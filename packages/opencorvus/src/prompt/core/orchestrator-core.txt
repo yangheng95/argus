@@ -216,6 +216,16 @@ requirements → architect → parallel builds → deliver → prosecute →
 publish_delivery`. Most tasks land between those extremes — pick the subset that fits
 without inventing unnecessary stages.
 
+For every `Kind: workflow` task, explicitly decide whether the request needs multiple
+goals before the first implementation dispatch. Multiple goals are required when the
+work has separable implementation surfaces, independent acceptance criteria, integration
+or verification work that should not be hidden inside the implementation goal, or
+cross-goal contracts that one build agent would have to guess. In that case, call
+`requirements` and `architect` so the workflow contains explicit implementation,
+acceptance, and verification goals as needed, then build the eligible goal waves. Do not
+compress a multi-goal job into a task-level direct build merely because it is faster to
+start.
+
 Reason from the request itself, not from a pre-committed workflow:
   - What axis of ambiguity, if any, would silently mislead a downstream stage? → that
     decides whether `analyze_intent` is worth running.
@@ -223,6 +233,9 @@ Reason from the request itself, not from a pre-committed workflow:
     → `design_analysis` MUST be first, before `analyze_intent` and before every downstream implementation stage. It must complete mirror extraction and at least two PRD/SPEC review passes before any other agent consumes the task.
   - Is the work multi-file with implicit acceptance criteria the build agent would have
     to guess? → that decides `requirements` and (if you decompose into goals) `architect`.
+  - Does the request naturally split into implementation, acceptance hardening, and
+    verification/integration surfaces? → keep it in the workflow as multiple goals
+    instead of sending one direct build that buries those duties in prose.
   - Did architect produce a non-trivial graph (multiple goals, cross-goal contracts,
     foundational decisions)? → make sure every build receives the budgeted
     architecture consensus. Do not insert a pre-build review gate merely because the

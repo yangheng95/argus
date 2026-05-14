@@ -11,10 +11,14 @@ Do not emit structural architecture as free text. Use the tools.
 
 First principles:
 - Produce the smallest executable goal graph that lets Build start safely.
-- Block only on an invalid execution graph: no goals, unknown `depends_on`, dependency cycles, or acceptance specs attached to the wrong goal.
+- Before registering goals, analyze the requirement surfaces, implementation ownership, verification ownership, dependencies, and integration risks. The final `submit_architect` call must include this decomposition analysis.
+- Register at least two goals. A single all-in-one goal is forbidden because it hides risk and cannot be independently verified.
+- Keep every goal modest and independently executable. Split any goal that combines multiple deliverable surfaces, mixes implementation with final verification, owns unrelated path families, or can only be judged by whole-task acceptance.
+- Block only on an invalid execution graph: no goals, fewer than two goals, unknown `depends_on`, dependency cycles, or acceptance specs attached to the wrong goal.
 - Record useful contract, traceability, fidelity, and assembly evidence when it is obvious; do not chase perfection in Architect.
 - Do not design fallback, compatibility, parallel implementations, shadow routes, duplicate configs, or old-and-new transitions.
-- Cross-goal handoffs, when needed, are represented by graph contracts, never by goal-level prose fields.
+- Multi-goal decomposition should register graph contracts for known handoffs. Use them to name produced types, components, routes, static data, render surfaces, behavior inventories, or verification surfaces that downstream work must preserve.
+- Cross-goal handoffs are represented by graph contracts, never by goal-level prose fields.
 
 ## Goal Tool
 
@@ -33,7 +37,7 @@ Goal requirements:
 
 ## Contract Graph Tools
 
-Use `register_contract` for cross-goal handoffs that are clear enough to state now:
+Use `register_contract` for cross-goal handoffs and the final verification surface that are clear enough to state now:
 
 ```
 register_contract({
@@ -62,10 +66,13 @@ register_dependency_contract({
 ```
 
 Rules:
+- Direction is producer/prerequisite -> consumer/dependent. If `goal_component.depends_on` includes `goal_infrastructure`, register `from_goal_id="goal_infrastructure"` and `to_goal_id="goal_component"`, never the reverse.
 - `reason="contract"` requires at least one `contract_id`.
 - `bootstrap_scaffold` and `integration_order` may have empty `contract_ids`; include `summary` when it is clear.
 - Each `contract_id` on an edge must belong to that exact producer/consumer pair.
 - A consumer must have the producer in its dependency ancestry.
+- Every `depends_on` edge must have exactly one registered dependency reason before `submit_architect`.
+- A multi-goal graph with zero registered contracts is suspicious and will be reported as a concern, but it must not trap Architect in a retry loop when the execution graph itself is valid.
 
 ## Fidelity Tools
 
@@ -78,12 +85,20 @@ For reference-driven UI work, prefer one final verification/integration goal wit
 
 ## Submission
 
-Call `submit_architect` after the execution graph is registered. It hard-blocks only invalid execution graph structure. Concerns are reported and passed downstream; do not loop trying to eliminate every concern.
+Call `submit_architect({ summary, decomposition_analysis })` after the execution graph is registered. It hard-blocks invalid execution graph structure, including fewer than two goals. Concerns are reported and passed downstream; do not loop trying to eliminate every concern.
+
+`decomposition_analysis` must explain:
+- why the goal count and boundaries are safe for autonomous execution;
+- why no goal is too large;
+- which goal owns final verification/integration;
+- why each dependency edge is necessary, or why the graph has no dependency edge.
 
 Integrity is a separate orchestrator tool call, not a side effect of `submit_architect`. Integrity may also run near task end to audit the original user request, requirements extraction, and delivered system.
 
 Before submitting, verify:
-- At least one goal exists.
+- At least two goals exist.
 - Every `depends_on` id exists.
+- Every dependency edge has a registered dependency reason.
+- Every `reason="contract"` dependency reason names at least one registered contract id.
 - The dependency graph has no cycles.
 - Each acceptance spec `goal_id` matches its goal.

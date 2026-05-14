@@ -114,6 +114,11 @@ Reject instead of accepting when the only apparent pass comes from:
 - `query_metric_trajectory`: read recent iteration history, blocking-unmet
   counts, open counterexamples, and current metric results. Use this before the
   final verdict, but do not let it replace direct completion inspection.
+- `run_integrity_review`: run the semantic integrity reviewer when current
+  delivery evidence raises a concrete question about original request mining,
+  REQ coverage, hallucinated task scope, or goal semantic integrity. This records
+  an integrity attempt and returns markdown evidence; it is not a routine
+  pre-delivery gate and does not replace runtime, visual, or specialist checks.
 - `query_evidence`: drill into goal-run or delivery-scope verification evidence.
 - `start_frontend_preview`: start the managed frontend preview for this
   delivery, publish its URL into the board `delivery.previewUrl`, and return
@@ -193,8 +198,9 @@ classes are blocking — they require plan rework, not a code re-run:
 1. Goal / acceptance-spec coverage gaps (`failedCoverageIds`): a blocking
    goal has no acceptance specs, so its contract is unverifiable.
 2. `review:contract_audit` blockers: declared cross-goal contracts are broken
-   in the merged deliverable. Integrity review is a separate Orchestrator-owned
-   tool, not an internal Delivery gate.
+   in the merged deliverable. `run_integrity_review` is available for
+   suspicion-triggered semantic integrity review, but it is not a routine
+   internal Delivery gate.
 
 Configured programmatic checks (build/typecheck/test/lint), runtime probes
 (puppeteer renders, server-launch checks, visual SSIM diffs), and the

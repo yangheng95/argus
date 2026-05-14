@@ -39,6 +39,7 @@ import { RewindTaskInput, taskRewindCursor } from "@/engine/rewind"
 import { TaskQueueReorderError } from "@/engine/queue"
 import { ExecutorNotConfiguredError, EngineService, PlannerFailureError } from "@/task-api"
 import { ProtocolStore } from "@/protocol/store"
+import { ChannelIngress } from "@/channel/ingress"
 import { Identifier } from "@/id/id"
 import { Session } from "@/session"
 import { Message } from "@/session/message"
@@ -70,9 +71,23 @@ const ReorderTaskQueueResult = z.object({
   queuedTaskIDs: z.array(z.string()),
 })
 
+const TaskBindingList = z.array(
+  z.object({
+    id: z.string(),
+    task_id: z.string(),
+    platform: z.string(),
+    channel: z.string(),
+    thread: z.string(),
+    payload: z.record(z.string(), z.unknown()).optional(),
+    time_created: z.number().optional(),
+    time_updated: z.number().optional(),
+  }),
+)
+
 export const EngineRoutes = lazy(() =>
   new Hono()
     .use(async (c, next) => {
+      if (c.req.path === "/global/tasks") return next()
       // Initialize bridge lazily on first request — Instance context is available here
       ensureTaskMessageProtocolBridge()
       return next()
@@ -293,6 +308,43 @@ export const EngineRoutes = lazy(() =>
       validator("param", z.object({ taskID: Task.shape.id })),
       async (c) => {
         return c.json(await EngineService.getTask(c.req.valid("param").taskID))
+      },
+    )
+    .get(
+      "/task/:taskID/bindings",
+      describeRoute({
+        summary: "List channel bindings for a task",
+        description:
+          "Return every (platform, channel, thread) binding that points at this task. " +
+          "Used by the Gateway page to surface inbound channel provenance for a selected task.",
+        operationId: "task.bindings",
+        responses: {
+          200: {
+            description: "Channel bindings for the task",
+            content: {
+              "application/json": {
+                schema: resolver(TaskBindingList),
+              },
+            },
+          },
+        },
+      }),
+      validator("param", z.object({ taskID: Task.shape.id })),
+      async (c) => {
+        const taskID = c.req.valid("param").taskID
+        const rows = ChannelIngress.bindingsByTaskID(taskID)
+        return c.json(
+          rows.map((row) => ({
+            id: String(row.id),
+            task_id: String(row.task_id),
+            platform: String(row.platform),
+            channel: String(row.channel),
+            thread: String(row.thread),
+            payload: (row.payload ?? {}) as Record<string, unknown>,
+            time_created: typeof row.time_created === "number" ? row.time_created : undefined,
+            time_updated: typeof row.time_updated === "number" ? row.time_updated : undefined,
+          })),
+        )
       },
     )
     .get(

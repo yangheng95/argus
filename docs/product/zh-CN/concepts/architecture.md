@@ -86,13 +86,13 @@ orchestrator/loop.ts — runTaskLoop()  (line 117)
 |---|---|---|
 | **Orchestrator** | `orchestrator/agent.ts` + `orchestrator/loop.ts` | 唯一决策者；通过 21 个 tool 推进任务 |
 | **Intent Analysis** | `intent-analysis/agent.ts` | 解读简短 / 模糊请求，输出 intent class / complexity / clarifications |
-| **Requirements** | `requirements/agent.ts` | Zod tool 输出 Goals[] + 追溯矩阵 + fidelity |
-| **Architect** | `architect/agent.ts` | 接口契约、目录蓝图、导出清单；写 decision-log |
+| **Requirements** | `requirements/agent.ts` | Zod tool 输出 REQ-N + foundational decisions；不产出 goals |
+| **Architect** | `architect/agent.ts` | 先分析边界，再产出至少 2 个小型、可独立执行/验收的 goals；禁止单个大型 all-in-one goal；同时负责接口契约、追溯与 fidelity |
 | **Design Analyst** | `design-analyst/agent.ts` | 视觉参考（Figma / 图片 / URL）→ 布局 / 样式 / 组件清单 |
 | **Build** | `build/agent.ts` + `build/index.ts` + `build/report.ts` + `build/types.ts` + `goal/runner.ts` + `agent/sub-agent-protocol.ts` | 在 worktree 中实际写代码；由 Orchestrator 通过 `build` tool 调起 |
 | **Integrity Reviewer** | `integrity/agent.ts` | 多维 integrity review（requirement_fidelity / technical_feasibility / hallucination / solution_quality） |
 | **Prosecutor** | `prosecutor/agent.ts` | 对交付候选发起对抗性复核 |
-| **Delivery** | `delivery/agent.ts` + `delivery/checks/` + `delivery/specialists/` | diff 验收 + 触发回修 + 确定性 / LLM judge 检查 |
+| **Delivery** | `delivery/agent.ts` + `delivery/checks/` + `delivery/specialists/` | diff 验收 + 触发回修 + 确定性 / LLM judge 检查；可按交付证据触发 `run_integrity_review` 语义完整性复核 |
 
 Task 生命周期的 agent-side 权限只属于 **Orchestrator**：启动 / 停止 / retry / cancel / fail 当前 task，以及发布新的 follow-up task，都必须通过 Orchestrator 的显式 lifecycle tools（例如 `propose_task`）。Delivery 只能输出验收 verdict、证据和建议，不能直接创建、取消、重试或终止 engine task。
 

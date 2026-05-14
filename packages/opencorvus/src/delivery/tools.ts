@@ -18,7 +18,13 @@ import { Shell } from "@/shell/shell"
 import { Database } from "@/storage/db"
 import { Filesystem } from "@/util/filesystem"
 import { Log } from "@/util/log"
-import { findTask } from "@/engine/store"
+import {
+  findActiveSpecForTask,
+  findLatestArchitectContractGraph,
+  findRequirements,
+  findTask,
+  listGoals,
+} from "@/engine/store"
 import { Identifier } from "@/id/id"
 import { ManagedPreviewStartError, startManagedPreview } from "@/preview/managed"
 import { type ManagedPreviewSession } from "@/preview/session"
@@ -32,6 +38,10 @@ import { buildMultimodalToolResult } from "@/delivery/tool-result"
 import { AttachmentStore } from "@/storage/attachment-store"
 import { buildTaskUpstreamAgentContextSections } from "@/prompt/upstream-context"
 import type { DeliveryInfo, GoalInfo } from "@/delivery/checks"
+import type { AcceptanceSpec } from "@/acceptance/types"
+import { createDecisionLog } from "@/decision-log"
+import { renderIntegrityMarkdown } from "@/integrity/render-markdown"
+import type { VisualSpec } from "@/design-analyst/types"
 
 const log = Log.create({ service: "delivery-tools" })
 
@@ -52,6 +62,7 @@ type DeliveryToolContext = {
   goals?: GoalInfo[]
   delivery?: DeliveryInfo
   attachments?: DeliveryToolAttachment[]
+  signal?: AbortSignal
 }
 
 export function normalizeDeliveryScreenshotViewport(input: { width: number; height: number }): {
@@ -95,6 +106,156 @@ function persistDeliveryPreviewSession(input: { taskID: string; deliveryID?: str
       })
       .run(),
   )
+}
+
+async function runDeliveryIntegrityReview(input: {
+  taskID?: string
+  parentSessionID?: string
+  signal?: AbortSignal
+}) {
+  if (!input.taskID) {
+    throw new Error("run_integrity_review requires taskID in the delivery tool context")
+  }
+  if (!input.parentSessionID) {
+    throw new Error("run_integrity_review requires delivery session context so the integrity card has a parent session")
+  }
+
+  const task = findTask(input.taskID)
+  if (!task) throw new Error(`run_integrity_review: task ${input.taskID} not found`)
+  const activeSpec = findActiveSpecForTask(task.id)
+  if (!activeSpec) throw new Error(`run_integrity_review: task ${task.id} has no active spec snapshot`)
+  const dbGoals = listGoals(task.id).filter((goal) => goal.spec_snapshot_id === activeSpec.id)
+  if (dbGoals.length === 0) throw new Error(`run_integrity_review: spec ${activeSpec.id} has no goals`)
+
+  const contractGraph = findLatestArchitectContractGraph(task.id)
+  if (!contractGraph) {
+    throw new Error(
+      `run_integrity_review: task ${task.id} is missing architect_contract_graph; run Architect again before integrity review`,
+    )
+  }
+  if (!Array.isArray(task.design_specs)) {
+    throw new Error(`run_integrity_review: task ${task.id} has malformed design_specs`)
+  }
+  if (task.attachments !== null && task.attachments !== undefined && !Array.isArray(task.attachments)) {
+    throw new Error(`run_integrity_review: task ${task.id} has malformed attachments`)
+  }
+  const designSpecs: VisualSpec[] | undefined = task.design_specs.length > 0 ? task.design_specs : undefined
+  const taskAttachments: AttachmentStore.Reference[] | undefined =
+    task.attachments && task.attachments.length > 0 ? task.attachments : undefined
+
+  const reqRows = findRequirements(activeSpec.id)
+  const requirements = reqRows.map((row) => {
+    const meta = (row.metadata ?? {}) as Record<string, unknown>
+    const sourceID = typeof meta.source_requirement_id === "string" ? meta.source_requirement_id : row.id
+    return {
+      id: sourceID,
+      type: (row.priority === "advisory" ? "implicit" : "explicit") as "explicit" | "implicit",
+      description: row.description,
+    }
+  })
+  const decisionLog = createDecisionLog(task.id)
+  const requirementDecisions = decisionLog.readByPhase("requirements").map((entry) => ({
+    key: entry.key,
+    value: entry.value,
+    reason: entry.reason,
+  }))
+  const goalsForReview = dbGoals.map((goal) => ({
+    id: goal.id,
+    title: goal.title,
+    objective: goal.objective,
+    acceptance_specs: (typeof goal.acceptance_specs === "string"
+      ? JSON.parse(goal.acceptance_specs)
+      : (goal.acceptance_specs ?? [])) as AcceptanceSpec[],
+    owned_paths: typeof goal.owned_paths === "string" ? JSON.parse(goal.owned_paths) : (goal.owned_paths ?? []),
+    depends_on: typeof goal.depends_on === "string" ? JSON.parse(goal.depends_on) : (goal.depends_on ?? []),
+    priority: goal.priority as "blocking" | "advisory",
+    kind: goal.kind,
+    requirement_ids:
+      typeof goal.requirement_ids === "string" ? JSON.parse(goal.requirement_ids) : (goal.requirement_ids ?? []),
+  }))
+
+  const { reviewIntegrity, computeRequirementStatusSnapshot } = await import("@/integrity")
+  const requirementStatus = computeRequirementStatusSnapshot({
+    taskID: task.id,
+    specSnapshotID: activeSpec.id,
+  })
+  const terminalRunStatuses = new Set<string>(["completed", "failed", "aborted"])
+  const phase: "pre_build" | "post_build" = requirementStatus.some((requirement) =>
+    requirement.claimingGoals.some((goal) => terminalRunStatuses.has(goal.runStatus)),
+  )
+    ? "post_build"
+    : "pre_build"
+
+  const verdict = await reviewIntegrity({
+    userRequest: task.request,
+    taskTitle: task.title,
+    goals: goalsForReview,
+    requirements,
+    requirementDecisions,
+    requirementStatus,
+    designSpecs,
+    contractGraph,
+    decisionLog,
+    attachments: taskAttachments,
+    signal: input.signal,
+    taskID: task.id,
+    parentSessionID: input.parentSessionID,
+  })
+
+  const markdown = renderIntegrityMarkdown({ verdict, sessionID: verdict.sessionID })
+  const { recordIntegrityAttempt } = await import("@/engine/persist")
+  recordIntegrityAttempt({
+    taskID: task.id,
+    sessionID: verdict.sessionID,
+    specSnapshotID: activeSpec.id,
+    verdict: verdict.verdict,
+    phase,
+    perDimension: verdict.dimensions.map((dimension) => ({ id: dimension.id, verdict: dimension.verdict })),
+    issuesCount: verdict.issues.length,
+    correctionsCount: verdict.corrections.length + verdict.graphCorrections.length,
+    missingCount: verdict.missingGoals.length,
+    reason: verdict.summary,
+    reviewMarkdown: markdown,
+    corrections: verdict.corrections.map((correction) => ({
+      action: correction.action,
+      goalID: correction.goalID,
+      reason: correction.reason,
+      updates: correction.updates as Record<string, unknown> | undefined,
+    })),
+    graphCorrections: verdict.graphCorrections,
+    missingGoals: verdict.missingGoals,
+  })
+
+  decisionLog.append({
+    phase: "review",
+    key: `delivery_integrity_${verdict.verdict}_${verdict.sessionID}`,
+    value:
+      `verdict=${verdict.verdict} | issues=${verdict.issues.length} | corrections=${verdict.corrections.length}` +
+      ` | graph_corrections=${verdict.graphCorrections.length} | missing_goals=${verdict.missingGoals.length}` +
+      (verdict.summary ? ` | summary=${verdict.summary}` : ""),
+    reason: "delivery-triggered integrity review",
+  })
+
+  return {
+    verdict: verdict.verdict,
+    summary: verdict.summary,
+    sessionID: verdict.sessionID,
+    specSnapshotID: activeSpec.id,
+    phase,
+    dimensions: verdict.dimensions.map((dimension) => ({
+      id: dimension.id,
+      verdict: dimension.verdict,
+      issues: dimension.issues.length,
+      corrections: dimension.corrections.length,
+      graphCorrections: dimension.graphCorrections.length,
+      missingGoals: dimension.missingGoals.length,
+    })),
+    issuesCount: verdict.issues.length,
+    correctionsCount: verdict.corrections.length,
+    graphCorrectionsCount: verdict.graphCorrections.length,
+    missingGoalsCount: verdict.missingGoals.length,
+    reviewMarkdown: markdown,
+  }
 }
 
 /**
@@ -146,6 +307,32 @@ export function createDeliveryTools(input?: DeliveryToolContext) {
       execute: async ({ section, max_chars }) => {
         const text = renderDeliveryContextSection(deliveryContext, section)
         return truncateToolText(text, max_chars)
+      },
+    }),
+
+    run_integrity_review: tool({
+      description:
+        "Run the task semantic integrity reviewer from inside delivery when the integrated evidence raises a real " +
+        "question about original-request mining, REQ coverage, hallucinated scope, or goal semantic integrity. " +
+        "This is review-only: it records an integrity_attempt and returns the full markdown; it never edits goals, " +
+        "starts build work, creates tasks, or replaces delivery runtime/visual verification.",
+      inputSchema: z.object({
+        reason: z.string().min(10).describe("Concrete delivery evidence that justifies running integrity review now."),
+      }),
+      execute: async ({ reason }) => {
+        const review = await runDeliveryIntegrityReview({
+          taskID,
+          parentSessionID: input?.sessionID,
+          signal: input?.signal,
+        })
+        return JSON.stringify(
+          {
+            reason,
+            ...review,
+          },
+          null,
+          2,
+        )
       },
     }),
 

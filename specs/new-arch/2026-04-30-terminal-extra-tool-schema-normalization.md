@@ -306,7 +306,7 @@ This is closer, but still needs a semantic review.
 Keep terminal-only scoping only when:
 
 - validator has no issues;
-- at least one goal exists;
+- at least two goals exist;
 - mandatory metric/spec/contract checks are complete;
 - any validator issue would still require work tools to fix.
 

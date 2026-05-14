@@ -82,6 +82,34 @@ export namespace ChannelIngress {
     return find(platform, channel, thread)
   }
 
+  /**
+   * Reverse lookup: every channel/thread binding pointing at the given
+   * task. Powers the Gateway page's "selected task bindings" surface
+   * (PRD §10) and any future audit that needs the inbound-message
+   * provenance for a task. The `engine_channel_task_idx` index on
+   * `task_id` keeps this O(matching rows) — typical tasks have 0-1
+   * bindings so the query cost is negligible.
+   */
+  export function bindingsByTaskID(taskID: string) {
+    if (!taskID) return [] as Array<{
+      id: string
+      task_id: string
+      platform: string
+      channel: string
+      thread: string
+      payload: Record<string, unknown> | null
+      time_created: number | null
+      time_updated: number | null
+    }>
+    return Database.use((db) =>
+      db
+        .select()
+        .from(EngineChannelBindingTable)
+        .where(eq(EngineChannelBindingTable.task_id, taskID))
+        .all(),
+    )
+  }
+
   export function bindThread(input: {
     platform: string
     channel: string

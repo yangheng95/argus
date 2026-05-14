@@ -80,6 +80,7 @@ import type {
   GatewayControlActionResponses,
   GatewayControlMessageResponses,
   GatewayStatsResponses,
+  GatewayTaskDecomposeResponses,
   GlobalConfigGetResponses,
   GlobalConfigUpdateErrors,
   GlobalConfigUpdateResponses,
@@ -225,6 +226,7 @@ import type {
   SkillPolicyResponses,
   SkillRemoveResponses,
   SubtaskPartInput,
+  TaskBindingsResponses,
   TaskBoardErrors,
   TaskBoardResponses,
   TaskBriefErrors,
@@ -958,7 +960,7 @@ export class Channel extends HeyApiClient {
       user_id?: string
       request_id?: string
       source?: string
-      executor?: "mirrorcode" | "codex" | "claude-code"
+      executor?: "opencorvus" | "codex" | "claude-code"
       allow_create?: boolean
       allow_session_mutation?: boolean
       bind?: boolean
@@ -3436,7 +3438,7 @@ export class Message extends HeyApiClient {
       text?: string
       taskID?: string
       sessionID?: string
-      executor?: "mirrorcode" | "codex" | "claude-code"
+      executor?: "opencorvus" | "codex" | "claude-code"
       channel?: string
       thread?: string
       user_id?: string
@@ -3699,7 +3701,7 @@ export class Panel extends HeyApiClient {
       text?: string
       taskID?: string
       sessionID?: string
-      executor?: "mirrorcode" | "codex" | "claude-code"
+      executor?: "opencorvus" | "codex" | "claude-code"
       channel?: string
       thread?: string
       user_id?: string
@@ -3980,7 +3982,7 @@ export class Control2 extends HeyApiClient {
       text?: string
       taskID?: string
       sessionID?: string
-      executor?: "mirrorcode" | "codex" | "claude-code"
+      executor?: "opencorvus" | "codex" | "claude-code"
       channel?: string
       thread?: string
       user_id?: string
@@ -4058,7 +4060,7 @@ export class Control2 extends HeyApiClient {
             action: "create_task"
             request: string
             request_id?: string
-            executor?: "mirrorcode" | "codex" | "claude-code"
+            executor?: "opencorvus" | "codex" | "claude-code"
             queue?: boolean
             checks?: {
               build?: Array<string> | false
@@ -4327,7 +4329,7 @@ export class Control2 extends HeyApiClient {
           }
         | {
             action: "set_executor"
-            executor: "mirrorcode" | "codex" | "claude-code"
+            executor: "opencorvus" | "codex" | "claude-code"
           }
         | {
             action: "select_task"
@@ -4385,6 +4387,45 @@ export class Control2 extends HeyApiClient {
   }
 }
 
+export class Task extends HeyApiClient {
+  /**
+   * Propose task decomposition
+   *
+   * Run a one-shot LLM call that turns a free-text big requirement into a structured proposal of small task candidates. The endpoint is read-only — no engine_task or session row is written. The Gateway page presents the proposal to the operator, who chooses which candidates to actually create via POST /task.
+   */
+  public decompose<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      requirement?: string
+      executor?: "opencorvus" | "codex" | "claude-code"
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "body", key: "requirement" },
+            { in: "body", key: "executor" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<GatewayTaskDecomposeResponses, unknown, ThrowOnError>({
+      url: "/gateway/task/decompose",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+}
+
 export class Channel2 extends HeyApiClient {
   /**
    * Handle gateway channel message
@@ -4402,7 +4443,7 @@ export class Channel2 extends HeyApiClient {
       user_id?: string
       request_id?: string
       source?: string
-      executor?: "mirrorcode" | "codex" | "claude-code"
+      executor?: "opencorvus" | "codex" | "claude-code"
       allow_create?: boolean
       allow_session_mutation?: boolean
       bind?: boolean
@@ -4532,6 +4573,11 @@ export class Gateway extends HeyApiClient {
   private _control?: Control2
   get control(): Control2 {
     return (this._control ??= new Control2({ client: this.client }))
+  }
+
+  private _task?: Task
+  get task(): Task {
+    return (this._task ??= new Task({ client: this.client }))
   }
 
   private _channel?: Channel2
@@ -4869,7 +4915,7 @@ export class Rewind extends HeyApiClient {
   }
 }
 
-export class Task extends HeyApiClient {
+export class Task2 extends HeyApiClient {
   /**
    * Create task
    */
@@ -4879,7 +4925,7 @@ export class Task extends HeyApiClient {
       project?: string
       requestID?: string
       source?: string
-      executor?: "mirrorcode" | "codex" | "claude-code"
+      executor?: "opencorvus" | "codex" | "claude-code"
       title?: string
       request?: string
       attachments?: Array<{
@@ -5369,6 +5415,36 @@ export class Task extends HeyApiClient {
     )
     return (options?.client ?? this.client).get<TaskGetResponses, TaskGetErrors, ThrowOnError>({
       url: "/task/{taskID}",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * List channel bindings for a task
+   *
+   * Return every (platform, channel, thread) binding that points at this task. Used by the Gateway page to surface inbound channel provenance for a selected task.
+   */
+  public bindings<ThrowOnError extends boolean = false>(
+    parameters: {
+      taskID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "taskID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<TaskBindingsResponses, unknown, ThrowOnError>({
+      url: "/task/{taskID}/bindings",
       ...options,
       ...params,
     })
@@ -6424,7 +6500,7 @@ export class Goal extends HeyApiClient {
   }
 }
 
-export class Task2 extends HeyApiClient {
+export class Task3 extends HeyApiClient {
   /**
    * Export task as zip archive
    *
@@ -6543,9 +6619,9 @@ export class Export extends HeyApiClient {
     })
   }
 
-  private _task?: Task2
-  get task2(): Task2 {
-    return (this._task ??= new Task2({ client: this.client }))
+  private _task?: Task3
+  get task2(): Task3 {
+    return (this._task ??= new Task3({ client: this.client }))
   }
 }
 
@@ -7853,9 +7929,9 @@ export class OpencodeClient extends HeyApiClient {
     return (this._server ??= new Server({ client: this.client }))
   }
 
-  private _task?: Task
-  get task(): Task {
-    return (this._task ??= new Task({ client: this.client }))
+  private _task?: Task2
+  get task(): Task2 {
+    return (this._task ??= new Task2({ client: this.client }))
   }
 
   private _run?: Run

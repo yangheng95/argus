@@ -67,6 +67,7 @@ export interface ArchitectCollector {
   /** Goal IDs the agent has explicitly removed during a re-run session. */
   removed_goal_ids: string[]
   summary: string
+  decomposition_analysis: string
   finalized: boolean
 }
 
@@ -86,6 +87,7 @@ function toRegisteredGoal(input: unknown): RegisteredGoal {
 }
 
 const ACCEPTANCE_SCORER_TYPES = ["heuristic", "llm_judge", "prebuilt", "contract_audit"] as const
+const MIN_ARCHITECT_GOAL_COUNT = 2
 
 const acceptanceScorerGuidance = [
   'Legal scorer type values are "heuristic", "llm_judge", "prebuilt", and "contract_audit".',
@@ -223,8 +225,31 @@ function emptyCollector(): ArchitectCollector {
     validation_findings: [],
     removed_goal_ids: [],
     summary: "",
+    decomposition_analysis: "",
     finalized: false,
   }
+}
+
+function collectorGoalByID(collector: ArchitectCollector): Map<string, RegisteredGoal> {
+  return new Map(collector.goals.map((goal) => [goal.id, goal]))
+}
+
+function hasCollectorDependencyPath(collector: ArchitectCollector, fromGoalID: string, ancestorGoalID: string): boolean {
+  const byID = collectorGoalByID(collector)
+  const seen = new Set<string>()
+  const stack = [...(byID.get(fromGoalID)?.depends_on ?? [])]
+  while (stack.length > 0) {
+    const next = stack.pop()!
+    if (next === ancestorGoalID) return true
+    if (seen.has(next)) continue
+    seen.add(next)
+    stack.push(...(byID.get(next)?.depends_on ?? []))
+  }
+  return false
+}
+
+function dependencyDirectionGuidance(fromGoalID: string, toGoalID: string): string {
+  return `Dependency contract direction is producer/prerequisite -> consumer/dependent. If ${toGoalID}.depends_on includes ${fromGoalID}, call register_dependency_contract({ from_goal_id: "${fromGoalID}", to_goal_id: "${toGoalID}", ... }).`
 }
 
 export function architectValidationFindings(
@@ -246,7 +271,26 @@ export function architectValidationFindings(
   ) => findings.push({ code, severity: "concern", scope, message, repair_tools: repairTools })
 
   if (collector.goals.length === 0) {
-    blocker("no_goals", "No goals registered - Architect must produce at least one goal", {}, ["register_goal"])
+    blocker(
+      "no_goals",
+      `No goals registered - Architect must produce at least ${MIN_ARCHITECT_GOAL_COUNT} goals`,
+      {},
+      ["register_goal"],
+    )
+  } else if (collector.goals.length < MIN_ARCHITECT_GOAL_COUNT) {
+    blocker(
+      "insufficient_goal_decomposition",
+      `Only ${collector.goals.length} goal registered - Architect must split the task into at least ${MIN_ARCHITECT_GOAL_COUNT} independently executable goals; a single large goal is forbidden.`,
+      { goal_ids: collector.goals.map((goal) => goal.id) },
+      ["register_goal", "modify_goal"],
+    )
+  } else if (collector.contract_graph.contracts.length === 0) {
+    concern(
+      "missing_contract_graph_contract",
+      `Multi-goal architecture registered ${collector.goals.length} goals but no graph contracts. Register at least one explicit handoff contract when a produced type, component, route, static data, render surface, behavior inventory, or verification surface is known.`,
+      { goal_ids: collector.goals.map((goal) => goal.id) },
+      ["register_contract", "register_dependency_contract", "modify_goal"],
+    )
   }
   const knownGoalIDs = new Set(collector.goals.map((g) => g.id))
   const requiredTraceability = new Map<string, Set<string>>()
@@ -471,6 +515,10 @@ export function isArchitectReadyToFinalize(collector: ArchitectCollector, input?
 
 export function buildArchitectReport(collector: ArchitectCollector) {
   const summary = requireReportString(collector.summary, "architect summary")
+  const decompositionAnalysis = requireReportString(
+    collector.decomposition_analysis,
+    "architect decomposition analysis",
+  )
   const goalLines = collector.goals.map((goal) => {
     const owned = goal.owned_paths.length > 0 ? goal.owned_paths.join(", ") : "no owned paths"
     return `${goal.title} [${goal.kind}] - owned_paths: ${owned}`
@@ -479,6 +527,7 @@ export function buildArchitectReport(collector: ArchitectCollector) {
     summary: limitSummary(summary),
     detail: [
       `## Summary\n${summary}`,
+      `## Decomposition Analysis\n${decompositionAnalysis}`,
       `## Goals\n${goalLines.length ? markdownList(goalLines) : "- no goals submitted"}`,
     ].join("\n\n"),
   }
@@ -791,10 +840,20 @@ export function createArchitectOutputTools(input: {
 
     register_contract: tool({
       description:
-        "Register one Architect Contract Graph contract. Use type/function/enum with ir for typed contracts; use route/component/static_data/render_surface/behavior_inventory for non-IR surfaces.",
+        "Register one Architect Contract Graph contract. producer_goal_id is the goal that creates the surface; every consumer_goal_id must depend on that producer. Use type/function/enum with ir for typed contracts; use route/component/static_data/render_surface/behavior_inventory for non-IR surfaces.",
       inputSchema: ArchitectContractRefSchema,
       execute: async (input) => {
         const contract = ArchitectContractRefSchema.parse(input)
+        const byID = collectorGoalByID(collector)
+        const unknownGoals = [contract.producer_goal_id, ...contract.consumer_goal_ids].filter((goalID) => !byID.has(goalID))
+        if (unknownGoals.length > 0) {
+          return `Error: contract "${contract.id}" references unknown goal id(s): ${[...new Set(unknownGoals)].join(", ")}. Register the goals first; collector unchanged.`
+        }
+        for (const consumerID of contract.consumer_goal_ids) {
+          if (!hasCollectorDependencyPath(collector, consumerID, contract.producer_goal_id)) {
+            return `Error: contract "${contract.id}" producer ${contract.producer_goal_id} is not in dependency ancestry for consumer ${consumerID}. The consumer goal must list the producer in depends_on before this contract is valid; collector unchanged.`
+          }
+        }
         const existingIdx = collector.contract_graph.contracts.findIndex((row) => row.id === contract.id)
         if (existingIdx >= 0) {
           collector.contract_graph.contracts[existingIdx] = contract
@@ -807,10 +866,39 @@ export function createArchitectOutputTools(input: {
 
     register_dependency_contract: tool({
       description:
-        "Register why a depends_on edge exists. reason=contract must name contract_ids; bootstrap_scaffold/integration_order may have no contract_ids but require summary.",
+        "Register why a depends_on edge exists. Direction is producer/prerequisite -> consumer/dependent: if goal B depends_on goal A, use from_goal_id=A and to_goal_id=B. reason=contract must name contract_ids; bootstrap_scaffold/integration_order may have no contract_ids but require summary.",
       inputSchema: GoalDependencyContractSchema,
       execute: async (input) => {
         const edge = GoalDependencyContractSchema.parse(input)
+        const byID = collectorGoalByID(collector)
+        const fromGoal = byID.get(edge.from_goal_id)
+        const toGoal = byID.get(edge.to_goal_id)
+        if (!fromGoal || !toGoal) {
+          const missing = [!fromGoal ? edge.from_goal_id : "", !toGoal ? edge.to_goal_id : ""].filter(Boolean)
+          return `Error: dependency contract references unknown goal id(s): ${missing.join(", ")}. Register the goals first; collector unchanged.`
+        }
+        if (!toGoal.depends_on.includes(edge.from_goal_id)) {
+          const reversed = fromGoal.depends_on.includes(edge.to_goal_id)
+          return `Error: dependency contract ${edge.from_goal_id} -> ${edge.to_goal_id} has no matching depends_on edge; collector unchanged. ${reversed ? "This edge is reversed. " : ""}${dependencyDirectionGuidance(edge.to_goal_id, edge.from_goal_id)}`
+        }
+        if (!hasCollectorDependencyPath(collector, edge.to_goal_id, edge.from_goal_id)) {
+          return `Error: dependency contract producer ${edge.from_goal_id} is not in dependency ancestry for ${edge.to_goal_id}; collector unchanged. ${dependencyDirectionGuidance(edge.from_goal_id, edge.to_goal_id)}`
+        }
+        if (edge.reason === "contract" && edge.contract_ids.length === 0) {
+          return `Error: dependency contract ${edge.from_goal_id} -> ${edge.to_goal_id} has reason=contract but no contract_ids; collector unchanged.`
+        }
+        if (edge.reason !== "contract" && !edge.summary?.trim()) {
+          return `Error: dependency contract ${edge.from_goal_id} -> ${edge.to_goal_id} has reason=${edge.reason} and must include summary; collector unchanged.`
+        }
+        for (const contractID of edge.contract_ids) {
+          const contract = collector.contract_graph.contracts.find((row) => row.id === contractID)
+          if (!contract) {
+            return `Error: dependency contract ${edge.from_goal_id} -> ${edge.to_goal_id} references unknown contract "${contractID}"; collector unchanged.`
+          }
+          if (contract.producer_goal_id !== edge.from_goal_id || !contract.consumer_goal_ids.includes(edge.to_goal_id)) {
+            return `Error: contract "${contractID}" belongs to ${contract.producer_goal_id} -> [${contract.consumer_goal_ids.join(", ")}], not ${edge.from_goal_id} -> ${edge.to_goal_id}; collector unchanged. ${dependencyDirectionGuidance(contract.producer_goal_id, contract.consumer_goal_ids[0] ?? edge.to_goal_id)}`
+          }
+        }
         const existingIdx = collector.contract_graph.dependency_contracts.findIndex(
           (row) => row.from_goal_id === edge.from_goal_id && row.to_goal_id === edge.to_goal_id,
         )
@@ -825,18 +913,37 @@ export function createArchitectOutputTools(input: {
 
     submit_architect: tool({
       description:
-        "Finalize the executable Architect goal graph. Blocks only invalid execution graph structure; reports traceability, fidelity, and contract concerns without requiring a retry.",
+        "Finalize the executable Architect goal graph. Requires a decomposition analysis and at least two goals. Blocks only invalid execution graph structure; reports traceability, fidelity, and contract concerns without requiring a retry.",
       inputSchema: z.object({
         summary: z.string().min(5).describe("One-line summary of what was decomposed and coordinated"),
+        decomposition_analysis: z
+          .string()
+          .min(80)
+          .describe(
+            "Required analysis explaining goal boundaries, why no goal is too large, final verification ownership, and dependency necessity.",
+          ),
       }),
-      execute: async ({ summary }) => {
+      execute: async ({ summary, decomposition_analysis }) => {
         collector.summary = summary
+        collector.decomposition_analysis =
+          typeof decomposition_analysis === "string" ? decomposition_analysis.trim() : ""
         const findings = architectValidationFindings(collector, {
           workDir: dir,
           designSpecs: input.designSpecs,
           requireReferenceCoverage: input.requireReferenceCoverage,
           referenceCoverageReasons: input.referenceCoverageReasons,
         })
+        if (collector.decomposition_analysis.length < 80) {
+          findings.unshift({
+            code: "missing_decomposition_analysis",
+            severity: "blocker",
+            scope: {},
+            message:
+              "submit_architect requires decomposition_analysis explaining safe goal boundaries, anti-large-goal reasoning, final verification ownership, and dependency necessity.",
+            repair_tools: ["submit_architect"],
+          })
+          collector.validation_findings = findings
+        }
         const blockers = findings.filter((finding) => finding.severity === "blocker")
         const concerns = findings.filter((finding) => finding.severity === "concern")
 

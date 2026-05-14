@@ -244,7 +244,9 @@ export const CreateTaskInput = z.object({
   //  - "high"/"normal"/"low": user-facing levels; also used by iteration /
   //                recommendation follow-ups from `submit_next_task`.
   priority: z.enum(["critical", "high", "normal", "low"]).optional(),
-  /** Queue opt-in. Omitted means false: start immediately. */
+  /** Queue preference. Creation cannot bypass the directory queue; omitted
+   *  still requests immediate eligibility, but active cwd siblings keep the
+   *  task queued until the cwd is free. */
   queue: z.boolean().default(false),
   /** Defaults to "workflow" (full pipeline). Pass "build" to bypass the pipeline
    *  and run the build agent directly — used for one-shot edits. */

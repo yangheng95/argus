@@ -129,3 +129,10 @@ review-time; "the original request says '断点续传 after refresh', but no REQ
 resume semantics" or "REQ-3 ('show stock dashboard') is claimed by goal_fe but
 goal_fe's only essential spec acc-fe-1 has `passed=false` in the Requirement Status
 Snapshot, and no goal owns the BE API REQ-3 implies" is the bar.
+
+Repository baseline is evidence, not a separate review surface. When the task can affect
+existing behavior, a pass verdict must stay consistent with existing tests, existing
+public behavior, existing design documents, historical plans, and current source
+contracts. If the current prompt, generated REQ rows, goal graph, or delivery evidence
+contradicts that repository evidence, report the contradiction under the most specific
+dimension instead of approving the review.

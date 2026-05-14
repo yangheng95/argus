@@ -177,8 +177,8 @@ export namespace ArchitectAgent {
       )
     }
 
-    if (collector.goals.length === 0) {
-      throw new Error("Architect finalized with zero goals — a task must have at least one goal.")
+    if (collector.goals.length < 2) {
+      throw new Error("Architect finalized with fewer than two goals — a task must be decomposed into at least two goals.")
     }
 
     // Architect produces the goal set as facts. Integrity (multi-dimension
@@ -219,6 +219,7 @@ export namespace ArchitectAgent {
       contractGraph: collector.contract_graph,
       validationFindings: collector.validation_findings,
       summary: collector.summary || "Architect decomposition",
+      decompositionAnalysis: collector.decomposition_analysis,
       sessionID: out.session.id,
     }
   }

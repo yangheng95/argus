@@ -34,6 +34,7 @@ describe("delivery review-only tool surface", () => {
           expect(Object.keys(tools)).toContain("start_frontend_preview")
           expect(Object.keys(tools)).toContain("screenshot")
           expect(Object.keys(tools)).toContain("inspect_delivery_context")
+          expect(Object.keys(tools)).toContain("run_integrity_review")
           expect(Object.keys(tools)).toContain("compare_visual_artifacts")
           expect(Object.keys(tools)).not.toContain("submit_next_task")
         },
@@ -52,6 +53,8 @@ describe("delivery review-only tool surface", () => {
     expect(prompt).toContain("MUST NOT edit the deliverable")
     expect(prompt).toContain("orchestrator can send the affected goal(s) back")
     expect(prompt).toContain("start_frontend_preview")
+    expect(prompt).toContain("run_integrity_review")
+    expect(prompt).toContain("suspicion-triggered semantic integrity review")
     expect(prompt).toContain("publishes the ready URL to the Overlay")
     expect(prompt).toContain("Orchestrator is the only agent allowed")
     expect(prompt).not.toContain("write_file")
@@ -68,6 +71,31 @@ describe("delivery review-only tool surface", () => {
 
     expect(source).not.toContain("EngineService.createTask")
     expect(source).not.toContain("submit_next_task")
+  })
+
+  test("integrity review tool requires task and parent session context", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "opencorvus-delivery-integrity-context-"))
+    try {
+      await Instance.provide({
+        directory: dir,
+        fn: async () => {
+          const noTaskTools = createDeliveryTools()
+          await expect(
+            noTaskTools.run_integrity_review.execute!({ reason: "delivery evidence needs semantic review" }, {} as any),
+          ).rejects.toThrow("requires taskID")
+
+          const noSessionTools = createDeliveryTools({ taskID: "tsk_integrity_context" })
+          await expect(
+            noSessionTools.run_integrity_review.execute!(
+              { reason: "delivery evidence needs semantic review" },
+              {} as any,
+            ),
+          ).rejects.toThrow("requires delivery session context")
+        },
+      })
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true })
+    }
   })
 
   test("upstream context hard-fails when architect contract graph is missing", async () => {

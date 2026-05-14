@@ -1,11 +1,11 @@
 /**
  * Single-source push-based async iterable with chunk-driven idle timeout.
  *
- * Both `executor/managed.ts` and `executor/opencode.ts` implement the same
+ * Both `executor/managed.ts` and `executor/opencorvus.ts` implement the same
  * ExecutorAdapter.events() shape: "a queue of {type,summary,payload}
  * notifications produced by one source, consumed by one async for-await,
  * stopped on completion OR external abort". Before this module each side
- * hand-rolled the queue/wake/loop — and `opencode.ts` in particular had
+ * hand-rolled the queue/wake/loop — and `opencorvus.ts` in particular had
  * no idle timeout, which left goal runs silently stuck when the upstream
  * TCP went quiet.
  *

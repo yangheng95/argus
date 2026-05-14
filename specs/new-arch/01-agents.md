@@ -123,12 +123,12 @@ orchestrator/loop.ts — runTaskLoop()
 | Agent | 代码 | 职责 | 何时被调用 |
 |---|---|---|---|
 | Intent Analysis | `intent-analysis/agent.ts` | 解读用户的简短/模糊请求，输出 `IntentAnalysisResult`（intent class / complexity band / missing-info / clarifications） | 由 `analyze_intent` orchestrator tool 调起；可选 stage（已接线，旧 13 号文档"not wired yet"已过期） |
-| Requirements | `requirements/agent.ts` | Zod tool 输出 Goals[] + 追溯矩阵 + fidelity | pipeline workflow 或 Orchestrator 判断需要 |
-| Architect | `architect/agent.ts` | 接口契约、目录蓝图、导出清单；写 decision-log；fidelity / contract IR / linker 拆到独立文件 | 跨目标协调需要时 |
+| Requirements | `requirements/agent.ts` | Zod tool 输出 REQ-N + foundational decisions；不产出 goals | pipeline workflow 或 Orchestrator 判断需要 |
+| Architect | `architect/agent.ts` | 权威 goal 分解者：必须先分析边界，再产出至少 2 个小型、可独立执行/验收的 goals；禁止单个大型 all-in-one goal；同时负责接口契约、追溯、fidelity / contract IR / linker | 跨目标协调需要时 |
 | Design Analyst | `design-analyst/agent.ts` | 视觉参考（Figma / 图片 / URL）→ 布局 / 样式 / 组件清单 | 有视觉参考的前端任务 |
 | Integrity Reviewer | `integrity/agent.ts` | 多维 integrity review：requirement_fidelity / technical_feasibility / hallucination / solution_quality | 由 `integrity` orchestrator tool 调起（旧 `fidelity` kind 已并入此 agent） |
 | Prosecutor | `prosecutor/agent.ts` | 对交付候选发起对抗性复核 | 由 `prosecute` orchestrator tool 调起 |
-| Delivery | `delivery/agent.ts` | diff 验收 + 触发回修（通过 deliver→重新 call build 的循环）；新增 arbiter / specialist-review / specialists/ / verdict / visual-metric | 每个 workflow 末尾 |
+| Delivery | `delivery/agent.ts` | diff 验收 + 触发回修（通过 deliver→重新 call build 的循环）；可在交付证据触发语义疑问时调用 `run_integrity_review` 记录 integrity_attempt，但不是固定 pre-delivery gate；新增 arbiter / specialist-review / specialists / verdict / visual-metric | 每个 workflow 末尾 |
 | Build | `build/agent.ts`（独立包：`agent.ts` / `index.ts` / `report.ts` / `types.ts`） + `goal/runner.ts`（worktree + executor 执行体）+ `agent/sub-agent-protocol.ts`（共享 subagent 协议） | 在 worktree 中实际写代码；通过 `Agent.get("build")` 暴露给 orchestrator | Orchestrator 通过 `build` tool 调起 |
 
 > Planner-as-agent 已删除。session 级的 `src/tool/planner.ts` 是一个 working-memory

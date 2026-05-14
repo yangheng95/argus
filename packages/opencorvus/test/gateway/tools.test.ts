@@ -17,7 +17,8 @@ Log.init({ print: false })
 // Phase 2 tool invariants:
 //  - enqueue_task creates a task with kind="workflow" (orchestrator itself decides
 //    whether to run the pipeline or route to its build tool)
-//  - queue is optional; omission starts immediately
+//  - queue is optional; omission makes the task immediately eligible for the
+//    directory queue, but never bypasses an active same-cwd task
 //  - it goes through EngineService.createTask + appears in listProjectTasks
 //  - forward_clarification unblocks an awaiting Question.ask
 //  - switch_cwd persists to gateway session metadata

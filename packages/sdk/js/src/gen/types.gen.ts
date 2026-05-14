@@ -3801,7 +3801,7 @@ export type ChannelMessageData = {
     user_id?: string
     request_id?: string
     source?: string
-    executor?: "mirrorcode" | "codex" | "claude-code"
+    executor?: "opencorvus" | "codex" | "claude-code"
     allow_create?: boolean
     allow_session_mutation?: boolean
     bind?: boolean
@@ -3835,7 +3835,7 @@ export type ChannelMessageResponses = {
     local_action?:
       | {
           type: "set_executor"
-          executor: "mirrorcode" | "codex" | "claude-code"
+          executor: "opencorvus" | "codex" | "claude-code"
         }
       | {
           type: "select_task"
@@ -3921,7 +3921,7 @@ export type ExecutorListResponses = {
    * Executor status
    */
   200: Array<{
-    id: "mirrorcode" | "codex" | "claude-code"
+    id: "opencorvus" | "codex" | "claude-code"
     label: string
     registered: boolean
     discovered: boolean
@@ -6305,7 +6305,7 @@ export type PanelMessageData = {
     text: string
     taskID?: string
     sessionID?: string
-    executor?: "mirrorcode" | "codex" | "claude-code"
+    executor?: "opencorvus" | "codex" | "claude-code"
     channel?: string
     thread?: string
     user_id?: string
@@ -6341,7 +6341,7 @@ export type PanelMessageResponses = {
     local_action?:
       | {
           type: "set_executor"
-          executor: "mirrorcode" | "codex" | "claude-code"
+          executor: "opencorvus" | "codex" | "claude-code"
         }
       | {
           type: "select_task"
@@ -6387,7 +6387,7 @@ export type PanelMessageStreamData = {
     text: string
     taskID?: string
     sessionID?: string
-    executor?: "mirrorcode" | "codex" | "claude-code"
+    executor?: "opencorvus" | "codex" | "claude-code"
     channel?: string
     thread?: string
     user_id?: string
@@ -6423,7 +6423,7 @@ export type PanelMessageStreamResponses = {
     local_action?:
       | {
           type: "set_executor"
-          executor: "mirrorcode" | "codex" | "claude-code"
+          executor: "opencorvus" | "codex" | "claude-code"
         }
       | {
           type: "select_task"
@@ -6857,7 +6857,7 @@ export type GatewayControlMessageData = {
     text: string
     taskID?: string
     sessionID?: string
-    executor?: "mirrorcode" | "codex" | "claude-code"
+    executor?: "opencorvus" | "codex" | "claude-code"
     channel?: string
     thread?: string
     user_id?: string
@@ -6894,7 +6894,7 @@ export type GatewayControlMessageResponses = {
     local_action?:
       | {
           type: "set_executor"
-          executor: "mirrorcode" | "codex" | "claude-code"
+          executor: "opencorvus" | "codex" | "claude-code"
         }
       | {
           type: "select_task"
@@ -6935,7 +6935,7 @@ export type GatewayControlActionData = {
         action: "create_task"
         request: string
         request_id?: string
-        executor?: "mirrorcode" | "codex" | "claude-code"
+        executor?: "opencorvus" | "codex" | "claude-code"
         queue?: boolean
         checks?: {
           build?: Array<string> | false
@@ -7204,7 +7204,7 @@ export type GatewayControlActionData = {
       }
     | {
         action: "set_executor"
-        executor: "mirrorcode" | "codex" | "claude-code"
+        executor: "opencorvus" | "codex" | "claude-code"
       }
     | {
         action: "select_task"
@@ -7257,6 +7257,69 @@ export type GatewayControlActionResponses = {
 
 export type GatewayControlActionResponse = GatewayControlActionResponses[keyof GatewayControlActionResponses]
 
+export type GatewayTaskDecomposeData = {
+  body?: {
+    requirement: string
+    executor?: "opencorvus" | "codex" | "claude-code"
+  }
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/gateway/task/decompose"
+}
+
+export type GatewayTaskDecomposeResponses = {
+  /**
+   * Decomposition proposal
+   */
+  200: {
+    proposal_id: string
+    requirement: string
+    summary: string
+    tasks: Array<{
+      /**
+       * Stable within-proposal identifier in snake_case (e.g. "add_login_route"). Used by other candidates' `dependencies` lists.
+       */
+      id: string
+      /**
+       * Imperative, concise task title (≤80 chars).
+       */
+      title: string
+      /**
+       * Detailed actionable description of the task — what to do and the rough scope.
+       */
+      description: string
+      /**
+       * Concrete acceptance criteria. Each item is a single observable condition.
+       */
+      acceptance?: Array<string>
+      /**
+       * Priority bucket. Default to "normal"; raise to "high" or "critical" only when other candidates depend on this one or it's a blocker.
+       */
+      priority: "critical" | "high" | "normal" | "low"
+      /**
+       * Optional executor hint. Leave empty unless the task strongly favours a specific executor.
+       */
+      executor?: "opencorvus" | "codex" | "claude-code"
+      /**
+       * true = recommended to enter the directory queue (defer to current active task), false = recommended to start immediately.
+       */
+      recommended_queue: boolean
+      /**
+       * Within-proposal dependency IDs (must match other candidates' `id` fields). Empty for independent tasks.
+       */
+      dependencies?: Array<string>
+      /**
+       * Short risk notes (one per item). Empty when no notable risk.
+       */
+      risks?: Array<string>
+    }>
+  }
+}
+
+export type GatewayTaskDecomposeResponse = GatewayTaskDecomposeResponses[keyof GatewayTaskDecomposeResponses]
+
 export type GatewayChannelMessageData = {
   body?: {
     channel: string
@@ -7266,7 +7329,7 @@ export type GatewayChannelMessageData = {
     user_id?: string
     request_id?: string
     source?: string
-    executor?: "mirrorcode" | "codex" | "claude-code"
+    executor?: "opencorvus" | "codex" | "claude-code"
     allow_create?: boolean
     allow_session_mutation?: boolean
     bind?: boolean
@@ -7317,7 +7380,7 @@ export type GatewayChannelMessageResponses = {
     local_action?:
       | {
           type: "set_executor"
-          executor: "mirrorcode" | "codex" | "claude-code"
+          executor: "opencorvus" | "codex" | "claude-code"
         }
       | {
           type: "select_task"
@@ -7412,7 +7475,7 @@ export type TaskCreateData = {
     project?: string
     requestID?: string
     source?: string
-    executor?: "mirrorcode" | "codex" | "claude-code"
+    executor?: "opencorvus" | "codex" | "claude-code"
     title?: string
     request: string
     attachments?: Array<{
@@ -7921,7 +7984,7 @@ export type TaskListResponses = {
         taskID: string
         planVersionID?: string | null
         sessionID?: string | null
-        executor: "mirrorcode" | "codex" | "claude-code"
+        executor: "opencorvus" | "codex" | "claude-code"
         status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
         phase: "plan" | "execute" | "evaluate" | "deliver" | "dispatch" | "retry"
         blockingReason?: string
@@ -8066,7 +8129,7 @@ export type TaskGlobalListResponses = {
         taskID: string
         planVersionID?: string | null
         sessionID?: string | null
-        executor: "mirrorcode" | "codex" | "claude-code"
+        executor: "opencorvus" | "codex" | "claude-code"
         status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
         phase: "plan" | "execute" | "evaluate" | "deliver" | "dispatch" | "retry"
         blockingReason?: string
@@ -8271,6 +8334,37 @@ export type TaskGetResponses = {
 
 export type TaskGetResponse = TaskGetResponses[keyof TaskGetResponses]
 
+export type TaskBindingsData = {
+  body?: never
+  path: {
+    taskID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/task/{taskID}/bindings"
+}
+
+export type TaskBindingsResponses = {
+  /**
+   * Channel bindings for the task
+   */
+  200: Array<{
+    id: string
+    task_id: string
+    platform: string
+    channel: string
+    thread: string
+    payload?: {
+      [key: string]: unknown
+    }
+    time_created?: number
+    time_updated?: number
+  }>
+}
+
+export type TaskBindingsResponse = TaskBindingsResponses[keyof TaskBindingsResponses]
+
 export type TaskProgressData = {
   body?: never
   path: {
@@ -8392,7 +8486,7 @@ export type TaskProgressResponses = {
       taskID: string
       planVersionID?: string | null
       sessionID?: string | null
-      executor: "mirrorcode" | "codex" | "claude-code"
+      executor: "opencorvus" | "codex" | "claude-code"
       status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
       phase: "plan" | "execute" | "evaluate" | "deliver" | "dispatch" | "retry"
       blockingReason?: string
@@ -8637,7 +8731,7 @@ export type TaskConversationResponses = {
         taskID: string
         planVersionID?: string | null
         sessionID?: string | null
-        executor: "mirrorcode" | "codex" | "claude-code"
+        executor: "opencorvus" | "codex" | "claude-code"
         status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
         phase: "plan" | "execute" | "evaluate" | "deliver" | "dispatch" | "retry"
         blockingReason?: string
@@ -9180,7 +9274,7 @@ export type TaskBoardResponses = {
       taskID: string
       planVersionID?: string | null
       sessionID?: string | null
-      executor: "mirrorcode" | "codex" | "claude-code"
+      executor: "opencorvus" | "codex" | "claude-code"
       status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
       phase: "plan" | "execute" | "evaluate" | "deliver" | "dispatch" | "retry"
       blockingReason?: string
@@ -9556,7 +9650,7 @@ export type TaskRunsResponses = {
     taskID: string
     planVersionID?: string | null
     sessionID?: string | null
-    executor: "mirrorcode" | "codex" | "claude-code"
+    executor: "opencorvus" | "codex" | "claude-code"
     status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
     phase: "plan" | "execute" | "evaluate" | "deliver" | "dispatch" | "retry"
     blockingReason?: string
@@ -9940,7 +10034,7 @@ export type TaskRetryResponses = {
     taskID: string
     planVersionID?: string | null
     sessionID?: string | null
-    executor: "mirrorcode" | "codex" | "claude-code"
+    executor: "opencorvus" | "codex" | "claude-code"
     status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
     phase: "plan" | "execute" | "evaluate" | "deliver" | "dispatch" | "retry"
     blockingReason?: string
@@ -9993,7 +10087,7 @@ export type TaskReplanResponses = {
     taskID: string
     planVersionID?: string | null
     sessionID?: string | null
-    executor: "mirrorcode" | "codex" | "claude-code"
+    executor: "opencorvus" | "codex" | "claude-code"
     status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
     phase: "plan" | "execute" | "evaluate" | "deliver" | "dispatch" | "retry"
     blockingReason?: string
@@ -10077,7 +10171,7 @@ export type RunGetResponses = {
     taskID: string
     planVersionID?: string | null
     sessionID?: string | null
-    executor: "mirrorcode" | "codex" | "claude-code"
+    executor: "opencorvus" | "codex" | "claude-code"
     status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
     phase: "plan" | "execute" | "evaluate" | "deliver" | "dispatch" | "retry"
     blockingReason?: string
@@ -10129,7 +10223,7 @@ export type RunExecutorSessionResponses = {
     id: string
     taskID: string
     runID: string
-    provider: "mirrorcode" | "codex" | "claude-code"
+    provider: "opencorvus" | "codex" | "claude-code"
     protocol: string
     protocolVersion: string
     transport: "inproc" | "stdio" | "ws" | "http"

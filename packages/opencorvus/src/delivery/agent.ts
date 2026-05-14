@@ -142,6 +142,7 @@ export namespace DeliveryAgent {
           goals: input.goals,
           delivery: input.delivery,
           attachments: input.attachments,
+          signal: input.signal,
         })
         const outputToolKit = createDeliveryOutputTools({
           requiredTools: systemResolved.requiredTools,

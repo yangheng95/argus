@@ -319,6 +319,7 @@ test("DeliveryAgent keeps visual images out of startup prompt and exposes explor
   expect(capturedParts.every((part) => part.type === "text")).toBe(true)
   expect(toolNames).toContain("compare_visual_artifacts")
   expect(toolNames).toContain("inspect_delivery_context")
+  expect(toolNames).toContain("run_integrity_review")
 })
 
 test("DeliveryAgent parses collector verdict before returning to the arbiter", async () => {

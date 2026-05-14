@@ -12,7 +12,9 @@
  *                              snapshot is present, actually done end-to-end)
  *   2. technical_feasibility — viability of the proposed contracts
  *   3. hallucination         — fabrication-free upstream reasoning
- *   4. solution_quality      — soundness of the decomposition itself
+ *   4. solution_quality      — decomposition defects that threaten task
+ *                              semantic integrity, not a general Architect
+ *                              style review
  *
  * Adding a 5th dimension is a one-liner here: append a new `IntegrityDimension`
  * to `INTEGRITY_DIMENSIONS`. The agent prompt, Zod submission schema, verdict
@@ -197,33 +199,28 @@ export const INTEGRITY_DIMENSIONS: readonly IntegrityDimension[] = [
     id: "solution_quality",
     title: "Solution Quality",
     summary:
-      "Independent of correctness, is the decomposition itself sound? Granularity, " +
-      "acceptance-spec strength, ownership clarity, and ordering smell all live here.",
+      "Only flag decomposition or acceptance-quality defects when they threaten the task's " +
+      "semantic integrity. This dimension is not a second full Architect review; advisory " +
+      "style preferences, harmless granularity taste, and ordinary refactor opinions do not " +
+      "belong here.",
     checklist: [
-      "Granularity. A single mega-goal that absorbs unrelated REQs = `granularity_off` " +
-        "(propose a split). 30 atomic goals where the user asked for one feature = same " +
-        "issue, opposite direction (propose merges).",
-      "Acceptance-spec strength. A `severity: 'essential'` spec backed only by a `test -f` " +
-        "or a `grep` of self-written content is `weak_acceptance` — the spec passes by " +
-        "construction. A goal with zero `essential` specs is also `weak_acceptance`. " +
-        "Acceptance command external dependencies. If a scorer's shell command depends on " +
-        "tooling, scripts, or configuration the goal does NOT own (e.g. an `npm test` " +
-        "command on a goal whose `owned_paths` include no `package.json`, or a `bunx tsc` " +
-        "command on a goal that owns no `tsconfig.json`), and no ancestor goal in " +
-        "`depends_on` owns it either, that's also `weak_acceptance`: the command passes " +
-        "or fails based on state outside this plan's control. Either widen the goal's " +
-        "`owned_paths` (or its dependency's) to cover the prerequisite, or scope the " +
-        "command to files the goal actually owns (e.g. `bun test src/<goal-dir>/`).",
+      "Granularity. Flag `granularity_off` only when goal shape hides or loses task scope: " +
+        "one mega-goal absorbs unrelated REQs so acceptance cannot isolate failures, or many " +
+        "atomic goals fragment one user capability so no goal owns the end-to-end behavior. " +
+        "Do not flag harmless preference-level graph shape.",
+      "Acceptance-spec strength. Flag `weak_acceptance` when an essential spec cannot prove " +
+        "the REQ it claims: file-existence / self-grep checks that pass by construction, zero " +
+        "essential specs on a blocking goal, or commands depending on tooling/config outside " +
+        "the goal's owned paths and ancestors. The issue must name the affected REQ or spec.",
       "Shared responsibility clarity. `owned_paths` overlap is allowed when goals need to " +
-        "coordinate on a shared surface. Flag `ownership_overlap` only when that shared " +
-        "surface has no dependency, import/export, assembly-owner, or `files_changed[]` " +
-        "explanation tying the edits together. The correction should add coordination " +
-        "context or clarify responsibility; it must not turn `owned_paths` into a hard " +
-        "editable-file lock.",
-      "Ordering smell. A `verification` goal scheduled before its target `feature` goal, " +
-        "or a `bootstrap` goal that depends on `feature` outputs, is `ordering_smell`. " +
-        "If the only needed repair is dependency ordering, propose a `modify` correction " +
-        "that rewrites `depends_on`; do not describe the desired ordering only in prose.",
+        "coordinate on a shared surface. Flag `ownership_overlap` only when the overlap makes " +
+        "the task outcome ambiguous because no dependency, import/export, assembly-owner, or " +
+        "`files_changed[]` evidence explains who completes the shared surface. It must not " +
+        "turn `owned_paths` into a hard editable-file lock.",
+      "Ordering smell. Flag `ordering_smell` only when dependency order can make a required " +
+        "REQ untestable or impossible to integrate, such as verification scheduled before its " +
+        "feature or bootstrap depending on feature outputs. Propose a concrete `depends_on` " +
+        "correction when ordering is the actual repair.",
     ],
     issueTypes: ["granularity_off", "weak_acceptance", "ownership_overlap", "ordering_smell"],
     canProposeCorrections: true,
