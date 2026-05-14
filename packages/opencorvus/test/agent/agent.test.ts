@@ -156,10 +156,12 @@ test("orchestrator does not receive the control-plane panel tool", async () => {
       expect(orchestrator).toBeDefined()
       expect(orchestrator?.tools?.include).not.toContain("panel")
       expect(orchestrator?.tools?.include).not.toContain("task")
+      expect(orchestrator?.tools?.include).not.toContain("memory")
 
       const tools = await ToolRegistry.tools({ providerID: "", modelID: "" }, orchestrator)
       expect(tools.map((tool) => tool.id)).not.toContain("panel")
       expect(tools.map((tool) => tool.id)).not.toContain("task")
+      expect(tools.map((tool) => tool.id)).not.toContain("memory")
     },
   })
 })

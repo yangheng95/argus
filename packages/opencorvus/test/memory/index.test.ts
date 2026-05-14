@@ -141,9 +141,20 @@ describe("memory typed recall", () => {
           projectID: Instance.project.id,
           sessionID: "ses_memory_prompt",
           query: "socket mode xoxb",
+          memoryToolAvailable: true,
         })
         expect(injected).toContain("Auto-Recalled Memory")
         expect(injected).toContain("Memory Policy")
+
+        const readOnlyInjected = await MemoryInjection.systemPromptSection({
+          projectID: Instance.project.id,
+          sessionID: "ses_memory_prompt",
+          query: "socket mode xoxb",
+          memoryToolAvailable: false,
+        })
+        expect(readOnlyInjected).toContain("Auto-Recalled Memory")
+        expect(readOnlyInjected).not.toContain("Memory Policy")
+        expect(readOnlyInjected).not.toContain("Proactive Writing")
       },
     })
   })
