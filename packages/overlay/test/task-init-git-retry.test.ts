@@ -14,7 +14,8 @@ import type {
 
 let dialogResponse: { confirmed: boolean } = { confirmed: true }
 let queueDialogResponse: { confirmed: boolean; value: string | null } = { confirmed: true, value: "queue" }
-const dialogCalls: Array<{ title?: string; message?: string; select?: boolean }> = []
+let routeDialogResponse: { confirmed: boolean; value: string | null } = { confirmed: true, value: "workflow" }
+const dialogCalls: Array<{ title?: string; message?: string; select?: boolean; kind?: string; countdownSeconds?: number }> = []
 const initCalls: number[] = []
 let initResult = true
 
@@ -26,8 +27,15 @@ const realGit = await import("../src/utils/git")
 mock.module("../src/services/app-dialog", () => ({
   ...realAppDialog,
   showAppDialog: async (options: any) => {
-    dialogCalls.push({ title: options?.title, message: options?.message, select: options?.select === true })
-    if (options?.select === true) return queueDialogResponse
+    dialogCalls.push({
+      title: options?.title,
+      message: options?.message,
+      select: options?.select === true,
+      kind: options?.kind,
+      countdownSeconds: options?.countdownSeconds,
+    })
+    if (options?.kind === "task-route-decision") return routeDialogResponse
+    if (options?.kind === "task-queue-decision") return queueDialogResponse
     return { confirmed: dialogResponse.confirmed, value: null }
   },
 }))
@@ -67,6 +75,7 @@ beforeEach(() => {
   initCalls.length = 0
   dialogResponse = { confirmed: true }
   queueDialogResponse = { confirmed: true, value: "queue" }
+  routeDialogResponse = { confirmed: true, value: "workflow" }
   initResult = true
 })
 
@@ -93,7 +102,7 @@ describe("createTask + WorktreeNotGitError init-git retry", () => {
       }),
     )
 
-    const taskID = await createTask({ text: "hello", queue: false })
+    const taskID = await createTask({ text: "hello", queue: false, kind: "workflow" })
     expect(taskID).toBe("tsk_abc123")
     expect(attempts).toBe(2)
     expect(dialogCalls.length).toBe(1)
@@ -116,7 +125,7 @@ describe("createTask + WorktreeNotGitError init-git retry", () => {
 
     let caught: unknown
     try {
-      await createTask({ text: "hello", queue: false })
+      await createTask({ text: "hello", queue: false, kind: "workflow" })
     } catch (e) {
       caught = e
     }
@@ -138,7 +147,7 @@ describe("createTask + WorktreeNotGitError init-git retry", () => {
 
     let caught: unknown
     try {
-      await createTask({ text: "hello", queue: false })
+      await createTask({ text: "hello", queue: false, kind: "workflow" })
     } catch (e) {
       caught = e
     }
@@ -159,7 +168,7 @@ describe("createTask + WorktreeNotGitError init-git retry", () => {
 
     let caught: unknown
     try {
-      await createTask({ text: "hello", queue: false })
+      await createTask({ text: "hello", queue: false, kind: "workflow" })
     } catch (e) {
       caught = e
     }
@@ -169,7 +178,7 @@ describe("createTask + WorktreeNotGitError init-git retry", () => {
     expect(initCalls.length).toBe(0)
   })
 
-  test("missing queue decision opens a selection dialog and posts the chosen queue value", async () => {
+  test("missing queue decision opens a card decision dialog and posts the chosen queue value", async () => {
     let posted: any
     __setHostTransportForTest(
       fakeTransport((req) => {
@@ -178,10 +187,46 @@ describe("createTask + WorktreeNotGitError init-git retry", () => {
       }),
     )
 
-    const taskID = await createTask({ text: "hello" })
+    const taskID = await createTask({ text: "hello", kind: "workflow" })
 
     expect(taskID).toBe("tsk_queue_choice")
-    expect(dialogCalls.some((item) => item.select === true)).toBe(true)
+    expect(dialogCalls.some((item) => item.kind === "task-queue-decision")).toBe(true)
+    expect(dialogCalls.some((item) => item.kind === "task-queue-decision" && item.select === true)).toBe(false)
+    expect(dialogCalls.find((item) => item.kind === "task-queue-decision")?.countdownSeconds).toBe(8)
     expect(posted.queue).toBe(true)
+  })
+
+  test("missing route decision posts the selected workflow task kind", async () => {
+    let posted: any
+    routeDialogResponse = { confirmed: true, value: "workflow" }
+    __setHostTransportForTest(
+      fakeTransport((req) => {
+        posted = req.body?.kind === "json" ? req.body.value : JSON.parse(String(req.body))
+        return { status: 200, ok: true, headers: {}, body: { task_id: "tsk_workflow_route" } }
+      }),
+    )
+
+    const taskID = await createTask({ text: "hello", queue: false })
+
+    expect(taskID).toBe("tsk_workflow_route")
+    expect(dialogCalls.some((item) => item.kind === "task-route-decision")).toBe(true)
+    expect(dialogCalls.some((item) => item.kind === "task-route-decision" && item.select === true)).toBe(false)
+    expect(posted.kind).toBe("workflow")
+  })
+
+  test("route decision can explicitly create a direct build task", async () => {
+    let posted: any
+    routeDialogResponse = { confirmed: true, value: "build" }
+    __setHostTransportForTest(
+      fakeTransport((req) => {
+        posted = req.body?.kind === "json" ? req.body.value : JSON.parse(String(req.body))
+        return { status: 200, ok: true, headers: {}, body: { task_id: "tsk_build_route" } }
+      }),
+    )
+
+    const taskID = await createTask({ text: "hello", queue: false })
+
+    expect(taskID).toBe("tsk_build_route")
+    expect(posted.kind).toBe("build")
   })
 })

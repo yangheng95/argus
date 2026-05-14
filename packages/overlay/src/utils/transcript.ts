@@ -551,6 +551,14 @@ function flattenCardToMessages(node: CardNode | undefined, out: any[]): void {
   }
 }
 
+export function conversationTranscriptMessageCount(): number {
+  const items: any[] = [];
+  for (const id of cardTreeStore.order) {
+    flattenCardToMessages(cardTreeStore.cards[id], items);
+  }
+  return items.filter((item) => Array.isArray(item.parts) && item.parts.length > 0).length;
+}
+
 export async function copyChatConversation(): Promise<void> {
   try {
     const items: any[] = [];

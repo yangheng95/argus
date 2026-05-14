@@ -13,7 +13,7 @@
 // resume from the last persisted sequence (plan §5.5).
 
 import { clearEventQueue, setSseConnected } from "../store/messages"
-import { boardStore } from "../store/board"
+import { boardStore, loadTasks } from "../store/board"
 import { routeSSEEvent, handleEventStreamEvent, handleTaskListNotification } from "./events"
 import { hydrateTaskConversation } from "./conversation"
 import { getHostTransport, type StreamHandle } from "./host-transport"
@@ -47,7 +47,7 @@ export async function performSseReconnect(deps: SseReconnectDeps): Promise<void>
     if (deps.currentTaskID() !== deps.taskID) return
     deps.scheduleRetry(() => {
       if (deps.currentTaskID() !== deps.taskID) return
-      deps.restart(deps.taskID, deps.after)
+      void performSseReconnect(deps)
     }, deps.retryDelayMs)
     return
   }
@@ -147,10 +147,9 @@ export function stopSSE() {
     clearTimeout(sseRetryTimer)
     sseRetryTimer = null
   }
-  if (sseHandle) {
-    sseHandle.close()
-  }
+  const handle = sseHandle
   sseHandle = null
+  if (handle) handle.close()
   setSseConnected(false)
   clearEventQueue()
 }
@@ -165,9 +164,28 @@ export function stopSSE() {
 
 let taskListHandle: StreamHandle | null = null
 let taskListRetryTimer: any = null
+let taskListRefreshTimer: ReturnType<typeof setInterval> | null = null
+
+export const TASK_LIST_REFRESH_INTERVAL_MS = 30_000
+
+function startTaskListRefreshTimer() {
+  stopTaskListRefreshTimer()
+  taskListRefreshTimer = setInterval(() => {
+    void loadTasks().catch((err) => {
+      console.error("[task-list-sse] periodic task refresh failed", err)
+    })
+  }, TASK_LIST_REFRESH_INTERVAL_MS)
+}
+
+function stopTaskListRefreshTimer() {
+  if (!taskListRefreshTimer) return
+  clearInterval(taskListRefreshTimer)
+  taskListRefreshTimer = null
+}
 
 export function startTaskListSSE() {
   stopTaskListSSE()
+  startTaskListRefreshTimer()
   if (!settingsStore.directory.trim()) return
   const transport = getHostTransport()
   const handle = transport.openStream(
@@ -217,12 +235,12 @@ export function startTaskListSSE() {
 }
 
 export function stopTaskListSSE() {
+  stopTaskListRefreshTimer()
   if (taskListRetryTimer) {
     clearTimeout(taskListRetryTimer)
     taskListRetryTimer = null
   }
-  if (taskListHandle) {
-    taskListHandle.close()
-  }
+  const handle = taskListHandle
   taskListHandle = null
+  if (handle) handle.close()
 }

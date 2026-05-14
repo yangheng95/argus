@@ -7,8 +7,8 @@ const REASONING_PART_TSX = readFileSync(
   "utf8",
 )
 
-test("ReasoningPart toggles between compact and full-height reasoning text", () => {
-  expect(REASONING_PART_TSX).toContain('const [expanded, setExpanded] = createSignal(false)')
+test("ReasoningPart defaults to full-height reasoning text and can be collapsed", () => {
+  expect(REASONING_PART_TSX).toContain('const [expanded, setExpanded] = createSignal(true)')
   expect(REASONING_PART_TSX).toContain('data-expanded={expanded() ? "true" : "false"}')
   expect(REASONING_PART_TSX).toContain('type="button"')
   expect(REASONING_PART_TSX).toContain("aria-expanded={expanded()}")

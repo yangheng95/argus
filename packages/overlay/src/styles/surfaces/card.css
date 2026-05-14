@@ -152,7 +152,7 @@ body {
 .card[data-depth="0"][data-kind="step"],
 .card[data-depth="0"][data-kind="tool"],
 .card[data-depth="0"][data-kind="integrity"] {
-  width: min(84%, calc(980px * var(--ui-scale)));
+  width: var(--conversation-card-inline-size);
 }
 
 /* iter51: flat hover — only border-color tightens, no

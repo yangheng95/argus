@@ -147,7 +147,8 @@ setCardTreeStore(
 - 头像列宽度：`calc(36px * var(--ui-scale))`
 - 头像圆形容器：`calc(28px * var(--ui-scale))`；图标 `calc(16px * var(--ui-scale))`
 - 头像与气泡间距：`calc(10px * var(--ui-scale))`
-- 气泡最大宽度：`min(76%, calc(720px * var(--ui-scale)))`
+- 普通 agent bubble 和结构化 goal/executor card 通过 Conversation owner surface 的 `--conversation-card-inline-size` 共享同一宽度契约，默认占满可用 inline size。user/system message 可以保留角色特定宽度，因为它们不是 agent execution card。
+- user bubble 的 header 不使用通用 right-align 镜像布局：title 与正文左边缘对齐，actions 和 avatar 固定在右侧，避免 copy action 抢占左侧文本起点。
 - 气泡内边距：`calc(11px * var(--ui-scale)) calc(14px * var(--ui-scale))`
 - 气泡圆角：`var(--oc-radius-large)`
 - 气泡间垂直间距：`calc(10px * var(--ui-scale))`
@@ -168,13 +169,8 @@ setCardTreeStore(
     inset 0 1px 0 color-mix(in srgb, var(--text-strong) 6%, transparent),
     0 1px 2px color-mix(in srgb, var(--text) 4%, transparent);
 }
-.chat-bubble[data-align="right"] {
-  background: color-mix(in srgb, var(--accent) 16%, color-mix(in srgb, var(--surface) 44%, transparent));
-  border-color: color-mix(in srgb, var(--accent) 28%, transparent);
-}
-.chat-bubble[data-stage="system"] {
-  background: color-mix(in srgb, var(--warn) 12%, color-mix(in srgb, var(--surface) 50%, transparent));
-  border-color: color-mix(in srgb, var(--warn) 24%, transparent);
+.chat-bubble-row[data-kind="agent"] .chat-bubble {
+  border-left: calc(3px * var(--ui-scale)) solid var(--card-stage);
 }
 @supports not (backdrop-filter: blur(0)) {
   .chat-bubble {
@@ -245,7 +241,8 @@ setCardTreeStore(
 
 ### bubble-foot（可选）
 
-- activity stats（仅展开 + 有 inline tool/skill 活动）
+- activity stats：agent bubble 与结构化 goal/executor card 一样长期展示执行统计；user/system message 仍只在展开且有活动时展示
+- agent bubble 可渲染 `card__todo-summary` 作为执行进度摘要，使用与结构化 card 相同的 progress bar / count / current 视觉语言
 - 时间戳：`stamp(time)`
 
 ### 折叠态（2026-05-13 用户反馈修订）
@@ -255,8 +252,8 @@ setCardTreeStore(
 - `ChatBubble` 的 bubble surface 可以保留安全过滤后的双击 toggle，但不能成为唯一折叠入口；否则会形成与 `Card` / workflow header 折叠不同的双源交互。
 - 结构化卡片折叠交互统一为单击双向 toggle：header 负责语义按钮和 Enter/Space，card surface 负责正文/空白区安全 toggle；surface 必须过滤按钮、链接、输入框、文本选择和嵌套卡片，禁止再用“单击只展开、双击收起”的双入口契约。
 - 结构化卡片 body 是内容层，不是第二张卡片：`goalDescription`、step 正文、collapsed preview 禁止再画内层边框、渐变底、圆角盒或额外竖向 rail。
-- ChatBubble 不渲染 `collapsedPreview` / `card__todo-summary`；todo progress 属于结构化卡折叠摘要，不属于消息卡片。
-- ChatBubble 使用单一 flat card surface：head 与 body 同处一个 `.chat-bubble` 边界内，禁止 head 外置再套一个空 bubble 形成“实心 bar”。
+- ChatBubble 收起态必须渲染 `card__collapsed-preview`，文本来自 `collectLatestActivityText` + `collapsedActivityPreviewText`，与结构化 CardHeader 共用同一预览清洗逻辑；agent bubble 可渲染 `card__todo-summary`，user/system message 不渲染 todo progress。
+- ChatBubble 使用单一 flat card surface：head 与 body 同处一个 `.chat-bubble` 边界内，禁止 head 外置再套一个空 bubble 形成“实心 bar”。agent bubble 使用与结构化执行卡一致的外层 stage rail；user/system message 不使用执行 rail。
 
 ---
 
@@ -361,14 +358,14 @@ interface UseCardHeadActionsOutput {
 | Copy                                 | CardHeader copy 按钮                                                                   | ChatBubble actions（复用 hook）                                   |
 | Status badge / spinner               | CardHeader 左侧                                                                        | ChatBubble head 内                                                |
 | Duration chip                        | CardHeader 中部                                                                        | ChatBubble head 内                                                |
-| Collapsed preview                    | CardHeader `.card__collapsed-preview`（仅结构化 Card）                                 | 不进入 ChatBubble                                                 |
+| Collapsed preview                    | CardHeader `.card__collapsed-preview`                                                  | ChatBubble 收起态复用同一 class 与 `collapsedActivityPreviewText` |
 | Collapsed todo-summary               | CardHeader `.card__todo-summary`（progress bar + 计数 + current，仅结构化 Card）       | 不进入 ChatBubble                                                 |
 | Token / usage hint                   | CardHeader actions                                                                     | ChatBubble actions                                                |
 | Activity foot stats                  | Card `.card__foot`                                                                     | ChatBubble bubble-foot                                            |
 | Tool 卡 inline 渲染                  | CardParts toolToCardNode                                                               | 不变；inline 仍在 ChatBubble body                                 |
 | Auto-scroll                          | `setupAutoScroll`                                                                      | 不变                                                              |
 | Rewind cursor                        | `pruneCardsAfterCursor`                                                                | 不变                                                              |
-| **Sticky inline width**              | `ResizeObserver` 在 Card.tsx:53,250                                                    | **ChatBubble 自己实现**（top-level 卡仍需稳定宽度，避免气泡跳动） |
+| **Sticky inline width**              | 仅 expanded tool card 在 `Card.tsx` 内使用 `ResizeObserver` 锁宽                       | 不进入 ChatBubble；agent/message 宽度由 Conversation owner surface 控制 |
 | **折叠切换**                         | CardHeader header 单击 / Enter / Space + Card surface 正文/空白区单击，均为双向 toggle | 不进入 ChatBubble                                                 |
 | **errorReason chip**                 | CardHeader.tsx:280                                                                     | bubble-head title 行末                                            |
 | **Integrity body**                   | Card.tsx:342 `<IntegrityBody/>` 渲染                                                   | ChatBubble body：当 `node.integrity` 存在时插入 IntegrityBody     |
@@ -463,8 +460,8 @@ interface UseCardHeadActionsOutput {
 | ------------- | ------------------------------------------------------------- |
 | 气泡背景      | `var(--surface)` + alpha                                      |
 | 气泡边框      | `color-mix(var(--text) 8%)`                                   |
-| user 气泡背景 | `var(--accent)` + `var(--surface)` mix                        |
-| system 气泡   | `var(--warn)` + `var(--surface)` mix                          |
+| user 气泡背景 | 与普通 message 气泡同源；只改变对齐和头像布局，不改变背景/前景 |
+| agent 气泡 rail | `var(--card-stage-<role>)`；agent 不覆盖浅层气泡背景 |
 | Avatar 容器   | `var(--surface-inset)`                                        |
 | Avatar 图标色 | `var(--card-stage-<role>)`（**含新补的 system / integrity**） |
 | 文本          | `var(--text)` / `var(--text-soft)` / `var(--text-muted)`      |

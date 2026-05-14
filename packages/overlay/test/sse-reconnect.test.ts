@@ -1,6 +1,14 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { createRoot } from "solid-js"
-import { performSseReconnect, startSSE, startTaskListSSE, stopSSE, stopTaskListSSE, type SseReconnectDeps } from "../src/services/sse"
+import {
+  TASK_LIST_REFRESH_INTERVAL_MS,
+  performSseReconnect,
+  startSSE,
+  startTaskListSSE,
+  stopSSE,
+  stopTaskListSSE,
+  type SseReconnectDeps,
+} from "../src/services/sse"
 import {
   __setHostTransportForTest,
   type HostTransport,
@@ -44,6 +52,7 @@ function makeDeps(opts: {
   currentTaskID: () => string
   hydrate: (taskID: string) => Promise<number>
   retryDelayMs?: number
+  fireRetry?: boolean
 }): { deps: SseReconnectDeps; spy: Spy } {
   const spy: Spy = {
     hydrateCalls: [],
@@ -64,9 +73,7 @@ function makeDeps(opts: {
     },
     scheduleRetry: (fn, _ms) => {
       spy.retryCalls++
-      // Fire immediately so the test can observe what the retry
-      // would do without standing up a real setTimeout.
-      void Promise.resolve().then(fn)
+      if (opts.fireRetry) void Promise.resolve().then(fn)
     },
     retryDelayMs: opts.retryDelayMs ?? 3000,
   }
@@ -108,16 +115,44 @@ describe("performSseReconnect (audit W2-V10)", () => {
       expect(spy.hydrateCalls).toEqual(["tsk_b"])
       // Retry was scheduled.
       expect(spy.retryCalls).toBe(1)
-      // Yield so the (microtask-queued) retry callback runs.
       await new Promise((r) => setTimeout(r, 0))
-      // Retry, now still on the same task, fires startSSE with the
-      // ORIGINAL `after` (the hydrate cursor we couldn't compute).
-      expect(spy.restartCalls).toEqual([["tsk_b", 100]])
+      // Hydrate failure must not restart from the old cursor. Recovery
+      // retries hydration until it can rebuild the visible tree and compute
+      // a fresh resume sequence.
+      expect(spy.restartCalls).toEqual([])
       // The throw was logged (not silently swallowed).
       expect(errs.length).toBeGreaterThanOrEqual(1)
       const msg = errs[0]!.map(String).join(" ")
       expect(msg).toMatch(/reconnect hydrate failed/)
       expect(msg).toMatch(/tsk_b/)
+    } finally {
+      console.error = orig
+    }
+  })
+
+  test("hydrate retry rebuilds before restarting instead of resuming from stale cursor", async () => {
+    let attempts = 0
+    const orig = console.error
+    console.error = () => {}
+    try {
+      const { deps, spy } = makeDeps({
+        taskID: "tsk_retry",
+        after: 100,
+        currentTaskID: () => "tsk_retry",
+        fireRetry: true,
+        hydrate: async () => {
+          attempts += 1
+          if (attempts === 1) throw new Error("network down")
+          return 123
+        },
+      })
+
+      await performSseReconnect(deps)
+      await new Promise((r) => setTimeout(r, 0))
+
+      expect(spy.hydrateCalls).toEqual(["tsk_retry", "tsk_retry"])
+      expect(spy.retryCalls).toBe(1)
+      expect(spy.restartCalls).toEqual([["tsk_retry", 123]])
     } finally {
       console.error = orig
     }
@@ -268,5 +303,117 @@ describe("startSSE stream error handling", () => {
       stopTaskListSSE()
       dispose()
     })
+  })
+
+  test("task-list periodic refresh reloads the global list even without stream events", async () => {
+    let tick: (() => void) | undefined
+    let intervalMs = 0
+    let clearCalls = 0
+    const originalSetInterval = globalThis.setInterval
+    const originalClearInterval = globalThis.clearInterval
+
+    globalThis.setInterval = ((handler: TimerHandler, timeout?: number) => {
+      tick = () => {
+        if (typeof handler === "function") handler()
+      }
+      intervalMs = Number(timeout)
+      return 177 as unknown as ReturnType<typeof setInterval>
+    }) as typeof globalThis.setInterval
+    globalThis.clearInterval = ((_handle?: ReturnType<typeof setInterval>) => {
+      clearCalls++
+    }) as typeof globalThis.clearInterval
+
+    try {
+      const paths: string[] = []
+      let streamOpened = 0
+      const transport = {
+        kind: "tauri",
+        request: async <T>(input: TransportRequest) => {
+          paths.push(input.path)
+          return { status: 200, ok: true, headers: {}, body: { tasks: [] } as T }
+        },
+        openStream: (_input: StreamOpenRequest, _h: StreamHandlers) => {
+          streamOpened++
+          return { close() {} }
+        },
+        native: async () => null,
+        subscribeUiCommand: () => ({ unsubscribe() {} }),
+      } satisfies HostTransport
+
+      __setHostTransportForTest(transport)
+      setSettingsStore("directory", "")
+
+      startTaskListSSE()
+
+      expect(intervalMs).toBe(TASK_LIST_REFRESH_INTERVAL_MS)
+      expect(streamOpened).toBe(0)
+      expect(tick).toBeDefined()
+
+      tick!()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+
+      expect(paths).toEqual(["global/tasks"])
+
+      stopTaskListSSE()
+      expect(clearCalls).toBe(1)
+    } finally {
+      stopTaskListSSE()
+      __setHostTransportForTest(undefined)
+      globalThis.setInterval = originalSetInterval
+      globalThis.clearInterval = originalClearInterval
+      setSettingsStore("directory", "")
+    }
+  })
+
+  test("task-list deliberate stop closes the stream without scheduling reconnect", () => {
+    const originalSetInterval = globalThis.setInterval
+    const originalClearInterval = globalThis.clearInterval
+    const originalSetTimeout = globalThis.setTimeout
+    const originalClearTimeout = globalThis.clearTimeout
+    let timeoutCalls = 0
+    let closeCalls = 0
+
+    globalThis.setInterval = ((_handler: TimerHandler, _timeout?: number) =>
+      211 as unknown as ReturnType<typeof setInterval>) as typeof globalThis.setInterval
+    globalThis.clearInterval = ((_handle?: ReturnType<typeof setInterval>) => {}) as typeof globalThis.clearInterval
+    globalThis.setTimeout = ((_handler: TimerHandler, _timeout?: number) => {
+      timeoutCalls++
+      return 233 as unknown as ReturnType<typeof setTimeout>
+    }) as typeof globalThis.setTimeout
+    globalThis.clearTimeout = ((_handle?: ReturnType<typeof setTimeout>) => {}) as typeof globalThis.clearTimeout
+
+    try {
+      const transport = {
+        kind: "tauri",
+        request: async <T>(_input: TransportRequest) => ({ status: 200, ok: true, headers: {}, body: null as T }),
+        openStream: (_input: StreamOpenRequest, h: StreamHandlers) => {
+          return {
+            close: () => {
+              closeCalls++
+              h.onClose?.("manual-stop")
+            },
+          }
+        },
+        native: async () => null,
+        subscribeUiCommand: () => ({ unsubscribe() {} }),
+      } satisfies HostTransport
+
+      __setHostTransportForTest(transport)
+      setSettingsStore("directory", "D:\\workspace")
+
+      startTaskListSSE()
+      stopTaskListSSE()
+
+      expect(closeCalls).toBe(1)
+      expect(timeoutCalls).toBe(0)
+    } finally {
+      stopTaskListSSE()
+      __setHostTransportForTest(undefined)
+      globalThis.setInterval = originalSetInterval
+      globalThis.clearInterval = originalClearInterval
+      globalThis.setTimeout = originalSetTimeout
+      globalThis.clearTimeout = originalClearTimeout
+      setSettingsStore("directory", "")
+    }
   })
 })

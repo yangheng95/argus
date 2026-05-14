@@ -21,6 +21,8 @@ export type AppDialogOptions = {
   selectLabel?: string;
   selectValue?: string;
   selectOptions?: Array<{ value: string; label?: string }>;
+  recommendedValue?: string;
+  countdownSeconds?: number;
 };
 
 export type AppDialogResult = { confirmed: boolean; value: string | null };
@@ -59,6 +61,8 @@ export function showAppDialog(options: AppDialogOptions = {}): Promise<AppDialog
     selectLabel: options.selectLabel || t("dialog.input"),
     selectValue: options.selectValue || options.selectOptions?.[0]?.value || "",
     selectOptions: options.selectOptions || [],
+    recommendedValue: options.recommendedValue || "",
+    countdownSeconds: options.countdownSeconds ?? 0,
   });
 
   return new Promise<AppDialogResult>((resolve) => {
@@ -78,8 +82,10 @@ export async function nativeMessage(
   });
 }
 
-export function settleAppDialog(confirmed: boolean, epoch?: number): void {
+export function settleAppDialog(confirmed: boolean, epoch?: number, valueOverride?: string | null): void {
   if (typeof epoch === "number" && epoch !== dialogStore.app.epoch) return;
+  const isTaskCardDecision =
+    dialogStore.app.kind === "task-route-decision" || dialogStore.app.kind === "task-queue-decision";
   const inputValue =
     typeof document !== "undefined"
       ? (document.getElementById("appDialogInput") as HTMLInputElement | null)?.value
@@ -88,11 +94,16 @@ export function settleAppDialog(confirmed: boolean, epoch?: number): void {
     typeof document !== "undefined"
       ? (document.getElementById("appDialogSelect") as HTMLSelectElement | null)?.value
       : undefined;
-  const value = dialogStore.app.input
-    ? inputValue ?? dialogStore.app.inputValue ?? ""
-    : dialogStore.app.select
-      ? selectValue ?? dialogStore.app.selectValue ?? null
-      : null;
+  const value =
+    valueOverride !== undefined
+      ? valueOverride
+      : isTaskCardDecision
+        ? dialogStore.app.selectValue || dialogStore.app.recommendedValue || null
+        : dialogStore.app.input
+          ? inputValue ?? dialogStore.app.inputValue ?? ""
+          : dialogStore.app.select
+            ? selectValue ?? dialogStore.app.selectValue ?? null
+            : null;
   const resolve = resolver;
   resolver = null;
   ignoreNextDismiss = true;

@@ -747,56 +747,82 @@
 }
 
 .project-group {
-  padding: calc(4px * var(--ui-scale)) 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(4px * var(--ui-scale));
+  padding: calc(2px * var(--ui-scale)) 0 0;
   border: none;
   border-radius: 0;
   background: transparent;
   box-shadow: none;
 }
 
-/* The .project-group + sibling rule and the .project-group-heading
- * canonical previously appeared twice in styles.css. The earlier
- * pair (~1745) set margin-top:6px / padding-top:10px and a separate
- * heading padding shorthand `0 0 6px 8px`; the later pair (~2557)
- * overrode those with margin-top:8px / padding-top:8px and a
- * heading padding-left:6px. The merged canonicals here take the
- * cascade-winning values (rule 9), so only one source for each
- * selector survives.
- */
 .project-group + .project-group {
-  margin-top: calc(8px * var(--ui-scale));
-  padding-top: calc(8px * var(--ui-scale));
+  margin-top: calc(4px * var(--ui-scale));
+  padding-top: calc(6px * var(--ui-scale));
   border-top: var(--oc-border-width) solid color-mix(in srgb, var(--border) 74%, transparent);
 }
 
-.project-group[data-active-project="true"] > .project-group-heading {
-  color: var(--accent);
-}
-
-.project-group[data-active-project="true"] > .project-group-heading .project-group-name {
-  color: var(--text-strong);
-}
-
 .project-group-heading {
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: calc(2px * var(--ui-scale)) calc(8px * var(--ui-scale));
-  padding: 0 0 calc(6px * var(--ui-scale)) calc(6px * var(--ui-scale));
-  font-size: var(--ui-font-meta);
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: calc(20px * var(--ui-scale)) minmax(0, 1fr) auto calc(16px * var(--ui-scale));
+  align-items: center;
+  gap: calc(6px * var(--ui-scale));
+  min-height: calc(34px * var(--ui-scale));
+  padding: calc(4px * var(--ui-scale)) calc(6px * var(--ui-scale));
+  border: 0 solid transparent;
+  border-radius: 0;
+  background: transparent;
   color: var(--text-muted);
+  font-family: var(--font);
+  font-size: var(--ui-font-meta);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background var(--ui-duration-base),
+    color var(--ui-duration-base);
+}
+
+.project-group-heading:hover,
+.project-group-heading:focus-visible {
+  background: var(--surface-hover);
+  color: var(--text-soft);
+}
+
+.project-group-heading:focus-visible {
+  outline: var(--oc-border-width) solid var(--accent);
+  outline-offset: calc(1px * var(--ui-scale));
+}
+
+.project-group-icon,
+.project-group-chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: color-mix(in srgb, var(--text-muted) 86%, transparent);
+}
+
+.project-group-copy {
+  min-width: 0;
+  display: grid;
+  gap: calc(1px * var(--ui-scale));
 }
 
 .project-group-name {
+  display: block;
   font-size: var(--ui-font-body);
   font-weight: var(--ui-font-weight-strong);
   letter-spacing: var(--ui-letter-spacing-loose);
   color: var(--text-strong);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .project-group-parent {
-  flex: 1 0 100%;
-  padding-left: 0;
+  display: block;
   font-size: var(--ui-font-small);
   color: color-mix(in srgb, var(--text-muted) 92%, var(--text-soft));
   opacity: var(--ui-opacity-subtle);
@@ -804,6 +830,36 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   min-width: 0;
+}
+
+.project-group-count {
+  min-width: calc(20px * var(--ui-scale));
+  height: calc(18px * var(--ui-scale));
+  padding: 0 calc(6px * var(--ui-scale));
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--border) 86%, transparent);
+  border-radius: var(--oc-radius-pill);
+  color: var(--text-muted);
+  font-size: var(--ui-font-meta);
+  line-height: calc(18px * var(--ui-scale));
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.project-group-body {
+  display: grid;
+  gap: calc(6px * var(--ui-scale));
+  animation: project-group-body-reveal var(--ui-duration-base) var(--ui-timing-standard);
+}
+
+@keyframes project-group-body-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(calc(-3px * var(--ui-scale)));
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* ─────────────────────────────────────────────────────────────

@@ -2,11 +2,9 @@ import { expect, test } from "bun:test";
 import { cardTreeStore } from "../src/store/card-tree";
 import { resetWriter } from "../src/services/tree-writer";
 import { ingestPersistedConversationMessage } from "../src/services/chat";
-import { clearMessages, messageStore } from "../src/store/messages";
 
 test("persisted task message is projected into the visible conversation tree", () => {
   resetWriter();
-  clearMessages();
 
   ingestPersistedConversationMessage({
     info: {
@@ -32,7 +30,6 @@ test("persisted task message is projected into the visible conversation tree", (
     ],
   });
 
-  expect(messageStore.messages.map((message) => message.info.id)).toEqual(["msg_user_1"]);
   expect(cardTreeStore.order.length).toBeGreaterThan(0);
   expect(Object.values(cardTreeStore.cards).some((card) =>
     card.parts.some((part: any) => part.text === "visible user text"),

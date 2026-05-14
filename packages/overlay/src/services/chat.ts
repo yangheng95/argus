@@ -14,9 +14,7 @@ import {
   setChatRequest,
   abortChatRequest,
   setChatAttachments,
-  setMessages,
   mergeLoadedConversationMessages,
-  ingestPersistedMessage,
 } from "../store/messages";
 import { boardStore, setTasksData, loadBoard, loadTasks } from "../store/board";
 import { appStore, setConnectionStatus } from "../store/app";
@@ -371,7 +369,6 @@ export function ingestPersistedConversationMessage(input: { info: any; parts: an
       properties: { part },
     });
   }
-  ingestPersistedMessage(input);
 }
 
 function ensureTaskListEntry(

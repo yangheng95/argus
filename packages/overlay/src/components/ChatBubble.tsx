@@ -1,12 +1,15 @@
-import { For, Show, createEffect, createMemo, createSignal, onCleanup } from "solid-js"
+import { For, Match, Show, Switch, createMemo, createSignal } from "solid-js"
 
 import type { CardNode } from "../store/card-tree"
 import { cardTreeStore, pruneCardsAfterCursor } from "../store/card-tree"
 import { boardStore, rootTaskSessionID } from "../store/board"
 import { cardExpanded, setCardExpanded } from "../store/conversation-ui"
 import {
+  collapsedActivityPreviewText,
   collectActivityCounts,
   collectCardText,
+  collectLatestActivityText,
+  collectTodoSummary,
   defaultExpandedForNode,
   visibleChildIDsForCard,
 } from "../utils/card-tree"
@@ -26,6 +29,7 @@ import { Avatar } from "./Avatar"
 import { CardParts } from "./CardParts"
 import { IntegrityBody } from "./IntegrityCard"
 import { Icon } from "./Icon"
+import { storeCardNode } from "./StoreCardNode"
 import { TracePanel } from "./TracePanel"
 
 function sessionIDFromCardID(id: string): string | undefined {
@@ -59,14 +63,36 @@ function formatCostUSD(n: number): string {
   return "$" + n.toFixed(2)
 }
 
+function UnsupportedChatBubbleChild(props: { child: CardNode; parentID: string }): null {
+  throw new Error(`ChatBubble: unsupported child kind "${props.child.kind}" for ${props.parentID}`)
+}
+
+function ChatBubbleChild(props: { childID: string; depth: number; parentID: string }) {
+  const child = () => storeCardNode(props.childID, props.parentID)
+
+  return (
+    <Switch fallback={<UnsupportedChatBubbleChild child={child()} parentID={props.parentID} />}>
+      <Match when={child().kind === "message"}>
+        <CardParts parts={child().parts} depth={props.depth + 1} />
+      </Match>
+      <Match when={child().kind === "agent" && child().integrity}>
+        <IntegrityBody integrity={child().integrity!} />
+      </Match>
+      <Match when={child().kind === "integrity" && child().integrity}>
+        <IntegrityBody integrity={child().integrity!} />
+      </Match>
+    </Switch>
+  )
+}
+
 export function ChatBubble(props: { node: CardNode; depth: number }) {
   let articleRef: HTMLElement | undefined
-  const [stickyInlineSize, setStickyInlineSize] = createSignal<number | undefined>()
   const [traceOpen, setTraceOpen] = createSignal(false)
   const [reasonCopied, setReasonCopied] = createSignal(false)
 
   const defaultExpanded = () => defaultExpandedForNode(props.node)
   const expanded = () => cardExpanded(props.node.id, props.node.status, defaultExpanded())
+  const isAgentBubble = () => props.node.kind === "agent"
   const align = () => bubbleAlign(props.node)
   const normalizedRole = () => normalizeAgentRole(props.node.role || props.node.stage || "")
   const roleTitle = () => roleLabel(normalizedRole())
@@ -124,11 +150,34 @@ export function ChatBubble(props: { node: CardNode; depth: number }) {
   })
 
   const footActivity = createMemo(() => {
-    if (!expanded()) return null
+    if (expanded()) return null
     const counts = collectActivityCounts(props.node)
     if (counts.messages + counts.tools + counts.agents + counts.skills === 0) return null
     return counts
   })
+  const footActivityTitle = () => {
+    const counts = footActivity()
+    if (!counts) return undefined
+    return t("card.activity_summary", {
+      messages: counts.messages,
+      tools: counts.tools,
+      agents: counts.agents,
+      skills: counts.skills,
+    })
+  }
+  const collapsedPreview = createMemo(() =>
+    !expanded()
+      ? collapsedActivityPreviewText(collectLatestActivityText(props.node), props.node.title)
+      : "",
+  )
+  const todoSummary = createMemo(() =>
+    !expanded() && isAgentBubble() ? collectTodoSummary(props.node) : null,
+  )
+  const todoProgressPct = () => {
+    const summary = todoSummary()
+    if (!summary || summary.total === 0) return 0
+    return Math.round((summary.completed / summary.total) * 100)
+  }
 
   const traceSessionID = createMemo(() =>
     props.node.kind === "agent" ? sessionIDFromCardID(props.node.id) : undefined,
@@ -223,35 +272,7 @@ export function ChatBubble(props: { node: CardNode; depth: number }) {
     const style: Record<string, string> = {}
     const accent = stageAccent(normalizedRole())
     if (accent) style["--card-stage"] = accent
-    const stickyWidth = stickyInlineSize()
-    if (stickyWidth) style["--card-sticky-inline-size"] = `${stickyWidth}px`
     return Object.keys(style).length > 0 ? style : undefined
-  })
-
-  createEffect(() => {
-    const article = articleRef
-    if (!article) return
-
-    let frame = 0
-    const updateStickyInlineSize = () => {
-      frame = 0
-      const nextWidth = Math.ceil(article.getBoundingClientRect().width)
-      if (!Number.isFinite(nextWidth) || nextWidth <= 0) return
-      setStickyInlineSize((current) => (typeof current === "number" && current >= nextWidth ? current : nextWidth))
-    }
-
-    const observer = new ResizeObserver(() => {
-      if (frame) cancelAnimationFrame(frame)
-      frame = requestAnimationFrame(updateStickyInlineSize)
-    })
-
-    observer.observe(article)
-    updateStickyInlineSize()
-
-    onCleanup(() => {
-      observer.disconnect()
-      if (frame) cancelAnimationFrame(frame)
-    })
   })
 
   return (
@@ -431,6 +452,34 @@ export function ChatBubble(props: { node: CardNode; depth: number }) {
                 </Show>
               </div>
             </div>
+            <Show when={collapsedPreview()}>
+              <div class="card__preview-row">
+                <span class="card__collapsed-preview" title={collapsedPreview()}>{collapsedPreview()}</span>
+              </div>
+            </Show>
+            <Show when={todoSummary()}>
+              {(summary) => (
+                <div
+                  class="card__todo-summary"
+                  title={`${summary().completed}/${summary().total} done${summary().current ? ` · ${summary().current}` : ""}`}
+                >
+                  <span
+                    class="card__todo-progress"
+                    role="progressbar"
+                    aria-valuenow={summary().completed}
+                    aria-valuemin={0}
+                    aria-valuemax={summary().total}
+                    style={{ "--pct": `${todoProgressPct()}%` }}
+                  />
+                  <span class="card__todo-count">
+                    {summary().completed}/{summary().total}
+                  </span>
+                  <Show when={summary().current}>
+                    <span class="card__todo-current">{summary().current}</span>
+                  </Show>
+                </div>
+              )}
+            </Show>
           </div>
           <Show when={expanded()}>
             <div class="chat-bubble__body">
@@ -447,19 +496,9 @@ export function ChatBubble(props: { node: CardNode; depth: number }) {
                 <Show when={visibleChildIDs().length > 0}>
                   <div class="chat-bubble__children">
                     <For each={visibleChildIDs()}>
-                      {(childID) => {
-                        const child = cardTreeStore.cards[childID]!
-                        if (child.kind === "message") {
-                          return <CardParts parts={child.parts} depth={props.depth + 1} />
-                        }
-                        if (child.kind === "agent" && child.integrity) {
-                          return <IntegrityBody integrity={child.integrity} />
-                        }
-                        if (child.kind === "integrity" && child.integrity) {
-                          return <IntegrityBody integrity={child.integrity} />
-                        }
-                        throw new Error(`ChatBubble: unsupported child kind "${child.kind}" for ${props.node.id}`)
-                      }}
+                      {(childID) => (
+                        <ChatBubbleChild childID={childID} depth={props.depth} parentID={props.node.id} />
+                      )}
                     </For>
                   </div>
                 </Show>
@@ -470,7 +509,7 @@ export function ChatBubble(props: { node: CardNode; depth: number }) {
             </div>
           </Show>
           <AgentFileChanges node={props.node} />
-          <div class="chat-bubble__foot">
+          <div class="chat-bubble__foot" title={footActivityTitle()}>
             <span class="chat-bubble__stamp" title={fullStampWithRelative(props.node.time)}>
               {stamp(props.node.time)}
             </span>

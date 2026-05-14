@@ -12,10 +12,9 @@ import type {
  * inject `?directory=` into the URL. The pre-fix logic used prefix
  * matching: any `global/*` path was excluded. That correctly skipped
  * `/global/health` (mounted on the server in GlobalRoutes, before the
- * Instance middleware) but ALSO skipped `/global/tasks` (mounted in
- * AppRoutes, after the middleware) — and after we removed the server's
- * `process.cwd()` fallback (W2-V31), `/global/tasks` started returning
- * 400 DirectoryRequiredError because the overlay never sent the directory.
+ * Instance middleware). `/global/tasks` originally lived in AppRoutes and
+ * required injection, but the sidebar now uses it as the all-project task
+ * ledger; sending `directory` would silently collapse it back to one project.
  *
  * The fix replaces prefix matching with an explicit whitelist of routes
  * that the server mounts pre-middleware. This test enumerates every
@@ -81,6 +80,7 @@ describe("apiUrl directory injection (W2-V31)", () => {
     test("global/config", () => expectDoesNotInject("global/config"));
     test("global/dispose", () => expectDoesNotInject("global/dispose"));
     test("global/db/reset", () => expectDoesNotInject("global/db/reset"));
+    test("global/tasks", () => expectDoesNotInject("global/tasks"));
   });
 
   describe("auth routes — no-inject (cross-project by design)", () => {
@@ -90,10 +90,9 @@ describe("apiUrl directory injection (W2-V31)", () => {
   });
 
   describe("project-scoped routes (registered under AppRoutes) — must inject", () => {
-    test("global/tasks (handler is in AppRoutes, despite the URL)", () => {
-      expectInjects("global/tasks");
-    });
     test("tasks", () => expectInjects("tasks"));
+    test("task create", () => expectInjects("task"));
+    test("task scoped followup", () => expectInjects("task/abc/followup"));
     test("path", () => expectInjects("path"));
     test("vcs", () => expectInjects("vcs"));
     test("config", () => expectInjects("config"));
@@ -107,7 +106,11 @@ describe("apiUrl directory injection (W2-V31)", () => {
     test("channel", () => expectInjects("channel"));
     test("agent", () => expectInjects("agent"));
     test("installed", () => expectInjects("installed"));
-    test("task/abc/followup", () => expectInjects("task/abc/followup"));
+    test("skill", () => expectInjects("skill"));
+    test("skill/installed", () => expectInjects("skill/installed"));
+    test("skill/market", () => expectInjects("skill/market"));
+    test("skill/directories", () => expectInjects("skill/directories"));
+    test("mcp", () => expectInjects("mcp"));
   });
 
   describe("when no directory is configured, no path receives the query", () => {
@@ -134,9 +137,9 @@ describe("apiUrl directory injection (W2-V31)", () => {
       let captured: TransportRequest | undefined;
       __setHostTransportForTest(fakeTransport((req) => { captured = req }));
 
-      await apiJson("global/tasks");
+      await apiJson("tasks");
 
-      expect(captured?.path).toBe("global/tasks");
+      expect(captured?.path).toBe("tasks");
       expect(captured?.query?.directory).toBe(SAVED_DIRECTORY);
     });
 

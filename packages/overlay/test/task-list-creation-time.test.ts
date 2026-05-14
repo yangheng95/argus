@@ -2,6 +2,7 @@ import { beforeEach, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
+  boardStore,
   setBoardStore,
   setPendingTasks,
   setTasksData,
@@ -74,9 +75,42 @@ test("visibleTasks keeps pending and terminal rows sorted by creation time", () 
   expect(visibleTasks().map((item) => item.task.id)).toEqual(["pending", "active", "older-failed"]);
 });
 
+test("task list refresh preserves unchanged row references", () => {
+  const active = taskItem("active", 2_000, 4_000, "active");
+  const completed = taskItem("completed", 1_000, 5_000, "completed");
+
+  setTasksData([active, completed]);
+  const firstArray = boardStore.tasks;
+  const firstActive = boardStore.tasks[0];
+  const firstCompleted = boardStore.tasks[1];
+
+  setTasksData([
+    taskItem("active", 2_000, 4_000, "active"),
+    taskItem("completed", 1_000, 5_000, "completed"),
+  ]);
+
+  expect(boardStore.tasks).toBe(firstArray);
+  expect(boardStore.tasks[0]).toBe(firstActive);
+  expect(boardStore.tasks[1]).toBe(firstCompleted);
+
+  setTasksData([
+    taskItem("active", 2_000, 4_000, "active"),
+    taskItem("completed", 1_000, 6_000, "failed"),
+  ]);
+
+  expect(boardStore.tasks).not.toBe(firstArray);
+  expect(boardStore.tasks[0]).toBe(firstActive);
+  expect(boardStore.tasks[1]).not.toBe(firstCompleted);
+});
+
 test("TaskList has no lifecycle timestamp or status-priority sort path", () => {
   expect(TASK_LIST_SOURCE).toContain("taskCreatedAt");
   expect(TASK_LIST_SOURCE).toContain("recent: sortTaskItemsByCreated(group.recent)");
+  expect(TASK_LIST_SOURCE).toContain('class="project-group"');
+  expect(TASK_LIST_SOURCE).toContain('aria-expanded={collapsed() ? "false" : "true"}');
+  expect(TASK_LIST_SOURCE).toContain("toggleDirectoryGroup(group.directory)");
+  expect(TASK_LIST_SOURCE).toContain('<Icon name={collapsed() ? "folder" : "folder-open"}');
+  expect(TASK_LIST_SOURCE).toContain('<Icon name={collapsed() ? "chevron" : "chevron-down"}');
   expect(TASK_LIST_SOURCE).not.toContain("taskUpdated");
   expect(TASK_LIST_SOURCE).not.toContain("queueOrder");
   expect(TASK_LIST_SOURCE).not.toContain("TASK_STATUS_PRIORITY");
@@ -84,4 +118,5 @@ test("TaskList has no lifecycle timestamp or status-priority sort path", () => {
   expect(TASK_LIST_SOURCE).not.toContain("updated_at");
   expect(TASK_LIST_SOURCE).not.toContain("a.directory === activeDir");
   expect(TASK_LIST_SOURCE).not.toContain("b.directory === activeDir");
+  expect(TASK_LIST_SOURCE).not.toContain("data-active-project");
 });

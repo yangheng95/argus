@@ -1,4 +1,4 @@
-import { For, Show, createMemo, createResource, createSignal, onCleanup } from "solid-js"
+import { Index, Show, createMemo, createResource, createSignal, onCleanup, type Accessor } from "solid-js"
 import { boardStore } from "../store/board"
 import { cardTreeStore } from "../store/card-tree"
 import { setCardExpanded } from "../store/conversation-ui"
@@ -14,7 +14,6 @@ import { AgentReportDialog } from "./AgentReportDialog"
 
 const NARROW_HEIGHT = 42
 const WIDE_THRESHOLD = 88
-const MAX_HEIGHT = 220
 const MIN_HEIGHT = 42
 
 function compactLabel(record: AgentWorkflowRecord): string {
@@ -103,46 +102,53 @@ function locateRecord(record: AgentWorkflowRecord): void {
 }
 
 function AgentRailRow(props: {
-  record: AgentWorkflowRecord
+  record: Accessor<AgentWorkflowRecord>
   wide: boolean
   onLocate: (record: AgentWorkflowRecord) => void
   onReport: (record: AgentWorkflowRecord) => void
 }) {
+  const record = props.record
   return (
     <div
       class="conversation-agent-rail__row"
-      data-status={props.record.status}
-      style={{ "--card-stage": stageAccent(avatarRole(props.record.agentName)) }}
+      data-status={record().status}
+      style={{ "--card-stage": stageAccent(avatarRole(record().agentName)) }}
     >
       <button
         type="button"
         class="conversation-agent-rail__avatar-button"
-        title={compactLabel(props.record)}
-        onClick={() => props.onLocate(props.record)}
+        title={compactLabel(record())}
+        onClick={() => props.onLocate(record())}
       >
-        <Avatar role={props.record.agentName} status={props.record.status} />
+        <Avatar role={record().agentName} status={record().status} />
       </button>
-      <Show when={props.wide}>
-        <button type="button" class="conversation-agent-rail__run" onClick={() => props.onLocate(props.record)}>
-          <span class="conversation-agent-rail__run-head">
-            <strong>{props.record.agentName}</strong>
-            <span>{props.record.status}</span>
-            <Show when={durationLabel(props.record)}>
-              <span>{durationLabel(props.record)}</span>
-            </Show>
-          </span>
-          <span class="conversation-agent-rail__summary">{summaryText(props.record)}</span>
-        </button>
-        <button
-          type="button"
-          class="conversation-agent-rail__report"
-          onClick={() => props.onReport(props.record)}
-          title="Open report"
-          aria-label="Open report"
-        >
-          <Icon name="file-document" size={14} />
-        </button>
-      </Show>
+      <button
+        type="button"
+        class="conversation-agent-rail__run"
+        aria-hidden={props.wide ? "false" : "true"}
+        tabIndex={props.wide ? 0 : -1}
+        onClick={() => props.onLocate(record())}
+      >
+        <span class="conversation-agent-rail__run-head">
+          <strong>{record().agentName}</strong>
+          <span>{record().status}</span>
+          <Show when={durationLabel(record())}>
+            <span>{durationLabel(record())}</span>
+          </Show>
+        </span>
+        <span class="conversation-agent-rail__summary">{summaryText(record())}</span>
+      </button>
+      <button
+        type="button"
+        class="conversation-agent-rail__report"
+        aria-hidden={props.wide ? "false" : "true"}
+        tabIndex={props.wide ? 0 : -1}
+        onClick={() => props.onReport(record())}
+        title="Open report"
+        aria-label="Open report"
+      >
+        <Icon name="file-document" size={14} />
+      </button>
     </div>
   )
 }
@@ -193,7 +199,7 @@ export function ConversationAgentRail() {
     const startY = event.clientY
     const startHeight = height()
     const onMove = (move: PointerEvent) => {
-      const next = Math.min(MAX_HEIGHT, Math.max(MIN_HEIGHT, startHeight + startY - move.clientY))
+      const next = Math.max(MIN_HEIGHT, startHeight + startY - move.clientY)
       setHeight(next)
     }
     const onUp = () => {
@@ -218,10 +224,10 @@ export function ConversationAgentRail() {
         </div>
       </Show>
       <div class="conversation-agent-rail__lanes" role="list">
-        <For each={lanes()}>
+        <Index each={lanes()}>
           {(lane) => (
-            <div class="conversation-agent-rail__lane" data-kind={lane.kind} role="listitem">
-              <For each={lane.records}>
+            <div class="conversation-agent-rail__lane" data-kind={lane().kind} role="listitem">
+              <Index each={lane().records}>
                 {(record) => (
                   <AgentRailRow
                     record={record}
@@ -230,10 +236,10 @@ export function ConversationAgentRail() {
                     onReport={setSelectedReport}
                   />
                 )}
-              </For>
+              </Index>
             </div>
           )}
-        </For>
+        </Index>
       </div>
       <button
         type="button"

@@ -41,6 +41,8 @@ interface PromptStatus {
   tone: string;
 }
 
+type PromptViewMode = "code" | "preview" | "default";
+
 // ── Helpers ──
 
 function promptEntryID(entry: PromptEntry): string {
@@ -79,18 +81,6 @@ function promptStatus(entry: PromptEntry): PromptStatus {
   return { label: t("prompt.status.empty"), tone: "" };
 }
 
-function promptHelper(entry: PromptEntry): string {
-  if (entry.scope === "system") {
-    return entry.configured_prompt !== null
-      ? t("prompt.help.custom_system")
-      : t("prompt.help.default_system");
-  }
-  if (entry.inherits_core) return t("prompt.help.inherits_core");
-  if (entry.configured_prompt !== null) return t("prompt.help.custom_agent");
-  if (entry.prompt) return t("prompt.help.default_agent");
-  return t("prompt.help.optional_agent");
-}
-
 function promptPreviewHtml(value: string): string {
   if (!value.trim()) {
     return `<p class="empty-hint">${t("prompt.preview_empty")}</p>`;
@@ -102,6 +92,7 @@ function promptPreviewHtml(value: string): string {
 
 export default function PromptCatalog() {
   const [drafts, setDrafts] = createStore<Record<string, string>>({});
+  const [viewModes, setViewModes] = createStore<Record<string, PromptViewMode>>({});
   const [notice, setNotice] = createSignal("");
   const [noticeTone, setNoticeTone] = createSignal("");
   const [saving, setSaving] = createSignal(false);
@@ -121,6 +112,14 @@ export default function PromptCatalog() {
 
   function isDirty(entry: PromptEntry): boolean {
     return draftValue(entry) !== (entry.prompt || "");
+  }
+
+  function viewMode(entryID: string): PromptViewMode {
+    return (viewModes as Record<string, PromptViewMode>)[entryID] || "code";
+  }
+
+  function setViewMode(entryID: string, mode: PromptViewMode) {
+    setViewModes(entryID, mode);
   }
 
   function handleDraftChange(entryID: string, value: string) {
@@ -198,6 +197,7 @@ export default function PromptCatalog() {
               const description = promptDescription(entry);
               const dirty = createMemo(() => isDirty(entry));
               const currentDraft = createMemo(() => draftValue(entry));
+              const canShowDefault = () => entry.configured_prompt !== null && !!entry.default_prompt;
 
               return (
                 <div class="prompt-card" data-prompt-entry={entryID}>
@@ -213,90 +213,111 @@ export default function PromptCatalog() {
                         <small>{description}</small>
                       </Show>
                     </div>
-                    <span
-                      class="extension-status"
-                      data-state={status().tone}
-                    >
-                      {status().label}
-                    </span>
+                    <Show when={status().tone !== "ready"}>
+                      <span
+                        class="extension-status"
+                        data-state={status().tone}
+                      >
+                        {status().label}
+                      </span>
+                    </Show>
                   </div>
 
-                  <label class="field">
-                    <span class="field-label">{t("prompt.editor_label")}</span>
-                    <textarea
-                      class="field-input prompt-textarea"
-                      rows={8}
-                      value={currentDraft()}
-                      disabled={saving()}
-                      onInput={(e) =>
-                        handleDraftChange(entryID, e.currentTarget.value)
-                      }
-                    />
-                  </label>
-
-                  <div class="prompt-toolbar">
-                    <span
-                      class="config-status-box"
-                      data-status={status().tone}
-                    >
-                      {promptHelper(entry)}
-                    </span>
-                    <div class="dialog-actions compact">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        tone="neutral"
-                        disabled={saving() || (entry.configured_prompt === null && !dirty())}
-                        onClick={() => handleReset(entry)}
-                      >
-                        {t("prompt.reset")}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="solid"
-                        size="sm"
-                        tone="accent"
-                        disabled={saving() || !dirty()}
-                        onClick={() => handleSave(entry)}
-                      >
-                        {t("common.save")}
-                      </Button>
-                    </div>
-                  </div>
-
-                  <Show
-                    when={
-                      entry.configured_prompt !== null && entry.default_prompt
-                    }
-                  >
-                    <details class="prompt-diff-details">
-                      <summary class="prompt-diff-summary">
-                        {t("prompt.show_default")}
-                      </summary>
-                      <div class="prompt-preview-card prompt-preview-card--default">
-                        <div class="prompt-preview-head">
-                          {t("prompt.default_label")}
-                        </div>
-                        <div
-                          class="md-content prompt-preview-body"
-                          innerHTML={promptPreviewHtml(entry.default_prompt!)}
-                        />
+                  <div class="prompt-editor">
+                    <div class="prompt-editor-head">
+                      <div class="prompt-view-tabs" role="tablist" aria-label={t("prompt.title")}>
+                        <button
+                          type="button"
+                          class="prompt-view-tab"
+                          role="tab"
+                          aria-selected={viewMode(entryID) === "code"}
+                          data-active={viewMode(entryID) === "code" ? "true" : "false"}
+                          onClick={() => setViewMode(entryID, "code")}
+                        >
+                          {t("prompt.editor_label")}
+                        </button>
+                        <button
+                          type="button"
+                          class="prompt-view-tab"
+                          role="tab"
+                          aria-selected={viewMode(entryID) === "preview"}
+                          data-active={viewMode(entryID) === "preview" ? "true" : "false"}
+                          onClick={() => setViewMode(entryID, "preview")}
+                        >
+                          {t("prompt.preview")}
+                        </button>
+                        <Show when={canShowDefault()}>
+                          <button
+                            type="button"
+                            class="prompt-view-tab"
+                            role="tab"
+                            aria-selected={viewMode(entryID) === "default"}
+                            data-active={viewMode(entryID) === "default" ? "true" : "false"}
+                            onClick={() => setViewMode(entryID, "default")}
+                          >
+                            {t("prompt.default_label")}
+                          </button>
+                        </Show>
                       </div>
-                    </details>
-                  </Show>
-
-                  <details class="prompt-diff-details">
-                    <summary class="prompt-diff-summary">
-                      {t("prompt.preview")}
-                    </summary>
-                    <div class="prompt-preview-card prompt-preview-card--attached">
-                      <div
-                        class="md-content prompt-preview-body"
-                        innerHTML={promptPreviewHtml(currentDraft())}
-                      />
+                      <div class="prompt-editor-actions">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          tone="neutral"
+                          disabled={saving() || (entry.configured_prompt === null && !dirty())}
+                          onClick={() => handleReset(entry)}
+                        >
+                          {t("prompt.reset")}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="solid"
+                          size="sm"
+                          tone="accent"
+                          disabled={saving() || !dirty()}
+                          onClick={() => handleSave(entry)}
+                        >
+                          {t("common.save")}
+                        </Button>
+                      </div>
                     </div>
-                  </details>
+                    <Show
+                      when={viewMode(entryID) !== "code"}
+                      fallback={
+                        <textarea
+                          class="field-input prompt-textarea"
+                          rows={8}
+                          value={currentDraft()}
+                          disabled={saving()}
+                          aria-label={t("prompt.editor_label")}
+                          onInput={(e) =>
+                            handleDraftChange(entryID, e.currentTarget.value)
+                          }
+                        />
+                      }
+                    >
+                      <Show
+                        when={viewMode(entryID) === "default" && canShowDefault()}
+                        fallback={
+                          <div class="prompt-preview-card prompt-preview-card--attached">
+                            <div
+                              class="md-content prompt-preview-body"
+                              innerHTML={promptPreviewHtml(currentDraft())}
+                            />
+                          </div>
+                        }
+                      >
+                        <div class="prompt-preview-card prompt-preview-card--attached">
+                          <div
+                            class="md-content prompt-preview-body"
+                            innerHTML={promptPreviewHtml(entry.default_prompt || "")}
+                          />
+                        </div>
+                      </Show>
+                    </Show>
+                  </div>
+
                 </div>
               );
             }}

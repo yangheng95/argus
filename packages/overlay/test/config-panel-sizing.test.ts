@@ -10,6 +10,7 @@ const OVERLAY_ROOT = join(import.meta.dir, "..")
 const SETTINGS_CSS = readFileSync(join(OVERLAY_ROOT, "src", "styles", "surfaces", "settings.css"), "utf8")
 const HEADER_CSS = readFileSync(join(OVERLAY_ROOT, "src", "styles", "surfaces", "header.css"), "utf8")
 const PROVIDERS_TSX = readFileSync(join(OVERLAY_ROOT, "src", "components", "settings", "ProvidersPanel.tsx"), "utf8")
+const PROMPT_CATALOG_TSX = readFileSync(join(OVERLAY_ROOT, "src", "components", "settings", "PromptCatalog.tsx"), "utf8")
 
 function bodyOfSource(source: string, selector: string): string {
   const css = source.replace(/\/\*[\s\S]*?\*\//g, "")
@@ -89,6 +90,7 @@ describe("config panel sizing", () => {
     }
 
     expect(bodyOf(".knowledge-toolbar")).toMatch(/background:\s*transparent/)
+    expect(bodyOf(".config-sidebar")).toMatch(/background:\s*transparent/)
     expect(bodyOf(".knowledge-toolbar")).toMatch(/border:\s*0 solid transparent/)
     expect(bodyOf(".config-section-head")).toMatch(/background:\s*transparent/)
     expect(bodyOf(".config-section-body")).toMatch(/border:\s*0 solid transparent/)
@@ -114,6 +116,22 @@ describe("config panel sizing", () => {
     expect(list).toMatch(/overflow-y:\s*auto/)
     expect(list).toMatch(/scrollbar-width:\s*auto/)
     expect(bodyOf(".knowledge-list::-webkit-scrollbar")).toContain("width: var(--session-scrollbar-size)")
+  })
+
+  test("prompt editor switches markdown code and preview in one tab surface", () => {
+    expect(PROMPT_CATALOG_TSX).toContain('class="prompt-view-tabs" role="tablist"')
+    expect(PROMPT_CATALOG_TSX).toContain('class="prompt-view-tab"')
+    expect(PROMPT_CATALOG_TSX).toContain('type PromptViewMode = "code" | "preview" | "default"')
+    expect(PROMPT_CATALOG_TSX).toContain('when={viewMode(entryID) !== "code"}')
+    expect(PROMPT_CATALOG_TSX).toContain('class="field-input prompt-textarea"')
+    expect(PROMPT_CATALOG_TSX).toContain('class="prompt-preview-card prompt-preview-card--attached"')
+    expect(PROMPT_CATALOG_TSX).not.toContain('class="prompt-toolbar"')
+    expect(PROMPT_CATALOG_TSX).not.toContain('<details class="prompt-diff-details">')
+    expect(PROMPT_CATALOG_TSX).not.toContain('{t("prompt.show_default")}')
+    expect(bodyOf(".prompt-view-tabs")).toMatch(/display:\s*inline-flex/)
+    expect(bodyOf(".prompt-editor-actions")).toMatch(/display:\s*inline-flex/)
+    expect(bodyOf('.prompt-view-tab[data-active="true"]')).toMatch(/background:\s*var\(--surface\)/)
+    expect(bodyOf(".prompt-preview-card--attached")).toMatch(/min-height:\s*calc\(160px \* var\(--ui-scale\)\)/)
   })
 
   test("providers panel renders stable height and equal same-row buttons", async () => {
@@ -151,6 +169,7 @@ describe("config panel sizing", () => {
         if (path === "/provider/auth") return send({})
         if (path === "/config/providers") return send({ providers: [], default: {} })
         if (path === "/config" && req.method === "GET") return send({ model: "alibaba/alibaba-coding-plan-long-context" })
+        if (path === "/config" && req.method === "PATCH") return send({ ok: true })
         if (path === "/config/prompt") return send([])
         if (path === "/agent") return send([])
         if (path === "/channel") return send([])

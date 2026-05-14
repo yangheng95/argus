@@ -60,3 +60,18 @@ test("tree-writer appends live message parts by replacing the parts array", asyn
   expect(source).toContain("const next = [...current, part]")
   expect(source).not.toContain("produce((parts: any[]) => {\n      parts.push")
 })
+
+test("store-backed conversation renderers use explicit card dereference primitive", async () => {
+  const conversation = await Bun.file(`${OVERLAY_ROOT}/src/components/Conversation.tsx`).text()
+  const card = await Bun.file(`${OVERLAY_ROOT}/src/components/Card.tsx`).text()
+  const chatBubble = await Bun.file(`${OVERLAY_ROOT}/src/components/ChatBubble.tsx`).text()
+  const primitive = await Bun.file(`${OVERLAY_ROOT}/src/components/StoreCardNode.tsx`).text()
+
+  expect(primitive).toContain("export function storeCardNode")
+  expect(primitive).toContain("cardTreeStore.cards[id]")
+  expect(conversation).toContain("<StoreCardNode id={id}>")
+  expect(card).toContain("<StoreCardNode id={id} ownerID={props.node.id}>")
+  expect(chatBubble).toContain("storeCardNode(props.childID, props.parentID)")
+  expect(conversation).not.toContain("cardTreeStore.cards[id]!")
+  expect(card).not.toContain("cardTreeStore.cards[id]!")
+})

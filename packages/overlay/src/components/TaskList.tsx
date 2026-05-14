@@ -460,6 +460,7 @@ export function TaskList(props: TaskListProps) {
   });
   const [draggingID, setDraggingID] = createSignal("");
   const [dragOverID, setDragOverID] = createSignal("");
+  const [collapsedDirectories, setCollapsedDirectories] = createSignal<Record<string, boolean>>({});
 
   // Queue badges follow the same creation-time row order as the sidebar list.
   const queuePositions = createMemo<Map<string, number>>(() => {
@@ -506,7 +507,24 @@ export function TaskList(props: TaskListProps) {
   // re-runs the `isActive` memo on exactly two rows (previously selected,
   // newly selected) instead of all N rows in the list. Wins scale with N.
   const isSelected = createSelector(() => boardStore.selectedTaskID);
-  const activeDir = () => settingsStore.directory || "";
+
+  function directoryGroupKey(directory: string): string {
+    return directory || "__opencorvus_unassigned_project__";
+  }
+
+  function isDirectoryCollapsed(directory: string): boolean {
+    return collapsedDirectories()[directoryGroupKey(directory)] === true;
+  }
+
+  function toggleDirectoryGroup(directory: string): void {
+    const key = directoryGroupKey(directory);
+    setCollapsedDirectories((current) => {
+      const next = { ...current };
+      if (next[key]) delete next[key];
+      else next[key] = true;
+      return next;
+    });
+  }
 
   const [retrying, setRetrying] = createSignal(false);
 
@@ -710,51 +728,74 @@ export function TaskList(props: TaskListProps) {
         <For each={grouped()}>
           {(group) => {
             const label = projectLabel(group.directory);
-            const isActiveProject = group.directory === activeDir();
+            const taskCount = () => group.active.length + group.recent.length;
+            const collapsed = () => isDirectoryCollapsed(group.directory);
             return (
               <section
-                class="sidebar-list-group project-group"
-                data-active-project={isActiveProject ? "true" : undefined}
+                class="project-group"
+                data-collapsed={collapsed() ? "true" : undefined}
               >
-                <div class="project-group-heading" title={group.directory}>
-                  <span class="project-group-name">{label.name}</span>
-                  <Show when={label.parent}>
-                    <span class="project-group-parent">{label.parent}</span>
-                  </Show>
-                </div>
-                <Show when={group.active.length > 0}>
-                  <TaskSection
-                    label={t("task.group.active")}
-                    items={group.active}
-                    isSelected={isSelected}
-                    queuePositions={queuePositions()}
-                    onSelectTask={props.onSelectTask}
-                    onDeleteTask={props.onDeleteTask}
-                    onCancelTask={props.onCancelTask}
-                    canReorder={group.active.filter((item) => item?.task?.status === "queued" && !item?._pending).length > 1}
-                    draggingID={draggingID()}
-                    dragOverID={dragOverID()}
-                    onDragStart={setDraggingID}
-                    onDragOver={(id, event) => {
-                      event.preventDefault();
-                      if (draggingID() && id !== draggingID()) setDragOverID(id);
-                    }}
-                    onDrop={(id, event) => handleDrop(group.directory, id, event)}
-                    onDragEnd={() => {
-                      setDraggingID("");
-                      setDragOverID("");
-                    }}
-                  />
-                </Show>
-                <Show when={group.recent.length > 0}>
-                  <TaskSection
-                    label={t("task.group.recent")}
-                    items={group.recent}
-                    isSelected={isSelected}
-                    onSelectTask={props.onSelectTask}
-                    onDeleteTask={props.onDeleteTask}
-                    onCancelTask={props.onCancelTask}
-                  />
+                <button
+                  type="button"
+                  class="project-group-heading"
+                  title={group.directory}
+                  aria-expanded={collapsed() ? "false" : "true"}
+                  aria-label={collapsed() ? t("task.project.expand", { name: label.name }) : t("task.project.collapse", { name: label.name })}
+                  onClick={() => toggleDirectoryGroup(group.directory)}
+                >
+                  <span class="project-group-icon" aria-hidden="true">
+                    <Icon name={collapsed() ? "folder" : "folder-open"} size={14} />
+                  </span>
+                  <span class="project-group-copy">
+                    <span class="project-group-name">{label.name}</span>
+                    <Show when={label.parent}>
+                      <span class="project-group-parent">{label.parent}</span>
+                    </Show>
+                  </span>
+                  <span class="project-group-count" aria-label={t("task.project.count", { count: String(taskCount()) })}>
+                    {taskCount()}
+                  </span>
+                  <span class="project-group-chevron" aria-hidden="true">
+                    <Icon name={collapsed() ? "chevron" : "chevron-down"} size={12} />
+                  </span>
+                </button>
+                <Show when={!collapsed()}>
+                  <div class="project-group-body">
+                    <Show when={group.active.length > 0}>
+                      <TaskSection
+                        label={t("task.group.active")}
+                        items={group.active}
+                        isSelected={isSelected}
+                        queuePositions={queuePositions()}
+                        onSelectTask={props.onSelectTask}
+                        onDeleteTask={props.onDeleteTask}
+                        onCancelTask={props.onCancelTask}
+                        canReorder={group.active.filter((item) => item?.task?.status === "queued" && !item?._pending).length > 1}
+                        draggingID={draggingID()}
+                        dragOverID={dragOverID()}
+                        onDragStart={setDraggingID}
+                        onDragOver={(id, event) => {
+                          event.preventDefault();
+                          if (draggingID() && id !== draggingID()) setDragOverID(id);
+                        }}
+                        onDrop={(id, event) => handleDrop(group.directory, id, event)}
+                        onDragEnd={() => {
+                          setDraggingID("");
+                          setDragOverID("");
+                        }}
+                      />
+                    </Show>
+                    <Show when={group.recent.length > 0}>
+                      <TaskSection
+                        label={t("task.group.recent")}
+                        items={group.recent}
+                        isSelected={isSelected}
+                        onSelectTask={props.onSelectTask}
+                        onDeleteTask={props.onDeleteTask}
+                        onCancelTask={props.onCancelTask}
+                      />
+                    </Show>
+                  </div>
                 </Show>
               </section>
             );

@@ -1,14 +1,8 @@
 // ── SSE Event Router & Board/Task Lifecycle ──
 // Central dispatch for all incoming SSE events.
 // Executor events (run.progress/run.output) are converted to standard
-// message events and routed to messageStore — no separate executorStore.
+// message events and routed to cardTreeStore — no separate executorStore.
 
-import {
-  enqueueEvent,
-  shouldReloadConversationForMessageEvent,
-  syncTask,
-  loadConversation,
-} from "../store/messages";
 import {
   boardStore,
   scheduleBoard,
@@ -16,7 +10,6 @@ import {
   setTaskSequence,
   setSnapshotVersion,
 } from "../store/board";
-import { startSSE } from "./sse";
 import { loadConfigInfo } from "./init";
 import { applyEvent as applyTreeWriterEvent } from "./tree-writer";
 import { notifyTaskLifecycle, notifyInteractionRequested } from "./notify";
@@ -25,10 +18,9 @@ import {
   isRouterConsumedNoopEventType,
 } from "./event-policy";
 
-// Forward SSE events to the tree-writer. Runs alongside `enqueueEvent` so
-// the `messageStore.messages` index (still consumed by Board panels and
-// section phase detection) stays in sync with the `cardTreeStore` that
-// powers the conversation view.
+// Forward SSE events to the tree-writer. The conversation view reads
+// `cardTreeStore`; message events are no longer mirrored into the legacy
+// message array on the hot path.
 function writeToTree(event: any): void {
   applyTreeWriterEvent(event);
   // Permission / question prompts surface as `interaction.requested`; ring
@@ -50,10 +42,76 @@ function writeToTree(event: any): void {
   }
 }
 
+function isMessageStreamEvent(type: string): boolean {
+  return (
+    type === "message.updated" ||
+    type === "message.part.updated" ||
+    type === "message.part.delta"
+  );
+}
+
 // ── Helpers ──
 
 function record(value: any): boolean {
   return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+function currentTaskSessionID(): string {
+  const boardSession = boardStore.board?.task?.sessionID;
+  if (typeof boardSession === "string" && boardSession) return boardSession;
+  const taskID = boardStore.selectedTaskID;
+  if (!taskID) return "";
+  const entry = boardStore.tasks.find((item: any) => item?.task?.id === taskID);
+  return typeof entry?.task?.sessionID === "string" ? entry.task.sessionID : "";
+}
+
+function messageEventSessionID(event: any): string {
+  const properties = record(event?.properties)
+    ? event.properties
+    : record(event?.payload)
+      ? event.payload
+      : {};
+  if (typeof properties?.info?.sessionID === "string") return properties.info.sessionID;
+  if (typeof properties?.part?.sessionID === "string") return properties.part.sessionID;
+  return typeof properties?.sessionID === "string" ? properties.sessionID : "";
+}
+
+function shouldRecoverForMessageEvent(event: any): boolean {
+  const type = String(event?.type || "").trim();
+  if (!isMessageStreamEvent(type)) return false;
+  if (!boardStore.selectedTaskID) return false;
+  if (currentTaskSessionID()) return false;
+  return !!messageEventSessionID(event);
+}
+
+function shouldRecoverSelectedTaskSequenceGap(event: any): boolean {
+  const taskID = eventTaskID(event);
+  if (!taskID || taskID !== boardStore.selectedTaskID) return false;
+  const sequence = eventSequence(event);
+  if (sequence <= 0) return false;
+  const current = boardStore.taskSequence;
+  return current > 0 && sequence > current + 1;
+}
+
+function isMessageWriterPrerequisiteError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error || "");
+  return (
+    message.startsWith("message.part.delta: unknown session ") ||
+    message.startsWith("message.part.delta: unknown part ")
+  );
+}
+
+function scheduleSelectedTaskRecovery(reason: string, taskID = boardStore.selectedTaskID): void {
+  const selectedTaskID = String(taskID || "");
+  if (!selectedTaskID) return;
+  void import("./selected-task-recovery")
+    .then(({ recoverSelectedTaskConversation }) =>
+      recoverSelectedTaskConversation(reason, selectedTaskID),
+    )
+    .catch((error) => {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      console.error("[sse] selected-task recovery failed", reason, selectedTaskID, error);
+    });
 }
 
 /** Parse tool input from various executor formats. */
@@ -436,30 +494,39 @@ function scheduleConfigReload(): void {
  */
 export function routeSSEEvent(event: any): boolean {
   const type: string = event.type || "";
-
-  // Double-write to the new cardTreeStore. Runs before any legacy routing
-  // so a writer crash surfaces with the original event context intact.
-  writeToTree(event);
-
-  // ── Message stream events → batched queue ──
-  if (
-    type === "message.updated" ||
-    type === "message.part.updated" ||
-    type === "message.part.delta"
-  ) {
-    scheduleBoard(BOARD_EVENT_DEBOUNCE);
-    if (shouldReloadConversationForMessageEvent(event)) {
-      void loadConversation();
-      return true;
-    }
-    enqueueEvent(event);
+  if (shouldRecoverSelectedTaskSequenceGap(event)) {
+    const taskID = eventTaskID(event);
+    scheduleSelectedTaskRecovery("selected task sequence gap", taskID);
+    scheduleTasksCompat(BOARD_EVENT_DEBOUNCE);
     return true;
   }
+
+  // ── Message stream events → batched queue ──
+  if (isMessageStreamEvent(type)) {
+    if (shouldRecoverForMessageEvent(event)) {
+      scheduleSelectedTaskRecovery(`message writer prerequisites missing: ${type}`);
+      return true;
+    }
+    // Write only after the prerequisite check. If the message graph cannot
+    // attach this event, the selected-task recovery path hydrates the full
+    // visible tree before SSE resumes.
+    try {
+      writeToTree(event);
+    } catch (error) {
+      if (!isMessageWriterPrerequisiteError(error)) throw error;
+      scheduleSelectedTaskRecovery(`message writer prerequisites missing: ${type}`);
+    }
+    return true;
+  }
+
+  // Double-write to the new cardTreeStore. Runs before non-message legacy
+  // routing so a writer crash surfaces with the original event context intact.
+  writeToTree(event);
 
   // ── Replay buffer expired → full transcript reload ──
   if (type === "task.replay_expired") {
     const taskID: string = boardStore.selectedTaskID || "";
-    if (taskID) void syncTask(taskID);
+    if (taskID) scheduleSelectedTaskRecovery("task replay expired", taskID);
     return true;
   }
 
@@ -489,7 +556,7 @@ export function routeSSEEvent(event: any): boolean {
       })();
     } else if (evtTaskID === boardStore.selectedTaskID && cursorTime === 0) {
       // Rewind cleared by backend — full reload to restore the suppressed tail.
-      void syncTask(evtTaskID);
+      scheduleSelectedTaskRecovery("task rewind cleared", evtTaskID);
     }
     return true;
   }
@@ -502,20 +569,20 @@ export function routeSSEEvent(event: any): boolean {
 
   // ── Executor progress / output events → convert to standard messages ──
   if (type === "run.progress") {
-    scheduleBoard(BOARD_EVENT_DEBOUNCE);
-    if (!shouldConvertRunProgress(properties)) return true;
+    if (!shouldConvertRunProgress(properties)) {
+      scheduleBoard(BOARD_EVENT_DEBOUNCE);
+      return true;
+    }
 
     // Convert executor events (Codex/Claude-Code CodingEventInfo) to standard messages
     const messages = convertExecutorEventToMessages(event, properties);
     for (const msg of messages) {
       writeToTree(msg);
-      enqueueEvent(msg);
     }
     return true;
   }
 
   if (type === "run.output") {
-    scheduleBoard(BOARD_EVENT_DEBOUNCE);
     // Text output from executor — convert to message delta
     const messages = convertExecutorEventToMessages(event, {
       ...properties,
@@ -524,7 +591,6 @@ export function routeSSEEvent(event: any): boolean {
     });
     for (const msg of messages) {
       writeToTree(msg);
-      enqueueEvent(msg);
     }
     return true;
   }
@@ -584,10 +650,10 @@ function boardInvalidatingEvent(type: string): boolean {
 }
 
 function shouldRefreshSelectedBoard(type: string): boolean {
+  if (type.startsWith("message.")) return false;
+  if (type === "run.progress" || type === "run.output") return false;
   return (
     boardInvalidatingEvent(type) ||
-    type.startsWith("message.") ||
-    type.startsWith("run.") ||
     type === "task.message" ||
     type === "session.status"
   );
@@ -611,15 +677,16 @@ export function handleEventStreamEvent(event: any): void {
   // board / task-sequence refresh path; tree projection is single-
   // sourced through routeSSEEvent.
   if (type.startsWith("message.")) {
-    if (shouldReloadConversationForMessageEvent({ ...event, type })) {
-      void loadConversation();
+    if (shouldRecoverForMessageEvent({ ...event, type })) {
+      scheduleSelectedTaskRecovery(`message writer prerequisites missing: ${type}`);
       return;
     }
-    enqueueEvent({ ...event, type });
     return;
   }
   if (type === "task.replay_expired") {
-    if (boardStore.selectedTaskID) void syncTask(boardStore.selectedTaskID);
+    if (boardStore.selectedTaskID) {
+      scheduleSelectedTaskRecovery("task replay expired", boardStore.selectedTaskID);
+    }
     scheduleTasksCompat(0);
     scheduleBoard(0);
     return;
@@ -630,10 +697,12 @@ export function handleEventStreamEvent(event: any): void {
     const current = boardStore.taskSequence;
     if (current > 0 && sequence <= current) return;
     if (current > 0 && sequence > current + 1) {
-      scheduleBoard(BOARD_EVENT_DEBOUNCE);
+      scheduleSelectedTaskRecovery("selected task sequence gap", taskID);
       scheduleTasksCompat(BOARD_EVENT_DEBOUNCE);
-      // Don't restart SSE for sequence gaps — the refresh will catch up.
-      // Restarting SSE here causes cascading refreshes that lead to flickering.
+      // Do not advance taskSequence across a gap. The selected conversation
+      // stream missed persisted events; only full selected-task recovery can
+      // rebuild cardTreeStore and compute the next safe resume cursor.
+      return;
     }
     setTaskSequence(sequence);
   }
@@ -663,8 +732,8 @@ export function handleEventStreamEvent(event: any): void {
  * in the overlay-web-benchmark).
  *
  * Route them correctly here instead:
- *   - `message.*` notifications → only mean "that task changed"; if it
- *     is the selected task, refresh the board.
+ *   - `message.*` notifications → only mean "that task changed"; update
+ *     sidebar task freshness without reloading the selected board.
  *   - task lifecycle events → same refresh path.
  *   - sequence tracking mirrors handleEventStreamEvent's rules.
  *
@@ -682,7 +751,9 @@ export function handleTaskListNotification(event: any): void {
     if (lifecycleTaskID) notifyTaskLifecycle(lifecycleTaskID, type);
   }
   if (type === "task.replay_expired") {
-    if (boardStore.selectedTaskID) void syncTask(boardStore.selectedTaskID);
+    if (boardStore.selectedTaskID) {
+      scheduleSelectedTaskRecovery("task-list replay expired", boardStore.selectedTaskID);
+    }
     scheduleTasksCompat(0);
     scheduleBoard(0);
     return;
@@ -691,12 +762,11 @@ export function handleTaskListNotification(event: any): void {
   const sequence = eventSequence(event);
   if (taskID && taskID === boardStore.selectedTaskID && sequence > 0) {
     const current = boardStore.taskSequence;
-    if (current > 0 && sequence <= current) return;
     if (current > 0 && sequence > current + 1) {
-      scheduleBoard(BOARD_EVENT_DEBOUNCE);
+      scheduleSelectedTaskRecovery("task-list selected task sequence gap", taskID);
       scheduleTasksCompat(BOARD_EVENT_DEBOUNCE);
+      return;
     }
-    setTaskSequence(sequence);
   }
   if (taskID) {
     scheduleTasksCompat(BOARD_EVENT_DEBOUNCE);
