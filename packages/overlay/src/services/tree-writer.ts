@@ -54,6 +54,8 @@ interface SessionInfo {
   partIndex: Map<string, number>;
   /** Session-level card id (`<stage>:session:<sid>`). */
   cardID: string;
+  /** Last known executor top-level visibility; gates expensive order rebuilds. */
+  executorTopLevelVisible: boolean;
 }
 
 interface MessageInfo {
@@ -496,7 +498,7 @@ function handlePartUpdated(event: any): void {
   }
 
   upsertPart(sessionID, partID, { ...part });
-  if (sessions.get(sessionID)?.stage === "executor") rebuildTopLevelOrder();
+  syncExecutorTopLevelVisibility(sessions.get(sessionID));
 }
 
 function handlePartDelta(event: any): void {
@@ -538,7 +540,7 @@ function handlePartDelta(event: any): void {
       (prev: any) => String(prev ?? "") + delta,
     );
   }
-  if (session.stage === "executor") rebuildTopLevelOrder();
+  syncExecutorTopLevelVisibility(session);
 }
 
 function handleTaskChanged(event: any): void {
@@ -1259,6 +1261,7 @@ function ensureSessionCard(
     messageIDs: new Set(),
     partIndex: new Map(),
     cardID,
+    executorTopLevelVisible: false,
   };
   sessions.set(sessionID, info);
 
@@ -1768,6 +1771,14 @@ function cardHasDisplayPart(card: CardNode | undefined): boolean {
     return true;
   }
   return false;
+}
+
+function syncExecutorTopLevelVisibility(session: SessionInfo | undefined): void {
+  if (!session || session.stage !== "executor") return;
+  const visible = cardHasDisplayPart(cardTreeStore.cards[session.cardID]);
+  if (session.executorTopLevelVisible === visible) return;
+  session.executorTopLevelVisible = visible;
+  rebuildTopLevelOrder();
 }
 
 function resolveGoalContainerCardID(goalID: string, stage: string): string | null {

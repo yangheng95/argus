@@ -770,34 +770,6 @@ const [pendingSuggestion, setPendingSuggestion] = createSignal("")
 // Track the previous task-busy state so we only fire once per finish edge.
 let lastTaskBusy = false
 let lastSuggestionTaskID: string | null = null
-createEffect(() => {
-  const busyNow = !!messageStore.chatRequest || isTaskInterruptable()
-  const wasBusy = lastTaskBusy
-  lastTaskBusy = busyNow
-  // Each busy→true edge resets the guard so the next finish is eligible for
-  // a fresh suggestion even if it's the same task.
-  if (busyNow && !wasBusy) {
-    lastSuggestionTaskID = null
-    return
-  }
-  if (!wasBusy || busyNow) return
-  const taskID = boardStore.selectedTaskID
-  if (!taskID) return
-  if (lastSuggestionTaskID === taskID) return
-  lastSuggestionTaskID = taskID
-  void apiJson(`task/${encodeURIComponent(taskID)}/followup`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: "{}",
-  })
-    .then((data: any) => {
-      const text = typeof data?.suggestion === "string" ? data.suggestion.trim() : ""
-      if (text) setPendingSuggestion(text)
-    })
-    .catch((err) => {
-      AppLog.warn("main", "followup suggestion failed", err)
-    })
-})
 
 const composerEl = document.getElementById("solidChatComposer")
 if (composerEl) {
@@ -965,30 +937,66 @@ if (frontendPreviewMountEl) {
   )
 }
 
-createEffect(() => {
-  const active = rightPanelTab()
-  const inspector = document.getElementById("rightPanelInspector")
-  const preview = document.getElementById("rightPanelPreview")
-  inspector?.setAttribute("data-active", active === "inspector" ? "true" : "false")
-  preview?.setAttribute("data-active", active === "preview" ? "true" : "false")
-})
-
 let lastFrontendPreviewKey = ""
-createEffect(() => {
-  const taskID = boardStore.selectedTaskID || boardStore.board?.task?.id || ""
-  const snapshot = boardStore.snapshotVersion || ""
-  const key = previewRequestKey(taskID, snapshot)
-  if (!taskID) {
-    lastFrontendPreviewKey = key
-    setFrontendPreviewResolution(null)
-    setFrontendPreviewError("")
-    setFrontendPreviewLoading(false)
-    return
-  }
-  if (key === lastFrontendPreviewKey) return
-  lastFrontendPreviewKey = key
-  refreshFrontendPreview()
-})
+
+disposers.push(
+  createRoot((dispose) => {
+    createEffect(() => {
+      const busyNow = !!messageStore.chatRequest || isTaskInterruptable()
+      const wasBusy = lastTaskBusy
+      lastTaskBusy = busyNow
+      // Each busy→true edge resets the guard so the next finish is eligible for
+      // a fresh suggestion even if it's the same task.
+      if (busyNow && !wasBusy) {
+        lastSuggestionTaskID = null
+        return
+      }
+      if (!wasBusy || busyNow) return
+      const taskID = boardStore.selectedTaskID
+      if (!taskID) return
+      if (lastSuggestionTaskID === taskID) return
+      lastSuggestionTaskID = taskID
+      void apiJson(`task/${encodeURIComponent(taskID)}/followup`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      })
+        .then((data: any) => {
+          const text = typeof data?.suggestion === "string" ? data.suggestion.trim() : ""
+          if (text) setPendingSuggestion(text)
+        })
+        .catch((err) => {
+          AppLog.warn("main", "followup suggestion failed", err)
+        })
+    })
+
+    createEffect(() => {
+      const active = rightPanelTab()
+      const inspector = document.getElementById("rightPanelInspector")
+      const preview = document.getElementById("rightPanelPreview")
+      inspector?.setAttribute("data-active", active === "inspector" ? "true" : "false")
+      preview?.setAttribute("data-active", active === "preview" ? "true" : "false")
+    })
+
+    createEffect(() => {
+      const taskID = boardStore.selectedTaskID || boardStore.board?.task?.id || ""
+      const snapshot = boardStore.snapshotVersion || ""
+      const key = previewRequestKey(taskID, snapshot)
+      if (!taskID) {
+        lastFrontendPreviewKey = key
+        setFrontendPreviewResolution(null)
+        setFrontendPreviewError("")
+        setFrontendPreviewLoading(false)
+        return
+      }
+      if (key === lastFrontendPreviewKey) return
+      lastFrontendPreviewKey = key
+      refreshFrontendPreview()
+    })
+
+    return dispose
+  }),
+)
 
 // ── Mount: Board (right-panel task workflow sections) ──
 
