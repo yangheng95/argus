@@ -91,7 +91,7 @@ export const PanelCapabilityRegistry = list(
     params: {
       request: z.string(),
       request_id: z.string().optional(),
-      executor: z.enum(["mirrorcode", "codex", "claude-code"]).optional(),
+      executor: z.enum(["opencorvus", "codex", "claude-code"]).optional(),
       queue: z.boolean().optional(),
       checks: CheckConfig.optional(),
       routing: StageRouting.optional(),
@@ -189,7 +189,7 @@ export const PanelCapabilityRegistry = list(
     kind: "mutation",
     surfaces: panel,
     params: {
-      executor: z.enum(["mirrorcode", "codex", "claude-code"]),
+      executor: z.enum(["opencorvus", "codex", "claude-code"]),
     },
     local_action_types: ["set_executor"],
     local_action_surfaces: panel,

@@ -17,8 +17,8 @@ const port = Number(process.env.PORT || 5599)
 
 const executors = [
   {
-    id: "mirrorcode",
-    label: "MirrorCode",
+    id: "opencorvus",
+    label: "OpenCorvus",
     registered: true,
     discovered: true,
     selectable: true,

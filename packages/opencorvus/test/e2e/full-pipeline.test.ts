@@ -1,5 +1,5 @@
 /**
- * Full end-to-end test: real Planner LLM → real OpencodeExecutor → real Checks → real Evaluator LLM.
+ * Full end-to-end test: real Planner LLM → real OpencorvusExecutor → real Checks → real Evaluator LLM.
  *
  * 无任何 mock。全链路：
  *   createTask → plan (real LLM) → execute (real opencorvus session) → verify (bun test) → evaluate (real LLM)
@@ -69,7 +69,7 @@ async function resolveModel() {
 
 const MODEL = await resolveModel()
 const MODEL_PROVIDER_ID = MODEL.split("/")[0] ?? "openai"
-const EXECUTOR = (process.env.OPENCORVUS_E2E_EXECUTOR ?? "mirrorcode") as "mirrorcode" | "codex" | "claude-code"
+const EXECUTOR = (process.env.OPENCORVUS_E2E_EXECUTOR ?? "opencorvus") as "opencorvus" | "codex" | "claude-code"
 
 async function hasLiveModel(model: string) {
   try {

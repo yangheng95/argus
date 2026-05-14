@@ -6,7 +6,7 @@ import { Message } from "../../src/session/message"
 
 /**
  * Regression for specs/scheduler-fix-plan-2026-04-30.md P2 (commit
- * e87333dbb) + audit §11.1 / L1. Pre-fix, a MirrorCode build session that
+ * e87333dbb) + audit §11.1 / L1. Pre-fix, a OpenCorvus build session that
  * ended without calling report_build_result emitted a generic
  * `Error("build agent: terminal build report did not match
  * BuildResultSchema: …")` from build/agent.ts:633. The orchestrator
@@ -16,7 +16,7 @@ import { Message } from "../../src/session/message"
  *
  * The fix introduces a typed BuildAgentContractError that:
  *   - distinguishes contract violation from infra failure (codex P2 #1
- *     scope: MirrorCode executor only — external executors host-synthesise
+ *     scope: OpenCorvus executor only — external executors host-synthesise
  *     BuildResult and don't have report_build_result, so they keep the
  *     generic Error throw),
  *   - carries diagnostic context (sessionID, parseError or

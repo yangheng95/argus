@@ -22,7 +22,7 @@ describe("ChannelIngress.bindingsByTaskID (Gateway PRD §10)", () => {
             request: "Test bindings reverse lookup",
             kind: "workflow",
             queue: false,
-            executor: "mirrorcode",
+            executor: "opencorvus",
             metadata: { source: "test" },
           })
           ChannelIngress.bindThread({
@@ -44,7 +44,7 @@ describe("ChannelIngress.bindingsByTaskID (Gateway PRD §10)", () => {
             request: "other",
             kind: "workflow",
             queue: false,
-            executor: "mirrorcode",
+            executor: "opencorvus",
             metadata: { source: "test" },
           })
           ChannelIngress.bindThread({

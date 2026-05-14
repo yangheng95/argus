@@ -29,7 +29,7 @@ export const StructuredOutputToolAdapter: ToolAdapter = {
   },
   projectCall(call) {
     return [{
-      provider: call.metadata?.provider as "mirrorcode" | "codex" | "claude-code",
+      provider: call.metadata?.provider as "opencorvus" | "codex" | "claude-code",
       kind: "tool_call",
       summary: "Structured output requested",
       refs: call.refs,
@@ -43,7 +43,7 @@ export const StructuredOutputToolAdapter: ToolAdapter = {
   },
   projectResult(result) {
     return [{
-      provider: result.metadata?.provider as "mirrorcode" | "codex" | "claude-code",
+      provider: result.metadata?.provider as "opencorvus" | "codex" | "claude-code",
       kind: "tool_result",
       summary: result.summary ?? "Structured output returned",
       refs: result.refs,

@@ -390,7 +390,7 @@ test(
       },
       executors: [
         {
-          id: "mirrorcode",
+          id: "opencorvus",
           label: "OpenCorvus",
           detail: "Bundled",
           version: "0.0.1-alpha",
@@ -515,7 +515,7 @@ test(
       },
       executors: [
         {
-          id: "mirrorcode",
+          id: "opencorvus",
           label: "OpenCorvus",
           detail: "Bundled",
           version: "0.0.1-alpha",
@@ -699,7 +699,7 @@ test(
       },
       executors: [
         {
-          id: "mirrorcode",
+          id: "opencorvus",
           label: "OpenCorvus",
           detail: "Bundled",
           version: "0.0.1-alpha",
@@ -831,7 +831,7 @@ test(
       },
       executors: [
         {
-          id: "mirrorcode",
+          id: "opencorvus",
           label: "OpenCorvus",
           detail: "Bundled",
           version: "0.0.1-alpha",

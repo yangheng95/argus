@@ -36,7 +36,7 @@ User 请求
 └──────┬───────┘  packages/opencorvus/src/orchestrator/goal-pool.ts
        ↓
 ┌──────────────┐
-│ Executor     │  MirrorCode / Codex / Claude Code
+│ Executor     │  OpenCorvus / Codex / Claude Code
 └──────┬───────┘  packages/opencorvus/src/executor/opencode.ts
        ↓  delivery
 ┌──────────────┐
@@ -86,7 +86,7 @@ while (session 活跃) {
 }
 ```
 
-连接两层的是 MirrorCode executor（`OpencodeExecutor.submit`，`src/executor/opencode.ts:48`）：把 Orchestrator 的 prompt 塞进 TaskQueue，触发 `SessionLoop`。
+连接两层的是 OpenCorvus executor（`OpencorvusExecutor.submit`，`src/executor/opencode.ts:48`）：把 Orchestrator 的 prompt 塞进 TaskQueue，触发 `SessionLoop`。
 
 详见 [Agentic Loop](./agent-loop.md)。
 

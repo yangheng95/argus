@@ -19,7 +19,7 @@ afterEach(async () => {
 /**
  * Fake adapter that satisfies ExecutorAdapter just enough for cancelTask.
  * The critical bit is `abort()` which returns a promise that never settles
- * — pre-Phase-1, this is exactly what mirrorcode looks like when its child
+ * — pre-Phase-1, this is exactly what opencorvus looks like when its child
  * is unresponsive, and pre-Phase-1 cancelTask awaited it directly so the
  * whole call hung. Phase-1 wraps each abort in `withTimeout`, so cancel
  * must now reach updateTask({status:"cancelled"}) within the deadline.
@@ -61,7 +61,7 @@ function seedRunningTaskRun() {
       title: "cancel timeout regression",
       request: "force executor.abort to hang and assert cancelTask still terminates",
       priority: "normal",
-      executor: "mirrorcode",
+      executor: "opencorvus",
       time_started: now,
       time_completed: null,
       time_created: now,
@@ -76,7 +76,7 @@ function seedRunningTaskRun() {
       payload: {
         plan_version_id: null,
         session_id: null,
-        executor: "mirrorcode",
+        executor: "opencorvus",
         status: "running",
         phase: "deliver",
         blocking_reason: null,
@@ -97,7 +97,7 @@ function seedRunningTaskRun() {
 describe("cancelTask under unresponsive executor.abort", () => {
   test("completes within deadline + writes time_completed + records abort_timeout in decision_log", async () => {
     ExecutorRegistry.reset()
-    ExecutorRegistry.register("mirrorcode", fakeStuckAdapter())
+    ExecutorRegistry.register("opencorvus", fakeStuckAdapter())
 
     const { taskID, runID } = seedRunningTaskRun()
 
@@ -125,7 +125,7 @@ describe("cancelTask under unresponsive executor.abort", () => {
     expect(taskRow?.error).toBe("task cancelled")
 
     // The zombie-observation breadcrumb must exist so an operator can find
-    // a stuck mirrorcode child after the API has unblocked.
+    // a stuck opencorvus child after the API has unblocked.
     const decisions = Database.use((db) =>
       db.select().from(DecisionLogTable)
         .where(eq(DecisionLogTable.task_id, taskID))

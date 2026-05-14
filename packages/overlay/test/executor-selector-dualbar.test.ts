@@ -63,7 +63,7 @@ describe("ExecutorSelector dual chip bar", () => {
     expect(SRC).toMatch(/await setExecutorModel\(executorID, model\)/)
   })
 
-  test("none-tab in external popover disables external by switching back to mirrorcode", () => {
+  test("none-tab in external popover disables external by switching back to opencorvus", () => {
     expect(SRC).toMatch(/function disableExternal\(\)/)
     expect(SRC).toMatch(/sanitizeExecutor\(INTERNAL_EXECUTOR_ID\)/)
   })

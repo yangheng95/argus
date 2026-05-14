@@ -64,7 +64,7 @@ describe("engine permission interactions", () => {
             payload: {
               plan_version_id: null,
               session_id: root.id,
-              executor: "mirrorcode",
+              executor: "opencorvus",
               status: "running",
               phase: "execute",
               blocking_reason: null,

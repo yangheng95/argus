@@ -58,7 +58,7 @@ const boardData = {
       cards: [{
         id: "run-1",
         kind: "run",
-        title: "MirrorCode / executing",
+        title: "OpenCorvus / executing",
         status: "running",
         time: Date.now(),
       }],
@@ -203,7 +203,7 @@ const transcriptMessages = [
     info: {
       id: "exec-auth-1",
       role: "assistant",
-      agent: "mirrorcode",
+      agent: "opencorvus",
       sessionID: "exec-session-auth",
       time: { created: Date.now() - 80_000 },
     },
@@ -216,7 +216,7 @@ const transcriptMessages = [
     info: {
       id: "exec-auth-2",
       role: "assistant",
-      agent: "mirrorcode",
+      agent: "opencorvus",
       sessionID: "exec-session-auth",
       time: { created: Date.now() - 75_000 },
     },
@@ -229,7 +229,7 @@ const transcriptMessages = [
     info: {
       id: "exec-auth-3",
       role: "assistant",
-      agent: "mirrorcode",
+      agent: "opencorvus",
       sessionID: "exec-session-auth",
       time: { created: Date.now() - 70_000 },
     },
@@ -242,7 +242,7 @@ const transcriptMessages = [
     info: {
       id: "exec-auth-4",
       role: "assistant",
-      agent: "mirrorcode",
+      agent: "opencorvus",
       sessionID: "exec-session-auth",
       time: { created: Date.now() - 65_000 },
     },
@@ -256,7 +256,7 @@ const transcriptMessages = [
     info: {
       id: "exec-api-1",
       role: "assistant",
-      agent: "mirrorcode",
+      agent: "opencorvus",
       sessionID: "exec-session-api",
       time: { created: Date.now() - 78_000 },
     },
@@ -269,7 +269,7 @@ const transcriptMessages = [
     info: {
       id: "exec-api-2",
       role: "assistant",
-      agent: "mirrorcode",
+      agent: "opencorvus",
       sessionID: "exec-session-api",
       time: { created: Date.now() - 72_000 },
     },
@@ -282,7 +282,7 @@ const transcriptMessages = [
     info: {
       id: "exec-api-3",
       role: "assistant",
-      agent: "mirrorcode",
+      agent: "opencorvus",
       sessionID: "exec-session-api",
       time: { created: Date.now() - 67_000 },
     },
@@ -296,7 +296,7 @@ const transcriptMessages = [
     info: {
       id: "exec-rbac-1",
       role: "assistant",
-      agent: "mirrorcode",
+      agent: "opencorvus",
       sessionID: "exec-session-rbac",
       time: { created: Date.now() - 40_000 },
     },

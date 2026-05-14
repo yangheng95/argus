@@ -1,11 +1,11 @@
-import { OpencodeExecutor } from "./opencode"
+import { OpencorvusExecutor } from "./opencorvus"
 import { ManagedCodingExecutor } from "./managed"
 import type { CodingProvider, CodingProviderOptions, ExecutorAdapter, ExecutorNameInfo } from "./contract"
 import { ExecutorNotConfiguredError } from "./contract"
 
 const base = () =>
   new Map<ExecutorNameInfo, ExecutorAdapter>([
-    ["mirrorcode", OpencodeExecutor],
+    ["opencorvus", OpencorvusExecutor],
   ])
 
 const state = {
@@ -16,7 +16,7 @@ const providerRegistry = new Map<string, { provider: CodingProvider; options: Co
 
 export namespace ExecutorRegistry {
   function get(name: ExecutorNameInfo): ExecutorAdapter | undefined {
-    if (name === "mirrorcode") return state.items.get(name) ?? OpencodeExecutor
+    if (name === "opencorvus") return state.items.get(name) ?? OpencorvusExecutor
     return state.items.get(name)
   }
 
@@ -35,7 +35,7 @@ export namespace ExecutorRegistry {
   }
 
   export function registerCoding(
-    name: Exclude<ExecutorNameInfo, "mirrorcode">,
+    name: Exclude<ExecutorNameInfo, "opencorvus">,
     provider: CodingProvider,
     options: CodingProviderOptions,
   ) {
@@ -61,7 +61,7 @@ export namespace ExecutorRegistry {
    * such as BuildAgent must use this rather than the provider alone; otherwise
    * the external executor loses its OpenCorvus tool surface.
    */
-  export function requireCoding(name: Exclude<ExecutorNameInfo, "mirrorcode">) {
+  export function requireCoding(name: Exclude<ExecutorNameInfo, "opencorvus">) {
     const entry = providerRegistry.get(name)
     if (!entry) {
       throw new ExecutorNotConfiguredError({

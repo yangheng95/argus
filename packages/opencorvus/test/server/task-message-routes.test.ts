@@ -524,7 +524,7 @@ describe("task message routes", () => {
         const app = Server.App()
         const dispatchTaskLoop = spyOn(Queue, "dispatchTaskLoop").mockResolvedValue(undefined)
         let resumeCalls = 0
-        ExecutorRegistry.register("mirrorcode", {
+        ExecutorRegistry.register("opencorvus", {
           capabilities: () => ({
             submit: true,
             status: true,
@@ -571,7 +571,7 @@ describe("task message routes", () => {
             payload: {
               plan_version_id: null,
               session_id: root.id,
-              executor: "mirrorcode",
+              executor: "opencorvus",
               status: "running",
               phase: "dispatch",
               retry_count: 0,

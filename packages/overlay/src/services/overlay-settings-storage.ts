@@ -61,7 +61,7 @@ export function saveBrowserOverlaySettings(input: BrowserOverlaySettings): boole
   write("oc_auto_server", input.autoServer ?? true);
   write("oc_password", input.password ?? "");
   write("oc_username", input.username ?? "opencorvus");
-  write("oc_executor", input.executor ?? "mirrorcode");
+  write("oc_executor", input.executor ?? "opencorvus");
   write("oc_sidebar_collapsed", input.sidebarCollapsed === true);
   write("oc_right_panel_collapsed", input.rightPanelCollapsed === true);
   writeOptional("oc_sidebar_width", input.sidebarWidth);

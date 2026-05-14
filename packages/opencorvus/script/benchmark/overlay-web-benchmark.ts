@@ -207,8 +207,8 @@ const resumeMessage = flag("--resume-message") || "请继续完成项目，修�
 // wake-up message instead of giving up. Bounded so a permanently broken
 // task does not loop forever. Set to 0 to disable.
 const maxAutoResumes = Number(flag("--max-auto-resumes") ?? "3")
-const executor = (flag("--executor") || "mirrorcode") as
-  | "mirrorcode"
+const executor = (flag("--executor") || "opencorvus") as
+  | "opencorvus"
   | "codex"
   | "claude-code"
 const requestFile = flag("--request-file")
@@ -375,9 +375,9 @@ const temp = {
 
 temp.home = resumeHomeDir
   ? path.resolve(resumeHomeDir)
-  : await fs.mkdtemp(path.join(os.tmpdir(), "mirrorcode-overlay-benchmark-home-"))
+  : await fs.mkdtemp(path.join(os.tmpdir(), "opencorvus-overlay-benchmark-home-"))
 if (resumeTaskID && !projectDir) throw new Error("--resume-task-id requires --project-dir")
-temp.dir = projectDir ? path.resolve(projectDir) : await fs.mkdtemp(path.join(os.tmpdir(), "mirrorcode-overlay-benchmark-project-"))
+temp.dir = projectDir ? path.resolve(projectDir) : await fs.mkdtemp(path.join(os.tmpdir(), "opencorvus-overlay-benchmark-project-"))
 temp.config = path.join(temp.home, "config-override")
 process.env.OPENCORVUS_HOME = temp.home
 // Copy request file into the project directory so the Task Agent can reference it

@@ -122,7 +122,7 @@ test.skip("GET /export/task/:taskID includes goal-snapshot evaluations and QA gr
               payload: {
                 plan_version_id: planID,
                 session_id: null,
-                executor: "mirrorcode",
+                executor: "opencorvus",
                 status: "failed",
                 phase: "dispatch",
                 blocking_reason: null,
@@ -145,7 +145,7 @@ test.skip("GET /export/task/:taskID includes goal-snapshot evaluations and QA gr
               payload: {
                 plan_version_id: planID,
                 session_id: null,
-                executor: "mirrorcode",
+                executor: "opencorvus",
                 status: "completed",
                 phase: "deliver",
                 blocking_reason: null,

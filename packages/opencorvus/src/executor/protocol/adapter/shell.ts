@@ -32,7 +32,7 @@ export const ShellToolAdapter: ToolAdapter = {
   },
   projectCall(call) {
     return [{
-      provider: call.metadata?.provider as "mirrorcode" | "codex" | "claude-code",
+      provider: call.metadata?.provider as "opencorvus" | "codex" | "claude-code",
       kind: "tool_call",
       summary: `Shell command: ${call.name}`,
       refs: call.refs,
@@ -47,7 +47,7 @@ export const ShellToolAdapter: ToolAdapter = {
   },
   projectResult(result) {
     return [{
-      provider: result.metadata?.provider as "mirrorcode" | "codex" | "claude-code",
+      provider: result.metadata?.provider as "opencorvus" | "codex" | "claude-code",
       kind: "tool_result",
       summary: result.summary ?? "Shell command completed",
       refs: result.refs,

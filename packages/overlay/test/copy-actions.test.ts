@@ -42,7 +42,7 @@ test("copying chat and logs does not open the dialog", async () => {
     board: {
       task,
       run: {
-        executor: "mirrorcode",
+        executor: "opencorvus",
         phase: "complete",
       },
       overview: {
@@ -96,7 +96,7 @@ test("copying chat and logs does not open the dialog", async () => {
     mcp: {},
     executors: [
       {
-        id: "mirrorcode",
+        id: "opencorvus",
         label: "OpenCorvus",
         detail: "Bundled",
         version: "0.0.1-alpha",

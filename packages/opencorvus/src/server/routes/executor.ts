@@ -17,7 +17,7 @@ const ExecutorToolInfo = z.object({
 })
 
 const ExecutorInfo = z.object({
-  id: z.enum(["mirrorcode", "codex", "claude-code"]),
+  id: z.enum(["opencorvus", "codex", "claude-code"]),
   label: z.string(),
   registered: z.boolean(),
   discovered: z.boolean(),
@@ -55,28 +55,28 @@ export const ExecutorRoutes = lazy(() => {
     async (c) => {
       await ExecutorBootstrap.autoRegister(true).catch(() => undefined)
       const found = await ExecutorDiscovery.scan()
-      const mirrorcode = protocolInfo("mirrorcode")
+      const opencorvus = protocolInfo("opencorvus")
       const codex = protocolInfo("codex")
       const claude = protocolInfo("claude-code")
       const tools = {
-        mirrorcode: await ToolAdapterRegistry.declare(ToolAdapterRegistry.context({ provider: "mirrorcode", capabilities: mirrorcode.capabilities })),
+        opencorvus: await ToolAdapterRegistry.declare(ToolAdapterRegistry.context({ provider: "opencorvus", capabilities: opencorvus.capabilities })),
         codex: await ToolAdapterRegistry.declare(ToolAdapterRegistry.context({ provider: "codex", capabilities: codex.capabilities })),
         claude: await ToolAdapterRegistry.declare(ToolAdapterRegistry.context({ provider: "claude-code", capabilities: claude.capabilities })),
       }
       return c.json([
         {
-          id: "mirrorcode",
-          label: "MirrorCode",
-          registered: ExecutorRegistry.has("mirrorcode"),
-          discovered: found.mirrorcode.available,
-          selectable: ExecutorRegistry.has("mirrorcode"),
-          protocol: mirrorcode.protocol,
-          protocolVersion: mirrorcode.version,
-          transport: mirrorcode.transport.kind,
-          features: mirrorcode.capabilities,
-          tools: tools.mirrorcode,
-          detail: found.mirrorcode.detail,
-          version: found.mirrorcode.version,
+          id: "opencorvus",
+          label: "OpenCorvus",
+          registered: ExecutorRegistry.has("opencorvus"),
+          discovered: found.opencorvus.available,
+          selectable: ExecutorRegistry.has("opencorvus"),
+          protocol: opencorvus.protocol,
+          protocolVersion: opencorvus.version,
+          transport: opencorvus.transport.kind,
+          features: opencorvus.capabilities,
+          tools: tools.opencorvus,
+          detail: found.opencorvus.detail,
+          version: found.opencorvus.version,
         },
         {
           id: "codex",

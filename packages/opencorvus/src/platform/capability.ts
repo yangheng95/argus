@@ -141,9 +141,9 @@ export namespace Capability {
   async function executors() {
     const found = await ExecutorDiscovery.scan()
     return [
-      found.mirrorcode.available
-        ? line("executor_mirrorcode", "Executor MirrorCode", "ok", found.mirrorcode.detail)
-        : line("executor_mirrorcode", "Executor MirrorCode", "fail", found.mirrorcode.detail),
+      found.opencorvus.available
+        ? line("executor_opencorvus", "Executor OpenCorvus", "ok", found.opencorvus.detail)
+        : line("executor_opencorvus", "Executor OpenCorvus", "fail", found.opencorvus.detail),
       found.codex.available
         ? line(
             "executor_codex",

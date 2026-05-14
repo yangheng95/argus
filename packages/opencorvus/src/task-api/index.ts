@@ -137,7 +137,7 @@ const log = Log.create({ service: "assistant" })
 /**
  * Per-call deadline for `executor.abort()` during cancelTask / abortRun.
  * Mirrorcode and other executors await child-process cooperation; if the
- * child is unresponsive (hung mirrorcode adapter, dead network), the abort
+ * child is unresponsive (hung opencorvus adapter, dead network), the abort
  * promise can hang forever. 5s is generous for an in-process abort and
  * tight enough that users see the cancel succeed (UI stops spinning).
  * Tests can override via CancelTaskOptions.
@@ -613,8 +613,8 @@ export namespace EngineService {
       if (existing) return existing.id
     }
     const title = input.title?.trim() || deriveTitle(input.request)
-    const executor = input.executor ?? "mirrorcode"
-    if (executor !== "mirrorcode" && !ExecutorRegistry.has(executor)) {
+    const executor = input.executor ?? "opencorvus"
+    if (executor !== "opencorvus" && !ExecutorRegistry.has(executor)) {
       await ExecutorBootstrap.autoRegister(true).catch((err) => {
         log.warn("executor autoRegister failed", { executor, error: String(err) })
       })

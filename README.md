@@ -17,7 +17,7 @@ Without a harness, you get a single attempt with no structured verification. Wit
 - **Spec agent** — researches the codebase and turns a vague request into a precise, testable specification
 - **Goal agent** — decomposes the spec into independent, verifiable implementation goals
 - **Planner agent** — expands goals into an execution plan with subtasks, risks, and assumptions
-- **Executor** — dispatches to MirrorCode, Codex, or Claude Code against the real repo
+- **Executor** — dispatches to OpenCorvus, Codex, or Claude Code against the real repo
 - **Evaluator agent** — runs `build`, `test`, `lint`, `startup`, `artifact`, `visual`, `puppeteer`, LLM review checks and the default-on `spec check` acceptance gate; classifies failures and generates replan guidance
 - **Delivery agent** — performs end-to-end verification before publishing
 
@@ -109,7 +109,7 @@ What the Slack gateway does today:
 
 ### Executors
 
-OpenCorvus always has the built-in MirrorCode executor. It can also dispatch to external coding CLIs when they are installed and auto-discovery is enabled.
+OpenCorvus always has the built-in OpenCorvus executor. It can also dispatch to external coding CLIs when they are installed and auto-discovery is enabled.
 
 ```bash
 export OPENCORVUS_AUTO_DISCOVER_EXECUTORS=1
@@ -117,7 +117,7 @@ export OPENCORVUS_AUTO_DISCOVER_EXECUTORS=1
 
 Supported executor display names today:
 
-- MirrorCode (`mirrorcode` executor id)
+- OpenCorvus (`opencorvus` executor id)
 - Codex (`codex` executor id)
 - Claude Code (`claude-code` executor id)
 

@@ -140,7 +140,7 @@ export function panelRequestBody(
   metadata: Record<string, unknown> = {},
   requestID: string = "",
   attachments: Attachment[] = [],
-  executor: string = "mirrorcode",
+  executor: string = "opencorvus",
 ): Record<string, unknown> {
   const taskID = boardStore.selectedTaskID || undefined;
   const body: Record<string, unknown> = {

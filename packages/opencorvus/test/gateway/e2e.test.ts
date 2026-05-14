@@ -60,7 +60,7 @@ describe("Gateway e2e — channel ingress routing (PRD §10)", () => {
 
         const taskID = await EngineService.createTask({
           request: "Initial requirement",
-          executor: "mirrorcode",
+          executor: "opencorvus",
           kind: "workflow",
           queue: false,
           metadata: { source: "test" },
@@ -147,7 +147,7 @@ describe("Gateway e2e — channel ingress routing (PRD §10)", () => {
           request: "Requires permission",
           kind: "workflow",
           queue: false,
-          executor: "mirrorcode",
+          executor: "opencorvus",
           metadata: { source: "test" },
         })
         ChannelIngress.bindThread({
@@ -197,7 +197,7 @@ describe("Gateway e2e — channel ingress routing (PRD §10)", () => {
           request: "Asks a question",
           kind: "workflow",
           queue: false,
-          executor: "mirrorcode",
+          executor: "opencorvus",
           metadata: { source: "test" },
         })
         ChannelIngress.bindThread({
@@ -237,7 +237,7 @@ describe("Gateway e2e — task lifecycle through EngineService (PRD §9)", () =>
         // create — queue:false → status active
         const taskID = await EngineService.createTask({
           request: "Build a counter",
-          executor: "mirrorcode",
+          executor: "opencorvus",
           kind: "workflow",
           queue: false,
           metadata: { source: "gateway:test" },
@@ -278,7 +278,7 @@ describe("Gateway e2e — task lifecycle through EngineService (PRD §9)", () =>
         // First task starts immediately (queue=false).
         const firstID = await EngineService.createTask({
           request: "first",
-          executor: "mirrorcode",
+          executor: "opencorvus",
           kind: "workflow",
           queue: false,
           metadata: { source: "gateway:test" },
@@ -290,7 +290,7 @@ describe("Gateway e2e — task lifecycle through EngineService (PRD §9)", () =>
         // is already active in the same directory — it stays queued.
         const secondID = await EngineService.createTask({
           request: "second",
-          executor: "mirrorcode",
+          executor: "opencorvus",
           kind: "workflow",
           queue: true,
           metadata: { source: "gateway:test" },
@@ -313,7 +313,7 @@ describe("Gateway e2e — task lifecycle through EngineService (PRD §9)", () =>
 
         const taskID = await EngineService.createTask({
           request: "to-be-retried",
-          executor: "mirrorcode",
+          executor: "opencorvus",
           kind: "workflow",
           queue: false,
           metadata: { source: "gateway:test" },
@@ -344,7 +344,7 @@ describe("Gateway e2e — channel bindings + reverse lookup (PRD §17.14)", () =
 
         const taskID = await EngineService.createTask({
           request: "binding round-trip",
-          executor: "mirrorcode",
+          executor: "opencorvus",
           kind: "workflow",
           queue: false,
           metadata: { source: "gateway:test" },
@@ -384,14 +384,14 @@ describe("Gateway e2e — channel bindings + reverse lookup (PRD §17.14)", () =
 
         const targetID = await EngineService.createTask({
           request: "target",
-          executor: "mirrorcode",
+          executor: "opencorvus",
           kind: "workflow",
           queue: false,
           metadata: { source: "gateway:test" },
         })
         const otherID = await EngineService.createTask({
           request: "other",
-          executor: "mirrorcode",
+          executor: "opencorvus",
           kind: "workflow",
           queue: false,
           metadata: { source: "gateway:test" },
@@ -431,7 +431,7 @@ describe("Gateway e2e — HTTP routes via Server.App().request (PRD §11)", () =
 
         const taskID = await EngineService.createTask({
           request: "for routing",
-          executor: "mirrorcode",
+          executor: "opencorvus",
           kind: "workflow",
           queue: false,
           metadata: { source: "gateway:test" },
@@ -512,7 +512,7 @@ describe("Gateway e2e — HTTP routes via Server.App().request (PRD §11)", () =
 
         const taskID = await EngineService.createTask({
           request: "stats sample",
-          executor: "mirrorcode",
+          executor: "opencorvus",
           kind: "workflow",
           queue: false,
           metadata: { source: "gateway:test" },
@@ -669,7 +669,7 @@ describe("Gateway e2e — HTTP routes via Server.App().request (PRD §11)", () =
 
           const taskID = await EngineService.createTask({
             request: "shape check",
-            executor: "mirrorcode",
+            executor: "opencorvus",
             kind: "workflow",
             queue: false,
             metadata: { source: "gateway:test" },

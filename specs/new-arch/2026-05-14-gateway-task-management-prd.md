@@ -310,7 +310,7 @@ type GatewayTaskDecomposition = {
     description: string
     acceptance: string[]
     priority: "critical" | "high" | "normal" | "low"
-    executor?: "mirrorcode" | "codex" | "claude-code"
+    executor?: "opencorvus" | "codex" | "claude-code"
     recommended_queue: boolean
     dependencies: string[]
     risks: string[]

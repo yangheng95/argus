@@ -28,7 +28,7 @@ describe("task creation route", () => {
       },
       body: JSON.stringify({
         request: "create from overlay without queue",
-        executor: "mirrorcode",
+        executor: "opencorvus",
         requestID: "route-create-no-queue",
         source: "panel",
       }),

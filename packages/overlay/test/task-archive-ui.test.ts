@@ -35,7 +35,7 @@ test("task row exposes export button + sidebar exposes import file picker", asyn
   }
   const board = {
     task,
-    run: { executor: "mirrorcode", phase: "complete" },
+    run: { executor: "opencorvus", phase: "complete" },
     overview: { headline: "Archive demo", summary: "demo", controls: {} },
     plan: null, spec: null, evaluation: null, delivery: null, interactions: [],
   }
@@ -75,7 +75,7 @@ test("task row exposes export button + sidebar exposes import file picker", asyn
       if (path === "/config/providers") return send({ providers: [], default: {} })
       if (path === "/channel") return send([])
       if (path === "/executor") return send([{
-        id: "mirrorcode", label: "OpenCorvus", detail: "Bundled",
+        id: "opencorvus", label: "OpenCorvus", detail: "Bundled",
         version: "0.0.1-alpha", selectable: true, discovered: true,
       }])
       if (path === "/skill/installed" || path === "/skill") return send([])

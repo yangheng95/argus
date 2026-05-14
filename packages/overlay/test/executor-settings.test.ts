@@ -87,8 +87,8 @@ describe("executor settings", () => {
 
     await loadSettings();
 
-    expect(settingsStore.executor).toBe("mirrorcode");
-    expect(sanitizeExecutor("opencode")).toBe("mirrorcode");
+    expect(settingsStore.executor).toBe("opencorvus");
+    expect(sanitizeExecutor("opencode")).toBe("opencorvus");
   });
 
   test("tauri settings load ignores stale browser storage", async () => {
@@ -124,7 +124,7 @@ describe("executor settings", () => {
 
     await loadSettings();
 
-    expect(settingsStore.executor).toBe("mirrorcode");
+    expect(settingsStore.executor).toBe("opencorvus");
     expect(settingsStore.theme).toBe("dark");
 
     setSettingsStore({
@@ -189,14 +189,15 @@ describe("executor settings", () => {
     );
     setSettingsStore("executor", "opencode" as any);
 
-    await createTask({ text: "hello" });
+    await createTask({ text: "hello", queue: false, kind: "workflow" });
 
     expect(captured?.body?.kind).toBe("json");
-    expect((captured?.body as any).value.executor).toBe("mirrorcode");
+    expect((captured?.body as any).value.executor).toBe("opencorvus");
+    expect((captured?.body as any).value.kind).toBe("workflow");
   });
 
   test("panel request body sanitizes explicit executor input", () => {
-    expect(panelRequestBody("hello", {}, "req_1", [], "opencode").executor).toBe("mirrorcode");
+    expect(panelRequestBody("hello", {}, "req_1", [], "opencode").executor).toBe("opencorvus");
   });
 
   test("native settings task id alias restores the workspace task", () => {

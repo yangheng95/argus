@@ -254,7 +254,7 @@ export function applyEvent(event: any): void {
   // gates and structured questions.
   if (type === "approval.request" || type === "input.request") return;
   // permission.* events fire alongside approval.request when an executor
-  // gates on a tool call (executor/opencode.ts:260,267). Handled inline by
+  // gates on a tool call (executor/opencorvus.ts:260,267). Handled inline by
   // InteractionCard — tree-writer just acknowledges.
   if (type === "permission.asked" || type === "permission.replied") return;
   // diff.delta is a streaming preview from the executor — boardStore
@@ -1027,7 +1027,7 @@ function deriveSessionStage(info: any): string {
   // Reading this as a fallback chain (channel → agent → resolvedRole →
   // role) previously routed root-session user messages to stage="build"
   // because `info.agent` on user rows is `Agent.defaultAgent()` (="build"
-  // under MirrorCode config). That cascade turned a user bubble into an
+  // under OpenCorvus config). That cascade turned a user bubble into an
   // orange 「构建」 card — a classic rule-1 fallback bug.
   //
   // Channel values:

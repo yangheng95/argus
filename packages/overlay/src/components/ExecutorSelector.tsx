@@ -1,9 +1,9 @@
 // ── ExecutorSelector ──
-// Bottom-of-composer dual chip: MirrorCode (left) and external executor
+// Bottom-of-composer dual chip: OpenCorvus (left) and external executor
 // (right). Each chip is an independent popover anchor with its own model
 // picker.
 //
-//   - MirrorCode picker lists only the models from providers that the
+//   - OpenCorvus picker lists only the models from providers that the
 //     server reports as connected (auth'd). Picking writes the project
 //     default via `patchConfig({ model })` — same write path as
 //     AgentModelsPanel project-default row.
@@ -49,7 +49,7 @@ interface ProviderGroup {
   models: string[];
 }
 
-const INTERNAL_EXECUTOR_ID = "mirrorcode";
+const INTERNAL_EXECUTOR_ID = "opencorvus";
 const EXTERNAL_EXECUTOR_IDS = ["codex", "claude-code"];
 
 function splitModelID(modelID: string): ModelParts {
@@ -116,7 +116,7 @@ function buildProviderGroups(
   return groups;
 }
 
-// MirrorCode (OpenCorvus internal) only surfaces models from providers that
+// OpenCorvus (OpenCorvus internal) only surfaces models from providers that
 // are already authenticated — there is no point letting the user pick a
 // model whose provider can't actually serve it.
 function mirrorProviderGroups(): ProviderGroup[] {

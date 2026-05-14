@@ -128,7 +128,7 @@ test(
       executors: [
         { id: "codex", label: "Codex", detail: "Connected", version: "1.0.0", selectable: true, discovered: true },
         {
-          id: "mirrorcode",
+          id: "opencorvus",
           label: "OpenCorvus",
           detail: "Bundled",
           version: "0.0.1-alpha",
@@ -150,7 +150,7 @@ test(
       board: {
         task,
         run: {
-          executor: "mirrorcode",
+          executor: "opencorvus",
           phase: "execute",
         },
         overview: {

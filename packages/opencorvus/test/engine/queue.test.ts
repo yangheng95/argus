@@ -87,7 +87,7 @@ describe("engine queue", () => {
         const taskID = await EngineService.createTask({
           request: "start without waiting for the active cwd sibling",
           title: "direct start task",
-          executor: "mirrorcode",
+          executor: "opencorvus",
         })
         for (let i = 0; i < 50 && runTaskLoop.mock.calls.length === 0; i++) {
           await new Promise((resolve) => setTimeout(resolve, 10))
@@ -127,7 +127,7 @@ describe("engine queue", () => {
         const taskID = await EngineService.createTask({
           request: "wait because the caller explicitly requested queueing",
           title: "queued opt-in task",
-          executor: "mirrorcode",
+          executor: "opencorvus",
           queue: true,
         })
         await new Promise((resolve) => setTimeout(resolve, 0))
@@ -256,7 +256,7 @@ describe("engine queue", () => {
             payload: {
               plan_version_id: null,
               session_id: null,
-              executor: "mirrorcode",
+              executor: "opencorvus",
               status: "failed",
               phase: "dispatch",
               blocking_reason: null,

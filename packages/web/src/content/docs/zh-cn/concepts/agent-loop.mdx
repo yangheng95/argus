@@ -32,12 +32,12 @@ LLM 返回的每个 tool-call 由 `SessionToolResolver`（`src/session/tool-reso
 
 ## 外层循环的触发
 
-`SessionLoop` 是内循环。外层的 `runTaskLoop`（`src/orchestrator/task-loop.ts:59`）通过 MirrorCode executor（`OpencodeExecutor.submit`，`src/executor/opencode.ts:48`）把 prompt 塞进 `TaskQueueService`：
+`SessionLoop` 是内循环。外层的 `runTaskLoop`（`src/orchestrator/task-loop.ts:59`）通过 OpenCorvus executor（`OpencorvusExecutor.submit`，`src/executor/opencode.ts:48`）把 prompt 塞进 `TaskQueueService`：
 
 ```
 Orchestrator.runTaskLoop
   └─ TaskAgent.processTask (LLM 决策)
-      └─ MirrorCode executor (inject prompt)
+      └─ OpenCorvus executor (inject prompt)
           └─ TaskQueueService.runNow
               └─ SessionLoop (内层 agentic loop)
 ```

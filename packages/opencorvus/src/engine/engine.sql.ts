@@ -20,7 +20,7 @@ export type DeliveryResult = {
 export type EngineTaskStatus = "queued" | "active" | "completed" | "failed" | "cancelled"
 
 export type EngineTaskPriority = "critical" | "high" | "normal" | "low"
-export type EngineExecutor = "mirrorcode" | "codex" | "claude-code"
+export type EngineExecutor = "opencorvus" | "codex" | "claude-code"
 export type EnginePlanStatus = "active" | "superseded"
 export type EngineGoalPriority = "blocking" | "advisory"
 // engine_goal.status was retired in the LLM-autonomous redesign: it was a
@@ -236,11 +236,11 @@ export const EngineTaskTable = sqliteTable(
      *  shape. Written by the orchestrator `design_analysis` tool, consumed by
      *  delivery prompt rendering. */
     design_specs: text({ mode: "json" }).$type<import("@/design-analyst/types").VisualSpec[]>().notNull().default([]),
-    /** Executor that runs this task's goal runs — "mirrorcode" / "codex" /
+    /** Executor that runs this task's goal runs — "opencorvus" / "codex" /
      *  "claude-code". Promoted from task.metadata._pipeline.executor (which
      *  carried several other fields that turned out to be dead). Read by the
      *  dispatch tool when creating runs. */
-    executor: text().notNull().$type<EngineExecutor>().default("mirrorcode"),
+    executor: text().notNull().$type<EngineExecutor>().default("opencorvus"),
     /** Delivery verdict criteria rollup — unified stream of
      *  deferred_checks + rejection_details + startup/frontend checks, used
      *  by the overlay Quality Gates panel. Promoted from
