@@ -628,3 +628,82 @@ test("Discard proposal clears both proposal and the composer requirement (round-
     /function handleProposalCleared\(\)\s*\{[\s\S]*?setProposal\(null\)[\s\S]*?setRequirement\(""\)[\s\S]*?setError\(""\)/,
   )
 })
+
+// ── Round-4 fixes ───────────────────────────────────────────────────
+
+test("Gateway armed-confirm disarms when page-mode leaves gateway (round-4 P1)", () => {
+  // Round-3 design review P1-1 — the Gateway component stays mounted
+  // (CSS-driven page-mode toggle), so a plain useArmedConfirm hook
+  // kept its armed state alive across Panel ↔ Gateway round trips
+  // and would commit on the operator's first click upon return.
+  // Wrap with useGatewayArmedConfirm so the createEffect on
+  // isGatewayPage() forces a disarm the moment the page mode leaves.
+  expect(GATEWAY_TSX).toContain("function useGatewayArmedConfirm(): ArmedConfirm")
+  expect(GATEWAY_TSX).toMatch(/createEffect\(\(\) => \{\s*if \(!isGatewayPage\(\)\) confirm\.disarm\(\)/)
+  // Every armed-confirm consumer in this file now goes through the
+  // wrapper — the bare hook is only called once, inside the wrapper
+  // itself. Count occurrences and assert that exactly one call sits
+  // in the file (the inner construct that drives the wrapper).
+  const bareCalls = [...GATEWAY_TSX.matchAll(/useArmedConfirm\(GATEWAY_CONFIRM_WINDOW_MS\)/g)]
+  expect(bareCalls.length).toBe(1)
+})
+
+test("Gateway proposal Recommended pill carries an accent-tinted background (round-4 P1)", () => {
+  // Pre-fix the recommended label was --text-muted + tiny on a
+  // surface-strong card, which sank below operator-noticeable contrast.
+  // Tinting it with the same accent palette the queue segmented control
+  // uses walks the eye from the recommendation to the matching radio.
+  expect(GATEWAY_CSS).toMatch(/\.gateway-proposal-recommended\s*\{[^}]*background:\s*var\(--accent-dim\)/)
+  expect(GATEWAY_CSS).toMatch(/\.gateway-proposal-recommended\s*\{[^}]*color:\s*var\(--accent\)/)
+})
+
+test("Gateway proposal card has a data-created visual lock (round-4 P1)", () => {
+  // Pre-fix the card wrote `data-created="true"` with no CSS hook, so a
+  // fully-saturated card masqueraded as a still-selectable candidate.
+  expect(GATEWAY_CSS).toMatch(
+    /\.gateway-proposal-card\[data-created="true"\]\s*\{[^}]*opacity:\s*var\(--ui-opacity-subtle\)/,
+  )
+  expect(GATEWAY_CSS).toMatch(/\.gateway-proposal-card\[data-created="true"\]\s*\{[^}]*var\(--good\)/)
+})
+
+test("Gateway composer enforces the requirement char cap (round-4 P1)", () => {
+  // 32k matches the server cap in packages/opencorvus/src/server/routes/
+  // gateway.ts so the operator's textarea refuses further input instead
+  // of letting the request fail at the network layer.
+  const helpers = readFileSync(join(import.meta.dir, "../src/utils/gateway-helpers.ts"), "utf8")
+  expect(helpers).toMatch(/export const GATEWAY_REQUIREMENT_MAX_CHARS\s*=\s*32_000/)
+  expect(GATEWAY_TSX).toContain("maxLength={GATEWAY_REQUIREMENT_MAX_CHARS}")
+  // Counter element exists and renders the live count.
+  expect(GATEWAY_TSX).toContain('data-ui="gateway-composer-counter"')
+  expect(GATEWAY_TSX).toContain('t("gateway.compose.length_counter"')
+  expect(I18N_ZH_CN).toContain('"gateway.compose.length_counter"')
+  expect(I18N_EN_US).toContain('"gateway.compose.length_counter"')
+})
+
+test("Gateway armed-confirm respects :disabled (round-4 P2)", () => {
+  // Pre-fix the bright `--ui-opacity-full` rule on
+  // [data-confirm="true"] beat the standard :disabled opacity, so a
+  // button that became disabled mid-arm still looked active.
+  // Adding :not(:disabled) lets the disabled tone win when the host
+  // action transitions to a non-interruptable state.
+  expect(GATEWAY_CSS).toMatch(/\[data-ui="gateway-ledger-cancel"\]\[data-confirm="true"\]:not\(:disabled\)/)
+  expect(GATEWAY_CSS).toMatch(/\[data-ui="gateway-ledger-delete"\]\[data-confirm="true"\]:not\(:disabled\)/)
+})
+
+test("Gateway armed-confirm focus-visible carries the warn / bad tone (round-4 P2)", () => {
+  // Pre-fix the generic `:focus-visible` rule painted every armed-confirm
+  // button with an accent-coloured outline, which clashed with the
+  // warm-tinted fill. Override the outline-color to match the button's
+  // own danger / warn palette so the focus signal stays semantically
+  // honest.
+  expect(GATEWAY_CSS).toMatch(/\[data-ui="gateway-workbench-cancel"\]\[data-confirm="true"\]:focus-visible[\s\S]*outline-color:\s*var\(--warn\)/)
+  expect(GATEWAY_CSS).toMatch(/\[data-ui="gateway-ledger-delete"\]\[data-confirm="true"\]:focus-visible[\s\S]*outline-color:\s*var\(--bad\)/)
+})
+
+test("Gateway workbench message section is sticky at the bottom (round-4 P1)", () => {
+  // Long goals / interactions lists push the composer below the
+  // viewport. Pinning it with `position: sticky; bottom: 0` keeps the
+  // reply box reachable without scrolling all the way down.
+  expect(GATEWAY_CSS).toMatch(/\.gateway-workbench-message\s*\{[^}]*position:\s*sticky/)
+  expect(GATEWAY_CSS).toMatch(/\.gateway-workbench-message\s*\{[^}]*bottom:\s*0/)
+})

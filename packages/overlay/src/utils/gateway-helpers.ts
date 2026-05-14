@@ -3,6 +3,17 @@ import { ApiError } from "../services/api"
 import { t } from "./i18n"
 
 export type LedgerFilter = "all" | "active" | "queued" | "waiting" | "failed" | "completed" | "cancelled"
+
+/**
+ * Hard upper bound on the requirement text the operator can submit to
+ * `/gateway/task/decompose`. The server (`gateway.ts:298`) caps the
+ * payload at 32_000 characters; the overlay surfaces the same number so
+ * the operator sees a counter approach the limit and the textarea
+ * itself refuses extra typing instead of letting them queue up a
+ * request that will fail at the network layer. Single source — the
+ * server route should keep parity with this constant.
+ */
+export const GATEWAY_REQUIREMENT_MAX_CHARS = 32_000
 export type GatewayStatusIconName =
   | "status-queued"
   | "status-active"

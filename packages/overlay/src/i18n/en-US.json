@@ -877,6 +877,7 @@
   "gateway.workbench.summary_empty": "No report yet.",
   "gateway.compose.title": "Decompose a new requirement",
   "gateway.compose.placeholder": "Describe a large requirement in detail. Gateway returns a structured decomposition before any task is created.",
+  "gateway.compose.length_counter": "{{count}} / {{max}} chars",
   "gateway.compose.executor_label": "Executor",
   "gateway.compose.submit": "Generate proposal",
   "gateway.compose.submitting": "Generating…",
