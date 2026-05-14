@@ -183,10 +183,11 @@ body[data-page-mode="gateway"] > main.panel {
   background: var(--bad-dim);
   color: var(--bad);
 }
-.gateway-count[data-status="completed"] {
-  background: color-mix(in srgb, var(--text-muted) 12%, transparent);
-  color: var(--text-muted);
-}
+/* completed + cancelled share the "consumed" tone — both states are
+   terminal, neither demands operator action. Pre-fix the two selectors
+   declared the identical color-mix / color pair (rule 9 — pattern
+   should be hoisted, not copy-pasted). */
+.gateway-count[data-status="completed"],
 .gateway-count[data-status="cancelled"] {
   background: color-mix(in srgb, var(--text-muted) 12%, transparent);
   color: var(--text-muted);
@@ -209,7 +210,14 @@ body[data-page-mode="gateway"] > main.panel {
   .gateway-body {
     grid-template-columns: minmax(calc(220px * var(--ui-scale)), calc(280px * var(--ui-scale))) minmax(0, 1fr);
   }
-  .gateway-channels {
+  /* `.gateway-body .gateway-channels` not bare `.gateway-channels` — the
+     base rule down at the channel-side-panel section sets display: flex,
+     and because both selectors carry the same specificity the LATER
+     source-order rule wins. Without bumping specificity here, the channel
+     column stayed `display: flex` under the narrow breakpoint and CSS
+     grid auto-placement wrapped it onto a fresh row below the ledger
+     (the bug Round 2 visual review caught in screenshot 06). */
+  .gateway-body .gateway-channels {
     display: none;
   }
 }
@@ -218,7 +226,10 @@ body[data-page-mode="gateway"] > main.panel {
   .gateway-body {
     grid-template-columns: 1fr;
   }
-  .gateway-ledger {
+  /* Same specificity logic as the channel-column rule above — the base
+     `.gateway-ledger` rule sets display: flex on line ~228, so the
+     narrow-breakpoint hide needs the parent to actually win. */
+  .gateway-body .gateway-ledger {
     display: none;
   }
 }
@@ -1162,7 +1173,12 @@ body[data-page-mode="gateway"] > main.panel {
 .gateway-channels-binding-channel,
 .gateway-channels-binding-thread {
   color: var(--text-muted);
-  font-family: ui-monospace, "SFMono-Regular", "Menlo", monospace;
+  /* design-language.css defines `--mono` as the single source for the
+     monospace stack; pre-fix this duplicated `ui-monospace, …`
+     verbatim and was the only mono-stack literal still left in the
+     overlay surface files (rule 8 single source — caught by round-2
+     design review P1-6). */
+  font-family: var(--mono);
 }
 
 /* Common error block ------------------------------------------------- */
@@ -1221,8 +1237,17 @@ body[data-page-mode="gateway"] > main.panel {
    primitive itself (rule 11 — extend through tokens, do not bypass
    the component). */
 
+/* Cancel / Retry / Replan share the warn tone — they suspend or re-spin
+   work that is in flight or just finished, which the operator can recover
+   from but should never trigger by accident. Delete uses the danger tone
+   because the row is gone after commit. The two palettes mirror the
+   panel-side TaskList affordances (sidebar.css:439-457) so the operator
+   sees one consistent grammar of "warm-up + commit" across surfaces. */
 .gateway-ledger-row-actions .oc-button[data-ui="gateway-ledger-cancel"][data-confirm="true"],
-.gateway-workbench-actions .oc-button[data-ui="gateway-workbench-cancel"][data-confirm="true"] {
+.gateway-ledger-row-actions .oc-button[data-ui="gateway-ledger-retry"][data-confirm="true"],
+.gateway-workbench-actions .oc-button[data-ui="gateway-workbench-cancel"][data-confirm="true"],
+.gateway-workbench-actions .oc-button[data-ui="gateway-workbench-retry"][data-confirm="true"],
+.gateway-workbench-actions .oc-button[data-ui="gateway-workbench-replan"][data-confirm="true"] {
   opacity: var(--ui-opacity-full);
   --oc-button-bg: color-mix(in srgb, var(--warn) 14%, transparent);
   --oc-button-color: var(--warn);
@@ -1237,11 +1262,16 @@ body[data-page-mode="gateway"] > main.panel {
 }
 
 /* ── Keyboard focus rings ──────────────────────────────────────────────
-   The Gateway surface had no :focus-visible rules pre-fix, so keyboard
-   users could not tell where focus landed. Mirrors the focus density
-   of sidebar.css / conversation.css for cross-surface consistency
-   (WCAG 2.1 SC 2.4.7 + rule 8 single source). The 2px outline plus
-   2px offset gives a clear ring without resizing the focused element. */
+   The Gateway surface had no :focus-visible rules pre-fix. Density and
+   width now match `primitives/button.css:141-144` and `sidebar.css:486`
+   so the operator perceives one consistent focus ring across surfaces:
+   `--oc-border-width` thick (1px scaled), accent colour, offset by
+   `calc(1px * var(--ui-scale))` so it grows with the operator's
+   accessibility zoom (WCAG 2.1 SC 2.4.7 + rule 8 single source). The
+   round-1 version hard-coded `outline: 2px solid` + `outline-offset: 2px`
+   which (a) made Gateway the only surface with a 2× thick ring, and (b)
+   ignored `--ui-scale` so the ring stayed 2px at zoom 1.4 while every
+   other surface scaled. Both bugs landed in round-2 P0-2. */
 
 .gateway-ledger-row-main:focus-visible,
 .gateway-filter-button:focus-visible,
@@ -1254,16 +1284,7 @@ body[data-page-mode="gateway"] > main.panel {
 .gateway-proposal-queue-option input[type="radio"]:focus-visible,
 .gateway-proposal-include input[type="checkbox"]:focus-visible,
 .gateway-action-error-dismiss:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-  border-radius: var(--oc-radius-soft);
-}
-
-/* Pill-style affordances (filter chips, scope toggle, count chips) sit
-   on their own background, so the focus ring inherits that surface's
-   shape — use the pill radius for those, and keep the soft radius for
-   rectangular fields (textarea, select). */
-.gateway-filter-button:focus-visible,
-.gateway-scope-button:focus-visible {
+  outline: var(--oc-border-width) solid var(--accent);
+  outline-offset: calc(1px * var(--ui-scale));
   border-radius: var(--oc-radius-soft);
 }

@@ -377,11 +377,20 @@ test("Gateway error.action i18n covers every actionBusy verb used in the surface
   // one has a translation. Missing keys would force actionVerbLabel
   // to fall through to the raw verb, which is itself a violation of
   // rule 7 — the page must render a real label, not a placeholder.
-  const verbs = ["cancel", "retry", "replan", "delete", "reorder", "restart", "send"]
+  // `send` was dropped in round-2 — message-send failures route through
+  // their own notice (`messageNotice`), not through actionBusy / banner,
+  // so the action verb registry never sees `send:*` at runtime. Keeping
+  // a dead key here would be a rule-17 violation, even though the
+  // template-literal static analyser would treat it as referenced via
+  // the `gateway.error.action.` prefix.
+  const verbs = ["cancel", "retry", "replan", "delete", "reorder", "restart"]
   for (const verb of verbs) {
     expect(I18N_ZH_CN).toContain(`"gateway.error.action.${verb}"`)
     expect(I18N_EN_US).toContain(`"gateway.error.action.${verb}"`)
   }
+  // Regression guard: `send` must NOT come back.
+  expect(I18N_ZH_CN).not.toContain('"gateway.error.action.send"')
+  expect(I18N_EN_US).not.toContain('"gateway.error.action.send"')
 })
 
 test("Gateway ledger row meta classes have backing CSS (round-1 P0)", () => {
@@ -440,4 +449,132 @@ test("Gateway surface has :focus-visible rules for every interactive element (ro
     const rule = new RegExp(`\\.${sel.replace(/ /g, "\\s+")}(?:[^,{]*?):focus-visible`)
     expect(GATEWAY_CSS).toMatch(rule)
   }
+})
+
+// ── Round-2 design + visual review fixes ────────────────────────────
+
+test("Gateway focus-visible outline uses --oc-border-width + ui-scale offset (round-2 P0)", () => {
+  // Pre-fix Gateway was the only surface using a hard-coded
+  // `outline: 2px solid var(--accent)` + `outline-offset: 2px` — twice
+  // the thickness of every other surface and not scaled by ui-scale.
+  // The new rule routes through the same token shape sidebar.css and
+  // primitives/button.css use, so the focus ring is one consistent
+  // density across the overlay.
+  expect(GATEWAY_CSS).toContain("outline: var(--oc-border-width) solid var(--accent)")
+  expect(GATEWAY_CSS).toContain("outline-offset: calc(1px * var(--ui-scale))")
+  // No literal `2px` outline-DECLARATION lingers on the Gateway surface.
+  // Strip comments before scanning so the bug-history note in the
+  // round-2 fix comment ("pre-fix had `outline: 2px solid` …") doesn't
+  // count as a real rule.
+  const cssNoComments = GATEWAY_CSS.replace(/\/\*[\s\S]*?\*\//g, "")
+  expect(cssNoComments).not.toMatch(/outline:\s*2px\s+solid/)
+})
+
+test("humanizeApiError translates known server error classes via i18n (round-2 P0)", () => {
+  // Pre-fix the page-level banner spliced the raw "DirectoryRequiredError:
+  // gateway/stats requires ?directory=…" message verbatim into the
+  // operator-facing template. The fix is a small registry of known
+  // error classes keyed to `gateway.error.class.<Name>` entries.
+  expect(GATEWAY_TSX).toContain("function humanizeApiError(err: unknown): string")
+  // Template literal `gateway.error.class.${…}` is the panel-i18n
+  // analyser hook — verifying the prefix is present.
+  expect(GATEWAY_TSX).toMatch(/`gateway\.error\.class\.\$\{[^}]+\}`/)
+  // Every site that previously called errorMessage(err) for display
+  // now routes through humanizeApiError so the registry covers all
+  // surfaces (header / channels / bindings / composer / proposal).
+  expect(GATEWAY_TSX).toContain("humanizeApiError(stats.error)")
+  expect(GATEWAY_TSX).toContain("humanizeApiError(channels.error)")
+  expect(GATEWAY_TSX).toContain("humanizeApiError(bindings.error)")
+  expect(GATEWAY_TSX).toContain("setError(humanizeApiError(err))")
+})
+
+test("Gateway error.class i18n covers the documented server error classes (round-2 P0)", () => {
+  for (const cls of [
+    "DirectoryRequiredError",
+    "InvalidDirectoryError",
+    "WorktreeNotGitError",
+  ]) {
+    expect(I18N_ZH_CN).toContain(`"gateway.error.class.${cls}"`)
+    expect(I18N_EN_US).toContain(`"gateway.error.class.${cls}"`)
+  }
+})
+
+test("Gateway retry / replan are armed-confirm like cancel (round-2 P0)", () => {
+  // Replan re-runs the architect (the most expensive LLM call in the
+  // system) and retry re-executes a finished task on top of its
+  // existing artifacts. Both are destructive enough to need the same
+  // two-step affordance as cancel — round-2 design review P0-1.
+  expect(GATEWAY_TSX).toContain("confirmLedgerRetry.confirm(() => props.onRetryTask(id()))")
+  expect(GATEWAY_TSX).toContain("confirmWorkbenchRetry.confirm(() => props.onRetryTask(id()))")
+  expect(GATEWAY_TSX).toContain("confirmWorkbenchReplan.confirm(() => props.onReplanTask(id()))")
+  // Pre-fix retry / replan went through raw onClick to the action handlers.
+  expect(GATEWAY_TSX).not.toMatch(/onClick=\{\(\) =>\s*props\.onRetryTask\(id\(\)\)\}/)
+  expect(GATEWAY_TSX).not.toMatch(/onClick=\{\(\) =>\s*props\.onReplanTask\(id\(\)\)\}/)
+})
+
+test("Gateway armed-confirm CSS now covers retry / replan, not only cancel / delete (round-2 P0)", () => {
+  expect(GATEWAY_CSS).toMatch(/\[data-ui="gateway-ledger-retry"\]\[data-confirm="true"\]/)
+  expect(GATEWAY_CSS).toMatch(/\[data-ui="gateway-workbench-retry"\]\[data-confirm="true"\]/)
+  expect(GATEWAY_CSS).toMatch(/\[data-ui="gateway-workbench-replan"\]\[data-confirm="true"\]/)
+})
+
+test("Gateway aria-label values route through i18n (round-2 P0)", () => {
+  // Pre-fix the filter tablist + workbench actions toolbar had
+  // hard-coded English aria-label strings, which produced English
+  // screen-reader output under the zh-CN locale. The fix introduces
+  // `gateway.ledger.filter_label` / `gateway.workbench.actions_label`
+  // i18n entries and references them via t().
+  expect(GATEWAY_TSX).toContain('aria-label={t("gateway.ledger.filter_label")}')
+  expect(GATEWAY_TSX).toContain('aria-label={t("gateway.workbench.actions_label")}')
+  // No bare-English aria-label literals left on the Gateway surface
+  // (regression guard — pre-fix had `aria-label="Filter"` and
+  // `aria-label="Task actions"`).
+  expect(GATEWAY_TSX).not.toMatch(/aria-label="Filter"/)
+  expect(GATEWAY_TSX).not.toMatch(/aria-label="Task actions"/)
+  // Both i18n entries actually exist in both locales.
+  expect(I18N_ZH_CN).toContain('"gateway.ledger.filter_label"')
+  expect(I18N_EN_US).toContain('"gateway.ledger.filter_label"')
+  expect(I18N_ZH_CN).toContain('"gateway.workbench.actions_label"')
+  expect(I18N_EN_US).toContain('"gateway.workbench.actions_label"')
+})
+
+test("Gateway selection reveals the workbench before the board fetch settles (round-2 P0)", () => {
+  // Pre-fix `hasSelection` required BOTH selectedTaskID and a
+  // fully-loaded board, so a slow `/task/:id/board` response left
+  // the workbench stuck on the empty placeholder even after the
+  // operator clicked a row. The fix lets it render as soon as the
+  // ledger row is available (boardStore.tasks already has it).
+  expect(GATEWAY_TSX).toMatch(
+    /hasSelection\s*=\s*\(\)\s*=>\s*\n?\s*!!boardStore\.selectedTaskID\s*&&\s*\(!!selectedItem\(\)\s*\|\|\s*!!selectedBoard\(\)\)/,
+  )
+})
+
+test("narrow-breakpoint hides channels with parent-scoped specificity (round-2 P0)", () => {
+  // The base `.gateway-channels { display: flex }` rule sits later in
+  // the source than the @media block, so the bare `.gateway-channels
+  // { display: none }` rule inside @media lost the cascade tie and CSS
+  // grid auto-placement wrapped the channel column onto a new row of
+  // the ledger column. The fix bumps specificity by prefixing the
+  // parent `.gateway-body` selector. Same logic applies to the
+  // narrower 760px breakpoint that hides the ledger.
+  expect(GATEWAY_CSS).toMatch(/\.gateway-body \.gateway-channels\s*\{[^}]*display:\s*none/)
+  expect(GATEWAY_CSS).toMatch(/\.gateway-body \.gateway-ledger\s*\{[^}]*display:\s*none/)
+})
+
+test("Gateway count chip 'consumed' tone is declared once for completed and cancelled (round-2 P1)", () => {
+  // Round-2 design review P1-5 — the two terminal statuses shared the
+  // identical color-mix / color pair but were declared in two separate
+  // selector blocks. Pattern hoist (rule 9) consolidates them.
+  expect(GATEWAY_CSS).toMatch(
+    /\.gateway-count\[data-status="completed"\],\s*\n\s*\.gateway-count\[data-status="cancelled"\]\s*\{/,
+  )
+})
+
+test("Gateway monospace font stack routes through the --mono token (round-2 P1)", () => {
+  // Round-2 design review P1-6 — gateway.css was the last surface
+  // file with a hard-coded `ui-monospace, "SFMono-Regular", "Menlo",
+  // monospace` literal. design-language.css owns `--mono` as the
+  // single source.
+  expect(GATEWAY_CSS).not.toMatch(/font-family:\s*ui-monospace,\s*"SFMono-Regular"/)
+  expect(GATEWAY_CSS).toMatch(/font-family:\s*var\(--mono\)/)
 })
