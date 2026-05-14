@@ -101,69 +101,6 @@
   background: var(--subtle-2);
 }
 
-.msg-tool-output-details {
-  margin: calc(6px * var(--ui-scale)) 0 var(--ui-gap-md) 0;
-  border: var(--oc-border-width) solid color-mix(in srgb, var(--text-muted) 13%, transparent);
-  border-radius: var(--oc-radius-soft);
-  background: color-mix(in srgb, var(--surface-inset) 84%, transparent);
-  overflow: hidden;
-}
-.msg-tool-output-details > summary {
-  list-style: none;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: var(--ui-gap-xs);
-  padding: calc(7px * var(--ui-scale)) calc(10px * var(--ui-scale));
-  border-radius: 0;
-  background: transparent;
-  border: 0;
-  color: var(--text-soft);
-  font-size: var(--ui-font-meta);
-  font-family: var(--mono);
-  user-select: none;
-  transition:
-    background var(--ui-duration-base),
-    color var(--ui-duration-base);
-}
-.msg-tool-output-details > summary::-webkit-details-marker {
-  display: none;
-}
-.msg-tool-output-details > summary::before {
-  content: "\25B6";
-  font-size: var(--ui-font-control);
-  margin-right: calc(4px * var(--ui-scale));
-  transform-origin: center;
-  transition: transform var(--ui-duration-base) var(--ui-timing-standard);
-}
-.msg-tool-output-details[open] > summary::before {
-  transform: rotate(90deg);
-}
-.msg-tool-output-details > summary:hover {
-  background: var(--surface-hover);
-  color: var(--text-strong);
-}
-.msg-tool-output-details > summary:focus-visible {
-  outline: calc(2px * var(--ui-scale)) solid color-mix(in srgb, var(--accent) 60%, transparent);
-  outline-offset: calc(2px * var(--ui-scale));
-}
-.msg-tool-output-details[open] > summary {
-  margin-bottom: 0;
-  border-bottom: var(--oc-border-width) solid color-mix(in srgb, var(--text-muted) 12%, transparent);
-}
-.msg-tool-output-details > .msg-tool-output {
-  margin-left: 0;
-  border: 0;
-  border-radius: 0;
-  background: color-mix(in srgb, var(--surface) 68%, transparent);
-}
-.msg-tool-output-summary-text {
-  white-space: nowrap;
-  max-width: clamp(calc(240px * var(--ui-scale)), 60vw, calc(720px * var(--ui-scale)));
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 .msg-tool-output {
   margin: calc(6px * var(--ui-scale)) 0 var(--ui-gap-md) 0;
   padding: calc(8px * var(--ui-scale)) calc(10px * var(--ui-scale));
