@@ -28,6 +28,8 @@ test("ChatBubble uses one unified IM bubble for user and agent cards with restor
   expect(CHAT_BUBBLE_TSX).toContain(
     '<Avatar role={normalizedRole()} status={props.node.status} class="chat-bubble__head-avatar" />',
   )
+  expect(CHAT_BUBBLE_TSX).not.toContain('class="card__spinner"')
+  expect(CHAT_BUBBLE_TSX).not.toContain('card__badge--running')
   expect(CHAT_BUBBLE_TSX).not.toContain("chat-bubble__avatar-slot")
   expect(CHAT_BUBBLE_TSX).toContain("<TracePanel sessionID={traceSessionID()!} onClose={() => setTraceOpen(false)} />")
   expect(CHAT_BUBBLE_TSX).toContain("<AgentSessionReplyBox")

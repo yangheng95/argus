@@ -8,7 +8,7 @@ import { statusBadge } from "../src/utils/status-badge";
 //   completed w/ concerns → concerns ⚠ amber  (integrity verdict)
 //   cancelled / aborted  → cancelled ⊘ outline (terminalReason)
 //   error                → error   ✗ red
-//   running              → running spinner
+//   running              → running tone
 //   pending              → pending ·
 
 const base: any = { id: "x", kind: "agent", title: "x", time: 0, parts: [] };
