@@ -556,22 +556,32 @@ export function bumpTasksSeq(): void {
 
 // ── Task list derived utilities ──
 
-/**
- * Sort a raw tasks payload by updated_at / task.time.updated descending.
- */
-export function sortedTasks(data: { tasks?: any[] } | null | undefined): any[] {
-  return [...(Array.isArray(data?.tasks) ? data!.tasks : [])].sort(
-    (a, b) =>
-      (b.updated_at || b.task?.time?.updated || 0) -
-      (a.updated_at || a.task?.time?.updated || 0),
-  );
+function finitePositiveNumber(value: unknown): number | undefined {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? n : undefined;
 }
 
 /**
- * Returns the last-updated timestamp for a task list item.
+ * Returns the sidebar ordering/display timestamp for a task list item.
+ * `task.time.created` is the only ordering source; lifecycle timestamps must
+ * not move a row after status changes.
  */
-export function taskUpdated(item: any): number {
-  return item?.updated_at || item?.task?.time?.updated || item?.task?.time?.created || 0;
+export function taskCreatedAt(item: any): number {
+  const task = item?.task ?? item;
+  const created = finitePositiveNumber(task?.time?.created);
+  if (created !== undefined) return created;
+  throw new Error(`task list item ${task?.id || "<unknown>"} is missing task.time.created`);
+}
+
+/**
+ * Sort a raw tasks payload by creation time descending. Status updates
+ * such as failed/cancelled/completed must not move a task by changing
+ * `updated_at` / `task.time.updated`.
+ */
+export function sortedTasks(data: { tasks?: any[] } | null | undefined): any[] {
+  return [...(Array.isArray(data?.tasks) ? data!.tasks : [])].sort(
+    (a, b) => taskCreatedAt(b) - taskCreatedAt(a),
+  );
 }
 
 /**
@@ -595,7 +605,7 @@ export function taskByRequestID(
 
 /**
  * Returns the merged visible task list: pending (not yet confirmed) tasks
- * prepended to the confirmed task list, sorted by last-updated descending.
+ * plus the confirmed task list, sorted by creation time descending.
  */
 export function visibleTasks(): any[] {
   const seen = new Set(
@@ -608,7 +618,7 @@ export function visibleTasks(): any[] {
       (item: any) => !seen.has(item?.requestID || item?.task?.id),
     ),
     ...boardStore.tasks,
-  ].sort((a, b) => taskUpdated(b) - taskUpdated(a));
+  ].sort((a, b) => taskCreatedAt(b) - taskCreatedAt(a));
 }
 
 // ── Task state classifiers ──

@@ -1,0 +1,87 @@
+import { beforeEach, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import {
+  setBoardStore,
+  setPendingTasks,
+  setTasksData,
+  sortedTasks,
+  taskCreatedAt,
+  visibleTasks,
+} from "../src/store/board";
+
+const TASK_LIST_SOURCE = readFileSync(join(import.meta.dir, "../src/components/TaskList.tsx"), "utf8");
+
+function taskItem(
+  id: string,
+  created: number,
+  updated: number,
+  status = "active",
+): any {
+  return {
+    updated_at: updated,
+    task: {
+      id,
+      requestID: id,
+      title: id,
+      status,
+      directory: "C:/repo",
+      time: {
+        created,
+        started: created + 100,
+        updated,
+        completed: ["completed", "failed", "cancelled"].includes(status) ? updated : undefined,
+      },
+    },
+  };
+}
+
+beforeEach(() => {
+  setBoardStore("tasks", []);
+  setBoardStore("pendingTasks", []);
+});
+
+test("task list utilities order only by task creation time", () => {
+  const olderCancelled = taskItem("older-cancelled", 1_000, 9_000, "cancelled");
+  const newerActive = taskItem("newer-active", 2_000, 3_000, "active");
+
+  expect(taskCreatedAt(olderCancelled)).toBe(1_000);
+  expect(sortedTasks({ tasks: [olderCancelled, newerActive] }).map((item) => item.task.id)).toEqual([
+    "newer-active",
+    "older-cancelled",
+  ]);
+});
+
+test("visibleTasks keeps pending and terminal rows sorted by creation time", () => {
+  const olderFailed = taskItem("older-failed", 1_000, 20_000, "failed");
+  const active = taskItem("active", 2_000, 4_000, "active");
+  const pending = {
+    _pending: true,
+    requestID: "pending",
+    task: {
+      id: "pending",
+      requestID: "pending",
+      title: "pending",
+      status: "queued",
+      directory: "C:/repo",
+      time: { created: 3_000 },
+    },
+  };
+
+  setTasksData([olderFailed, active]);
+  setPendingTasks([pending]);
+
+  expect(visibleTasks().map((item) => item.task.id)).toEqual(["pending", "active", "older-failed"]);
+});
+
+test("TaskList has no lifecycle timestamp or status-priority sort path", () => {
+  expect(TASK_LIST_SOURCE).toContain("taskCreatedAt");
+  expect(TASK_LIST_SOURCE).toContain("recent: sortTaskItemsByCreated(group.recent)");
+  expect(TASK_LIST_SOURCE).not.toContain("taskUpdated");
+  expect(TASK_LIST_SOURCE).not.toContain("queueOrder");
+  expect(TASK_LIST_SOURCE).not.toContain("TASK_STATUS_PRIORITY");
+  expect(TASK_LIST_SOURCE).not.toContain("time?.updated");
+  expect(TASK_LIST_SOURCE).not.toContain("updated_at");
+  expect(TASK_LIST_SOURCE).not.toContain("a.directory === activeDir");
+  expect(TASK_LIST_SOURCE).not.toContain("b.directory === activeDir");
+});
