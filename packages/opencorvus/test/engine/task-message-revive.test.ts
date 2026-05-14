@@ -17,11 +17,6 @@ afterEach(async () => {
 })
 
 /**
- * Backend invariant: lifecycle status is display/audit context, not a gate.
- * Any task can receive a new operator message, but accepting that message must
- * not erase the prior completed / failed / cancelled facts.
- */
-/**
  * Status is a derivation, not a column (see engine/task-status.ts).
  * To pin each terminal variant we seed the underlying facts the
  * derivation reads:
@@ -44,9 +39,43 @@ const TERMINAL_FIXTURES = [
   },
 ] as const
 
-describe("openTaskForOperatorMessage — terminal-state facts are preserved", () => {
+describe("openTaskForOperatorMessage — terminal tasks reopen for operator messages", () => {
+  test("does not activate a queued task before the queue claims it", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const taskID = Identifier.ascending("task")
+        const now = Date.now()
+        Database.use((db) => {
+          db.insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              source: "test",
+              title: "Queued task",
+              request: "do thing",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+            } as any)
+            .run()
+        })
+
+        const task = findTask(taskID)
+        expect(task).toBeDefined()
+        expect(deriveTaskStatus(task!)).toBe("queued")
+
+        const reopened = await openTaskForOperatorMessage(task!)
+        expect(reopened.time_started).toBeNull()
+        expect(reopened.time_completed).toBeNull()
+        expect(deriveTaskStatus(reopened)).toBe("queued")
+      },
+    })
+  })
+
   for (const fixture of TERMINAL_FIXTURES) {
-    test(`keeps ${fixture.label} markers when opening for an operator message`, async () => {
+    test(`reactivates ${fixture.label} tasks when opening for an operator message`, async () => {
       await using tmp = await tmpdir({ git: true })
       await Instance.provide({
         directory: tmp.path,
@@ -79,16 +108,16 @@ describe("openTaskForOperatorMessage — terminal-state facts are preserved", ()
           expect(task!.time_completed).toBe(completedAt)
 
           const reopened = await openTaskForOperatorMessage(task!)
-          expect(reopened.time_completed).toBe(completedAt)
-          expect(reopened.error).toBe(fixture.fields.error)
+          expect(reopened.time_completed).toBeNull()
+          expect(reopened.error).toBeNull()
           const md = (reopened.metadata ?? {}) as Record<string, unknown>
-          expect(md.cancelled).toBe((fixture.fields.metadata as any)?.cancelled)
-          expect(deriveTaskStatus(reopened)).toBe(fixture.label)
+          expect(md.cancelled).toBeUndefined()
+          expect(deriveTaskStatus(reopened)).toBe("active")
 
           // Persisted, not just in-memory: re-read from DB.
           const reread = findTask(taskID)
-          expect(reread!.time_completed).toBe(completedAt)
-          expect(deriveTaskStatus(reread!)).toBe(fixture.label)
+          expect(reread!.time_completed).toBeNull()
+          expect(deriveTaskStatus(reread!)).toBe("active")
         },
       })
     })
