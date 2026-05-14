@@ -8,6 +8,8 @@ import { createEffect, createRoot, createSignal } from "solid-js"
 import { Conversation } from "./components/Conversation"
 import { TaskList } from "./components/TaskList"
 import { Board } from "./components/Board"
+import { Gateway } from "./components/Gateway"
+import { pageMode, setPageMode } from "./store/page-mode"
 import { TaskStatusHeader } from "./components/TaskStatusHeader"
 import { TaskDirContent, VcsBadge } from "./components/TaskDirBar"
 import { ChatComposer } from "./components/ChatComposer"
@@ -34,7 +36,7 @@ import { selectTask, retryTask, replanTask, cancelTask, createTask, deleteTask }
 import { canComposeChat, stopChatRequest } from "./services/chat"
 import { isTaskInterruptable } from "./store/board"
 import { setLocale } from "./utils/i18n"
-import { apiJson, apiRequest, configure as configureApi } from "./services/api"
+import { apiJson, apiRequest, configure as configureApi, getServerUrl } from "./services/api"
 import { t } from "./utils/i18n"
 import { renderMarkdown, escapeHtml } from "./utils/markdown"
 import { copyChatConversation } from "./utils/transcript"
@@ -207,6 +209,16 @@ function debugGoalBoardFiles(gw: any): string {
   return `changedFiles=${changedFiles}; changedFileDiffs=${changedFileDiffs}; diffStats=${statText}`
 }
 
+function psSingleQuote(value: unknown): string {
+  return String(value ?? "").replace(/'/g, "''")
+}
+
+function projectLocalDbCandidate(directory: unknown): string {
+  const dir = typeof directory === "string" && directory.trim().length > 0 ? directory.trim() : ""
+  if (!dir || dir === "—") return "<unknown task.directory>"
+  return `${dir.replace(/[\\/]+$/, "")}\\.opencorvus\\opencorvus.db`
+}
+
 /**
  * Build a plain-text debug blob for the currently selected task board.
  * Contains everything an operator needs to triage a stuck / mis-merged task
@@ -217,6 +229,8 @@ function buildTaskDebugBlob(board: any): string {
   const task = board?.task
   const id = typeof task?.id === "string" ? task.id : ""
   if (!id) return ""
+  const taskDirectory = String(task?.directory ?? "—")
+  const serverUrl = getServerUrl()
   const goalWorkflows: any[] = Array.isArray(board?.goalWorkflows) ? board.goalWorkflows : []
   const lines: string[] = []
   const push = (...l: string[]) => lines.push(...l)
@@ -228,7 +242,8 @@ function buildTaskDebugBlob(board: any): string {
     `task.id:        ${id}`,
     `task.title:     ${String(task?.title ?? "—")}`,
     `task.status:    ${String(task?.status ?? "—")}`,
-    `task.directory: ${String(task?.directory ?? "—")}`,
+    `task.directory: ${taskDirectory}`,
+    `server.url:     ${serverUrl}`,
     `task.session:   ${String(task?.sessionID ?? "—")}`,
     `task.run.id:    ${String(task?.activeRunID ?? "—")}`,
     `task.time.created: ${formatDebugTime(task?.time?.created)}`,
@@ -257,11 +272,24 @@ function buildTaskDebugBlob(board: any): string {
     `  - engine_goal stores the goal contract only. workspace_dir / workspace_branch / workspace_base_ref / retry_count / status / cascade_state were retired (2026-05-05); workspace + retry live on the latest engine_artifact[kind='goal_run_attempt'].payload row, goal status is derived live via engine/describe.ts::goalStatusByID from the goal_run chain.`,
     `  - engine_artifact is the append-only single source: run / goal_run_attempt / delivery / verification-evidence / architect_contract_graph / integrity_attempt / prosecutor_attempt / orchestrator-stream-error all live here. Latest-per-id wins by time_created desc.`,
     `  - Right-side Files panel reads board.goalWorkflows[].steps[].payload.changedFiles / changedFileDiffs, which are projected from per-goal engine_artifact[kind='delivery']. If SQL shows delivery rows but the panel omits a goal, debug overlay refresh/resource keys before suspecting DB writes.`,
+    `  - Project-scoped HTTP routes require task.directory as ?directory= or x-opencorvus-directory. /global/health is control-plane only; it confirms server health and global paths, not whether this task exists in the selected project instance.`,
     `  - Empty engine_executor_session does NOT mean nothing is running — that table is only populated when the executor protocol formally registers a lease; in-process executors emit only via session.bridge.`,
     `  - LLM stream stalls bound through llm/activity.ts (withLLMActivity): first-byte gate, idle gate (default 180s = session_llm_idle_ms), total deadline (default 30 min). Exactly one terminal event per call — done | failed | aborted. Board "running" past the total deadline with no events ⇒ bug at withLLMActivity or its sink wiring, NOT a missing stalled-detection heuristic elsewhere.`,
     ``,
-    `# SQL templates (read-only — open the DB with bun:sqlite readonly:true,`,
-    `#  DB path (resolved by engine at runtime via /global/health): ${appStore.enginePaths?.database ?? "<not yet known — engine offline; reconnect and retry>"})`,
+    `# Project-scoped HTTP probes (run these before direct SQLite; they use the same directory context as Overlay)`,
+    `$server = '${psSingleQuote(serverUrl)}'`,
+    `$dir = '${psSingleQuote(taskDirectory)}'`,
+    `$task = '${psSingleQuote(id)}'`,
+    `Invoke-RestMethod -Uri "$server/task/$task/board" -Headers @{ 'x-opencorvus-directory' = $dir } | ConvertTo-Json -Depth 40`,
+    `Invoke-RestMethod -Uri "$server/task/$task/progress" -Headers @{ 'x-opencorvus-directory' = $dir } | ConvertTo-Json -Depth 30`,
+    `Invoke-RestMethod -Uri "$server/task/$task/conversation" -Headers @{ 'x-opencorvus-directory' = $dir } | ConvertTo-Json -Depth 30`,
+    `Invoke-RestMethod -Uri "$server/global/health" | ConvertTo-Json -Depth 10  # control-plane only; do not use this alone as task DB proof`,
+    ``,
+    `# SQL templates (read-only — open the verified DB with bun:sqlite readonly:true)`,
+    `# Candidate DB paths:`,
+    `#  - Project-local default for task.directory: ${projectLocalDbCandidate(taskDirectory)}`,
+    `#  - OPENCORVUS_HOME/global mode from /global/health: ${appStore.enginePaths?.database ?? "<not yet known — engine offline; reconnect and retry>"}`,
+    `# If SELECT * FROM engine_task returns 0 rows for this task, stop using that DB and use the project-scoped HTTP probes above; do not infer missing goals/contracts from an empty wrong DB.`,
     ``,
     `-- Task snapshot (no status column — derive via deriveTaskStatus from (time_started, time_completed, error, metadata.cancelled))`,
     `SELECT * FROM engine_task WHERE id = '${id}';`,
@@ -580,6 +608,7 @@ function installGlobalBridges(): void {
   ;(window as any).selectTask = selectTask
   ;(window as any).loadBoard = loadBoard
   ;(window as any).loadConversation = loadConversation
+  ;(window as any).setPageMode = setPageMode
 }
 
 installGlobalBridges()
@@ -593,6 +622,28 @@ const notificationHost = document.createElement("div")
 notificationHost.id = "notificationCenterHost"
 document.body.appendChild(notificationHost)
 render(() => <NotificationCenter />, notificationHost)
+
+// ── Mount: Gateway page ──
+// The Gateway page mode lives next to the default panel. The CSS
+// (`body[data-page-mode="gateway"]`) flips visibility between Panel
+// and Gateway without unmounting either side, so returning to Panel
+// preserves selected task / conversation state (PRD §6.3).
+const gatewayMountEl = document.getElementById("solidGatewayMount")
+if (gatewayMountEl) {
+  gatewayMountEl.innerHTML = ""
+  render(() => <Gateway />, gatewayMountEl)
+}
+
+// Reflect the active page mode onto <body> so the surface CSS in
+// gateway.css can hide the panel chrome when Gateway is active.
+disposers.push(
+  createRoot((dispose) => {
+    createEffect(() => {
+      document.body.dataset.pageMode = pageMode()
+    })
+    return dispose
+  }),
+)
 
 // ── Mount: Conversation ──
 
@@ -1032,9 +1083,17 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("btnCreateTask")?.addEventListener("click", () => {
     // Deselect current task and focus the composer — the user types their
     // request directly in the ChatComposer, no modal dialog needed.
+    setPageMode("panel")
     void selectTask("")
     const textarea = document.querySelector<HTMLTextAreaElement>("#solidChatComposer textarea")
     textarea?.focus()
+  })
+
+  // Gateway entry: switch to the Gateway page mode. The mount itself
+  // lives in the static layout (#solidGatewayMount); show/hide is
+  // governed by body[data-page-mode] (see styles/surfaces/gateway.css).
+  document.getElementById("btnGateway")?.addEventListener("click", () => {
+    setPageMode(pageMode() === "gateway" ? "panel" : "gateway")
   })
 
   // Executor selection moved to <ExecutorSelector/> mounted inside ChatComposer

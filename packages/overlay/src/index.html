@@ -38,6 +38,7 @@
   <link rel="stylesheet" href="styles/surfaces/header.css">
   <link rel="stylesheet" href="styles/surfaces/card.css">
   <link rel="stylesheet" href="styles/surfaces/chat-bubble.css">
+  <link rel="stylesheet" href="styles/surfaces/gateway.css">
 </head>
 <body data-page="overlay" data-theme="light">
   <!-- Titlebar (draggable) -->
@@ -135,6 +136,30 @@
           <div id="solidLeftPanelHeaderCollapseControl" class="panel-header-collapse-mount"></div>
           <div class="sidebar-title oc-surface-header__title" data-i18n="sidebar.title">Recent Chats</div>
           <div class="sidebar-header-actions oc-surface-header__actions" role="toolbar" aria-label="Recent Chats" data-i18n-aria-label="sidebar.title">
+            <button
+              type="button"
+              class="oc-button"
+              id="btnGateway"
+              data-variant="ghost"
+              data-size="md"
+              data-tone="neutral"
+              data-ui="sidebar-gateway-button"
+              data-i18n-title="gateway.open_title"
+              data-i18n-aria-label="gateway.open_title"
+              title="Open Gateway"
+              aria-label="Open Gateway"
+            >
+              <span class="sidebar-btn-icon" aria-hidden="true">
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                  <circle cx="8" cy="8" r="2.4" stroke="currentColor" stroke-width="1.4"/>
+                  <line x1="8" y1="2.5" x2="8" y2="5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+                  <line x1="8" y1="11" x2="8" y2="13.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+                  <line x1="2.5" y1="8" x2="5" y2="8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+                  <line x1="11" y1="8" x2="13.5" y2="8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+                </svg>
+              </span>
+              <span class="sidebar-btn-label" data-i18n="gateway.open">Gateway</span>
+            </button>
             <button
               type="button"
               class="oc-button"
@@ -267,6 +292,12 @@
 
   <!-- Log Viewer Dialog (managed by Solid LogViewer component) -->
   <div id="solidLogViewer"></div>
+
+  <!-- Gateway page (mounted by Solid Gateway component). Shown when
+       body[data-page-mode="gateway"]; hidden by default. The default
+       conversation panel and titlebar stay in the DOM, just hidden,
+       so returning to Panel does not lose state (PRD §6.3). -->
+  <div id="solidGatewayMount" class="gateway-mount"></div>
 
   <!-- Recent directory dropdown — must live outside .task-bar / .panel to
        escape their stacking context (backdrop-filter) and overflow clip. -->
