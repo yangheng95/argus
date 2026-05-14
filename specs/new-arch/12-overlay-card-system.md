@@ -126,7 +126,7 @@ type CardShell = "message" | "session" | "process" | "tool"
 | `message` | 用户请求、系统消息、interaction 消息 | 默认展开；弱容器；通常不含复杂 child |
 | `session` | agent 会话卡、子 agent 会话卡 | 默认展开；统一标题栏；吸收本 session parts |
 | `process` | goal step、phase、fidelity、delivery verdict 等过程节点 | 默认可折叠；强状态；允许嵌套子卡 |
-| `tool` | promoted tool card | 默认运行中展开；正文由 tool payload renderer 决定 |
+| `tool` | promoted tool card | 默认运行中展开；正文由 tool payload renderer 决定；展开后直接显示结果，禁止再套 `<details>` / summary 二次展开 |
 
 ### 4.2 CardVariant
 

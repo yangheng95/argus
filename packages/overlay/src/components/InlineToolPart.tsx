@@ -258,27 +258,8 @@ export function InlineToolPart(props: { part: any; mode?: "inline" | "block" | "
               </Show>
               <Show when={showPlainOutput()}>
                 {(_) => {
-                  // Default-collapse stdout / shell output past ~12 lines or
-                  // ~1500 chars so a single noisy bash run doesn't bury the
-                  // rest of the timeline. <details> is native, no state to
-                  // manage, and the operator can pin it open per-instance
-                  // by clicking the summary. Short output stays open.
                   const text = output()
-                  const outputLines = text.split("\n")
-                  const isLong = outputLines.length > 12 || text.length > 1500
-                  const previewLine = outputLines.find((l) => l.trim()) || ""
-                  const preview = previewLine.length > 80 ? previewLine.slice(0, 80) + "…" : previewLine
-                  const summaryText = isLong ? preview : ""
-                  return (
-                    <details class="msg-tool-output-details" open={!isLong} data-long={isLong ? "true" : "false"}>
-                      <summary class="msg-tool-output-summary" aria-label="Toggle tool output">
-                        <Show when={summaryText}>
-                          <span class="msg-tool-output-summary-text">{summaryText}</span>
-                        </Show>
-                      </summary>
-                      <div class="msg-tool-output msg-tool-output--expanded">{text}</div>
-                    </details>
-                  )
+                  return <div class="msg-tool-output">{text}</div>
                 }}
               </Show>
             </>
