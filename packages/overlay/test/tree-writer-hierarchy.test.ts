@@ -1,10 +1,13 @@
 import { test, expect } from "bun:test";
-import { setBoardStore } from "../src/store/board";
-import { applyEvent, resetWriter } from "../src/services/tree-writer";
-import { cardTreeStore } from "../src/store/card-tree";
-import { statusBadge } from "../src/utils/status-badge";
-import { replay } from "./fixtures/replay";
-import {
+
+(globalThis as typeof globalThis & { __OPENCORVUS_OVERLAY_VERSION__?: string }).__OPENCORVUS_OVERLAY_VERSION__ = "test";
+
+const { setBoardStore } = await import("../src/store/board");
+const { applyEvent, resetWriter } = await import("../src/services/tree-writer");
+const { cardTreeStore } = await import("../src/store/card-tree");
+const { statusBadge } = await import("../src/utils/status-badge");
+const { replay } = await import("./fixtures/replay");
+const {
   EVENTS,
   INITIAL_BOARD,
   GOAL_ID,
@@ -17,7 +20,7 @@ import {
   DESIGN_SID,
   ARCHITECT_SID,
   TASK_ID,
-} from "./fixtures/goal-phase-events";
+} = await import("./fixtures/goal-phase-events");
 
 const INTEGRITY_SID = "ses_integrity";
 

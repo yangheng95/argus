@@ -11,14 +11,20 @@
 // message.part.delta; if that invariant ever regresses, this catches it.
 
 import { test, expect } from "bun:test";
-import { setBoardStore } from "../src/store/board";
-import { applyEvent, resetWriter } from "../src/services/tree-writer";
-import { cardTreeStore } from "../src/store/card-tree";
+
+(globalThis as typeof globalThis & { __OPENCORVUS_OVERLAY_VERSION__?: string }).__OPENCORVUS_OVERLAY_VERSION__ = "test";
+
+const { setBoardStore } = await import("../src/store/board");
+const { applyEvent, resetWriter } = await import("../src/services/tree-writer");
+const { cardTreeStore } = await import("../src/store/card-tree");
 
 const TASK_ID = "tsk_perf";
 const SID = "ses_perf";
 const MSG_ID = "msg_perf";
 const PART_ID = "part_perf";
+const EXECUTOR_SID = "ses_executor_perf";
+const EXECUTOR_MSG_ID = "msg_executor_perf";
+const EXECUTOR_PART_ID = "part_executor_perf";
 
 const INITIAL_BOARD = {
   task: {
@@ -90,6 +96,86 @@ function runDeltaBurst(count: number): { totalMs: number; perEventMs: number } {
   return { totalMs, perEventMs: totalMs / count };
 }
 
+function seedAssistantSession(sessionID: string, messageID: string, time: number): void {
+  applyEvent({
+    type: "message.updated",
+    properties: {
+      taskID: TASK_ID,
+      info: {
+        id: messageID,
+        sessionID,
+        role: "assistant",
+        resolvedRole: "assistant",
+        agent: "assistant",
+        channel: "assistant",
+        time: { created: time },
+      },
+    },
+  });
+}
+
+function bootstrapExecutorWithManyCards(extraCards: number): void {
+  setBoardStore("board", INITIAL_BOARD);
+  setBoardStore("selectedTaskID", TASK_ID);
+  resetWriter();
+
+  const baseTime = 1_776_000_000_000;
+  for (let i = 0; i < extraCards; i++) {
+    seedAssistantSession(`noise_${i}`, `noise_msg_${i}`, baseTime + i);
+  }
+
+  applyEvent({
+    type: "message.updated",
+    properties: {
+      taskID: TASK_ID,
+      info: {
+        id: EXECUTOR_MSG_ID,
+        sessionID: EXECUTOR_SID,
+        role: "assistant",
+        resolvedRole: "executor",
+        agent: "executor",
+        channel: "executor",
+        time: { created: baseTime + extraCards + 1 },
+      },
+    },
+  });
+  applyEvent({
+    type: "message.part.updated",
+    properties: {
+      taskID: TASK_ID,
+      part: {
+        id: EXECUTOR_PART_ID,
+        messageID: EXECUTOR_MSG_ID,
+        sessionID: EXECUTOR_SID,
+        resolvedRole: "executor",
+        channel: "executor",
+        type: "reasoning",
+        text: "",
+      },
+    },
+  });
+}
+
+function runExecutorDeltaBurstWithManyCards(count: number, extraCards: number): { totalMs: number; perEventMs: number } {
+  bootstrapExecutorWithManyCards(extraCards);
+  const start = performance.now();
+  for (let i = 0; i < count; i++) {
+    applyEvent({
+      type: "message.part.delta",
+      properties: {
+        taskID: TASK_ID,
+        partID: EXECUTOR_PART_ID,
+        messageID: EXECUTOR_MSG_ID,
+        sessionID: EXECUTOR_SID,
+        field: "text",
+        delta: "x",
+      },
+    });
+  }
+  const totalMs = performance.now() - start;
+  return { totalMs, perEventMs: totalMs / count };
+}
+
 test("writer applies 1000 reasoning deltas in < 1s total (<1ms/event avg)", () => {
   const { totalMs, perEventMs } = runDeltaBurst(1000);
   console.log(`[perf] 1000 deltas: ${totalMs.toFixed(1)}ms (${perEventMs.toFixed(3)}ms/event)`);
@@ -109,6 +195,21 @@ test("writer applies 10000 reasoning deltas in < 10s total (guard against quadra
   expect(totalMs).toBeLessThan(10_000);
   // Per-event must stay O(1) — median allowance well below 1ms.
   expect(perEventMs).toBeLessThan(2);
+});
+
+test("executor reasoning deltas do not rebuild top-level order for every token", () => {
+  const { totalMs, perEventMs } = runExecutorDeltaBurstWithManyCards(5000, 1500);
+  console.log(`[perf] executor 5000 deltas / 1500 cards: ${totalMs.toFixed(1)}ms (${perEventMs.toFixed(3)}ms/event)`);
+  expect(totalMs).toBeLessThan(750);
+  expect(perEventMs).toBeLessThan(0.15);
+
+  const cardID = `executor:session:${EXECUTOR_SID}`;
+  const card = cardTreeStore.cards[cardID];
+  expect(card).toBeDefined();
+  expect(cardTreeStore.order).toContain(cardID);
+  const reasoningPart = (card!.parts as any[]).find((p) => p.id === EXECUTOR_PART_ID);
+  expect(reasoningPart).toBeDefined();
+  expect((reasoningPart.text ?? "").length).toBe(5000);
 });
 
 test("new message.updated for new sessions stays cheap under many concurrent sessions", () => {
