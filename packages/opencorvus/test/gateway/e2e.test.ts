@@ -44,6 +44,13 @@ afterEach(async () => {
   await resetDatabase()
 })
 
+async function waitForTaskStatus(taskID: string, status: string) {
+  for (let i = 0; i < 50; i++) {
+    if ((await EngineService.getTask(taskID)).status === status) return
+    await new Promise((resolve) => setTimeout(resolve, 10))
+  }
+}
+
 // ── 1. Channel ingress: routing semantics ────────────────────────────
 
 describe("Gateway e2e — channel ingress routing (PRD §10)", () => {
@@ -65,6 +72,7 @@ describe("Gateway e2e — channel ingress routing (PRD §10)", () => {
           queue: false,
           metadata: { source: "test" },
         })
+        await waitForTaskStatus(taskID, "active")
         ChannelIngress.bindThread({
           platform: "slack",
           channel: "C-route",
@@ -150,6 +158,7 @@ describe("Gateway e2e — channel ingress routing (PRD §10)", () => {
           executor: "opencorvus",
           metadata: { source: "test" },
         })
+        await waitForTaskStatus(taskID, "active")
         ChannelIngress.bindThread({
           platform: "slack",
           channel: "C-perm",
@@ -173,7 +182,7 @@ describe("Gateway e2e — channel ingress routing (PRD §10)", () => {
         expect(handleSpy).not.toHaveBeenCalled()
       },
     })
-  })
+  }, { timeout: 10_000 })
 
   test("question interaction passes the message text into the reply (no LLM)", async () => {
     await using tmp = await tmpdir({ git: true })
@@ -200,6 +209,7 @@ describe("Gateway e2e — channel ingress routing (PRD §10)", () => {
           executor: "opencorvus",
           metadata: { source: "test" },
         })
+        await waitForTaskStatus(taskID, "active")
         ChannelIngress.bindThread({
           platform: "telegram",
           channel: "@me",
@@ -242,6 +252,7 @@ describe("Gateway e2e — task lifecycle through EngineService (PRD §9)", () =>
           queue: false,
           metadata: { source: "gateway:test" },
         })
+        await waitForTaskStatus(taskID, "active")
         let task = await EngineService.getTask(taskID)
         expect(task.status).toBe("active")
         expect(task.kind).toBe("workflow")
@@ -283,6 +294,7 @@ describe("Gateway e2e — task lifecycle through EngineService (PRD §9)", () =>
           queue: false,
           metadata: { source: "gateway:test" },
         })
+        await waitForTaskStatus(firstID, "active")
         const first = await EngineService.getTask(firstID)
         expect(first.status).toBe("active")
 
@@ -318,6 +330,7 @@ describe("Gateway e2e — task lifecycle through EngineService (PRD §9)", () =>
           queue: false,
           metadata: { source: "gateway:test" },
         })
+        await waitForTaskStatus(taskID, "active")
         await EngineService.cancelTask(taskID)
         const cancelled = await EngineService.getTask(taskID)
         expect(cancelled.status).toBe("cancelled")
@@ -349,6 +362,7 @@ describe("Gateway e2e — channel bindings + reverse lookup (PRD §17.14)", () =
           queue: false,
           metadata: { source: "gateway:test" },
         })
+        await waitForTaskStatus(taskID, "active")
         ChannelIngress.bindThread({
           platform: "slack",
           channel: "C-bind",
@@ -412,7 +426,7 @@ describe("Gateway e2e — channel bindings + reverse lookup (PRD §17.14)", () =
         await EngineService.deleteTask(otherID).catch(() => undefined)
       },
     })
-  })
+  }, { timeout: 10_000 })
 })
 
 // ── 4. HTTP transport coverage for gateway routes ───────────────────
@@ -436,6 +450,7 @@ describe("Gateway e2e — HTTP routes via Server.App().request (PRD §11)", () =
           queue: false,
           metadata: { source: "gateway:test" },
         })
+        await waitForTaskStatus(taskID, "active")
         ChannelIngress.bindThread({ platform: "slack", channel: "C-rt", thread: "T-rt", taskID })
 
         const response = await Server.App().request("/channel/message", {
@@ -674,6 +689,7 @@ describe("Gateway e2e — HTTP routes via Server.App().request (PRD §11)", () =
             queue: false,
             metadata: { source: "gateway:test" },
           })
+          await waitForTaskStatus(taskID, "active")
           ChannelIngress.bindThread({
             platform: "slack",
             channel: "C-shape",

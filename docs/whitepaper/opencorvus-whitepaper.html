@@ -1519,12 +1519,9 @@ POST   /task/&lt;task_id&gt;/cancel</code></pre>
 
 <!-- 15 -->
 <section id="ch15">
-  <h2><span class="num">15</span>设计取舍：Why not X</h2>
+  <h2><span class="num">15</span>设计取舍（Why not X）</h2>
 
-  <p class="lede">
-    <span class="lede-label">反向论证</span>
-    很多设计选择是&ldquo;主动选不做&rdquo;的结果。把这些反向论证讲清楚，比正向陈述更能说明 OpenCorvus 的判断。
-  </p>
+  <p>本节列出若干常见疑问对应的设计决策——这些决策都是&ldquo;主动选不做&rdquo;的结果，比正向陈述更能说明项目的判断标准。</p>
 
   <div class="qa">
     <div class="qa-q">为什么不让一个全能 Agent 干完所有事？</div>
@@ -1568,24 +1565,22 @@ POST   /task/&lt;task_id&gt;/cancel</code></pre>
 <section id="ch16">
   <h2><span class="num">16</span>结语</h2>
 
-  <p>OpenCorvus 不试图证明&ldquo;LLM 已经能取代工程师&rdquo;。它试图证明的是另一件事：
-  <strong>LLM 已经足够聪明，但要把代码变成可交付的工程，需要的是<em>纪律</em>，不是更聪明的模型</strong>。</p>
+  <p>OpenCorvus 的工程命题是：<strong>当前 LLM 的生成能力已经足够，制约可交付性的是工程纪律</strong>——
+  spec 化、契约化、可独立验收化、可审计化。这些纪律在 prompt 层难以稳定兑现，
+  因此本项目将其下沉到框架层，通过多 Agent 流水线、机器可校验契约、append-only 事件序列、自动 replan 闭环来强制落地。</p>
 
-  <p>把这种纪律——spec 落盘、目标分解、接口契约、四维审计、四族评分、append-only 审计踪迹——
-  从开发者的脑子里搬到框架内，把每一次 LLM 调用变成<em>可追溯的工程动作</em>。
-  你看到的 OpenCorvus 是一组刻意取舍：</p>
-
+  <p>由此衍生的关键设计选择：</p>
   <ul>
-    <li>选 <strong>事件驱动</strong>，而不是后台轮询，让进程崩溃也能恢复；</li>
-    <li>选 <strong>append-only artifact</strong>，而不是 mutable state，让任何时刻的状态都是事实的投影；</li>
-    <li>选 <strong>9 个角色清晰的 Agent</strong>，而不是 1 个全能 Agent，让边界足够窄、上下文足够长；</li>
-    <li>选 <strong>Contract IR + Goal DAG</strong>，而不是模糊自然语言 spec，让验证可机器化、可独立化；</li>
-    <li>选 <strong>禁止 fallback / 禁止双源 / 禁止状态机</strong>，让代码库永远只有一种正解；</li>
-    <li>选 <strong>Solid.js + Tauri + SQLite + WAL</strong>，让你的本地仓库就是完整运行时，无云依赖。</li>
+    <li>事件驱动而非后台轮询——任意时刻的状态都是事件序列的投影，进程崩溃可重建；</li>
+    <li>append-only artifact 而非 mutable state——审计踪迹与决策回放与生成结果天然解耦；</li>
+    <li>9 个独立会话 Agent 而非单一全能 Agent——单角色上下文短、注意力集中、子任务可独立 retry；</li>
+    <li>Contract IR + Goal DAG 替代模糊自然语言 spec——验收可机器化、跨模块接口先于实现固化；</li>
+    <li>五条设计红线（禁双源 / 禁 fallback / 禁状态机 / 禁合成消息 / prompt-over-host）——保持代码库单一来源与决策可读性；</li>
+    <li>Solid.js + Tauri + SQLite + WAL 的本地优先栈——单文件可备份、无云依赖、零部署成本。</li>
   </ul>
 
-  <p>如果有一天编码 Agent 能稳定地&ldquo;一次交付&rdquo;，那一定不是因为单个模型变得更聪明，
-  而是因为<em>框架本身学会了如何让多个模型互相纠错、互相验证、互相对抗</em>——这是 OpenCorvus 选择的赛道。</p>
+  <p>本白皮书所述机制均已在仓库中可被代码路径与单元测试佐证；未来版本的演进方向、未解决的工程问题与公开 roadmap，
+  以 GitHub 仓库 issue / discussion 为准。</p>
 </section>
 
 <footer>
