@@ -159,6 +159,7 @@ const KNOWN_FLAGS = new Set<string>([
   "--no-keep",
   "--skip-local-verify",
   "--no-browser",
+  "--stop-after-architect",
 ])
 
 function validateFlags(): void {
@@ -227,6 +228,7 @@ const skipLocalVerify = process.argv.includes("--skip-local-verify")
 // branches. Useful when the overlay UI is under refactor (07-panel-reactivity.md)
 // and we only want to exercise the opencorvus server pipeline end-to-end.
 const noBrowser = process.argv.includes("--no-browser")
+const stopAfterArchitect = process.argv.includes("--stop-after-architect")
 // Only set task-level budget when explicitly provided via CLI flag.
 // Otherwise leave undefined so the task inherits the config-level default (opencorvus.jsonc).
 const maxExecutorGroups = flag("--max-executor-groups") ? Number(flag("--max-executor-groups")) : undefined
@@ -884,13 +886,12 @@ try {
     }, server.url.origin, temp.dir)
 
     await page.goto(new URL("/ui/index.html", server.url).toString(), { waitUntil: "load" })
-    await page.waitForFunction(() => document.querySelector("#connBadge")?.dataset.status === "online", { timeout: 0 })
-  }
-  marks.onlineAt = Date.now()
-  if (page) {
+    await page.waitForFunction(() => typeof (window as OverlayBenchmarkWindow).applyDirectory === "function", { timeout: 30_000 })
     const overlay = await syncDirectory(page, temp.dir)
     logLine(`[overlay-benchmark] directory=${overlay.directory} saved=${overlay.savedDirectory}`)
+    await api("/global/health", { signal: AbortSignal.timeout(10_000) })
   }
+  marks.onlineAt = Date.now()
   marks.submittedAt = Date.now()
 
   if (resumeTaskID) {
@@ -1054,6 +1055,11 @@ try {
   marks.resumedAt = Date.now()
   board = await api(`/task/${taskID}/board?sync=1`).then((res) => res.json())
 
+  if (stopAfterArchitect) {
+    finalBoard = await waitForArchitectBoard(taskID, api)
+    progress = await api(`/task/${taskID}/progress`).then((res) => res.json()).catch(() => null)
+    marks.completedAt = Date.now()
+  } else {
   // The bench is allowed to break — orchestrator stalls, LLM aborts,
   // sub-agent gives up. When waitForFinal returns a non-completed
   // terminal state (failed / cancelled), cancel the dead run and inject
@@ -1081,6 +1087,7 @@ try {
   }
   marks.completedAt = Date.now()
   finalBoard = taskID ? await api(`/task/${taskID}/board?sync=1`).then((res) => res.json()).catch(() => board) : board
+  }
 
   transcript = await api(`/task/${taskID}/transcript`).then((res) => res.json())
   timeline = await api(`/control/timeline?taskID=${encodeURIComponent(taskID)}`).then((res) => res.json())
@@ -1103,7 +1110,9 @@ try {
   logLine(`events: ${eventFile}`)
   logLine(`events_ndjson: ${eventLogFile}`)
 
-  const pass = out.assertions.planning_visible.pass && out.assertions.streaming_visible.pass && out.assertions.materialized.pass && out.assertions.delivery.pass && out.failure_matrix.verdict === "accepted"
+  const pass = stopAfterArchitect
+    ? out.assertions.planning_visible.pass && out.assertions.streaming_visible.pass && out.assertions.materialized.pass && out.assertions.architect_contract_graph.pass
+    : out.assertions.planning_visible.pass && out.assertions.streaming_visible.pass && out.assertions.materialized.pass && out.assertions.delivery.pass && out.failure_matrix.verdict === "accepted"
   if (!pass) {
     process.exit(1)
   }
@@ -1578,6 +1587,17 @@ async function buildBenchmarkReport(error?: unknown) {
           resumed: marks.resumedAt > 0,
         },
       },
+      architect_contract_graph: {
+        pass: Array.isArray(currentFinalBoard?.goalWorkflows) &&
+          currentFinalBoard.goalWorkflows.length >= 2 &&
+          typeof currentFinalBoard?.architect?.contractCount === "number" &&
+          currentFinalBoard.architect.contractCount > 0,
+        sample: {
+          goalCount: Array.isArray(currentFinalBoard?.goalWorkflows) ? currentFinalBoard.goalWorkflows.length : 0,
+          contractCount: currentFinalBoard?.architect?.contractCount ?? null,
+          architectSummary: currentFinalBoard?.architect?.summary ?? null,
+        },
+      },
       delivery: {
         pass: (progress?.task?.status || currentFinalBoard?.task?.status) === "completed" &&
             (progress?.evaluation?.verdict || currentFinalBoard?.evaluation?.verdict) === "accepted" &&
@@ -1823,6 +1843,41 @@ async function waitForFinal(
   }
 }
 
+async function waitForArchitectBoard(
+  taskID: string,
+  api: (pathname: string, init?: RequestInit) => Promise<Response>,
+) {
+  let lastSignature = ""
+  let lastChangeAt = Date.now()
+  while (true) {
+    const currentBoard = await api(`/task/${taskID}/board?sync=1`).then((res) => res.json())
+    const status = String(currentBoard?.task?.status ?? "")
+    const goalCount = Array.isArray(currentBoard?.goalWorkflows) ? currentBoard.goalWorkflows.length : 0
+    const contractCount = typeof currentBoard?.architect?.contractCount === "number"
+      ? currentBoard.architect.contractCount
+      : null
+    const signature = JSON.stringify({
+      status,
+      goalCount,
+      contractCount,
+      hasArchitect: !!currentBoard?.architect,
+    })
+    if (signature !== lastSignature) {
+      lastSignature = signature
+      lastChangeAt = Date.now()
+      activityLine(
+        `[overlay-benchmark] architect-check status=${status || "unknown"} goals=${goalCount} contracts=${contractCount ?? "unknown"}`,
+      )
+    }
+    if (currentBoard?.architect && goalCount >= 2) return currentBoard
+    if (FINAL.has(status)) return currentBoard
+    if (Date.now() - lastChangeAt > 180_000) {
+      throw new Error(`Architect board did not materialize within 180000ms of no progress; last=${lastSignature || "none"}`)
+    }
+    await Bun.sleep(2_000)
+  }
+}
+
 function progressSignature(progress: any) {
   return JSON.stringify({
     task: progress?.task?.status || "",
@@ -1902,8 +1957,9 @@ async function verifyResume(
     localStorage.setItem("oc_auto_question", "true")
   }, serverUrl, directory, taskID)
   await next.goto(new URL("/ui/index.html", serverUrl).toString(), { waitUntil: "load" })
-  await next.waitForFunction(() => document.querySelector("#connBadge")?.dataset.status === "online", { timeout: 0 })
+  await next.waitForFunction(() => typeof (window as OverlayBenchmarkWindow).applyDirectory === "function", { timeout: 30_000 })
   await syncDirectory(next, directory)
+  await api("/global/health", { signal: AbortSignal.timeout(10_000) })
   await waitForTaskCreated(next, api)
   await next.evaluate(async (id) => {
     const overlay = window as OverlayBenchmarkWindow

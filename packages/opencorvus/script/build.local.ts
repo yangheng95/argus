@@ -14,6 +14,12 @@ process.chdir(dir)
 
 import { Script } from "@opencorvus-ai/script"
 import pkg from "../package.json"
+import {
+  artifactEntrypoints,
+  artifactPackageBaseName,
+  artifactSourcemap,
+  parseBuildFlavor,
+} from "./build-artifact"
 
 const modelsUrl = process.env.OPENCORVUS_MODELS_URL || "https://models.dev"
 // Fetch and generate models.dev snapshot
@@ -31,6 +37,7 @@ const allFlag = process.argv.includes("--all")
 const baselineFlag = process.argv.includes("--baseline")
 const binaryOnly = process.argv.includes("--binary-only")
 const onefileFlag = process.argv.includes("--onefile") || process.env.OPENCORVUS_ONEFILE === "1"
+const buildFlavor = parseBuildFlavor(process.argv)
 
 const embeddedEnv = (() => {
   const keys = (process.env.OPENCORVUS_EMBED_ENV_KEYS ?? "")
@@ -203,8 +210,17 @@ await $`rm -rf dist`
 
 const binaries: Record<string, string> = {}
 for (const item of targets) {
+  const compileTarget = [
+    "bun",
+    item.os === "win32" ? "windows" : item.os,
+    item.arch,
+    item.avx2 === false ? "baseline" : undefined,
+    item.abi === undefined ? undefined : item.abi,
+  ]
+    .filter(Boolean)
+    .join("-")
   const name = [
-    pkg.name,
+    artifactPackageBaseName(pkg.name, buildFlavor),
     // changing to win32 flags npm for some reason
     item.os === "win32" ? "windows" : item.os,
     item.arch,
@@ -234,7 +250,7 @@ for (const item of targets) {
     autoloadDotenv: false,
     autoloadTsconfig: true,
     autoloadPackageJson: true,
-    target: name.replace(pkg.name, "bun"),
+    target: compileTarget,
     outfile: `dist/${name}/bin/opencorvus`,
     execArgv: [`--user-agent=opencorvus/${Script.version}`, "--use-system-ca", "--"],
     windows: {},
@@ -245,9 +261,9 @@ for (const item of targets) {
     conditions: ["browser"],
     tsconfig: "./tsconfig.json",
     plugins: [solidPlugin],
-    sourcemap: binaryOnly ? "none" : "external",
+    sourcemap: artifactSourcemap(),
     compile: compile as any,
-    entrypoints: ["./src/index.ts", parserWorker, workerPath],
+    entrypoints: artifactEntrypoints(buildFlavor, parserWorker, workerPath),
     define: {
       OPENCORVUS_VERSION: `'${Script.version}'`,
       OTUI_TREE_SITTER_WORKER_PATH: bunfsRoot + workerRelativePath,

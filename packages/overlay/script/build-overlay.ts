@@ -67,7 +67,7 @@ const isWindows = tripleIsWindows
 const overlayFile = isWindows ? "opencorvus-overlay.exe" : "opencorvus-overlay"
 const serverFile = isWindows ? "opencorvus.exe" : "opencorvus"
 
-const serverDistName = `opencorvus-${triplePlatform}-${tripleArch}`
+const serverDistName = `opencorvus-overlay-server-${triplePlatform}-${tripleArch}`
 const packageName = `opencorvus-overlay-${triplePlatform}-${tripleArch}`
 
 const distServer = path.join(opencorvus, "dist", serverDistName, serverFile)
@@ -150,8 +150,8 @@ await $`bun run build`.cwd(sdk)
 // ── Step 5: Tauri build ──
 step("Tauri build → overlay binary")
 
-console.log("Building opencorvus first...")
-await $`bun run build`.cwd(opencorvus)
+console.log("Building opencorvus overlay server first...")
+await $`bun run build --overlay-server`.cwd(opencorvus)
 if (!(await exists(distServer))) {
   throw new Error(`opencorvus binary still not found at ${distServer}`)
 }
