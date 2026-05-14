@@ -81,17 +81,6 @@ describe("SessionLoop terminal tool recovery", () => {
     expect(SessionLoop.terminalToolChoice(contract, { register_goal: {} as any })).toBeUndefined()
   })
 
-  test("narrows tool surface to the terminal tool when collector facts are ready", () => {
-    const contract = {
-      toolName: "submit_architect",
-      isSatisfied: () => false,
-      shouldExposeOnlyTerminalTool: () => true,
-    }
-    const tools = { submit_architect: {} as any, register_goal: {} as any }
-
-    expect(Object.keys(SessionLoop.terminalToolScopedTools(contract, tools))).toEqual(["submit_architect"])
-  })
-
   test("adds an explicit terminal tool system prompt for reasoning models", () => {
     const prompt = terminalToolSystemPrompt("submit_design_prd_spec")
 
@@ -100,30 +89,4 @@ describe("SessionLoop terminal tool recovery", () => {
     expect(prompt).toContain("input matching its schema")
   })
 
-  test("marks the scoped terminal tool strict for providers that support strict tool input", () => {
-    const contract = {
-      toolName: "submit_architect",
-      isSatisfied: () => false,
-      shouldExposeOnlyTerminalTool: () => true,
-    }
-    const tools = { submit_architect: { description: "terminal" } as any, register_goal: {} as any }
-
-    const scoped = SessionLoop.terminalToolScopedTools(contract, tools)
-    expect((scoped.submit_architect as any).strict).toBe(true)
-    expect((tools.submit_architect as any).strict).toBeUndefined()
-  })
-
-  test("keeps work tools when terminal facts are not ready", () => {
-    const contract = {
-      toolName: "report_build_result",
-      isSatisfied: () => false,
-      shouldExposeOnlyTerminalTool: () => false,
-    }
-    const tools = { report_build_result: {} as any, merge_back: {} as any }
-
-    expect(Object.keys(SessionLoop.terminalToolScopedTools(contract, tools)).sort()).toEqual([
-      "merge_back",
-      "report_build_result",
-    ])
-  })
 })

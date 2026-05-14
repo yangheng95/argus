@@ -27,10 +27,9 @@ void SessionPrompt
  * budget without ever reaching submit.
  *
  * Fix: when the model exposes `capabilities.reasoning`, drop the
- * tool_choice override entirely. The peer scoping
- * (`terminalToolScopedTools`) still narrows the tool set to the single
- * terminal tool, so "auto" picks it deterministically. Non-reasoning
- * models keep the hard pin.
+ * tool_choice override entirely. The terminal system prompt and recovery
+ * channel carry the terminal contract without hiding work tools.
+ * Non-reasoning models keep the hard pin.
  */
 
 const contract = (overrides: Partial<Parameters<typeof SessionLoop.terminalToolChoice>[0] & object> = {}) => ({
@@ -58,7 +57,7 @@ test("non-reasoning model with shouldExpose=false still requires a tool call", (
   expect(choice).toBe("required")
 })
 
-test("reasoning model drops the override (auto via scoped tool set)", () => {
+test("reasoning model drops the override and relies on prompt plus recovery", () => {
   const choice = SessionLoop.terminalToolChoice(contract(), tools, {
     capabilities: { reasoning: true },
   })
