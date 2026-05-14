@@ -3,7 +3,7 @@
 // Displays active and recently-completed tasks from boardStore.
 
 import { createMemo, createSelector, createSignal, For, Show } from "solid-js";
-import { boardStore, visibleTasks, loadTasks } from "../store/board";
+import { boardStore, visibleTasks, loadTasks, taskCreatedAt } from "../store/board";
 import { settingsStore } from "../store/settings";
 import { reorderTaskQueue } from "../services/task-queue";
 import { exportTaskArchive, importTaskArchive } from "../services/task-archive";
@@ -11,7 +11,6 @@ import { notifyError, notifyProgress, notifySuccess, notifyWarning } from "../se
 import { useArmedConfirm } from "../solid/armed-confirm";
 import { useAsyncAction } from "../solid/async-action";
 import { t } from "../utils/i18n";
-import { TASK_STATUS_PRIORITY } from "../utils/status-mapping";
 import { stamp, fullStampWithRelative } from "../utils/time";
 import { Icon } from "./Icon";
 import { Button } from "./ui/Button";
@@ -37,10 +36,6 @@ function shortPath(p: string): string {
 
 function joinBullet(values: (string | undefined | null | false)[]): string {
   return values.filter(Boolean).join(" / ");
-}
-
-function taskUpdated(item: any): number {
-  return item?.updated_at || item?.task?.time?.updated || item?.task?.time?.created || 0;
 }
 
 function taskListTitle(item: any): string {
@@ -71,12 +66,7 @@ function taskListBadge(item: any, queuePos?: number): string {
 }
 
 function taskListMeta(item: any): string {
-  return joinBullet([stamp(taskUpdated(item))]);
-}
-
-function queueOrder(item: any): number {
-  const value = item?.task?.queue?.order;
-  return Number.isFinite(value) ? value : Number.MAX_SAFE_INTEGER;
+  return joinBullet([stamp(taskCreatedAt(item))]);
 }
 
 function queueRevision(items: any[]): string | undefined {
@@ -87,23 +77,8 @@ function queueRevision(items: any[]): string | undefined {
   return undefined;
 }
 
-function priorityBucket(item: any): number {
-  return item?.task?.priority === "critical" ? 0 : 1;
-}
-
-function sortActiveItems(items: any[]): any[] {
-  return [...items].sort((a, b) => {
-    const ap = a?._pending ? -1 : (TASK_STATUS_PRIORITY[a?.task?.status ?? ""] ?? 99);
-    const bp = b?._pending ? -1 : (TASK_STATUS_PRIORITY[b?.task?.status ?? ""] ?? 99);
-    if (ap !== bp) return ap - bp;
-    if (ap === TASK_STATUS_PRIORITY.queued) {
-      const priorityDelta = priorityBucket(a) - priorityBucket(b);
-      if (priorityDelta !== 0) return priorityDelta;
-      const orderDelta = queueOrder(a) - queueOrder(b);
-      if (orderDelta !== 0) return orderDelta;
-    }
-    return taskUpdated(b) - taskUpdated(a);
-  });
+function sortTaskItemsByCreated(items: any[]): any[] {
+  return [...items].sort((a, b) => taskCreatedAt(b) - taskCreatedAt(a));
 }
 
 function moveBefore(ids: string[], sourceID: string, targetID: string): string[] {
@@ -378,7 +353,7 @@ function TaskRow(props: {
       <div class="task-row-right">
         <small
           class="task-row-stamp"
-          title={fullStampWithRelative(taskUpdated(props.item))}
+          title={fullStampWithRelative(taskCreatedAt(props.item))}
         >{taskListMeta(props.item)}</small>
         <Show when={hasActions()}>
           <div class="task-row-actions">
@@ -486,18 +461,11 @@ export function TaskList(props: TaskListProps) {
   const [draggingID, setDraggingID] = createSignal("");
   const [dragOverID, setDragOverID] = createSignal("");
 
-  // Queue positions mirror the backend's directory-scoped serial queue while
-  // the UI still surfaces a unified task list.
+  // Queue badges follow the same creation-time row order as the sidebar list.
   const queuePositions = createMemo<Map<string, number>>(() => {
-    const queued = sortedItems()
-      .filter((item) => item?.task?.status === "queued" && !item?._pending)
-      .sort((a, b) => {
-        const priorityDelta = priorityBucket(a) - priorityBucket(b);
-        if (priorityDelta !== 0) return priorityDelta;
-        const orderDelta = queueOrder(a) - queueOrder(b);
-        if (orderDelta !== 0) return orderDelta;
-        return (a?.task?.time?.created ?? 0) - (b?.task?.time?.created ?? 0);
-      });
+    const queued = sortTaskItemsByCreated(
+      sortedItems().filter((item) => item?.task?.status === "queued" && !item?._pending),
+    );
     const map = new Map<string, number>();
     queued.forEach((item, idx) => {
       const id = item?.task?.id;
@@ -506,8 +474,8 @@ export function TaskList(props: TaskListProps) {
     return map;
   });
 
-  // Group tasks by project directory. Active project first, then others by
-  // most-recent activity. Within each project, active tasks precede recent.
+  // Group tasks by project directory; group order also follows latest task
+  // creation time so the sidebar has one ordering source.
   type Group = { directory: string; latest: number; active: any[]; recent: any[] };
   const grouped = createMemo<Group[]>(() => {
     const byDir = new Map<string, Group>();
@@ -521,16 +489,14 @@ export function TaskList(props: TaskListProps) {
       const status = item?.task?.status || "";
       if (item?._pending || !COMPLETED_STATUSES.has(status)) g.active.push(item);
       else g.recent.push(item);
-      const updated = taskUpdated(item);
-      if (updated > g.latest) g.latest = updated;
+      const created = taskCreatedAt(item);
+      if (created > g.latest) g.latest = created;
     }
-    const activeDir = settingsStore.directory || "";
     return [...byDir.values()].map((group) => ({
       ...group,
-      active: sortActiveItems(group.active),
+      active: sortTaskItemsByCreated(group.active),
+      recent: sortTaskItemsByCreated(group.recent),
     })).sort((a, b) => {
-      if (a.directory === activeDir && b.directory !== activeDir) return -1;
-      if (b.directory === activeDir && a.directory !== activeDir) return 1;
       return b.latest - a.latest;
     });
   });

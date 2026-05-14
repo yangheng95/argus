@@ -53,6 +53,16 @@ bun run build:overlay   # produces .msi / .dmg / .deb
 
 Settings (sidebar): General / Providers / Channels / Orchestration / Permissions / SkillMarket.
 
+### Task List Ordering
+
+`TaskList` displays and orders task rows by `task.time.created`. Lifecycle
+timestamps such as `task.time.updated`, `task.time.started`, `task.time.completed`
+and top-level `updated_at` are not ordering inputs, so cancelling, failing or
+completing a task cannot move it. Terminal tasks stay in the Recent group and
+are ordered by creation time within that group. Queue badges follow the same
+creation-time row order instead of introducing a second visible ordering source.
+Project groups are ordered by the latest created task in each group.
+
 ## Comms
 
 ### SSE event streams
