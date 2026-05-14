@@ -1118,13 +1118,6 @@ export namespace SessionLoop {
         }),
       })
     }
-    if (format.type !== "json_schema") {
-      tools = terminalToolScopedTools(terminalToolContract, tools, {
-        sessionID: input.sessionID,
-        agent: agent.name,
-      })
-    }
-
     if (input.step === 1) {
       SessionSummary.summarize({
         sessionID: input.sessionID,
@@ -1541,40 +1534,11 @@ export namespace SessionLoop {
     // {type:"tool",toolName} object form (e.g. alibaba-coding-plan-cn/glm-5
     // returns HTTP 400 "tool_choice parameter does not support being set to
     // required or object in thinking mode" — captured in r8 bench evidence
-    // 2026-04-30T16:00:13). The terminal-tool *scoping* (terminalToolScopedTools)
-    // still narrows the tool set to just the terminal tool, so "auto" picks
-    // it deterministically. Soft-pin via prompt + scoped tool set is the
-    // single path that works on both reasoning and non-reasoning models.
+    // 2026-04-30T16:00:13). For these models the terminal tool is soft-pinned
+    // by the terminal system prompt plus the recovery channel.
     if (model?.capabilities?.reasoning) return undefined
     if (contract.shouldExposeOnlyTerminalTool()) return { type: "tool", toolName: contract.toolName }
     return "required"
-  }
-
-  export function terminalToolScopedTools(
-    contract: TerminalToolContract | undefined,
-    tools: Record<string, AITool>,
-    context?: {
-      sessionID?: string
-      agent?: string
-    },
-  ): Record<string, AITool> {
-    if (!contract) return tools
-    const terminalTool = tools[contract.toolName]
-    if (!terminalTool) return tools
-    if (contract.isSatisfied()) return tools
-    if (!contract.shouldExposeOnlyTerminalTool()) return tools
-    const originalToolNames = Object.keys(tools)
-    log.info("terminal tool scoping", {
-      sessionID: context?.sessionID,
-      agent: context?.agent,
-      terminalTool: contract.toolName,
-      originalToolCount: originalToolNames.length,
-      scopedToolCount: 1,
-      originalToolNames,
-      scopedToolNames: [contract.toolName],
-      predicateResult: true,
-    })
-    return { [contract.toolName]: strictTool(terminalTool) }
   }
   export const loop = fn(LoopInput, async (input) => {
     const { sessionID, resume_existing } = input
