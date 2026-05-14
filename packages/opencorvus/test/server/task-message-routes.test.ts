@@ -1,13 +1,15 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
 import { Database, eq } from "../../src/storage/db"
 import { Identifier } from "../../src/id/id"
-import { EngineTaskTable } from "../../src/engine/engine.sql"
+import { EngineArtifactTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import { deriveTaskStatus } from "../../src/engine/task-status"
 import * as Queue from "../../src/engine/queue"
 import { Instance } from "../../src/project/instance"
 import { Server } from "../../src/server/server"
 import { Session } from "../../src/session"
 import { Log } from "../../src/util/log"
+import { ExecutorRegistry } from "../../src/executor/registry"
+import type { ExecutorAdapter } from "../../src/executor/contract"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
@@ -42,6 +44,7 @@ async function seedRootSession(sessionID: string, text = "initial request") {
 describe("task message routes", () => {
   afterEach(async () => {
     mock.restore()
+    ExecutorRegistry.reset()
     await resetDatabase()
   })
 
@@ -508,6 +511,119 @@ describe("task message routes", () => {
         )
         expect(row ? deriveTaskStatus(row) : undefined).toBe("active")
         expect((row?.metadata as { decision_log?: string[] } | null)?.decision_log).toEqual(["keep-me"])
+      },
+    })
+  })
+
+  test("POST /task/:taskID/inject wakes orchestrator without resuming the root run session", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const dispatchTaskLoop = spyOn(Queue, "dispatchTaskLoop").mockResolvedValue(undefined)
+        let resumeCalls = 0
+        ExecutorRegistry.register("mirrorcode", {
+          capabilities: () => ({
+            submit: true,
+            status: true,
+            abort: true,
+            delivery: true,
+            resume: true,
+            events: false,
+          }),
+          submit: async () => { throw new Error("submit should not be called") },
+          status: async () => { throw new Error("status should not be called") },
+          abort: async () => { throw new Error("abort should not be called") },
+          delivery: async () => { throw new Error("delivery should not be called") },
+          resume: async () => {
+            resumeCalls += 1
+            throw new Error("task inject must not resume the active executor")
+          },
+          events: () => { throw new Error("events should not be called") },
+        } as unknown as ExecutorAdapter)
+        const taskID = Identifier.ascending("task")
+        const runID = Identifier.ascending("run")
+        const now = Date.now()
+        const root = await Session.create({ kind: "root", title: "inject running" })
+        await seedRootSession(root.id)
+
+        Database.use((db) => {
+          db.insert(EngineTaskTable).values({
+            id: taskID,
+            project_id: Instance.project.id,
+            session_id: root.id,
+            source: "panel",
+            title: "inject running",
+            request: "inject running",
+            priority: "normal",
+            time_created: now,
+            time_updated: now,
+            time_started: now,
+          }).run()
+          db.insert(EngineArtifactTable).values({
+            id: runID,
+            task_id: taskID,
+            run_id: runID,
+            kind: "run",
+            label: "run-running",
+            payload: {
+              plan_version_id: null,
+              session_id: root.id,
+              executor: "mirrorcode",
+              status: "running",
+              phase: "dispatch",
+              retry_count: 0,
+              blocking_reason: null,
+              error: null,
+              executor_ref: {
+                session_id: root.id,
+                queue_task_id: "queue-root",
+              },
+              metadata: {},
+              time_started: now,
+              time_completed: null,
+            },
+            time_created: now,
+            time_updated: now,
+          }).run()
+        })
+
+        const response = await app.request(`/task/${taskID}/inject`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({
+            message: "继续完成G3",
+          }),
+        })
+
+        expect(response.status).toBe(200)
+        const body = await response.json() as { resumed: boolean; status: string }
+        await new Promise((resolve) => setTimeout(resolve, 0))
+        expect(body).toEqual({ resumed: true, status: "active" })
+        expect(resumeCalls).toBe(0)
+        expect(dispatchTaskLoop).toHaveBeenCalledTimes(1)
+        const event = (dispatchTaskLoop.mock.calls[0]?.[0] as {
+          event: {
+            operatorMessage: {
+              text: string
+            }
+          }
+          interrupt?: boolean
+        })
+        expect(event.event.operatorMessage.text).toBe("继续完成G3")
+        expect(event.interrupt).toBe(true)
+
+        const messages = await Session.messages({ sessionID: root.id })
+        expect(messages.filter((message) => message.info.role === "assistant")).toHaveLength(0)
+        expect(messages.some((message) =>
+          message.info.role === "user" &&
+          message.parts.some((part) => part.type === "text" && part.text === "继续完成G3"),
+        )).toBe(true)
       },
     })
   })
