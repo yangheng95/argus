@@ -261,6 +261,30 @@ async function applyMocks(page: Page): Promise<void> {
     if (/\/channel\/runtime\/restart/.test(url) && method === "POST") return void ok(CHANNEL_RUNTIME_OK)
     if (/\/channel\b/.test(url) && method === "GET") return void ok(CHANNELS_OK)
     if (/\/task\/[^/]+\/bindings/.test(url) && method === "GET") return void ok(TASK_BINDINGS_FIXTURE)
+    // Board detail for the selected task — without this the loadBoard
+    // call in store/board.ts:273 hits the default empty 200 and leaves
+    // boardStore.board null, which kept the workbench stuck on its
+    // empty placeholder even after selectTask fired (round-2 P0-1).
+    if (/\/task\/[^/]+\/board/.test(url) && method === "GET") {
+      const taskID = decodeURIComponent(url.match(/\/task\/([^/]+)\/board/)?.[1] ?? "")
+      const item = GLOBAL_TASKS.find((row) => row.task.id === taskID)
+      const summary = item?.task.id === "task_active_payment"
+        ? "Refactor focuses on token-level checkout flow. Currently auditing PCI footprint of the legacy adapter."
+        : ""
+      return void ok({
+        task: item?.task ?? null,
+        overview: { headline: summary },
+        goalWorkflows: item?.task.id === "task_active_payment"
+          ? [
+              { id: "goal_audit", title: "Audit PCI scope of checkout adapter", status: "completed" },
+              { id: "goal_extract", title: "Extract tokenised payment service", status: "running" },
+              { id: "goal_replay", title: "Replay PCI-bound transactions in staging", status: "pending" },
+            ]
+          : [],
+        interactions: item?.interactions ?? [],
+        lastSequence: 1,
+      })
+    }
     if (/\/config\/locale/.test(url)) return void ok({ locale: "zh-CN" })
     if (/\/config\/settings/.test(url) && method === "GET") return void ok(SETTINGS_FIXTURE)
     if (/\/session\/me/.test(url)) return void ok(SESSION_FIXTURE)

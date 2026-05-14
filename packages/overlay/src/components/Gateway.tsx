@@ -99,6 +99,28 @@ function errorMessage(err: unknown): string {
   return String(err)
 }
 
+// Translates a raw server error message into the operator-facing copy
+// the Gateway should render. Server errors arrive as
+// "<ErrorClass>: <detail>" (e.g. "DirectoryRequiredError: gateway/stats
+// requires ?directory=…"); leaking the class + decoded query param at
+// the operator (round-2 P0-2 visual review) exposed both an internal
+// protocol detail and an actionless raw message. The fix is a small
+// registry of known error classes keyed to i18n entries — anything
+// outside the registry falls through to the trimmed raw message so we
+// do not silently swallow unknown failures (rule 7 no fallback applies
+// to data integrity, not to user-facing copy quality).
+function humanizeApiError(err: unknown): string {
+  const raw = errorMessage(err).trim()
+  const match = /^([A-Z][a-zA-Z]+(?:Error|Exception)):/.exec(raw)
+  if (match) {
+    const translated = t(`gateway.error.class.${match[1]}`)
+    if (translated !== `gateway.error.class.${match[1]}`) return translated
+  }
+  // Cap the unknown-error message length so a long stack trace cannot
+  // blow out the banner; the full message is still logged server-side.
+  return raw.length > 240 ? `${raw.slice(0, 240)}…` : raw
+}
+
 // `actionBusy` and `actionError.action` carry an internal key of the form
 // `<verb>:<id>` (e.g. `cancel:tsk_01HZ…`) or a verb-only key for
 // surface-level actions (e.g. `restart:channel`). The page-level banner
@@ -390,7 +412,18 @@ export function Gateway() {
 
   const selectedItem = () => taskByID(boardStore.selectedTaskID)
   const selectedBoard = () => boardStore.board ?? null
-  const hasSelection = () => !!boardStore.selectedTaskID && !!selectedBoard()
+  // Workbench shows progressively: if the operator selects a task we have
+  // *any* data on (the ledger row from boardStore.tasks), render the
+  // detail surface immediately. The `/task/:id/board` fetch can land
+  // later and the per-task summary/goals/interactions sections will
+  // populate when it does. Pre-fix this required BOTH selectedTaskID
+  // AND a fully-loaded board, so a slow board fetch left the workbench
+  // stuck on the empty placeholder even though the row was selected —
+  // the visual loop captured this regression in screenshot 03 (round-2
+  // P0-1). GatewaySelectedTask already reads task/* fields from item
+  // when board is null, so the partial render is correct, not a fallback.
+  const hasSelection = () =>
+    !!boardStore.selectedTaskID && (!!selectedItem() || !!selectedBoard())
 
   // ── Refresh / actions ──────────────────────────────────────────────
 
@@ -407,7 +440,7 @@ export function Gateway() {
   }
 
   function reportActionError(action: string, err: unknown): void {
-    setActionError({ action, error: errorMessage(err) })
+    setActionError({ action, error: humanizeApiError(err) })
   }
 
   async function withBusy<T>(actionKey: string, fn: () => Promise<T>): Promise<T | undefined> {
@@ -466,7 +499,7 @@ export function Gateway() {
     } catch (err) {
       setMessageNotice({
         kind: "error",
-        text: t("gateway.workbench.error_message_failed", { error: errorMessage(err) }),
+        text: t("gateway.workbench.error_message_failed", { error: humanizeApiError(err) }),
       })
     } finally {
       setMessageSending(false)
@@ -487,9 +520,9 @@ export function Gateway() {
     <div class="gateway" data-ui="gateway-page">
       <GatewayHeader
         stats={stats()}
-        statsError={stats.error ? errorMessage(stats.error) : ""}
+        statsError={stats.error ? humanizeApiError(stats.error) : ""}
         runtime={runtime()}
-        runtimeError={runtime.error ? errorMessage(runtime.error) : ""}
+        runtimeError={runtime.error ? humanizeApiError(runtime.error) : ""}
         counts={counts()}
         directory={activeDirectory()}
         refreshing={stats.loading || runtime.loading || channels.loading}
@@ -566,12 +599,12 @@ export function Gateway() {
 
         <GatewayChannelPanel
           channels={channels()}
-          channelsError={channels.error ? errorMessage(channels.error) : ""}
+          channelsError={channels.error ? humanizeApiError(channels.error) : ""}
           runtime={runtime()}
-          runtimeError={runtime.error ? errorMessage(runtime.error) : ""}
+          runtimeError={runtime.error ? humanizeApiError(runtime.error) : ""}
           restartError={channelRestartError()}
           bindings={bindings()}
-          bindingsError={bindings.error ? errorMessage(bindings.error) : ""}
+          bindingsError={bindings.error ? humanizeApiError(bindings.error) : ""}
           selectedTaskID={boardStore.selectedTaskID}
           actionBusy={actionBusy()}
           onRestartRuntime={async () => {
@@ -591,7 +624,7 @@ export function Gateway() {
               const next = await restartChannelRuntime()
               runtimeCtl.mutate(next)
             } catch (err) {
-              setChannelRestartError(errorMessage(err))
+              setChannelRestartError(humanizeApiError(err))
             } finally {
               setActionBusy("")
             }
@@ -811,7 +844,7 @@ function GatewayTaskLedger(props: {
         </Show>
       </div>
 
-      <div class="gateway-filter-bar" role="tablist" aria-label="Filter">
+      <div class="gateway-filter-bar" role="tablist" aria-label={t("gateway.ledger.filter_label")}>
         <For each={FILTERS}>
           {(value) => (
             <button
@@ -913,8 +946,14 @@ function GatewayLedgerRow(props: {
   // single misclick can't lose work — the panel's DeleteButton uses the
   // same hook, so the operator sees one consistent two-step pattern
   // across surfaces (rule 8 single source).
+  //
+  // retry is included on the same footing as cancel/delete because for
+  // a task that has already produced artifacts (failed / completed /
+  // cancelled), pushing it through the executor again can overwrite
+  // those artifacts — round-2 design review P0-1.
   const confirmCancel = useArmedConfirm(GATEWAY_CONFIRM_WINDOW_MS)
   const confirmDelete = useArmedConfirm(GATEWAY_CONFIRM_WINDOW_MS)
+  const confirmLedgerRetry = useArmedConfirm(GATEWAY_CONFIRM_WINDOW_MS)
   return (
     <div
       class="gateway-ledger-row"
@@ -1024,15 +1063,21 @@ function GatewayLedgerRow(props: {
             size="icon"
             tone="neutral"
             data-ui="gateway-ledger-retry"
+            data-confirm={confirmLedgerRetry.armed() ? "true" : undefined}
             disabled={isBusy("retry")}
-            title={t("gateway.ledger.action.retry")}
-            aria-label={t("gateway.ledger.action.retry")}
+            title={confirmLedgerRetry.armed()
+              ? t("gateway.ledger.action.retry_confirm")
+              : t("gateway.ledger.action.retry")}
+            aria-label={confirmLedgerRetry.armed()
+              ? t("gateway.ledger.action.retry_confirm")
+              : t("gateway.ledger.action.retry")}
             onClick={(e) => {
               e.stopPropagation()
-              props.onRetryTask(id())
+              confirmLedgerRetry.confirm(() => props.onRetryTask(id()))
             }}
+            onBlur={confirmLedgerRetry.disarm}
           >
-            <Icon name="refresh" size={11} />
+            <Icon name={confirmLedgerRetry.armed() ? "check" : "refresh"} size={11} />
           </Button>
         </Show>
         <Show when={canDelete()}>
@@ -1165,7 +1210,13 @@ function GatewaySelectedTask(props: {
   const messageBusy = () => props.messageSending || isBusy("cancel") || isBusy("retry") || isBusy("replan")
   // Wide "Cancel task" button mirrors the ledger row's armed-confirm so a
   // misclick on the workbench doesn't kill a running task without warning.
+  // retry / replan use the same gating: replan re-runs the architect agent
+  // (the most expensive LLM call in the system, PRD §11) and retry
+  // re-executes a finished task on top of its existing artifacts. Both are
+  // destructive enough to warrant the same two-step affordance as cancel.
   const confirmWorkbenchCancel = useArmedConfirm(GATEWAY_CONFIRM_WINDOW_MS)
+  const confirmWorkbenchRetry = useArmedConfirm(GATEWAY_CONFIRM_WINDOW_MS)
+  const confirmWorkbenchReplan = useArmedConfirm(GATEWAY_CONFIRM_WINDOW_MS)
 
   return (
     <div class="gateway-workbench-detail">
@@ -1216,7 +1267,7 @@ function GatewaySelectedTask(props: {
             </div>
           </Show>
         </dl>
-        <div class="gateway-workbench-actions" role="toolbar" aria-label="Task actions">
+        <div class="gateway-workbench-actions" role="toolbar" aria-label={t("gateway.workbench.actions_label")}>
           <Button
             type="button"
             variant="outline"
@@ -1240,10 +1291,16 @@ function GatewaySelectedTask(props: {
             size="md"
             tone="neutral"
             data-ui="gateway-workbench-retry"
+            data-confirm={confirmWorkbenchRetry.armed() ? "true" : undefined}
             disabled={INTERRUPTABLE_STATUSES.has(status()) || isBusy("retry")}
-            onClick={() => props.onRetryTask(id())}
+            onClick={() => confirmWorkbenchRetry.confirm(() => props.onRetryTask(id()))}
+            onBlur={confirmWorkbenchRetry.disarm}
           >
-            {isBusy("retry") ? t("gateway.workbench.actions.busy") : t("gateway.workbench.actions.retry")}
+            {isBusy("retry")
+              ? t("gateway.workbench.actions.busy")
+              : confirmWorkbenchRetry.armed()
+                ? t("gateway.workbench.actions.retry_confirm")
+                : t("gateway.workbench.actions.retry")}
           </Button>
           <Button
             type="button"
@@ -1251,10 +1308,16 @@ function GatewaySelectedTask(props: {
             size="md"
             tone="neutral"
             data-ui="gateway-workbench-replan"
+            data-confirm={confirmWorkbenchReplan.armed() ? "true" : undefined}
             disabled={INTERRUPTABLE_STATUSES.has(status()) || isBusy("replan")}
-            onClick={() => props.onReplanTask(id())}
+            onClick={() => confirmWorkbenchReplan.confirm(() => props.onReplanTask(id()))}
+            onBlur={confirmWorkbenchReplan.disarm}
           >
-            {isBusy("replan") ? t("gateway.workbench.actions.busy") : t("gateway.workbench.actions.replan")}
+            {isBusy("replan")
+              ? t("gateway.workbench.actions.busy")
+              : confirmWorkbenchReplan.armed()
+                ? t("gateway.workbench.actions.replan_confirm")
+                : t("gateway.workbench.actions.replan")}
           </Button>
           <Button
             type="button"
@@ -1398,7 +1461,7 @@ function GatewayComposer(props: { onClose: () => void }) {
       setProposal(data)
     } catch (err) {
       if (controller.signal.aborted) return
-      setError(errorMessage(err))
+      setError(humanizeApiError(err))
       setProposal(null)
     } finally {
       if (activeController === controller) activeController = null
@@ -1579,7 +1642,7 @@ function GatewayProposalReview(props: {
           prev.map((row) => (row.candidate.id === c.id ? { ...row, createdTaskID: taskID } : row)),
         )
       } catch (err) {
-        out.push({ id: c.id, title: c.title, ok: false, error: errorMessage(err) })
+        out.push({ id: c.id, title: c.title, ok: false, error: humanizeApiError(err) })
       }
     }
     setResults(out)
