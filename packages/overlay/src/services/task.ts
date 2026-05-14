@@ -191,6 +191,10 @@ export function panelRequestBody(
 const TASK_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
 const TASK_DECISION_COUNTDOWN_SECONDS = 8;
 
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === "AbortError";
+}
+
 export async function selectTask(
   taskID: string,
   options: SelectTaskOptions = {},
@@ -280,6 +284,9 @@ export async function selectTask(
     setSettingsStore("workspaceTaskID", nextTaskID);
     setSettingsStore("workspaceDirectory", restoreDir);
     saveSettings();
+  } catch (error) {
+    if (stale() && isAbortError(error)) return;
+    throw error;
   } finally {
     // Only clear the progress flag if we are still the active selection.
     // A newer selectTask() call has taken over and will manage its own flag.

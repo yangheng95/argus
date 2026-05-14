@@ -1,16 +1,19 @@
 import { afterEach, expect, test } from "bun:test";
-import { setBoardStore } from "../src/store/board";
-import { recoverSelectedTaskConversation } from "../src/services/selected-task-recovery";
-import { startSSE, stopSSE } from "../src/services/sse";
-import {
-  __setHostTransportForTest,
-  type HostTransport,
-  type StreamHandlers,
-  type StreamOpenRequest,
-  type TransportRequest,
-  type TransportResponse,
+(globalThis as typeof globalThis & { __OPENCORVUS_OVERLAY_VERSION__?: string }).__OPENCORVUS_OVERLAY_VERSION__ = "test";
+
+import type {
+  HostTransport,
+  StreamHandlers,
+  StreamOpenRequest,
+  TransportRequest,
+  TransportResponse,
 } from "../src/services/host-transport";
-import { resetWriter } from "../src/services/tree-writer";
+
+const { setBoardStore } = await import("../src/store/board");
+const { recoverSelectedTaskConversation } = await import("../src/services/selected-task-recovery");
+const { startSSE, stopSSE } = await import("../src/services/sse");
+const { __setHostTransportForTest } = await import("../src/services/host-transport");
+const { resetWriter } = await import("../src/services/tree-writer");
 
 function conversationBody(taskID: string, sequence: number) {
   return {
