@@ -26,13 +26,14 @@
 import {
   For,
   Show,
+  createEffect,
   createMemo,
   createResource,
   createSignal,
   onCleanup,
   onMount,
 } from "solid-js"
-import { useArmedConfirm } from "../solid/armed-confirm"
+import { useArmedConfirm, type ArmedConfirm } from "../solid/armed-confirm"
 import { boardStore, isTaskInterruptable, isTaskTerminal, loadTasks, taskByID, visibleTasks } from "../store/board"
 import { settingsStore, sanitizeExecutor } from "../store/settings"
 import { isGatewayPage, setPageMode } from "../store/page-mode"
@@ -66,6 +67,7 @@ import {
   compactDirectory,
   composeTaskText,
   filterMatches,
+  GATEWAY_REQUIREMENT_MAX_CHARS,
   humanizeApiError,
   pendingInteractions,
   runtimeLabel,
@@ -132,6 +134,24 @@ function actionVerbLabel(actionKey: string): string {
 // Mirrors the value used by TaskList's DeleteButton so the operator sees a
 // consistent dwell time across panel and gateway (rule 8 single source).
 const GATEWAY_CONFIRM_WINDOW_MS = 3000
+
+// Gateway-scoped armed-confirm. The Gateway component stays mounted while
+// the operator switches to Panel (CSS-driven page-mode toggle, no
+// unmount), so the plain useArmedConfirm only disarms via 3s timeout or
+// element blur — meaning a half-armed button can survive a quick
+// Panel → … → Gateway round trip and commit on the next click. Wrapping
+// the hook with a `createEffect` on `isGatewayPage()` disarms the moment
+// the operator leaves Gateway, closing the round-3 design review's
+// P1-1 escape hatch. The wrapper is the single source — every armed-
+// confirm in this file goes through it so a future caller cannot
+// accidentally use the bare hook and re-introduce the gap.
+function useGatewayArmedConfirm(): ArmedConfirm {
+  const confirm = useArmedConfirm(GATEWAY_CONFIRM_WINDOW_MS)
+  createEffect(() => {
+    if (!isGatewayPage()) confirm.disarm()
+  })
+  return confirm
+}
 
 function clip(value: string | undefined, limit = 80): string {
   const text = String(value ?? "").replace(/\s+/g, " ").trim()
@@ -939,9 +959,9 @@ function GatewayLedgerRow(props: {
   // a task that has already produced artifacts (failed / completed /
   // cancelled), pushing it through the executor again can overwrite
   // those artifacts — round-2 design review P0-1.
-  const confirmCancel = useArmedConfirm(GATEWAY_CONFIRM_WINDOW_MS)
-  const confirmDelete = useArmedConfirm(GATEWAY_CONFIRM_WINDOW_MS)
-  const confirmLedgerRetry = useArmedConfirm(GATEWAY_CONFIRM_WINDOW_MS)
+  const confirmCancel = useGatewayArmedConfirm()
+  const confirmDelete = useGatewayArmedConfirm()
+  const confirmLedgerRetry = useGatewayArmedConfirm()
   return (
     <div
       class="gateway-ledger-row"
@@ -1202,9 +1222,9 @@ function GatewaySelectedTask(props: {
   // (the most expensive LLM call in the system, PRD §11) and retry
   // re-executes a finished task on top of its existing artifacts. Both are
   // destructive enough to warrant the same two-step affordance as cancel.
-  const confirmWorkbenchCancel = useArmedConfirm(GATEWAY_CONFIRM_WINDOW_MS)
-  const confirmWorkbenchRetry = useArmedConfirm(GATEWAY_CONFIRM_WINDOW_MS)
-  const confirmWorkbenchReplan = useArmedConfirm(GATEWAY_CONFIRM_WINDOW_MS)
+  const confirmWorkbenchCancel = useGatewayArmedConfirm()
+  const confirmWorkbenchRetry = useGatewayArmedConfirm()
+  const confirmWorkbenchReplan = useGatewayArmedConfirm()
 
   return (
     <div class="gateway-workbench-detail">
@@ -1502,10 +1522,22 @@ function GatewayComposer(props: { onClose: () => void }) {
             rows={8}
             placeholder={t("gateway.compose.placeholder")}
             value={requirement()}
+            maxLength={GATEWAY_REQUIREMENT_MAX_CHARS}
             onInput={(e) => setRequirement(e.currentTarget.value)}
             disabled={submitting()}
             data-ui="gateway-composer-input"
           />
+          <div class="gateway-composer-counter" data-ui="gateway-composer-counter">
+            <span
+              data-near-limit={requirement().length >= GATEWAY_REQUIREMENT_MAX_CHARS - 200 ? "true" : undefined}
+              data-at-limit={requirement().length >= GATEWAY_REQUIREMENT_MAX_CHARS ? "true" : undefined}
+            >
+              {t("gateway.compose.length_counter", {
+                count: String(requirement().length),
+                max: String(GATEWAY_REQUIREMENT_MAX_CHARS),
+              })}
+            </span>
+          </div>
           <div class="gateway-composer-controls">
             <label class="gateway-composer-executor">
               <span>{t("gateway.compose.executor_label")}</span>

@@ -877,6 +877,7 @@
   "gateway.workbench.summary_empty": "尚无最新报告。",
   "gateway.compose.title": "拆解新需求",
   "gateway.compose.placeholder": "把一段大需求详细描述在此处。Gateway 会先返回拆解方案，让你逐项确认后再创建任务。",
+  "gateway.compose.length_counter": "{{count}} / {{max}} 字",
   "gateway.compose.executor_label": "执行器",
   "gateway.compose.submit": "生成拆解方案",
   "gateway.compose.submitting": "拆解中…",

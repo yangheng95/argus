@@ -728,6 +728,21 @@ body[data-page-mode="gateway"] > main.panel {
   gap: var(--ui-gap-sm);
   border-top: var(--oc-border-width) solid var(--border);
   padding-top: var(--ui-gap-lg);
+  /* Pin the composer to the bottom of the scrolling workbench column.
+     Pre-fix a long goals / interactions list pushed message + Send
+     below the visible area, which forced the operator to scroll to
+     reply — round-3 design review P1-6. Pair the sticky positioning
+     with the surface background so scrolled goal rows don't bleed
+     through the composer, and a soft shadow to keep the visual layer
+     intact. */
+  position: sticky;
+  bottom: 0;
+  background: var(--surface);
+  z-index: var(--ui-z-sticky);
+  margin-top: auto;
+  /* Inset top shadow draws a 1px soft separator that doubles as a
+     "content continues above" cue when the user scrolls. */
+  box-shadow: 0 calc(-1px * var(--ui-scale)) 0 0 var(--border);
 }
 
 .gateway-workbench-message-input {
@@ -791,6 +806,28 @@ body[data-page-mode="gateway"] > main.panel {
   font-family: inherit;
   font-size: var(--ui-font-body);
   resize: vertical;
+}
+
+/* Live "<n> / 32000" counter under the composer textarea. Hits a warning
+   colour 200 chars before the server cap (rule 7 — surface failure
+   conditions early) and pegs to bad once the operator is at the limit
+   (textarea `maxLength` stops further input, the colour confirms why). */
+.gateway-composer-counter {
+  display: flex;
+  justify-content: flex-end;
+  font-size: var(--ui-font-tiny);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  margin-top: var(--ui-gap-xs);
+}
+
+.gateway-composer-counter [data-near-limit="true"] {
+  color: var(--warn);
+}
+
+.gateway-composer-counter [data-at-limit="true"] {
+  color: var(--bad);
+  font-weight: var(--ui-font-weight-strong);
 }
 
 .gateway-composer-controls {
@@ -860,6 +897,19 @@ body[data-page-mode="gateway"] > main.panel {
 
 .gateway-proposal-card[data-include="false"] {
   opacity: var(--ui-opacity-dim);
+}
+
+/* Data-created lock — once the operator's "Create selected" run has
+   actually written the candidate to engine_task (Gateway.tsx sets
+   data-created="true" with the returned taskID), dim the whole card and
+   tint its border with the good colour so the operator sees one-glance
+   "this row is done" while the inner created-pill still carries the new
+   task id. Pre-fix the data attribute was already set but the CSS had
+   no rule, which let a fully-saturated card masquerade as a still-
+   selectable candidate (round-3 design review P1-8). */
+.gateway-proposal-card[data-created="true"] {
+  opacity: var(--ui-opacity-subtle);
+  border-color: color-mix(in srgb, var(--good) 32%, var(--border));
 }
 
 .gateway-proposal-card-header {
@@ -940,10 +990,24 @@ body[data-page-mode="gateway"] > main.panel {
 }
 
 .gateway-proposal-recommended {
+  /* The architect's "Recommended: Queue" / "Recommended: Start now" line
+     was previously --text-muted + tiny + uppercase, which on the
+     surface-strong card background sank below operator-noticeable
+     contrast — the round-3 visual review flagged it as "almost invisible".
+     Lift it into an inline pill that reuses the accent tone the queue
+     segmented control already speaks, so the eye walks from the
+     recommendation straight to the matching radio. */
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ui-gap-xs);
+  padding: var(--ui-gap-xs) var(--ui-gap-sm);
+  border-radius: var(--oc-radius-pill);
+  background: var(--accent-dim);
+  color: var(--accent);
   font-size: var(--ui-font-tiny);
+  font-weight: var(--ui-font-weight-strong);
   text-transform: uppercase;
   letter-spacing: var(--ui-letter-spacing-loose);
-  color: var(--text-muted);
 }
 
 .gateway-proposal-queue {
@@ -1242,23 +1306,47 @@ body[data-page-mode="gateway"] > main.panel {
    from but should never trigger by accident. Delete uses the danger tone
    because the row is gone after commit. The two palettes mirror the
    panel-side TaskList affordances (sidebar.css:439-457) so the operator
-   sees one consistent grammar of "warm-up + commit" across surfaces. */
-.gateway-ledger-row-actions .oc-button[data-ui="gateway-ledger-cancel"][data-confirm="true"],
-.gateway-ledger-row-actions .oc-button[data-ui="gateway-ledger-retry"][data-confirm="true"],
-.gateway-workbench-actions .oc-button[data-ui="gateway-workbench-cancel"][data-confirm="true"],
-.gateway-workbench-actions .oc-button[data-ui="gateway-workbench-retry"][data-confirm="true"],
-.gateway-workbench-actions .oc-button[data-ui="gateway-workbench-replan"][data-confirm="true"] {
+   sees one consistent grammar of "warm-up + commit" across surfaces.
+
+   `:not(:disabled)` on the armed-confirm rule lets the standard disabled
+   opacity (button.css :disabled clause) win when the task transitions to
+   a non-interruptable state mid-arm — pre-fix the bright `--ui-opacity-
+   full` overrode the disabled tone and the button looked active even
+   when the click handler was a no-op (round-3 P2-1). */
+.gateway-ledger-row-actions .oc-button[data-ui="gateway-ledger-cancel"][data-confirm="true"]:not(:disabled),
+.gateway-ledger-row-actions .oc-button[data-ui="gateway-ledger-retry"][data-confirm="true"]:not(:disabled),
+.gateway-workbench-actions .oc-button[data-ui="gateway-workbench-cancel"][data-confirm="true"]:not(:disabled),
+.gateway-workbench-actions .oc-button[data-ui="gateway-workbench-retry"][data-confirm="true"]:not(:disabled),
+.gateway-workbench-actions .oc-button[data-ui="gateway-workbench-replan"][data-confirm="true"]:not(:disabled) {
   opacity: var(--ui-opacity-full);
   --oc-button-bg: color-mix(in srgb, var(--warn) 14%, transparent);
   --oc-button-color: var(--warn);
   --oc-button-border: var(--oc-border-width) solid color-mix(in srgb, var(--warn) 28%, transparent);
 }
 
-.gateway-ledger-row-actions .oc-button[data-ui="gateway-ledger-delete"][data-confirm="true"] {
+.gateway-ledger-row-actions .oc-button[data-ui="gateway-ledger-delete"][data-confirm="true"]:not(:disabled) {
   opacity: var(--ui-opacity-full);
   --oc-button-bg: color-mix(in srgb, var(--bad) 14%, transparent);
   --oc-button-color: var(--bad);
   --oc-button-border: var(--oc-border-width) solid color-mix(in srgb, var(--bad) 28%, transparent);
+}
+
+/* When an armed-confirm button takes focus, the focus ring should
+   inherit the button's own danger / warn colour instead of the generic
+   accent that the keyboard-focus block below applies. Pre-fix the
+   warm-tinted fill carried an accent-coloured outline — the colour pair
+   read like an accidental cocktail and dulled the "you are about to
+   commit a destructive action" signal (round-3 P2-2). */
+.gateway-ledger-row-actions .oc-button[data-ui="gateway-ledger-cancel"][data-confirm="true"]:focus-visible,
+.gateway-ledger-row-actions .oc-button[data-ui="gateway-ledger-retry"][data-confirm="true"]:focus-visible,
+.gateway-workbench-actions .oc-button[data-ui="gateway-workbench-cancel"][data-confirm="true"]:focus-visible,
+.gateway-workbench-actions .oc-button[data-ui="gateway-workbench-retry"][data-confirm="true"]:focus-visible,
+.gateway-workbench-actions .oc-button[data-ui="gateway-workbench-replan"][data-confirm="true"]:focus-visible {
+  outline-color: var(--warn);
+}
+
+.gateway-ledger-row-actions .oc-button[data-ui="gateway-ledger-delete"][data-confirm="true"]:focus-visible {
+  outline-color: var(--bad);
 }
 
 /* ── Keyboard focus rings ──────────────────────────────────────────────
