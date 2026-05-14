@@ -24,14 +24,12 @@
  * state's pass/fail status + the absolute path captured.
  */
 
-import { spawn, type Subprocess } from "bun"
 import { mkdir, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import puppeteer, { type Browser, type HTTPRequest, type Page } from "puppeteer-core"
 import { findBrowserExecutable } from "../../opencorvus/src/delivery/checks/visual"
 
-const OVERLAY_ROOT = path.resolve(__dirname, "..")
 const OUT_DIR_ARG = process.argv[2]
 const OUT_DIR = path.resolve(OUT_DIR_ARG ?? path.join(tmpdir(), "gateway-visual-loop"))
 const VITE_PORT = 5173
@@ -175,75 +173,18 @@ async function ensureOutDir(): Promise<string> {
   return OUT_DIR
 }
 
-async function waitForVite(timeoutMs = 60_000): Promise<void> {
-  const deadline = Date.now() + timeoutMs
-  while (Date.now() < deadline) {
-    try {
-      const res = await fetch(`http://127.0.0.1:${VITE_PORT}/`)
-      if (res.ok) return
-    } catch {}
-    await new Promise((r) => setTimeout(r, 250))
-  }
-  throw new Error(`gateway-visual-loop: vite dev did not respond on :${VITE_PORT} within ${timeoutMs}ms`)
-}
-
-async function startVite(): Promise<Subprocess> {
-  // Spawn vite as a detached subprocess so we own the PID; we still tree-kill
-  // it explicitly during cleanup because Bun.spawn.kill() on Windows only
-  // hits the immediate child (bun wrapper), not the vite/node grandchild.
-  const proc = spawn({
-    cmd: ["bun", "run", "--cwd", OVERLAY_ROOT, "dev:vite"],
-    stdout: "pipe",
-    stderr: "pipe",
-    env: { ...process.env, NO_COLOR: "1", FORCE_COLOR: "0" },
-  })
-  return proc
-}
-
-function treeKill(pid: number): void {
-  // Windows: taskkill -F -T tears down the whole process tree, which is the
-  // only reliable way to stop vite when bun wraps it (bun → node → vite).
-  // Other platforms: SIGKILL via process.kill — bun's subprocess.kill()
-  // already propagates to the group in POSIX.
-  if (!pid) return
-  if (process.platform === "win32") {
-    try {
-      spawn({ cmd: ["taskkill", "/F", "/T", "/PID", String(pid)], stdout: "ignore", stderr: "ignore" })
-    } catch {}
-    return
-  }
-  try { process.kill(-pid, "SIGKILL") } catch {}
-  try { process.kill(pid, "SIGKILL") } catch {}
-}
-
 async function isPortBound(port: number): Promise<boolean> {
-  try {
-    const res = await fetch(`http://127.0.0.1:${port}/`)
-    return res.ok || res.status < 500
-  } catch {
-    return false
+  // Vite on Windows defaults to binding ::1 (IPv6 localhost) only —
+  // a fetch against the bare IPv4 literal returns ECONNREFUSED even
+  // though netstat shows the port LISTENING. Try the hostname and
+  // both literals so we don't mis-report vite as down.
+  for (const host of ["localhost", "127.0.0.1", "[::1]"]) {
+    try {
+      const res = await fetch(`http://${host}:${port}/`)
+      if (res.ok || res.status < 500) return true
+    } catch {}
   }
-}
-
-async function killPort(port: number): Promise<void> {
-  // Defensive: even with treeKill, the previous run can leave a vite
-  // listener bound if Bun crashed before cleanup. Read netstat and kill
-  // anything still attached to the port so the next run is not blocked.
-  if (process.platform !== "win32") return
-  try {
-    const proc = spawn({ cmd: ["netstat", "-ano"], stdout: "pipe" })
-    const text = await new Response(proc.stdout).text()
-    const pids = new Set<string>()
-    for (const line of text.split(/\r?\n/)) {
-      if (!line.includes(`:${port} `) && !line.includes(`:${port}\t`)) continue
-      const cols = line.trim().split(/\s+/)
-      const pid = cols[cols.length - 1]
-      if (/^\d+$/.test(pid)) pids.add(pid)
-    }
-    for (const pid of pids) {
-      try { spawn({ cmd: ["taskkill", "/F", "/T", "/PID", pid], stdout: "ignore", stderr: "ignore" }) } catch {}
-    }
-  } catch {}
+  return false
 }
 
 async function applyMocks(page: Page): Promise<void> {
@@ -257,16 +198,58 @@ async function applyMocks(page: Page): Promise<void> {
   await page.setRequestInterception(true)
   page.on("request", async (req: HTTPRequest) => {
     const url = req.url()
-    // Only intercept opencorvus server calls — vite assets pass through.
-    if (!/:(7878)|\/(gateway|task|channel|global|config|workspace|session)\b/.test(url)) {
+    // Only intercept opencorvus server calls. The previous regex also
+    // matched any vite-served URL whose path contained "gateway" /
+    // "channel" / etc. (e.g. /src/services/gateway.ts) and responded
+    // with JSON, which Chrome rejected with "Expected a JS module …"
+    // and bricked overlay init. Pin interception to the opencorvus
+    // sidecar port so vite source assets always pass through.
+    if (!/:7878\//.test(url)) {
       return req.continue()
     }
     const method = req.method().toUpperCase()
+    // Vite serves the overlay at :5173 but the overlay's apiJson hits
+    // :7878 directly, so every mocked response must wear the CORS
+    // headers Chrome demands from a cross-origin fetch. We also have
+    // to honour OPTIONS preflight before any real method lands.
+    const corsHeaders = {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    }
+    if (method === "OPTIONS") {
+      return void req.respond({ status: 204, headers: corsHeaders })
+    }
     const ok = (body: unknown) =>
-      req.respond({ status: 200, contentType: "application/json", body: JSON.stringify(body) })
+      req.respond({
+        status: 200,
+        contentType: "application/json",
+        headers: corsHeaders,
+        body: JSON.stringify(body),
+      })
     const fail = (status: number, message: string) =>
-      req.respond({ status, contentType: "application/json", body: JSON.stringify({ error: message }) })
+      req.respond({
+        status,
+        contentType: "application/json",
+        headers: corsHeaders,
+        body: JSON.stringify({ error: message }),
+      })
 
+    if (/\/global\/health/.test(url) && method === "GET") {
+      // Connection probe — overlay's connection.ts:149 expects
+      // `{ paths: { database, data, home } }`. Anything else and
+      // checkConnection() returns false, which keeps the Workspace-
+      // Required modal pinned on top and the Gateway invisible behind it.
+      return void ok({
+        ok: true,
+        paths: {
+          database: "/tmp/gateway-loop/global.db",
+          data: "/tmp/gateway-loop/data",
+          home: "/tmp/gateway-loop",
+        },
+      })
+    }
+    if (/\/global\/tasks/.test(url) && method === "GET") return void ok({ tasks: GLOBAL_TASKS, summary: null })
     if (/\/gateway\/stats/.test(url) && method === "GET") {
       const force = await page.evaluate(() => (window as unknown as { __statsForceError?: string }).__statsForceError)
       if (force) return void fail(500, force)
@@ -278,7 +261,6 @@ async function applyMocks(page: Page): Promise<void> {
     if (/\/channel\/runtime\/restart/.test(url) && method === "POST") return void ok(CHANNEL_RUNTIME_OK)
     if (/\/channel\b/.test(url) && method === "GET") return void ok(CHANNELS_OK)
     if (/\/task\/[^/]+\/bindings/.test(url) && method === "GET") return void ok(TASK_BINDINGS_FIXTURE)
-    if (/\/global\/tasks/.test(url) && method === "GET") return void ok({ tasks: GLOBAL_TASKS, summary: null })
     if (/\/config\/locale/.test(url)) return void ok({ locale: "zh-CN" })
     if (/\/config\/settings/.test(url) && method === "GET") return void ok(SETTINGS_FIXTURE)
     if (/\/session\/me/.test(url)) return void ok(SESSION_FIXTURE)
@@ -289,34 +271,60 @@ async function applyMocks(page: Page): Promise<void> {
 }
 
 async function bootstrapOverlay(page: Page): Promise<void> {
-  await page.goto(`http://127.0.0.1:${VITE_PORT}/`, { waitUntil: "domcontentloaded", timeout: 30_000 })
-  // Give SolidJS enough time to settle its first render + theme cascade.
-  await page.waitForSelector("body", { timeout: 10_000 })
+  // Surface anything that lands in the page console while we wait for
+  // overlay init — without this, a syntax error or thrown import in
+  // main.tsx silently turns into "setPageMode never appears" with no
+  // hint of why.
+  page.on("console", (msg) => {
+    const type = msg.type()
+    if (type === "error" || type === "warning") {
+      console.error(`[overlay/${type}] ${msg.text()}`)
+    }
+  })
+  page.on("pageerror", (err) => {
+    console.error(`[overlay/pageerror] ${err.message}`)
+  })
+  page.on("requestfailed", (req) => {
+    const failure = req.failure()?.errorText ?? "unknown"
+    console.error(`[overlay/requestfailed] ${req.method()} ${req.url()} — ${failure}`)
+  })
+  await page.goto(`http://localhost:${VITE_PORT}/`, { waitUntil: "domcontentloaded", timeout: 30_000 })
+  // Wait until main.tsx finishes its async init — that is when both the
+  // `applyDirectory` / `setPageMode` window globals exist and the page-mode
+  // createEffect is wired. Setting body[data-page-mode] before that effect
+  // is established would be overwritten the moment the signal fires, which
+  // is exactly the bug round-2 hit (screenshot 01 showed the Panel chrome
+  // even though we'd flipped the attribute).
+  // Wait for the window-side helpers main.tsx publishes from
+  // installGlobalBridges(). We deliberately do NOT wait on
+  // __overlayInitSettled — overlay init blocks on workspace / config
+  // round-trips that are happy to hang under our mocked transport
+  // (capabilities, session, etc.). setPageMode / applyDirectory are
+  // installed at module load, well before init's network work, so they
+  // are the right "ready" signal for headed visual capture.
   await page.waitForFunction(() => {
-    return !!document.body && document.body.getAttribute("data-theme") !== null
-  }, { timeout: 10_000 }).catch(() => undefined)
+    const w = window as unknown as {
+      setPageMode?: (mode: "panel" | "gateway") => void
+      applyDirectory?: unknown
+    }
+    return typeof w.setPageMode === "function" && typeof w.applyDirectory === "function"
+  }, { timeout: 20_000 })
   // Apply the fixture directory + switch into Gateway mode via the
-  // app-store helpers the overlay deliberately exposes on `window` for
-  // headed automation (matches the existing benchmark scripts).
+  // app-store helpers the overlay deliberately exposes on `window`
+  // for headed automation.
   await page.evaluate((directory: string) => {
     const w = window as unknown as {
-      applyDirectory?: (dir: string, opts: { save: boolean; temp: boolean; restoreWorkspace: boolean }) => void
-      setPageMode?: (mode: "panel" | "gateway") => void
+      applyDirectory: (dir: string, opts: { save: boolean; temp: boolean; restoreWorkspace: boolean }) => void
+      setPageMode: (mode: "panel" | "gateway") => void
     }
-    try {
-      w.applyDirectory?.(directory, { save: false, temp: true, restoreWorkspace: false })
-    } catch {}
-    try {
-      w.setPageMode?.("gateway")
-    } catch {}
-    // The setPageMode helper may not be on window — fall back to a
-    // store-side toggle through the body data attribute. The Gateway
-    // CSS keys on `body[data-page-mode="gateway"]`, so flipping that
-    // attribute force-flips the visible surface even if the helper is
-    // unavailable.
-    document.body.setAttribute("data-page-mode", "gateway")
+    w.applyDirectory(directory, { save: false, temp: true, restoreWorkspace: false })
+    w.setPageMode("gateway")
   }, FIXTURE_DIR)
-  await new Promise((r) => setTimeout(r, 600))
+  // One frame for the page-mode createEffect to write body[data-page-mode]
+  // and for Gateway's createResource bindings (gateway/stats, channel,
+  // bindings) to fire their mocked requests.
+  await page.waitForFunction(() => document.body.getAttribute("data-page-mode") === "gateway", { timeout: 5_000 })
+  await new Promise((r) => setTimeout(r, 800))
 }
 
 async function snap(page: Page, state: string, viewport = VIEWPORT_WIDE): Promise<string> {
@@ -423,38 +431,30 @@ async function run(): Promise<void> {
   const summaryPath = path.join(OUT_DIR, "summary.json")
 
   console.log(`[gateway-visual-loop] outDir=${OUT_DIR}`)
-  // Detect an externally-managed vite dev (e.g. a long-running background
-  // shell started by the operator before this loop). Re-using that
-  // instance keeps subsequent rounds cheap (no 30s startup tax) and
-  // avoids fighting Windows for port :5173 ownership. If nothing is on
-  // the port we own the vite lifecycle ourselves.
-  const externalVite = await isPortBound(VITE_PORT)
-  let vite: Subprocess | undefined
-  if (externalVite) {
-    console.log(`[gateway-visual-loop] reusing external vite on :${VITE_PORT}`)
-  } else {
-    console.log(`[gateway-visual-loop] starting vite dev on :${VITE_PORT}`)
-    vite = await startVite()
+  // The loop now REQUIRES an externally-managed vite dev (port :5173).
+  // Spawning vite from inside a Bun child proved unreliable on Windows
+  // (Bun → node → vite tree did not always surface readiness on stdout,
+  // and the 60s timeout fired even when vite eventually came up). Keep
+  // vite alive in a separate long-running shell — the loop just connects.
+  // Fail fast and tell the operator how to fix it if the port is not bound.
+  if (!(await isPortBound(VITE_PORT))) {
+    throw new Error(
+      `gateway-visual-loop: vite dev is not listening on :${VITE_PORT}. ` +
+      `Start it in a separate shell with ` +
+      `\`bun run --cwd packages/overlay dev:vite\` and re-run this script.`,
+    )
   }
+  console.log(`[gateway-visual-loop] connecting to external vite on :${VITE_PORT}`)
   let browser: Browser | undefined
   const cleanup = async () => {
     try { await browser?.close() } catch {}
-    if (vite) {
-      treeKill(vite.pid ?? 0)
-      // Final sweep in case the wrapper bun PID does not match what
-      // taskkill found via the tree — drains anything still bound to
-      // :5173 so the next loop iteration can start vite cleanly. Skip
-      // when an external vite owns the port: it's the operator's
-      // process, not ours.
-      await killPort(VITE_PORT)
-    }
+    // Vite is operator-managed — never kill it from inside the loop.
   }
   process.on("SIGINT", () => { void cleanup().then(() => process.exit(130)) })
   process.on("SIGTERM", () => { void cleanup().then(() => process.exit(143)) })
 
   try {
-    await waitForVite()
-    console.log(`[gateway-visual-loop] vite ready — launching chrome`)
+    console.log(`[gateway-visual-loop] launching chrome`)
     const executablePath = await findBrowserExecutable()
     browser = await puppeteer.launch({
       executablePath,
