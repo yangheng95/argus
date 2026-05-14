@@ -90,7 +90,9 @@ describe("core prompt hygiene", () => {
 
   test("architect prompt documents graph contracts as the only cross-goal handoff shape", async () => {
     const text = await readPrompt("architect")
-    expect(text).toContain("Cross-goal handoffs, when needed, are represented by graph contracts")
+    expect(text).toContain("Multi-goal decomposition should register graph contracts for known handoffs")
+    expect(text).toContain("must not trap Architect in a retry loop")
+    expect(text).toContain("Cross-goal handoffs are represented by graph contracts")
     expect(text).toContain("register_contract({")
     expect(text).toContain("producer_goal_id")
     expect(text).toContain("consumer_goal_ids")
@@ -106,6 +108,19 @@ describe("core prompt hygiene", () => {
     expect(text).toContain('"type": "heuristic"')
     expect(text).toContain('"kind": "shell"')
     expect(text).toContain('"kind": "script_ref"')
+  })
+
+  test("architect prompt requires cautious multi-goal decomposition analysis", async () => {
+    const text = await readPrompt("architect")
+    const normalized = text.replace(/\s+/g, " ")
+
+    expect(normalized).toContain("Before registering goals, analyze the requirement surfaces")
+    expect(normalized).toContain("Register at least two goals")
+    expect(normalized).toContain("A single all-in-one goal is forbidden")
+    expect(normalized).toContain("Keep every goal modest and independently executable")
+    expect(normalized).toContain("Call `submit_architect({ summary, decomposition_analysis })`")
+    expect(normalized).toContain("why no goal is too large")
+    expect(normalized).toContain("At least two goals exist")
   })
 
   test("architect prompt and tool surface do not expose duplicate metric or challenge lanes", async () => {
@@ -248,6 +263,9 @@ describe("core prompt hygiene", () => {
     expect(text).toContain("`start_frontend_preview`")
     expect(text).toContain("board `delivery.previewUrl`")
     expect(text).toContain("required runtime flow cannot be")
+    expect(text).toContain("run_integrity_review")
+    expect(text).toContain("suspicion-triggered semantic integrity review")
+    expect(text.replace(/\s+/g, " ")).toContain("not a routine internal Delivery gate")
     expect(text).not.toContain("create follow-up tasks")
     expect(text).toContain("recommend follow-up")
     expect(text).toContain("Do not create the task yourself")
@@ -313,6 +331,15 @@ describe("core prompt hygiene", () => {
     expect(normalized).toContain('`build({ request, directBuildIntent: "modify_files" })` is still supported')
     expect(normalized).toContain('direct `build({ request, directBuildIntent: "modify_files" })` is allowed')
     expect(normalized).toContain("Task-level inspect-only build is not a workflow path")
+  })
+
+  test("orchestrator prompt sends multi-goal requests through workflow decomposition", async () => {
+    const text = await readPrompt("orchestrator")
+    const normalized = text.replace(/\s+/g, " ")
+    expect(normalized).toContain("explicitly decide whether the request needs multiple goals before the first implementation dispatch")
+    expect(normalized).toContain("implementation, acceptance, and verification goals")
+    expect(normalized).toContain("Do not compress a multi-goal job into a task-level direct build")
+    expect(normalized).toContain("Does the request naturally split into implementation, acceptance hardening, and verification/integration surfaces?")
   })
 
   test("orchestrator prompt caps deliver retries and routes minor rejection fixes through build", async () => {

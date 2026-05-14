@@ -47,6 +47,8 @@ ProgressSnapshot · ExecutorSession ← 进度与 executor 句柄
 
 最小可并行、可独立验收的实现单元。
 
+Architect 分解必须先分析需求表面、实现责任、验证责任、依赖与集成风险，再提交 goal 图。有效工作流至少包含 2 个 goal；单个 all-in-one 大型 goal 不合格，因为它无法提供可靠的独立执行与独立验收边界。
+
 | 字段 | 说明 |
 |---|---|
 | `title` / `objective` | 目标名与叙述 |

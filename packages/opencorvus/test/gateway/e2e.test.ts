@@ -234,7 +234,7 @@ describe("Gateway e2e — task lifecycle through EngineService (PRD §9)", () =>
       fn: async () => {
         spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
 
-        // create — queue:false → status active
+        // create — cwd is idle, so the directory queue claims it immediately.
         const taskID = await EngineService.createTask({
           request: "Build a counter",
           executor: "opencorvus",
@@ -268,14 +268,14 @@ describe("Gateway e2e — task lifecycle through EngineService (PRD §9)", () =>
     })
   })
 
-  test("queue=true keeps the task queued instead of starting (matches 2026-05-13 task-queue-opt-in)", async () => {
+  test("a second same-directory task stays queued until the active task exits", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
 
-        // First task starts immediately (queue=false).
+        // First task starts because the cwd is idle.
         const firstID = await EngineService.createTask({
           request: "first",
           executor: "opencorvus",
@@ -286,13 +286,13 @@ describe("Gateway e2e — task lifecycle through EngineService (PRD §9)", () =>
         const first = await EngineService.getTask(firstID)
         expect(first.status).toBe("active")
 
-        // Second task with queue=true must NOT auto-start because the first
-        // is already active in the same directory — it stays queued.
+        // Second task must NOT auto-start because the first is already active
+        // in the same directory — even queue:false cannot bypass the cwd gate.
         const secondID = await EngineService.createTask({
           request: "second",
           executor: "opencorvus",
           kind: "workflow",
-          queue: true,
+          queue: false,
           metadata: { source: "gateway:test" },
         })
         const second = await EngineService.getTask(secondID)

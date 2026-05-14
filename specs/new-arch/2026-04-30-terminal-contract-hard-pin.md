@@ -45,7 +45,7 @@ Terminal collector tools have two distinct phases:
 The phase boundary is not a retry counter or a hidden state machine. It is derived from the collector:
 
 - requirements: at least one requirement is registered
-- architect: at least one goal is registered
+- architect: at least two goals are registered; the named terminal `submit_architect` call itself must supply decomposition analysis
 - integrity: every dimension verdict is registered
 - build: merge has succeeded for pass; failure can still be reported through `"required"` before merge
 

@@ -44,6 +44,8 @@ One attempt to complete the task end-to-end. Phase advances: `plan â†’ execute â
 
 The smallest unit that can be executed in parallel and verified independently.
 
+Architect decomposition must analyze requirement surfaces, implementation ownership, verification ownership, dependencies, and integration risk before submitting the goal graph. A valid workflow has at least 2 goals; a single all-in-one large goal is invalid because it does not create reliable execution or verification boundaries.
+
 | Field | Meaning |
 |---|---|
 | `title` / `objective` | Name and narrative |

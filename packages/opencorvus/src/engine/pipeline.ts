@@ -74,7 +74,6 @@ export function persistQueuedTask(input: {
   taskID: string
   sessionID: string
   now: number
-  queue: boolean
   executor: RunRow["executor"]
   title: string
   request: string
@@ -106,7 +105,7 @@ export function persistQueuedTask(input: {
         queue_order: initialQueueOrder(input.priority, input.now),
         budget: budgetRow(input.budget),
         metadata: input.metadata,
-        time_started: input.queue ? undefined : input.now,
+        time_started: null,
         time_created: input.now,
         time_updated: input.now,
       })
@@ -129,8 +128,8 @@ export function persistQueuedTask(input: {
       .values({
         id: Identifier.ascending("progress"),
         task_id: input.taskID,
-        status: input.queue ? "created" : "active",
-        summary: input.queue ? "Task queued" : "Task started",
+        status: "created",
+        summary: "Task queued",
         payload: { sessionID: input.sessionID },
         time_created: input.now,
         time_updated: input.now,
@@ -139,9 +138,9 @@ export function persistQueuedTask(input: {
     Database.effect(() =>
       EngineProtocol.emit(Event.TaskCreated, {
         taskID: input.taskID,
-        status: input.queue ? "queued" : "active",
-        summary: input.queue ? "Task queued" : "Task started",
-      }, { source: input.queue ? "pipeline.queued" : "pipeline.started" }),
+        status: "queued",
+        summary: "Task queued",
+      }, { source: "pipeline.queued" }),
     )
   })
 }

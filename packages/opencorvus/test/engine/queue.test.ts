@@ -60,7 +60,28 @@ describe("engine queue", () => {
     })
   })
 
-  test("createTask starts immediately by default even when the cwd already has an active task", async () => {
+  test("createTask starts through the directory queue when the cwd is idle", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
+
+        const taskID = await EngineService.createTask({
+          request: "start when the cwd is free",
+          title: "idle cwd task",
+          executor: "opencorvus",
+        })
+
+        expect(taskStatus(taskID)).toBe("active")
+        expect(runTaskLoop).toHaveBeenCalledTimes(1)
+        expect(runTaskLoop.mock.calls[0]?.[0]).toMatchObject({ taskID })
+      },
+    })
+  })
+
+  test("createTask does not bypass an active task in the same cwd", async () => {
     await using tmp = await tmpdir({ git: true })
 
     await Instance.provide({
@@ -85,17 +106,13 @@ describe("engine queue", () => {
         )
 
         const taskID = await EngineService.createTask({
-          request: "start without waiting for the active cwd sibling",
-          title: "direct start task",
+          request: "wait for the active cwd sibling",
+          title: "queued behind active task",
           executor: "opencorvus",
         })
-        for (let i = 0; i < 50 && runTaskLoop.mock.calls.length === 0; i++) {
-          await new Promise((resolve) => setTimeout(resolve, 10))
-        }
 
-        expect(taskStatus(taskID)).toBe("active")
-        expect(runTaskLoop).toHaveBeenCalledTimes(1)
-        expect(runTaskLoop.mock.calls[0]?.[0]).toMatchObject({ taskID })
+        expect(taskStatus(taskID)).toBe("queued")
+        expect(runTaskLoop).not.toHaveBeenCalled()
       },
     })
   })

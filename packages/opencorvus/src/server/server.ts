@@ -159,6 +159,7 @@ export namespace Server {
             || c.req.path === "/shutdown"
             || c.req.path === "/restart"
             || c.req.path === "/favicon.ico"
+            || c.req.path === "/global/tasks"
           ) {
             return next()
           }

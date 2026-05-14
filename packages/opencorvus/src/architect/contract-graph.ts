@@ -155,7 +155,7 @@ export function validateArchitectContractGraph(input: {
   for (const goal of input.goals) {
     for (const dep of goal.depends_on) {
       if (!registeredDependencyPairs.has(edgeKey(dep, goal.id))) {
-        findings.push(concern(
+        findings.push(blocker(
           "dependency_edge_missing_reason",
           `Goal dependency ${dep} -> ${goal.id} has no registered dependency contract reason.`,
           { goal_ids: [dep, goal.id] },
@@ -177,7 +177,7 @@ export function validateArchitectContractGraph(input: {
   for (const contract of input.graph.contracts) {
     if (contractIDs.has(contract.id)) {
       findings.push(
-        concern(
+        blocker(
           "duplicate_contract_id",
           `Contract id "${contract.id}" is registered more than once.`,
           { contract_ids: [contract.id] },
@@ -193,7 +193,7 @@ export function validateArchitectContractGraph(input: {
     )
     if (unknownGoals.length > 0) {
       findings.push(
-        concern(
+        blocker(
           "contract_unknown_goal",
           `Contract ${contract.id} references unknown goal ids: ${unique(unknownGoals).join(", ")}.`,
           { contract_ids: [contract.id], goal_ids: unique(unknownGoals) },
@@ -205,7 +205,7 @@ export function validateArchitectContractGraph(input: {
     for (const consumerID of contract.consumer_goal_ids) {
       if (!hasDependencyPath(input.goals, consumerID, contract.producer_goal_id)) {
         findings.push(
-          concern(
+          blocker(
             "contract_producer_not_ancestor",
             `Contract ${contract.id} producer ${contract.producer_goal_id} is not in dependency ancestry for consumer ${consumerID}.`,
             { contract_ids: [contract.id], goal_ids: [contract.producer_goal_id, consumerID] },
@@ -243,7 +243,7 @@ export function validateArchitectContractGraph(input: {
     const unknownGoals = edgeGoals.filter((goalID) => !goalIDs.has(goalID))
     if (unknownGoals.length > 0) {
       findings.push(
-        concern(
+        blocker(
           "dependency_contract_unknown_goal",
           `Dependency contract ${edge.from_goal_id} -> ${edge.to_goal_id} references unknown goal ids: ${unknownGoals.join(", ")}.`,
           { goal_ids: unknownGoals },
@@ -254,7 +254,7 @@ export function validateArchitectContractGraph(input: {
     }
     if (!dependencyPairs.has(edgeKey(edge.from_goal_id, edge.to_goal_id))) {
       findings.push(
-        concern(
+        blocker(
           "dependency_contract_missing_depends_on",
           `Dependency contract ${edge.from_goal_id} -> ${edge.to_goal_id} has no matching depends_on edge.`,
           { goal_ids: edgeGoals },
@@ -264,7 +264,7 @@ export function validateArchitectContractGraph(input: {
     }
     if (!hasDependencyPath(input.goals, edge.to_goal_id, edge.from_goal_id)) {
       findings.push(
-        concern(
+        blocker(
           "dependency_contract_producer_not_ancestor",
           `Dependency contract producer ${edge.from_goal_id} is not in dependency ancestry for ${edge.to_goal_id}.`,
           { goal_ids: edgeGoals },
@@ -275,7 +275,7 @@ export function validateArchitectContractGraph(input: {
 
     if (edge.reason === "contract" && edge.contract_ids.length === 0) {
       findings.push(
-        concern(
+        blocker(
           "contract_edge_empty_contract_ids",
           `Dependency contract ${edge.from_goal_id} -> ${edge.to_goal_id} has reason=contract but no contract_ids.`,
           { goal_ids: edgeGoals },
@@ -285,7 +285,7 @@ export function validateArchitectContractGraph(input: {
     }
     if (edge.reason !== "contract" && !edge.summary?.trim()) {
       findings.push(
-        concern(
+        blocker(
           "non_contract_edge_missing_summary",
           `Dependency contract ${edge.from_goal_id} -> ${edge.to_goal_id} has reason=${edge.reason} and must explain the ordering contract in summary.`,
           { goal_ids: edgeGoals },
@@ -308,7 +308,7 @@ export function validateArchitectContractGraph(input: {
       const contract = contractsByID.get(contractID)
       if (!contract) {
         findings.push(
-          concern(
+          blocker(
             "dependency_contract_unknown_contract",
             `Dependency contract ${edge.from_goal_id} -> ${edge.to_goal_id} references unknown contract ${contractID}.`,
             { goal_ids: edgeGoals, contract_ids: [contractID] },
@@ -319,7 +319,7 @@ export function validateArchitectContractGraph(input: {
       }
       if (contract.producer_goal_id !== edge.from_goal_id || !contract.consumer_goal_ids.includes(edge.to_goal_id)) {
         findings.push(
-          concern(
+          blocker(
             "dependency_contract_edge_mismatch",
             `Contract ${contractID} belongs to ${contract.producer_goal_id} -> [${contract.consumer_goal_ids.join(", ")}], not ${edge.from_goal_id} -> ${edge.to_goal_id}.`,
             { goal_ids: edgeGoals, contract_ids: [contractID] },

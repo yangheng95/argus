@@ -17,7 +17,7 @@
 - **Planner agent 已删除**：`src/planner/` 整目录、`src/engine/goal-pool.ts`、`planGoal()` 全部移除。Orchestrator 没有 `planner` tool；pipeline build 路径里 "per-goal 实现步骤" 现由 build agent 直接基于 architect contract + decision-log 推进。`src/tool/planner.ts` 是 session 级 working-memory 工具（task tree / scratchpad），**不是** planner agent 的替代。
 - **`intent-analysis` 已接线**：orchestrator 通过 `analyze_intent` tool 调 `IntentAnalysisAgent.analyze`，落 `intent-analysis` SessionKind。13 号文档此前的"not wired yet"已过期。
 - **`integrity` 与 `prosecute` 是新加的 orchestrator tools**：分别对应 `IntegrityAgent`（多维 review：requirement_fidelity / technical_feasibility / hallucination / solution_quality）与 `ProsecutorAgent`（对抗性复核）。
-- `build -> general/explore`、`deliver -> general/explore`、`general -> explore` 是当前真实存在的 direct 子代理路径；`general -> general` 自递归被权限拒绝。
+- `build -> general/explore`、`deliver -> general/explore`、`deliver -> integrity`、`general -> explore` 是当前真实存在的 direct 子代理路径；`deliver -> integrity` 只通过 delivery 的 `run_integrity_review` 工具在交付证据触发语义疑问时发生，不是固定 pre-delivery gate；`general -> general` 自递归被权限拒绝。
 - `orchestrator -> EngineService.createTask` 只通过 `propose_task` 间接发生：先向用户展示"完善上一个 request 的新任务"候选，用户确认后才创建新 task；这不是 `panel` control-plane action，也不是 generic `task` subagent dispatch。
 - [11-agent-oop-protocol.md](11-agent-oop-protocol.md) 的白名单表存在一个闭环不完整点：`explore.receiveWhitelist` 包含 `general`，但 `general.sendWhitelist` 没有 `explore`。按该文自己的"双向都要声明"规则，`general -> explore` 在 spec 文本上并不成立。
 
@@ -121,6 +121,7 @@ flowchart LR
 
 - `T` = direct Orchestrator tool 调用
 - `RT` = tool result 直接回到调用方上下文
+- `IR` = delivery `run_integrity_review` 工具调用 integrity reviewer 并返回 markdown
 - `Q` = direct `task` subagent 调用
 - `RQ` = `task` subagent 结果回到调用方上下文
 - `Q/RQ` = 同一个节点既能发起也能接收该类 direct 子任务
@@ -132,7 +133,7 @@ flowchart LR
 | X | RT | - | - | - | - | - | - | - | - | - | - |
 | A | RT | - | - | - | - | - | - | - | - | - | - |
 | B | RT | - | - | - | - | - | - | - | Q | Q | - |
-| D | RT | - | - | - | - | - | - | - | Q | Q | - |
+| D | RT | - | - | - | - | - | IR | - | Q | Q | - |
 | IT | RT | - | - | - | - | - | - | - | - | - | - |
 | PR | RT | - | - | - | - | - | - | - | - | - | - |
 | G | - | - | - | - | RQ | RQ | - | - | - | Q | - |
@@ -143,6 +144,7 @@ flowchart LR
 
 - `O -> I` (intent-analysis) 现在已是 direct tool（`analyze_intent`）；`I -> O` 由 tool result 回写到 orchestrator session。
 - `O -> IT` (`integrity`) 与 `O -> PR` (`prosecute`) 是新加的 review 路径。
+- `D -> IT` 是 delivery tool surface 的 `run_integrity_review`，用于 suspicion-triggered semantic integrity review；它记录 `integrity_attempt` 并把 markdown 返回 delivery，不替代 runtime / visual / specialist verification。
 - `G -> G` 被显式拒绝，避免 `general` 自递归；`general -> explore` 仍是当前实现真实存在的二级探索路径。
 - Planner 节点已从代码与本矩阵双向删除；旧的 "build 里通过 plan_node.brief 收到 planner 输出" 这条间接路径不再存在。
 
@@ -205,6 +207,7 @@ flowchart LR
   IT -->|result| O
   O -->|prosecute| PR
   PR -->|result| O
+  D -->|run_integrity_review| IT
 
   X -.->|design_specs| B
   X -.->|design_specs/system_artifacts| D

@@ -15,7 +15,7 @@ A coding agent writes code. A harness makes sure the code is correct.
 Without a harness, you get a single attempt with no structured verification. With OpenCorvus, every task goes through a multi-agent pipeline where each stage has a clear contract:
 
 - **Spec agent** — researches the codebase and turns a vague request into a precise, testable specification
-- **Goal agent** — decomposes the spec into independent, verifiable implementation goals
+- **Architect agent** — analyzes boundaries and decomposes the spec into at least two modest, independently verifiable implementation goals
 - **Planner agent** — expands goals into an execution plan with subtasks, risks, and assumptions
 - **Executor** — dispatches to OpenCorvus, Codex, or Claude Code against the real repo
 - **Evaluator agent** — runs `build`, `test`, `lint`, `startup`, `artifact`, `visual`, `puppeteer`, LLM review checks and the default-on `spec check` acceptance gate; classifies failures and generates replan guidance
@@ -33,7 +33,7 @@ task → spec → goals → plan → execute → evaluate ─┬→ deliver → 
 
 1. Accept a task from API, Slack, or a local session.
 2. **Spec**: research, clarify, and write the specification with acceptance criteria.
-3. **Goals**: decompose the spec into independent implementation goals.
+3. **Goals**: analyze boundaries, then decompose the spec into at least two independent implementation goals.
 4. **Plan**: expand goals into an execution plan with subtasks and risks.
 5. **Execute**: dispatch a coding agent against the repo.
 6. **Evaluate**: run checks with `spec check` enabled by default.

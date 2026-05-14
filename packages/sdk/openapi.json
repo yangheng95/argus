@@ -1184,7 +1184,7 @@
                             "executor": {
                               "type": "string",
                               "enum": [
-                                "mirrorcode",
+                                "opencorvus",
                                 "codex",
                                 "claude-code"
                               ]
@@ -1327,7 +1327,7 @@
                   "executor": {
                     "type": "string",
                     "enum": [
-                      "mirrorcode",
+                      "opencorvus",
                       "codex",
                       "claude-code"
                     ]
@@ -1584,7 +1584,7 @@
                       "id": {
                         "type": "string",
                         "enum": [
-                          "mirrorcode",
+                          "opencorvus",
                           "codex",
                           "claude-code"
                         ]
@@ -7198,7 +7198,7 @@
                             "executor": {
                               "type": "string",
                               "enum": [
-                                "mirrorcode",
+                                "opencorvus",
                                 "codex",
                                 "claude-code"
                               ]
@@ -7329,7 +7329,7 @@
                   "executor": {
                     "type": "string",
                     "enum": [
-                      "mirrorcode",
+                      "opencorvus",
                       "codex",
                       "claude-code"
                     ]
@@ -7456,7 +7456,7 @@
                             "executor": {
                               "type": "string",
                               "enum": [
-                                "mirrorcode",
+                                "opencorvus",
                                 "codex",
                                 "claude-code"
                               ]
@@ -7587,7 +7587,7 @@
                   "executor": {
                     "type": "string",
                     "enum": [
-                      "mirrorcode",
+                      "opencorvus",
                       "codex",
                       "claude-code"
                     ]
@@ -8790,7 +8790,7 @@
                             "executor": {
                               "type": "string",
                               "enum": [
-                                "mirrorcode",
+                                "opencorvus",
                                 "codex",
                                 "claude-code"
                               ]
@@ -8900,7 +8900,7 @@
                   "executor": {
                     "type": "string",
                     "enum": [
-                      "mirrorcode",
+                      "opencorvus",
                       "codex",
                       "claude-code"
                     ]
@@ -9082,7 +9082,7 @@
                       "executor": {
                         "type": "string",
                         "enum": [
-                          "mirrorcode",
+                          "opencorvus",
                           "codex",
                           "claude-code"
                         ]
@@ -10223,7 +10223,7 @@
                       "executor": {
                         "type": "string",
                         "enum": [
-                          "mirrorcode",
+                          "opencorvus",
                           "codex",
                           "claude-code"
                         ]
@@ -10365,6 +10365,162 @@
         ]
       }
     },
+    "/gateway/task/decompose": {
+      "post": {
+        "operationId": "gateway.task.decompose",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "summary": "Propose task decomposition",
+        "description": "Run a one-shot LLM call that turns a free-text big requirement into a structured proposal of small task candidates. The endpoint is read-only — no engine_task or session row is written. The Gateway page presents the proposal to the operator, who chooses which candidates to actually create via POST /task.",
+        "responses": {
+          "200": {
+            "description": "Decomposition proposal",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "proposal_id": {
+                      "type": "string"
+                    },
+                    "requirement": {
+                      "type": "string"
+                    },
+                    "summary": {
+                      "type": "string"
+                    },
+                    "tasks": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "description": "Stable within-proposal identifier in snake_case (e.g. \"add_login_route\"). Used by other candidates' `dependencies` lists.",
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "title": {
+                            "description": "Imperative, concise task title (≤80 chars).",
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "description": {
+                            "description": "Detailed actionable description of the task — what to do and the rough scope.",
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "acceptance": {
+                            "description": "Concrete acceptance criteria. Each item is a single observable condition.",
+                            "default": [],
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "minLength": 1
+                            }
+                          },
+                          "priority": {
+                            "description": "Priority bucket. Default to \"normal\"; raise to \"high\" or \"critical\" only when other candidates depend on this one or it's a blocker.",
+                            "type": "string",
+                            "enum": [
+                              "critical",
+                              "high",
+                              "normal",
+                              "low"
+                            ]
+                          },
+                          "executor": {
+                            "description": "Optional executor hint. Leave empty unless the task strongly favours a specific executor.",
+                            "type": "string",
+                            "enum": [
+                              "opencorvus",
+                              "codex",
+                              "claude-code"
+                            ]
+                          },
+                          "recommended_queue": {
+                            "description": "true = recommended to enter the directory queue (defer to current active task), false = recommended to start immediately.",
+                            "type": "boolean"
+                          },
+                          "dependencies": {
+                            "description": "Within-proposal dependency IDs (must match other candidates' `id` fields). Empty for independent tasks.",
+                            "default": [],
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "risks": {
+                            "description": "Short risk notes (one per item). Empty when no notable risk.",
+                            "default": [],
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "title",
+                          "description",
+                          "priority",
+                          "recommended_queue"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "proposal_id",
+                    "requirement",
+                    "summary",
+                    "tasks"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "requirement": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 32000
+                  },
+                  "executor": {
+                    "type": "string",
+                    "enum": [
+                      "opencorvus",
+                      "codex",
+                      "claude-code"
+                    ]
+                  }
+                },
+                "required": [
+                  "requirement"
+                ]
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.gateway.task.decompose({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/gateway/channel/{platform}/message": {
       "post": {
         "operationId": "gateway.channel.message",
@@ -10431,7 +10587,7 @@
                             "executor": {
                               "type": "string",
                               "enum": [
-                                "mirrorcode",
+                                "opencorvus",
                                 "codex",
                                 "claude-code"
                               ]
@@ -10555,7 +10711,7 @@
                   "executor": {
                     "type": "string",
                     "enum": [
-                      "mirrorcode",
+                      "opencorvus",
                       "codex",
                       "claude-code"
                     ]
@@ -10905,7 +11061,7 @@
                   "executor": {
                     "type": "string",
                     "enum": [
-                      "mirrorcode",
+                      "opencorvus",
                       "codex",
                       "claude-code"
                     ]
@@ -12726,7 +12882,7 @@
                               "executor": {
                                 "type": "string",
                                 "enum": [
-                                  "mirrorcode",
+                                  "opencorvus",
                                   "codex",
                                   "claude-code"
                                 ]
@@ -13384,7 +13540,7 @@
                               "executor": {
                                 "type": "string",
                                 "enum": [
-                                  "mirrorcode",
+                                  "opencorvus",
                                   "codex",
                                   "claude-code"
                                 ]
@@ -14045,6 +14201,89 @@
         ]
       }
     },
+    "/task/{taskID}/bindings": {
+      "get": {
+        "operationId": "task.bindings",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "taskID",
+            "schema": {
+              "type": "string",
+              "pattern": "^tsk.*"
+            },
+            "required": true
+          }
+        ],
+        "summary": "List channel bindings for a task",
+        "description": "Return every (platform, channel, thread) binding that points at this task. Used by the Gateway page to surface inbound channel provenance for a selected task.",
+        "responses": {
+          "200": {
+            "description": "Channel bindings for the task",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "task_id": {
+                        "type": "string"
+                      },
+                      "platform": {
+                        "type": "string"
+                      },
+                      "channel": {
+                        "type": "string"
+                      },
+                      "thread": {
+                        "type": "string"
+                      },
+                      "payload": {
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "additionalProperties": {}
+                      },
+                      "time_created": {
+                        "type": "number"
+                      },
+                      "time_updated": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "task_id",
+                      "platform",
+                      "channel",
+                      "thread"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.task.bindings({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/task/{taskID}/progress": {
       "get": {
         "operationId": "task.progress",
@@ -14530,7 +14769,7 @@
                         "executor": {
                           "type": "string",
                           "enum": [
-                            "mirrorcode",
+                            "opencorvus",
                             "codex",
                             "claude-code"
                           ]
@@ -15518,7 +15757,7 @@
                             "executor": {
                               "type": "string",
                               "enum": [
-                                "mirrorcode",
+                                "opencorvus",
                                 "codex",
                                 "claude-code"
                               ]
@@ -17761,7 +18000,7 @@
                         "executor": {
                           "type": "string",
                           "enum": [
-                            "mirrorcode",
+                            "opencorvus",
                             "codex",
                             "claude-code"
                           ]
@@ -19333,7 +19572,7 @@
                       "executor": {
                         "type": "string",
                         "enum": [
-                          "mirrorcode",
+                          "opencorvus",
                           "codex",
                           "claude-code"
                         ]
@@ -20375,7 +20614,7 @@
                     "executor": {
                       "type": "string",
                       "enum": [
-                        "mirrorcode",
+                        "opencorvus",
                         "codex",
                         "claude-code"
                       ]
@@ -20551,7 +20790,7 @@
                     "executor": {
                       "type": "string",
                       "enum": [
-                        "mirrorcode",
+                        "opencorvus",
                         "codex",
                         "claude-code"
                       ]
@@ -20787,7 +21026,7 @@
                     "executor": {
                       "type": "string",
                       "enum": [
-                        "mirrorcode",
+                        "opencorvus",
                         "codex",
                         "claude-code"
                       ]
@@ -20944,7 +21183,7 @@
                     "provider": {
                       "type": "string",
                       "enum": [
-                        "mirrorcode",
+                        "opencorvus",
                         "codex",
                         "claude-code"
                       ]

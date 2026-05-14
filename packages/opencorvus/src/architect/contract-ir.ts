@@ -5,9 +5,13 @@ const unknownOpenReason = /\b(tbd|unknown|unsure|unclear|n\/a|todo)\b/i
 export const ValueDomainSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("open"),
-    reason: z.string().min(10).refine((value) => !unknownOpenReason.test(value), {
-      message: "open valueDomain requires a concrete reason; unknown/TBD is not a valid domain",
-    }),
+    reason: z.string()
+      .refine((value) => value.trim().length > 0, {
+        message: "open valueDomain requires a concrete reason",
+      })
+      .refine((value) => !unknownOpenReason.test(value), {
+        message: "open valueDomain requires a concrete reason; unknown/TBD is not a valid domain",
+      }),
   }),
   z.object({
     kind: z.literal("literal_union"),

@@ -76,6 +76,7 @@ All endpoints are protected by `OPENCORVUS_SERVER_PASSWORD`. When set, clients m
 | GET | `/task/events` | Subscribe to global task-list change notifications | `task.list.events` |
 | DELETE | `/task/{taskID}` | Delete task | `task.delete` |
 | GET | `/task/{taskID}` | Get task | `task.get` |
+| GET | `/task/{taskID}/bindings` | List channel bindings for a task | `task.bindings` |
 | GET | `/task/{taskID}/board` | Get task board | `task.board` |
 | GET | `/task/{taskID}/brief` | Get task brief | `task.brief` |
 | PATCH | `/task/{taskID}/budget` | Update task budget | `task.updateBudget` |
@@ -166,6 +167,7 @@ All endpoints are protected by `OPENCORVUS_SERVER_PASSWORD`. When set, clients m
 | POST | `/gateway/control/action` | Run gateway control action | `gateway.control.action` |
 | POST | `/gateway/control/message` | Handle gateway control message | `gateway.control.message` |
 | GET | `/gateway/stats` | Get gateway stats | `gateway.stats` |
+| POST | `/gateway/task/decompose` | Propose task decomposition | `gateway.task.decompose` |
 
 ### Attachment
 

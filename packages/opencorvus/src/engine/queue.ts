@@ -16,11 +16,14 @@ import { ProjectTable } from "@/project/project.sql"
 import { SessionTable } from "@/session/session.sql"
 import { Database, and, desc, eq, sql } from "@/storage/db"
 import { Log } from "@/util/log"
-import { EngineTaskTable } from "./engine.sql"
+import { EngineProgressSnapshotTable, EngineTaskTable } from "./engine.sql"
 import { findTask, type TaskRow } from "./store"
 import { openTaskForOperatorMessage } from "./task-message-open"
 import { isTaskActive, isTaskQueued } from "./task-status"
 import type { OrchestratorEvent } from "@/orchestrator/agent"
+import { Identifier } from "@/id/id"
+import { Event } from "./model"
+import { EngineProtocol } from "./protocol"
 
 const log = Log.create({ service: "engine.queue" })
 
@@ -218,8 +221,9 @@ export function claimNextForCwd(cwd: string, now = Date.now()): TaskRow | undefi
   // Phase-6-f-2: no status column. Queued = time_started IS NULL (never
   // picked up). Active = time_started IS NOT NULL AND time_completed IS NULL.
   // Terminal = time_completed IS NOT NULL.
-  const result = Database.use((db) =>
-    db
+  let result: TaskRow | undefined
+  Database.transaction((db) => {
+    result = db
       .update(EngineTaskTable)
       .set({
         time_started: now,
@@ -250,8 +254,27 @@ export function claimNextForCwd(cwd: string, now = Date.now()): TaskRow | undefi
         )`,
       )
       .returning()
-      .get(),
-  )
+      .get()
+    if (!result) return
+    db.insert(EngineProgressSnapshotTable)
+      .values({
+        id: Identifier.ascending("progress"),
+        task_id: result.id,
+        status: "active",
+        summary: "Task started",
+        payload: { status: "active" },
+        time_created: now,
+        time_updated: now,
+      })
+      .run()
+    Database.effect(() =>
+      EngineProtocol.emit(
+        Event.TaskUpdated,
+        { taskID: result!.id, status: "active", summary: "Task started" },
+        { source: "engine.queue" },
+      ),
+    )
+  })
   return result ?? undefined
 }
 

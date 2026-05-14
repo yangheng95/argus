@@ -2724,7 +2724,7 @@ export function createOrchestratorTools(input: {
                   version: 2,
                   status: "ready",
                   summary: result.summary,
-                  content: `${task.title}\n\n${result.summary}`,
+                  content: `${task.title}\n\n${result.summary}\n\n${result.decompositionAnalysis}`,
                   scope: requirements.map((r) => r.description).join("; "),
                   time_created: now,
                   time_updated: now,
@@ -2817,6 +2817,9 @@ export function createOrchestratorTools(input: {
                 "",
                 result.summary,
                 "",
+                "## Decomposition Analysis",
+                result.decompositionAnalysis,
+                "",
                 "## Requirements",
                 ...(reqLines.length > 0 ? reqLines : ["_(none — Requirements produced an empty REQ-N list)_"]),
                 "",
@@ -2886,7 +2889,7 @@ export function createOrchestratorTools(input: {
             headline:
               `Architect decomposition complete: ${persisted.length} goals, ${result.contractGraph.contracts.length} contracts.` +
               (deletedIDs.length > 0 ? ` Removed ${deletedIDs.length} prior goal(s).` : "") +
-              ` NEXT: dispatch eligible per-goal \`build({ goalID })\`; each goal build returns its post-build architecture_review markdown inline — read it and decide modify_goal / build / architect / deliver / fail_task explicitly (no auto-routing).`,
+              ` NEXT: dispatch eligible per-goal \`build({ goalID })\`; read each build report and worktree facts, then decide modify_goal / build / architect / deliver / fail_task explicitly (no auto-routing).`,
             summary: result.summary,
             fields: [
               ["goals", persisted.map((g) => `${g.id} ${g.title}`)],
@@ -6082,12 +6085,11 @@ export function createOrchestratorTools(input: {
           const actualChangedFiles = buildOutcome.result.actualChangedFiles ?? []
           // Architecture review is no longer triggered automatically per
           // build. Per-goal automatic review fired N times for N goals,
-          // each look at one goal's worktree in isolation, and crowded
-          // the orchestrator's prompt with redundant entries. The
-          // orchestrator now calls `integrity` explicitly at wave
-          // boundaries (see orchestrator-core.txt) so the review sees
-          // the merged primary state once per wave instead of N times.
-          // Spec architecture-rework-loosening-plan-2026-05-06.md (B-wave).
+          // each looking at one goal's worktree in isolation, and crowded
+          // the orchestrator's prompt with redundant entries. Build reports
+          // are recorded as decision-log evidence; standalone integrity is
+          // reserved for task-end or suspicion-triggered system-integrity
+          // review, not routine wave-level review.
           if (attachedGoalID && !goalRunInvalidated) {
             const buildReportForReview = {
               status: result.status,
@@ -6173,8 +6175,8 @@ export function createOrchestratorTools(input: {
             `${factBlock}\n\n` +
             `### Next step\n` +
             `Read the build report and the worktree facts above. Cross-check the LLM's files_changed/commit_ref against the worktree facts; if they disagree, factor that into your next call. ` +
-            `When the current eligible wave (every dispatchable goal whose depends_on is satisfied) reaches terminal state, call \`integrity\` ONCE to review the merged primary state — that is wave-level architecture review (not per-goal). ` +
-            `Then choose: deliver / build({goalID}) / modify_goal / architect / fail_task / restart_from_stage based on what the build report, worktree facts, integrity history (read_context), and review verdict together support.`
+            `When the current eligible wave reaches terminal state, choose deliver / build({goalID}) / modify_goal / architect / fail_task / restart_from_stage from the build evidence and task context. ` +
+            `Call standalone \`integrity\` only when the integrated evidence raises a real question about requirement mining or system integrity; it is not a routine wave-level step.`
           )
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err)

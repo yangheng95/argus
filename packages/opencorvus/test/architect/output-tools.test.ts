@@ -111,10 +111,93 @@ test("architect registers graph contracts and finalizes without goal imports or 
     {} as any,
   )
 
-  const out = await tools.submit_architect.execute!({ summary: "Graph-based two-goal architecture." } as any, {} as any)
+  const out = await tools.submit_architect.execute!(
+    {
+      summary: "Graph-based two-goal architecture.",
+      decomposition_analysis:
+        "The model goal owns the shared contract and the UI goal consumes it for rendering, so neither goal is oversized. The UI goal owns final integration because it depends on the model contract and verifies the rendered surface.",
+    } as any,
+    {} as any,
+  )
   expect(out).toContain("PASS")
   expect(kit.getCollector().goals[0]).not.toHaveProperty("exports")
   expect(kit.getCollector().goals[0]).not.toHaveProperty("imports")
+})
+
+test("submit_architect blocks single large goal decomposition", async () => {
+  const kit = createArchitectOutputTools({ existingGoals: [], workDir: process.cwd() })
+  await kit.tools.register_goal.execute!(
+    {
+      id: "goal_everything",
+      title: "Everything",
+      objective: "Implement and verify the entire requested change as one broad unit of work.",
+      acceptance_specs: [acceptance("goal_everything")],
+      owned_paths: ["src/index.ts", "test/index.test.ts"],
+      depends_on: [],
+      priority: "blocking",
+      kind: "feature",
+      requirement_ids: ["REQ-1"],
+    } as any,
+    {} as any,
+  )
+
+  const out = await kit.tools.submit_architect.execute!(
+    {
+      summary: "Single goal decomposition.",
+      decomposition_analysis:
+        "This analysis intentionally explains the unsafe single boundary: implementation and verification are still combined, so the graph should be split before build dispatch can start.",
+    } as any,
+    {} as any,
+  )
+
+  expect(out).toContain("BLOCKERS")
+  expect(out).toContain("insufficient_goal_decomposition")
+  expect(kit.getCollector().finalized).toBe(false)
+})
+
+test("submit_architect reports zero graph contracts as a concern without blocking goal finalization", async () => {
+  const kit = createArchitectOutputTools({ existingGoals: [], workDir: process.cwd() })
+  await kit.tools.register_goal.execute!(
+    {
+      id: "goal_model",
+      title: "Model",
+      objective: "Define the reusable model surface for the downstream implementation.",
+      acceptance_specs: [acceptance("goal_model")],
+      owned_paths: ["src/model.ts"],
+      depends_on: [],
+      priority: "blocking",
+      kind: "feature",
+      requirement_ids: ["REQ-1"],
+    } as any,
+    {} as any,
+  )
+  await kit.tools.register_goal.execute!(
+    {
+      id: "goal_render",
+      title: "Render",
+      objective: "Render the user-facing surface and verify it against the shared model contract.",
+      acceptance_specs: [acceptance("goal_render")],
+      owned_paths: ["src/render.tsx"],
+      depends_on: [],
+      priority: "blocking",
+      kind: "feature",
+      requirement_ids: ["REQ-1"],
+    } as any,
+    {} as any,
+  )
+
+  const out = await kit.tools.submit_architect.execute!(
+    {
+      summary: "Two goals without graph contracts.",
+      decomposition_analysis:
+        "The model and render goals are both modest, but the missing graph contract should block because downstream work has no durable handoff surface.",
+    } as any,
+    {} as any,
+  )
+
+  expect(out).toContain("PASS")
+  expect(out).toContain("missing_contract_graph_contract")
+  expect(kit.getCollector().finalized).toBe(true)
 })
 
 test("register_goal returns actionable guidance for malformed scorer type without mutating collector", async () => {
@@ -157,9 +240,9 @@ test("register_goal returns actionable guidance for malformed scorer type withou
   expect(kit.getCollector().goals).toHaveLength(0)
 })
 
-test("dependency reason with unknown contract id is a concern", async () => {
+test("register_dependency_contract rejects unknown contract id without mutating collector", async () => {
   const kit = await registerTwoGoalGraph()
-  await kit.tools.register_dependency_contract.execute!(
+  const out = await kit.tools.register_dependency_contract.execute!(
     {
       from_goal_id: "goal_model",
       to_goal_id: "goal_ui",
@@ -169,17 +252,14 @@ test("dependency reason with unknown contract id is a concern", async () => {
     {} as any,
   )
 
-  const findings = architectValidationFindings(kit.getCollector(), { workDir: process.cwd() })
-  expect(
-    findings.some(
-      (finding) => finding.severity === "concern" && finding.code === "dependency_contract_unknown_contract",
-    ),
-  ).toBe(true)
+  expect(out).toContain("unknown contract")
+  expect(out).toContain("collector unchanged")
+  expect(kit.getCollector().contract_graph.dependency_contracts).toHaveLength(0)
 })
 
-test("contract dependency reason without contract id is a concern", async () => {
+test("register_dependency_contract rejects contract reason without contract id", async () => {
   const kit = await registerTwoGoalGraph()
-  await kit.tools.register_dependency_contract.execute!(
+  const out = await kit.tools.register_dependency_contract.execute!(
     {
       from_goal_id: "goal_model",
       to_goal_id: "goal_ui",
@@ -189,13 +269,12 @@ test("contract dependency reason without contract id is a concern", async () => 
     {} as any,
   )
 
-  const findings = architectValidationFindings(kit.getCollector(), { workDir: process.cwd() })
-  expect(
-    findings.some((finding) => finding.severity === "concern" && finding.code === "contract_edge_empty_contract_ids"),
-  ).toBe(true)
+  expect(out).toContain("reason=contract but no contract_ids")
+  expect(out).toContain("collector unchanged")
+  expect(kit.getCollector().contract_graph.dependency_contracts).toHaveLength(0)
 })
 
-test("dependency contract id mismatch is a concern", async () => {
+test("register_dependency_contract rejects contract id that does not belong to the edge", async () => {
   const kit = await registerTwoGoalGraph()
   await kit.tools.register_contract.execute!(
     {
@@ -203,7 +282,7 @@ test("dependency contract id mismatch is a concern", async () => {
       kind: "type",
       name: "Order",
       producer_goal_id: "goal_model",
-      consumer_goal_ids: ["goal_model"],
+      consumer_goal_ids: [],
       summary: "Shared order status model for UI rendering.",
       ir: {
         kind: "type",
@@ -219,7 +298,7 @@ test("dependency contract id mismatch is a concern", async () => {
     } as any,
     {} as any,
   )
-  await kit.tools.register_dependency_contract.execute!(
+  const out = await kit.tools.register_dependency_contract.execute!(
     {
       from_goal_id: "goal_model",
       to_goal_id: "goal_ui",
@@ -229,18 +308,37 @@ test("dependency contract id mismatch is a concern", async () => {
     {} as any,
   )
 
-  const findings = architectValidationFindings(kit.getCollector(), { workDir: process.cwd() })
-  expect(
-    findings.some((finding) => finding.severity === "concern" && finding.code === "dependency_contract_edge_mismatch"),
-  ).toBe(true)
+  expect(out).toContain('contract "contract_order" belongs to goal_model -> []')
+  expect(out).toContain("collector unchanged")
+  expect(kit.getCollector().contract_graph.dependency_contracts).toHaveLength(0)
 })
 
-test("depends_on edge without graph reason is a concern", async () => {
+test("register_dependency_contract rejects reversed dependency direction with explicit guidance", async () => {
+  const kit = await registerTwoGoalGraph()
+  const out = await kit.tools.register_dependency_contract.execute!(
+    {
+      from_goal_id: "goal_ui",
+      to_goal_id: "goal_model",
+      reason: "integration_order",
+      contract_ids: [],
+      summary: "Incorrectly reversed edge.",
+    } as any,
+    {} as any,
+  )
+
+  expect(out).toContain("This edge is reversed")
+  expect(out).toContain("producer/prerequisite -> consumer/dependent")
+  expect(out).toContain('from_goal_id: "goal_model"')
+  expect(out).toContain('to_goal_id: "goal_ui"')
+  expect(kit.getCollector().contract_graph.dependency_contracts).toHaveLength(0)
+})
+
+test("depends_on edge without graph reason is a blocker", async () => {
   const kit = await registerTwoGoalGraph()
 
   const findings = architectValidationFindings(kit.getCollector(), { workDir: process.cwd() })
   expect(
-    findings.some((finding) => finding.severity === "concern" && finding.code === "dependency_edge_missing_reason"),
+    findings.some((finding) => finding.severity === "blocker" && finding.code === "dependency_edge_missing_reason"),
   ).toBe(true)
 })
 
@@ -265,9 +363,9 @@ test("dependency cycle is a blocker", async () => {
   expect(findings.some((finding) => finding.severity === "blocker" && finding.code === "dependency_cycle")).toBe(true)
 })
 
-test("bootstrap scaffold dependency without ordering summary is a concern", async () => {
+test("register_dependency_contract rejects bootstrap scaffold dependency without ordering summary", async () => {
   const kit = await registerTwoGoalGraph()
-  await kit.tools.register_dependency_contract.execute!(
+  const out = await kit.tools.register_dependency_contract.execute!(
     {
       from_goal_id: "goal_model",
       to_goal_id: "goal_ui",
@@ -277,22 +375,24 @@ test("bootstrap scaffold dependency without ordering summary is a concern", asyn
     {} as any,
   )
 
-  const findings = architectValidationFindings(kit.getCollector(), { workDir: process.cwd() })
-  expect(
-    findings.some((finding) => finding.severity === "concern" && finding.code === "non_contract_edge_missing_summary"),
-  ).toBe(true)
+  expect(out).toContain("must include summary")
+  expect(out).toContain("collector unchanged")
+  expect(kit.getCollector().contract_graph.dependency_contracts).toHaveLength(0)
 })
 
-test("submit_architect finalizes executable graph while reporting concerns", async () => {
+test("submit_architect blocks executable graph with an unregistered dependency reason", async () => {
   const kit = await registerTwoGoalGraph()
 
   const out = await kit.tools.submit_architect.execute!(
-    { summary: "Executable graph with non-blocking contract concerns." } as any,
+    {
+      summary: "Executable graph with non-blocking contract concerns.",
+      decomposition_analysis:
+        "The model goal owns the reusable data contract, while the UI goal owns rendering and integration verification. The dependency is necessary because UI behavior consumes the model surface, and the split keeps each goal modest.",
+    } as any,
     {} as any,
   )
 
-  expect(out).toContain("PASS")
-  expect(out).toContain("Concerns:")
+  expect(out).toContain("BLOCKERS")
   expect(out).toContain("dependency_edge_missing_reason")
-  expect(kit.getCollector().finalized).toBe(true)
+  expect(kit.getCollector().finalized).toBe(false)
 })

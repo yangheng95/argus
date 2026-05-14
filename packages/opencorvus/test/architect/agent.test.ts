@@ -35,7 +35,9 @@ test("ArchitectAgent registers submit_architect as the terminal collector contra
         expect(input.terminalTool?.shouldExposeOnlyTerminalTool(input.toolKit.getCollector())).toBe(false)
 
         const collector = input.toolKit.getCollector()
-        collector.summary = "Single goal decomposition"
+        collector.summary = "Two goal decomposition"
+        collector.decomposition_analysis =
+          "The main implementation goal owns product code, while the integration test goal owns verification and consumes the implementation contract. This keeps each goal modest and makes the dependency explicit."
         collector.goals.push({
           id: "goal_main",
           title: "Main implementation",

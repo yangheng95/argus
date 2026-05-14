@@ -87,6 +87,8 @@ export interface ArchitectResult {
   validationFindings: ArchitectValidationFinding[]
   /** One-line summary of what was decomposed and coordinated. */
   summary: string
+  /** Architect-authored analysis explaining why the goal split is safe and not oversized. */
+  decompositionAnalysis: string
 }
 
 // ---------------------------------------------------------------------------

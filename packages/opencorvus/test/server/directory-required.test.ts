@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, mock, test } from "bun:test"
+import { EngineTaskTable } from "../../src/engine/engine.sql"
+import { ProjectTable } from "../../src/project/project.sql"
 import { Server } from "../../src/server/server"
 import { clearServerShutdownHandler } from "../../src/server/shutdown"
+import { Database } from "../../src/storage/db"
 import { Log } from "../../src/util/log"
 import { resetDatabase } from "../fixture/db"
 
@@ -55,6 +58,27 @@ describe("project-scope middleware: directory required", () => {
     expect(response.status).toBe(200)
     const body = (await response.json()) as { healthy: boolean }
     expect(body.healthy).toBe(true)
+  })
+
+  test("cross-project GET /global/tasks works without ?directory=", async () => {
+    const now = Date.now()
+    Database.use((db) => {
+      db.insert(ProjectTable).values([
+        { id: "project-alpha", name: "Alpha", worktree: "C:/work/alpha", sandboxes: [], time_created: now, time_updated: now },
+        { id: "project-beta", name: "Beta", worktree: "C:/work/beta", sandboxes: [], time_created: now, time_updated: now },
+      ]).run()
+      db.insert(EngineTaskTable).values([
+        { id: "task-alpha", project_id: "project-alpha", title: "Alpha task", request: "alpha", time_created: now - 2, time_updated: now - 2 },
+        { id: "task-beta", project_id: "project-beta", title: "Beta task", request: "beta", time_created: now - 1, time_updated: now - 1 },
+      ]).run()
+    })
+
+    const app = Server.App()
+    const response = await app.request("/global/tasks", { method: "GET" })
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as { tasks: Array<{ task: { directory?: string } }> }
+    expect(Array.isArray(body.tasks)).toBe(true)
+    expect(body.tasks.map((item) => item.task.directory).sort()).toEqual(["C:/work/alpha", "C:/work/beta"])
   })
 
   test("cross-project DELETE /auth/:providerID works without ?directory=", async () => {

@@ -711,7 +711,6 @@ export namespace EngineService {
         requestID,
         source: input.source,
         priority: input.priority,
-        queue: input.queue,
         kind: input.kind,
         budget: input.budget,
         metadata,
@@ -732,7 +731,7 @@ export namespace EngineService {
       source: input.source ?? "api",
       userID: slackUser(metadata),
     })
-    void dispatchTaskLoop({ taskID })
+    await dispatchTaskLoop({ taskID })
     return taskID
   }
 
