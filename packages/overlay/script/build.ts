@@ -15,7 +15,7 @@ const release = path.join(target, "release")
 const serverFile = process.platform === "win32" ? "opencorvus.exe" : "opencorvus"
 const overlayFile = process.platform === "win32" ? "opencorvus-overlay.exe" : "opencorvus-overlay"
 const serverDistName = [
-  "opencorvus",
+  "opencorvus-overlay-server",
   process.platform === "win32" ? "windows" : process.platform,
   process.arch,
 ].join("-")
@@ -109,7 +109,7 @@ async function cleanBuildResidue() {
   )
 }
 
-await $`bun run build`.cwd(opencorvus)
+await $`bun run build --overlay-server`.cwd(opencorvus)
 
 if (!(await exists(distServer))) {
   throw new Error(`Bundled opencorvus binary not found at ${distServer}`)

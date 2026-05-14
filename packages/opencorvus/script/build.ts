@@ -15,6 +15,12 @@ process.chdir(dir)
 import { Script } from "@opencorvus-ai/script"
 import pkg from "../package.json"
 import { selectBuildTargets, type BuildTarget } from "./build-targets"
+import {
+  artifactEntrypoints,
+  artifactPackageBaseName,
+  artifactSourcemap,
+  parseBuildFlavor,
+} from "./build-artifact"
 
 const modelsUrl = process.env.OPENCORVUS_MODELS_URL || "https://models.dev"
 // Fetch and generate models.dev snapshot
@@ -31,6 +37,7 @@ const singleFlag = process.argv.includes("--single")
 const allFlag = process.argv.includes("--all")
 const baselineFlag = process.argv.includes("--baseline")
 const binaryOnly = process.argv.includes("--binary-only")
+const buildFlavor = parseBuildFlavor(process.argv)
 // --musl-only selects abi-tagged targets (musl) for the current arch
 // instead of the default glibc set. Used by the Linux docker step in
 // .github/workflows/build.yml, which runs inside `oven/bun:alpine` and
@@ -173,8 +180,17 @@ if (!noCleanFlag) {
 
 const binaries: Record<string, string> = {}
 for (const item of targets) {
+  const compileTarget = [
+    "bun",
+    item.os === "win32" ? "windows" : item.os,
+    item.arch,
+    item.avx2 === false ? "baseline" : undefined,
+    item.abi === undefined ? undefined : item.abi,
+  ]
+    .filter(Boolean)
+    .join("-")
   const name = [
-    pkg.name,
+    artifactPackageBaseName(pkg.name, buildFlavor),
     // changing to win32 flags npm for some reason
     item.os === "win32" ? "windows" : item.os,
     item.arch,
@@ -204,7 +220,7 @@ for (const item of targets) {
     autoloadDotenv: false,
     autoloadTsconfig: true,
     autoloadPackageJson: true,
-    target: name.replace(pkg.name, "bun"),
+    target: compileTarget,
     outfile: `dist/${name}/opencorvus`,
     execArgv: [`--user-agent=opencorvus/${Script.version}`, "--use-system-ca", "--"],
     windows: {},
@@ -215,9 +231,9 @@ for (const item of targets) {
     conditions: ["browser"],
     tsconfig: "./tsconfig.json",
     plugins: [solidPlugin],
-    sourcemap: binaryOnly ? "none" : "external",
+    sourcemap: artifactSourcemap(),
     compile: compile as any,
-    entrypoints: ["./src/index.ts", parserWorker, workerPath],
+    entrypoints: artifactEntrypoints(buildFlavor, parserWorker, workerPath),
     define: {
       OPENCORVUS_VERSION: `'${Script.version}'`,
       OTUI_TREE_SITTER_WORKER_PATH: bunfsRoot + workerRelativePath,
