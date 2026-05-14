@@ -1,3 +1,23 @@
+.file-changes-view {
+  min-width: 0;
+}
+
+.file-changes-view__heading {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: calc(8px * var(--ui-scale));
+  margin-bottom: calc(6px * var(--ui-scale));
+  color: var(--text-strong);
+  font-size: var(--ui-font-control);
+  font-weight: var(--ui-font-weight-strong);
+}
+
+.file-changes-view__heading .oc-icon {
+  flex: none;
+  color: var(--accent);
+}
+
 .changes-summary {
   display: flex;
   align-items: center;
@@ -224,6 +244,14 @@
 
 .change-row:hover {
   background: color-mix(in srgb, var(--surface-hover) 60%, transparent);
+}
+
+.change-row[data-clickable="false"] {
+  cursor: default;
+}
+
+.change-row[data-clickable="false"]:hover {
+  background: transparent;
 }
 
 .change-row:focus-visible {
