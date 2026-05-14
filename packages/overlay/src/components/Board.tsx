@@ -298,26 +298,18 @@ export function DeliveryPanel(props: DeliveryPanelProps) {
       when={props.delivery}
       fallback={
         <section class="delivery-panel" data-verdict="empty">
-          <header class="delivery-panel-header">
-            <span class="verdict-pill" data-verdict="empty">
-              {verdictPillLabel("empty")}
-            </span>
-          </header>
           <p class="empty-hint empty-hint--card">{t("delivery.empty.hint")}</p>
         </section>
       }
     >
       <section class="delivery-panel" data-verdict={tone()}>
-        <header class="delivery-panel-header">
-          <span class="verdict-pill" data-verdict={tone()}>
-            {verdictPillLabel(tone())}
-          </span>
-          <Show when={iteration() > 0}>
+        <Show when={iteration() > 0}>
+          <div class="delivery-panel-meta">
             <span class="delivery-iteration">
               {t("delivery.iteration", { n: String(iteration()) })}
             </span>
-          </Show>
-        </header>
+          </div>
+        </Show>
 
         <Show when={summaryText()}>
           <div
