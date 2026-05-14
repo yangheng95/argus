@@ -1,0 +1,251 @@
+import { expect, test } from "bun:test"
+import { launchBrowser } from "./launch"
+import { ensureOverlayDist, overlayStaticResponse } from "./overlay-dist"
+
+await ensureOverlayDist()
+
+const TASK_COUNT = 300
+const PERF_LIMITS = {
+  panelRowsMs: 2500,
+  selectLastMs: 1200,
+  gatewayRowsMs: 1500,
+  gatewaySearchMs: 600,
+}
+
+function send(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "content-type": "application/json; charset=utf-8" },
+  })
+}
+
+function route(url: URL): string {
+  return url.pathname.replace(/\/+$/, "") || "/"
+}
+
+function taskItem(index: number): any {
+  const now = 1_776_000_000_000
+  const created = now + index
+  const id = `task-perf-${String(index).padStart(3, "0")}`
+  return {
+    updated_at: created + 10,
+    pending_interactions: 0,
+    overview: {
+      headline: `Performance task ${index}`,
+      summary: "Synthetic task used to measure 100+ task list rendering.",
+    },
+    task: {
+      id,
+      requestID: `req-perf-${String(index).padStart(3, "0")}`,
+      title: `Performance task ${index}`,
+      directory: "D:/perf/workspace",
+      status: "queued",
+      queue: { order: index, revision: "rev-perf" },
+      sessionID: `session-perf-${index}`,
+      time: {
+        created,
+        updated: created + 10,
+      },
+    },
+  }
+}
+
+function boardForTask(item: any): any {
+  return {
+    task: item.task,
+    overview: item.overview,
+    goalWorkflows: [],
+    interactions: [],
+    lastSequence: 1,
+    snapshotVersion: `snapshot-${item.task.id}`,
+  }
+}
+
+test(
+  `overlay task surfaces stay responsive with ${TASK_COUNT} queued tasks`,
+  async () => {
+    const tasks = Array.from({ length: TASK_COUNT }, (_, index) => taskItem(index))
+    const tasksByID = new Map(tasks.map((item) => [item.task.id, item]))
+    const server = Bun.serve({
+      idleTimeout: 255,
+      port: 0,
+      async fetch(req) {
+        const url = new URL(req.url)
+        const path = route(url)
+        if (path === "/favicon.ico" || path === "/ui/favicon.ico") return new Response(null, { status: 204 })
+        if (path === "/ui" || path === "/ui/") return Response.redirect(`${url.origin}/ui/index.html`, 302)
+        const staticResponse = await overlayStaticResponse(path)
+        if (staticResponse) return staticResponse
+        if (path === "/global/health") return send({ version: "perf-test" })
+        if (path === "/global/tasks" || path === "/tasks") return send({ tasks })
+        if (path === "/executor") return send([])
+        if (path === "/terminal/profiles" || path === "/coding/cli/profiles") return send({ profiles: [] })
+        if (path === "/preview/frontend") {
+          return send({ url: null, source: null, port: null, checkedPorts: [], reason: "not_detected" })
+        }
+        if (path === "/path") return send({ directory: "D:/perf/workspace", exists: true, git: true })
+        if (path === "/vcs") return send({ branch: "main", dirty: false })
+        if (path === "/provider") return send({ all: [], connected: [], default: {} })
+        if (path === "/provider/auth") return send({})
+        if (path === "/config/providers") return send({ providers: [], default: {} })
+        if (path === "/config") {
+          return send({
+            server: {},
+            provider: {},
+            channel: {},
+            mcp: {},
+            model: "",
+            directory: "D:/perf/workspace",
+          })
+        }
+        if (path === "/config/prompt") return send({})
+        if (path === "/channel") return send([])
+        if (path === "/channel/runtime") return send({ status: "disabled", channels: [] })
+        if (path === "/gateway/stats") return send({ active: 0, queued: TASK_COUNT, completed: 0, failed: 0 })
+        if (path === "/skill/installed" || path === "/skill") return send([])
+        if (path === "/skill/directories") return send([])
+        if (path === "/skill/market") return send({ items: [] })
+        if (path === "/mcp") return send({})
+        if (path === "/agent") return send([])
+        const boardMatch = /^\/task\/([^/]+)\/board$/.exec(path)
+        if (boardMatch) {
+          const item = tasksByID.get(decodeURIComponent(boardMatch[1]))
+          return item ? send(boardForTask(item)) : send({ error: "not found" }, 404)
+        }
+        if (/^\/task\/[^/]+\/conversation$/.test(path)) {
+          const id = decodeURIComponent(path.split("/")[2] || "")
+          const item = tasksByID.get(id)
+          return send({
+            board: item ? boardForTask(item) : boardForTask(tasks[0]),
+            transcript: [],
+            timeline: [],
+            events: [],
+            view: { sessions: [] },
+            eventReplay: { cursor: 0, latestSequence: 0, complete: true, limit: 100 },
+            lastSequence: 0,
+          })
+        }
+        if (/^\/task\/[^/]+\/bindings$/.test(path)) return send([])
+        if (/^\/task\/[^/]+\/events$/.test(path)) {
+          return new Response(new ReadableStream(), {
+            headers: { "content-type": "text/event-stream", "cache-control": "no-cache" },
+          })
+        }
+        return send({ error: `unhandled ${path}` }, 404)
+      },
+    })
+
+    const browser = await launchBrowser()
+    const page = await browser.newPage()
+    const consoleErrors: string[] = []
+    const failedRequests: string[] = []
+    const badResponses: string[] = []
+    page.on("console", (msg) => {
+      if (msg.type() === "error") consoleErrors.push(msg.text())
+    })
+    page.on("pageerror", (error) => {
+      consoleErrors.push(error.message)
+    })
+    page.on("requestfailed", (request) => {
+      if (/\/task\/[^/]+\/events(?:\?.*)?$/.test(request.url())) return
+      if (
+        /\/task\/[^/]+\/conversation(?:\?.*)?$/.test(request.url()) &&
+        request.failure()?.errorText === "net::ERR_ABORTED"
+      ) {
+        return
+      }
+      failedRequests.push(request.url())
+    })
+    page.on("response", (response) => {
+      if (response.status() < 400) return
+      badResponses.push(`${response.status()} ${response.url()}`)
+    })
+
+    try {
+      const app = `http://127.0.0.1:${server.port}`
+      await page.evaluateOnNewDocument((origin) => {
+        localStorage.setItem("oc_server_url", origin)
+        localStorage.setItem("oc_auto_server", "true")
+        localStorage.setItem("oc_directory", "D:/perf/workspace")
+        localStorage.setItem("oc_theme", "light")
+      }, app)
+      await page.goto(`${app}/ui/index.html`, { waitUntil: "load" })
+      await page.waitForFunction(() => document.querySelector("#connBadge")?.getAttribute("data-status") === "online")
+
+      const panelRowsMs = await page.evaluate(async (count) => {
+        const start = performance.now()
+        while (document.querySelectorAll(".task-row-main[data-task-id]").length < count) {
+          if (performance.now() - start > 10_000) {
+            const rows = document.querySelectorAll(".task-row-main[data-task-id]").length
+            const text = document.body.textContent?.replace(/\s+/g, " ").trim().slice(0, 500)
+            throw new Error(`task rows did not render; rows=${rows}; body=${text}`)
+          }
+          await new Promise((resolve) => setTimeout(resolve, 16))
+        }
+        return performance.now() - start
+      }, TASK_COUNT)
+
+      const selectLastMs = await page.evaluate(async () => {
+        const rows = Array.from(document.querySelectorAll<HTMLButtonElement>(".task-row-main[data-task-id]"))
+        const last = rows.at(-1)
+        if (!last) throw new Error("missing last task row")
+        const start = performance.now()
+        last.click()
+        while (last.getAttribute("aria-current") !== "page") {
+          if (performance.now() - start > 10_000) throw new Error("last task was not selected")
+          await new Promise((resolve) => setTimeout(resolve, 16))
+        }
+        return performance.now() - start
+      })
+
+      const gatewayRowsMs = await page.evaluate(async (count) => {
+        const gateway = document.querySelector<HTMLButtonElement>("#btnGateway")
+        if (!gateway) throw new Error("missing Gateway button")
+        const start = performance.now()
+        gateway.click()
+        while (document.body.getAttribute("data-page-mode") !== "gateway") {
+          if (performance.now() - start > 10_000) throw new Error("Gateway page did not open")
+          await new Promise((resolve) => setTimeout(resolve, 16))
+        }
+        while (document.querySelectorAll(".gateway-ledger-row").length < count) {
+          if (performance.now() - start > 10_000) throw new Error("Gateway rows did not render")
+          await new Promise((resolve) => setTimeout(resolve, 16))
+        }
+        return performance.now() - start
+      }, TASK_COUNT)
+
+      const gatewaySearchMs = await page.evaluate(async () => {
+        const input = document.querySelector<HTMLInputElement>('[data-ui="gateway-search"]')
+        if (!input) throw new Error("missing Gateway search input")
+        const start = performance.now()
+        input.value = "task 149"
+        input.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: "task 149" }))
+        while (document.querySelectorAll(".gateway-ledger-row").length !== 1) {
+          if (performance.now() - start > 10_000) throw new Error("Gateway search did not filter")
+          await new Promise((resolve) => setTimeout(resolve, 16))
+        }
+        return performance.now() - start
+      })
+
+      const metrics = await page.metrics()
+      console.log(
+        `[perf] ${TASK_COUNT} tasks: panelRows=${panelRowsMs.toFixed(1)}ms ` +
+          `selectLast=${selectLastMs.toFixed(1)}ms gatewayRows=${gatewayRowsMs.toFixed(1)}ms ` +
+          `gatewaySearch=${gatewaySearchMs.toFixed(1)}ms heap=${Math.round(metrics.JSHeapUsedSize / 1024 / 1024)}MB`,
+      )
+
+      expect(panelRowsMs).toBeLessThan(PERF_LIMITS.panelRowsMs)
+      expect(selectLastMs).toBeLessThan(PERF_LIMITS.selectLastMs)
+      expect(gatewayRowsMs).toBeLessThan(PERF_LIMITS.gatewayRowsMs)
+      expect(gatewaySearchMs).toBeLessThan(PERF_LIMITS.gatewaySearchMs)
+      expect(consoleErrors).toEqual([])
+      expect(failedRequests).toEqual([])
+      expect(badResponses).toEqual([])
+    } finally {
+      await page.close().catch(() => undefined)
+      await browser.close().catch(() => undefined)
+      server.stop(true)
+    }
+  },
+  120_000,
+)
