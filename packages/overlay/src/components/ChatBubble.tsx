@@ -300,18 +300,9 @@ export function ChatBubble(props: { node: CardNode; depth: number }) {
                 <Avatar role={normalizedRole()} status={props.node.status} class="chat-bubble__head-avatar" />
                 <div class="chat-bubble__identity-copy">
                   <div class="chat-bubble__title-line" data-align={align()}>
-                    <Show
-                      when={props.node.status === "running"}
-                      fallback={
-                        <Show when={badge().tone !== "neutral"}>
-                          <span class={`card__badge card__badge--${badge().tone}`} title={props.node.status || ""}>
-                            {badge().glyph}
-                          </span>
-                        </Show>
-                      }
-                    >
-                      <span class="card__badge card__badge--running" title="running">
-                        <span class="card__spinner" />
+                    <Show when={props.node.status !== "running" && badge().tone !== "neutral"}>
+                      <span class={`card__badge card__badge--${badge().tone}`} title={props.node.status || ""}>
+                        {badge().glyph}
                       </span>
                     </Show>
                     <span class="chat-bubble__title">{roleTitle()}</span>
