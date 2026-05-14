@@ -1130,19 +1130,12 @@ body {
 /* Inline reply box at the END of agent session card body. Renders via
    <AgentSessionReplyBox/> in Card.tsx; spans full width of the card body. */
 .card__agent-reply {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: calc(7px * var(--ui-scale));
   margin-top: calc(8px * var(--ui-scale));
-  padding: calc(8px * var(--ui-scale));
-  border-radius: var(--oc-radius-large);
-  background: color-mix(in srgb, var(--surface-inset) 82%, transparent);
-  border: var(--oc-border-width) solid var(--border);
   cursor: default;
-}
-
-.card__agent-reply-field {
-  position: relative;
 }
 
 .card__agent-reply-input {

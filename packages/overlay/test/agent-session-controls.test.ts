@@ -59,6 +59,10 @@ describe("agent session controls", () => {
 
     expect(component).toContain("rows={2}");
     expect(component).not.toContain("rows={3}");
+    expect(component).not.toContain("card__agent-reply-field");
+    expect(css).not.toContain(".card__agent-reply-field");
+    expect(css).toContain(".card__agent-reply {\n  position: relative;");
+    expect(css).not.toContain("background: color-mix(in srgb, var(--surface-inset) 82%, transparent);");
     expect(css).toContain("resize: none;");
     expect(css).toContain("height: calc(58px * var(--ui-scale));");
     expect(css).toContain("max-height: calc(58px * var(--ui-scale));");
