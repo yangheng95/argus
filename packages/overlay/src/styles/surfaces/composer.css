@@ -436,7 +436,7 @@
 
 /* ── ExecutorSelector dual-chip bar ─────────────────────────
    Bottom-of-composer row that hosts two side-by-side chips:
-   MirrorCode (left) and the external executor (right). Each chip
+   OpenCorvus (left) and the external executor (right). Each chip
    is its own popover anchor; the bar itself spans the composer
    width so the controls align with the textarea above. */
 .executor-dualbar {

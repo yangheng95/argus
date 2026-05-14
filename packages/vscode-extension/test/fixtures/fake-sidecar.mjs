@@ -80,7 +80,7 @@ const server = createServer((req, res) => {
   }
   if (url === "/executor" && req.method === "GET") {
     sendJson(req, res, 200, [
-      { id: "mirrorcode", label: "MirrorCode", selectable: true, discovered: true },
+      { id: "opencorvus", label: "OpenCorvus", selectable: true, discovered: true },
     ])
     return
   }

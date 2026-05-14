@@ -31,7 +31,7 @@ LLM 返回的每个 tool-call 由 `session/loop.ts` 内的 `resolveTools()`（`s
 
 ## 外层 Task Loop 如何触发 SessionLoop
 
-外层 `runTaskLoop`（`orchestrator/loop.ts:117`）通过 Orchestrator LLM 调 `build` tool，build tool 的执行体是 `goal/runner.ts`，runner 在独立 git worktree 内通过 `executor/registry.ts` 选中的 executor（MirrorCode / Codex / Claude Code）启动 build session：
+外层 `runTaskLoop`（`orchestrator/loop.ts:117`）通过 Orchestrator LLM 调 `build` tool，build tool 的执行体是 `goal/runner.ts`，runner 在独立 git worktree 内通过 `executor/registry.ts` 选中的 executor（OpenCorvus / Codex / Claude Code）启动 build session：
 
 ```
 Orchestrator.runTaskLoop                                  orchestrator/loop.ts:117
@@ -41,7 +41,7 @@ Orchestrator.runTaskLoop                                  orchestrator/loop.ts:1
               └─ build SessionLoop                        session/loop.ts
 ```
 
-> **MirrorCode 只是 opencode 这个 executor 的品牌名**（commit `b85ff20d4`），代码实体名仍是 `OpencodeExecutor`（`executor/opencode.ts`）。`opencode` / `mirrorcode` 都可作为 executor id 在 `--executor=` flag 或 `executor.discover` 配置中使用。
+> **OpenCorvus 只是 opencode 这个 executor 的品牌名**（commit `b85ff20d4`），代码实体名仍是 `OpencorvusExecutor`（`executor/opencode.ts`）。`opencode` / `opencorvus` 都可作为 executor id 在 `--executor=` flag 或 `executor.discover` 配置中使用。
 
 ## 关键约束
 

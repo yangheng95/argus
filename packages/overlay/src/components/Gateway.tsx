@@ -1435,7 +1435,7 @@ function GatewaySelectedTask(props: {
 
 function GatewayComposer(props: { onClose: () => void }) {
   const [requirement, setRequirement] = createSignal("")
-  const [executor, setExecutor] = createSignal<"" | "mirrorcode" | "codex" | "claude-code">("")
+  const [executor, setExecutor] = createSignal<"" | "opencorvus" | "codex" | "claude-code">("")
   const [submitting, setSubmitting] = createSignal(false)
   const [error, setError] = createSignal("")
   const [proposal, setProposal] = createSignal<GatewayTaskDecomposition | null>(null)
@@ -1549,7 +1549,7 @@ function GatewayComposer(props: { onClose: () => void }) {
                 data-ui="gateway-composer-executor"
               >
                 <option value="">—</option>
-                <option value="mirrorcode">mirrorcode</option>
+                <option value="opencorvus">opencorvus</option>
                 <option value="codex">codex</option>
                 <option value="claude-code">claude-code</option>
               </select>

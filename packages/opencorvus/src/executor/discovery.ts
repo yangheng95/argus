@@ -207,10 +207,10 @@ async function locate(input: {
 
 export namespace ExecutorDiscovery {
   export async function scan() {
-    const [mirrorcode, codex, claude] = await Promise.all([
+    const [opencorvus, codex, claude] = await Promise.all([
       locate({
-        name: "mirrorcode",
-        env: "OPENCORVUS_EXECUTOR_OPENCODE_BIN",
+        name: "opencorvus",
+        env: "OPENCORVUS_EXECUTOR_OPENCORVUS_BIN",
         names: process.platform === "win32" ? ["opencode.exe", "opencode.cmd", "opencode"] : ["opencode"],
         builtin: true,
       }),
@@ -239,7 +239,7 @@ export namespace ExecutorDiscovery {
     ])
 
     return {
-      mirrorcode,
+      opencorvus,
       codex,
       "claude-code": claude,
     }

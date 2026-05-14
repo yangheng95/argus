@@ -11,7 +11,7 @@ import { sanitizeLocale } from "../utils/i18n";
 // ── Types ──
 
 export type ToolPermAction = "allow" | "ask" | "deny";
-export type ExecutorID = "mirrorcode" | "codex" | "claude-code";
+export type ExecutorID = "opencorvus" | "codex" | "claude-code";
 
 export interface ToolPermissions {
   websearch:          ToolPermAction;
@@ -111,7 +111,7 @@ function sanitizeAutoServer(value: any, serverUrl: string): boolean {
 
 export function sanitizeExecutor(value: any): ExecutorID {
   const text = String(value || "").trim();
-  if (text === "mirrorcode" || text === "codex" || text === "claude-code") return text;
+  if (text === "opencorvus" || text === "codex" || text === "claude-code") return text;
   return DEFAULT_SETTINGS.executor;
 }
 
@@ -134,7 +134,7 @@ export const DEFAULT_SETTINGS: OverlaySettings = {
   autoServer: true,
   password: "",
   username: "opencorvus",
-  executor: "mirrorcode",
+  executor: "opencorvus",
   initGit: true,
   sidebarCollapsed: false,
   rightPanelCollapsed: false,

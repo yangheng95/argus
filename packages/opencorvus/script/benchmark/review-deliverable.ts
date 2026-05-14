@@ -13,7 +13,7 @@ import puppeteer from "puppeteer-core"
 
 const TARGET = process.argv[2] ?? "http://localhost:3000"
 const OUT_DIR = process.argv[3]
-  ?? "C:/Users/hengu/AppData/Local/Temp/mirrorcode-overlay-benchmark-project-w5RoTK"
+  ?? "C:/Users/hengu/AppData/Local/Temp/opencorvus-overlay-benchmark-project-w5RoTK"
 const OUT = path.join(OUT_DIR, "review-rendered.png")
 
 function findChrome(): string {

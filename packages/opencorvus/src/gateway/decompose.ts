@@ -52,7 +52,7 @@ const log = Log.create({ service: "gateway.decompose" })
 const DECOMPOSE_IDLE_MS = 30_000
 
 export const GatewayCandidatePriority = z.enum(["critical", "high", "normal", "low"])
-export const GatewayCandidateExecutor = z.enum(["mirrorcode", "codex", "claude-code"])
+export const GatewayCandidateExecutor = z.enum(["opencorvus", "codex", "claude-code"])
 
 export const GatewayTaskCandidate = z.object({
   id: z.string().min(1).describe(
@@ -117,7 +117,7 @@ const SYSTEM_PROMPT = [
 
 export interface DecomposeInput {
   requirement: string
-  executor?: "mirrorcode" | "codex" | "claude-code"
+  executor?: "opencorvus" | "codex" | "claude-code"
   signal?: AbortSignal
 }
 

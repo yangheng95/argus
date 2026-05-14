@@ -52,7 +52,7 @@ describe("run blocking state", () => {
             payload: {
               plan_version_id: null,
               session_id: session.id,
-              executor: "mirrorcode",
+              executor: "opencorvus",
               status: "running",
               phase: "dispatch",
               blocking_reason: null,
@@ -116,7 +116,7 @@ describe("run blocking state", () => {
             payload: {
               plan_version_id: null,
               session_id: session.id,
-              executor: "mirrorcode",
+              executor: "opencorvus",
               status: "blocked",
               phase: "dispatch",
               blocking_reason: "orchestrator_stream_error",

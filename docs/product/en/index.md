@@ -13,8 +13,8 @@ OpenCorvus wraps one-shot code generation into a **repeatable, evaluator-driven,
 | Capability | Summary |
 |---|---|
 | **Spec-first planning** | A Spec agent turns vague requests into testable specifications with acceptance criteria and evidence chains |
-| **Goal decomposition** | A Goal agent breaks the spec into independent, parallel-executable implementation goals |
-| **Multi-executor dispatch** | Built-in MirrorCode; auto-discovers and dispatches to Codex / Claude Code |
+| **Goal decomposition** | Architect analyzes boundaries, then breaks the spec into at least two modest, independently verifiable implementation goals |
+| **Multi-executor dispatch** | Built-in OpenCorvus; auto-discovers and dispatches to Codex / Claude Code |
 | **Evaluator-driven retry** | build/test/lint/startup/artifact/visual/puppeteer/LLM review plus default-on `spec check` acceptance gate |
 | **Multi-channel reach** | Local TUI, HTTP API, Overlay desktop app, 14 IM channels (Slack/Telegram/Feishu/Discord/…) |
 | **Durable state** | All tasks, plans, runs, interactions, deliveries, and evaluations persist to SQLite; session and project memory reused across sessions |
@@ -35,7 +35,7 @@ OpenCorvus wraps one-shot code generation into a **repeatable, evaluator-driven,
 │  Task Agent → GoalPool → Planner → Executor → Evaluator │
 │  (SQLite persistence + permissions + budget + retries)  │
 ├─ Executor layer ─────────────────────────────────────────┤
-│  MirrorCode kernel / Codex / Claude Code                 │
+│  OpenCorvus kernel / Codex / Claude Code                 │
 └──────────────────────────────────────────────────────────┘
 ```
 

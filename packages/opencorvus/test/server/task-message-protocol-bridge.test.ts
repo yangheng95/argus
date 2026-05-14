@@ -116,7 +116,7 @@ test("assistant on a sub-agent session → channel/resolvedRole = its kind", asy
 })
 
 test("engine self-stamped info.agent has zero effect — kind is the truth source", async () => {
-  // MirrorCode stamps info.agent="build" on executor-session messages, codex
+  // OpenCorvus stamps info.agent="build" on executor-session messages, codex
   // stamps "general", etc. The previous bridge had a registry-override + a
   // resolveRole() string-mapper that translated those names. Now overlayMeta
   // doesn't even look at info.agent — it reads session.kind directly. This

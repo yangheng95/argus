@@ -1,8 +1,8 @@
 // Puppeteer-driven behavioral test for the dual-chip executor bar.
 //
-//   - Two chips (MirrorCode + external) render side-by-side under the
+//   - Two chips (OpenCorvus + external) render side-by-side under the
 //     composer.
-//   - Clicking MirrorCode opens its popover; only connected providers'
+//   - Clicking OpenCorvus opens its popover; only connected providers'
 //     models appear.
 //   - Clicking External opens its popover; all configured providers for
 //     the active executor appear, but provider auth is not presented as
@@ -50,7 +50,7 @@ test("dual executor chip — mirror vs external popovers with availability", asy
       if (path === "/vcs") return send({ branch: "dev", clean: true, dirty: false, staged: 0, modified: 0, untracked: 0, conflicts: 0, ahead: 0, behind: 0 })
       if (path === "/provider") {
         // openai is connected; anthropic is configured but NOT connected.
-        // MirrorCode should hide anthropic, while the external Claude Code
+        // OpenCorvus should hide anthropic, while the external Claude Code
         // tab still lists anthropic models without mislabeling Claude Code
         // itself as disconnected.
         return send({
@@ -90,7 +90,7 @@ test("dual executor chip — mirror vs external popovers with availability", asy
       if (path === "/channel") return send([])
       if (path === "/executor") {
         return send([
-          { id: "mirrorcode", label: "MirrorCode", selectable: true, discovered: true },
+          { id: "opencorvus", label: "OpenCorvus", selectable: true, discovered: true },
           { id: "codex", label: "Codex", selectable: true, discovered: true, model: codexModel },
           { id: "claude-code", label: "Claude Code", selectable: true, discovered: true },
         ])
@@ -166,7 +166,7 @@ test("dual executor chip — mirror vs external popovers with availability", asy
     })
     expect(layout.barWidth).toBeGreaterThan(400)
     expect(layout.externalLeft).toBeGreaterThan(layout.mirrorRight - 1)
-    expect(layout.mirrorText).toContain("MirrorCode")
+    expect(layout.mirrorText).toContain("OpenCorvus")
     expect(layout.mirrorText).toContain("gpt-5.5-pro")
     expect(layout.externalText).toContain("Codex")
     expect(layout.externalText).toContain("gpt-5.5-codex")

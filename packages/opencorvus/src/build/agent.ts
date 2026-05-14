@@ -2,7 +2,7 @@
  * BuildAgent — phase 5-b-2 implementation of the `build` tool's agent body.
  *
  * Replaces the GoalPool + executor adapter path for coding work: instead of
- * delegating to an external coding executor (MirrorCode / codex / claude-code),
+ * delegating to an external coding executor (OpenCorvus / codex / claude-code),
  * build runs an in-process LLM via SessionPrompt with the broad coding
  * toolset (read / write / edit / bash / ...) and the build-core prompt.
  *
@@ -276,7 +276,7 @@ export namespace BuildAgent {
   }
 
   export function composeExternalCodingSystem(input: {
-    executor: Exclude<TaskRow["executor"], "mirrorcode">
+    executor: Exclude<TaskRow["executor"], "opencorvus">
     baseSystem?: string
     skillPrompt?: string
   }) {
@@ -464,7 +464,7 @@ export namespace BuildAgent {
       // The visual contract has to ride on the prompt itself, with the
       // "staged-only" wording so the LLM is told it must `read` the
       // worktree's references/<filename> on disk (not pretend it saw
-      // pixels in the message). Mirrors the mirrorcode path so external
+      // pixels in the message). Mirrors the opencorvus path so external
       // executors stop free-styling away from screenshots they were given.
       const buildExternalPromptText =
         allMultimodal.length > 0
@@ -639,14 +639,14 @@ export namespace BuildAgent {
       let out: { session: { id: string }; structured?: unknown; collector?: BuildCollector } | undefined
       let parsed: ReturnType<typeof BuildResultSchema.safeParse> | undefined
       let diffs: FileDiff[] | undefined
-      // Dispatch fork: executor === "mirrorcode" → in-process LLM via SessionPrompt
+      // Dispatch fork: executor === "opencorvus" → in-process LLM via SessionPrompt
       // (the existing runAgentSession path with merge_back tool). Anything else
       // (claude-code, codex) → external CodingProvider; the provider edits files
       // in the worktree on its own, then BuildAgent runs merge_back itself
       // because the SDK has no way to call our merge_back tool.
-      const executor = input.task.executor ?? "mirrorcode"
+      const executor = input.task.executor ?? "opencorvus"
       try {
-        if (executor === "mirrorcode") {
+        if (executor === "opencorvus") {
           out = await runAgentSession({
             kind: "build",
             core: BUILD_CORE,
@@ -734,7 +734,7 @@ export namespace BuildAgent {
         // cross-checks them and decides if the report is honest. CLAUDE.md
         // rule 13. Spec architecture-rework-loosening-plan-2026-05-06.md (B6).
       } catch (err) {
-        // B8 compliance: when the mirrorcode build session ends without
+        // B8 compliance: when the opencorvus build session ends without
         // calling report_build_result, runAgentSession throws an
         // AgentRunError carrying Message.TerminalToolMissingError as
         // cause. Convert to a typed BuildAgentContractError so the
@@ -778,13 +778,13 @@ export namespace BuildAgent {
         // output fails BuildResultSchema validation, that's a
         // provider-side bug — keep the generic Error throw so the
         // orchestrator's existing infra-error rethrow path surfaces it.
-        // The mirrorcode missing-terminal branch was previously here but
+        // The opencorvus missing-terminal branch was previously here but
         // was unreachable: runAgentSession throws AgentRunError before
         // parsed is computed, so control never reached this block. The
-        // mirrorcode signal now flows through the catch block above.
+        // opencorvus signal now flows through the catch block above.
         // Spec build-missing-terminal-signal-restore-2026-05-07.md §5.1.
         throw new Error(
-          `build agent: ${executor === "mirrorcode" ? "mirrorcode report_build_result" : "external executor structured output"} did not match BuildResultSchema: ${
+          `build agent: ${executor === "opencorvus" ? "opencorvus report_build_result" : "external executor structured output"} did not match BuildResultSchema: ${
             parsed?.error ? formatBuildResultSchemaError(parsed.error) : "(no parsed output)"
           }`,
         )
@@ -876,7 +876,7 @@ export namespace BuildAgent {
   }
 }
 
-function externalBuildSystemContract(executor: Exclude<TaskRow["executor"], "mirrorcode">): string {
+function externalBuildSystemContract(executor: Exclude<TaskRow["executor"], "opencorvus">): string {
   return [
     `You are the OpenCorvus external build executor running through ${executor}.`,
     "",
@@ -1234,11 +1234,11 @@ export function externalEventPartText(event: CodingEventInfo, executor: string):
  * and hydrate paths share the same rendering model.
  *
  * Returns a synthesized `BuildResult` matching `BuildResultSchema` so the
- * post-run path is identical for MirrorCode and external executors (rule 22:
+ * post-run path is identical for OpenCorvus and external executors (rule 22:
  * single contract, multiple implementations).
  */
 async function runWithExternalProvider(args: {
-  executor: Exclude<TaskRow["executor"], "mirrorcode">
+  executor: Exclude<TaskRow["executor"], "opencorvus">
   target: BuildTarget
   taskID: string
   parentSessionID?: string
@@ -1253,7 +1253,7 @@ async function runWithExternalProvider(args: {
   // External-build dispatch boundary: surface terminal to the overlay when
   // the inner function returns (every return below structures failure as a
   // `failed` status rather than throwing) or throws. Mirrors agent/runner.ts
-  // for the MirrorCode executor path; without this the build session card
+  // for the OpenCorvus executor path; without this the build session card
   // stays at idle (no checkmark) once the external provider stops streaming.
   // Idempotent: a later actor close just rewrites the same terminal status.
   let result: Awaited<ReturnType<typeof runWithExternalProviderImpl>>
@@ -1278,7 +1278,7 @@ async function runWithExternalProvider(args: {
 }
 
 async function runWithExternalProviderImpl(args: {
-  executor: Exclude<TaskRow["executor"], "mirrorcode">
+  executor: Exclude<TaskRow["executor"], "opencorvus">
   target: BuildTarget
   taskID: string
   parentSessionID?: string
@@ -1395,7 +1395,7 @@ async function runWithExternalProviderImpl(args: {
   }
 
   // Auto-detect build-stage skills for the same taskSignals the in-process
-  // MirrorCode path uses, and append the skill bundle (stage invariant +
+  // OpenCorvus path uses, and append the skill bundle (stage invariant +
   // matched skill bodies) to the system prompt forwarded to the external
   // coding provider. Reference extraction skills now belong to
   // design_analysis; build-stage skills describe implementation and
@@ -2048,7 +2048,7 @@ function collectBuildReferenceAttachments(task: TaskRow): BuildReferenceAttachme
  * attachments take a different prompt path (read_attachment / inline).
  *
  * `mode`:
- *   - `"inlined"` (mirrorcode in-process build): file parts are inlined in
+ *   - `"inlined"` (opencorvus in-process build): file parts are inlined in
  *     the user message above this text. Tell the LLM it can look at them
  *     directly and fail loudly if it can't.
  *   - `"staged-only"` (external coding providers — codex, claude-code):

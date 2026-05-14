@@ -4,7 +4,7 @@ import { ChannelSurface } from "@/channel/catalog"
 export const ControlLocalAction = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("set_executor"),
-    executor: z.enum(["mirrorcode", "codex", "claude-code"]),
+    executor: z.enum(["opencorvus", "codex", "claude-code"]),
   }),
   z.object({
     type: z.literal("select_task"),
@@ -41,7 +41,7 @@ export const ControlMessageInput = z.object({
   text: z.string(),
   taskID: z.string().optional(),
   sessionID: z.string().optional(),
-  executor: z.enum(["mirrorcode", "codex", "claude-code"]).optional(),
+  executor: z.enum(["opencorvus", "codex", "claude-code"]).optional(),
   channel: z.string().optional(),
   thread: z.string().optional(),
   user_id: z.string().optional(),

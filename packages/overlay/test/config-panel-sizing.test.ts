@@ -154,7 +154,7 @@ describe("config panel sizing", () => {
         if (path === "/config/prompt") return send([])
         if (path === "/agent") return send([])
         if (path === "/channel") return send([])
-        if (path === "/executor") return send([{ id: "mirrorcode", label: "MirrorCode", selectable: true, discovered: true }])
+        if (path === "/executor") return send([{ id: "opencorvus", label: "OpenCorvus", selectable: true, discovered: true }])
         if (path === "/skill/installed" || path === "/skill") return send([])
         if (path === "/mcp") return send({})
         if (path === "/panel/knowledge/memory") return send([])

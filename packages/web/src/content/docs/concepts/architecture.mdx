@@ -36,7 +36,7 @@ User request
 └──────┬───────┘  packages/opencorvus/src/orchestrator/goal-pool.ts
        ↓
 ┌──────────────┐
-│ Executor     │  MirrorCode / Codex / Claude Code
+│ Executor     │  OpenCorvus / Codex / Claude Code
 └──────┬───────┘  packages/opencorvus/src/executor/opencode.ts
        ↓  delivery
 ┌──────────────┐
@@ -84,7 +84,7 @@ while (session alive) {
 }
 ```
 
-Bridge: the MirrorCode executor (`OpencodeExecutor.submit`, `src/executor/opencode.ts:48`) injects the orchestrator's prompt into `TaskQueueService`, which fires the session loop.
+Bridge: the OpenCorvus executor (`OpencorvusExecutor.submit`, `src/executor/opencode.ts:48`) injects the orchestrator's prompt into `TaskQueueService`, which fires the session loop.
 
 See [Agentic Loop](./agent-loop.md).
 

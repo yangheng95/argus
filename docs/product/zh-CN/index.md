@@ -13,8 +13,8 @@ OpenCorvus 把「一次性的代码生成」包装成**可重复、可验收、�
 | 能力 | 说明 |
 |---|---|
 | **Spec-first 规划** | Spec Agent 把模糊需求转写成可测试的规格书（含验收标准、证据链） |
-| **目标分解** | Goal Agent 把规格分解成互相独立、可并行执行的实现目标 |
-| **多执行器调度** | 内置 MirrorCode，可自动发现并调度 Codex / Claude Code |
+| **目标分解** | Architect 先分析边界，再把规格分解成至少 2 个小型、可独立验收的实现目标 |
+| **多执行器调度** | 内置 OpenCorvus，可自动发现并调度 Codex / Claude Code |
 | **评估驱动重试** | build/test/lint/startup/artifact/visual/puppeteer/LLM review + 默认开启的 `spec check` 验收门 |
 | **多通道接入** | 本地 TUI、HTTP API、Overlay 桌面端、14 个 IM channel（Slack/Telegram/Feishu/Discord/…） |
 | **状态持久化** | 任务、计划、运行、交互、交付、评估全部落 SQLite；会话与项目级记忆跨会话复用 |
@@ -35,7 +35,7 @@ OpenCorvus 把「一次性的代码生成」包装成**可重复、可验收、�
 │  Task Agent → GoalPool → Planner → Executor → Evaluator │
 │  （SQLite 持久化 + permission + 预算 + 重试/重规划）     │
 ├─ Executor 层 ────────────────────────────────────────────┤
-│  MirrorCode 内核 / Codex / Claude Code                   │
+│  OpenCorvus 内核 / Codex / Claude Code                   │
 └──────────────────────────────────────────────────────────┘
 ```
 

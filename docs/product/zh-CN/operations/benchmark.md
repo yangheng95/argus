@@ -17,14 +17,14 @@ OPENCORVUS_DISABLE_DEFAULT_PLUGINS=1 \
 CODING_DASHSCOPE_API_KEY=sk-sp-... \
 ALIBABA_CODING_PLAN_API_KEY=sk-sp-... \
 DASHSCOPE_API_URL=https://coding.dashscope.aliyuncs.com/v1 \
-bun run script/benchmark/overlay-web-benchmark.ts --executor=mirrorcode
+bun run script/benchmark/overlay-web-benchmark.ts --executor=opencorvus
 ```
 
 跑自定义 PRD：
 
 ```bash
 bun run script/benchmark/overlay-web-benchmark.ts \
-  --executor=mirrorcode \
+  --executor=opencorvus \
   "--request-file=D:/path/to/prd.txt" \
   "--title=My benchmark"
 ```
@@ -37,7 +37,7 @@ bun run script/benchmark/overlay-web-benchmark.ts \
 
 | flag | 说明 |
 |---|---|
-| `--executor=mirrorcode\|codex\|claude-code` | 执行器；**默认 `mirrorcode`** |
+| `--executor=opencorvus\|codex\|claude-code` | 执行器；**默认 `opencorvus`** |
 | `--request-file=PATH` | 任务描述文件（PRD）；不传则跑内置 case |
 | `--request-attachment=PATH` | 附件（图片 / 文件），不能与 `--request-file` 同时传 |
 | `--reference-images=GLOB` | 视觉对比参考图路径（含空格请加引号） |
@@ -131,7 +131,7 @@ bun install && bun run build && bun run start
   run: |
     cd packages/opencorvus
     bun run script/benchmark/overlay-web-benchmark.ts \
-      --executor=mirrorcode \
+      --executor=opencorvus \
       "--request-file=benchmarks/smoke.txt" \
       "--report=.scratch/benchmark-runs/report.json"
 ```

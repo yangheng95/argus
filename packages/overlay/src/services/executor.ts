@@ -29,7 +29,7 @@ export interface ExecutorDescriptor {
 export function executorLabel(value: string): string {
   if (value === "codex") return "Codex";
   if (value === "claude-code") return "Claude Code";
-  if (value === "mirrorcode") return "MirrorCode";
+  if (value === "opencorvus") return "OpenCorvus";
   return value;
 }
 
@@ -40,13 +40,13 @@ export function executorInfo(value: string): ExecutorDescriptor | undefined {
 
 /**
  * Returns true when the executor can be selected (i.e. it was discovered and
- * is marked as selectable, or falls back to the MirrorCode default
- * executor id ("mirrorcode").
+ * is marked as selectable, or falls back to the OpenCorvus default
+ * executor id ("opencorvus").
  */
 export function executorSelectable(value: string): boolean {
   const item = executorInfo(value);
   if (item) return !!item.selectable;
-  return value === "mirrorcode";
+  return value === "opencorvus";
 }
 
 /**
@@ -91,14 +91,14 @@ export function executorCurrentModel(executorID: string): string {
 }
 
 /** Maps executor ID → provider IDs whose models are relevant for that
- *  executor. Drives the model picker; MirrorCode has no entry because its
+ *  executor. Drives the model picker; OpenCorvus has no entry because its
  *  model is not user-selectable in the overlay (it follows project config). */
 export const EXECUTOR_PROVIDER_MAP: Record<string, string[]> = {
   codex: ["openai-codex", "openai"],
   "claude-code": ["anthropic"],
 };
 
-/** Returns true when the executor has user-selectable models. MirrorCode
+/** Returns true when the executor has user-selectable models. OpenCorvus
  *  returns false (its model follows project config). */
 export function executorHasModelChoice(executorID: string): boolean {
   return executorID in EXECUTOR_PROVIDER_MAP;
@@ -139,7 +139,7 @@ export function executorProcessKindTag(kind: string): string {
 /**
  * Fetches the executor list from the server and updates the app store.
  * If the currently active executor is no longer selectable, falls back to
- * the first selectable executor or the MirrorCode default id ("mirrorcode").
+ * the first selectable executor or the OpenCorvus default id ("opencorvus").
  * NOTE: `renderExecutor()` / `persistOverlaySettings()` calls are
  * omitted here because they belong to 's DOM world. Callers that need
  * to persist settings after loading should do so explicitly.

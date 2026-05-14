@@ -126,7 +126,7 @@ while (session 活跃) {
 }
 ```
 
-连接两层的是 build tool → `goal/runner.ts`：在 worktree 内启动 executor session（MirrorCode / Codex / Claude Code），prompt 注入后驱动内层 SessionLoop。
+连接两层的是 build tool → `goal/runner.ts`：在 worktree 内启动 executor session（OpenCorvus / Codex / Claude Code），prompt 注入后驱动内层 SessionLoop。
 
 详见 [Agentic Loop](./agent-loop.md)。
 

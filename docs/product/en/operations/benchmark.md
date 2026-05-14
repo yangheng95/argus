@@ -31,7 +31,7 @@ bun run script/benchmark/overlay-web-benchmark.ts \
 | `--reference-images=PATH` | visual comparison reference image |
 | `--figma-url=URL` | Figma design URL |
 | `--model` | **not accepted**; use environment/config model selection instead |
-| `--executor=mirrorcode\|codex\|claude-code` | executor: MirrorCode / Codex / Claude Code |
+| `--executor=opencorvus\|codex\|claude-code` | executor: OpenCorvus / Codex / Claude Code |
 | `--title=TITLE` | task title |
 | `--report=PATH` | output JSON report |
 | `--max-runs=N` | maximum runs |

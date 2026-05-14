@@ -45,7 +45,7 @@ describe("panel.send_task_message attachment forwarding", () => {
               title: "bound thread",
               request: "see follow-up",
               priority: "normal",
-              executor: "mirrorcode",
+              executor: "opencorvus",
               time_created: now,
               time_updated: now,
             })
@@ -121,7 +121,7 @@ describe("panel.send_task_message attachment forwarding", () => {
               title: "bound thread",
               request: "see follow-up",
               priority: "normal",
-              executor: "mirrorcode",
+              executor: "opencorvus",
               time_created: now,
               time_updated: now,
             })

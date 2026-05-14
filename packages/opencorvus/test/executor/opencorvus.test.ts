@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
-import { OpencodeExecutor } from "../../src/executor/opencode"
+import { OpencorvusExecutor } from "../../src/executor/opencorvus"
 import { TaskQueueService } from "../../src/scheduler/task-queue-service"
 import { Database, eq } from "../../src/storage/db"
 import { TaskQueueTable } from "../../src/scheduler/task-queue.sql"
@@ -12,7 +12,7 @@ import { Instance } from "../../src/project/instance"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
-describe("executor.opencode", () => {
+describe("executor.opencorvus", () => {
   afterEach(async () => {
     mock.restore()
     await resetDatabase()
@@ -26,7 +26,7 @@ describe("executor.opencode", () => {
       directory: tmp.path,
       fn: async () => {
         const session = await Session.create({ kind: "assistant", title: "executor test" })
-        const result = await OpencodeExecutor.resume({
+        const result = await OpencorvusExecutor.resume({
           sessionID: session.id,
           message: "continue with the latest operator note",
         })
@@ -45,7 +45,7 @@ describe("executor.opencode", () => {
       directory: tmp.path,
       fn: async () => {
         const session = await Session.create({ kind: "assistant", title: "executor events" })
-        const stream = OpencodeExecutor.events({ sessionID: session.id })
+        const stream = OpencorvusExecutor.events({ sessionID: session.id })
         const next = stream.next()
         await Bus.publish(Message.Event.PartDelta, {
           sessionID: session.id,
@@ -71,7 +71,7 @@ describe("executor.opencode", () => {
       fn: async () => {
         const session = await Session.create({ kind: "assistant", title: "executor permissions" })
         const other = await Session.create({ kind: "assistant", title: "other session" })
-        const stream = OpencodeExecutor.events({ sessionID: session.id })
+        const stream = OpencorvusExecutor.events({ sessionID: session.id })
         const next = stream.next()
         await Bus.publish(PermissionNext.Event.Asked, {
           id: "perm_other",
@@ -115,7 +115,7 @@ describe("executor.opencode", () => {
         const root = await Session.create({ kind: "assistant", goalID: "gol_shared", title: "root session" })
         const child = await Session.create({ kind: "assistant", goalID: "gol_shared", parentID: root.id, title: "child session" })
         const other = await Session.create({ kind: "assistant", goalID: "gol_other", title: "other goal" })
-        const stream = OpencodeExecutor.events({ goalID: "gol_shared", sessionID: root.id })
+        const stream = OpencorvusExecutor.events({ goalID: "gol_shared", sessionID: root.id })
         const next = stream.next()
         await Bus.publish(Message.Event.PartDelta, {
           sessionID: other.id,
@@ -189,7 +189,7 @@ describe("executor.opencode", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const result = await OpencodeExecutor.delivery({
+        const result = await OpencorvusExecutor.delivery({
           sessionID: "ses_test",
           since: now - 100,
         })

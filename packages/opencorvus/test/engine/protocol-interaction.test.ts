@@ -163,7 +163,7 @@ describe("protocol interaction resolution", () => {
             payload: {
               plan_version_id: null,
               session_id: session.id,
-              executor: "mirrorcode",
+              executor: "opencorvus",
               status: "blocked",
               phase: "dispatch",
               blocking_reason: "question",

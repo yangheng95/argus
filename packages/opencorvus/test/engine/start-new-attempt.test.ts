@@ -57,7 +57,7 @@ function seedBaseline() {
       payload: {
         plan_version_id: null,
         session_id: null,
-        executor: "mirrorcode",
+        executor: "opencorvus",
         status: "running",
         phase: "execute",
         blocking_reason: null,

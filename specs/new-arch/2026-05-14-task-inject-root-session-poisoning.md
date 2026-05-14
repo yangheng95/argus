@@ -12,7 +12,7 @@ Appending `继续完成G3` to task `tsk_e25f7ccce001axv5eALmdXaswP` left the tas
 
 `EngineService.injectMessage` calls `injectRunningTaskMessage`, which resumes the active run executor with `run.session_id`.
 
-For workflow runs, `run.session_id` is the task root session. Resuming `mirrorcode` against that id starts a build agent turn in the root session, violating the invariant that root sessions only hold user-authored task messages.
+For workflow runs, `run.session_id` is the task root session. Resuming `opencorvus` against that id starts a build agent turn in the root session, violating the invariant that root sessions only hold user-authored task messages.
 
 This also misses the actual goal child session, so the user input neither safely steers G3 nor stays visible to the orchestrator as the single task entry agent.
 

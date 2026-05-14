@@ -69,7 +69,7 @@ await Instance.provide({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         request: 'Create a file src/count.ts that exports a function count(n: number): number that returns n+1. Then create src/count.test.ts using bun:test that tests count(1)===2.',
-        executor: "mirrorcode",
+        executor: "opencorvus",
       }),
     })
     const createData = await createRes.json() as any

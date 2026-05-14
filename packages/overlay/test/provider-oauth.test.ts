@@ -99,7 +99,7 @@ test("selecting an oauth-capable provider starts oauth before provider test", as
     },
     executors: [
       {
-        id: "mirrorcode",
+        id: "opencorvus",
         label: "OpenCorvus",
         detail: "Bundled",
         version: "0.0.1-alpha",

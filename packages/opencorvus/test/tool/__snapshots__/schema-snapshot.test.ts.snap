@@ -962,7 +962,7 @@ Output: Creates directory 'foo'"
           },
           "executor": {
             "enum": [
-              "mirrorcode",
+              "opencorvus",
               "codex",
               "claude-code",
             ],
@@ -1676,7 +1676,7 @@ Output: Creates directory 'foo'"
           },
           "executor": {
             "enum": [
-              "mirrorcode",
+              "opencorvus",
               "codex",
               "claude-code",
             ],

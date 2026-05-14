@@ -35,7 +35,7 @@ const EventResult = z.object({
   payload: z.record(z.string(), z.unknown()).optional(),
 })
 
-export namespace OpencodeExecutor {
+export namespace OpencorvusExecutor {
   export function capabilities() {
     return {
       submit: true,
@@ -179,7 +179,7 @@ export namespace OpencodeExecutor {
       queue = createEventQueue<z.infer<typeof EventResult>>({
         idleMs: cfg.activity.executor_events_idle_ms,
         signal: input.signal,
-        label: `mirrorcode-executor:${input.queueTaskID ?? input.sessionID ?? input.goalID}`,
+        label: `opencorvus-executor:${input.queueTaskID ?? input.sessionID ?? input.goalID}`,
       })
       // Drain anything we caught during the EngineConfig.get await.
       for (const ev of buffered) {

@@ -50,7 +50,7 @@ function seedRunningTaskRun(input?: { taskCompleted?: number }) {
         payload: {
           plan_version_id: null,
           session_id: null,
-          executor: "mirrorcode",
+          executor: "opencorvus",
           status: "running",
           phase: "deliver",
           blocking_reason: null,

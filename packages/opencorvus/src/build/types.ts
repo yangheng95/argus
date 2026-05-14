@@ -146,7 +146,7 @@ export function formatBuildResultSchemaError(error: z.ZodError): string {
 }
 
 /**
- * Typed contract violation thrown by BuildAgent.run when a MirrorCode build
+ * Typed contract violation thrown by BuildAgent.run when a OpenCorvus build
  * session ends without honouring its terminal-tool contract.
  *
  *   - missing_terminal_report — session ended without a `report_build_result`
@@ -155,7 +155,7 @@ export function formatBuildResultSchemaError(error: z.ZodError): string {
  *     generic `terminal build report did not match BuildResultSchema` Error
  *     that hides the underlying agent progress).
  *
- * Scope: MirrorCode executor only. External executors (codex / claude-code)
+ * Scope: OpenCorvus executor only. External executors (codex / claude-code)
  * host-synthesise the BuildResult after the provider finishes — there is
  * no in-session report_build_result tool call to be missing.
  *

@@ -244,10 +244,10 @@ describe("Task create routing — services/task.ts → POST /task threading (sce
             .where(eq(EngineTaskTable.id, accepted.task_id))
             .get(),
         )
-        // Server default ("mirrorcode") and "normal" priority — proves
+        // Server default ("opencorvus") and "normal" priority — proves
         // the overlay's optional executor / priority threading isn't
         // accidentally injecting nulls when the operator omits them.
-        expect(row!.executor).toBe("mirrorcode")
+        expect(row!.executor).toBe("opencorvus")
         expect(row!.priority).toBe("normal")
         await EngineService.deleteTask(accepted.task_id).catch(() => undefined)
       },

@@ -471,7 +471,7 @@ describe("task conversation routes", () => {
             id: executorSessionID,
             task_id: taskID,
             run_id: runID,
-            provider: "mirrorcode",
+            provider: "opencorvus",
             protocol: "session-prompt",
             protocol_version: "v1",
             transport: "inproc",
