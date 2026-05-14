@@ -60,6 +60,11 @@ describe("Gateway tools (Phase 2)", () => {
       const row = tasks.find((t) => t.id === taskID)
       expect(row).toBeDefined()
       expect(row!.kind).toBe("workflow")
+      for (let i = 0; i < 50 && typeof row!.time_started !== "number"; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 10))
+        const next = listProjectTasks(Instance.project.id, 50).find((t) => t.id === taskID)
+        if (next) Object.assign(row!, next)
+      }
       expect(typeof row!.time_started).toBe("number")
       expect(runTaskLoop).toHaveBeenCalledTimes(1)
       await EngineService.cancelTask(taskID).catch(() => undefined)

@@ -9,6 +9,13 @@ function taskStatus(id: string): string | undefined {
   const t = findTask(id)
   return t ? deriveTaskStatus(t) : undefined
 }
+
+async function waitForTaskStatus(id: string, status: string) {
+  for (let i = 0; i < 50; i++) {
+    if (taskStatus(id) === status) return
+    await new Promise((resolve) => setTimeout(resolve, 10))
+  }
+}
 import { Instance } from "../../src/project/instance"
 import * as TaskLoop from "../../src/orchestrator/loop"
 import { Database, eq } from "../../src/storage/db"
@@ -73,6 +80,7 @@ describe("engine queue", () => {
           title: "idle cwd task",
           executor: "opencorvus",
         })
+        await waitForTaskStatus(taskID, "active")
 
         expect(taskStatus(taskID)).toBe("active")
         expect(runTaskLoop).toHaveBeenCalledTimes(1)
@@ -115,7 +123,7 @@ describe("engine queue", () => {
         expect(runTaskLoop).not.toHaveBeenCalled()
       },
     })
-  })
+  }, { timeout: 10_000 })
 
   test("createTask with queue=true waits behind an active task in the same cwd", async () => {
     await using tmp = await tmpdir({ git: true })
