@@ -320,6 +320,51 @@ describe("task conversation routes", () => {
     })
   })
 
+  test("POST /task/:taskID/session/:sessionID/reply rejects the root session", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const taskID = Identifier.ascending("task")
+        const now = Date.now()
+        const root = await Session.create({
+          kind: "root",
+          title: "task root",
+        })
+
+        Database.use((db) =>
+          db.insert(EngineTaskTable).values({
+            id: taskID,
+            project_id: Instance.project.id,
+            session_id: root.id,
+            source: "panel",
+            title: "direct reply root rejection",
+            request: "direct reply root rejection",
+            priority: "normal",
+            time_created: now,
+            time_updated: now,
+            time_started: now,
+          }).run(),
+        )
+
+        const response = await app.request(`/task/${taskID}/session/${root.id}/reply`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({ message: "继续完成G3" }),
+        })
+
+        expect(response.status).not.toBe(202)
+        const messages = await Session.messages({ sessionID: root.id })
+        expect(messages).toHaveLength(0)
+      },
+    })
+  })
+
   test("POST /task/:taskID/session/:sessionID/cancel aborts only the target agent session", async () => {
     await using tmp = await tmpdir({ git: true })
 

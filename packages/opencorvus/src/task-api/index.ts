@@ -285,16 +285,6 @@ async function appendDirectAgentSessionReply(input: {
 }
 
 async function continueTaskMessage(taskID: string, text: string, attachments: AttachmentStore.Reference[] = []) {
-  const task = requireTask(taskID)
-
-  // Append the user message to session history — the describe layer and
-  // orchestrator prompt both read session messages, so appending here is
-  // how the new message becomes visible to whatever runs next. Surface the
-  // persisted message back to the caller so the HTTP response can carry the
-  // real user-message id straight into the overlay (no client-side
-  // synthetic placeholder; rule 22 single source).
-  const persisted = await appendTaskSessionMessage(task, text, attachments)
-
   const attachmentSummary =
     attachments.length > 0
       ? [
@@ -310,64 +300,49 @@ async function continueTaskMessage(taskID: string, text: string, attachments: At
           }),
         ].join("\n")
       : undefined
+  const wake = await appendAndWakeTaskOperatorMessage({ taskID, text, attachments, attachmentSummary })
+
+  return {
+    mode: "scheduler" as const,
+    resumed: true,
+    status: deriveTaskStatus(wake.task) as string,
+    user_message: wake.userMessage,
+  }
+}
+
+async function appendAndWakeTaskOperatorMessage(input: {
+  taskID: string
+  text: string
+  attachments?: AttachmentStore.Reference[]
+  attachmentSummary?: string
+}): Promise<{ task: TaskRow; userMessage: { info: Message.User; parts: Message.Part[] } }> {
+  const task = requireTask(input.taskID)
+
+  // Append the user message to session history. The describe layer and
+  // orchestrator prompt both read session messages, so this is the single
+  // task-level operator-message owner for /message and /inject.
+  const userMessage = await appendTaskSessionMessage(task, input.text, input.attachments ?? [])
   const openedTask = await openTaskForOperatorMessage(task)
 
-  // User messages must re-enter the task lifecycle shell. Calling the
-  // Orchestrator directly bypasses loop/pool coordination and can strand the
-  // message behind a sleeping wait path.
   void dispatchTaskLoop({
-    taskID,
+    taskID: input.taskID,
     event: {
-      note: OrchestratorEventNote.operatorMessage({ text, attachmentSummary }),
-      operatorMessage: { text, attachmentSummary },
+      note: OrchestratorEventNote.operatorMessage({
+        text: input.text,
+        attachmentSummary: input.attachmentSummary,
+      }),
+      operatorMessage: {
+        text: input.text,
+        attachmentSummary: input.attachmentSummary,
+      },
     },
     interrupt: true,
   })
 
   return {
-    mode: "scheduler" as const,
-    resumed: true,
-    status: deriveTaskStatus(openedTask) as string,
-    user_message: persisted,
+    task: openedTask,
+    userMessage,
   }
-}
-
-async function injectRunningTaskMessage(task: TaskRow, run: RunRow, message: string) {
-  if (!["accepted", "running"].includes(run.status)) return false
-  if (!run.session_id) return false
-  const executor = ExecutorRegistry.require(run.executor)
-  if (!executor.capabilities().resume) return false
-
-  const submission = await executor.resume({
-    sessionID: run.session_id,
-    message,
-  })
-  if (run.executor !== "mirrorcode") {
-    await appendTaskSessionMessage(task, message)
-  }
-  if (submission.queueTaskID !== run.executor_ref?.queue_task_id) {
-    await updateRun(
-      run,
-      {
-        executor_ref: {
-          session_id: submission.sessionID,
-          queue_task_id: submission.queueTaskID,
-        },
-      },
-      "Message injected into running session",
-    )
-  }
-  await EngineProtocol.emit(
-    Event.MessageInjected,
-    {
-      taskID: task.id,
-      runID: run.id,
-      text: message,
-      summary: "Operator message injected into running session",
-    },
-    { taskID: task.id, runID: run.id, source: "service.inject" },
-  )
-  return true
 }
 
 async function appendTaskSessionMessage(
@@ -1548,42 +1523,15 @@ export namespace EngineService {
   }
 
   /**
-   * 向正在运行的 task 注入消息。
-   * 如果当前 run 正在执行且 executor 支持 resume，直接注入到 session；
-   * 否则记录为 operator note，并由编排器决定是否创建新 run。
+   * 向 task 注入用户消息。
    *
-   * orchestrator-loop wake 与 executor resume 是两个独立动作:
-   *   - executor.resume = 把消息送进正在跑的 build agent sub-session
-   *     (best effort: 该 session 可能已结束或没有此特定 build agent active)
-   *   - dispatchTaskLoop = 触发 orchestrator-loop 重新运行一轮决策
-   *     (orchestrator agent 通过 describe + new note 看到注入的 message)
-   *
-   * 历史 wedge: orchestrator deferred stop 后 (e.g. delivery_render_rejected),
-   * run.status 仍 "running" 但 orchestrator-loop 已退出. 之前路径只 resume
-   * executor session (build agent 早已 finished, resume 无效) 然后短路返回.
-   * recordOperatorNote 又因 status === "running" 跳过 dispatchTaskLoop. 没人
-   * 唤醒 orchestrator → 被注入的 operator message 永远没被读到.
-   *
-   * 修复: 与 continueTaskMessage (chat 路径) 行为对齐, 必须始终
-   * dispatchTaskLoop, 把消息变成 OrchestratorEventNote.operatorMessage 唤醒
-   * 决策循环. 见 _session-20260429-014338.out 实证 (codex 0.125 benchmark).
+   * Task-level input has a single owner: the orchestrator wake path. The active
+   * run's session_id is the task root session in workflow mode, so resuming an
+   * executor from here writes agent output into root and breaks conversation
+   * projection. Scoped agent steering must use /task/:id/session/:sessionID/reply.
    */
   export async function injectMessage(taskID: string, message: string) {
-    const task = requireTask(taskID)
-    const run = findActiveRunForTask(task.id)
-    const resumed = run ? await injectRunningTaskMessage(task, run, message) : false
-    if (!resumed) {
-      await appendTaskSessionMessage(task, message)
-    }
-    await openTaskForOperatorMessage(requireTask(taskID))
-    void dispatchTaskLoop({
-      taskID,
-      event: {
-        note: OrchestratorEventNote.operatorMessage({ text: message }),
-        operatorMessage: { text: message },
-      },
-      interrupt: true,
-    })
+    await appendAndWakeTaskOperatorMessage({ taskID, text: message })
     return { resumed: true, status: deriveTaskStatus(requireTask(taskID)) as string }
   }
 
