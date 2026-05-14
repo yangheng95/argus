@@ -470,18 +470,12 @@ test("Gateway focus-visible outline uses --oc-border-width + ui-scale offset (ro
   expect(cssNoComments).not.toMatch(/outline:\s*2px\s+solid/)
 })
 
-test("humanizeApiError translates known server error classes via i18n (round-2 P0)", () => {
-  // Pre-fix the page-level banner spliced the raw "DirectoryRequiredError:
-  // gateway/stats requires ?directory=…" message verbatim into the
-  // operator-facing template. The fix is a small registry of known
-  // error classes keyed to `gateway.error.class.<Name>` entries.
-  expect(GATEWAY_TSX).toContain("function humanizeApiError(err: unknown): string")
-  // Template literal `gateway.error.class.${…}` is the panel-i18n
-  // analyser hook — verifying the prefix is present.
-  expect(GATEWAY_TSX).toMatch(/`gateway\.error\.class\.\$\{[^}]+\}`/)
-  // Every site that previously called errorMessage(err) for display
-  // now routes through humanizeApiError so the registry covers all
-  // surfaces (header / channels / bindings / composer / proposal).
+test("humanizeApiError is wired everywhere errorMessage used to drive display (round-2 P0)", () => {
+  // The function itself now lives in utils/gateway-helpers.ts (round-3
+  // P0 fix); the unit test at "humanizeApiError unwraps …" exercises
+  // the behaviour. This guard makes sure every page-level surface
+  // routes through it so the registry actually reaches the operator.
+  expect(GATEWAY_TSX).toContain("humanizeApiError,")
   expect(GATEWAY_TSX).toContain("humanizeApiError(stats.error)")
   expect(GATEWAY_TSX).toContain("humanizeApiError(channels.error)")
   expect(GATEWAY_TSX).toContain("humanizeApiError(bindings.error)")
@@ -577,4 +571,60 @@ test("Gateway monospace font stack routes through the --mono token (round-2 P1)"
   // single source.
   expect(GATEWAY_CSS).not.toMatch(/font-family:\s*ui-monospace,\s*"SFMono-Regular"/)
   expect(GATEWAY_CSS).toMatch(/font-family:\s*var\(--mono\)/)
+})
+
+// ── Round-3 fixes ───────────────────────────────────────────────────
+
+test("humanizeApiError unwraps ApiError-wrapped class names end-to-end (round-3 P0)", async () => {
+  // Round-2 shipped a humanizeApiError that grepped `^<Class>:` only and
+  // never matched the wrapped `API <code> <path>: <Class>: <detail>`
+  // string that overlay's ApiError actually produces. The round-3
+  // visual review caught the regression because the existing test only
+  // grepped for the function name's presence — never invoked it with a
+  // real ApiError. THIS test does the round-trip: build a real
+  // ApiError that mirrors what the network layer constructs, run the
+  // helper, assert the translation matches the i18n entry.
+  const { humanizeApiError } = await import("../src/utils/gateway-helpers")
+  const { ApiError } = await import("../src/services/api")
+  const { setLocaleData } = await import("../src/utils/i18n")
+  // Inject the live locale fixture so the i18n lookup actually resolves.
+  // Bun's test runner cannot fetch the locale JSON at module load, so
+  // without this seed `t()` returns the raw key and the regression net
+  // would only check fallback behaviour, not the success path.
+  const enUS = JSON.parse(I18N_EN_US) as Record<string, string>
+  setLocaleData("en-US", enUS)
+  const wrapped = new ApiError(500, "gateway/stats?directory=%2FUsers%2Foperator", {
+    error: "DirectoryRequiredError: gateway/stats requires ?directory= query param",
+  })
+  const text = humanizeApiError(wrapped)
+  expect(text).toBe(enUS["gateway.error.class.DirectoryRequiredError"])
+  // The raw class name and the encoded path MUST NOT leak through.
+  expect(text).not.toContain("DirectoryRequiredError")
+  expect(text).not.toContain("%2F")
+  expect(text).not.toContain("API 500")
+  // Unknown classes fall through to the raw message (capped at 240 chars).
+  const unknown = new ApiError(500, "x", { error: "MysteryBananaError: unexpected stem fracture" })
+  const unknownText = humanizeApiError(unknown)
+  expect(unknownText).toContain("MysteryBananaError")
+})
+
+test("humanizeApiError lives in gateway-helpers so the unit test can call it (round-3 P0)", () => {
+  // Pre-fix the function lived inside Gateway.tsx where the unit test
+  // could not invoke it without booting the full Solid runtime. Move
+  // it to helpers so behaviour, not source structure, is what the
+  // regression net catches (rule 28 / 36).
+  const helpers = readFileSync(join(import.meta.dir, "../src/utils/gateway-helpers.ts"), "utf8")
+  expect(helpers).toContain("export function humanizeApiError")
+  expect(GATEWAY_TSX).toContain(`humanizeApiError,
+  pendingInteractions,`)
+})
+
+test("Discard proposal clears both proposal and the composer requirement (round-3 P1)", () => {
+  // Pre-fix `handleProposalCleared` only cleared the proposal — the
+  // requirement signal kept the previous text and the operator
+  // returned to a pre-filled composer. Both discard paths now treat
+  // the iteration as throwaway.
+  expect(GATEWAY_TSX).toMatch(
+    /function handleProposalCleared\(\)\s*\{[\s\S]*?setProposal\(null\)[\s\S]*?setRequirement\(""\)[\s\S]*?setError\(""\)/,
+  )
 })
