@@ -167,7 +167,6 @@ export async function decomposeRequirement(input: DecomposeInput): Promise<Gatew
   }
 
   const messages: ModelMessage[] = [
-    { role: "system", content: SYSTEM_PROMPT },
     { role: "user", content: userPreface.join("\n") },
   ]
 
@@ -184,6 +183,7 @@ export async function decomposeRequirement(input: DecomposeInput): Promise<Gatew
   try {
     const result = streamText({
       model: language,
+      system: SYSTEM_PROMPT,
       messages,
       output: Output.object({ schema: StructuredPayload }),
       temperature: 0.2,

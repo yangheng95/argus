@@ -4,7 +4,7 @@ import { isTaskTerminal } from "./task-status"
 
 export async function openTaskForOperatorMessage(
   task: TaskRow,
-  summary = "Operator message opened task",
+  summary = "Operator message queued task",
 ): Promise<TaskRow> {
   if (!isTaskTerminal(task)) return task
 
@@ -17,7 +17,7 @@ export async function openTaskForOperatorMessage(
   return updateTask(
     task,
     {
-      status: "active",
+      status: "queued",
       error: null,
       ...(metadata ? { metadata } : {}),
     },

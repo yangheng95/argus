@@ -39,7 +39,7 @@ const TERMINAL_FIXTURES = [
   },
 ] as const
 
-describe("openTaskForOperatorMessage — terminal tasks reopen for operator messages", () => {
+describe("openTaskForOperatorMessage — terminal tasks queue for operator messages", () => {
   test("does not activate a queued task before the queue claims it", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
@@ -75,7 +75,7 @@ describe("openTaskForOperatorMessage — terminal tasks reopen for operator mess
   })
 
   for (const fixture of TERMINAL_FIXTURES) {
-    test(`reactivates ${fixture.label} tasks when opening for an operator message`, async () => {
+    test(`queues ${fixture.label} tasks when opening for an operator message`, async () => {
       await using tmp = await tmpdir({ git: true })
       await Instance.provide({
         directory: tmp.path,
@@ -112,12 +112,12 @@ describe("openTaskForOperatorMessage — terminal tasks reopen for operator mess
           expect(reopened.error).toBeNull()
           const md = (reopened.metadata ?? {}) as Record<string, unknown>
           expect(md.cancelled).toBeUndefined()
-          expect(deriveTaskStatus(reopened)).toBe("active")
+          expect(deriveTaskStatus(reopened)).toBe("queued")
 
           // Persisted, not just in-memory: re-read from DB.
           const reread = findTask(taskID)
           expect(reread!.time_completed).toBeNull()
-          expect(deriveTaskStatus(reread!)).toBe("active")
+          expect(deriveTaskStatus(reread!)).toBe("queued")
         },
       })
     })

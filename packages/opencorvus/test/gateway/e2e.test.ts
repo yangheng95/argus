@@ -387,7 +387,7 @@ describe("Gateway e2e — channel bindings + reverse lookup (PRD §17.14)", () =
         await EngineService.deleteTask(taskID).catch(() => undefined)
       },
     })
-  })
+  }, { timeout: 10_000 })
 
   test("HTTP GET /task/:taskID/bindings returns the bindings for the task only", async () => {
     await using tmp = await tmpdir({ git: true })

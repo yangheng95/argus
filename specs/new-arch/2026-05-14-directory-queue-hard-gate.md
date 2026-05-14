@@ -55,3 +55,12 @@ instead of adding a fallback path.
 This code fix prevents new task storms. It does not mutate already active
 tasks in a live database. Reducing the current 17 active tasks requires an
 explicit operator decision to cancel or requeue selected tasks.
+
+## Review Update
+
+Independent review found another active-promotion source: operator messages
+and inject can revive a terminal task through `openTaskForOperatorMessage()`.
+That path must not call `updateTask(... status: "active")` directly. Revival
+must set the task to queued and let `dispatchTaskLoop()` / `claimNextForCwd()`
+decide whether the cwd is free. Regression coverage must include a terminal
+sibling receiving an operator message while another same-cwd task is active.

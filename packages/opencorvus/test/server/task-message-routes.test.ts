@@ -202,7 +202,7 @@ describe("task message routes", () => {
           db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get(),
         )
         expect(row).toBeDefined()
-        expect(row ? deriveTaskStatus(row) : undefined).toBe("active")
+        expect(row ? deriveTaskStatus(row) : undefined).toBe("queued")
         expect(row?.time_completed).toBeNull()
         expect(row?.error).toBeNull()
         expect((row?.metadata as { decision_log?: string[] } | null)?.decision_log).toEqual(["keep-me"])
@@ -262,7 +262,7 @@ describe("task message routes", () => {
         const row = Database.use((db) =>
           db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get(),
         )
-        expect(row ? deriveTaskStatus(row) : undefined).toBe("active")
+        expect(row ? deriveTaskStatus(row) : undefined).toBe("queued")
         expect((row?.metadata as { decision_log?: string[] } | null)?.decision_log).toEqual(["keep-me"])
         expect((row?.metadata as { cancelled?: boolean } | null)?.cancelled).toBeUndefined()
       },
@@ -322,7 +322,7 @@ describe("task message routes", () => {
         const row = Database.use((db) =>
           db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get(),
         )
-        expect(row ? deriveTaskStatus(row) : undefined).toBe("active")
+        expect(row ? deriveTaskStatus(row) : undefined).toBe("queued")
         expect(row?.time_completed).toBeNull()
         expect(row?.error).toBeNull()
         expect((row?.metadata as { cancelled?: boolean; decision_log?: string[] } | null)?.cancelled).toBeUndefined()
@@ -380,7 +380,7 @@ describe("task message routes", () => {
         const row = Database.use((db) =>
           db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get(),
         )
-        expect(row ? deriveTaskStatus(row) : undefined).toBe("active")
+        expect(row ? deriveTaskStatus(row) : undefined).toBe("queued")
         expect(row?.time_completed).toBeNull()
         expect((row?.metadata as { decision_log?: string[] } | null)?.decision_log).toEqual(["keep-me"])
       },
@@ -503,13 +503,13 @@ describe("task message routes", () => {
         expect(response.status).toBe(200)
         const body = await response.json() as { resumed: boolean; status: string }
         await new Promise((resolve) => setTimeout(resolve, 0))
-        expect(body).toEqual({ resumed: true, status: "active" })
+        expect(body).toEqual({ resumed: true, status: "queued" })
         expect(dispatchTaskLoop).toHaveBeenCalledTimes(1)
 
         const row = Database.use((db) =>
           db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get(),
         )
-        expect(row ? deriveTaskStatus(row) : undefined).toBe("active")
+        expect(row ? deriveTaskStatus(row) : undefined).toBe("queued")
         expect((row?.metadata as { decision_log?: string[] } | null)?.decision_log).toEqual(["keep-me"])
       },
     })

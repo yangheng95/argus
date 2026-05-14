@@ -163,6 +163,53 @@ describe("engine queue", () => {
     })
   })
 
+  test("operator message revival cannot bypass an active same-cwd task", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
+        const now = Date.now()
+        const activeID = `task_queue_active_${now}`
+        const terminalID = `task_queue_terminal_${now}`
+
+        Database.transaction((db) => {
+          db.insert(EngineTaskTable).values({
+            id: activeID,
+            project_id: Instance.project.id,
+            source: "test",
+            title: "active task",
+            request: "holds the cwd gate",
+            priority: "normal",
+            time_started: now,
+            time_created: now,
+            time_updated: now,
+          }).run()
+          db.insert(EngineTaskTable).values({
+            id: terminalID,
+            project_id: Instance.project.id,
+            source: "test",
+            title: "terminal task",
+            request: "must queue before revival",
+            priority: "normal",
+            time_started: now - 10_000,
+            time_completed: now - 1_000,
+            time_created: now - 10_000,
+            time_updated: now - 1_000,
+          }).run()
+        })
+
+        await dispatchTaskLoop({ taskID: terminalID, event: { note: "operator follow-up" } })
+        await new Promise((resolve) => setTimeout(resolve, 0))
+
+        expect(taskStatus(activeID)).toBe("active")
+        expect(taskStatus(terminalID)).toBe("queued")
+        expect(runTaskLoop).not.toHaveBeenCalled()
+      },
+    })
+  }, { timeout: 10_000 })
+
   test("loop exit flips the queued sibling in the same cwd to active", async () => {
     await using tmp = await tmpdir({ git: true })
 
