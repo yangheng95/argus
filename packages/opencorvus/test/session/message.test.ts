@@ -2,7 +2,10 @@ import { describe, expect, test } from "bun:test"
 import { APICallError } from "ai"
 import { Message } from "../../src/session/message"
 import { CompactionHandoff } from "../../src/session/compaction-handoff"
+import { Instance } from "../../src/project/instance"
+import { AttachmentStore } from "../../src/storage/attachment-store"
 import type { Provider } from "../../src/provider/provider"
+import { tmpdir } from "../fixture/fixture"
 
 const sessionID = "session"
 const model: Provider.Model = {
@@ -349,6 +352,47 @@ describe("session.message.toModelMessage", () => {
       },
     ])
   })
+
+  test("hydrates persisted AttachmentStore refs for provider-bound user file parts", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const messageID = "m-user-ref"
+        const bytes = Buffer.from([0x89, 0x50, 0x4e, 0x47])
+        const ref = await AttachmentStore.write(Instance.project.id, bytes, "image/png", "ref.png")
+
+        const input: Message.WithParts[] = [
+          {
+            info: userInfo(messageID),
+            parts: [
+              {
+                ...basePart(messageID, "p-ref"),
+                type: "file",
+                mime: "image/png",
+                filename: "ref.png",
+                url: ref.url,
+              },
+            ] as Message.Part[],
+          },
+        ]
+
+        expect(await Message.toModelMessages(input, model)).toStrictEqual([
+          {
+            role: "user",
+            content: [
+              {
+                type: "file",
+                mediaType: "image/png",
+                filename: "ref.png",
+                data: `data:image/png;base64,${bytes.toString("base64")}`,
+              },
+            ],
+          },
+        ])
+      },
+    })
+  }, 20000)
 
   test("converts assistant tool completion into tool-call + tool-result messages with attachments", async () => {
     const userID = "m-user"

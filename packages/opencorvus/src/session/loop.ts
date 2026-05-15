@@ -39,6 +39,7 @@ import { SessionSummary } from "./summary"
 import { SessionPromptState } from "./prompt/state"
 import { muteAISdkWarnings } from "@/runtime/shims"
 import { Config } from "@/config/config"
+import { decodeDataUrlBase64 } from "./text-mime"
 
 muteAISdkWarnings()
 
@@ -824,6 +825,36 @@ export namespace SessionLoop {
     }
 
     return { output: String(input ?? ""), title: "", metadata: {} }
+  }
+
+  export async function materializeToolResultAttachments(attachments: unknown): Promise<unknown> {
+    if (!Array.isArray(attachments)) return attachments
+    return Promise.all(
+      attachments.map(async (attachment: unknown) => {
+        if (!attachment || typeof attachment !== "object" || Array.isArray(attachment)) return attachment
+        const file = attachment as Record<string, unknown>
+        if (typeof file.url !== "string" || typeof file.mime !== "string") return attachment
+        if (!file.url.startsWith("data:")) return attachment
+        const bytes = Buffer.from(
+          decodeDataUrlBase64(
+            file.url,
+            `SessionLoop.materializeToolResultAttachments ${typeof file.filename === "string" ? file.filename : file.mime}`,
+          ),
+          "base64",
+        )
+        const ref = await AttachmentStore.write(
+          Instance.project.id,
+          bytes,
+          file.mime,
+          typeof file.filename === "string" ? file.filename : undefined,
+        )
+        return {
+          ...file,
+          url: ref.url,
+          mime: ref.mime,
+        }
+      }),
+    )
   }
 
   function collectLoopState(msgs: Message.WithParts[]) {
@@ -1784,14 +1815,15 @@ export namespace SessionLoop {
             },
           )
           const result = await item.execute(args, ctx)
+          const materializedAttachments = await materializeToolResultAttachments(result.attachments)
           const output = {
             ...result,
-            attachments: result.attachments?.map((attachment) => ({
+            attachments: Array.isArray(materializedAttachments) ? materializedAttachments.map((attachment) => ({
               ...attachment,
               id: Identifier.ascending("part"),
               sessionID: ctx.sessionID,
               messageID: input.processor.message.id,
-            })),
+            })) : undefined,
           }
           await Plugin.trigger(
             "tool.execute.after",
@@ -1972,10 +2004,11 @@ export namespace SessionLoop {
       async execute(args: unknown, options: unknown) {
         const result = await execute(args, options)
         const normalized = normalizeExtraToolResult(result)
+        const materializedAttachments = await materializeToolResultAttachments(normalized.attachments)
         return {
           ...normalized,
-          ...(normalized.attachments !== undefined
-            ? { attachments: stampAttachments(normalized.attachments) }
+          ...(materializedAttachments !== undefined
+            ? { attachments: stampAttachments(materializedAttachments) }
             : {}),
         }
       },

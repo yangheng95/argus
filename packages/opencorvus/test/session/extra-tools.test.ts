@@ -9,6 +9,9 @@ import z from "zod"
 import { SessionPrompt } from "../../src/session/prompt"
 import { SessionLoop } from "../../src/session/loop"
 import { BuildResultSchema } from "../../src/build/types"
+import { Instance } from "../../src/project/instance"
+import { AttachmentStore } from "../../src/storage/attachment-store"
+import { tmpdir } from "../fixture/fixture"
 
 const dummyTool = () =>
   tool({
@@ -154,6 +157,25 @@ describe("extras execute-return normalisation (integration via resolveTools)", (
       }),
     ).toThrow("attachments without string output/text")
   })
+
+  test("materializes data URL tool-result attachments into AttachmentStore refs", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const attachments = await SessionLoop.materializeToolResultAttachments([
+          { type: "file", mime: "image/png", filename: "tool.png", url: "data:image/png;base64,UE5H" },
+        ])
+        expect(Array.isArray(attachments)).toBe(true)
+        const first = (attachments as Array<{ url: string; mime: string }>)[0]
+        expect(first.url.startsWith("data:")).toBe(false)
+        const located = AttachmentStore.nameFromUrl(first.url)
+        expect(located).toBeTruthy()
+        const bytes = await AttachmentStore.read(located!.projectID, located!.name)
+        expect(bytes.toString("utf8")).toBe("PNG")
+      },
+    })
+  }, 20000)
 })
 
 describe("extra tool provider schema preparation", () => {

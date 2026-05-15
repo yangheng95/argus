@@ -709,6 +709,13 @@ export namespace Message {
       return { mime: attachment.mime, data: bytes.toString("base64") }
     }
 
+    const userFileUrl = async (part: Message.FilePart): Promise<string> => {
+      const located = AttachmentStore.nameFromUrl(part.url)
+      if (!located) return part.url
+      const bytes = await AttachmentStore.read(located.projectID, located.name)
+      return `data:${part.mime};base64,${bytes.toString("base64")}`
+    }
+
     // AI SDK v6 invokes tool.toModelOutput with an args object
     // ({ toolCallId, input, output }), not a raw output. v5 passed `output`
     // directly. Reading the wrapped argument as if it were the output gave
@@ -795,7 +802,7 @@ export namespace Message {
             if (capable) {
               userMessage.parts.push({
                 type: "file",
-                url: part.url,
+                url: await userFileUrl(part),
                 mediaType: part.mime,
                 filename: part.filename,
               })
