@@ -12,7 +12,7 @@
   --card-min-inline-size: min(100%, var(--conversation-card-inline-size));
   flex: 1;
   overflow-y: auto;
-  overflow-anchor: none;
+  overflow-anchor: auto;
   padding: calc(18px * var(--ui-scale)) calc(22px * var(--ui-scale)) calc(20px * var(--ui-scale));
   display: flex;
   flex-direction: column;

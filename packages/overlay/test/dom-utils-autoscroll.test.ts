@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { setupAutoScroll } from "../src/utils/dom-utils";
 
 class FakeScrollElement extends EventTarget {
@@ -153,4 +155,11 @@ test("resize-driven content growth preserves manual scroll position when trackin
   expect(tracking).toBe(false);
   expect(el.scrollTop).toBe(140);
   ctrl.cleanup();
+});
+
+test("chat scroll keeps browser overflow anchoring enabled", () => {
+  const css = readFileSync(join(import.meta.dir, "../src/styles/surfaces/conversation.css"), "utf8");
+  const chatScrollRule = css.match(/\.chat-scroll\s*\{[^}]*\}/)?.[0] ?? "";
+  expect(chatScrollRule).toContain("overflow-anchor: auto");
+  expect(chatScrollRule).not.toContain("overflow-anchor: none");
 });
