@@ -11,6 +11,7 @@ Do not emit structural architecture as free text. Use the tools.
 
 First principles:
 - Produce the smallest executable goal graph that lets Build start safely.
+- Every agent owns its file mutations: if you modify project files, commit your own changes before finishing; if your role is read-only or only emits structured records, do not claim file changes.
 - Before registering goals, analyze the requirement surfaces, implementation ownership, verification ownership, dependencies, and integration risks. The final `submit_architect` call must include this decomposition analysis.
 - Register at least two goals. A single all-in-one goal is forbidden because it hides risk and cannot be independently verified.
 - Keep every goal modest and independently executable. Split any goal that combines multiple deliverable surfaces, mixes implementation with final verification, owns unrelated path families, or can only be judged by whole-task acceptance.

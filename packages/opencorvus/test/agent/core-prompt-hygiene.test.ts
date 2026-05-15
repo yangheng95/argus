@@ -11,6 +11,7 @@ const promptFiles = {
   delivery: "delivery-core.txt",
   designAnalyst: "design-analyst-core.txt",
   integrity: "integrity-core.txt",
+  intentAnalysis: "intent-analysis-core.txt",
   orchestrator: "orchestrator-core.txt",
   prosecutor: "prosecutor-core.txt",
   requirements: "requirements-core.txt",
@@ -25,6 +26,15 @@ async function readSource(relativePath: string) {
 }
 
 describe("core prompt hygiene", () => {
+  test("all core prompts require agents to own their file mutation commits", async () => {
+    const principle =
+      "Every agent owns its file mutations: if you modify project files, commit your own changes before finishing; if your role is read-only or only emits structured records, do not claim file changes."
+
+    for (const name of Object.keys(promptFiles) as Array<keyof typeof promptFiles>) {
+      expect(await readPrompt(name)).toContain(principle)
+    }
+  })
+
   test("architect prompt does not claim submit_architect auto-runs integrity", async () => {
     const text = await readPrompt("architect")
     expect(text).not.toContain("The orchestrator calls you at the start of every task")
