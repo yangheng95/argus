@@ -199,7 +199,27 @@ export async function createUserMessage(input: PromptInput) {
           }
           const url = new URL(part.url)
           switch (url.protocol) {
-            case "data:":
+            case "data:": {
+              const bytes = Buffer.from(
+                decodeDataUrlBase64(
+                  part.url,
+                  `SessionPrompt.createUserMessage data URL file part ${part.filename ?? part.mime}`,
+                ),
+                "base64",
+              )
+              const fileRef = await AttachmentStore.write(
+                Instance.project.id,
+                bytes,
+                part.mime,
+                part.filename,
+              )
+              const persistedPart: Draft<Message.Part> = {
+                ...part,
+                messageID: info.id,
+                sessionID: input.sessionID,
+                url: fileRef.url,
+                mime: fileRef.mime,
+              }
               if (isDecodableText(part.mime, part.filename)) {
                 return [
                   {
@@ -214,37 +234,11 @@ export async function createUserMessage(input: PromptInput) {
                     type: "text",
                     text: decodeDataUrlText(part.url),
                   },
-                  {
-                    ...part,
-                    messageID: info.id,
-                    sessionID: input.sessionID,
-                  },
+                  persistedPart,
                 ]
               }
-              {
-                const bytes = Buffer.from(
-                  decodeDataUrlBase64(
-                    part.url,
-                    `SessionPrompt.createUserMessage binary file part ${part.filename ?? part.mime}`,
-                  ),
-                  "base64",
-                )
-                const fileRef = await AttachmentStore.write(
-                  Instance.project.id,
-                  bytes,
-                  part.mime,
-                  part.filename,
-                )
-                return [
-                  {
-                    ...part,
-                    messageID: info.id,
-                    sessionID: input.sessionID,
-                    url: fileRef.url,
-                    mime: fileRef.mime,
-                  },
-                ]
-              }
+              return [persistedPart]
+            }
             case "file:": {
               log.info("file", { mime: part.mime })
               const filepath = fileURLToPath(part.url)
