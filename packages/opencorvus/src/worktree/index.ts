@@ -22,7 +22,7 @@ export namespace Worktree {
   // Per-project git mutex: serializes worktree add/remove/reset operations
   // to prevent concurrent git commands from corrupting the repository.
   const gitLocks = new Map<string, Promise<void>>()
-  async function withGitLock<T>(fn: () => Promise<T>): Promise<T> {
+  export async function withGitLock<T>(fn: () => Promise<T>): Promise<T> {
     const key = Instance.project.id
     const prev = gitLocks.get(key) ?? Promise.resolve()
     let resolve!: () => void
