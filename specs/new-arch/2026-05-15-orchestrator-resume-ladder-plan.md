@@ -4,15 +4,14 @@
 
 When a workflow is resumed and the blocker is a stalled child agent, the orchestrator
 must prefer the narrowest recovery that preserves the current contract. Recent traces
-showed premature escalation to `modify_goal` or task-wide restart, even when the right
-move was "contact the child" or "kill the wedged child and re-dispatch the same goal".
+showed premature escalation to contract/workflow rewrites even when the right move was
+"contact the child" or "kill the wedged child and re-dispatch the same goal".
 
-Required priority order:
+The fix should stay semantic and local:
 
-1. `steer_subagent`
-2. `cancel_subagent`
-3. `modify_goal`
-4. `restart_from_stage`
+- expose the missing child-cancel operation
+- make that operation retire the live `goal_run`
+- keep prompt changes minimal instead of introducing a new scripted ladder
 
 ## Call-Site Inventory
 
@@ -20,9 +19,8 @@ Required priority order:
 
 | Surface | Role | Decision |
 | --- | --- | --- |
-| `packages/opencorvus/src/prompt/core/orchestrator-core.txt` | Orchestrator system policy | Replace vague resume guidance with an explicit 4-rung ladder. |
-| `packages/opencorvus/test/agent/orchestrator-core-grain-ladder.test.ts` | Existing per-goal vs task-wide retry ladder coverage | Keep unchanged; new child-session ladder must complement it, not fork it. |
-| `packages/opencorvus/test/agent/orchestrator-core-resume-ladder.test.ts` | New regression for child-session resume order | Add and pin rung order plus "do not jump upward" wording. |
+| `packages/opencorvus/src/prompt/core/orchestrator-core.txt` | Orchestrator system policy | Keep the change to one short sentence near operator controls; do not add a standalone resume ladder section. |
+| `packages/opencorvus/test/agent/orchestrator-core-grain-ladder.test.ts` | Existing per-goal vs task-wide retry ladder coverage | Keep unchanged; child-session recovery should not create a second large prompt policy block. |
 
 ### Tool exposure / runtime
 
@@ -44,29 +42,29 @@ Required priority order:
 
 ## Design Rules
 
-- Single source: the resume priority must live in the orchestrator prompt, not in a host-side state machine.
+- Single source: child-session recovery semantics belong to the tool contract and runtime behavior, not a long prompt checklist.
 - No fallback ladder duplication: do not add another child-resume policy in routes or task API.
 - `cancel_subagent` is session-level recovery only. It must preserve the goal contract and instruct the orchestrator to explicitly re-dispatch the same goal/stage if work should continue.
-- `modify_goal` remains the first contract-changing rung.
-- `restart_from_stage` remains task-wide and destructive.
+- `modify_goal` remains contract change; `restart_from_stage` remains task-wide and destructive.
 
 ## Concrete Changes
 
-1. Expand the orchestrator prompt with a dedicated "Resume ladder for stuck child agents" section.
-2. Expose `cancel_subagent` to the orchestrator.
-3. Implement `cancel_subagent` in orchestrator tools:
+1. Expose `cancel_subagent` to the orchestrator.
+2. Implement `cancel_subagent` in orchestrator tools:
    - resolve `session_id`, `goal_id`, and legacy `goal_run_id`
    - verify the session belongs to the current task and is a direct-reply child kind
    - call `SessionPrompt.cancel(sessionID)`
    - if the target maps to a live `goal_run`, mark that attempt `aborted`
    - if an executor session exists for the attempt, mark it `aborted`
+3. Keep orchestrator prompt deltas minimal:
+   - add `cancel_subagent` to the operator-controls list
+   - keep one short sentence that points resume back toward child/session-local recovery
 4. Add regressions for:
-   - prompt rung order
    - orchestrator include list
    - `cancel_subagent` by child `session_id`
    - `cancel_subagent` by `goal_id`
 
 ## Validation
 
-- `bun test packages/opencorvus/test/agent/agent.test.ts packages/opencorvus/test/agent/orchestrator-core-resume-ladder.test.ts packages/opencorvus/test/orchestrator/tools.test.ts --test-name-pattern "control-plane panel tool|resume ladder|steer_subagent|cancel_subagent"`
+- `bun test packages/opencorvus/test/agent/agent.test.ts packages/opencorvus/test/orchestrator/tools.test.ts --test-name-pattern "control-plane panel tool|steer_subagent|cancel_subagent"`
 - `bun run --cwd packages/opencorvus typecheck`
