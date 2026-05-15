@@ -531,6 +531,17 @@ function modifyGoalAcceptanceHints(input: unknown): string[] {
   return [...new Set(hints)]
 }
 
+function resolveSteerTargetSessionID(taskID: string, requestedID: string): string {
+  const goalRun = findGoalRun(requestedID)
+  if (!goalRun || goalRun.task_id !== taskID) return requestedID
+  if (!goalRun.session_id) {
+    throw new Error(
+      `goal_run ${requestedID} has no child session_id yet; wait for the build session to start or finalize the stale attempt before steering it.`,
+    )
+  }
+  return goalRun.session_id
+}
+
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
 }
@@ -3516,6 +3527,14 @@ export function createOrchestratorTools(input: {
             sections.push(
               `  acceptance_specs:\n${renderSpecsAsText((g.acceptance_specs ?? []) as AcceptanceSpec[]).slice(0, 400)}`,
             )
+            const latestGoalRun = findLatestTipGoalRun(g.id)
+            if (latestGoalRun) {
+              sections.push(`  latest_goal_run_id: ${latestGoalRun.id}`)
+              sections.push(`  latest_goal_run_status: ${latestGoalRun.status}`)
+              if (latestGoalRun.session_id) {
+                sections.push(`  latest_goal_session_id: ${latestGoalRun.session_id}`)
+              }
+            }
             if (g.owned_paths?.length) sections.push(`  owned_paths: ${g.owned_paths.join(", ")}`)
             if (g.depends_on?.length) sections.push(`  depends_on: ${g.depends_on.join(", ")}`)
           }
@@ -3771,15 +3790,21 @@ export function createOrchestratorTools(input: {
     steer_subagent: tool({
       description:
         "Send a scoped steering message to a child agent session and wake that session. " +
-        "Use this before retrying a sub-agent that appears idle/timed out: ask for current status, partial findings, and whether it can continue.",
+        "Use this before retrying a sub-agent that appears idle/timed out: ask for current status, partial findings, and whether it can continue. " +
+        "You may pass either the child session_id or the live goal_run_id reported by read_context.",
       inputSchema: z.object({
-        session_id: z.string().min(1).describe("Child agent session id to steer"),
+        session_id: z
+          .string()
+          .min(1)
+          .describe("Child agent session id to steer, or the live goal_run_id reported by read_context"),
         message: z.string().min(1).describe("Natural-language steering/status-check message for that sub-agent"),
         reason: z.string().describe("Why this sub-agent must be contacted before retrying"),
       }),
       execute: async ({ session_id, message, reason }) => {
-        const result = await EngineService.replyAgentSession(taskID, session_id, { message })
-        return `Steered sub-agent session ${result.session_id}. message=${result.message_id}. Reason: ${reason}`
+        const targetSessionID = resolveSteerTargetSessionID(taskID, session_id)
+        const result = await EngineService.replyAgentSession(taskID, targetSessionID, { message })
+        const source = targetSessionID === session_id ? session_id : `${session_id} -> session ${targetSessionID}`
+        return `Steered sub-agent session ${result.session_id}. source=${source}. message=${result.message_id}. Reason: ${reason}`
       },
     }),
 

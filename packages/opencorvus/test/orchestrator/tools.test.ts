@@ -370,6 +370,127 @@ describe("orchestrator tools", () => {
     })
   })
 
+  test("steer_subagent resolves a live goal_run id to the child build session", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_steer_goal_run_${stamp}`
+    const taskID = `tsk_steer_goal_run_${stamp}`
+    const goalID = `gol_steer_goal_run_${stamp}`
+
+    insertWorkflowTaskWithGoal({
+      projectID,
+      taskID,
+      goalID,
+      sessionID: null,
+      worktree: tmp.path,
+      projectName: "steer_subagent goal_run resolution",
+      taskTitle: "steer_subagent goal_run resolution",
+      request: "Resolve goal_run ids to build sessions",
+      goalTitle: "Build child session",
+      goalSlug: "build-child-session",
+      objective: "Allow steering a running build via the live goal_run id from read_context",
+      now,
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "steer goal_run parent" })
+        const child = await Session.create({
+          kind: "build",
+          parentID: parent.id,
+          goalID,
+          title: "steer goal_run child",
+        })
+        Database.use((db) =>
+          db.update(EngineTaskTable).set({ session_id: parent.id }).where(eq(EngineTaskTable.id, taskID)).run(),
+        )
+        const goalRunID = beginBuildAttempt({
+          taskID,
+          goalID,
+          sessionID: child.id,
+        })
+        const replySpy = spyOn(EngineService, "replyAgentSession").mockResolvedValue({
+          task_id: taskID,
+          session_id: child.id,
+          message_id: "msg_reply_goal_run",
+        } as Awaited<ReturnType<typeof EngineService.replyAgentSession>>)
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const result = await tools.steer_subagent.execute(
+          {
+            session_id: goalRunID,
+            message: "汇报当前实现进度",
+            reason: "live goal_run should resolve to the child build session",
+          },
+          {} as any,
+        )
+
+        expect(replySpy).toHaveBeenCalledWith(taskID, child.id, { message: "汇报当前实现进度" })
+        expect(result).toContain(`source=${goalRunID} -> session ${child.id}`)
+      },
+    })
+  })
+
+  test("read_context surfaces latest goal_run and child session ids for running goals", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_read_context_goal_run_${stamp}`
+    const taskID = `tsk_read_context_goal_run_${stamp}`
+    const goalID = `gol_read_context_goal_run_${stamp}`
+
+    insertWorkflowTaskWithGoal({
+      projectID,
+      taskID,
+      goalID,
+      sessionID: null,
+      worktree: tmp.path,
+      projectName: "read_context goal runtime",
+      taskTitle: "read_context goal runtime",
+      request: "Expose runtime ids for steering",
+      goalTitle: "Surface live runtime ids",
+      goalSlug: "surface-live-runtime-ids",
+      objective: "Show latest goal_run and child session ids so the orchestrator can steer the live build correctly",
+      now,
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "read_context parent" })
+        const child = await Session.create({
+          kind: "build",
+          parentID: parent.id,
+          goalID,
+          title: "read_context child",
+        })
+        Database.use((db) =>
+          db.update(EngineTaskTable).set({ session_id: parent.id }).where(eq(EngineTaskTable.id, taskID)).run(),
+        )
+        const goalRunID = beginBuildAttempt({
+          taskID,
+          goalID,
+          sessionID: child.id,
+        })
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const result = await tools.read_context.execute({ scope: "goals" }, {} as any)
+
+        expect(result).toContain(`latest_goal_run_id: ${goalRunID}`)
+        expect(result).toContain("latest_goal_run_status: running")
+        expect(result).toContain(`latest_goal_session_id: ${child.id}`)
+      },
+    })
+  })
+
   test("task-level direct build creates the run that deliver uses for delivery evidence", async () => {
     await tmp?.[Symbol.asyncDispose]?.()
     tmp = await tmpdir({ git: true })
