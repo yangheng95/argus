@@ -17,7 +17,14 @@ import { boardStore, loadTasks } from "../store/board"
 import { routeSSEEvent, handleEventStreamEvent, handleTaskListNotification } from "./events"
 import { hydrateTaskConversation } from "./conversation"
 import { getHostTransport, type StreamHandle } from "./host-transport"
+import {
+  recordConversationRecoveryAborted,
+  recordConversationRecoveryFailed,
+  recordConversationRecoveryStarted,
+  recordConversationRecoverySucceeded,
+} from "./refresh-diagnostics"
 import { settingsStore } from "../store/settings"
+import { createVisibilityInterval, type VisibilityInterval } from "../utils/visibility-interval"
 
 let sseHandle: StreamHandle | null = null
 let sseRetryTimer: any = null
@@ -39,10 +46,25 @@ export interface SseReconnectDeps {
 
 export async function performSseReconnect(deps: SseReconnectDeps): Promise<void> {
   if (deps.currentTaskID() !== deps.taskID) return
+  const startedAt = Date.now()
+  recordConversationRecoveryStarted({
+    channel: "sse-reconnect",
+    reason: "sse stream reconnect",
+    taskID: deps.taskID,
+    source: "sse-reconnect",
+  })
   let nextSequence: number
   try {
     nextSequence = await deps.hydrate(deps.taskID)
   } catch (err) {
+    recordConversationRecoveryFailed({
+      channel: "sse-reconnect",
+      reason: "sse stream reconnect",
+      taskID: deps.taskID,
+      source: "sse-reconnect",
+      durationMs: Date.now() - startedAt,
+      error: err instanceof Error ? err.message : String(err || ""),
+    })
     console.error("[sse] reconnect hydrate failed for task", deps.taskID, err)
     if (deps.currentTaskID() !== deps.taskID) return
     deps.scheduleRetry(() => {
@@ -55,7 +77,25 @@ export async function performSseReconnect(deps: SseReconnectDeps): Promise<void>
   // was in flight. Restarting the OLD task's SSE would stomp the
   // NEW task's handle (startSSE calls stopSSE first), silently
   // killing the user-visible stream.
-  if (deps.currentTaskID() !== deps.taskID) return
+  if (deps.currentTaskID() !== deps.taskID) {
+    recordConversationRecoveryAborted({
+      channel: "sse-reconnect",
+      reason: "sse stream reconnect",
+      taskID: deps.taskID,
+      source: "sse-reconnect",
+      durationMs: Date.now() - startedAt,
+      error: "task changed before restart",
+    })
+    return
+  }
+  recordConversationRecoverySucceeded({
+    channel: "sse-reconnect",
+    reason: "sse stream reconnect",
+    taskID: deps.taskID,
+    source: "sse-reconnect",
+    durationMs: Date.now() - startedAt,
+    resumeSequence: nextSequence,
+  })
   deps.restart(deps.taskID, nextSequence)
 }
 
@@ -164,22 +204,23 @@ export function stopSSE() {
 
 let taskListHandle: StreamHandle | null = null
 let taskListRetryTimer: any = null
-let taskListRefreshTimer: ReturnType<typeof setInterval> | null = null
+let taskListRefreshTimer: VisibilityInterval | null = null
 
 export const TASK_LIST_REFRESH_INTERVAL_MS = 30_000
 
 function startTaskListRefreshTimer() {
   stopTaskListRefreshTimer()
-  taskListRefreshTimer = setInterval(() => {
+  taskListRefreshTimer = createVisibilityInterval(() => {
     void loadTasks().catch((err) => {
       console.error("[task-list-sse] periodic task refresh failed", err)
     })
   }, TASK_LIST_REFRESH_INTERVAL_MS)
+  taskListRefreshTimer.start()
 }
 
 function stopTaskListRefreshTimer() {
   if (!taskListRefreshTimer) return
-  clearInterval(taskListRefreshTimer)
+  taskListRefreshTimer.dispose()
   taskListRefreshTimer = null
 }
 
