@@ -61,6 +61,51 @@ describe("session.prompt missing file", () => {
     })
   }, 20000)
 
+  test("materializes decodable text data URL file parts after injecting text content", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      config: {
+        agent: {
+          build: {
+            model: "openai/gpt-5.2",
+          },
+        },
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ kind: "build" })
+        const markdown = "## Acceptance\nUse the existing card tokens."
+
+        const msg = await SessionPrompt.prompt({
+          sessionID: session.id,
+          agent: "build",
+          noReply: true,
+          parts: [
+            {
+              type: "file",
+              mime: "text/markdown",
+              filename: "notes.md",
+              url: `data:text/markdown;base64,${Buffer.from(markdown).toString("base64")}`,
+            },
+          ],
+        })
+
+        if (msg.info.role !== "user") throw new Error("expected user message")
+        const stored = await Message.get({ sessionID: session.id, messageID: msg.info.id })
+        expect(stored.parts.some((part) => part.type === "text" && part.text === markdown)).toBe(true)
+        const filePart = stored.parts.find((part) => part.type === "file")
+        if (!filePart || filePart.type !== "file") throw new Error("expected stored file part")
+        expect(filePart.url.startsWith("data:")).toBe(false)
+        expect(AttachmentStore.nameFromUrl(filePart.url)).toBeTruthy()
+
+        await Session.remove(session.id)
+      },
+    })
+  }, 20000)
+
   test("does not fail the prompt when a file part is missing", async () => {
     await using tmp = await tmpdir({
       git: true,
