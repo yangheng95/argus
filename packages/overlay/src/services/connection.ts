@@ -13,6 +13,7 @@ import { appStore, setAppStore, setConnectionStatus } from "../store/app";
 import { settingsStore, applySettings, saveSettings } from "../store/settings";
 import { getHostTransport } from "./host-transport";
 import { makeMonitorTick } from "./monitor-tick";
+import { createVisibilityInterval, type VisibilityInterval } from "../utils/visibility-interval";
 
 // ── Helpers ──
 
@@ -173,7 +174,7 @@ export async function checkConnection(): Promise<boolean> {
 
 // ── Connection monitor ──
 
-let _monitorTimer: ReturnType<typeof setInterval> | null = null;
+let _monitorTimer: VisibilityInterval | null = null;
 
 /**
  * Start a periodic connection monitor that attempts reconnection every 10 s
@@ -198,7 +199,8 @@ export function startConnectionMonitor(
     check: () => checkConnection(),
     onReconnect,
   });
-  _monitorTimer = setInterval(tick, intervalMs);
+  _monitorTimer = createVisibilityInterval(tick, intervalMs);
+  _monitorTimer.start();
 }
 
 /**
@@ -207,7 +209,7 @@ export function startConnectionMonitor(
  */
 export function stopConnectionMonitor(): void {
   if (_monitorTimer !== null) {
-    clearInterval(_monitorTimer);
+    _monitorTimer.dispose();
     _monitorTimer = null;
   }
 }
