@@ -13860,6 +13860,472 @@
         ]
       }
     },
+    "/task/{taskID}/start-now": {
+      "post": {
+        "operationId": "task.queue.startNow",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "taskID",
+            "schema": {
+              "type": "string",
+              "pattern": "^tsk.*"
+            },
+            "required": true
+          }
+        ],
+        "summary": "Promote a queued task and attempt to start it",
+        "responses": {
+          "200": {
+            "description": "Queued task promoted and scheduler invoked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "task": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "pattern": "^tsk.*"
+                        },
+                        "projectID": {
+                          "type": "string"
+                        },
+                        "directory": {
+                          "type": "string"
+                        },
+                        "sessionID": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "pattern": "^ses.*"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "activePlanVersionID": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "pattern": "^pln.*"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "activeRunID": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "pattern": "^run.*"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "requestID": {
+                          "type": "string"
+                        },
+                        "source": {
+                          "type": "string"
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "request": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "queued",
+                            "active",
+                            "completed",
+                            "failed",
+                            "cancelled"
+                          ]
+                        },
+                        "priority": {
+                          "type": "string",
+                          "enum": [
+                            "critical",
+                            "high",
+                            "normal",
+                            "low"
+                          ]
+                        },
+                        "queue": {
+                          "type": "object",
+                          "properties": {
+                            "order": {
+                              "type": "number"
+                            },
+                            "revision": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "order"
+                          ]
+                        },
+                        "kind": {
+                          "default": "workflow",
+                          "type": "string",
+                          "enum": [
+                            "workflow",
+                            "build"
+                          ]
+                        },
+                        "blockingReason": {
+                          "type": "string"
+                        },
+                        "error": {
+                          "type": "string"
+                        },
+                        "budget": {
+                          "type": "object",
+                          "properties": {
+                            "maxExecutorGroups": {
+                              "type": "integer",
+                              "exclusiveMinimum": 0,
+                              "maximum": 9007199254740991
+                            }
+                          }
+                        },
+                        "metadata": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {}
+                        },
+                        "attachments": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "sha": {
+                                "type": "string"
+                              },
+                              "url": {
+                                "type": "string"
+                              },
+                              "mime": {
+                                "type": "string"
+                              },
+                              "size": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "filename": {
+                                "type": "string"
+                              },
+                              "intent": {
+                                "type": "string"
+                              },
+                              "source": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "sha",
+                              "url",
+                              "mime",
+                              "size"
+                            ]
+                          }
+                        },
+                        "time": {
+                          "type": "object",
+                          "properties": {
+                            "created": {
+                              "type": "number"
+                            },
+                            "updated": {
+                              "type": "number"
+                            },
+                            "started": {
+                              "type": "number"
+                            },
+                            "completed": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "created",
+                            "updated"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "projectID",
+                        "source",
+                        "title",
+                        "request",
+                        "status",
+                        "priority",
+                        "time"
+                      ]
+                    },
+                    "directory": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "started": {
+                      "type": "boolean"
+                    },
+                    "queuedTaskIDs": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "blockingTask": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "pattern": "^tsk.*"
+                        },
+                        "projectID": {
+                          "type": "string"
+                        },
+                        "directory": {
+                          "type": "string"
+                        },
+                        "sessionID": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "pattern": "^ses.*"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "activePlanVersionID": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "pattern": "^pln.*"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "activeRunID": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "pattern": "^run.*"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "requestID": {
+                          "type": "string"
+                        },
+                        "source": {
+                          "type": "string"
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "request": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "queued",
+                            "active",
+                            "completed",
+                            "failed",
+                            "cancelled"
+                          ]
+                        },
+                        "priority": {
+                          "type": "string",
+                          "enum": [
+                            "critical",
+                            "high",
+                            "normal",
+                            "low"
+                          ]
+                        },
+                        "queue": {
+                          "type": "object",
+                          "properties": {
+                            "order": {
+                              "type": "number"
+                            },
+                            "revision": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "order"
+                          ]
+                        },
+                        "kind": {
+                          "default": "workflow",
+                          "type": "string",
+                          "enum": [
+                            "workflow",
+                            "build"
+                          ]
+                        },
+                        "blockingReason": {
+                          "type": "string"
+                        },
+                        "error": {
+                          "type": "string"
+                        },
+                        "budget": {
+                          "type": "object",
+                          "properties": {
+                            "maxExecutorGroups": {
+                              "type": "integer",
+                              "exclusiveMinimum": 0,
+                              "maximum": 9007199254740991
+                            }
+                          }
+                        },
+                        "metadata": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {}
+                        },
+                        "attachments": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "sha": {
+                                "type": "string"
+                              },
+                              "url": {
+                                "type": "string"
+                              },
+                              "mime": {
+                                "type": "string"
+                              },
+                              "size": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "filename": {
+                                "type": "string"
+                              },
+                              "intent": {
+                                "type": "string"
+                              },
+                              "source": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "sha",
+                              "url",
+                              "mime",
+                              "size"
+                            ]
+                          }
+                        },
+                        "time": {
+                          "type": "object",
+                          "properties": {
+                            "created": {
+                              "type": "number"
+                            },
+                            "updated": {
+                              "type": "number"
+                            },
+                            "started": {
+                              "type": "number"
+                            },
+                            "completed": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "created",
+                            "updated"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "projectID",
+                        "source",
+                        "title",
+                        "request",
+                        "status",
+                        "priority",
+                        "time"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "task",
+                    "directory",
+                    "status",
+                    "started",
+                    "queuedTaskIDs"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Task is not queued"
+          },
+          "422": {
+            "description": "Task has no working directory"
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.task.queue.startNow({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/task/events": {
       "get": {
         "operationId": "task.list.events",

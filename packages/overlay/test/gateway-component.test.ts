@@ -148,12 +148,15 @@ test("Gateway ledger exposes queue reorder controls for queued tasks (PRD §7.2)
   // never render the controls.
   expect(GATEWAY_TSX).toContain('data-ui="gateway-ledger-move-up"')
   expect(GATEWAY_TSX).toContain('data-ui="gateway-ledger-move-down"')
+  expect(GATEWAY_TSX).toContain('data-ui="gateway-ledger-start-now"')
   expect(GATEWAY_TSX).toMatch(/<Show when=\{props\.canMoveUp\}>/)
   expect(GATEWAY_TSX).toMatch(/<Show when=\{props\.canMoveDown\}>/)
+  expect(GATEWAY_TSX).toMatch(/<Show when=\{canStartNow\(\)\}>/)
   // The handler must call the existing reorderTaskQueue service — single
   // source of truth for queue ordering, no Gateway-private mirror.
-  expect(GATEWAY_TSX).toContain('import { reorderTaskQueue } from "../services/task-queue"')
+  expect(GATEWAY_TSX).toContain('from "../services/task-queue"')
   expect(GATEWAY_TSX).toMatch(/await reorderTaskQueue\(\{[\s\S]*directory[\s\S]*orderedTaskIDs/)
+  expect(GATEWAY_TSX).toMatch(/await startQueuedTaskNow\(taskID\)/)
 })
 
 test("Gateway channel side panel exposes runtime restart action and surfaces errors (PRD §10)", () => {

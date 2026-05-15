@@ -259,6 +259,8 @@ import type {
   TaskProgressResponses,
   TaskQueueReorderErrors,
   TaskQueueReorderResponses,
+  TaskQueueStartNowErrors,
+  TaskQueueStartNowResponses,
   TaskReplanErrors,
   TaskReplanResponses,
   TaskRetryErrors,
@@ -4739,6 +4741,34 @@ export class Queue extends HeyApiClient {
         ...options?.headers,
         ...params.headers,
       },
+    })
+  }
+
+  /**
+   * Promote a queued task and attempt to start it
+   */
+  public startNow<ThrowOnError extends boolean = false>(
+    parameters: {
+      taskID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "taskID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<TaskQueueStartNowResponses, TaskQueueStartNowErrors, ThrowOnError>({
+      url: "/task/{taskID}/start-now",
+      ...options,
+      ...params,
     })
   }
 }

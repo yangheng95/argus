@@ -385,7 +385,8 @@
 
 .task-row-actions .oc-button[data-ui="task-row-delete"],
 .task-row-actions .oc-button[data-ui="task-row-cancel"],
-.task-row-actions .oc-button[data-ui="task-row-export"] {
+.task-row-actions .oc-button[data-ui="task-row-export"],
+.task-row-actions .oc-button[data-ui="task-row-start-now"] {
   --oc-button-height: calc(22px * var(--ui-scale));
   --oc-button-padding-x: 0;
   --oc-button-border: 0 solid transparent;
@@ -413,8 +414,23 @@
 .task-row-mini[data-active="true"] .oc-button[data-ui="task-row-cancel"],
 .task-row-mini:hover .oc-button[data-ui="task-row-export"],
 .task-row-mini:focus-within .oc-button[data-ui="task-row-export"],
-.task-row-mini[data-active="true"] .oc-button[data-ui="task-row-export"] {
+.task-row-mini[data-active="true"] .oc-button[data-ui="task-row-export"],
+.task-row-mini:hover .oc-button[data-ui="task-row-start-now"],
+.task-row-mini:focus-within .oc-button[data-ui="task-row-start-now"],
+.task-row-mini[data-active="true"] .oc-button[data-ui="task-row-start-now"] {
   opacity: var(--ui-opacity-full);
+}
+
+.task-row-actions .oc-button[data-ui="task-row-start-now"]:hover,
+.task-row-actions .oc-button[data-ui="task-row-start-now"]:focus-visible {
+  opacity: var(--ui-opacity-full);
+  --oc-button-bg: color-mix(in srgb, var(--accent) 10%, transparent);
+  --oc-button-color: var(--accent);
+}
+
+.task-row-actions .oc-button[data-ui="task-row-start-now"][data-busy="true"] {
+  opacity: var(--ui-opacity-subtle);
+  cursor: progress;
 }
 
 .task-row-actions .oc-button[data-ui="task-row-export"]:hover,

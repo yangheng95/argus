@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
-import { advanceQueue, dispatchTaskLoop, reorderQueuedTasksForCwd, taskCwd } from "../../src/engine/queue"
+import { advanceQueue, directoryQueueSnapshot, dispatchTaskLoop, reorderQueuedTasksForCwd, taskCwd } from "../../src/engine/queue"
 import { EngineArtifactTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import { findTask } from "../../src/engine/store"
 import { deriveTaskStatus } from "../../src/engine/task-status"
@@ -402,6 +402,146 @@ describe("engine queue", () => {
         expect(runTaskLoop.mock.calls[0]?.[0]).toMatchObject({ taskID: thirdID })
         expect(taskStatus(thirdID)).toBe("active")
         expect(taskStatus(firstID)).toBe("queued")
+      },
+    })
+  })
+
+  test("startQueuedTaskNow promotes and claims a queued task when the cwd is idle", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
+        const now = Date.now()
+        const firstID = `task_queue_first_${now}`
+        const secondID = `task_queue_second_${now}`
+
+        Database.transaction((db) => {
+          for (const [index, id] of [firstID, secondID].entries()) {
+            db.insert(EngineTaskTable).values({
+              id,
+              project_id: Instance.project.id,
+              source: "test",
+              title: `queued task ${index}`,
+              request: "start queued task now",
+              priority: "normal",
+              queue_order: index,
+              time_created: now + index,
+              time_updated: now + index,
+            }).run()
+          }
+        })
+
+        const result = await EngineService.startQueuedTaskNow(secondID)
+        await new Promise((resolve) => setTimeout(resolve, 0))
+
+        expect(result.started).toBe(true)
+        expect(result.status).toBe("active")
+        expect(runTaskLoop).toHaveBeenCalledTimes(1)
+        expect(runTaskLoop.mock.calls[0]?.[0]).toMatchObject({ taskID: secondID })
+        expect(taskStatus(secondID)).toBe("active")
+        expect(taskStatus(firstID)).toBe("queued")
+      },
+    })
+  })
+
+  test("startQueuedTaskNow starts the clicked task instead of a higher-priority queued sibling", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
+        const now = Date.now()
+        const criticalID = `task_queue_critical_${now}`
+        const normalID = `task_queue_normal_${now}`
+
+        Database.transaction((db) => {
+          db.insert(EngineTaskTable).values({
+            id: criticalID,
+            project_id: Instance.project.id,
+            source: "test",
+            title: "critical queued task",
+            request: "would normally win priority ordering",
+            priority: "critical",
+            queue_order: 0,
+            time_created: now,
+            time_updated: now,
+          }).run()
+          db.insert(EngineTaskTable).values({
+            id: normalID,
+            project_id: Instance.project.id,
+            source: "test",
+            title: "normal queued task",
+            request: "explicit operator start",
+            priority: "normal",
+            queue_order: 1,
+            time_created: now + 1,
+            time_updated: now + 1,
+          }).run()
+        })
+
+        const result = await EngineService.startQueuedTaskNow(normalID)
+        await new Promise((resolve) => setTimeout(resolve, 0))
+
+        expect(result.started).toBe(true)
+        expect(taskStatus(normalID)).toBe("active")
+        expect(taskStatus(criticalID)).toBe("queued")
+        expect(runTaskLoop).toHaveBeenCalledTimes(1)
+        expect(runTaskLoop.mock.calls[0]?.[0]).toMatchObject({ taskID: normalID })
+      },
+    })
+  })
+
+  test("startQueuedTaskNow keeps the hard gate when another same-cwd task is active", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
+        const now = Date.now()
+        const activeID = `task_queue_active_${now}`
+        const firstID = `task_queue_first_${now}`
+        const secondID = `task_queue_second_${now}`
+
+        Database.transaction((db) => {
+          db.insert(EngineTaskTable).values({
+            id: activeID,
+            project_id: Instance.project.id,
+            source: "test",
+            title: "active task",
+            request: "holds the directory gate",
+            priority: "normal",
+            time_started: now,
+            time_created: now,
+            time_updated: now,
+          }).run()
+          for (const [index, id] of [firstID, secondID].entries()) {
+            db.insert(EngineTaskTable).values({
+              id,
+              project_id: Instance.project.id,
+              source: "test",
+              title: `queued task ${index}`,
+              request: "promote while blocked",
+              priority: "normal",
+              queue_order: index,
+              time_created: now + index + 1,
+              time_updated: now + index + 1,
+            }).run()
+          }
+        })
+
+        const result = await EngineService.startQueuedTaskNow(secondID)
+
+        expect(result.started).toBe(false)
+        expect(result.status).toBe("queued")
+        expect(result.blockingTask?.id).toBe(activeID)
+        expect(taskStatus(activeID)).toBe("active")
+        expect(taskStatus(secondID)).toBe("queued")
+        expect(directoryQueueSnapshot(taskCwd(secondID)).queuedTaskIDs).toEqual([secondID, firstID])
+        expect(runTaskLoop).not.toHaveBeenCalled()
       },
     })
   })

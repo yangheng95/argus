@@ -52,7 +52,14 @@ import {
 import { ORCHESTRATOR_POLL_INTERVAL_MS, budgetRow, deriveTitle, progressStatus } from "@/engine/helpers"
 import { orchestratorState } from "@/engine/orchestrator-state"
 import { mergeTaskChecks, writeTaskChecks } from "@/engine/checks"
-import { dispatchTaskLoop, reorderQueuedTasksForCwd } from "@/engine/queue"
+import {
+  directoryQueueSnapshot,
+  dispatchTaskLoop,
+  listActiveForCwd,
+  reorderQueuedTasksForCwd,
+  startQueuedTaskInCwd,
+  taskCwd,
+} from "@/engine/queue"
 import { openTaskForOperatorMessage } from "@/engine/task-message-open"
 import { OrchestratorEventNote } from "@/orchestrator/agent"
 import { updateGoal as updateGoalRow, deleteGoal as deleteGoalRow } from "@/engine/persist"
@@ -580,6 +587,13 @@ export class PlannerFailureError extends Error {
   }
 }
 
+export class TaskQueueStartError extends Error {
+  constructor(message: string, readonly code: "not_queued" | "no_directory") {
+    super(message)
+    this.name = "TaskQueueStartError"
+  }
+}
+
 export namespace EngineService {
   export function init() {
     const current = orchestratorState()
@@ -992,6 +1006,48 @@ export namespace EngineService {
       ),
     )
     return result
+  }
+
+  export async function startQueuedTaskNow(taskID: string) {
+    const task = requireTask(taskID)
+    if (!isTaskQueued(task)) {
+      throw new TaskQueueStartError(`Task ${taskID} is not queued`, "not_queued")
+    }
+    const cwd = taskCwd(taskID)
+    if (!cwd) {
+      throw new TaskQueueStartError(`Task ${taskID} has no working directory`, "no_directory")
+    }
+
+    const before = directoryQueueSnapshot(cwd)
+    if (!before.queuedTaskIDs.includes(taskID)) {
+      throw new TaskQueueStartError(`Task ${taskID} is not in the directory queue`, "not_queued")
+    }
+    const orderedTaskIDs = [
+      taskID,
+      ...before.queuedTaskIDs.filter((id) => id !== taskID),
+    ]
+    await reorderTaskQueue({
+      directory: cwd,
+      orderedTaskIDs,
+      revision: before.revision,
+    })
+    await startQueuedTaskInCwd(taskID, cwd)
+
+    const updated = requireTask(taskID)
+    const status = deriveTaskStatus(updated) as string
+    const active = listActiveForCwd(cwd)
+    const blockingTask = status === "active"
+      ? undefined
+      : active.find((row) => row.id !== taskID)
+    const after = directoryQueueSnapshot(cwd)
+    return {
+      task: viewTask(updated, { directory: cwd }),
+      directory: cwd,
+      status,
+      started: status === "active",
+      queuedTaskIDs: after.queuedTaskIDs,
+      blockingTask: blockingTask ? viewTask(blockingTask, { directory: cwd }) : undefined,
+    }
   }
 
   export async function getDelivery(runID: string) {
