@@ -1,15 +1,16 @@
 /**
  * Tool set for the DeliveryAgent.
  *
- * Includes exploration tools, execution tools, screenshot tools, and memory
- * tools. Delivery is review-only: it verifies runtime
- * behavior and makes the final acceptance decision, while repair belongs to
+ * Includes exploration tools, bounded repair tools, execution tools,
+ * screenshot tools, and memory tools. Delivery may fix simple localized
+ * defects it can verify immediately; larger repair still belongs to
  * orchestrator retry/replan and build agents.
  */
 import { tool } from "ai"
 import z from "zod"
 import fs from "fs/promises"
 import path from "path"
+import { createTwoFilesPatch, diffLines } from "diff"
 import { createCodebaseTools } from "@/engine/codebase-tools"
 import { EngineArtifactTable } from "@/engine/engine.sql"
 import { Memory } from "@/memory"
@@ -263,6 +264,7 @@ async function runDeliveryIntegrityReview(input: {
  *
  * Includes:
  * - 4 codebase read tools: read_file, find_files, search_code, list_directory
+ * - 2 bounded repair tools: edit_file, write_file
  * - 2 memory tools: memory_search, memory_write
  * - 1 execution tool: run_command (for builds, startup checks)
  */
@@ -281,6 +283,53 @@ export function createDeliveryTools(input?: DeliveryToolContext) {
 
   return {
     ...codebase,
+
+    edit_file: tool({
+      description:
+        "Apply a small, targeted text replacement inside the project. Use only for simple delivery repairs " +
+        "that are clearly localized and immediately verifiable in this delivery run. For broad rewrites, " +
+        "cross-goal contract changes, missing features, or uncertain fixes, reject instead of editing.",
+      inputSchema: z.object({
+        path: z.string().describe("File path relative to the project root."),
+        old_text: z.string().min(1).describe("Exact text to replace."),
+        new_text: z.string().describe("Replacement text. Must differ from old_text."),
+        replace_all: z.boolean().default(false).describe("Replace every occurrence instead of requiring one match."),
+      }),
+      execute: async ({ path: filePath, old_text, new_text, replace_all }) => {
+        if (old_text === new_text) return "edit_file: no-op rejected because old_text and new_text are identical."
+        const abs = resolveDeliveryEditPath(projectDir, filePath)
+        const before = await readDeliveryTextFile(abs)
+        const occurrences = countOccurrences(before, old_text)
+        if (occurrences === 0) return `edit_file: old_text not found in ${filePath}.`
+        if (!replace_all && occurrences > 1) {
+          return `edit_file: old_text matched ${occurrences} times in ${filePath}; provide more context or set replace_all=true.`
+        }
+        const after = replace_all ? before.replaceAll(old_text, new_text) : before.replace(old_text, new_text)
+        await fs.writeFile(abs, after, "utf-8")
+        return renderDeliveryEditResult({ filePath, before, after })
+      },
+    }),
+
+    write_file: tool({
+      description:
+        "Write full text content to a project file for a simple delivery repair. Prefer edit_file for " +
+        "existing files. Do not use for broad rewrites, generated artifacts, vendored dependencies, or " +
+        "repairs that should go back through Build.",
+      inputSchema: z.object({
+        path: z.string().describe("File path relative to the project root."),
+        content: z.string().describe("Full replacement content."),
+      }),
+      execute: async ({ path: filePath, content }) => {
+        const abs = resolveDeliveryEditPath(projectDir, filePath)
+        const before = await fs.readFile(abs, "utf-8").catch((err) => {
+          if ((err as NodeJS.ErrnoException).code === "ENOENT") return ""
+          throw err
+        })
+        await fs.mkdir(path.dirname(abs), { recursive: true })
+        await fs.writeFile(abs, content, "utf-8")
+        return renderDeliveryEditResult({ filePath, before, after: content })
+      },
+    }),
 
     inspect_delivery_context: tool({
       description:
@@ -929,8 +978,12 @@ function renderDeliveryContextSection(
       return (
         "# Code Diffs\n\n" +
         ((delivery?.diffs ?? [])
-          .filter((item) => item.diff)
-          .map((item) => `--- ${item.file} ---\n${item.diff}`)
+          .map(
+            (item) =>
+              `--- ${item.file} (+${item.additions}/-${item.deletions}) ---\n` +
+              `[before]\n${item.before || "(empty)"}\n` +
+              `[after]\n${item.after || "(empty)"}`,
+          )
           .join("\n\n") || "(none)")
       )
 
@@ -1071,6 +1124,66 @@ function describeVisualArtifact(item: DeliveryToolAttachment) {
     intent: item.intent,
     source: item.source,
   }
+}
+
+function resolveDeliveryEditPath(projectDir: string, relPath: string): string {
+  if (path.isAbsolute(relPath)) {
+    throw new Error("delivery repair paths must be relative to the project root")
+  }
+  const abs = path.resolve(projectDir, relPath)
+  const root = path.resolve(projectDir)
+  const relative = path.relative(root, abs)
+  if (relative === "" || relative.startsWith("..") || path.isAbsolute(relative)) {
+    throw new Error(`delivery repair path escapes the project root: ${relPath}`)
+  }
+  const normalized = relative.replaceAll("\\", "/")
+  if (
+    normalized.startsWith(".git/") ||
+    normalized.includes("/.git/") ||
+    normalized.startsWith("node_modules/") ||
+    normalized.includes("/node_modules/")
+  ) {
+    throw new Error(`delivery repair path is not editable: ${relPath}`)
+  }
+  return abs
+}
+
+async function readDeliveryTextFile(abs: string): Promise<string> {
+  const buf = await fs.readFile(abs)
+  if (buf.subarray(0, Math.min(buf.length, 4096)).includes(0)) {
+    throw new Error(`delivery repair refused binary/NUL-containing file: ${abs}`)
+  }
+  return buf.toString("utf-8")
+}
+
+function countOccurrences(text: string, needle: string): number {
+  if (needle.length === 0) return 0
+  let count = 0
+  let index = 0
+  while (true) {
+    const found = text.indexOf(needle, index)
+    if (found === -1) return count
+    count++
+    index = found + needle.length
+  }
+}
+
+function renderDeliveryEditResult(input: { filePath: string; before: string; after: string }): string {
+  const diff = createTwoFilesPatch(input.filePath, input.filePath, input.before, input.after)
+  let additions = 0
+  let deletions = 0
+  for (const change of diffLines(input.before, input.after)) {
+    if (change.added) additions += change.count || 0
+    if (change.removed) deletions += change.count || 0
+  }
+  return [
+    `delivery repair updated ${input.filePath}`,
+    `additions=${additions} deletions=${deletions}`,
+    "Run a focused verification command or runtime probe before submit_verdict. " +
+      "If the issue is not fully fixed, submit verdict='rejected'.",
+    "diff:",
+    diff.slice(0, 8000),
+  ].join("\n")
 }
 
 function truncateToolText(text: string, maxChars: number): string {

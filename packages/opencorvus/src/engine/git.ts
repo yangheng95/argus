@@ -304,21 +304,20 @@ export async function ensureGitignore() {
   // HEAD with the same bytes it exits 0 → we skip.
   const diff = await git(["diff", "--cached", "--quiet", "--", ".gitignore"], { cwd: dir })
   if (diff.exitCode === 0) return
+  const hasHead = (await git(["rev-parse", "--verify", "HEAD"], { cwd: dir })).exitCode === 0
   // `-m` and the message MUST come before `--` — anything after `--` is
   // pathspec, so the prior arg order made git parse `-m` and the subject
   // as filenames and the seed commit silently failed on every fresh repo.
   // That left HEAD absent, and `Worktree.create` then died with the opaque
   // `WorktreeCreateFailedError` on every greenfield project.
-  const committed = await git(
-    [
-      "-c", "user.email=opencorvus@local",
-      "-c", "user.name=OpenCorvus",
-      "commit", "--only",
-      "-m", "chore(opencorvus): seed baseline .gitignore",
-      "--", ".gitignore",
-    ],
-    { cwd: dir },
-  )
+  const committed = await git([
+    "-c", "user.email=opencorvus@local",
+    "-c", "user.name=OpenCorvus",
+    "commit",
+    ...(hasHead ? ["--only"] : []),
+    "-m", "chore(opencorvus): seed baseline .gitignore",
+    ...(hasHead ? ["--", ".gitignore"] : []),
+  ], { cwd: dir })
   if (committed.exitCode !== 0) {
     const detail = committed.stderr.toString().trim() || committed.stdout.toString().trim() || "git commit failed"
     throw new Error(`ensureGitignore: seed commit failed: ${detail}`)
@@ -387,14 +386,14 @@ function result(task: TaskRow) {
 /**
  * P0-C.1 — anchor each delivery picky-loop iteration in git.
  *
- * Delivery is review-only, but each picky-loop iteration still needs a git
- * anchor. Rejected rounds identify the exact merged state that delivery
- * reviewed; accepted rounds anchor the final state before publishing. Without
+ * Delivery can make bounded final repairs, and each picky-loop iteration needs
+ * a git anchor. Rejected rounds identify the exact merged state that delivery
+ * reviewed or repaired; accepted rounds anchor the final state before publishing. Without
  * this helper the loop has no per-round LKG (Last Known Good) anchor and no
  * historical record of which round produced which verdict.
  *
  * Always commits — `--allow-empty` plus `--no-gpg-sign` keep this a
- * pure time anchor when the LLM made no code edits. Best-effort: any
+ * pure time anchor when delivery made no code edits. Best-effort: any
  * git failure is logged and reported back, never thrown, so a broken
  * commit never blocks the surrounding deliver tool.
  */
