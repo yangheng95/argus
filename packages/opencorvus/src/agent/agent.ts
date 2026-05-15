@@ -267,7 +267,7 @@ export namespace Agent {
         // exposed every executor surface. Rule 22 — one role per tool list.
         // Allowed:
         //   - dispatch tools (the orchestrator's actual job)
-        //   - observation tools (read_context, query_failed_goals, *_report)
+        //   - observation tools (read_context, query_failed_goals, goal_report)
         //   - user interaction (question)
         //   - session-local bookkeeping (todoread, todowrite, schedule, skill)
         // Excluded:
@@ -301,7 +301,6 @@ export namespace Agent {
             // observation (read-only views of task state)
             "query_failed_goals",
             "read_context",
-            "task_report",
             "goal_report",
             "analytics",
             // user interaction
