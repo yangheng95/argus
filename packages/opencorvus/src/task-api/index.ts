@@ -178,17 +178,53 @@ async function resolveDirectReplyTarget(taskID: string, sessionID: string) {
     throw new Error(`Session ${sessionID} has kind "${kind}" and cannot receive direct agent replies`)
   }
   const session = await Session.get(sessionID)
-  const latest = await latestSessionModelIdentity(sessionID)
+  const latest = await latestSessionPromptEnvelope(sessionID)
   if (!latest) {
-    throw new Error(`Session ${sessionID} has no prior model identity to continue`)
+    throw new Error(`Session ${sessionID} has no prior user prompt envelope to continue`)
   }
 
   return {
     session,
+    prompt: latest,
+  }
+}
+
+async function latestSessionPromptEnvelope(sessionID: string) {
+  const messages = await Session.messages({ sessionID })
+  const users = messages
+    .map((message) => message.info)
+    .filter((info): info is Message.User => info.role === "user")
+    .sort((left, right) => (right.time.created ?? 0) - (left.time.created ?? 0))
+
+  const latest = users[0]
+  if (!latest) return
+
+  const pickLatestDefined = <K extends keyof Message.User>(key: K): Message.User[K] | undefined => {
+    for (const user of users) {
+      const value = user[key]
+      if (value !== undefined) return value
+    }
+    return undefined
+  }
+
+  const mergedExtra = users
+    .slice()
+    .reverse()
+    .reduce<Record<string, unknown>>((acc, user) => {
+      if (user.extra && typeof user.extra === "object") Object.assign(acc, user.extra)
+      return acc
+    }, {})
+
+  return {
     agent: latest.agent,
     model: latest.model,
-    variant: latest.variant,
-  }
+    ...(pickLatestDefined("variant") ? { variant: pickLatestDefined("variant") } : {}),
+    ...(pickLatestDefined("system") ? { system: pickLatestDefined("system") } : {}),
+    ...(pickLatestDefined("systemMode") ? { systemMode: pickLatestDefined("systemMode") } : {}),
+    ...(pickLatestDefined("tools") ? { tools: pickLatestDefined("tools") } : {}),
+    ...(pickLatestDefined("format") ? { format: pickLatestDefined("format") } : {}),
+    ...(Object.keys(mergedExtra).length > 0 ? { extra: mergedExtra } : {}),
+  } satisfies Pick<Message.User, "agent" | "model" | "variant" | "system" | "systemMode" | "tools" | "format" | "extra">
 }
 
 async function latestSessionModelIdentity(sessionID: string) {
@@ -233,10 +269,15 @@ async function appendDirectAgentSessionReply(input: {
     sessionID: target.session.id,
     role: "user",
     time: { created: Date.now() },
-    agent: target.agent,
-    model: target.model,
-    ...(target.variant ? { variant: target.variant } : {}),
+    agent: target.prompt.agent,
+    model: target.prompt.model,
+    ...(target.prompt.variant ? { variant: target.prompt.variant } : {}),
+    ...(target.prompt.system ? { system: target.prompt.system } : {}),
+    ...(target.prompt.systemMode ? { systemMode: target.prompt.systemMode } : {}),
+    ...(target.prompt.tools ? { tools: target.prompt.tools } : {}),
+    ...(target.prompt.format ? { format: target.prompt.format } : {}),
     extra: {
+      ...(target.prompt.extra ?? {}),
       overlay_direct_reply: true,
       source: "overlay_direct_reply",
       taskID: input.taskID,

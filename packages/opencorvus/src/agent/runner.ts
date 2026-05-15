@@ -15,8 +15,8 @@
  *   - `format` (optional): JSON-schema for the StructuredOutput tool when
  *     the agent has a terminal structured payload.
  *
- * Everything else — model resolution, child session creation, withExtraTools
- * wiring, SessionPrompt invocation, abort propagation, stream-error capture,
+ * Everything else — model resolution, child session creation, resumable
+ * session-runtime wiring, SessionPrompt invocation, abort propagation, stream-error capture,
  * `loadStageSkills` skill injection, `config.agent.<kind>.prompt` user-append
  * — is centralised here.
  *
@@ -94,8 +94,8 @@ const log = Log.create({ service: "agent-runner" })
 // ---------------------------------------------------------------------------
 
 /**
- * Stage-specific tool kit. `tools` is the tool surface registered via
- * `SessionPrompt.withExtraTools`. `getCollector()` returns whatever the
+ * Stage-specific tool kit. `tools` is the tool surface registered on the
+ * child session's runtime contract. `getCollector()` returns whatever the
  * agent collected during the run; the runner does not interpret it.
  */
 export interface AgentToolKit<C> {
@@ -768,6 +768,19 @@ export async function runAgentSession<C>(
     : undefined
 
   let finalMessage: Message.WithParts | undefined
+  const terminalToolContract = input.terminalTool
+    ? {
+        toolName: input.terminalTool.toolName,
+        isSatisfied: () => input.terminalTool!.isSatisfied(input.toolKit.getCollector()),
+        shouldExposeOnlyTerminalTool: () =>
+          input.terminalTool!.shouldExposeOnlyTerminalTool(input.toolKit.getCollector()),
+      }
+    : undefined
+  SessionPrompt.setSessionRuntimeContract(session.id, {
+    tools: input.toolKit.tools,
+    terminalToolContract,
+    structuredOutputGuard: input.format?.validate,
+  })
   try {
     try {
       const promptOnce = async (
@@ -791,55 +804,36 @@ export async function runAgentSession<C>(
         }
         finalMessage = (await SessionPrompt.prompt(promptArgs)) as Message.WithParts
       }
-      await SessionPrompt.withExtraTools(session.id, input.toolKit.tools, async () => {
-        const runWithTerminalContract = async () => {
-          if (!input.terminalTool) {
-            await promptOnce()
-            return
-          }
-          await SessionPrompt.withTerminalToolContract(session.id, {
+      let terminalRecoveryAttempt = 0
+      let nextParts: typeof parts = parts
+      while (true) {
+        await promptOnce(nextParts)
+        if (!finalMessage) throw new Error(`agent ${agentName} prompt returned no final message`)
+        if (!input.terminalTool) break
+        const collector = input.toolKit.getCollector()
+        if (input.terminalTool.isSatisfied(collector)) break
+        const recovery = input.terminalTool.recovery
+        if (
+          !recovery ||
+          !shouldContinueForMissingTerminalTool({
+            finalMessage,
             toolName: input.terminalTool.toolName,
-            isSatisfied: () => input.terminalTool!.isSatisfied(input.toolKit.getCollector()),
-            shouldExposeOnlyTerminalTool: () =>
-              input.terminalTool!.shouldExposeOnlyTerminalTool(input.toolKit.getCollector()),
-          }, async () => {
-            let terminalRecoveryAttempt = 0
-            let nextParts: typeof parts = parts
-            while (true) {
-              await promptOnce(nextParts)
-              if (!finalMessage) return
-              const collector = input.toolKit.getCollector()
-              if (input.terminalTool!.isSatisfied(collector)) return
-              const recovery = input.terminalTool!.recovery
-              if (
-                !recovery ||
-                !shouldContinueForMissingTerminalTool({
-                  finalMessage,
-                  toolName: input.terminalTool!.toolName,
-                  satisfied: false,
-                  attempt: terminalRecoveryAttempt,
-                  maxTurns: recovery.maxTurns,
-                })
-              ) {
-                return
-              }
-              terminalRecoveryAttempt++
-              const text = recovery.buildUserPrompt({
-                collector,
-                toolName: input.terminalTool!.toolName,
-                attempt: terminalRecoveryAttempt,
-                finalMessage,
-              })
-              nextParts = [{ type: "text", text, id: Identifier.ascending("part") }]
-            }
+            satisfied: false,
+            attempt: terminalRecoveryAttempt,
+            maxTurns: recovery.maxTurns,
           })
+        ) {
+          break
         }
-        if (input.format?.validate) {
-          await SessionPrompt.withStructuredOutputGuard(session.id, input.format.validate, runWithTerminalContract)
-          return
-        }
-        await runWithTerminalContract()
-      })
+        terminalRecoveryAttempt++
+        const text = recovery.buildUserPrompt({
+          collector,
+          toolName: input.terminalTool.toolName,
+          attempt: terminalRecoveryAttempt,
+          finalMessage,
+        })
+        nextParts = [{ type: "text", text, id: Identifier.ascending("part") }]
+      }
     } finally {
       errorUnsub()
       input.signal?.removeEventListener("abort", abortPrompt)
