@@ -62,11 +62,8 @@ export interface AppState {
   coreVersion: string;
   /** Runtime-resolved on-disk paths the engine is using. Populated by
    *  /global/health response so debug tooling (task debug blob, support
-   *  bundles) reads the actual DB location instead of guessing from a
-   *  static `<task.directory>/.opencorvus/opencorvus.db` template — that
-   *  guess is wrong whenever OPENCORVUS_HOME is set or the engine was
-   *  launched from a cwd different from the task's project directory
-   *  (e.g. the bundled overlay carrying its own .opencorvus/). */
+   *  bundles) reads the actual single-source DB location instead of
+   *  rebuilding a path template in the client. */
   enginePaths: { database: string; data: string; home: string } | null;
  // ── Server-side config (mirrors state.config) ──
   /** Full server-side config object as returned by the /config API */

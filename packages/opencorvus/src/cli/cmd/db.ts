@@ -64,7 +64,7 @@ const PathCommand = cmd({
  *
  * Follows CLAUDE.md rule 13 (reset DB, no migrations) + specs/new-arch/16-unified-teardown.md §7-6
  * (schema-zero rebuild). Wipes:
- *   - SQLite db + WAL + SHM (opencorvus.db, opencorvus.db-wal, opencorvus.db-shm)
+ *   - Global SQLite db + WAL + SHM (`${Global.Path.data}/opencorvus.db*`)
  *   - Ownership markers under <primary>/.opencorvus/ownership/
  *   - Worktree directories under <primary>/.opencorvus/worktrees/
  *   - Snapshot scratch under Global.Path.data + "snapshot"
@@ -75,7 +75,7 @@ const PathCommand = cmd({
  */
 const ResetCommand = cmd({
   command: "reset",
-  describe: "atomically wipe the opencorvus SQLite DB and on-disk scratch (worktrees, ownership markers, snapshots). DESTRUCTIVE — there is no undo.",
+  describe: "atomically wipe the global opencorvus SQLite DB and project scratch (worktrees, ownership markers, snapshots). DESTRUCTIVE — there is no undo.",
   builder: (yargs: Argv) => {
     return yargs.option("force", {
       type: "boolean",
@@ -91,7 +91,7 @@ const ResetCommand = cmd({
     }
 
     // CLI is invoked from the project directory; capture cwd BEFORE disposing
-    // any active Instance so reset() can locate `<projectDir>/.opencorvus/`.
+    // any active Instance so reset() can locate the project's scratch dirs.
     const projectDir = process.cwd()
     await Instance.disposeAll().catch(() => undefined)
     const results = await Database.reset(projectDir)

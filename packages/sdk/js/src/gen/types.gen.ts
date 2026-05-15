@@ -3342,7 +3342,7 @@ export type GlobalDisposeResponse = GlobalDisposeResponses[keyof GlobalDisposeRe
 export type GlobalDbResetData = {
   body?: {
     /**
-     * Absolute filesystem path of the project whose DB should be wiped (the directory containing .opencorvus/).
+     * Absolute filesystem path of the project whose .opencorvus scratch directories should be wiped alongside the shared DB.
      */
     projectDir: string
   }

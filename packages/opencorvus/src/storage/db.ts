@@ -32,27 +32,15 @@ function ensureSchemaCompatibility(sqlite: BunDatabase) {
 
 
 export namespace Database {
-  // Project-local DB lives under `<projectDir>/.opencorvus/opencorvus.db` so
-  // engine state (sqlite + WAL + SHM) is fully isolated from the user's
-  // primary worktree contents — `git merge --ff-only` can never trip on an
-  // untracked opencorvus.db dropped at the project root.
+  // SQLite state is global and single-source: `<Global.Path.data>/opencorvus.db`.
+  // Project-scoped routing (`Instance.directory`) selects which project rows
+  // a request operates on; it does NOT select a different SQLite file.
   //
-  // Anchor: process.cwd(). The project context (Instance) is established
-  // AFTER Database.Client opens (Instance.provide → Project.fromDirectory
-  // → Database.use), so resolving via Instance.directory would deadlock the
-  // bootstrap. opencorvus is always invoked with cwd == project dir, so cwd
-  // and Instance.directory agree. The `.opencorvus/` subfolder is the
-  // architectural guarantee — not which variable provides the project root.
-  //
-  // OPENCORVUS_HOME (benchmarks, portable installs) keeps using the
-  // Global.Path.data layout. Path() stays a function — not a const — so
-  // OPENCORVUS_HOME resolves lazily on first DB open, after benchmarks have
-  // set their env.
+  // Path() stays a function — not a const — so OPENCORVUS_HOME resolves
+  // lazily on first DB open, after benchmarks / portable launchers have set
+  // their env.
   export function Path() {
-    if (process.env.OPENCORVUS_HOME?.trim()) {
-      return path.join(Global.Path.data, "opencorvus.db")
-    }
-    return path.join(process.cwd(), ".opencorvus", "opencorvus.db")
+    return path.join(Global.Path.data, "opencorvus.db")
   }
   type Schema = typeof schema
   export type Transaction = SQLiteTransaction<"sync", void, Schema>
@@ -61,15 +49,10 @@ export namespace Database {
 
   const state = {
     sqlite: undefined as BunDatabase | undefined,
-    // Path used at last open. Captured so `reset()` can wipe the right files
-    // after `Instance.disposeAll()` has cleared the project context — Path()
-    // would otherwise throw when no Instance is active.
-    lastPath: undefined as string | undefined,
   }
 
   export const Client = lazy(() => {
     const dbPath = Path()
-    state.lastPath = dbPath
     log.info("opening database", { path: dbPath })
     // Ensure data dir exists — benchmarks create OPENCORVUS_HOME at runtime,
     // so the data subdirectory may not have been created by global/index.ts
@@ -111,13 +94,13 @@ export namespace Database {
   }
 
   // Atomic on-disk wipe shared by `opencorvus db reset` CLI and the
-  // /global/db/reset HTTP backdoor. Caller MUST pass the project directory
-  // explicitly — the DB path now lives under `<projectDir>/.opencorvus/`,
-  // and Instance state may already have been disposed before reset() runs
-  // (so we can't rely on Instance.directory here).
+  // /global/db/reset HTTP backdoor. The SQLite file itself is global
+  // (`Database.Path()`); caller still MUST pass the project directory
+  // explicitly so project-scoped scratch under `<projectDir>/.opencorvus/`
+  // can be removed alongside the shared DB.
   export async function reset(projectDir: string): Promise<Array<{ label: string; path: string; ok: boolean; error?: string }>> {
     close()
-    const dbPath = path.join(projectDir, ".opencorvus", "opencorvus.db")
+    const dbPath = Path()
     const targets: Array<{ label: string; path: string }> = [
       { label: "db", path: dbPath },
       { label: "db-wal", path: `${dbPath}-wal` },
@@ -135,7 +118,6 @@ export namespace Database {
         results.push({ ...target, ok: false, error: err instanceof Error ? err.message : String(err) })
       }
     }
-    state.lastPath = undefined
     return results
   }
 
