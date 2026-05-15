@@ -531,15 +531,48 @@ function modifyGoalAcceptanceHints(input: unknown): string[] {
   return [...new Set(hints)]
 }
 
-function resolveSteerTargetSessionID(taskID: string, requestedID: string): string {
-  const goalRun = findGoalRun(requestedID)
-  if (!goalRun || goalRun.task_id !== taskID) return requestedID
+function resolveSteerTarget(input: {
+  taskID: string
+  sessionID?: string
+  goalID?: string
+}): { sessionID: string; source: string } {
+  if (input.goalID) {
+    const goal = findGoal(input.goalID)
+    if (!goal || goal.task_id !== input.taskID) {
+      throw new Error(`goal ${input.goalID} does not belong to task ${input.taskID}`)
+    }
+    const goalRun = findLatestTipGoalRun(input.goalID)
+    if (!goalRun) {
+      throw new Error(`goal ${input.goalID} has no goal_run yet; dispatch build before steering it.`)
+    }
+    if (!goalRun.session_id) {
+      throw new Error(
+        `goal ${input.goalID} latest goal_run ${goalRun.id} has no child session_id yet; wait for the build session to start or finalize the stale attempt before steering it.`,
+      )
+    }
+    return {
+      sessionID: goalRun.session_id,
+      source: `${input.goalID} -> goal_run ${goalRun.id} -> session ${goalRun.session_id}`,
+    }
+  }
+
+  if (!input.sessionID) {
+    throw new Error("steer_subagent requires either session_id or goal_id")
+  }
+
+  const goalRun = findGoalRun(input.sessionID)
+  if (!goalRun || goalRun.task_id !== input.taskID) {
+    return { sessionID: input.sessionID, source: input.sessionID }
+  }
   if (!goalRun.session_id) {
     throw new Error(
-      `goal_run ${requestedID} has no child session_id yet; wait for the build session to start or finalize the stale attempt before steering it.`,
+      `goal_run ${input.sessionID} has no child session_id yet; wait for the build session to start or finalize the stale attempt before steering it.`,
     )
   }
-  return goalRun.session_id
+  return {
+    sessionID: goalRun.session_id,
+    source: `${input.sessionID} -> session ${goalRun.session_id}`,
+  }
 }
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
@@ -3791,20 +3824,34 @@ export function createOrchestratorTools(input: {
       description:
         "Send a scoped steering message to a child agent session and wake that session. " +
         "Use this before retrying a sub-agent that appears idle/timed out: ask for current status, partial findings, and whether it can continue. " +
-        "You may pass either the child session_id or the live goal_run_id reported by read_context.",
-      inputSchema: z.object({
-        session_id: z
-          .string()
-          .min(1)
-          .describe("Child agent session id to steer, or the live goal_run_id reported by read_context"),
-        message: z.string().min(1).describe("Natural-language steering/status-check message for that sub-agent"),
-        reason: z.string().describe("Why this sub-agent must be contacted before retrying"),
-      }),
-      execute: async ({ session_id, message, reason }) => {
-        const targetSessionID = resolveSteerTargetSessionID(taskID, session_id)
-        const result = await EngineService.replyAgentSession(taskID, targetSessionID, { message })
-        const source = targetSessionID === session_id ? session_id : `${session_id} -> session ${targetSessionID}`
-        return `Steered sub-agent session ${result.session_id}. source=${source}. message=${result.message_id}. Reason: ${reason}`
+        "You may pass session_id directly, goal_id for the latest live attempt, or a live goal_run_id via session_id for backward compatibility.",
+      inputSchema: z
+        .object({
+          session_id: z
+            .string()
+            .min(1)
+            .optional()
+            .describe("Child agent session id to steer. Backward-compatible: also accepts the live goal_run_id reported by read_context."),
+          goal_id: z
+            .string()
+            .min(1)
+            .optional()
+            .describe("Goal id to steer. Host resolves it to the latest live goal_run and child session."),
+          message: z.string().min(1).describe("Natural-language steering/status-check message for that sub-agent"),
+          reason: z.string().describe("Why this sub-agent must be contacted before retrying"),
+        })
+        .refine((value) => !!value.session_id || !!value.goal_id, {
+          message: "steer_subagent requires either session_id or goal_id",
+          path: ["session_id"],
+        }),
+      execute: async ({ session_id, goal_id, message, reason }) => {
+        const target = resolveSteerTarget({
+          taskID,
+          sessionID: session_id,
+          goalID: goal_id,
+        })
+        const result = await EngineService.replyAgentSession(taskID, target.sessionID, { message })
+        return `Steered sub-agent session ${result.session_id}. source=${target.source}. message=${result.message_id}. Reason: ${reason}`
       },
     }),
 
