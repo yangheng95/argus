@@ -2,8 +2,13 @@ import { test, expect } from "bun:test";
 
 (globalThis as typeof globalThis & { __OPENCORVUS_OVERLAY_VERSION__?: string }).__OPENCORVUS_OVERLAY_VERSION__ = "test";
 
+if (typeof globalThis.requestAnimationFrame === "undefined") {
+  (globalThis as any).requestAnimationFrame = (() => 1) as any;
+  (globalThis as any).cancelAnimationFrame = (() => {}) as any;
+}
+
 const { setBoardStore } = await import("../src/store/board");
-const { applyEvent, resetWriter } = await import("../src/services/tree-writer");
+const { applyEvent, flushBufferedPartDeltas, resetWriter } = await import("../src/services/tree-writer");
 const { cardTreeStore } = await import("../src/store/card-tree");
 const { statusBadge } = await import("../src/utils/status-badge");
 const { replay } = await import("./fixtures/replay");
@@ -189,6 +194,7 @@ test("executor sessions surface when they contain visible reasoning", () => {
       delta: "thinking through the executor path",
     },
   });
+  flushBufferedPartDeltas();
 
   expect(cardTreeStore.order).toContain(executorCardID);
   expect(

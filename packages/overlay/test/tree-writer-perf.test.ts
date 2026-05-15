@@ -13,9 +13,13 @@
 import { test, expect } from "bun:test";
 
 (globalThis as typeof globalThis & { __OPENCORVUS_OVERLAY_VERSION__?: string }).__OPENCORVUS_OVERLAY_VERSION__ = "test";
+if (typeof globalThis.requestAnimationFrame === "undefined") {
+  (globalThis as any).requestAnimationFrame = (() => 1) as any;
+  (globalThis as any).cancelAnimationFrame = (() => {}) as any;
+}
 
 const { setBoardStore } = await import("../src/store/board");
-const { applyEvent, resetWriter } = await import("../src/services/tree-writer");
+const { applyEvent, flushBufferedPartDeltas, resetWriter } = await import("../src/services/tree-writer");
 const { cardTreeStore } = await import("../src/store/card-tree");
 
 const TASK_ID = "tsk_perf";
@@ -93,6 +97,7 @@ function runDeltaBurst(count: number): { totalMs: number; perEventMs: number } {
     });
   }
   const totalMs = performance.now() - start;
+  flushBufferedPartDeltas();
   return { totalMs, perEventMs: totalMs / count };
 }
 
@@ -173,6 +178,7 @@ function runExecutorDeltaBurstWithManyCards(count: number, extraCards: number): 
     });
   }
   const totalMs = performance.now() - start;
+  flushBufferedPartDeltas();
   return { totalMs, perEventMs: totalMs / count };
 }
 

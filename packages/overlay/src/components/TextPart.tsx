@@ -1,5 +1,7 @@
-import { createEffect, createMemo, createSignal, For, Show } from "solid-js";
+/** @jsxImportSource solid-js */
+import { createMemo, For, Show } from "solid-js";
 import { renderMarkdown } from "../utils/markdown";
+import { createStreamingTextPartModel } from "./text-part-model";
 
 /**
  * Incremental streaming markdown renderer.
@@ -13,72 +15,8 @@ import { renderMarkdown } from "../utils/markdown";
  * card leaves the running state.
  */
 
-/** Split text into top-level markdown blocks separated by blank lines. */
-function splitBlocks(text: string): string[] {
-  if (!text) return [];
-  // Split on double newline (standard markdown block boundary).
-  // Preserve code fences as single blocks even if they contain blank lines.
-  const blocks: string[] = [];
-  let current = "";
-  let inFence = false;
-
-  for (const line of text.split("\n")) {
-    if (line.trimStart().startsWith("```")) {
-      inFence = !inFence;
-      current += (current ? "\n" : "") + line;
-      continue;
-    }
-    if (inFence) {
-      current += (current ? "\n" : "") + line;
-      continue;
-    }
-    // Blank line outside of fence → block boundary
-    if (line.trim() === "") {
-      if (current.trim()) {
-        blocks.push(current);
-      }
-      current = "";
-      continue;
-    }
-    current += (current ? "\n" : "") + line;
-  }
-  if (current) blocks.push(current);
-  return blocks;
-}
-
 export function TextPart(props: { text: string; streaming?: boolean }) {
-  // Frozen block cache: index → rendered HTML string.
-  // Once a block is frozen its HTML never changes.
-  const [frozenHtml, setFrozenHtml] = createSignal<string[]>([]);
-  let frozenSources: string[] = [];
-  const [activeText, setActiveText] = createSignal("");
-
-  createEffect(() => {
-    const text = props.text || "";
-    const streaming = props.streaming === true;
-    const blocks = splitBlocks(text);
-    const total = blocks.length;
-    // Running streams keep the trailing block raw; completed text renders every
-    // block as markdown exactly once through the frozen cache.
-    const frozenCount = streaming ? Math.max(0, total - 1) : total;
-    const nextFrozenSources = blocks.slice(0, frozenCount);
-
-    const cacheStillValid =
-      frozenSources.length <= nextFrozenSources.length &&
-      frozenSources.every((source, index) => source === nextFrozenSources[index]);
-    if (!cacheStillValid) {
-      frozenSources = nextFrozenSources;
-      setFrozenHtml(nextFrozenSources.map((source) => renderMarkdown(source)));
-    } else if (nextFrozenSources.length > frozenSources.length) {
-      const additions = nextFrozenSources
-        .slice(frozenSources.length)
-        .map((source) => renderMarkdown(source));
-      frozenSources = nextFrozenSources;
-      setFrozenHtml((prev) => [...prev, ...additions]);
-    }
-
-    setActiveText(streaming && total > 0 ? blocks[total - 1] : "");
-  });
+  const { frozenHtml, activeText } = createStreamingTextPartModel(props, renderMarkdown);
 
   return (
     <div class="msg-text">

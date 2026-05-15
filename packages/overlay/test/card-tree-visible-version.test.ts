@@ -4,7 +4,12 @@ import { expect, test } from "bun:test";
 
 const { setBoardStore } = await import("../src/store/board");
 const { cardTreeStore } = await import("../src/store/card-tree");
-const { applyEvent, resetWriter } = await import("../src/services/tree-writer");
+const { applyEvent, flushBufferedPartDeltas, resetWriter } = await import("../src/services/tree-writer");
+
+if (typeof globalThis.requestAnimationFrame === "undefined") {
+  (globalThis as any).requestAnimationFrame = (() => 1) as any;
+  (globalThis as any).cancelAnimationFrame = (() => {}) as any;
+}
 
 const TASK_ID = "tsk_visible_version";
 const SESSION_ID = "ses_visible_version";
@@ -74,6 +79,7 @@ test("streaming part deltas advance the card tree visible version", () => {
         delta: "hello",
       },
     });
+    flushBufferedPartDeltas();
 
     expect(cardTreeStore.visibleVersion).toBeGreaterThan(before);
   } finally {
