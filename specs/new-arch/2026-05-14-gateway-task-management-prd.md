@@ -50,7 +50,7 @@ The page must:
 - Do not introduce fallback behavior when channel status, task status, or binding data cannot be loaded. Show explicit error states.
 - Do not move workspace/panel-level controls into the window titlebar. Gateway is a page-level and task-level surface.
 - Do not implement channel-specific business logic in the Gateway UI. Platform differences stay in adapters and channel config.
-- Do not use dropdowns for small mutually exclusive choices such as immediate start vs queue.
+- Do not use dropdowns for small mutually exclusive choices such as start-when-idle vs queue.
 
 ## 4. Users
 
@@ -190,7 +190,7 @@ The proposal contains:
 - dependencies
 - acceptance criteria per task
 - risk notes
-- recommended execution mode per task: immediate or queued
+- recommended execution mode per task: start when idle or queue
 
 ### 8.2 Required Interaction
 
@@ -202,18 +202,20 @@ For each proposed small task:
 - priority
 - executor
 - queue choice using a segmented control or cards:
-  - Start now
+  - Start when idle
   - Queue
 - include/exclude toggle
 
-The default for low-risk new task creation is Start now, consistent with `2026-05-13-task-queue-opt-in.md`. Queue must be explicit.
+The default for low-risk new task creation is Start when idle, consistent with
+`2026-05-14-directory-queue-hard-gate.md`. Queue must be explicit, but task
+creation must still respect the same-directory active-task gate.
 
 ### 8.3 Creation Behavior
 
 On confirmation:
 
 - included candidates become normal OpenCorvus tasks via existing task creation APIs
-- candidates with Start now use omitted `queue` or `queue: false`
+- candidates with Start when idle use omitted `queue` or `queue: false`
 - candidates with Queue use `queue: true`
 - created tasks appear immediately in Task Ledger
 
@@ -403,8 +405,8 @@ Future:
 6. `Cancel`, `Retry`, `Replan`, and operator message actions call existing task APIs and show exact failures.
 7. Large requirement composer returns a structured decomposition proposal before task creation.
 8. Proposed small tasks can be included/excluded.
-9. Each proposed task uses a visible Start now / Queue segmented choice.
-10. Omitted queue and Start now create immediate tasks; Queue creates queued tasks.
+9. Each proposed task uses a visible Start when idle / Queue segmented choice.
+10. Omitted queue and Start when idle make tasks eligible to start when the same directory is idle; Queue creates directory-queued tasks.
 11. Created tasks appear in the ledger with correct status.
 12. Gateway shows channel list and managed runtime status.
 13. Gateway can restart managed channel runtime.
@@ -419,7 +421,7 @@ Future:
 - Gateway page state model:
   - page switch preserves selected task
   - task filters do not mutate task data
-  - Start now maps to omitted `queue` or `queue: false`
+  - Start when idle maps to omitted `queue` or `queue: false`
   - Queue maps to `queue: true`
 - Decomposition proposal:
   - required fields validate
@@ -439,7 +441,7 @@ Future:
 
 ### Integration
 
-- Create a large requirement, decompose into at least three tasks, start one immediately and queue another.
+- Create a large requirement, decompose into at least three tasks, start one when its directory is idle and queue another.
 - Verify ledger and board states match backend task APIs.
 - Bind a channel thread to a task, send a channel message, verify the message reaches the same task.
 - Trigger a pending interaction and reply from Gateway.
@@ -475,7 +477,7 @@ Visual checks must use visible rendering or screenshots, not headless-only asser
 
 - Add `/gateway/task/decompose` if no existing structured proposal path fits.
 - Add decomposition composer and proposal review.
-- Add include/exclude and Start now / Queue controls.
+- Add include/exclude and Start when idle / Queue controls.
 - Create selected tasks through existing task creation.
 
 ### Phase 4: Channel Management

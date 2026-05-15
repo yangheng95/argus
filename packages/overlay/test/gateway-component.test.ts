@@ -48,7 +48,7 @@ test("Gateway error blocks render explicit error messages (PRD §14, no fallback
   expect(GATEWAY_TSX).not.toMatch(/catch\s*\([^)]*\)\s*\{\s*\/\*\s*ignore\s*\*\/\s*\}/)
 })
 
-test("Gateway proposal exposes Start now / Queue radio segmented control per candidate (PRD §8.2)", () => {
+test("Gateway proposal exposes start-when-idle / Queue radio segmented control per candidate", () => {
   expect(GATEWAY_TSX).toContain('data-ui="gateway-proposal-queue-start"')
   expect(GATEWAY_TSX).toContain('data-ui="gateway-proposal-queue-queue"')
   // The choice is a radio group, not a dropdown (PRD §3 — "Do not use dropdowns

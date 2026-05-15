@@ -72,7 +72,7 @@ export const GatewayTaskCandidate = z.object({
     "Optional executor hint. Leave empty unless the task strongly favours a specific executor.",
   ),
   recommended_queue: z.boolean().describe(
-    "true = recommended to enter the directory queue (defer to current active task), false = recommended to start immediately.",
+    "true = recommended to enter the directory queue, false = recommended to start as soon as the same directory is idle.",
   ),
   dependencies: z.array(z.string()).default([]).describe(
     "Within-proposal dependency IDs (must match other candidates' `id` fields). Empty for independent tasks.",

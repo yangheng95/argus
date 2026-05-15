@@ -69,6 +69,11 @@ must set the task to queued and let `dispatchTaskLoop()` / `claimNextForCwd()`
 decide whether the cwd is free. Regression coverage must include a terminal
 sibling receiving an operator message while another same-cwd task is active.
 
+Overlay and control-plane copy must not describe `queue:false` as bypassing the
+directory queue. The accurate operator-facing meaning is "start when the
+directory is idle"; if the same directory already has an active task, creation
+enters the directory queue until the cwd is free.
+
 ## Manual Start-Now Override
 
 Operator clicks on queued rows are a separate product gesture from automatic
