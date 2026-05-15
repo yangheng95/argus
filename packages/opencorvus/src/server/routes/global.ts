@@ -23,7 +23,7 @@ export const GlobalRoutes = lazy(() =>
       describeRoute({
         summary: "Get health",
         description:
-          "Get health information about the OpenCorvus server, including the runtime-resolved on-disk paths the engine is actually using (database, data dir, home). The DB path is resolved by `Database.Path()` and reflects whether OPENCORVUS_HOME is set or the project-local `.opencorvus/` layout is in effect — UIs should read this rather than rebuilding the path from a template.",
+          "Get health information about the OpenCorvus server, including the runtime-resolved on-disk paths the engine is actually using (database, data dir, home). The DB path is resolved by `Database.Path()` and is always the single global SQLite location for this server process — UIs should read this rather than rebuilding the path from a template.",
         operationId: "global.health",
         responses: {
           200: {
@@ -212,7 +212,7 @@ export const GlobalRoutes = lazy(() =>
       describeRoute({
         summary: "Reset database",
         description:
-          "DESTRUCTIVE. Disposes all in-memory Instance handles, closes the SQLite DB, and removes the DB file (with WAL/SHM), snapshot scratch, and per-project worktree/ownership markers under <projectDir>/.opencorvus/. Caller must specify projectDir in the request body since the DB is project-local. Schema is rebuilt from DDL on next access. Active executor sessions block the reset (409).",
+          "DESTRUCTIVE. Disposes all in-memory Instance handles, closes the global SQLite DB, and removes the DB file (with WAL/SHM), snapshot scratch, and the specified project's worktree/ownership markers under <projectDir>/.opencorvus/. Caller must specify projectDir so project-scoped scratch can be removed alongside the shared DB. Schema is rebuilt from DDL on next access. Active executor sessions block the reset (409).",
         operationId: "global.db.reset",
         responses: {
           200: {
@@ -241,7 +241,7 @@ export const GlobalRoutes = lazy(() =>
       validator(
         "json",
         z.object({
-          projectDir: z.string().describe("Absolute filesystem path of the project whose DB should be wiped (the directory containing .opencorvus/)."),
+          projectDir: z.string().describe("Absolute filesystem path of the project whose .opencorvus scratch directories should be wiped alongside the shared DB."),
         }),
       ),
       async (c) => {

@@ -412,7 +412,7 @@ export class Db extends HeyApiClient {
   /**
    * Reset database
    *
-   * DESTRUCTIVE. Disposes all in-memory Instance handles, closes the SQLite DB, and removes the DB file (with WAL/SHM), snapshot scratch, and per-project worktree/ownership markers under <projectDir>/.opencorvus/. Caller must specify projectDir in the request body since the DB is project-local. Schema is rebuilt from DDL on next access. Active executor sessions block the reset (409).
+   * DESTRUCTIVE. Disposes all in-memory Instance handles, closes the global SQLite DB, and removes the DB file (with WAL/SHM), snapshot scratch, and the specified project's worktree/ownership markers under <projectDir>/.opencorvus/. Caller must specify projectDir so project-scoped scratch can be removed alongside the shared DB. Schema is rebuilt from DDL on next access. Active executor sessions block the reset (409).
    */
   public reset<ThrowOnError extends boolean = false>(
     parameters?: {
@@ -438,7 +438,7 @@ export class Global extends HeyApiClient {
   /**
    * Get health
    *
-   * Get health information about the OpenCorvus server, including the runtime-resolved on-disk paths the engine is actually using (database, data dir, home). The DB path is resolved by `Database.Path()` and reflects whether OPENCORVUS_HOME is set or the project-local `.opencorvus/` layout is in effect — UIs should read this rather than rebuilding the path from a template.
+   * Get health information about the OpenCorvus server, including the runtime-resolved on-disk paths the engine is actually using (database, data dir, home). The DB path is resolved by `Database.Path()` and is always the single global SQLite location for this server process — UIs should read this rather than rebuilding the path from a template.
    */
   public health<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
     return (options?.client ?? this.client).get<GlobalHealthResponses, unknown, ThrowOnError>({

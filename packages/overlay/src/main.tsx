@@ -212,12 +212,6 @@ function psSingleQuote(value: unknown): string {
   return String(value ?? "").replace(/'/g, "''")
 }
 
-function projectLocalDbCandidate(directory: unknown): string {
-  const dir = typeof directory === "string" && directory.trim().length > 0 ? directory.trim() : ""
-  if (!dir || dir === "—") return "<unknown task.directory>"
-  return `${dir.replace(/[\\/]+$/, "")}\\.opencorvus\\opencorvus.db`
-}
-
 /**
  * Build a plain-text debug blob for the currently selected task board.
  * Contains everything an operator needs to triage a stuck / mis-merged task
@@ -285,9 +279,8 @@ function buildTaskDebugBlob(board: any): string {
     `Invoke-RestMethod -Uri "$server/global/health" | ConvertTo-Json -Depth 10  # control-plane only; do not use this alone as task DB proof`,
     ``,
     `# SQL templates (read-only — open the verified DB with bun:sqlite readonly:true)`,
-    `# Candidate DB paths:`,
-    `#  - Project-local default for task.directory: ${projectLocalDbCandidate(taskDirectory)}`,
-    `#  - OPENCORVUS_HOME/global mode from /global/health: ${appStore.enginePaths?.database ?? "<not yet known — engine offline; reconnect and retry>"}`,
+    `# Runtime DB path (single source):`,
+    `#  - /global/health -> paths.database: ${appStore.enginePaths?.database ?? "<not yet known — engine offline; reconnect and retry>"}`,
     `# If SELECT * FROM engine_task returns 0 rows for this task, stop using that DB and use the project-scoped HTTP probes above; do not infer missing goals/contracts from an empty wrong DB.`,
     ``,
     `-- Task snapshot (no status column — derive via deriveTaskStatus from (time_started, time_completed, error, metadata.cancelled))`,
