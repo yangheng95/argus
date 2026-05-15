@@ -6,7 +6,8 @@ import { git } from "@/util/git"
 import { Log } from "@/util/log"
 import { Identifier } from "@/id/id"
 import { EngineProgressSnapshotTable, EngineTaskTable } from "./engine.sql"
-import { requireTask, type DeliveryRow, type PlanRow, type TaskRow } from "./store"
+import { ACTIVE_GOAL_RUN_STATUSES } from "./catalog"
+import { listGoalRunsForTask, requireTask, type DeliveryRow, type PlanRow, type TaskRow } from "./store"
 import fs from "node:fs/promises"
 import path from "node:path"
 
@@ -527,13 +528,25 @@ export type LKGOutcome =
   | { kind: "first_round"; score: number; updated: DeliveryLKG }
   | { kind: "improved"; score: number; previous: DeliveryLKG; updated: DeliveryLKG }
   | { kind: "held"; score: number; previous: DeliveryLKG }
+  | { kind: "blocked_by_siblings"; score: number; previous: DeliveryLKG; activeSiblings: string[] }
   | { kind: "regressed"; score: number; previous: DeliveryLKG; rolledBackTo: string }
+
+async function detectActiveSiblingGoals(taskID: string): Promise<string[]> {
+  const active = new Set(ACTIVE_GOAL_RUN_STATUSES as readonly string[])
+  return listGoalRunsForTask(taskID)
+    .filter((row) => active.has(row.status))
+    .map((row) => row.id)
+    .sort()
+}
 
 async function evaluateAndApplyLKG(input: {
   task: TaskRow
   iteration: number
   score: number
   roundCommitSha: string | undefined
+  /** Override the git worktree affected by rollback. Delivery isolation
+   *  passes a detached eval worktree here so reset never touches primary. */
+  worktreeDirectory?: string
   /** Symmetric tolerance — score difference within ±epsilon is treated as
    *  "held" (no LKG update, no rollback). 0.01 ≈ 1% of the [0,1] score. */
   epsilon?: number
@@ -593,7 +606,25 @@ async function evaluateAndApplyLKG(input: {
     })
     return { task: input.task, outcome: { kind: "held", score: input.score, previous } }
   }
-  const cwd = Instance.directory
+  const activeSiblings = await detectActiveSiblingGoals(input.task.id)
+  if (activeSiblings.length > 0) {
+    log.warn("evaluateAndApplyLKG: regression detected but active sibling goals exist — skipping reset to avoid wiping concurrent progress", {
+      taskID: input.task.id,
+      iteration: input.iteration,
+      delta,
+      activeSiblings,
+    })
+    return {
+      task: input.task,
+      outcome: {
+        kind: "blocked_by_siblings",
+        score: input.score,
+        previous,
+        activeSiblings,
+      },
+    }
+  }
+  const cwd = input.worktreeDirectory ?? Instance.directory
   const reset = await git(["reset", "--hard", previous.best_commit_sha], { cwd, env: env() })
   if (reset.exitCode !== 0) {
     const err = reset.stderr.toString().trim() || reset.stdout.toString().trim() || "git reset failed"

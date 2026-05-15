@@ -7303,7 +7303,7 @@ export type GatewayTaskDecomposeResponses = {
        */
       executor?: "opencorvus" | "codex" | "claude-code"
       /**
-       * true = recommended to enter the directory queue (defer to current active task), false = recommended to start immediately.
+       * true = recommended to enter the directory queue, false = recommended to start as soon as the same directory is idle.
        */
       recommended_queue: boolean
       /**

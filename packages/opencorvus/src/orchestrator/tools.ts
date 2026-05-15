@@ -4349,50 +4349,51 @@ export function createOrchestratorTools(input: {
             const referenceRef = (tagged[0] ?? referencePool[0]) as { url: string } | undefined
 
             if (renderedRef && referenceRef) {
-              const { AttachmentStore } = await import("@/storage/attachment-store")
-              const { computeVisualMetric, loadVisualThresholds } = await import("@/delivery/visual-metric")
-              const renderedLoc = AttachmentStore.nameFromUrl(renderedRef.url)
-              const referenceLoc = AttachmentStore.nameFromUrl(referenceRef.url)
-              const renderedPath = renderedLoc
-                ? AttachmentStore.resolveAbsolute(renderedLoc.projectID, renderedLoc.name)
-                : undefined
-              const referencePath = referenceLoc
-                ? AttachmentStore.resolveAbsolute(referenceLoc.projectID, referenceLoc.name)
-                : undefined
-              if (renderedPath && referencePath) {
-                const metric = await computeVisualMetric({
-                  renderedPath,
-                  referencePath,
-                  thresholds: loadVisualThresholds(),
+              if (!roundCommit.commit) {
+                throw new Error("deliver: LKG isolated evaluation requires a round commit sha")
+              }
+              const { evaluateLKGInIsolatedWorktree } = await import("@/delivery/lkg-isolated-eval")
+              const lkg = await evaluateLKGInIsolatedWorktree({
+                task: taskAfterRound,
+                iteration,
+                roundCommitSha: roundCommit.commit,
+                renderedRefUrl: renderedRef.url,
+                referenceRefUrl: referenceRef.url,
+              })
+              lkgMetric = lkg.metric
+              lkgRenderedPath = lkg.renderedArtifactPath
+              lkgOutcome = lkg.outcome
+              log.info("deliver: LKG outcome", {
+                taskID,
+                iteration,
+                kind: lkg.outcome.kind,
+                score: lkg.metric.score.toFixed(3),
+                best_score: "previous" in lkg.outcome ? lkg.outcome.previous.best_score.toFixed(3) : undefined,
+                evaluatedSha: lkg.evaluatedSha,
+                renderedArtifact: lkg.renderedArtifactPath,
+                rolledBackTo: "rolledBackTo" in lkg.outcome ? lkg.outcome.rolledBackTo : undefined,
+                activeSiblings: "activeSiblings" in lkg.outcome ? lkg.outcome.activeSiblings : undefined,
+              })
+              try {
+                const { createDecisionLog } = await import("@/decision-log")
+                const rolledBackTo = "rolledBackTo" in lkg.outcome ? lkg.outcome.rolledBackTo : undefined
+                const activeSiblings = "activeSiblings" in lkg.outcome ? lkg.outcome.activeSiblings : undefined
+                createDecisionLog(taskID).append({
+                  phase: "delivery",
+                  key: lkg.outcome.kind === "blocked_by_siblings"
+                    ? `delivery_lkg_blocked_${iteration}`
+                    : `delivery_lkg_${iteration}`,
+                  value:
+                    `score=${lkg.metric.score.toFixed(3)} outcome=${lkg.outcome.kind} ` +
+                    `evaluated_sha=${lkg.evaluatedSha} rendered_artifact=${lkg.renderedArtifactPath}` +
+                    (rolledBackTo ? ` rolled_back_to=${rolledBackTo}` : "") +
+                    (activeSiblings ? ` active_siblings=${JSON.stringify(activeSiblings)}` : ""),
+                  reason: lkg.outcome.kind === "blocked_by_siblings"
+                    ? "reset skipped due to concurrent sibling goals"
+                    : rolledBackTo ? `rollback_to=${rolledBackTo}` : "",
                 })
-                lkgMetric = metric
-                lkgRenderedPath = renderedPath
-                const lkg = await EngineGit.evaluateAndApplyLKG({
-                  task: taskAfterRound,
-                  iteration,
-                  score: metric.score,
-                  roundCommitSha: roundCommit.commit,
-                })
-                lkgOutcome = lkg.outcome
-                log.info("deliver: LKG outcome", {
-                  taskID,
-                  iteration,
-                  kind: lkg.outcome.kind,
-                  score: metric.score.toFixed(3),
-                  best_score: "previous" in lkg.outcome ? lkg.outcome.previous.best_score.toFixed(3) : undefined,
-                  rolledBackTo: "rolledBackTo" in lkg.outcome ? lkg.outcome.rolledBackTo : undefined,
-                })
-                try {
-                  const { createDecisionLog } = await import("@/decision-log")
-                  createDecisionLog(taskID).append({
-                    phase: "delivery",
-                    key: `delivery_lkg_${iteration}`,
-                    value: `score=${metric.score.toFixed(3)} outcome=${lkg.outcome.kind}`,
-                    reason: "rolledBackTo" in lkg.outcome ? `rollback_to=${lkg.outcome.rolledBackTo}` : "",
-                  })
-                } catch {
-                  /* best effort */
-                }
+              } catch {
+                /* best effort */
               }
             }
           } catch (lkgErr) {
@@ -4426,7 +4427,20 @@ export function createOrchestratorTools(input: {
           // (`changed_file` / `report` / `verdict` kinds), so the parallel
           // delivery_round table was removed. Rolled-back / regressed outcomes
           // still get surfaced via the decision log appended above.
-          void lkgOutcome
+          if (
+            verdict.verdict === "accepted" &&
+            (lkgOutcome?.kind === "regressed" || lkgOutcome?.kind === "blocked_by_siblings")
+          ) {
+            await trackStepComplete("deliver", undefined, true)
+            const detail = lkgOutcome.kind === "regressed"
+              ? `rolled_back_to=${lkgOutcome.rolledBackTo}`
+              : `active_siblings=${lkgOutcome.activeSiblings.join(",")}`
+            return (
+              `Delivery agent accepted, but isolated LKG evaluation detected ${lkgOutcome.kind}; ` +
+              `${detail}; score=${lkgMetric?.score.toFixed(3) ?? "n/a"}; ` +
+              `rendered_artifact=${lkgRenderedPath ?? "n/a"}. Current primary HEAD was not reset or published.`
+            )
+          }
 
           if (verdict.verdict === "accepted") {
             await trackStepComplete("deliver")

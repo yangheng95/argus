@@ -6,6 +6,8 @@ node_modules
 .idea
 .vscode
 .codex
+.codex-*-lkg.log
+.codex-*-lkg.txt
 .claude
 *~
 playground
