@@ -30,7 +30,9 @@ import { AttachmentStore } from "../../src/storage/attachment-store"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 import {
+  findActiveRunForTask,
   findActivePlanForTask,
+  findDeliveryByRun,
   findActiveSpecForTask,
   findGoal,
   findGoalLatestWorkspace,
@@ -360,6 +362,130 @@ describe("orchestrator tools", () => {
         expect(result).toContain("Build agent finished")
         expect(result).toContain("Direct workflow build completed")
         expect(workflowState.workflowID).toBe("pipeline")
+        const run = findActiveRunForTask(taskID)
+        expect(run).toBeDefined()
+        expect(run?.plan_version_id).toBeNull()
+        expect(run?.status).toBe("running")
+      },
+    })
+  })
+
+  test("task-level direct build creates the run that deliver uses for delivery evidence", async () => {
+    await tmp?.[Symbol.asyncDispose]?.()
+    tmp = await tmpdir({ git: true })
+
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_direct_deliver_${stamp}`
+    const taskID = `tsk_direct_deliver_${stamp}`
+    const direct = WorkflowRegistry.resolveSync("direct")!
+    const workflowState = createWorkflowState(direct)
+
+    Database.use((db) => {
+      db.insert(ProjectTable)
+        .values({
+          id: projectID,
+          worktree: tmp.path,
+          name: "Direct build deliver project",
+          sandboxes: "[]",
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+      db.insert(EngineTaskTable)
+        .values({
+          id: taskID,
+          project_id: projectID,
+          source: "test",
+          title: "Direct build deliver task",
+          request: "Apply a direct edit and verify it through delivery.",
+          kind: "build",
+          priority: "normal",
+          time_created: now,
+          time_updated: now,
+          time_started: now,
+        })
+        .run()
+    })
+
+    buildAgentRunImpl = async () => {
+      await fs.writeFile(path.join(tmp.path, "direct-output.txt"), "direct build output\n")
+      return {
+        result: {
+          status: "passed",
+          summary: "Direct build wrote an output file.",
+          files_changed: [
+            {
+              path: "direct-output.txt",
+              summary: "Added direct build output.",
+              reason: "The direct build request required a concrete file change.",
+            },
+          ],
+          tests: [],
+        },
+        sessionID: "ses_direct_build_deliver",
+        worktreeDir: tmp.path,
+        diffs: [{ file: "direct-output.txt", diff: "New file:\ndirect build output\n" }],
+      }
+    }
+    let verifyInput: any
+    deliveryServiceVerifyImpl = async (input: any) => {
+      verifyInput = input
+      return {
+        verdict: "rejected",
+        summary: "Direct build delivery inspected the run-bound evidence.",
+        deferred_checks: [],
+        tool_call_evidence: [
+          {
+            tool: "inspect_delivery_context",
+            passed: true,
+            detail: "inspected direct build delivery evidence",
+          },
+        ],
+        rejection_details: [
+          {
+            category: "quality",
+            file: "direct-output.txt",
+            error: "Direct build needs one more verification pass.",
+          },
+        ],
+      }
+    }
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "direct build deliver test" })
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+          workflow: direct,
+          workflowState,
+        })
+
+        const buildResult = await tools.build.execute(
+          {
+            request: "Write the direct output file.",
+            reason: "Explicit kind=build task-level direct implementation.",
+          },
+          {} as any,
+        )
+        expect(buildResult).toContain("Build agent finished")
+
+        const run = findActiveRunForTask(taskID)
+        expect(run).toBeDefined()
+        expect(run?.plan_version_id).toBeNull()
+
+        const deliverResult = await tools.deliver.execute(
+          { reason: "Direct build finished and must pass delivery." },
+          {} as any,
+        )
+
+        expect(deliverResult).toContain("Delivery rejected at task scope")
+        expect(verifyInput.runID).toBe(run?.id)
+        expect(verifyInput.delivery.changedFiles).toContain("direct-output.txt")
+        expect(findDeliveryByRun(run!.id)?.run_id).toBe(run?.id)
       },
     })
   })

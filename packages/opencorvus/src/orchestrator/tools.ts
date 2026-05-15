@@ -1456,6 +1456,34 @@ export function createOrchestratorTools(input: {
     return { task, run, plan, createdRun, activatedRun } as const
   }
 
+  async function ensureTaskLevelBuildRun() {
+    const task = requireTask(taskID)
+    const existing = findActiveRunForTask(task.id)
+    if (existing && isLiveRunStatus(existing.status)) return existing
+
+    const { createRun } = await import("@/engine/writer")
+    const now = Date.now()
+    const created = createRun({
+      taskID,
+      planVersionID: null,
+      sessionID: task.session_id ?? null,
+      executor: task.executor,
+      status: "running",
+      phase: "execute",
+      summary: "direct build run created",
+      now,
+    })
+    await updateTask(
+      requireTask(taskID),
+      {
+        status: "active",
+        error: null,
+      },
+      `direct_build_run: runID=${created.id}`,
+    )
+    return created
+  }
+
   /** ensureGoalInWorkflow was the workflow_state.goalSteps pre-allocator. The
    *  shadow table is gone — goal step status is derived from engine_goal_run
    *  at read time. This remains as a no-op for callers still referencing it;
@@ -3784,14 +3812,17 @@ export function createOrchestratorTools(input: {
 
         // Stateless / unconditional deliver (rule 23): every task ends through
         // this agent regardless of upstream state. No "execute goals first"
-        // gate. If no coordinator run exists yet (e.g. direct request-only
-        // path, or LLM chose to deliver before any build) we lazy-bootstrap
-        // one when there are goals to anchor it; otherwise we proceed with a
-        // null run id and let the delivery agent decide on the available state.
+        // gate. Delivery persistence is run-scoped: goal tasks can create a
+        // dispatchable run from the goal graph, while direct task-level builds
+        // must have created their run in `build`.
         let activeRun = findActiveRunForTask(task.id)
         if (!activeRun && listGoals(taskID).length > 0) {
           const ensured = await ensureDispatchableRunForSingleGoal()
-          if (!("error" in ensured)) activeRun = ensured.run
+          if ("error" in ensured) return `deliver: cannot ensure coordinator run — ${ensured.error}`
+          activeRun = ensured.run
+        }
+        if (!activeRun) {
+          return "deliver: no coordinator run exists for this task. Run build first so delivery can bind evidence to the build run."
         }
         const run = activeRun
 
@@ -3799,10 +3830,8 @@ export function createOrchestratorTools(input: {
 
         const goals = listGoals(taskID)
 
-        // Aggregate per-goal deliveries — query by task so deliver still works
-        // when no coordinator run exists (e.g. tasks that bypassed the
-        // pipeline). When a run exists every goal_run_attempt also carries
-        // its run_id; the task-scoped query returns the same set.
+        // Aggregate per-goal deliveries by task. Every valid delivery has a
+        // coordinator run; goal_run_attempt rows also carry that run_id.
         const { listGoalRunsForTask, findDeliveryByGoalRun } = await import("@/engine/store")
         const goalRuns = listGoalRunsForTask(task.id)
         const allDiffs: Array<{ file: string; diff?: string; [key: string]: unknown }> = []
@@ -3921,8 +3950,8 @@ export function createOrchestratorTools(input: {
         const { persistTaskDelivery } = await import("@/engine/persist")
         const deliveryID = Identifier.ascending("delivery")
         persistTaskDelivery({
-          task: task as any,
-          run: run as any,
+          task,
+          run,
           deliveryID,
           delivery: {
             summary: summaries.length > 0 ? summaries.join("\n") : "Aggregated delivery",
@@ -5428,16 +5457,11 @@ export function createOrchestratorTools(input: {
         // directly. For pure request path, the LLM-supplied `request` is
         // the user message.
         //
-        // Coordinator Run lazy-create: the unified-teardown spec collapsed
-        // dispatch_goal/create_run/exec_goal into this single `build` tool,
-        // but stripped the run-creation step that dispatch_goal used to do.
-        // Restore the invariant for goal-scoped builds: when build is
-        // dispatched against a goal, ensure a coordinator Run exists for
-        // this task so the goal_run_attempt + per-goal delivery artifacts
-        // anchor to it (rule 22 — single source: build is the dispatcher,
-        // build owns the run). Task-level request builds skip this because
-        // they have no goal row to bind to; deliver supports the run-less
-        // path and judges the integrated workspace directly.
+        // Coordinator Run lazy-create: build is the dispatcher, so every
+        // implementation build owns the run that later anchors delivery
+        // evidence. Goal-scoped builds create a dispatchable run from the
+        // active goal graph; task-level direct builds create a run without a
+        // plan_version_id because there is intentionally no goal graph.
         if (attachedGoalID) {
           const { findGoal } = await import("@/engine/store")
           const goal = findGoal(attachedGoalID)
@@ -5478,6 +5502,9 @@ export function createOrchestratorTools(input: {
             return `build: cannot ensure coordinator run for goal ${attachedGoalID} — ${ensured.error}`
           }
           coordinatorRunID = ensured.run.id
+        } else {
+          const ensured = await ensureTaskLevelBuildRun()
+          coordinatorRunID = ensured.id
         }
 
         try {
@@ -6176,7 +6203,7 @@ export function createOrchestratorTools(input: {
             `### Next step\n` +
             `Read the build report and the worktree facts above. Cross-check the LLM's files_changed/commit_ref against the worktree facts; if they disagree, factor that into your next call. ` +
             `When the current eligible wave reaches terminal state, choose deliver / build({goalID}) / modify_goal / architect / fail_task / restart_from_stage from the build evidence and task context. ` +
-            `Call standalone \`integrity\` only when the integrated evidence raises a real question about requirement mining or system integrity; it is not a routine wave-level step.`
+            `call \`integrity\` only when the integrated evidence raises a real question about requirement mining or system integrity; it is not a routine wave-level step.`
           )
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err)
