@@ -3,1607 +3,498 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>OpenCorvus 技术白皮书 · 让编码 Agent 真正可交付</title>
+<title>OpenCorvus 技术白皮书 v2026.05</title>
 <style>
   :root {
-    --bg: #fafaf7;
-    --bg-soft: #f3f1ea;
-    --bg-card: #ffffff;
-    --bg-code: #f5f3ec;
-    --line: #e5e2d8;
-    --line-soft: #ecebe3;
-    --ink-0: #1a1a1a;
-    --ink-1: #3d3d3d;
-    --ink-2: #6b6b6b;
-    --ink-3: #9a9a9a;
-    --accent: #2563eb;
-    --accent-soft: #eaf0ff;
-    --good: #047857;
-    --good-soft: #e6f4ee;
-    --warn: #b45309;
-    --warn-soft: #faf0e0;
-    --danger: #b91c1c;
-    --danger-soft: #fbeaea;
-    --sans: "Inter", "PingFang SC", "Microsoft YaHei", "Noto Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    --mono: "JetBrains Mono", "SF Mono", "Sarasa Mono SC", Consolas, "PingFang SC", "Microsoft YaHei", monospace;
+    --page: #fbfbf8;
+    --surface: #ffffff;
+    --muted: #f2f3ef;
+    --line: #dddfd8;
+    --line-soft: #eceee7;
+    --text: #161817;
+    --text-2: #404540;
+    --text-3: #6f766f;
+    --accent: #1d5f78;
+    --accent-soft: #e7f1f4;
+    --green: #2f6f53;
+    --amber: #8a5a12;
+    --red: #9f3434;
+    --mono: "JetBrains Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+    --sans: "Inter", "Noto Sans SC", "Microsoft YaHei", "PingFang SC", "Segoe UI", Arial, sans-serif;
   }
   * { box-sizing: border-box; }
-  html, body {
-    margin: 0; padding: 0;
-    background: var(--bg);
-    color: var(--ink-0);
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--page);
+    color: var(--text);
     font-family: var(--sans);
-    line-height: 1.75;
-    font-size: 16.5px;
-    -webkit-font-smoothing: antialiased;
+    font-size: 16px;
+    line-height: 1.72;
   }
-  a { color: var(--accent); text-decoration: none; border-bottom: 1px solid transparent; }
-  a:hover { border-bottom-color: var(--accent); }
-  code, pre, kbd { font-family: var(--mono); font-size: 0.92em; }
+  a { color: var(--accent); text-decoration: none; border-bottom: 1px solid rgba(29,95,120,.32); }
   code {
-    background: var(--bg-code);
-    padding: 1.5px 7px;
-    border-radius: 4px;
+    font-family: var(--mono);
+    font-size: .9em;
+    background: var(--muted);
     border: 1px solid var(--line);
-    color: var(--ink-0);
+    border-radius: 4px;
+    padding: 1px 5px;
   }
   pre {
-    background: var(--bg-code);
+    overflow: auto;
+    margin: 18px 0;
+    padding: 15px 17px;
+    background: #f5f5f1;
     border: 1px solid var(--line);
-    border-radius: 8px;
-    padding: 16px 20px;
-    overflow-x: auto;
-    color: var(--ink-1);
-    font-size: 13.5px;
-    line-height: 1.7;
-  }
-  pre code { background: transparent; border: 0; padding: 0; color: inherit; }
-
-  .layout { display: grid; grid-template-columns: 240px 1fr; gap: 0; }
-  aside.sidenav {
-    position: sticky; top: 0;
-    height: 100vh; overflow-y: auto;
-    border-right: 1px solid var(--line-soft);
-    padding: 28px 22px 40px;
-    background: var(--bg-soft);
-    font-size: 13.5px;
-  }
-  aside .brand {
-    display: flex; align-items: center; gap: 10px;
-    margin-bottom: 22px; padding-bottom: 18px;
-    border-bottom: 1px solid var(--line);
-  }
-  aside .brand-mark {
-    width: 28px; height: 28px;
     border-radius: 6px;
-    background: var(--ink-0); color: var(--bg);
-    display: inline-flex; align-items: center; justify-content: center;
-    font-weight: 900; font-size: 14px;
-  }
-  aside .brand-name { font-weight: 700; color: var(--ink-0); letter-spacing: 0.01em; }
-  aside .group { margin-bottom: 18px; }
-  aside .group-label {
-    font-size: 11px; text-transform: uppercase; letter-spacing: 0.12em;
-    color: var(--ink-3); font-weight: 700; margin-bottom: 8px;
-  }
-  aside .toc-item {
-    display: block;
-    padding: 5px 0 5px 10px;
-    border-left: 2px solid transparent;
-    color: var(--ink-1);
-    border-bottom: 0;
-  }
-  aside .toc-item:hover { border-left-color: var(--accent); color: var(--accent); border-bottom: 0; }
-  aside .toc-item .num { color: var(--ink-3); font-variant-numeric: tabular-nums; margin-right: 8px; font-family: var(--mono); font-size: 11.5px; }
-  aside .meta { margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--line); color: var(--ink-3); font-size: 12px; line-height: 1.6; }
-
-  details.mobile-toc { display: none; }
-
-  main {
-    max-width: 880px; margin: 0 auto;
-    padding: 64px 56px 120px;
-  }
-  section { margin-bottom: 80px; scroll-margin-top: 24px; }
-  section:last-of-type { margin-bottom: 40px; }
-
-  h1 {
-    font-size: 46px; line-height: 1.15;
-    letter-spacing: -0.02em;
-    margin: 0 0 22px;
-    color: var(--ink-0); font-weight: 700;
-  }
-  h2 {
-    font-size: 27px; margin: 0 0 18px;
-    padding-bottom: 14px;
-    border-bottom: 1px solid var(--line);
-    color: var(--ink-0); font-weight: 700;
-    line-height: 1.3; letter-spacing: -0.01em;
-  }
-  h2 .num {
-    display: inline-block;
-    color: var(--ink-3);
-    margin-right: 14px;
-    font-variant-numeric: tabular-nums;
-    font-weight: 500; font-size: 21px;
     font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.55;
+  }
+  pre code { padding: 0; border: 0; background: transparent; }
+  .shell {
+    display: grid;
+    grid-template-columns: 248px minmax(0, 1fr);
+    min-height: 100vh;
+  }
+  nav {
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow: auto;
+    padding: 30px 22px;
+    border-right: 1px solid var(--line);
+    background: #f1f2ed;
+  }
+  .mark {
+    font-weight: 760;
+    font-size: 18px;
+    letter-spacing: 0;
+    margin-bottom: 6px;
+  }
+  .nav-meta {
+    color: var(--text-3);
+    font-size: 12px;
+    line-height: 1.55;
+    padding-bottom: 18px;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 18px;
+  }
+  nav a {
+    display: block;
+    border: 0;
+    padding: 6px 0;
+    color: var(--text-2);
+    font-size: 13px;
+  }
+  nav a span {
+    display: inline-block;
+    width: 28px;
+    color: var(--text-3);
+    font-family: var(--mono);
+    font-size: 11px;
+  }
+  main {
+    width: min(920px, 100%);
+    margin: 0 auto;
+    padding: 58px 54px 90px;
+  }
+  header {
+    padding-bottom: 34px;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 52px;
+  }
+  h1 {
+    margin: 0 0 18px;
+    font-size: 42px;
+    line-height: 1.15;
+    letter-spacing: 0;
+  }
+  .subtitle {
+    max-width: 780px;
+    color: var(--text-2);
+    font-size: 19px;
+    line-height: 1.65;
+    margin: 0;
+  }
+  .doc-meta {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 26px;
+  }
+  .meta-cell {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 11px 13px;
+    min-width: 0;
+  }
+  .meta-cell b {
+    display: block;
+    color: var(--text-3);
+    font-size: 11px;
+    font-weight: 650;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+  .meta-cell span {
+    color: var(--text);
+    font-size: 13px;
+  }
+  section { margin: 0 0 62px; }
+  h2 {
+    margin: 0 0 20px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--line);
+    font-size: 25px;
+    line-height: 1.32;
+    letter-spacing: 0;
+  }
+  h2 span {
+    color: var(--text-3);
+    font-family: var(--mono);
+    font-size: 15px;
+    font-weight: 500;
+    margin-right: 10px;
   }
   h3 {
-    font-size: 19px; margin: 36px 0 10px;
-    color: var(--ink-0); font-weight: 600;
+    margin: 28px 0 10px;
+    font-size: 17px;
+    line-height: 1.4;
   }
-  h4 {
-    font-size: 13px; margin: 28px 0 8px;
-    color: var(--ink-3);
-    text-transform: uppercase; letter-spacing: 0.1em;
-    font-weight: 700;
-  }
-  p { color: var(--ink-1); margin: 12px 0; }
-  ul, ol { color: var(--ink-1); padding-left: 24px; }
-  ul li, ol li { margin: 7px 0; }
-  strong { color: var(--ink-0); font-weight: 600; }
-  em { color: var(--ink-0); font-style: italic; }
-
-  .hero { padding: 64px 0 40px; margin-bottom: 56px; border-bottom: 1px solid var(--line); }
-  .hero-tag {
-    display: inline-block;
-    padding: 4px 12px;
+  p { margin: 11px 0; color: var(--text-2); }
+  ul, ol { margin: 10px 0; padding-left: 22px; color: var(--text-2); }
+  li { margin: 5px 0; }
+  strong { color: var(--text); font-weight: 680; }
+  .grid { display: grid; gap: 12px; }
+  .grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .grid.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .stat, .panel {
+    background: var(--surface);
     border: 1px solid var(--line);
-    background: var(--bg-card);
-    border-radius: 999px;
-    color: var(--ink-2);
-    font-size: 12px;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    margin-bottom: 24px;
-    font-weight: 600;
-  }
-  .hero-sub {
-    font-size: 20px; color: var(--ink-1);
-    max-width: 720px;
-    margin: 18px 0 16px;
-    line-height: 1.6; font-weight: 400;
-  }
-  .hero-byline {
-    color: var(--ink-3);
-    font-size: 13px; margin-top: 22px;
-    padding-top: 16px;
-    border-top: 1px dashed var(--line);
-  }
-  .hero-byline b { color: var(--ink-1); font-weight: 600; margin-right: 4px; }
-  .hero-byline span + b { margin-left: 18px; }
-
-  .lede {
-    font-size: 17px; line-height: 1.65;
-    color: var(--ink-1);
-    margin: 8px 0 26px;
-    padding: 14px 22px;
-    background: var(--bg-card);
-    border-left: 3px solid var(--ink-0);
-    border-radius: 0 8px 8px 0;
-  }
-  .lede strong { color: var(--ink-0); }
-  .lede .lede-label {
-    display: inline-block;
-    font-size: 11px;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: var(--ink-3);
-    margin-right: 8px;
-    font-weight: 700;
-    vertical-align: 0.1em;
-  }
-
-  .callout {
-    margin: 22px 0;
-    padding: 16px 22px;
-    border-radius: 8px;
-    border: 1px solid var(--line);
-    background: var(--bg-card);
-  }
-  .callout.warn { background: var(--warn-soft); border-color: #ecd9b3; }
-  .callout.danger { background: var(--danger-soft); border-color: #efc6c6; }
-  .callout.good { background: var(--good-soft); border-color: #c8e2d3; }
-  .callout.accent { background: var(--accent-soft); border-color: #c8d6f4; }
-  .callout .tag {
-    display: inline-block;
-    font-size: 10.5px;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: var(--ink-3);
-    margin-bottom: 6px;
-    font-weight: 700;
-  }
-  .callout.warn .tag { color: var(--warn); }
-  .callout.danger .tag { color: var(--danger); }
-  .callout.good .tag { color: var(--good); }
-  .callout.accent .tag { color: var(--accent); }
-  .callout p { margin: 4px 0; color: var(--ink-1); }
-
-  .grid { display: grid; gap: 14px; }
-  .grid.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .grid.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .grid.cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-
-  @media (max-width: 900px) {
-    .layout { grid-template-columns: 1fr; }
-    aside.sidenav { display: none; }
-    details.mobile-toc {
-      display: block;
-      background: var(--bg-soft);
-      border-bottom: 1px solid var(--line);
-      padding: 12px 20px;
-      font-size: 14px;
-    }
-    details.mobile-toc summary {
-      cursor: pointer; font-weight: 600;
-      color: var(--ink-0); list-style: none;
-    }
-    details.mobile-toc summary::after { content: ' ▼'; color: var(--ink-3); font-size: 11px; }
-    details.mobile-toc[open] summary::after { content: ' ▲'; }
-    details.mobile-toc .toc-list { margin-top: 12px; columns: 2; column-gap: 16px; }
-    details.mobile-toc a { display: block; color: var(--ink-1); padding: 4px 0; font-size: 13.5px; border-bottom: 0; }
-    details.mobile-toc a .num { color: var(--ink-3); font-family: var(--mono); font-size: 11.5px; margin-right: 6px; }
-    main { padding: 32px 22px 80px; }
-    .grid.cols-2, .grid.cols-3, .grid.cols-4 { grid-template-columns: 1fr; }
-    h1 { font-size: 32px; }
-    h2 { font-size: 22px; }
-    .svg-fig { overflow-x: auto; }
-    .svg-fig svg { min-width: 720px; }
-  }
-
-  .card {
-    background: var(--bg-card);
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    padding: 18px 20px;
-  }
-  .card h3 { margin-top: 0; font-size: 17px; }
-  .card p { font-size: 14.5px; margin: 8px 0 0; }
-  .card .label {
-    font-size: 10.5px;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: var(--ink-3);
-    font-weight: 700;
-  }
-
-  /* Stat card — for §X 项目规模 */
-  .stat {
-    background: var(--bg-card);
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    padding: 18px 18px;
+    border-radius: 7px;
+    padding: 15px 16px;
   }
   .stat .num {
     font-family: var(--mono);
-    font-size: 32px;
-    font-weight: 600;
-    color: var(--ink-0);
-    line-height: 1.1;
+    font-size: 28px;
+    line-height: 1.05;
+    color: var(--text);
+    font-weight: 650;
     font-variant-numeric: tabular-nums;
   }
-  .stat .num .unit { font-size: 14px; color: var(--ink-2); margin-left: 4px; font-weight: 500; }
   .stat .label {
-    margin-top: 6px;
+    margin-top: 7px;
+    color: var(--text-3);
     font-size: 12.5px;
-    color: var(--ink-2);
-    line-height: 1.5;
+    line-height: 1.55;
   }
-  .stat .label b { color: var(--ink-1); font-weight: 600; }
-
-  figure { margin: 32px 0; padding: 0; }
-  figure img {
-    width: 100%; height: auto;
-    border-radius: 8px;
-    display: block;
-    border: 1px solid var(--line);
-  }
-  figcaption {
-    margin-top: 14px;
-    color: var(--ink-2);
-    font-size: 13.5px;
-    line-height: 1.65;
-    text-align: left;
-    padding: 0 4px;
-  }
-  figcaption b { color: var(--ink-1); font-weight: 600; }
-
-  .svg-fig {
-    background: var(--bg-card);
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    padding: 24px;
-    margin: 32px 0;
-  }
-  .svg-fig svg { display: block; width: 100%; height: auto; }
-  .svg-fig figcaption { margin-top: 12px; }
-
-  .tbl {
+  .panel h3 { margin-top: 0; }
+  .panel p { font-size: 14.5px; }
+  table {
     width: 100%;
     border-collapse: collapse;
-    margin: 18px 0;
-    font-size: 14px;
-    background: var(--bg-card);
+    margin: 17px 0;
+    background: var(--surface);
     border: 1px solid var(--line);
-    border-radius: 8px;
+    border-radius: 7px;
     overflow: hidden;
     table-layout: fixed;
+    font-size: 14px;
   }
-  .tbl th, .tbl td {
-    padding: 11px 13px;
-    text-align: left;
+  th, td {
     border-bottom: 1px solid var(--line-soft);
+    padding: 10px 12px;
+    text-align: left;
     vertical-align: top;
-    color: var(--ink-1);
-    word-wrap: break-word;
+    color: var(--text-2);
+    overflow-wrap: anywhere;
   }
-  .tbl th {
-    background: var(--bg-soft);
-    color: var(--ink-0);
-    font-weight: 600;
+  th {
+    background: #f0f1ec;
+    color: var(--text);
+    font-weight: 650;
+  }
+  tr:last-child td { border-bottom: 0; }
+  figure {
+    margin: 26px 0;
+    padding: 0;
+  }
+  figure img {
+    display: block;
+    width: 100%;
+    height: auto;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    background: var(--surface);
+  }
+  figcaption {
+    margin-top: 10px;
+    color: var(--text-3);
+    font-size: 13px;
+    line-height: 1.6;
+  }
+  .flow {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    padding: 20px;
+    margin: 22px 0;
+    overflow: auto;
+  }
+  .flow svg {
+    display: block;
+    min-width: 760px;
+    width: 100%;
+    height: auto;
+  }
+  .term {
+    display: inline-block;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--muted);
+    color: var(--text-2);
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 1px 8px;
+    margin: 1px 2px 1px 0;
+  }
+  .scope {
+    border-left: 3px solid var(--accent);
+    background: var(--accent-soft);
+    padding: 12px 15px;
+    margin: 18px 0;
+    color: var(--text-2);
+    border-radius: 0 6px 6px 0;
+  }
+  footer {
+    margin-top: 58px;
+    padding-top: 22px;
+    border-top: 1px solid var(--line);
+    color: var(--text-3);
     font-size: 13px;
   }
-  .tbl tr:last-child td { border-bottom: 0; }
-  .tbl code { font-size: 12.5px; word-break: break-all; }
-  .tbl .yes { color: var(--good); font-weight: 600; }
-  .tbl .no  { color: var(--ink-3); }
-  .tbl .partial { color: var(--warn); }
-
-  .pill {
-    display: inline-block;
-    padding: 2px 10px;
-    border-radius: 999px;
-    background: var(--bg-soft);
-    color: var(--ink-1);
-    font-size: 11.5px;
-    margin: 2px 4px 2px 0;
-    border: 1px solid var(--line);
-    font-family: var(--mono);
-    line-height: 1.5;
+  @media (max-width: 900px) {
+    .shell { display: block; }
+    nav { position: relative; height: auto; padding: 18px 22px; }
+    nav a { display: inline-block; margin-right: 12px; }
+    main { padding: 34px 22px 70px; }
+    h1 { font-size: 32px; }
+    .doc-meta, .grid.two, .grid.three, .grid.four { grid-template-columns: 1fr; }
   }
-  .pill.good { background: var(--good-soft); color: var(--good); border-color: #c8e2d3; }
-  .pill.warn { background: var(--warn-soft); color: var(--warn); border-color: #ecd9b3; }
-  .pill.danger { background: var(--danger-soft); color: var(--danger); border-color: #efc6c6; }
-  .pill.accent { background: var(--accent-soft); color: var(--accent); border-color: #c8d6f4; }
-
-  .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 22px 0; }
-  @media (max-width: 760px) { .compare { grid-template-columns: 1fr; } }
-  .compare .pane { border-radius: 10px; padding: 20px 22px; border: 1px solid var(--line); background: var(--bg-card); }
-  .compare .pane.bad { background: var(--danger-soft); border-color: #efc6c6; }
-  .compare .pane.good { background: var(--good-soft); border-color: #c8e2d3; }
-  .compare h4 { margin-top: 0; color: var(--ink-0); letter-spacing: 0.04em; }
-
-  .qa { margin: 16px 0; }
-  .qa-q {
-    font-weight: 600; color: var(--ink-0);
-    padding: 10px 0 4px;
-  }
-  .qa-q::before { content: 'Q · '; color: var(--ink-3); font-family: var(--mono); font-size: 12.5px; margin-right: 4px; }
-  .qa-a { color: var(--ink-1); padding: 0 0 14px; border-bottom: 1px dashed var(--line-soft); }
-  .qa-a::before { content: 'A · '; color: var(--accent); font-family: var(--mono); font-size: 12.5px; margin-right: 4px; font-weight: 600; }
-
   @media print {
-    aside.sidenav, details.mobile-toc { display: none; }
-    .layout { grid-template-columns: 1fr; }
-    main { max-width: 17cm; padding: 24px 32px; }
-    .callout, .card, .svg-fig, figure, .stat { break-inside: avoid; }
-    h2 { break-after: avoid; }
-    a { color: var(--ink-0); border-bottom: 0; }
-    .callout { background: var(--bg-card) !important; border-left: 4px solid currentColor; }
-    .svg-fig svg { max-height: 18cm; }
+    body { background: #fff; }
+    nav { display: none; }
+    .shell { display: block; }
+    main { width: 17cm; padding: 20px 0; }
+    section, figure, .panel, .stat { break-inside: avoid; }
+    a { color: var(--text); border: 0; }
   }
-
-  footer {
-    border-top: 1px solid var(--line);
-    margin-top: 60px;
-    padding: 32px 0 0;
-    color: var(--ink-2);
-    font-size: 13.5px;
-  }
-  footer .cite {
-    background: var(--bg-soft);
-    border: 1px solid var(--line);
-    border-radius: 6px;
-    padding: 12px 16px;
-    margin: 12px 0;
-    font-family: var(--mono);
-    font-size: 12.5px;
-    color: var(--ink-1);
-    white-space: pre-wrap;
-  }
-  footer .row { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-top: 16px; }
 </style>
 </head>
 <body>
+<div class="shell">
+  <nav>
+    <div class="mark">OpenCorvus</div>
+    <div class="nav-meta">技术白皮书 v2026.05<br>报告日 2026-05-15<br>MIT License</div>
+    <a href="#problem"><span>01</span>问题边界</a>
+    <a href="#scale"><span>02</span>规模数据</a>
+    <a href="#position"><span>03</span>同类定位</a>
+    <a href="#architecture"><span>04</span>编排框架</a>
+    <a href="#contracts"><span>05</span>Goal 与契约</a>
+    <a href="#storage"><span>06</span>数据库</a>
+    <a href="#frontend"><span>07</span>前端与通道</a>
+    <a href="#runtime"><span>08</span>执行器与部署</a>
+    <a href="#limits"><span>09</span>边界与后续工作</a>
+  </nav>
 
-<details class="mobile-toc">
-  <summary>目录</summary>
-  <div class="toc-list">
-    <a href="#ch01"><span class="num">01</span>它解决什么</a>
-    <a href="#ch02"><span class="num">02</span>项目规模与同类对照</a>
-    <a href="#ch03"><span class="num">03</span>为什么需要 Harness</a>
-    <a href="#ch04"><span class="num">04</span>编排总览</a>
-    <a href="#ch05"><span class="num">05</span>九位角色</a>
-    <a href="#ch06"><span class="num">06</span>Goal 与契约</a>
-    <a href="#ch07"><span class="num">07</span>完整性审计</a>
-    <a href="#ch08"><span class="num">08</span>验收评分</a>
-    <a href="#ch09"><span class="num">09</span>数据持久化</a>
-    <a href="#ch10"><span class="num">10</span>事件与唤醒</a>
-    <a href="#ch11"><span class="num">11</span>前端 Overlay</a>
-    <a href="#ch12"><span class="num">12</span>执行器</a>
-    <a href="#ch13"><span class="num">13</span>完整工作流</a>
-    <a href="#ch14"><span class="num">14</span>部署上手</a>
-    <a href="#ch15"><span class="num">15</span>设计取舍</a>
-    <a href="#ch16"><span class="num">16</span>结语</a>
-  </div>
-</details>
+  <main>
+    <header>
+      <h1>OpenCorvus 技术白皮书</h1>
+      <p class="subtitle">OpenCorvus 是一个围绕代码交付任务构建的多 Agent 编排系统。它不把模型输出直接视为交付结果，而是把需求、Goal、接口契约、构建、审计、交付判决和用户消息都保存在可追溯的任务上下文中，再由编排器持续读取事实并决定下一步。</p>
+      <div class="doc-meta">
+        <div class="meta-cell"><b>Version</b><span>2026.05</span></div>
+        <div class="meta-cell"><b>Repository</b><span>github.com/yangheng95/opencorvus</span></div>
+        <div class="meta-cell"><b>Scope</b><span>数据库 / 前端 / 后端 / 编排 / 部署</span></div>
+        <div class="meta-cell"><b>Basis</b><span>2026-05-15 仓库复核</span></div>
+      </div>
+    </header>
 
-<div class="layout">
+    <section id="problem">
+      <h2><span>01</span>问题边界</h2>
+      <p>OpenCorvus 处理的是长周期代码交付任务，而不是一次性补全。单个编码 Agent 可以编辑文件、运行命令并回答问题；OpenCorvus 关注的是这些动作如何被需求、架构边界、验收证据和用户后续消息约束。</p>
+      <p>系统把任务拆成可审计事实：用户请求、意图分析、需求条目、架构 Goal、Acceptance Spec（验收规格）、构建结果、Integrity 审计、Delivery 判决、协议事件和人工消息。Orchestrator（编排器）读取这些事实并选择工具；代码层不把任务生命周期写成固定状态机。</p>
+      <p>本文中的缩写含义如下：LLM 是 Large Language Model（大语言模型），API 是 Application Programming Interface（应用程序接口），HTTP 是 Hypertext Transfer Protocol（超文本传输协议），SSE 是 Server-Sent Events（服务端事件流），IR 是 Intermediate Representation（中间表示），REQ 是 Requirement（需求条目），UI 是 User Interface（用户界面），CLI 是 Command Line Interface（命令行接口），MCP 是 Model Context Protocol（模型上下文协议），WAL 是 Write-Ahead Logging（预写日志）。</p>
 
-<aside class="sidenav">
-  <div class="brand">
-    <span class="brand-mark">O</span>
-    <span class="brand-name">OpenCorvus</span>
-  </div>
+      <figure>
+        <img src="assets/agent-comparison.png" alt="两种 Agent 工作方式对比">
+        <figcaption>图 1：视觉材料展示了直接 Agent 工作方式与 OpenCorvus 编排方式的差异。本文后续章节把图中的抽象流程对应到仓库中的工具、表、执行器和前端入口。</figcaption>
+      </figure>
+    </section>
 
-  <div class="group">
-    <div class="group-label">背景</div>
-    <a class="toc-item" href="#ch01"><span class="num">01</span>它解决什么</a>
-    <a class="toc-item" href="#ch02"><span class="num">02</span>规模与同类对照</a>
-    <a class="toc-item" href="#ch03"><span class="num">03</span>为什么需要 Harness</a>
-  </div>
-  <div class="group">
-    <div class="group-label">架构</div>
-    <a class="toc-item" href="#ch04"><span class="num">04</span>编排总览</a>
-    <a class="toc-item" href="#ch05"><span class="num">05</span>九位角色</a>
-    <a class="toc-item" href="#ch06"><span class="num">06</span>Goal 与契约</a>
-    <a class="toc-item" href="#ch07"><span class="num">07</span>完整性审计</a>
-    <a class="toc-item" href="#ch08"><span class="num">08</span>验收评分</a>
-    <a class="toc-item" href="#ch09"><span class="num">09</span>数据持久化</a>
-    <a class="toc-item" href="#ch10"><span class="num">10</span>事件与唤醒</a>
-  </div>
-  <div class="group">
-    <div class="group-label">实践</div>
-    <a class="toc-item" href="#ch11"><span class="num">11</span>前端 Overlay</a>
-    <a class="toc-item" href="#ch12"><span class="num">12</span>执行器</a>
-    <a class="toc-item" href="#ch13"><span class="num">13</span>完整工作流</a>
-    <a class="toc-item" href="#ch14"><span class="num">14</span>部署上手</a>
-  </div>
-  <div class="group">
-    <div class="group-label">附</div>
-    <a class="toc-item" href="#ch15"><span class="num">15</span>设计取舍</a>
-    <a class="toc-item" href="#ch16"><span class="num">16</span>结语</a>
-  </div>
+    <section id="scale">
+      <h2><span>02</span>规模数据</h2>
+      <p>OpenCorvus fork 自 <a href="https://github.com/sst/opencode">sst/opencode</a>。当前仓库保留上游历史，因此不能把全仓 commit 数等同为 OpenCorvus 自身工作量。本次复核使用 `git log`、`rg` 和目录枚举分别统计全仓历史、OpenCorvus 自身路径、数据库、前端和通道适配器。</p>
+      <div class="grid four">
+        <div class="stat"><div class="num">1,507</div><div class="label"><code>packages/opencorvus</code> 路径相关 commit，不计入 fork 前上游历史</div></div>
+        <div class="stat"><div class="num">196</div><div class="label">2026-W20 核心路径 commit，统计范围含 core / overlay / channel-runtime / docs</div></div>
+        <div class="stat"><div class="num">44</div><div class="label">SQLite 表与虚拟表，定义集中在 <code>storage/ddl.ts</code></div></div>
+        <div class="stat"><div class="num">9</div><div class="label">对外 Agent 入口文件与核心 prompt 文件</div></div>
+      </div>
+      <div class="grid four">
+        <div class="stat"><div class="num">21</div><div class="label">Orchestrator 工具入口</div></div>
+        <div class="stat"><div class="num">9</div><div class="label">对外 Agent 入口文件与核心 prompt</div></div>
+        <div class="stat"><div class="num">15</div><div class="label">通道适配器文件</div></div>
+        <div class="stat"><div class="num">76</div><div class="label">Overlay `.tsx` 组件；`.ts` + `.tsx` 合计 177</div></div>
+      </div>
+      <p>这些数字的作用是说明工程面，而不是排名。OpenCorvus 的主要工作量集中在编排核心、任务持久化、Goal/Contract/Audit 链路、Overlay 操作面、执行器集成和多通道接入。</p>
+      <pre><code>git log --oneline -- packages/opencorvus
+rg -n "^    [a-z_]+: tool\(" packages/opencorvus/src/orchestrator/tools.ts
+rg -n "CREATE TABLE|CREATE VIRTUAL TABLE" packages/opencorvus/src/storage/ddl.ts</code></pre>
+    </section>
 
-  <div class="meta">
-    版本 2026.05<br>
-    最后更新 2026-05-14<br>
-    MIT License
-  </div>
-</aside>
+    <section id="position">
+      <h2><span>03</span>同类定位</h2>
+      <p>OpenCorvus 与同类工具的边界可以从“执行者”与“编排层”区分。Claude Code、Codex CLI、aider、cline、opencode 主要面向开发者发起的代码编辑与命令执行；OpenCorvus 也可以使用外部执行器，但它的主体是任务级编排、持久化和验收闭环。</p>
+      <table>
+        <thead><tr><th>项目</th><th>主要入口</th><th>OpenCorvus 对照视角</th></tr></thead>
+        <tbody>
+          <tr><td>sst/opencode</td><td>终端原生编码 Agent 与 TUI</td><td>OpenCorvus 保留 fork 血缘，但把项目重心放在任务编排、Goal 拆分、审计和 Overlay 上。</td></tr>
+          <tr><td>Claude Code</td><td>终端 / IDE / Web / Slack / CI 场景中的编码 Agent</td><td>适合作为强执行器。OpenCorvus 关注它产出的内容如何进入任务事实链并被后续验收。</td></tr>
+          <tr><td>Codex CLI</td><td>本地终端编码 Agent</td><td>适合作为外部执行器。OpenCorvus 通过执行器协议集成，而不是复制其交互层。</td></tr>
+          <tr><td>aider</td><td>终端 pair programming，围绕本地 Git 仓库修改代码</td><td>适合人工协作式编辑。OpenCorvus 额外强调任务持久化、跨 Goal 契约和交付判决。</td></tr>
+          <tr><td>cline</td><td>IDE 内 autonomous coding agent，带命令和浏览器动作</td><td>适合 IDE 内逐步授权。OpenCorvus 的控制面在 Overlay / HTTP / 通道层，任务事实保存在本地数据库。</td></tr>
+          <tr><td>OpenClaw 类个人 Agent 平台</td><td>跨应用、跨消息通道的个人自动化</td><td>关注面更宽。OpenCorvus 的范围收窄在代码仓库内的交付任务、执行器和验收链。</td></tr>
+        </tbody>
+      </table>
+      <p>这个定位并不要求 OpenCorvus 替代任一工具。更实际的使用方式是：让外部编码 Agent 做代码生成和命令执行，让 OpenCorvus 保存任务事实、拆分目标、复核契约、处理用户消息并决定是否继续推进。</p>
+    </section>
 
-<main>
+    <section id="architecture">
+      <h2><span>04</span>编排框架</h2>
+      <p>Orchestrator 的真实工具入口在 <code>packages/opencorvus/src/orchestrator/tools.ts</code>。本次复核到 21 个工具：<code>analyze_intent</code>、<code>requirements</code>、<code>design_analysis</code>、<code>architect</code>、<code>build</code>、<code>integrity</code>、<code>deliver</code>、<code>prosecute</code>、<code>publish_delivery</code>、<code>refine</code>、<code>question</code>、<code>propose_task</code>、<code>modify_goal</code>、<code>query_failed_goals</code>、<code>read_context</code>、<code>fail_task</code>、<code>cancel_task</code>、<code>retry_task</code>、<code>inject_operator_message</code>、<code>steer_subagent</code>、<code>restart_from_stage</code>。</p>
+      <p>九个对外 Agent 入口文件分别位于 <code>intent-analysis</code>、<code>requirements</code>、<code>design-analyst</code>、<code>architect</code>、<code>build</code>、<code>integrity</code>、<code>delivery</code>、<code>prosecutor</code>、<code>orchestrator</code> 目录。与之并行，<code>SessionKind</code> 是运行时容器分类，共 15 项：root、orchestrator、assistant、gateway、intent-analysis、requirements、design-analyst、goal、architect、integrity、delivery、executor、build、evaluator、system。九个对外角色不等于这 15 个容器的一一映射。</p>
 
-<section class="hero">
-  <span class="hero-tag">Technical Whitepaper · v2026.05</span>
-  <h1>OpenCorvus</h1>
-  <p class="hero-sub">
-    A multi-agent harness for reliable code delivery.<br>
-    围绕编码 Agent 的多角色编排框架——把用户请求经过 spec / contract / build / audit / delivery 多阶段流水线，
-    产出与机器可校验契约一致的交付物。
-  </p>
-  <p class="hero-byline">
-    <b>作者</b>OpenCorvus Contributors<b>发布</b>2026-05-14<b>许可</b>MIT
-  </p>
-</section>
+      <figure>
+        <img src="assets/orchestration-framework.png" alt="事件驱动的单题编排框架">
+        <figcaption>图 2：事件驱动的任务编排视图。用户消息、工具结果、构建证据和判决都进入同一任务事实集合，Orchestrator 在每次唤醒时重新读取上下文。</figcaption>
+      </figure>
 
-<!-- 01 -->
-<section id="ch01">
-  <h2><span class="num">01</span>问题陈述</h2>
+      <div class="flow" aria-label="OpenCorvus 编排流程示意图">
+        <svg viewBox="0 0 940 250" xmlns="http://www.w3.org/2000/svg" role="img">
+          <defs>
+            <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#1d5f78"/>
+            </marker>
+          </defs>
+          <g font-family="Inter, Noto Sans SC, sans-serif" font-size="14" fill="#161817">
+            <rect x="20" y="70" width="120" height="64" rx="6" fill="#ffffff" stroke="#dddfd8"/>
+            <text x="80" y="96" text-anchor="middle" dominant-baseline="middle">用户请求</text>
+            <text x="80" y="119" text-anchor="middle" dominant-baseline="middle" font-size="11" fill="#6f766f">HTTP / Overlay / Channel</text>
+            <rect x="190" y="70" width="130" height="64" rx="6" fill="#ffffff" stroke="#dddfd8"/>
+            <text x="255" y="96" text-anchor="middle" dominant-baseline="middle">需求事实</text>
+            <text x="255" y="119" text-anchor="middle" dominant-baseline="middle" font-size="11" fill="#6f766f">REQ / decision log</text>
+            <rect x="370" y="70" width="130" height="64" rx="6" fill="#ffffff" stroke="#dddfd8"/>
+            <text x="435" y="96" text-anchor="middle" dominant-baseline="middle">架构 Goal</text>
+            <text x="435" y="119" text-anchor="middle" dominant-baseline="middle" font-size="11" fill="#6f766f">>= 2 runtime check</text>
+            <rect x="550" y="70" width="130" height="64" rx="6" fill="#ffffff" stroke="#dddfd8"/>
+            <text x="615" y="96" text-anchor="middle" dominant-baseline="middle">构建执行</text>
+            <text x="615" y="119" text-anchor="middle" dominant-baseline="middle" font-size="11" fill="#6f766f">opencorvus / codex / claude-code</text>
+            <rect x="730" y="70" width="150" height="64" rx="6" fill="#ffffff" stroke="#dddfd8"/>
+            <text x="805" y="96" text-anchor="middle" dominant-baseline="middle">审计与交付</text>
+            <text x="805" y="119" text-anchor="middle" dominant-baseline="middle" font-size="11" fill="#6f766f">integrity / deliver</text>
+            <path d="M 140 102 L 190 102" stroke="#1d5f78" stroke-width="1.5" marker-end="url(#arrow)"/>
+            <path d="M 320 102 L 370 102" stroke="#1d5f78" stroke-width="1.5" marker-end="url(#arrow)"/>
+            <path d="M 500 102 L 550 102" stroke="#1d5f78" stroke-width="1.5" marker-end="url(#arrow)"/>
+            <path d="M 680 102 L 730 102" stroke="#1d5f78" stroke-width="1.5" marker-end="url(#arrow)"/>
+            <path d="M 805 136 C 805 205 435 205 435 140" fill="none" stroke="#8a5a12" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#arrow)"/>
+            <text x="610" y="218" text-anchor="middle" dominant-baseline="middle" font-size="12" fill="#8a5a12">未满足需求或契约时回到架构/构建事实层重新决策</text>
+          </g>
+        </svg>
+      </div>
+    </section>
 
-  <p>当前 AI 编码工具普遍采用<strong>单 Agent + 单循环</strong>结构：模型读取上下文 → 写代码 → 用户审查 → 纠正。
-  这种结构在 1–2 文件的局部修改上表现良好，但在需要多阶段规划、跨模块协作、端到端可验收的任务上失败率显著上升。
-  主要原因可观察为四类：</p>
+    <section id="contracts">
+      <h2><span>05</span>Goal 与契约</h2>
+      <p>Architect 通过工具注册 Goal、traceability 和 contract graph。当前实现以运行时常量 <code>MIN_ARCHITECT_GOAL_COUNT = 2</code> 约束至少两个 Goal；如果最终 Goal 少于两个，<code>architect/agent.ts</code> 会抛出错误。这个约束不是 Zod 数组上的 <code>.min(2)</code>。</p>
+      <p>Acceptance Spec 的字段是 <code>scorers: ScorerSchema[]</code>，schema 层要求至少一个 scorer。合法 scorer 类型包括 <code>heuristic</code>、<code>llm_judge</code>、<code>prebuilt</code>、<code>contract_audit</code>。Contract IR 的 enum variant 是对象数组，每项包含 <code>value</code> 和 <code>meaning</code>，不是字符串数组。</p>
+      <figure>
+        <img src="assets/opencorvus-goal-design.png" alt="OpenCorvus Goal 设计三段式">
+        <figcaption>图 3：Goal 设计材料对应当前代码中的 Goal、Acceptance Spec、Contract IR 与跨 Goal traceability。图中的阶段不是独立产品流程，而是架构事实的组织方式。</figcaption>
+      </figure>
+      <table>
+        <thead><tr><th>对象</th><th>当前仓库事实</th><th>设计含义</th></tr></thead>
+        <tbody>
+          <tr><td>Requirement / REQ</td><td>需求条目进入 engine 域表与 artifact</td><td>后续审计按需求完成度追踪，不只看 Goal 是否存在</td></tr>
+          <tr><td>Goal</td><td>Architect 至少注册两个 Goal</td><td>把实现边界拆成可独立构建、验证和重试的单元</td></tr>
+          <tr><td>Acceptance Spec</td><td><code>scorers</code> 是数组且至少一项</td><td>一个验收规格可以由不同类型证据共同支撑</td></tr>
+          <tr><td>Contract IR</td><td>type / function / enum 三类 IR</td><td>让跨模块接口能先于实现被声明和审计</td></tr>
+          <tr><td>Integrity</td><td>独立 Agent 与工具入口</td><td>构建后复核需求覆盖、可行性、幻觉风险和方案质量</td></tr>
+        </tbody>
+      </table>
+    </section>
 
-  <ul>
-    <li><strong>需求漏覆盖</strong>——模型在长上下文中遗忘早期约束；</li>
-    <li><strong>覆盖度不均</strong>——擅长部分写得过细，不擅长部分一笔带过；</li>
-    <li><strong>失败不可局部回退</strong>——单循环出错后只能整体重写；</li>
-    <li><strong>无审计踪迹</strong>——决策路径不可追溯，无法定位&ldquo;在哪一步、基于什么事实做出了什么选择&rdquo;。</li>
-  </ul>
+    <section id="storage">
+      <h2><span>06</span>数据库与持久化</h2>
+      <p>本地持久化采用 SQLite。当前 DDL 集中在 <code>packages/opencorvus/src/storage/ddl.ts</code>，包含 44 张表或虚拟表，覆盖 project、session、message、memory、cron、engine、decision log、protocol event 等域。</p>
+      <p>任务级事实主要分为三类：关系型任务数据，例如 <code>engine_task</code>、<code>engine_goal</code>、<code>engine_requirement</code>；append-only 事件，例如 <code>protocol_event</code> 与 <code>protocol_inbox</code>；构建与交付证据，例如 <code>engine_artifact</code>、<code>engine_metric_spec</code>、<code>engine_metric_result</code>。这种结构让 Overlay、HTTP API、通道和 Orchestrator 读取同一事实源。</p>
+      <p>记忆表不是单表字段堆叠。<code>memory_file</code> 保存记忆文件元信息，<code>memory_chunk</code> 保存分块内容，<code>memory_embedding</code> 是以 <code>chunk_id</code> 为主键的独立表，<code>memory_fts</code> 提供全文检索虚拟表。</p>
+      <div class="grid three">
+        <div class="panel"><h3>关系层</h3><p><code>engine_task</code>、<code>engine_goal</code>、<code>engine_requirement</code>、<code>engine_plan_version</code> 保存任务结构。</p></div>
+        <div class="panel"><h3>证据层</h3><p><code>engine_artifact</code>、metric、counterexample、iteration 记录构建、验收和审计材料。</p></div>
+        <div class="panel"><h3>事件层</h3><p><code>protocol_event</code> 与 <code>protocol_inbox</code> 记录可重放的任务通信事实。</p></div>
+      </div>
+    </section>
 
-  <p>OpenCorvus 的设计前提是：<strong>当前 LLM 的能力已经足够，受限的是工程纪律</strong>——
-  spec 化、契约化、可审计化、可独立验收化。这套纪律若交由模型在 prompt 层自行管理，几乎一定被省略；
-  本项目将其下沉到框架层，通过多 Agent 流水线、机器可校验契约、append-only 审计踪迹、自动 replan 闭环来强制兑现。</p>
+    <section id="frontend">
+      <h2><span>07</span>前端与通道</h2>
+      <p>Overlay 是本地操作界面，代码位于 <code>packages/overlay/src</code>。当前有 76 个 `.tsx` 组件，`.ts` 与 `.tsx` 合计 177 个文件。界面职责不是替代 Orchestrator 决策，而是展示任务、会话、Goal、构建证据、控制消息和人工操作入口。</p>
+      <p>通道运行时位于 <code>packages/channel-runtime/src/adapters</code>，当前 15 个适配器文件：dingtalk、discord、feishu、googlechat、http、line、matrix、mattermost、msteams、qq、signal、slack、telegram、wecom、whatsapp。通道消息进入共享控制面，而不是为每个通道复制一套任务逻辑。</p>
+      <table>
+        <thead><tr><th>入口</th><th>职责</th><th>与核心任务的关系</th></tr></thead>
+        <tbody>
+          <tr><td>Overlay UI</td><td>浏览任务、读事件、发控制消息、查看证据</td><td>读取本地 server API 与 SSE 流</td></tr>
+          <tr><td>HTTP API</td><td>创建任务、读取 board、发送 follow-up、retry、replan、cancel</td><td>路由定义在 <code>server/routes/orchestrator.ts</code></td></tr>
+          <tr><td>Channel runtime</td><td>将外部消息平台接入任务控制面</td><td>平台适配器只做 ingress/egress，不持有独立任务事实</td></tr>
+        </tbody>
+      </table>
+    </section>
 
-  <p>因此每个任务先经过 <em>意图分析 → 需求 → 架构</em> 三道前置关，把请求转译为可枚举的 REQ 列表
-  （REQ-1、REQ-2 … 序号化）与机器可校验的接口契约（Contract IR + Graph），
-  再交由实现层调度外部编码执行器；交付前由独立审计与交付角色复核，不通过则自动重计划。
-  本白皮书余下章节按此顺序展开。</p>
-</section>
+    <section id="runtime">
+      <h2><span>08</span>执行器与部署</h2>
+      <p>执行器枚举是 <code>opencorvus | codex | claude-code</code>。内置实现文件是 <code>packages/opencorvus/src/executor/opencorvus.ts</code>，namespace 为 <code>OpencorvusExecutor</code>。</p>
+      <p>调度服务是 <code>TaskQueueService</code>，定义在 <code>packages/opencorvus/src/scheduler/task-queue-service.ts</code>。它被 project bootstrap、TUI、session route 和内置 executor 调用。</p>
+      <p>本地启动形态以 <code>opencorvus serve</code> 为主，Overlay 通过本地 server 暴露。公共文档和安装引用应指向 GitHub 仓库：<a href="https://github.com/yangheng95/opencorvus">https://github.com/yangheng95/opencorvus</a>。</p>
+      <pre><code>git clone https://github.com/yangheng95/opencorvus.git
+cd opencorvus
+bun install
+bun run --cwd packages/opencorvus build
+opencorvus serve</code></pre>
+      <p>常用任务 API 已在路由与产品文档中出现：<code>POST /task</code> 创建任务，<code>GET /tasks</code> 列表，<code>GET /task/&lt;task_id&gt;/board</code> 读取 board，<code>GET /task/&lt;task_id&gt;/events</code> 订阅 SSE，<code>POST /task/&lt;task_id&gt;/message</code> 追加用户消息，<code>POST /task/&lt;task_id&gt;/retry</code>、<code>POST /task/&lt;task_id&gt;/replan</code>、<code>POST /task/&lt;task_id&gt;/cancel</code> 分别处理重试、重规划和取消。</p>
+    </section>
 
-<!-- 02 — 新增：规模 & 同类对照 -->
-<section id="ch02">
-  <h2><span class="num">02</span>项目规模与定位对照</h2>
-
-  <p>本节给出仓库的客观体量、OpenCorvus 自 fork 后的自身工作量、以及它在编码 Agent 工具谱系中的定位。
-  所有数字均可在仓库根用 <code>git ls-files</code> / <code>grep -c</code> 等命令复核。</p>
-
-  <h3>OpenCorvus 自身工作量（fork 之后 / 两个半月）</h3>
-  <p>仓库 <a href="https://github.com/sst/opencode" target="_blank" rel="noopener">fork 自 sst/opencode</a>。
-  下面这组数字只统计 <strong>fork 之后写入 <code>packages/opencorvus/</code> 的工作</strong>，不计入上游历史，
-  便于读者衡量 OpenCorvus 自身的工程投入：</p>
-
-  <div class="grid cols-4">
-    <div class="stat">
-      <div class="num">1.5k<span class="unit">+</span></div>
-      <div class="label"><b>OpenCorvus 自身 commit</b><br>自 <code>2026-03-02</code> 至 <code>2026-05-14</code>，<br>触及 <code>packages/opencorvus/</code> 的提交</div>
-    </div>
-    <div class="stat">
-      <div class="num">230<span class="unit">+</span></div>
-      <div class="label"><b>独创子系统 commit</b><br>分布于 architect / integrity / acceptance / delivery / prosecutor 五个 fork 前不存在的目录</div>
-    </div>
-    <div class="stat">
-      <div class="num">50<span class="unit">个</span></div>
-      <div class="label"><b>独创子系统 TS 源文件</b><br>fork 前完全不存在的核心模块全部由 OpenCorvus 从零实现</div>
-    </div>
-    <div class="stat">
-      <div class="num">1829<span class="unit">行</span></div>
-      <div class="label"><b>核心 Agent prompt 字面字数</b><br><code>prompt/core/*.txt</code> 9 份系统 prompt 文本</div>
-    </div>
-  </div>
-
-  <h3>仓库整体体量（含 fork 基础设施）</h3>
-  <div class="grid cols-4">
-    <div class="stat">
-      <div class="num">571<span class="unit">个</span></div>
-      <div class="label"><b>编排核心 TypeScript 源文件</b><br>位于 <code>packages/opencorvus/src/</code>，<br>不含测试</div>
-    </div>
-    <div class="stat">
-      <div class="num">410<span class="unit">个</span></div>
-      <div class="label"><b>单元 / 集成测试</b><br>覆盖 architect / delivery / acceptance / server 等关键路径</div>
-    </div>
-    <div class="stat">
-      <div class="num">44<span class="unit">张</span></div>
-      <div class="label"><b>SQLite 表 / 虚拟表</b><br>集中定义于 <code>storage/ddl.ts</code>（911 行单一来源）</div>
-    </div>
-    <div class="stat">
-      <div class="num">21<span class="unit">个</span></div>
-      <div class="label"><b>Orchestrator 工具调用</b><br><code>orchestrator/tools.ts</code> 内的 <code>tool({...})</code> 定义</div>
-    </div>
-    <div class="stat">
-      <div class="num">9<span class="unit">个</span></div>
-      <div class="label"><b>对外专业 Agent 角色</b><br>另有 6 种运行时容器（root / gateway / goal / assistant / executor / system），共 15 种 SessionKind</div>
-    </div>
-    <div class="stat">
-      <div class="num">15<span class="unit">个</span></div>
-      <div class="label"><b>消息通道适配器</b><br>Slack / 飞书 / Discord / Telegram / WhatsApp / 钉钉 / QQ / HTTP Webhook 等</div>
-    </div>
-    <div class="stat">
-      <div class="num">76<span class="unit">个</span></div>
-      <div class="label"><b>Overlay 前端 .tsx 文件</b><br>Solid.js + Vite 6 + Tauri 2；加 .ts 合计 177 个</div>
-    </div>
-    <div class="stat">
-      <div class="num">5<span class="unit">条</span></div>
-      <div class="label"><b>项目硬规则（设计红线）</b><br>禁双源 / 禁 fallback / 禁状态机 / 禁合成消息 / prompt-over-host</div>
-    </div>
-  </div>
-  <p style="font-size: 12.5px; color: var(--ink-3); margin-top: 8px;">
-    上表数字可在仓库根用 <code>git ls-files</code>、<code>grep -c &quot;CREATE TABLE&quot;</code> 等命令直接复核；不含 LLM provider SDK、浏览器引擎等三方依赖。
-  </p>
-
-  <h3 id="ch02-lineage">血缘：在 opencode 之上做了什么</h3>
-  <p>OpenCorvus 仓库 fork 自 <a href="https://github.com/sst/opencode" target="_blank" rel="noopener">sst/opencode</a>
-  （早期是 Kujtim Hoxha 起步的 <code>termai</code> → <code>opencode-ai/opencode</code> 演进而来）。
-  fork 之后的工作不是&ldquo;改造 opencode&rdquo;，而是<strong>在它之上引入一整套新的编排抽象</strong>。
-  下面是 fork 前不存在、由 OpenCorvus 从零设计的独创子系统：</p>
-
-  <table class="tbl">
-    <colgroup>
-      <col style="width: 28%">
-      <col style="width: 72%">
-    </colgroup>
-    <thead><tr><th>子系统</th><th>核心贡献</th></tr></thead>
-    <tbody>
-      <tr>
-        <td><code>architect/</code></td>
-        <td>从零设计的 <strong>Contract IR + ArchitectContractGraph</strong>——把模糊需求转译为 Zod schema 化的接口契约 DAG，含 5 种 ValueDomain、循环 / 孤立消费者等多种静态校验</td>
-      </tr>
-      <tr>
-        <td><code>integrity/</code></td>
-        <td><strong>四维完整性审计框架</strong>——Requirement Fidelity / Technical Feasibility / Hallucination / Solution Quality，通过 prompt 注入正交审查维度</td>
-      </tr>
-      <tr>
-        <td><code>acceptance/</code></td>
-        <td><strong>四族评分器抽象</strong>——Heuristic / LLM Judge / Prebuilt / Contract Audit；其中 Contract Audit 是<em>零 LLM</em> 的 AST 静态校验路径</td>
-      </tr>
-      <tr>
-        <td><code>delivery/</code> + <code>prosecutor/</code></td>
-        <td><strong>评审 + 对抗</strong>双角色——Delivery 无修复权的 verdict 关卡，Prosecutor 专门寻找未被指标覆盖的失败模式</td>
-      </tr>
-      <tr>
-        <td><code>scheduler/</code> + <code>protocol/</code></td>
-        <td><strong>事件驱动唤醒循环</strong>——<code>TaskQueueService</code> 串行调度 + <code>protocol_event</code> append-only seq 单调递增，让进程崩溃也能从事件序列恢复</td>
-      </tr>
-      <tr>
-        <td><code>../channel-runtime/</code></td>
-        <td><strong>15 个消息通道适配器</strong>——把同一个 headless 编排器同时暴露给 Slack / 飞书 / 钉钉 / QQ / HTTP Webhook 等渠道</td>
-      </tr>
-      <tr>
-        <td><code>decision-log/</code></td>
-        <td>跨 Agent 共享的<strong>决策审计层</strong>——记录&ldquo;为什么&rdquo;而非&ldquo;做了什么&rdquo;</td>
-      </tr>
-    </tbody>
-  </table>
-
-  <p>OpenCorvus 内置的默认执行器命名为 <code>mirrorcode</code>，致敬这段血缘。
-  定位关系一句话总结：</p>
-  <ul>
-    <li><strong>opencode / Claude Code / Codex CLI / aider / cline</strong>是<em>单点编码工具</em>——一个模型 + 一个工具循环 + 一个用户。</li>
-    <li><strong>OpenCorvus</strong> 是<em>编排框架</em>——它把上述工具<strong>当作 executor 之一</strong>调用，
-    在它们之上套一层 9 角色团队、契约图、append-only 审计、重计划循环。</li>
-  </ul>
-
-  <h3>能力定位对照</h3>
-  <p>下表用统一判据评估能力<em>是否在项目内被结构化承载</em>。判据：</p>
-  <ul style="font-size: 14px;">
-    <li><span class="yes">✓</span> = 项目内有命名清晰的子系统承载该能力（可指认源码路径或文档）；</li>
-    <li><span class="partial">部分</span> = 通过项目内置的命令行参数 / 插件 / 配置可勉强达到，但不是核心抽象；</li>
-    <li><span class="no">—</span> = 项目内不存在该概念，需用户在 prompt 层自行实现。</li>
-  </ul>
-
-  <table class="tbl">
-    <colgroup>
-      <col style="width: 30%">
-      <col style="width: 18%">
-      <col style="width: 18%">
-      <col style="width: 17%">
-      <col style="width: 17%">
-    </colgroup>
-    <thead>
-      <tr>
-        <th>能力维度</th>
-        <th>OpenCorvus</th>
-        <th>opencode<br><span style="font-weight:400;color:var(--ink-3);font-size:11px;">sst/opencode</span></th>
-        <th>Claude Code / Codex CLI</th>
-        <th>aider / cline</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td>多 Agent 流水线（意图→需求→架构→构建→审计→交付）</td>
-        <td class="yes">✓ 9 角色</td>
-        <td class="partial">部分（build / plan / subagent 切换）</td>
-        <td class="no">— 单 Agent</td>
-        <td class="no">— 单 Agent</td>
-      </tr>
-      <tr>
-        <td>机器可校验的接口契约（Contract IR + Graph）</td>
-        <td class="yes">✓ Zod schema</td>
-        <td class="no">—</td>
-        <td class="no">—</td>
-        <td class="no">—</td>
-      </tr>
-      <tr>
-        <td>验收评分器（独立子系统，非 prompt 自带）</td>
-        <td class="yes">✓ 4 family</td>
-        <td class="no">—</td>
-        <td class="no">—</td>
-        <td class="partial">部分（<code>--auto-test</code>）</td>
-      </tr>
-      <tr>
-        <td>Append-only 审计踪迹（DB schema 级承载）</td>
-        <td class="yes">✓ 44 表</td>
-        <td class="no">—</td>
-        <td class="no">—</td>
-        <td class="no">—</td>
-      </tr>
-      <tr>
-        <td>失败时自动 replan（不需要用户重启）</td>
-        <td class="yes">✓ Integrity 触发</td>
-        <td class="no">—</td>
-        <td class="no">—</td>
-        <td class="no">—</td>
-      </tr>
-      <tr>
-        <td>事务化本地持久化（进程崩溃可恢复）</td>
-        <td class="yes">✓ SQLite + WAL</td>
-        <td class="no">— 文件型</td>
-        <td class="no">— 文件型</td>
-        <td class="no">—</td>
-      </tr>
-      <tr>
-        <td>多通道触发（Slack / 飞书 / 邮件 / Webhook 等）</td>
-        <td class="yes">✓ 15 适配器</td>
-        <td class="no">—</td>
-        <td class="no">—</td>
-        <td class="no">—</td>
-      </tr>
-      <tr>
-        <td>适用任务尺度</td>
-        <td>完整功能 / 多 Goal</td>
-        <td>多文件改动</td>
-        <td>1–2 文件 / 一次会话</td>
-        <td>1–N 文件改动</td>
-      </tr>
-      <tr>
-        <td>首次任务的工程预算（LLM token / 启动成本）</td>
-        <td>较高（多 Agent 接力）</td>
-        <td>低</td>
-        <td>低</td>
-        <td>低</td>
-      </tr>
-    </tbody>
-  </table>
-
-  <div class="callout">
-    <span class="tag">读这张表的方式</span>
-    <p>OpenCorvus 与 opencode / Claude Code / aider <strong>不在同一抽象层</strong>。
-    它们是&ldquo;干活的编码 Agent&rdquo;，OpenCorvus 是&ldquo;把它们组织起来交付完整功能的编排框架&rdquo;。
-    最后两行特意把&ldquo;适用尺度&rdquo;和&ldquo;成本&rdquo;放进表里：<strong>1–2 文件的修改请用 Claude Code / Codex，
-    完整功能的端到端交付才需要 OpenCorvus</strong>——这才是定位差异的实用读法。</p>
-  </div>
-</section>
-
-<!-- 03 -->
-<section id="ch03">
-  <h2><span class="num">03</span>Harness 的角色边界</h2>
-
-  <p>&ldquo;Harness&rdquo;在本项目中指<strong>套在 LLM 外侧的工程约束层</strong>——它不参与生成本身，
-  只负责把生成结果与可验证的工程规约（spec、契约、审计踪迹、验收评分）绑定。
-  下表给出两种结构在工程场景下可观察的差异：</p>
-
-  <div class="compare">
-    <div class="pane bad">
-      <h4>单 Agent 模式</h4>
+    <section id="limits">
+      <h2><span>09</span>边界与后续工作</h2>
+      <p>OpenCorvus 当前已经具备任务编排、数据库持久化、Overlay 操作面、执行器集成、通道适配器和验收/审计链路。但它仍处于开源准备和早期增长阶段，对外发布材料、性能基线、长任务稳定性和多操作员协作仍需要持续验证。</p>
       <ul>
-        <li><strong>需要盯人</strong>：每一步等用户审查、纠偏。</li>
-        <li><strong>覆盖不均</strong>：易做的写得多，难做的一笔带过。</li>
-        <li><strong>失败成本高</strong>：整体重写，无法局部回滚。</li>
-        <li><strong>无审计</strong>：错在哪个决策？回不到现场。</li>
+        <li>Overlay 大规模任务列表性能本周已开始测试，后续需要固定 1k / 5k / 10k 任务量级的基线。</li>
+        <li>Executor delta 流式停顿已在 W20 修复，仍需要在长输出场景中持续回归。</li>
+        <li>Gateway operator console 已落地，下一阶段需要明确多人协作和跨页面确认动作的边界。</li>
+        <li>对外文档需要继续清理历史域名和历史命名残留，公开入口以 GitHub 仓库为准。</li>
       </ul>
-    </div>
-    <div class="pane good">
-      <h4>Agent 团队模式（OpenCorvus）</h4>
-      <ul>
-        <li><strong>无人值守</strong>：编排器自驱 spec → goal → build → eval 循环。</li>
-        <li><strong>覆盖强制</strong>：Integrity 四维审计逐条对照 REQ-N 才放行。</li>
-        <li><strong>失败可重计划</strong>：自动 replan 受影响的 goal 而非全推倒。</li>
-        <li><strong>全程留痕</strong>：决策日志 + Append-only 工件 + 契约图。</li>
-      </ul>
-    </div>
-  </div>
-
-  <figure>
-    <img src="assets/agent-comparison.png" alt="两种 Agent 工作方式对比示意">
-    <figcaption><b>图 3-1</b>　从&ldquo;人盯人&rdquo;到&ldquo;无人值守&rdquo;。左侧暴露了单循环 Agent 的脆弱性；右侧展示了团队化流程如何把&ldquo;覆盖度&rdquo;与&ldquo;正确性&rdquo;从用户脑子里转移到框架内。</figcaption>
-  </figure>
-
-</section>
-
-<!-- 04 -->
-<section id="ch04">
-  <h2><span class="num">04</span>编排总览：事件驱动的单任务架构</h2>
-
-  <p>OpenCorvus 的运行时由三个职责正交的层构成：HTTP / SSE 网关与序列化调度；Orchestrator LLM 主控会话；
-  append-only 工件与事件序列。前者把外部请求转译为可调度的唤醒事件，中者基于事件做出下一步决策并调用专业 Agent，
-  后者承载所有过程事实供后续唤醒读取。</p>
-
-  <div class="grid cols-3">
-    <div class="card">
-      <span class="label">入口</span>
-      <h3>Engine Service</h3>
-      <p>HTTP / SSE 网关、任务路由、序列化调度。接收用户请求、生成 task_id、根据事件触发&ldquo;唤醒&rdquo;。</p>
-    </div>
-    <div class="card">
-      <span class="label">大脑</span>
-      <h3>Orchestrator LLM</h3>
-      <p>编排器本身是一个 LLM 会话，持有任务整体上下文，<strong>通过调用工具</strong>调度其他 Agent，决定下一步该做什么。</p>
-    </div>
-    <div class="card">
-      <span class="label">记忆</span>
-      <h3>Append-only Artifacts</h3>
-      <p>所有过程事实（goal、attempt、verdict、patch）按约定<em>只追加不修改</em>地写入 <code>engine_artifact</code> 与 <code>protocol_event</code>。</p>
-    </div>
-  </div>
-
-  <figure>
-    <img src="assets/orchestration-framework.png" alt="事件驱动的单任务编排架构">
-    <figcaption><b>图 4-1</b>　事件驱动的单任务编排。Engine Service 把每次 wake 交给 Orchestrator LLM；Orchestrator 通过工具调用调度其他 Agent；所有过程数据写入 append-only artifacts，作为下一次 wake 的输入。<b>红色&ldquo;设计红线&rdquo;</b>意味着：禁止状态机式守门、禁止旁路 fallback、禁止合成消息。</figcaption>
-  </figure>
-
-  <h3 id="ch04-wake">唤醒循环：流程不由代码硬编码</h3>
-  <p>外部事件（用户消息、Agent 完成、Eval 结果回流）触发 Engine 对该任务发起一次 wake。
-  Orchestrator LLM 读取该任务全部 append-only 事实，自行决定下一步调度的工具。
-  这意味着流程控制不存在于任何 if / else 或状态枚举中——它是 LLM 在事实集合上的实时决策投影。
-  这一设计的代价是：编排路径不可静态可视化、debug 依赖事件回放；收益是：模型决策与流程逻辑同源、任何状态都可由事件重建。</p>
-
-  <h3>五条设计红线</h3>
-  <p>项目层面贯穿的硬约束，文档中所有设计决策须与之相容：</p>
-  <ul>
-    <li><strong>禁止双源</strong>——每个功能只有一种实现，删旧不留兼容；</li>
-    <li><strong>禁止 fallback</strong>——失败抛错而非静默降级；</li>
-    <li><strong>禁止状态机</strong>——流程由 LLM 决策、不预先编码；</li>
-    <li><strong>禁止合成消息</strong>——所有对话均为真实角色对真实角色，UI 显示全部消息；</li>
-    <li><strong>prompt 优先于宿主守门</strong>——LLM 决策类错误改 prompt，host-side 守门仅用于数据完整性与不可逆操作。</li>
-  </ul>
-</section>
-
-<!-- 05 -->
-<section id="ch05">
-  <h2><span class="num">05</span>九个 Agent 角色</h2>
-
-  <p>OpenCorvus 暴露 9 个对外的专业 Agent。每个 Agent 在独立 LLM 会话中运行，持有独立 prompt cache 与工具集，
-  通过结构化结论（非 transcript）回传给 Orchestrator，避免主控上下文成本随子任务深度膨胀。
-  下图按职责将 9 个 Agent 分为三层；Orchestrator 居中通过工具调用辐射调度。</p>
-
-  <div class="svg-fig">
-    <svg viewBox="0 0 820 480" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="9 个 Agent 协作关系图">
-      <defs>
-        <marker id="arrow1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-          <path d="M 0 0 L 10 5 L 0 10 z" fill="#6b6b6b"/>
-        </marker>
-      </defs>
-
-      <rect x="0" y="20" width="820" height="120" fill="#eaf0ff" rx="10"/>
-      <rect x="0" y="160" width="820" height="130" fill="#f3f1ea" rx="10"/>
-      <rect x="0" y="310" width="820" height="130" fill="#f3f1ea" rx="10"/>
-
-      <text x="14" y="42" font-family="Inter, sans-serif" font-size="12" font-weight="700" fill="#2563eb" letter-spacing="0.1em">PRE-FLIGHT · 前置分析</text>
-      <text x="14" y="182" font-family="Inter, sans-serif" font-size="12" font-weight="700" fill="#1a1a1a" letter-spacing="0.1em">CORE · 主控与执行</text>
-      <text x="14" y="332" font-family="Inter, sans-serif" font-size="12" font-weight="700" fill="#6b6b6b" letter-spacing="0.1em">QUALITY GATE · 审计与对抗</text>
-
-      <g>
-        <rect x="60" y="60" width="170" height="64" fill="#ffffff" stroke="#c8d6f4" rx="8"/>
-        <text x="145" y="88" text-anchor="middle" dominant-baseline="middle" font-family="Inter, sans-serif" font-size="14" font-weight="700" fill="#1a1a1a">Intent</text>
-        <text x="145" y="108" text-anchor="middle" dominant-baseline="middle" font-family="Inter, sans-serif" font-size="11.5" fill="#3d3d3d">意图分析 · 消歧</text>
-      </g>
-      <g>
-        <rect x="250" y="60" width="170" height="64" fill="#ffffff" stroke="#c8d6f4" rx="8"/>
-        <text x="335" y="88" text-anchor="middle" dominant-baseline="middle" font-family="Inter, sans-serif" font-size="14" font-weight="700" fill="#1a1a1a">Requirements</text>
-        <text x="335" y="108" text-anchor="middle" dominant-baseline="middle" font-family="Inter, sans-serif" font-size="11.5" fill="#3d3d3d">需求清单 REQ-N</text>
-      </g>
-      <g>
-        <rect x="440" y="60" width="180" height="64" fill="#ffffff" stroke="#c8d6f4" rx="8"/>
-        <text x="530" y="88" text-anchor="middle" dominant-baseline="middle" font-family="Inter, sans-serif" font-size="14" font-weight="700" fill="#1a1a1a">Design Analyst</text>
-        <text x="530" y="108" text-anchor="middle" dominant-baseline="middle" font-family="Inter, sans-serif" font-size="11.5" fill="#3d3d3d">视觉证据 → SPEC</text>
-      </g>
-
-      <g>
-        <rect x="60" y="200" width="200" height="64" fill="#ffffff" stroke="#1a1a1a" stroke-width="1.5" rx="8"/>
-        <text x="160" y="228" text-anchor="middle" dominant-baseline="middle" font-family="Inter, sans-serif" font-size="14" font-weight="700" fill="#1a1a1a">Architect</text>
-        <text x="160" y="248" text-anchor="middle" dominant-baseline="middle" font-family="Inter, sans-serif" font-size="11.5" fill="#3d3d3d">Goal DAG · Contract Graph</text>
-      </g>
-      <g>
-        <rect x="310" y="200" width="200" height="64" fill="#1a1a1a" rx="8"/>
-        <text x="410" y="228" text-anchor="middle" dominant-baseline="middle" font-family="Inter, sans-serif" font-size="14" font-weight="700" fill="#fafaf7">Orchestrator</text>
-        <text x="410" y="248" text-anchor="middle" dominant-baseline="middle" font-family="Inter, sans-serif" font-size="11.5" fill="#9a9a9a">主控大脑 · 工具调度</text>
-      </g>
-      <g>
-        <rect x="560" y="200" width="200" height="64" fill="#ffffff" stroke="#1a1a1a" stroke-width="1.5" rx="8"/>
-        <text x="660" y="228" text-anchor="middle" dominant-baseline="middle" font-family="Inter, sans-serif" font-size="14" font-weight="700" fill="#1a1a1a">Build</text>
-        <text x="660" y="248" text-anchor="middle" dominant-baseline="middle" font-family="Inter, sans-serif" font-size="11.5" fill="#3d3d3d">逐 Goal 实现 · Worktree 隔离</text>
-      </g>
-
-      <g>
-        <rect x="60" y="350" width="170" height="64" fill="#ffffff" stroke="#cfcdc2" rx="8"/>
-        <text x="145" y="378" text-anchor="middle" dominant-baseline="middle" font-family="Inter, sans-serif" font-size="14" font-weight="700" fill="#1a1a1a">Integrity</text>
-        <text x="145" y="398" text-anchor="middle" dominant-baseline="middle" font-family="Inter, sans-serif" font-size="11.5" fill="#3d3d3d">四维完整性审计</text>
-      </g>
-      <g>
-        <rect x="250" y="350" width="170" height="64" fill="#ffffff" stroke="#cfcdc2" rx="8"/>
-        <text x="335" y="378" text-anchor="middle" dominant-baseline="middle" font-family="Inter, sans-serif" font-size="14" font-weight="700" fill="#1a1a1a">Delivery</text>
-        <text x="335" y="398" text-anchor="middle" dominant-baseline="middle" font-family="Inter, sans-serif" font-size="11.5" fill="#3d3d3d">交付评审 · 无修复权</text>
-      </g>
-      <g>
-        <rect x="440" y="350" width="180" height="64" fill="#ffffff" stroke="#cfcdc2" rx="8"/>
-        <text x="530" y="378" text-anchor="middle" dominant-baseline="middle" font-family="Inter, sans-serif" font-size="14" font-weight="700" fill="#1a1a1a">Prosecutor</text>
-        <text x="530" y="398" text-anchor="middle" dominant-baseline="middle" font-family="Inter, sans-serif" font-size="11.5" fill="#3d3d3d">对抗 · 找反例</text>
-      </g>
-
-      <g stroke="#6b6b6b" stroke-width="1.2" fill="none" stroke-dasharray="4,3">
-        <line x1="380" y1="200" x2="180" y2="124" marker-end="url(#arrow1)"/>
-        <line x1="410" y1="200" x2="335" y2="124" marker-end="url(#arrow1)"/>
-        <line x1="440" y1="200" x2="500" y2="124" marker-end="url(#arrow1)"/>
-        <line x1="310" y1="232" x2="262" y2="232" marker-end="url(#arrow1)"/>
-        <line x1="510" y1="232" x2="558" y2="232" marker-end="url(#arrow1)"/>
-        <line x1="380" y1="264" x2="180" y2="350" marker-end="url(#arrow1)"/>
-        <line x1="410" y1="264" x2="335" y2="350" marker-end="url(#arrow1)"/>
-        <line x1="440" y1="264" x2="500" y2="350" marker-end="url(#arrow1)"/>
-      </g>
-
-      <text x="60" y="458" font-family="Inter, sans-serif" font-size="11" fill="#6b6b6b">虚线箭头 = Orchestrator 工具调用；各 Agent 在独立 LLM 会话中工作，返回结构化结论而非原始 transcript</text>
-    </svg>
-    <figcaption><b>图 5-1</b>　九位 Agent 的协作关系。Orchestrator 居中调度，三组各司其职。每个 Agent 在独立 LLM 会话中工作，返回<em>结构化结论</em>而非原始 transcript，让主控的上下文成本可控。</figcaption>
-  </div>
-
-  <h3>每个角色做什么</h3>
-
-  <h4>前置分析层（明确目标）</h4>
-  <div class="grid cols-3">
-    <div class="card">
-      <span class="label">intent-analysis</span>
-      <h3>Intent</h3>
-      <p>用户最先遇到的角色。把&ldquo;做个网页&rdquo;这种模糊请求拆解为多目标、隐含约束、消歧问题。</p>
-    </div>
-    <div class="card">
-      <span class="label">requirements</span>
-      <h3>Requirements</h3>
-      <p>把意图转译为 <code>REQ-1, REQ-2 …</code> 的可枚举需求清单，并把基础技术决策（运行时、关键库）写入 Decision Log。</p>
-    </div>
-    <div class="card">
-      <span class="label">design-analyst</span>
-      <h3>Design Analyst</h3>
-      <p>可选环节。任务带有视觉参考（截图、参考网页）时，由它把图像证据翻译为 PRD / SPEC，避免后续 Agent 看图脑补。</p>
-    </div>
-  </div>
-
-  <h4>主控与执行层</h4>
-  <div class="grid cols-3">
-    <div class="card">
-      <span class="label">architect</span>
-      <h3>Architect</h3>
-      <p>关键角色。把需求分解为<strong>至少 2 个</strong>独立可执行的 Goal，并产出 <em>ArchitectContractGraph</em>——goal 之间的接口契约图。</p>
-    </div>
-    <div class="card">
-      <span class="label">orchestrator</span>
-      <h3>Orchestrator</h3>
-      <p>主控大脑。持有系统 prompt + 动态 describe 段，通过 <code>requirements</code> / <code>architect</code> / <code>build</code> / <code>integrity</code> / <code>deliver</code> 等工具调度其他 Agent。</p>
-    </div>
-    <div class="card">
-      <span class="label">build</span>
-      <h3>Build</h3>
-      <p>每个 Goal 一个独立 git worktree，由 Build Agent 调度外部执行器（mirrorcode / codex / claude-code）实现。</p>
-    </div>
-  </div>
-
-  <h4>审计与对抗层（质量门）</h4>
-  <div class="grid cols-3">
-    <div class="card">
-      <span class="label">integrity</span>
-      <h3>Integrity</h3>
-      <p>后期审计员。对 REQ 覆盖度、技术可行性、是否幻觉、方案质量做四维审查，不通过则提议修复（goal 级别）。</p>
-    </div>
-    <div class="card">
-      <span class="label">delivery</span>
-      <h3>Delivery</h3>
-      <p>纯<strong>评审视角</strong>的关卡：读所有验证证据、跑视觉验证、查测试，只发布 verdict（通过 / 拒绝 + 影响 goal），<em>无修复权</em>。</p>
-    </div>
-    <div class="card">
-      <span class="label">prosecutor</span>
-      <h3>Prosecutor</h3>
-      <p>对抗性评估器。专门寻找 Delivery 忽略的失败模式：可复现反例、未被指标覆盖的盲区，允许提议新的诊断指标。</p>
-    </div>
-  </div>
-
-  <h3>Agent 间通信</h3>
-  <p>OpenCorvus 不设全局消息总线。Agent 间的信息流通过三个真实通道：</p>
-  <ol>
-    <li><strong>工具调用与返回</strong>——Orchestrator 调用 <code>architect</code> / <code>build</code> 等工具，返回的结构化结论被嵌入主控对话历史；</li>
-    <li><strong>持久化工件</strong>——goal、run、attempt、verdict 全部落入 <code>engine_artifact</code>，后续 Agent 通过查询工件读取上游产出；</li>
-    <li><strong>Decision Log</strong>——跨 Agent 共享的决策记录，承载&ldquo;为什么&rdquo;而非&ldquo;做了什么&rdquo;。</li>
-  </ol>
-
-  <p style="font-size: 14px; color: var(--ink-2);">
-  注：<code>session.sql.ts</code> 中 <code>SessionKind</code> 共 15 种；上述 9 个为对外暴露的专业 Agent，
-  另 6 种（<code>root</code> / <code>gateway</code> / <code>goal</code> / <code>assistant</code> / <code>executor</code> / <code>system</code>）为运行时容器，不作为角色暴露。
-  对话流不允许&ldquo;仅给模型可见、不给界面可见&rdquo;的合成消息——所有 agent 消息、tool result 在 UI 中必须可见。
-  </p>
-</section>
-
-<!-- 06 -->
-<section id="ch06">
-  <h2><span class="num">06</span>Goal 与契约：从需求到机器可验规约</h2>
-
-  <p>OpenCorvus 在需求与实现之间引入两层结构化中间表示：<strong>Goal DAG</strong>（任务的可执行分解）与
-  <strong>Contract IR + ArchitectContractGraph</strong>（跨 Goal 的接口规约图）。两者的目的是把&ldquo;模糊需求&rdquo;
-  转换为&ldquo;可独立验证、可机器审计、可局部回退&rdquo;的工程对象。</p>
-
-  <h3>为什么强制目标分解</h3>
-  <p>单 Goal 实现端到端需求在工程上有三类问题：失败不可局部回退、跨模块接口形态滞后于实现暴露、风险与覆盖度无法分项度量。</p>
-  <p>因此 OpenCorvus 在 <code>architect/output-tools.ts</code> 的 <code>submit_architect</code> 工具里加了运行时校验
-  （常量 <code>MIN_ARCHITECT_GOAL_COUNT = 2</code>）：<strong>Architect 输出少于 2 个 goal 直接抛错</strong>，
-  必须显式声明 goal 间的接口契约。</p>
-
-  <figure>
-    <img src="assets/opencorvus-goal-design.png" alt="OpenCorvus Goal 设计：三段式架构">
-    <figcaption><b>图 6-1</b>　Goal 设计的三段式：① 设计层产出 <em>PlanVersion → Goal DAG</em>；② <em>ArchitectContractArtifact</em> 把跨 Goal 接口物化为版本化工件；③ 运行时的 Process Facts（run / attempt / verification / verdict / patch）按写入纪律 append-only 流动。三者职责正交。</figcaption>
-  </figure>
-
-  <h3 id="contract-ir">Contract IR：让接口&ldquo;机器可验&rdquo;</h3>
-
-  <p>Architect 不能只用自然语言说&ldquo;这里返回一个股票数组&rdquo;。它必须输出一个 <strong>Contract IR</strong>——
-  由 Zod schema 定义的中间表示。看一个具体例子：</p>
-
-  <div class="svg-fig">
-    <svg viewBox="0 0 820 300" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Contract IR 三段流程图">
-      <defs>
-        <marker id="arrowR" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
-          <path d="M 0 0 L 10 5 L 0 10 z" fill="#6b6b6b"/>
-        </marker>
-      </defs>
-
-      <g>
-        <rect x="20" y="30" width="240" height="240" fill="#f3f1ea" stroke="#e5e2d8" rx="8"/>
-        <text x="140" y="56" text-anchor="middle" dominant-baseline="middle" font-family="Inter, sans-serif" font-size="11" font-weight="700" fill="#6b6b6b" letter-spacing="0.12em">用户说</text>
-        <text x="140" y="100" text-anchor="middle" dominant-baseline="middle" font-family="Inter, sans-serif" font-size="16" fill="#1a1a1a">&ldquo;任务有三种状态：</text>
-        <text x="140" y="124" text-anchor="middle" dominant-baseline="middle" font-family="Inter, sans-serif" font-size="16" fill="#1a1a1a">待办、进行中、完成&rdquo;</text>
-        <text x="140" y="200" text-anchor="middle" dominant-baseline="middle" font-family="Inter, sans-serif" font-size="12" fill="#6b6b6b">自然语言</text>
-        <text x="140" y="220" text-anchor="middle" dominant-baseline="middle" font-family="Inter, sans-serif" font-size="11" fill="#9a9a9a">没有机器边界</text>
-      </g>
-      <line x1="265" y1="150" x2="290" y2="150" stroke="#6b6b6b" stroke-width="1.5" marker-end="url(#arrowR)"/>
-      <g>
-        <rect x="295" y="30" width="240" height="240" fill="#eaf0ff" stroke="#c8d6f4" rx="8"/>
-        <text x="415" y="56" text-anchor="middle" dominant-baseline="middle" font-family="Inter, sans-serif" font-size="11" font-weight="700" fill="#2563eb" letter-spacing="0.12em">ARCHITECT 声明</text>
-        <text x="310" y="86" font-family="JetBrains Mono, monospace" font-size="11.5" fill="#1a1a1a">kind: &quot;enum&quot;</text>
-        <text x="310" y="104" font-family="JetBrains Mono, monospace" font-size="11.5" fill="#1a1a1a">name: TaskState</text>
-        <text x="310" y="122" font-family="JetBrains Mono, monospace" font-size="11.5" fill="#1a1a1a">variants: [</text>
-        <text x="324" y="140" font-family="JetBrains Mono, monospace" font-size="11.5" fill="#047857">  { value: &quot;pending&quot;,</text>
-        <text x="324" y="156" font-family="JetBrains Mono, monospace" font-size="11.5" fill="#047857">    meaning: &quot;未开始&quot; },</text>
-        <text x="324" y="174" font-family="JetBrains Mono, monospace" font-size="11.5" fill="#047857">  { value: &quot;active&quot;,</text>
-        <text x="324" y="190" font-family="JetBrains Mono, monospace" font-size="11.5" fill="#047857">    meaning: &quot;进行中&quot; },</text>
-        <text x="324" y="208" font-family="JetBrains Mono, monospace" font-size="11.5" fill="#047857">  { value: &quot;done&quot;,</text>
-        <text x="324" y="224" font-family="JetBrains Mono, monospace" font-size="11.5" fill="#047857">    meaning: &quot;已完成&quot; }</text>
-        <text x="310" y="242" font-family="JetBrains Mono, monospace" font-size="11.5" fill="#1a1a1a">]</text>
-        <text x="415" y="260" text-anchor="middle" dominant-baseline="middle" font-family="Inter, sans-serif" font-size="11" fill="#6b6b6b">机器可读 IR · 闭集枚举</text>
-      </g>
-      <line x1="540" y1="150" x2="565" y2="150" stroke="#6b6b6b" stroke-width="1.5" marker-end="url(#arrowR)"/>
-      <g>
-        <rect x="570" y="30" width="230" height="240" fill="#e6f4ee" stroke="#c8e2d3" rx="8"/>
-        <text x="685" y="56" text-anchor="middle" dominant-baseline="middle" font-family="Inter, sans-serif" font-size="11" font-weight="700" fill="#047857" letter-spacing="0.12em">CONTRACT AUDIT</text>
-        <text x="585" y="86" font-family="JetBrains Mono, monospace" font-size="11.5" fill="#1a1a1a">代码扫描：</text>
-        <text x="585" y="112" font-family="JetBrains Mono, monospace" font-size="11.5" fill="#3d3d3d">state = &quot;pending&quot;  ✓</text>
-        <text x="585" y="132" font-family="JetBrains Mono, monospace" font-size="11.5" fill="#3d3d3d">state = &quot;active&quot;   ✓</text>
-        <text x="585" y="152" font-family="JetBrains Mono, monospace" font-size="11.5" fill="#3d3d3d">state = &quot;done&quot;     ✓</text>
-        <text x="585" y="176" font-family="JetBrains Mono, monospace" font-size="11.5" fill="#b91c1c">state = &quot;unknown&quot; ✗</text>
-        <text x="585" y="206" font-family="Inter, sans-serif" font-size="12" fill="#b91c1c" font-weight="600">→ 阻断 / 反馈</text>
-        <text x="685" y="245" text-anchor="middle" dominant-baseline="middle" font-family="Inter, sans-serif" font-size="11" fill="#6b6b6b">零 LLM · AST 自动审计</text>
-      </g>
-    </svg>
-    <figcaption><b>图 6-2</b>　Contract IR 的三段旅程。左：用户的自然语言无机器边界；中：Architect 用 Zod schema 把它转为<em>闭集枚举</em>，每个 variant 是 <code>{ value, meaning }</code> 对象；右：Acceptance Spec 的 <code>contract_audit</code> 评分器直接 AST 扫描代码，越界即阻断——<strong>整个验证过程不需要 LLM</strong>。</figcaption>
-  </div>
-
-  <p>Contract IR 是一个判别式联合（discriminated union），三种形式：</p>
-  <ul>
-    <li><strong>type</strong>：结构体——含若干字段，每个字段都要声明<em>值域</em>（ValueDomain）；</li>
-    <li><strong>function</strong>：函数签名——参数列表 + 返回类型；</li>
-    <li><strong>enum</strong>：枚举——若干 variant 的闭集，每个 variant 含 <code>value</code> + <code>meaning</code>。</li>
-  </ul>
-  <p>每个字段的<em>值域</em>有五种声明方式：<code>open</code>（未约束，必须给 justification）、<code>literal_union</code>、<code>branded</code>、<code>numeric_range</code>、<code>ref</code>。
-  <span class="pill">源</span> <code>packages/opencorvus/src/architect/contract-ir.ts</code></p>
-
-  <h3>Contract Graph：goal 间的依赖 DAG</h3>
-  <p>把多个 Contract IR 连接成图就是 <em>ArchitectContractGraph</em>：每个 contract 标注&ldquo;谁生产&rdquo;&ldquo;谁消费&rdquo;，
-  另有一组 dependency 边记录 goal 间的依赖原因（contract 引用 / 启动顺序 / 集成顺序）。
-  循环依赖、孤立消费者、引用未声明 contract 等错误<strong>在提交时拦截</strong>，而不是在 build 后才暴露。
-  <span class="pill">源</span> <code>packages/opencorvus/src/architect/contract-graph.ts</code></p>
-
-  <p>三段职责正交：Goal 描述意图、Contract Graph 规定接口、Runtime Artifacts 记录事实。
-  任一段都可被独立验证或回放，不在层间互相污染。</p>
-</section>
-
-<!-- 07 -->
-<section id="ch07">
-  <h2><span class="num">07</span>完整性审计：Integrity 四维框架</h2>
-
-  <p>所有 Goal 实现完成后由 Integrity Agent 进行后置审查，四个正交维度逐项过审才可进入交付阶段：</p>
-
-  <table class="tbl">
-    <colgroup><col style="width: 22%"><col style="width: 46%"><col style="width: 32%"></colgroup>
-    <thead><tr><th>维度</th><th>审什么</th><th>典型问题</th></tr></thead>
-    <tbody>
-      <tr>
-        <td><strong>Requirement Fidelity</strong><br><span class="pill accent">需求保真</span></td>
-        <td>原始用户请求的每一项能力，是否都被 REQ-N 捕获？每条 REQ 是否都被某个 goal 声明？</td>
-        <td><span class="pill">uncovered</span><span class="pill">partial</span><span class="pill">distorted</span><span class="pill">merged_incorrectly</span></td>
-      </tr>
-      <tr>
-        <td><strong>Technical Feasibility</strong><br><span class="pill accent">技术可行性</span></td>
-        <td>技术栈一致性、契约是否可达、依赖是否无环、终端用户路径是否完整？</td>
-        <td><span class="pill">infeasible_stack</span><span class="pill">missing_capability</span><span class="pill">contract_collision</span><span class="pill">dependency_cycle</span></td>
-      </tr>
-      <tr>
-        <td><strong>Hallucination</strong><br><span class="pill warn">幻觉检测</span></td>
-        <td>所有 spec 必须可<em>追溯</em>到用户请求、参考资料或代码现状——任何凭空捏造的工件都要拦截。</td>
-        <td><span class="pill warn">invented_artifact</span><span class="pill warn">out_of_scope</span><span class="pill warn">unsupported_claim</span></td>
-      </tr>
-      <tr>
-        <td><strong>Solution Quality</strong><br><span class="pill accent">方案质量</span></td>
-        <td>仅拦截威胁<em>语义完整性</em>的分解缺陷，不评判风格品味。</td>
-        <td><span class="pill">granularity_off</span><span class="pill">weak_acceptance</span><span class="pill">ownership_overlap</span><span class="pill">ordering_smell</span></td>
-      </tr>
-    </tbody>
-  </table>
-
-  <p><span class="pill">源</span> <code>packages/opencorvus/src/integrity/dimensions.ts</code>。四维以 prompt 段形式注入 Integrity Agent 的系统消息，
-  不并行维护任何状态枚举或评分表——确保&ldquo;审查标准&rdquo;的单一来源。
-  每一维都强制独立反思，避免单一汇总分数掩盖局部失效。</p>
-</section>
-
-<!-- 08 -->
-<section id="ch08">
-  <h2><span class="num">08</span>验收评分：四族评分器</h2>
-
-  <p>Architect 在每个 Goal 上挂载若干 <strong>Acceptance Spec</strong>。每个 spec 含一个或多个评分器
-  （<code>scorers</code> 是数组，schema 层校验最少 1 个）。评分器按求值机制分为四族，
-  适配从纯静态校验到主观语义评审的不同需求：</p>
-
-  <div class="grid cols-2">
-    <div class="card">
-      <span class="label">Family 1 · Shell</span>
-      <h3>Heuristic 启发式</h3>
-      <p>跑一条 shell 命令或脚本，<code>exit_code = 0</code> 即通过。适合 build、lint、test 这类外部工具。</p>
-    </div>
-    <div class="card">
-      <span class="label">Family 2 · LLM</span>
-      <h3>LLM Judge 模型评审</h3>
-      <p>把验收准则写成自然语言，配 2–5 级 rubric，由 LLM 序分。适合代码可读性、UI 是否符合参考图等主观维度。</p>
-    </div>
-    <div class="card">
-      <span class="label">Family 3 · Builtin</span>
-      <h3>Prebuilt 预置评分</h3>
-      <p>开箱即用的常见检查：factuality / relevance / contains / exact_match / length_within / json_schema。</p>
-    </div>
-    <div class="card">
-      <span class="label">Family 4 · AST</span>
-      <h3>Contract Audit 契约审计</h3>
-      <p><strong>不调用 LLM</strong>。直接 AST 解析代码，对照 ContractIR 的 ValueDomain，看实际赋值是否越界。最快、最确定、最可复现。</p>
-    </div>
-  </div>
-
-  <h3>严重度与触发时机</h3>
-  <p>每个 Acceptance Spec 还要声明<strong>严重度</strong>（<code>essential</code> / <code>important</code> / <code>optional</code> / <code>pitfall</code>）
-  和<strong>触发时机</strong>（<code>on_goal</code> / <code>on_delivery</code>）。Delivery Agent 评审时按严重度阈值汇总：
-  <em>essential 全部通过</em>才能放行。失败的 spec 会被打成结构化 verdict，回送给 Orchestrator 决定下一步——重试同一 plan，还是基于新事实 replan。
-  <span class="pill">源</span> <code>packages/opencorvus/src/acceptance/types.ts</code></p>
-</section>
-
-<!-- 09 -->
-<section id="ch09">
-  <h2><span class="num">09</span>数据持久化：三层结构</h2>
-
-  <p>OpenCorvus 不依赖远程数据库。每个项目目录下都有独立的 SQLite：
-  <code>&lt;projectDir&gt;/.opencorvus/opencorvus.db</code>，开启 WAL 模式 + 外键约束。
-  所有 DDL 集中在 <code>packages/opencorvus/src/storage/ddl.ts</code>（单一来源，44 张表 / 虚拟表 / 索引集中维护）。
-  持久化按职责拆为三层：SQLite 关系层承载实体；append-only 事件层承载因果时序事实；
-  磁盘 worktree 层承载真实代码副本。三层通过 ID 串联但责权各异。</p>
-
-  <div class="svg-fig">
-    <svg viewBox="0 0 760 340" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="三层数据持久化示意">
-      <defs>
-        <marker id="arrowUp" viewBox="0 0 10 10" refX="5" refY="1" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-          <path d="M 0 10 L 5 0 L 10 10 z" fill="#6b6b6b"/>
-        </marker>
-      </defs>
-      <g>
-        <rect x="60" y="20" width="640" height="84" fill="#faf0e0" stroke="#ecd9b3" rx="8"/>
-        <text x="80" y="48" dominant-baseline="middle" font-family="Inter, sans-serif" font-size="12" font-weight="700" fill="#b45309" letter-spacing="0.1em">LAYER 3 · 磁盘 WORKTREE 层</text>
-        <text x="80" y="76" dominant-baseline="middle" font-family="JetBrains Mono, monospace" font-size="13" fill="#1a1a1a">.opencorvus/worktrees/&lt;goal_id&gt;/    每个 Goal 一份隔离 git worktree</text>
-      </g>
-      <line x1="380" y1="104" x2="380" y2="128" stroke="#6b6b6b" stroke-width="1.5" marker-start="url(#arrowUp)"/>
-      <text x="395" y="120" font-family="Inter, sans-serif" font-size="11" fill="#6b6b6b" dominant-baseline="middle">通过 goal_id 关联</text>
-      <g>
-        <rect x="60" y="130" width="640" height="84" fill="#eaf0ff" stroke="#c8d6f4" rx="8"/>
-        <text x="80" y="158" dominant-baseline="middle" font-family="Inter, sans-serif" font-size="12" font-weight="700" fill="#2563eb" letter-spacing="0.1em">LAYER 2 · APPEND-ONLY 事件层（写入纪律）</text>
-        <text x="80" y="186" dominant-baseline="middle" font-family="JetBrains Mono, monospace" font-size="13" fill="#1a1a1a">protocol_event (seq 单调递增) · engine_artifact (run / attempt / verdict ...)</text>
-      </g>
-      <line x1="380" y1="214" x2="380" y2="238" stroke="#6b6b6b" stroke-width="1.5" marker-start="url(#arrowUp)"/>
-      <text x="395" y="230" font-family="Inter, sans-serif" font-size="11" fill="#6b6b6b" dominant-baseline="middle">投影</text>
-      <g>
-        <rect x="60" y="240" width="640" height="84" fill="#e6f4ee" stroke="#c8e2d3" rx="8"/>
-        <text x="80" y="268" dominant-baseline="middle" font-family="Inter, sans-serif" font-size="12" font-weight="700" fill="#047857" letter-spacing="0.1em">LAYER 1 · SQLITE 关系层（43 张表）</text>
-        <text x="80" y="296" dominant-baseline="middle" font-family="JetBrains Mono, monospace" font-size="13" fill="#1a1a1a">engine_task / session / project / memory_* / decision_log / control_message ...</text>
-      </g>
-    </svg>
-    <figcaption><b>图 9-1</b>　三层数据持久化。底层是常规的 SQLite 关系存储（任务、会话、项目）；中间层是 append-only 的事件 / 工件序列（按写入纪律保持不可变）；顶层是磁盘 worktree，承载真实代码副本。三层通过 ID 串联，<em>各有责权</em>。</figcaption>
-  </div>
-
-  <h3>核心表清单（节选）</h3>
-  <table class="tbl">
-    <colgroup><col style="width: 22%"><col style="width: 42%"><col style="width: 36%"></colgroup>
-    <thead><tr><th>表名</th><th>用途</th><th>关键字段</th></tr></thead>
-    <tbody>
-      <tr><td><code>engine_task</code></td><td>任务主体</td><td>id / project_id / session_id / request / status / priority / budget</td></tr>
-      <tr><td><code>engine_artifact</code></td><td>过程事实（run、goal_run_attempt、delivery、verification_evidence …），按写入纪律保持 append-only</td><td>id / task_id / kind / payload / label / time_updated</td></tr>
-      <tr><td><code>protocol_event</code></td><td>事件流，行级 seq 单调递增</td><td>id / kind / type / aggregate_id / seq / payload</td></tr>
-      <tr><td><code>session</code></td><td>会话；15 种 SessionKind 含 9 个对外 Agent + 6 个运行时容器</td><td>id / kind / goal_id / directory / metadata</td></tr>
-      <tr><td><code>memory_file</code></td><td>记忆条目；区分 <code>global</code> / <code>session</code> 作用域</td><td>scope / kind / importance / confidence</td></tr>
-      <tr><td><code>memory_chunk</code></td><td>记忆文本切块（与 file 一对多）</td><td>file_id / content / token_count</td></tr>
-      <tr><td><code>memory_embedding</code></td><td><strong>独立</strong>向量表，承载语义检索 embedding</td><td>chunk_id / embedding / model</td></tr>
-      <tr><td><code>memory_fts</code></td><td>FTS5 全文检索虚拟表</td><td>content / chunk_id / project_id</td></tr>
-      <tr><td><code>decision_log</code></td><td>跨 Agent 的决策审计（记录&ldquo;为什么&rdquo;）</td><td>phase / key / value / reason</td></tr>
-      <tr><td><code>project</code></td><td>项目根（worktree 指针、沙箱配置）</td><td>worktree / sandboxes</td></tr>
-      <tr><td><code>control_message</code></td><td>跨渠道控制面消息（Slack / Discord / HTTP）</td><td>surface / channel / thread / user_id</td></tr>
-      <tr><td><code>cron_job</code> / <code>event_job</code></td><td>定时与事件触发任务</td><td>expression / prompt / next_run</td></tr>
-    </tbody>
-  </table>
-  <p style="font-size: 13px; color: var(--ink-2);">完整 43 张表见 <code>storage/ddl.ts</code> 单一来源。</p>
-
-  <div class="callout">
-    <span class="tag">Append-only 不是 trigger 强制</span>
-    <p><code>engine_task</code> / <code>engine_goal</code> 等&ldquo;主体表&rdquo;的 <code>status</code> / <code>time_started</code> 等字段仍允许更新；
-    &ldquo;append-only&rdquo;是<strong>写入纪律</strong>——对 <code>engine_artifact</code> 和 <code>protocol_event</code> 这两类事实记录，
-    Agent 们约定只追加新行、不修改旧行。由代码风格、单元测试和 reviewer 共同维护，<em>不是数据库 trigger</em>。</p>
-  </div>
-</section>
-
-<!-- 10 -->
-<section id="ch10">
-  <h2><span class="num">10</span>事件驱动与唤醒</h2>
-
-  <p>OpenCorvus 不维护后台轮询循环。任务推进由外部事件触发——任务创建、消息到达、子 Agent 完成、Eval 结果回流
-  均作为新事件写入 <code>protocol_event</code>，并触发对应任务的一次 wake：</p>
-
-  <ol>
-    <li>用户通过 HTTP / Slack / TUI 发起任务，Engine 写入 <code>engine_task</code>，发布事件到 <code>protocol_event</code>。</li>
-    <li><code>TaskQueueService</code>（位于 <code>packages/opencorvus/src/scheduler/</code>）串行调度该任务的&ldquo;唤醒&rdquo;。</li>
-    <li>Orchestrator 读完所有 append-only 事实，<em>自行判断</em>下一步该调度哪个工具。</li>
-    <li>Agent 完成 / 外部消息到达 / Eval 结果回流 → 都是新事件，触发下一次唤醒。</li>
-    <li>当编排器决定 <em>task done</em> 或 <em>budget exhausted</em>，循环停止。</li>
-  </ol>
-
-  <h3 id="ch10-sse">SSE：把事件推回前端</h3>
-  <p>前端订阅 <code>GET /task/&lt;task_id&gt;/events</code>。SSE 路由在 <code>server/routes/orchestrator.ts</code>，
-  从 <code>protocol_event</code> 按 seq 单调拉取并流式转发；具体的事件查询函数 <code>ProtocolStore.listTaskEventsAfter()</code>
-  定义在 <code>packages/opencorvus/src/protocol/store.ts</code>。
-  断线时客户端会用最后看到的 seq 作为 cursor 重连——已序列化事件按 cursor 去重，不会重放；
-  非 sequenced 的 ephemeral 内部事件断线即丢，不影响最终状态投影。</p>
-
-  <pre><code>$ curl -N http://127.0.0.1:7878/task/&lt;task_id&gt;/events
-
-event: artifact.created
-data: {"kind":"goal_run_attempt","goal_id":"g1",...}
-
-event: agent.message
-data: {"role":"architect","content":"..."}
-
-event: task.completed
-data: {"reason":"all_essential_passed"}</code></pre>
-</section>
-
-<!-- 11 -->
-<section id="ch11">
-  <h2><span class="num">11</span>前端 Overlay：Solid.js SPA 与多宿主</h2>
-
-  <p>前端代码位于 <code>packages/overlay/</code>，技术栈 <strong>Solid.js + Vite 6 + Tauri 2</strong>。
-  选择 Solid 而非 React 的考量在于细粒度响应式（fine-grained reactivity）对流式事件场景的契合：
-  后端每推送一条 artifact 仅触发挂载到该 artifact 的组件局部重新求值，不进入 VDOM reconciliation。
-  对一个长时间在线、每秒接收多条 SSE 事件的前端，这是降低渲染开销的关键。</p>
-
-  <h3>组件分组</h3>
-  <p><code>packages/overlay/src/components/</code> 下约 75 个 <code>.tsx</code> 组件，按职责分为四大家族：</p>
-
-  <div class="grid cols-2">
-    <div class="card">
-      <span class="label">对话</span>
-      <h3>Conversation 家族</h3>
-      <p><code>Conversation</code> / <code>ChatBubble</code> / <code>ChatComposer</code> / <code>AgentSessionReplyBox</code>——流式渲染 agent 消息、tool result、reasoning、附件。</p>
-    </div>
-    <div class="card">
-      <span class="label">任务</span>
-      <h3>Task 家族</h3>
-      <p><code>TaskList</code> / <code>TaskDetailOverlay</code> / <code>TaskStatusHeader</code> / <code>TaskProgressBar</code>——左侧任务面板与详情视图。</p>
-    </div>
-    <div class="card">
-      <span class="label">布局</span>
-      <h3>Panel 家族</h3>
-      <p><code>Panel</code> / <code>Section</code> / <code>WorkspacePanel</code>——右侧工作区视图（编辑器、diff、预览）。</p>
-    </div>
-    <div class="card">
-      <span class="label">对话框</span>
-      <h3>Dialog 家族</h3>
-      <p><code>AppDialogHost</code> / <code>SessionDialogHost</code> / <code>GoalDialogHost</code> / <code>ConfigDialogHost</code>——权限确认、会话配置等模态。</p>
-    </div>
-  </div>
-
-  <h3>状态分层</h3>
-  <p>位于 <code>packages/overlay/src/store/</code>，9 个 store 文件分层职责，避免巨型 store：
-  <code>app.ts</code> / <code>board.ts</code> / <code>messages.ts</code> / <code>page-mode.ts</code> / <code>card-tree.ts</code> /
-  <code>dialog.ts</code> / <code>settings.ts</code> / <code>reasoning.ts</code> / <code>conversation-ui.ts</code>。</p>
-
-  <h3>多宿主：Tauri & VS Code 共享业务逻辑</h3>
-  <p><code>services/host-transport.ts</code> 抽象了&ldquo;前端到后端&rdquo;的传输层。Tauri 桌面端通过 sidecar 直接访问本机端口；VS Code webview 通过 message channel 转发——业务代码不感知差异。</p>
-</section>
-
-<!-- 12 -->
-<section id="ch12">
-  <h2><span class="num">12</span>执行器（Executor）</h2>
-
-  <p>Build Agent 仅负责调度决策，真正的代码生成由 Executor 完成。OpenCorvus 提供一个内置默认实现，并允许通过 auto-discover
-  挂载外部编码 CLI。三种执行器并存且可指定：</p>
-
-  <table class="tbl">
-    <colgroup><col style="width: 22%"><col style="width: 48%"><col style="width: 30%"></colgroup>
-    <thead><tr><th>Executor ID</th><th>角色</th><th>来源</th></tr></thead>
-    <tbody>
-      <tr>
-        <td><code>mirrorcode</code></td>
-        <td><strong>内置默认</strong>。无需外部 CLI，视觉参考页面复制、前端结构提取等场景的兜底执行器。</td>
-        <td>仓库自带<br><span class="pill">注</span>实现位于 <code>executor/opencorvus.ts</code>；命名 <code>mirrorcode</code> 致敬血缘自 <a href="https://github.com/sst/opencode" target="_blank" rel="noopener">sst/opencode</a> 的早期历史。</td>
-      </tr>
-      <tr>
-        <td><code>codex</code></td>
-        <td>OpenAI Codex CLI 集成。集群服务模式。</td>
-        <td>外部安装 + auto-discover</td>
-      </tr>
-      <tr>
-        <td><code>claude-code</code></td>
-        <td>Claude Code CLI 集成。本地或远程。</td>
-        <td>外部安装 + auto-discover</td>
-      </tr>
-    </tbody>
-  </table>
-
-  <p>启用自动发现：</p>
-  <pre><code>export OPENCORVUS_AUTO_DISCOVER_EXECUTORS=1</code></pre>
-
-  <p>注册机制在 <code>packages/opencorvus/src/executor/registry.ts</code>：</p>
-  <ul>
-    <li><code>ExecutorRegistry.registerCoding(name, provider, options)</code> 注册外部执行器；</li>
-    <li><code>ExecutorRegistry.createInstance(name)</code> 每个 goal 拿独立实例，状态隔离；</li>
-    <li><code>ExecutorRegistry.requireCoding(name)</code> Build Agent 在取 provider 时调用——
-    如果未发现到 codex / claude-code，直接抛 <code>ExecutorNotConfiguredError</code>，对应 goal 的 build 立即失败，<strong>不会静默 fallback 到 mirrorcode</strong>。</li>
-  </ul>
-
-  <p style="font-size: 14px; color: var(--ink-2);">
-  指定 <code>codex</code> 或 <code>claude-code</code> 但未发现可用 CLI 时直接拒绝任务创建，不会静默回退到 <code>mirrorcode</code>。
-  这符合项目第二条设计红线：失败应在 task 创建点暴露，而非在 verification 阶段才被发现。
-  </p>
-</section>
-
-<!-- 13 -->
-<section id="ch13">
-  <h2><span class="num">13</span>端到端任务示例</h2>
-
-  <p>以一个具体任务&mdash;&mdash;&ldquo;实现一个股票看板，含代码搜索、实时报价、K 线图、技术指标&rdquo;&mdash;&mdash;
-  展开 8 个阶段的事实流。每个阶段对应一次 Orchestrator wake；阶段间转换由 Orchestrator 基于当前 append-only 事实集合自行决定，
-  不由代码硬编码。</p>
-
-  <div class="svg-fig">
-    <svg viewBox="0 0 820 680" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="任务完整旅程时间线">
-      <defs>
-        <marker id="loopArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
-          <path d="M 0 0 L 10 5 L 0 10 z" fill="#b45309"/>
-        </marker>
-      </defs>
-      <line x1="90" y1="40" x2="90" y2="620" stroke="#e5e2d8" stroke-width="2"/>
-
-      <circle cx="90" cy="56" r="10" fill="#2563eb"/>
-      <text x="46" y="56" text-anchor="end" dominant-baseline="middle" font-family="JetBrains Mono, monospace" font-size="11" fill="#6b6b6b">①</text>
-      <g transform="translate(120,30)">
-        <rect width="680" height="56" fill="#ffffff" stroke="#e5e2d8" rx="8"/>
-        <text x="14" y="22" dominant-baseline="middle" font-family="Inter, sans-serif" font-size="13" font-weight="700" fill="#1a1a1a">请求接入</text>
-        <text x="14" y="42" dominant-baseline="middle" font-family="Inter, sans-serif" font-size="12" fill="#3d3d3d"><tspan font-family="JetBrains Mono, monospace" font-size="11">POST /task</tspan> → Engine 写入 engine_task → 返回 202 + task_id → TaskQueueService 唤醒 Orchestrator</text>
-        <rect x="580" y="34" width="92" height="18" fill="#eaf0ff" rx="4"/>
-        <text x="626" y="46" text-anchor="middle" dominant-baseline="middle" font-family="JetBrains Mono, monospace" font-size="10" fill="#2563eb">engine_task</text>
-      </g>
-
-      <circle cx="90" cy="130" r="10" fill="#2563eb"/>
-      <text x="46" y="130" text-anchor="end" dominant-baseline="middle" font-family="JetBrains Mono, monospace" font-size="11" fill="#6b6b6b">②</text>
-      <g transform="translate(120,104)">
-        <rect width="680" height="56" fill="#ffffff" stroke="#e5e2d8" rx="8"/>
-        <text x="14" y="22" dominant-baseline="middle" font-family="Inter, sans-serif" font-size="13" font-weight="700" fill="#1a1a1a">意图分析</text>
-        <text x="14" y="42" dominant-baseline="middle" font-family="Inter, sans-serif" font-size="12" fill="#3d3d3d">Orchestrator 调用 <tspan font-family="JetBrains Mono, monospace" font-size="11">analyze_intent</tspan> → &ldquo;web 看板，含 4 项能力：搜索 / 价格 / K 线 / 指标&rdquo;</text>
-        <rect x="580" y="34" width="92" height="18" fill="#eaf0ff" rx="4"/>
-        <text x="626" y="46" text-anchor="middle" dominant-baseline="middle" font-family="JetBrains Mono, monospace" font-size="10" fill="#2563eb">intent_report</text>
-      </g>
-
-      <circle cx="90" cy="204" r="10" fill="#2563eb"/>
-      <text x="46" y="204" text-anchor="end" dominant-baseline="middle" font-family="JetBrains Mono, monospace" font-size="11" fill="#6b6b6b">③</text>
-      <g transform="translate(120,178)">
-        <rect width="680" height="56" fill="#ffffff" stroke="#e5e2d8" rx="8"/>
-        <text x="14" y="22" dominant-baseline="middle" font-family="Inter, sans-serif" font-size="13" font-weight="700" fill="#1a1a1a">需求清单与决策</text>
-        <text x="14" y="42" dominant-baseline="middle" font-family="Inter, sans-serif" font-size="12" fill="#3d3d3d">调用 <tspan font-family="JetBrains Mono, monospace" font-size="11">requirements</tspan> → REQ-1…REQ-4；Decision Log（举例）：framework=Solid, chart=ECharts</text>
-        <rect x="580" y="34" width="92" height="18" fill="#eaf0ff" rx="4"/>
-        <text x="626" y="46" text-anchor="middle" dominant-baseline="middle" font-family="JetBrains Mono, monospace" font-size="10" fill="#2563eb">REQ + decision_log</text>
-      </g>
-
-      <circle cx="90" cy="278" r="10" fill="#1a1a1a"/>
-      <text x="46" y="278" text-anchor="end" dominant-baseline="middle" font-family="JetBrains Mono, monospace" font-size="11" fill="#6b6b6b">④</text>
-      <g transform="translate(120,252)">
-        <rect width="680" height="56" fill="#ffffff" stroke="#1a1a1a" stroke-width="1.5" rx="8"/>
-        <text x="14" y="22" dominant-baseline="middle" font-family="Inter, sans-serif" font-size="13" font-weight="700" fill="#1a1a1a">架构与契约</text>
-        <text x="14" y="42" dominant-baseline="middle" font-family="Inter, sans-serif" font-size="12" fill="#3d3d3d">调用 <tspan font-family="JetBrains Mono, monospace" font-size="11">architect</tspan> → 产出 g1 (backend-api) + g2 (frontend-board) + ContractGraph (Quote / StockCode)</text>
-        <rect x="560" y="34" width="112" height="18" fill="#f3f1ea" rx="4"/>
-        <text x="616" y="46" text-anchor="middle" dominant-baseline="middle" font-family="JetBrains Mono, monospace" font-size="10" fill="#1a1a1a">goal × 2 + ContractGraph</text>
-      </g>
-
-      <circle cx="90" cy="352" r="10" fill="#1a1a1a"/>
-      <text x="46" y="352" text-anchor="end" dominant-baseline="middle" font-family="JetBrains Mono, monospace" font-size="11" fill="#6b6b6b">⑤</text>
-      <g transform="translate(120,326)">
-        <rect width="680" height="56" fill="#ffffff" stroke="#1a1a1a" stroke-width="1.5" rx="8"/>
-        <text x="14" y="22" dominant-baseline="middle" font-family="Inter, sans-serif" font-size="13" font-weight="700" fill="#1a1a1a">逐 Goal 构建</text>
-        <text x="14" y="42" dominant-baseline="middle" font-family="Inter, sans-serif" font-size="12" fill="#3d3d3d">并行 <tspan font-family="JetBrains Mono, monospace" font-size="11">build(g1)</tspan> + 依赖等待后 <tspan font-family="JetBrains Mono, monospace" font-size="11">build(g2)</tspan>；每个 Goal 独立 worktree</text>
-        <rect x="560" y="34" width="112" height="18" fill="#f3f1ea" rx="4"/>
-        <text x="616" y="46" text-anchor="middle" dominant-baseline="middle" font-family="JetBrains Mono, monospace" font-size="10" fill="#1a1a1a">goal_run_attempt × N</text>
-      </g>
-
-      <circle cx="90" cy="426" r="10" fill="#047857"/>
-      <text x="46" y="426" text-anchor="end" dominant-baseline="middle" font-family="JetBrains Mono, monospace" font-size="11" fill="#6b6b6b">⑥</text>
-      <g transform="translate(120,400)">
-        <rect width="680" height="56" fill="#ffffff" stroke="#c8e2d3" rx="8"/>
-        <text x="14" y="22" dominant-baseline="middle" font-family="Inter, sans-serif" font-size="13" font-weight="700" fill="#1a1a1a">Acceptance 评分（四族评分器）</text>
-        <text x="14" y="42" dominant-baseline="middle" font-family="Inter, sans-serif" font-size="12" fill="#3d3d3d">heuristic(bun test) ✓　·　contract_audit(Quote 值域) ✓　·　llm_judge(API 文档) 4/5　·　visual ✓</text>
-        <rect x="560" y="34" width="112" height="18" fill="#e6f4ee" rx="4"/>
-        <text x="616" y="46" text-anchor="middle" dominant-baseline="middle" font-family="JetBrains Mono, monospace" font-size="10" fill="#047857">verification_evidence</text>
-      </g>
-
-      <circle cx="90" cy="500" r="10" fill="#b45309"/>
-      <text x="46" y="500" text-anchor="end" dominant-baseline="middle" font-family="JetBrains Mono, monospace" font-size="11" fill="#6b6b6b">⑦</text>
-      <g transform="translate(120,474)">
-        <rect width="680" height="56" fill="#faf0e0" stroke="#ecd9b3" rx="8"/>
-        <text x="14" y="22" dominant-baseline="middle" font-family="Inter, sans-serif" font-size="13" font-weight="700" fill="#b45309">Integrity 审计 → 发现漏需求 → replan</text>
-        <text x="14" y="42" dominant-baseline="middle" font-family="Inter, sans-serif" font-size="12" fill="#3d3d3d">调用 <tspan font-family="JetBrains Mono, monospace" font-size="11">integrity</tspan> → 检出 REQ-3（技术指标）未覆盖 → 新增 g3 → 回到 ④ 重计划</text>
-        <rect x="580" y="34" width="92" height="18" fill="#faf0e0" rx="4"/>
-        <text x="626" y="46" text-anchor="middle" dominant-baseline="middle" font-family="JetBrains Mono, monospace" font-size="10" fill="#b45309">integrity_finding</text>
-      </g>
-
-      <path d="M 120 502 Q 28 502 28 278 L 80 278" fill="none" stroke="#b45309" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#loopArrow)"/>
-      <text x="32" y="392" font-family="Inter, sans-serif" font-size="10" fill="#b45309">replan</text>
-
-      <circle cx="90" cy="574" r="10" fill="#047857"/>
-      <text x="46" y="574" text-anchor="end" dominant-baseline="middle" font-family="JetBrains Mono, monospace" font-size="11" fill="#6b6b6b">⑧</text>
-      <g transform="translate(120,548)">
-        <rect width="680" height="56" fill="#e6f4ee" stroke="#c8e2d3" rx="8"/>
-        <text x="14" y="22" dominant-baseline="middle" font-family="Inter, sans-serif" font-size="13" font-weight="700" fill="#047857">Delivery + Prosecutor → done</text>
-        <text x="14" y="42" dominant-baseline="middle" font-family="Inter, sans-serif" font-size="12" fill="#3d3d3d">调用 <tspan font-family="JetBrains Mono, monospace" font-size="11">deliver</tspan> 评审通过　·　<tspan font-family="JetBrains Mono, monospace" font-size="11">prosecute</tspan> 提议诊断指标（例：越界输入覆盖）　·　任务完成</text>
-        <rect x="560" y="34" width="112" height="18" fill="#e6f4ee" rx="4"/>
-        <text x="616" y="46" text-anchor="middle" dominant-baseline="middle" font-family="JetBrains Mono, monospace" font-size="10" fill="#047857">delivery_verdict / done</text>
-      </g>
-
-      <text x="120" y="660" font-family="Inter, sans-serif" font-size="11" fill="#6b6b6b">阶段顺序示意——实际时长视 LLM provider 与执行器而定，节点间距非按时间比例</text>
-    </svg>
-    <figcaption><b>图 13-1</b>　一个&ldquo;股票看板&rdquo;任务从输入到交付的完整旅程。第⑦阶段 Integrity 发现 REQ-3 漏覆盖后<em>沿橙色虚线自动 replan</em>——
-    整个过程中<strong>没有任何 if / else 在决定&ldquo;现在该做什么&rdquo;</strong>，所有动作都是 Orchestrator LLM 读完事实后的判断。</figcaption>
-  </div>
-</section>
-
-<!-- 14 -->
-<section id="ch14">
-  <h2><span class="num">14</span>部署与上手</h2>
-
-  <p>OpenCorvus 以本地 headless server 形态部署，前端 Overlay 由 <code>/ui</code> 路由静态托管，HTTP / SSE API 暴露在 127.0.0.1:7878。
-  任意 git 工作目录均可作为项目根目录。</p>
-
-  <h3>安装</h3>
-  <pre><code># 安装脚本
-curl -fsSL https://raw.githubusercontent.com/yangheng95/opencorvus/main/install.sh | bash
-
-# 或包管理器（具体可用方式以发布说明为准）
-npm i -g opencorvus-ai@latest      # 二进制名为 opencorvus，npm 包名为 opencorvus-ai
-brew install yangheng95/tap/opencorvus
-scoop install opencorvus
-choco install opencorvus</code></pre>
-
-  <h3>启动 headless server</h3>
-  <pre><code>cd /path/to/your/repo
-opencorvus serve
-
-# Overlay UI 自动可用：
-# http://127.0.0.1:7878/ui/</code></pre>
-
-  <h3>通过 HTTP 创建任务</h3>
-  <pre><code>curl -X POST http://127.0.0.1:7878/task \
-  -H "content-type: application/json" \
-  -d '{ "request": "实现 X，跑通验证，未交付前不停手。" }'
-
-# 返回 202 + task_id，订阅 SSE：
-curl -N http://127.0.0.1:7878/task/&lt;task_id&gt;/events</code></pre>
-
-  <h3>15 个消息通道适配器</h3>
-  <p><code>packages/channel-runtime/src/adapters/</code> 同时打包了 15 个适配器：</p>
-  <p>
-    <span class="pill">slack</span><span class="pill">telegram</span><span class="pill">discord</span>
-    <span class="pill">feishu</span><span class="pill">whatsapp</span><span class="pill">googlechat</span>
-    <span class="pill">msteams</span><span class="pill">line</span><span class="pill">matrix</span>
-    <span class="pill">mattermost</span><span class="pill">signal</span><span class="pill">wecom</span>
-    <span class="pill">dingtalk</span><span class="pill">qq</span><span class="pill">http</span>
-  </p>
-  <p>Slack 在文档与示例上是目前完整度最高的一个：把线程消息映射为任务 / 操作消息，把 spec / plan / run / delivery / eval 更新回写到同一线程。其余通道按需启用。</p>
-
-  <h3>常用任务端点</h3>
-  <pre><code>GET    /tasks
-GET    /task/&lt;task_id&gt;
-GET    /task/&lt;task_id&gt;/board
-GET    /task/&lt;task_id&gt;/events     # SSE
-POST   /task/&lt;task_id&gt;/message
-POST   /task/&lt;task_id&gt;/retry
-POST   /task/&lt;task_id&gt;/replan
-POST   /task/&lt;task_id&gt;/cancel</code></pre>
-
-  <div class="callout warn">
-    <span class="tag">公网暴露注意</span>
-    <p>如果把 <code>opencorvus serve</code> 暴露在 localhost 之外，必须先设置 <code>OPENCORVUS_SERVER_PASSWORD</code>，否则启动会拒绝。</p>
-  </div>
-</section>
-
-<!-- 15 -->
-<section id="ch15">
-  <h2><span class="num">15</span>设计取舍（Why not X）</h2>
-
-  <p>本节列出若干常见疑问对应的设计决策——这些决策都是&ldquo;主动选不做&rdquo;的结果，比正向陈述更能说明项目的判断标准。</p>
-
-  <div class="qa">
-    <div class="qa-q">为什么不让一个全能 Agent 干完所有事？</div>
-    <div class="qa-a">单 Agent 的上下文窗口虽大，但<em>注意力</em>不大。任务越长、上下文越满，模型越容易&ldquo;忘记早期约束&rdquo;。
-    把它拆成 9 个角色，每个角色只看自己需要的输入（结构化 conclusion 而非原始 transcript），单角色上下文短，注意力集中。</div>
-  </div>
-
-  <div class="qa">
-    <div class="qa-q">为什么用 SQLite 而不是 Postgres / 云数据库？</div>
-    <div class="qa-a">OpenCorvus 是&ldquo;你的本地仓库 = 完整运行时&rdquo;。SQLite 无服务、零配置、单文件可备份。
-    多任务并发由 <code>TaskQueueService</code> 串行调度 + SQLite WAL 并发读协调，单机性能足够。</div>
-  </div>
-
-  <div class="qa">
-    <div class="qa-q">为什么禁止状态机？我看好多 agent 框架都有 state graph。</div>
-    <div class="qa-a">状态机的本质是&ldquo;<em>预先规定流程</em>&rdquo;。但 OpenCorvus 的核心命题恰恰是&ldquo;让 LLM 根据当下事实做决定&rdquo;——
-    如果你已经知道&ldquo;接下来必然是 A 然后 B&rdquo;，那这个流程不需要 LLM；如果你不知道，那写 state graph 就是<em>用代码冒充智能</em>。</div>
-  </div>
-
-  <div class="qa">
-    <div class="qa-q">为什么 prompt 优先于宿主守门？让代码直接拦截不更稳吗？</div>
-    <div class="qa-a">在&ldquo;LLM 选错工具 / 走错路径&rdquo;这类场景里，宿主层加 if 守门看似稳，实则把&ldquo;教模型走对路&rdquo;的责任埋进了代码，<em>调 prompt 就调不动了</em>。
-    数据完整性（Zod schema、DB constraint）和不可逆操作的二次确认仍走宿主——这是两类合理场景。</div>
-  </div>
-
-  <div class="qa">
-    <div class="qa-q">为什么前端选 Solid 而不是 React？</div>
-    <div class="qa-a">Solid 的细粒度响应式让流式更新的渲染开销远低于 React VDOM reconciliation。
-    OpenCorvus 前端是一个长时间在线、每秒收到多条 SSE 事件的应用，渲染性能是<em>体验底线</em>。
-    Solid 官方文档明确其 API 与 React Hooks 心智接近，已有 React 经验的工程师过渡成本可控。</div>
-  </div>
-
-  <div class="qa">
-    <div class="qa-q">那为什么不做云托管版？</div>
-    <div class="qa-a">能做，但暂不做。开源版的目标是&ldquo;你的代码、你的 worktree、你的密钥不离开你的机器&rdquo;。
-    云托管会立刻引入 secrets 管理、多租户隔离、SOC2 等不属于&ldquo;让 Agent 团队跑起来&rdquo;这一核心问题的复杂度。</div>
-  </div>
-</section>
-
-<!-- 16 -->
-<section id="ch16">
-  <h2><span class="num">16</span>结语</h2>
-
-  <p>OpenCorvus 的工程命题是：<strong>当前 LLM 的生成能力已经足够，制约可交付性的是工程纪律</strong>——
-  spec 化、契约化、可独立验收化、可审计化。这些纪律在 prompt 层难以稳定兑现，
-  因此本项目将其下沉到框架层，通过多 Agent 流水线、机器可校验契约、append-only 事件序列、自动 replan 闭环来强制落地。</p>
-
-  <p>由此衍生的关键设计选择：</p>
-  <ul>
-    <li>事件驱动而非后台轮询——任意时刻的状态都是事件序列的投影，进程崩溃可重建；</li>
-    <li>append-only artifact 而非 mutable state——审计踪迹与决策回放与生成结果天然解耦；</li>
-    <li>9 个独立会话 Agent 而非单一全能 Agent——单角色上下文短、注意力集中、子任务可独立 retry；</li>
-    <li>Contract IR + Goal DAG 替代模糊自然语言 spec——验收可机器化、跨模块接口先于实现固化；</li>
-    <li>五条设计红线（禁双源 / 禁 fallback / 禁状态机 / 禁合成消息 / prompt-over-host）——保持代码库单一来源与决策可读性；</li>
-    <li>Solid.js + Tauri + SQLite + WAL 的本地优先栈——单文件可备份、无云依赖、零部署成本。</li>
-  </ul>
-
-  <p>本白皮书所述机制均已在仓库中可被代码路径与单元测试佐证；未来版本的演进方向、未解决的工程问题与公开 roadmap，
-  以 GitHub 仓库 issue / discussion 为准。</p>
-</section>
-
-<footer>
-  <p><strong>OpenCorvus Technical Whitepaper</strong>　·　Version 2026.05　·　Released 2026-05-14　·　MIT License</p>
-
-  <p>如需引用本白皮书：</p>
-  <div class="cite">@misc{opencorvus2026,
-  title  = {OpenCorvus: A Multi-Agent Harness for Reliable Code Delivery},
-  author = {OpenCorvus Contributors},
-  year   = {2026},
-  month  = may,
-  url    = {https://github.com/yangheng95/opencorvus}
-}</div>
-
-  <div class="row">
-    <span>仓库 · <a href="https://github.com/yangheng95/opencorvus">github.com/yangheng95/opencorvus</a></span>
-    <span>文档 · 见仓库 <code>docs/</code> 目录</span>
-  </div>
-</footer>
-
-</main>
-
+      <p>因此，OpenCorvus 的合理定位是：一个本地优先、以任务事实和验收证据为中心的代码交付编排系统。它的价值不来自替代模型能力，而来自把模型执行纳入可追溯、可复核、可继续推进的工程流程。</p>
+    </section>
+
+    <footer>
+      <p><strong>OpenCorvus Technical Whitepaper</strong> · v2026.05 · 2026-05-15 · MIT License</p>
+      <p>Repository: <a href="https://github.com/yangheng95/opencorvus">https://github.com/yangheng95/opencorvus</a></p>
+      <p>External references used for positioning: <a href="https://github.com/sst/opencode">sst/opencode</a>, <a href="https://docs.claude.com/en/docs/agents-and-tools/claude-code/overview">Claude Code docs</a>, <a href="https://github.com/openai/codex">OpenAI Codex CLI</a>, <a href="https://aider.chat/docs/">aider docs</a>, <a href="https://github.com/cline/cline">cline repository</a>.</p>
+    </footer>
+  </main>
 </div>
-
 </body>
 </html>
