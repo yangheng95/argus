@@ -88,6 +88,16 @@ test("ConversationAgentRail only polls task trace for the wide report surface", 
   expect(source).toContain("if (!id || !shouldFetchTrace() || trace.loading")
 })
 
+test("ConversationAgentRail does not use streamed card text as workflow summary input", () => {
+  const workflow = readFileSync(join(import.meta.dir, "../src/utils/agent-workflow.ts"), "utf8")
+  const rail = readFileSync(join(import.meta.dir, "../src/components/ConversationAgentRail.tsx"), "utf8")
+  expect(workflow).not.toContain("textFromCard")
+  expect(workflow).not.toContain("textFromPart")
+  expect(workflow).not.toContain('source: "card_output"')
+  expect(rail).toContain("record.goalDescription")
+  expect(rail).not.toContain("No summary")
+})
+
 test("AgentReportDialog renders markdown report content through the central renderer", () => {
   const source = readFileSync(join(import.meta.dir, "../src/components/AgentReportDialog.tsx"), "utf8")
   expect(source).toContain("renderMarkdown")

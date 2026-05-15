@@ -27,7 +27,14 @@ function summaryText(record: AgentWorkflowRecord): string {
     (record.displaySummary?.text || "")
       .split("\n")
       .map((line) => line.trim())
-      .filter(Boolean)[0] || "No summary"
+      .filter(Boolean)[0] ||
+    (record.goalDescription || "")
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean)[0] ||
+    record.stepID ||
+    record.stage ||
+    record.agentName
   )
 }
 

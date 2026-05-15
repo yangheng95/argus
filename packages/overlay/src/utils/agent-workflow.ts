@@ -37,7 +37,7 @@ export interface AgentWorkflowRecord {
   traceReport?: AgentWorkflowReport
   displaySummary?: {
     text: string
-    source: "trace_report" | "card_output"
+    source: "trace_report"
   }
 }
 
@@ -99,27 +99,6 @@ function firstString(...values: unknown[]): string {
     if (typeof value === "string" && value.trim()) return value.trim()
   }
   return ""
-}
-
-function textFromPart(part: any): string {
-  if (!part || typeof part !== "object") return ""
-  if (part.type === "text" || part.type === "reasoning") return String(part.text || "").trim()
-  return ""
-}
-
-function textFromCard(card: CardNode | undefined, cards: Record<string, CardNode>, seen = new Set<string>()): string {
-  if (!card || seen.has(card.id)) return ""
-  seen.add(card.id)
-  const chunks: string[] = []
-  for (const part of card.parts || []) {
-    const text = textFromPart(part)
-    if (text) chunks.push(text)
-  }
-  for (const childID of card.childIDs || []) {
-    const text = textFromCard(cards[childID], cards, seen)
-    if (text) chunks.push(text)
-  }
-  return chunks.join("\n\n").trim()
 }
 
 export function traceReport(event: TraceEvent): AgentWorkflowReport | undefined {
@@ -253,12 +232,6 @@ function applyCardRecord(
     record.lastObservedAt = Math.max(record.lastObservedAt || 0, card.timeCompleted)
     if (isTerminalStatus(cardStatus)) {
       record.completedAt = Math.max(record.completedAt || 0, card.timeCompleted)
-    }
-  }
-  if (!record.displaySummary) {
-    const summary = textFromCard(card, cards)
-    if (summary) {
-      record.displaySummary = { text: summary, source: "card_output" }
     }
   }
 }

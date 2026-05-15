@@ -14,5 +14,6 @@ test("ReasoningPart defaults to full-height reasoning text and can be collapsed"
   expect(REASONING_PART_TSX).toContain("aria-expanded={expanded()}")
   expect(REASONING_PART_TSX).toContain("event.stopPropagation();")
   expect(REASONING_PART_TSX).toContain("setExpanded(!expanded())")
-  expect(REASONING_PART_TSX).toContain('<div class="reasoning-text md-content" innerHTML={renderMarkdown(text())} />')
+  expect(REASONING_PART_TSX).toContain('<div class="reasoning-text md-content" innerHTML={renderedHtml()} />')
+  expect(REASONING_PART_TSX).toContain('<div class="reasoning-text reasoning-text--streaming">{text()}</div>')
 })

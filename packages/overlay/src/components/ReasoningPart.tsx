@@ -9,9 +9,10 @@ export function isEmptyReasoning(s: string): boolean {
   return !s.replace(/[\[\]\s]/g, "");
 }
 
-export function ReasoningPart(props: { part: any }) {
+export function ReasoningPart(props: { part: any; streaming?: boolean }) {
   const [expanded, setExpanded] = createSignal(true);
   const text = () => String(props.part?.text || "");
+  const renderedHtml = createMemo(() => (props.streaming ? "" : renderMarkdown(text())));
   const hidden = createMemo(() => {
     reasoningRevision();
     return reasoningPartHidden(props.part);
@@ -33,7 +34,9 @@ export function ReasoningPart(props: { part: any }) {
         >
           {label()} <Icon name={expanded() ? "caret-down" : "chevron"} />
         </button>
-        <div class="reasoning-text md-content" innerHTML={renderMarkdown(text())} />
+        <Show when={props.streaming} fallback={<div class="reasoning-text md-content" innerHTML={renderedHtml()} />}>
+          <div class="reasoning-text reasoning-text--streaming">{text()}</div>
+        </Show>
       </div>
     </Show>
   );

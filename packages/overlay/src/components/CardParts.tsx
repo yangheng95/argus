@@ -51,7 +51,7 @@ function toolToCardNode(part: any): CardNode {
 /** Render the parts list of a card body. Handles boundary separators,
  *  inline text / reasoning, and nested tool cards. Each part renders as its
  *  own sibling. */
-export function CardParts(props: { parts: any[]; depth: number }) {
+export function CardParts(props: { parts: any[]; depth: number; streaming?: boolean }) {
   return (
     <For each={props.parts}>
       {(part) => (
@@ -68,7 +68,7 @@ export function CardParts(props: { parts: any[]; depth: number }) {
             </div>
           </Match>
           <Match when={part?.type === "text" && (part.text || "").trim()}>
-            <TextPart text={part.text || ""} />
+            <TextPart text={part.text || ""} streaming={props.streaming} />
           </Match>
           <Match
             when={
@@ -77,7 +77,7 @@ export function CardParts(props: { parts: any[]; depth: number }) {
               !isEmptyReasoning(part.text || "")
             }
           >
-            <ReasoningPart part={part} />
+            <ReasoningPart part={part} streaming={props.streaming} />
           </Match>
           <Match when={part?.type === "tool"}>
             <Card node={toolToCardNode(part)} depth={props.depth + 1} />

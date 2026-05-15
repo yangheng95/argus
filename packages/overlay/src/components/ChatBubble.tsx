@@ -73,7 +73,7 @@ function ChatBubbleChild(props: { childID: string; depth: number; parentID: stri
   return (
     <Switch fallback={<UnsupportedChatBubbleChild child={child()} parentID={props.parentID} />}>
       <Match when={child().kind === "message"}>
-        <CardParts parts={child().parts} depth={props.depth + 1} />
+        <CardParts parts={child().parts} depth={props.depth + 1} streaming={child().status === "running"} />
       </Match>
       <Match when={child().kind === "agent" && child().integrity}>
         <IntegrityBody integrity={child().integrity!} />
@@ -151,6 +151,7 @@ export function ChatBubble(props: { node: CardNode; depth: number }) {
 
   const footActivity = createMemo(() => {
     if (expanded()) return null
+    if (props.node.status === "running") return null
     const counts = collectActivityCounts(props.node)
     if (counts.messages + counts.tools + counts.agents + counts.skills === 0) return null
     return counts
@@ -166,12 +167,12 @@ export function ChatBubble(props: { node: CardNode; depth: number }) {
     })
   }
   const collapsedPreview = createMemo(() =>
-    !expanded()
+    !expanded() && props.node.status !== "running"
       ? collapsedActivityPreviewText(collectLatestActivityText(props.node), props.node.title)
       : "",
   )
   const todoSummary = createMemo(() =>
-    !expanded() && isAgentBubble() ? collectTodoSummary(props.node) : null,
+    !expanded() && props.node.status !== "running" && isAgentBubble() ? collectTodoSummary(props.node) : null,
   )
   const todoProgressPct = () => {
     const summary = todoSummary()
@@ -488,7 +489,7 @@ export function ChatBubble(props: { node: CardNode; depth: number }) {
               </Show>
               <div class="chat-bubble__body-inner">
                 <Show when={props.node.parts.length > 0}>
-                  <CardParts parts={props.node.parts} depth={props.depth} />
+                  <CardParts parts={props.node.parts} depth={props.depth} streaming={props.node.status === "running"} />
                 </Show>
                 <Show when={props.node.integrity}>
                   <IntegrityBody integrity={props.node.integrity!} />
