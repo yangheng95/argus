@@ -28,3 +28,6 @@ callbacks keep forcing `scrollTop = scrollHeight`.
 - Explicit controller jumps do not call `onUserScrollUp`.
 - Content growth while tracking is false preserves the operator's scroll
   position.
+- `.chat-scroll` must not disable browser scroll anchoring. Native anchoring is
+  required to keep the visible message stable when content above the viewport
+  changes height while follow-lock is disabled.
