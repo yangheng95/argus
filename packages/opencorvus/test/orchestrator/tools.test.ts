@@ -436,6 +436,72 @@ describe("orchestrator tools", () => {
     })
   })
 
+  test("steer_subagent resolves goal_id to the latest child build session", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_steer_goal_id_${stamp}`
+    const taskID = `tsk_steer_goal_id_${stamp}`
+    const goalID = `gol_steer_goal_id_${stamp}`
+
+    insertWorkflowTaskWithGoal({
+      projectID,
+      taskID,
+      goalID,
+      sessionID: null,
+      worktree: tmp.path,
+      projectName: "steer_subagent goal id resolution",
+      taskTitle: "steer_subagent goal id resolution",
+      request: "Resolve goal ids to build sessions",
+      goalTitle: "Build child session",
+      goalSlug: "build-child-session",
+      objective: "Allow steering a running build via goal_id without guessing the child session",
+      now,
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "steer goal id parent" })
+        const child = await Session.create({
+          kind: "build",
+          parentID: parent.id,
+          goalID,
+          title: "steer goal id child",
+        })
+        Database.use((db) =>
+          db.update(EngineTaskTable).set({ session_id: parent.id }).where(eq(EngineTaskTable.id, taskID)).run(),
+        )
+        const goalRunID = beginBuildAttempt({
+          taskID,
+          goalID,
+          sessionID: child.id,
+        })
+        const replySpy = spyOn(EngineService, "replyAgentSession").mockResolvedValue({
+          task_id: taskID,
+          session_id: child.id,
+          message_id: "msg_reply_goal_id",
+        } as Awaited<ReturnType<typeof EngineService.replyAgentSession>>)
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const result = await tools.steer_subagent.execute(
+          {
+            goal_id: goalID,
+            message: "汇报当前测试进度",
+            reason: "goal_id should resolve to the latest live child session",
+          },
+          {} as any,
+        )
+
+        expect(replySpy).toHaveBeenCalledWith(taskID, child.id, { message: "汇报当前测试进度" })
+        expect(result).toContain(`source=${goalID} -> goal_run ${goalRunID} -> session ${child.id}`)
+      },
+    })
+  })
+
   test("read_context surfaces latest goal_run and child session ids for running goals", async () => {
     const now = Date.now()
     const stamp = now.toString(16)
