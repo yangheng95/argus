@@ -19,7 +19,8 @@ import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
 import { createDecisionLog } from "@/decision-log"
 import { EngineService } from "@/task-api"
-import { sessionGoalID } from "./task-event"
+import { DIRECT_REPLY_AGENT_KINDS } from "./direct-reply"
+import { sessionGoalID, sessionRole, taskIDForSession } from "./task-event"
 import { Publisher } from "@/engine/publisher"
 import { EngineGit } from "@/engine/git"
 import { git as runGit } from "@/util/git"
@@ -29,7 +30,7 @@ import { Event as EngineEvent } from "@/engine/model"
 import { EngineProtocol } from "@/engine/protocol"
 import { renderDesignAnalysisHandoffReference } from "@/design-analyst/handoff"
 import { materializeMcpToolResult } from "@/mcp/materialize"
-import { EngineArtifactTable, EngineGoalTable, EngineTaskTable } from "@/engine/engine.sql"
+import { EngineArtifactTable, EngineExecutorSessionTable, EngineGoalTable, EngineTaskTable } from "@/engine/engine.sql"
 import {
   markDeliveryPublishing,
   finalizeDeliveryResult,
@@ -45,6 +46,7 @@ import {
   findActiveSpecForTask,
   findDeliveryByRun,
   findEvaluationByRun,
+  findExecutorSession,
   findGoal,
   findGoalRun,
   findLatestArchitectContractGraph,
@@ -54,6 +56,7 @@ import {
   getGoalRetryCount,
   listGoals,
   listGoalsForPlan,
+  listGoalRunsForTask,
   requireRun,
   requireTask,
   type TaskRow,
@@ -535,7 +538,7 @@ function resolveSteerTarget(input: {
   taskID: string
   sessionID?: string
   goalID?: string
-}): { sessionID: string; source: string } {
+}): { sessionID: string; source: string; goalRunID?: string } {
   if (input.goalID) {
     const goal = findGoal(input.goalID)
     if (!goal || goal.task_id !== input.taskID) {
@@ -553,6 +556,7 @@ function resolveSteerTarget(input: {
     return {
       sessionID: goalRun.session_id,
       source: `${input.goalID} -> goal_run ${goalRun.id} -> session ${goalRun.session_id}`,
+      goalRunID: goalRun.id,
     }
   }
 
@@ -562,7 +566,12 @@ function resolveSteerTarget(input: {
 
   const goalRun = findGoalRun(input.sessionID)
   if (!goalRun || goalRun.task_id !== input.taskID) {
-    return { sessionID: input.sessionID, source: input.sessionID }
+    const byChildSession = listGoalRunsForTask(input.taskID).find((row) => row.session_id === input.sessionID)
+    return {
+      sessionID: input.sessionID,
+      source: input.sessionID,
+      goalRunID: byChildSession?.id,
+    }
   }
   if (!goalRun.session_id) {
     throw new Error(
@@ -572,7 +581,38 @@ function resolveSteerTarget(input: {
   return {
     sessionID: goalRun.session_id,
     source: `${input.sessionID} -> session ${goalRun.session_id}`,
+    goalRunID: goalRun.id,
   }
+}
+
+function assertDirectReplySessionOwnership(input: {
+  taskID: string
+  sessionID: string
+}): { kind: string } {
+  const owningTask = taskIDForSession(input.sessionID)
+  if (owningTask !== input.taskID) {
+    throw new Error(`Session ${input.sessionID} does not belong to task ${input.taskID}`)
+  }
+  const kind = sessionRole(input.sessionID)
+  if (!kind) {
+    throw new Error(`Session ${input.sessionID} has no task agent kind`)
+  }
+  if (!DIRECT_REPLY_AGENT_KINDS.has(kind)) {
+    throw new Error(`Session ${input.sessionID} has kind "${kind}" and cannot receive direct agent control`)
+  }
+  return { kind }
+}
+
+function findExecutorSessionByGoalRunID(goalRunID: string) {
+  const row = Database.use((db) =>
+    db
+      .select()
+      .from(EngineExecutorSessionTable)
+      .where(eq(EngineExecutorSessionTable.goal_run_id, goalRunID))
+      .orderBy(sql`${EngineExecutorSessionTable.time_created} desc`)
+      .get(),
+  )
+  return row ? findExecutorSession(row.id) : undefined
 }
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
@@ -3852,6 +3892,67 @@ export function createOrchestratorTools(input: {
         })
         const result = await EngineService.replyAgentSession(taskID, target.sessionID, { message })
         return `Steered sub-agent session ${result.session_id}. source=${target.source}. message=${result.message_id}. Reason: ${reason}`
+      },
+    }),
+
+    cancel_subagent: tool({
+      description:
+        "Abort a specific child agent session when steering has already failed or the session clearly cannot continue. " +
+        "This is the session-level resume rung: cancel the stale child, then explicitly re-dispatch the SAME goal or stage under the SAME contract before escalating to modify_goal or restart_from_stage. " +
+        "You may pass session_id directly, goal_id for the latest live attempt, or a live goal_run_id via session_id for backward compatibility.",
+      inputSchema: z
+        .object({
+          session_id: z
+            .string()
+            .min(1)
+            .optional()
+            .describe("Child agent session id to cancel. Backward-compatible: also accepts the live goal_run_id reported by read_context."),
+          goal_id: z
+            .string()
+            .min(1)
+            .optional()
+            .describe("Goal id whose latest live child session should be cancelled."),
+          reason: z.string().describe("Why this child session must be cancelled before re-dispatching the same stage/goal"),
+        })
+        .refine((value) => !!value.session_id || !!value.goal_id, {
+          message: "cancel_subagent requires either session_id or goal_id",
+          path: ["session_id"],
+        }),
+      execute: async ({ session_id, goal_id, reason }) => {
+        const target = resolveSteerTarget({
+          taskID,
+          sessionID: session_id,
+          goalID: goal_id,
+        })
+        const { kind } = assertDirectReplySessionOwnership({
+          taskID,
+          sessionID: target.sessionID,
+        })
+
+        SessionPrompt.cancel(target.sessionID)
+
+        let abortedFact = ""
+        if (target.goalRunID) {
+          const goalRun = findGoalRun(target.goalRunID)
+          if (goalRun && isLiveGoalRunStatus(goalRun.status)) {
+            updateGoalRun(goalRun.id, {
+              status: "aborted",
+              error: `cancel_subagent: ${reason}`,
+              blocking_reason: null,
+            })
+            updateGoalRunExecutorSessionStatus(goalRun.id, "aborted")
+            const executorSession = findExecutorSessionByGoalRunID(goalRun.id)
+            abortedFact =
+              ` goal_run ${goalRun.id} aborted` +
+              `${executorSession ? `; executor_session ${executorSession.id} aborted` : ""}.`
+          }
+        }
+
+        return (
+          `Cancelled sub-agent session ${target.sessionID} (kind=${kind}). ` +
+          `source=${target.source}. Reason: ${reason}.` +
+          `${abortedFact} NEXT: if you still need work from it, re-dispatch the same stage/goal under the same contract explicitly.`
+        )
       },
     }),
 

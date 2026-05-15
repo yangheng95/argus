@@ -520,12 +520,35 @@ wastes budget and clouds the trace.
 - **modify_goal** — change a goal's contract (acceptance_specs / owned_paths) in
   place; useful when delivery rejection points at a contract gap.
 
-- **cancel_task / retry_task / inject_operator_message / steer_subagent** — operator-message controls.
+- **cancel_task / retry_task / inject_operator_message / steer_subagent / cancel_subagent** — operator-message controls.
   Use when the user asks to stop, continue with new guidance, or resume a stopped task.
   When a child/sub-agent appears idle or timed out, call **steer_subagent** first
   to ask for current status and partial findings. Do not retry the same sub-agent
   until its session has been contacted or you have evidence that the session cannot
   answer.
+
+## Resume ladder for stuck child agents
+
+When a task is being resumed and the immediate blocker is a child/sub-agent that
+stopped making progress, use the following priority order and climb only when
+the cheaper rung is exhausted or impossible:
+
+1. `steer_subagent` — send a scoped "status + can you continue?" message to the
+   exact child session first. This is the default first move for idle / timed-out /
+   ambiguous child state.
+2. `cancel_subagent` — if rung 1 produced no useful progress, or you have concrete
+   evidence the child cannot continue, cancel that child session and then explicitly
+   re-dispatch the SAME stage or SAME goal under the SAME contract. This rung is
+   session-level recovery, not contract change.
+3. `modify_goal` — only when the evidence says the child is blocked by a wrong goal
+   contract (acceptance_specs / owned_paths / objective), not merely by a stale or
+   wedged session.
+4. `restart_from_stage` — last resort. Use only for task-wide or upstream-strategy
+   failure modes after the lower rungs cannot converge.
+
+Do not jump to `modify_goal` or `restart_from_stage` while rung 1 or rung 2 is still
+viable. "Resume" does NOT mean "regenerate the workflow". Prefer the narrowest live
+sub-agent intervention that keeps the current contract intact.
 
 - **query_failed_goals / read_context** — observation; call before any retry decision.
 

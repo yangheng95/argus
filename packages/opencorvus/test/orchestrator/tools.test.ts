@@ -6,6 +6,7 @@ import { Instance } from "../../src/project/instance"
 import { ProjectTable } from "../../src/project/project.sql"
 import {
   EngineArtifactTable,
+  EngineExecutorSessionTable,
   EngineGoalTable,
   EnginePlanNodeTable,
   EnginePlanVersionTable,
@@ -34,7 +35,9 @@ import {
   findActivePlanForTask,
   findDeliveryByRun,
   findActiveSpecForTask,
+  findExecutorSession,
   findGoal,
+  findGoalRun,
   findGoalLatestWorkspace,
   findLatestIntegrityAttemptArtifact,
   findRequirements,
@@ -497,6 +500,173 @@ describe("orchestrator tools", () => {
         )
 
         expect(replySpy).toHaveBeenCalledWith(taskID, child.id, { message: "汇报当前测试进度" })
+        expect(result).toContain(`source=${goalID} -> goal_run ${goalRunID} -> session ${child.id}`)
+      },
+    })
+  })
+
+  test("cancel_subagent aborts a live goal attempt by child session", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_cancel_subagent_${stamp}`
+    const taskID = `tsk_cancel_subagent_${stamp}`
+    const goalID = `gol_cancel_subagent_${stamp}`
+
+    insertWorkflowTaskWithGoal({
+      projectID,
+      taskID,
+      goalID,
+      sessionID: null,
+      worktree: tmp.path,
+      projectName: "cancel_subagent goal session",
+      taskTitle: "cancel_subagent goal session",
+      request: "Cancel a wedged build child session and re-dispatch later",
+      goalTitle: "Cancel stale child session",
+      goalSlug: "cancel-stale-child-session",
+      objective: "Abort the live goal attempt tied to the child build session",
+      now,
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "cancel_subagent parent" })
+        const child = await Session.create({
+          kind: "build",
+          parentID: parent.id,
+          goalID,
+          title: "cancel_subagent child",
+        })
+        Database.use((db) =>
+          db.update(EngineTaskTable).set({ session_id: parent.id }).where(eq(EngineTaskTable.id, taskID)).run(),
+        )
+        const runID = `run_cancel_subagent_${stamp}`
+        const goalRunID = beginBuildAttempt({
+          taskID,
+          goalID,
+          runID,
+          sessionID: child.id,
+        })
+        const goalRun = findGoalRun(goalRunID)
+        expect(goalRun).toBeDefined()
+
+        const executorSessionID = `exec_cancel_subagent_${stamp}`
+        Database.use((db) =>
+          db.insert(EngineExecutorSessionTable).values({
+            id: executorSessionID,
+            task_id: taskID,
+            run_id: runID,
+            goal_run_id: goalRunID,
+            provider: "opencorvus",
+            protocol: "session-prompt",
+            protocol_version: "v1",
+            transport: "inproc",
+            status: "active",
+            time_created: now,
+            time_updated: now,
+          }).run(),
+        )
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const result = await tools.cancel_subagent.execute(
+          {
+            session_id: child.id,
+            reason: "steer gave no useful progress; abort the stale child before re-dispatch",
+          },
+          {} as any,
+        )
+
+        expect(findGoalRun(goalRunID)?.status).toBe("aborted")
+        expect(findGoalRun(goalRunID)?.error).toContain("cancel_subagent:")
+        expect(findExecutorSession(executorSessionID)?.status).toBe("aborted")
+        expect(result).toContain(`Cancelled sub-agent session ${child.id}`)
+        expect(result).toContain(`goal_run ${goalRunID} aborted`)
+        expect(result).toContain(`executor_session ${executorSessionID} aborted`)
+      },
+    })
+  })
+
+  test("cancel_subagent resolves goal_id to the latest live child attempt", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_cancel_subagent_goal_${stamp}`
+    const taskID = `tsk_cancel_subagent_goal_${stamp}`
+    const goalID = `gol_cancel_subagent_goal_${stamp}`
+
+    insertWorkflowTaskWithGoal({
+      projectID,
+      taskID,
+      goalID,
+      sessionID: null,
+      worktree: tmp.path,
+      projectName: "cancel_subagent goal id",
+      taskTitle: "cancel_subagent goal id",
+      request: "Cancel the latest live child session by goal id",
+      goalTitle: "Cancel latest child session by goal id",
+      goalSlug: "cancel-latest-child-session-by-goal-id",
+      objective: "Resolve goal_id to the latest live child session before aborting the attempt",
+      now,
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "cancel_subagent goal parent" })
+        const child = await Session.create({
+          kind: "build",
+          parentID: parent.id,
+          goalID,
+          title: "cancel_subagent goal child",
+        })
+        Database.use((db) =>
+          db.update(EngineTaskTable).set({ session_id: parent.id }).where(eq(EngineTaskTable.id, taskID)).run(),
+        )
+        const runID = `run_cancel_subagent_goal_${stamp}`
+        const goalRunID = beginBuildAttempt({
+          taskID,
+          goalID,
+          runID,
+          sessionID: child.id,
+        })
+        const executorSessionID = `exec_cancel_subagent_goal_${stamp}`
+        Database.use((db) =>
+          db.insert(EngineExecutorSessionTable).values({
+            id: executorSessionID,
+            task_id: taskID,
+            run_id: runID,
+            goal_run_id: goalRunID,
+            provider: "opencorvus",
+            protocol: "session-prompt",
+            protocol_version: "v1",
+            transport: "inproc",
+            status: "active",
+            time_created: now,
+            time_updated: now,
+          }).run(),
+        )
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const result = await tools.cancel_subagent.execute(
+          {
+            goal_id: goalID,
+            reason: "resume should terminate the latest live child session for this goal before re-dispatch",
+          },
+          {} as any,
+        )
+
+        expect(findGoalRun(goalRunID)?.status).toBe("aborted")
+        expect(findExecutorSession(executorSessionID)?.status).toBe("aborted")
+        expect(result).toContain(`Cancelled sub-agent session ${child.id}`)
         expect(result).toContain(`source=${goalID} -> goal_run ${goalRunID} -> session ${child.id}`)
       },
     })
