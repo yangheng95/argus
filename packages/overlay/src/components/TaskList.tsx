@@ -626,10 +626,8 @@ export function TaskList(props: TaskListProps) {
       } else {
         notifyWarning({
           id: noticeID,
-          title: t("task.start_now_queued_title"),
-          message: result.blockingTask?.title
-            ? t("task.start_now_queued_blocked", { title: result.blockingTask.title })
-            : t("task.start_now_queued"),
+          title: t("task.start_now_not_started_title"),
+          message: t("task.start_now_not_started"),
         });
       }
       await loadTasks();

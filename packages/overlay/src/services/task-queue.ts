@@ -24,7 +24,6 @@ export interface StartQueuedTaskNowResult {
   status: string;
   started: boolean;
   queuedTaskIDs: string[];
-  blockingTask?: { id: string; title: string };
 }
 
 export async function startQueuedTaskNow(taskID: string): Promise<StartQueuedTaskNowResult> {

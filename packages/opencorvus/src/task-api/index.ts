@@ -55,7 +55,6 @@ import { mergeTaskChecks, writeTaskChecks } from "@/engine/checks"
 import {
   directoryQueueSnapshot,
   dispatchTaskLoop,
-  listActiveForCwd,
   reorderQueuedTasksForCwd,
   startQueuedTaskInCwd,
   taskCwd,
@@ -1022,23 +1021,10 @@ export namespace EngineService {
     if (!before.queuedTaskIDs.includes(taskID)) {
       throw new TaskQueueStartError(`Task ${taskID} is not in the directory queue`, "not_queued")
     }
-    const orderedTaskIDs = [
-      taskID,
-      ...before.queuedTaskIDs.filter((id) => id !== taskID),
-    ]
-    await reorderTaskQueue({
-      directory: cwd,
-      orderedTaskIDs,
-      revision: before.revision,
-    })
     await startQueuedTaskInCwd(taskID, cwd)
 
     const updated = requireTask(taskID)
     const status = deriveTaskStatus(updated) as string
-    const active = listActiveForCwd(cwd)
-    const blockingTask = status === "active"
-      ? undefined
-      : active.find((row) => row.id !== taskID)
     const after = directoryQueueSnapshot(cwd)
     return {
       task: viewTask(updated, { directory: cwd }),
@@ -1046,7 +1032,6 @@ export namespace EngineService {
       status,
       started: status === "active",
       queuedTaskIDs: after.queuedTaskIDs,
-      blockingTask: blockingTask ? viewTask(blockingTask, { directory: cwd }) : undefined,
     }
   }
 
