@@ -154,6 +154,7 @@ test("orchestrator does not receive the control-plane panel tool", async () => {
     fn: async () => {
       const orchestrator = await Agent.get("orchestrator")
       expect(orchestrator).toBeDefined()
+      expect(orchestrator?.tools?.include).toContain("cancel_subagent")
       expect(orchestrator?.tools?.include).not.toContain("panel")
       expect(orchestrator?.tools?.include).not.toContain("task")
       expect(orchestrator?.tools?.include).not.toContain("task_report")

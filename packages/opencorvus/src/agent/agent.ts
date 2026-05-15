@@ -298,6 +298,7 @@ export namespace Agent {
             "cancel_task",
             "retry_task",
             "inject_operator_message",
+            "cancel_subagent",
             // observation (read-only views of task state)
             "query_failed_goals",
             "read_context",
