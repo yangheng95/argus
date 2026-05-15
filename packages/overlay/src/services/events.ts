@@ -620,7 +620,8 @@ export function routeSSEEvent(event: any): boolean {
 function executorEventKind(progressType: string | undefined): string {
   const t = String(progressType || "").trim().toLowerCase().replace(/[.\s-]+/g, "_");
   if (!t) return "event";
-  if (t === "message_delta" || t === "reasoning_delta") return t;
+  if (t === "message_delta" || t === "text_delta") return "message_delta";
+  if (t === "reasoning_delta") return t;
   if (t === "tool_call" || t === "tool_delta" || t === "tool_result") return t;
   if (t.includes("tool")) return t.includes("result") ? "tool_result" : "tool_call";
   if (t.includes("reason")) return "reasoning_delta";

@@ -1,4 +1,4 @@
-import { Index, Show, createMemo, createResource, createSignal, onCleanup, type Accessor } from "solid-js"
+import { Index, Show, createEffect, createMemo, createResource, createSignal, onCleanup, type Accessor } from "solid-js"
 import { boardStore } from "../store/board"
 import { cardTreeStore } from "../store/card-tree"
 import { setCardExpanded } from "../store/conversation-ui"
@@ -6,10 +6,12 @@ import { fetchTaskTrace, invalidateTraceCache } from "../services/trace"
 import { notifyWarning } from "../services/notify"
 import { buildAgentWorkflow, type AgentWorkflowRecord } from "../utils/agent-workflow"
 import { buildAgentWorkflowLanes } from "../utils/agent-workflow-lanes"
-import { orderedReachableCardIDs } from "../utils/card-tree"
+import { orderedReachableCardIDs, cardMessageSegments } from "../utils/card-tree"
+import { orderedMessageParts } from "../utils/message"
 import { stageAccent } from "../utils/card-color"
 import { Avatar, avatarRole } from "./Avatar"
 import { Icon } from "./Icon"
+import { CardParts } from "./CardParts"
 import { AgentReportDialog } from "./AgentReportDialog"
 
 const NARROW_HEIGHT = 42
@@ -115,6 +117,34 @@ function AgentRailRow(props: {
   onReport: (record: AgentWorkflowRecord) => void
 }) {
   const record = props.record
+  let streamRef: HTMLDivElement | undefined
+
+  // Latest agent message, reusing the conversation message-panel renderer
+  // (CardParts) instead of a single clipped summary line. Source is the
+  // same card-tree store the left conversation reads — we split the card's
+  // flat parts at boundary markers (shared cardMessageSegments) and keep
+  // only the final turn, which is the agent's most recent output.
+  const latestParts = createMemo<any[]>(() => {
+    const cardID = record().cardID
+    if (!cardID) return []
+    const card = cardTreeStore.cards[cardID]
+    if (!card) return []
+    const segments = cardMessageSegments(card)
+    if (segments.length === 0) return []
+    return orderedMessageParts(segments[segments.length - 1])
+  })
+
+  // Keep the newest content in view as it streams — "latest scrolling
+  // message". Tracks the part count + status so a running agent's pane
+  // pins to the bottom; once terminal it stops fighting manual scroll.
+  createEffect(() => {
+    const count = latestParts().length
+    const running = record().status === "running"
+    const el = streamRef
+    if (!el || count === 0 || !running) return
+    el.scrollTop = el.scrollHeight
+  })
+
   return (
     <div
       class="conversation-agent-rail__row"
@@ -129,22 +159,49 @@ function AgentRailRow(props: {
       >
         <Avatar role={record().agentName} status={record().status} />
       </button>
-      <button
-        type="button"
+      <div
         class="conversation-agent-rail__run"
         aria-hidden={props.wide ? "false" : "true"}
-        tabIndex={props.wide ? 0 : -1}
-        onClick={() => props.onLocate(record())}
       >
-        <span class="conversation-agent-rail__run-head">
+        <button
+          type="button"
+          class="conversation-agent-rail__run-head"
+          tabIndex={props.wide ? 0 : -1}
+          onClick={() => props.onLocate(record())}
+          title={compactLabel(record())}
+        >
           <strong>{record().agentName}</strong>
           <span>{record().status}</span>
           <Show when={durationLabel(record())}>
             <span>{durationLabel(record())}</span>
           </Show>
-        </span>
-        <span class="conversation-agent-rail__summary">{summaryText(record())}</span>
-      </button>
+        </button>
+        <Show
+          when={props.wide && latestParts().length > 0}
+          fallback={
+            <button
+              type="button"
+              class="conversation-agent-rail__summary"
+              tabIndex={props.wide ? 0 : -1}
+              onClick={() => props.onLocate(record())}
+            >
+              {summaryText(record())}
+            </button>
+          }
+        >
+          <div
+            ref={streamRef}
+            class="conversation-agent-rail__stream"
+            data-streaming={record().status === "running" ? "true" : "false"}
+          >
+            <CardParts
+              parts={latestParts()}
+              depth={1}
+              streaming={record().status === "running"}
+            />
+          </div>
+        </Show>
+      </div>
       <button
         type="button"
         class="conversation-agent-rail__report"

@@ -1,4 +1,4 @@
-import { afterEach, expect, test } from "bun:test";
+import { afterAll, afterEach, expect, test } from "bun:test";
 import { setBoardStore } from "../src/store/board";
 import { cardTreeStore } from "../src/store/card-tree";
 import { cancelConversationReplay, hydrateTaskConversation } from "../src/services/conversation";
@@ -12,6 +12,15 @@ import {
   type TransportResponse,
 } from "../src/services/host-transport";
 import { resetWriter } from "../src/services/tree-writer";
+
+const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
+const originalCancelAnimationFrame = globalThis.cancelAnimationFrame;
+
+globalThis.requestAnimationFrame = ((callback: FrameRequestCallback) => {
+  callback(0);
+  return 1;
+}) as any;
+globalThis.cancelAnimationFrame = (() => {}) as any;
 
 function fakeTransport(
   responder: (req: TransportRequest) => Promise<TransportResponse<unknown>> | TransportResponse<unknown>,
@@ -38,6 +47,11 @@ afterEach(() => {
   __setHostTransportForTest(undefined);
   resetWriter();
   setBoardStore("selectedTaskID", "");
+});
+
+afterAll(() => {
+  globalThis.requestAnimationFrame = originalRequestAnimationFrame;
+  globalThis.cancelAnimationFrame = originalCancelAnimationFrame;
 });
 
 test("hydration replay projects persisted executor output into the card tree", () => {
@@ -71,7 +85,7 @@ test("hydration replay projects persisted executor output into the card tree", (
     },
   });
 
-  const cardID = "executor:session:ses_executor";
+  const cardID = "executor:session:ses_executor:message:executor:msg:run_1";
   expect(cardTreeStore.cards[cardID]).toBeDefined();
   expect(
     cardTreeStore.cards[cardID]?.parts.some(
@@ -166,5 +180,5 @@ test("hydrateTaskConversation waits for persisted event replay before returning 
   });
 
   await expect(hydration).resolves.toBe(2);
-  expect(cardTreeStore.cards["executor:session:ses_executor_replay"]).toBeDefined();
+  expect(cardTreeStore.cards["executor:session:ses_executor_replay:message:executor:msg:run_replay"]).toBeDefined();
 });

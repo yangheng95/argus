@@ -55,12 +55,6 @@ export interface AgentWorkflowProjection {
   stacks: AgentWorkflowStack[]
 }
 
-function sessionIDFromCardID(id: string): string {
-  const marker = ":session:"
-  const idx = id.indexOf(marker)
-  return idx >= 0 ? id.slice(idx + marker.length) : ""
-}
-
 function normaliseStatus(status: CardStatus | string | undefined): AgentWorkflowStatus {
   const value = String(status || "").toLowerCase()
   if (value === "running") return "running"
@@ -209,7 +203,11 @@ function applyCardRecord(
   cards: Record<string, CardNode>,
 ): void {
   if (card.kind !== "agent" && card.kind !== "phase") return
-  const sessionID = card.kind === "phase" ? String(card.phaseSessionID || "") : sessionIDFromCardID(card.id)
+  // Phase cards absorb a goal-scoped runtime session via phaseSessionID;
+  // every other card carries its explicit sessionID. Multiple message-turn
+  // cards for the same session merge into one workflow record because
+  // ensureRecord is keyed by sessionID (spec §5.2).
+  const sessionID = card.kind === "phase" ? String(card.phaseSessionID || "") : String(card.sessionID || "")
   if (!sessionID) return
   const record = ensureRecord(records, sessionID)
   record.cardID = card.id

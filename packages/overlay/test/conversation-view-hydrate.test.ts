@@ -207,8 +207,8 @@ test("hydrateConversationView restores task-scope agent cards with reasoning par
     transcript,
   );
 
-  const requirementsCardID = "requirements:session:ses_requirements";
-  const architectCardID = "architect:session:ses_architect";
+  const requirementsCardID = "requirements:session:ses_requirements:message:msg_requirements";
+  const architectCardID = "architect:session:ses_architect:message:msg_architect";
   expect(cardTreeStore.order).toContain(requirementsCardID);
   expect(cardTreeStore.order).toContain(architectCardID);
   expect(

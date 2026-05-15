@@ -12,7 +12,7 @@ import { cardTreeStore, type CardNode } from "../store/card-tree";
 import { t, tc } from "../utils/i18n";
 import { renderMarkdown } from "../utils/markdown";
 import { deliveryGoalProgress } from "../utils/goal-workflow";
-import { orderedReachableCardIDs } from "../utils/card-tree";
+import { orderedReachableCardIDs, cardMessageSegments } from "../utils/card-tree";
 import { statusIconName } from "../utils/status-mapping";
 import { activeTone, verdictTone } from "../utils/verdict-tone";
 import { GoalWorkflowList } from "./GoalWorkflowGroup";
@@ -575,39 +575,24 @@ export function Board(props: BoardProps) {
   // them in the panel. One card -> N message segments (N = boundary count + 1,
   // minus empty trailing groups).
   function cardToMessageSegments(card: CardNode): any[] {
-    const parts = card.parts || [];
-    if (parts.length === 0) return [];
-    const groups: any[] = [];
-    let boundary: { role?: string; time?: number } | null = null;
-    let buffer: any[] = [];
-    const flush = () => {
-      if (buffer.length === 0) return;
-      // No assistant-fallback (一个萝卜一个坑). The grouping boundary marker
-      // must carry a role; if missing, the source emitter is wrong — surface
-      // it instead of silently attributing the parts to the generic assistant.
-      if (!boundary || typeof boundary.role !== "string" || boundary.role.length === 0) {
+    // Single source for the boundary split lives in utils/card-tree
+    // (cardMessageSegments) — shared with the ConversationAgentRail
+    // latest-message preview. Board additionally requires a role on every
+    // segment for attribution: no assistant-fallback (一个萝卜一个坑). A
+    // missing role means the emitter is wrong — surface it.
+    return cardMessageSegments(card).map((segment) => {
+      if (segment.role.length === 0) {
         throw new Error(`Board grouping: card ${card.id} parts have no role boundary; emitter must mark role transitions explicitly`);
       }
-      groups.push({
+      return {
         info: {
-          id: `${card.id}:msg:${groups.length}`,
-          role: boundary.role,
-          time: { created: boundary.time ?? card.time ?? 0 },
+          id: segment.id,
+          role: segment.role,
+          time: { created: segment.time },
         },
-        parts: buffer,
-      });
-      buffer = [];
-    };
-    for (const part of parts) {
-      if (part?.type === "boundary") {
-        flush();
-        boundary = part;
-        continue;
-      }
-      buffer.push(part);
-    }
-    flush();
-    return groups;
+        parts: segment.parts,
+      };
+    });
   }
 
   /** Agent cards for a given stage, in chronological order. */
