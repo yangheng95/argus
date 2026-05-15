@@ -55,6 +55,7 @@ const PROGRAM_TOLERANCE = 2;
 export interface AutoScrollOptions {
   isTracking: () => boolean;
   onUserScrollUp: () => void;
+  onAtBottom?: () => void;
 }
 
 export interface AutoScrollController {
@@ -69,40 +70,43 @@ export function setupAutoScroll(
 ): AutoScrollController {
   let rafPending = false;
   let expectedTop = el.scrollTop;
-  const observedChildren = new Set<Element>();
+  let observedTail: Element | null = null;
   let programScrollTarget: number | null = null;
+
+  function syncFollowLockAttribute() {
+    el.dataset.followLock = opts.isTracking() ? "true" : "false";
+  }
 
   function distanceFromBottom(): number {
     return el.scrollHeight - el.clientHeight - el.scrollTop;
   }
 
-  function syncResizeTargets() {
-    const nextChildren = new Set(Array.from(el.children));
-    for (const child of nextChildren) {
-      if (observedChildren.has(child)) continue;
-      resizeObserver.observe(child);
-      observedChildren.add(child);
-    }
-    for (const child of Array.from(observedChildren)) {
-      if (nextChildren.has(child)) continue;
-      resizeObserver.unobserve(child);
-      observedChildren.delete(child);
-    }
+  function syncResizeTarget() {
+    const tail = el.lastElementChild;
+    if (tail === observedTail) return;
+    if (observedTail) resizeObserver.unobserve(observedTail);
+    observedTail = tail;
+    if (observedTail) resizeObserver.observe(observedTail);
   }
 
   function onScroll() {
     const nextTop = el.scrollTop;
     const delta = nextTop - expectedTop;
+    const bottomDistance = distanceFromBottom();
     if (
       programScrollTarget !== null &&
       Math.abs(nextTop - programScrollTarget) <= PROGRAM_TOLERANCE
     ) {
       programScrollTarget = null;
       expectedTop = nextTop;
+      if (bottomDistance <= BOTTOM_TOLERANCE) opts.onAtBottom?.();
+      syncFollowLockAttribute();
       return;
     }
     if (Math.abs(delta) <= PROGRAM_TOLERANCE) {
       expectedTop = nextTop;
+      if (bottomDistance <= BOTTOM_TOLERANCE) opts.onAtBottom?.();
+      syncFollowLockAttribute();
       return;
     }
     const movedUp = delta < -PROGRAM_TOLERANCE;
@@ -110,17 +114,23 @@ export function setupAutoScroll(
     if (
       opts.isTracking() &&
       movedUp &&
-      distanceFromBottom() > BOTTOM_TOLERANCE
+      bottomDistance > BOTTOM_TOLERANCE
     ) {
       opts.onUserScrollUp();
+      syncFollowLockAttribute();
+      return;
     }
+    if (bottomDistance <= BOTTOM_TOLERANCE) opts.onAtBottom?.();
+    syncFollowLockAttribute();
   }
 
   function scrollDown() {
+    syncFollowLockAttribute();
     if (!opts.isTracking() || rafPending) return;
     rafPending = true;
     requestAnimationFrame(() => {
       rafPending = false;
+      syncFollowLockAttribute();
       if (!opts.isTracking()) return;
       el.scrollTop = el.scrollHeight;
       programScrollTarget = el.scrollTop;
@@ -132,26 +142,21 @@ export function setupAutoScroll(
 
   const resizeObserver = new ResizeObserver(scrollDown);
   resizeObserver.observe(el);
-  syncResizeTargets();
+  syncResizeTarget();
 
   const mutationObserver = new MutationObserver((records) => {
     if (records.some((record) => record.type === "childList")) {
-      syncResizeTargets();
+      syncResizeTarget();
     }
     scrollDown();
   });
-  // childList:true is enough — every text mutation that grows the
-  // scrollHeight (TextPart's appendChild of frozen blocks, Card's
-  // structural updates) shows up as a childList record. The previously
-  // enabled `characterData: true` fired the callback for every SSE
-  // token tick on top of that, producing a callback storm during
-  // streaming (50ms flush × per-character text mutations on the active
-  // tail block). The ResizeObserver above already catches scrollHeight
-  // grows from in-place text edits, so dropping characterData costs
-  // zero correctness and removes the high-frequency redundant work.
-  mutationObserver.observe(el, { childList: true, subtree: true });
+  // Observe only top-level child-list changes. Streaming text mutates inside
+  // the current tail card; the tail ResizeObserver above catches resulting
+  // height changes without routing every nested DOM write through scroll code.
+  mutationObserver.observe(el, { childList: true });
 
   requestAnimationFrame(() => {
+    syncFollowLockAttribute();
     el.scrollTop = el.scrollHeight;
     programScrollTarget = el.scrollTop;
     expectedTop = el.scrollTop;
@@ -162,14 +167,17 @@ export function setupAutoScroll(
       el.removeEventListener("scroll", onScroll);
       mutationObserver.disconnect();
       resizeObserver.disconnect();
-      observedChildren.clear();
+      observedTail = null;
+      delete el.dataset.followLock;
     },
     scrollToBottom: () => {
+      syncFollowLockAttribute();
       el.scrollTop = el.scrollHeight;
       programScrollTarget = el.scrollTop;
       expectedTop = el.scrollTop;
     },
     scrollToTop: () => {
+      syncFollowLockAttribute();
       el.scrollTop = 0;
       programScrollTarget = el.scrollTop;
       expectedTop = el.scrollTop;

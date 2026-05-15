@@ -7,6 +7,7 @@ class FakeScrollElement extends EventTarget {
   scrollHeight = 0;
   clientHeight = 0;
   children: any[] = [];
+  dataset: Record<string, string> = {};
   private _scrollTop = 0;
 
   get scrollTop() {
@@ -18,15 +19,27 @@ class FakeScrollElement extends EventTarget {
     const next = Number.isFinite(value) ? value : 0;
     this._scrollTop = Math.max(0, Math.min(next, maxTop));
   }
+
+  get lastElementChild() {
+    return this.children.length > 0 ? this.children[this.children.length - 1] : null;
+  }
 }
 
 class FakeResizeObserver {
+  observed: unknown[] = [];
+
   constructor(private readonly callback: ResizeObserverCallback) {
     resizeObservers.push(this);
   }
 
-  observe() {}
-  unobserve() {}
+  observe(target: unknown) {
+    this.observed.push(target);
+  }
+
+  unobserve(target: unknown) {
+    this.observed = this.observed.filter((item) => item !== target);
+  }
+
   disconnect() {}
 
   trigger(entries: ResizeObserverEntry[] = []) {
@@ -35,11 +48,15 @@ class FakeResizeObserver {
 }
 
 class FakeMutationObserver {
+  options: MutationObserverInit | undefined;
+
   constructor(private readonly callback: MutationCallback) {
     mutationObservers.push(this);
   }
 
-  observe() {}
+  observe(_target: Node, options?: MutationObserverInit) {
+    this.options = options;
+  }
   disconnect() {}
 
   trigger(records: MutationRecord[] = []) {
@@ -75,6 +92,7 @@ function createScrollElement() {
   const el = new FakeScrollElement();
   el.clientHeight = 100;
   el.scrollHeight = 300;
+  el.children = [{ id: "first" }, { id: "tail" }];
   el.scrollTop = 999;
   return el;
 }
@@ -136,6 +154,36 @@ test("resize-driven content growth keeps the view pinned to bottom while trackin
   ctrl.cleanup();
 });
 
+test("only the scroll container and current tail child are resize observed", () => {
+  const el = createScrollElement();
+
+  const ctrl = setupAutoScroll(el as any, {
+    isTracking: () => true,
+    onUserScrollUp: () => {},
+  });
+
+  expect(resizeObservers[0]?.observed).toEqual([el, el.children[1]]);
+
+  const nextTail = { id: "next-tail" };
+  el.children = [el.children[0], el.children[1], nextTail];
+  mutationObservers[0]?.trigger([{ type: "childList" } as MutationRecord]);
+
+  expect(resizeObservers[0]?.observed).toEqual([el, nextTail]);
+  ctrl.cleanup();
+});
+
+test("nested mutations are not observed by the scroll owner", () => {
+  const el = createScrollElement();
+
+  const ctrl = setupAutoScroll(el as any, {
+    isTracking: () => true,
+    onUserScrollUp: () => {},
+  });
+
+  expect(mutationObservers[0]?.options).toEqual({ childList: true });
+  ctrl.cleanup();
+});
+
 test("resize-driven content growth preserves manual scroll position when tracking is disabled", () => {
   const el = createScrollElement();
   let tracking = true;
@@ -160,6 +208,8 @@ test("resize-driven content growth preserves manual scroll position when trackin
 test("chat scroll keeps browser overflow anchoring enabled", () => {
   const css = readFileSync(join(import.meta.dir, "../src/styles/surfaces/conversation.css"), "utf8");
   const chatScrollRule = css.match(/\.chat-scroll\s*\{[^}]*\}/)?.[0] ?? "";
+  const followLockRule = css.match(/\.chat-scroll\[data-follow-lock="true"\]\s*\{[^}]*\}/)?.[0] ?? "";
   expect(chatScrollRule).toContain("overflow-anchor: auto");
   expect(chatScrollRule).not.toContain("overflow-anchor: none");
+  expect(followLockRule).toContain("overflow-anchor: none");
 });
