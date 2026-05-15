@@ -147,6 +147,33 @@ const CONFIG_TABS: ConfigTabDef[] = [
 const MAIN_CONFIG_TABS = CONFIG_TABS.filter((tab) => tab.id !== "about");
 const ABOUT_CONFIG_TAB = CONFIG_TABS.find((tab) => tab.id === "about") as ConfigTabDef;
 
+function activePanelBodyID(tab: ConfigDialogTab): string {
+  switch (tab) {
+    case "general":
+      return "generalBody";
+    case "permissions":
+      return "permissionsBody";
+    case "prompt":
+      return "promptBody";
+    case "channel":
+      return "channelConfigBody";
+    case "skill":
+      return "skillConfigBody";
+    case "skill-market":
+      return "skillMarketConfigBody";
+    case "mcp":
+      return "mcpConfigBody";
+    case "memory":
+      return "memoryBody";
+    case "providers":
+      return "providersConfigBody";
+    case "agent-models":
+      return "agentModelsBody";
+    case "about":
+      return "aboutBody";
+  }
+}
+
 function runtimeTypeLabel(): string {
   const hostKind = getHostTransport().kind;
   if (hostKind === "tauri") return "Tauri Desktop";
@@ -223,6 +250,89 @@ export function ConfigDialogHost() {
     return rows;
   });
 
+  const renderActivePanel = () => {
+    switch (dialogStore.config.activeTab) {
+      case "general":
+        return <GeneralPanel />;
+      case "permissions":
+        return <PermissionsPanel />;
+      case "prompt":
+        return <PromptCatalog />;
+      case "channel":
+        return <ChannelsPanel />;
+      case "skill":
+        return <SkillsPanel />;
+      case "skill-market":
+        return <SkillMarketPanel active={true} />;
+      case "mcp":
+        return <McpPanel />;
+      case "memory":
+        return <MemoryPanel taskID={boardStore.selectedTaskID || undefined} />;
+      case "providers":
+        return <ProvidersPanel />;
+      case "agent-models":
+        return <AgentModelsPanel />;
+      case "about":
+        return (
+          <>
+            <div class="about-section">
+              <h4 class="about-section-title">{t("about.author_name")}</h4>
+              <div class="about-author-card">
+                <div class="about-author-avatar">
+                  <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
+                    <circle cx="20" cy="20" r="19" stroke="var(--accent)" stroke-width="1.5" />
+                    <circle cx="20" cy="16" r="6" stroke="var(--text-soft)" stroke-width="1.3" />
+                    <path d="M8 34c0-6.6 5.4-12 12-12s12 5.4 12 12" stroke="var(--text-soft)" stroke-width="1.3" />
+                  </svg>
+                </div>
+                <div class="about-author-info">
+                  <strong class="about-author-name">杨恒@代码生成组</strong>
+                </div>
+              </div>
+            </div>
+            <div class="about-section">
+              <h4 class="about-section-title">{t("about.runtime")}</h4>
+              <div class="about-info-grid" id="aboutRuntimeGrid">
+                <For each={aboutRows()}>
+                  {(row) => (
+                    <>
+                      <div class="about-info-label">{row[0]}</div>
+                      <div class="about-info-value">{row[1]}</div>
+                    </>
+                  )}
+                </For>
+              </div>
+            </div>
+            <div class="about-section">
+              <h4 class="about-section-title">{t("about.links")}</h4>
+              <div class="about-links">
+                <a class="about-link" href="https://github.com/yangheng95" target="_blank" rel="noopener">
+                  <Icon name="github" />
+                  <span>GitHub</span>
+                </a>
+                <a class="about-link" href="https://github.com/yangheng95" target="_blank" rel="noopener">
+                  <Icon name="info-circle" />
+                  <span>{t("about.issues")}</span>
+                </a>
+              </div>
+            </div>
+            <div class="about-section">
+              <h4 class="about-section-title">{t("about.shortcuts")}</h4>
+              <div class="about-shortcut-grid">
+                <kbd>F12</kbd><span>{t("about.shortcut_devtools")}</span>
+                <kbd>Ctrl +</kbd><span>{t("about.shortcut_zoom_in")}</span>
+                <kbd>Ctrl -</kbd><span>{t("about.shortcut_zoom_out")}</span>
+                <kbd>Ctrl 0</kbd><span>{t("about.shortcut_zoom_reset")}</span>
+                <kbd>Enter</kbd><span>{t("about.shortcut_send")}</span>
+                <kbd>Shift+Enter</kbd><span>{t("about.shortcut_newline")}</span>
+                <kbd>Esc</kbd><span>{t("about.shortcut_close")}</span>
+              </div>
+            </div>
+          </>
+        );
+    }
+  };
+
   let resizeHandle: HTMLDivElement | undefined;
   let resizeStartWidth = 0;
   let resizeMin = 0;
@@ -272,152 +382,59 @@ export function ConfigDialogHost() {
         </button>
       }
     >
-      <div class="config-dialog-layout">
-        <nav class="config-sidebar" id="configSidebar" style={sidebarStyle()}>
-          <For each={MAIN_CONFIG_TABS}>
-            {(tab) => (
-              <button
-                type="button"
-                classList={{
-                  "config-nav-item": true,
-                  active: dialogStore.config.activeTab === tab.id,
-                }}
-                data-config-tab={tab.id}
-                onClick={() => switchConfigTab(tab.id)}
+      <Show when={dialogStore.config.open}>
+        <div class="config-dialog-layout">
+          <nav class="config-sidebar" id="configSidebar" style={sidebarStyle()}>
+            <For each={MAIN_CONFIG_TABS}>
+              {(tab) => (
+                <button
+                  type="button"
+                  classList={{
+                    "config-nav-item": true,
+                    active: dialogStore.config.activeTab === tab.id,
+                  }}
+                  data-config-tab={tab.id}
+                  onClick={() => switchConfigTab(tab.id)}
+                >
+                  {tab.icon}
+                  <span>{t(tab.labelKey)}</span>
+                  <Show when={tab.badgeID}>
+                    <span class="config-nav-badge" id={tab.badgeID} />
+                  </Show>
+                </button>
+              )}
+            </For>
+            <div class="config-nav-spacer" />
+            <button
+              type="button"
+              classList={{
+                "config-nav-item": true,
+                active: dialogStore.config.activeTab === "about",
+              }}
+              data-config-tab="about"
+              onClick={() => switchConfigTab("about")}
+            >
+              {ABOUT_CONFIG_TAB.icon}
+              <span>{t(ABOUT_CONFIG_TAB.labelKey)}</span>
+            </button>
+          </nav>
+          <div class="config-resizer" id="configResizer" onPointerDown={startResize} />
+          <div class="config-content" id="configContent">
+            <div
+              class="config-tab-panel active"
+              data-config-panel={dialogStore.config.activeTab}
+              id={dialogStore.config.activeTab === "channel" ? "channelSection" : undefined}
+            >
+              <div
+                classList={{ "config-section-body": true, "about-body": dialogStore.config.activeTab === "about" }}
+                id={activePanelBodyID(dialogStore.config.activeTab)}
               >
-                {tab.icon}
-                <span>{t(tab.labelKey)}</span>
-                <Show when={tab.badgeID}>
-                  <span class="config-nav-badge" id={tab.badgeID} />
-                </Show>
-              </button>
-            )}
-          </For>
-          <div class="config-nav-spacer" />
-          <button
-            type="button"
-            classList={{
-              "config-nav-item": true,
-              active: dialogStore.config.activeTab === "about",
-            }}
-            data-config-tab="about"
-            onClick={() => switchConfigTab("about")}
-          >
-            {ABOUT_CONFIG_TAB.icon}
-            <span>{t(ABOUT_CONFIG_TAB.labelKey)}</span>
-          </button>
-        </nav>
-        <div class="config-resizer" id="configResizer" onPointerDown={startResize} />
-        <div class="config-content" id="configContent">
-          <div classList={{ "config-tab-panel": true, active: dialogStore.config.activeTab === "general" }} data-config-panel="general">
-            <div class="config-section-body" id="generalBody">
-              <GeneralPanel />
-            </div>
-          </div>
-          <div classList={{ "config-tab-panel": true, active: dialogStore.config.activeTab === "permissions" }} data-config-panel="permissions">
-            <div class="config-section-body" id="permissionsBody">
-              <PermissionsPanel />
-            </div>
-          </div>
-          <div classList={{ "config-tab-panel": true, active: dialogStore.config.activeTab === "prompt" }} data-config-panel="prompt">
-            <div class="config-section-body" id="promptBody">
-              <PromptCatalog />
-            </div>
-          </div>
-          <div classList={{ "config-tab-panel": true, active: dialogStore.config.activeTab === "channel" }} id="channelSection" data-config-panel="channel">
-            <div class="config-section-body" id="channelConfigBody">
-              <ChannelsPanel />
-            </div>
-          </div>
-          <div classList={{ "config-tab-panel": true, active: dialogStore.config.activeTab === "skill" }} data-config-panel="skill">
-            <div class="config-section-body" id="skillConfigBody">
-              <SkillsPanel />
-            </div>
-          </div>
-          <div classList={{ "config-tab-panel": true, active: dialogStore.config.activeTab === "skill-market" }} data-config-panel="skill-market">
-            <div class="config-section-body" id="skillMarketConfigBody">
-              <SkillMarketPanel active={dialogStore.config.activeTab === "skill-market"} />
-            </div>
-          </div>
-          <div classList={{ "config-tab-panel": true, active: dialogStore.config.activeTab === "mcp" }} data-config-panel="mcp">
-            <div class="config-section-body" id="mcpConfigBody">
-              <McpPanel />
-            </div>
-          </div>
-          <div classList={{ "config-tab-panel": true, active: dialogStore.config.activeTab === "memory" }} data-config-panel="memory">
-            <div class="config-section-body" id="memoryBody">
-              <MemoryPanel taskID={boardStore.selectedTaskID || undefined} />
-            </div>
-          </div>
-          <div classList={{ "config-tab-panel": true, active: dialogStore.config.activeTab === "providers" }} data-config-panel="providers">
-            <div class="config-section-body" id="providersConfigBody">
-              <ProvidersPanel />
-            </div>
-          </div>
-          <div classList={{ "config-tab-panel": true, active: dialogStore.config.activeTab === "agent-models" }} data-config-panel="agent-models">
-            <div class="config-section-body" id="agentModelsBody">
-              <AgentModelsPanel />
-            </div>
-          </div>
-          <div classList={{ "config-tab-panel": true, active: dialogStore.config.activeTab === "about" }} data-config-panel="about">
-            <div class="config-section-body about-body" id="aboutBody">
-              <div class="about-section">
-                <h4 class="about-section-title">{t("about.author_name")}</h4>
-                <div class="about-author-card">
-                  <div class="about-author-avatar">
-                    <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
-                      <circle cx="20" cy="20" r="19" stroke="var(--accent)" stroke-width="1.5" />
-                      <circle cx="20" cy="16" r="6" stroke="var(--text-soft)" stroke-width="1.3" />
-                      <path d="M8 34c0-6.6 5.4-12 12-12s12 5.4 12 12" stroke="var(--text-soft)" stroke-width="1.3" />
-                    </svg>
-                  </div>
-                  <div class="about-author-info">
-                    <strong class="about-author-name">杨恒@代码生成组</strong>
-                  </div>
-                </div>
-              </div>
-              <div class="about-section">
-                <h4 class="about-section-title">{t("about.runtime")}</h4>
-                <div class="about-info-grid" id="aboutRuntimeGrid">
-                  <For each={aboutRows()}>
-                    {(row) => (
-                      <>
-                        <div class="about-info-label">{row[0]}</div>
-                        <div class="about-info-value">{row[1]}</div>
-                      </>
-                    )}
-                  </For>
-                </div>
-              </div>
-              <div class="about-section">
-                <h4 class="about-section-title">{t("about.links")}</h4>
-                <div class="about-links">
-                  <a class="about-link" href="https://github.com/yangheng95" target="_blank" rel="noopener">
-                    <Icon name="github" />
-                    <span>GitHub</span>
-                  </a>
-                  <a class="about-link" href="https://github.com/yangheng95" target="_blank" rel="noopener">
-                    <Icon name="info-circle" />
-                    <span>{t("about.issues")}</span>
-                  </a>
-                </div>
-              </div>
-              <div class="about-section">
-                <h4 class="about-section-title">{t("about.shortcuts")}</h4>
-                <div class="about-shortcut-grid">
-                  <kbd>F12</kbd><span>{t("about.shortcut_devtools")}</span>
-                  <kbd>Ctrl +</kbd><span>{t("about.shortcut_zoom_in")}</span>
-                  <kbd>Ctrl -</kbd><span>{t("about.shortcut_zoom_out")}</span>
-                  <kbd>Ctrl 0</kbd><span>{t("about.shortcut_zoom_reset")}</span>
-                  <kbd>Enter</kbd><span>{t("about.shortcut_send")}</span>
-                  <kbd>Shift+Enter</kbd><span>{t("about.shortcut_newline")}</span>
-                  <kbd>Esc</kbd><span>{t("about.shortcut_close")}</span>
-                </div>
+                {renderActivePanel()}
               </div>
             </div>
           </div>
         </div>
-      </div>
+      </Show>
     </Dialog>
   );
 }

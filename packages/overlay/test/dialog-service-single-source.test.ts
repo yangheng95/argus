@@ -73,6 +73,15 @@ describe("app/session dialog single source", () => {
     expect(configHost).toContain('id="btnCloseConfigDialog"');
   });
 
+  test("config dialog mounts only the active settings tab body", () => {
+    expect(configHost).toContain("<Show when={dialogStore.config.open}>");
+    expect(configHost).toContain("renderActivePanel");
+    expect(configHost).toContain("switch (dialogStore.config.activeTab)");
+    expect(configHost).not.toContain('<PromptCatalog />\n            </div>\n          </div>\n          <div classList');
+    expect(configHost).not.toContain('<ProvidersPanel />\n            </div>\n          </div>\n          <div classList');
+    expect(configHost).not.toContain('<AgentModelsPanel />\n            </div>\n          </div>');
+  });
+
   test("task route and queue decisions use card choices instead of select UI", () => {
     expect(appHost).toContain('dialogStore.app.kind === "task-queue-decision"');
     expect(appHost).toContain('class="app-dialog-decision__choice"');
