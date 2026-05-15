@@ -278,6 +278,68 @@ export function claimNextForCwd(cwd: string, now = Date.now()): TaskRow | undefi
   return result ?? undefined
 }
 
+export function claimQueuedTaskForCwd(taskID: string, cwd: string, now = Date.now()): TaskRow | undefined {
+  if (!taskID || !cwd) return undefined
+  let result: TaskRow | undefined
+  Database.transaction((db) => {
+    result = db
+      .update(EngineTaskTable)
+      .set({
+        time_started: now,
+        time_updated: now,
+      })
+      .where(
+        sql`${EngineTaskTable.id} = (
+          SELECT t.id
+          FROM engine_task t
+          LEFT JOIN session s ON s.id = t.session_id
+          LEFT JOIN project p ON p.id = t.project_id
+          WHERE t.id = ${taskID}
+            AND t.time_started IS NULL AND t.time_completed IS NULL
+            AND COALESCE(s.directory, p.worktree) = ${cwd}
+            AND NOT EXISTS (
+              SELECT 1
+              FROM engine_task t2
+              LEFT JOIN session s2 ON s2.id = t2.session_id
+              LEFT JOIN project p2 ON p2.id = t2.project_id
+              WHERE t2.time_started IS NOT NULL AND t2.time_completed IS NULL
+                AND COALESCE(s2.directory, p2.worktree) = ${cwd}
+            )
+          LIMIT 1
+        )`,
+      )
+      .returning()
+      .get()
+    if (!result) return
+    db.insert(EngineProgressSnapshotTable)
+      .values({
+        id: Identifier.ascending("progress"),
+        task_id: result.id,
+        status: "active",
+        summary: "Task started",
+        payload: { status: "active" },
+        time_created: now,
+        time_updated: now,
+      })
+      .run()
+    Database.effect(() =>
+      EngineProtocol.emit(
+        Event.TaskUpdated,
+        { taskID: result!.id, status: "active", summary: "Task started" },
+        { source: "engine.queue" },
+      ),
+    )
+  })
+  return result ?? undefined
+}
+
+export async function startQueuedTaskInCwd(taskID: string, cwd: string): Promise<TaskRow | undefined> {
+  const claimed = claimQueuedTaskForCwd(taskID, cwd)
+  if (!claimed) return undefined
+  await startLoopForTask(claimed, undefined, cwd)
+  return claimed
+}
+
 /**
  * List active tasks for a cwd.
  */

@@ -17,3 +17,18 @@ export async function reorderTaskQueue(input: ReorderTaskQueueInput): Promise<{
     body: JSON.stringify(input),
   });
 }
+
+export interface StartQueuedTaskNowResult {
+  task: { id: string; title: string };
+  directory: string;
+  status: string;
+  started: boolean;
+  queuedTaskIDs: string[];
+  blockingTask?: { id: string; title: string };
+}
+
+export async function startQueuedTaskNow(taskID: string): Promise<StartQueuedTaskNowResult> {
+  return apiJson(`task/${encodeURIComponent(taskID)}/start-now`, {
+    method: "POST",
+  });
+}

@@ -8215,6 +8215,132 @@ export type TaskQueueReorderResponses = {
 
 export type TaskQueueReorderResponse = TaskQueueReorderResponses[keyof TaskQueueReorderResponses]
 
+export type TaskQueueStartNowData = {
+  body?: never
+  path: {
+    taskID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/task/{taskID}/start-now"
+}
+
+export type TaskQueueStartNowErrors = {
+  /**
+   * Not found
+   */
+  404: NotFoundError
+  /**
+   * Task is not queued
+   */
+  409: unknown
+  /**
+   * Task has no working directory
+   */
+  422: unknown
+}
+
+export type TaskQueueStartNowError = TaskQueueStartNowErrors[keyof TaskQueueStartNowErrors]
+
+export type TaskQueueStartNowResponses = {
+  /**
+   * Queued task promoted and scheduler invoked
+   */
+  200: {
+    task: {
+      id: string
+      projectID: string
+      directory?: string
+      sessionID?: string | null
+      activePlanVersionID?: string | null
+      activeRunID?: string | null
+      requestID?: string
+      source: string
+      title: string
+      request: string
+      status: "queued" | "active" | "completed" | "failed" | "cancelled"
+      priority: "critical" | "high" | "normal" | "low"
+      queue?: {
+        order: number
+        revision?: string
+      }
+      kind?: "workflow" | "build"
+      blockingReason?: string
+      error?: string
+      budget?: {
+        maxExecutorGroups?: number
+      }
+      metadata?: {
+        [key: string]: unknown
+      }
+      attachments?: Array<{
+        sha: string
+        url: string
+        mime: string
+        size: number
+        filename?: string
+        intent?: string
+        source?: string
+      }>
+      time: {
+        created: number
+        updated: number
+        started?: number
+        completed?: number
+      }
+    }
+    directory: string
+    status: string
+    started: boolean
+    queuedTaskIDs: Array<string>
+    blockingTask?: {
+      id: string
+      projectID: string
+      directory?: string
+      sessionID?: string | null
+      activePlanVersionID?: string | null
+      activeRunID?: string | null
+      requestID?: string
+      source: string
+      title: string
+      request: string
+      status: "queued" | "active" | "completed" | "failed" | "cancelled"
+      priority: "critical" | "high" | "normal" | "low"
+      queue?: {
+        order: number
+        revision?: string
+      }
+      kind?: "workflow" | "build"
+      blockingReason?: string
+      error?: string
+      budget?: {
+        maxExecutorGroups?: number
+      }
+      metadata?: {
+        [key: string]: unknown
+      }
+      attachments?: Array<{
+        sha: string
+        url: string
+        mime: string
+        size: number
+        filename?: string
+        intent?: string
+        source?: string
+      }>
+      time: {
+        created: number
+        updated: number
+        started?: number
+        completed?: number
+      }
+    }
+  }
+}
+
+export type TaskQueueStartNowResponse = TaskQueueStartNowResponses[keyof TaskQueueStartNowResponses]
+
 export type TaskListEventsData = {
   body?: never
   path?: never

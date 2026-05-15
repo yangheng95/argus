@@ -96,6 +96,7 @@ All endpoints are protected by `OPENCORVUS_SERVER_PASSWORD`. When set, clients m
 | GET | `/task/{taskID}/runs` | List task runs | `task.runs` |
 | POST | `/task/{taskID}/session/{sessionID}/cancel` | Cancel a task agent session | `task.session.cancel` |
 | POST | `/task/{taskID}/session/{sessionID}/reply` | Reply directly to a task agent session | `task.session.reply` |
+| POST | `/task/{taskID}/start-now` | Promote a queued task and attempt to start it | `task.queue.startNow` |
 | GET | `/task/{taskID}/trace` | Get task AgentTrace events (all sessions) | `task.trace` |
 | GET | `/task/{taskID}/transcript` | Get task transcript | `task.transcript` |
 | GET | `/tasks` | List project tasks | `task.list` |

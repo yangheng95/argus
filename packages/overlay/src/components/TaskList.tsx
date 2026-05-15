@@ -5,7 +5,7 @@
 import { createMemo, createSelector, createSignal, For, Show } from "solid-js";
 import { boardStore, visibleTasks, loadTasks, taskCreatedAt } from "../store/board";
 import { settingsStore } from "../store/settings";
-import { reorderTaskQueue } from "../services/task-queue";
+import { reorderTaskQueue, startQueuedTaskNow } from "../services/task-queue";
 import { exportTaskArchive, importTaskArchive } from "../services/task-archive";
 import { notifyError, notifyProgress, notifySuccess, notifyWarning } from "../services/notify";
 import { useArmedConfirm } from "../solid/armed-confirm";
@@ -241,6 +241,30 @@ function CancelButton(props: { id: string; onCancel: (id: string) => void }) {
   );
 }
 
+function StartNowButton(props: { id: string; busy?: boolean; onStartNow: (id: string) => void }) {
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon"
+      tone="accent"
+      data-chrome="icon-action"
+      data-ui="task-row-start-now"
+      data-task-start-now={props.id}
+      data-busy={props.busy ? "true" : undefined}
+      disabled={props.busy}
+      title={t("task.start_now_button_title")}
+      aria-label={t("task.start_now_button_title")}
+      onClick={(e) => {
+        e.stopPropagation();
+        props.onStartNow(props.id);
+      }}
+    >
+      <Icon name="send" size={11} />
+    </Button>
+  );
+}
+
 // ── TaskRow ──
 
 const INTERRUPTABLE_TASK_STATUSES = new Set(["queued", "active"]);
@@ -256,6 +280,8 @@ function TaskRow(props: {
   onSelectTask: (id: string) => void;
   onDeleteTask?: (id: string) => void;
   onCancelTask?: (id: string) => void;
+  onStartNow?: (id: string) => void;
+  startNowBusyID?: string;
   canDrag?: boolean;
   dragging?: boolean;
   dragOver?: boolean;
@@ -272,6 +298,8 @@ function TaskRow(props: {
   const badgeLabel = () => taskListBadge(props.item, props.queuePos);
   const canCancel = () =>
     !pending() && !!id() && !!props.onCancelTask && INTERRUPTABLE_TASK_STATUSES.has(status());
+  const canStartNow = () =>
+    !pending() && !!id() && !!props.onStartNow && status() === "queued";
   const canDelete = () =>
     !pending() && !!id() && !!props.onDeleteTask;
   // Export is offered for any persisted task — no status gate (you can
@@ -279,7 +307,7 @@ function TaskRow(props: {
   const canExport = () => !pending() && !!id();
   const directory = () =>
     typeof props.item?.task?.directory === "string" ? props.item.task.directory : undefined;
-  const hasActions = () => canCancel() || canDelete() || canExport();
+  const hasActions = () => canStartNow() || canCancel() || canDelete() || canExport();
   const canDrag = () => props.canDrag === true && status() === "queued" && !pending();
 
   return (
@@ -357,6 +385,13 @@ function TaskRow(props: {
         >{taskListMeta(props.item)}</small>
         <Show when={hasActions()}>
           <div class="task-row-actions">
+            <Show when={canStartNow()}>
+              <StartNowButton
+                id={id()}
+                busy={props.startNowBusyID === id()}
+                onStartNow={props.onStartNow!}
+              />
+            </Show>
             <Show when={canExport()}>
               <ExportButton id={id()} directory={directory()} />
             </Show>
@@ -383,6 +418,8 @@ function TaskSection(props: {
   onSelectTask: (id: string) => void;
   onDeleteTask?: (id: string) => void;
   onCancelTask?: (id: string) => void;
+  onStartNow?: (id: string) => void;
+  startNowBusyID?: string;
   draggingID?: string;
   dragOverID?: string;
   canReorder?: boolean;
@@ -405,6 +442,8 @@ function TaskSection(props: {
                 onSelectTask={props.onSelectTask}
                 onDeleteTask={props.onDeleteTask}
                 onCancelTask={props.onCancelTask}
+                onStartNow={props.onStartNow}
+                startNowBusyID={props.startNowBusyID}
                 canDrag={props.canReorder}
                 dragging={props.draggingID === (item?.task?.id || "")}
                 dragOver={props.dragOverID === (item?.task?.id || "")}
@@ -527,6 +566,7 @@ export function TaskList(props: TaskListProps) {
   }
 
   const [retrying, setRetrying] = createSignal(false);
+  const [startNowBusyID, setStartNowBusyID] = createSignal("");
 
   function queuedItems(directory: string): any[] {
     const group = grouped().find((item) => item.directory === directory);
@@ -568,6 +608,40 @@ export function TaskList(props: TaskListProps) {
       // will pick it up; no need to swallow/transform here.
     } finally {
       setRetrying(false);
+    }
+  }
+
+  async function handleStartNow(taskID: string) {
+    if (startNowBusyID()) return;
+    setStartNowBusyID(taskID);
+    const noticeID = `task:start-now:${taskID}`;
+    try {
+      const result = await startQueuedTaskNow(taskID);
+      if (result.started) {
+        notifySuccess({
+          id: noticeID,
+          title: t("task.start_now_started_title"),
+          message: result.task?.title || taskID,
+        });
+      } else {
+        notifyWarning({
+          id: noticeID,
+          title: t("task.start_now_queued_title"),
+          message: result.blockingTask?.title
+            ? t("task.start_now_queued_blocked", { title: result.blockingTask.title })
+            : t("task.start_now_queued"),
+        });
+      }
+      await loadTasks();
+    } catch (err) {
+      notifyError({
+        id: noticeID,
+        title: t("task.start_now_failed_title"),
+        message: t("task.start_now_failed", { error: err instanceof Error ? err.message : String(err) }),
+      });
+      await loadTasks().catch(() => undefined);
+    } finally {
+      setStartNowBusyID("");
     }
   }
 
@@ -770,6 +844,8 @@ export function TaskList(props: TaskListProps) {
                         onSelectTask={props.onSelectTask}
                         onDeleteTask={props.onDeleteTask}
                         onCancelTask={props.onCancelTask}
+                        onStartNow={handleStartNow}
+                        startNowBusyID={startNowBusyID()}
                         canReorder={group.active.filter((item) => item?.task?.status === "queued" && !item?._pending).length > 1}
                         draggingID={draggingID()}
                         dragOverID={dragOverID()}
@@ -793,6 +869,8 @@ export function TaskList(props: TaskListProps) {
                         onSelectTask={props.onSelectTask}
                         onDeleteTask={props.onDeleteTask}
                         onCancelTask={props.onCancelTask}
+                        onStartNow={handleStartNow}
+                        startNowBusyID={startNowBusyID()}
                       />
                     </Show>
                   </div>

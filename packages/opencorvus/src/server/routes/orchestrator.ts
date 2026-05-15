@@ -37,7 +37,7 @@ import {
 } from "@/engine/model"
 import { RewindTaskInput, taskRewindCursor } from "@/engine/rewind"
 import { TaskQueueReorderError } from "@/engine/queue"
-import { ExecutorNotConfiguredError, EngineService, PlannerFailureError } from "@/task-api"
+import { ExecutorNotConfiguredError, EngineService, PlannerFailureError, TaskQueueStartError } from "@/task-api"
 import { ProtocolStore } from "@/protocol/store"
 import { ChannelIngress } from "@/channel/ingress"
 import { Identifier } from "@/id/id"
@@ -69,6 +69,15 @@ const ReorderTaskQueueResult = z.object({
   directory: z.string(),
   revision: z.string(),
   queuedTaskIDs: z.array(z.string()),
+})
+
+const StartQueuedTaskNowResult = z.object({
+  task: Task,
+  directory: z.string(),
+  status: z.string(),
+  started: z.boolean(),
+  queuedTaskIDs: z.array(z.string()),
+  blockingTask: Task.optional(),
 })
 
 const TaskBindingList = z.array(
@@ -217,6 +226,37 @@ export const EngineRoutes = lazy(() =>
         } catch (error) {
           if (error instanceof TaskQueueReorderError) {
             throw new HTTPException(error.code === "conflict" ? 409 : 422, { message: error.message })
+          }
+          throw error
+        }
+      },
+    )
+    .post(
+      "/task/:taskID/start-now",
+      describeRoute({
+        summary: "Promote a queued task and attempt to start it",
+        operationId: "task.queue.startNow",
+        responses: {
+          200: {
+            description: "Queued task promoted and scheduler invoked",
+            content: {
+              "application/json": {
+                schema: resolver(StartQueuedTaskNowResult),
+              },
+            },
+          },
+          409: { description: "Task is not queued" },
+          422: { description: "Task has no working directory" },
+          ...errors(404),
+        },
+      }),
+      validator("param", z.object({ taskID: Task.shape.id })),
+      async (c) => {
+        try {
+          return c.json(await EngineService.startQueuedTaskNow(c.req.valid("param").taskID))
+        } catch (error) {
+          if (error instanceof TaskQueueStartError) {
+            throw new HTTPException(error.code === "not_queued" ? 409 : 422, { message: error.message })
           }
           throw error
         }

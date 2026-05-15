@@ -46,7 +46,7 @@ import {
   selectTask,
   submitMessage,
 } from "../services/task"
-import { reorderTaskQueue } from "../services/task-queue"
+import { reorderTaskQueue, startQueuedTaskNow } from "../services/task-queue"
 import {
   decomposeRequirement,
   loadChannelList,
@@ -395,6 +395,15 @@ export function Gateway() {
     })
   }
 
+  async function handleStartQueuedTask(item: any): Promise<void> {
+    const taskID = String(item?.task?.id ?? "")
+    if (!taskID) return
+    await withBusy(`start:${taskID}`, async () => {
+      await startQueuedTaskNow(taskID)
+      await loadTasks()
+    })
+  }
+
   const counts = createMemo(() => {
     const list = visibleTasks()
     let active = 0
@@ -576,6 +585,7 @@ export function Gateway() {
           canMoveUp={canMoveUp}
           canMoveDown={canMoveDown}
           onMoveTask={(item, direction) => void moveQueuedTask(item, direction)}
+          onStartTask={(item) => void handleStartQueuedTask(item)}
           onSelectTask={(id) => {
             setMessageNotice(null)
             void selectTask(id)
@@ -790,6 +800,7 @@ function GatewayTaskLedger(props: {
   canMoveUp: (item: any) => boolean
   canMoveDown: (item: any) => boolean
   onMoveTask: (item: any, direction: -1 | 1) => void
+  onStartTask: (item: any) => void
   onSelectTask: (id: string) => void
   onCancelTask: (id: string) => void
   onRetryTask: (id: string) => void
@@ -912,6 +923,7 @@ function GatewayTaskLedger(props: {
                 canMoveDown={props.canMoveDown(item)}
                 onMoveUp={() => props.onMoveTask(item, -1)}
                 onMoveDown={() => props.onMoveTask(item, 1)}
+                onStartNow={() => props.onStartTask(item)}
                 actionBusy={props.actionBusy}
                 onSelectTask={props.onSelectTask}
                 onCancelTask={props.onCancelTask}
@@ -934,6 +946,7 @@ function GatewayLedgerRow(props: {
   canMoveDown: boolean
   onMoveUp: () => void
   onMoveDown: () => void
+  onStartNow: () => void
   actionBusy: string
   onSelectTask: (id: string) => void
   onCancelTask: (id: string) => void
@@ -947,6 +960,7 @@ function GatewayLedgerRow(props: {
   const updatedAt = () =>
     Number(props.item?.updated_at ?? props.item?.task?.time?.updated ?? props.item?.task?.time?.created ?? 0)
   const canCancel = () => INTERRUPTABLE_STATUSES.has(status())
+  const canStartNow = () => status() === "queued"
   const canRetry = () => status() === "failed" || status() === "completed" || status() === "cancelled"
   const canDelete = () => !INTERRUPTABLE_STATUSES.has(status())
   const isBusy = (key: string) => props.actionBusy === `${key}:${id()}`
@@ -1038,6 +1052,25 @@ function GatewayLedgerRow(props: {
             }}
           >
             <Icon name="chevron-down" size={11} />
+          </Button>
+        </Show>
+        <Show when={canStartNow()}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            tone="accent"
+            data-ui="gateway-ledger-start-now"
+            data-task-id={id()}
+            disabled={isBusy("start")}
+            title={t("gateway.ledger.action.start_now")}
+            aria-label={t("gateway.ledger.action.start_now")}
+            onClick={(e) => {
+              e.stopPropagation()
+              props.onStartNow()
+            }}
+          >
+            <Icon name="send" size={11} />
           </Button>
         </Show>
         <Show when={canCancel()}>
