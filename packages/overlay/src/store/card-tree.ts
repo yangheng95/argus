@@ -236,6 +236,10 @@ export interface CardTreeStore {
   order: string[];
   /** Every card by id, flat. Includes cards referenced from any `childIDs`. */
   cards: Record<string, CardNode>;
+  /** Monotonic transcript-generation counter. Increments only when the whole
+   *  visible tree is replaced, so scroll owners can drop follow-lock from the
+   *  previous transcript instance without guessing from DOM emptiness. */
+  treeEpoch: number;
   /** Monotonic visible-content version. The conversation scroll owner reads
    *  this single signal instead of observing rendered DOM mutations. */
   visibleVersion: number;
@@ -249,9 +253,14 @@ export interface CardTreeStore {
 export const [cardTreeStore, setCardTreeStore] = createStore<CardTreeStore>({
   order: [],
   cards: {},
+  treeEpoch: 0,
   visibleVersion: 0,
   rewindCursor: null,
 });
+
+export function markCardTreeReplaced(): void {
+  setCardTreeStore("treeEpoch", (epoch) => epoch + 1);
+}
 
 export function markCardTreeVisibleChanged(): void {
   setCardTreeStore("visibleVersion", (version) => version + 1);

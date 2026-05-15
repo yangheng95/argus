@@ -21,6 +21,7 @@ import { batch, createEffect } from "solid-js";
 import { produce } from "solid-js/store";
 import {
   cardTreeStore,
+  markCardTreeReplaced,
   markCardTreeVisibleChanged,
   setCardTreeStore,
   type CardNode,
@@ -191,6 +192,7 @@ export function resetWriter(): void {
       for (const k of Object.keys(c)) delete c[k];
     }),
   );
+  markCardTreeReplaced();
   markCardTreeVisibleChanged();
 }
 
