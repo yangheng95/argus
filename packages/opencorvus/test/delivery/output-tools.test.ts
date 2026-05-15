@@ -115,7 +115,7 @@ describe("delivery output tools", () => {
     expect(DeliveryVerdict.parse(kit.getCollector().verdict).verdict).toBe("accepted")
   })
 
-  test("rejects accepted verdict while manifest gate is failed", async () => {
+  test("allows accepted verdict payload after initial manifest gate failure so service can re-arbitrate fresh evidence", async () => {
     const kit = createDeliveryOutputTools({
       manifestGate: {
         status: "failed",
@@ -123,13 +123,13 @@ describe("delivery output tools", () => {
       },
     })
 
-    const rejected = await kit.tools.submit_verdict.execute!(acceptedBase, {} as any)
+    const accepted = await kit.tools.submit_verdict.execute!(acceptedBase, {} as any)
 
-    expect(rejected).toContain("host hard gate")
-    expect(kit.getCollector().finalized).toBe(false)
+    expect(accepted).toContain("verdict=accepted")
+    expect(kit.getCollector().finalized).toBe(true)
   })
 
-  test("rejects accepted verdict while runtime or visual host gate failed", async () => {
+  test("allows accepted verdict payload after initial runtime or visual host gate failure so service can re-arbitrate fresh evidence", async () => {
     const kit = createDeliveryOutputTools({
       hostGateFailures: [{
         kind: "runtime",
@@ -138,10 +138,10 @@ describe("delivery output tools", () => {
       }],
     })
 
-    const rejected = await kit.tools.submit_verdict.execute!(acceptedBase, {} as any)
+    const accepted = await kit.tools.submit_verdict.execute!(acceptedBase, {} as any)
 
-    expect(rejected).toContain("runtime:runtime-evidence")
-    expect(kit.getCollector().finalized).toBe(false)
+    expect(accepted).toContain("verdict=accepted")
+    expect(kit.getCollector().finalized).toBe(true)
   })
 
   test("derives no runtime facets for docs-only delivery", () => {

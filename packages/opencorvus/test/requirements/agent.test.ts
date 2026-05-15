@@ -10,6 +10,8 @@ import { RequirementsSubmitSchema } from "../../src/requirements/output-tools"
 let runnerImpl: ((input: any) => Promise<any>) | undefined
 
 mock.module("@/agent/runner", () => ({
+  messageHasInformationMissing: () => false,
+  extractInformationMissingBlock: () => null,
   runAgentSession: (input: any) => {
     if (!runnerImpl) throw new Error("runAgentSession mock not configured")
     return runnerImpl(input)

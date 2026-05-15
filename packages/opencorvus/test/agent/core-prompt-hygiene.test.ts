@@ -175,6 +175,8 @@ describe("core prompt hygiene", () => {
     expect(build).toContain("mkdir -p")
     expect(build).toContain("PowerShell-native commands")
     expect(build).toContain("unverified Unix-only helpers")
+    expect(build).toContain("Commit your work to the worktree branch when you changed project files")
+    expect(build).toContain("first `git add -A`, then `git commit -m")
   })
 
   test("build prompt requires explicit browser dev scripts for delivery preview", async () => {
@@ -240,6 +242,22 @@ describe("core prompt hygiene", () => {
     expect(requirements).toContain("compact capability catalog")
     expect(requirements).not.toContain("Every distinct user-facing need is one REQ-N")
     expect(requirements).not.toContain("TypeScript types for the Stock entity")
+  })
+
+  test("requirements prompt calibrates scope without becoming architect decomposition", async () => {
+    const requirements = await readPrompt("requirements")
+    const normalized = requirements.replace(/\s+/g, " ")
+
+    expect(requirements).toContain("calibrate scope")
+    expect(requirements).toContain("affected_modules")
+    expect(requirements).toContain("affected_concepts")
+    expect(requirements).toContain("impact_size")
+    expect(requirements).toContain("Calibrate scope before finalize")
+    expect(normalized).toContain("Likely affected modules/surfaces and concepts needed to calibrate requirement scope")
+    expect(normalized).toContain("use this to catch missing implicit REQs, not to design goals")
+    expect(normalized).toContain("This calibration is not goal decomposition")
+    expect(normalized.toLowerCase()).toContain("do not produce goals, owned paths, acceptance specs, dependency contracts, or implementation plans here")
+    expect(normalized).toContain("Minimum: runtime + one framework + test_framework + affected_modules + affected_concepts + impact_size")
   })
 
   test("delivery prompt matches DeliveryVerdict schema single-source fields", async () => {

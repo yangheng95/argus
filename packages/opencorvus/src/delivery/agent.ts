@@ -3,11 +3,12 @@
  * verification of the delivered application, including starting the server/client,
  * checking frontend rendering, and reporting any bugs discovered during verification.
  *
- * The DeliveryAgent is review-only. It can:
+ * The DeliveryAgent is a verifier with a narrow final-repair lane. It can:
  * 1. Start the application (server, client, or both)
  * 2. Verify frontend rendering and runtime behavior
- * 3. Produce concrete rejection evidence for orchestrator retry/replan
- * 4. Make a final acceptance decision before publishing
+ * 3. Fix simple localized errors that can be re-verified immediately
+ * 4. Produce concrete rejection evidence for orchestrator retry/replan
+ * 5. Make a final acceptance decision before publishing
  */
 import { createDeliveryTools } from "./tools"
 import { createDeliveryOutputTools } from "./output-tools"
@@ -446,10 +447,11 @@ function buildUserPrompt(
     "IMPORTANT: You MUST verify the application works end-to-end.\n" +
       "1. Inspect whether the delivered implementation actually satisfies the task and acceptance specs\n" +
       "2. Verify the applicable runtime, output, interface, data, or presentation surface requested by the task\n" +
-      "3. If completion is already missing, reject with concrete evidence and skip broad auxiliary commands\n" +
-      "4. Run build/typecheck/lint/test/configured verification only after completion checks have not failed\n" +
-      "5. Attribute every rejection to the responsible goal when identifiable\n" +
-      "6. Produce your semantic verdict for the host delivery arbiter without editing project files",
+      "3. If a failure is simple, localized, and immediately verifiable, repair it and rerun the focused check\n" +
+      "4. If completion is missing in a broad or uncertain way, reject with concrete evidence and skip broad auxiliary commands\n" +
+      "5. Run build/typecheck/lint/test/configured verification only after completion checks have not failed\n" +
+      "6. Attribute every rejection to the responsible goal when identifiable\n" +
+      "7. Produce your semantic verdict for the host delivery arbiter",
   )
 
   const notice = budget.renderNotice()

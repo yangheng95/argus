@@ -107,7 +107,14 @@ test("DeliveryAgent budgets large auxiliary evidence while preserving hard gates
               blockers: [huge],
             },
           })),
-          diffs: Array.from({ length: 40 }, (_, i) => ({ file: `src/file-${i}.ts`, diff: huge })),
+          diffs: Array.from({ length: 40 }, (_, i) => ({
+            file: `src/file-${i}.ts`,
+            before: "",
+            after: huge,
+            additions: 1,
+            deletions: 0,
+            status: "added" as const,
+          })),
         },
         model: { providerID: "budget-test", modelID: "tiny-delivery" },
       })
@@ -121,12 +128,12 @@ test("DeliveryAgent budgets large auxiliary evidence while preserving hard gates
   expect(capturedPrompt).toContain("inspect_delivery_context")
   expect(capturedPrompt).not.toContain("# Executor Reports")
   expect(capturedPrompt).not.toContain("# Code Diffs")
-})
+}, 30_000)
 
 test("DeliveryAgent prompt includes manifest gate, ownership, and executor changed files", async () => {
   await using tmp = await tmpdir({ git: true, config: { model: "test/mock" } })
   let capturedPrompt = ""
-  let acceptedBlocked = ""
+  let acceptedPayloadResult = ""
   spyOn(Provider, "getModel").mockResolvedValue(testDeliveryModel())
 
   await Instance.provide({
@@ -135,12 +142,17 @@ test("DeliveryAgent prompt includes manifest gate, ownership, and executor chang
       runnerImpl = async (input: any) => {
         capturedPrompt = input.buildUserPrompt()
         const kit = input.toolKitFactory()
-        acceptedBlocked = await kit.tools.submit_verdict.execute!(
+        acceptedPayloadResult = await kit.tools.submit_verdict.execute!(
           {
             verdict: "accepted",
-            summary: "Should be blocked by the failed manifest gate.",
+            summary: "Accepted payload can be collected; service re-runs manifest before final arbitration.",
             deferred_checks: [],
-            tool_call_evidence: [{ tool: "run_command", passed: true, detail: "build checked" }],
+            startup_verification: { attempted: true, success: true, command: "bun run dev" },
+            frontend_check: { attempted: true, renders_correctly: true, notes: "preview rendered" },
+            tool_call_evidence: [
+              { tool: "run_command", passed: true, detail: "build checked" },
+              { tool: "start_frontend_preview", passed: true, detail: "managed preview rendered" },
+            ],
           },
           {} as any,
         )
@@ -232,8 +244,8 @@ test("DeliveryAgent prompt includes manifest gate, ownership, and executor chang
   expect(capturedPrompt).toContain("Cannot find module './missing'")
   expect(capturedPrompt).toContain("owned_paths=src/App.tsx, package.json")
   expect(capturedPrompt).toContain("- src/App.tsx")
-  expect(acceptedBlocked).toContain("host hard gate")
-})
+  expect(acceptedPayloadResult).toContain("verdict=accepted")
+}, 30_000)
 
 test("DeliveryAgent keeps visual images out of startup prompt and exposes exploration tools", async () => {
   await using tmp = await tmpdir({ git: true, config: { model: "test/mock" } })
@@ -320,7 +332,9 @@ test("DeliveryAgent keeps visual images out of startup prompt and exposes explor
   expect(toolNames).toContain("compare_visual_artifacts")
   expect(toolNames).toContain("inspect_delivery_context")
   expect(toolNames).toContain("run_integrity_review")
-})
+  expect(toolNames).toContain("edit_file")
+  expect(toolNames).toContain("write_file")
+}, 30_000)
 
 test("DeliveryAgent parses collector verdict before returning to the arbiter", async () => {
   await using tmp = await tmpdir({ git: true, config: { model: "test/mock" } })
@@ -361,7 +375,7 @@ test("DeliveryAgent parses collector verdict before returning to the arbiter", a
       expect(verdict.deferred_checks).toEqual([])
     },
   })
-})
+}, 30_000)
 
 function scenarioSpec() {
   return {

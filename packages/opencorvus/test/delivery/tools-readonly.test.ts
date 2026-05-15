@@ -20,16 +20,16 @@ afterEach(async () => {
   await resetDatabase()
 })
 
-describe("delivery review-only tool surface", () => {
-  test("does not expose file mutation tools", async () => {
+describe("delivery bounded repair tool surface", () => {
+  test("exposes bounded file mutation tools", async () => {
     const dir = await mkdtemp(path.join(os.tmpdir(), "opencorvus-delivery-readonly-"))
     try {
       await Instance.provide({
         directory: dir,
         fn: () => {
           const tools = createDeliveryTools({ taskID: "tsk_readonly" })
-          expect(Object.keys(tools)).not.toContain("write_file")
-          expect(Object.keys(tools)).not.toContain("edit_file")
+          expect(Object.keys(tools)).toContain("write_file")
+          expect(Object.keys(tools)).toContain("edit_file")
           expect(Object.keys(tools)).toContain("run_command")
           expect(Object.keys(tools)).toContain("start_frontend_preview")
           expect(Object.keys(tools)).toContain("screenshot")
@@ -44,21 +44,59 @@ describe("delivery review-only tool surface", () => {
     }
   })
 
-  test("core prompt routes repair through rejection instead of file edits", async () => {
+  test("edit_file applies localized project repairs and blocks path escapes", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "opencorvus-delivery-repair-"))
+    try {
+      await fs.mkdir(path.join(dir, "src"), { recursive: true })
+      await fs.writeFile(path.join(dir, "src", "app.ts"), "import './missing'\nconsole.log('ok')\n")
+      await Instance.provide({
+        directory: dir,
+        fn: async () => {
+          const tools = createDeliveryTools({ taskID: "tsk_repair" })
+          const output = await tools.edit_file.execute!(
+            {
+              path: "src/app.ts",
+              old_text: "import './missing'",
+              new_text: "import './present'",
+              replace_all: false,
+            },
+            {} as any,
+          ) as string
+
+          expect(output).toContain("delivery repair updated src/app.ts")
+          expect(await fs.readFile(path.join(dir, "src", "app.ts"), "utf-8")).toContain("import './present'")
+
+          await expect(tools.edit_file.execute!(
+            {
+              path: "../outside.ts",
+              old_text: "x",
+              new_text: "y",
+              replace_all: false,
+            },
+            {} as any,
+          )).rejects.toThrow("escapes the project root")
+        },
+      })
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  test("core prompt treats delivery as limited repair plus gate", async () => {
     const prompt = await Bun.file(
       path.join(repoRoot, "packages/opencorvus/src/prompt/core/delivery-core.txt"),
     ).text()
 
-    expect(prompt).toContain("review-only acceptance gate")
-    expect(prompt).toContain("MUST NOT edit the deliverable")
+    expect(prompt).toContain("limited final repairer")
+    expect(prompt).toContain("simple localized")
+    expect(prompt).toContain("edit_file")
+    expect(prompt).toContain("write_file")
     expect(prompt).toContain("orchestrator can send the affected goal(s) back")
     expect(prompt).toContain("start_frontend_preview")
     expect(prompt).toContain("run_integrity_review")
     expect(prompt).toContain("suspicion-triggered semantic integrity review")
     expect(prompt).toContain("publishes the ready URL to the Overlay")
     expect(prompt).toContain("Orchestrator is the only agent allowed")
-    expect(prompt).not.toContain("write_file")
-    expect(prompt).not.toContain("edit_file")
     expect(prompt).not.toContain("submit_next_task")
     expect(prompt).not.toContain("Fix aggressively")
     expect(prompt).not.toContain(" or criteria")

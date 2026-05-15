@@ -231,10 +231,10 @@ export namespace Agent {
         // registry to runtime state (CLAUDE.md rule 26), so we keep both
         // in sync by convention.
         steps: 1000,
-        // Delivery is review-only. Registry tools include mutation-capable
-        // surfaces (`edit`, `write`, `apply_patch`, `bash`, `task`) that bypass
-        // the delivery-specific read-only contract, so this stage exposes no
-        // registry tools. Its review and output tools are injected by
+        // Delivery has a bounded final-repair lane. Registry mutation tools
+        // (`edit`, `write`, `apply_patch`, `bash`, `task`) are too broad for
+        // that lane, so this stage exposes no registry tools. Its review,
+        // bounded repair, and output tools are injected by
         // DeliveryAgent.verify via SessionLoop extra tools.
         tools: { include: [] as string[] },
         // Permission remains merged for consistency with the shared Agent.Info

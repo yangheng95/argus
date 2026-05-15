@@ -265,7 +265,34 @@ export namespace DeliveryService {
       throw new DeliveryFailureError("delivery agent failed", { cause: error })
     }
 
-    const decision = arbitrateDeliveryVerdict({ manifest, goalIds, llmVerdict, runtimeReport, visualMetric })
+    // Delivery can now make narrow final repairs. The manifest shown to the
+    // agent is still useful evidence, but an accepted verdict must arbitrate
+    // against a fresh manifest so pre-repair build/runtime/check failures do
+    // not mask a verified simple fix.
+    let finalManifest = manifest
+    if (llmVerdict.verdict === "accepted") {
+      try {
+        finalManifest = await buildDeliveryEvidenceManifest({
+          taskID: input.task.id,
+          runID: input.runID,
+          deliveryID: input.deliveryID,
+          specSnapshotID: input.specSnapshotID,
+          iteration: input.iteration,
+          changedFiles: input.delivery.changedFiles,
+          taskRequest: input.task.request,
+          metadata: input.task.metadata,
+          goals: input.goals,
+          criteriaResults: input.criteriaResults ?? [],
+        })
+        persistDeliveryEvidenceManifest({ manifest: finalManifest })
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        log.error("post-repair delivery evidence manifest raised", { title: input.task.title, error: msg })
+        throw new DeliveryFailureError(`post-repair delivery evidence manifest crashed: ${msg}`, { cause: err })
+      }
+    }
+
+    const decision = arbitrateDeliveryVerdict({ manifest: finalManifest, goalIds, llmVerdict, runtimeReport, visualMetric })
     if (!decision) throw new DeliveryFailureError("delivery arbiter did not decide final verdict")
     const finalVerdict = decision.verdict
 

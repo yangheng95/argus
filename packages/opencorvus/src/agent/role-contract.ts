@@ -68,7 +68,7 @@ export namespace AgentRoleContract {
     },
     delivery: {
       id: "delivery",
-      description: "Delivery agent. Submits semantic accept/reject judgments from delivery evidence; deterministic arbiter finalizes the delivery-stage verdict.",
+      description: "Delivery agent. Performs delivery evidence review, bounded simple repairs, and semantic accept/reject judgments; deterministic arbiter finalizes the delivery-stage verdict.",
       promptEditable: true,
       defaultPromptRequired: true,
     },
