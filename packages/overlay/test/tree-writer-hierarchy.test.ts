@@ -8,7 +8,7 @@ if (typeof globalThis.requestAnimationFrame === "undefined") {
 }
 
 const { setBoardStore } = await import("../src/store/board");
-const { applyEvent, flushBufferedPartDeltas, resetWriter } = await import("../src/services/tree-writer");
+const { applyEvent, flushBufferedPartDeltas, resetWriter, hydrateConversationView } = await import("../src/services/tree-writer");
 const { cardTreeStore } = await import("../src/store/card-tree");
 const { statusBadge } = await import("../src/utils/status-badge");
 const { replay } = await import("./fixtures/replay");
@@ -68,13 +68,14 @@ test("phase cards absorb goal-scoped session parts — no nested session cards",
   const planPhaseID = `${stepCardID}:phase:plan`;
   const buildPhaseID = `${stepCardID}:phase:build`;
 
-  const executorCardID = `executor:session:${EXECUTOR_SID}`;
-  const buildWorkerCardID = `build:session:${BUILD_SID}`;
-  const plannerCardID = `planner:session:${PLANNER_SID}`;
-  const requirementsCardID = `requirements:session:${REQUIREMENTS_SID}`;
-  const designCardID = `design-analyst:session:${DESIGN_SID}`;
-  const architectCardID = `architect:session:${ARCHITECT_SID}`;
-  const rootCardID = `assistant:session:${ROOT_SID}`;
+  // One real message turn = one card: `<stage>:session:<sid>:message:<mid>`.
+  const executorCardID = `executor:session:${EXECUTOR_SID}:message:msg_exec_1`;
+  const buildWorkerCardID = `build:session:${BUILD_SID}:message:msg_build_1`;
+  const plannerCardID = `planner:session:${PLANNER_SID}:message:msg_planner_1`;
+  const requirementsCardID = `requirements:session:${REQUIREMENTS_SID}:message:msg_requirements_1`;
+  const designCardID = `design-analyst:session:${DESIGN_SID}:message:msg_design_1`;
+  const architectCardID = `architect:session:${ARCHITECT_SID}:message:msg_architect_1`;
+  const rootCardID = `assistant:session:${ROOT_SID}:message:msg_orch_1`;
 
   // Step card exists and has the two phase cards in order — no session
   // cards between step and phase.
@@ -149,7 +150,7 @@ test("executor sessions surface when they contain visible reasoning", () => {
   setBoardStore("selectedTaskID", TASK_ID);
   resetWriter();
 
-  const executorCardID = `executor:session:${EXECUTOR_SID}`;
+  const executorCardID = `executor:session:${EXECUTOR_SID}:message:msg_executor_reasoning`;
   const reasoningPartID = "part_executor_reasoning";
   applyEvent({
     type: "message.updated",
@@ -250,8 +251,8 @@ test("non-goal sub-agent sessions surface at top level, not under their parent s
     },
   });
 
-  const rootCardID = `assistant:session:${ROOT_SID}`;
-  const architectCardID = "architect:session:ses_architect";
+  const rootCardID = `assistant:session:${ROOT_SID}:message:msg_root`;
+  const architectCardID = "architect:session:ses_architect:message:msg_architect";
 
   expect(cardTreeStore.order).toContain(rootCardID);
   expect(cardTreeStore.order).toContain(architectCardID);
@@ -304,7 +305,7 @@ test("follow-up user sessions render as plain user bubbles without boundary chro
     },
   });
 
-  const userCardID = `user:session:${USER_SID}`;
+  const userCardID = `user:session:${USER_SID}:message:msg_user_followup`;
   const userCard = cardTreeStore.cards[userCardID];
 
   expect(userCard).toBeDefined();
@@ -430,7 +431,7 @@ test("tree-writer projects interactions into session children and top-level card
     },
   });
 
-  const rootCardID = `assistant:session:${ROOT_SID}`;
+  const rootCardID = `assistant:session:${ROOT_SID}:message:msg_root_interaction`;
   const claimedCardID = "interaction-card:ctx:interaction:int_claimed";
   const orphanCardID = "interaction-card:ctx:interaction:int_orphan";
 
@@ -481,7 +482,7 @@ test("root assistant session with parentSessionID pointing to task-virtual root 
     },
   });
 
-  const rootCardID = `assistant:session:${ROOT_ASSISTANT_SID}`;
+  const rootCardID = `assistant:session:${ROOT_ASSISTANT_SID}:message:msg_root`;
   expect(cardTreeStore.cards[rootCardID]).toBeDefined();
   expect(cardTreeStore.order).toContain(rootCardID);
 });
@@ -521,11 +522,12 @@ test("channel-stamped part.updated materializes the correct session card immedia
     },
   });
 
+  const plannerRaceCardID = "planner:session:ses_race:message:msg_race";
   expect(cardTreeStore.cards["pending:session:ses_race"]).toBeUndefined();
-  expect(cardTreeStore.cards["planner:session:ses_race"]).toBeDefined();
-  expect(cardTreeStore.order).toContain("planner:session:ses_race");
+  expect(cardTreeStore.cards[plannerRaceCardID]).toBeDefined();
+  expect(cardTreeStore.order).toContain(plannerRaceCardID);
 
-  // Once message.updated arrives, the same planner session card stays put.
+  // Once message.updated arrives, the same planner turn card stays put.
   applyEvent({
     type: "message.updated",
     properties: {
@@ -556,14 +558,14 @@ test("channel-stamped part.updated materializes the correct session card immedia
     },
   });
 
-  const rootCardID = `assistant:session:${ROOT_SID}`;
+  const rootCardID = `assistant:session:${ROOT_SID}:message:msg_root`;
   expect(cardTreeStore.cards["pending:session:ses_race"]).toBeUndefined();
-  expect(cardTreeStore.cards["planner:session:ses_race"]).toBeDefined();
+  expect(cardTreeStore.cards[plannerRaceCardID]).toBeDefined();
   expect(cardTreeStore.order).toContain(rootCardID);
   // Planner is now a top-level sibling of the root assistant, not a child.
-  expect(cardTreeStore.order).toContain("planner:session:ses_race");
+  expect(cardTreeStore.order).toContain(plannerRaceCardID);
   expect(cardTreeStore.cards[rootCardID]?.childIDs || []).not.toContain(
-    "planner:session:ses_race",
+    plannerRaceCardID,
   );
 });
 
@@ -756,6 +758,54 @@ test("integrity progress no longer writes elapsed string into subtitle", () => {
   expect(afterRetry.time).toBe(1_776_000_001_000);
 });
 
+test("integrity reasoning chunks append byte-identical text without changing the rendered part shape", () => {
+  resetWriter();
+  setBoardStore("board", {
+    task: {
+      id: TASK_ID,
+      status: "active",
+      request: "integrity reasoning streaming",
+      sessionID: ROOT_SID,
+      time: { created: 1_776_000_000_000 },
+      attachments: [],
+    },
+    goalWorkflows: [],
+    interactions: [],
+  });
+  setBoardStore("selectedTaskID", TASK_ID);
+
+  applyEvent({
+    type: "integrity.review.started",
+    emittedAt: 1_776_000_001_000,
+    properties: { taskID: TASK_ID, sessionID: INTEGRITY_SID },
+  });
+
+  for (const delta of ["plan ", "then ", "verify"]) {
+    applyEvent({
+      type: "integrity.review.chunk",
+      emittedAt: 1_776_000_001_100,
+      properties: {
+        taskID: TASK_ID,
+        sessionID: INTEGRITY_SID,
+        kind: "reasoning",
+        attempt: 1,
+        delta,
+      },
+    });
+  }
+
+  const integrityCardID = `integrity:session:${INTEGRITY_SID}`;
+  const part = cardTreeStore.cards[integrityCardID]?.parts.find((entry: any) =>
+    entry?.partID === `integrity:${INTEGRITY_SID}:reasoning:1`
+  );
+  expect(part).toEqual({
+    type: "reasoning",
+    partID: `integrity:${INTEGRITY_SID}:reasoning:1`,
+    text: "plan then verify",
+  });
+  expect(String(part?.text || "")).toBe("plan then verify");
+});
+
 test("resetWriter clears integrity session cards materialized from protocol events", () => {
   resetWriter();
   setBoardStore("board", {
@@ -853,7 +903,7 @@ test("session.status preserves terminal reason when status arrives before the ca
     },
   });
 
-  const card = cardTreeStore.cards["requirements:session:ses_pending_terminal"]!;
+  const card = cardTreeStore.cards["requirements:session:ses_pending_terminal:message:msg_pending_terminal"]!;
   expect(card.status).toBe("error");
   expect(card.terminalReason).toBe("aborted");
   expect(card.timeCompleted).toBe(1_776_000_010_000);
@@ -896,9 +946,198 @@ test("session.error marks the session card with the original stream error", () =
     },
   });
 
-  const card = cardTreeStore.cards["design-analyst:session:ses_stream_error"]!;
+  const card = cardTreeStore.cards["design-analyst:session:ses_stream_error:message:msg_stream_error"]!;
   expect(card.status).toBe("error");
   expect(card.terminalReason).toBe("error");
   expect(card.errorReason).toBe("upstream closed while starting tool call");
   expect(card.timeCompleted).toBe(1_776_000_010_000);
+});
+
+// ── Message-turn cards (2026-05-16) ──
+//
+// A long-lived orchestrator session emits a fresh real message every time
+// it resumes. Each must become its own top-level card so later turns sort
+// AFTER the child agent cards that ran in between, instead of back-filling
+// the earliest card.
+
+function seedTurnBoard(request: string): void {
+  setBoardStore("board", {
+    task: {
+      id: TASK_ID,
+      status: "active",
+      request,
+      sessionID: ROOT_SID,
+      time: { created: 1_776_000_000_000 },
+      attachments: [],
+    },
+    goalWorkflows: [],
+    interactions: [],
+  });
+  setBoardStore("selectedTaskID", TASK_ID);
+  resetWriter();
+}
+
+test("orchestrator turns interleave with child agent cards by message time", () => {
+  seedTurnBoard("interleave turns");
+
+  const o1 = `assistant:session:${ROOT_SID}:message:msg_o1`;
+  const childCard = "architect:session:ses_child:message:msg_child";
+  const o2 = `assistant:session:${ROOT_SID}:message:msg_o2`;
+
+  applyEvent({ type: "message.updated", properties: { taskID: TASK_ID, info: stampedInfo("assistant", {
+    id: "msg_o1", sessionID: ROOT_SID, role: "assistant", resolvedRole: "assistant", agent: "assistant",
+    time: { created: 1_776_000_000_100 } }) } });
+  applyEvent({ type: "message.part.updated", properties: { taskID: TASK_ID, part: stampedPart("assistant", {
+    id: "prt_o1", messageID: "msg_o1", sessionID: ROOT_SID, type: "text", text: "turn one" }) } });
+
+  applyEvent({ type: "message.updated", properties: { taskID: TASK_ID, info: stampedInfo("architect", {
+    id: "msg_child", sessionID: "ses_child", role: "assistant", resolvedRole: "architect", agent: "architect",
+    parentSessionID: ROOT_SID, time: { created: 1_776_000_000_200 } }) } });
+
+  applyEvent({ type: "message.updated", properties: { taskID: TASK_ID, info: stampedInfo("assistant", {
+    id: "msg_o2", sessionID: ROOT_SID, role: "assistant", resolvedRole: "assistant", agent: "assistant",
+    time: { created: 1_776_000_000_300 } }) } });
+  applyEvent({ type: "message.part.updated", properties: { taskID: TASK_ID, part: stampedPart("assistant", {
+    id: "prt_o2", messageID: "msg_o2", sessionID: ROOT_SID, type: "text", text: "turn two" }) } });
+
+  const ordered = cardTreeStore.order.filter((id) => id === o1 || id === childCard || id === o2);
+  expect(ordered).toEqual([o1, childCard, o2]);
+
+  const o1Texts = (cardTreeStore.cards[o1]?.parts || []).map((p: any) => p.text);
+  expect(o1Texts).toContain("turn one");
+  expect(o1Texts).not.toContain("turn two");
+  expect((cardTreeStore.cards[o2]?.parts || []).map((p: any) => p.text)).toContain("turn two");
+
+  expect(cardTreeStore.cards[o1]?.status).toBe("completed");
+  expect(cardTreeStore.cards[o2]?.status).toBe("running");
+  expect(cardTreeStore.cards[o2]?.sessionID).toBe(ROOT_SID);
+  expect(cardTreeStore.cards[o2]?.messageID).toBe("msg_o2");
+});
+
+test("interaction remains attached to the turn active at interaction time", () => {
+  setBoardStore("board", {
+    task: {
+      id: TASK_ID,
+      status: "active",
+      request: "interaction turn ownership",
+      sessionID: ROOT_SID,
+      time: { created: 1_776_000_000_000 },
+      attachments: [],
+    },
+    goalWorkflows: [],
+    interactions: [
+      {
+        id: "int_turn_owner",
+        sessionID: ROOT_SID,
+        type: "permission",
+        status: "pending",
+        title: "Need approval",
+        body: "Allow this turn?",
+        time: { created: 1_776_000_000_150 },
+      },
+    ],
+  });
+  setBoardStore("selectedTaskID", TASK_ID);
+  resetWriter();
+
+  const o1 = `assistant:session:${ROOT_SID}:message:msg_i1`;
+  const o2 = `assistant:session:${ROOT_SID}:message:msg_i2`;
+  const interactionCardID = "interaction-card:ctx:interaction:int_turn_owner";
+
+  applyEvent({ type: "message.updated", properties: { taskID: TASK_ID, info: stampedInfo("assistant", {
+    id: "msg_i1", sessionID: ROOT_SID, role: "assistant", resolvedRole: "assistant", agent: "assistant",
+    time: { created: 1_776_000_000_100 } }) } });
+  applyEvent({ type: "message.updated", properties: { taskID: TASK_ID, info: stampedInfo("assistant", {
+    id: "msg_i2", sessionID: ROOT_SID, role: "assistant", resolvedRole: "assistant", agent: "assistant",
+    time: { created: 1_776_000_000_300 } }) } });
+
+  expect(cardTreeStore.cards[o1]?.childIDs || []).toContain(interactionCardID);
+  expect(cardTreeStore.cards[o2]?.childIDs || []).not.toContain(interactionCardID);
+});
+
+test("late part.delta lands on the original turn card after a newer message starts", () => {
+  seedTurnBoard("late delta");
+
+  const o1 = `assistant:session:${ROOT_SID}:message:msg_d1`;
+  const o2 = `assistant:session:${ROOT_SID}:message:msg_d2`;
+
+  applyEvent({ type: "message.updated", properties: { taskID: TASK_ID, info: stampedInfo("assistant", {
+    id: "msg_d1", sessionID: ROOT_SID, role: "assistant", resolvedRole: "assistant", agent: "assistant",
+    time: { created: 1_776_000_000_100 } }) } });
+  applyEvent({ type: "message.part.updated", properties: { taskID: TASK_ID, part: stampedPart("assistant", {
+    id: "prt_d1", messageID: "msg_d1", sessionID: ROOT_SID, type: "text", text: "" }) } });
+
+  applyEvent({ type: "message.updated", properties: { taskID: TASK_ID, info: stampedInfo("assistant", {
+    id: "msg_d2", sessionID: ROOT_SID, role: "assistant", resolvedRole: "assistant", agent: "assistant",
+    time: { created: 1_776_000_000_200 } }) } });
+  applyEvent({ type: "message.part.updated", properties: { taskID: TASK_ID, part: stampedPart("assistant", {
+    id: "prt_d2", messageID: "msg_d2", sessionID: ROOT_SID, type: "text", text: "" }) } });
+
+  applyEvent({ type: "message.part.delta", properties: { taskID: TASK_ID,
+    partID: "prt_d1", messageID: "msg_d1", sessionID: ROOT_SID, field: "text", delta: "late tail" } });
+  flushBufferedPartDeltas();
+
+  expect((cardTreeStore.cards[o1]?.parts || []).map((p: any) => p.text)).toContain("late tail");
+  expect((cardTreeStore.cards[o2]?.parts || []).map((p: any) => p.text)).not.toContain("late tail");
+});
+
+test("session.status terminal updates only the active turn card", () => {
+  seedTurnBoard("status active only");
+
+  const o1 = `assistant:session:${ROOT_SID}:message:msg_s1`;
+  const o2 = `assistant:session:${ROOT_SID}:message:msg_s2`;
+
+  applyEvent({ type: "message.updated", properties: { taskID: TASK_ID, info: stampedInfo("assistant", {
+    id: "msg_s1", sessionID: ROOT_SID, role: "assistant", resolvedRole: "assistant", agent: "assistant",
+    time: { created: 1_776_000_000_100 } }) } });
+  applyEvent({ type: "message.updated", properties: { taskID: TASK_ID, info: stampedInfo("assistant", {
+    id: "msg_s2", sessionID: ROOT_SID, role: "assistant", resolvedRole: "assistant", agent: "assistant",
+    time: { created: 1_776_000_000_200 } }) } });
+
+  applyEvent({ type: "session.status", emittedAt: 1_776_000_000_300, properties: {
+    sessionID: ROOT_SID, status: { type: "terminal", reason: "completed" } } });
+
+  expect(cardTreeStore.cards[o1]?.status).toBe("completed");
+  expect(cardTreeStore.cards[o1]?.terminalReason).toBeUndefined();
+  expect(cardTreeStore.cards[o2]?.status).toBe("completed");
+  expect(cardTreeStore.cards[o2]?.terminalReason).toBe("completed");
+});
+
+test("hydrate creates one top-level turn card per message — no session aggregation", () => {
+  resetWriter();
+  setBoardStore("board", {
+    task: {
+      id: TASK_ID,
+      status: "active",
+      request: "hydrate multi message",
+      sessionID: ROOT_SID,
+      time: { created: 1_776_000_000_000 },
+      attachments: [],
+    },
+    goalWorkflows: [],
+    interactions: [],
+  });
+  setBoardStore("selectedTaskID", TASK_ID);
+
+  const mk = (id: string, created: number, text: string) => ({
+    info: {
+      id, sessionID: ROOT_SID, role: "assistant", resolvedRole: "assistant",
+      agent: "assistant", channel: "assistant", time: { created },
+    },
+    parts: [{ id: `prt_${id}`, messageID: id, sessionID: ROOT_SID, type: "text", text }],
+  });
+  const transcript = [
+    mk("msg_h1", 1_776_000_000_100, "first turn"),
+    mk("msg_h2", 1_776_000_000_200, "second turn"),
+  ];
+
+  hydrateConversationView({ sessions: [{ sessionID: ROOT_SID, stage: "assistant" }] }, transcript);
+
+  const h1 = `assistant:session:${ROOT_SID}:message:msg_h1`;
+  const h2 = `assistant:session:${ROOT_SID}:message:msg_h2`;
+  expect(cardTreeStore.order).toContain(h1);
+  expect(cardTreeStore.order).toContain(h2);
+  expect(cardTreeStore.cards[h1]?.parts.some((p: any) => p.text === "first turn")).toBe(true);
+  expect(cardTreeStore.cards[h2]?.parts.some((p: any) => p.text === "second turn")).toBe(true);
+  expect(cardTreeStore.cards[`assistant:session:${ROOT_SID}`]).toBeUndefined();
 });

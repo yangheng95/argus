@@ -187,7 +187,7 @@ test("writer applies 1000 reasoning deltas in < 1s total (<1ms/event avg)", () =
   console.log(`[perf] 1000 deltas: ${totalMs.toFixed(1)}ms (${perEventMs.toFixed(3)}ms/event)`);
   expect(totalMs).toBeLessThan(1000);
   // Verify the text actually accumulated — otherwise a no-op writer would "pass"
-  const card = cardTreeStore.cards[`assistant:session:${SID}`];
+  const card = cardTreeStore.cards[`assistant:session:${SID}:message:${MSG_ID}`];
   expect(card).toBeDefined();
   const parts = card!.parts as any[];
   const reasoningPart = parts.find((p) => p.id === PART_ID);
@@ -209,7 +209,7 @@ test("executor reasoning deltas do not rebuild top-level order for every token",
   expect(totalMs).toBeLessThan(750);
   expect(perEventMs).toBeLessThan(0.15);
 
-  const cardID = `executor:session:${EXECUTOR_SID}`;
+  const cardID = `executor:session:${EXECUTOR_SID}:message:${EXECUTOR_MSG_ID}`;
   const card = cardTreeStore.cards[cardID];
   expect(card).toBeDefined();
   expect(cardTreeStore.order).toContain(cardID);

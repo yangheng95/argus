@@ -12,7 +12,7 @@ describe("tool call generation stream", () => {
     const { flushBufferedPartDeltas, resetWriter } = await import("../src/services/tree-writer")
     const { describeToolPart } = await import("../src/utils/tool")
     const toolPart = () => {
-      const card = cardTreeStore.cards["executor:session:ses_tool_stream"]
+      const card = cardTreeStore.cards["executor:session:ses_tool_stream:message:executor:msg:default"]
       return card?.parts.find((part: any) => part?.type === "tool")
     }
 

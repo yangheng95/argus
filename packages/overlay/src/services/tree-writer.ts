@@ -50,6 +50,16 @@ import { goalStagePhaseID } from "../utils/workflow-step";
 
 // ── Internal indices ──
 
+/** A part's exact display target: which card owns it and at which index in
+ *  that card's `parts` array. Carrying the cardID (not just the index) is
+ *  mandatory — a long-lived session has many turn cards, and a late delta
+ *  for an older message must land on the card that owns the original part,
+ *  not on whatever turn is currently active (spec §3.3 / §11.1). */
+interface PartTarget {
+  cardID: string;
+  index: number;
+}
+
 interface SessionInfo {
   sessionID: string;
   stage: string;
@@ -57,10 +67,21 @@ interface SessionInfo {
   goalID: string;
   /** ids of messages that landed in this session's bucket, preserved to derive status. */
   messageIDs: Set<string>;
-  /** part id → index into cardTreeStore.cards[cardID].parts — O(1) lookup for updates. */
-  partIndex: Map<string, number>;
-  /** Session-level card id (`<stage>:session:<sid>`). */
-  cardID: string;
+  /** messageID → the display card that owns that message turn. For
+   *  phase-absorbed sessions (build / planner under a goal) every entry
+   *  points at the single phase card; for integrity it points at the
+   *  dedicated integrity card; otherwise each entry is a distinct
+   *  message-turn card (`<stage>:session:<sid>:message:<mid>`). */
+  messageCardIDs: Map<string, string>;
+  /** The message turn currently receiving session-level events
+   *  (session.status / session.error / usage.updated). The newest
+   *  `message.updated` for this session sets it. */
+  activeMessageID?: string;
+  /** Display card for `activeMessageID`. Session lifecycle/usage events
+   *  mutate THIS card only — older turn cards are frozen history. */
+  activeCardID?: string;
+  /** part id → its exact {cardID,index} target — O(1) lookup for updates. */
+  partIndex: Map<string, PartTarget>;
   /** Last known executor top-level visibility; gates expensive order rebuilds. */
   executorTopLevelVisible: boolean;
 }
@@ -168,8 +189,14 @@ let bufferedPartDeltaFrame: number | null = null;
 
 // ── Entry point ──
 
-/** Reset all writer state + cardTreeStore. Called on task switch and in tests. */
-export function resetWriter(): void {
+/** Reset all writer state + cardTreeStore. Called on task switch, hydrate,
+ *  recovery, and in tests. The caller must stamp the replacement scroll
+ *  intent explicitly so the conversation view does not guess whether this
+ *  replacement should preserve the operator's viewport or jump to the tail. */
+export function resetWriter(options: {
+  scrollIntent?: "preserve" | "bottom";
+  cause?: string;
+} = {}): void {
   try {
     flushBufferedPartDeltas();
   } finally {
@@ -192,7 +219,10 @@ export function resetWriter(): void {
       for (const k of Object.keys(c)) delete c[k];
     }),
   );
-  markCardTreeReplaced();
+  markCardTreeReplaced({
+    scrollIntent: options.scrollIntent ?? "preserve",
+    cause: options.cause ?? "writer-reset",
+  });
   markCardTreeVisibleChanged();
 }
 
@@ -383,8 +413,24 @@ function propsOf(event: any): Record<string, any> {
   return {};
 }
 
+/** Dedicated, message-turn-less card id. Only the integrity review uses
+ *  this form: integrity is a real session but its reasoning/verdict reach
+ *  the overlay through `integrity.review.*` events (NOT `message.updated`),
+ *  so there is no durable messageID to scope a turn card by. The card is
+ *  single per integrity session, which is the desired display anyway. */
 function sessionCardID(stage: string, sid: string): string {
   return `${stage}:session:${sid}`;
+}
+
+/** Per-message-turn card id. A long-lived session (orchestrator especially)
+ *  produces a new real `message.updated` every time it resumes reasoning;
+ *  each becomes its own top-level card so later turns sort AFTER the child
+ *  agent cards that ran between them, instead of back-filling the earliest
+ *  card. Keeps the old `<stage>:session:<sid>` prefix recognizable for
+ *  diagnostics and appends `:message:<mid>`; sorting is still by
+ *  `CardNode.time`, never by id. */
+function messageTurnCardID(stage: string, sid: string, messageID: string): string {
+  return `${stage}:session:${sid}:message:${messageID}`;
 }
 
 function isUserStage(stage: string): boolean {
@@ -396,6 +442,8 @@ function createSessionCardNode(
   stage: string,
   goalID: string,
   time: number,
+  sessionID: string,
+  messageID: string,
   parts: any[] = [],
   childIDs: string[] = [],
 ): CardNode {
@@ -404,6 +452,8 @@ function createSessionCardNode(
     id: cardID,
     kind: userStage ? "message" : "agent",
     role: userStage ? "user" : undefined,
+    sessionID,
+    messageID,
     stage,
     accent: !userStage && stage ? stageAccent(stage) : undefined,
     status: "running",
@@ -476,12 +526,6 @@ function interactionCardID(messageID: string): string {
   return `interaction-card:${messageID}`;
 }
 
-function partCardPath(sid: string, idx: number): ["cards", string, "parts", number] {
-  const info = sessions.get(sid);
-  if (!info) throw new Error(`tree-writer: no session info for ${sid}`);
-  return ["cards", info.cardID, "parts", idx] as any;
-}
-
 // ── Handlers ──
 
 function handleMessageUpdated(event: any): void {
@@ -528,36 +572,34 @@ function handleMessageUpdated(event: any): void {
     completed,
   });
 
-  // Ensure the session's card exists. Channel-driven only; bridge stamps
-  // it on every event and an absent channel is a bridge bug, not a case
-  // we silently accommodate.
+  // Channel-driven stage. Bridge stamps it on every event; an absent
+  // channel is a bridge bug, not a case we silently accommodate.
   const stage = deriveSessionStage(info);
   if (stage === "filtered") return;
-  ensureSessionCard(sessionID, {
+
+  const session = ensureSession(sessionID, { stage, parentSessionID, goalID });
+  session.messageIDs.add(id);
+
+  // Open (or refresh) THIS message's turn card. A long-lived session emits
+  // a fresh real message every time it resumes reasoning; each becomes its
+  // own top-level card so later turns sort AFTER any child agent card that
+  // ran between them — instead of all turns piling onto the earliest card.
+  const { cardID, isPhase } = ensureTurnCard(session, id, {
     stage,
-    parentSessionID,
     goalID,
+    role: resolvedRole,
     time: timeCreated,
+    stampServerTime: true,
   });
 
-  // Register the message under the session so status derivation sees it.
-  const session = sessions.get(sessionID)!;
-  session.messageIDs.add(id);
-  if (parentSessionID && !session.parentSessionID) session.parentSessionID = parentSessionID;
-  if (goalID && !session.goalID) session.goalID = goalID;
+  // Phase-absorbed sessions keep their in-card boundary: the single phase
+  // card folds in multiple sub-sessions / turns and still needs a visible
+  // per-turn separator. Top-level message-turn cards ARE the boundary —
+  // the card itself separates turns, so no synthetic boundary part.
+  if (isPhase) ensureBoundaryPart(session, cardID, id, resolvedRole, timeCreated);
 
-  // Insert a boundary part for THIS message so the renderer's CardParts
-  // draws a timeline separator between successive agent invocations. The
-  // orchestrator session is long-lived: every re-invocation (trigger=
-  // goal_completed / delivery_rejected / ...) writes a new assistant
-  // message into the SAME session. Prior impl deduped by sessionID, which
-  // meant the card had one boundary at the very top and all N turns' parts
-  // piled in afterwards with no visible split — the whole card read as
-  // "one big blob". Deduping by messageID gives one boundary per agent
-  // turn (stamped with the message's creation time), so the timeline is
-  // legible. Single-message sub-agent sessions (requirements / architect /
-  // design-analyst / delivery) still show exactly one boundary, unchanged.
-  ensureBoundaryPart(sessionID, id, resolvedRole, timeCreated);
+  drainPendingSessionStatus(sessionID);
+  drainPendingIntegrity(sessionID);
 }
 
 function handlePartUpdated(event: any): void {
@@ -570,39 +612,47 @@ function handlePartUpdated(event: any): void {
     throw new Error("message.part.updated part missing id/messageID/sessionID");
   }
 
-  // Bridge stamps channel/goalID/parentSessionID directly onto the part
-  // (task-message-protocol-bridge.enrichProperties). When a part arrives
-  // before its message.updated — possible because session/index.ts'
-  // saveMessage is silent and updatePart fires before updateMessage —
-  // we can still build the correctly-staged card on the spot instead of
-  // creating a `pending:session:...` stub and racing to rename it. The
-  // stub/rename path was a fallback for missing channel info and was
-  // responsible for the white 助手 card leak; now deleted entirely.
-  if (!sessions.has(sessionID)) {
+  const existingSession = sessions.get(sessionID);
+  let session = existingSession;
+  let cardID = session?.messageCardIDs.get(messageID);
+
+  if (!session || !cardID) {
+    // Bridge stamps channel/goalID/parentSessionID onto the part. A part can
+    // arrive before its message.updated (saveMessage is silent; updatePart
+    // fires before updateMessage). Because messageID is already known, the
+    // turn card's deterministic id is too — build it now at observation
+    // time. The later message.updated overwrites `time` with the
+    // authoritative server timestamp; no synthetic stub / rename.
     const stage = deriveSessionStage(part);
     if (stage === "filtered") return;
-    ensureSessionCard(sessionID, {
+    session = ensureSession(sessionID, {
       stage,
       parentSessionID: String(part.parentSessionID || ""),
       goalID: String(part.goalID || ""),
-      // Part events do not carry the message's server timestamp; stamp
-      // the observation moment. The subsequent message.updated for this
-      // message will call ensureSessionCard again with the authoritative
-      // `time.created`; ensureSessionCard's existing branch only updates
-      // parentSessionID/goalID, so the stamp stays — acceptable since
-      // parts land within milliseconds of the message row commit.
-      time: Date.now(),
     });
+    cardID = session.messageCardIDs.get(messageID);
   }
 
-  upsertPart(sessionID, partID, { ...part });
-  syncExecutorTopLevelVisibility(sessions.get(sessionID));
+  if (!cardID) {
+    const ensured = ensureTurnCard(session, messageID, {
+      stage: session.stage,
+      goalID: session.goalID,
+      role: String(part.resolvedRole || session.stage),
+      time: Date.now(),
+      stampServerTime: false,
+    });
+    cardID = ensured.cardID;
+    drainPendingSessionStatus(sessionID);
+    drainPendingIntegrity(sessionID);
+  }
+
+  upsertPart(session, messageID, cardID, partID, { ...part });
+  syncExecutorTopLevelVisibility(session);
 }
 
 function handlePartDelta(event: any): void {
   const p = propsOf(event);
   const partID = String(p.partID || "");
-  const messageID = String(p.messageID || "");
   const sessionID = String(p.sessionID || "");
   const field = String(p.field || "");
   const delta = typeof p.delta === "string" ? p.delta : "";
@@ -612,18 +662,21 @@ function handlePartDelta(event: any): void {
 
   const session = sessions.get(sessionID);
   if (!session) throw new Error(`message.part.delta: unknown session ${sessionID}`);
-  const idx = session.partIndex.get(partID);
-  if (idx === undefined) {
+  const target = session.partIndex.get(partID);
+  if (target === undefined) {
     throw new Error(`message.part.delta: unknown part ${partID} in session ${sessionID}`);
   }
 
-  const part = cardTreeStore.cards[session.cardID]?.parts?.[idx];
+  // Resolve the EXACT card that owns this part. A late delta for an older
+  // message turn must land on that turn's card, never on whatever turn is
+  // currently active for the session (spec §3.3 — primary failure mode).
+  const part = cardTreeStore.cards[target.cardID]?.parts?.[target.index];
   if (field === "raw" && part?.type === "tool") {
     setCardTreeStore(
       "cards",
-      session.cardID,
+      target.cardID,
       "parts",
-      idx,
+      target.index,
       "state",
       "raw",
       (prev: any) => String(prev ?? "") + delta,
@@ -631,9 +684,9 @@ function handlePartDelta(event: any): void {
   } else {
     setCardTreeStore(
       "cards",
-      session.cardID,
+      target.cardID,
       "parts",
-      idx,
+      target.index,
       field as any,
       (prev: any) => String(prev ?? "") + delta,
     );
@@ -755,12 +808,15 @@ function handleSessionStatus(event: any): void {
   }
   const projected = projectSessionStatus(event);
   const info = sessions.get(sessionID);
-  if (!info || !cardTreeStore.cards[info.cardID]) {
-    // Card not yet materialized — hold until ensureSessionCard runs.
+  const activeCardID = info?.activeCardID;
+  if (!info || !activeCardID || !cardTreeStore.cards[activeCardID]) {
+    // Active turn card not yet materialized — hold until one exists.
     pendingSessionStatus.set(sessionID, projected);
     return;
   }
-  applyProjectedSessionStatus(info.cardID, projected);
+  // Session lifecycle only touches the ACTIVE turn card. Older turn cards
+  // are frozen history; a later terminal status must not retro-flip them.
+  applyProjectedSessionStatus(activeCardID, projected);
 }
 
 function handleSessionError(event: any): void {
@@ -771,11 +827,12 @@ function handleSessionError(event: any): void {
   }
   const projected = projectSessionError(event);
   const info = sessions.get(sessionID);
-  if (!info || !cardTreeStore.cards[info.cardID]) {
+  const activeCardID = info?.activeCardID;
+  if (!info || !activeCardID || !cardTreeStore.cards[activeCardID]) {
     pendingSessionStatus.set(sessionID, projected);
     return;
   }
-  applyProjectedSessionStatus(info.cardID, projected);
+  applyProjectedSessionStatus(activeCardID, projected);
 }
 
 // usage.updated — cumulative LLM token / cost totals from the executor for a
@@ -788,14 +845,19 @@ function handleUsageUpdated(event: any): void {
   const sessionID = String(props.sessionID || "");
   if (!sessionID) return;
   const info = sessions.get(sessionID);
-  if (!info || !cardTreeStore.cards[info.cardID]) return;
+  const activeCardID = info?.activeCardID;
+  if (!info || !activeCardID || !cardTreeStore.cards[activeCardID]) return;
   const usage: { inputTokens?: number; outputTokens?: number; totalTokens?: number; costUSD?: number } = {};
   if (Number.isFinite(props.inputTokens)) usage.inputTokens = Number(props.inputTokens);
   if (Number.isFinite(props.outputTokens)) usage.outputTokens = Number(props.outputTokens);
   if (Number.isFinite(props.totalTokens)) usage.totalTokens = Number(props.totalTokens);
   if (Number.isFinite(props.costUSD)) usage.costUSD = Number(props.costUSD);
   if (Object.keys(usage).length === 0) return;
-  setCardTreeStore("cards", info.cardID, "usage", usage);
+  // Usage is cumulative for the runtime session. P1 writes it onto the
+  // active turn card only; a later usage event naturally moves the chip to
+  // the newest turn (per-turn split would need backend per-message
+  // accounting — out of scope, spec §3.5).
+  setCardTreeStore("cards", activeCardID, "usage", usage);
 }
 
 /** Drain any session.status buffered for this session. Called from
@@ -805,9 +867,10 @@ function drainPendingSessionStatus(sessionID: string): void {
   const projected = pendingSessionStatus.get(sessionID);
   if (!projected) return;
   const session = sessions.get(sessionID);
-  if (!session || !cardTreeStore.cards[session.cardID]) return;
+  const activeCardID = session?.activeCardID;
+  if (!session || !activeCardID || !cardTreeStore.cards[activeCardID]) return;
   pendingSessionStatus.delete(sessionID);
-  applyProjectedSessionStatus(session.cardID, projected);
+  applyProjectedSessionStatus(activeCardID, projected);
 }
 
 function handleInteraction(event: any): void {
@@ -930,7 +993,7 @@ function handleIntegrityChunk(event: any): void {
     produce((parts: any[]) => {
       const idx = parts.findIndex((p) => p?.partID === partID);
       if (idx >= 0) {
-        parts[idx] = { ...parts[idx], text: (parts[idx].text || "") + delta };
+        parts[idx].text = String(parts[idx].text || "") + delta;
       } else {
         parts.push({ type: "reasoning", partID, text: delta });
       }
@@ -938,16 +1001,36 @@ function handleIntegrityChunk(event: any): void {
   );
 }
 
+/** Integrity is a real session, but its reasoning/verdict reach the overlay
+ *  through `integrity.review.*` events (NOT `message.updated`), so there is
+ *  no durable messageID to scope a message-turn card by. It therefore keeps
+ *  a single dedicated card id (`integrity:session:<sid>`). We still register
+ *  a SessionInfo so session.status / usage routing (active turn card) works
+ *  uniformly — `activeCardID` is pinned to the dedicated card. */
+function ensureIntegritySession(sessionID: string, time: number): { session: SessionInfo; cardID: string } {
+  const session = ensureSession(sessionID, { stage: "integrity", parentSessionID: "", goalID: "" });
+  const cardID = sessionCardID("integrity", sessionID);
+  const created = !cardTreeStore.cards[cardID];
+  if (created) {
+    setCardTreeStore(
+      "cards",
+      cardID,
+      createSessionCardNode(cardID, "integrity", "", time, sessionID, ""),
+    );
+  }
+  session.activeCardID = cardID;
+  if (created) {
+    rebuildCardHierarchy();
+    drainPendingSessionStatus(sessionID);
+    drainPendingIntegrity(sessionID);
+  }
+  return { session, cardID };
+}
+
 /** Upsert the running-phase integrity session card. Integrity is now a normal
  *  agent session, so lifecycle events target the session card directly. */
 function materializeRunningIntegrity(p: RunningIntegrityPayload): void {
-  const session = ensureSessionCard(p.sessionID, {
-    stage: "integrity",
-    parentSessionID: "",
-    goalID: "",
-    time: p.startedAt,
-  });
-  const cardID = session.cardID;
+  const { cardID } = ensureIntegritySession(p.sessionID, p.startedAt);
   const existing = cardTreeStore.cards[cardID];
   // If the completed event has already landed, don't downgrade the verdict
   // card back to "running". `attempts` on a completed card is > 0 and the
@@ -975,7 +1058,7 @@ function materializeRunningIntegrity(p: RunningIntegrityPayload): void {
     });
     return;
   }
-  throw new Error(`integrity session card missing after ensureSessionCard (sessionID=${p.sessionID})`);
+  throw new Error(`integrity session card missing after ensureIntegritySession (sessionID=${p.sessionID})`);
 }
 
 function handleIntegrityCompleted(event: any): void {
@@ -1058,12 +1141,7 @@ function handleIntegrityCompleted(event: any): void {
     attempts,
   };
 
-  const session = ensureSessionCard(sessionID, {
-    stage: "integrity",
-    parentSessionID: "",
-    goalID: "",
-    time: emittedAt,
-  });
+  const { session } = ensureIntegritySession(sessionID, emittedAt);
 
   materializeIntegrity(session, payload);
   // Running-card lifecycle: the completed upsert now owns this cardID; drop
@@ -1074,7 +1152,10 @@ function handleIntegrityCompleted(event: any): void {
 
 /** Atomically write the integrity verdict onto the session card itself. */
 function materializeIntegrity(session: SessionInfo, p: PendingIntegrityPayload): void {
-  const cardID = session.cardID;
+  const cardID = session.activeCardID;
+  if (!cardID) {
+    throw new Error(`integrity session card missing on completion (sessionID=${session.sessionID})`);
+  }
   // pass = green/completed, concerns = warning (rendered as completed but the
   // verdict pill carries the warning colour), needs_correction = error.
   const status: CardStatus =
@@ -1111,7 +1192,7 @@ function drainPendingIntegrity(sessionID: string): void {
   const payload = pendingIntegrity.get(sessionID);
   if (!payload) return;
   const session = sessions.get(sessionID);
-  if (!session || !cardTreeStore.cards[session.cardID]) return;
+  if (!session || !session.activeCardID || !cardTreeStore.cards[session.activeCardID]) return;
   pendingIntegrity.delete(sessionID);
   materializeIntegrity(session, payload);
 }
@@ -1150,337 +1231,300 @@ interface EnsureSessionOpts {
   stage: string;
   parentSessionID: string;
   goalID: string;
-  time: number;
 }
 
-interface HydratedConversationViewSession {
-  sessionID?: string;
-  stage?: string;
-  parentSessionID?: string;
-  goalID?: string;
-  messageIDs?: string[];
-  firstMessageTime?: number;
+/** Register / backfill the runtime session index. NEVER creates a display
+ *  card — display identity is per message turn, not per session (spec
+ *  §2.3). `ensureTurnCard` owns card creation. */
+function ensureSession(sessionID: string, opts: EnsureSessionOpts): SessionInfo {
+  const existing = sessions.get(sessionID);
+  if (existing) {
+    if (!existing.stage && opts.stage) existing.stage = opts.stage;
+    if (!existing.parentSessionID && opts.parentSessionID) existing.parentSessionID = opts.parentSessionID;
+    if (!existing.goalID && opts.goalID) existing.goalID = opts.goalID;
+    return existing;
+  }
+  const info: SessionInfo = {
+    sessionID,
+    stage: opts.stage || "",
+    parentSessionID: opts.parentSessionID || "",
+    goalID: opts.goalID || "",
+    messageIDs: new Set(),
+    messageCardIDs: new Map(),
+    partIndex: new Map(),
+    executorTopLevelVisible: false,
+  };
+  sessions.set(sessionID, info);
+  return info;
 }
 
-/** Resolve the cardID a session should write its parts to. For goal-scope
- *  sessions whose stage maps to a declared phase (planner → plan,
- *  build → build, evaluator → evaluate), this IS the phase card — the
- *  session does NOT get its own card. Parts accumulate directly on the
- *  phase card, which eliminates the parent-child label mirror (phase
- *  "Build" + nested session "构建") that confused users.
+/** Is this session folded into a goal phase card (build / planner under a
+ *  goal)? Phase-absorbed sessions do NOT get message-turn cards — their
+ *  parts accumulate on the single phase card, unchanged from P0 (spec
+ *  §3.7 — keep existing phase-absorbed build/planner behaviour). */
+function isPhaseAbsorbedSession(stage: string, goalID: string): boolean {
+  return Boolean(goalID && stage && goalStagePhaseID(stage));
+}
+
+/** Resolve the display card id for ONE message turn of a session.
  *
- *  Non-phase sessions (assistant orchestrator, requirements, architect,
- *  design-analyst, delivery, and the executor container) fall through to
- *  the standard `<stage>:session:<sid>` id. The executor container still
- *  gets its own id but is filtered out of rendering in rebuildTopLevelOrder.
- *
- *  When the phase card doesn't yet exist (reconnect replay arriving
- *  before the board's goalWorkflows lands), a minimal stub is created
- *  here so part writes don't throw; `rebuildGoalStepCards` later
- *  overlays the real title / status / phase metadata without clobbering
- *  the accumulated parts. */
-function resolvePhaseOrSessionCardID(
+ *  - Phase-absorbed (goal-scope build/planner): the goal phase card. The
+ *    phase card is stubbed here if SSE ordering put message/part events
+ *    before the board's goalWorkflows arrived; rebuildGoalStepCards later
+ *    overlays its real metadata without clobbering accumulated parts.
+ *  - Otherwise: a deterministic per-message-turn card id. messageID is
+ *    durable, so a pending turn card (part-before-message) and the final
+ *    turn card share the same id — no stub/rename needed. */
+function resolveTurnCardID(
   sessionID: string,
   stage: string,
   goalID: string,
+  messageID: string,
   time: number,
 ): {
   cardID: string;
   isPhase: boolean;
 } {
-  if (goalID && stage) {
-    const phase = goalStagePhaseID(stage);
-    if (phase) {
-      // Same attempt-scoping rule as resolveGoalContainerCardID — read
-      // the live run id so the stub lands on the current attempt's card.
-      const runID = goalCurrentRunID.get(goalID);
-      const phaseCardID = goalPhaseCardID(goalID, runID, phase.stepID, phase.phaseID);
-      // Stub the phase card if it hasn't been materialized yet (SSE
-      // ordering: message.updated can arrive before the board refetch
-      // that carries goalWorkflows[].steps[].phases). The stub's
-      // fields get overlaid by rebuildGoalStepCards on the next
-      // board tick — including an authoritative `time` from
-      // goal_run.time_started, which replaces the session-derived
-      // birth time we stamp here.
-      if (!cardTreeStore.cards[phaseCardID]) {
-        setCardTreeStore("cards", phaseCardID, {
-          id: phaseCardID,
-          kind: "phase",
-          stage,
-          accent: stageAccent(stage),
-          status: "running",
-          title: phase.phaseID,
-          parts: [],
-          childIDs: [],
-          phaseID: phase.phaseID,
-          phaseSessionKind: stage,
-          phaseSessionID: sessionID,
-          time,
-        });
-      } else if (cardTreeStore.cards[phaseCardID]!.phaseSessionID !== sessionID) {
-        // Same phaseCardID but new sessionID means the absorbed session
-        // was replaced (e.g. a rewind / re-dispatch within the same goal
-        // run). Track the latest one so the reply box always targets the
-        // session whose parts are currently streaming.
-        setCardTreeStore("cards", phaseCardID, "phaseSessionID", sessionID);
-      }
-      return { cardID: phaseCardID, isPhase: true };
+  if (isPhaseAbsorbedSession(stage, goalID)) {
+    const phase = goalStagePhaseID(stage)!;
+    // Read the live run id so the stub lands on the current attempt's card.
+    const runID = goalCurrentRunID.get(goalID);
+    const phaseCardID = goalPhaseCardID(goalID, runID, phase.stepID, phase.phaseID);
+    if (!cardTreeStore.cards[phaseCardID]) {
+      setCardTreeStore("cards", phaseCardID, {
+        id: phaseCardID,
+        kind: "phase",
+        stage,
+        accent: stageAccent(stage),
+        status: "running",
+        title: phase.phaseID,
+        parts: [],
+        childIDs: [],
+        phaseID: phase.phaseID,
+        phaseSessionKind: stage,
+        phaseSessionID: sessionID,
+        time,
+      });
+    } else if (cardTreeStore.cards[phaseCardID]!.phaseSessionID !== sessionID) {
+      // Absorbed session replaced (rewind / re-dispatch within the same
+      // goal run). Track the latest so the reply box always targets the
+      // session whose parts are currently streaming.
+      setCardTreeStore("cards", phaseCardID, "phaseSessionID", sessionID);
     }
+    return { cardID: phaseCardID, isPhase: true };
   }
-  // stage is guaranteed non-empty by ensureSessionCard's invariant check.
-  // No `pending:session:` stub path — that was the fallback for
-  // channel-unknown events we no longer accept (bridge stamps channel on
-  // every message.updated AND message.part.updated now).
-  return { cardID: sessionCardID(stage, sessionID), isPhase: false };
+  // stage is guaranteed non-empty by the deriveSessionStage invariant.
+  return { cardID: messageTurnCardID(stage, sessionID, messageID), isPhase: false };
 }
 
-function ensureSessionCard(
-  sessionID: string,
-  opts: EnsureSessionOpts,
-  deferHierarchy = false,
-): SessionInfo {
-  const existing = sessions.get(sessionID);
-  if (existing) {
-    // Backfill on first real message.updated. Two arrivals matter for the
-    // cardID migration: `stage` (decides phase-vs-session class) and
-    // `goalID` (decides whether a goal-phase mapping even applies).
-    // `resolvePhaseOrSessionCardID` uses BOTH inputs, so whichever one
-    // arrives last can still flip the placeholder from a top-level
-    // `<stage>:session:<sid>` card to the real phase card. The previous
-    // guard `!existing.stage && opts.stage` only fired when stage was
-    // the latecomer — if goalID was late instead, the stale session
-    // card survived and `rebuildCardHierarchy` then pushed it as a child
-    // of the real phase card, producing a visible "phase → nested
-    // session" mirror. We now migrate on either transition.
-    const stageNewlyKnown = !existing.stage && Boolean(opts.stage);
-    const goalNewlyKnown = !existing.goalID && Boolean(opts.goalID);
-    const stageForResolve = existing.stage || opts.stage || "";
-    const goalForResolve = opts.goalID || existing.goalID || "";
-    if ((stageNewlyKnown || goalNewlyKnown) && stageForResolve) {
-      const { cardID: newCardID, isPhase } = resolvePhaseOrSessionCardID(
-        sessionID, stageForResolve, goalForResolve, opts.time,
-      );
-      if (newCardID !== existing.cardID) {
-        // Rename is an atomic invariant: after this produce commits, the
-        // placeholder MUST be gone and newCardID MUST exist with a proper
-        // CardNode shape (parts: []). Splitting stub + move across two
-        // setStore calls previously caused `ensureBoundaryPart` to crash
-        // with "Cannot read properties of undefined (reading 'parts')"
-        // when something between the stub call and this block removed or
-        // failed to create the phase card. Do everything in one produce.
-        setCardTreeStore(
-          "cards",
-          produce((cards: Record<string, CardNode>) => {
-            const placeholder = cards[existing.cardID];
-            if (isPhase) {
-              // Phase card: preserve parts/childIDs if a prior rebuild
-              // already materialized it; otherwise seed the full CardNode
-              // here so downstream writes never see undefined.
-              const phase = cards[newCardID];
-              const phaseParts = phase?.parts ?? [];
-              const phaseChildIDs = phase?.childIDs ?? [];
-              if (placeholder) {
-                for (const p of placeholder.parts || []) phaseParts.push(p);
-              }
-              cards[newCardID] = {
-                id: newCardID,
-                kind: "phase",
-                stage: stageForResolve,
-                accent: stageAccent(stageForResolve),
-                status: phase?.status ?? "running",
-                title: phase?.title ?? stageForResolve,
-                parts: phaseParts,
-                childIDs: phaseChildIDs,
-                phaseID: phase?.phaseID ?? stageForResolve,
-                phaseSessionKind: phase?.phaseSessionKind ?? stageForResolve,
-                time: phase?.time ?? opts.time,
-              };
-            } else {
-              // Non-phase session card: migrate the placeholder CardNode
-              // under its real id. Fall back to a fresh shell when no
-              // placeholder exists (part event never arrived first).
-              cards[newCardID] = {
-                ...placeholder,
-                ...createSessionCardNode(
-                  newCardID,
-                  stageForResolve,
-                  goalForResolve,
-                  opts.time,
-                  placeholder?.parts ?? [],
-                  placeholder?.childIDs ?? [],
-                ),
-              };
-            }
-            if (placeholder && existing.cardID !== newCardID) delete cards[existing.cardID];
-          }),
-        );
-        existing.cardID = newCardID;
+interface EnsureTurnCardOpts {
+  stage: string;
+  goalID: string;
+  role: string;
+  time: number;
+  /** message.updated carries the authoritative server time; a
+   *  part-before-message stamp is observation time only and must not
+   *  overwrite a server time already on the card. */
+  stampServerTime: boolean;
+  /** Hydrate replays many turns then rebuilds once at the end. */
+  deferHierarchy?: boolean;
+}
+
+/** Move an early non-phase turn card's parts onto the resolved target card
+ *  and repoint this session's part targets. Only fires when goalID arrives
+ *  AFTER a turn card was already opened for the message (rare: the bridge
+ *  stamps goalID/channel consistently on every event for a message). Keeps
+ *  a single display identity — no duplicate / orphan card (rule 8). */
+function migrateTurnCard(
+  session: SessionInfo,
+  fromCardID: string,
+  toCardID: string,
+): void {
+  if (fromCardID === toCardID) return;
+  const from = cardTreeStore.cards[fromCardID];
+  const movedParts = from ? (from.parts || []).slice() : [];
+  setCardTreeStore(
+    "cards",
+    produce((cards: Record<string, CardNode>) => {
+      const target = cards[toCardID];
+      if (!target) return;
+      const baseLen = target.parts.length;
+      for (const p of movedParts) target.parts.push(p);
+      for (const [pid, tgt] of session.partIndex) {
+        if (tgt.cardID === fromCardID) {
+          session.partIndex.set(pid, { cardID: toCardID, index: baseLen + tgt.index });
+        }
       }
-      if (stageNewlyKnown) existing.stage = opts.stage;
-      if (goalNewlyKnown) existing.goalID = opts.goalID;
-    }
-    if (opts.parentSessionID && !existing.parentSessionID) {
-      existing.parentSessionID = opts.parentSessionID;
-    }
-    if (opts.goalID && !existing.goalID) {
-      existing.goalID = opts.goalID;
-    }
-    if (!deferHierarchy) rebuildCardHierarchy();
-    // An integrity event may have arrived before this session's first
-    // message.updated (reconnect replay, SSE interleaving). Drain any held
-    // payload now that the session card exists under its real stage id.
-    if (!deferHierarchy) {
-      drainPendingIntegrity(sessionID);
-      drainPendingSessionStatus(sessionID);
-    }
-    return existing;
+      if (fromCardID in cards) delete cards[fromCardID];
+    }),
+  );
+  for (const [mid, cid] of session.messageCardIDs) {
+    if (cid === fromCardID) session.messageCardIDs.set(mid, toCardID);
+  }
+  if (session.activeCardID === fromCardID) session.activeCardID = toCardID;
+}
+
+/** Create or refresh the display card for one message turn and point the
+ *  session's active pointers at it. Returns the resolved card id + whether
+ *  it is a phase card. */
+function ensureTurnCard(
+  session: SessionInfo,
+  messageID: string,
+  opts: EnsureTurnCardOpts,
+): { cardID: string; isPhase: boolean } {
+  const stage = opts.stage || session.stage || "";
+  const goalID = opts.goalID || session.goalID || "";
+  const { cardID, isPhase } = resolveTurnCardID(
+    session.sessionID, stage, goalID, messageID, opts.time,
+  );
+
+  const prior = session.messageCardIDs.get(messageID);
+  if (prior && prior !== cardID) {
+    migrateTurnCard(session, prior, cardID);
   }
 
-  const stage = opts.stage || "";
-  const { cardID, isPhase } = resolvePhaseOrSessionCardID(sessionID, stage, opts.goalID || "", opts.time);
-
-  // Only non-phase sessions create their own card. For phase-absorbed
-  // sessions the phase card already exists (resolvePhaseOrSessionCardID
-  // stubbed it if necessary) and we route all subsequent parts to it.
   if (!isPhase) {
-    // Follow-up user turns should reuse the plain user bubble chrome from
-    // ctx:user-request instead of surfacing as foldable agent cards.
-    const node = createSessionCardNode(cardID, stage, opts.goalID || "", opts.time);
-    setCardTreeStore("cards", cardID, node);
+    const existing = cardTreeStore.cards[cardID];
+    if (existing) {
+      setCardTreeStore("cards", cardID, "sessionID", session.sessionID);
+      setCardTreeStore("cards", cardID, "messageID", messageID);
+      if (opts.stampServerTime) setCardTreeStore("cards", cardID, "time", opts.time);
+    } else {
+      setCardTreeStore(
+        "cards",
+        cardID,
+        createSessionCardNode(cardID, stage, goalID, opts.time, session.sessionID, messageID),
+      );
+    }
+    // Freeze the previous still-running turn: a newer real message in the
+    // same session means the older turn is no longer the active stream.
+    // Display projection invariant, not a synthetic lifecycle event
+    // (spec §3.4).
+    const prevCardID = session.activeCardID;
+    if (
+      prevCardID &&
+      prevCardID !== cardID &&
+      cardTreeStore.cards[prevCardID]?.status === "running"
+    ) {
+      setCardTreeStore("cards", prevCardID, "status", "completed");
+    }
   }
 
-  // Top-level placement is decided by rebuildTopLevelOrder() which is called
-  // lazily; for now we register the session and let order rebuild handle it.
-  const info: SessionInfo = {
-    sessionID,
-    stage,
-    parentSessionID: opts.parentSessionID,
-    goalID: opts.goalID,
-    messageIDs: new Set(),
-    partIndex: new Map(),
-    cardID,
-    executorTopLevelVisible: false,
-  };
-  sessions.set(sessionID, info);
+  session.messageCardIDs.set(messageID, cardID);
+  session.activeMessageID = messageID;
+  session.activeCardID = cardID;
 
-  if (!deferHierarchy) {
-    rebuildCardHierarchy();
-    drainPendingIntegrity(sessionID);
-    drainPendingSessionStatus(sessionID);
-  }
-  return info;
+  if (!opts.deferHierarchy) rebuildCardHierarchy();
+  return { cardID, isPhase };
 }
 
+/** Replay a persisted task into the exact same visible card identity the
+ *  live SSE stream would have built. Single render identity = `messageID`:
+ *  turn cards are derived straight from the transcript in chronological
+ *  order. `view.sessions` is metadata only (parentSessionID / goalID
+ *  fallback) and MUST NOT regroup multiple messages into one session card
+ *  (spec §6 — the highest replay-collapse risk). */
 export function hydrateConversationView(view: any, transcript: any[]): void {
-  const sessionViews: HydratedConversationViewSession[] = Array.isArray(view?.sessions)
-    ? view.sessions
-    : [];
-  if (sessionViews.length === 0) return;
+  const all = Array.isArray(transcript) ? transcript : [];
+  if (all.length === 0) return;
   // Hydration runs immediately after setBoardData(); do not rely on the
   // detached boardStore effect having re-projected phase cards yet.
   rebuildBoardDerivedCards();
-  const messageByID = new Map<string, any>();
-  for (const message of Array.isArray(transcript) ? transcript : []) {
-    const id = String(message?.info?.id || "");
-    if (id) messageByID.set(id, message);
+  const sessionMeta = new Map<string, any>();
+  for (const s of Array.isArray(view?.sessions) ? view.sessions : []) {
+    const sid = String(s?.sessionID || "");
+    if (sid) sessionMeta.set(sid, s);
   }
-  const orderedSessions = sessionViews.slice().sort(
+  const ordered = all.slice().sort(
     (left, right) =>
-      Number(left?.firstMessageTime || 0) - Number(right?.firstMessageTime || 0),
+      Number(left?.info?.time?.created || 0) - Number(right?.info?.time?.created || 0),
   );
-  for (const sessionView of orderedSessions) {
-    const sessionID = String(sessionView?.sessionID || "");
-    const stage = String(sessionView?.stage || "");
-    const firstMessageTime = Number(sessionView?.firstMessageTime || 0);
-    if (!sessionID || !stage) {
-      throw new Error("hydrateConversationView: session view missing sessionID/stage");
+  const touched = new Set<string>();
+  for (const message of ordered) {
+    const info = message?.info;
+    if (!info || typeof info !== "object") {
+      throw new Error("hydrateConversationView: transcript message missing info");
     }
-    if (!(firstMessageTime > 0)) {
-      throw new Error(`hydrateConversationView: session ${sessionID} missing firstMessageTime`);
+    const messageID = String(info.id || "");
+    const sessionID = String(info.sessionID || "");
+    if (!messageID || !sessionID) {
+      throw new Error("hydrateConversationView: transcript message missing id/sessionID");
     }
+    // No assistant-fallback (一个萝卜一个坑) — replay must reflect the same
+    // role attribution the live event stream carries.
+    const rawRole = info.role;
+    if (typeof rawRole !== "string" || rawRole.length === 0) {
+      throw new Error(`hydrateConversationView: message ${messageID} missing info.role`);
+    }
+    const role = rawRole;
+    const rawResolvedRole = info.resolvedRole || info.agent || role;
+    if (typeof rawResolvedRole !== "string" || rawResolvedRole.length === 0) {
+      throw new Error(`hydrateConversationView: message ${messageID} missing resolvedRole/agent`);
+    }
+    const resolvedRole = String(rawResolvedRole);
+    const meta = sessionMeta.get(sessionID);
+    const parentSessionID = String(info.parentSessionID || meta?.parentSessionID || "");
+    const goalID = String(info.goalID || meta?.goalID || "");
+    const timeCreated = Number(info?.time?.created || 0);
+    if (!(timeCreated > 0)) {
+      throw new Error(`hydrateConversationView: message ${messageID} missing info.time.created`);
+    }
+    const completed =
+      Number.isFinite(info?.time?.completed) && Number(info.time.completed) > 0;
+    const stage = deriveSessionStage(info);
     if (stage === "filtered") continue;
-    const session = ensureSessionCard(
+    messages.set(messageID, {
+      id: messageID,
       sessionID,
-      {
-        stage,
-        parentSessionID: String(sessionView?.parentSessionID || ""),
-        goalID: String(sessionView?.goalID || ""),
-        time: firstMessageTime,
-      },
-      true,
-    );
-    const messageIDs = Array.isArray(sessionView?.messageIDs) ? sessionView.messageIDs : [];
-    for (const rawMessageID of messageIDs) {
-      const messageID = String(rawMessageID || "");
-      if (!messageID) continue;
-      const message = messageByID.get(messageID);
-      if (!message) {
-        throw new Error(`hydrateConversationView: message ${messageID} missing from transcript`);
+      role,
+      resolvedRole,
+      agent: String(info.agent || ""),
+      parentSessionID,
+      goalID,
+      time: timeCreated,
+      completed,
+    });
+    const session = ensureSession(sessionID, { stage, parentSessionID, goalID });
+    session.messageIDs.add(messageID);
+    const { cardID, isPhase } = ensureTurnCard(session, messageID, {
+      stage,
+      goalID,
+      role: resolvedRole,
+      time: timeCreated,
+      stampServerTime: true,
+      deferHierarchy: true,
+    });
+    if (isPhase) ensureBoundaryPart(session, cardID, messageID, resolvedRole, timeCreated);
+    const parts = Array.isArray(message?.parts) ? message.parts : [];
+    for (const part of parts) {
+      const partID = String(part?.id || "");
+      if (!partID) {
+        throw new Error(`hydrateConversationView: message ${messageID} contains part without id`);
       }
-      const info = message?.info;
-      // No assistant-fallback (一个萝卜一个坑) — replay path must reflect the
-      // same role attribution the live event stream carries.
-      const rawRole = info?.role;
-      if (typeof rawRole !== "string" || rawRole.length === 0) {
-        throw new Error(`hydrateConversationView: message ${messageID} missing info.role`);
-      }
-      const role = rawRole;
-      const rawResolvedRole = info?.resolvedRole || info?.agent || role;
-      if (typeof rawResolvedRole !== "string" || rawResolvedRole.length === 0) {
-        throw new Error(`hydrateConversationView: message ${messageID} missing resolvedRole/agent`);
-      }
-      const resolvedRole = String(rawResolvedRole);
-      const agent = String(info?.agent || "");
-      const parentSessionID = String(info?.parentSessionID || session.parentSessionID || "");
-      const goalID = String(info?.goalID || session.goalID || "");
-      const timeCreated = Number(info?.time?.created || 0);
-      if (!(timeCreated > 0)) {
-        throw new Error(`hydrateConversationView: message ${messageID} missing info.time.created`);
-      }
-      const completed =
-        Number.isFinite(info?.time?.completed) && Number(info.time.completed) > 0;
-      messages.set(messageID, {
-        id: messageID,
-        sessionID,
-        role,
-        resolvedRole,
-        agent,
-        parentSessionID,
-        goalID,
-        time: timeCreated,
-        completed,
-      });
-      session.messageIDs.add(messageID);
-      if (parentSessionID && !session.parentSessionID) session.parentSessionID = parentSessionID;
-      if (goalID && !session.goalID) session.goalID = goalID;
-      ensureBoundaryPart(sessionID, messageID, resolvedRole, timeCreated);
-      const parts = Array.isArray(message?.parts) ? message.parts : [];
-      for (const part of parts) {
-        const partID = String(part?.id || "");
-        if (!partID) {
-          throw new Error(`hydrateConversationView: message ${messageID} contains part without id`);
-        }
-        upsertPart(sessionID, partID, { ...part });
-      }
+      upsertPart(session, messageID, cardID, partID, { ...part });
     }
+    touched.add(sessionID);
   }
   rebuildCardHierarchy();
-  for (const sessionView of orderedSessions) {
-    const sessionID = String(sessionView?.sessionID || "");
-    if (!sessionID) continue;
+  for (const sessionID of touched) {
     drainPendingIntegrity(sessionID);
     drainPendingSessionStatus(sessionID);
   }
 }
 
-function ensureBoundaryPart(sessionID: string, messageID: string, role: string, time: number): void {
-  const session = sessions.get(sessionID);
-  if (!session) return;
+/** Per-message boundary part — only used by phase-absorbed cards, which
+ *  fold multiple sub-sessions / turns into one phase card and still need a
+ *  visible per-turn separator. Top-level message-turn cards do NOT get a
+ *  boundary: the card itself is the boundary (spec §3.1). */
+function ensureBoundaryPart(
+  session: SessionInfo,
+  cardID: string,
+  messageID: string,
+  role: string,
+  time: number,
+): void {
   if (isUserStage(session.stage || role)) return;
-  // Per-message key so each agent invocation in a long-lived session gets
-  // its own timeline separator. See handleMessageUpdated for the semantic
-  // rationale.
-  const boundaryKey = `__boundary__:${sessionID}:${messageID}`;
+  const boundaryKey = `__boundary__:${session.sessionID}:${messageID}`;
   if (session.partIndex.has(boundaryKey)) return;
   const part: any = {
     type: "boundary",
@@ -1488,24 +1532,29 @@ function ensureBoundaryPart(sessionID: string, messageID: string, role: string, 
     roleLabel: roleLabel(role),
     time: time > 0 ? time : undefined,
   };
-  const newIdx = appendSessionPart(session.cardID, part);
-  session.partIndex.set(boundaryKey, newIdx);
+  const newIdx = appendSessionPart(cardID, part);
+  session.partIndex.set(boundaryKey, { cardID, index: newIdx });
 }
 
-function upsertPart(sessionID: string, partID: string, part: any): void {
-  const session = sessions.get(sessionID);
-  if (!session) throw new Error(`upsertPart: unknown session ${sessionID}`);
-  const existingIdx = session.partIndex.get(partID);
-  const previousPart = existingIdx !== undefined
-    ? cardTreeStore.cards[session.cardID].parts[existingIdx]
+function upsertPart(
+  session: SessionInfo,
+  _messageID: string,
+  cardID: string,
+  partID: string,
+  part: any,
+): void {
+  const existing = session.partIndex.get(partID);
+  const sameCard = existing !== undefined && existing.cardID === cardID;
+  const previousPart = sameCard
+    ? cardTreeStore.cards[cardID]?.parts?.[existing!.index]
     : undefined;
   const normalizedPart = normalizeToolPartRecord(part, previousPart);
-  if (existingIdx !== undefined) {
-    setCardTreeStore("cards", session.cardID, "parts", existingIdx, normalizedPart);
+  if (sameCard) {
+    setCardTreeStore("cards", cardID, "parts", existing!.index, normalizedPart);
     return;
   }
-  const newIdx = appendSessionPart(session.cardID, normalizedPart);
-  session.partIndex.set(partID, newIdx);
+  const newIdx = appendSessionPart(cardID, normalizedPart);
+  session.partIndex.set(partID, { cardID, index: newIdx });
 }
 
 function appendSessionPart(cardID: string, part: any): number {
@@ -1795,6 +1844,22 @@ function upsertInteractionCard(seed: { info: { id: string; role: string; time: {
   return cardID;
 }
 
+function sessionTurnCardAtOrBefore(session: SessionInfo | undefined, time: number): string | undefined {
+  if (!session) return undefined;
+  let selectedCardID = "";
+  let selectedTime = 0;
+  for (const cardID of new Set(session.messageCardIDs.values())) {
+    const card = cardTreeStore.cards[cardID];
+    const cardTime = Number(card?.time || 0);
+    if (!(cardTime > 0) || cardTime > time) continue;
+    if (!selectedCardID || cardTime >= selectedTime) {
+      selectedCardID = cardID;
+      selectedTime = cardTime;
+    }
+  }
+  return selectedCardID || undefined;
+}
+
 function rebuildInteractionCards(board: any): {
   bySessionCardID: Map<string, string[]>;
   topLevel: string[];
@@ -1817,10 +1882,18 @@ function rebuildInteractionCards(board: any): {
       aliveCardIDs.add(cardID);
       if (sessionID) {
         const session = sessions.get(sessionID);
-        if (!session) continue;
-        const bucket = bySessionCardID.get(session.cardID);
+        const interactionTime = Number(seed?.info?.time?.created || 0);
+        // Attach to the latest turn that existed at the interaction time.
+        // Rebuilds can run after newer turns appear; using activeCardID here
+        // would make old prompts drift onto the newest card.
+        const ownerCardID = sessionTurnCardAtOrBefore(session, interactionTime);
+        if (!ownerCardID) {
+          topLevel.push(cardID);
+          continue;
+        }
+        const bucket = bySessionCardID.get(ownerCardID);
         if (bucket) bucket.push(cardID);
-        else bySessionCardID.set(session.cardID, [cardID]);
+        else bySessionCardID.set(ownerCardID, [cardID]);
       } else {
         topLevel.push(cardID);
       }
@@ -1849,9 +1922,22 @@ function rebuildInteractionCards(board: any): {
   return { bySessionCardID, topLevel };
 }
 
-function sessionSortTime(cardID: string): number {
+function sessionSortTime(cardID: string | undefined): number {
+  if (!cardID) return 0;
   const time = Number(cardTreeStore.cards[cardID]?.time || 0);
   return Number.isFinite(time) ? time : 0;
+}
+
+/** Display cards this session owns for hierarchy / visibility. Phase-
+ *  absorbed sessions own NONE here — their parts live on the phase card,
+ *  which is managed as a step child by rebuildGoalStepCards. Integrity
+ *  has no messageCardIDs but pins activeCardID to its dedicated card. */
+function sessionOwnedCardIDs(info: SessionInfo): string[] {
+  if (isPhaseAbsorbedSession(info.stage, info.goalID)) return [];
+  const ids = new Set<string>();
+  for (const cid of info.messageCardIDs.values()) ids.add(cid);
+  if (info.activeCardID) ids.add(info.activeCardID);
+  return [...ids];
 }
 
 function pushUniqueChild(target: string[], childID: string): void {
@@ -1874,40 +1960,15 @@ function cardHasDisplayPart(card: CardNode | undefined): boolean {
 
 function syncExecutorTopLevelVisibility(session: SessionInfo | undefined): void {
   if (!session || session.stage !== "executor") return;
-  const visible = cardHasDisplayPart(cardTreeStore.cards[session.cardID]);
+  // Executor container session has no LLM of its own; surface only the
+  // turn cards that actually received visible parts (spec §4.3).
+  let visible = false;
+  for (const cid of sessionOwnedCardIDs(session)) {
+    if (cardHasDisplayPart(cardTreeStore.cards[cid])) { visible = true; break; }
+  }
   if (session.executorTopLevelVisible === visible) return;
   session.executorTopLevelVisible = visible;
   rebuildTopLevelOrder();
-}
-
-function resolveGoalContainerCardID(goalID: string, stage: string): string | null {
-  if (!goalID) return null;
-  const phase = goalStagePhaseID(stage);
-  if (!phase) return null;
-  // Route to the CURRENT attempt's phase card. goalCurrentRunID is
-  // refreshed on every rebuildGoalStepCards pass, so parts claimed by
-  // a session under attempt N never land on an attempt N+1 card.
-  const runID = goalCurrentRunID.get(goalID);
-  const phaseCardID = goalPhaseCardID(goalID, runID, phase.stepID, phase.phaseID);
-  return cardTreeStore.cards[phaseCardID] ? phaseCardID : null;
-}
-
-function resolveSessionContainerCardID(info: SessionInfo): string | null {
-  // Only goal phase cards (step:<gid>:<stepID>:phase:<phaseID>)
-  // are allowed session containers. Every other sub-agent session is
-  // top-level, by design (see specs/new-arch/07-panel-reactivity §身份规则).
-  //
-  // The executor container session (session.kind="executor") does NOT
-  // render as its own card and is not nested anywhere — its only role is
-  // to be a parentID anchor for planner / build worker / evaluator child
-  // sessions. The step card in the overlay represents it visually.
-  // goalStagePhaseID("executor") returns null, so ensureSessionCard
-  // creates the card but rebuildCardHierarchy leaves it unclaimed, and
-  // rebuildTopLevelOrder excludes it via the same phase-match check.
-  if (info.goalID) {
-    return resolveGoalContainerCardID(info.goalID, info.stage);
-  }
-  return null;
 }
 
 function rebuildCardHierarchy(): void {
@@ -1961,21 +2022,19 @@ function rebuildCardHierarchyImpl(): void {
     }
   }
 
+  // Non-phase message-turn cards are all top-level by design — they sort
+  // chronologically by `time` in rebuildTopLevelOrder, so an orchestrator
+  // turn that ran after a child agent naturally falls AFTER that child's
+  // card. No parent claim, no "move parent after child" logic (spec §4).
+  // Phase-absorbed sessions own no separate cards (parts live on the phase
+  // card, claimed as a step child above).
   const orderedSessions = [...sessions.values()].sort(
-    (a, b) => sessionSortTime(a.cardID) - sessionSortTime(b.cardID),
+    (a, b) => sessionSortTime(a.activeCardID) - sessionSortTime(b.activeCardID),
   );
   for (const info of orderedSessions) {
-    if (!cardTreeStore.cards[info.cardID]) continue;
-    nextChildIDs.set(info.cardID, nextChildIDs.get(info.cardID) || []);
-    const containerID = resolveSessionContainerCardID(info);
-    if (!containerID) continue;
-    // Phase-absorbed session: info.cardID IS the phase card (ensureSessionCard
-    // routed the session directly onto it). No claim needed — adding the
-    // phase card as its own child would cycle.
-    if (containerID === info.cardID) continue;
-    const bucket = nextChildIDs.get(containerID) || [];
-    pushUniqueChild(bucket, info.cardID);
-    nextChildIDs.set(containerID, bucket);
+    for (const cid of sessionOwnedCardIDs(info)) {
+      if (cardTreeStore.cards[cid]) nextChildIDs.set(cid, nextChildIDs.get(cid) || []);
+    }
   }
   for (const [sessionCardID, childIDs] of interactions.bySessionCardID.entries()) {
     const bucket = nextChildIDs.get(sessionCardID) || [];
@@ -1996,18 +2055,23 @@ function rebuildCardHierarchyImpl(): void {
   for (const [cardID, ownerSessionID] of integrityCardOwners.entries()) {
     if (!cardTreeStore.cards[cardID]) continue;
     const owner = sessions.get(ownerSessionID);
-    if (!owner || !cardTreeStore.cards[owner.cardID]) continue;
-    const bucket = nextChildIDs.get(owner.cardID) || [];
+    const ownerCardID = owner?.activeCardID;
+    if (!ownerCardID || !cardTreeStore.cards[ownerCardID]) continue;
+    const bucket = nextChildIDs.get(ownerCardID) || [];
     pushUniqueChild(bucket, cardID);
-    nextChildIDs.set(owner.cardID, bucket);
+    nextChildIDs.set(ownerCardID, bucket);
     nextChildIDs.set(cardID, nextChildIDs.get(cardID) || []);
   }
 
   setCardTreeStore(
     "cards",
     produce((cards: Record<string, CardNode>) => {
+      // Reset every session-owned turn card's childIDs from nextChildIDs so
+      // a removed interaction child is cleared, not left dangling.
       for (const info of sessions.values()) {
-        if (cards[info.cardID]) cards[info.cardID].childIDs = nextChildIDs.get(info.cardID) || [];
+        for (const cid of sessionOwnedCardIDs(info)) {
+          if (cards[cid]) cards[cid].childIDs = nextChildIDs.get(cid) || [];
+        }
       }
       for (const [cardID, childIDs] of nextChildIDs.entries()) {
         if (cards[cardID]) cards[cardID].childIDs = childIDs;
@@ -2050,10 +2114,11 @@ function normalizeStepStatus(raw: any): CardStatus {
 //     out via the `claimedChildIDs` filter instead of needing kind logic.
 //   • Empty `stage === "executor"` sessions are the goal's executor container
 //     (parentID anchor only); the step card is their visual proxy. If an
-//     executor session does receive visible parts, surface the card rather
+//     executor turn card does receive visible parts, surface it rather
 //     than hiding real reasoning/text/tool output.
-//   • `resolveSessionContainerCardID(info)` sessions are goal-phase-routed;
-//     their parts live on the phase card, not a duplicate top-level card.
+//   • Phase-absorbed sessions (build/planner under a goal) own no top-level
+//     turn card — their parts live on the phase card (a step child), so
+//     `sessionOwnedCardIDs` returns nothing for them here.
 
 function rebuildTopLevelOrder(): void {
   const claimedChildIDs = new Set<string>();
@@ -2061,20 +2126,15 @@ function rebuildTopLevelOrder(): void {
     for (const childID of node.childIDs || []) claimedChildIDs.add(childID);
   }
 
-  // Hide path is driven entirely by the session-info path: a session whose
-  // info.goalID is set routes to its goal phase via resolveSessionContainerCardID,
-  // and the orphan-top-level case is fixed at the source (runAgentSession now
-  // threads goalID into Session.createNext so the protocol bridge stamps it on
-  // every part event). The previous belt-and-braces "hide every stage=build/planner
-  // when task has goals" rule made empty cards by hiding orphan top-level
-  // sessions whose parts had nowhere else to go; with the engine fix in place
-  // the standard path is sufficient.
+  // Hide path: only the executor container's empty turn cards. Phase-
+  // absorbed sessions never produce a top-level turn card (their parts
+  // accumulate on the phase card, a step child); goalID threading at the
+  // source keeps build/planner parts off any orphan top-level card.
   const hiddenSessionCardIDs = new Set<string>();
   for (const info of sessions.values()) {
-    const card = cardTreeStore.cards[info.cardID];
-    const emptyExecutorContainer = info.stage === "executor" && !cardHasDisplayPart(card);
-    if (emptyExecutorContainer || resolveSessionContainerCardID(info)) {
-      if (info.cardID) hiddenSessionCardIDs.add(info.cardID);
+    if (info.stage !== "executor") continue;
+    for (const cid of sessionOwnedCardIDs(info)) {
+      if (!cardHasDisplayPart(cardTreeStore.cards[cid])) hiddenSessionCardIDs.add(cid);
     }
   }
 

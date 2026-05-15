@@ -97,8 +97,8 @@ function delta(partID: string, field: string, chunk: string, messageID = MESSAGE
   });
 }
 
-function sessionCard(sessionID = SESSION_ID) {
-  return cardTreeStore.cards[`assistant:session:${sessionID}`];
+function sessionCard(sessionID = SESSION_ID, messageID = MESSAGE_ID) {
+  return cardTreeStore.cards[`assistant:session:${sessionID}:message:${messageID}`];
 }
 
 function partText(partID: string): string {

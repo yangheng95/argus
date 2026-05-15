@@ -361,6 +361,63 @@ export function collectLatestActivityText(node: CardNode): string {
   return best.text;
 }
 
+// ── Message segmentation ──
+//
+// A card aggregates N message turns into one flat `parts` array, with a
+// `BoundaryPart` (carrying the effective role + timestamp) marking each
+// turn transition. Splitting the array back at those boundaries yields the
+// individual messages — this is the single source for that operation,
+// shared by the Board streaming surfaces and the ConversationAgentRail
+// "latest message" preview. Role is preserved verbatim (empty string when
+// the boundary carried none); callers that require a role assert it
+// themselves rather than this splitter inventing an assistant fallback
+// (一个萝卜一个坑).
+
+export interface CardMessageSegment {
+  id: string;
+  role: string;
+  time: number;
+  parts: any[];
+}
+
+export function cardMessageSegments(card: CardNode): CardMessageSegment[] {
+  const parts = card.parts || [];
+  if (parts.length === 0) return [];
+  const segments: CardMessageSegment[] = [];
+  let boundary: BoundaryPart | null = null;
+  let buffer: any[] = [];
+  // A message-turn card IS one message and carries no in-card boundary
+  // (the card itself is the boundary). Fall back to the card's own
+  // role/stage for that single segment. Phase-absorbed cards still carry
+  // boundary parts (they fold N sub-sessions) and split exactly as before.
+  const cardRole =
+    typeof card.role === "string" && card.role.length > 0
+      ? card.role
+      : typeof card.stage === "string"
+        ? card.stage
+        : "";
+  const flush = () => {
+    if (buffer.length === 0) return;
+    segments.push({
+      id: `${card.id}:msg:${segments.length}`,
+      role: typeof boundary?.role === "string" && boundary.role.length > 0 ? boundary.role : cardRole,
+      time: boundary?.time ?? card.time ?? 0,
+      parts: buffer,
+    });
+    buffer = [];
+  };
+  for (const part of parts) {
+    if ((part as { type?: string } | undefined)?.type === "boundary") {
+      flush();
+      boundary = part as BoundaryPart;
+      continue;
+    }
+    buffer.push(part);
+  }
+  flush();
+  return segments;
+}
+
 // ── Activity counts (collapsed header) ──
 // Tally the work that has happened inside a card subtree so the collapsed
 // header can show "🤖 2  🛠 14  🎯 1  💬 5" and the operator gets a sense

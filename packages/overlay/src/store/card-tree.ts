@@ -12,7 +12,9 @@
 //   ctx:user-request                                       — task request bubble
 //   ctx:user-request:text                                  — the text part of that bubble
 //   ctx:user-request:file:<url|idx>                        — an attachment part
-//   <stage>:session:<sid>                                  — per-session agent card
+//   <stage>:session:<sid>:message:<mid>                    — per-message-turn agent card
+//                                                            (one real message turn = one card;
+//                                                            a long-lived session produces N)
 //   part:<messageID>:<partID>                              — part inside a session card
 //   step:<goalID>:<goalRunID|"pre">:<stepID>               — per-goal executor step (top-level),
 //                                                            scoped to one attempt (goal_run)
@@ -80,6 +82,12 @@ export interface StepPayload {
   }>;
   buildSessionID?: string;
   changedFiles?: string[];
+  changedFileDiffs?: Array<{
+    file: string;
+    additions?: number;
+    deletions?: number;
+    status?: "added" | "deleted" | "modified";
+  }>;
   diffStats?: { files?: number; additions?: number; deletions?: number };
   checks?: Array<{ name: string; status: string; evidence?: string; family?: string }>;
   evalSummary?: string;
@@ -94,6 +102,18 @@ export interface StepPayload {
 export interface CardNode {
   id: string;
   kind: CardKind;
+  /** Runtime session id that owns this card. Drives trace / reply / cancel /
+   *  agent-workflow projection. Renderer and workflow utilities MUST read
+   *  this explicit field — never parse the session id out of `id`. Phase
+   *  cards intentionally leave this unset and use `phaseSessionID` instead
+   *  (a phase card absorbs a goal-scoped runtime session, it is not a
+   *  message-turn card). */
+  sessionID?: string;
+  /** Durable message id whose turn this display card represents. One real
+   *  `message.updated` in a (possibly long-lived) session maps to exactly
+   *  one card; the next real message in the same session opens a new card.
+   *  Unset on phase / step / interaction / task-context cards. */
+  messageID?: string;
   /** Session kind / stage name (assistant / executor / build / planner / goal / ...). */
   stage?: string;
   /** Resolved accent colour for this card's stage. */
@@ -240,6 +260,14 @@ export interface CardTreeStore {
    *  visible tree is replaced, so scroll owners can drop follow-lock from the
    *  previous transcript instance without guessing from DOM emptiness. */
   treeEpoch: number;
+  /** Scroll intent stamped onto the most recent whole-tree replacement.
+   *  `bottom` is used for explicit task switches where the operator should
+   *  land on the latest content of the newly selected task. `preserve` is
+   *  used for same-task hydrate/recovery so a user reading history does not
+   *  get yanked to the tail. */
+  treeReplacementScrollIntent: "preserve" | "bottom";
+  /** Human-readable replacement cause for diagnostics / tests. */
+  treeReplacementCause: string;
   /** Monotonic visible-content version. The conversation scroll owner reads
    *  this single signal instead of observing rendered DOM mutations. */
   visibleVersion: number;
@@ -254,11 +282,20 @@ export const [cardTreeStore, setCardTreeStore] = createStore<CardTreeStore>({
   order: [],
   cards: {},
   treeEpoch: 0,
+  treeReplacementScrollIntent: "preserve",
+  treeReplacementCause: "init",
   visibleVersion: 0,
   rewindCursor: null,
 });
 
-export function markCardTreeReplaced(): void {
+export function markCardTreeReplaced(
+  options: {
+    scrollIntent?: "preserve" | "bottom";
+    cause?: string;
+  } = {},
+): void {
+  setCardTreeStore("treeReplacementScrollIntent", options.scrollIntent ?? "preserve");
+  setCardTreeStore("treeReplacementCause", options.cause ?? "unspecified");
   setCardTreeStore("treeEpoch", (epoch) => epoch + 1);
 }
 

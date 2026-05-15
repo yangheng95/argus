@@ -32,13 +32,6 @@ import { Icon } from "./Icon"
 import { storeCardNode } from "./StoreCardNode"
 import { TracePanel } from "./TracePanel"
 
-function sessionIDFromCardID(id: string): string | undefined {
-  const idx = id.indexOf(":session:")
-  if (idx < 0) return undefined
-  const sessionID = id.slice(idx + ":session:".length)
-  return sessionID || undefined
-}
-
 async function writeClipboard(text: string): Promise<boolean> {
   if (!text) return false
   if (navigator.clipboard?.writeText) {
@@ -181,7 +174,7 @@ export function ChatBubble(props: { node: CardNode; depth: number }) {
   }
 
   const traceSessionID = createMemo(() =>
-    props.node.kind === "agent" ? sessionIDFromCardID(props.node.id) : undefined,
+    props.node.kind === "agent" ? props.node.sessionID || undefined : undefined,
   )
   const directAgentSessionID = createMemo(() => {
     if (props.node.kind !== "agent") return undefined
