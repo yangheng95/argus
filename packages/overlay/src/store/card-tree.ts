@@ -236,6 +236,9 @@ export interface CardTreeStore {
   order: string[];
   /** Every card by id, flat. Includes cards referenced from any `childIDs`. */
   cards: Record<string, CardNode>;
+  /** Monotonic visible-content version. The conversation scroll owner reads
+   *  this single signal instead of observing rendered DOM mutations. */
+  visibleVersion: number;
   /** Rewind cursor (ms). When non-null, cards with time > cursor have been
    *  pruned from `order` + `cards` by pruneCardsAfterCursor(). The backend
    *  also filters its describe outputs, so any SSE event stream for this
@@ -246,8 +249,13 @@ export interface CardTreeStore {
 export const [cardTreeStore, setCardTreeStore] = createStore<CardTreeStore>({
   order: [],
   cards: {},
+  visibleVersion: 0,
   rewindCursor: null,
 });
+
+export function markCardTreeVisibleChanged(): void {
+  setCardTreeStore("visibleVersion", (version) => version + 1);
+}
 
 /**
  * Prune all top-level cards (and their orphaned children) whose `time` is
@@ -288,6 +296,7 @@ export function pruneCardsAfterCursor(cursorTime: number) {
       }
     }),
   );
+  markCardTreeVisibleChanged();
 }
 
 /** Clear the rewind cursor without re-fetching — used when the backend
@@ -296,4 +305,5 @@ export function pruneCardsAfterCursor(cursorTime: number) {
  *  from the server if full restoration is desired. */
 export function clearPruneCursor() {
   setCardTreeStore("rewindCursor", null);
+  markCardTreeVisibleChanged();
 }

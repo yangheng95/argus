@@ -33,6 +33,8 @@ import { escapeHtml } from "./markdown";
  *   `onUserScrollUp` is invoked so the caller can flip tracking off.
  * - On initial mount the container snaps to the bottom once, regardless of
  *   tracking state, so the user lands on the latest content.
+ * - `contentChanged` is the only content-growth trigger. Callers wire it to
+ *   their data source version; this utility does not observe DOM mutations.
  * - `scrollToBottom` on the returned controller jumps to the bottom without
  *   being mis-classified as a user scroll (used when the caller turns
  *   tracking on again).
@@ -60,6 +62,7 @@ export interface AutoScrollOptions {
 
 export interface AutoScrollController {
   cleanup: () => void;
+  contentChanged: () => void;
   scrollToBottom: () => void;
   scrollToTop: () => void;
 }
@@ -69,8 +72,8 @@ export function setupAutoScroll(
   opts: AutoScrollOptions,
 ): AutoScrollController {
   let rafPending = false;
+  let disposed = false;
   let expectedTop = el.scrollTop;
-  let observedTail: Element | null = null;
   let programScrollTarget: number | null = null;
 
   function syncFollowLockAttribute() {
@@ -79,14 +82,6 @@ export function setupAutoScroll(
 
   function distanceFromBottom(): number {
     return el.scrollHeight - el.clientHeight - el.scrollTop;
-  }
-
-  function syncResizeTarget() {
-    const tail = el.lastElementChild;
-    if (tail === observedTail) return;
-    if (observedTail) resizeObserver.unobserve(observedTail);
-    observedTail = tail;
-    if (observedTail) resizeObserver.observe(observedTail);
   }
 
   function onScroll() {
@@ -124,12 +119,13 @@ export function setupAutoScroll(
     syncFollowLockAttribute();
   }
 
-  function scrollDown() {
+  function scheduleFollowScroll() {
     syncFollowLockAttribute();
     if (!opts.isTracking() || rafPending) return;
     rafPending = true;
     requestAnimationFrame(() => {
       rafPending = false;
+      if (disposed) return;
       syncFollowLockAttribute();
       if (!opts.isTracking()) return;
       el.scrollTop = el.scrollHeight;
@@ -140,22 +136,8 @@ export function setupAutoScroll(
 
   el.addEventListener("scroll", onScroll, { passive: true });
 
-  const resizeObserver = new ResizeObserver(scrollDown);
-  resizeObserver.observe(el);
-  syncResizeTarget();
-
-  const mutationObserver = new MutationObserver((records) => {
-    if (records.some((record) => record.type === "childList")) {
-      syncResizeTarget();
-    }
-    scrollDown();
-  });
-  // Observe only top-level child-list changes. Streaming text mutates inside
-  // the current tail card; the tail ResizeObserver above catches resulting
-  // height changes without routing every nested DOM write through scroll code.
-  mutationObserver.observe(el, { childList: true });
-
   requestAnimationFrame(() => {
+    if (disposed) return;
     syncFollowLockAttribute();
     el.scrollTop = el.scrollHeight;
     programScrollTarget = el.scrollTop;
@@ -164,12 +146,11 @@ export function setupAutoScroll(
 
   return {
     cleanup: () => {
+      disposed = true;
       el.removeEventListener("scroll", onScroll);
-      mutationObserver.disconnect();
-      resizeObserver.disconnect();
-      observedTail = null;
       delete el.dataset.followLock;
     },
+    contentChanged: scheduleFollowScroll,
     scrollToBottom: () => {
       syncFollowLockAttribute();
       el.scrollTop = el.scrollHeight;

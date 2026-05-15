@@ -1,0 +1,82 @@
+import { expect, test } from "bun:test";
+
+(globalThis as typeof globalThis & { __OPENCORVUS_OVERLAY_VERSION__?: string }).__OPENCORVUS_OVERLAY_VERSION__ = "test";
+
+const { setBoardStore } = await import("../src/store/board");
+const { cardTreeStore } = await import("../src/store/card-tree");
+const { applyEvent, resetWriter } = await import("../src/services/tree-writer");
+
+const TASK_ID = "tsk_visible_version";
+const SESSION_ID = "ses_visible_version";
+const MESSAGE_ID = "msg_visible_version";
+const PART_ID = "part_visible_version";
+
+function seedPart(): void {
+  setBoardStore("selectedTaskID", TASK_ID);
+  setBoardStore("board", {
+    task: {
+      id: TASK_ID,
+      status: "active",
+      request: "visible version",
+      sessionID: SESSION_ID,
+      time: { created: 1_776_000_000_000 },
+      attachments: [],
+    },
+    goalWorkflows: [],
+    interactions: [],
+  });
+  resetWriter();
+  applyEvent({
+    type: "message.updated",
+    properties: {
+      taskID: TASK_ID,
+      info: {
+        id: MESSAGE_ID,
+        sessionID: SESSION_ID,
+        role: "assistant",
+        resolvedRole: "assistant",
+        agent: "assistant",
+        channel: "assistant",
+        time: { created: 1_776_000_000_010 },
+      },
+    },
+  });
+  applyEvent({
+    type: "message.part.updated",
+    properties: {
+      taskID: TASK_ID,
+      part: {
+        id: PART_ID,
+        messageID: MESSAGE_ID,
+        sessionID: SESSION_ID,
+        resolvedRole: "assistant",
+        channel: "assistant",
+        type: "text",
+        text: "",
+      },
+    },
+  });
+}
+
+test("streaming part deltas advance the card tree visible version", () => {
+  try {
+    seedPart();
+    const before = cardTreeStore.visibleVersion;
+
+    applyEvent({
+      type: "message.part.delta",
+      properties: {
+        taskID: TASK_ID,
+        partID: PART_ID,
+        messageID: MESSAGE_ID,
+        sessionID: SESSION_ID,
+        field: "text",
+        delta: "hello",
+      },
+    });
+
+    expect(cardTreeStore.visibleVersion).toBeGreaterThan(before);
+  } finally {
+    resetWriter();
+  }
+});

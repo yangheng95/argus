@@ -19,7 +19,13 @@
 
 import { batch, createEffect } from "solid-js";
 import { produce } from "solid-js/store";
-import { cardTreeStore, setCardTreeStore, type CardNode, type CardStatus } from "../store/card-tree";
+import {
+  cardTreeStore,
+  markCardTreeVisibleChanged,
+  setCardTreeStore,
+  type CardNode,
+  type CardStatus,
+} from "../store/card-tree";
 import { boardStore, setBoardProjectionHandler } from "../store/board";
 import { agentStageLabel, normalizeAgentRole, roleLabel } from "../utils/message";
 import { stageAccent } from "../utils/card-color";
@@ -171,6 +177,14 @@ export function resetWriter(): void {
       for (const k of Object.keys(c)) delete c[k];
     }),
   );
+  markCardTreeVisibleChanged();
+}
+
+function applyVisibleCardTreeEvent(handler: () => void): void {
+  batch(() => {
+    handler();
+    markCardTreeVisibleChanged();
+  });
 }
 
 /** Top-level dispatcher. Unknown event types throw by design (rule 1:
@@ -181,9 +195,9 @@ export function applyEvent(event: any): void {
   if (!type) throw new Error("tree-writer: event missing type");
 
   // ── Message stream ──
-  if (type === "message.updated") return handleMessageUpdated(event);
-  if (type === "message.part.updated") return handlePartUpdated(event);
-  if (type === "message.part.delta") return handlePartDelta(event);
+  if (type === "message.updated") return applyVisibleCardTreeEvent(() => handleMessageUpdated(event));
+  if (type === "message.part.updated") return applyVisibleCardTreeEvent(() => handlePartUpdated(event));
+  if (type === "message.part.delta") return applyVisibleCardTreeEvent(() => handlePartDelta(event));
 
   // ── Task / board ──
   if (type === "task.created" || type === "task.updated" || type === "task.completed") {
@@ -210,16 +224,16 @@ export function applyEvent(event: any): void {
   // Identity is `integrity:<taskID>` (stable per task) so all three events
   // land on the same card.
   if (type === "integrity.review.started") {
-    return handleIntegrityStarted(event);
+    return applyVisibleCardTreeEvent(() => handleIntegrityStarted(event));
   }
   if (type === "integrity.review.progress") {
-    return handleIntegrityProgress(event);
+    return applyVisibleCardTreeEvent(() => handleIntegrityProgress(event));
   }
   if (type === "integrity.review.chunk") {
-    return handleIntegrityChunk(event);
+    return applyVisibleCardTreeEvent(() => handleIntegrityChunk(event));
   }
   if (type === "integrity.review.completed") {
-    return handleIntegrityCompleted(event);
+    return applyVisibleCardTreeEvent(() => handleIntegrityCompleted(event));
   }
 
   // ── Session lifecycle (single source) ──
@@ -231,12 +245,12 @@ export function applyEvent(event: any): void {
   // analyze_intent / modify_goal / publish_delivery, future phases. See
   // specs/new-arch/07-panel-reactivity.md §session 终态信号源.
   if (type === "session.status") {
-    return handleSessionStatus(event);
+    return applyVisibleCardTreeEvent(() => handleSessionStatus(event));
   }
   // session.error carries provider/stream failures that can precede a later
   // secondary lifecycle status. Show the original error on the card directly.
   if (type === "session.error") {
-    return handleSessionError(event);
+    return applyVisibleCardTreeEvent(() => handleSessionError(event));
   }
   // session.idle is published alongside session.status when status flips to
   // idle. We already handle the lifecycle via session.status, so it's noop
@@ -245,7 +259,7 @@ export function applyEvent(event: any): void {
 
   // ── Cumulative LLM usage for a session (token + cost). ──
   if (type === "usage.updated") {
-    return handleUsageUpdated(event);
+    return applyVisibleCardTreeEvent(() => handleUsageUpdated(event));
   }
 
   // ── Interactive prompts that need operator response. ──
@@ -1437,6 +1451,7 @@ function rebuildBoardDerivedCards(): void {
     rebuildGoalStepCards(board);
     // Session-to-goal claiming.
     rebuildCardHierarchy();
+    markCardTreeVisibleChanged();
   });
 }
 

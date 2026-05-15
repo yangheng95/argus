@@ -1,4 +1,4 @@
-import { For, Show, onMount, onCleanup, createSignal } from "solid-js";
+import { For, Show, onMount, onCleanup, createSignal, createEffect, on } from "solid-js";
 import { Card } from "./Card";
 import { ChatBubble } from "./ChatBubble";
 import { TaskProgressBar } from "./TaskProgressBar";
@@ -6,7 +6,7 @@ import { cardTreeStore } from "../store/card-tree";
 import { boardStore } from "../store/board";
 import { t } from "../utils/i18n";
 import { renderAsBubble } from "../utils/chat-bubble";
-import { setupAutoScroll } from "../utils/dom-utils";
+import { setupAutoScroll, type AutoScrollController } from "../utils/dom-utils";
 import { StoreCardNode } from "./StoreCardNode";
 
 function clipText(value: string, limit = 96): string {
@@ -42,6 +42,7 @@ function taskStatusLabel(status: string): string {
 
 export function Conversation(props: { container: HTMLElement }) {
   const el = props.container;
+  let scrollController: AutoScrollController | undefined;
 
   const hasItems = () => cardTreeStore.order.length > 0;
 
@@ -94,14 +95,24 @@ export function Conversation(props: { container: HTMLElement }) {
       onUserScrollUp: () => setTracking(false),
       onAtBottom: () => setTracking(true),
     });
+    scrollController = c;
     // Conversation is rendered directly into an existing `.chat-scroll`
     // host (see main.tsx and TaskDetailOverlay). Keeping the passive
     // listener on that host preserves `.chat-scroll > .card` layout and
     // browser scroll performance without introducing a wrapper element.
     onCleanup(() => {
       c.cleanup();
+      scrollController = undefined;
     });
   });
+
+  createEffect(on(
+    () => cardTreeStore.visibleVersion,
+    () => {
+      scrollController?.contentChanged();
+    },
+    { defer: true },
+  ));
 
   const emptyText = () => t("chat.empty");
 

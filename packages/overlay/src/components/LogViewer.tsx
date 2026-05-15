@@ -14,7 +14,7 @@ import {
   Index,
   Show,
 } from "solid-js";
-import { setupAutoScroll } from "../utils/dom-utils";
+import { setupAutoScroll, type AutoScrollController } from "../utils/dom-utils";
 import { appStore, setAppStore, filteredLogEntries } from "../store/app";
 import type { LogEntry, LogLevel, LogSource } from "../store/app";
 import { t } from "../utils/i18n";
@@ -416,6 +416,7 @@ export interface LogViewerProps {
 
 export function LogViewer(props: LogViewerProps) {
   const [serverLogsSeq, setServerLogsSeq] = createSignal(0);
+  let logScrollController: AutoScrollController | undefined;
 
  // Merged & filtered log entries
   const entries = createMemo(() => {
@@ -456,6 +457,11 @@ export function LogViewer(props: LogViewerProps) {
     }
   });
 
+  createEffect(() => {
+    if (!props.open) return;
+    entries().length;
+    logScrollController?.contentChanged();
+  });
 
   return (
     <Dialog
@@ -550,7 +556,11 @@ export function LogViewer(props: LogViewerProps) {
             isTracking: () => true,
             onUserScrollUp: () => {},
           });
-          onCleanup(() => ctrl.cleanup());
+          logScrollController = ctrl;
+          onCleanup(() => {
+            ctrl.cleanup();
+            logScrollController = undefined;
+          });
         }}
       >
         <Show
