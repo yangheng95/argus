@@ -26,8 +26,10 @@ const I18N_EN_US = readFileSync(join(import.meta.dir, "../src/i18n/en-US.json"),
 
 test("Gateway component reuses boardStore as single source of truth (rule 8)", () => {
   expect(GATEWAY_TSX).toContain('import { boardStore')
-  // No private task list copy — ledger reads visibleTasks() from board store.
+  // No private task list copy — ledger reads the store-owned visibleTasks()
+  // projection when the Gateway page is active.
   expect(GATEWAY_TSX).toContain("visibleTasks()")
+  expect(GATEWAY_TSX).toContain("const gatewayTasks = createMemo(() => (isGatewayPage() ? visibleTasks() : []))")
   expect(GATEWAY_TSX).not.toMatch(/createStore\s*\(\s*\{[^}]*tasks\s*:/)
 })
 
@@ -120,7 +122,7 @@ test("Gateway action errors render at the page level so non-workbench states can
   // a ledger or channel-action failure with no selected task was
   // invisible. The page-level banner closes that hole.
   expect(GATEWAY_TSX).toContain('data-ui="gateway-global-action-error"')
-  expect(GATEWAY_TSX).toMatch(/<Show when=\{actionError\(\)\}>/)
+  expect(GATEWAY_TSX).toMatch(/<Show when=\{isGatewayPage\(\) && actionError\(\)\}>/)
   // The workbench MUST NOT duplicate the banner (single source — rule 8).
   expect(GATEWAY_TSX).not.toContain('data-ui="gateway-action-error"')
 })
@@ -190,9 +192,13 @@ test("loadChannelList also throws on non-array body (codex review P2)", () => {
   expect(SERVICES_GATEWAY).not.toMatch(/return Array\.isArray\(data\) \? \(data as ChannelInfo\[\]\) : \[\]/)
 })
 
-test("Gateway page CSS uses body[data-page-mode] to flip visibility — no signal-driven JSX hide", () => {
+test("Gateway page-mode keeps the page route in CSS and gates heavy hidden DOM", () => {
   expect(GATEWAY_CSS).toContain('body[data-page-mode="gateway"] .gateway-mount')
   expect(GATEWAY_CSS).toContain('body[data-page-mode="gateway"] > main.panel')
+  expect(GATEWAY_TSX).toMatch(/<Show when=\{isGatewayPage\(\)\}>[\s\S]*<GatewayTaskLedger/)
+  expect(GATEWAY_TSX).toContain("active={isGatewayPage()}")
+  expect(GATEWAY_TSX).toMatch(/<Show when=\{props\.active\}>[\s\S]*<GatewaySelectedTask/)
+  expect(GATEWAY_TSX).toMatch(/<Show[\s\S]*when=\{props\.composerOpen\}[\s\S]*<GatewayComposer/)
 })
 
 test("Gateway resources gate on directory + page mode (no DirectoryRequiredError on cold boot)", () => {

@@ -644,7 +644,7 @@ export function sortedTasks(data: { tasks?: any[] } | null | undefined): any[] {
  */
 export function taskByID(taskID: string | null | undefined): any | null {
   if (!taskID) return null;
-  return boardStore.tasks.find((item: any) => item?.task?.id === taskID) ?? null;
+  return visibleTaskIndex().get(taskID) ?? null;
 }
 
 /**
@@ -663,17 +663,48 @@ export function taskByRequestID(
  * plus the confirmed task list, sorted by creation time descending.
  */
 export function visibleTasks(): any[] {
+  return visibleTaskProjection().items;
+}
+
+let visibleTaskProjectionCache: {
+  tasks: any[];
+  pendingTasks: any[];
+  items: any[];
+  byID: Map<string, any>;
+} | null = null;
+
+function visibleTaskProjection(): { items: any[]; byID: Map<string, any> } {
+  const tasks = boardStore.tasks;
+  const pendingTasks = boardStore.pendingTasks;
+  if (
+    visibleTaskProjectionCache &&
+    visibleTaskProjectionCache.tasks === tasks &&
+    visibleTaskProjectionCache.pendingTasks === pendingTasks
+  ) {
+    return visibleTaskProjectionCache;
+  }
   const seen = new Set(
-    boardStore.tasks
+    tasks
       .map((item: any) => item?.task?.requestID || item?.task?.id)
       .filter(Boolean),
   );
-  return [
-    ...boardStore.pendingTasks.filter(
+  const items = [
+    ...pendingTasks.filter(
       (item: any) => !seen.has(item?.requestID || item?.task?.id),
     ),
-    ...boardStore.tasks,
+    ...tasks,
   ].sort((a, b) => taskCreatedAt(b) - taskCreatedAt(a));
+  const byID = new Map<string, any>();
+  for (const item of items) {
+    const id = item?.task?.id;
+    if (typeof id === "string" && id) byID.set(id, item);
+  }
+  visibleTaskProjectionCache = { tasks, pendingTasks, items, byID };
+  return visibleTaskProjectionCache;
+}
+
+function visibleTaskIndex(): Map<string, any> {
+  return visibleTaskProjection().byID;
 }
 
 // ── Task state classifiers ──
