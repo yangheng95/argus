@@ -23,15 +23,15 @@ async function resolveCreateTaskQueueDecision(input: {
     questions: [
       {
         header: "任务排队",
-        question: "这个新任务要排队等待，还是立即开始？",
+        question: "这个新任务要排队等待，还是在目录空闲时启动？",
         options: [
           {
-            label: "立即开始",
-            description: "新任务会马上运行，不等待同目录中正在进行的任务。",
+            label: "空闲即启动",
+            description: "当前目录空闲时马上运行；同目录已有任务在运行时进入目录队列。",
           },
           {
             label: "排队等待",
-            description: "新任务会等同目录中当前任务结束后再运行。",
+            description: "新任务进入目录队列，等同目录中当前任务结束后再运行。",
           },
         ],
         multiple: false,
@@ -40,7 +40,7 @@ async function resolveCreateTaskQueueDecision(input: {
     ],
   })
   const selected = answers?.[0]?.[0]
-  if (selected === "立即开始") return false
+  if (selected === "空闲即启动") return false
   if (selected === "排队等待") return true
   throw new Error("Task creation cancelled before selecting a start mode.")
 }

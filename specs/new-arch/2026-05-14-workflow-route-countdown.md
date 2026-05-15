@@ -19,8 +19,8 @@
 - 弹窗属于任务创建确认，owner surface 是 composer / conversation，不放到 titlebar。
 - 沿用 AppDialogHost，不创建第二套 modal 基础设施。
 - 二元任务创建决策（执行路径、是否排队）必须用可直接比较的卡片按钮，禁止下拉框。
-- Agent Team / Direct Build 与立即开始 / 排队等待两处弹窗都不再提供额外确认按钮；点击卡片立即生效。
-- 立即开始 / 排队等待弹窗也显示倒计时；倒计时结束自动采用推荐启动方式。
+- Agent Team / Direct Build 与空闲即启动 / 排队等待两处弹窗都不再提供额外确认按钮；点击卡片立即生效。
+- 空闲即启动 / 排队等待弹窗也显示倒计时；倒计时结束自动采用推荐启动方式。
 
 ## 改动范围
 
@@ -41,7 +41,7 @@
 - `packages/overlay/src/i18n/zh-CN.json` / `en-US.json`
   - 增加文案。
 - `packages/overlay/src/services/task.ts`
-  - `resolveTaskQueueDecision()` 使用同一套 task decision 卡片，默认推荐立即开始。
+  - `resolveTaskQueueDecision()` 使用同一套 task decision 卡片，默认推荐空闲即启动。
 - 测试
   - 更新 task creation 测试，验证选择 `workflow` / `build` 会进入请求体。
   - 增加 prompt hygiene 守护，锁住 multiple goals / implementation / acceptance / verification 进入 workflow 的规则。
@@ -53,7 +53,7 @@
 - 用户点击 Direct Build 后创建 `kind="build"` 任务。
 - 用户点击 Agent Team 或倒计时结束后创建 `kind="workflow"` 任务。
 - 弹窗视觉使用既有 Dialog / Button / token，不出现 titlebar 控制或割裂样式。
-- 是否排队提示框不出现 `<select>` 下拉框；立即开始 / 排队等待以卡片并列呈现。
-- Agent Team / Direct Build 和立即开始 / 排队等待都点击卡片即选择并继续，不出现重复确认 footer。
-- 立即开始 / 排队等待弹窗显示倒计时，倒计时结束后自动选择推荐项并继续创建任务。
+- 是否排队提示框不出现 `<select>` 下拉框；空闲即启动 / 排队等待以卡片并列呈现。
+- Agent Team / Direct Build 和空闲即启动 / 排队等待都点击卡片即选择并继续，不出现重复确认 footer。
+- 空闲即启动 / 排队等待弹窗显示倒计时，倒计时结束后自动选择推荐项并继续创建任务。
 - 编排器 prompt 明确：发现需要多个 goals 时走 requirements / architect goal graph，不能把多目标工作压成直接 build。

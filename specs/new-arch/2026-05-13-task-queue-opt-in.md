@@ -1,5 +1,10 @@
 # Task Queue Opt-In
 
+> Superseded by `2026-05-14-directory-queue-hard-gate.md` for same-directory
+> concurrency. Omitted `queue` / `queue:false` now means immediate eligibility:
+> the task starts only when its directory has no active task. It must not bypass
+> an active same-directory task.
+
 ## Requirement
 
 - New task creation defaults to no queue: omitted `queue` is `false`.

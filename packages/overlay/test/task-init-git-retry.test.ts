@@ -13,7 +13,7 @@ import type {
 // any other failure (or a declined prompt) must propagate unchanged.
 
 let dialogResponse: { confirmed: boolean } = { confirmed: true }
-let queueDialogResponse: { confirmed: boolean; value: string | null } = { confirmed: true, value: "queue" }
+let queueDialogResponse: { confirmed: boolean; value: string | null } = { confirmed: true, value: "start" }
 let routeDialogResponse: { confirmed: boolean; value: string | null } = { confirmed: true, value: "workflow" }
 const dialogCalls: Array<{ title?: string; message?: string; select?: boolean; kind?: string; countdownSeconds?: number }> = []
 const initCalls: number[] = []
@@ -74,7 +74,7 @@ beforeEach(() => {
   dialogCalls.length = 0
   initCalls.length = 0
   dialogResponse = { confirmed: true }
-  queueDialogResponse = { confirmed: true, value: "queue" }
+  queueDialogResponse = { confirmed: true, value: "start" }
   routeDialogResponse = { confirmed: true, value: "workflow" }
   initResult = true
 })
@@ -178,7 +178,7 @@ describe("createTask + WorktreeNotGitError init-git retry", () => {
     expect(initCalls.length).toBe(0)
   })
 
-  test("missing queue decision opens a card decision dialog and posts the chosen queue value", async () => {
+  test("missing queue decision opens a card decision dialog and defaults to immediate eligibility", async () => {
     let posted: any
     __setHostTransportForTest(
       fakeTransport((req) => {
@@ -193,6 +193,22 @@ describe("createTask + WorktreeNotGitError init-git retry", () => {
     expect(dialogCalls.some((item) => item.kind === "task-queue-decision")).toBe(true)
     expect(dialogCalls.some((item) => item.kind === "task-queue-decision" && item.select === true)).toBe(false)
     expect(dialogCalls.find((item) => item.kind === "task-queue-decision")?.countdownSeconds).toBe(8)
+    expect(posted.queue).toBe(false)
+  })
+
+  test("queue decision posts true when the user chooses queue", async () => {
+    let posted: any
+    queueDialogResponse = { confirmed: true, value: "queue" }
+    __setHostTransportForTest(
+      fakeTransport((req) => {
+        posted = req.body?.kind === "json" ? req.body.value : JSON.parse(String(req.body))
+        return { status: 200, ok: true, headers: {}, body: { task_id: "tsk_queue_choice" } }
+      }),
+    )
+
+    const taskID = await createTask({ text: "hello", kind: "workflow" })
+
+    expect(taskID).toBe("tsk_queue_choice")
     expect(posted.queue).toBe(true)
   })
 

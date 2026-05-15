@@ -5269,7 +5269,7 @@ export function createOrchestratorTools(input: {
         queue: z
           .boolean()
           .default(false)
-          .describe("Set true when this confirmed follow-up task should wait behind active tasks in the same directory; set false to start immediately."),
+          .describe("Set true when this confirmed follow-up task should wait in the directory queue; set false when it may start as soon as the same directory is idle."),
         kind: z.enum(["workflow", "build"]).default("workflow"),
       }),
       execute: async ({ title, request, reason, priority, queue, kind }) => {
