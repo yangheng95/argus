@@ -145,6 +145,38 @@ test("data-driven content changes preserve manual scroll position when tracking 
   ctrl.cleanup();
 });
 
+test("transcript replacement can re-arm bottom follow after manual scroll lock", () => {
+  const el = createScrollElement();
+  let tracking = true;
+
+  const ctrl = setupAutoScroll(el as any, {
+    isTracking: () => tracking,
+    onUserScrollUp: () => {
+      tracking = false;
+    },
+  });
+
+  el.scrollTop = 140;
+  el.dispatchEvent(new Event("scroll"));
+  expect(tracking).toBe(false);
+
+  // Whole-transcript replacement clears the scroll range; the browser clamps
+  // the viewport to the top while the old content is gone.
+  el.scrollHeight = 0;
+  el.scrollTop = 0;
+
+  // The scroll owner must explicitly scope follow-lock to the new transcript
+  // generation rather than leaking the old manual-scroll intent forward.
+  tracking = true;
+  ctrl.scrollToBottom();
+
+  el.scrollHeight = 420;
+  ctrl.contentChanged();
+
+  expect(el.scrollTop).toBe(320);
+  ctrl.cleanup();
+});
+
 test("chat scroll keeps browser overflow anchoring enabled", () => {
   const css = readFileSync(join(import.meta.dir, "../src/styles/surfaces/conversation.css"), "utf8");
   const chatScrollRule = css.match(/\.chat-scroll\s*\{[^}]*\}/)?.[0] ?? "";

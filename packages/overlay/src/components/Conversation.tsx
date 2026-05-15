@@ -107,6 +107,15 @@ export function Conversation(props: { container: HTMLElement }) {
   });
 
   createEffect(on(
+    () => cardTreeStore.treeEpoch,
+    () => {
+      setTracking(true);
+      scrollController?.scrollToBottom();
+    },
+    { defer: true },
+  ));
+
+  createEffect(on(
     () => cardTreeStore.visibleVersion,
     () => {
       scrollController?.contentChanged();

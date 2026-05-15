@@ -1,4 +1,6 @@
 import { expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 (globalThis as typeof globalThis & { __OPENCORVUS_OVERLAY_VERSION__?: string }).__OPENCORVUS_OVERLAY_VERSION__ = "test";
 
@@ -85,4 +87,21 @@ test("streaming part deltas advance the card tree visible version", () => {
   } finally {
     resetWriter();
   }
+});
+
+test("resetWriter advances the card tree epoch for transcript replacement boundaries", () => {
+  try {
+    const before = cardTreeStore.treeEpoch;
+    resetWriter();
+    expect(cardTreeStore.treeEpoch).toBe(before + 1);
+  } finally {
+    resetWriter();
+  }
+});
+
+test("Conversation re-arms follow lock from the card tree epoch", () => {
+  const source = readFileSync(join(import.meta.dir, "../src/components/Conversation.tsx"), "utf8");
+  expect(source).toContain("() => cardTreeStore.treeEpoch");
+  expect(source).toContain("setTracking(true);");
+  expect(source).toContain("scrollController?.scrollToBottom();");
 });
