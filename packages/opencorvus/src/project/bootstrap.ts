@@ -10,6 +10,7 @@ import { Instance } from "./instance"
 import { Vcs } from "./vcs"
 import { Log } from "@/util/log"
 import { ProjectGC } from "./gc"
+import { WorktreeGC } from "../worktree/gc"
 import { Truncate } from "../tool/truncation"
 import { CronService } from "../scheduler/cron-service"
 import { EventService } from "../scheduler/event-service"
@@ -31,6 +32,9 @@ export async function InstanceBootstrap() {
   // Snapshot has no init/cleanup of its own — disk reclaim is ProjectGC's
   // sole responsibility (whole-project rm). See snapshot/index.ts.
   ProjectGC.init()
+  // Phase F of specs/new-arch/10-worktree-lifecycle.md — periodic sweep of
+  // orphaned goal worktrees (age + clean + no in-transit commits + not live).
+  WorktreeGC.init()
   Truncate.init()
   CronService.init()
   EventService.init()
