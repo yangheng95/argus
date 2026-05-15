@@ -1125,6 +1125,7 @@ fn overlay_attention_set<R: Runtime>(app: AppHandle<R>, active: bool) -> Result<
 }
 
 #[tauri::command]
+#[cfg(feature = "devtools")]
 fn overlay_toggle_devtools<R: Runtime>(app: AppHandle<R>) -> Result<bool, String> {
     if let Some(window) = app.get_webview_window("main") {
         if window.is_devtools_open() {
@@ -1139,11 +1140,14 @@ fn overlay_toggle_devtools<R: Runtime>(app: AppHandle<R>) -> Result<bool, String
 }
 
 fn main() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
-        .invoke_handler(tauri::generate_handler![
+        ;
+
+    #[cfg(feature = "devtools")]
+    let builder = builder.invoke_handler(tauri::generate_handler![
             overlay_settings_load,
             overlay_settings_save,
             overlay_server_info,
@@ -1157,7 +1161,25 @@ fn main() {
             overlay_pick_files,
             overlay_attention_set,
             overlay_toggle_devtools
-        ])
+    ]);
+
+    #[cfg(not(feature = "devtools"))]
+    let builder = builder.invoke_handler(tauri::generate_handler![
+            overlay_settings_load,
+            overlay_settings_save,
+            overlay_server_info,
+            overlay_server_restart,
+            overlay_open_path,
+            overlay_open_url,
+            overlay_open_project_editor,
+            overlay_create_dir,
+            overlay_write_file,
+            overlay_pick_dir,
+            overlay_pick_files,
+            overlay_attention_set
+    ]);
+
+    builder
         .setup(|app| {
             app.manage(Server(Mutex::new(ServerState::default())));
             app.manage(TrayAttention {
