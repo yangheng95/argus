@@ -24,7 +24,7 @@ import { iife } from "@/util/iife"
 import { defer } from "../../util/defer"
 import { fileURLToPath, pathToFileURL } from "bun"
 import type { PromptInput } from "./schema"
-import { isDecodableText, decodeDataUrlText } from "../text-mime"
+import { isDecodableText, decodeDataUrlBase64, decodeDataUrlText } from "../text-mime"
 import { AttachmentStore } from "@/storage/attachment-store"
 
 const log = Log.create({ service: "session.prompt" })
@@ -221,7 +221,30 @@ export async function createUserMessage(input: PromptInput) {
                   },
                 ]
               }
-              break
+              {
+                const bytes = Buffer.from(
+                  decodeDataUrlBase64(
+                    part.url,
+                    `SessionPrompt.createUserMessage binary file part ${part.filename ?? part.mime}`,
+                  ),
+                  "base64",
+                )
+                const fileRef = await AttachmentStore.write(
+                  Instance.project.id,
+                  bytes,
+                  part.mime,
+                  part.filename,
+                )
+                return [
+                  {
+                    ...part,
+                    messageID: info.id,
+                    sessionID: input.sessionID,
+                    url: fileRef.url,
+                    mime: fileRef.mime,
+                  },
+                ]
+              }
             case "file:": {
               log.info("file", { mime: part.mime })
               const filepath = fileURLToPath(part.url)

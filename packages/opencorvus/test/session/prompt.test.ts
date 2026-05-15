@@ -5,12 +5,62 @@ import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
 import { Message } from "../../src/session/message"
 import { SessionPrompt } from "../../src/session/prompt"
+import { AttachmentStore } from "../../src/storage/attachment-store"
 import { Log } from "../../src/util/log"
 import { tmpdir } from "../fixture/fixture"
 
 Log.init({ print: false })
 
 describe("session.prompt missing file", () => {
+  test("materializes binary data URL file parts into AttachmentStore refs before persistence", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      config: {
+        agent: {
+          build: {
+            model: "openai/gpt-5.2",
+          },
+        },
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ kind: "build" })
+        const pngBytes = Buffer.from([0x89, 0x50, 0x4e, 0x47])
+
+        const msg = await SessionPrompt.prompt({
+          sessionID: session.id,
+          agent: "build",
+          noReply: true,
+          parts: [
+            { type: "text", text: "use the attached visual reference" },
+            {
+              type: "file",
+              mime: "image/png",
+              filename: "reference.png",
+              url: `data:image/png;base64,${pngBytes.toString("base64")}`,
+            },
+          ],
+        })
+
+        if (msg.info.role !== "user") throw new Error("expected user message")
+        const stored = await Message.get({ sessionID: session.id, messageID: msg.info.id })
+        const filePart = stored.parts.find((part) => part.type === "file")
+        if (!filePart || filePart.type !== "file") throw new Error("expected stored file part")
+
+        expect(filePart.url.startsWith("data:")).toBe(false)
+        const located = AttachmentStore.nameFromUrl(filePart.url)
+        expect(located).toBeTruthy()
+        const roundTrip = await AttachmentStore.read(located!.projectID, located!.name)
+        expect(roundTrip.equals(pngBytes)).toBe(true)
+
+        await Session.remove(session.id)
+      },
+    })
+  }, 20000)
+
   test("does not fail the prompt when a file part is missing", async () => {
     await using tmp = await tmpdir({
       git: true,
