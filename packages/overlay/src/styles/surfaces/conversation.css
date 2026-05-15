@@ -23,6 +23,10 @@
   background: var(--chat-canvas);
 }
 
+.chat-scroll[data-follow-lock="true"] {
+  overflow-anchor: none;
+}
+
 .conversation-body {
   flex: 1 1 auto;
   display: flex;

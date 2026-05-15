@@ -92,21 +92,13 @@ export function Conversation(props: { container: HTMLElement }) {
     const c = setupAutoScroll(el, {
       isTracking: tracking,
       onUserScrollUp: () => setTracking(false),
+      onAtBottom: () => setTracking(true),
     });
-    const resumeTracking = () => {
-      if (tracking()) return;
-      const distanceFromBottom = el.scrollHeight - el.clientHeight - el.scrollTop;
-      if (distanceFromBottom <= 8) {
-        setTracking(true);
-      }
-    };
     // Conversation is rendered directly into an existing `.chat-scroll`
     // host (see main.tsx and TaskDetailOverlay). Keeping the passive
     // listener on that host preserves `.chat-scroll > .card` layout and
     // browser scroll performance without introducing a wrapper element.
-    el.addEventListener("scroll", resumeTracking, { passive: true });
     onCleanup(() => {
-      el.removeEventListener("scroll", resumeTracking);
       c.cleanup();
     });
   });
