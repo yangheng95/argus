@@ -17,7 +17,7 @@
 //   - per-executor model → appStore.executors via setExecutorModel
 //   - project default model → appStore.config.model via patchConfig
 
-import { createMemo, For, onCleanup, Show } from "solid-js";
+import { createMemo, createSignal, For, onCleanup, Show } from "solid-js";
 import { useHotkey } from "../solid/hotkey";
 import { appStore } from "../store/app";
 import { settingsStore, setSettingsStore, saveSettings, sanitizeExecutor } from "../store/settings";
@@ -32,6 +32,7 @@ import {
   setExecutorModel,
 } from "../services/executor";
 import { patchConfig } from "../services/config";
+import { loadProviderInfo } from "../services/init";
 import { t } from "../utils/i18n";
 import { Button } from "./ui/Button";
 
@@ -161,6 +162,7 @@ export function ExecutorSelector() {
   // popover stack never overlaps.
   const mirror = useDisclosure();
   const external = useDisclosure();
+  const [providerLoading, setProviderLoading] = createSignal(false);
 
   const activeID = createMemo(() => sanitizeExecutor(settingsStore.executor));
   const isExternalActive = createMemo(() => activeID() !== INTERNAL_EXECUTOR_ID);
@@ -200,11 +202,24 @@ export function ExecutorSelector() {
 
   function openMirror() {
     external.close();
+    void ensureProviderInfoLoaded();
     mirror.openIt();
   }
   function openExternal() {
     mirror.close();
+    void ensureProviderInfoLoaded();
     external.openIt();
+  }
+
+  async function ensureProviderInfoLoaded(): Promise<void> {
+    if (providerLoading()) return;
+    if (appStore.providerCatalog) return;
+    setProviderLoading(true);
+    try {
+      await loadProviderInfo();
+    } finally {
+      setProviderLoading(false);
+    }
   }
 
   let mirrorRef: HTMLDivElement | undefined;
@@ -299,7 +314,7 @@ export function ExecutorSelector() {
             when={mirrorGroups().length > 0}
             fallback={
               <div class="executor-popover-empty">
-                {t("executor.mirror_no_connected_providers")}
+                {providerLoading() ? t("common.loading") : t("executor.mirror_no_connected_providers")}
               </div>
             }
           >
@@ -392,7 +407,7 @@ export function ExecutorSelector() {
               when={focusedGroups().length > 0}
               fallback={
                 <div class="executor-popover-empty">
-                  {t("executor.external_no_models")}
+                  {providerLoading() ? t("common.loading") : t("executor.external_no_models")}
                 </div>
               }
             >

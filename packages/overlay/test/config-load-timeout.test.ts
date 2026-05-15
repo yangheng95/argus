@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { loadConfigInfo } from "../src/services/init";
+import { loadConfigInfo, loadSettingsInfo } from "../src/services/init";
 import { __setHostTransportForTest } from "../src/services/host-transport";
 import { appStore, setAppStore } from "../src/store/app";
 import type {
@@ -41,6 +41,29 @@ afterEach(() => {
 });
 
 describe("loadConfigInfo", () => {
+  test("startup mode does not request settings-only provider or prompt data", async () => {
+    const requested: string[] = [];
+    __setHostTransportForTest(
+      fakeTransport((req) => {
+        requested.push(req.path);
+        if (req.path === "config") {
+          return { status: 200, ok: true, headers: {}, body: { model: "openai/gpt-4o-mini" } };
+        }
+        if (req.path === "channel") {
+          return { status: 200, ok: true, headers: {}, body: [] };
+        }
+        throw new Error(`unexpected route ${req.path}`);
+      }),
+    );
+
+    await loadConfigInfo(5, { includeSettingsData: false });
+
+    expect(appStore.config).toEqual({ model: "openai/gpt-4o-mini" });
+    expect(appStore.providerCatalog).toBeNull();
+    expect(appStore.promptEntries).toEqual([]);
+    expect(requested).toEqual(["config", "channel"]);
+  });
+
   test("does not hang when provider catalog loading stalls", async () => {
     __setHostTransportForTest(
       fakeTransport((req) => {
@@ -71,7 +94,7 @@ describe("loadConfigInfo", () => {
       }),
     );
 
-    await loadConfigInfo(5);
+    await loadSettingsInfo(5);
 
     expect(appStore.config).toEqual({ model: "openai/gpt-4o-mini" });
     expect(appStore.providerCatalog).toBeNull();
@@ -116,7 +139,7 @@ describe("loadConfigInfo", () => {
       }),
     );
 
-    await loadConfigInfo(5);
+    await loadSettingsInfo(5);
 
     expect(appStore.config).toEqual({ model: "openai/gpt-4.1" });
     expect(appStore.providerCatalog).toEqual(existingCatalog);
@@ -161,9 +184,9 @@ describe("loadConfigInfo", () => {
       }),
     );
 
-    const first = loadConfigInfo(1_000);
+    const first = loadSettingsInfo(1_000);
     await new Promise((resolve) => setTimeout(resolve, 0));
-    await loadConfigInfo(1_000);
+    await loadSettingsInfo(1_000);
     expect(appStore.config).toEqual({ model: "openai/new" });
 
     releaseFirstConfig?.();

@@ -10,7 +10,7 @@ import {
   setTaskSequence,
   setSnapshotVersion,
 } from "../store/board";
-import { loadConfigInfo } from "./init";
+import { configRefreshIncludesSettingsData, loadConfigInfo, loadSettingsInfo } from "./init";
 import { applyEvent as applyTreeWriterEvent } from "./tree-writer";
 import { notifyTaskLifecycle, notifyInteractionRequested } from "./notify";
 import {
@@ -481,7 +481,10 @@ function scheduleConfigReload(): void {
   if (configKickTimer) clearTimeout(configKickTimer);
   configKickTimer = setTimeout(() => {
     configKickTimer = null;
-    void loadConfigInfo().catch((err: unknown) => {
+    const refresh = configRefreshIncludesSettingsData()
+      ? loadSettingsInfo()
+      : loadConfigInfo();
+    void refresh.catch((err: unknown) => {
       console.error("[sse] config.changed refresh failed", err);
     });
   }, CONFIG_EVENT_DEBOUNCE);

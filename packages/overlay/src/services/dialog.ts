@@ -5,7 +5,7 @@
 
 import { boardStore, loadBoard } from "../store/board";
 import { appStore } from "../store/app";
-import { loadConfigInfo } from "./init";
+import { loadSettingsInfo } from "./init";
 import { apiJson } from "./api";
 import { selectedTaskDirectory } from "../store/board";
 import { t } from "../utils/i18n";
@@ -123,7 +123,7 @@ export function renderAboutVersion(): void {
  */
 export function openConfigDialog(section?: string): void {
   setDialogStore("config", "open", true);
-  void loadConfigInfo().then(() => renderAboutVersion());
+  void loadSettingsInfo().then(() => renderAboutVersion());
 
   if (section) {
     focusConfigSection(section);

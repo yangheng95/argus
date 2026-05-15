@@ -1,6 +1,6 @@
 // ── PromptCatalog ──
 // Solid.js component that renders the prompt override editor.
-// Data source: appStore.promptEntries (populated by loadConfigInfo on connect).
+// Data source: appStore.promptEntries (populated when Settings data loads).
 // Save/reset: delegates to config.ts savePromptEntry / resetPromptEntry
 // which use the correct PATCH /config mechanism.
 
@@ -97,7 +97,7 @@ export default function PromptCatalog() {
   const [noticeTone, setNoticeTone] = createSignal("");
   const [saving, setSaving] = createSignal(false);
 
-  // Data source: reactive from appStore (populated by loadConfigInfo after connect)
+  // Data source: reactive from appStore (populated by Settings data loading)
   const entries = createMemo((): PromptEntry[] => {
     const raw = appStore.promptEntries;
     return Array.isArray(raw) ? raw as PromptEntry[] : [];

@@ -29,6 +29,7 @@ import {
 } from "../store/settings";
 import { appStore, setAppStore } from "../store/app";
 import { boardStore, setBoardStore, loadTasks, clearTasksForMissingDirectory } from "../store/board";
+import { dialogStore } from "../store/dialog";
 import { loadMeta } from "./meta";
 import { loadExtensions } from "./extensions";
 import { loadExecutors } from "./executor";
@@ -106,7 +107,9 @@ async function loadInitialData(): Promise<boolean> {
     loadTasks(),
     loadMeta(),
     loadExtensions(),
-    loadConfigInfo(),
+    loadConfigInfo(CONFIG_INFO_LOAD_TIMEOUT_MILLISECONDS, {
+      includeSettingsData: false,
+    }),
     loadExecutors(),
   ]);
   return true;
@@ -198,6 +201,10 @@ export function persistAndSyncSettings(): void {
 const CONFIG_INFO_LOAD_TIMEOUT_MILLISECONDS = 20_000;
 let configInfoLoadSequence = 0;
 
+export interface LoadConfigInfoOptions {
+  includeSettingsData?: boolean;
+}
+
 function loadErrorMessage(error: unknown): string {
   if (error instanceof Error && error.message) return error.message;
   return String(error);
@@ -214,39 +221,68 @@ function settledValue<T>(
   return fallback;
 }
 
+function providerInfoRequests(timeoutMilliseconds: number) {
+  return [
+    apiJsonWithTimeout("provider", timeoutMilliseconds),
+    apiJsonWithTimeout("provider/auth", timeoutMilliseconds),
+  ] as const;
+}
+
+function settledProviderInfo(
+  catalogResult: PromiseSettledResult<unknown>,
+  authResult: PromiseSettledResult<unknown>,
+  errors: Record<string, string>,
+): { catalog: unknown; auth: unknown } {
+  return {
+    catalog: settledValue("provider", catalogResult, appStore.providerCatalog ?? null, errors),
+    auth: settledValue("provider/auth", authResult, appStore.providerAuth ?? null, errors),
+  };
+}
+
 /**
- * Load server-side config, provider catalog, provider auth, channel list and
- * prompt entries from the API, then push everything into the Solid stores.
- * Pushes config, provider, channel, and prompt data into the Solid stores.
+ * Load server-side config and channel data into the Solid stores.
+ * Settings-only data is opt-in so cold start does not parse provider catalogs
+ * or prompt definitions before the corresponding UI is visible.
  */
 export async function loadConfigInfo(
   timeoutMilliseconds = CONFIG_INFO_LOAD_TIMEOUT_MILLISECONDS,
+  options: LoadConfigInfoOptions = {},
 ): Promise<void> {
   const loadSequence = ++configInfoLoadSequence;
+  const includeSettingsData = options.includeSettingsData === true;
   try {
-    const [configResult, catalogResult, authResult, channelsResult, promptsResult] = await Promise.allSettled([
-      apiJsonWithTimeout("config", timeoutMilliseconds),
-      apiJsonWithTimeout("provider", timeoutMilliseconds),
-      apiJsonWithTimeout("provider/auth", timeoutMilliseconds),
-      apiJsonWithTimeout("channel", timeoutMilliseconds),
-      apiJsonWithTimeout("config/prompt", timeoutMilliseconds),
+    const configRequest = apiJsonWithTimeout("config", timeoutMilliseconds);
+    const channelsRequest = apiJsonWithTimeout("channel", timeoutMilliseconds);
+    const settingsRequests = includeSettingsData
+      ? [
+          ...providerInfoRequests(timeoutMilliseconds),
+          apiJsonWithTimeout("config/prompt", timeoutMilliseconds),
+        ] as const
+      : [] as const;
+    const [configResult, channelsResult, ...settingsResults] = await Promise.allSettled([
+      configRequest,
+      channelsRequest,
+      ...settingsRequests,
     ]);
     const errors: Record<string, string> = {};
     const config = settledValue("config", configResult, appStore.config ?? null, errors);
-    const catalog = settledValue("provider", catalogResult, appStore.providerCatalog ?? null, errors);
-    const auth = settledValue("provider/auth", authResult, appStore.providerAuth ?? null, errors);
     const channels = settledValue(
       "channel",
       channelsResult,
       Array.isArray(appStore.channels) ? appStore.channels : [],
       errors,
     );
-    const prompts = settledValue(
-      "config/prompt",
-      promptsResult,
-      Array.isArray(appStore.promptEntries) ? appStore.promptEntries : [],
-      errors,
-    );
+    const providerInfo = includeSettingsData
+      ? settledProviderInfo(settingsResults[0], settingsResults[1], errors)
+      : { catalog: appStore.providerCatalog, auth: appStore.providerAuth };
+    const prompts = includeSettingsData
+      ? settledValue(
+          "config/prompt",
+          settingsResults[2],
+          Array.isArray(appStore.promptEntries) ? appStore.promptEntries : [],
+          errors,
+        )
+      : appStore.promptEntries;
     if (Object.keys(errors).length > 0) {
       console.warn("[init] loadConfigInfo partial failure", errors);
     }
@@ -256,14 +292,14 @@ export async function loadConfigInfo(
     // Push into appStore
     setAppStore({
       config: config ?? null,
-      providerCatalog: catalog ?? null,
-      providerAuth: auth ?? null,
+      providerCatalog: providerInfo.catalog ?? null,
+      providerAuth: providerInfo.auth ?? null,
       configLoadErrors: errors,
       channels: Array.isArray(channels) ? channels : [],
       promptEntries: Array.isArray(prompts) ? prompts : [],
     });
 
- // Sync tool_permissions from server config into settingsStore.
+    // Sync tool_permissions from server config into settingsStore.
     const remoteTP = (config as any)?.tool_permissions;
     if (remoteTP && typeof remoteTP === "object") {
       const def = DEFAULT_SETTINGS.toolPermissions;
@@ -282,6 +318,34 @@ export async function loadConfigInfo(
     console.warn("[init] loadConfigInfo failed", e);
     setAppStore("configLoadErrors", { loadConfigInfo: loadErrorMessage(e) });
   }
+}
+
+export async function loadProviderInfo(
+  timeoutMilliseconds = CONFIG_INFO_LOAD_TIMEOUT_MILLISECONDS,
+): Promise<void> {
+  const [catalogResult, authResult] = await Promise.allSettled(
+    providerInfoRequests(timeoutMilliseconds),
+  );
+  const errors: Record<string, string> = {};
+  const providerInfo = settledProviderInfo(catalogResult, authResult, errors);
+  if (Object.keys(errors).length > 0) {
+    console.warn("[init] loadProviderInfo partial failure", errors);
+  }
+  setAppStore({
+    providerCatalog: providerInfo.catalog ?? null,
+    providerAuth: providerInfo.auth ?? null,
+    configLoadErrors: errors,
+  });
+}
+
+export async function loadSettingsInfo(
+  timeoutMilliseconds = CONFIG_INFO_LOAD_TIMEOUT_MILLISECONDS,
+): Promise<void> {
+  await loadConfigInfo(timeoutMilliseconds, { includeSettingsData: true });
+}
+
+export function configRefreshIncludesSettingsData(): boolean {
+  return dialogStore.config.open;
 }
 
 // ── Workspace restoration ──

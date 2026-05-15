@@ -8,6 +8,7 @@ import { t } from "../../utils/i18n"
 import { appStore, setAppStore } from "../../store/app"
 import { updateConfig } from "../../services/config"
 import { apiJson, ApiError } from "../../services/api"
+import { loadProviderInfo } from "../../services/init"
 import {
   authenticateSelectedProvider,
   providerAuthMethods,
@@ -100,8 +101,7 @@ export default function ProvidersPanel() {
         return
       }
       setLastRefreshedAt(result.fetchedAt ?? Date.now())
-      const catalog = await apiJson("provider")
-      setAppStore("providerCatalog", catalog ?? null)
+      await loadProviderInfo()
     } catch (e) {
       setFormError(t("provider.refresh.failed", { reason: describeFailure(e) }))
     } finally {
@@ -161,11 +161,7 @@ export default function ProvidersPanel() {
   }
 
   async function refreshAuthState() {
-    const [catalog, auth] = await Promise.all([apiJson("provider"), apiJson("provider/auth")])
-    setAppStore({
-      providerCatalog: catalog ?? null,
-      providerAuth: auth ?? null,
-    })
+    await loadProviderInfo()
   }
 
   async function handleAuth(providerId: string) {

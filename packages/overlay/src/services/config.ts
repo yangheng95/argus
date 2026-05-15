@@ -259,7 +259,7 @@ export async function reloadProjectScope(options: { restoreWorkspace?: boolean }
  // Mirrors loadInitialData's parallel reload — must load all project-scope
  // data including tasks and executors so the UI fully reflects the new directory.
   await Promise.all([
-    loadConfigInfo().catch((e: unknown) => console.error("[reloadProjectScope] loadConfigInfo", e)),
+    loadConfigInfo(undefined, { includeSettingsData: false }).catch((e: unknown) => console.error("[reloadProjectScope] loadConfigInfo", e)),
     loadExtensions().catch((e: unknown) => console.error("[reloadProjectScope] loadExtensions", e)),
     loadMeta().catch((e: unknown) => console.error("[reloadProjectScope] loadMeta", e)),
     loadTasks().catch((e: unknown) => console.error("[reloadProjectScope] loadTasks", e)),
