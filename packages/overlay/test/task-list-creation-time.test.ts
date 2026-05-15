@@ -8,6 +8,7 @@ import {
   setTasksData,
   sortedTasks,
   taskCreatedAt,
+  taskByID,
   visibleTasks,
 } from "../src/store/board";
 
@@ -73,6 +74,17 @@ test("visibleTasks keeps pending and terminal rows sorted by creation time", () 
   setPendingTasks([pending]);
 
   expect(visibleTasks().map((item) => item.task.id)).toEqual(["pending", "active", "older-failed"]);
+});
+
+test("visibleTasks is the shared memoized task projection", () => {
+  const active = taskItem("active", 2_000, 4_000, "active");
+  const olderFailed = taskItem("older-failed", 1_000, 20_000, "failed");
+
+  setTasksData([olderFailed, active]);
+
+  const first = visibleTasks();
+  expect(visibleTasks()).toBe(first);
+  expect(taskByID("active")).toBe(first[0]);
 });
 
 test("task list refresh preserves unchanged row references", () => {

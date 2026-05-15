@@ -282,9 +282,10 @@ export function Gateway() {
   // ── Derived task views ─────────────────────────────────────────────
 
   const activeDirectory = () => settingsStore.directory || ""
+  const gatewayTasks = createMemo(() => (isGatewayPage() ? visibleTasks() : []))
 
   const filteredTasks = createMemo(() => {
-    const list = visibleTasks()
+    const list = gatewayTasks()
     const q = searchQuery().trim().toLowerCase()
     const f = filter()
     const s = scope()
@@ -326,7 +327,7 @@ export function Gateway() {
   // visibleTasks() and drifted away from the actual queue order).
   const queuedItemsByDir = createMemo(() => {
     const map = new Map<string, any[]>()
-    for (const item of visibleTasks()) {
+    for (const item of gatewayTasks()) {
       if (item?.task?.status !== "queued" || item?._pending) continue
       const dir = String(item?.task?.directory ?? "")
       if (!dir) continue
@@ -405,7 +406,7 @@ export function Gateway() {
   }
 
   const counts = createMemo(() => {
-    const list = visibleTasks()
+    const list = gatewayTasks()
     let active = 0
     let queued = 0
     let waiting = 0
@@ -535,21 +536,23 @@ export function Gateway() {
 
   return (
     <div class="gateway" data-ui="gateway-page">
-      <GatewayHeader
-        stats={stats()}
-        statsError={stats.error ? humanizeApiError(stats.error) : ""}
-        runtime={runtime()}
-        runtimeError={runtime.error ? humanizeApiError(runtime.error) : ""}
-        counts={counts()}
-        directory={activeDirectory()}
-        refreshing={stats.loading || runtime.loading || channels.loading}
-        composerOpen={composerOpen()}
-        onRefresh={() => void refreshAll()}
-        onCompose={() => setComposerOpen(true)}
-        onBack={handleBackToPanel}
-      />
+      <Show when={isGatewayPage()}>
+        <GatewayHeader
+          stats={stats()}
+          statsError={stats.error ? humanizeApiError(stats.error) : ""}
+          runtime={runtime()}
+          runtimeError={runtime.error ? humanizeApiError(runtime.error) : ""}
+          counts={counts()}
+          directory={activeDirectory()}
+          refreshing={stats.loading || runtime.loading || channels.loading}
+          composerOpen={composerOpen()}
+          onRefresh={() => void refreshAll()}
+          onCompose={() => setComposerOpen(true)}
+          onBack={handleBackToPanel}
+        />
+      </Show>
 
-      <Show when={actionError()}>
+      <Show when={isGatewayPage() && actionError()}>
         <div class="gateway-action-error" role="alert" data-ui="gateway-global-action-error">
           <span>
             {t("gateway.workbench.error_action_failed", {
@@ -569,34 +572,37 @@ export function Gateway() {
       </Show>
 
       <div class="gateway-body">
-        <GatewayTaskLedger
-          tasks={filteredTasks()}
-          selectedTaskID={boardStore.selectedTaskID}
-          filter={filter()}
-          onFilterChange={setFilter}
-          scope={scope()}
-          onScopeChange={setScope}
-          searchQuery={searchQuery()}
-          onSearchChange={setSearchQuery}
-          tasksError={boardStore.tasksError}
-          tasksLoaded={boardStore.tasksLoaded}
-          actionBusy={actionBusy()}
-          queuePosition={queuePosition}
-          canMoveUp={canMoveUp}
-          canMoveDown={canMoveDown}
-          onMoveTask={(item, direction) => void moveQueuedTask(item, direction)}
-          onStartTask={(item) => void handleStartQueuedTask(item)}
-          onSelectTask={(id) => {
-            setMessageNotice(null)
-            void selectTask(id)
-          }}
-          onCancelTask={(id) => void handleCancelTask(id)}
-          onRetryTask={(id) => void handleRetryTask(id)}
-          onDeleteTask={(id) => void handleDeleteTask(id)}
-          onRetryLoad={() => void loadTasks().catch(() => undefined)}
-        />
+        <Show when={isGatewayPage()}>
+          <GatewayTaskLedger
+            tasks={filteredTasks()}
+            selectedTaskID={boardStore.selectedTaskID}
+            filter={filter()}
+            onFilterChange={setFilter}
+            scope={scope()}
+            onScopeChange={setScope}
+            searchQuery={searchQuery()}
+            onSearchChange={setSearchQuery}
+            tasksError={boardStore.tasksError}
+            tasksLoaded={boardStore.tasksLoaded}
+            actionBusy={actionBusy()}
+            queuePosition={queuePosition}
+            canMoveUp={canMoveUp}
+            canMoveDown={canMoveDown}
+            onMoveTask={(item, direction) => void moveQueuedTask(item, direction)}
+            onStartTask={(item) => void handleStartQueuedTask(item)}
+            onSelectTask={(id) => {
+              setMessageNotice(null)
+              void selectTask(id)
+            }}
+            onCancelTask={(id) => void handleCancelTask(id)}
+            onRetryTask={(id) => void handleRetryTask(id)}
+            onDeleteTask={(id) => void handleDeleteTask(id)}
+            onRetryLoad={() => void loadTasks().catch(() => undefined)}
+          />
+        </Show>
 
         <GatewayWorkbench
+          active={isGatewayPage()}
           composerOpen={composerOpen()}
           onCloseComposer={() => setComposerOpen(false)}
           hasSelection={hasSelection()}
@@ -615,40 +621,42 @@ export function Gateway() {
           onOpenInPanel={handleOpenInPanel}
         />
 
-        <GatewayChannelPanel
-          channels={channels()}
-          channelsError={channels.error ? humanizeApiError(channels.error) : ""}
-          runtime={runtime()}
-          runtimeError={runtime.error ? humanizeApiError(runtime.error) : ""}
-          restartError={channelRestartError()}
-          bindings={bindings()}
-          bindingsError={bindings.error ? humanizeApiError(bindings.error) : ""}
-          selectedTaskID={boardStore.selectedTaskID}
-          actionBusy={actionBusy()}
-          onRestartRuntime={async () => {
-            // Restart errors live in `channelRestartError` (rendered by
-            // the channel panel itself) instead of the workbench
-            // `actionError` block. The channel panel is the surface the
-            // operator is looking at when they click Restart.
-            if (actionBusy()) return
-            // `<verb>:<scope>` so actionVerbLabel can map this to a
-            // translated label. Pre-fix this was "channel:restart", which
-            // pulled the noun out as the verb and produced the wrong i18n
-            // lookup (rule 8 single source — actionBusy keys share one
-            // grammar across the surface).
-            setActionBusy("restart:channel")
-            setChannelRestartError("")
-            try {
-              const next = await restartChannelRuntime()
-              runtimeCtl.mutate(next)
-            } catch (err) {
-              setChannelRestartError(humanizeApiError(err))
-            } finally {
-              setActionBusy("")
-            }
-          }}
-          onRefreshChannels={() => void Promise.allSettled([channelsCtl.refetch(), runtimeCtl.refetch(), bindingsCtl.refetch()])}
-        />
+        <Show when={isGatewayPage()}>
+          <GatewayChannelPanel
+            channels={channels()}
+            channelsError={channels.error ? humanizeApiError(channels.error) : ""}
+            runtime={runtime()}
+            runtimeError={runtime.error ? humanizeApiError(runtime.error) : ""}
+            restartError={channelRestartError()}
+            bindings={bindings()}
+            bindingsError={bindings.error ? humanizeApiError(bindings.error) : ""}
+            selectedTaskID={boardStore.selectedTaskID}
+            actionBusy={actionBusy()}
+            onRestartRuntime={async () => {
+              // Restart errors live in `channelRestartError` (rendered by
+              // the channel panel itself) instead of the workbench
+              // `actionError` block. The channel panel is the surface the
+              // operator is looking at when they click Restart.
+              if (actionBusy()) return
+              // `<verb>:<scope>` so actionVerbLabel can map this to a
+              // translated label. Pre-fix this was "channel:restart", which
+              // pulled the noun out as the verb and produced the wrong i18n
+              // lookup (rule 8 single source — actionBusy keys share one
+              // grammar across the surface).
+              setActionBusy("restart:channel")
+              setChannelRestartError("")
+              try {
+                const next = await restartChannelRuntime()
+                runtimeCtl.mutate(next)
+              } catch (err) {
+                setChannelRestartError(humanizeApiError(err))
+              } finally {
+                setActionBusy("")
+              }
+            }}
+            onRefreshChannels={() => void Promise.allSettled([channelsCtl.refetch(), runtimeCtl.refetch(), bindingsCtl.refetch()])}
+          />
+        </Show>
       </div>
     </div>
   )
@@ -1153,6 +1161,7 @@ function GatewayLedgerRow(props: {
 // ── Workbench (center column) ─────────────────────────────────────────
 
 function GatewayWorkbench(props: {
+  active: boolean
   composerOpen: boolean
   onCloseComposer: () => void
   hasSelection: boolean
@@ -1175,25 +1184,27 @@ function GatewayWorkbench(props: {
       <Show
         when={props.composerOpen}
         fallback={
-          <Show
-            when={props.hasSelection}
-            fallback={<GatewayEmptyWorkbench />}
-          >
-            <GatewaySelectedTask
-              item={props.selectedItem}
-              board={props.board}
-              messageDraft={props.messageDraft}
-              onMessageDraftChange={props.onMessageDraftChange}
-              messageSending={props.messageSending}
-              messageNotice={props.messageNotice}
-              actionBusy={props.actionBusy}
-              actionError={props.actionError}
-              onSendMessage={props.onSendMessage}
-              onCancelTask={props.onCancelTask}
-              onRetryTask={props.onRetryTask}
-              onReplanTask={props.onReplanTask}
-              onOpenInPanel={props.onOpenInPanel}
-            />
+          <Show when={props.active}>
+            <Show
+              when={props.hasSelection}
+              fallback={<GatewayEmptyWorkbench />}
+            >
+              <GatewaySelectedTask
+                item={props.selectedItem}
+                board={props.board}
+                messageDraft={props.messageDraft}
+                onMessageDraftChange={props.onMessageDraftChange}
+                messageSending={props.messageSending}
+                messageNotice={props.messageNotice}
+                actionBusy={props.actionBusy}
+                actionError={props.actionError}
+                onSendMessage={props.onSendMessage}
+                onCancelTask={props.onCancelTask}
+                onRetryTask={props.onRetryTask}
+                onReplanTask={props.onReplanTask}
+                onOpenInPanel={props.onOpenInPanel}
+              />
+            </Show>
           </Show>
         }
       >
