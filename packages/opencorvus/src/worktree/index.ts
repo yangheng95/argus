@@ -36,6 +36,18 @@ export namespace Worktree {
     }
   }
 
+  /**
+   * Single source for the per-project worktree root. Goal worktrees live
+   * UNDER `<primary>/.opencorvus/worktrees/` (co-located with other runtime
+   * scratch, covered by the `/.opencorvus/` .gitignore entry). `create()`
+   * and `WorktreeGC` MUST both derive the root from here — two inline
+   * `path.join(...,".opencorvus","worktrees")` would be a double source
+   * (rule 8) and the GC sweep could scan the wrong directory.
+   */
+  export function worktreesRoot(primaryDir: string) {
+    return path.join(primaryDir, ".opencorvus", "worktrees")
+  }
+
   export const Event = {
     Ready: BusEvent.define(
       "worktree.ready",
@@ -894,7 +906,7 @@ export namespace Worktree {
       throw new CreateFailedError({ message: err instanceof Error ? err.message : String(err) })
     })
     const primaryDir = primary.directory
-    const root = path.join(primaryDir, ".opencorvus", "worktrees")
+    const root = worktreesRoot(primaryDir)
     await fs.mkdir(root, { recursive: true })
 
     const base = input?.name ? slug(input.name) : ""
