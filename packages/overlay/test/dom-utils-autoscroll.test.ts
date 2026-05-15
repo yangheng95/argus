@@ -150,6 +150,7 @@ test("chat scroll keeps browser overflow anchoring enabled", () => {
   const chatScrollRule = css.match(/\.chat-scroll\s*\{[^}]*\}/)?.[0] ?? "";
   const followLockRule = css.match(/\.chat-scroll\[data-follow-lock="true"\]\s*\{[^}]*\}/)?.[0] ?? "";
   expect(chatScrollRule).toContain("overflow-anchor: auto");
+  expect(chatScrollRule).toMatch(/contain:\s*layout\b/);
   expect(chatScrollRule).not.toContain("overflow-anchor: none");
   expect(followLockRule).toContain("overflow-anchor: none");
 });

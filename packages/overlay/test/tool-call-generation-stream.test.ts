@@ -3,9 +3,13 @@ import { describe, expect, test } from "bun:test"
 describe("tool call generation stream", () => {
   test("projects executor tool deltas into tool state.raw", async () => {
     ;(globalThis as any).__OPENCORVUS_OVERLAY_VERSION__ = "test"
+    if (typeof globalThis.requestAnimationFrame === "undefined") {
+      ;(globalThis as any).requestAnimationFrame = (() => 1) as any
+      ;(globalThis as any).cancelAnimationFrame = (() => {}) as any
+    }
     const { cardTreeStore } = await import("../src/store/card-tree")
     const { routeSSEEvent } = await import("../src/services/events")
-    const { resetWriter } = await import("../src/services/tree-writer")
+    const { flushBufferedPartDeltas, resetWriter } = await import("../src/services/tree-writer")
     const { describeToolPart } = await import("../src/utils/tool")
     const toolPart = () => {
       const card = cardTreeStore.cards["executor:session:ses_tool_stream"]
@@ -38,6 +42,7 @@ describe("tool call generation stream", () => {
         delta: "\"content\":\"console.log(1)\"}",
       },
     })
+    flushBufferedPartDeltas()
 
     const part = toolPart()
     expect(part?.state?.raw).toBe("{\"path\":\"src/app.ts\",\"content\":\"console.log(1)\"}")

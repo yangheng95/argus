@@ -157,10 +157,24 @@ interface ProjectedSessionStatus {
 }
 const pendingSessionStatus = new Map<string, ProjectedSessionStatus>();
 
+interface BufferedPartDelta {
+  event: any;
+  delta: string;
+}
+
+const bufferedPartDeltas = new Map<string, BufferedPartDelta>();
+let bufferedPartDeltaFrame: number | null = null;
+
 // ── Entry point ──
 
 /** Reset all writer state + cardTreeStore. Called on task switch and in tests. */
 export function resetWriter(): void {
+  try {
+    flushBufferedPartDeltas();
+  } finally {
+    cancelBufferedPartDeltaFrame();
+    bufferedPartDeltas.clear();
+  }
   sessions.clear();
   messages.clear();
   knownGoalIDs.clear();
@@ -187,17 +201,85 @@ function applyVisibleCardTreeEvent(handler: () => void): void {
   });
 }
 
+function cancelBufferedPartDeltaFrame(): void {
+  if (bufferedPartDeltaFrame === null) return;
+  cancelAnimationFrame(bufferedPartDeltaFrame);
+  bufferedPartDeltaFrame = null;
+}
+
+function validatePartDeltaTarget(event: any): {
+  key: string;
+  delta: string;
+} {
+  const p = propsOf(event);
+  const partID = String(p.partID || "");
+  const sessionID = String(p.sessionID || "");
+  const field = String(p.field || "");
+  if (!partID || !sessionID || !field) {
+    throw new Error("message.part.delta missing partID/sessionID/field");
+  }
+  const session = sessions.get(sessionID);
+  if (!session) throw new Error(`message.part.delta: unknown session ${sessionID}`);
+  if (session.partIndex.get(partID) === undefined) {
+    throw new Error(`message.part.delta: unknown part ${partID} in session ${sessionID}`);
+  }
+  return {
+    key: `${sessionID}|${partID}|${field}`,
+    delta: typeof p.delta === "string" ? p.delta : "",
+  };
+}
+
+function mergedPartDeltaEvent(entry: BufferedPartDelta): any {
+  const props = propsOf(entry.event);
+  if (entry.event?.properties && typeof entry.event.properties === "object" && !Array.isArray(entry.event.properties)) {
+    return { ...entry.event, properties: { ...props, delta: entry.delta } };
+  }
+  return { ...entry.event, payload: { ...props, delta: entry.delta } };
+}
+
+function queuePartDelta(event: any): void {
+  const { key, delta } = validatePartDeltaTarget(event);
+  const buffered = bufferedPartDeltas.get(key);
+  if (buffered) {
+    buffered.delta += delta;
+  } else {
+    bufferedPartDeltas.set(key, { event, delta });
+  }
+  if (bufferedPartDeltaFrame !== null) return;
+  bufferedPartDeltaFrame = requestAnimationFrame(() => {
+    bufferedPartDeltaFrame = null;
+    flushBufferedPartDeltas();
+  });
+}
+
+export function flushBufferedPartDeltas(): void {
+  if (bufferedPartDeltas.size === 0) {
+    cancelBufferedPartDeltaFrame();
+    return;
+  }
+  cancelBufferedPartDeltaFrame();
+  const entries = [...bufferedPartDeltas.entries()];
+  batch(() => {
+    for (const [key, entry] of entries) {
+      bufferedPartDeltas.delete(key);
+      handlePartDelta(mergedPartDeltaEvent(entry));
+    }
+    markCardTreeVisibleChanged();
+  });
+}
+
 /** Top-level dispatcher. Unknown event types throw by design (rule 1:
  *  let-it-crash). Keeping the branches close together makes coverage
  *  auditable — every event type the overlay processes lives here. */
 export function applyEvent(event: any): void {
   const type: string = String(event?.type || "");
   if (!type) throw new Error("tree-writer: event missing type");
+  if (type === "message.part.delta") return queuePartDelta(event);
+  flushBufferedPartDeltas();
 
   // ── Message stream ──
   if (type === "message.updated") return applyVisibleCardTreeEvent(() => handleMessageUpdated(event));
   if (type === "message.part.updated") return applyVisibleCardTreeEvent(() => handlePartUpdated(event));
-  if (type === "message.part.delta") return applyVisibleCardTreeEvent(() => handlePartDelta(event));
 
   // ── Task / board ──
   if (type === "task.created" || type === "task.updated" || type === "task.completed") {

@@ -11,7 +11,7 @@
 
 import { boardStore, setBoardStore } from "../../src/store/board";
 import { cardTreeStore, type CardNode } from "../../src/store/card-tree";
-import { applyEvent, resetWriter } from "../../src/services/tree-writer";
+import { applyEvent, flushBufferedPartDeltas, resetWriter } from "../../src/services/tree-writer";
 import type { FixtureEvent } from "./goal-phase-events";
 
 // ── Snapshot shape ──
@@ -151,5 +151,6 @@ export async function replay(
     applyBoardEvent(event);
     applyEvent(event);
   }
+  flushBufferedPartDeltas();
   return captureSnapshot();
 }

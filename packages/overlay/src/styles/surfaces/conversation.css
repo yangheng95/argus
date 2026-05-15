@@ -11,6 +11,7 @@
   --conversation-system-card-inline-size: min(86%, calc(760px * var(--ui-scale)));
   --card-min-inline-size: min(100%, var(--conversation-card-inline-size));
   flex: 1;
+  contain: layout;
   overflow-y: auto;
   overflow-anchor: auto;
   padding: calc(18px * var(--ui-scale)) calc(22px * var(--ui-scale)) calc(20px * var(--ui-scale));
