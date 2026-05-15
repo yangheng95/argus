@@ -56,6 +56,7 @@ export function Card(props: { node: CardNode; depth: number }) {
   const footActivity = createMemo(() => {
     if (!isStageCard() || props.node.kind === "tool") return null;
     if (expanded()) return null;
+    if (props.node.status === "running") return null;
     const counts = collectActivityCounts(props.node);
     if ((counts.messages + counts.tools + counts.agents + counts.skills) === 0) return null;
     return counts;
@@ -320,7 +321,7 @@ export function Card(props: { node: CardNode; depth: number }) {
 
           {/* Generic parts */}
           <Show when={!isTool() && bodyParts().length > 0}>
-            <CardParts parts={bodyParts()} depth={props.depth} />
+            <CardParts parts={bodyParts()} depth={props.depth} streaming={props.node.status === "running"} />
           </Show>
 
           {/* Recursive children.
@@ -353,7 +354,11 @@ export function Card(props: { node: CardNode; depth: number }) {
           </Show>
 
           <Show when={promotedBuildParts().length > 0}>
-            <CardParts parts={promotedBuildParts()} depth={props.depth + 1} />
+            <CardParts
+              parts={promotedBuildParts()}
+              depth={props.depth + 1}
+              streaming={promotedBuildPhase()?.status === "running"}
+            />
           </Show>
 
           {/* Inline reply box at the END of every direct-replyable agent

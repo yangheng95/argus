@@ -74,7 +74,7 @@ test("agent workflow projection stacks repeated retry sessions by parent and age
   expect(deliveryStack?.records[1]?.traceReport?.summary).toBe("Accepted after runtime evidence was attached")
 })
 
-test("agent workflow projection uses live phase cards when trace is not available yet", () => {
+test("agent workflow projection uses live phase cards without subscribing to streamed text", () => {
   const projection = buildAgentWorkflow({
     traceEvents: [],
     order: ["step:goal:build:phase:build"],
@@ -96,7 +96,7 @@ test("agent workflow projection uses live phase cards when trace is not availabl
   expect(projection.records).toHaveLength(1)
   expect(projection.records[0]?.sessionID).toBe("ses_build_live")
   expect(projection.records[0]?.status).toBe("running")
-  expect(projection.records[0]?.displaySummary?.text).toBe("Editing the component")
+  expect(projection.records[0]?.displaySummary).toBeUndefined()
   expect(projection.records[0]?.traceReport).toBeUndefined()
 })
 

@@ -55,7 +55,7 @@ export function RequirementsPanel(props: RequirementsPanelProps) {
             <div class="req-streaming-messages">
               {/* Index over For: SSE stream is append-only, never reorders. */}
               <Index each={props.streamingMessages}>
-                {(msg) => <CardParts parts={orderedMessageParts(msg())} depth={1} />}
+                {(msg) => <CardParts parts={orderedMessageParts(msg())} depth={1} streaming={props.isGenerating === true} />}
               </Index>
             </div>
           </Show>

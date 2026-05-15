@@ -86,7 +86,10 @@ export function CardHeader(props: {
     agentSessionID: () => props.agentSessionID,
   });
   const collapsedActive = () =>
-    !props.expanded && isStageCard(props.node) && props.node.kind !== "tool";
+    !props.expanded &&
+    props.node.status !== "running" &&
+    isStageCard(props.node) &&
+    props.node.kind !== "tool";
   const collapsedPreview = () =>
     collapsedActive()
       ? collapsedActivityPreviewText(collectLatestActivityText(props.node), props.node.title)
