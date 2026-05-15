@@ -289,6 +289,38 @@ describe("task conversation routes", () => {
           time: { created: now + 1 },
           agent: "build",
           model: { providerID: "test-provider", modelID: "test-model" },
+          system: "requirements system prompt",
+          systemMode: "complete",
+          tools: {
+            register_requirement: true,
+            submit_requirements: true,
+          },
+          format: {
+            type: "json_schema",
+            schema: {
+              type: "object",
+              properties: {
+                summary: { type: "string" },
+              },
+            },
+            retryCount: 2,
+          },
+          variant: "worker",
+          extra: {
+            resume_scope: "requirements",
+          },
+        })
+        await Session.updateMessage({
+          id: Identifier.ascending("message"),
+          sessionID: requirements.id,
+          role: "user",
+          time: { created: now + 2 },
+          agent: "build",
+          model: { providerID: "test-provider", modelID: "test-model" },
+          extra: {
+            overlay_direct_reply: true,
+            source: "overlay_direct_reply",
+          },
         })
         SessionStatus.set(requirements.id, { type: "busy" })
 
@@ -311,6 +343,24 @@ describe("task conversation routes", () => {
         expect(message.info.role).toBe("user")
         if (message.info.role !== "user") throw new Error("expected user message")
         expect(message.info.extra?.overlay_direct_reply).toBe(true)
+        expect(message.info.system).toBe("requirements system prompt")
+        expect(message.info.systemMode).toBe("complete")
+        expect(message.info.tools).toEqual({
+          register_requirement: true,
+          submit_requirements: true,
+        })
+        expect(message.info.format).toEqual({
+          type: "json_schema",
+          schema: {
+            type: "object",
+            properties: {
+              summary: { type: "string" },
+            },
+          },
+          retryCount: 2,
+        })
+        expect(message.info.variant).toBe("worker")
+        expect(message.info.extra?.resume_scope).toBe("requirements")
         expect(message.parts[0]?.type).toBe("text")
         const part = message.parts[0]
         if (part?.type !== "text") throw new Error("expected text part")

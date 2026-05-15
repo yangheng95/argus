@@ -70,31 +70,56 @@ export namespace SessionLoop {
     return { ...(input as StrictAITool), strict: true } as AITool
   }
 
+  export interface SessionRuntimeContract {
+    tools?: Record<string, AITool>
+    terminalToolContract?: TerminalToolContract
+    structuredOutputGuard?: StructuredOutputGuard
+  }
+
   // ---------------------------------------------------------------------------
-  // Ephemeral per-session tools (phase 3-a-1 of specs/new-arch/16-unified-teardown.md)
+  // Session-scoped runtime contract + ephemeral overlays
   //
-  // Some stage agents (intent-analysis, requirements, architect, delivery,
-  // integrity reviewer, ...) need to expose agent-scoped tool objects
-  // (`extract_slot`, `register_requirement`, `submit_verdict`, ...) for a
-  // single prompt invocation. These tools do not belong in the global Agent
-  // registry because their meaning is bounded to one agent's lifetime, and
-  // persisting them per-message would require serialising function bodies.
+  // Worker child sessions can be resumed later by appending another user
+  // message to the same session. The resumed loop must see the same extra
+  // tools / terminal contract / structured-output guard as the original run;
+  // otherwise the session is no longer the same agent contract and "resume"
+  // degenerates into a bare chat turn that has lost its stage tools.
   //
-  // The solution is a process-local Map keyed by sessionID. Callers register
-  // the tools before `SessionPrompt.prompt()` runs the loop and clear them
-  // when the prompt resolves. `resolveTools` merges the registered tools on
-  // top of the registry- and MCP-sourced ones.
+  // We therefore keep a persistent IN-MEMORY runtime contract per sessionID
+  // for resumable worker sessions. Ephemeral wrappers (`withExtraTools`,
+  // `withTerminalToolContract`, `withStructuredOutputGuard`) remain as a
+  // short-lived overlay layer for one-shot flows such as the orchestrator's
+  // own turn execution.
   //
-  // Scope rules:
-  //   - One entry per sessionID. Overwriting replaces the prior set.
-  //   - Tools survive only within a single agent invocation; callers MUST
-  //     clear on both success and failure paths.
-  //   - The registry is IN-MEMORY only. Crash recovery re-enters the child
-  //     session from DB-persisted messages; the extra tools would be gone,
-  //     and the matching stage-agent caller must either re-register or
-  //     abandon the session.
+  // Crash recovery is still not supported here: these contracts close over
+  // live collectors and tool functions, so they cannot be serialized into DB.
   // ---------------------------------------------------------------------------
+  const sessionRuntimeContracts = new Map<string, SessionRuntimeContract>()
   const ephemeralTools = new Map<string, Record<string, AITool>>()
+
+  export function setSessionRuntimeContract(
+    sessionID: string,
+    contract: SessionRuntimeContract | undefined,
+  ): void {
+    if (
+      !contract ||
+      ((!contract.tools || Object.keys(contract.tools).length === 0) &&
+        !contract.terminalToolContract &&
+        !contract.structuredOutputGuard)
+    ) {
+      sessionRuntimeContracts.delete(sessionID)
+      return
+    }
+    sessionRuntimeContracts.set(sessionID, contract)
+  }
+
+  export function getSessionRuntimeContract(sessionID: string): SessionRuntimeContract | undefined {
+    return sessionRuntimeContracts.get(sessionID)
+  }
+
+  export function clearSessionRuntimeContract(sessionID: string): void {
+    sessionRuntimeContracts.delete(sessionID)
+  }
 
   /**
    * Register a map of agent-scoped tool objects for the given session.
@@ -114,7 +139,10 @@ export namespace SessionLoop {
   /** Read back the currently registered tools. Returns an empty record
    *  when nothing is registered. Used by `resolveTools`. */
   export function getExtraTools(sessionID: string): Record<string, AITool> {
-    return ephemeralTools.get(sessionID) ?? {}
+    return {
+      ...(sessionRuntimeContracts.get(sessionID)?.tools ?? {}),
+      ...(ephemeralTools.get(sessionID) ?? {}),
+    }
   }
 
   /** Convenience wrapper: set the tools, run `fn`, always clear afterwards
@@ -312,6 +340,14 @@ export namespace SessionLoop {
       if (previous) ephemeralStructuredOutputGuards.set(sessionID, previous)
       else ephemeralStructuredOutputGuards.delete(sessionID)
     }
+  }
+
+  function getTerminalToolContract(sessionID: string): TerminalToolContract | undefined {
+    return ephemeralTerminalToolContracts.get(sessionID) ?? sessionRuntimeContracts.get(sessionID)?.terminalToolContract
+  }
+
+  function getStructuredOutputGuard(sessionID: string): StructuredOutputGuard | undefined {
+    return ephemeralStructuredOutputGuards.get(sessionID) ?? sessionRuntimeContracts.get(sessionID)?.structuredOutputGuard
   }
 
   /**
@@ -1124,7 +1160,7 @@ export namespace SessionLoop {
     const lastUserMsg = input.msgs.findLast((m) => m.info.role === "user")
     const bypassAgentCheck = lastUserMsg?.parts.some((p) => p.type === "agent") ?? false
     const format = input.lastUser.format ?? { type: "text" }
-    const terminalToolContract = ephemeralTerminalToolContracts.get(input.sessionID)
+    const terminalToolContract = getTerminalToolContract(input.sessionID)
     let tools = await resolveTools({
       agent,
       session: input.session,
@@ -1142,7 +1178,7 @@ export namespace SessionLoop {
         model: input.model,
         tool: createStructuredOutputTool({
           schema: input.lastUser.format.schema,
-          validate: ephemeralStructuredOutputGuards.get(input.sessionID),
+          validate: getStructuredOutputGuard(input.sessionID),
           onSuccess(output) {
             structured = output
           },

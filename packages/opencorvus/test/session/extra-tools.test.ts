@@ -64,6 +64,40 @@ describe("SessionLoop.setExtraTools / getExtraTools", () => {
   })
 })
 
+describe("SessionLoop session runtime contract", () => {
+  test("persistent contract tools remain visible through getExtraTools", () => {
+    const sessionID = `ses_runtime_${Date.now()}_visible`
+    SessionLoop.setSessionRuntimeContract(sessionID, { tools: { persistent: dummyTool() } })
+    expect(Object.keys(SessionLoop.getExtraTools(sessionID))).toEqual(["persistent"])
+    SessionLoop.clearSessionRuntimeContract(sessionID)
+    expect(SessionLoop.getExtraTools(sessionID)).toEqual({})
+  })
+
+  test("withExtraTools overlays persistent tools and restores the session contract afterwards", async () => {
+    const sessionID = `ses_runtime_${Date.now()}_overlay`
+    SessionLoop.setSessionRuntimeContract(sessionID, { tools: { persistent: dummyTool() } })
+    await SessionLoop.withExtraTools(sessionID, { scoped: dummyTool() }, async () => {
+      expect(Object.keys(SessionLoop.getExtraTools(sessionID)).sort()).toEqual(["persistent", "scoped"])
+    })
+    expect(Object.keys(SessionLoop.getExtraTools(sessionID))).toEqual(["persistent"])
+    SessionLoop.clearSessionRuntimeContract(sessionID)
+  })
+
+  test("SessionPrompt.cancel clears the session runtime contract", async () => {
+    const sessionID = `ses_runtime_${Date.now()}_cancel`
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        SessionPrompt.setSessionRuntimeContract(sessionID, { tools: { persistent: dummyTool() } })
+        expect(SessionPrompt.getSessionRuntimeContract(sessionID)?.tools).toBeDefined()
+        SessionPrompt.cancel(sessionID)
+        expect(SessionPrompt.getSessionRuntimeContract(sessionID)).toBeUndefined()
+      },
+    })
+  })
+})
+
 describe("SessionLoop.withExtraTools", () => {
   test("clears the registry after the callback resolves", async () => {
     const sessionID = `ses_extra_${Date.now()}_with_ok`
@@ -280,11 +314,17 @@ describe("SessionLoop.summarizeModelMessagePayloads", () => {
 
 describe("SessionPrompt re-exports extraTools API", () => {
   test("surfaces setExtraTools / getExtraTools / withExtraTools", () => {
+    expect(typeof SessionPrompt.setSessionRuntimeContract).toBe("function")
+    expect(typeof SessionPrompt.getSessionRuntimeContract).toBe("function")
+    expect(typeof SessionPrompt.clearSessionRuntimeContract).toBe("function")
     expect(typeof SessionPrompt.setExtraTools).toBe("function")
     expect(typeof SessionPrompt.getExtraTools).toBe("function")
     expect(typeof SessionPrompt.withExtraTools).toBe("function")
     // The re-exports must be the same function references — SessionPrompt is
     // a thin namespace on top of SessionLoop, not an independent copy.
+    expect(SessionPrompt.setSessionRuntimeContract).toBe(SessionLoop.setSessionRuntimeContract)
+    expect(SessionPrompt.getSessionRuntimeContract).toBe(SessionLoop.getSessionRuntimeContract)
+    expect(SessionPrompt.clearSessionRuntimeContract).toBe(SessionLoop.clearSessionRuntimeContract)
     expect(SessionPrompt.setExtraTools).toBe(SessionLoop.setExtraTools)
     expect(SessionPrompt.getExtraTools).toBe(SessionLoop.getExtraTools)
     expect(SessionPrompt.withExtraTools).toBe(SessionLoop.withExtraTools)

@@ -8,8 +8,8 @@
  *
  * The remaining three tools (`extract_slot`, `flag_missing_info`,
  * `ask_clarification`) stay as incremental "scratchpad" tools, injected
- * via `SessionPrompt.setExtraTools(childSessionID, ...)` for the life of
- * a single agent invocation.
+ * via the child session's runtime contract so the same session can be
+ * resumed later without losing its stage tools.
  *
  * Small tool schemas mirror the architect pattern — gives the LLM an
  * incremental append surface rather than a single monolithic object that
