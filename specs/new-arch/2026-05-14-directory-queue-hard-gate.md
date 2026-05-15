@@ -38,6 +38,10 @@ instead of adding a fallback path.
    accurate state until the queue claim succeeds.
 6. Existing queue reorder behavior still applies only to queued tasks.
 7. No compatibility path may keep the old concurrent-start semantics.
+8. An explicit operator `Start now` action is not queue reorder. It starts the
+   clicked queued task immediately and must not silently degrade to "move to
+   front and wait". This is a deliberate manual override, separate from task
+   creation, retry, and operator-message revival.
 
 ## Implementation
 
@@ -64,3 +68,15 @@ That path must not call `updateTask(... status: "active")` directly. Revival
 must set the task to queued and let `dispatchTaskLoop()` / `claimNextForCwd()`
 decide whether the cwd is free. Regression coverage must include a terminal
 sibling receiving an operator message while another same-cwd task is active.
+
+## Manual Start-Now Override
+
+Operator clicks on queued rows are a separate product gesture from automatic
+task creation and task-message revival. The UI label says "Start now", so the
+server contract must actually start that task if it is still queued. It must
+not implement the click as queue reorder, priority bump, or any other delayed
+queue operation.
+
+The override remains narrowly scoped: only `POST /task/:taskID/start-now` may
+directly claim the clicked queued task. Automatic paths continue to use the
+directory queue.

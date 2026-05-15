@@ -4745,7 +4745,7 @@ export class Queue extends HeyApiClient {
   }
 
   /**
-   * Promote a queued task and attempt to start it
+   * Start a queued task immediately
    */
   public startNow<ThrowOnError extends boolean = false>(
     parameters: {

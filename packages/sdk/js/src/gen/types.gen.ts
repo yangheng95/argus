@@ -8245,7 +8245,7 @@ export type TaskQueueStartNowError = TaskQueueStartNowErrors[keyof TaskQueueStar
 
 export type TaskQueueStartNowResponses = {
   /**
-   * Queued task promoted and scheduler invoked
+   * Queued task started and scheduler invoked
    */
   200: {
     task: {
@@ -8294,48 +8294,6 @@ export type TaskQueueStartNowResponses = {
     status: string
     started: boolean
     queuedTaskIDs: Array<string>
-    blockingTask?: {
-      id: string
-      projectID: string
-      directory?: string
-      sessionID?: string | null
-      activePlanVersionID?: string | null
-      activeRunID?: string | null
-      requestID?: string
-      source: string
-      title: string
-      request: string
-      status: "queued" | "active" | "completed" | "failed" | "cancelled"
-      priority: "critical" | "high" | "normal" | "low"
-      queue?: {
-        order: number
-        revision?: string
-      }
-      kind?: "workflow" | "build"
-      blockingReason?: string
-      error?: string
-      budget?: {
-        maxExecutorGroups?: number
-      }
-      metadata?: {
-        [key: string]: unknown
-      }
-      attachments?: Array<{
-        sha: string
-        url: string
-        mime: string
-        size: number
-        filename?: string
-        intent?: string
-        source?: string
-      }>
-      time: {
-        created: number
-        updated: number
-        started?: number
-        completed?: number
-      }
-    }
   }
 }
 

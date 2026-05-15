@@ -297,14 +297,6 @@ export function claimQueuedTaskForCwd(taskID: string, cwd: string, now = Date.no
           WHERE t.id = ${taskID}
             AND t.time_started IS NULL AND t.time_completed IS NULL
             AND COALESCE(s.directory, p.worktree) = ${cwd}
-            AND NOT EXISTS (
-              SELECT 1
-              FROM engine_task t2
-              LEFT JOIN session s2 ON s2.id = t2.session_id
-              LEFT JOIN project p2 ON p2.id = t2.project_id
-              WHERE t2.time_started IS NOT NULL AND t2.time_completed IS NULL
-                AND COALESCE(s2.directory, p2.worktree) = ${cwd}
-            )
           LIMIT 1
         )`,
       )

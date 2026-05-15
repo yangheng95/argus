@@ -77,7 +77,6 @@ const StartQueuedTaskNowResult = z.object({
   status: z.string(),
   started: z.boolean(),
   queuedTaskIDs: z.array(z.string()),
-  blockingTask: Task.optional(),
 })
 
 const TaskBindingList = z.array(
@@ -234,11 +233,11 @@ export const EngineRoutes = lazy(() =>
     .post(
       "/task/:taskID/start-now",
       describeRoute({
-        summary: "Promote a queued task and attempt to start it",
+        summary: "Start a queued task immediately",
         operationId: "task.queue.startNow",
         responses: {
           200: {
-            description: "Queued task promoted and scheduler invoked",
+            description: "Queued task started and scheduler invoked",
             content: {
               "application/json": {
                 schema: resolver(StartQueuedTaskNowResult),
