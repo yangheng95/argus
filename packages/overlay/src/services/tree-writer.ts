@@ -178,6 +178,11 @@ interface ProjectedSessionStatus {
   timeCompleted?: number;
 }
 const pendingSessionStatus = new Map<string, ProjectedSessionStatus>();
+/** Latest conversation card opened by the writer. Consecutive messages from
+ *  the same runtime session reuse that card; a message from another session,
+ *  including a phase-absorbed session, updates this pointer and therefore
+ *  splits the original session when it resumes later. */
+let latestConversationCardID: string | undefined;
 
 interface BufferedPartDelta {
   event: any;
@@ -210,6 +215,7 @@ export function resetWriter(options: {
   pendingIntegrity.clear();
   runningIntegrity.clear();
   pendingSessionStatus.clear();
+  latestConversationCardID = undefined;
   // Drop every key explicitly — plain assignment on a store merges instead of
   // replacing (see setMessages's messagesBySession fix in store/messages.ts).
   setCardTreeStore("order", []);
@@ -580,11 +586,7 @@ function handleMessageUpdated(event: any): void {
   const session = ensureSession(sessionID, { stage, parentSessionID, goalID });
   session.messageIDs.add(id);
 
-  // Open (or refresh) THIS message's turn card. A long-lived session emits
-  // a fresh real message every time it resumes reasoning; each becomes its
-  // own top-level card so later turns sort AFTER any child agent card that
-  // ran between them — instead of all turns piling onto the earliest card.
-  const { cardID, isPhase } = ensureTurnCard(session, id, {
+  const { cardID, isPhase, groupedIntoExistingCard } = ensureTurnCard(session, id, {
     stage,
     goalID,
     role: resolvedRole,
@@ -592,11 +594,12 @@ function handleMessageUpdated(event: any): void {
     stampServerTime: true,
   });
 
-  // Phase-absorbed sessions keep their in-card boundary: the single phase
-  // card folds in multiple sub-sessions / turns and still needs a visible
-  // per-turn separator. Top-level message-turn cards ARE the boundary —
-  // the card itself separates turns, so no synthetic boundary part.
-  if (isPhase) ensureBoundaryPart(session, cardID, id, resolvedRole, timeCreated);
+  // Phase cards always need in-card message boundaries. Non-phase cards only
+  // need one when consecutive messages from the same session were grouped
+  // into an existing card; a freshly split card is already the boundary.
+  if (isPhase || groupedIntoExistingCard) {
+    ensureBoundaryPart(session, cardID, id, resolvedRole, timeCreated);
+  }
 
   drainPendingSessionStatus(sessionID);
   drainPendingIntegrity(sessionID);
@@ -642,6 +645,15 @@ function handlePartUpdated(event: any): void {
       stampServerTime: false,
     });
     cardID = ensured.cardID;
+    if (ensured.isPhase || ensured.groupedIntoExistingCard) {
+      ensureBoundaryPart(
+        session,
+        cardID,
+        messageID,
+        String(part.resolvedRole || session.stage),
+        Date.now(),
+      );
+    }
     drainPendingSessionStatus(sessionID);
     drainPendingIntegrity(sessionID);
   }
@@ -1371,24 +1383,38 @@ function ensureTurnCard(
   session: SessionInfo,
   messageID: string,
   opts: EnsureTurnCardOpts,
-): { cardID: string; isPhase: boolean } {
+): { cardID: string; isPhase: boolean; groupedIntoExistingCard: boolean } {
   const stage = opts.stage || session.stage || "";
   const goalID = opts.goalID || session.goalID || "";
-  const { cardID, isPhase } = resolveTurnCardID(
+  const resolved = resolveTurnCardID(
     session.sessionID, stage, goalID, messageID, opts.time,
   );
+  let cardID = resolved.cardID;
+  const isPhase = resolved.isPhase;
 
   const prior = session.messageCardIDs.get(messageID);
-  if (prior && prior !== cardID) {
+  let groupedIntoExistingCard = false;
+  if (!prior && !isPhase && session.activeCardID && latestConversationCardID === session.activeCardID) {
+    cardID = session.activeCardID;
+    groupedIntoExistingCard = true;
+  }
+
+  if (prior && prior !== resolved.cardID && isPhase) {
+    cardID = resolved.cardID;
     migrateTurnCard(session, prior, cardID);
+  } else if (prior) {
+    cardID = prior;
   }
 
   if (!isPhase) {
     const existing = cardTreeStore.cards[cardID];
     if (existing) {
       setCardTreeStore("cards", cardID, "sessionID", session.sessionID);
-      setCardTreeStore("cards", cardID, "messageID", messageID);
-      if (opts.stampServerTime) setCardTreeStore("cards", cardID, "time", opts.time);
+      if (!existing.messageID) setCardTreeStore("cards", cardID, "messageID", messageID);
+      if (opts.stampServerTime && prior && existing.messageID === messageID) {
+        setCardTreeStore("cards", cardID, "time", opts.time);
+      }
+      setCardTreeStore("cards", cardID, "status", "running");
     } else {
       setCardTreeStore(
         "cards",
@@ -1408,6 +1434,10 @@ function ensureTurnCard(
     ) {
       setCardTreeStore("cards", prevCardID, "status", "completed");
     }
+    latestConversationCardID = cardID;
+  }
+  if (isPhase) {
+    latestConversationCardID = cardID;
   }
 
   session.messageCardIDs.set(messageID, cardID);
@@ -1415,7 +1445,7 @@ function ensureTurnCard(
   session.activeCardID = cardID;
 
   if (!opts.deferHierarchy) rebuildCardHierarchy();
-  return { cardID, isPhase };
+  return { cardID, isPhase, groupedIntoExistingCard };
 }
 
 /** Replay a persisted task into the exact same visible card identity the
@@ -1486,15 +1516,17 @@ export function hydrateConversationView(view: any, transcript: any[]): void {
     });
     const session = ensureSession(sessionID, { stage, parentSessionID, goalID });
     session.messageIDs.add(messageID);
-    const { cardID, isPhase } = ensureTurnCard(session, messageID, {
-      stage,
-      goalID,
-      role: resolvedRole,
+  const { cardID, isPhase, groupedIntoExistingCard } = ensureTurnCard(session, messageID, {
+    stage,
+    goalID,
+    role: resolvedRole,
       time: timeCreated,
-      stampServerTime: true,
-      deferHierarchy: true,
-    });
-    if (isPhase) ensureBoundaryPart(session, cardID, messageID, resolvedRole, timeCreated);
+    stampServerTime: true,
+    deferHierarchy: true,
+  });
+    if (isPhase || groupedIntoExistingCard) {
+      ensureBoundaryPart(session, cardID, messageID, resolvedRole, timeCreated);
+    }
     const parts = Array.isArray(message?.parts) ? message.parts : [];
     for (const part of parts) {
       const partID = String(part?.id || "");

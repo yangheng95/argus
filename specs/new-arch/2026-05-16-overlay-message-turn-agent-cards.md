@@ -41,17 +41,17 @@ orchestrator message turn 3 card
 
 | Area | Current source | Current assumption | Required decision |
 | --- | --- | --- | --- |
-| Card identity | `packages/overlay/src/store/card-tree.ts` ID comment: `<stage>:session:<sid>` | Agent card is session-scoped | Replace display agent card identity with message-turn-scoped ID |
+| Card identity | `packages/overlay/src/store/card-tree.ts` ID comment: `<stage>:session:<sid>` | Agent card is session-scoped | Replace display agent card identity with contiguous-session segment ID |
 | Card payload | `CardNode` lacks explicit `sessionID` / `messageID` | UI derives session from `card.id` | Add explicit `sessionID` and `messageID`; stop parsing IDs |
 | Writer session index | `packages/overlay/src/services/tree-writer.ts` `SessionInfo.cardID` | One session has one render card | Split runtime session index from display card ids |
 | Writer part index | `SessionInfo.partIndex: Map<string, number>` | Part id targets `session.cardID.parts[index]` | Change to `Map<string, { cardID, index }>` |
-| Message creation | `handleMessageUpdated` | `ensureSessionCard` creates/reuses one card then `ensureBoundaryPart` | Create or update one turn card per `messageID` |
+| Message creation | `handleMessageUpdated` | `ensureSessionCard` creates/reuses one card then `ensureBoundaryPart` | Reuse the current session card for consecutive messages; open a new segment after another session interrupts |
 | Part creation | `handlePartUpdated` | Missing session creates session card, then writes part to `session.cardID` | Route part by `messageID`; create pending turn card if message metadata has not arrived |
 | Delta routing | `handlePartDelta` / `validatePartDeltaTarget` | Lookup part index only within session card | Lookup exact `{cardID,index}` target |
 | Status routing | `handleSessionStatus` / `handleSessionError` / `drainPendingSessionStatus` | Session lifecycle mutates `info.cardID` | Mutate the current active turn card for that session |
 | Usage routing | `handleUsageUpdated` | Session usage mutates `info.cardID` | Mutate current active turn card; do not try to retroactively distribute cumulative usage |
 | Integrity | `materializeRunningIntegrity` / `materializeIntegrity` use `session.cardID` | Integrity verdict lives on the session card | If integrity remains single-message in practice, it still uses turn card; otherwise verdict applies to active turn |
-| Hydrate | `hydrateConversationView` iterates `sessionView.messageIDs` but writes into one session card | Hydration re-aggregates a session into one display card | Hydrate must create one turn card per message |
+| Hydrate | `hydrateConversationView` iterates `sessionView.messageIDs` but writes into one session card | Hydration re-aggregates an entire session into one display card | Hydrate must mirror live contiguous-session segmenting |
 | Backend view | `packages/opencorvus/src/conversation/view.ts` groups by session and carries `messageIDs` | Frontend currently re-aggregates those IDs into one display card | P1 must stop using session grouping as render identity; prefer message-level view |
 | Hierarchy | `rebuildCardHierarchyImpl` iterates `sessions.values()` and uses `info.cardID` | Session card is the node to claim / hide / attach interactions to | Hierarchy must operate over session-owned turn card ids |
 | Top-level order | `rebuildTopLevelOrder` sorts cards by `time` | Session card birth time equals session first message | Turn card birth time is message creation time; existing sorter becomes correct |
@@ -59,8 +59,8 @@ orchestrator message turn 3 card
 | Interactions | `rebuildInteractionCards` attaches by `session.cardID` | Interactions attach to the session card | Attach to the active turn card at interaction time; if unavailable, pending until a turn exists |
 | Chat bubble trace/reply | `ChatBubble.tsx` `sessionIDFromCardID` | Card id format contains session id as suffix | Use `node.sessionID` |
 | Workflow projection | `utils/agent-workflow.ts` `sessionIDFromCardID` | Card id format contains session id as suffix | Use `node.sessionID`, with `phaseSessionID` for phase cards |
-| Board streams | `Board.tsx` `cardToMessageSegments` splits one agent card by `boundary` | One card may contain N messages | Simplify to one card = one message; keep validation for legacy only if tests still require |
-| Transcript | `utils/transcript.ts` flatten card parts | One session card exports as one message with boundary parts inside | One turn card exports as one transcript message; boundary may be removed from new turn cards |
+| Board streams | `Board.tsx` `cardToMessageSegments` splits one agent card by `boundary` | One card may contain N messages | Keep boundary splitting because a contiguous segment can contain multiple real messages |
+| Transcript | `utils/transcript.ts` flatten card parts | One session card exports as one message with boundary parts inside | Segment cards export in display order; boundary parts preserve grouped message turns |
 | Tests | `tree-writer-hierarchy`, `conversation-view-hydrate`, `delta-coalesce`, `tool-call-generation-stream`, `tree-writer-perf` | Assert `<stage>:session:<sid>` card ids and one-card aggregation | Update to message-turn card ids and add orchestrator interleaving regression |
 
 ## 2. Target Protocol
@@ -86,7 +86,7 @@ Rules:
 - Renderer and workflow utilities must never parse `sessionID` from `id`.
 - Phase cards keep `phaseSessionID` because they are not message-turn cards; they absorb a goal-scoped runtime session.
 
-### 2.2 Display card ids
+### 2.2 Display segment card ids
 
 Use deterministic turn card ids:
 
@@ -99,8 +99,9 @@ function messageTurnCardID(stage: string, sessionID: string, messageID: string):
 Rationale:
 
 - Keeps old prefix recognizable for diagnostics.
-- Adds `messageID` without requiring backend schema changes.
+- Adds the first message id in the segment without requiring backend schema changes.
 - Sorting is still by `CardNode.time`, not by ID.
+- Consecutive messages from the same session can map to the same card id; a later resume after another session interrupts uses that later message id to open a new segment.
 
 ### 2.3 Runtime session index
 
@@ -141,13 +142,13 @@ Rules:
 1. Validate `info.id`, `info.sessionID`, `info.role`, `info.channel`, `info.time.created`.
 2. Derive stage from channel exactly as today.
 3. Ensure `SessionInfo` exists without creating a display card by session id.
-4. Upsert turn card by `messageTurnCardID(stage, sessionID, messageID)`.
+4. Upsert the active segment card: reuse the previous card if the previous visible session is the same session; otherwise create `messageTurnCardID(stage, sessionID, messageID)`.
 5. Stamp `sessionID`, `messageID`, `stage`, `role`, `time = info.time.created`, `status = running`.
 6. Set `session.activeMessageID` and `session.activeCardID`.
 7. Add `messageID -> cardID` to `messageCardIDs`.
 8. Reconcile any parts that arrived before message metadata by updating the pending card's title/time/stage.
 
-New turn cards do not need a `boundary` part at the top. The card itself is the boundary.
+Newly split cards do not need a `boundary` part at the top. When a consecutive message is grouped into an existing card, insert a `boundary` part before that message's parts.
 
 ### 3.2 Part creation path
 
@@ -208,7 +209,7 @@ Trying to distribute cumulative usage per turn would require backend per-message
 
 ### 3.6 Integrity
 
-Integrity review is already a real session and should follow the same mechanism. If integrity produces one message, it will produce one turn card. `materializeIntegrity(session, payload)` must target `session.activeCardID`, not `session.cardID`.
+Integrity review is already a real session and should follow the same mechanism when it emits normal message rows. If integrity produces one message, it will produce one segment card. `materializeIntegrity(session, payload)` must target `session.activeCardID`, not `session.cardID`.
 
 If an integrity completed event arrives before message metadata, keep the existing pending map keyed by `sessionID`; drain it after the first turn card materializes.
 
@@ -313,10 +314,10 @@ Subagent breakage audit found the highest replay risk here: if live SSE creates 
 Hydrate must rebuild the exact same visible card identity that live SSE would have built:
 
 ```text
-transcript message id -> message-turn card id
+transcript message id -> contiguous session segment card id
 ```
 
-It must not use `sessionView.messageIDs` as permission to aggregate multiple messages into one card.
+It must not use `sessionView.messageIDs` as permission to aggregate an entire session into one card. It may aggregate only contiguous messages from the same session, matching live SSE projection.
 
 ### 6.2 Preferred P1 contract
 
@@ -339,13 +340,13 @@ interface ConversationView {
 }
 ```
 
-The frontend `hydrateConversationView(view, transcript)` then iterates `view.messages` and writes one card per message. Session metadata remains available, but it is no longer the render grouping key.
+The frontend `hydrateConversationView(view, transcript)` then iterates `view.messages` and writes cards by the same contiguous-session segmenting rule used by live SSE. Session metadata remains available, but it is no longer the render grouping key.
 
 ### 6.3 Acceptable fallback only if backend contract churn is deferred
 
 If changing the backend route in the same PR is too broad, the frontend must ignore `view.sessions[].messageIDs` for render grouping and instead derive message views directly from `transcript`. In that variant, `view.sessions` may only provide phase/session metadata. It must not drive card identity.
 
-This is not a compatibility fallback; it is a temporary implementation ordering choice. The single render identity remains `messageID`.
+This is not a compatibility fallback; it is a temporary implementation ordering choice. The render identity is the first `messageID` in a contiguous segment, not the whole session id.
 
 ### 6.4 Existing backend evidence
 
@@ -383,7 +384,7 @@ expect(delta lands in O1Card)
 
 3. `session.status terminal` updates only active turn card.
 
-4. Hydrate with two messages in one session creates two top-level turn cards.
+4. Hydrate with two consecutive messages in one session creates one card with a boundary; hydrate with another session between them creates two cards.
 
 5. `ChatBubble` trace/reply uses `node.sessionID`, not card id parsing.
 
@@ -415,7 +416,7 @@ Current `tree-writer-perf` protects against O(N²) message/part handling. P1 mus
 2. Refactor `SessionInfo` and `partIndex` in `tree-writer`.
 3. Implement message-turn card creation for non-phase sessions.
 4. Update delta/status/usage/integrity routing to active/target turn cards.
-5. Update hydrate/backend conversation view so replay creates one turn card per message.
+5. Update hydrate/backend conversation view so replay creates the same contiguous-session segments as live SSE.
 6. Update Board/transcript/workflow utilities.
 7. Update tests and add the interleaving regression.
 8. Remove boundary insertion for new non-phase agent cards after tests no longer rely on it.
@@ -472,3 +473,24 @@ These findings are reflected in sections 3.2, 3.3, 3.7, and 6.
 
 1. `rebuildInteractionCards` still attached interaction cards to `session.activeCardID`. This was incorrect after message-turn cards because hierarchy rebuilds after a newer turn could move an older interaction prompt from the turn that was active at prompt time to the newest turn. Implementation now selects the latest session-owned turn card whose `CardNode.time` is less than or equal to the interaction message time, and `tree-writer-hierarchy.test.ts` includes a regression named `interaction remains attached to the turn active at interaction time`.
 2. Integrity review events remain a protocol exception in P1. Backend `integrity.review.started`, `integrity.review.progress`, `integrity.review.chunk`, and `integrity.review.completed` carry `sessionID` but do not carry a durable `messageID`; `started/progress/chunk` can arrive before any message metadata for that integrity session. Therefore the overlay keeps the existing single `integrity:session:<sessionID>` card for `integrity.review.*` protocol events rather than inventing a synthetic message id. If the backend later emits integrity verdict/progress as normal `message.updated` / `message.part.updated` rows with real message ids, this exception must be removed and integrity must route through the standard message-turn mechanism.
+
+## 13. User Correction: Segment, Not Every Message
+
+Implementation review after visual inspection corrected the display target:
+
+- Wrong: one card for every `message.updated`.
+- Correct: one card for a contiguous visible run of the same runtime session.
+
+Rules:
+
+- Consecutive messages from the same session reuse the current agent card.
+- If another session opens a visible agent card in between, the original session opens a new card when it resumes.
+- The card id still uses the first message id in that segment:
+
+```ts
+`${stage}:session:${sessionID}:message:${firstMessageIDInSegment}`
+```
+
+- `messageCardIDs` may therefore map multiple `messageID`s to the same display card.
+- Grouped messages inside one card use a real `boundary` part so Board / rail previews can still split message segments without flattening distinct turns into one text blob.
+- Hydrate must follow the same contiguous-session rule as live SSE replay.

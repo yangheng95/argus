@@ -12,9 +12,11 @@
 //   ctx:user-request                                       — task request bubble
 //   ctx:user-request:text                                  — the text part of that bubble
 //   ctx:user-request:file:<url|idx>                        — an attachment part
-//   <stage>:session:<sid>:message:<mid>                    — per-message-turn agent card
-//                                                            (one real message turn = one card;
-//                                                            a long-lived session produces N)
+//   <stage>:session:<sid>:message:<mid>                    — agent run-segment card
+//                                                            (mid is the first message in the segment;
+//                                                            consecutive messages from the same
+//                                                            session reuse the card until another
+//                                                            session interrupts)
 //   part:<messageID>:<partID>                              — part inside a session card
 //   step:<goalID>:<goalRunID|"pre">:<stepID>               — per-goal executor step (top-level),
 //                                                            scoped to one attempt (goal_run)
@@ -109,9 +111,9 @@ export interface CardNode {
    *  (a phase card absorbs a goal-scoped runtime session, it is not a
    *  message-turn card). */
   sessionID?: string;
-  /** Durable message id whose turn this display card represents. One real
-   *  `message.updated` in a (possibly long-lived) session maps to exactly
-   *  one card; the next real message in the same session opens a new card.
+  /** Durable message id that opened this display segment. Consecutive
+   *  `message.updated` rows from the same session can share this card;
+   *  once another session interrupts, the next message opens a new segment.
    *  Unset on phase / step / interaction / task-context cards. */
   messageID?: string;
   /** Session kind / stage name (assistant / executor / build / planner / goal / ...). */
