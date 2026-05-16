@@ -727,7 +727,7 @@ export function integrityAttemptVerdict(row: ArtifactRow | undefined | null) {
 /** Latest delivery-agent-verdict artifact bound to a specific delivery row.
  *  Used by the board view to render delivery.status from the agent verdict
  *  rather than from the candidate-delivery row's lifecycle status (which
- *  stays "candidate" until publish_delivery, regardless of verdict). */
+ *  can stay "candidate" until explicit post-delivery export, regardless of verdict). */
 export function findLatestDeliveryVerdictArtifactForDelivery(deliveryID: string) {
   return Database.use((db) =>
     db

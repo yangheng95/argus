@@ -119,6 +119,8 @@
     `fail_task` · `cancel_task` · `retry_task` · `inject_operator_message` ·
     `steer_subagent` · `restart_from_stage` · `deliver` · `publish_delivery` ·
     `refine` · `question` · `propose_task` · `build`
+    `publish_delivery` is post-delivery artifact export only; accepted `deliver`
+    is the task lifecycle completion authority.
   - `panel/capability.ts` 当前注册 **20 个 action**（详见 03-control.md）
   - **SessionKind 实际是 15 种**（02-data.md 写"16 种"且把 `planner` 列入是错的）：
     `root` · `orchestrator` · `assistant` · `gateway` · `intent-analysis` ·
