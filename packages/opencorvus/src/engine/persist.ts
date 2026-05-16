@@ -1264,8 +1264,8 @@ export function persistTaskDelivery(input: {
  *
  * The `checks` parameter semantics match the pre-artifact behaviour: when
  * supplied, replaces the previous check set wholesale; when OMITTED, the
- * prior check set is preserved (used by `publish_delivery` which runs after
- * `deliver` has already written the structured checks). Pass [] to clear.
+  * prior check set is preserved (used by explicit post-delivery artifact export
+  * after `deliver` has already written the structured checks). Pass [] to clear.
  */
 export function updateEvaluationFromDeliveryVerdict(input: {
   deliveryID: string

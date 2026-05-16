@@ -3,6 +3,11 @@
 Date: 2026-05-12
 Status: Draft for implementation, revised after sub-agent review
 
+2026-05-16 lifecycle update: `deliver` accepted is now the task completion
+authority. `publish_delivery` is explicit post-delivery artifact export only,
+and `prosecute` is post-delivery hardening evidence rather than a pre-publish
+review window. See `specs/deliver-accepted-completes-task-2026-05-16.md`.
+
 ## 0. Problem Statement
 
 Current agent architecture has responsibility drift, but the fix is not to
@@ -142,8 +147,9 @@ role contract.
   wording.
 - Prompt catalog can expose empty default prompts for native editable agents
   such as `integrity` / `prosecutor`.
-- `deliver` auto-publish can bypass the intended `deliver -> prosecute ->
-  publish_delivery` review window.
+- Historical: `deliver` auto-publish could bypass the intended `deliver ->
+  prosecute -> publish_delivery` review window. Superseded on 2026-05-16:
+  accepted `deliver` completes the task; `prosecute` is post-delivery evidence.
 - `prosecutor.query_diff` is still a stub and its prompt still contains phase
   wording that describes incomplete wiring.
 - `runProsecutor` catches broad errors and returns zero activity.
@@ -411,8 +417,8 @@ Tests:
 - prosecutor failure is not indistinguishable from no counterexamples.
 - prosecutor cannot write final delivery verdict state.
 - diagnostic challenge metrics cannot become acceptance authority.
-- accepted delivery auto-publish does not make prosecutor unreachable when the
-  workflow requires prosecution before publish.
+- accepted delivery completion leaves prosecutor usable as post-delivery
+  hardening evidence, without making publish the lifecycle gate.
 
 Acceptance:
 
@@ -570,8 +576,8 @@ This refactor is complete only when all items below are true:
    write acceptance verdicts.
 5. `integrity` may use requirement-status completion evidence but does not run
    delivery runtime verification or publish delivery verdicts.
-6. `deliver` auto-publish and `publish_delivery` use the same manifest gate and
-   final verdict semantics.
+6. `deliver` accepted owns task completion; `publish_delivery` is artifact export
+   and must not write task lifecycle.
 7. prosecutor failures are visible and cannot be collapsed into no-op success.
 8. no user-facing or internal live docs describe planner as active.
 9. targeted tests pass.

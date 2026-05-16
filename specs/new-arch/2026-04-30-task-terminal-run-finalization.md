@@ -1,5 +1,10 @@
 # 2026-04-30 Task Terminal Run Finalization
 
+2026-05-16 note: the historical auto-publish terminal path described below was
+superseded by `specs/deliver-accepted-completes-task-2026-05-16.md`. Current
+runtime completes the task on accepted `deliver`; `publish_delivery` no longer
+owns task lifecycle.
+
 ## Evidence
 
 - Live task `tsk_ddceedabf001760U5O4QH2Gk1I` was not blocked in delivery by the time the database was inspected.

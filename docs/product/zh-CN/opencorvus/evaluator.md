@@ -55,7 +55,7 @@ verdict 以 `engine_artifact[kind="verdict"]` 形式落盘：
 
 | verdict        | 后续动作                                                                                                       |
 | -------------- | -------------------------------------------------------------------------------------------------------------- |
-| `accepted`     | 进入 publish（`publish_delivery` tool）                                                                        |
+| `accepted`     | `deliver` 直接完成 task；如需补充 patch / git preview 等交付物，可显式调用 `publish_delivery` 做 post-delivery artifact export |
 | `rejected`     | 走 `delivery-retry-feedback.ts` 回修；超过 `delivery.max_retries` 后由 Orchestrator 决定 retry / replan / fail |
 | `inconclusive` | 视为 rejected，但优先 replan（无法判决通常意味着信息不全或 doom-loop）                                         |
 

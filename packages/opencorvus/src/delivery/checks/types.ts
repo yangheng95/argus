@@ -90,7 +90,15 @@ export interface GoalReportClaim {
 export interface DeliveryInfo {
   summary: string
   changedFiles: string[]
-  diffs?: Array<{ file: string; diff?: string }>
+  diffs?: Array<{
+    file: string
+    diff?: string
+    before?: string
+    after?: string
+    additions?: number
+    deletions?: number
+    status?: string
+  }>
   hostGateFailures?: Array<{
     kind: "manifest" | "runtime" | "visual"
     id: string

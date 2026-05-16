@@ -139,14 +139,15 @@ orchestrator/loop.ts — runTaskLoop()
 **Checks（原 evaluator 模块）**：移到 `delivery/checks/`，不再是独立 sub-agent。delivery agent 通过 `discovery.ts` 解析 check family，调 `visual.ts` / `runtime-evidence.ts` / `runtime-readiness.ts` / `walkthrough/` / `content-fingerprint.ts` / `contract-audit-review.ts` / `project-gate.ts` 执行确定性或 LLM judge 验证。旧 `src/evaluator/` 目录已删除。
 
 **`orchestrator/tools.ts` 当前导出 21 个 tool**（2026-05-11，下面按职责分组；文件内的实际出现顺序为 `requirements` · `design_analysis` · `architect` · `integrity` · `prosecute` · `analyze_intent` · `modify_goal` · `query_failed_goals` · `read_context` · `fail_task` · `cancel_task` · `retry_task` · `inject_operator_message` · `steer_subagent` · `restart_from_stage` · `deliver` · `publish_delivery` · `refine` · `question` · `propose_task` · `build`）：
-1. **Stage 调用**：`requirements`、`design_analysis`、`architect`、`build`、`deliver`、`publish_delivery`
-2. **审查 / 复核**：`integrity`（integrity reviewer）、`prosecute`（prosecutor）、`analyze_intent`
-3. **Goal 维护**：`modify_goal`、`query_failed_goals`
-4. **状态 / 上下文**：`read_context`
-5. **任务级控制**：`fail_task`、`cancel_task`、`retry_task`、`inject_operator_message`、
+1. **Stage 调用**：`requirements`、`design_analysis`、`architect`、`build`、`deliver`
+2. **Post-delivery artifact export**：`publish_delivery`（不决定 task lifecycle；accepted `deliver` 已完成 task）
+3. **审查 / 复核**：`integrity`（integrity reviewer）、`prosecute`（prosecutor）、`analyze_intent`
+4. **Goal 维护**：`modify_goal`、`query_failed_goals`
+5. **状态 / 上下文**：`read_context`
+6. **任务级控制**：`fail_task`、`cancel_task`、`retry_task`、`inject_operator_message`、
    `steer_subagent`、`restart_from_stage`、`refine`
-6. **用户交互**：`question`
-7. **任务繁衍**：`propose_task`（拟新建关联任务，需用户确认后才落 `EngineService.createTask`）
+7. **用户交互**：`question`
+8. **任务繁衍**：`propose_task`（拟新建关联任务，需用户确认后才落 `EngineService.createTask`）
 
 **Planner agent 已删除**，因此 orchestrator 也没有 `planner` tool。pipeline build 路径里 "per-goal 实现步骤" 的旧 `planGoal()` 入口随同 `engine/goal-pool.ts` 一起删掉了；现在 build agent 直接读 architect contract + decision-log 自行推进。
 

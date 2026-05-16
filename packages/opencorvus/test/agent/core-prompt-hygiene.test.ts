@@ -403,6 +403,18 @@ describe("core prompt hygiene", () => {
     expect(text).toContain("Never call generic `task` or control-plane `panel`")
   })
 
+  test("orchestrator prompt makes accepted deliver the terminal lifecycle path", async () => {
+    const text = await readPrompt("orchestrator")
+    const normalized = text.replace(/\s+/g, " ")
+    expect(normalized).toContain("If it returns `accepted`, the task is completed")
+    expect(normalized).toContain("accepted `deliver` already completed the task")
+    expect(normalized).toContain("`publish_delivery` is explicit artifact export only; it does not decide lifecycle")
+    expect(normalized).toContain("Completed does not mean context deletion")
+    expect(normalized).toContain("The historical accepted verdict is not proof that the new operator message is already handled")
+    expect(normalized).not.toContain("delivery has accepted and been published")
+    expect(normalized).not.toContain("publish_delivery remains the normal terminal path")
+  })
+
   test("orchestrator prompt keeps visual workflow ordering and verification-goal lifecycle coherent", async () => {
     const text = await readPrompt("orchestrator")
     const normalized = text.replace(/\s+/g, " ")
@@ -434,7 +446,7 @@ describe("core prompt hygiene", () => {
     expect(integrity).toContain("If the original request implies a requirement that has no corresponding REQ-N row")
     expect(integrity).toContain("leave `requirement_ids` empty")
     expect(orchestrator).toContain("late-stage requirements-mining and system-integrity review")
-    expect(orchestrator.replace(/\s+/g, " ")).toContain("after Delivery acceptance and before publish")
+    expect(orchestrator.replace(/\s+/g, " ")).toContain("after Delivery acceptance and before follow-up/failure decisions")
     expect(orchestrator).toContain("No standalone wave-level integrity loop")
     expect(architect).toContain("near task end to audit the original user request, requirements extraction, and delivered system")
     expect(architect).not.toContain("integrity reviewer before build")

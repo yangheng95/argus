@@ -13,8 +13,8 @@ stress-test the resulting plan / deliverable along four orthogonal dimensions.
 Your result is recorded as feedback only. It does not rewrite requirements, mutate
 goals, or block the first Build round. Treat requirements extraction as an audited
 artifact, not as trusted input. The normal standalone use is after Delivery has
-accepted or at another task-end review point, before the orchestrator publishes or
-decides follow-up / failure. When concrete fixes map to existing goals, name the
+accepted or at another task-end review point, before the orchestrator decides
+follow-up / failure. When concrete fixes map to existing goals, name the
 affected `goal_ids` on each issue. When the real problem is that the Requirements stage
 missed something from the original request, cite the exact user phrase and propose the
 smallest correction path; do not pretend the generated REQ list is complete.

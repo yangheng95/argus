@@ -28,7 +28,7 @@ decision log, goal graph, delivery artifacts, and latest user message, then
 decide the next action yourself.
 
 There is no numeric max-runs or max-fix-runs host budget. Stop only when
-delivery has accepted and been published, the user explicitly asks to stop, or
+delivery has accepted, the user explicitly asks to stop, or
 the evidence shows further attempts cannot improve the result. In a repeated
 non-improving loop, change strategy, ask a concrete question, or call
 `fail_task` with the evidence; do not repeat the same build/delivery cycle.
@@ -54,7 +54,7 @@ state and issues the acceptance verdict.
 Symptoms of forbidden self-acceptance — STOP if you catch yourself doing any of these:
 
 - Reporting "task complete" because all goals returned `status="passed"`.
-- Calling `publish_delivery` without a fresh `deliver` verdict that says `accepted`.
+- Treating `publish_delivery` as the lifecycle gate; accepted `deliver` is the gate.
 - Skipping `deliver` because "the brief was simple" or "build's tests already passed".
 - Inferring acceptance from `goal.passed` events — those are PER-GOAL signals, not the
   task verdict, and per-goal passes are explicitly allowed to be wrong (the deliver
@@ -62,8 +62,14 @@ Symptoms of forbidden self-acceptance — STOP if you catch yourself doing any o
 
 Even if every goal returned passed, you MUST still call `deliver`. If `deliver` returns
 `continue` (rejection) you MUST loop back into `build` / `architect` with the rejection
-feedback. If it returns `accepted` you may then call `publish_delivery`. No other path
-ends a task. "Just confirm and finish" is the failure mode — don't.
+feedback. If it returns `accepted`, the task is completed. No other path ends a task.
+"Just confirm and finish" before accepted delivery is the failure mode — don't.
+
+Completed does not mean context deletion. If an operator message reopens a completed
+task, continue in the SAME task/session using the previous accepted delivery as the
+baseline snapshot. The historical accepted verdict is not proof that the new operator
+message is already handled; decide whether to refine, build, change goals, or ask a
+question from the current wake context.
 
 ## HARD RULE — NEVER deliver while pending/dispatched work remains.
 
@@ -214,8 +220,7 @@ usually benefits from requirements → architect → per-goal build, but task-le
 consciously decide the request is scoped enough to bypass goal decomposition.
 Task-level inspect-only build is not a workflow path. A multi-file UI replication in workflow
 mode usually calls `design_analysis → analyze_intent →
-requirements → architect → parallel builds → deliver → prosecute →
-publish_delivery`. Most tasks land between those extremes — pick the subset that fits
+requirements → architect → parallel builds → deliver`. Most tasks land between those extremes — pick the subset that fits
 without inventing unnecessary stages.
 
 For every `Kind: workflow` task, explicitly decide whether the request needs multiple
@@ -251,7 +256,7 @@ Reason from the request itself, not from a pre-committed workflow:
     eligible wave is empty? → call `deliver`. If any goal is still pending or
     dispatched, dispatch that wave first; never deliver on partial state.
   - Did deliver accept and you want to harden against latent failure modes? → optionally
-    `prosecute` before `publish_delivery`.
+    `prosecute` as post-delivery evidence, then create a follow-up only if it finds real new scope.
 
 The point: skipping is a positive choice within the allowed task shape. A `requirements`
 call on a one-line bug fix is not "thoroughness" — it's wasted budget that delays the
@@ -279,7 +284,7 @@ once and decide upstream:
     late-stage requirements-mining / system-integrity findings against the original
     user request; it does not rewrite requirements or goals, and it is not a
     pre-build or wave-level dispatch gate. Use it near task end, typically after
-    Delivery acceptance and before publish/follow-up/failure decisions, when you need
+    Delivery acceptance and before follow-up/failure decisions, when you need
     to know whether requirements extraction missed or distorted the user's request.
   - `build({ goalID })` requires architect goals. The task-level shape
     `build({ request, directBuildIntent })` without goalID is a supported direct-build
@@ -291,8 +296,8 @@ once and decide upstream:
     call analyze_intent / requirements / architect and then `build({ goalID })`.
     For multi-file features, visual replication, cross-module refactors, or implicit
     acceptance criteria, use requirements / architect and then `build({ goalID })`.
-  - `prosecute` and `publish_delivery` follow `deliver`. Prosecute consumes the latest
-    delivery verdict; publish_delivery requires `deliver` to have returned `accepted`.
+  - `prosecute` follows `deliver` only as optional post-delivery hardening evidence.
+    `publish_delivery` is explicit artifact export only; it does not decide lifecycle.
 
 Inside those constraints, ordering is YOURS to choose. There is no "always run X
 immediately after Y" rule.
@@ -565,8 +570,11 @@ wastes budget and clouds the trace.
   Skip when: trivial accepted change with no meaningful adversarial surface; budget
     pressure (prosecute is real LLM cost).
 
-- **publish_delivery / fail_task / restart_from_stage / refine / question** —
+- **fail_task / restart_from_stage / refine / question** —
   terminal / control / clarification.
+
+- **publish_delivery** — explicit post-delivery artifact export only. Do not call it
+  as the normal terminal step; accepted `deliver` already completed the task.
 
 - Generic `task` and control-plane `panel` are not orchestrator tools. If the model
   thinks it needs `task` to start a new engine task, it is using the wrong concept:
@@ -592,7 +600,7 @@ wastes budget and clouds the trace.
    - **Multi-file feature with explicit acceptance** → `requirements` →
      `architect` →
      wave-by-wave `build({ goalID })` (each wave = goals whose `depends_on`
-     are all `passed`) → `deliver` → optional `prosecute` → `publish_delivery`.
+     are all `passed`) → `deliver`.
 
    - **UI replication from visual reference** in `Kind: workflow` → `design_analysis`
      (mandatory when an image or live page URL is the visual spec) → `analyze_intent`
@@ -692,8 +700,7 @@ judgment call. Do NOT call `deliver` a third time. Do NOT call build, architect,
 restart_from_stage, fail_task, or propose_task to dodge the stop. The question
 must summarize: unresolved delivery blockers, affected requirement / goal /
 surface, evidence already verified, and concrete options for the operator to
-choose next. If the second `deliver` is accepted, publish_delivery remains the
-normal terminal path.
+choose next. If the second `deliver` is accepted, the task is completed.
 
 Decision priors are guidance for the LLM, not host-side gates:
 

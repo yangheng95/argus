@@ -18,6 +18,7 @@ import { createDecisionLog } from "../../src/decision-log"
 import { createWorkflowState, WorkflowRegistry } from "../../src/engine/workflow"
 import { createOrchestratorTools } from "../../src/orchestrator/tools"
 import { goalStatusByID } from "../../src/engine/describe"
+import { openTaskForOperatorMessage } from "../../src/engine/task-message-open"
 import { Session } from "../../src/session"
 import { SessionTable } from "../../src/session/session.sql"
 import {
@@ -35,18 +36,21 @@ import {
   findActivePlanForTask,
   findDeliveryByRun,
   findActiveSpecForTask,
+  findEvaluationByRun,
   findExecutorSession,
   findGoal,
   findGoalRun,
   findGoalLatestWorkspace,
   findLatestIntegrityAttemptArtifact,
   findRequirements,
+  findRun,
   listGoalRunsByGoal,
 } from "../../src/engine/store"
 import { seedGoalRunAttemptWithWorkspace } from "../fixture/goal-run-attempt"
 import { Filesystem } from "../../src/util/filesystem"
 import { EngineService } from "../../src/task-api"
 import { Question } from "../../src/question"
+import { deriveTaskStatus } from "../../src/engine/task-status"
 
 let buildAgentRunImpl: ((input: any) => Promise<any>) | undefined
 let reviewIntegrityImpl: ((input: any) => Promise<any>) | undefined
@@ -843,6 +847,145 @@ describe("orchestrator tools", () => {
         expect(verifyInput.runID).toBe(run?.id)
         expect(verifyInput.delivery.changedFiles).toContain("direct-output.txt")
         expect(findDeliveryByRun(run!.id)?.run_id).toBe(run?.id)
+      },
+    })
+  })
+
+  test("accepted deliver completes the task without publish_delivery", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_deliver_completed_${stamp}`
+    const taskID = `tsk_deliver_completed_${stamp}`
+    const direct = WorkflowRegistry.resolveSync("direct")!
+    const workflowState = createWorkflowState(direct)
+
+    Database.use((db) => {
+      db.insert(ProjectTable)
+        .values({
+          id: projectID,
+          worktree: tmp.path,
+          name: "Accepted deliver completion test",
+          sandboxes: "[]",
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+      db.insert(EngineTaskTable)
+        .values({
+          id: taskID,
+          project_id: projectID,
+          source: "test",
+          title: "Accepted deliver completion task",
+          request: "Verify accepted deliver is the completion authority",
+          kind: "build",
+          priority: "normal",
+          time_created: now,
+          time_updated: now,
+          time_started: now,
+        })
+        .run()
+    })
+
+    buildAgentRunImpl = async () => {
+      await fs.writeFile(path.join(tmp.path, "accepted-output.txt"), "accepted delivery output\n")
+      return {
+        result: {
+          status: "passed",
+          summary: "Direct build wrote accepted output.",
+          files_changed: [
+            {
+              path: "accepted-output.txt",
+              summary: "Added accepted output.",
+              reason: "The direct build request required a concrete file change.",
+            },
+          ],
+          tests: [],
+        },
+        sessionID: "ses_direct_build_accepted_deliver",
+        worktreeDir: tmp.path,
+        diffs: [{ file: "accepted-output.txt", diff: "New file:\naccepted delivery output\n" }],
+      }
+    }
+    deliveryServiceVerifyImpl = async () => ({
+      verdict: "accepted",
+      summary: "Delivery accepted the integrated output.",
+      deferred_checks: [],
+      tool_call_evidence: [
+        {
+          tool: "inspect_delivery_context",
+          passed: true,
+          detail: "accepted delivery evidence",
+        },
+      ],
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "accepted deliver completion test" })
+        Database.use((db) =>
+          db
+            .update(EngineTaskTable)
+            .set({ session_id: parent.id, time_updated: Date.now() })
+            .where(eq(EngineTaskTable.id, taskID))
+            .run(),
+        )
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+          workflow: direct,
+          workflowState,
+        })
+
+        const buildResult = await tools.build.execute(
+          {
+            request: "Write the accepted output file.",
+            reason: "Explicit kind=build task-level implementation.",
+          },
+          {} as any,
+        )
+        expect(buildResult).toContain("Build agent finished")
+
+        const run = findActiveRunForTask(taskID)
+        expect(run).toBeDefined()
+
+        const deliverResult = await tools.deliver.execute(
+          { reason: "Direct build finished and delivery should complete the task." },
+          {} as any,
+        )
+
+        expect(deliverResult).toContain("Delivery accepted and task completed")
+        const taskRow = Database.use((db) =>
+          db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get(),
+        )
+        expect(taskRow?.session_id).toBe(parent.id)
+        expect(taskRow?.time_completed).toBeNumber()
+        expect(deriveTaskStatus(taskRow!)).toBe("completed")
+        expect(findRun(run!.id)?.status).toBe("completed")
+        expect(findDeliveryByRun(run!.id)?.run_id).toBe(run?.id)
+        const evaluation = findEvaluationByRun(run!.id)
+        expect(evaluation?.status).toBe("passed")
+        expect(evaluation?.verdict).toBe("accepted")
+
+        const publishResult = await tools.publish_delivery.execute(
+          { reason: "Explicit artifact export after accepted delivery completion." },
+          {} as any,
+        )
+        expect(publishResult).toContain("Delivery evidence manifest is missing")
+        expect(publishResult).not.toContain("no coordinator run")
+        const taskAfterPublishAttempt = Database.use((db) =>
+          db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get(),
+        )
+        expect(deriveTaskStatus(taskAfterPublishAttempt!)).toBe("completed")
+
+        const reopened = await openTaskForOperatorMessage(taskAfterPublishAttempt!, "Operator continuation reopened task")
+        expect(reopened.session_id).toBe(parent.id)
+        expect(reopened.time_completed).toBeNull()
+        expect(deriveTaskStatus(reopened)).toBe("queued")
+        expect(findRun(run!.id)?.status).toBe("completed")
+        expect(findDeliveryByRun(run!.id)?.run_id).toBe(run?.id)
+        expect(findEvaluationByRun(run!.id)?.verdict).toBe("accepted")
       },
     })
   })
@@ -1704,10 +1847,11 @@ describe("orchestrator tools", () => {
     })
   })
 
-  test("publish gate failures remain rework feedback instead of terminal task failures", async () => {
+  test("publish gate failures are post-delivery export feedback instead of task lifecycle decisions", async () => {
     const source = await fs.readFile(path.join(import.meta.dir, "../../src/orchestrator/tools.ts"), "utf8")
 
-    expect(source).toContain("publishGateReworkResult")
+    expect(source).toContain("publishGateArtifactResult")
+    expect(source).toContain("Task lifecycle is unchanged")
     expect(source).not.toContain('await updateTask(currentTask, { status: "failed", error: publishResult.summary')
     expect(source).not.toContain('await updateTask(task, { status: "failed", error: result.summary')
   })

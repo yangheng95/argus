@@ -44,6 +44,7 @@ import {
   findActivePlanForTask,
   findActiveRunForTask,
   findActiveSpecForTask,
+  findDeliveriesForTask,
   findDeliveryByRun,
   findEvaluationByRun,
   findExecutorSession,
@@ -51,8 +52,10 @@ import {
   findGoalRun,
   findLatestArchitectContractGraph,
   findLatestDeliveryVerdictArtifact,
+  findLatestDeliveryVerdictArtifactForDelivery,
   findLatestTipGoalRun,
   findPlan,
+  findRun,
   getGoalRetryCount,
   listGoals,
   listGoalsForPlan,
@@ -1188,16 +1191,16 @@ export function createOrchestratorTools(input: {
     }
   }
 
-  async function publishGateReworkResult(input: {
+  async function publishGateArtifactResult(input: {
     deliveryID: string
     runID: string
     summary: string
-    source: "deliver_auto_publish" | "publish_delivery"
+    source: "publish_delivery"
   }) {
     const detail =
       `Publish gate blocked delivery ${input.deliveryID}: ${input.summary}. ` +
-      `This is a rework signal, not a terminal task failure. The orchestrator must fix the ` +
-      `workspace/export mismatch, then run deliver again.`
+      `This is an artifact/export failure, not a delivery verdict. Task lifecycle is unchanged; ` +
+      `accepted deliver is the completion authority.`
     try {
       const { createDecisionLog } = await import("@/decision-log")
       createDecisionLog(taskID).append({
@@ -1211,18 +1214,17 @@ export function createOrchestratorTools(input: {
     }
     return SubAgentProtocol.yieldResult({
       headline:
-        `Publish gate blocked delivery, but task remains active for rework. ` +
-        `Fix the workspace/export mismatch and re-run deliver.`,
+        `Publish gate blocked delivery artifact export. Task lifecycle is unchanged.`,
       fields: [
         ["delivery_id", input.deliveryID],
         ["run_id", input.runID],
         ["publish_gate", input.summary],
         [
           "next",
-          "inspect declared changed files vs exported workspace; build/restart_from_stage as needed; then deliver again",
+          "inspect declared changed files vs exported workspace; retry publish_delivery only if explicit artifact export is still needed",
         ],
       ],
-      pointer: `delivery ${input.deliveryID}; publish gate failure is rework feedback`,
+      pointer: `delivery ${input.deliveryID}; publish gate failure is post-delivery export feedback`,
     })
   }
 
@@ -3106,8 +3108,8 @@ export function createOrchestratorTools(input: {
     // (kind: "evaluator") was previously called inside `deliver` between
     // metric execution and snapshot writing. Per the agent boundary rule
     // it must be the orchestrator that decides when to run the adversarial
-    // pass and consumes its yield. The orchestrator now drives the order
-    // explicitly: deliver → prosecute → publish_delivery / next iteration.
+    // pass and consumes its yield. Accepted deliver already completes the
+    // task; prosecutor is post-delivery hardening evidence, not a publish gate.
     // -----------------------------------------------------------------------
 
     prosecute: tool({
@@ -3115,8 +3117,8 @@ export function createOrchestratorTools(input: {
         "Run the adversarial Prosecutor against the most recent delivery " +
         "iteration: file concrete counterexamples for failure modes the " +
         "delivery agent missed, or propose at most one diagnostic challenge " +
-        "metric per iteration (capped at 3 per task). Call AFTER every " +
-        "`deliver` invocation and BEFORE `publish_delivery` so the iteration " +
+        "metric per iteration (capped at 3 per task). Call AFTER a " +
+        "`deliver` invocation when post-delivery hardening is worth the cost so the iteration " +
         "snapshot reflects the adversarial pass. Side-effects land in DB " +
         "(engine_counterexample, engine_metric_spec) and feed the next " +
         "deliver iteration's trajectory query.",
@@ -3213,7 +3215,7 @@ export function createOrchestratorTools(input: {
           headline:
             `Prosecutor iter ${iteration}: filed ${pRes.counterexamples_filed} counterexample(s), ` +
             `proposed ${pRes.challenges_proposed} challenge(s), resolved ${pRes.counterexamples_resolved}. ` +
-            `NEXT: ${verdict.verdict === "accepted" ? "call `publish_delivery`" : "address feedback then call `build`/`deliver` again"}.`,
+            `NEXT: ${verdict.verdict === "accepted" ? "review the post-delivery evidence or create a follow-up if it found real scope" : "address feedback then call `build`/`deliver` again"}.`,
           summary: pRes.rationale,
           fields: [
             ["iteration", String(iteration)],
@@ -3785,7 +3787,7 @@ export function createOrchestratorTools(input: {
             } else {
               sections.push(
                 `\n## Prosecutor (latest, delivery ${lastDeliveryID})`,
-                `- not run for this delivery — call \`prosecute\` after \`deliver\` and before \`publish_delivery\`.`,
+                `- not run for this delivery — call \`prosecute\` after \`deliver\` only when post-delivery hardening is worth the cost.`,
               )
             }
           }
@@ -4617,139 +4619,62 @@ export function createOrchestratorTools(input: {
 
           if (verdict.verdict === "accepted") {
             await trackStepComplete("deliver")
-            log.info("deliver: agent accepted, auto-publishing", { taskID, runID: run?.id ?? null, deliveryID })
-            // Auto-publish: delivery agent accepted → immediately complete task.
-            // No second LLM turn needed — avoids infinite loop where LLM ends turn
-            // without calling publish_delivery.
-            //
-            // Stateless deliver path (run-less tasks): if no coordinator run
-            // exists, there is no Publisher pipeline to drive — the task has
-            // no goals/plan to merge. The verdict is already recorded above;
-            // surface the accept to the LLM so it can fail-task or complete
-            // by other means. This path is rare (most tasks now lazy-create
-            // a run via build), but covered for unconditional deliver intent.
-            if (!run) {
-              return `Delivery verified and ACCEPTED, but no coordinator run exists for this task — nothing for Publisher to merge. Verdict artifact ${verdictArtifactId} recorded; call modify_goal/build to materialise a goal-bearing run if you need to publish a deliverable.`
+            log.info("deliver: agent accepted, completing task", { taskID, runID: run.id, deliveryID })
+            const delivery = findDeliveryByRun(run.id)
+            if (!delivery) {
+              throw new Error(`Delivery verified and accepted, but no delivery record found for run ${run.id}`)
             }
+
+            const completed = Date.now()
+            updateEvaluationFromDeliveryVerdict({
+              deliveryID: delivery.id,
+              verdict: verdict.verdict,
+              summary: verdict.summary,
+              now: completed,
+            })
+
+            const preComplete = requireTask(taskID)
+            if (isTaskQueued(preComplete)) {
+              await updateTask(preComplete, { status: "active" }, "Activating for accepted delivery completion")
+            }
+            const completedTask = await updateTask(
+              requireTask(taskID),
+              { status: "completed", error: null, time_completed: completed },
+              "Task completed by accepted delivery",
+            )
+
+            let cleanupNote = ""
             try {
-              const delivery = findDeliveryByRun(run.id)
-              if (!delivery) return `Delivery verified and ACCEPTED but no delivery record found.`
-              const verdictArtifact = Database.use((db) =>
-                db.select().from(EngineArtifactTable).where(eq(EngineArtifactTable.id, verdictArtifactId)).get(),
-              )
-              // No host gate veto on an LLM-accepted delivery. If the agent
-              // says accepted, we publish — the gate is informational. The
-              // previous `finalGate.status !== "passed"` check returned a
-              // tool-result string that didn't change run state; the
-              // orchestrator's next turn would just call deliver again on
-              // the same code → infinite loop on coverage gaps that
-              // re-running cannot fix. Per CLAUDE.md rule 7 (no dual
-              // accept paths) and rule 13 (LLM owns the decision).
-              markDeliveryPublishing(delivery.id, Date.now())
-              const PUBLISH_TIMEOUT_MS = 60_000
-              const currentTask = requireTask(taskID)
-              const publishResult = await Promise.race([
-                Publisher.deliver({ task: currentTask, run, delivery }),
-                new Promise<never>((_, reject) =>
-                  setTimeout(() => reject(new Error("Publisher.deliver() timeout")), PUBLISH_TIMEOUT_MS),
-                ),
-              ])
-              const completed = Date.now()
-              finalizeDeliveryResult({
-                deliveryId: delivery.id,
-                taskId: taskID,
-                runId: run.id,
-                delivery,
-                result: publishResult,
-                now: completed,
-              })
-              if (publishResult.status === "delivered") {
-                const current = requireTask(taskID)
-                const currentPlan = run.plan_version_id ? findPlan(run.plan_version_id) : undefined
-                const published = findDeliveryByRun(run.id) ?? delivery
-                const verdictPayload = verdictArtifact?.payload as
-                  | (import("@/delivery/agent").DeliveryVerdictType & { verdict: "accepted" | "rejected" })
-                  | null
-                if (verdictPayload?.verdict) {
-                  // The persisted verdict carries rejection_details for
-                  // rejected verdicts; derive the issues list here so the
-                  // schema stays single-source-of-truth (rule 22).
-                  const issues =
-                    verdictPayload.verdict === "rejected" ? verdictPayload.rejection_details.map((d) => d.error) : []
-                  updateEvaluationFromDeliveryVerdict({
-                    deliveryID: delivery.id,
-                    verdict: verdictPayload.verdict,
-                    summary: verdictPayload.summary ?? "Delivery agent verification",
-                    // Record agent-reported issues as structured failed-check
-                    // rows for operator-facing drill-down. Convergence lives
-                    // in engine_iteration, not these rows.
-                    checks: issues.map((evidence, i) => ({
-                      name: `issue-${i + 1}`,
-                      status: "failed" as const,
-                      evidence,
-                      scorer_kind: "delivery_verdict" as const,
-                    })),
-                    now: completed,
-                  })
-                }
-                const finalized = await EngineGit.complete(current, currentPlan, published)
-                if (finalized.error) {
-                  await updateTask(
-                    current,
-                    { status: "failed", error: finalized.error, time_completed: completed },
-                    finalized.error,
-                  )
-                  return `Git finalization failed: ${finalized.error}`
-                }
-                const cleanedGoalWorkspaces = await cleanupTerminalGoalWorkspaces("deliver auto-publish")
-                // Ensure task is in "active" before completing (recovery may have reset to "queued")
-                const preComplete = requireTask(taskID)
-                if (isTaskQueued(preComplete)) {
-                  await updateTask(preComplete, { status: "active" }, "Activating for completion")
-                }
-                const readyTask = requireTask(taskID)
-                await updateTask(
-                  readyTask,
-                  { status: "completed", error: null, time_completed: completed },
-                  "Task completed",
-                )
-                const { Plugin } = await import("@/plugin")
-                await Plugin.trigger(
-                  "delivery.ready",
-                  { taskID, runID: run.id, deliveryID: delivery.id },
-                  { actions: [] },
-                ).catch((err) => log.warn("plugin 'delivery.ready' trigger failed (non-fatal)", { error: String(err) }))
-                Promise.race([
-                  EngineMemoryBridge.flushTaskLearnings({
-                    task: currentTask,
-                    run,
-                    delivery,
-                    evaluation: findEvaluationByRun(run.id),
-                    plan: currentPlan,
-                  }),
-                  new Promise<void>((_, reject) =>
-                    setTimeout(() => reject(new Error("flushTaskLearnings timeout (30s)")), 30_000),
-                  ),
-                ]).catch((err) => log.warn("failed to flush task learnings", { error: String(err) }))
-                const cleanupNote =
-                  cleanedGoalWorkspaces > 0 ? ` ${cleanedGoalWorkspaces} goal worktree(s) cleaned.` : ""
-                return `Delivery published and task completed successfully.${cleanupNote} You can call refine to analyze the project and suggest improvements for the next iteration.`
-              }
-              return publishGateReworkResult({
-                deliveryID: delivery.id,
-                runID: run.id,
-                summary: publishResult.summary,
-                source: "deliver_auto_publish",
-              })
-            } catch (err) {
-              const msg = err instanceof Error ? err.message : String(err)
-              log.error("deliver: auto-publish failed", {
-                taskID,
-                error: msg,
-                stack: err instanceof Error ? err.stack : undefined,
-              })
-              return `Delivery verified and ACCEPTED but publish failed: ${msg}. Call publish_delivery to retry.`
+              const cleanedGoalWorkspaces = await cleanupTerminalGoalWorkspaces("accepted deliver")
+              cleanupNote = cleanedGoalWorkspaces > 0 ? ` ${cleanedGoalWorkspaces} goal worktree(s) cleaned.` : ""
+            } catch (cleanupErr) {
+              const cleanupMsg = cleanupErr instanceof Error ? cleanupErr.message : String(cleanupErr)
+              cleanupNote = ` Goal workspace cleanup failed: ${cleanupMsg}`
+              log.error("deliver: accepted task cleanup failed", { taskID, deliveryID: delivery.id, error: cleanupMsg })
             }
+
+            const { Plugin } = await import("@/plugin")
+            await Plugin.trigger(
+              "delivery.ready",
+              { taskID, runID: run.id, deliveryID: delivery.id },
+              { actions: [] },
+            ).catch((err) => log.warn("plugin 'delivery.ready' trigger failed (non-fatal)", { error: String(err) }))
+
+            const currentPlan = run.plan_version_id ? findPlan(run.plan_version_id) : undefined
+            Promise.race([
+              EngineMemoryBridge.flushTaskLearnings({
+                task: completedTask,
+                run,
+                delivery,
+                evaluation: findEvaluationByRun(run.id),
+                plan: currentPlan,
+              }),
+              new Promise<void>((_, reject) =>
+                setTimeout(() => reject(new Error("flushTaskLearnings timeout (30s)")), 30_000),
+              ),
+            ]).catch((err) => log.warn("failed to flush task learnings", { error: String(err) }))
+
+            return `Delivery accepted and task completed.${cleanupNote} You can call refine to analyze the project and suggest improvements for the next iteration.`
           }
           await trackStepComplete("deliver", undefined, true)
 
@@ -5043,11 +4968,9 @@ export function createOrchestratorTools(input: {
 
     publish_delivery: tool({
       description:
-        "Publish the accepted delivery to git and mark the task as completed. " +
-        "You decide when it is safe to publish — the describe layer shows every goal's " +
-        "`is_terminal_ok` / `is_terminal_fail` / `needs_redispatch` flags and the latest " +
-        "delivery verdict. If a blocking goal is failing you must fix it first; no tool " +
-        "gate blocks a knowingly-incomplete publish, the decision is yours.",
+        "Post-delivery artifact export for an already accepted delivery. " +
+        "`deliver` accepted is the task completion authority; this tool must not decide lifecycle. " +
+        "Use only when the operator explicitly needs a patch/git preview/export artifact after completion.",
       inputSchema: z.object({
         reason: z.string().optional().describe("Confirmation that both verifications passed"),
       }),
@@ -5056,41 +4979,38 @@ export function createOrchestratorTools(input: {
         const designGate = requireDesignAnalysisBefore("publish_delivery", task)
         if (designGate) return designGate
 
-        // Stateless / unconditional — same intent as `deliver`. publish_delivery
-        // has TWO physical preconditions (delivery row exists; verdict artifact
-        // exists) — those stay because "you cannot publish what was never built
-        // / never verified" is a physical fact, not a state-machine cache. The
-        // "No active run" gate WAS state-machine-ish; lazy-bootstrap a run if
-        // one is missing (the deliver call that produced the verdict already
-        // does this, so in practice it always exists at this point).
-        let run = findActiveRunForTask(task.id)
-        if (!run && listGoals(task.id).length > 0) {
-          const ensured = await ensureDispatchableRunForSingleGoal()
-          if (!("error" in ensured)) run = ensured.run
-        }
-        if (!run)
-          return "publish_delivery: no coordinator run for this task — call build (with a goal) or deliver first to materialise one."
-
-        const delivery = findDeliveryByRun(run.id)
-        if (!delivery) return "No delivery found."
-
-        // Require delivery to exist before publishing
-        const { EngineArtifactTable } = await import("@/engine/engine.sql")
-        const verdictArtifact = Database.use((db) =>
-          db
-            .select()
-            .from(EngineArtifactTable)
-            .where(and(eq(EngineArtifactTable.run_id, run.id), eq(EngineArtifactTable.label, "delivery-agent-verdict")))
-            .limit(1)
-            .get(),
-        )
-        if (!verdictArtifact) return "Delivery not verified. Run deliver first to aggregate and verify goal deliveries."
-        const verdictPayload = verdictArtifact.payload as
+        type DeliveryVerdictPayload =
           | (import("@/delivery/agent").DeliveryVerdictType & { verdict: "accepted" | "rejected" })
           | null
-        if (verdictPayload?.verdict !== "accepted") {
-          return "Delivery verdict is not accepted; publish blocked until deliver verifies the current output."
+          | undefined
+        let delivery: ReturnType<typeof findDeliveriesForTask>[number] | undefined
+
+        for (const candidate of findDeliveriesForTask(task.id)) {
+          const artifact = findLatestDeliveryVerdictArtifactForDelivery(candidate.id)
+          const payload = artifact?.payload as DeliveryVerdictPayload
+          if (payload?.verdict !== "accepted") continue
+          delivery = candidate
+          break
         }
+        if (!delivery) return "publish_delivery: no accepted delivery found. Run deliver first and publish only after an accepted verdict."
+
+        const run = findRun(delivery.run_id)
+        if (!run) {
+          throw new Error(
+            `publish_delivery invariant violation: accepted delivery ${delivery.id} references missing run ${delivery.run_id}`,
+          )
+        }
+
+        const verdictArtifact = findLatestDeliveryVerdictArtifactForDelivery(delivery.id)
+        const confirmedVerdictPayload = verdictArtifact?.payload as
+          | (import("@/delivery/agent").DeliveryVerdictType & { verdict: "accepted" | "rejected" })
+          | null
+        if (confirmedVerdictPayload?.verdict !== "accepted") {
+          throw new Error(
+            `publish_delivery invariant violation: accepted delivery ${delivery.id} lost its accepted verdict artifact`,
+          )
+        }
+        const verdictPayload = confirmedVerdictPayload
         const { findLatestDeliveryEvidenceManifest } = await import("@/delivery/manifest")
         const manifest = findLatestDeliveryEvidenceManifest({ deliveryID: delivery.id })
         if (!manifest) {
@@ -5114,7 +5034,7 @@ export function createOrchestratorTools(input: {
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err)
           log.error("publish_delivery failed", { taskID: task.id, runID: run.id, error: msg })
-          return `Publish failed: ${msg}. Decide whether to retry or fail the task.`
+          return `Publish failed: ${msg}. Task lifecycle is unchanged; retry only if explicit artifact export is still needed.`
         }
 
         const completed = Date.now()
@@ -5149,39 +5069,10 @@ export function createOrchestratorTools(input: {
 
           const finalized = await EngineGit.complete(current, currentPlan, published)
           if (finalized.error) {
-            await updateTask(
-              current,
-              { status: "failed", error: finalized.error, time_completed: completed },
-              finalized.error,
-            )
-            return `Git finalization failed: ${finalized.error}`
+            return `Delivery artifact export succeeded, but git checkpoint failed: ${finalized.error}. Task lifecycle is unchanged.`
           }
           const cleanedGoalWorkspaces = await cleanupTerminalGoalWorkspaces("publish_delivery")
           const cleanupNote = cleanedGoalWorkspaces > 0 ? ` ${cleanedGoalWorkspaces} goal worktree(s) cleaned.` : ""
-          await updateTask(
-            finalized.task,
-            { status: "completed", error: null, time_completed: completed },
-            "Task completed",
-          )
-          const { Plugin } = await import("@/plugin")
-          await Plugin.trigger(
-            "delivery.ready",
-            { taskID: task.id, runID: run.id, deliveryID: delivery.id },
-            { actions: [] },
-          ).catch(() => undefined)
-          // Flush task learnings to memory (fire-and-forget). Bound by a
-          // 30s timeout so a stuck Memory.write or LLM-backed digestor
-          // can't keep the bun event loop busy after the task itself
-          // finished publishing — observed leak when the parent process
-          // was killed force-style and these orphan promises kept
-          // running.
-          const evaluation = findEvaluationByRun(run.id)
-          Promise.race([
-            EngineMemoryBridge.flushTaskLearnings({ task, run, delivery, evaluation, plan: currentPlan }),
-            new Promise<void>((_, reject) =>
-              setTimeout(() => reject(new Error("flushTaskLearnings timeout (30s)")), 30_000),
-            ),
-          ]).catch((err) => log.warn("failed to flush task learnings", { error: String(err) }))
 
           // Auto-launch the deliverable if the delivery agent recorded a
           // launch command. `launch_command` exists only on AcceptedVerdict
@@ -5197,18 +5088,18 @@ export function createOrchestratorTools(input: {
               const launched = await Shell.launch(launchCmd, { cwd: projectDir })
               const addrNote = launched.address ? ` — running at ${launched.address}` : ` (PID ${launched.pid})`
               log.info("deliverable launched", { pid: launched.pid, address: launched.address, command: launchCmd })
-              return `Delivery published and task completed successfully.${cleanupNote} Deliverable launched${addrNote}.`
+              return `Delivery artifacts published.${cleanupNote} Deliverable launched${addrNote}. Task lifecycle is unchanged.`
             } catch (err) {
               const msg = err instanceof Error ? err.message : String(err)
               log.warn("auto-launch failed after publish", { error: msg, command: launchCmd })
-              return `Delivery published and task completed successfully.${cleanupNote} Auto-launch failed: ${msg}. Launch manually with: ${launchCmd}`
+              return `Delivery artifacts published.${cleanupNote} Auto-launch failed: ${msg}. Launch manually with: ${launchCmd}. Task lifecycle is unchanged.`
             }
           }
 
-          return `Delivery published and task completed successfully.${cleanupNote} You can call refine to analyze the project and suggest improvements for the next iteration.`
+          return `Delivery artifacts published.${cleanupNote} Task lifecycle is unchanged; accepted deliver is already the completion source.`
         }
 
-        return publishGateReworkResult({
+        return publishGateArtifactResult({
           deliveryID: delivery.id,
           runID: run.id,
           summary: result.summary,
