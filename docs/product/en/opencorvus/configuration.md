@@ -45,6 +45,12 @@ Modeled on the real `packages/opencorvus/.opencorvus/opencorvus.jsonc`:
     }
   },
 
+  "assistant": {
+    "auto_iteration": false,
+    "max_executor_groups": 3,
+    "default_workflow": "pipeline"
+  },
+
   "experimental": {
     "auto_question": true
   }
@@ -73,17 +79,25 @@ Fine-grained switch for stale clarification questions. Permission prompts are no
 
 ### `assistant` block
 
-Fine-tunes each agent (merged in `OrchestratorConfig.get()` — see `src/orchestrator/config.ts:67`):
+Fine-tunes orchestration policy and each agent (merged in `EngineConfig.get()` — see `src/engine/config.ts`):
 
 ```jsonc
 {
   "assistant": {
+    "auto_iteration": false,
     "requirements": { "max_steps": 20 },
-    "evaluator": { "tier": "standard" },  // core | standard | full
+    "architect": { "max_steps": 40 },
+    "build": { "max_steps": 80, "skills": [] },
+    "delivery": { "max_retries": 2 },
     "max_executor_groups": 3
   }
 }
 ```
+
+`assistant.auto_iteration` defaults to `false`. When disabled, failed goal waves
+and rejected `deliver` verdicts are reported as visible endpoints and OpenCorvus
+waits for operator follow-up. Set it to `true` only when OpenCorvus should
+automatically reopen rework attempts and continue the build/deliver repair loop.
 
 ## Load order
 

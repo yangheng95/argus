@@ -1256,6 +1256,12 @@ export namespace Config {
         .optional(),
       assistant: z
         .object({
+          auto_iteration: z
+            .boolean()
+            .optional()
+            .describe(
+              "Enable OpenCorvus host-side automatic repair iteration after failed goal waves or rejected deliveries. Default false: delivery rejection is reported and waits for operator follow-up.",
+            ),
           requirements: z
             .object({
               max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for requirements agent"),
@@ -1430,7 +1436,7 @@ export namespace Config {
         })
         .optional()
         .describe(
-          "Assistant agent configuration — controls requirements, architect, build, design-analysis, intent-analysis, and delivery agent behavior",
+          "Assistant agent configuration — controls orchestration policy, requirements, architect, build, design-analysis, intent-analysis, and delivery agent behavior",
         ),
       experimental: z
         .object({

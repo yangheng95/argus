@@ -650,14 +650,14 @@ export const OrchestratorEventNote = {
       }
       lines.push(
         "",
-        "ACTION REQUIRED: resolve the blocking goals before these can proceed. Call query_failed_goals, then build({ goalID, request }) with root cause or fail_task.",
+        "ACTION REQUIRED: resolve the blocking goals before these can proceed. If assistant.auto_iteration=false, report blockers and wait for operator follow-up. If assistant.auto_iteration=true, call query_failed_goals, then build({ goalID, request }) with root cause or fail_task.",
       )
     } else {
       lines.push(
         "",
         "Read context (read_context) to see goal statuses and eval evidence.",
         input.failed > 0
-          ? "Failed goal worktrees are diagnostic evidence under .opencorvus/worktrees, not primary workspace pollution. Do not restart_from_stage solely because a failed diagnostic worktree contains partial files; query_failed_goals, then retry or modify the failed goal."
+          ? "Failed goal worktrees are diagnostic evidence under .opencorvus/worktrees, not primary workspace pollution. Do not restart_from_stage solely because a failed diagnostic worktree contains partial files; when assistant.auto_iteration=false, report the failed goal blockers and wait; when assistant.auto_iteration=true, query_failed_goals, then retry or modify the failed goal."
           : "No goals failed in this batch.",
         "Decide next action based on current state — no predetermined action.",
       )
@@ -680,16 +680,16 @@ export const OrchestratorEventNote = {
 
   deliveryRework(input: { reason: string; iteration: number; summary?: string; affectedGoalCount?: number }): string {
     const lines = [
-      `Delivery iteration ${input.iteration} rejected (reason=${input.reason}).`,
+      `Auto iteration is enabled; delivery iteration ${input.iteration} rejected (reason=${input.reason}).`,
     ]
     if (typeof input.affectedGoalCount === "number") {
       lines.push(
         input.affectedGoalCount > 0
-          ? `${input.affectedGoalCount} affected goal(s) were reset to pending; dispatch them again or escalate.`
-          : "No goals were reset automatically; inspect the delivery gate failure and choose the next repair strategy.",
+          ? `${input.affectedGoalCount} affected goal attempt(s) were reopened for rework; dispatch them again or escalate.`
+          : "No goal attempt was reopened; inspect the delivery gate failure and choose the next repair strategy from manifest evidence.",
       )
     } else {
-      lines.push("Affected goals were reset to pending; dispatch them again or escalate.")
+      lines.push("Affected goal attempts were reopened for rework; dispatch them again or escalate.")
     }
     if (input.summary) lines.push("", `Detail: ${input.summary}`)
     return lines.join("\n")
@@ -727,6 +727,20 @@ const ORCHESTRATOR_INSTRUCTIONS = ORCHESTRATOR_CORE
  */
 async function buildSystemParts(task: TaskRow, _event: OrchestratorEvent | undefined, workflow?: MiniWorkflow, workflowState?: WorkflowState): Promise<string[]> {
   const ctx: string[] = []
+  const autoIteration = (await EngineConfig.get()).auto_iteration === true
+
+  // ── Auto iteration mode ──
+  // This is intentionally dynamic, not hard-coded into the static prompt, so
+  // flipping `assistant.auto_iteration` changes the next wake immediately.
+  ctx.push("## Auto Iteration Mode")
+  if (autoIteration) {
+    ctx.push("- assistant.auto_iteration=true: rejected deliveries and failed terminal waves may queue same-task repair work automatically when evidence is concrete and not a repeated identical failure.")
+    ctx.push("- Keep repairs scoped to the latest delivery evidence, then run `deliver` again; stop and ask when the failure repeats or needs operator judgment.")
+  } else {
+    ctx.push("- assistant.auto_iteration=false: `deliver` is the scheduler endpoint. After a rejected delivery or failed terminal wave, report blockers and wait for an operator follow-up before launching repair work.")
+    ctx.push("- A fresh operator message such as `continue` or a concrete change request may continue the same task, but the host must not open rework attempts or queue a new build loop by itself.")
+  }
+  ctx.push("")
 
   // ── Follow-up task context ──
   // When the delivery agent's `submit_next_task` spawned this task (for any
@@ -824,7 +838,7 @@ async function buildSystemParts(task: TaskRow, _event: OrchestratorEvent | undef
   // reflects reality, and when Phase 3 retires the cache field entirely,
   // this block keeps working unchanged.
   const snapshot = await describeTask(task.id)
-  ctx.push(renderTaskDescription(snapshot))
+  ctx.push(renderTaskDescription(snapshot, { autoIteration }))
 
   // ── Workflow guidance (injected as recommended path, not enforced) ──
   if (workflow && workflowState) {

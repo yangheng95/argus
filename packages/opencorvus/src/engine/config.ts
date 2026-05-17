@@ -140,6 +140,8 @@ interface DebugConfig {
 }
 
 export interface EngineConfigType {
+  /** Enable host-driven repair iteration after rejected deliveries / failed waves. Default: false. */
+  auto_iteration: boolean
   requirements: RequirementsConfig
   architect: ArchitectConfig
   delivery: DeliveryConfig
@@ -161,6 +163,9 @@ export interface EngineConfigType {
 // ═══════════════════════════════════════════════════════════════════
 
 const DEFAULTS: EngineConfigType = {
+  // Default off: delivery rejection is a visible endpoint unless an operator
+  // explicitly enables OpenCorvus' host-side algorithmic rework loop.
+  auto_iteration: false,
   // Step budgets sized for sonnet-tier sub-agents on large PRDs.
   // Sonnet deliberates more per step than haiku (deeper exploration, more
   // reasoning text) and large attachments push step counts into the dozens
@@ -271,6 +276,7 @@ export namespace EngineConfig {
 
 function merge(user?: Config.Info["assistant"]): EngineConfigType {
   return {
+    auto_iteration: user?.auto_iteration ?? DEFAULTS.auto_iteration,
     requirements: {
       max_steps: user?.requirements?.max_steps ?? DEFAULTS.requirements.max_steps,
       skills: user?.requirements?.skills ?? DEFAULTS.requirements.skills,

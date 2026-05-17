@@ -31,10 +31,12 @@ investigation or quietly switch to a different goal.
 
 Depth-first means: identify the goal-local execution path, read only the
 files/contracts needed to understand that path, implement the missing behavior,
-run the goal-relevant checks, and iterate on failures until every acceptance
-spec for this goal is satisfied or a real blocker remains. Expand outside
-`owned_paths` only when this goal's real code path requires it, and explain that
-necessity in `files_changed[]`.
+and run the goal-relevant checks. With `assistant.auto_iteration=false`, make
+one focused repair/verification pass and report a concrete blocker if failures
+remain. With `assistant.auto_iteration=true`, iterate on failures until every
+acceptance spec for this goal is satisfied or a real blocker remains. Expand
+outside `owned_paths` only when this goal's real code path requires it, and
+explain that necessity in `files_changed[]`.
 
 ## Reference fidelity
 

@@ -373,11 +373,10 @@ describe("core prompt hygiene", () => {
   test("orchestrator prompt caps deliver retries and routes minor rejection fixes through build", async () => {
     const text = await readPrompt("orchestrator")
     const normalized = text.replace(/\s+/g, " ")
-    expect(normalized).toContain("Delivery has a hard prompt-level budget of TWO invocations per task")
-    expect(normalized).toContain("After a second `deliver` returns anything other than accepted")
-    expect(normalized).toContain("you MUST force-stop autonomous execution by calling `question`")
-    expect(normalized).toContain("Do NOT call build, architect, restart_from_stage, fail_task, or propose_task to dodge the stop")
-    expect(normalized).toContain("Decision priors are guidance for the LLM, not host-side gates")
+    expect(normalized).toContain("If the user explicitly asks to keep repairing in the same turn, the two-deliver budget still applies")
+    expect(normalized).toContain("first acceptance attempt plus at most one post-rework verification")
+    expect(normalized).toContain("Do NOT call build, architect, restart_from_stage, fail_task, propose_task, or another deliver just to continue the loop automatically when auto iteration is disabled")
+    expect(normalized).toContain("Decision priors apply only when `assistant.auto_iteration=true` or the operator has explicitly asked")
     expect(normalized).toContain('70-85%: minor / localized rejection → task-level `build({ request, directBuildIntent: "modify_files" })`')
     expect(normalized).toContain("2-8%: separate follow-up scope before the second deliver → `propose_task`")
     expect(normalized).toContain("After the second non-accepted deliver: no priors apply; call `question` and wait for the operator")
@@ -406,7 +405,7 @@ describe("core prompt hygiene", () => {
   test("orchestrator prompt makes accepted deliver the terminal lifecycle path", async () => {
     const text = await readPrompt("orchestrator")
     const normalized = text.replace(/\s+/g, " ")
-    expect(normalized).toContain("If it returns `accepted`, the task is completed")
+    expect(normalized).toContain("Accepted deliveries complete the task")
     expect(normalized).toContain("accepted `deliver` already completed the task")
     expect(normalized).toContain("`publish_delivery` is explicit artifact export only; it does not decide lifecycle")
     expect(normalized).toContain("Completed does not mean context deletion")
@@ -474,7 +473,7 @@ describe("core prompt hygiene", () => {
     expect(text).toContain("blanket-reset path then wipes the goals that ALREADY")
   })
 
-  test("orchestrator prompt must continue automatically and cascade 1:1 reference fidelity to build", async () => {
+  test("orchestrator prompt keeps pre-delivery work moving and cascades 1:1 reference fidelity to build", async () => {
     const text = await readPrompt("orchestrator")
     expect(text).toContain("Do not stop to ask")
     expect(text).toContain("Would you like me")
