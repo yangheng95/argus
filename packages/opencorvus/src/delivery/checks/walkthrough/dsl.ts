@@ -1,4 +1,5 @@
 import z from "zod"
+import { isResourceLoadConsoleError } from "../browser-noise"
 
 export const WalkthroughStepSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("goto"), path: z.string().min(1) }),
@@ -88,7 +89,12 @@ export async function executeWalkthrough(input: {
   input.page.on?.("pageerror", (error) => pageErrors.push(error instanceof Error ? error.message : String(error)))
   input.page.on?.("console", (message) => {
     const item = message as { type?: () => string; text?: () => string }
-    if (item.type?.() === "error") consoleErrors.push(item.text?.() ?? String(message))
+    if (item.type?.() !== "error") return
+    const text = item.text?.() ?? String(message)
+    // Browser-mirrored network-load failures are not walkthrough JS faults
+    // (single-sourced in the asset layer; same rationale as runtime capture).
+    if (isResourceLoadConsoleError(text)) return
+    consoleErrors.push(text)
   })
   for (const [index, step] of steps.entries()) {
     try {

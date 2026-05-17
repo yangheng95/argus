@@ -23,6 +23,7 @@ import path from "node:path"
 import puppeteer, { type Page } from "puppeteer-core"
 import { PNG } from "pngjs"
 import ssim from "ssim.js"
+import { isBrowserImplicitAssetRequest, isResourceLoadConsoleError } from "./browser-noise"
 
 export interface VisualDiffOptions {
   /** Live http(s) URL. File paths are intentionally rejected by renderPage. */
@@ -211,16 +212,23 @@ export async function renderPage(opts: {
     page.on("response", (res) => {
       totalResponses += 1
       const status = res.status()
-      if (status >= 400 && status < 600) {
+      if (status >= 400 && status < 600 && !isBrowserImplicitAssetRequest(res.url())) {
         failedRequests.push({ url: res.url(), status, reason: res.statusText() || `HTTP ${status}` })
       }
     })
     page.on("requestfailed", (req) => {
+      if (isBrowserImplicitAssetRequest(req.url())) return
       failedRequests.push({ url: req.url(), status: 0, reason: req.failure()?.errorText ?? "request failed" })
     })
     const consoleErrors: string[] = []
     page.on("console", (msg) => {
-      if (msg.type() === "error") consoleErrors.push(msg.text().slice(0, 400))
+      if (msg.type() !== "error") return
+      const text = msg.text().slice(0, 400)
+      // Network-load failures are owned by the asset layer (single source);
+      // Chromium's mirrored "Failed to load resource" console error is not an
+      // app JS fault.
+      if (isResourceLoadConsoleError(text)) return
+      consoleErrors.push(text)
     })
     const pageErrors: string[] = []
     page.on("pageerror", (err) => {
