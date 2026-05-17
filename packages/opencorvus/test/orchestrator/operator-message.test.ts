@@ -38,7 +38,7 @@ test("deliveryRework wake note carries iteration + reason + summary so re-dispat
 
   expect(note).toContain("iteration 0")
   expect(note).toContain("render_prerequisite_failed:bun_install")
-  expect(note).toContain("No goals were reset automatically")
+  expect(note).toContain("No goal attempt was reopened")
   expect(note).toContain("bun install pre-launch exited code=1 in merged worktree")
 })
 
@@ -50,6 +50,6 @@ test("deliveryRework wake note reports exact affected goal count for agent-attri
     affectedGoalCount: 2,
   })
 
-  expect(note).toContain("2 affected goal(s) were reset to pending")
+  expect(note).toContain("2 affected goal attempt(s) were reopened for rework")
   expect(note).toContain("two scoped issues")
 })

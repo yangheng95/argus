@@ -74,7 +74,7 @@ function renderPrdEvidenceSummary(input: {
     `- Full scaffold source for bounded targeted reads: ${input.scaffoldPath}`,
     "",
     "## PRD/SPEC Draft Surface",
-    "Use this as the first draft surface, then perform two PRD/SPEC review passes before submit_design_prd_spec.",
+    "Use this as the first draft surface, then perform the PRD/SPEC review pass(es) required by assistant.auto_iteration before submit_design_prd_spec.",
     "",
     "### Page Inventory",
     sections || "- No sections detected; mark inventory gaps explicitly.",

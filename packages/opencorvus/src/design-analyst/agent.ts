@@ -25,6 +25,7 @@ import { Log } from "@/util/log"
 import { AttachmentStore } from "@/storage/attachment-store"
 import { Instance } from "@/project/instance"
 import { deriveUrlSignals } from "@/engine/skill-inject"
+import { EngineConfig } from "@/engine/config"
 import type { VisualSpec } from "./types"
 import { createDesignOutputTools, type DesignOutputCollector } from "./output-tools"
 import { createReadAttachmentTool } from "./read-attachment-tool"
@@ -71,9 +72,10 @@ export namespace DesignAnalystAgent {
   }
 
   export async function analyze(input: AnalyzeInput): Promise<Result & { sessionID: string }> {
+    const autoIteration = (await EngineConfig.get()).auto_iteration === true
     const contextTools = await filterAgentTools(createAgentContextTools(), "design-analyst")
     const screenshotToolKit = createUrlScreenshotTool()
-    const outputToolKit = createDesignOutputTools()
+    const outputToolKit = createDesignOutputTools({ autoIteration })
     const submitDesignPrdSpecTool = selectDesignSubmitTool(outputToolKit)
     const projectID = (() => {
       try {
@@ -92,7 +94,7 @@ export namespace DesignAnalystAgent {
 
     const out = await runAgentSession({
       kind: "design-analyst",
-      core: DESIGN_ANALYST_CORE,
+      core: [DESIGN_ANALYST_CORE, renderAutoIterationMode(autoIteration)].join("\n\n"),
       sessionTitle: `Design: ${input.title}`,
       parentSessionID: input.parentSessionID,
       taskID: input.taskID,
@@ -112,8 +114,8 @@ export namespace DesignAnalystAgent {
         getCollector: () => outputToolKit.getCollector(),
         buildReport: () => outputToolKit.buildReport(),
       },
-      buildUserPrompt: () => buildUserPrompt(input),
-      buildUserParts: () => buildPromptParts(input),
+      buildUserPrompt: () => buildUserPrompt(input, autoIteration),
+      buildUserParts: () => buildPromptParts(input, autoIteration),
       terminalTool: {
         toolName: "submit_design_prd_spec",
         isSatisfied: (collector: DesignOutputCollector) => !!collector.final,
@@ -121,7 +123,9 @@ export namespace DesignAnalystAgent {
         recovery: {
           maxTurns: 2,
           buildUserPrompt: () =>
-            "Design-analysis has enough evidence for handoff. Submit the complete PRD/SPEC now with submit_design_prd_spec. Include the two review-pass notes in prd_iteration_notes.",
+            autoIteration
+              ? "Design-analysis has enough evidence for handoff. Submit the complete PRD/SPEC now with submit_design_prd_spec. Include at least two review-pass notes in prd_iteration_notes."
+              : "Design-analysis has enough evidence for handoff. Submit the complete PRD/SPEC now with submit_design_prd_spec. Include the bounded review-pass notes in prd_iteration_notes.",
         },
       },
       skillsStage: "design_analyst",
@@ -215,8 +219,8 @@ async function buildPromptParts(input: {
   title: string
   request: string
   attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string; intent?: string; source?: string }>
-}) {
-  const text = buildUserPrompt(input)
+}, autoIteration = false) {
+  const text = buildUserPrompt(input, autoIteration)
   const hasLiveHttpUrl = hasNonFigmaHttpUrl(input.request)
   const inlineAttachments = (input.attachments ?? []).filter((attachment) =>
     shouldInlineDesignAttachment(attachment, hasLiveHttpUrl),
@@ -244,11 +248,21 @@ function selectDesignSubmitTool(outputToolKit: ReturnType<typeof createDesignOut
   }
 }
 
+function renderAutoIterationMode(autoIteration: boolean): string {
+  return [
+    "## Auto Iteration Mode",
+    autoIteration
+      ? "- assistant.auto_iteration=true: perform at least two PRD/SPEC review passes before handoff when visual evidence is available."
+      : "- assistant.auto_iteration=false: perform one bounded PRD/SPEC review pass before handoff; do not loop through additional PRD/SPEC revisions automatically.",
+    "- In both modes, acquire missing mirror evidence at most once per source and finalize through `submit_design_prd_spec`.",
+  ].join("\n")
+}
+
 function buildUserPrompt(input: {
   title: string
   request: string
   attachments?: Array<{ filename?: string; mime: string; intent?: string; source?: string }>
-}): string {
+}, autoIteration = false): string {
   const sections = [
     "# Delegation\n\nOrchestrator is asking design-analysis to extract the visual contract for this task.",
     `# Task\n\nTitle: ${input.title}\n\nRequest:\n${input.request}`,
@@ -311,8 +325,10 @@ function buildUserPrompt(input: {
     "# Live URL Capture\n\n" +
     "For visual webpage URLs, use the matched webpage reference skill — not `webfetch` and not screenshot-only analysis. " +
     "Acquire missing reference evidence once, then stop acquiring and read the compact artifacts before finalizing; never inline raw extraction JSON or stored URL screenshot base64 into the PRD/SPEC prompt. " +
-    "Do at least two PRD/SPEC review passes before `submit_design_prd_spec`: first check page inventory and visual coverage, then check downstream frontend/backend implementability. " +
-    "Do not use todo or scratchpad tools for PRD iteration; write the review-pass findings directly into the final PRD/SPEC fields.",
+    (autoIteration
+      ? "Because assistant.auto_iteration=true, do at least two PRD/SPEC review passes before `submit_design_prd_spec`: first check page inventory and visual coverage, then check downstream frontend/backend implementability. "
+      : "Because assistant.auto_iteration=false, do one bounded PRD/SPEC review pass before `submit_design_prd_spec`; report remaining gaps in completeness_review/open_questions instead of looping automatically. ") +
+    "Do not use todo or scratchpad tools for PRD review; write the review-pass findings directly into the final PRD/SPEC fields.",
   )
 
   return sections.join("\n\n")

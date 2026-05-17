@@ -305,6 +305,7 @@ export namespace BuildAgent {
   export async function run(input: RunInput): Promise<RunOutput> {
     return BuildSemaphore.withSlot(input.task, async () => {
       await input.onSlotAcquired?.()
+      const autoIteration = (await EngineConfig.get()).auto_iteration === true
       // ── Worktree acquisition ─────────────────────────────────────────────
       // Happens OUTSIDE runAgentSession because the worktree is the
       // session's working directory — the runner needs it resolved before
@@ -649,7 +650,7 @@ export namespace BuildAgent {
         if (executor === "opencorvus") {
           out = await runAgentSession({
             kind: "build",
-            core: BUILD_CORE,
+            core: [BUILD_CORE, renderBuildAutoIterationMode(autoIteration)].join("\n\n"),
             sessionTitle: buildSessionTitle(input.target),
             sessionDirectory: worktreeDir!,
             parentSessionID: input.parentSessionID,
@@ -1186,6 +1187,15 @@ export function externalToolProtocolErrorMessage(input: {
   )
 }
 
+export function renderBuildAutoIterationMode(autoIteration: boolean): string {
+  return [
+    "## Auto Iteration Mode",
+    autoIteration
+      ? "- assistant.auto_iteration=true: after verification failures, continue focused repair attempts until every acceptance spec is satisfied or a concrete blocker remains."
+      : "- assistant.auto_iteration=false: make one focused repair/verification pass, then report a concrete blocker through report_build_result(status=\"failed\") if failures remain.",
+  ].join("\n")
+}
+
 export function externalEventPartText(event: CodingEventInfo, executor: string): string | undefined {
   // Progress events are intentionally NOT rendered as user-visible parts:
   // claude-code + codex both emit a stream of fine-grained "Phase: X" /
@@ -1405,9 +1415,12 @@ async function runWithExternalProviderImpl(args: {
   const { resolveStageSkills } = await import("@/engine/skill-inject")
   const resolvedSkills = await resolveStageSkills(buildSkillsCfg, "build", args.taskSignals)
   const baseSystem = resolveOption<string>(options.system)
+  const systemWithAutoIteration = [baseSystem, renderBuildAutoIterationMode(orchCfg.auto_iteration === true)]
+    .filter((part): part is string => typeof part === "string" && part.trim().length > 0)
+    .join("\n\n")
   const composedSystem = BuildAgent.composeExternalCodingSystem({
     executor: args.executor,
-    baseSystem,
+    baseSystem: systemWithAutoIteration,
     skillPrompt: resolvedSkills.prompt,
   })
 

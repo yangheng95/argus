@@ -106,10 +106,11 @@ export const DesignFinalSchema = z.object({
     ),
   prd_iteration_notes: z
     .array(z.string().min(1))
-    .min(2)
+    .min(1)
     .describe(
-      "At least two PRD/SPEC review passes completed before handoff. Each item must name what was checked, " +
-      "what was missing or corrected, and why the resulting PRD/SPEC is now safe for downstream agents.",
+      "PRD/SPEC review-pass notes completed before handoff. One note is enough when assistant.auto_iteration=false; " +
+      "include at least two when assistant.auto_iteration=true. Each item must name what was checked, what was missing " +
+      "or corrected, and why the resulting PRD/SPEC is now safe for downstream agents.",
     ),
   completeness_review: z
     .string()
@@ -300,7 +301,8 @@ function buildRequirement(category: VisualSpecCategory, input: Record<string, un
 // Tool factory
 // ---------------------------------------------------------------------------
 
-export function createDesignOutputTools() {
+export function createDesignOutputTools(options: { autoIteration?: boolean } = {}) {
+  const autoIteration = options.autoIteration === true
   let collector = emptyCollector()
 
   function assertIdFree(id: string): string | null {
@@ -319,7 +321,7 @@ export function createDesignOutputTools() {
       return (
         `SPEC_BUDGET_REACHED: ${DESIGN_SPEC_BUDGET} visual specs are already registered. ` +
         "Stop registering per-item visual rows; consolidate remaining detail in product_spec/frontend_spec/visual_consistency_spec/backend_spec, " +
-        "complete the two PRD/SPEC review passes, then call submit_design_prd_spec."
+        "complete the PRD/SPEC review pass(es) required by assistant.auto_iteration, then call submit_design_prd_spec."
       )
     }
     const spec: VisualSpec = {
@@ -440,10 +442,15 @@ export function createDesignOutputTools() {
     submit_design_prd_spec: tool({
       description:
         "Submit the complete mirror-grounded PRD/SPEC for downstream agents. " +
-        "Use this as the final action after visual evidence review and at least two PRD/SPEC review passes; " +
+        "Use this as the final action after visual evidence review and the PRD/SPEC review pass(es) required by assistant.auto_iteration; " +
         "do not register rows or call more mirror tools once this terminal tool is exposed.",
       inputSchema: DesignFinalSchema,
       execute: async (input) => {
+        if (autoIteration && input.prd_iteration_notes.length < 2) {
+          throw new Error(
+            "assistant.auto_iteration=true requires at least two PRD/SPEC review-pass notes before submit_design_prd_spec.",
+          )
+        }
         collector.final = input
         return "OK: complete design-analysis PRD/SPEC submitted for orchestrator handoff."
       },

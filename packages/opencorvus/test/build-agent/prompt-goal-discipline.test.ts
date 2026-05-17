@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test"
+import { renderBuildAutoIterationMode } from "../../src/build/agent"
 
 const promptPath = new URL("../../src/prompt/core/build-core.txt", import.meta.url)
 
@@ -19,7 +20,15 @@ describe("build agent goal execution discipline prompt", () => {
     expect(normalized).toContain("reopen the whole task plan")
     expect(normalized).toContain("redesign the decomposition")
     expect(normalized).toContain("Depth-first means: identify the goal-local execution path")
-    expect(normalized).toContain("iterate on failures until every acceptance spec for this goal is satisfied")
+    expect(normalized).toContain("With `assistant.auto_iteration=false`, make one focused repair/verification pass")
+    expect(normalized).toContain("With `assistant.auto_iteration=true`, iterate on failures until every acceptance spec for this goal is satisfied")
     expect(normalized).toContain("Expand outside `owned_paths` only when this goal's real code path requires it")
+  })
+
+  test("renders current auto-iteration mode into build sessions", () => {
+    expect(renderBuildAutoIterationMode(false)).toContain("assistant.auto_iteration=false")
+    expect(renderBuildAutoIterationMode(false)).toContain("one focused repair/verification pass")
+    expect(renderBuildAutoIterationMode(true)).toContain("assistant.auto_iteration=true")
+    expect(renderBuildAutoIterationMode(true)).toContain("continue focused repair attempts")
   })
 })

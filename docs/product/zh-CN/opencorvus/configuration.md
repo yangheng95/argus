@@ -33,6 +33,7 @@ OpenCorvus 的配置分三层：**CLI flag > 环境变量 > `opencorvus.jsonc` �
   username · locale
 
 assistant:
+  auto_iteration
   requirements{} · architect{} · delivery{} · delivery_visual{}
   design_analyst{} · intent_analysis{} · build{} · activity{} · debug{}
   default_workflow · workflows[] · max_executor_groups
@@ -81,6 +82,7 @@ experimental:
   },
 
   "assistant": {
+    "auto_iteration": false,
     "max_executor_groups": 3,
     "default_workflow": "pipeline",
     "delivery": { "max_retries": 2 },
@@ -123,11 +125,12 @@ experimental:
 
 ### `assistant` 子块
 
-各 agent 的精细调优（合并入口 `src/engine/config.ts`，合并 DEFAULTS 后返回 typed config）：
+各 agent 的精细调优与编排策略（合并入口 `src/engine/config.ts`，合并 DEFAULTS 后返回 typed config）：
 
 ```jsonc
 {
   "assistant": {
+    "auto_iteration": false,
     "requirements": { "max_steps": 20 },
     "architect": { "max_steps": 40 },
     "build": { "max_steps": 80, "skills": [] },
@@ -138,6 +141,10 @@ experimental:
   }
 }
 ```
+
+`assistant.auto_iteration` 默认 `false`。关闭时，failed goal wave 或 rejected
+`deliver` 是可见终点：OpenCorvus 报告阻塞与下一步选项并等待 operator
+follow-up。只有设为 `true` 时，OpenCorvus 才会在证据明确且非重复失败的情况下自动重新打开 rework attempt 并继续 build/deliver 修复循环。
 
 - `max_executor_groups`：同一任务内 build / goal 的并行上限，默认 3
 - `default_workflow`：`direct`（单文件 / bugfix）或 `pipeline`（多文件 / 复杂功能），见 [架构总览](../concepts/architecture.md#miniworkflow--两种声明式模板)

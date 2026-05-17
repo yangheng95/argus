@@ -2508,9 +2508,13 @@ export type Config = {
     preserve_recent_tokens?: number
   }
   /**
-   * Assistant agent configuration — controls requirements, architect, build, design-analysis, intent-analysis, and delivery agent behavior
+   * Assistant agent configuration — controls orchestration policy, requirements, architect, build, design-analysis, intent-analysis, and delivery agent behavior
    */
   assistant?: {
+    /**
+     * Enable OpenCorvus host-side automatic repair iteration after failed goal waves or rejected deliveries. Default false: delivery rejection is reported and waits for operator follow-up.
+     */
+    auto_iteration?: boolean
     /**
      * Requirements agent configuration — analyzes input, extracts requirements, decomposes into goal contracts
      */

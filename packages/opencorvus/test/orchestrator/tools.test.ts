@@ -955,7 +955,7 @@ describe("orchestrator tools", () => {
           {} as any,
         )
 
-        expect(deliverResult).toContain("Delivery accepted and task completed")
+        expect(deliverResult).toContain("Delivery result: ACCEPTED")
         const taskRow = Database.use((db) =>
           db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get(),
         )

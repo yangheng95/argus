@@ -24,13 +24,14 @@ describe("design-analyst prompt assembly", () => {
     expect(parts[0]?.type).toBe("text")
     expect(parts[0]?.text).toContain("stored for provenance but are not inlined")
     expect(parts[0]?.text).toContain("Use the matched webpage reference skill")
+    expect(parts[0]?.text).toContain("assistant.auto_iteration=false")
     expect(parts[0]?.text).not.toContain("webpage_extract")
     expect(parts[0]?.text).not.toContain("webpage_compile")
     expect(parts[0]?.text).not.toContain("webpage_analyze")
     expect(parts[0]?.text).not.toContain("[inlined as file part]")
   })
 
-  test("terminal PRD/SPEC submit tool stores the authoritative handoff payload", async () => {
+  test("terminal PRD/SPEC submit tool accepts bounded review notes when auto iteration is off", async () => {
     const kit = createDesignOutputTools()
     const submit = kit.tools.submit_design_prd_spec as any
 
@@ -41,7 +42,7 @@ describe("design-analyst prompt assembly", () => {
       frontend_spec: "完整前端规格",
       visual_consistency_spec: "视觉一致性规格",
       backend_spec: "后端/API 规格",
-      prd_iteration_notes: ["pass 1 inventory complete", "pass 2 implementation handoff complete"],
+      prd_iteration_notes: ["bounded inventory and implementation review complete"],
       completeness_review: "PRD/SPEC complete enough for handoff",
       reference_artifacts: ["mirror/reference.png", "mirror/prd-evidence-summary.md"],
       open_questions: [],
@@ -49,7 +50,34 @@ describe("design-analyst prompt assembly", () => {
 
     const collector = kit.getCollector()
     expect(collector.final?.visual_consistency_spec).toBe("视觉一致性规格")
-    expect(collector.final?.prd_iteration_notes).toHaveLength(2)
+    expect(collector.final?.prd_iteration_notes).toHaveLength(1)
+  })
+
+  test("terminal PRD/SPEC submit tool requires two review notes when auto iteration is on", async () => {
+    const kit = createDesignOutputTools({ autoIteration: true })
+    const submit = kit.tools.submit_design_prd_spec as any
+
+    const payload = {
+      design_system: "custom financial dashboard",
+      tech_stack: ["React", "mock API"],
+      product_spec: "完整产品规格",
+      frontend_spec: "完整前端规格",
+      visual_consistency_spec: "视觉一致性规格",
+      backend_spec: "后端/API 规格",
+      prd_iteration_notes: ["pass 1 inventory complete"],
+      completeness_review: "PRD/SPEC complete enough for handoff",
+      reference_artifacts: ["mirror/reference.png"],
+      open_questions: [],
+    }
+
+    await expect(submit.execute(payload, {})).rejects.toThrow("requires at least two")
+
+    await submit.execute({
+      ...payload,
+      prd_iteration_notes: ["pass 1 inventory complete", "pass 2 implementation handoff complete"],
+    }, {})
+
+    expect(kit.getCollector().final?.prd_iteration_notes).toHaveLength(2)
   })
 
   test("agent exposes direct PRD/SPEC submit instead of register tools", () => {

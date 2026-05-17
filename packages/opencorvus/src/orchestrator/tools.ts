@@ -19,6 +19,7 @@ import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
 import { createDecisionLog } from "@/decision-log"
 import { EngineService } from "@/task-api"
+import { EngineConfig } from "@/engine/config"
 import { DIRECT_REPLY_AGENT_KINDS } from "./direct-reply"
 import { sessionGoalID, sessionRole, taskIDForSession } from "./task-event"
 import { Publisher } from "@/engine/publisher"
@@ -81,7 +82,6 @@ import { Question } from "@/question"
 import { renderSpecsAsText, type AcceptanceSpec, type ContractAuditScorer } from "@/acceptance/types"
 import { contractAuditRequired, runContractAudit, type ContractAuditCriteriaResult } from "@/acceptance/contract-audit"
 import { isLiveRunStatus, isRunReadyForGoalDispatch, restartStagePlan, type RestartStage } from "./scheduler"
-import { OrchestratorEventNote } from "./agent"
 import { composeDeliveryRetryFeedback } from "./delivery-retry-feedback"
 import {
   architectFidelityIssues,
@@ -451,7 +451,7 @@ function requireDesignAnalysisBefore(stage: string, task: TaskRow) {
     headline: `${stage}: blocked — call design_analysis before any downstream stage for visual/reference tasks.`,
     summary:
       `This task has visual/reference inputs (${signals.join(", ")}), but the active design-analysis contract is incomplete. ` +
-      "Run design_analysis first and require it to complete mirror extraction plus at least two PRD/SPEC review passes. " +
+      "Run design_analysis first and require it to complete mirror extraction plus the PRD/SPEC review pass(es) required by assistant.auto_iteration. " +
       "Downstream agents must consume decision_log phase=design_analysis, including visual_consistency_spec and evidence_source_manifest; they must not infer from the raw URL or attachments.",
     fields: [
       ["next_action", "design_analysis"],
@@ -1142,10 +1142,6 @@ export function createOrchestratorTools(input: {
   const stopAfterDispatch = new AbortController()
   let pendingStopReason: string | undefined
 
-  function requestStopAfterCurrentStep(reason: string) {
-    if (!pendingStopReason) pendingStopReason = reason
-  }
-
   function finalizeDeferredStop(): string | undefined {
     if (!pendingStopReason) return undefined
     const reason = pendingStopReason
@@ -1154,6 +1150,39 @@ export function createOrchestratorTools(input: {
       stopAfterDispatch.abort(reason)
     }
     return reason
+  }
+
+  function requestStopAfterCurrentStep(reason: string): void {
+    pendingStopReason = reason
+  }
+
+  async function queueDeliveryReworkWake(input: {
+    iteration: number
+    summary?: string
+    affectedGoalCount: number
+  }): Promise<void> {
+    const [{ dispatchTaskLoop }, { OrchestratorEventNote }] = await Promise.all([
+      import("@/engine/queue"),
+      import("./agent"),
+    ])
+    void dispatchTaskLoop({
+      taskID,
+      event: {
+        note: OrchestratorEventNote.deliveryRework({
+          reason: "delivery_rework",
+          iteration: input.iteration,
+          summary: input.summary,
+          affectedGoalCount: input.affectedGoalCount,
+        }),
+      },
+    }).catch((error) => {
+      log.error("deliver: failed to queue delivery_rework wake", {
+        taskID,
+        iteration: input.iteration,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    })
+    requestStopAfterCurrentStep("delivery_rework")
   }
 
   async function cleanupTerminalGoalWorkspaces(reason: string): Promise<number> {
@@ -2175,7 +2204,7 @@ export function createOrchestratorTools(input: {
         "  - The request mentions a URL to replicate or analyze",
         "  - The request explicitly asks for layout/design analysis",
         "",
-        "The design-analysis agent must iterate the PRD/SPEC at least twice before handoff.",
+        "The design-analysis agent must follow assistant.auto_iteration: one bounded PRD/SPEC review pass when disabled, at least two review passes when enabled.",
         "The full PRD/SPEC plus visual_consistency_spec and iteration/completeness review is persisted",
         "into the decision log from the same design-analysis run. Optional task.design_specs rows may exist as anchors, but the",
         "decision-log PRD/SPEC is authoritative. The decision log also includes evidence_source_manifest,",
@@ -3109,17 +3138,18 @@ export function createOrchestratorTools(input: {
     // metric execution and snapshot writing. Per the agent boundary rule
     // it must be the orchestrator that decides when to run the adversarial
     // pass and consumes its yield. Accepted deliver already completes the
-    // task; prosecutor is post-delivery hardening evidence, not a publish gate.
+    // task; prosecutor is optional post-delivery hardening evidence, not a
+    // publish gate or part of the default deliver endpoint.
     // -----------------------------------------------------------------------
 
     prosecute: tool({
       description:
         "Run the adversarial Prosecutor against the most recent delivery " +
-        "iteration: file concrete counterexamples for failure modes the " +
-        "delivery agent missed, or propose at most one diagnostic challenge " +
-        "metric per iteration (capped at 3 per task). Call AFTER a " +
-        "`deliver` invocation when post-delivery hardening is worth the cost so the iteration " +
-        "snapshot reflects the adversarial pass. Side-effects land in DB " +
+        "iteration when the user explicitly asks for post-deliver hardening: " +
+        "file concrete counterexamples for failure modes the delivery agent " +
+        "missed, or propose at most one diagnostic challenge metric per " +
+        "iteration (capped at 3 per task). This is not part of the default " +
+        "deliver endpoint. Side-effects land in DB " +
         "(engine_counterexample, engine_metric_spec) and feed the next " +
         "deliver iteration's trajectory query.",
       inputSchema: z.object({
@@ -3578,6 +3608,7 @@ export function createOrchestratorTools(input: {
       execute: async ({ scope }) => {
         const task = requireTask(taskID)
         const sections: string[] = []
+        const autoIteration = (await EngineConfig.get()).auto_iteration === true
         // Source-level caps on read_context output. Rationale: this tool is
         // called every orchestrator turn; tool results live forever in session
         // history. Unbounded accumulation (every historical eval, every run's
@@ -3589,7 +3620,7 @@ export function createOrchestratorTools(input: {
 
         if (scope === "goals" || scope === "all") {
           const desc = await describeTask(taskID)
-          const closureLines = renderCollaborationClosure(desc.collaboration_closure, desc.goals)
+          const closureLines = renderCollaborationClosure(desc.collaboration_closure, desc.goals, { autoIteration })
           if (closureLines.length > 0) {
             sections.push(closureLines.join("\n"))
           }
@@ -3787,7 +3818,7 @@ export function createOrchestratorTools(input: {
             } else {
               sections.push(
                 `\n## Prosecutor (latest, delivery ${lastDeliveryID})`,
-                `- not run for this delivery — call \`prosecute\` after \`deliver\` only when post-delivery hardening is worth the cost.`,
+                `- not run for this delivery — default scheduling stops at \`deliver\`; call \`prosecute\` only if the user asks for post-deliver hardening.`,
               )
             }
           }
@@ -4674,7 +4705,10 @@ export function createOrchestratorTools(input: {
               ),
             ]).catch((err) => log.warn("failed to flush task learnings", { error: String(err) }))
 
-            return `Delivery accepted and task completed.${cleanupNote} You can call refine to analyze the project and suggest improvements for the next iteration.`
+            return (
+              `Delivery result: ACCEPTED. Task completed successfully.${cleanupNote} ` +
+              `Report this delivery result directly to the user and tell them they can continue with follow-up questions or further changes in this task.`
+            )
           }
           await trackStepComplete("deliver", undefined, true)
 
@@ -4764,11 +4798,13 @@ export function createOrchestratorTools(input: {
                 history: priorManifests,
               })
             : { repeated: false, signatures: [] }
+          const autoIteration = (await EngineConfig.get()).auto_iteration === true
           if (repeatedFailure.repeated) {
             log.info("deliver: repeated failure signatures — refusing identical delivery_rework", {
               taskID,
               iteration,
               signatures: repeatedFailure.signatures.length,
+              auto_iteration: autoIteration,
             })
             const { countPriorRepeatedDeliveryFailureSignals } = await import("@/delivery/manifest")
             const priorSignalCount = countPriorRepeatedDeliveryFailureSignals(
@@ -4781,13 +4817,17 @@ export function createOrchestratorTools(input: {
               reason:
                 "Current DeliveryEvidenceManifest repeats the prior manifest failure set; the orchestrator must change strategy, ask the operator, or fail_task from evidence instead of blindly repeating the same rework.",
             })
+            requestStopAfterCurrentStep("delivery_rejected")
             await trackStepComplete("deliver", undefined, true)
             return SubAgentProtocol.yieldResult({
-              headline: `Delivery rejected with repeated failure signatures (iteration=${iteration}). No host rule restarted the plan; choose the next strategy from the manifest evidence.`,
+              headline:
+                `Delivery rejected with repeated failure signatures (iteration=${iteration}). ` +
+                `No host rule restarted the plan; report the manifest evidence and wait before any further rework.`,
               fields: [
                 ["failure_signatures", repeatedFailure.signatures],
                 ["manifest_failures", manifestFailureDetails],
                 ["iteration", String(iteration)],
+                ["auto_iteration", autoIteration ? "enabled_but_blocked_by_repetition" : "disabled"],
                 ["prior_repeated_signals", String(priorSignalCount)],
                 ["agent_summary", verdict.summary],
               ],
@@ -4809,16 +4849,29 @@ export function createOrchestratorTools(input: {
               iteration,
               issues: rejectionIssues.length,
               affected_goal_ids: rejectionAffectedGoalIDs,
+              auto_iteration: autoIteration,
             })
+            if (autoIteration) {
+              await queueDeliveryReworkWake({
+                iteration,
+                summary: verdict.summary,
+                affectedGoalCount: 0,
+              })
+            } else {
+              requestStopAfterCurrentStep("delivery_rejected")
+            }
             await trackStepComplete("deliver", undefined, true)
             return SubAgentProtocol.yieldResult({
               headline:
-                `Delivery rejected at task scope — iteration ${iteration}; no goal attempts were reopened. ` +
-                `No host rule restarted the plan; choose build({ request }), architect, question, or fail_task from the evidence.`,
+                autoIteration
+                  ? `Delivery rejected at task scope — iteration ${iteration}; assistant.auto_iteration=true, so a rework wake was queued from manifest evidence.`
+                  : `Delivery rejected at task scope — iteration ${iteration}; no goal attempts were reopened. ` +
+                    `assistant.auto_iteration=false, so report the result and wait for follow-up before rework.`,
               fields: [
                 ["issues_found", rejectionIssues],
                 ["manifest_failures", manifestFailureDetails],
                 ["iteration", String(iteration)],
+                ["auto_iteration", autoIteration ? "enabled" : "disabled"],
                 ["agent_summary", verdict.summary],
               ],
               pointer: currentManifest
@@ -4826,27 +4879,34 @@ export function createOrchestratorTools(input: {
                 : `verdict artifact ${verdictArtifactId}; task-scope rejection requires an orchestrator decision`,
             })
           }
-          // Per-goal rejection slice: the delivery agent already attributed
-          // each rejection_details[] entry to a specific goal_id; feed that
-          // subset (plus the task-level summary) into startNewAttempt so the
-          // executor's next prompt shows exactly what this goal must fix.
-          // Without this, delivery_rework reworks ran against an unchanged
-          // prompt (the root cause we're fixing here).
-          for (const g of toReset) {
-            const ownDetails = verdict.rejection_details.filter((d) => d.goal_id === g.id)
-            const value = composeDeliveryRetryFeedback({
+          // Per-goal rejection slice: only the explicit auto-iteration mode
+          // reopens goal attempts and re-wakes the orchestrator. Default-off
+          // mode keeps the rejection as a visible endpoint and leaves the
+          // next repair strategy to a fresh operator follow-up.
+          if (autoIteration) {
+            for (const g of toReset) {
+              const ownDetails = verdict.rejection_details.filter((d) => d.goal_id === g.id)
+              const value = composeDeliveryRetryFeedback({
+                iteration,
+                verdict: verdict.verdict,
+                summary: verdict.summary,
+                manifestFailureDetails,
+                ownDetails,
+              })
+              const reason = `Delivery rejection; ${rejectionIssues.length} issue(s): ${rejectionIssues.slice(0, 3).join("; ")}`
+              startNewAttempt({
+                goalID: g.id,
+                reason: "delivery_rework",
+                feedback: { value, reason },
+              })
+            }
+            await queueDeliveryReworkWake({
               iteration,
-              verdict: verdict.verdict,
               summary: verdict.summary,
-              manifestFailureDetails,
-              ownDetails,
+              affectedGoalCount: toReset.length,
             })
-            const reason = `Delivery rejection; ${rejectionIssues.length} issue(s): ${rejectionIssues.slice(0, 3).join("; ")}`
-            startNewAttempt({
-              goalID: g.id,
-              reason: "delivery_rework",
-              feedback: { value, reason },
-            })
+          } else {
+            requestStopAfterCurrentStep("delivery_rejected")
           }
 
           try {
@@ -4866,32 +4926,27 @@ export function createOrchestratorTools(input: {
             taskID,
             iteration,
             issues: rejectionIssues.length,
-            reset_goals: toReset.length,
+            reset_goals: autoIteration ? toReset.length : 0,
             affected_goal_ids: rejectionAffectedGoalIDs,
+            auto_iteration: autoIteration,
           })
 
-          requestStopAfterCurrentStep("delivery_rework")
-          {
-            const { dispatchTaskLoop } = await import("@/engine/queue")
-            void dispatchTaskLoop({
-              taskID,
-              event: {
-                note: OrchestratorEventNote.deliveryRework({
-                  reason: "agent_verdict_rejected",
-                  iteration,
-                  summary: verdict.summary,
-                  affectedGoalCount: toReset.length,
-                }),
-              },
-            })
-          }
           return SubAgentProtocol.yieldResult({
-            headline: `Delivery rejected — iteration ${iteration}, agent_verdict=${verdict.verdict}, assistant must re-plan`,
+            headline:
+              autoIteration
+                ? `Delivery rejected — iteration ${iteration}, agent_verdict=${verdict.verdict}. assistant.auto_iteration=true, so ${toReset.length} affected goal attempt(s) were reopened and a rework wake was queued.`
+                : `Delivery rejected — iteration ${iteration}, agent_verdict=${verdict.verdict}. ` +
+                  `Default scheduling stops at deliver; assistant.auto_iteration=false, so report this result to the user and wait for follow-up before rework.`,
             fields: [
               ["issues_found", rejectionIssues],
               ["manifest_failures", manifestFailureDetails],
               ["iteration", String(iteration)],
+              ["auto_iteration", autoIteration ? "enabled" : "disabled"],
               ["agent_summary", verdict.summary],
+              [
+                "next_user_message",
+                "The user can continue with follow-up questions or ask for further changes in this same task.",
+              ],
             ],
             pointer: currentManifest
               ? `verdict artifact ${verdictArtifactId}; manifest ${currentManifest.id}; use manifest_failures above before deciding the next tool`
@@ -5444,9 +5499,10 @@ export function createOrchestratorTools(input: {
         "directBuildIntent='inspect_only' is not a workflow execution path; use analyze_intent / requirements / " +
         "architect and then per-goal build instead. " +
         "After build returns, you MUST call `deliver` next: build does NOT auto-complete the task; the only " +
-        "way to mark a task accepted is through delivery's adversarial verification. Build → deliver loops " +
-        "until Arbiter accepts (or hits stalled/abort). On rejection, call build again with " +
-        "the rejection feedback in the prompt, then deliver again. " +
+        "way to mark a task accepted is through delivery's adversarial verification. By default `deliver` is " +
+        "the scheduler endpoint: on rejection, report the evidence and wait for operator follow-up. Only when " +
+        "`assistant.auto_iteration=true` may OpenCorvus automatically queue another build/deliver repair pass " +
+        "with rejection feedback. " +
         "DO NOT USE FOR: multi-file features, UI replication from designs, anything with explicit acceptance " +
         "criteria, cross-module refactors, new subsystems — those go through requirements → architect → " +
         "per-goal build → deliver (the pipeline workflow). For visual/reference tasks, design_analysis must " +

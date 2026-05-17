@@ -7,7 +7,8 @@
  *   2. **pipeline** — (design_analysis) → analyze_intent → requirements → architect → per-goal[build] → deliver
  *      用于多文件功能、UI 复刻、跨模块重构、需要验收标准的任务。
  *
- * 两条路径都以 build 做实现、以 deliver 做对抗式验收，rejection 会循环回到 build 进行返工。
+ * 两条路径都以 build 做实现、以 deliver 做对抗式验收。deliver 是默认调度终点：
+ * accepted 会自动发布并完成任务；rejected 会把交付结果报告给用户，后续返工等待用户继续指示。
  *
  * MiniWorkflow 不是状态机，不是固定 pipeline。Orchestrator 仍可基于 agent 推理偏离推荐
  * 路径，每个步骤映射到一个已存在的 Orchestrator 工具，工作流只在 system prompt 中以
@@ -128,8 +129,8 @@ export interface WorkflowState {
 /** direct — 即时调用 build，然后 deliver 对抗式验收。
  *
  *  适合：显式 kind=build 的单文件 / 局部 bugfix / 配置调整 / 短调试。无需 goal 分解。
- *  流程：build 实现 → deliver 验证；deliver rejection 触发 orchestrator 重新 call
- *  build 修复（最多 max_delivery_iterations 轮）；delivery 只审查和出 verdict。
+ *  流程：build 实现 → deliver 验证；deliver accepted 自动发布并完成任务；
+ *  deliver rejected 报告交付结果并停止默认调度，等待用户继续指示。delivery 只审查和出 verdict。
  */
 const DIRECT: MiniWorkflow = {
   id: "direct",
@@ -158,7 +159,7 @@ const DIRECT: MiniWorkflow = {
       id: "deliver",
       tool: "deliver",
       label: "Deliver",
-      hint: "delivery agent 端到端验收 + 发布判定。Reject 会触发 orchestrator 再次 call build 修复，最多 max_delivery_iterations 轮。",
+      hint: "delivery agent 端到端验收 + 发布判定。Accepted 会自动发布并完成任务；Rejected 默认直接报告结果并停止调度，等待用户继续指示。",
       scope: "task",
       skippable: false,
       after: ["build"],
@@ -171,7 +172,7 @@ const DIRECT: MiniWorkflow = {
  *
  *  适合：多文件功能 / UI 复刻 / 跨模块重构 / 需要明确验收标准的任务。
  *  流程：(design_analysis 可选) → analyze_intent → requirements → architect → per-goal[build + architecture_review] → deliver；
- *  rejection 触发返工。
+ *  deliver 是默认调度终点：accepted 自动发布并完成任务；rejected 报告结果后等待用户继续指示。
  */
 const PIPELINE: MiniWorkflow = {
   id: "pipeline",
@@ -246,7 +247,7 @@ const PIPELINE: MiniWorkflow = {
       id: "deliver",
       tool: "deliver",
       label: "Deliver",
-      hint: "聚合所有 goal 交付物，delivery agent 端到端验收 + 发布判定。Reject 触发 orchestrator 再 dispatch 受影响的 goal 进行返工。",
+      hint: "聚合所有 goal 交付物，delivery agent 端到端验收 + 发布判定。Accepted 会自动发布并完成任务；Rejected 默认直接报告结果并停止调度，等待用户继续指示。",
       scope: "task",
       skippable: false,
       after: ["build"],
@@ -636,8 +637,8 @@ export function renderWorkflowPrompt(workflow: MiniWorkflow, state: WorkflowStat
   lines.push(
     "NOTE: 上面是按需调用的可见进度，不是必须按序触发的状态机。每个 stage agent 是否调用由你 " +
     "（编排器）按 request 形态决定 —— 跳过等同于显式选择，理由要在 reasoning 里讲清楚。`deliver` " +
-    "始终是唯一的接受闸；deliver rejection 必须循环回 build 修复，直到接受或耗尽 " +
-    "max_delivery_iterations。",
+    "始终是唯一的接受闸和默认调度终点；deliver accepted 自动发布并完成任务，" +
+    "deliver rejected 默认报告结果并等待用户继续指示。",
   )
 
   return lines.join("\n")

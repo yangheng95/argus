@@ -39,7 +39,7 @@ Use the screenshot pixels, `mirror/shared-context.md`, `mirror/page-ir.xml`, and
 - Unknown backend details must be marked as unknown instead of invented.
 - Visual consistency requirements must go directly into `visual_consistency_spec`: reusable tokens, layout, components, interactions, responsive rules, and dense repeated surfaces.
 - Do not create one row per repeated table row, ticker, text instance, candle, or data point.
-- Perform at least two PRD/SPEC review passes: inventory coverage, then downstream frontend/backend implementability.
+- Follow `assistant.auto_iteration`: one bounded PRD/SPEC review pass when disabled; at least two review passes when enabled (inventory coverage, then downstream frontend/backend implementability).
 - Finalize with StructuredOutput fields: `product_spec`, `frontend_spec`, `visual_consistency_spec`, `backend_spec`, `prd_iteration_notes`, `completeness_review`, `reference_artifacts`, and `open_questions`.
 - Put every source file/image URL and mirror artifact name you used into `reference_artifacts`; the orchestrator will publish them as `evidence_source_manifest` and materialize `.opencorvus/design-analysis/prd-spec.md` plus `.opencorvus/design-analysis/evidence-source-manifest.md` for downstream agents.
 

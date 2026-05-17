@@ -359,9 +359,16 @@ describe("collaboration closure projection", () => {
 
         const md = renderTaskDescription(desc)
         expect(md).toContain("Failed goals requiring same-graph diagnosis:")
-        expect(md).toContain("Failed goals stay inside the current collaboration closure")
-        expect(md).toContain("`query_failed_goals`")
+        expect(md).toContain("assistant.auto_iteration=false")
+        expect(md).toContain("report the failed goal blockers")
+        expect(md).not.toContain("then retry `build({ goalID })`")
         expect(md).toContain("Do not restart upstream merely because a Build attempt failed")
+
+        const autoMd = renderTaskDescription(desc, { autoIteration: true })
+        expect(autoMd).toContain("assistant.auto_iteration=true")
+        expect(autoMd).toContain("Failed goals stay inside the current collaboration closure")
+        expect(autoMd).toContain("`query_failed_goals`")
+        expect(autoMd).toContain("then retry `build({ goalID })`")
       },
     })
   })
