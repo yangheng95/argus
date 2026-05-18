@@ -969,8 +969,9 @@ function buildWorkflowFields(
     }
   })
 
-  const requirements = findActiveSpecForTask(task.id)
-    ? buildRequirements(task.id, goals)
+  const activeSpec = findActiveSpecForTask(task.id)
+  const requirements = activeSpec
+    ? buildRequirements(task.id, activeSpec.id, goals)
     : []
 
   const architect = buildArchitectSummary(task.id)
@@ -1063,17 +1064,24 @@ function deriveGoalScopeStatusFromProjection(
 /** Build structured requirements array from DB */
 function buildRequirements(
   taskID: string,
+  specSnapshotID: string,
   goals: Array<typeof EngineGoalTable.$inferSelect>,
 ) {
   const rows = Database.use((db) =>
     db.select().from(EngineRequirementTable)
-      .where(eq(EngineRequirementTable.task_id, taskID))
+      .where(
+        and(
+          eq(EngineRequirementTable.task_id, taskID),
+          eq(EngineRequirementTable.spec_snapshot_id, specSnapshotID),
+        ),
+      )
       .orderBy(EngineRequirementTable.order_index, EngineRequirementTable.id)
       .all(),
   )
   if (rows.length === 0) return undefined
   const goalsByRequirement = new Map<string, Array<typeof EngineGoalTable.$inferSelect>>()
   for (const goal of goals) {
+    if (goal.spec_snapshot_id !== specSnapshotID) continue
     for (const requirementID of goal.requirement_ids ?? []) {
       const list = goalsByRequirement.get(requirementID) ?? []
       list.push(goal)

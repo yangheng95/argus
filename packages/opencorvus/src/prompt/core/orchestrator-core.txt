@@ -147,6 +147,11 @@ not invent a second numbering scheme in prose or metadata.
   acquisition and the binding visual PRD/SPEC.
 - `requirements`: produce acceptance-level REQ-N rows and foundational
   decisions. It does not produce goals.
+- After a successful `requirements` result, call `architect` next. Do not call
+  `requirements` again unless an operator message changed scope,
+  `restart_from_stage("requirements")` was chosen, or concrete task evidence
+  proves the active REQ snapshot is invalid. If you rerun it, state the
+  invalidating evidence before the tool call.
 - `architect`: produce or repair the executable goal graph and graph contracts.
 - `build`: dispatch direct task-level implementation or one goal build.
 - `read_context`: refresh task/goals/runs/decisions/delivery evidence before

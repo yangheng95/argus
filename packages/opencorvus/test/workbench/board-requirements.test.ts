@@ -182,4 +182,113 @@ describe("workbench board requirements", () => {
       },
     })
   })
+
+  test("shows requirements only from the active spec snapshot", async () => {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const now = Date.now()
+        const stamp = now.toString(16)
+        const projectID = `proj_req_active_${stamp}`
+        const taskID = `tsk_req_active_${stamp}`
+        const runID = `run_req_active_${stamp}`
+        const oldGoalID = `gol_req_old_${stamp}`
+        const oldSpecID = `spec_req_old_${stamp}`
+        const activeSpecID = `spec_req_active_${stamp}`
+
+        Database.use((db) => {
+          db.insert(ProjectTable).values({
+            id: projectID,
+            worktree: tmp.path,
+            name: "Active requirement projection",
+            sandboxes: [],
+            time_created: now,
+            time_updated: now,
+          }).run()
+          db.insert(EngineTaskTable).values({
+            id: taskID,
+            project_id: projectID,
+            source: "test",
+            title: "Active requirements",
+            request: "show only active requirements",
+            kind: "workflow",
+            priority: "normal",
+            time_created: now,
+            time_updated: now,
+            time_started: now,
+          }).run()
+          db.insert(EngineSpecSnapshotTable).values({
+            id: oldSpecID,
+            task_id: taskID,
+            version: 1,
+            status: "superseded",
+            summary: "old requirements",
+            content: "old spec",
+            scope: "old",
+            time_created: now,
+            time_updated: now + 1,
+          }).run()
+          db.insert(EngineSpecSnapshotTable).values({
+            id: activeSpecID,
+            task_id: taskID,
+            version: 1,
+            status: "ready",
+            summary: "active requirements",
+            content: "active spec",
+            scope: "active",
+            time_created: now + 2,
+            time_updated: now + 2,
+          }).run()
+
+          for (const [specID, prefix] of [[oldSpecID, "old"], [activeSpecID, "active"]] as const) {
+            for (const index of [1, 2]) {
+              db.insert(EngineRequirementTable).values({
+                id: `req_${prefix}_${index}_${stamp}`,
+                task_id: taskID,
+                spec_snapshot_id: specID,
+                title: `${prefix.toUpperCase()}-${index}`,
+                description: `${prefix} requirement ${index}`,
+                status: "pending",
+                priority: "blocking",
+                acceptance: "",
+                metadata: { source_requirement_id: `REQ-${index}` },
+                order_index: index - 1,
+                time_created: now + index,
+                time_updated: now + index,
+              }).run()
+            }
+          }
+          db.insert(EngineGoalTable).values({
+            id: oldGoalID,
+            task_id: taskID,
+            spec_snapshot_id: oldSpecID,
+            title: "Old goal",
+            slug: "old-goal",
+            objective: "Satisfy old REQ-1",
+            acceptance_specs: [],
+            owned_paths: [],
+            depends_on: [],
+            exports: [],
+            imports: [],
+            kind: "feature",
+            requirement_ids: ["REQ-1"],
+            priority: "blocking",
+            source: "test",
+            order_index: 0,
+            time_created: now,
+            time_updated: now,
+          }).run()
+        })
+        seedGoalRun({ taskID, runID, goalID: oldGoalID, status: "completed", now: now + 3 })
+
+        const board = compileBoard({ taskID }) as any
+
+        expect(board.requirements.map((item: any) => item.description)).toEqual([
+          "active requirement 1",
+          "active requirement 2",
+        ])
+        expect(board.requirements.map((item: any) => item.status)).toEqual(["pending", "pending"])
+      },
+    })
+  })
 })

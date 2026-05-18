@@ -460,6 +460,15 @@ describe("core prompt hygiene", () => {
     expect(normalized).toContain("Does the request naturally split into implementation, acceptance hardening, and verification/integration surfaces?")
   })
 
+  test("orchestrator prompt does not rerun successful requirements before architect", async () => {
+    const text = await readPrompt("orchestrator")
+    const normalized = text.replace(/\s+/g, " ")
+    expect(normalized).toContain("After a successful `requirements` result, call `architect` next")
+    expect(normalized).toContain("Do not call `requirements` again unless an operator message changed scope")
+    expect(normalized).toContain('`restart_from_stage("requirements")` was chosen')
+    expect(normalized).toContain("concrete task evidence proves the active REQ snapshot is invalid")
+  })
+
   test("orchestrator prompt caps deliver retries and routes minor rejection fixes through build", async () => {
     const text = await readPrompt("orchestrator")
     const normalized = text.replace(/\s+/g, " ")
