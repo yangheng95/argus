@@ -1,79 +1,88 @@
-# Evaluator
+# Delivery Checks and Verdict
 
-Evaluator decides whether a delivery is acceptable. It runs **deterministic checks** (real commands) first, then falls back to **LLM judge** for the final verdict.
+> **Important change (2026-05)**: The old `evaluator` agent and `src/evaluator/` directory have been **removed entirely**. The "determine whether a deliverable is acceptable" responsibility they previously held is now fulfilled by the **Delivery agent** + `src/delivery/checks/` modules; verdict artifacts are persisted as `engine_artifact[kind="evaluation" | "verdict" | "verification-evidence"]`. This page retains URL compatibility; content has been replaced with the new model.
 
-## Two-stage evaluation
+## Two-stage verification
 
 ### Stage 1: deterministic checks
 
-`evaluateGoal` (`packages/opencorvus/src/evaluator/per-goal.ts`), in priority order:
+The Delivery agent resolves the current task's check family via `delivery/checks/discovery.ts` and runs checks in the following order:
 
-1. **Extract commands from `done_definition`** — parse executable commands (`pnpm test`, `cargo build`, `pytest`, …) from acceptance text; run them; trust exit codes.
-2. **Project discovery** — walk up from `owned_paths` to find the nearest `package.json` / `pyproject.toml` / `Cargo.toml` / `go.mod`; auto-detect build/test/lint commands.
-3. **Semantic criteria** — plain-text criteria that cannot be executed (e.g., "conforms to architecture") become evidence; they do not decide pass/fail.
+1. **Extract commands from `done_definition` / `check_selectors`** — parse commands declared on Goal / Requirement metadata (`bun run typecheck`, `bun test`, `pytest`, etc.); run them directly; trust exit codes. Commands must come from structured metadata — **never inferred from keywords** (see `check/policy.ts::inferSelectors`, which returns an empty array by design).
+2. **Project discovery** — walk up from `owned_paths` to find the nearest `package.json` / `pyproject.toml` / `Cargo.toml` / `go.mod`; auto-detect build / test / lint commands. Exact rules live in `delivery/checks/project-gate.ts` and `delivery/checks/runtime-readiness.ts`.
+3. **Semantic criteria** — plain-text criteria that cannot be executed (e.g., "conforms to architecture spec") contribute only as evidence; they do not affect pass/fail.
 
 ### Stage 2: LLM judge
 
-Engaged only when deterministic checks **can't decide** (e.g., no executable tests). Produces `EvaluatorAnalysis` (`src/evaluator/types.ts:37`):
-
-```typescript
-interface EvaluatorAnalysis {
-  verdict: "accepted" | "rejected" | "inconclusive"
-  goal_statuses: GoalStatus[]
-  replan_guidance?: string
-}
-```
+Engaged **only when deterministic checks cannot decide** (e.g., no executable tests, or a UI visual fidelity judgment). Produces evidence via `delivery/checks/visual.ts` (visual / screenshot comparison), `delivery/checks/content-fingerprint.ts` (content fingerprint), and other submodules; the delivery agent's `verdict.ts` then aggregates these into the final verdict.
 
 ## CheckSelector
 
-Allowed selectors (`src/check/policy.ts:3`):
+Allowed selector list (`packages/opencorvus/src/check/policy.ts:3`, the single authoritative source):
 
 ```
-build | test | lint | verify_cmd | ui_review |
-code_quality | code_review | dead_code_review |
-startup | spec_check
+build · test · lint · verify_cmd · ui_review · code_quality ·
+code_review · dead_code_review · startup · spec_check
 ```
 
-`spec_check` (spec-consistency check) is **on by default** — this is a core part of the harness value.
+`CheckFamily` (`policy.ts:17`) is a subset of selectors: `build · test · lint · verify_cmd`, used for generic family matching.
 
-## Evaluator tiers
+> Selectors must be explicitly declared in a spec requirement's `check_selectors` field or in the architect's structured output — **inference from keywords is prohibited** (`policy.ts:24`).
 
-Set via `assistant.evaluator.tier`:
+## Configuration
 
-| tier | includes |
-|---|---|
-| `core` | build + test + spec_check |
-| `standard` (default) | core + lint + startup |
-| `full` | standard + ui_review + visual + puppeteer + code_quality |
+Configure via `assistant.delivery.*` / `assistant.delivery_visual.*` in `opencorvus.jsonc`. The old `assistant.evaluator.tier` field no longer exists:
+
+- `delivery.max_retries` — maximum remediation attempts in the delivery phase
+- `delivery_visual.*` — numeric hard-threshold values for visual judgment
+- Full schema: [05-config.md](../../../specs/new-arch/05-config.md)
 
 ## `selectorsSatisfied` semantics
 
-`src/check/policy.ts:45`:
+Key implementation at `check/policy.ts:45`:
 
 ```
 1. Filter out checks where status === "skipped"
-2. Every declared selector must have at least one matched and passed check
+2. Every declared selector must have at least one matched and passed active check
 3. Unexecuted selectors never count as passed
 ```
 
-**Critical**: not-run ≠ passed. Prevents "silently skip build and declare accepted".
+**Note**: not-run ≠ passed. This prevents "silently skip build and declare accepted".
 
 ## Verdict semantics
 
-| verdict | next action |
-|---|---|
-| `accepted` | proceed to Delivery |
-| `rejected` | retry (same plan) or replan (new plan) — `replan_guidance` decides |
-| `inconclusive` | treated as rejected but prefers replan (missing info) |
+Verdicts are persisted as `engine_artifact[kind="verdict"]`:
 
-Lifecycle boundary: the Delivery/Evaluator surface provides verdicts and
-evidence only. Starting, stopping, retrying, cancelling, failing the current
-task, and publishing linked follow-up tasks are Orchestrator lifecycle
-decisions. If delivery evidence implies a new task, report the recommendation
-as evidence; do not create the task from the delivery agent.
+| verdict | Next action |
+|---|---|
+| `accepted` | `deliver` completes the task directly; if additional artifacts (patch / git preview) are needed, call `publish_delivery` explicitly for post-delivery artifact export |
+| `rejected` | Remediation via `delivery-retry-feedback.ts`; once `delivery.max_retries` is exceeded, the Orchestrator decides whether to retry / replan / fail |
+| `inconclusive` | Treated as rejected, but prefers replan (an inability to decide usually means incomplete information or a doom-loop) |
+
+The Delivery agent is responsible only for verdicts and evidence. Starting / stopping / retrying / cancelling / failing the current task, and publishing new follow-up tasks, are Orchestrator lifecycle authority. If Delivery determines the work should be split into a new task, it can only recommend this in verdict evidence — it cannot create the task directly.
+
+## Relationship to benchmarks
+
+A benchmark `qualityVerdict === "accepted"` now means the delivery agent has written a verdict artifact of `accepted` and the `verification-evidence` satisfies `required_check_pass_rate > 0` (`script/benchmark/quality-gates.ts`).
+
+## Prosecutor / Integrity review
+
+`accepted` candidates may undergo a further independent review by two agents, but neither is an internal Delivery step or an automatic delivery gate:
+
+- **Integrity Reviewer** (`integrity/agent.ts`): a multi-dimension review explicitly invoked by the Orchestrator (requirement_fidelity / technical_feasibility / hallucination / solution_quality); results land in `engine_artifact[kind="integrity_attempt"]`. Delivery does not automatically run or consume it as an internal gate; evidence for fixing a Delivery rejection should go directly into the next build round.
+- **Prosecutor** (`prosecutor/agent.ts`): adversarial review; results land in `engine_artifact[kind="prosecutor_attempt"]`.
+
+Both are invoked actively by the Orchestrator via tool calls — not part of an automatic pipeline.
 
 ## Known traps
 
-1. **Empty output → `inconclusive`, not `accepted`.** Historical bug: empty executor output treated as "no problems → pass".
-2. **Skipped build checks.** If a worktree merge fails (`EEXIST`), build can't run — must not be passed over.
-3. **TypeScript errors undetected.** Ensure `qa_rule_selectors` includes `lint` or `typecheck`.
+1. **Empty output → `inconclusive`**: when the executor returns an empty string, it must be marked `inconclusive`, **not** accepted (historical bug: empty output was treated as "no problems → pass").
+2. **Build check skipped**: if a worktree merge fails (`EEXIST`), the build cannot run — must not be passed over; mark it rejected.
+3. **TypeScript errors undetected**: ensure the spec's `check_selectors` includes `lint` or an explicit `typecheck` family.
+
+## What's next
+
+- [Configuration](./configuration.md)
+- [Benchmark](../operations/benchmark.md)
+- [Troubleshooting](../operations/troubleshooting.md)
+- Full agent family: [specs/new-arch/01-agents.md](../../../specs/new-arch/01-agents.md)

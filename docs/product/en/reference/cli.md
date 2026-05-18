@@ -135,8 +135,7 @@ opencorvus db --query "SELECT id, status FROM task ORDER BY id DESC LIMIT 20"
 | `opencorvus import` | Import sessions / tasks |
 | `opencorvus github` | GitHub Action runtime (typically invoked by the Action itself) |
 | `opencorvus pr` | PR helpers |
-| `opencorvus attach` | Attach to an existing session |
-| `opencorvus tui-thread` | TUI thread mode |
+| `opencorvus sidecar` | Headless managed sidecar for the VS Code extension (internal use) |
 | `opencorvus mcp` | MCP subcommand group (`mcp serve` / `mcp auth` / `mcp status` / `mcp remove-auth`) |
 | `opencorvus session` | Session management |
 
@@ -155,6 +154,6 @@ The code calls `process.exit(1)` only on error paths (`packages/opencorvus/src/i
 ## Shell completions
 
 ```bash
-opencorvus completions bash > /etc/bash_completion.d/opencorvus
-opencorvus completions zsh  > ~/.zsh/completions/_opencorvus
+opencorvus completion bash > /etc/bash_completion.d/opencorvus
+opencorvus completion zsh  > ~/.zsh/completions/_opencorvus
 ```

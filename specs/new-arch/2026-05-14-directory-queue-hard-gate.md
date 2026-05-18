@@ -17,9 +17,10 @@ main thread is saturated, pointer hover and cursor updates stop responding.
 
 ## Historical Conflict
 
-`specs/new-arch/2026-05-13-task-queue-opt-in.md` explicitly required new task
-creation to start immediately by default, even if another task is active in the
-same directory. The corresponding test asserts that behavior.
+The earlier task-queue-opt-in plan (since removed; this doc superseded it)
+explicitly required new task creation to start immediately by default, even if
+another task is active in the same directory. The corresponding test asserts
+that behavior.
 
 That requirement is incompatible with the older and stronger invariant in
 `engine/queue.ts`: one working directory has one active task because the tasks

@@ -1,11 +1,19 @@
 # 11 — Agent OOP 协议设计
 
-> 状态：未来方案 / 未落地实现。
+> 状态：未来方案 / 部分落地（见下方 §实施进度）。
 >
 > 当前运行时并未实现本文中的 `BaseAgent`、`AgentRegistry`、`AgentMailbox`、
 > 白名单点对点消息或统一 mailbox 协议。现行实现仍然以 orchestrator tool 调度、
 > `task.design_specs` / `decision_log` 持久化、以及 per-stage session prompt 注入为准。
 > 修改现网消息路径时，必须先以当前实现为真源，不得把本文当作已生效协议。
+>
+> **§实施进度（2026-05-18）**：`codex/agent-boundary-role-contract` 分支已落地**阶段一**：
+> `packages/opencorvus/src/agent/role-contract.ts` 定义了 `AgentRoleContract` 接口（含
+> `id`、`description`、`promptEditable`、`defaultPromptRequired`、`promptConfigMode` 等字段）
+> 与 `AgentRoleID` 联合类型（覆盖全部 16 个 native agent 角色：`coding` · `build` · `general` ·
+> `explore` · `compaction` · `title` · `summary` · `control` · `delivery` · `orchestrator` ·
+> `requirements` · `architect` · `design-analyst` · `intent-analysis` · `integrity` · `prosecutor`）。
+> OOP 继承体系（`BaseAgent` / `AgentMailbox` / `AgentRegistry`）及 mailbox 数据库表仍**待实现**。
 >
 > 抽象修正：本文把未来 agent 家族拆成 `PipelineAgent` / `SessionAgent`，这是对当前
 > 执行器分流的直接映射，不是更好的最终抽象。关于“单一 AgentSpec + RuntimeMode /
@@ -400,7 +408,9 @@ agent              receiveWhitelist              sendWhitelist
 orchestrator       [system_entry]                [requirements, architect,
                                                   design-analyst, delivery,
                                                   build, intent-analysis,
-                                                  integrity, prosecutor]
+                                                  integrity, prosecutor,
+                                                  cancel_subagent（task-control tool，
+                                                  不派发新 agent，终止现有子 session）]
 
 requirements       [orchestrator]                [orchestrator]
 architect          [orchestrator]                [orchestrator]

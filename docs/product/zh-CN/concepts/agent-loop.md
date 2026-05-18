@@ -67,7 +67,7 @@ build / intent-analysis / requirements / architect / design-analyst / integrity 
 
 ## Doom-loop 检测
 
-`tool/gui-state.ts` 会记录工具调用序列，检测重复动作（例如连续 5 次点击同一坐标）。触发后当前 attempt 会被标记 `stuck`，delivery checks 产出 `inconclusive` verdict，Orchestrator 据此决定 retry / replan / fail——防止 agent 在死循环里烧预算。
+`session/processor.ts` 在每次工具调用后回看最近的工具 part：当同一工具以**完全相同的入参连续调用 `DOOM_LOOP_THRESHOLD`（= 3）次**时，判定为 doom-loop，通过 `PermissionNext.ask({ permission: "doom_loop" })` 拦截该工具调用，交由 agent 的 permission ruleset 决定放行 / 拒绝——防止 agent 在死循环里烧预算。
 
 ## Trace 与 Bus
 

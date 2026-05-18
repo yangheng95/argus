@@ -1,112 +1,152 @@
-# Data model: Task / Run / Goal / Plan / Spec
+# Data model: Task / Goal / Plan / Artifact
 
-All table definitions live in `packages/opencorvus/src/orchestrator/orchestrator.sql.ts`.
+All engine-domain table definitions are centralized in `packages/opencorvus/src/engine/engine.sql.ts`, with the unified naming prefix `engine_*` (the historical `orchestrator_*` prefix has been fully renamed).
+
+> **Key change (2026-05)**: Phase 6 merged 5 process tables (`engine_run` / `engine_goal_run` / `engine_delivery` / `engine_evaluation` / `engine_goal_snapshot`) into a **single `engine_artifact` table**, distinguished by the `kind` field. If you came from older docs that treated Run / GoalRun / Evaluation / Delivery as separate tables, that model is entirely obsolete.
 
 ## Entity relationships
 
 ```
 Task (kind: "workflow" | "build")
- ├─ Run (phase: plan | execute | evaluate | deliver)
- │   ├─ PlanVersion (version 1, 2, ...)
- │   │   └─ Goal[] (decomposed targets)
- │   └─ GoalRun[] (one per goal execution)
- │       └─ Evaluation (verdict: accepted | rejected | inconclusive)
- └─ Delivery (status: candidate → publishing → delivered)
-SpecSnapshot (standalone; referenced by PlanVersion)
+ └─ PlanVersion (version 1, 2, ... ; status ∈ {active, superseded})
+     ├─ Goal[]                ← deeply decomposed targets
+     ├─ Milestone[]           ← acceptance milestones (pending / active / passed / failed)
+     ├─ Requirement[]         ← requirement traceability
+     └─ PlanNode[]            ← plan steps
+
+Artifact[]   (run / goal_run_attempt / delivery / verification-evidence / verdict / patch / …)
+SpecSnapshot · SpecItem        ← requirements output
+InteractionRequest             ← permission / question
+ChannelBinding                 ← external channel ↔ task binding
+ProgressSnapshot · ExecutorSession ← progress and executor handles
 ```
+
+The complete list of 13 tables is in [02-data.md](../../../specs/new-arch/02-data.md#engine-domain-13-tables).
 
 ## Entity reference
 
-### Task (`orchestrator.sql.ts:113`)
+### Task (`engine.sql.ts` · `EngineTaskTable`)
 
 | Field | Meaning |
 |---|---|
-| `kind` | `"workflow"` (full pipeline) or `"build"` (build-only) |
-| `status` | `pending / running / done / failed / canceled` |
-| `active_run_id` | Currently active Run |
-| `active_plan_version_id` | Currently active PlanVersion |
-| `budget` | Total budget (runs / goals / tokens) |
+| `kind` | `"workflow"` (default; runs the full Task Control Loop) or `"build"` (runs the build agent directly, skipping decomposition / planning / evaluation) |
+| `status` | `queued / active / completed / failed / cancelled` |
+| `priority` | `critical / high / normal / low` |
+| `session_id` | Points to the root session |
 
-One Task may span many Runs. Each replan creates a new PlanVersion; the old one is marked `superseded`.
+One Task may go through multiple PlanVersions (each replan creates a new version; the old one is set to `superseded`).
 
-### Run (`orchestrator.sql.ts:332`)
-
-One attempt to complete the task end-to-end. Phase advances: `plan → execute → evaluate → deliver`.
-
-### PlanVersion (`orchestrator.sql.ts:161`)
+### PlanVersion (`EnginePlanVersionTable`)
 
 - `version` — sequential number
-- `summary` — human-readable plan summary
-- `spec_snapshot_id` — ties to the spec at this version
-- New version on every replan
+- `status` — `active` / `superseded`
+- `spec_snapshot_id` — ties to the SpecSnapshot at this version
+- New version on every replan / restart_from_stage
 
-### Goal (`orchestrator.sql.ts:205`)
+### Goal (`EngineGoalTable`)
 
 The smallest unit that can be executed in parallel and verified independently.
 
-Architect decomposition must analyze requirement surfaces, implementation ownership, verification ownership, dependencies, and integration risk before submitting the goal graph. A valid workflow has at least 2 goals; a single all-in-one large goal is invalid because it does not create reliable execution or verification boundaries.
+Architect decomposition must analyze the requirement surface, implementation ownership, verification ownership, dependencies, and integration risk before submitting the goal graph. A valid workflow includes at least 2 goals; a single all-in-one large goal is invalid because it does not provide reliable independent-execution and independent-acceptance boundaries.
 
 | Field | Meaning |
 |---|---|
 | `title` / `objective` | Name and narrative |
-| `done_definition` | Acceptance criteria, optionally embedding executable commands (`pnpm test`, `cargo build`, …) |
+| `done_definition` | Acceptance criteria (may include executable commands: `bun run typecheck`, etc.) |
 | `owned_paths[]` | Code paths owned by this goal |
-| `depends_on[]` | Upstream goals (topological order) |
-| `exports[]` / `imports[]` | Cross-goal contracts |
+| `depends_on[]` | Upstream goals (topological ordering basis) |
+| `priority` | `blocking` or `advisory` |
+| `exports[]` / `imports[]` | Cross-goal data contracts |
 
-### GoalRun (`orchestrator.sql.ts:359`)
+> **The Goal table no longer has a `status` column** — live status is derived by `engine/describe.ts::goalStatusByID` (retired in Phase E, 2026-05-05).
+>
+> **The Goal table no longer has `workspace_dir` / `workspace_branch` / `workspace_base_ref` / `retry_count` / `cascade_state`** — these have moved to `engine_artifact[kind="goal_run_attempt"].payload` (single source), read via `engine/store.ts::findGoalLatestWorkspace` / `getGoalRetryCount`.
 
-| Field | Meaning |
-|---|---|
-| `status` | `queued → planning → running → evaluating → completed / failed` |
-| `workspace_dir` | Git worktree path (one per goal) |
-| `base_ref` / `merge_ref` | Branch start / merge target |
+### Milestone (`EngineMilestoneTable`)
 
-The same Goal may have multiple GoalRuns (via retry).
+Advances through `status ∈ {pending, active, passed, failed}`. Milestones connect the delivery handoff points between Requirements, Architect, and Delivery.
 
-### Evaluation (`orchestrator.sql.ts:467`)
+### Requirement (`EngineRequirementTable`) / SpecItem (`EngineSpecItemTable`)
 
-| Field | Meaning |
-|---|---|
-| `verdict` | `accepted / rejected / inconclusive` |
-| `checks[]` | Per-check results (build/test/lint/spec_check/…) |
+Written by the `requirements` agent; serve as traceability anchors for fidelity evaluation.
 
-`inconclusive` means "cannot judge" — not a pass, not a fail — and triggers replan instead of retry.
+### Artifact (`EngineArtifactTable` · unified process table)
 
-### Delivery (`orchestrator.sql.ts:423`)
+`kind` determines semantics. Full `EngineArtifactKind` values (`engine.sql.ts:90`):
 
-- `candidate` — passed evaluation, awaiting delivery
-- `publishing` — merging/pushing
-- `delivered` — shipped
-
-### SpecSnapshot (`orchestrator.sql.ts:36`)
-
-Produced by Spec Agent:
-
-| Field | Meaning |
-|---|---|
-| `summary` | One-liner |
-| `content` | Full spec (Markdown) |
-| `scope` | Files/modules touched |
-| `evidence[]` | Code evidence the spec is grounded on |
-
-## GoalContract: runtime contract
-
-`GoalContract` (`src/pipeline/types.ts:60`) is the **only** input to the execution pipeline and is **immutable once created**:
-
-```typescript
-interface GoalContract {
-  goal: Goal
-  planNode: PlanStep
-  run: Run
-  task: Task
-  plan: PlanVersion
-  allGoals: Goal[]  // for cross-goal dependency queries
-}
+```
+run · goal_run_attempt · delivery · verification-evidence · evaluation ·
+verdict · patch · changed_file · diff · log · report · image · link ·
+git_ref · pr · integrity_attempt · prosecutor_attempt ·
+delivery_evidence_manifest · delivery_surface_manifest ·
+delivery_specialist_review · delivery_verification_threw ·
+delivery_preview · orchestrator-stream-error
 ```
 
-It guarantees a stable snapshot; concurrent modifications cannot contaminate in-flight goals.
+**Common `kind` meanings**:
+
+| kind | Meaning |
+|---|---|
+| `run` | Root node for one task execution attempt (replaces the old `engine_run` table) |
+| `goal_run_attempt` | One worktree attempt for a single goal; `payload.workspace_*` is the single source for worktree info |
+| `delivery` | One delivery candidate (replaces the old `engine_delivery` table) |
+| `evaluation` / `verdict` | Evaluation decision (`accepted / rejected / inconclusive`; replaces the old `engine_evaluation` table) |
+| `verification-evidence` | Delivery check evidence (with `scope = goal_run` / `delivery`) |
+| `patch` / `changed_file` / `diff` | Code change artifacts |
+| `delivery_evidence_manifest` / `surface_manifest` / `specialist_review` / `preview` | Delivery-phase artifacts |
+| `integrity_attempt` / `prosecutor_attempt` | Integrity / prosecutor agent output |
+
+`inconclusive` verdict means "unable to decide" — not a pass and not a failure; it triggers replan rather than retry.
+
+### InteractionRequest (`EngineInteractionRequestTable`)
+
+`type ∈ {permission, question}`. `permission` is for tool authorization approvals; `question` is for agents actively querying the user.
+
+### ChannelBinding (`EngineChannelBindingTable`)
+
+External channel (platform / channel / thread) ↔ task binding; `ChannelIngress` uses this to route external replies to the corresponding task.
+
+### SpecSnapshot (`EngineSpecSnapshotTable`)
+
+| Field | Meaning |
+|---|---|
+| `summary` | One-liner spec |
+| `content` | Full spec (Markdown) |
+| `scope` | Files / modules in scope |
+| `evidence[]` | Code evidence chain that grounded the spec |
+
+## Session domain
+
+`packages/opencorvus/src/session/session.sql.ts` contains 5 tables: `session` · `message` · `part` · `todo` · `permission`.
+
+**SessionKind** (fixed at creation time; order as they appear in `session.sql.ts:50-65`):
+
+```
+root · orchestrator · assistant · gateway · intent-analysis ·
+requirements · design-analyst · goal · architect · integrity ·
+delivery · executor · build · evaluator · system
+```
+
+**15 kinds** total. `planner` has been removed and is **no longer a valid SessionKind**.
+
+`session.goal_id` field: set when a session belongs to a specific goal (`executor` / `build` sessions); the overlay uses this to nest messages under the corresponding goal card.
+
+## Single writer rule
+
+**No other module may write directly to `engine_*` tables.** The only permitted write paths are:
+
+- `task-api/index.ts` (`EngineService.*` entry points)
+- `engine/persist.ts` / `engine/state.ts` / `engine/store.ts`
+
+Read paths are exposed as query helpers in `engine/describe.ts` / `engine/store.ts`.
 
 ## Durable state
 
-All state lives in SQLite (default: `~/.opencorvus/opencorvus.db`) and persists across process and session boundaries. A crashed Task can resume after server restart as long as its worktree is intact.
+All state lives in SQLite (default `~/.opencorvus/opencorvus.db`) and persists across process and session boundaries. A crashed task can resume after server restart — the `EngineService.init` serial queue recovery restarts orphaned tasks uniformly (the old `recoverOrphanedTasks` fire-and-forget path no longer exists).
+
+## What's next
+
+- [Architecture overview](./architecture.md)
+- [Agentic Loop](./agent-loop.md)
+- [Delivery checks and verdict](../opencorvus/evaluator.md)
+- Full data-plane spec: [specs/new-arch/02-data.md](../../../specs/new-arch/02-data.md)

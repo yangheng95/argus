@@ -4,7 +4,7 @@
 > Status: Product requirements draft
 > Owner surface: Overlay
 > Related code: `packages/overlay/src/index.html`, `packages/overlay/src/main.tsx`, `packages/overlay/src/services/task.ts`, `packages/opencorvus/src/server/routes/gateway.ts`, `packages/opencorvus/src/server/routes/channel.ts`, `packages/opencorvus/src/channel/ingress.ts`, `packages/opencorvus/src/channel/supervisor.ts`, `packages/opencorvus/src/task-api/index.ts`
-> Related docs: `specs/new-arch/02-data.md`, `specs/new-arch/03-control.md`, `specs/new-arch/13-agent-communication-matrix.md`, `specs/new-arch/2026-05-13-task-queue-opt-in.md`, `docs/product/zh-CN/channels/overview.md`
+> Related docs: `specs/new-arch/02-data.md`, `specs/new-arch/03-control.md`, `specs/new-arch/13-agent-communication-matrix.md`, `specs/new-arch/2026-05-14-directory-queue-hard-gate.md`, `docs/product/zh-CN/channels/overview.md`
 
 ## Glossary
 
@@ -435,7 +435,7 @@ Future:
 
 - `/gateway/task/decompose` returns proposal and creates no task.
 - task creation from proposal calls existing create task path.
-- queue opt-in behavior matches `2026-05-13-task-queue-opt-in.md`.
+- queue opt-in behavior matches `2026-05-14-directory-queue-hard-gate.md` (superseded the earlier task-queue-opt-in plan).
 - channel runtime restart returns updated status.
 - gateway channel message delegates to `ChannelIngress`.
 

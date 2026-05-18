@@ -39,13 +39,13 @@ Root cause almost always: **missing provider API key**. Because `Env.state()` sn
 
 ## Orchestrator
 
-### Stuck in spec / goals / plan
+### Stuck in requirements / architect / build
 
 | Symptom | Check |
 |---|---|
 | No events at all | LLM provider connectivity |
 | Reasoning tokens but no tool-call | Reasoning models must use `toolChoice: "auto"` |
-| Planner silent for long | Normal — planning may think quietly for 30+ minutes. Tune `--planning-stall-timeout-ms`. |
+| Agent silent for long | Activity is managed by the engine's internal stream-activity watchdog (180 s idle abort). The `--planning-stall-timeout-ms` / `--stall-timeout-ms` flags are no longer accepted. |
 
 ### Task replans indefinitely
 

@@ -13,7 +13,7 @@
   board refreshes or duplicated message stores.
 - `specs/new-arch/2026-05-14-conversation-scroll-follow-lock.md` requires
   native scroll anchoring while the operator reads older content.
-- `specs/new-arch/2026-05-15-overlay-scroll-main-thread-jank-plan.md`
+- The interim main-thread-jank plan (since removed; superseded by this doc)
   narrowed DOM observers, but still left scroll follow driven by DOM mutation
   and resize observation. That is still a second source and does not satisfy
   the no-patch rule.
