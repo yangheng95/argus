@@ -219,6 +219,15 @@ export namespace Database {
     }
   }
 
+  export function hasActiveContext() {
+    try {
+      ctx.use()
+      return true
+    } catch {
+      return false
+    }
+  }
+
   export function transaction<T>(callback: (tx: TxOrDb) => T): T {
     try {
       return callback(ctx.use().tx)
