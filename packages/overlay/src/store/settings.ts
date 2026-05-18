@@ -4,6 +4,7 @@
 import { createStore } from "solid-js/store";
 import { DEFAULT_SERVER } from "../services/default-server";
 import { getHostTransport } from "../services/host-transport";
+import type { ProjectEditorID } from "../services/host-transport";
 import { requireInitialVsCodeHostTheme } from "../services/host-theme";
 import { DEFAULT_THEME_ID, sanitizeThemeForHost } from "../services/theme-registry";
 import { sanitizeLocale } from "../utils/i18n";
@@ -46,6 +47,8 @@ export interface OverlaySettings {
   /** Last persisted directory value; used to detect uncommitted changes and
    *  restored on next cold start by loadSettings(). */
   savedDirectory: string;
+  /** Preferred IDE used by the workspace launcher and file-link open actions. */
+  preferredProjectEditor: ProjectEditorID;
   /** Incremented each time the workspace is invalidated/reset */
   workspaceEpoch: number;
   /** Incremented each time the working directory changes */
@@ -115,6 +118,20 @@ export function sanitizeExecutor(value: any): ExecutorID {
   return DEFAULT_SETTINGS.executor;
 }
 
+export function sanitizeProjectEditor(value: any): ProjectEditorID {
+  const text = String(value || "").trim();
+  if (
+    text === "vscode" ||
+    text === "pycharm" ||
+    text === "webstorm" ||
+    text === "intellij" ||
+    text === "cursor"
+  ) {
+    return text;
+  }
+  return DEFAULT_SETTINGS.preferredProjectEditor;
+}
+
 // ── Default locale ──
 
 const DEFAULT_LOCALE = sanitizeLocale(
@@ -149,6 +166,7 @@ export const DEFAULT_SETTINGS: OverlaySettings = {
   workspaceTaskID: "",
   workspaceDirectory: "",
   savedDirectory: "",
+  preferredProjectEditor: "vscode",
   workspaceEpoch: 0,
   directoryEpoch: 0,
   toolPermissions: {
@@ -221,6 +239,7 @@ export function applySettings(input: Partial<OverlaySettings>): void {
       typeof input?.workspaceDirectory === "string"
         ? input.workspaceDirectory.trim()
         : DEFAULT_SETTINGS.workspaceDirectory,
+    preferredProjectEditor: sanitizeProjectEditor((input as any)?.preferredProjectEditor),
     desktopNotifications: input?.desktopNotifications !== false,
   });
 }
@@ -286,6 +305,7 @@ export function bootstrapOverlaySettings(
   sidebarWidth?: number;
   sectionsWidth?: number;
   workspacePanelHeight?: number;
+  preferredProjectEditor?: ProjectEditorID;
   workspaceTaskID?: string;
   workspaceTaskId?: string;
   workspaceDirectory?: string;
@@ -309,6 +329,7 @@ export function bootstrapOverlaySettings(
     locale: input.locale ?? DEFAULT_SETTINGS.locale,
     desktopNotifications: input.desktopNotifications ?? DEFAULT_SETTINGS.desktopNotifications,
     directory: input.savedDirectory || undefined,
+    preferredProjectEditor: sanitizeProjectEditor(input.preferredProjectEditor),
     workspaceTaskID,
     workspaceTaskId: workspaceTaskID,
     workspaceDirectory: input.workspaceDirectory || undefined,

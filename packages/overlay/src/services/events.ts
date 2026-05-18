@@ -76,6 +76,19 @@ function shouldRecoverSelectedTaskSequenceGap(event: any): boolean {
   return current > 0 && sequence > current + 1;
 }
 
+function advanceHandledSelectedTaskSequence(event: any): void {
+  const taskID = eventTaskID(event);
+  if (!taskID || taskID !== boardStore.selectedTaskID) return;
+  const sequence = eventSequence(event);
+  if (sequence <= 0) return;
+  const current = boardStore.taskSequence;
+  // Gap detection runs before a handled event reaches this helper. If we
+  // still see a jump here, do not paper over it by moving the cursor.
+  if (current > 0 && sequence > current + 1) return;
+  if (sequence <= current) return;
+  setTaskSequence(sequence);
+}
+
 function isMessageWriterPrerequisiteError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error || "");
   return (
@@ -501,7 +514,9 @@ export function routeSSEEvent(event: any): boolean {
     } catch (error) {
       if (!isMessageWriterPrerequisiteError(error)) throw error;
       scheduleSelectedTaskRecovery(`message writer prerequisites missing: ${type}`);
+      return true;
     }
+    advanceHandledSelectedTaskSequence(event);
     return true;
   }
 
@@ -544,6 +559,7 @@ export function routeSSEEvent(event: any): boolean {
       // Rewind cleared by backend — full reload to restore the suppressed tail.
       scheduleSelectedTaskRecovery("task rewind cleared", evtTaskID);
     }
+    advanceHandledSelectedTaskSequence(event);
     return true;
   }
 
@@ -557,6 +573,7 @@ export function routeSSEEvent(event: any): boolean {
   if (type === "run.progress") {
     if (!shouldConvertRunProgress(properties)) {
       scheduleBoard(BOARD_EVENT_DEBOUNCE);
+      advanceHandledSelectedTaskSequence(event);
       return true;
     }
 
@@ -565,6 +582,7 @@ export function routeSSEEvent(event: any): boolean {
     for (const msg of messages) {
       writeToTree(msg);
     }
+    advanceHandledSelectedTaskSequence(event);
     return true;
   }
 
@@ -578,19 +596,24 @@ export function routeSSEEvent(event: any): boolean {
     for (const msg of messages) {
       writeToTree(msg);
     }
+    advanceHandledSelectedTaskSequence(event);
     return true;
   }
 
   // ── Config changed → refresh appStore.config ──
   if (type === "config.changed") {
     scheduleConfigReload();
+    advanceHandledSelectedTaskSequence(event);
     return true;
   }
 
   // Explicitly consumed protocol events that do not project into either
   // messageStore or cardTreeStore. tree-writer whitelists them as no-ops so
   // they remain auditable and don't surface as unknown-event crashes.
-  if (isRouterConsumedNoopEventType(type)) return true;
+  if (isRouterConsumedNoopEventType(type)) {
+    advanceHandledSelectedTaskSequence(event);
+    return true;
+  }
 
   // ── Board-invalidating events → forwarded to handleEventStreamEvent
   if (isBoardInvalidatingEventType(type)) return false;

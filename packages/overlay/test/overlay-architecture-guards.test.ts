@@ -865,7 +865,7 @@ describe("overlay architecture guards", () => {
     expect(composerSurface).toMatch(/\.executor-chip-model\[data-empty="true"\]/)
   })
 
-  test("workspace panel, diff preview, and file view are owned by surfaces/workspace.css", () => {
+  test("workspace panel, diff preview, and file-link chrome are owned by surfaces/workspace.css", () => {
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const workspaceSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/workspace.css"))
     const html = readText(join(OVERLAY_ROOT, "src/index.html"))
@@ -889,21 +889,14 @@ describe("overlay architecture guards", () => {
       "diff-preview-meta",
       "diff-preview-body",
       "diff-preview-empty",
-      "file-view-panel",
-      // file-view-head replaced by .oc-panel__header override in Step 9.E
-      "file-view-path",
-      "file-view-body",
-      "file-view-empty",
     ]) {
       expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
       expect(workspaceSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
     }
 
-    // diff-preview-head and file-view-head were replaced by .oc-panel__header overrides
+    // diff-preview-head was replaced by the shared .oc-panel__header override.
     expect(workspaceSurface).toMatch(/\.diff-preview-panel > \.oc-panel__header\s*\{/)
-    expect(workspaceSurface).toMatch(/\.file-view-panel > \.oc-panel__header\s*\{/)
     expect(workspaceSurface).not.toMatch(/(^|\n)\.diff-preview-head\s*\{/)
-    expect(workspaceSurface).not.toMatch(/(^|\n)\.file-view-head\s*\{/)
 
     expect(styles).not.toMatch(/(^|\n)\.pane-resizer\.pane-resizer-workspace\s*\{/)
     expect(workspaceSurface).toMatch(/\.pane-resizer\.pane-resizer-workspace\s*\{/)
@@ -929,7 +922,6 @@ describe("overlay architecture guards", () => {
     expect(workspaceSurface).toMatch(/\.workspace-tab\[data-active="true"\]\s*\{/)
     expect(workspaceSurface).toMatch(/\.workspace-close:hover\s*\{/)
     expect(workspaceSurface).toMatch(/\.workspace-view\[data-active="false"\]\s*\{/)
-    expect(workspaceSurface).toMatch(/\.file-view-body pre\s*\{/)
     expect(workspaceSurface).toMatch(/code \.file-link:hover\s*\{/)
   })
 
@@ -2452,9 +2444,8 @@ describe("overlay architecture guards", () => {
 
     const railBody = soloRuleBody(surface, ".conversation-agent-rail")
     for (const declaration of [
-      "position: relative",
       "width: 100%",
-      "height: calc(var(--conversation-agent-rail-height, 42) * 1px * var(--ui-scale))",
+      "height: calc(42px * var(--ui-scale))",
       "min-height: calc(42px * var(--ui-scale))",
       "display: flex",
       "flex-direction: row",
@@ -2471,12 +2462,11 @@ describe("overlay architecture guards", () => {
 
     const rowBody = soloRuleBody(surface, ".conversation-agent-rail__row")
     expect(rowBody).toContain("display: grid")
-    expect(rowBody).toContain("grid-template-columns: calc(26px * var(--ui-scale)) minmax(0, 1fr) calc(24px * var(--ui-scale))")
-    expect(rowBody).toContain("border-left: calc(2px * var(--ui-scale)) solid color-mix(in srgb, var(--card-stage, var(--accent)) 72%, transparent)")
+    expect(rowBody).toContain("grid-template-columns: calc(26px * var(--ui-scale)) calc(24px * var(--ui-scale))")
 
-    const runBody = soloRuleBody(surface, ".conversation-agent-rail__run")
-    expect(runBody).toContain("background: transparent")
-    expect(runBody).toContain("border: 0")
+    const railReportBody = soloRuleBody(surface, ".conversation-agent-rail__report")
+    expect(railReportBody).toContain("display: inline-flex")
+    expect(railReportBody).toContain("background var(--ui-duration-fast)")
 
     const reportPanelBody = soloRuleBody(surface, ".agent-report-dialog__panel")
     expect(reportPanelBody).toContain("display: flex")

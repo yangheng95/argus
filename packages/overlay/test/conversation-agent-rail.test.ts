@@ -28,22 +28,21 @@ test("ConversationAgentRail locates cards through renderedCardID and CSS.escape"
   expect(source).not.toContain('scrollIntoView({ block: "center"')
 })
 
-test("ConversationAgentRail uses bottom-strip height resizing instead of left-column width", () => {
+test("ConversationAgentRail keeps a fixed bottom-strip layout instead of a resizable expansion rail", () => {
   const source = readFileSync(join(import.meta.dir, "../src/components/ConversationAgentRail.tsx"), "utf8")
   const css = readFileSync(join(import.meta.dir, "../src/styles/surfaces/conversation.css"), "utf8")
   const html = readFileSync(join(import.meta.dir, "../src/index.html"), "utf8")
-  expect(source).toContain("--conversation-agent-rail-height")
-  expect(source).toContain("startY - move.clientY")
-  expect(source).not.toContain("MAX_HEIGHT")
-  expect(source).not.toContain("--conversation-agent-rail-width")
+  expect(source).not.toContain("setHeight(")
+  expect(source).not.toContain("beginResize")
+  expect(source).not.toContain("--conversation-agent-rail-height")
+  expect(source).not.toContain("data-wide=")
   expect(css).toContain("border-top: var(--oc-border-width) solid color-mix(in srgb, var(--border) 82%, transparent)")
-  expect(css).toContain("height: calc(var(--conversation-agent-rail-height, 42) * 1px * var(--ui-scale))")
-  expect(css).not.toContain("max-height: calc(220px * var(--ui-scale))")
+  expect(css).toContain("height: calc(42px * var(--ui-scale))")
+  expect(css).not.toContain("conversation-agent-rail__resize")
   expect(css).toContain("flex-direction: row")
   expect(css).toContain("overflow-x: auto")
   expect(css).toContain(".conversation-agent-rail .chat-avatar")
   expect(css).toContain("animation: none;")
-  expect(css).toContain("border-left: calc(2px * var(--ui-scale)) solid color-mix(in srgb, var(--card-stage, var(--accent)) 72%, transparent)")
   expect(html.indexOf('id="conversationBody"')).toBeLessThan(html.indexOf('id="solidConversationAgentRailMount"'))
 })
 
@@ -58,17 +57,16 @@ test("ConversationAgentRail keeps avatar DOM stable across workflow refreshes", 
   expect(css).toContain(".conversation-agent-rail .chat-avatar::after")
 })
 
-test("ConversationAgentRail expands text and animates detail reveal when widened", () => {
+test("ConversationAgentRail stays compact and does not keep a widened detail mode", () => {
   const source = readFileSync(join(import.meta.dir, "../src/components/ConversationAgentRail.tsx"), "utf8")
   const css = readFileSync(join(import.meta.dir, "../src/styles/surfaces/conversation.css"), "utf8")
-  expect(source).toContain('aria-hidden={props.wide ? "false" : "true"}')
-  expect(source).toContain("tabIndex={props.wide ? 0 : -1}")
-  expect(source).not.toContain("<Show when={props.wide}>")
-  expect(css).toContain(".conversation-agent-rail[data-wide=\"true\"] .conversation-agent-rail__run")
-  expect(css).toContain("white-space: normal")
-  expect(css).toContain("overflow-wrap: anywhere")
-  expect(css).toContain("transition:")
-  expect(css).toContain("transform: translateY(calc(3px * var(--ui-scale)))")
+  expect(source).not.toContain("props.wide")
+  expect(source).not.toContain("conversation-agent-rail__run")
+  expect(source).toContain('class="conversation-agent-rail__report"')
+  expect(css).toContain(".conversation-agent-rail__row")
+  expect(css).toContain("grid-template-columns: calc(26px * var(--ui-scale)) calc(24px * var(--ui-scale))")
+  expect(css).not.toContain(".conversation-agent-rail__run")
+  expect(css).not.toContain("[data-wide=\"true\"]")
 })
 
 test("ConversationAgentRail hides the bottom strip when there are no workflow lanes", () => {
@@ -81,11 +79,11 @@ test("ConversationAgentRail hides the bottom strip when there are no workflow la
   expect(css).toContain("display: none;")
 })
 
-test("ConversationAgentRail only polls task trace for the wide report surface", () => {
+test("ConversationAgentRail keeps task trace available for the compact report surface", () => {
   const source = readFileSync(join(import.meta.dir, "../src/components/ConversationAgentRail.tsx"), "utf8")
-  expect(source).toContain("const shouldFetchTrace = createMemo(() => wide())")
-  expect(source).toContain("if (!taskID || !shouldFetchTrace) return { ok: true as const, events: [], traceDir: \"\", enabled: true }")
-  expect(source).toContain("if (!id || !shouldFetchTrace() || trace.loading")
+  expect(source).not.toContain("shouldFetchTrace")
+  expect(source).toContain("if (!taskID) return { ok: true as const, events: [], traceDir: \"\", enabled: true }")
+  expect(source).toContain("if (!id || trace.loading")
 })
 
 test("ConversationAgentRail does not use streamed card text as workflow summary input", () => {
@@ -94,7 +92,7 @@ test("ConversationAgentRail does not use streamed card text as workflow summary 
   expect(workflow).not.toContain("textFromCard")
   expect(workflow).not.toContain("textFromPart")
   expect(workflow).not.toContain('source: "card_output"')
-  expect(rail).toContain("record.goalDescription")
+  expect(rail).toContain("compactLabel(record())")
   expect(rail).not.toContain("No summary")
 })
 

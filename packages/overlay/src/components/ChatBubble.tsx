@@ -5,6 +5,7 @@ import { cardTreeStore, pruneCardsAfterCursor } from "../store/card-tree"
 import { boardStore, rootTaskSessionID } from "../store/board"
 import { cardExpanded, setCardExpanded } from "../store/conversation-ui"
 import {
+  cardMessageSegments,
   collapsedActivityPreviewText,
   collectActivityCounts,
   collectCardText,
@@ -91,6 +92,20 @@ export function ChatBubble(props: { node: CardNode; depth: number }) {
   const roleTitle = () => roleLabel(normalizedRole())
   const badge = () => statusBadge(props.node)
   const visibleChildIDs = createMemo(() => visibleChildIDsForCard(props.node))
+  const messageFlow = createMemo(() => {
+    if (props.node.kind !== "agent") return []
+    return cardMessageSegments(props.node).map((segment, index, segments) => {
+      const role = normalizeAgentRole(segment.role || props.node.stage || props.node.role || "")
+      return {
+        id: segment.id,
+        role,
+        label: roleLabel(role),
+        time: segment.time,
+        current: index === segments.length - 1,
+      }
+    })
+  })
+  const showMessageFlow = () => isAgentBubble() && messageFlow().length > 1
 
   const setExpanded = (value: boolean) => {
     setCardExpanded(props.node.id, value, props.node.status)
@@ -261,6 +276,8 @@ export function ChatBubble(props: { node: CardNode; depth: number }) {
     if ((usage.costUSD ?? 0) > 0) parts.push(formatCostUSD(usage.costUSD!))
     return parts.join(" · ")
   }
+  const messageFlowTitle = (item: { label: string; time: number }) =>
+    item.time > 0 ? `${item.label} · ${fullStampWithRelative(item.time)}` : item.label
 
   const articleStyle = createMemo<Record<string, string> | undefined>(() => {
     const style: Record<string, string> = {}
@@ -446,6 +463,30 @@ export function ChatBubble(props: { node: CardNode; depth: number }) {
                 </Show>
               </div>
             </div>
+            <Show when={showMessageFlow()}>
+              <div class="chat-bubble__flow" aria-label="Agent message flow">
+                <For each={messageFlow()}>
+                  {(item, index) => (
+                    <>
+                      <Show when={index() > 0}>
+                        <span class="chat-bubble__flow-link" aria-hidden="true" />
+                      </Show>
+                      <span
+                        class="chat-bubble__flow-stop"
+                        data-current={item.current ? "true" : "false"}
+                        title={messageFlowTitle(item)}
+                      >
+                        <Avatar
+                          role={item.role}
+                          status={item.current ? props.node.status : undefined}
+                          class="chat-bubble__flow-avatar"
+                        />
+                      </span>
+                    </>
+                  )}
+                </For>
+              </div>
+            </Show>
             <Show when={collapsedPreview()}>
               <div class="card__preview-row">
                 <span class="card__collapsed-preview" title={collapsedPreview()}>{collapsedPreview()}</span>
