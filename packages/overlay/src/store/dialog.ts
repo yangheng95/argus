@@ -37,6 +37,8 @@ export interface ConfigDialogState {
   open: boolean;
   activeTab: ConfigDialogTab;
   sidebarWidth: number | null;
+  agentModelsScope: "project" | "session";
+  agentModelsSessionID: string | null;
 }
 
 export interface DialogState {
@@ -83,6 +85,8 @@ const DEFAULT_DIALOG_STATE: DialogState = {
     open: false,
     activeTab: "general",
     sidebarWidth: null,
+    agentModelsScope: "project",
+    agentModelsSessionID: null,
   },
 };
 

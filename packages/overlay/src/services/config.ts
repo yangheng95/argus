@@ -137,6 +137,29 @@ export async function patchConfig(diff: Record<string, any>): Promise<any> {
   }
 }
 
+export interface SessionConfigResponse {
+  config: Record<string, any>;
+  origin: Record<string, any>;
+}
+
+export async function getSessionConfig(sessionID: string): Promise<SessionConfigResponse> {
+  if (!appStore.connected) {
+    throw new Error("Cannot load session config while disconnected");
+  }
+  return await apiJson(`session/${encodeURIComponent(sessionID)}/config`);
+}
+
+export async function patchSessionConfig(sessionID: string, diff: Record<string, any>): Promise<SessionConfigResponse> {
+  if (!appStore.connected) {
+    throw new Error("Cannot patch session config while disconnected");
+  }
+  return await apiJson(`session/${encodeURIComponent(sessionID)}/config`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(diff),
+  });
+}
+
 export async function syncAgentPromptLocale(locale: string): Promise<void> {
   await patchConfig({ locale: sanitizeLocale(locale) });
 }

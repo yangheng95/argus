@@ -97,6 +97,7 @@ describe("apiUrl directory injection (W2-V31)", () => {
     test("vcs", () => expectInjects("vcs"));
     test("config", () => expectInjects("config"));
     test("config/providers", () => expectInjects("config/providers"));
+    test("session config", () => expectInjects("session/session_123/config"));
     test("config/auth", () => expectInjects("config/auth"));
     test("config/mcp", () => expectInjects("config/mcp"));
     test("config/skill", () => expectInjects("config/skill"));

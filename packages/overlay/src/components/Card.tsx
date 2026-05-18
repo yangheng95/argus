@@ -11,6 +11,7 @@ import {
 import { cardExpanded, setCardExpanded } from "../store/conversation-ui";
 import { boardStore, rootTaskSessionID } from "../store/board";
 import { cancelAgentSession, replyToAgentSession } from "../services/task";
+import { openSessionAgentModels } from "../services/dialog";
 import { apiRequest } from "../services/api";
 import { normalizeAgentRole } from "../utils/message";
 import { AgentSessionReplyBox } from "./AgentSessionReplyBox";
@@ -280,6 +281,7 @@ export function Card(props: { node: CardNode; depth: number }) {
         onTrace={traceSessionID() ? onTraceToggle : undefined}
         agentSessionID={directAgentSessionID() ?? toolCancelSessionID()}
         onAgentCancel={(directAgentSessionID() ?? toolCancelSessionID()) ? onAgentCancel : undefined}
+        onAgentModelSettings={(directAgentSessionID() ?? toolCancelSessionID()) ? openSessionAgentModels : undefined}
       />
       <Show when={expanded()}>
         <div class="card__body">

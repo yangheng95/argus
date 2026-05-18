@@ -121,13 +121,24 @@ export function renderAboutVersion(): void {
  * Open the config dialog, optionally scrolling to a specific section.
  * Pre-loads config info and refreshes the about panel.
  */
-export function openConfigDialog(section?: string): void {
+export function openConfigDialog(
+  section?: string,
+  options: { agentModelsScope?: "project" | "session"; sessionID?: string } = {},
+): void {
+  setDialogStore("config", {
+    agentModelsScope: options.agentModelsScope ?? "project",
+    agentModelsSessionID: options.sessionID ?? null,
+  });
   setDialogStore("config", "open", true);
   void loadSettingsInfo().then(() => renderAboutVersion());
 
   if (section) {
     focusConfigSection(section);
   }
+}
+
+export function openSessionAgentModels(sessionID: string): void {
+  openConfigDialog("agent-models", { agentModelsScope: "session", sessionID });
 }
 
 export function closeConfigDialog(): void {
