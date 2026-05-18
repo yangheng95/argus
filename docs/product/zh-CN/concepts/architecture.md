@@ -143,7 +143,7 @@ while (session 活跃) {
 
 ## 数据流与数据模型
 
-执行过程合并到 `engine_artifact` 单表（13 张表中的一张），用 `kind` 区分语义：`run` · `goal_run_attempt` · `delivery` · `verification-evidence` · `evaluation` · `verdict` · `patch` · `changed_file` · `diff` · `log` · `report` · `image` · `link` · `git_ref` · `pr` · `integrity_attempt` · `prosecutor_attempt` · `delivery_evidence_manifest` · `delivery_surface_manifest` · `delivery_specialist_review` · `delivery_verification_threw` · `delivery_preview` · `orchestrator-stream-error`。
+执行过程合并到 `engine_artifact` 单表（13 张表中的一张），用 `kind` 区分语义：`run` · `goal_run_attempt` · `delivery` · `verification-evidence` · `evaluation` · `verdict` · `patch` · `changed_file` · `diff` · `log` · `report` · `image` · `link` · `git_ref` · `pr` · `integrity_attempt` · `prosecutor_attempt` · `delivery_evidence_manifest` · `delivery_surface_manifest` · `delivery_specialist_review` · `delivery_verification_threw` · `delivery_preview` · `architect_contract_graph` · `orchestrator-stream-error`。
 
 详见 [Goal / Run / Task](./goal-run-task.md)。
 

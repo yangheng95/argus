@@ -133,7 +133,10 @@ wake）。Agent 代码不手工调 trace；命名空间是 `AgentTrace`，不是
 ## Decision Log（重申）
 
 - 全局共享 append-only 表
-- Requirements 种子 → Architect 写契约 → Planner/Executor 读上下文
+- Requirements 种子 → Architect 写契约 → Build/Executor 读上下文
+  > **已废弃历史记录**：早期设计曾引入 Planner/Executor 两个阶段；Planner 已于后续重构删除，
+  > 现为 Orchestrator + 专职 sub-agent 模型（Requirements → Architect → Build/Executor）。
+  > Planner 不再是合法 SessionKind（见本文件 §session 域）。
 - **传 WHY 不只 WHAT**
 
 ## 相关文档

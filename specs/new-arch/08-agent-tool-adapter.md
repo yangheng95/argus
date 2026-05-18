@@ -92,20 +92,24 @@ export async function tools(model, agent?) {
 
 | Agent | 模式 | 声明 | 理由 |
 |---|---|---|---|
-| build | exclude | `["planner", "panel", "tui", "task_report", "analytics"]` | 交互模式需要大部分工具，排除 orchestrator 专用的；`goal_report` 对 build 开放，它就是 goal executor |
-| spec | include | `["read", "glob", "grep", "codesearch", "lsp", "question", "spec_exit", "task", "memory", "webfetch", "websearch"]` | 只读 + 规格相关 |
-| plan | include | `["read", "glob", "grep", "codesearch", "lsp", "question", "plan_exit", "task", "memory", "webfetch", "websearch"]` | 只读 + 计划相关 |
-| explore | include | `["read", "glob", "grep", "bash", "codesearch", "lsp", "webfetch", "memory"]` | 搜索专用 |
-| general | exclude | `["planner", "panel", "tui", "task_report", "analytics", "plan_enter", "plan_exit", "spec_enter", "spec_exit"]` | 通用但不进入 spec/plan 模式；`goal_report` 暂不排除（非 goal executor 也不会主动调用，调用则被 extractGoalReport 按 session 过滤） |
+| coding | exclude | `["panel", "task_report", "analytics", ...MIRROR_TOOL_IDS]` | 通用交互编码角色，**独立命名角色**（非 build 别名）；prompt = `agent/prompt/coding.txt`（`agent.ts:127`） |
+| build | exclude | `["panel", "task_report", "analytics", ...MIRROR_TOOL_IDS]` | goal executor，与 `coding` 同一 exclude 集合；orchestrator `build` tool 另注入 session 级 deny（见下节）（`agent.ts:142`） |
+| general | exclude | `["planner", "panel", "task_report", "analytics", "todoread", "todowrite", ...MIRROR_TOOL_IDS]` | 通用 sub-agent（`agent.ts:158`） |
+| explore | include | `["read", "glob", "search_code", "bash", "external_code_search", "lsp", "webfetch", "memory"]` | 只读搜索专用（`agent.ts:174`） |
 | compaction | include | `[]` | 无工具 |
 | title | include | `[]` | 无工具 |
 | summary | include | `[]` | 无工具 |
-| evaluator | include | `["read", "glob", "grep", "bash", "codesearch", "question"]` | 只读 + 验证命令 |
-| delivery | exclude | `["task", "plan_enter", "plan_exit", "spec_enter", "spec_exit", "planner", "panel", "tui", "task_report", "goal_report", "analytics"]` | 完整编码能力，无 orchestration；排除 `goal_report` — delivery 是 adversarial evaluator，不产出 goal report |
-| requirements | — | 不走 ToolRegistry（orchestrator/tools.ts 自建） | |
-| architect | — | 不走 ToolRegistry（orchestrator/tools.ts 自建） | |
-| planner | — | 不走 ToolRegistry（orchestrator/tools.ts 自建） | |
-| task | — | 不走 ToolRegistry（orchestrator/tools.ts 自建） | |
+| control | include | `["panel"]` | 仅 panel capability（`agent.ts:227`） |
+| delivery | include | `[]` | adversarial evaluator；工具集经 orchestrator `deliver` tool 的 session 注入（`agent.ts:242`） |
+| orchestrator | include | dispatch/observation/interaction/bookkeeping 共一组（含 `cancel_subagent`，见 `agent.ts:299-332`） | **走** ToolRegistry（`agent.ts:267+`） |
+| requirements | include | `["read_file", "find_files", "search_code", "list_directory", "memory_search", "memory_get", "todoread", "todowrite"]` | **走** ToolRegistry（`agent.ts:340+`，`mode:"primary"` + `hidden` native） |
+| architect | include | `["read_file", "find_files", "search_code", "list_directory", "memory_search", "memory_get", "todoread", "todowrite"]` | **走** ToolRegistry（`agent.ts:355+`） |
+| design-analyst | include | `["read_file", "find_files", "search_code", "list_directory", "memory_search", "memory_get", "url_screenshot", ...MIRROR_ANALYSIS_TOOL_IDS]` | **走** ToolRegistry（`agent.ts:366+`） |
+| intent-analysis | include | `["read_file", "find_files", "search_code", "list_directory", "memory_search", "memory_get", "todoread", "todowrite"]` | **走** ToolRegistry（`agent.ts:393+`） |
+| integrity | include | `[]` | **走** ToolRegistry（`agent.ts:403+`）；工具集经 session 注入 |
+| prosecutor | include | `[]` | **走** ToolRegistry（`agent.ts:414+`）；工具集经 session 注入 |
+
+> 已删除的 agent 行（`spec` / `plan` / `planner` / `task` / `evaluator`）已从上表移除——这些 native agent 已在历次重构中删除，`agent.ts` 不再注册。`requirements` / `architect` / `design-analyst` / `intent-analysis` / `integrity` / `prosecutor` **均走 ToolRegistry**（与本文件头部「校准注」一致，旧版「不走 ToolRegistry」表述已纠正）。
 
 ### Build 快速通道（orchestrator build tool）
 
@@ -178,12 +182,12 @@ tools: z.union([
 | `config/config.ts` | `Config.Agent` 加 `tools` 字段 |
 | `tool/registry.ts` | `tools()` 加 agent adapter 过滤 |
 | `session/loop.ts` | `resolveTools` 用 session.permission deny 代替 `lastUser.tools` allowlist |
-| `session/tool-resolver.ts` | 同上（如果此文件的 resolveTools 有调用方） |
+| ~~`session/tool-resolver.ts`~~ | 已并入 `session/loop.ts` 的 `resolveTools()`，独立文件不存在 |
 | `orchestrator/tools.ts` | build tool 创建 session 时注入 deny 规则 |
 
 ## 不动的
 
-- `orchestrator/tools.ts` 的 orchestrator 工具（requirements / architect / planner 等）—— 它们不走 ToolRegistry，已经是独立构建的
+- `orchestrator/tools.ts` 的 orchestrator **自建工具**（`build` / `deliver` / `prosecute` / `publish_delivery` 等 dispatch/observation tool）—— 这些不走 ToolRegistry，由 orchestrator tool 工厂独立构建。注意：`requirements` / `architect` / `design-analyst` / `intent-analysis` / `integrity` / `prosecutor` 是 **native agent，走 ToolRegistry**（见上表），不属于此类；`planner` agent 已删除
 - `PermissionNext` 基础设施 —— 复用现有 deny/allow/ask 语义
 - agent prompt 内容 —— 工具不可见后，prompt 中 "use the Task tool" 之类的指示自然失效，无需改 prompt
 

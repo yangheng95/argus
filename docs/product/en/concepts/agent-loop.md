@@ -1,68 +1,80 @@
-# Agentic loop
+# Agentic Loop
 
-The executor internals follow the **standard agentic loop**: LLM emits tool-call → tool executes → result fed back → next turn. This page covers the three states, tool routing, and the key invariants.
+The executor internals follow the **standard agentic loop**: LLM emits tool-call → tool executes → result fed back → next turn. This page covers the three states, the key invariants, and how this inner loop connects to the Orchestrator's outer task loop.
 
 ## Three states
 
-`SessionLoop` (`packages/opencorvus/src/session/loop.ts:50`) is always in one of:
+`SessionLoop` (`packages/opencorvus/src/session/loop.ts:64`, namespace) is always in one of:
 
 | State | Meaning | Exit |
 |---|---|---|
 | **standby** | assistant emitted `finish`; waiting for the next user message | new user message arrives |
 | **tool-call** | LLM requested tools; they're executing | all tools resolved |
-| **subtask** | current turn spawned a sub-agent (recursive call) | sub-task completes |
+| **subtask** | current turn spawned a subtask (recursive SessionLoop) | subtask completes |
 
-`collectLoopState` scans the last user/assistant pair; if the assistant's `finishReason !== "tool-calls"` and no new user message is queued → standby.
+Standby detection: scan the last user/assistant pair; if the assistant's `finishReason !== "tool-calls"` and no new user message is queued → standby.
 
 ## Tool routing
 
-Each tool-call returned by the LLM is routed by `SessionToolResolver` (`src/session/tool-resolver.ts`):
+Each tool-call returned by the LLM is routed by `resolveTools()` inside `session/loop.ts` (`session/loop.ts:1779`). The historical `SessionToolResolver` class / `session/tool-resolver.ts` file no longer exist; tool resolution logic has been merged into the SessionLoop itself.
 
-1. **Filter** — `resolveTools()` applies the `input.tools` allow-list so DashScope isn't bombarded with 30+ tools.
+1. **Filter** — applies the `input.tools` allow-list to avoid sending 30+ tools to DashScope.
 2. **Permission check** — `PermissionNext.ask()` (see [Permissions](../opencorvus/permissions.md)).
-3. **Execute** — dispatch to the tool handler.
+3. **Execute** — dispatch to the corresponding tool handler.
 4. **Write back** — the result becomes a `tool-result` part on the session message stream.
 
 ## Sub-tasks
 
-`TaskTool` spawns sub-tasks that recurse into a new SessionLoop via `runSubtask` (`src/session/loop.ts:88`). This supports arbitrary nesting: main agent → research sub-agent → …
+Sub-tasks are spawned by `TaskTool` (`tool/task.ts`) and recurse into a new SessionLoop inside the current one. This supports arbitrary nesting: main agent → research sub-agent → … → tool execution.
 
-## Outer loop wiring
+Each sub-agent (requirements / architect / build / integrity / …) also runs as a new SessionLoop started by `agent/runner.ts:runAgentSession`; their SessionKind is fixed at creation time (see [SessionKind list](../../../specs/new-arch/02-data.md#session-domain-5-tables)).
 
-`runTaskLoop` (`src/orchestrator/task-loop.ts:59`) injects prompts through the OpenCorvus executor (`OpencorvusExecutor.submit`, `src/executor/opencode.ts:48`):
+## How the outer task loop triggers the SessionLoop
+
+The outer `runTaskLoop` (`orchestrator/loop.ts:117`) has the Orchestrator LLM call the `build` tool; the build tool's execution body is `goal/runner.ts`, which starts a build session inside an isolated git worktree using the executor selected by `executor/registry.ts` (OpenCorvus / Codex / Claude Code):
 
 ```
-Orchestrator.runTaskLoop
-  └─ TaskAgent.processTask      (LLM decision)
-      └─ OpenCorvus executor (inject prompt)
-          └─ TaskQueueService.runNow
-              └─ SessionLoop     (inner agentic loop)
+Orchestrator.runTaskLoop                                  orchestrator/loop.ts:117
+  └─ Orchestrator LLM calls build tool                   orchestrator/tools.ts
+      └─ goal/runner.ts (worktree + executor)             goal/runner.ts
+          └─ executor (claude-code / codex / opencorvus)  executor/*.ts
+              └─ build SessionLoop                        session/loop.ts
 ```
+
+> **OpenCorvus is just the brand name for the `opencode` executor** (commit `b85ff20d4`); the code entity is still `OpencorvusExecutor` (`executor/opencorvus.ts`). Both `opencode` and `opencorvus` are valid executor IDs for the `--executor=` flag or `executor.discover` config.
 
 ## Key invariants
 
 ### 1. Must use `streamText`, never `generateText`
 
-The LLM call in `session/loop.ts` uses Vercel AI SDK's `streamText`. **Do not** swap to `generateText` — reasoning models (DashScope `qwq`, Claude reasoning, o1) will time out while emitting reasoning tokens.
+`session/llm.ts::LLM.stream` uses Vercel AI SDK's `streamText`. **Do not** swap to `generateText` — reasoning models (DashScope's `qwq` / Claude reasoning / GLM reasoning, etc.) will time out while emitting reasoning tokens.
 
 ### 2. `toolChoice: "auto"`
 
-Reasoning models must use `toolChoice: "auto"`, not `"required"`. With `required`, reasoning tokens eat tool-call slots, corrupting output.
+Reasoning models must use `toolChoice: "auto"`, not `"required"`. With `"required"`, reasoning tokens eat tool-call slots, corrupting output format.
 
-### 3. Stall-based timeouts, not wall-clock timeouts
+### 3. Inactivity timeouts, not wall-clock timeouts
 
-Tool-call timeouts are **inactivity timeouts** — long-running build/test calls are fine as long as stdout/stderr keeps flowing. `OPENCORVUS_TOOL_TIMEOUT_MS` controls this. Wall-clock timeouts are wrong.
+Tool-call timeouts must be "true timeouts after no output", not mechanical countdowns from launch time. Long-running build / test tool calls are legitimate as long as stdout/stderr keeps flowing. `OPENCORVUS_TOOL_TIMEOUT_MS` controls the **inactivity timeout**. The engine also maintains a separate stream-activity watchdog for LLM streams (180s idle abort).
 
 ### 4. Tool-call outputs are JSON strings
 
-Tool `output` fields are **JSON strings**, not objects. Consumers must `JSON.parse`. Parse failure → let it crash. No silent fallback.
+All tool `output` fields are **JSON strings** (not objects). Consumers must `JSON.parse`; parse failure → let it crash, no silent fallback.
+
+### 5. Build agent shares the sub-agent protocol
+
+build / intent-analysis / requirements / architect / design-analyst / integrity / prosecutor / delivery all share the structured output contract in `agent/sub-agent-protocol.ts` (Zod tool calls); results are written to `engine_artifact`.
 
 ## Doom-loop detection
 
-`tool/gui-state.ts` records tool-call sequences and detects repetition (e.g. 5 identical clicks at the same coordinate). When triggered, the Run is marked `stuck`; Evaluator returns `inconclusive`, which replans instead of retries — avoiding dead-loop budget burn.
+`session/processor.ts` records tool-call sequences and detects repetition (e.g., the same tool called with identical input 3 times consecutively — `DOOM_LOOP_THRESHOLD = 3`). When triggered, a `doom_loop` permission check fires via `PermissionNext.ask()`; if not approved, the current attempt halts, preventing the agent from burning budget in a dead loop.
+
+## Trace and bus
+
+Every LLM call, tool call / result, and agent boundary is written to `AgentTrace` (`src/trace/`, JSONL appended to `<dir>/.opencorvus/trace/<sessionID>.jsonl` and `_task-<taskID>.jsonl`) and simultaneously broadcast to the overlay SSE via `Bus.publish`. Agent code does not manually call trace; instrumentation is automatic in `session/llm.ts::LLM.stream` + `agent/agent.ts::Agent.generate` + `agent/runner.ts::runAgentSession` + `orchestrator/agent.ts::Orchestrator.processTask`.
 
 ## What's next
 
-- [Architecture](./architecture.md)
-- [Evaluator](../opencorvus/evaluator.md)
+- [Architecture overview](./architecture.md)
+- [Delivery checks and verdict](../opencorvus/evaluator.md)
 - [Permissions](../opencorvus/permissions.md)

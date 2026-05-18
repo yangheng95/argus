@@ -1,7 +1,11 @@
 # new-arch — 架构文档（拆分版）
 
 > 替代原 1336 行单 SVG。现在按「4 主题 MD + 3 瘦身 SVG」维护。
-> 旧 SVG 已归档为 `_archive-old-arch.svg`，阶段 1 工作笔记为 `00-sync-notes.md`。
+> 旧 SVG 已归档为 `_archive-old-arch.svg`。
+>
+> **Last sync 2026-05-18**：本轮 `codex/agent-boundary-role-contract` 分支引入了
+> `packages/opencorvus/src/agent/role-contract.ts`（`AgentRoleContract` 接口 +
+> `AgentRoleID` 联合类型），并新增 `cancel_subagent` orchestrator tool（工具总数升至 22 个）。
 
 ## 目录
 
@@ -41,7 +45,6 @@
 
 | 文件 | 说明 |
 | --- | --- |
-| [00-sync-notes.md](00-sync-notes.md) | 阶段 1 概念对齐笔记（三张 mental model 初稿） |
 | [_archive-old-arch.svg](_archive-old-arch.svg) | 原 `specs/new-arch.svg`（1336 行）归档 |
 
 ## 三张总览框图（SVG 瘦身目标）
@@ -80,7 +83,7 @@
 - [x] 04-extensions.md 填充
 - [x] 新 SVG 三张总览图（01/02/03-*.svg）
 - [x] 旧 new-arch.svg 归档为 `_archive-old-arch.svg`
-- [x] 工作笔记归入 `00-sync-notes.md`
+- [x] 工作笔记已归档（原 `00-sync-notes.md` 已移除）
 - [x] 05-config.md · 06-provider.md · 07-panel.md · 99-principles.md 全部填充
 - [x] `src/calculator/` 已删除（零消费者，git rm）
 - [x] 2026-04-17 同步：`orchestrator/` → `engine/` · `task-agent/` → `orchestrator/` ·

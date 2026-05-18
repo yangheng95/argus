@@ -4,7 +4,7 @@
 
 Implemented with review follow-up. This document extends:
 
-- `specs/new-arch/2026-04-28-structured-output-systemic-fix.md`
+- the earlier structured-output-systemic-fix plan (since removed; its core insights were folded into the two docs below)
 - `specs/new-arch/2026-04-30-terminal-contract-hard-pin.md`
 - `specs/new-arch/2026-04-30-result-schema-hardening.md`
 

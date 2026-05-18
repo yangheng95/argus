@@ -63,6 +63,14 @@ Modeled on the real `packages/opencorvus/.opencorvus/opencorvus.jsonc`:
 
 Default LLM. Format `<providerId>/<modelId>`; provider must be registered in `provider` or built-in.
 
+### `small_model`
+
+Lightweight model used for summary / title generation and similar low-stakes tasks. Falls back to `model` when unset.
+
+### `locale`
+
+`"en-US" | "zh-CN"` — operator-selected system language; influences LLM reply language and SDK pass-through. Distinct from the Overlay UI locale preference (localStorage, front-end text only).
+
 ### `skills.paths` / `skills.urls`
 
 Local skill market paths and remote skill URLs. Loaded at startup.
@@ -72,6 +80,14 @@ Local skill market paths and remote skill URLs. Loaded at startup.
 Per-skill / per-tool `allow / ask / deny`. **Rule order matters, last declaration wins** (last-match-wins).
 
 See [Permissions](./permissions.md).
+
+### `enabled_providers` / `disabled_providers`
+
+Explicit allow-list / deny-list for providers. `enabled_providers` (when non-empty) restricts the active set to only the named providers; `disabled_providers` is a deny-list. Both take priority over the "no API key → skip" heuristic. See [Providers](./providers.md).
+
+### `tool_permissions`
+
+Task-level tool permission defaults (snapshot at task creation time). Distinct from `permission.tool`, which is a project-persistent declarative rule.
 
 ### `experimental.auto_question`
 
@@ -111,4 +127,4 @@ Env snapshot: `Env.state()` snapshots `process.env` on instance creation. `.env`
 
 ## Hot reload
 
-Not supported today. Restart `opencorvus serve` after config changes.
+`PATCH /config` accepts a JSON Merge Patch (RFC 7396). After writing, the server publishes a `config.changed` event via SSE (`Bus.publish("config.changed")`); all connected Overlay instances automatically refresh their config store. Overlay sends only a partial diff — it does **not** do a full GET → clone → mutate → PATCH round-trip.

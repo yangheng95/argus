@@ -1,6 +1,8 @@
 # Architecture
 
-OpenCorvus's job: **turn a natural-language request into verified code changes, reliably**. Reliability requires a pipeline of specialized agents that check each other, where every failure has a recovery path and every state is traceable.
+OpenCorvus's job: **turn a natural-language request into verified code changes, reliably**. A single LLM cannot do this reliably alone, so the system consists of a **single decision-maker** (Orchestrator) and a set of **specialist sub-agents**; each agent has its own LLM + tools and reasons independently, invoked by the Orchestrator as needed.
+
+> Important change (2026-05): The old `Task Agent / Planner / GoalPool / Evaluator agent` have been removed entirely. The pipeline is no longer a hardcoded six-layer waterfall; execution-process data is merged into a single `engine_artifact` table (differentiated by `kind`). See [Goal / Run / Task](./goal-run-task.md).
 
 ## HTTP API runtime layering
 
@@ -9,98 +11,143 @@ The HTTP server (`packages/opencorvus/src/server/server.ts`) splits routes into 
 - **Control plane** — `/global/*`, `/auth/*`, `/ui/*`, plus `/log`, `/shutdown`, `/restart` are mounted before the `Instance.provide` middleware. They work even when no project directory is open. Use these for health checks, server lifecycle, and authentication.
 - **Instance-scoped** — every other route (`/session`, `/task`, `/run`, `/mcp`, `/tui`, `/experimental`, `/panel`, …) runs inside `Instance.provide({ directory, init: InstanceBootstrap })`. They require a project directory (resolved from `?directory=` query or `x-opencorvus-directory` header).
 
-Route handlers themselves do not read `process.env`, do not call `Database.use(...)`, do not open SQL tables, and do not use `z.any()`. The boundary is enforced by `bun run api:routes-check` and the bilingual API reference is regenerated from OpenAPI by `bun run docs:api` / `docs:check`.
+Route handlers themselves do not read `process.env`, do not call `Database.use(...)`, do not open SQL tables directly, and do not use `z.any()`. The boundary is enforced by `bun run api:routes-check`; the bilingual API reference is regenerated from OpenAPI by `bun run docs:api` / `docs:check`.
 
-## Six-layer pipeline
+## Inbound: two entry points
 
 ```
-User request
-  ↓
-┌──────────────┐
-│ Channel      │  Local TUI / HTTP / Slack / Telegram / …
-└──────┬───────┘
-       ↓  CreateTask
-┌──────────────┐
-│ Orchestrator │  Task/Run/Goal lifecycle, retry/replan, budget
-└──────┬───────┘  packages/opencorvus/src/orchestrator/task-loop.ts:59
-       ↓
-┌──────────────┐
-│ Task Agent   │  Main decision LLM; invokes spec/goal/plan sub-agents
-└──────┬───────┘  packages/opencorvus/src/task-agent/agent.ts:60
-       ↓
-┌──────────────┐
-│ GoalPool     │  Per-goal worktree, concurrent execution
-└──────┬───────┘  packages/opencorvus/src/orchestrator/goal-pool.ts
-       ↓
-┌──────────────┐
-│ Executor     │  OpenCorvus / Codex / Claude Code
-└──────┬───────┘  packages/opencorvus/src/executor/opencode.ts
-       ↓  delivery
-┌──────────────┐
-│ Evaluator    │  build/test/lint/… + LLM-judge fallback
-└──────┬───────┘  packages/opencorvus/src/evaluator/per-goal.ts
-       ↓
- accepted / rejected
-       ↓
- done  |  retry  |  replan
+External channel → ChannelIngress.message       channel/ingress.ts
+(Slack /          Inbound routing · binds task_id; deterministically backfills
+ HTTP)            when a binding exists and the task has a pending interaction,
+                  otherwise enters ControlMessage
+
+Local user     → ControlMessage.handle           control/message.ts
+ (overlay /      Short-lived "control" session (not an engine_task);
+  TUI)           outputs JSON actions via PanelCapabilityRegistry allowlist
+                 (create_task / send_task_message / reply_interaction /
+                  cancel_task / retry_task / …)
 ```
 
-## Layer responsibilities
+Both entry points converge into `EngineService.createTask` (`task-api/index.ts`) or the existing `Session` / `Question` API.
 
-| Layer | Role | Entry point |
+## Task control loop (kind = `workflow`)
+
+```
+orchestrator/loop.ts — runTaskLoop()  (line 117)
+┌──────────────────────────────────────────────┐
+│  Decision Point (Orchestrator LLM)            │
+│    Reads full engine_* state + decision-log   │
+│    Decides: which sub-agent? retry? add goal? │
+│             deliver? terminate?               │
+└────────────┬─────────────────────────────────┘
+             │ via 21 tools in orchestrator/tools.ts
+             ▼
+    ┌─────────────────────────────────────┐
+    │ sub-agent (invoked on demand)        │
+    │  requirements / architect /         │
+    │  design_analysis / build /          │
+    │  integrity / prosecute /            │
+    │  analyze_intent / deliver / …       │
+    └────────────┬────────────────────────┘
+                 │ build tool → goal/runner.ts
+                 ▼
+    ┌─────────────────────────────────────┐
+    │ Executor (external process,          │
+    │  worktree-isolated)                 │
+    │  claude-code / codex / opencorvus   │
+    └────────────┬────────────────────────┘
+                 │ delivery diff
+                 ▼
+    ┌─────────────────────────────────────┐
+    │ delivery/checks/  deterministic +   │
+    │  LLM judge                          │
+    └────────────┬────────────────────────┘
+                 ▼
+          back to Decision Point
+```
+
+`kind = "build"` tasks skip decomposition / planning / evaluation and go directly to the build tool (`engine_task` rows are still created, so cancel / list / audit all work uniformly).
+
+### No longer present
+
+- ~~`Task Agent` / `Planner` agent / `GoalPool` / `evaluator` agent~~ (removed in Phase 5–6)
+- ~~`recoverOrphanedTasks` fire-and-forget~~ (the loop itself is the lifecycle; orphaned tasks are restarted uniformly by the `EngineService.init` serial queue)
+- ~~dispatch gate / infinite wake-up~~
+- ~~hardcoded 6-layer pipeline~~ — replaced by the two declarative MiniWorkflows in `engine/workflow.ts` (see below); the Orchestrator may deviate from the recommended path
+
+## MiniWorkflow — two declarative templates
+
+| ID | Suited for | Recommended steps |
 |---|---|---|
-| **Channel** | Protocol adapter (Slack/HTTP/TUI/…), converts inbound messages to `CreateTask` | `src/channel/ingress.ts:39` |
-| **Orchestrator** | Task/Run/Goal lifecycle, retry, replan, budget | `src/orchestrator/task-loop.ts:59` |
-| **Task Agent** | Main LLM decision-maker; coordinates spec/goal/plan sub-agents | `src/task-agent/agent.ts:60` |
-| **Planner** | Produces PlanSteps per Goal | `src/planner/per-goal.ts:45` |
-| **GoalPool** | Topological scheduling of goals by `depends_on` | `src/orchestrator/goal-pool.ts` |
-| **Executor** | Injects prompt into coding agent, runs agentic loop | `src/executor/opencode.ts:36` |
-| **Evaluator** | Runs deterministic checks + LLM judge for verdict | `src/evaluator/per-goal.ts` |
+| `direct` | Single-file / bugfix / config / short debug | `build` → `deliver` |
+| `pipeline` | Multi-file features / UI replication / cross-module refactors | `design_analysis?` → `requirements` → `architect` → per-goal `build` → `deliver` |
+
+Defined in `engine/workflow.ts`; users can customize via `opencorvus.jsonc`. The Orchestrator retrieves a template via `WorkflowRegistry.resolve(id)` but may still deviate based on its own reasoning.
+
+## Sub-agent overview
+
+| Agent | Code | Responsibility |
+|---|---|---|
+| **Orchestrator** | `orchestrator/agent.ts` + `orchestrator/loop.ts` | Sole decision-maker; advances the task through 21 tools |
+| **Intent Analysis** | `intent-analysis/agent.ts` | Interprets short / ambiguous requests; outputs intent class / complexity / clarifications |
+| **Requirements** | `requirements/agent.ts` | Writes REQ-N + foundational decisions via Zod tool output; does not produce goals |
+| **Architect** | `architect/agent.ts` | Analyzes boundaries first, then produces at least 2 small, independently executable/verifiable goals; single all-in-one goals are disallowed; also owns interface contracts, traceability, and fidelity |
+| **Design Analyst** | `design-analyst/agent.ts` | Visual references (Figma / images / URL) → layout / style / component inventory |
+| **Build** | `build/agent.ts` + `build/index.ts` + `build/report.ts` + `build/types.ts` + `goal/runner.ts` + `agent/sub-agent-protocol.ts` | Actually writes code in the worktree; invoked by the Orchestrator via the `build` tool |
+| **Integrity Reviewer** | `integrity/agent.ts` | Multi-dimension integrity review (requirement_fidelity / technical_feasibility / hallucination / solution_quality) |
+| **Prosecutor** | `prosecutor/agent.ts` | Adversarial review of delivery candidates |
+| **Delivery** | `delivery/agent.ts` + `delivery/checks/` + `delivery/specialists/` | Diff acceptance + remediation triggers + deterministic / LLM judge checks; can trigger a `run_integrity_review` semantic integrity review based on delivery evidence |
+
+Task lifecycle agent-side authority belongs exclusively to the **Orchestrator**: starting / stopping / retrying / cancelling / failing the current task, and publishing new follow-up tasks, must all go through Orchestrator explicit lifecycle tools (e.g. `propose_task`). Delivery can only output a verdict, evidence, and recommendations — it cannot directly create, cancel, retry, or terminate engine tasks.
+
+> **Planner agent removed.** The session-level `src/tool/planner.ts` is a working-memory tool (`add_task / update_task / scratchpad_*`) that any agent can mount to manage its own subtask tree; it is **not** a replacement for the old per-goal planner.
+>
+> **Evaluator agent removed.** Verification responsibilities are merged into `delivery/checks/` (`discovery.ts` resolves the check family → `project-gate.ts` / `runtime-readiness.ts` / `visual.ts`).
 
 ## Two nested loops
 
 ### Outer: task control loop
 
-`runTaskLoop` (`src/orchestrator/task-loop.ts:59`):
+`runTaskLoop` (`orchestrator/loop.ts:117`):
 
 ```
-while (!aborted && budget > 0) {
-  1. TaskAgent.processTask()       ← LLM decides next step
-  2. GoalPool.drain()              ← concurrently executes all goals
-  3. loop back so TaskAgent sees results
+while (!aborted) {
+  Orchestrator.processTask()      ← LLM decides: which sub-agent to call
+  await sub-agent / build tool completion
+  back to decision point (no mechanical phase progression)
 }
 ```
+
+No event allowlist: the early `trigger.kind ∈ {created, batch_complete, delivery_rejected, retry}` filter was removed in Phase 2; the LLM reads `engine_*` + decision-log directly to determine its next action.
 
 ### Inner: session agentic loop
 
-`SessionLoop` (`src/session/loop.ts:50`):
+`SessionLoop` (`session/loop.ts:64`, namespace):
 
 ```
-while (session alive) {
-  LLM emits tool-call → tool executes → result fed back into messages → next turn
+while (session active) {
+  LLM emits tool-call → tool executes → result written back as part → next turn
 }
 ```
 
-Bridge: the OpenCorvus executor (`OpencorvusExecutor.submit`, `src/executor/opencode.ts:48`) injects the orchestrator's prompt into `TaskQueueService`, which fires the session loop.
+The bridge between the two loops is the build tool → `goal/runner.ts`: it launches an executor session (OpenCorvus / Codex / Claude Code) inside a worktree, injects the prompt, and drives the inner SessionLoop.
 
 See [Agentic Loop](./agent-loop.md).
 
-## Why six layers, not one
+## Why not a monolithic agent
 
-Common question: "Why not let one big LLM prompt do everything?"
-
-1. **Each stage has a different I/O contract** — spec produces a structured specification, plan produces ordered steps, eval produces verdict + evidence. Mixing them makes the LLM skip checks.
-2. **Failures need targeted rollback** — spec wrong → re-spec; plan wrong → re-plan; execution wrong → retry. Monolithic agents can't do this layering.
-3. **Parallelism control** — streaming activity timeouts remain layer-specific; `assistant.max_executor_groups` controls per-task goal/build parallelism and defaults to 3.
-4. **Human-machine interaction granularity** — permission approvals and follow-up messages live in the task loop, not polluting a single LLM context.
+1. **Each stage has a different I/O contract** — requirements produces Goals + a traceability matrix; architect produces a contract IR; delivery checks produce a verdict + evidence. Mixing them causes checks to be skipped.
+2. **Failures need precise attribution** — requirements wrong → redo requirements; architect wrong → redo architect; build wrong → retry build; delivery wrong → remediate. This graduated handling is impossible in a monolithic agent.
+3. **Parallelism and isolation** — each build runs in an independent git worktree (see [Worktree lifecycle](../../../specs/new-arch/10-worktree-lifecycle.md)), with no cross-contamination; per-task goal parallelism is bounded by `assistant.max_executor_groups` (default 3).
+4. **Human-machine interaction granularity** — permission approvals, follow-up messages, and the `question` tool all live in the task loop, not polluting a single LLM context.
 
 ## Worktree parallelism
 
-Each Goal gets its own Git worktree (`src/orchestrator/goal-pool.ts`); they don't interfere. Delivery agent handles the final merge.
-
-This means: one Task may have multiple Goals running in different worktrees concurrently; retrying a failed Goal doesn't affect others.
+Each build attempt gets its own worktree (path written to `engine_artifact[kind="goal_run_attempt"].payload`, read via `engine/store.ts:findGoalLatestWorkspace`). A failed attempt can be retried without affecting other goals; the final merge is handled by the `delivery` agent.
 
 ## Data flow and model
+
+Execution process data is merged into the single `engine_artifact` table (one of 13 tables), with `kind` distinguishing semantics: `run` · `goal_run_attempt` · `delivery` · `verification-evidence` · `evaluation` · `verdict` · `patch` · `changed_file` · `diff` · `log` · `report` · `image` · `link` · `git_ref` · `pr` · `integrity_attempt` · `prosecutor_attempt` · `delivery_evidence_manifest` · `delivery_surface_manifest` · `delivery_specialist_review` · `delivery_verification_threw` · `delivery_preview` · `architect_contract_graph` · `orchestrator-stream-error`.
 
 See [Goal / Run / Task](./goal-run-task.md).
 
@@ -109,4 +156,4 @@ See [Goal / Run / Task](./goal-run-task.md).
 - [Goal / Run / Task data model](./goal-run-task.md)
 - [Agentic loop](./agent-loop.md)
 - [OpenCorvus configuration](../opencorvus/configuration.md)
-- [Evaluator](../opencorvus/evaluator.md)
+- [Delivery checks and verdict](../opencorvus/evaluator.md)

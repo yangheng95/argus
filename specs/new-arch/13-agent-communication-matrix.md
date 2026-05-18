@@ -246,7 +246,7 @@ flowchart LR
 
 - `src/channel/ingress.ts`：外部入站是否直接回填 interaction，还是委托 control 层
 - `src/control/message.ts`：panel/control 入口，任务真正创建前的 LLM 路由
-- `src/orchestrator/tools.ts`：21 个 orchestrator tools（含 `requirements / design_analysis / architect / build / deliver / analyze_intent / integrity / prosecute / propose_task / steer_subagent / refine` 等）
+- `src/orchestrator/tools.ts`：22 个 orchestrator tools（含 `requirements / design_analysis / architect / build / deliver / analyze_intent / integrity / prosecute / propose_task / steer_subagent / cancel_subagent / refine` 等）
 - `src/orchestrator/loop.ts`：`runTaskLoop` 决策入口
 - `src/goal/runner.ts`：build tool 落到 worktree + executor 的执行体
 - `src/build/agent.ts`：build agent 入口（`build/` 独立包共 4 个文件：`agent.ts` / `index.ts` / `report.ts` / `types.ts`）
