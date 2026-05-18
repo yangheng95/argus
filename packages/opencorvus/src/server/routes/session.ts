@@ -4,6 +4,7 @@ import z from "zod"
 import { Session } from "../../session"
 import { SessionStatus } from "@/session"
 import { SessionPrompt } from "../../session/prompt"
+import { SessionContext } from "@/session/context"
 import { clearRewindCursorForSession } from "@/engine/rewind"
 import { SessionCompaction } from "../../session/compaction"
 import { CompactionHandoff } from "@/session/compaction-handoff"
@@ -460,6 +461,7 @@ export const SessionRoutes = lazy(() =>
       async (c) => {
         const sessionID = c.req.valid("param").sessionID
         const body = c.req.valid("json")
+        const session = await Session.get(sessionID)
         await clearRewindCursorForSession(sessionID)
         const msgs = await Session.messages({ sessionID })
         let source: Message.User | undefined
@@ -484,7 +486,7 @@ export const SessionRoutes = lazy(() =>
           auto: body.auto,
           focus: body.focus,
         })
-        const result = await SessionPrompt.loop({ sessionID })
+        const result = await SessionContext.provide(session, () => SessionPrompt.loop({ sessionID }))
         return c.json(result.info.role === "assistant" && CompactionHandoff.isValidSummaryMessage(result.info))
       },
     )

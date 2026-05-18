@@ -13,6 +13,7 @@ import ARCHITECT_CORE from "@/prompt/core/architect-core.txt"
 import BUILD_CORE from "@/prompt/core/build-core.txt"
 import REQUIREMENTS_CORE from "@/prompt/core/requirements-core.txt"
 import DESIGN_ANALYST_CORE from "@/prompt/core/design-analyst-core.txt"
+import DELIVERY_CORE from "@/prompt/core/delivery-core.txt"
 import INTEGRITY_CORE from "@/prompt/core/integrity-core.txt"
 import INTENT_ANALYSIS_CORE from "@/prompt/core/intent-analysis-core.txt"
 import PROSECUTOR_CORE from "@/prompt/core/prosecutor-core.txt"
@@ -24,7 +25,6 @@ import PROMPT_TITLE from "./prompt/title.txt"
 import { AgentRoleContract, type AgentRoleID } from "./role-contract"
 import { PermissionNext } from "@/permission/next"
 import { mergeDeep, pipe, sortBy, values } from "remeda"
-import { Plugin } from "@/plugin"
 import { entries, values as objectValues } from "@/util/object"
 import { MIRROR_ANALYSIS_TOOL_IDS, MIRROR_TOOL_IDS } from "@/mirror/tools/ids"
 
@@ -82,10 +82,6 @@ export namespace Agent {
 
   const state = lazyInstanceState(async () => {
     const cfg = await Config.get()
-    // Lazy-load the delivery agent system prompt to avoid pulling the large
-    // delivery module at startup.
-    const { DELIVERY_AGENT_SYSTEM } = await import("@/delivery/agent")
-
     // Debug-default permission policy: tools are accepted unless an operator
     // supplies an explicit `deny` or `ask` rule in config. Tool availability is
     // still controlled separately by each agent's include/exclude list.
@@ -257,7 +253,7 @@ export namespace Agent {
         // shape, but registry tool exposure above is the delivery authority.
         permission: nonDesignPermissions(),
         options: {},
-        prompt: DELIVERY_AGENT_SYSTEM,
+        prompt: DELIVERY_CORE,
         mode: "primary",
         native: true,
         hidden: true,
@@ -550,6 +546,7 @@ export namespace Agent {
     const language = await Provider.getLanguage(model)
 
     const system = [cfg.prompt?.["agent_generate"] ?? PROMPT_GENERATE]
+    const { Plugin } = await import("@/plugin")
     await Plugin.trigger("experimental.chat.system.transform", { model }, { system })
     const existing = await list()
 
