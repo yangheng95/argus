@@ -17,6 +17,13 @@ export namespace Context {
         }
         return result
       },
+      // Non-throwing accessor: returns undefined when no context is active.
+      // Required for ambient consumers that legitimately run both inside and
+      // outside a context (e.g. Config resolution runs in session execution
+      // AND on the CLI / control plane where no session exists).
+      tryUse(): T | undefined {
+        return storage.getStore()
+      },
       provide<R>(value: T, fn: () => R) {
         return storage.run(value, fn)
       },

@@ -767,6 +767,33 @@ export namespace Config {
     })
   export type Agent = z.infer<typeof Agent>
 
+  // Session overlay: the EXACT subset of config a session may override
+  // (decision §6-1, widest set). `.strict()` is the pinned-invariant guard
+  // (design principle 5): any key NOT listed here — permission, tools, mcp,
+  // provider creds, paths — is rejected at the schema boundary, so a session
+  // can never weaken project security/cost boundaries.
+  const OverlayAgent = z
+    .object({
+      // ModelId reused from the single source so model format stays in sync.
+      model: ModelId.optional(),
+      variant: z.string().optional(),
+      temperature: z.number().optional(),
+      top_p: z.number().optional(),
+      prompt: z.string().optional(),
+      prompt_append: z.string().optional(),
+    })
+    .strict()
+
+  export const Overlay = z
+    .object({
+      model: ModelId.optional(),
+      // System-scope prompt overrides (e.g. core_header) — same shape as Info.prompt.
+      prompt: z.record(z.string(), z.string()).optional(),
+      agent: z.record(z.string(), OverlayAgent).optional(),
+    })
+    .strict()
+  export type Overlay = z.output<typeof Overlay>
+
   export const Keybinds = z
     .object({
       leader: z.string().optional().default("ctrl+x").describe("Leader key for keybind combinations"),
@@ -1710,6 +1737,17 @@ export namespace Config {
       }
     }
     return result
+  }
+
+  // THE single API for applying a sparse session overlay onto a base config.
+  // A session overlay is exactly an RFC 7396 merge-patch (sparse delta, null
+  // deletes a key), so this reuses the existing mergeWithNullDelete primitive
+  // rather than reimplementing deep/null-delete merge (single source — the
+  // overlay schema forbids array keys, so the file-load concat-array layering
+  // in mergeConfigConcatArrays is a different operation, not a parallel impl).
+  // `base` is treated as immutable; a fresh object is always returned.
+  export function mergeOverlay(base: Info, patch: Overlay): Info {
+    return mergeWithNullDelete(base, patch) as Info
   }
 
   // Serializes read-modify-write of each config file. Two concurrent
