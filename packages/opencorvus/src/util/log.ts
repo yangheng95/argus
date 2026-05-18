@@ -5,6 +5,7 @@ import { Global } from "../global"
 import z from "zod"
 import { Glob } from "./glob"
 import { safeStringify, sanitizeMessage } from "./log-safety"
+import { SessionObservability } from "./session-observability"
 
 export namespace Log {
   export const Level = z.enum(["DEBUG", "INFO", "WARN", "ERROR"]).meta({ ref: "LogLevel", description: "Log level" })
@@ -104,6 +105,7 @@ export namespace Log {
       const prefix = Object.entries({
         ...ownTags,
         ...extra,
+        ...SessionObservability.logTags(),
       })
         .filter(([_, value]) => value !== undefined && value !== null)
         .map(([key, value]) => {
