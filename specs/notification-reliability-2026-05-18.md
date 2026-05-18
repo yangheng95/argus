@@ -1,7 +1,7 @@
 # Notification Reliability & Coverage — Single-Source Tiered Design
 
 - Date: 2026-05-18
-- Status: DRAFT v3 — addresses codex iteration 2 (REJECTED, 7 points); pending iteration 3 consensus → codex implementation
+- Status: DRAFT v5 — §3 regenerated from authoritative rg on the correct branch tree (commit 6b43131659); iter-4 was wrong-tree; pending iter-5 consensus on the implementable tree → codex implementation
 - Owner decisions (locked by user 2026-05-18): full tiered model · persistent dock badge + attention flash · persistence/resume via projection · architecture A (engine classifies, overlay delivers)
 
 ---
@@ -78,7 +78,7 @@ Two seams, one registry source:
 The runtime event envelope exposes its data as **`event.payload`**, not `.properties` (`ProtocolStore.eventView` `protocol/store.ts:91`; `protocolTaskEvent` serializes `payload` at `orchestrator.ts:1435`; the task-list serializer receives the same shape at `:300`) — codex iter2 #3. Both seams call `const notify = resolveNotify(event.type, event.payload ?? {})` from the registry and attach `notify` to the JSON. Update `TaskEvent` model (`engine/model.ts:912-922`) and the `/task/events` schema (`orchestrator.ts:280-284`) to include optional `notify`. The lightweight task-list payload grows by exactly this one field.
 
 ### 2.3 Overlay delivery — single hub, live-only (codex #13)
-New `routeNotification(event, { live: boolean })` in `notify.ts`. Called **only** from the live SSE dispatch and the task-list live handler — **never** from `replayTaskEventToTree`/hydration. `live` is a property of the call path, not inferred from event content (no heuristics, rule 13). It reads `event.notify` (opaque) and applies:
+New `routeNotification(event)` in `notify.ts`. **Single-owner delivery (codex iter3 #2):** the server broadcasts every task-aggregate event to *both* the per-task SSE stream (`overlay sse.ts:104-137`, server `orchestrator.ts:447-469`) and the global task-list stream (`sse.ts:227-250`, server `:300-309`). Calling `routeNotification` from both would double-fire. Therefore **the live task-list handler is the sole notification owner** — it now carries the stamped `notify` (§2.2), runs globally regardless of selected task, and is the only caller of `routeNotification`. The per-task live SSE path and `replayTaskEventToTree`/hydration only write the tree, never notify. Ownership is structural (one call site), not a runtime `{live}` flag or content heuristic (rule 13). It reads `event.notify` (opaque) and applies:
 
 | `tier` | in-app toast | OS notification | badge |
 |---|---|---|---|
@@ -98,7 +98,10 @@ badgeCount = Σ over tasks (global summary): task.pending_interactions    // awa
 flashActive = badgeCount > 0          // derived, NOT a separate signal
 ```
 - **Only summary-projectable facts** (codex iter2 #4). The global task summary carries exactly `task` (status), `run`, `evaluation`, `pending_interactions` (`engine/model.ts:880`). The `badge:true` set in §3 is **exactly** these three projectable facts and nothing else. Selected task's detailed `interactions` (`:848`) are used only to render *which* prompt in the UI, never to alter the count. No persisted interaction details (rule 8 — codex iter1 #10).
-- **`acks`**: a persisted set keyed `` `${taskID}:${failedAt}` `` where `failedAt = task.time.completed ?? task.time.updated` (`engine/model.ts:263,295`). Task IDs are reused across retries (codex iter2 #5); a version-keyed ack subtracts **only** when it matches the current failed snapshot, so a new failure after a retry re-appears. `acks` is local UI acknowledgement that only ever *subtracts* from a projection over authoritative data → not a second source.
+- **`acks`**: a persisted set of **typed, per-fact** version-keyed entries (codex iter3 #3 — the two badge facts have independent identities/clocks):
+  - `task-failed:${taskID}:${task.time.completed ?? task.time.updated}` (`engine/model.ts:295-300`)
+  - `evaluation-rejected:${evaluation.id}:${evaluation.time.completed ?? evaluation.time.updated}` (`engine/model.ts:467-480`)
+  An ack subtracts **only** the fact whose typed key matches the current snapshot. Acking a failed task does not clear a rejected evaluation; a new evaluation, or a retry that produces a fresh failure timestamp, re-appears (IDs/timestamps are reused per retry — codex iter2 #5). `acks` only ever *subtracts* from a projection over authoritative data → not a second source.
 - One pure function `computeBadge(globalSummary, acks) → {count}`; `flashActive` is `count > 0`. Recomputed on every SSE (re)connect/hydrate and board/summary refresh; pushes `setDockBadge(count)` + `setTrayAttention(count > 0)` (debounced). Restart → reload `acks`, recompute from fresh summary → self-heals; nothing leak/lose-able persisted.
 - `interaction.resolved` is **not in the tier table** (codex iter2 #6): it carries no `notify`, fires no toast; the resolved interaction simply drops out of `pending_interactions` at the source and the next recompute reflects it. No overlay special-casing, no `badgeEffect` field.
 - Tier-1 events that are **not** `badge:true` (`goal.failed`, `delivery.gate.rejected`, `session.error`) still fire an immediate OS toast (urgent, live), but their *persistent* signal arrives via the resulting terminal `task.failed` which **is** projectable. Flash therefore stays a clean derivative of the projection, never an independent live latch (rule 13).
@@ -114,7 +117,12 @@ Authoritative Tauri v2 behavior: `setBadgeCount` is **macOS/Linux/iOS only**; **
 
 ## 3. Full event matrix (rule 35 — every `BusEvent.define`, codex #12)
 
-Task-scoped events reach the overlay either via `protocolTaskEvent` (`engine/model.ts` lifecycle) **or** via the orchestrator message-bridge `dispatchEphemeral({aggregate:"task"})` (`orchestrator/protocol/message-bridge.ts:294,352,406,459`) — codex iter2 #1. `badge:true` ⇒ contributes to the §2.4 projection; permitted **only** for the three summary-projectable facts (codex iter2 #4).
+Task-scoped events reach the overlay through the task aggregate via three distinct mechanisms (codex iter3 #5 precision):
+- **Lifecycle** — `engine/model.ts` events through `protocolTaskEvent` (`orchestrator.ts:1422-1444`).
+- **Persisted bridged** — `session.status|idle|error` via `ProtocolStore.appendEvent` on the task aggregate (`message-bridge.ts:302-319,360-380`; task-aggregate append at `engine/protocol.ts:49-67`). Being persisted task-aggregate events, these are broadcast to the task-list stream and so are stamped/owned identically to lifecycle.
+- **Ephemeral bridged** — `message.*` via `ProtocolStore.dispatchEphemeral({aggregate:"task"})` (`message-bridge.ts:406-413`). All tier-3 (no toast), so their stream routing does not affect notification correctness.
+
+`badge:true` ⇒ contributes to the §2.4 projection; permitted **only** for the three summary-projectable facts (codex iter2 #4).
 
 **A. `engine/model.ts` lifecycle (task-scoped):**
 
@@ -139,20 +147,24 @@ Task-scoped events reach the overlay either via `protocolTaskEvent` (`engine/mod
 
 | Event | tier | badge | rationale |
 |---|---|---|---|
-| `message.updated\|removed`, `message.part.updated\|delta\|removed` | 3 | – | conversation stream; in-app feed only (`message-bridge.ts:406,459`) |
-| `session.status`, `session.idle` | NOOP | – | liveness/phase; surfaced via run/task state, not a toast (`:294,352`) |
-| `session.error` | 1 | – | crash → tier-1 toast (also listed in A for tier reference) (`:352`) |
+Define sites: `message.*` at `session/message.ts`; `session.error` at `session/events.ts`; `session.status`/`session.idle` at `session/status.ts`. They reach the overlay as **task-aggregate** events because `message-bridge.ts` republishes them onto the task aggregate: persisted `ProtocolStore.appendEvent({aggregate:"task", aggregate_id: taskID})` for session lifecycle/error (`message-bridge.ts:302-306,360-364`) and ephemeral `dispatchEphemeral({aggregate:"task"})` for messages (`:406-408`) — both verified on this tree (commit `6b43131659`).
 
-**C. Global / non-task-scoped `BusEvent.define` → cannot flow through `protocolTaskEvent` or `/task/events`; out of architecture-A scope (codex iter2 #2):** `workspace.failed`, `workspace.ready` (`workspace/workspace.ts:14,20`), `worktree.failed`, `worktree.ready` (`worktree/index.ts:54,61`, emitted via `GlobalBus.emit` `:1061`), `server.instance.disposed`, `global.disposed`, `server.connected`, `file.watcher.updated`, `file.edited`, `command.executed`, `installation.updated`, `installation.update-available`, `ide.installed`, `lsp.*`, `tui.*`, `mcp.*`, `project.updated`, `task-queue.completed`, `permission.asked\|replied`, `question.asked\|replied\|rejected`, `memory.task-plan`, `task-report`/`goal-report`. **`workspace.failed`/`worktree.failed` operator impact is not lost** — when they break a task, that task emits a terminal `task.failed` (tier-1, `badge:true`), which is the user-facing carrier. No separate global notification seam is added (rule 5/6 — no scope creep). `permission.asked`/`question.asked` surface solely via re-emitted `interaction.requested` (§0 note).
+| Event | tier | badge | rationale |
+|---|---|---|---|
+| `message.updated\|removed`, `message.part.updated\|delta\|removed` | 3 | – | conversation stream; ephemeral; in-app feed only (`message-bridge.ts:406-408`) |
+| `session.status`, `session.idle` | NOOP | – | liveness/phase; persisted, surfaced via run/task state, not a toast (`message-bridge.ts:302-306`) |
+| `session.error` | 1 | – | crash → tier-1 toast; persisted task-aggregate event (also in A for tier ref) (`message-bridge.ts:360-364`) |
 
-> Iteration 3 ask: codex confirms (a) the A/B/C partition is exhaustive over all 86 defines, (b) no other `dispatchEphemeral({aggregate:"task"})` family is missed, (c) `badge:true` is restricted to exactly the three projectable facts.
+**C. Global / non-task-scoped — every remaining `BusEvent.define`, exact names regenerated from `rg 'BusEvent.define'` on this tree (codex iter4 #4):** `workspace.failed`, `workspace.ready` (`workspace/workspace.ts`), `worktree.failed`, `worktree.ready` (`worktree/index.ts`, `GlobalBus.emit`), `session.created`, `session.updated`, `session.deleted`, `session.diff` (`session/index.ts`), `session.compacted` (`session/compaction.ts`), `todo.updated` (`session/todo.ts`), `vcs.branch.updated` (`project/vcs.ts`), `task_plan.updated` (`memory/task-plan.ts`), `project.updated` (`project/project.ts`), `task-queue.completed` (`scheduler/task-queue-service.ts` — **does exist on this branch**, contrary to an origin/dev-based review), `goal.report` (`tool/goal-report.ts`), `task.report` (`tool/task-report.ts`), `permission.asked`, `permission.replied` (`permission/next.ts`), `question.asked`, `question.replied`, `question.rejected` (`question/index.ts`), `lsp.client.diagnostics` (`lsp/client.ts`), `lsp.updated` (`lsp/index.ts`), `mcp.tools.changed`, `mcp.prompts.changed`, `mcp.resources.changed`, `mcp.browser.open.failed` (`mcp/index.ts`), `file.edited` (`file/index.ts`), `file.watcher.updated` (`file/watcher.ts`), `ide.installed` (`ide/index.ts`), `installation.updated`, `installation.update-available` (`installation/index.ts`), `command.executed` (`command/index.ts`), `tui.command.execute`, `tui.prompt.append`, `tui.session.select`, `tui.toast.show` (`cli/cmd/tui/event.ts`), `server.instance.disposed` (`bus/index.ts`), `global.disposed` (`server/event.ts`, `server/routes/global.ts`), `server.connected` (`server/event.ts`). **`workspace.failed`/`worktree.failed` operator impact is not lost** — a broken task emits terminal `task.failed` (tier-1, `badge:true`), the user-facing carrier. No separate global seam (rule 5/6). `permission.asked`/`question.asked` surface solely via re-emitted `interaction.requested` (§0). This list ∪ §3-A ∪ §3-B = the complete `BusEvent.define` set on this tree.
+
+> Iteration 4 was run against an **origin/dev**-based worktree (a 2127-commit-older architecture lacking `engine/model.ts`/`orchestrator.ts`/`message-bridge.ts`); its points #1–#3 were wrong-tree artifacts and are disproven here. Point #4 (regenerate §3 from real `rg`) was valid and is now applied on the correct pinned tree. All §3-A/B/C define sites + the task-aggregate seams (`orchestrator.ts:300-309`, `:1422`, `message-bridge.ts:302/360/406`) and `evaluation.id` (`engine/model.ts:468`) re-verified at commit `6b43131659`.
 
 ---
 
 ## 4. Files touched (rule 35)
 
 **Engine:** `bus/bus-event.ts` (registry shape + `resolveNotify`, generic constraint preserved); task-scoped `BusEvent.define` in `engine/model.ts:1057-1393` per §3-A (add `notify` only to non-NOOP rows); the bridged `session.error` / `message.*` defines per §3-B (session/message define sites — `session/events.ts`, `session/message.ts`; only `session.error` gets `notify`); `server/routes/orchestrator.ts` (`protocolTaskEvent` `:1422-1444` stamp via `event.payload`, task-list serializer `:300-307` stamp, `/task/events` schema `:280-284`); `engine/model.ts:912-922` `TaskEvent` type. **Global/non-task-scoped defines (§3-C incl. `workspace.failed`/`worktree.failed`): untouched** — no `notify`, not in scope.
-**Overlay:** `notify.ts` (replace `dispatch`/`notifyTaskLifecycle`/`notifyInteractionRequested` with `routeNotification(event,{live})` toast/OS only + pure `computeBadge(globalSummary, acks)` + version-keyed `acks` persisted via `overlay-settings-storage.ts`); `events.ts` (call `routeNotification` from the live per-task + live task-list paths only; remove the old 2 sites); `conversation.ts` replay/hydration path (`:117-184`) does **not** call `routeNotification` (`{live}` is the call-path, not event-derived); `window.ts` (`setDockBadge`); `host-transport.ts`/`tauri-transport.ts` (`badge.set` kind); `sse.ts` (recompute on hydrate/reconnect `:120`).
+**Overlay:** `notify.ts` (replace `dispatch`/`notifyTaskLifecycle`/`notifyInteractionRequested` with `routeNotification(event)` toast/OS only + pure `computeBadge(globalSummary, acks)` + typed version-keyed `acks` persisted via `overlay-settings-storage.ts`); `events.ts` (call `routeNotification` from **exactly one** site — the live task-list handler `handleTaskListNotification` `:945-954`; **delete** the per-task `interaction.requested` notify branch `:40-47` and the old lifecycle site so the per-task stream only writes the tree — codex iter3 #2); `conversation.ts` replay/hydration (`:117-184`) never calls `routeNotification`; `window.ts` (`setDockBadge`); `host-transport.ts`/`tauri-transport.ts` (`badge.set` kind); `sse.ts` (recompute on hydrate/reconnect `:120`).
 **Rust:** `main.rs` (`overlay_badge_set` + register in both invoke lists `:1150-1179`).
 **Docs:** `packages/web/.../overlay/overview.mdx` (EN + zh-cn) — `overlay_badge_set`.
 
@@ -163,14 +175,15 @@ Task-scoped events reach the overlay either via `protocolTaskEvent` (`engine/mod
 1. Registry: `define` with descriptor / fn-descriptor / omitted ⇒ stored / resolved-by-payload / undefined (NOOP).
 2. Stamp: tier-1 event ⇒ `notify` present on **both** `protocolTaskEvent` output and task-list serializer output; NOOP event ⇒ no `notify`; `/task/events` schema validates the new optional field.
 3. `evaluation.completed`: rejected payload ⇒ `{tier:1,badge:true}`; accepted ⇒ `{tier:2}` (resolved at engine emit, asserted on stamped envelope, **not** overlay).
-4. routeNotification matrix: table-driven tier×focus×selected; negatives (tier-3 never OS; tier-2 no OS when focused; tier-1 focused+selected+detail ⇒ no toast). routeNotification never mutates badge state.
-5. Replay guard: `replayTaskEventToTree` on `interaction.requested` ⇒ **no** toast (asserts codex iter1 #13 fixed).
-6. Badge projection: pure-function `computeBadge(globalSummary, acks)` over `pending_interactions` + terminal `task.status` + rejected `task.evaluation`; version-keyed ack `${taskID}:${failedAt}` — assert a retry after an acked failure re-counts (codex iter2 #5); reconnect with changed summary self-corrects; restart (reload acks, recompute) ⇒ no leak/loss; `flashActive == count>0`.
-7. `interaction.resolved` ⇒ no `notify`, no toast; recompute reflects lowered `pending_interactions`.
-8. Rust: `overlay_badge_set(0)` clears; `>0` ⇒ macOS/Linux `set_badge_count(Some(i64))`, Windows `set_overlay_icon` (mock per-platform); `i64` param type.
-10. Bridged events: `message.part.delta` ⇒ tier-3 (no toast); `session.error` ⇒ tier-1 toast, no badge (codex iter2 #1).
+4. routeNotification matrix: table-driven tier×focus×selected; negatives (tier-3 never OS; tier-2 no OS when focused; **tier-1 focused+selected+detail ⇒ in-app toast still shown, OS/host notification suppressed** — codex iter3 #4). routeNotification never mutates badge state.
+5. **Single-owner (codex iter3 #2):** feed the *same* task-aggregate event into both the per-task live SSE path and the live task-list handler ⇒ assert exactly **one** toast + one OS send (the task-list owner); per-task path produces zero notifications.
+6. Replay guard: `replayTaskEventToTree` on `interaction.requested` ⇒ **no** toast (asserts codex iter1 #13 fixed).
+7. Badge projection: pure `computeBadge(globalSummary, acks)` over `pending_interactions` + terminal `task.status` + rejected `task.evaluation`; **typed** acks — assert acking a failed task does NOT clear a co-pending rejected evaluation, and a retry with a fresh failure timestamp re-counts (codex iter3 #3 / iter2 #5); reconnect self-corrects; restart (reload acks, recompute) ⇒ no leak/loss; `flashActive == count>0`.
+8. `interaction.resolved` ⇒ no `notify`, no toast; recompute reflects lowered `pending_interactions`.
+9. Rust: `overlay_badge_set(0)` clears; `>0` ⇒ macOS/Linux `set_badge_count(Some(i64))`, Windows `set_overlay_icon` (mock per-platform); `i64` param type.
+10. Bridged events: `message.part.delta` ⇒ tier-3 (no toast); `session.error` ⇒ tier-1 toast, no badge (codex iter2 #1 / iter3 #5).
 11. Global events: `workspace.failed`/`worktree.failed` ⇒ no overlay notification path exercised; the consequent `task.failed` carries the badge (codex iter2 #2).
-9. Regression: `notify-no-boot-prompt.test.ts`, `events-single-write-to-tree.test.ts` adapted & green (no double-fire, no boot prompt).
+12. Regression: `notify-no-boot-prompt.test.ts`, `events-single-write-to-tree.test.ts` adapted & green (no double-fire, no boot prompt).
 
 ---
 
@@ -182,4 +195,7 @@ Mapping: #1→§2.1, #2→§2.2, #3→§0 scope-narrowing, #4→§0/D2 chain, #5
 ### Iteration 2 (2026-05-18): REJECTED — 7 points, all accepted
 1 (missing bridged task-scoped `message.*`/`session.*`) → §3-B added. 2 (`workspace.failed`/`worktree.failed` are global, not task-scoped) → §3-C, removed from matrix; impact via resulting `task.failed`. 3 (`event.payload` not `.properties`; keep generic constraint) → §2.1/§2.2. 4 (badge projection can only cover summary facts) → §2.4 + §3 `badge:true` restricted to `pending_interactions`/terminal `task.status`/rejected `evaluation`; results lose `dock`. 5 (`Set<taskID>` ack too coarse) → §2.4 version-keyed `${taskID}:${failedAt}`. 6 (`interaction.resolved` contradiction) → removed from tier table, `badgeEffect` field deleted. 7 (`set_badge_count` is `Option<i64>`) → §2.5 `i64`. Codex confirmed the live-only replay fix sound.
 
-Open for iteration 3 consensus: §3 closing note (A/B/C partition exhaustive over 86 defines; no other `aggregate:"task"` family missed; `badge:true` ⊆ projectable facts). No silent rewrites — further feedback appended as iteration 3.
+### Iteration 3 (2026-05-18): REJECTED — 5 points; **architecture explicitly blessed**
+Codex: *"evaluation tier via payload function is sound… Dropping interaction.resolved is correct… The pure projection design is sound after the ack-key fix."* All 5 accepted: 1 (§3-C non-exhaustive / misnamed) → §3-C exact names incl. `task_plan.updated`, `session.created|updated|deleted|diff`, `session.compacted`, `todo.updated`, `vcs.branch.updated`. 2 (live double-fire across both streams) → §2.3/§4 single-owner = task-list handler only; per-task notify branch deleted; §5.5 regression. 3 (ack keys incomplete for rejected eval) → §2.4 typed per-fact keys. 4 (test plan contradicts §2.3) → §5.4 "in-app yes, OS no". 5 (bridge prose wrong: session.* persisted not ephemeral) → §3 intro three-mechanism rewrite.
+
+Done in an isolated worktree (`worktree-notif-spec-consensus`) because the main tree was under concurrent git churn. Open for iteration 4: confirm the 5 fixes resolve cleanly with no regressions; expecting APPROVED.
