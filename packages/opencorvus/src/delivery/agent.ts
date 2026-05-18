@@ -26,6 +26,7 @@ import { EngineConfig, clarificationTranscriptSection, operatorNotesSection } fr
 import { deriveUrlSignals, resolveStageSkills, type TaskSignals } from "@/engine/skill-inject"
 import { Provider } from "@/provider/provider"
 import { createDecisionLog } from "@/decision-log"
+import { SessionContext } from "@/session/context"
 import type { GoalInfo, DeliveryInfo } from "@/delivery/checks"
 import {
   DeliveryVerdict,
@@ -548,7 +549,7 @@ export const DELIVERY_AGENT_SYSTEM = DELIVERY_CORE
  * every matched skill so submit_verdict can enforce them. Task signals
  * (attachments, request URL) drive auto-detect alongside project files/deps. */
 export async function deliveryAgentSystem(input?: VerifyInput): Promise<{ prompt: string; requiredTools: string[] }> {
-  const config = await Config.get()
+  const config = Config.mergeOverlay(await Config.get(), SessionContext.overlay() ?? {})
   const userAppend = (config.agent as Record<string, any> | undefined)?.delivery?.prompt_append
   const core =
     typeof userAppend === "string" && userAppend.trim().length > 0

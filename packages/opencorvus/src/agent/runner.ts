@@ -67,6 +67,7 @@
 import type { LanguageModel } from "ai"
 import type { TextHooks } from "@/llm/api"
 import { resolveAgentModel } from "@/agent/model"
+import { Agent } from "@/agent/agent"
 import { Provider } from "@/provider/provider"
 import { Config } from "@/config/config"
 import { EngineConfig } from "@/engine"
@@ -85,6 +86,7 @@ import type { ToolSet } from "ai"
 import { AgentTrace } from "@/trace"
 import { TaskContext } from "@/task-context"
 import type { AgentReport, AgentReportContext } from "@/agent/report"
+import { SessionContext } from "@/session/context"
 
 const log = Log.create({ service: "agent-runner" })
 
@@ -283,7 +285,6 @@ const BUILD_SKILL_GATED_TOOLS = [
   "external_code_search",
   "skill",
   "memory",
-  "schedule",
   "planner",
   "goal_report",
 ] as const
@@ -1273,8 +1274,11 @@ async function composeSystemPrompt(
   skillsStage: SkillStage | undefined,
   taskSignals: TaskSignals | undefined,
 ): Promise<{ prompt: string; requiredTools: string[] }> {
-  const config = await Config.get()
-  const userAppend = (config.agent as Record<string, any> | undefined)?.[agentName]?.prompt_append
+  const overlay = SessionContext.overlay()
+  const config = Config.mergeOverlay(await Config.get(), overlay ?? {})
+  const baseAgent = await Agent.get(agentName)
+  const effectiveAgent = baseAgent ? Agent.resolveSessionAgent(baseAgent, overlay) : undefined
+  const userAppend = effectiveAgent?.promptAppend ?? (config.agent as Record<string, any> | undefined)?.[agentName]?.prompt_append
   const withAppend =
     typeof userAppend === "string" && userAppend.trim().length > 0
       ? `${core}\n\n${userAppend}`

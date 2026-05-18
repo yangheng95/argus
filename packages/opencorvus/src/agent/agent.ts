@@ -66,6 +66,7 @@ export namespace Agent {
         .optional(),
       variant: z.string().optional(),
       prompt: z.string().optional(),
+      promptAppend: z.string().optional(),
       options: z.record(z.string(), z.any()),
       steps: z.number().int().positive().optional(),
       tools: z
@@ -448,6 +449,7 @@ export namespace Agent {
         throw new Error(`config.agent.${key}.prompt is invalid for append-mode agents; use prompt_append`)
       }
       if (promptConfigMode !== "append") item.prompt = value.prompt ?? item.prompt
+      item.promptAppend = value.prompt_append ?? item.promptAppend
       item.description = value.description ?? item.description
       item.temperature = value.temperature ?? item.temperature
       item.topP = value.top_p ?? item.topP
@@ -508,6 +510,37 @@ export namespace Agent {
 
   export async function get(agent: string) {
     return state().then((x) => x[agent])
+  }
+
+  export function resolveSessionAgent(baseAgent: Info, overlay: Config.Overlay | undefined): Info {
+    const agentOverlay = overlay?.agent?.[baseAgent.name]
+    if (!agentOverlay) return baseAgent
+    const model = baseAgent.model ? `${baseAgent.model.providerID}/${baseAgent.model.modelID}` : undefined
+    const merged = Config.mergeOverlay(
+      {
+        agent: {
+          [baseAgent.name]: {
+            model,
+            variant: baseAgent.variant,
+            temperature: baseAgent.temperature,
+            top_p: baseAgent.topP,
+            prompt: baseAgent.prompt,
+            prompt_append: baseAgent.promptAppend,
+          },
+        },
+      } as never,
+      { agent: { [baseAgent.name]: agentOverlay } } as never,
+    )
+    const effective = (merged.agent as Record<string, any> | undefined)?.[baseAgent.name] ?? {}
+    return {
+      ...baseAgent,
+      model: effective.model ? Provider.parseModel(effective.model) : undefined,
+      variant: effective.variant,
+      temperature: effective.temperature,
+      topP: effective.top_p,
+      prompt: effective.prompt,
+      promptAppend: effective.prompt_append,
+    }
   }
 
   export async function list() {
