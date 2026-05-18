@@ -21,6 +21,7 @@ import { Worktree } from "@/worktree"
 import { Question } from "@/question"
 import { Scheduler } from "@/scheduler"
 import { Session } from "@/session"
+import { SessionContext } from "@/session/context"
 import { Message } from "@/session/message"
 import { SessionPrompt } from "@/session/prompt"
 import { Database, NotFoundError, and, eq, inArray } from "@/storage/db"
@@ -317,7 +318,7 @@ async function appendDirectAgentSessionReply(input: {
     parts,
     touchSessionID: target.session.id,
   })
-  void SessionPrompt.loop({ sessionID: target.session.id }).catch((error) => {
+  void SessionContext.provide(target.session, () => SessionPrompt.loop({ sessionID: target.session.id })).catch((error) => {
     log.error("direct agent session reply loop failed", {
       sessionID: target.session.id,
       taskID: input.taskID,

@@ -5,6 +5,7 @@ import { Log } from "@/util/log"
 import { Provider } from "@/provider/provider"
 import { SessionPrompt } from "./prompt"
 import { Agent } from "@/agent/agent"
+import { SessionContext } from "./context"
 
 /**
  * Session wake mechanism.
@@ -40,62 +41,67 @@ export namespace SessionWake {
 
     // Resolve or create session
     let sessionID = input.sessionID
+    let session: Session.Info
     if (!sessionID) {
-      const session = await Session.createNext({
+      session = await Session.createNext({
         kind: "assistant",
         directory: Instance.directory,
         title: `Scheduled: ${input.prompt.slice(0, 60)}`,
       })
       sessionID = session.id
       log.info("created new session for wake", { sessionID })
+    } else {
+      session = await Session.get(sessionID)
     }
 
-    // Resolve model: use override, or the configured default model
-    let model = input.model
-    if (!model) {
-      model = await resolveModel(sessionID)
-    }
+    return SessionContext.provide(session, async () => {
+      // Resolve model: use override, or the configured default model
+      let model = input.model
+      if (!model) {
+        model = await resolveModel(sessionID)
+      }
 
-    const msg = await Session.updateMessage({
-      id: Identifier.ascending("message"),
-      role: "user",
-      sessionID,
-      time: { created: Date.now() },
-      agent,
-      model,
+      const msg = await Session.updateMessage({
+        id: Identifier.ascending("message"),
+        role: "user",
+        sessionID,
+        time: { created: Date.now() },
+        agent,
+        model,
+      })
+      await Session.updatePart({
+        id: Identifier.ascending("part"),
+        messageID: msg.id,
+        sessionID,
+        type: "text",
+        text: input.prompt,
+        time: {
+          start: Date.now(),
+          end: Date.now(),
+        },
+      })
+
+      log.info("injected wake message", { sessionID, messageID: msg.id })
+
+      // Start the session loop.
+      //
+      // For existing sessions with an active loop in standby (waitForUserMessage),
+      // the Bus event from updateMessage above will wake it automatically.
+      //
+      // For new sessions or sessions whose loop has ended, we need to start
+      // a fresh loop. Using resume_existing=false ensures a new loop starts.
+      // If a loop is already running, start() returns undefined and the
+      // function enters the callback path (which resolves when the loop
+      // processes our message).
+      void SessionPrompt.loop({
+        sessionID,
+        resume_existing: false,
+      }).catch((err) => {
+        log.error("wake loop failed", { sessionID, err })
+      })
+
+      return sessionID
     })
-    await Session.updatePart({
-      id: Identifier.ascending("part"),
-      messageID: msg.id,
-      sessionID,
-      type: "text",
-      text: input.prompt,
-      time: {
-        start: Date.now(),
-        end: Date.now(),
-      },
-    })
-
-    log.info("injected wake message", { sessionID, messageID: msg.id })
-
-    // Start the session loop.
-    //
-    // For existing sessions with an active loop in standby (waitForUserMessage),
-    // the Bus event from updateMessage above will wake it automatically.
-    //
-    // For new sessions or sessions whose loop has ended, we need to start
-    // a fresh loop. Using resume_existing=false ensures a new loop starts.
-    // If a loop is already running, start() returns undefined and the
-    // function enters the callback path (which resolves when the loop
-    // processes our message).
-    void SessionPrompt.loop({
-      sessionID,
-      resume_existing: false,
-    }).catch((err) => {
-      log.error("wake loop failed", { sessionID, err })
-    })
-
-    return sessionID
   }
 
   /** Resolve the configured model (session overlay over project base, spec

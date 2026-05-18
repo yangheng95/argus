@@ -6,6 +6,7 @@ import { Session } from ".."
 import { SessionCommand } from "../command-exec"
 import { SessionLoop } from "../loop"
 import { SessionShell } from "../shell-exec"
+import { SessionContext } from "../context"
 import { createUserMessage, resolvePromptParts as resolvePromptPartsImpl } from "./parts"
 import { PromptInput as PromptInputSchema, type PromptInput as PromptInputType } from "./schema"
 import { SessionPromptState } from "./state"
@@ -45,30 +46,31 @@ export namespace SessionPrompt {
   export const prompt = fn(PromptInput, async (input) => {
     const session = await Session.get(input.sessionID)
     await clearRewindCursorForSession(session.id)
+    return SessionContext.provide(session, async () => {
+      const message = await createUserMessage(input)
+      await Session.touch(input.sessionID)
 
-    const message = await createUserMessage(input)
-    await Session.touch(input.sessionID)
+      const permissions: PermissionNext.Ruleset = []
+      for (const [tool, enabled] of Object.entries(input.tools ?? {})) {
+        permissions.push({
+          permission: tool,
+          action: enabled ? "allow" : "deny",
+          pattern: "*",
+        })
+      }
+      if (permissions.length > 0) {
+        session.permission = permissions
+        await Session.setPermission({ sessionID: session.id, permission: permissions })
+      }
 
-    const permissions: PermissionNext.Ruleset = []
-    for (const [tool, enabled] of Object.entries(input.tools ?? {})) {
-      permissions.push({
-        permission: tool,
-        action: enabled ? "allow" : "deny",
-        pattern: "*",
+      if (input.noReply === true) {
+        return message
+      }
+
+      return Instance.provide({
+        directory: session.directory,
+        fn: () => loop({ sessionID: input.sessionID }),
       })
-    }
-    if (permissions.length > 0) {
-      session.permission = permissions
-      await Session.setPermission({ sessionID: session.id, permission: permissions })
-    }
-
-    if (input.noReply === true) {
-      return message
-    }
-
-    return Instance.provide({
-      directory: session.directory,
-      fn: () => loop({ sessionID: input.sessionID }),
     })
   })
 }

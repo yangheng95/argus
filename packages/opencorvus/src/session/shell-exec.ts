@@ -12,6 +12,7 @@ import { Shell } from "@/shell/shell"
 import { PidGuard } from "@/shell/pid-guard"
 import { SessionPromptState } from "./prompt/state"
 import { gitCeilingEnvForWorktree } from "@/worktree/git-ceiling"
+import { SessionContext } from "./context"
 
 export namespace SessionShell {
   const { log, state, start, cancel } = SessionPromptState
@@ -40,7 +41,8 @@ export namespace SessionShell {
         cancel(input.sessionID)
       } else {
         const { SessionLoop } = await import("./loop")
-        SessionLoop.loop({ sessionID: input.sessionID, resume_existing: true }).catch((error: any) => {
+        const session = await Session.get(input.sessionID)
+        SessionContext.provide(session, () => SessionLoop.loop({ sessionID: input.sessionID, resume_existing: true })).catch((error: any) => {
           log.error("session loop failed to resume after shell command", { sessionID: input.sessionID, error })
         })
       }
@@ -48,10 +50,13 @@ export namespace SessionShell {
 
     // Single model resolver (spec §13.1): explicit > session overlay > base.
     const { resolveAgentModelRef } = await import("../agent/model")
-    const model = await resolveAgentModelRef(input.agent, {
-      explicitModel: input.model,
-      sessionID: input.sessionID,
-    })
+    const session = await Session.get(input.sessionID)
+    const model = await SessionContext.provide(session, () =>
+      resolveAgentModelRef(input.agent, {
+        explicitModel: input.model,
+        sessionID: input.sessionID,
+      }),
+    )
     const userMsg: Message.User = {
       id: Identifier.ascending("message"),
       sessionID: input.sessionID,
