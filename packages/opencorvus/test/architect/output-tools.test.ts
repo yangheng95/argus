@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test"
+import { validateArchitectContractGraph, type ArchitectContractGraph } from "@/architect/contract-graph"
 import { createArchitectOutputTools, architectValidationFindings } from "@/architect/output-tools"
 
 function acceptance(goalID: string, contractIDs: string[] = []) {
@@ -27,6 +28,63 @@ function acceptance(goalID: string, contractIDs: string[] = []) {
             },
           ],
   }
+}
+
+function contractAuditSpec(contractIDs: string[], severity: "essential" | "important" = "essential") {
+  return {
+    scorers: [
+      {
+        type: "contract_audit" as const,
+        name: "graph-contract",
+        spec: { kind: "contract_graph" as const, contract_ids: contractIDs },
+        expect: { status: "passed" as const },
+      },
+    ],
+    severity,
+  }
+}
+
+function baseGraph(contractIDs: string[] = ["contract_order"]): ArchitectContractGraph {
+  return {
+    version: 1,
+    contracts: contractIDs.map((id) => ({
+      id,
+      kind: "static_data" as const,
+      name: "OrderStatusCatalog",
+      producer_goal_id: "goal_model",
+      consumer_goal_ids: ["goal_ui"],
+      summary: "Shared status catalog consumed by the UI goal.",
+      artifact_paths: ["src/model.ts"],
+    })),
+    dependency_contracts:
+      contractIDs.length > 0
+        ? [
+            {
+              from_goal_id: "goal_model",
+              to_goal_id: "goal_ui",
+              reason: "contract" as const,
+              contract_ids: contractIDs,
+            },
+          ]
+        : [],
+  }
+}
+
+function graphGoals(uiAcceptanceSpecs: Array<{ scorers: Array<{ type: string; spec?: unknown }>; severity?: string }>) {
+  return [
+    { id: "goal_model", depends_on: [], acceptance_specs: [] },
+    { id: "goal_ui", depends_on: ["goal_model"], acceptance_specs: uiAcceptanceSpecs },
+  ]
+}
+
+function contractWithoutAuditCoverageFindings(input: {
+  graph: ArchitectContractGraph
+  uiAcceptanceSpecs: Array<{ scorers: Array<{ type: string; spec?: unknown }>; severity?: string }>
+}) {
+  return validateArchitectContractGraph({
+    goals: graphGoals(input.uiAcceptanceSpecs),
+    graph: input.graph,
+  }).filter((finding) => finding.code === "contract_without_audit_coverage")
 }
 
 async function registerTwoGoalGraph() {
@@ -122,6 +180,91 @@ test("architect registers graph contracts and finalizes without goal imports or 
   expect(out).toContain("PASS")
   expect(kit.getCollector().goals[0]).not.toHaveProperty("exports")
   expect(kit.getCollector().goals[0]).not.toHaveProperty("imports")
+})
+
+test("contract covered by related essential contract_audit has no audit coverage concern", () => {
+  const findings = contractWithoutAuditCoverageFindings({
+    graph: baseGraph(),
+    uiAcceptanceSpecs: [contractAuditSpec(["contract_order"])],
+  })
+
+  expect(findings).toHaveLength(0)
+})
+
+test("contract without essential contract_audit coverage reports audit coverage concern", () => {
+  const findings = contractWithoutAuditCoverageFindings({
+    graph: baseGraph(),
+    uiAcceptanceSpecs: [],
+  })
+
+  expect(findings).toHaveLength(1)
+  expect(findings[0]).toMatchObject({
+    code: "contract_without_audit_coverage",
+    severity: "concern",
+    scope: { contract_ids: ["contract_order"], goal_ids: ["goal_model", "goal_ui"] },
+    repair_tools: ["register_goal", "modify_goal", "register_contract"],
+  })
+})
+
+test("non-essential contract_audit coverage still reports audit coverage concern", () => {
+  const findings = contractWithoutAuditCoverageFindings({
+    graph: baseGraph(),
+    uiAcceptanceSpecs: [contractAuditSpec(["contract_order"], "important")],
+  })
+
+  expect(findings).toHaveLength(1)
+  expect(findings[0]?.code).toBe("contract_without_audit_coverage")
+})
+
+test("empty contract graph does not report audit coverage concern", () => {
+  const findings = contractWithoutAuditCoverageFindings({
+    graph: baseGraph([]),
+    uiAcceptanceSpecs: [],
+  })
+
+  expect(findings).toHaveLength(0)
+})
+
+test("typed closed-domain contract without scorers reports only unified audit coverage concern", () => {
+  const findings = validateArchitectContractGraph({
+    goals: graphGoals([]),
+    graph: {
+      version: 1,
+      contracts: [
+        {
+          id: "contract_order",
+          kind: "type",
+          name: "Order",
+          producer_goal_id: "goal_model",
+          consumer_goal_ids: ["goal_ui"],
+          summary: "Shared order status model for UI rendering.",
+          artifact_paths: ["src/model.ts"],
+          ir: {
+            kind: "type",
+            name: "Order",
+            fields: [
+              {
+                name: "status",
+                typeExpr: "string",
+                valueDomain: { kind: "literal_union", values: ["new", "paid"] },
+              },
+            ],
+          },
+        },
+      ],
+      dependency_contracts: [
+        {
+          from_goal_id: "goal_model",
+          to_goal_id: "goal_ui",
+          reason: "contract",
+          contract_ids: ["contract_order"],
+        },
+      ],
+    },
+  })
+
+  expect(findings.map((finding) => finding.code)).toEqual(["contract_without_audit_coverage"])
+  expect(findings.some((finding) => finding.code === "contract_audit_missing_criterion")).toBe(false)
 })
 
 test("submit_architect blocks single large goal decomposition", async () => {
