@@ -5,7 +5,7 @@ import { EngineInteractionRequestTable, EngineTaskTable } from "../../src/engine
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 import { Instance } from "../../src/project/instance"
-import { RequirementsSubmitSchema } from "../../src/requirements/output-tools"
+import { createRequirementsOutputTools, RequirementsSubmitSchema } from "../../src/requirements/output-tools"
 
 let runnerImpl: ((input: any) => Promise<any>) | undefined
 
@@ -117,6 +117,11 @@ describe("RequirementsAgent prompt precedence", () => {
             description: "使用原生 HTML、CSS 和 JavaScript 复刻百度首页。",
           }, {} as any)
           await input.toolKit.tools.register_decision.execute({
+            key: "runtime",
+            value: "browser",
+            reason: "The requested deliverable is a browser page.",
+          }, {} as any)
+          await input.toolKit.tools.register_decision.execute({
             key: "frontend_framework",
             value: "none (vanilla HTML/CSS/JavaScript)",
             reason: "已回答澄清明确选择原生三件套，这高于现有 scaffold。",
@@ -125,6 +130,21 @@ describe("RequirementsAgent prompt precedence", () => {
             key: "test_framework",
             value: "vitest",
             reason: "现有项目脚手架使用 Vitest。",
+          }, {} as any)
+          await input.toolKit.tools.register_decision.execute({
+            key: "affected_modules",
+            value: "frontend page scaffold and static assets",
+            reason: "The task changes the user-facing page implementation.",
+          }, {} as any)
+          await input.toolKit.tools.register_decision.execute({
+            key: "affected_concepts",
+            value: "layout, visual fidelity, search form interaction",
+            reason: "These concepts define the acceptance surface.",
+          }, {} as any)
+          await input.toolKit.tools.register_decision.execute({
+            key: "impact_size",
+            value: "medium",
+            reason: "A page replica touches multiple frontend surfaces.",
           }, {} as any)
           expect(input.terminalTool.shouldExposeOnlyTerminalTool(input.toolKit.getCollector())).toBe(false)
           await input.toolKit.tools.submit_requirements.execute({ final: true }, {} as any)
@@ -167,4 +187,39 @@ describe("RequirementsAgent prompt precedence", () => {
 test("submit_requirements schema requires explicit final confirmation", () => {
   expect(RequirementsSubmitSchema.safeParse({}).success).toBe(false)
   expect(RequirementsSubmitSchema.safeParse({ final: true }).success).toBe(true)
+})
+
+test("submit_requirements requires the minimum downstream decision contract", async () => {
+  const kit = createRequirementsOutputTools()
+  await kit.tools.register_requirement.execute({
+    id: "REQ-1",
+    type: "explicit",
+    description: "Implement the requested user-visible behavior.",
+  }, {} as any)
+
+  const missing = await kit.tools.submit_requirements.execute({ final: true }, {} as any)
+  expect(missing).toContain("missing required foundational decision")
+  expect(missing).toContain("runtime")
+  expect(missing).toContain("one_framework")
+  expect(missing).toContain("affected_modules")
+  expect(kit.getCollector().finalized).toBe(false)
+
+  for (const decision of [
+    ["runtime", "browser"],
+    ["frontend_framework", "vanilla"],
+    ["test_framework", "bun:test"],
+    ["affected_modules", "src/app"],
+    ["affected_concepts", "rendering, interaction"],
+    ["impact_size", "small"],
+  ] as const) {
+    await kit.tools.register_decision.execute({
+      key: decision[0],
+      value: decision[1],
+      reason: "test fixture",
+    }, {} as any)
+  }
+
+  const passed = await kit.tools.submit_requirements.execute({ final: true }, {} as any)
+  expect(passed).toContain("PASS: Requirements finalized")
+  expect(kit.getCollector().finalized).toBe(true)
 })

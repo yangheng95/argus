@@ -7,6 +7,8 @@ import { PromptCatalog } from "../../src/config/prompt-catalog"
 import { Config } from "../../src/config/config"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
+import BUILD_CORE from "../../src/prompt/core/build-core.txt"
+import PROMPT_CODING from "../../src/agent/prompt/coding.txt"
 
 afterEach(async () => {
   Config.global.reset()
@@ -47,6 +49,74 @@ test("editable native prompt catalog entries have non-empty defaults", async () 
         }
         expect(entry!.description).toBe(contract.description)
       }
+    },
+  })
+})
+
+test("build prompt catalog default matches the runtime build core prompt", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const entries = await PromptCatalog.list()
+      const build = entries.find((entry) => entry.scope === "agent" && entry.key === "build")
+      expect(build).toBeDefined()
+      expect(await Agent.nativeDefaultPrompt("build")).toBe(BUILD_CORE)
+      expect(build!.prompt_mode).toBe("append")
+      expect(build!.prompt).toBe("")
+      expect(build!.effective_prompt).toBe(BUILD_CORE)
+      expect(build!.default_prompt).toBe(BUILD_CORE)
+      expect(build!.default_prompt).not.toBe(PROMPT_CODING)
+    },
+  })
+})
+
+test("coding prompt catalog default matches the direct assistant prompt", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const entries = await PromptCatalog.list()
+      const coding = entries.find((entry) => entry.scope === "agent" && entry.key === "coding")
+      expect(coding).toBeDefined()
+      expect(await Agent.nativeDefaultPrompt("coding")).toBe(PROMPT_CODING)
+      expect(coding!.prompt_mode).toBe("override")
+      expect(coding!.prompt).toBe(PROMPT_CODING)
+      expect(coding!.effective_prompt).toBe(PROMPT_CODING)
+      expect(coding!.default_prompt).toBe(PROMPT_CODING)
+    },
+  })
+})
+
+test("coding override and build append catalog entries stay distinct", async () => {
+  await using tmp = await tmpdir({
+    git: true,
+    config: {
+      agent: {
+        coding: { prompt: "Custom coding prompt" },
+        build: { prompt_append: "Extra build-stage instruction" },
+      },
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const entries = await PromptCatalog.list()
+      const coding = entries.find((entry) => entry.scope === "agent" && entry.key === "coding")
+      const build = entries.find((entry) => entry.scope === "agent" && entry.key === "build")
+
+      expect(coding).toBeDefined()
+      expect(build).toBeDefined()
+      expect(coding!.prompt_mode).toBe("override")
+      expect(coding!.default_prompt).toBe(PROMPT_CODING)
+      expect(coding!.prompt).toBe("Custom coding prompt")
+      expect(coding!.effective_prompt).toBe("Custom coding prompt")
+      expect(build!.prompt_mode).toBe("append")
+      expect(build!.default_prompt).toBe(BUILD_CORE)
+      expect(build!.prompt).toBe("Extra build-stage instruction")
+      expect(build!.effective_prompt).toBe(`${BUILD_CORE}\n\nExtra build-stage instruction`)
+      expect(coding!.default_prompt).not.toBe(build!.default_prompt)
+      expect(coding!.effective_prompt).not.toBe(build!.effective_prompt)
     },
   })
 })

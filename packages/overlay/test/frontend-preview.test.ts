@@ -1,5 +1,9 @@
 import { expect, test } from "bun:test"
 import {
+  isBoardInvalidatingEventType,
+  isTreeWriterPassThroughEventType,
+} from "../src/services/event-policy"
+import {
   isLoopbackHttpUrl,
   nextTabForPreviewResolution,
   resolveFrontendPreviewFromBoard,
@@ -104,4 +108,14 @@ test("static html preview path is absent", async () => {
   expect(service).not.toContain("DOMParser")
   expect(service).not.toContain("/file/content")
   expect(component).not.toContain("srcdoc")
+})
+
+test("preview iframe preserves same-origin for Vite module scripts", async () => {
+  const component = await Bun.file(new URL("../src/components/FrontendPreviewPanel.tsx", import.meta.url)).text()
+  expect(component).toContain('sandbox="allow-scripts allow-forms allow-same-origin"')
+})
+
+test("delivery preview update refreshes board without creating a card", () => {
+  expect(isBoardInvalidatingEventType("delivery.preview.updated")).toBe(true)
+  expect(isTreeWriterPassThroughEventType("delivery.preview.updated")).toBe(true)
 })

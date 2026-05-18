@@ -6,8 +6,8 @@ import { Message } from "../../src/session/message"
  * Phase F of specs/new-arch/2026-04-28-structured-output-systemic-fix.md:
  * `runAgentSessionWithRetry` must NOT loop on deterministic structural
  * failures (prompt-budget / tool-schema-budget overflow), and must NOT
- * loop after the caller's `isComplete` signals that in-session recovery
- * has already exhausted its budget (`terminal: true`). Transient
+ * loop after the caller's `isComplete` signals a deterministic completed
+ * attempt failure (`terminal: true`). Transient
  * provider/stream errors keep the existing retry behaviour.
  *
  * The classifier is a pure function so tests cover the full decision

@@ -8297,7 +8297,7 @@
           }
         ],
         "summary": "Send coding assistant message with streaming",
-        "description": "Send a message to the build agent for direct coding assistance. Streams text deltas, tool calls, and results via SSE.",
+        "description": "Send a message to the coding agent for direct coding assistance. Streams text deltas, tool calls, and results via SSE.",
         "responses": {
           "200": {
             "description": "Streaming coding assistant events",
@@ -10445,7 +10445,7 @@
                             ]
                           },
                           "recommended_queue": {
-                            "description": "true = recommended to enter the directory queue, false = recommended to start as soon as the same directory is idle.",
+                            "description": "true = recommended to enter the directory queue, false = recommended to start immediately and bypass the directory queue.",
                             "type": "boolean"
                           },
                           "dependencies": {
@@ -28036,6 +28036,52 @@
           "properties"
         ]
       },
+      "Event.delivery.preview.updated": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "delivery.preview.updated"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "deliveryID": {
+                "type": "string",
+                "pattern": "^dlv.*"
+              },
+              "status": {
+                "type": "string"
+              },
+              "url": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "string"
+              },
+              "command": {
+                "type": "string"
+              },
+              "workspaceDir": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "deliveryID",
+              "status"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
       "Event.integrity.review.completed": {
         "type": "object",
         "properties": {
@@ -31812,6 +31858,9 @@
             "$ref": "#/components/schemas/Event.delivery.evidence.updated"
           },
           {
+            "$ref": "#/components/schemas/Event.delivery.preview.updated"
+          },
+          {
             "$ref": "#/components/schemas/Event.integrity.review.completed"
           },
           {
@@ -32540,6 +32589,10 @@
           "prompt": {
             "type": "string"
           },
+          "prompt_append": {
+            "description": "Additional instructions appended after a code-owned stage-agent core prompt.",
+            "type": "string"
+          },
           "disable": {
             "type": "boolean"
           },
@@ -33206,7 +33259,7 @@
             "type": "string"
           },
           "default_agent": {
-            "description": "Default agent to use when none is specified. Must be a primary agent. Falls back to 'build' if not set or if the specified agent is invalid.",
+            "description": "Default agent to use when none is specified. Must be a primary agent. When omitted, the built-in default is 'coding'; an invalid configured agent is an error.",
             "type": "string"
           },
           "username": {
@@ -33225,6 +33278,9 @@
             "description": "Agent configuration, see https://opencorvus.ai/docs/agents",
             "type": "object",
             "properties": {
+              "coding": {
+                "$ref": "#/components/schemas/AgentConfig"
+              },
               "build": {
                 "$ref": "#/components/schemas/AgentConfig"
               },

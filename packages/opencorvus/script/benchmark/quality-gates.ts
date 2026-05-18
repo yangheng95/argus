@@ -84,9 +84,8 @@ export async function auditWorkspace(input: {
   const scopeRelevantFiles = input.changedFiles && input.changedFiles.length > 0
     ? dedupeFiles(input.changedFiles).filter((f) => !isInternalPath(f))
     : []
-  const nonConfigScopeFiles = scopeRelevantFiles.filter((f) => !CONFIG_BASENAMES.has(path.basename(f.replace(/\\/g, "/"))))
-  const unmappedFiles = input.moduleBlocks && input.moduleBlocks.length > 0 && nonConfigScopeFiles.length > 0
-    ? nonConfigScopeFiles.filter((file) => !belongsToAnyBlock(file, input.moduleBlocks!))
+  const unmappedFiles = input.moduleBlocks && input.moduleBlocks.length > 0 && scopeRelevantFiles.length > 0
+    ? scopeRelevantFiles.filter((file) => !belongsToAnyBlock(file, input.moduleBlocks!))
     : []
 
   return ArtifactAudit.parse({
@@ -144,10 +143,10 @@ export async function deriveRunMetrics(input: {
   const judgeEvents = input.events.filter((e) => String(e.stage || "") === "evaluator")
   const noopCycles = longestVerificationStreakByGoal(judgeEvents)
   const repeatedReasoning = repeatedSimilarity(commandSummaries)
-  // Exclude config infrastructure files from scope drift — modifying tsconfig.json,
-  // package.json, etc. is often necessary for the project to function (e.g., adding
-  // @types/bun to make `bunx tsc --noEmit` pass) and should not count as scope drift.
-  const scopeFiles = changedFiles.filter((f) => !CONFIG_BASENAMES.has(path.basename(f.replace(/\\/g, "/"))))
+  // When module blocks are present, every changed file must map to one of
+  // them. Package manifests and lockfiles are legitimate implementation
+  // files, but they still need explicit ownership in request-scoped benches.
+  const scopeFiles = changedFiles
   const mappedChangedCount = scopeFiles.length > 0 && input.moduleBlocks && input.moduleBlocks.length > 0
     ? scopeFiles.filter((file) => belongsToAnyBlock(file, input.moduleBlocks!)).length
     : 0
@@ -178,6 +177,11 @@ export function evaluateQualityGates(input: {
   runMetrics: RunMetricsType
   taskStatus: string
   evaluationVerdict?: string
+  localVerify?: {
+    status?: string
+    exitCode?: number | null
+    command?: string | null
+  }
 }): QualityVerdict {
   const failures: QualityFailure[] = []
   if (input.runMetrics.noop_cycle_count >= 8 || (input.runMetrics.meaningful_change_gap_ms >= 15 * 60 * 1000 && input.runMetrics.repeat_command_ratio >= 0.45)) {
@@ -208,6 +212,13 @@ export function evaluateQualityGates(input: {
       evidence: `taskStatus=${input.taskStatus}, evaluationVerdict=${input.evaluationVerdict || ""}`,
     })
   }
+  if (input.localVerify?.status === "completed" && input.localVerify.exitCode !== 0) {
+    failures.push({
+      category: "verification_gap",
+      message: "Configured local verification command failed",
+      evidence: `command=${input.localVerify.command || ""}, exitCode=${input.localVerify.exitCode}`,
+    })
+  }
   if (
     input.artifactAudit.out_of_scope_file_count > 0 ||
     input.runMetrics.scope_drift_score >= 0.25 ||
@@ -220,7 +231,7 @@ export function evaluateQualityGates(input: {
     })
   }
 
-  const hardFailCategories = new Set(["liveness", "verification_gap"])
+  const hardFailCategories = new Set(["liveness", "scope_drift", "artifact_quality", "verification_gap", "delivery_gap"])
   const hardFailures = failures.filter((item) => hardFailCategories.has(item.category))
   const verdict = hardFailures.some((item) => item.category === "liveness")
     ? "blocked"

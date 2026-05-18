@@ -5,6 +5,8 @@ import type { Agent } from "../../src/agent/agent"
 import { LLM } from "../../src/session/llm"
 import type { Message } from "../../src/session/message"
 import type { Provider } from "../../src/provider/provider"
+import BUILD_CORE from "../../src/prompt/core/build-core.txt"
+import PROMPT_CODING from "../../src/agent/prompt/coding.txt"
 
 const model = {
   providerID: "test",
@@ -52,6 +54,44 @@ test("default system mode appends caller system after the agent prompt", async (
   })
 
   expect(system).toEqual(["AGENT REGISTRY PROMPT\nCALLER RUNTIME CONTEXT\nRUNNER STAGE CORE"])
+})
+
+test("direct coding uses the coding prompt while build stage uses complete core", async () => {
+  const coding = {
+    name: "coding",
+    mode: "primary",
+    prompt: PROMPT_CODING,
+  } as Agent.Info
+  const codingSystem = await LLM.composeSystem({
+    agent: coding,
+    model,
+    system: [],
+    user: {
+      ...user(),
+      agent: "coding",
+      system: undefined,
+    } as Message.User,
+  })
+
+  expect(codingSystem).toEqual([PROMPT_CODING])
+
+  const build = {
+    name: "build",
+    mode: "primary",
+    prompt: BUILD_CORE,
+  } as Agent.Info
+  const buildSystem = await LLM.composeSystem({
+    agent: build,
+    model,
+    system: ["RUNNER RUNTIME CONTEXT"],
+    user: {
+      ...user("complete"),
+      agent: "build",
+      system: BUILD_CORE,
+    } as Message.User,
+  })
+
+  expect(buildSystem).toEqual([`RUNNER RUNTIME CONTEXT\n${BUILD_CORE}`])
 })
 
 test("runtime prompt call sites mark complete system prompts explicitly", async () => {

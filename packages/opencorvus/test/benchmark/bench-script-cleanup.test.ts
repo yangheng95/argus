@@ -76,3 +76,41 @@ test("benchmark path flags tolerate shell-preserved wrapping quotes", () => {
   expect(src).toContain("function stripWrappingQuotes")
   expect(src).toContain("const report = stripWrappingQuotes(flag(\"--report\"))")
 })
+
+test("benchmark does not auto-resume failed terminal tasks", () => {
+  expect(src).not.toMatch(/--max-auto-resumes/)
+  expect(src).not.toMatch(/\bmaxAutoResumes\b/)
+  expect(src).not.toMatch(/\bautoResumes\b/)
+  expect(src).not.toMatch(/auto-resume/)
+  expect(src).toContain("report preserves the terminal state without automatic resume")
+})
+
+test("resume mode attaches read-only unless an explicit message is provided", () => {
+  expect(src).toContain("const resumeMessage = flag(\"--resume-message\")")
+  expect(src).not.toContain("修复所有失败的goals并重试")
+  expect(src).toContain("attached without message injection")
+  expect(src).toContain("injecting explicit message")
+  expect(src).not.toContain("resume message inject failed")
+})
+
+test("benchmark timeout is based on real inactivity, not process start time", () => {
+  expect(src).toContain("--idle-timeout-ms")
+  expect(src).toContain("function assertRecentBenchmarkActivity")
+  expect(src).toContain("Date.now() - lastActivityLogAt")
+  expect(src).toContain("had no benchmark activity")
+  expect(src).not.toContain("(no benchmark-side timeouts)")
+})
+
+test("benchmark report preserves missing evidence instead of substituting empty API data", () => {
+  expect(src).not.toContain("tryApiJson")
+  expect(src).not.toContain("fallback: unknown")
+  expect(src).toContain("report_api_errors")
+  expect(src).toContain("report api error")
+})
+
+test("benchmark git changed-file evidence fails loudly", () => {
+  expect(src).not.toMatch(/gitFallback/)
+  expect(src).not.toMatch(/catch\(\(\) => \[\] as string\[\]\)/)
+  expect(src).toContain("Git is a parallel evidence")
+  expect(src).toContain("failed with exit")
+})

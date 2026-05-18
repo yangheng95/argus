@@ -2,7 +2,6 @@ import { Hono } from "hono"
 import { describeRoute, validator, resolver } from "hono-openapi"
 import { streamSSE } from "hono/streaming"
 import z from "zod"
-import { Agent } from "@/agent/agent"
 import { Bus } from "@/bus"
 import { Session } from "@/session"
 import { SessionPrompt } from "@/session/prompt"
@@ -89,7 +88,7 @@ export function CodingRoutes() {
       describeRoute({
         summary: "Send coding assistant message with streaming",
         description:
-          "Send a message to the build agent for direct coding assistance. Streams text deltas, tool calls, and results via SSE.",
+          "Send a message to the coding agent for direct coding assistance. Streams text deltas, tool calls, and results via SSE.",
         operationId: "coding.message.stream",
         responses: {
           200: {
@@ -197,13 +196,13 @@ export function CodingRoutes() {
               }),
             )
 
-            // Send the prompt to the build agent
-            const agent = await Agent.defaultAgent()
+            // Send direct coding requests to the coding agent, independent of
+            // the operator's workflow/default_agent selection.
             const parts = input.parts ?? [{ type: "text" as const, text: input.text }]
 
             await SessionPrompt.prompt({
               sessionID,
-              agent,
+              agent: "coding",
               parts,
             })
 

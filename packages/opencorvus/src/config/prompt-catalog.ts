@@ -1,11 +1,11 @@
 import { Config } from "./config"
 import { Agent } from "@/agent/agent"
-import { AgentRoleContract } from "@/agent/role-contract"
+import { AgentRoleContract, type AgentRoleID } from "@/agent/role-contract"
 
 import PROMPT_SYSTEM from "@/session/prompt/system.txt"
 import PROMPT_GENERATE from "@/agent/generate.txt"
 
-/** Native agents whose prompt is NOT consumed from `config.agent.<name>.prompt`
+/** Native agents whose prompt is NOT consumed from prompt catalog config
  *  at runtime. Surfacing them in the catalog is a UX trap: users edit the
  *  card, hit Save, and nothing changes.
  *  - orchestrator → dynamic prompt built per-trigger in `buildSystemParts`;
@@ -29,17 +29,20 @@ export namespace PromptCatalog {
     group: string
     mode?: string
     prompt: string
+    effective_prompt: string
     configured_prompt: string | null
     default_prompt: string
     inherits_core: boolean
+    prompt_mode: "override" | "append"
     description?: string
   }
 
   /** Static metadata for system-scope prompt slots.
    *  Only two truly system-wide slots remain — they apply to every LLM call
-   *  regardless of which agent is running. Per-agent prompts live on
-   *  `config.agent.{name}.prompt` and surface as agent-scope entries with
-   *  their own distinct defaults from `Agent.nativeDefaultPrompt`. */
+   *  regardless of which agent is running. Per-agent override prompts live on
+   *  `config.agent.{name}.prompt`; code-owned stage prompts accept only
+   *  `config.agent.{name}.prompt_append`. Both surface as agent-scope entries
+   *  with distinct defaults from `Agent.nativeDefaultPrompt`. */
   const SYSTEM_PROMPT_META: Array<{
     key: string
     label: string
@@ -97,9 +100,11 @@ export namespace PromptCatalog {
         label: slot.label,
         group: slot.group,
         prompt: configured ?? defaultPrompt,
+        effective_prompt: configured ?? defaultPrompt,
         configured_prompt: configured,
         default_prompt: defaultPrompt,
         inherits_core: false,
+        prompt_mode: "override",
         description: slot.description,
       })
     }
@@ -111,24 +116,39 @@ export namespace PromptCatalog {
     // That mask was removed together with those legacy slots, so every native
     // agent now renders as one distinct card. `Agent.nativeDefaultPrompt` is
     // the single source of truth for the default prompt; dynamically-loaded
-    // agents (e.g. delivery) fall back to `agent.prompt` populated in state().
+    // agents (e.g. delivery) use `agent.prompt` populated in state().
+    // `prompt_mode` makes the write semantics explicit:
+    // - override entries replace the runtime prompt with `config.agent.X.prompt`.
+    // - append entries keep the code-owned core and append
+    //   `config.agent.X.prompt_append`.
     for (const agent of agents) {
       if (UNEDITABLE_AGENTS.has(agent.name)) continue
       const agentCfg = (cfg.agent ?? {})[agent.name]
-      const configuredPrompt = agentCfg?.prompt ?? null
+      const contract = AgentRoleContract.all[agent.name as AgentRoleID]
+      const promptMode = contract?.promptConfigMode === "append" ? "append" : "override"
+      const configuredPrompt = promptMode === "append"
+        ? (agentCfg?.prompt_append ?? null)
+        : (agentCfg?.prompt ?? null)
       const nativeDefault = agent.native ? Agent.nativeDefaultPrompt(agent.name) : undefined
       const defaultPrompt = nativeDefault ?? agent.prompt ?? ""
-      const inheritsCore = !configuredPrompt && (!defaultPrompt || defaultPrompt === PROMPT_SYSTEM)
+      const prompt = configuredPrompt ?? (promptMode === "append" ? "" : defaultPrompt)
+      const effectivePrompt =
+        promptMode === "append"
+          ? [defaultPrompt, configuredPrompt].filter((item) => item && item.trim().length > 0).join("\n\n")
+          : prompt
+      const inheritsCore = promptMode === "override" && !configuredPrompt && (!defaultPrompt || defaultPrompt === PROMPT_SYSTEM)
       entries.push({
         scope: "agent",
         key: agent.name,
         label: agent.name,
         group: agentGroup(agent),
         mode: agent.mode,
-        prompt: configuredPrompt ?? defaultPrompt,
+        prompt,
+        effective_prompt: effectivePrompt,
         configured_prompt: configuredPrompt,
         default_prompt: defaultPrompt,
         inherits_core: inheritsCore,
+        prompt_mode: promptMode,
         description: agent.description,
       })
     }

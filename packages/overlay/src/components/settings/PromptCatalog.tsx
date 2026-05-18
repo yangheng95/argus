@@ -32,8 +32,10 @@ interface PromptEntry {
   description?: string;
   inherits_core?: boolean;
   prompt?: string;
+  effective_prompt?: string;
   configured_prompt: string | null;
   default_prompt?: string;
+  prompt_mode?: "override" | "append";
 }
 
 interface PromptStatus {
@@ -70,6 +72,9 @@ function promptStatus(entry: PromptEntry): PromptStatus {
     return { label: t("prompt.status.custom"), tone: "active" };
   }
   if (entry.scope === "system") {
+    return { label: t("prompt.status.default"), tone: "ready" };
+  }
+  if (entry.default_prompt) {
     return { label: t("prompt.status.default"), tone: "ready" };
   }
   if (entry.inherits_core) {
@@ -197,7 +202,7 @@ export default function PromptCatalog() {
               const description = promptDescription(entry);
               const dirty = createMemo(() => isDirty(entry));
               const currentDraft = createMemo(() => draftValue(entry));
-              const canShowDefault = () => entry.configured_prompt !== null && !!entry.default_prompt;
+              const canShowDefault = () => !!entry.default_prompt;
 
               return (
                 <div class="prompt-card" data-prompt-entry={entryID}>

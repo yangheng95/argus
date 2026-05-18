@@ -5,6 +5,7 @@ const dir = fileURLToPath(new URL("..", import.meta.url))
 process.chdir(dir)
 
 import { $ } from "bun"
+import fs from "node:fs/promises"
 import path from "path"
 
 const openapi = path.join(dir, "openapi.json")
@@ -15,6 +16,28 @@ import { createClient } from "@hey-api/openapi-ts"
 const defaultsPath = path.resolve(dir, "..", "..", "opencorvus", "server-defaults.json")
 const serverDefaults = (await Bun.file(defaultsPath).json()) as { host: string; port: number }
 const defaultBaseUrl = `http://${serverDefaults.host}:${serverDefaults.port}`
+
+async function rmWithinPackage(target: string, options: { recursive?: boolean } = {}) {
+  const root = path.resolve(dir)
+  const resolved = path.resolve(dir, target)
+  if (resolved !== root && !resolved.startsWith(root + path.sep)) {
+    throw new Error(`refusing to delete path outside SDK package: ${resolved}`)
+  }
+
+  for (let attempt = 1; attempt <= 20; attempt++) {
+    try {
+      await fs.rm(resolved, { force: true, recursive: options.recursive ?? false })
+      return
+    } catch (error) {
+      const code = error && typeof error === "object" && "code" in error
+        ? String((error as NodeJS.ErrnoException).code)
+        : ""
+      if (!["EBUSY", "ENOTEMPTY", "EPERM"].includes(code) || attempt === 20) throw error
+      Bun.gc(true)
+      await Bun.sleep(100 * attempt)
+    }
+  }
+}
 
 await Bun.write(
   path.join(dir, "src", "defaults.ts"),
@@ -51,7 +74,8 @@ await Bun.write(
 
 await $`bun dev generate > ${openapi}`.cwd(path.resolve(dir, "../../opencorvus"))
 await Bun.write(rootOpenapi, await Bun.file(openapi).text())
-await $`rm -rf src/gen dist`
+await rmWithinPackage("src/gen", { recursive: true })
+await rmWithinPackage("dist", { recursive: true })
 
 const generate = async (output: string) =>
   createClient({
@@ -89,4 +113,4 @@ await generate("./src/gen")
 
 await $`bun prettier --write src`
 await $`bun tsc`
-await $`rm openapi.json`
+await rmWithinPackage("openapi.json")

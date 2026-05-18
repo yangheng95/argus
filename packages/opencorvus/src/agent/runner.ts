@@ -17,7 +17,8 @@
  *
  * Everything else — model resolution, child session creation, resumable
  * session-runtime wiring, SessionPrompt invocation, abort propagation, stream-error capture,
- * `loadStageSkills` skill injection, `config.agent.<kind>.prompt` user-append
+ * `loadStageSkills` skill injection, `config.agent.<kind>.prompt_append`
+ * user-append
  * — is centralised here.
  *
  * Per CLAUDE.md rule 24, this is the deliberate abstraction of a repeating
@@ -39,12 +40,10 @@
  *      a single composed string; the orchestrator's static / dynamic split
  *      is a 1h-cache optimisation that has no analog for worker agents.
  *
- *   2. `withStepHook` wrapping `withExtraTools` so a deferred-stop finalizer
- *      runs after every assistant step. Worker agents have no equivalent
- *      step-level coordination need — their session terminates on the
- *      collector's contract being met (build/delivery) or stepCountIs (integrity
- *      / prosecutor). Adding step-hook plumbing to the runner would saddle
- *      every worker with the orchestrator's dispatch-model overhead.
+ *   2. Orchestrator tools return evidence to the same reasoning turn. Worker
+ *      agents terminate on the collector's contract being met (build/delivery)
+ *      or stepCountIs (integrity / prosecutor), while the orchestrator owns the
+ *      next decision itself instead of relying on a worker-style collector.
  *
  *   3. Stream errors are persisted as `engine_artifact kind="orchestrator-
  *      stream-error"` and consumed by the next wake's LLM via describe (rule
@@ -54,8 +53,8 @@
  *      whose recovery loop is itself driven by another LLM turn.
  *
  * The orchestrator additionally owns concurrency state (`running.set(taskID,
- * ctrl)`), `stopSignal` deferred-stop plumbing, and SerialQueue-driven wake
- * scheduling — none of which the runner models, by design.
+ * ctrl)`) and SerialQueue-driven wake scheduling — neither of which the runner
+ * models, by design.
  *
  * Anyone considering "consolidating orchestrator onto runAgentSession":
  * stop. The orchestrator is the worker abstraction's HOST, not a worker.
@@ -209,15 +208,6 @@ export interface RunAgentSessionInput<C> {
     toolName: string
     isSatisfied: (collector: C) => boolean
     shouldExposeOnlyTerminalTool: (collector: C) => boolean
-    recovery?: {
-      maxTurns: number
-      buildUserPrompt: (input: {
-        collector: C
-        toolName: string
-        attempt: number
-        finalMessage: Message.WithParts
-      }) => string
-    }
   }
   /** Pass-through skill stage. When omitted, no skill injection runs.
    *  See `SkillStage` JSDoc. */
@@ -479,18 +469,6 @@ export function terminalToolMissingErrorFor(input: {
   const data = (err as { data?: { toolName?: string; message?: string } }).data
   if (data?.toolName !== input.toolName) return null
   return { message: data.message ?? `missing terminal tool ${input.toolName}` }
-}
-
-export function shouldContinueForMissingTerminalTool(input: {
-  finalMessage: { info: { role: string; error?: unknown } }
-  toolName: string
-  satisfied: boolean
-  attempt: number
-  maxTurns: number
-}): boolean {
-  if (input.satisfied) return false
-  if (input.attempt >= input.maxTurns) return false
-  return terminalToolMissingErrorFor(input) !== null
 }
 
 async function recordAgentErrorForOrchestrator(input: {
@@ -804,36 +782,7 @@ export async function runAgentSession<C>(
         }
         finalMessage = (await SessionPrompt.prompt(promptArgs)) as Message.WithParts
       }
-      let terminalRecoveryAttempt = 0
-      let nextParts: typeof parts = parts
-      while (true) {
-        await promptOnce(nextParts)
-        if (!finalMessage) throw new Error(`agent ${agentName} prompt returned no final message`)
-        if (!input.terminalTool) break
-        const collector = input.toolKit.getCollector()
-        if (input.terminalTool.isSatisfied(collector)) break
-        const recovery = input.terminalTool.recovery
-        if (
-          !recovery ||
-          !shouldContinueForMissingTerminalTool({
-            finalMessage,
-            toolName: input.terminalTool.toolName,
-            satisfied: false,
-            attempt: terminalRecoveryAttempt,
-            maxTurns: recovery.maxTurns,
-          })
-        ) {
-          break
-        }
-        terminalRecoveryAttempt++
-        const text = recovery.buildUserPrompt({
-          collector,
-          toolName: input.terminalTool.toolName,
-          attempt: terminalRecoveryAttempt,
-          finalMessage,
-        })
-        nextParts = [{ type: "text", text, id: Identifier.ascending("part") }]
-      }
+      await promptOnce()
     } finally {
       errorUnsub()
       input.signal?.removeEventListener("abort", abortPrompt)
@@ -1098,10 +1047,9 @@ function namedErrorReason(err: Error): string {
  *   4. `isComplete({ok:true})` → ok.
  *
  *   5. `isComplete({ok:false, terminal:true})` → fail-fast. This is
- *      the contract by which a caller (e.g. integrity) signals that
- *      its in-session recovery has already exhausted its budget; an
- *      outer retry would be the 90-minute storm Phase D was designed
- *      to avoid.
+ *      the contract by which a caller signals that the completed attempt has
+ *      already proven a deterministic protocol failure; an outer retry would
+ *      repeat the same shape.
  *
  *   6. `isComplete({ok:false, terminal:false})` → retry.
  *
@@ -1234,8 +1182,8 @@ export async function runAgentSessionWithRetry<C>(
       lastError = thrownError ?? new Error(classification.reason)
       // Either the throw was a deterministic budget overflow (re-running
       // can't fix it — caller needs to see the breakdown), or the caller's
-      // isComplete signalled `terminal:true` (in-session recovery has
-      // already exhausted its budget for this contract — see Phase D).
+      // isComplete signalled `terminal:true` for a deterministic contract
+      // failure.
       // Either way the retry loop must stop now (rule 1: surface the real
       // cause, do not loop a useless action). For thrown deterministic
       // budget overflows we re-throw the original error type so the
@@ -1311,7 +1259,7 @@ export async function runAgentSessionWithRetry<C>(
 //
 // Order:
 //   1. core prompt (from `prompt/core/<kind>-core.txt`)
-//   2. user-config append: `config.agent.<kind>.prompt`, when present
+//   2. user-config append: `config.agent.<kind>.prompt_append`, when present
 //   3. skill injection: `loadStageSkills(EngineConfig.<stage>.skills, stage)`
 //      when `skillsStage` is set on the input.
 //
@@ -1326,7 +1274,7 @@ async function composeSystemPrompt(
   taskSignals: TaskSignals | undefined,
 ): Promise<{ prompt: string; requiredTools: string[] }> {
   const config = await Config.get()
-  const userAppend = (config.agent as Record<string, any> | undefined)?.[agentName]?.prompt
+  const userAppend = (config.agent as Record<string, any> | undefined)?.[agentName]?.prompt_append
   const withAppend =
     typeof userAppend === "string" && userAppend.trim().length > 0
       ? `${core}\n\n${userAppend}`

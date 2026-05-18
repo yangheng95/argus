@@ -770,6 +770,7 @@ export namespace EngineService {
         metadata,
         channelBinding: input.channelBinding,
         projectID: Instance.project.id,
+        queue: input.queue,
       })
     } catch (error) {
       const existing = requestID ? recoverTaskByRequest(requestID, error) : undefined

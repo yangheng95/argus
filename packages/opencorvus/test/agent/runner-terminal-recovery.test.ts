@@ -1,11 +1,8 @@
 import { describe, expect, test } from "bun:test"
-import {
-  shouldContinueForMissingTerminalTool,
-  terminalToolMissingErrorFor,
-} from "../../src/agent/runner"
+import { terminalToolMissingErrorFor } from "../../src/agent/runner"
 import { Message } from "../../src/session/message"
 
-describe("runAgentSession terminal tool same-session recovery", () => {
+describe("runAgentSession terminal tool missing detection", () => {
   test("recognizes the matching missing terminal tool error", () => {
     const err = new Message.TerminalToolMissingError({
       message: "missing report",
@@ -36,7 +33,7 @@ describe("runAgentSession terminal tool same-session recovery", () => {
     ).toBeNull()
   })
 
-  test("continues the same session while recovery budget remains", () => {
+  test("does not convert missing terminal tool errors into recovery turns", async () => {
     const err = new Message.TerminalToolMissingError({
       message: "missing report",
       toolName: "report_build_result",
@@ -44,40 +41,10 @@ describe("runAgentSession terminal tool same-session recovery", () => {
     })
 
     expect(
-      shouldContinueForMissingTerminalTool({
+      terminalToolMissingErrorFor({
         finalMessage: { info: { role: "assistant", error: err } },
         toolName: "report_build_result",
-        satisfied: false,
-        attempt: 0,
-        maxTurns: 3,
-      }),
-    ).toBe(true)
-  })
-
-  test("stops recovery once the report is present or the same-session budget is exhausted", () => {
-    const err = new Message.TerminalToolMissingError({
-      message: "missing report",
-      toolName: "report_build_result",
-      retries: 0,
-    })
-
-    expect(
-      shouldContinueForMissingTerminalTool({
-        finalMessage: { info: { role: "assistant", error: err } },
-        toolName: "report_build_result",
-        satisfied: true,
-        attempt: 0,
-        maxTurns: 3,
-      }),
-    ).toBe(false)
-    expect(
-      shouldContinueForMissingTerminalTool({
-        finalMessage: { info: { role: "assistant", error: err } },
-        toolName: "report_build_result",
-        satisfied: false,
-        attempt: 3,
-        maxTurns: 3,
-      }),
-    ).toBe(false)
+      })?.message,
+    ).toBe("missing report")
   })
 })

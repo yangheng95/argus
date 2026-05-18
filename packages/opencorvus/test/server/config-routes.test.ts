@@ -29,7 +29,7 @@ describe("config prompt routes", () => {
             prompt: "Custom explore prompt",
           },
           "intent-analysis": {
-            prompt: "Custom intent prompt",
+            prompt_append: "Custom intent append",
           },
         },
       },
@@ -51,9 +51,11 @@ describe("config prompt routes", () => {
           key: string
           scope: string
           prompt: string
+          effective_prompt: string
           default_prompt?: string
           configured_prompt: string | null
           inherits_core?: boolean
+          prompt_mode?: "override" | "append"
         }>
         // System-scope slots: core_header + agent_generate (legacy spec/goal/
         // delivery _system slots were dropped when per-agent scope
@@ -61,8 +63,14 @@ describe("config prompt routes", () => {
         expect(body.some((item) => item.key === "core_header" && item.scope === "system" && item.prompt === "Custom core header")).toBe(true)
         expect(body.some((item) => item.key === "agent_generate" && item.scope === "system")).toBe(true)
         // Agent-scope: user override on an agent surfaces as configured_prompt.
-        expect(body.some((item) => item.key === "explore" && item.scope === "agent" && item.prompt === "Custom explore prompt" && item.configured_prompt === "Custom explore prompt")).toBe(true)
-        expect(body.some((item) => item.key === "intent-analysis" && item.scope === "agent" && item.prompt === "Custom intent prompt" && item.configured_prompt === "Custom intent prompt")).toBe(true)
+        expect(body.some((item) => item.key === "explore" && item.scope === "agent" && item.prompt_mode === "override" && item.prompt === "Custom explore prompt" && item.configured_prompt === "Custom explore prompt")).toBe(true)
+        const intent = body.find((item) => item.key === "intent-analysis" && item.scope === "agent")
+        expect(intent?.prompt_mode).toBe("append")
+        expect(intent?.prompt).toBe("Custom intent append")
+        expect(intent?.configured_prompt).toBe("Custom intent append")
+        expect(intent?.default_prompt && intent.default_prompt.length > 0).toBe(true)
+        expect(intent?.effective_prompt).toContain(intent!.default_prompt!)
+        expect(intent?.effective_prompt).toContain("Custom intent append")
         // Previously-masked native agents (architect / requirements / design-analyst)
         // now each have a distinct default prompt — none collapse to empty.
         const architect = body.find((item) => item.key === "architect" && item.scope === "agent")
@@ -78,5 +86,23 @@ describe("config prompt routes", () => {
         expect(requirements!.default_prompt).not.toBe(designAnalyst!.default_prompt)
       },
     })
+  })
+
+  test("Config schema rejects append-mode prompt replacement and agent renames", () => {
+    const promptParsed = Config.Info.safeParse({
+      agent: {
+        build: { prompt: "Invalid replacement" },
+      },
+    })
+    if (promptParsed.success) throw new Error("expected build prompt replacement to be rejected")
+    expect(JSON.stringify(promptParsed.error.issues)).toContain("config.agent.build.prompt is invalid")
+
+    const nameParsed = Config.Info.safeParse({
+      agent: {
+        build: { name: "Builder" },
+      },
+    })
+    if (nameParsed.success) throw new Error("expected agent rename to be rejected")
+    expect(JSON.stringify(nameParsed.error.issues)).toContain("config.agent.build.name cannot rename")
   })
 })

@@ -67,7 +67,7 @@ export function FrontendPreviewPanel(props: {
           class="frontend-preview-frame"
           src={url()}
           title={t("frontend_preview.title")}
-          sandbox="allow-scripts allow-forms"
+          sandbox="allow-scripts allow-forms allow-same-origin"
         />
       </Show>
     </section>

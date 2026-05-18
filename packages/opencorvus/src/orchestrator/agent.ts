@@ -9,9 +9,13 @@
  * string to hint WHY they just woke the orchestrator; every decision derives
  * from the describe snapshot, not from the note's content.
  *
- * The orchestrator controls the entire pipeline via tools:
- * requirements → goals → plan → execute → eval → delivery verify → publish
- * All other agents (requirements, architect, plan, eval, delivery) are subordinate workers.
+ * The orchestrator is the only task-level decision maker. It reads the
+ * describe/artifact snapshot on every wake and chooses which specialist tool
+ * to invoke next: intent analysis, design analysis, requirements, architect,
+ * build, integrity, prosecutor, delivery, or lifecycle controls. MiniWorkflow
+ * renders an advisory path; it is not a fixed pipeline or hidden state
+ * machine. Specialist agents own their structured artifacts, but task
+ * lifecycle stays here.
  *
  * ── Why this file does NOT use `runAgentSession` ───────────────────────────
  *
@@ -24,9 +28,8 @@
  *
  * The orchestrator deliberately diverges on every one of those axes:
  *   - Two-part system prompt (static + per-wake describe / iteration / verdict)
- *   - `withStepHook` wrapping `withExtraTools` so deferred-stop finalises after
- *     every assistant step (dispatch tools opt to abort the orchestrator's
- *     turn once their child sessions are launched).
+ *   - Orchestrator tools return evidence to the same reasoning turn; they do
+ *     not end scheduling through host-side deferred-stop gates.
  *   - Stream errors are persisted as `engine_artifact kind="orchestrator-
  *     stream-error"` and consumed by the next wake's LLM via describe; the
  *     orchestrator does NOT throw on them, because rule 23 says recovery is
@@ -192,7 +195,6 @@ export namespace Orchestrator {
     const ctrl = new AbortController()
     running.set(taskID, ctrl)
 
-    let stopSignal: AbortSignal | undefined
     let agentSessionID: string | undefined
     try {
       const task = requireTask(taskID)
@@ -258,7 +260,7 @@ export namespace Orchestrator {
 
 
       // 3. Create tools (agentSessionID passed so tool sessions become children)
-      const { tools, stopSignal: dispatchSignal, finalizeDeferredStop } = createOrchestratorTools({
+      const { tools } = createOrchestratorTools({
         taskID,
         agentSessionID: agentSession.id,
         signal: ctrl.signal,
@@ -266,7 +268,6 @@ export namespace Orchestrator {
         workflowState,
         operatorMessage: event?.operatorMessage,
       })
-      stopSignal = dispatchSignal
       const guard = toolGuard(tools)
       const enableMap: Record<string, boolean> = Object.fromEntries(
         Object.keys(guard.tools).map((name) => [name, true]),
@@ -365,9 +366,8 @@ export namespace Orchestrator {
         toolCount: Object.keys(tools).length,
       })
 
-      // Abort hooks: both ctrl.signal (external interrupt) and stopSignal
-      // (deferred-stop from dispatch tools) translate to SessionPrompt.cancel
-      // on the child session so the loop releases its processor cleanly.
+      // Abort hooks translate external interrupts to SessionPrompt.cancel on
+      // the child session so the loop releases its processor cleanly.
       const abortPrompt = () => {
         try {
           SessionPrompt.cancel(agentSession.id)
@@ -376,12 +376,6 @@ export namespace Orchestrator {
         }
       }
       ctrl.signal.addEventListener("abort", abortPrompt, { once: true })
-      const stopSignalListener = stopSignal
-        ? () => abortPrompt()
-        : undefined
-      if (stopSignal && stopSignalListener) {
-        stopSignal.addEventListener("abort", stopSignalListener, { once: true })
-      }
 
       // Subscribe to session-level errors so critical stream failures still
       // flip the task to failed. SessionLoop publishes Session.Event.Error on
@@ -405,32 +399,24 @@ export namespace Orchestrator {
         streamErrors.push({ reason: msg, errorName: props.error?.name })
       })
 
-      // 5. Run the orchestrator session — tools via withExtraTools, deferred
-      //    stop via withStepHook. Step limit lives on agent.orchestrator.steps.
+      // 5. Run the orchestrator session — tools via withExtraTools. Step limit
+      //    lives on agent.orchestrator.steps.
       let finalMessage: Message.WithParts | undefined
       try {
         await SessionPrompt.withExtraTools(agentSession.id, guard.tools as any, async () => {
-          await SessionPrompt.withStepHook(agentSession.id, () => {
-            const stopReason = finalizeDeferredStop()
-            if (stopReason) {
-              log.info("orchestrator deferred stop finalized", { taskID, reason: stopReason })
-            }
-          }, async () => {
-            finalMessage = (await SessionPrompt.prompt({
-              sessionID: agentSession.id,
-              model: { providerID: model.providerID, modelID: model.api.id },
-              agent: "orchestrator",
-              system: Array.isArray(system) ? system.join("\n\n") : system,
-              systemMode: "complete",
-              tools: enableMap,
-              parts: partsWithIds,
-            })) as Message.WithParts
-          })
+          finalMessage = (await SessionPrompt.prompt({
+            sessionID: agentSession.id,
+            model: { providerID: model.providerID, modelID: model.api.id },
+            agent: "orchestrator",
+            system: Array.isArray(system) ? system.join("\n\n") : system,
+            systemMode: "complete",
+            tools: enableMap,
+            parts: partsWithIds,
+          })) as Message.WithParts
         })
       } finally {
         errorUnsub()
         ctrl.signal.removeEventListener("abort", abortPrompt)
-        if (stopSignal && stopSignalListener) stopSignal.removeEventListener("abort", stopSignalListener)
       }
 
       const assistantInfo = finalMessage?.info as Message.Assistant | undefined
@@ -546,12 +532,6 @@ export namespace Orchestrator {
       // equivalent for the post-phase-3 the pre-migration runtime hooks path.
       if (ctrl.signal.aborted) {
         log.info("orchestrator was aborted", { taskID })
-        return
-      }
-      // stopSignal abort is a normal termination (submit_execution/dispatch/dispatch_goal
-      // dispatched work). NOT an error — the agent will be re-triggered on completion.
-      if (stopSignal?.aborted) {
-        log.info("orchestrator stopped after dispatch", { taskID, note: event?.note })
         return
       }
       const structured = serializeOrchestratorTaskError(error)
@@ -737,8 +717,8 @@ async function buildSystemParts(task: TaskRow, _event: OrchestratorEvent | undef
     ctx.push("- assistant.auto_iteration=true: rejected deliveries and failed terminal waves may queue same-task repair work automatically when evidence is concrete and not a repeated identical failure.")
     ctx.push("- Keep repairs scoped to the latest delivery evidence, then run `deliver` again; stop and ask when the failure repeats or needs operator judgment.")
   } else {
-    ctx.push("- assistant.auto_iteration=false: `deliver` is the scheduler endpoint. After a rejected delivery or failed terminal wave, report blockers and wait for an operator follow-up before launching repair work.")
-    ctx.push("- A fresh operator message such as `continue` or a concrete change request may continue the same task, but the host must not open rework attempts or queue a new build loop by itself.")
+    ctx.push("- assistant.auto_iteration=false: rejected deliveries and failed terminal waves do not open host-side rework attempts or queue a new build loop by themselves.")
+    ctx.push("- The current reasoning turn still owns the next decision: use the evidence to repair, replan, ask a concrete question, fail the task, or report the current result.")
   }
   ctx.push("")
 

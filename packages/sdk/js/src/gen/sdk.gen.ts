@@ -3883,7 +3883,7 @@ export class Message2 extends HeyApiClient {
   /**
    * Send coding assistant message with streaming
    *
-   * Send a message to the build agent for direct coding assistance. Streams text deltas, tool calls, and results via SSE.
+   * Send a message to the coding agent for direct coding assistance. Streams text deltas, tool calls, and results via SSE.
    */
   public stream<ThrowOnError extends boolean = false>(
     parameters?: {

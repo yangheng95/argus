@@ -22,7 +22,7 @@
  * Implementation: thin shell over `runAgentSession`. Agent-specific code
  * is the user-prompt constructor and the architect output tool kit; the
  * runner owns model resolution, session creation, system-prompt
- * composition (core + config.agent.architect.prompt append + skills),
+ * composition (core + config.agent.architect.prompt_append append + skills),
  * stream-error capture, and abort signal propagation.
  */
 import { runAgentSession } from "@/agent/runner"

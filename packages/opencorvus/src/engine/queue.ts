@@ -1,14 +1,15 @@
 /**
- * Task serialization queue — single source of truth for "which task is
- * active in a working directory".
+ * Task serialization queue — single source of truth for queue=true task
+ * admission in a working directory.
  *
  * Lock key: the task's working directory (cwd), resolved from
  *   session.directory → project.worktree.
  *
- * Two tasks in the same cwd must never run concurrently (shared git state,
- * shared file system). Two tasks in different cwds are independent.
+ * queue=true tasks in the same cwd are serialized. queue=false creation
+ * persists an active task before this module runs, so it intentionally bypasses
+ * this directory queue and may run beside active same-cwd tasks.
  *
- * All external scheduling requests must go through this module so queued-task
+ * All queued scheduling requests must go through this module so queued-task
  * claiming and active-task re-entry share one coordinator.
  */
 

@@ -22,7 +22,6 @@ mock.module("@/agent/runner", () => ({
   messageHasInformationMissing: () => false,
   extractInformationMissingBlock: () => undefined,
   terminalToolMissingErrorFor: () => undefined,
-  shouldContinueForMissingTerminalTool: () => false,
   promptToolSwitchesForAgentRun: () => ({}),
   classifyAttemptOutcome: () => ({ kind: "noop" }),
 }))

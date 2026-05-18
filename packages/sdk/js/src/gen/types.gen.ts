@@ -438,6 +438,19 @@ export type EventDeliveryEvidenceUpdated = {
   }
 }
 
+export type EventDeliveryPreviewUpdated = {
+  type: "delivery.preview.updated"
+  properties: {
+    taskID: string
+    deliveryID: string
+    status: string
+    url?: string
+    reason?: string
+    command?: string
+    workspaceDir?: string
+  }
+}
+
 export type EventIntegrityReviewCompleted = {
   type: "integrity.review.completed"
   properties: {
@@ -1585,6 +1598,7 @@ export type Event =
   | EventIntegrityReviewChunk
   | EventDeliveryGateRejected
   | EventDeliveryEvidenceUpdated
+  | EventDeliveryPreviewUpdated
   | EventIntegrityReviewCompleted
   | EventProjectUpdated
   | EventServerConnected
@@ -2063,6 +2077,10 @@ export type AgentConfig = {
   temperature?: number
   top_p?: number
   prompt?: string
+  /**
+   * Additional instructions appended after a code-owned stage-agent core prompt.
+   */
+  prompt_append?: string
   disable?: boolean
   /**
    * Description of when to use the agent
@@ -2378,7 +2396,7 @@ export type Config = {
    */
   small_model?: string
   /**
-   * Default agent to use when none is specified. Must be a primary agent. Falls back to 'build' if not set or if the specified agent is invalid.
+   * Default agent to use when none is specified. Must be a primary agent. When omitted, the built-in default is 'coding'; an invalid configured agent is an error.
    */
   default_agent?: string
   /**
@@ -2393,6 +2411,7 @@ export type Config = {
    * Agent configuration, see https://opencorvus.ai/docs/agents
    */
   agent?: {
+    coding?: AgentConfig
     build?: AgentConfig
     general?: AgentConfig
     explore?: AgentConfig
@@ -7307,7 +7326,7 @@ export type GatewayTaskDecomposeResponses = {
        */
       executor?: "opencorvus" | "codex" | "claude-code"
       /**
-       * true = recommended to enter the directory queue, false = recommended to start as soon as the same directory is idle.
+       * true = recommended to enter the directory queue, false = recommended to start immediately and bypass the directory queue.
        */
       recommended_queue: boolean
       /**

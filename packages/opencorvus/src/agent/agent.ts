@@ -10,17 +10,18 @@ import { ProviderTransform } from "../provider/transform"
 
 import PROMPT_GENERATE from "./generate.txt"
 import ARCHITECT_CORE from "@/prompt/core/architect-core.txt"
+import BUILD_CORE from "@/prompt/core/build-core.txt"
 import REQUIREMENTS_CORE from "@/prompt/core/requirements-core.txt"
 import DESIGN_ANALYST_CORE from "@/prompt/core/design-analyst-core.txt"
 import INTEGRITY_CORE from "@/prompt/core/integrity-core.txt"
 import INTENT_ANALYSIS_CORE from "@/prompt/core/intent-analysis-core.txt"
 import PROSECUTOR_CORE from "@/prompt/core/prosecutor-core.txt"
-import PROMPT_BUILD from "./prompt/build.txt"
+import PROMPT_CODING from "./prompt/coding.txt"
 import PROMPT_COMPACTION from "./prompt/compaction.txt"
 import PROMPT_EXPLORE from "./prompt/explore.txt"
 import PROMPT_GENERAL from "./prompt/general.txt"
 import PROMPT_TITLE from "./prompt/title.txt"
-import { AgentRoleContract } from "./role-contract"
+import { AgentRoleContract, type AgentRoleID } from "./role-contract"
 import { PermissionNext } from "@/permission/next"
 import { mergeDeep, pipe, sortBy, values } from "remeda"
 import { Plugin } from "@/plugin"
@@ -122,12 +123,12 @@ export namespace Agent {
       PermissionNext.merge(defaults, ...rulesets, user, mirrorDenied)
 
     const result: Record<string, Info> = {
-      build: {
-        name: "build",
-        description: AgentRoleContract.description("build"),
+      coding: {
+        name: "coding",
+        description: AgentRoleContract.description("coding"),
         tools: { exclude: ["panel", "task_report", "analytics", ...MIRROR_TOOL_IDS] },
         options: {},
-        prompt: PROMPT_BUILD,
+        prompt: PROMPT_CODING,
         permission: nonDesignPermissions(
           PermissionNext.fromConfig({
             question: "allow",
@@ -136,6 +137,22 @@ export namespace Agent {
         ),
         mode: "primary",
         native: true,
+      },
+      build: {
+        name: "build",
+        description: AgentRoleContract.description("build"),
+        tools: { exclude: ["panel", "task_report", "analytics", ...MIRROR_TOOL_IDS] },
+        options: {},
+        prompt: BUILD_CORE,
+        permission: nonDesignPermissions(
+          PermissionNext.fromConfig({
+            question: "allow",
+            webfetch: "allow",
+          }),
+        ),
+        mode: "primary",
+        native: true,
+        hidden: true,
       },
       general: {
         name: "general",
@@ -290,6 +307,7 @@ export namespace Agent {
             "deliver",
             "prosecute",
             "publish_delivery",
+            "propose_task",
             "analyze_intent",
             "modify_goal",
             "refine",
@@ -425,16 +443,23 @@ export namespace Agent {
           options: {},
           native: false,
         }
+      if (value.name !== undefined && value.name !== key) {
+        throw new Error(`config.agent.${key}.name cannot rename the agent identity`)
+      }
       if (value.model) item.model = Provider.parseModel(value.model)
       item.variant = value.variant ?? item.variant
-      item.prompt = value.prompt ?? item.prompt
+      const role = AgentRoleContract.all[key as AgentRoleID]
+      const promptConfigMode = role?.promptConfigMode ?? "override"
+      if (promptConfigMode === "append" && value.prompt !== undefined) {
+        throw new Error(`config.agent.${key}.prompt is invalid for append-mode agents; use prompt_append`)
+      }
+      if (promptConfigMode !== "append") item.prompt = value.prompt ?? item.prompt
       item.description = value.description ?? item.description
       item.temperature = value.temperature ?? item.temperature
       item.topP = value.top_p ?? item.topP
       item.mode = value.mode ?? item.mode
       item.color = value.color ?? item.color
       item.hidden = value.hidden ?? item.hidden
-      item.name = value.name ?? item.name
       item.steps = value.steps ?? item.steps
       item.tools = value.tools ?? item.tools
       item.options = mergeDeep(item.options, value.options ?? {})
@@ -455,7 +480,8 @@ export namespace Agent {
    *  empty / "inherits core_header" placeholder and multiple agents collapse
    *  into visually identical cards. */
   const NATIVE_DEFAULTS: Record<string, string> = {
-    build: PROMPT_BUILD,
+    coding: PROMPT_CODING,
+    build: BUILD_CORE,
     general: PROMPT_GENERAL,
     explore: PROMPT_EXPLORE,
     compaction: PROMPT_COMPACTION,
@@ -495,7 +521,7 @@ export namespace Agent {
     return pipe(
       await state(),
       values(),
-      sortBy([(x) => (cfg.default_agent ? x.name === cfg.default_agent : x.name === "build"), "desc"]),
+      sortBy([(x) => (cfg.default_agent ? x.name === cfg.default_agent : x.name === "coding"), "desc"]),
     )
   }
 

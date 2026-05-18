@@ -244,9 +244,8 @@ export const CreateTaskInput = z.object({
   //  - "high"/"normal"/"low": user-facing levels; also used by iteration /
   //                recommendation follow-ups from `submit_next_task`.
   priority: z.enum(["critical", "high", "normal", "low"]).optional(),
-  /** Queue preference. Creation cannot bypass the directory queue; omitted
-   *  still requests immediate eligibility, but active cwd siblings keep the
-   *  task queued until the cwd is free. */
+  /** Queue preference. false starts immediately and bypasses the directory
+   *  queue; true enters the directory queue and waits for the cwd slot. */
   queue: z.boolean().default(false),
   /** Defaults to "workflow" (full pipeline). Pass "build" to bypass the pipeline
    *  and run the build agent directly — used for one-shot edits. */
@@ -1420,6 +1419,18 @@ export const Event = {
       ),
     }),
     { tier: 3 },
+  ),
+  DeliveryPreviewUpdated: BusEvent.define(
+    "delivery.preview.updated",
+    z.object({
+      taskID: Identifier.schema("task"),
+      deliveryID: Identifier.schema("delivery"),
+      status: z.string(),
+      url: z.string().optional(),
+      reason: z.string().optional(),
+      command: z.string().optional(),
+      workspaceDir: z.string().optional(),
+    }),
   ),
   IntegrityReviewCompleted: BusEvent.define(
     "integrity.review.completed",

@@ -13,6 +13,8 @@ import path from "path"
 import { createTwoFilesPatch, diffLines } from "diff"
 import { createCodebaseTools } from "@/engine/codebase-tools"
 import { EngineArtifactTable } from "@/engine/engine.sql"
+import { Event as EngineEvent } from "@/engine/model"
+import { EngineProtocol } from "@/engine/protocol"
 import { Memory } from "@/memory"
 import { Instance } from "@/project/instance"
 import { Shell } from "@/shell/shell"
@@ -106,6 +108,19 @@ function persistDeliveryPreviewSession(input: { taskID: string; deliveryID?: str
         time_updated: now,
       })
       .run(),
+  )
+  void EngineProtocol.emit(
+    EngineEvent.DeliveryPreviewUpdated,
+    {
+      taskID: input.taskID,
+      deliveryID: input.deliveryID,
+      status: input.session.status,
+      url: input.session.url,
+      reason: input.session.reason,
+      command: input.session.command,
+      workspaceDir: input.session.workspaceDir,
+    },
+    { source: "delivery.preview" },
   )
 }
 
