@@ -351,7 +351,6 @@
   "cwd.title": "Working Directory",
   "cwd.unavailable": "Working directory unavailable",
   "delivery.checks": "Required checks",
-  "delivery.empty.hint": "No delivery has been queued for this task yet. The panel will populate once the orchestrator builds a candidate.",
   "delivery.inflight.hint": "Delivery verification is running. OpenCorvus is collecting the merged diff, runtime evidence, and specialist reviews before it can accept or reject the result.",
   "delivery.files_changed": {
     "one": "{{count}} file changed",

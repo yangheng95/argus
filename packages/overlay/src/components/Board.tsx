@@ -294,14 +294,7 @@ export function DeliveryPanel(props: DeliveryPanelProps) {
       defaultOpen
       attr:data-phase-state={props.phaseState || undefined}
     >
-    <Show
-      when={props.delivery}
-      fallback={
-        <section class="delivery-panel" data-verdict="empty">
-          <p class="empty-hint empty-hint--card">{t("delivery.empty.hint")}</p>
-        </section>
-      }
-    >
+    <Show when={props.delivery}>
       <section class="delivery-panel" data-verdict={tone()}>
         <Show when={iteration() > 0}>
           <div class="delivery-panel-meta">
@@ -720,7 +713,9 @@ export function Board(props: BoardProps) {
           />
         </SectionFrame>
 
-        <DeliveryPanel delivery={delivery()} phaseState={phaseFor("delivery")} />
+        <Show when={delivery()}>
+          <DeliveryPanel delivery={delivery()} phaseState={phaseFor("delivery")} />
+        </Show>
         <FilesSection />
       </div>
 

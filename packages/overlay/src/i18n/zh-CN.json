@@ -351,7 +351,6 @@
   "cwd.title": "工作目录",
   "cwd.unavailable": "工作目录不可用",
   "delivery.checks": "必跑检查",
-  "delivery.empty.hint": "当前任务还没有交付候选。Orchestrator 产出第一份候选后这里会自动填充。",
   "delivery.inflight.hint": "交付验收正在运行。OpenCorvus 正在收集合并后的 diff、运行时证据和专家评审，然后才会给出接受或拒绝结论。",
   "delivery.files_changed": {
     "one": "{{count}} 个文件变更",

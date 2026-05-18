@@ -124,6 +124,15 @@ test("DeliveryPanel has an in-flight projection while the run is in deliver befo
   expect(board).toContain("<DeliveryPanel delivery={delivery()}")
 })
 
+test("DeliveryPanel is not mounted for tasks without delivery content", async () => {
+  const board = await readSrc("src/components/Board.tsx")
+  const filesAt = board.indexOf("<FilesSection")
+  const beforeFiles = board.slice(Math.max(0, filesAt - 220), filesAt)
+  expect(beforeFiles).toContain("<Show when={delivery()}>")
+  expect(board).not.toContain("delivery.empty.hint")
+  expect(board).not.toContain('data-verdict="empty"')
+})
+
 test("DeliveryPanel drives chrome via [data-verdict] (not the lifecycle status mapping)", async () => {
   const board = await readSrc("src/components/Board.tsx")
   // Single attribute hook for delivery body chrome. Verdict text belongs to
@@ -181,13 +190,15 @@ test("evidence rows reuse the shared .verdict-pill primitive — no per-row colo
 test("`delivery:focus-changes` event contract — DeliveryPanel dispatches, ChangesPanel listens", async () => {
   const board = await readSrc("src/components/Board.tsx")
   const changes = await readSrc("src/components/ChangesPanel.tsx")
+  const fileChangesView = await readSrc("src/components/FileChangesView.tsx")
   // Dispatch site (DeliveryPanel goal-pill / files-changed footer).
   expect(board).toContain('"delivery:focus-changes"')
   expect(board).toMatch(/window\.dispatchEvent\(\s*new CustomEvent\("delivery:focus-changes"/)
-  // Listener side (ChangesPanel translates the event into setSelectedGroupID).
+  // Listener side (ChangesPanel wires the event into FileChangesView, which owns selection state).
   expect(changes).toContain('"delivery:focus-changes"')
-  expect(changes).toContain("addEventListener")
-  expect(changes).toContain("setSelectedGroupID")
+  expect(changes).toContain('focusEvent="delivery:focus-changes"')
+  expect(fileChangesView).toContain("addEventListener")
+  expect(fileChangesView).toContain("setSelectedGroupID")
 })
 
 test("redesign-required i18n keys exist in both locales; the legacy lifecycle keys are gone", async () => {
@@ -204,7 +215,6 @@ test("redesign-required i18n keys exist in both locales; the legacy lifecycle ke
     "delivery.reviews",
     "delivery.show_more",
     "delivery.show_less",
-    "delivery.empty.hint",
     "delivery.inflight.hint",
     "right_panel.tabs",
     "right_panel.inspector",
@@ -218,6 +228,7 @@ test("redesign-required i18n keys exist in both locales; the legacy lifecycle ke
   }
   // Legacy lifecycle-as-verdict keys + old empty hint must be deleted (rule 17).
   for (const key of [
+    "delivery.empty.hint",
     "delivery.status.candidate",
     "delivery.status.delivered",
     "delivery.status.failed",
