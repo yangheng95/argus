@@ -37,14 +37,14 @@ describe("BuildAgentContractError", () => {
     const err = new BuildAgentContractError(
       "missing_terminal_report",
       { sessionID: "ses_abc123" },
-      "Build agent terminated without a valid report_build_result tool call after same-session recovery. Retry this goal with files_changed only after recovery exhausted; not primary workspace pollution.",
+      "Build agent terminated without a valid report_build_result tool call. Retry this goal with files_changed; not primary workspace pollution.",
     )
     expect(err).toBeInstanceOf(Error)
     expect(err.code).toBe("missing_terminal_report")
     expect(err.diagnostics.sessionID).toBe("ses_abc123")
     expect(err.message).toMatch(/report_build_result/)
     expect(err.message).toMatch(/files_changed/)
-    expect(err.message).toMatch(/same-session recovery/)
+    expect(err.message).not.toMatch(/same-session recovery/)
     expect(err.message).toMatch(/not primary workspace pollution/)
     expect(err.name).toBe("BuildAgentContractError")
   })

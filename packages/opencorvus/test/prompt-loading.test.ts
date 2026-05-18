@@ -15,9 +15,11 @@
  * Trim imports to currently-bundled prompts only.
  */
 import { describe, test, expect } from "bun:test"
+import fs from "node:fs/promises"
+import path from "node:path"
 
 // --- Agent prompts (currently bundled) ---
-import PROMPT_BUILD from "../src/agent/prompt/build.txt"
+import PROMPT_CODING from "../src/agent/prompt/coding.txt"
 import PROMPT_EXPLORE from "../src/agent/prompt/explore.txt"
 import PROMPT_GENERAL from "../src/agent/prompt/general.txt"
 import PROMPT_COMPACTION from "../src/agent/prompt/compaction.txt"
@@ -30,7 +32,7 @@ import PROMPT_SYSTEM from "../src/session/prompt/system.txt"
 describe("Prompt file loading", () => {
   const prompts: Record<string, string> = {
     system: PROMPT_SYSTEM,
-    build: PROMPT_BUILD,
+    coding: PROMPT_CODING,
     explore: PROMPT_EXPLORE,
     general: PROMPT_GENERAL,
     compaction: PROMPT_COMPACTION,
@@ -44,4 +46,27 @@ describe("Prompt file loading", () => {
       expect(content.length).toBeGreaterThan(30)
     })
   }
+
+  test("legacy direct-assistant prompt filename has no repository references", async () => {
+    const root = path.join(import.meta.dir, "..")
+    const legacyName = ["build", "txt"].join(".")
+    const ignored = new Set([".git", "dist", "node_modules", ".turbo", ".opencorvus"])
+    const hits: string[] = []
+
+    async function scan(dir: string) {
+      for (const entry of await fs.readdir(dir, { withFileTypes: true })) {
+        if (ignored.has(entry.name)) continue
+        const full = path.join(dir, entry.name)
+        if (entry.isDirectory()) {
+          await scan(full)
+          continue
+        }
+        const text = await fs.readFile(full, "utf8").catch(() => "")
+        if (text.includes(legacyName)) hits.push(path.relative(root, full))
+      }
+    }
+
+    await scan(root)
+    expect(hits).toEqual([])
+  })
 })

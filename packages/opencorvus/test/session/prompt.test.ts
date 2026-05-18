@@ -17,7 +17,7 @@ describe("session.prompt missing file", () => {
       git: true,
       config: {
         agent: {
-          build: {
+          coding: {
             model: "openai/gpt-5.2",
           },
         },
@@ -32,7 +32,7 @@ describe("session.prompt missing file", () => {
 
         const msg = await SessionPrompt.prompt({
           sessionID: session.id,
-          agent: "build",
+          agent: "coding",
           noReply: true,
           parts: [
             { type: "text", text: "use the attached visual reference" },
@@ -66,7 +66,7 @@ describe("session.prompt missing file", () => {
       git: true,
       config: {
         agent: {
-          build: {
+          coding: {
             model: "openai/gpt-5.2",
           },
         },
@@ -81,7 +81,7 @@ describe("session.prompt missing file", () => {
 
         const msg = await SessionPrompt.prompt({
           sessionID: session.id,
-          agent: "build",
+          agent: "coding",
           noReply: true,
           parts: [
             {
@@ -111,7 +111,7 @@ describe("session.prompt missing file", () => {
       git: true,
       config: {
         agent: {
-          build: {
+          coding: {
             model: "openai/gpt-5.2",
           },
         },
@@ -126,7 +126,7 @@ describe("session.prompt missing file", () => {
         const missing = path.join(tmp.path, "does-not-exist.ts")
         const msg = await SessionPrompt.prompt({
           sessionID: session.id,
-          agent: "build",
+          agent: "coding",
           noReply: true,
           parts: [
             { type: "text", text: "please review @does-not-exist.ts" },
@@ -142,7 +142,7 @@ describe("session.prompt missing file", () => {
         if (msg.info.role !== "user") throw new Error("expected user message")
 
         const hasFailure = msg.parts.some(
-          (part) => part.type === "text" && part.text.includes("Read tool failed to read"),
+          (part) => part.type === "text" && part.text.includes("Host-provided file context failed to read"),
         )
         expect(hasFailure).toBe(true)
 
@@ -156,7 +156,7 @@ describe("session.prompt missing file", () => {
       git: true,
       config: {
         agent: {
-          build: {
+          coding: {
             model: "openai/gpt-5.2",
           },
         },
@@ -171,7 +171,7 @@ describe("session.prompt missing file", () => {
         const missing = path.join(tmp.path, "still-missing.ts")
         const msg = await SessionPrompt.prompt({
           sessionID: session.id,
-          agent: "build",
+          agent: "coding",
           noReply: true,
           parts: [
             {
@@ -192,8 +192,8 @@ describe("session.prompt missing file", () => {
         })
         const text = stored.parts.filter((part) => part.type === "text").map((part) => part.text)
 
-        expect(text[0]?.startsWith("Called the Read tool with the following input:")).toBe(true)
-        expect(text[1]?.includes("Read tool failed to read")).toBe(true)
+        expect(text[0]?.startsWith("Host-provided file context (not a model tool call):")).toBe(true)
+        expect(text[1]?.includes("Host-provided file context failed to read")).toBe(true)
         expect(text[2]).toBe("after-file")
 
         await Session.remove(session.id)
@@ -261,7 +261,7 @@ describe("session.prompt agent variant", () => {
         git: true,
         config: {
           agent: {
-            build: {
+            coding: {
               model: "openai/gpt-5.2",
               variant: "xhigh",
             },
@@ -276,7 +276,7 @@ describe("session.prompt agent variant", () => {
 
           const other = await SessionPrompt.prompt({
             sessionID: session.id,
-            agent: "build",
+            agent: "coding",
             model: { providerID: "opencorvus", modelID: "kimi-k2.5-free" },
             noReply: true,
             parts: [{ type: "text", text: "hello" }],
@@ -286,7 +286,7 @@ describe("session.prompt agent variant", () => {
 
           const match = await SessionPrompt.prompt({
             sessionID: session.id,
-            agent: "build",
+            agent: "coding",
             noReply: true,
             parts: [{ type: "text", text: "hello again" }],
           })
@@ -296,7 +296,7 @@ describe("session.prompt agent variant", () => {
 
           const override = await SessionPrompt.prompt({
             sessionID: session.id,
-            agent: "build",
+            agent: "coding",
             noReply: true,
             variant: "high",
             parts: [{ type: "text", text: "hello third" }],
@@ -361,6 +361,29 @@ describe("session.prompt agent contract", () => {
         const stored = await Message.get({ sessionID: session.id, messageID: msg.info.id })
         if (stored.info.role !== "user") throw new Error("expected stored user message")
         expect(stored.info.systemMode).toBe("complete")
+
+        await Session.remove(session.id)
+      },
+    })
+  }, 20000)
+
+  test("rejects workflow build agent outside complete system mode", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ kind: "assistant" })
+
+        await expect(
+          SessionPrompt.prompt({
+            sessionID: session.id,
+            agent: "build",
+            model: { providerID: "openai", modelID: "gpt-5.2" },
+            noReply: true,
+            parts: [{ type: "text", text: "hello" }],
+          }),
+        ).rejects.toThrow('workflow build agent requires systemMode="complete"')
 
         await Session.remove(session.id)
       },

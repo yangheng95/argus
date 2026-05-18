@@ -6,6 +6,7 @@ describe("BuildAgent external coding system prompt", () => {
     const composed = BuildAgent.composeExternalCodingSystem({
       executor: "codex",
       baseSystem: "base system",
+      userAppend: "operator build append",
       skillPrompt: "skill prompt",
     })
 
@@ -23,6 +24,7 @@ describe("BuildAgent external coding system prompt", () => {
     expect(composed.system).toContain("Match them 1:1 as closely as the stack allows")
     expect(composed.system).toContain("Write shell commands for the actual platform and shell")
     expect(composed.system).toContain("PowerShell-native commands")
+    expect(composed.system).toContain("operator build append")
     expect(composed.system).toContain("skill prompt")
   })
 

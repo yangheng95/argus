@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test"
 import { renderTaskDescription, type TaskDesc } from "../../src/engine/describe"
 
-describe("describe build terminal report recovery", () => {
-  test("tells orchestrator same-session report recovery is exhausted before retrying", () => {
+describe("describe build terminal report failure", () => {
+  test("tells orchestrator to retry with explicit terminal report instructions", () => {
     const desc: TaskDesc = {
       id: "tsk_report_hint",
       title: "Report hint",
@@ -47,10 +47,10 @@ describe("describe build terminal report recovery", () => {
     }
 
     const md = renderTaskDescription(desc)
-    expect(md).toContain("Build exhausted same-session report_build_result recovery")
+    expect(md).toContain("Build ended without a structured report_build_result terminal call")
     expect(md).toContain(".opencorvus/worktrees")
     expect(md).toContain("not primary workspace pollution")
-    expect(md).toContain("only after same-session recovery has failed")
+    expect(md).toContain("Retry this goal with explicit report_build_result(files_changed[]) instructions")
     expect(md).toContain("do not restart_from_stage solely because diagnostic worktree files exist")
   })
 })

@@ -1134,28 +1134,6 @@ export function createOrchestratorTools(input: {
 }) {
   const { taskID } = input
 
-  // Some tools intentionally end the current orchestrator turn. Do not abort
-  // the provider stream from inside the tool body itself — that races the AI
-  // SDK's tool-result persistence and makes a successful tool look interrupted.
-  // Instead record a deferred stop reason here and let the caller abort after
-  // the current step has finished cleanly.
-  const stopAfterDispatch = new AbortController()
-  let pendingStopReason: string | undefined
-
-  function finalizeDeferredStop(): string | undefined {
-    if (!pendingStopReason) return undefined
-    const reason = pendingStopReason
-    pendingStopReason = undefined
-    if (!stopAfterDispatch.signal.aborted) {
-      stopAfterDispatch.abort(reason)
-    }
-    return reason
-  }
-
-  function requestStopAfterCurrentStep(reason: string): void {
-    pendingStopReason = reason
-  }
-
   async function queueDeliveryReworkWake(input: {
     iteration: number
     summary?: string
@@ -1182,7 +1160,6 @@ export function createOrchestratorTools(input: {
         error: error instanceof Error ? error.message : String(error),
       })
     })
-    requestStopAfterCurrentStep("delivery_rework")
   }
 
   async function cleanupTerminalGoalWorkspaces(reason: string): Promise<number> {
@@ -1975,9 +1952,10 @@ export function createOrchestratorTools(input: {
       description:
         "OPTIONAL stage agent. Parse the user's task into REQ-N requirements plus " +
         "foundational technical decisions (runtime, framework, test strategy, " +
-        "package_manager, communication_protocol). Goal decomposition / metric specs / " +
-        "challenge seeds / traceability / cross-goal contracts are all produced by " +
-        "the Architect — do NOT expect them from this step.\n\n" +
+        "package_manager, communication_protocol). Goal decomposition, " +
+        "acceptance_specs, traceability, source/reference coverage, and cross-goal " +
+        "contracts are all produced by the Architect — do NOT expect them from " +
+        "this step.\n\n" +
         "USE WHEN: the work is multi-file with implicit acceptance criteria, OR you " +
         "intend to call `architect` next (architect needs the REQ-N rows), OR " +
         "foundational decisions are ambiguous and the build agent would otherwise " +
@@ -2724,8 +2702,8 @@ export function createOrchestratorTools(input: {
       description:
         "OPTIONAL stage agent. Decompose the task into goals. The Architect reads the " +
         "REQ-N list + foundational decisions produced by requirements, explores the " +
-        "codebase, and registers the final goal set (metric specs, challenge seeds, " +
-        "traceability, cross-goal contracts).\n\n" +
+        "codebase, and registers the final goal set with acceptance_specs, " +
+        "traceability, source/reference coverage, and cross-goal contracts.\n\n" +
         "USE WHEN: the work fans into multiple parallel goals (independent " +
         "owned_paths, cross-goal contracts), OR you need explicit acceptance specs " +
         "per goal so per-goal builds and `deliver` have something concrete to verify " +
@@ -3109,13 +3087,14 @@ export function createOrchestratorTools(input: {
         "never rewrites requirements, never upserts goals, and the host never " +
         "auto-supersedes attempts or auto-routes findings — you read the markdown " +
         "and choose modify_goal / build({goalID}) / architect / deliver / fail_task " +
-        "explicitly. Each goal build automatically records its build report and runs " +
-        "this review after the report; the review's findings are returned inline in " +
-        "the build tool result for you to act on.\n\n" +
+        "explicitly. Goal builds record build reports as review input, but they do " +
+        "not automatically run this review; call `integrity` explicitly when the " +
+        "integrated evidence raises a concrete requirements-mining or system-integrity " +
+        "question.\n\n" +
         "USE WHEN: architect just produced a non-trivial goal graph (≥3 goals, OR " +
         "cross-goal contracts, OR foundational decisions architect derived rather " +
         "than user-stated), OR a Build / Delivery result needs architecture feedback. " +
-        "Build already invokes the post-build review for goal builds.\n" +
+        "Build reports are already recorded as review input for goal builds.\n" +
         "SKIP WHEN: architect produced exactly one goal whose contract trivially " +
         "matches the user request, OR you already ran integrity for this spec " +
         "snapshot and have no new signal. Requires architect goals on the active " +
@@ -3580,7 +3559,7 @@ export function createOrchestratorTools(input: {
                 latestGr.error.includes("missing_terminal_report")
               ) {
                 sections.push(
-                  `- recovery hint: the build session should first stay alive and add report_build_result(files_changed[]) in-place. If same-session recovery already exhausted, retry this goal with explicit report_build_result(files_changed[]) instructions. ` +
+                  `- terminal report hint: retry this goal with explicit report_build_result(files_changed[]) instructions. ` +
                     `Any retained files under .opencorvus/worktrees are diagnostic worktree evidence, not primary workspace pollution; ` +
                     `do not restart_from_stage solely because those diagnostic files exist.`,
                 )
@@ -4817,12 +4796,11 @@ export function createOrchestratorTools(input: {
               reason:
                 "Current DeliveryEvidenceManifest repeats the prior manifest failure set; the orchestrator must change strategy, ask the operator, or fail_task from evidence instead of blindly repeating the same rework.",
             })
-            requestStopAfterCurrentStep("delivery_rejected")
             await trackStepComplete("deliver", undefined, true)
             return SubAgentProtocol.yieldResult({
               headline:
                 `Delivery rejected with repeated failure signatures (iteration=${iteration}). ` +
-                `No host rule restarted the plan; report the manifest evidence and wait before any further rework.`,
+                `No host rule may end scheduling here; decide from the manifest evidence whether to ask, change strategy, or fail the task.`,
               fields: [
                 ["failure_signatures", repeatedFailure.signatures],
                 ["manifest_failures", manifestFailureDetails],
@@ -4857,16 +4835,14 @@ export function createOrchestratorTools(input: {
                 summary: verdict.summary,
                 affectedGoalCount: 0,
               })
-            } else {
-              requestStopAfterCurrentStep("delivery_rejected")
             }
             await trackStepComplete("deliver", undefined, true)
             return SubAgentProtocol.yieldResult({
               headline:
                 autoIteration
-                  ? `Delivery rejected at task scope — iteration ${iteration}; assistant.auto_iteration=true, so a rework wake was queued from manifest evidence.`
+                  ? `Delivery rejected at task scope — iteration ${iteration}; assistant.auto_iteration=true queued a rework wake from manifest evidence, but this tool did not stop the current scheduler turn.`
                   : `Delivery rejected at task scope — iteration ${iteration}; no goal attempts were reopened. ` +
-                    `assistant.auto_iteration=false, so report the result and wait for follow-up before rework.`,
+                    `Use the manifest evidence to choose the next orchestrator action; the host did not request a scheduler stop.`,
               fields: [
                 ["issues_found", rejectionIssues],
                 ["manifest_failures", manifestFailureDetails],
@@ -4881,8 +4857,8 @@ export function createOrchestratorTools(input: {
           }
           // Per-goal rejection slice: only the explicit auto-iteration mode
           // reopens goal attempts and re-wakes the orchestrator. Default-off
-          // mode keeps the rejection as a visible endpoint and leaves the
-          // next repair strategy to a fresh operator follow-up.
+          // mode keeps attempts untouched; the same reasoning turn receives
+          // the rejection evidence and chooses the next action.
           if (autoIteration) {
             for (const g of toReset) {
               const ownDetails = verdict.rejection_details.filter((d) => d.goal_id === g.id)
@@ -4905,8 +4881,6 @@ export function createOrchestratorTools(input: {
               summary: verdict.summary,
               affectedGoalCount: toReset.length,
             })
-          } else {
-            requestStopAfterCurrentStep("delivery_rejected")
           }
 
           try {
@@ -4934,9 +4908,9 @@ export function createOrchestratorTools(input: {
           return SubAgentProtocol.yieldResult({
             headline:
               autoIteration
-                ? `Delivery rejected — iteration ${iteration}, agent_verdict=${verdict.verdict}. assistant.auto_iteration=true, so ${toReset.length} affected goal attempt(s) were reopened and a rework wake was queued.`
+                ? `Delivery rejected — iteration ${iteration}, agent_verdict=${verdict.verdict}. assistant.auto_iteration=true reopened ${toReset.length} affected goal attempt(s) and queued a rework wake; the host did not stop this scheduler turn.`
                 : `Delivery rejected — iteration ${iteration}, agent_verdict=${verdict.verdict}. ` +
-                  `Default scheduling stops at deliver; assistant.auto_iteration=false, so report this result to the user and wait for follow-up before rework.`,
+                  `Use the rejection evidence to choose whether to repair, replan, ask, fail, or report; the host did not request a scheduler stop.`,
             fields: [
               ["issues_found", rejectionIssues],
               ["manifest_failures", manifestFailureDetails],
@@ -5402,7 +5376,7 @@ export function createOrchestratorTools(input: {
         queue: z
           .boolean()
           .default(false)
-          .describe("Set true when this confirmed follow-up task should wait in the directory queue; set false when it may start as soon as the same directory is idle."),
+          .describe("Set true when this confirmed follow-up task should wait in the directory queue; set false when it should start immediately and bypass the directory queue."),
         kind: z.enum(["workflow", "build"]).default("workflow"),
       }),
       execute: async ({ title, request, reason, priority, queue, kind }) => {
@@ -5499,10 +5473,10 @@ export function createOrchestratorTools(input: {
         "directBuildIntent='inspect_only' is not a workflow execution path; use analyze_intent / requirements / " +
         "architect and then per-goal build instead. " +
         "After build returns, you MUST call `deliver` next: build does NOT auto-complete the task; the only " +
-        "way to mark a task accepted is through delivery's adversarial verification. By default `deliver` is " +
-        "the scheduler endpoint: on rejection, report the evidence and wait for operator follow-up. Only when " +
-        "`assistant.auto_iteration=true` may OpenCorvus automatically queue another build/deliver repair pass " +
-        "with rejection feedback. " +
+        "way to mark a task accepted is through delivery's adversarial verification. Rejected delivery returns " +
+        "structured evidence to this same reasoning turn; choose the next action from that evidence instead of " +
+        "treating `deliver` as a host-forced terminal point. Only when `assistant.auto_iteration=true` may " +
+        "OpenCorvus automatically queue another build/deliver repair pass with rejection feedback. " +
         "DO NOT USE FOR: multi-file features, UI replication from designs, anything with explicit acceptance " +
         "criteria, cross-module refactors, new subsystems — those go through requirements → architect → " +
         "per-goal build → deliver (the pipeline workflow). For visual/reference tasks, design_analysis must " +
@@ -6359,7 +6333,5 @@ export function createOrchestratorTools(input: {
   // from the LLM are now fully deleted. Build is the single dispatch tool.
   return {
     tools,
-    stopSignal: stopAfterDispatch.signal,
-    finalizeDeferredStop,
   }
 }

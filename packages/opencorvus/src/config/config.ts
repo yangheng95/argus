@@ -37,6 +37,7 @@ import { ConfigPaths } from "./paths"
 import { Filesystem } from "@/util/filesystem"
 import { buildChannelSchema } from "@/channel/catalog"
 import { withKeyedLock } from "@/util/lock"
+import { AgentRoleContract, type AgentRoleID } from "@/agent/role-contract"
 
 export namespace Config {
   const ModelId = z.string().meta({ $ref: "https://models.dev/model-schema.json#/$defs/Model" })
@@ -693,6 +694,10 @@ export namespace Config {
       temperature: z.number().optional(),
       top_p: z.number().optional(),
       prompt: z.string().optional(),
+      prompt_append: z
+        .string()
+        .optional()
+        .describe("Additional instructions appended after a code-owned stage-agent core prompt."),
       disable: z.boolean().optional(),
       description: z.string().optional().describe("Description of when to use the agent"),
       mode: z.enum(["subagent", "primary", "all"]).optional(),
@@ -730,6 +735,7 @@ export namespace Config {
         "model",
         "variant",
         "prompt",
+        "prompt_append",
         "description",
         "temperature",
         "top_p",
@@ -1098,7 +1104,7 @@ export namespace Config {
         .string()
         .optional()
         .describe(
-          "Default agent to use when none is specified. Must be a primary agent. Falls back to 'build' if not set or if the specified agent is invalid.",
+          "Default agent to use when none is specified. Must be a primary agent. When omitted, the built-in default is 'coding'; an invalid configured agent is an error.",
         ),
       username: z
         .string()
@@ -1111,6 +1117,7 @@ export namespace Config {
       agent: z
         .object({
           // primary
+          coding: Agent.optional(),
           build: Agent.optional(),
           // subagent
           general: Agent.optional(),
@@ -1481,6 +1488,28 @@ export namespace Config {
         .optional(),
     })
     .strict()
+    .superRefine((config, ctx) => {
+      for (const [agentID, agentConfig] of Object.entries(config.agent ?? {})) {
+        if (!agentConfig) continue
+        const configuredName = (agentConfig as { name?: unknown }).name
+        if (configuredName !== undefined && configuredName !== agentID) {
+          ctx.addIssue({
+            code: "custom",
+            path: ["agent", agentID, "name"],
+            message: `config.agent.${agentID}.name cannot rename the agent identity; use the config key as the agent id.`,
+          })
+        }
+
+        const role = AgentRoleContract.all[agentID as AgentRoleID]
+        if (role?.promptConfigMode === "append" && agentConfig.prompt !== undefined) {
+          ctx.addIssue({
+            code: "custom",
+            path: ["agent", agentID, "prompt"],
+            message: `config.agent.${agentID}.prompt is invalid for append-mode agents; use prompt_append.`,
+          })
+        }
+      }
+    })
     .meta({
       ref: "Config",
     })

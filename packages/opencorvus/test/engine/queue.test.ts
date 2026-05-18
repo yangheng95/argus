@@ -67,7 +67,7 @@ describe("engine queue", () => {
     })
   })
 
-  test("createTask starts through the directory queue when the cwd is idle", async () => {
+  test("createTask with queue=false starts immediately when the cwd is idle", async () => {
     await using tmp = await tmpdir({ git: true })
 
     await Instance.provide({
@@ -76,9 +76,10 @@ describe("engine queue", () => {
         const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
 
         const taskID = await EngineService.createTask({
-          request: "start when the cwd is free",
-          title: "idle cwd task",
+          request: "start immediately",
+          title: "direct-start task",
           executor: "opencorvus",
+          queue: false,
         })
         await waitForTaskStatus(taskID, "active")
 
@@ -89,7 +90,7 @@ describe("engine queue", () => {
     })
   })
 
-  test("createTask does not bypass an active task in the same cwd", async () => {
+  test("createTask with queue=false bypasses an active task in the same cwd", async () => {
     await using tmp = await tmpdir({ git: true })
 
     await Instance.provide({
@@ -114,13 +115,18 @@ describe("engine queue", () => {
         )
 
         const taskID = await EngineService.createTask({
-          request: "wait for the active cwd sibling",
-          title: "queued behind active task",
+          request: "start beside the active cwd sibling",
+          title: "direct-start beside active task",
           executor: "opencorvus",
+          queue: false,
         })
+        await waitForTaskStatus(taskID, "active")
 
-        expect(taskStatus(taskID)).toBe("queued")
-        expect(runTaskLoop).not.toHaveBeenCalled()
+        expect(taskStatus(activeID)).toBe("active")
+        expect(taskStatus(taskID)).toBe("active")
+        expect(directoryQueueSnapshot(tmp.path).queuedTaskIDs).not.toContain(taskID)
+        expect(runTaskLoop).toHaveBeenCalledTimes(1)
+        expect(runTaskLoop.mock.calls[0]?.[0]).toMatchObject({ taskID })
       },
     })
   }, { timeout: 10_000 })

@@ -3,8 +3,10 @@
  *
  * Requirements is narrow: it parses the user input into REQ-N requirements
  * and records foundational technical decisions (runtime / framework / test
- * strategy). Goals, metric specs, challenge seeds, traceability, and
- * cross-goal contracts are all produced by the Architect — not here.
+ * strategy). Goals, acceptance specs, traceability, source/reference
+ * coverage, and cross-goal contracts are produced by the Architect — not
+ * here. Challenge metrics are produced by prosecutor/metrics after delivery
+ * evidence exists.
  *
  * Each tool call is small (~500 bytes). Zod schema validation at the wire
  * enforces required fields, enums, and min lengths.
@@ -33,6 +35,30 @@ export interface RegisteredDecision {
   key: string
   value: string
   reason: string
+}
+
+const REQUIRED_DECISION_KEYS = [
+  "runtime",
+  "test_framework",
+  "affected_modules",
+  "affected_concepts",
+  "impact_size",
+] as const
+
+const FRAMEWORK_DECISION_KEYS = [
+  "frontend_framework",
+  "backend_framework",
+  "framework",
+  "runtime_framework",
+] as const
+
+function missingRequiredDecisions(collector: RequirementsCollector): string[] {
+  const keys = new Set(collector.decisions.map((decision) => decision.key))
+  const missing: string[] = REQUIRED_DECISION_KEYS.filter((key) => !keys.has(key))
+  if (!FRAMEWORK_DECISION_KEYS.some((key) => keys.has(key))) {
+    missing.push("one_framework")
+  }
+  return missing
 }
 
 export const RequirementsSubmitSchema = z.object({
@@ -117,6 +143,11 @@ export function createRequirementsOutputTools() {
       execute: async () => {
         if (collector.requirements.length === 0) {
           return "Error: no requirements registered. Call register_requirement at least once before submit_requirements."
+        }
+        const missing = missingRequiredDecisions(collector)
+        if (missing.length > 0) {
+          return `Error: missing required foundational decision(s): ${missing.join(", ")}. ` +
+            "Register runtime, one framework, test_framework, affected_modules, affected_concepts, and impact_size before submit_requirements."
         }
         collector.finalized = true
         return `PASS: Requirements finalized (${collector.requirements.length} requirement(s), ${collector.decisions.length} decision(s)).`

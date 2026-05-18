@@ -3,7 +3,12 @@ import { Database } from "../../src/storage/db"
 import { ProjectTable } from "../../src/project/project.sql"
 import { EngineSpecSnapshotTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import { recordIntegrityAttempt } from "../../src/engine/persist"
-import { WorkflowRegistry, projectTaskSteps } from "../../src/engine/workflow"
+import {
+  WorkflowRegistry,
+  createWorkflowState,
+  projectTaskSteps,
+  renderWorkflowPrompt,
+} from "../../src/engine/workflow"
 import { createDecisionLog } from "../../src/decision-log"
 import { resetDatabase } from "../fixture/db"
 
@@ -33,6 +38,25 @@ describe("pipeline workflow architecture review step", () => {
     expect(pipeline!.steps.find((step) => step.id === "analyze_intent")?.after).toEqual(["design_analysis"])
     expect(pipeline!.steps.find((step) => step.id === "build")?.after).toEqual(["architect"])
     expect(pipeline!.steps.find((step) => step.id === "integrity")?.after).toEqual(["build"])
+  })
+
+  test("rendered workflow prompt does not expose deleted architect or scheduler semantics", () => {
+    const direct = WorkflowRegistry.resolveSync("direct")!
+    const pipeline = WorkflowRegistry.resolveSync("pipeline")!
+    const text = [
+      renderWorkflowPrompt(direct, createWorkflowState(direct)),
+      renderWorkflowPrompt(pipeline, createWorkflowState(pipeline)),
+    ].join("\n\n")
+
+    expect(text).not.toContain("停止默认调度")
+    expect(text).not.toContain("goals / 度量 / 挑战种子 / 契约")
+    expect(text).not.toContain("metric specs, challenge seeds")
+    expect(text).not.toContain("evaluator as plan/build/evaluate phases")
+    expect(text).not.toContain("per-goal[build + architecture_review]")
+    expect(text).not.toContain("goal build 完成后自动跑一次 architecture_review")
+    expect(text).toContain("deliver rejected 返回结构化证据")
+    expect(text).toContain("acceptance_specs / traceability / source-reference coverage / cross-goal contracts")
+    expect(text).toContain("build 报告会作为 review input 被记录，但不会自动触发 architecture_review")
   })
 
   test("projects design_analysis as completed from PRD/SPEC decision log without visual rows", () => {

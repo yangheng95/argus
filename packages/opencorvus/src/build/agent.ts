@@ -40,6 +40,7 @@ import { BuildSemaphore } from "@/engine/build-semaphore"
 import { Ownership } from "@/engine/ownership"
 import { findActiveRunForTask, type TaskRow } from "@/engine/store"
 import { EngineConfig } from "@/engine/config"
+import { Config } from "@/config/config"
 import { ExecutorRegistry } from "@/executor/registry"
 import {
   record,
@@ -278,12 +279,14 @@ export namespace BuildAgent {
   export function composeExternalCodingSystem(input: {
     executor: Exclude<TaskRow["executor"], "opencorvus">
     baseSystem?: string
+    userAppend?: string
     skillPrompt?: string
   }) {
     const mcpPrompt = input.executor === "codex" ? MCPServe.codingExecutorPromptSection() : ""
     const system = [
       input.baseSystem ?? "",
       externalBuildSystemContract(input.executor),
+      input.userAppend ?? "",
       mcpPrompt,
       input.skillPrompt ?? "",
     ]
@@ -1125,13 +1128,13 @@ function singleLineText(value: string, limit = 220): string {
 /**
  * Recognise an `AgentRunError` whose `cause` is a `Message.TerminalToolMissingError`
  * and convert it to a typed `BuildAgentContractError("missing_terminal_report")`
- * carrying a recovery hint that names the actual failure mode.
+ * carrying a retry hint that names the actual failure mode.
  *
  * Returns null when the error is not a missing-terminal failure — the caller
  * MUST re-throw the original error in that case (provider 4xx/5xx, abort,
  * schema rejection all have their own orchestrator-side handling).
  *
- * The recovery hint deliberately tells the next attempt:
+ * The retry hint deliberately tells the next attempt:
  *   - read what's already in the worktree (prior attempts wrote files)
  *   - verify per acceptance_specs
  *   - complete via the standard terminal report tool, not turn-final prose
@@ -1156,7 +1159,7 @@ export function convertMissingTerminalToolError(
       sessionID: diagnostics.sessionID,
       lastMergeBackOutcome: diagnostics.lastMergeBackOutcome ?? null,
     },
-    // Recovery hint deliberately describes the failure FACT and points
+    // Retry hint deliberately describes the failure fact and points
     // back at the standard build-agent contract instead of restating
     // prompt instructions inline (rule 8 single source — the protocol
     // text lives in BUILD_CORE; visible-brief hygiene forbids worker
@@ -1411,6 +1414,8 @@ async function runWithExternalProviderImpl(args: {
   // design_analysis; build-stage skills describe implementation and
   // verification only.
   const orchCfg = await EngineConfig.get()
+  const config = await Config.get()
+  const userAppend = (config.agent as Record<string, any> | undefined)?.build?.prompt_append
   const buildSkillsCfg = (orchCfg as unknown as { build?: { skills?: string[] } }).build?.skills ?? []
   const { resolveStageSkills } = await import("@/engine/skill-inject")
   const resolvedSkills = await resolveStageSkills(buildSkillsCfg, "build", args.taskSignals)
@@ -1421,6 +1426,7 @@ async function runWithExternalProviderImpl(args: {
   const composedSystem = BuildAgent.composeExternalCodingSystem({
     executor: args.executor,
     baseSystem: systemWithAutoIteration,
+    userAppend,
     skillPrompt: resolvedSkills.prompt,
   })
 

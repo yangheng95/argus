@@ -844,6 +844,8 @@ describe("orchestrator tools", () => {
         )
 
         expect(deliverResult).toContain("Delivery rejected at task scope")
+        expect(deliverResult).toContain("the host did not request a scheduler stop")
+        expect(deliverResult).not.toContain("wait for follow-up")
         expect(verifyInput.runID).toBe(run?.id)
         expect(verifyInput.delivery.changedFiles).toContain("direct-output.txt")
         expect(findDeliveryByRun(run!.id)?.run_id).toBe(run?.id)

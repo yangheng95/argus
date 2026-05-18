@@ -141,6 +141,7 @@ function stripWrappingQuotes(value: string | undefined): string | undefined {
 const KNOWN_FLAGS = new Set<string>([
   "--delivery-verify-cmd",
   "--executor",
+  "--idle-timeout-ms",
   "--max-executor-groups",
   "--max-fix-runs",
   "--max-runs",
@@ -152,7 +153,6 @@ const KNOWN_FLAGS = new Set<string>([
   "--resume-home-dir",
   "--resume-message",
   "--resume-task-id",
-  "--max-auto-resumes",
   "--title",
   "--figma-url",
   // boolean (no value) switches
@@ -194,6 +194,11 @@ validateFlags()
 
 const maxRuns = Number(flag("--max-runs")) || 20
 const maxFixRuns = Number(flag("--max-fix-runs")) || 8
+const benchmarkIdleTimeoutMs = Number(flag("--idle-timeout-ms") ?? "180000")
+if (!Number.isFinite(benchmarkIdleTimeoutMs) || benchmarkIdleTimeoutMs <= 0) {
+  process.stderr.write("[overlay-benchmark] --idle-timeout-ms must be a positive number\n")
+  process.exit(2)
+}
 const report = stripWrappingQuotes(flag("--report"))
 const keep = !process.argv.includes("--no-keep")
 // Resume mode: re-attach to an existing task rather than creating a new one.
@@ -202,12 +207,11 @@ const keep = !process.argv.includes("--no-keep")
 // --resume-message  : user message injected to wake up the failed task
 const resumeTaskID = flag("--resume-task-id")
 const resumeHomeDir = flag("--resume-home-dir")
-const resumeMessage = flag("--resume-message") || "请继续完成项目，修复所有失败的goals并重试，直到全部通过。"
-// Auto-resume drill: when waitForFinal returns with task.status = failed
-// or cancelled, the bench cancels the active run and injects the resume
-// wake-up message instead of giving up. Bounded so a permanently broken
-// task does not loop forever. Set to 0 to disable.
-const maxAutoResumes = Number(flag("--max-auto-resumes") ?? "3")
+const resumeMessage = flag("--resume-message")
+if (resumeMessage !== undefined && resumeMessage.trim().length === 0) {
+  process.stderr.write("[overlay-benchmark] --resume-message must not be empty when provided\n")
+  process.exit(2)
+}
 const executor = (flag("--executor") || "opencorvus") as
   | "opencorvus"
   | "codex"
@@ -440,7 +444,7 @@ process.env.OPENCORVUS_EXECUTOR_CLAUDE_PERMISSION_MODE = "bypassPermissions"
 process.env.OPENCORVUS_MAX_DELIVERY_ITERATIONS = "6"
 
 console.log(
-  `[overlay-benchmark] config model=${model} executor=${executor} groups=${maxExecutorGroups ?? "config-default"} (no benchmark-side timeouts)`,
+  `[overlay-benchmark] config model=${model} executor=${executor} groups=${maxExecutorGroups ?? "config-default"} idle_timeout_ms=${benchmarkIdleTimeoutMs}`,
 )
 
 // Force-remove SQLite WAL/SHM before reset — prevents previous benchmark's
@@ -578,6 +582,7 @@ const eventLogFile = reportFile.endsWith(".json")
   ? reportFile.slice(0, -".json".length) + ".events.ndjson"
   : `${reportFile}.events.ndjson`
 const events: Array<Record<string, unknown>> = []
+const reportApiErrors: string[] = []
 let flushed = Promise.resolve()
 let lastEventAt = Date.now()
 let lastProgressSignature = ""
@@ -620,6 +625,15 @@ function activityLine(value: string) {
 function errorLine(value: string) {
   lastLogAt = Date.now()
   console.error(value)
+}
+
+function assertRecentBenchmarkActivity(label: string) {
+  const idleFor = Date.now() - lastActivityLogAt
+  if (idleFor <= benchmarkIdleTimeoutMs) return
+  throw new Error(
+    `${label} had no benchmark activity for ${idleFor}ms ` +
+      `(idle_timeout_ms=${benchmarkIdleTimeoutMs}, last_progress=${lastProgressSignature || "none"})`,
+  )
 }
 
 function formatEventLine(
@@ -933,13 +947,17 @@ try {
     }
     marks.boardAt = Date.now()
 
-    // Inject user message to wake up a failed/cancelled task, or to add guidance to a running one.
-    logLine(`[overlay-benchmark] resume taskID=${taskID} injecting message: ${resumeMessage}`)
-    await api(`/task/${taskID}/message`, {
-      method: "POST",
-      headers: { "content-type": "application/json; charset=utf-8" },
-      body: JSON.stringify({ text: resumeMessage, source: "user_message" }),
-    }).catch((err) => logLine(`[overlay-benchmark] resume message inject failed: ${err}`))
+    if (resumeMessage !== undefined) {
+      logLine(`[overlay-benchmark] resume taskID=${taskID} injecting explicit message: ${resumeMessage}`)
+      await api(`/task/${taskID}/message`, {
+        method: "POST",
+        headers: { "content-type": "application/json; charset=utf-8" },
+        body: JSON.stringify({ text: resumeMessage, source: "user_message" }),
+      })
+      marks.resumedAt = Date.now()
+    } else {
+      logLine(`[overlay-benchmark] resume taskID=${taskID} attached without message injection`)
+    }
 
     if (page) {
       streaming = await waitForStreamingVisible(page).catch(() => ({
@@ -1052,7 +1070,6 @@ try {
   if (page && browser) {
     page = await verifyResume(browser, page, server.url.origin, taskID, temp.dir, api)
   }
-  marks.resumedAt = Date.now()
   board = await api(`/task/${taskID}/board?sync=1`).then((res) => res.json())
 
   if (stopAfterArchitect) {
@@ -1060,33 +1077,13 @@ try {
     progress = await api(`/task/${taskID}/progress`).then((res) => res.json()).catch(() => null)
     marks.completedAt = Date.now()
   } else {
-  // The bench is allowed to break — orchestrator stalls, LLM aborts,
-  // sub-agent gives up. When waitForFinal returns a non-completed
-  // terminal state (failed / cancelled), cancel the dead run and inject
-  // the resume wake-up message. The orchestrator's describe-snapshot
-  // logic figures out what to redo from where it stopped. Bounded so
-  // a permanently broken task does not loop forever.
-  let autoResumes = 0
-  while (true) {
     progress = await waitForFinal(taskID, api)
     const status = String(progress?.task?.status ?? "")
-    if (status === "completed") break
-    if (autoResumes >= maxAutoResumes) {
-      logLine(`[overlay-benchmark] task ended status=${status} after ${autoResumes} auto-resumes — giving up`)
-      break
+    if (status !== "completed") {
+      logLine(`[overlay-benchmark] task ended status=${status} — report preserves the terminal state without automatic resume`)
     }
-    autoResumes += 1
-    logLine(`[overlay-benchmark] task ended status=${status} — auto-resume ${autoResumes}/${maxAutoResumes}, injecting wake-up`)
-    await api(`/task/${taskID}/cancel`, { method: "POST" }).catch(() => undefined)
-    await Bun.sleep(1500)
-    await api(`/task/${taskID}/message`, {
-      method: "POST",
-      headers: { "content-type": "application/json; charset=utf-8" },
-      body: JSON.stringify({ text: resumeMessage, source: "user_message" }),
-    }).catch((err) => logLine(`[overlay-benchmark] auto-resume message inject failed: ${err}`))
-  }
-  marks.completedAt = Date.now()
-  finalBoard = taskID ? await api(`/task/${taskID}/board?sync=1`).then((res) => res.json()).catch(() => board) : board
+    marks.completedAt = Date.now()
+    finalBoard = taskID ? await api(`/task/${taskID}/board?sync=1`).then((res) => res.json()) : board
   }
 
   transcript = await api(`/task/${taskID}/transcript`).then((res) => res.json())
@@ -1378,9 +1375,10 @@ async function runLocalVerify(cwd: string, cmd: string) {
     return {
       mode: "skipped",
       command: null,
-      exitCode: 0,
+      exitCode: null,
       stdout: "",
       stderr: "",
+      status: "not_run",
     }
   }
   const shell = process.platform === "win32" ? ["cmd", "/c", cmd] : ["bash", "-lc", cmd]
@@ -1395,6 +1393,7 @@ async function runLocalVerify(cwd: string, cmd: string) {
     exitCode: await proc.exited,
     stdout: (await new Response(proc.stdout).text()).trim(),
     stderr: (await new Response(proc.stderr).text()).trim(),
+    status: "completed",
   }
 }
 
@@ -1447,19 +1446,19 @@ function formatIntegritySection(
 async function buildBenchmarkReport(error?: unknown) {
   const reportError = error ? String(error) : undefined
   const completedAt = marks.completedAt || Date.now()
-  const currentBoard = board ?? (taskID ? await tryApiJson(`/task/${taskID}/board?sync=1`) : null)
-  const currentFinalBoard = finalBoard ?? (taskID
-    ? await tryApiJson(`/task/${taskID}/board?sync=1`, currentBoard)
-    : currentBoard)
-  const currentTranscript = transcript ?? (taskID ? await tryApiJson(`/task/${taskID}/transcript`, []) : [])
-  const currentTimeline = timeline ?? (taskID ? await tryApiJson(`/control/timeline?taskID=${encodeURIComponent(taskID)}`, []) : [])
-  const currentRuns = runs ?? (taskID ? await tryApiJson(`/task/${taskID}/runs`, []) : [])
+  const currentBoard = board ?? (taskID ? await reportApiJson(`/task/${taskID}/board?sync=1`) : null)
+  const currentFinalBoard = finalBoard ?? (taskID ? await reportApiJson(`/task/${taskID}/board?sync=1`) : null)
+  const currentTranscript = transcript ?? (taskID ? await reportApiJson(`/task/${taskID}/transcript`) : null)
+  const currentTimeline = timeline ?? (taskID ? await reportApiJson(`/control/timeline?taskID=${encodeURIComponent(taskID)}`) : null)
+  const currentRuns = runs ?? (taskID ? await reportApiJson(`/task/${taskID}/runs`) : null)
   const localVerify = await runLocalVerify(temp.dir, DELIVERY_VERIFY_CMD)
   const deliveryChangedFiles = progress?.delivery?.result?.changedFiles ?? currentFinalBoard?.delivery?.result?.changedFiles ?? []
-  // Always run git fallback: delivery changedFiles may only contain internal .opencorvus/ files
-  // while actual source files are in committed diffs (executor commits before delivery).
-  const gitFallbackFiles = await gitChangedFiles(temp.dir)
-  const changedFiles = dedupePaths([...deliveryChangedFiles, ...gitFallbackFiles])
+  // Delivery changedFiles may only contain internal .opencorvus/ files while
+  // actual source files are in committed diffs. Git is a parallel evidence
+  // source, not a substitute; failures throw instead of producing an empty
+  // changed-files list.
+  const gitObservedFiles = await gitChangedFiles(temp.dir)
+  const changedFiles = dedupePaths([...deliveryChangedFiles, ...gitObservedFiles])
   const moduleBlocks = resolveModuleBlocks(progress, currentFinalBoard ?? currentBoard, TASK_REQUEST)
   const artifactAudit = await auditWorkspace({
     rootDir: temp.dir,
@@ -1480,6 +1479,7 @@ async function buildBenchmarkReport(error?: unknown) {
     runMetrics,
     taskStatus: progress?.task?.status || currentFinalBoard?.task?.status || "",
     evaluationVerdict: progress?.evaluation?.verdict || currentFinalBoard?.evaluation?.verdict || "",
+    localVerify,
   }), reportError)
   const screenshot = page ? await takeBenchmarkScreenshot(page) : null
   const currentOverlay = page ? await overlaySnapshot(page).catch((cause) => ({ error: String(cause) })) : { error: "no-browser mode" }
@@ -1497,9 +1497,9 @@ async function buildBenchmarkReport(error?: unknown) {
     taskStatus: progress?.task?.status || currentFinalBoard?.task?.status || "",
     evaluation: progress?.evaluation?.verdict || currentFinalBoard?.evaluation?.verdict || "",
     changedFiles,
-    transcriptCount: Array.isArray(currentTranscript) ? currentTranscript.length : 0,
-    timelineCount: Array.isArray(currentTimeline) ? currentTimeline.length : 0,
-    runCount: Array.isArray(currentRuns) ? currentRuns.length : 0,
+    transcriptCount: Array.isArray(currentTranscript) ? currentTranscript.length : null,
+    timelineCount: Array.isArray(currentTimeline) ? currentTimeline.length : null,
+    runCount: Array.isArray(currentRuns) ? currentRuns.length : null,
     planning: planning
       ? {
           pendingCount: planning.pendingCount,
@@ -1548,8 +1548,10 @@ async function buildBenchmarkReport(error?: unknown) {
     integrity: formatIntegritySection(latestIntegrity, integrityAttemptCount),
     screenshot,
     resume: {
-      restored: marks.resumedAt > 0,
-      selectedAt: elapsedOrNull(marks.resumedAt),
+      attached: !!resumeTaskID && marks.selectedAt > 0,
+      messageInjected: marks.resumedAt > 0,
+      selectedAt: elapsedOrNull(marks.selectedAt),
+      injectedAt: elapsedOrNull(marks.resumedAt),
       // resume mode metadata
       resumeTaskID: resumeTaskID ?? null,
       resumeHomeDir: resumeHomeDir ?? null,
@@ -1580,11 +1582,11 @@ async function buildBenchmarkReport(error?: unknown) {
         sample: streaming,
       },
       materialized: {
-        pass: !!taskID && (currentBoard?.task?.id || "") === taskID && marks.resumedAt > 0,
+        pass: !!taskID && (currentBoard?.task?.id || "") === taskID && marks.boardAt > 0,
         sample: {
           taskID,
           boardTaskID: currentBoard?.task?.id || "",
-          resumed: marks.resumedAt > 0,
+          boardLoaded: marks.boardAt > 0,
         },
       },
       architect_contract_graph: {
@@ -1624,15 +1626,19 @@ async function buildBenchmarkReport(error?: unknown) {
       event_file: eventFile,
       event_count: events.length,
       stage_summary: summarizeEvents(events, taskID),
+      report_api_errors: reportApiErrors,
     },
   }
 }
 
-async function tryApiJson(pathname: string, fallback: unknown = null) {
+async function reportApiJson(pathname: string) {
   try {
     return await api(pathname).then((res) => res.json())
-  } catch {
-    return fallback
+  } catch (error) {
+    const message = `${pathname}: ${error instanceof Error ? error.message : String(error)}`
+    reportApiErrors.push(message)
+    logLine(`[overlay-benchmark] report api error ${message}`)
+    return null
   }
 }
 
@@ -1678,35 +1684,38 @@ function dedupePaths(files: string[]) {
   return [...new Set(files.filter((item): item is string => typeof item === "string" && item.length > 0).map((item) => item.replace(/\\/g, "/")))]
 }
 
-/** Fallback: compute changed+untracked files directly from project git when delivery result is empty. */
 async function gitChangedFiles(dir: string): Promise<string[]> {
-  try {
-    const run = (args: string[]) =>
-      Bun.spawn(["git", ...args], { cwd: dir, stdout: "pipe", stderr: "pipe" })
-        .stdout.text().then((t) => t.trim().split(/\r?\n/).filter(Boolean))
-        .catch(() => [] as string[])
-    // 1. Uncommitted changes (working tree vs HEAD)
-    const [modified, untracked] = await Promise.all([
-      run(["diff", "--name-only", "HEAD"]),
-      run(["ls-files", "--others", "--exclude-standard"]),
+  const run = async (args: string[]) => {
+    const proc = Bun.spawn(["git", ...args], { cwd: dir, stdout: "pipe", stderr: "pipe" })
+    const [exitCode, stdout, stderr] = await Promise.all([
+      proc.exited,
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
     ])
-    if (modified.length > 0 || untracked.length > 0) return [...modified, ...untracked]
-    // 2. Committed changes: compare initial checkpoint to HEAD.
-    //    The orchestrator creates a checkpoint commit, executor works, delivery commits.
-    //    `git diff HEAD` is empty because everything is committed.
-    const commits = await run(["log", "--oneline", "--reverse"])
-    if (commits.length >= 2) {
-      const firstHash = commits[0].split(" ")[0]
-      return run(["diff", "--name-only", firstHash, "HEAD"])
+    if (exitCode !== 0) {
+      throw new Error(`git ${args.join(" ")} failed with exit ${exitCode}: ${stderr.trim()}`)
     }
-    // 3. Single commit: list all files in that commit (everything was added in one go)
-    if (commits.length === 1) {
-      return run(["diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD"])
-    }
-    return []
-  } catch {
-    return []
+    return stdout.trim().split(/\r?\n/).filter(Boolean)
   }
+  // 1. Uncommitted changes (working tree vs HEAD)
+  const [modified, untracked] = await Promise.all([
+    run(["diff", "--name-only", "HEAD"]),
+    run(["ls-files", "--others", "--exclude-standard"]),
+  ])
+  if (modified.length > 0 || untracked.length > 0) return [...modified, ...untracked]
+  // 2. Committed changes: compare initial checkpoint to HEAD.
+  //    The orchestrator creates a checkpoint commit, executor works, delivery commits.
+  //    `git diff HEAD` is empty because everything is committed.
+  const commits = await run(["log", "--oneline", "--reverse"])
+  if (commits.length >= 2) {
+    const firstHash = commits[0].split(" ")[0]
+    return run(["diff", "--name-only", firstHash, "HEAD"])
+  }
+  // 3. Single commit: list all files in that commit (everything was added in one go)
+  if (commits.length === 1) {
+    return run(["diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD"])
+  }
+  return []
 }
 
 function resolveModuleBlocks(progress: any, board: any, request: string) {
@@ -1797,6 +1806,7 @@ async function waitForFinal(
   })
   try {
   while (true) {
+    assertRecentBenchmarkActivity("waitForFinal")
     let progress: any
     try {
       progress = await api(`/task/${taskID}/progress`).then((res) => res.json())
@@ -1807,6 +1817,7 @@ async function waitForFinal(
       if (isTransient) {
         logLine(`[overlay-benchmark] warn: progress poll error (${(e as any)?.name ?? "Error"}: ${(e as any)?.message}), retrying in 2s`)
         await Bun.sleep(2_000)
+        assertRecentBenchmarkActivity("waitForFinal progress polling")
         continue
       }
       throw e
@@ -1837,6 +1848,7 @@ async function waitForFinal(
     } else {
       await Promise.race([Bun.sleep(2_000), terminalPromise])
     }
+    assertRecentBenchmarkActivity("waitForFinal")
   }
   } finally {
     terminalSignalResolver = null
@@ -1871,8 +1883,8 @@ async function waitForArchitectBoard(
     }
     if (currentBoard?.architect && goalCount >= 2) return currentBoard
     if (FINAL.has(status)) return currentBoard
-    if (Date.now() - lastChangeAt > 180_000) {
-      throw new Error(`Architect board did not materialize within 180000ms of no progress; last=${lastSignature || "none"}`)
+    if (Date.now() - lastChangeAt > benchmarkIdleTimeoutMs) {
+      throw new Error(`Architect board did not materialize within ${benchmarkIdleTimeoutMs}ms of no progress; last=${lastSignature || "none"}`)
     }
     await Bun.sleep(2_000)
   }

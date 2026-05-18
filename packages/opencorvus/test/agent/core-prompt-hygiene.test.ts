@@ -26,12 +26,55 @@ async function readSource(relativePath: string) {
 }
 
 describe("core prompt hygiene", () => {
-  test("all core prompts require agents to own their file mutation commits", async () => {
+  test("core prompt file inventory is fully covered by hygiene tests", async () => {
+    const files = await Array.fromAsync(new Bun.Glob("*.txt").scan({ cwd: coreDir }))
+    expect(files.sort()).toEqual(Object.values(promptFiles).sort())
+  })
+
+  test("core prompt size budgets keep roles concise", async () => {
+    const maxLines: Record<keyof typeof promptFiles, number> = {
+      architect: 150,
+      build: 175,
+      delivery: 320,
+      designAnalyst: 125,
+      integrity: 175,
+      intentAnalysis: 130,
+      orchestrator: 260,
+      prosecutor: 80,
+      requirements: 180,
+    }
+
+    for (const name of Object.keys(promptFiles) as Array<keyof typeof promptFiles>) {
+      const text = await readPrompt(name)
+      const lines = text.split(/\r?\n/).length
+      expect(lines, `${name} prompt exceeds line budget`).toBeLessThanOrEqual(maxLines[name])
+    }
+  })
+
+  test("shared file-mutation ownership principle appears exactly once per non-delivery core prompt", async () => {
     const principle =
       "Every agent owns its file mutations: if you modify project files, commit your own changes before finishing; if your role is read-only or only emits structured records, do not claim file changes."
 
     for (const name of Object.keys(promptFiles) as Array<keyof typeof promptFiles>) {
-      expect(await readPrompt(name)).toContain(principle)
+      const text = await readPrompt(name)
+      const expected = name === "delivery" ? 0 : 1
+      expect(text.split(principle).length - 1, `${name} prompt`).toBe(expected)
+    }
+  })
+
+  test("core prompts define their real file mutation commit boundary", async () => {
+    const principle =
+      "Every agent owns its file mutations: if you modify project files, commit your own changes before finishing; if your role is read-only or only emits structured records, do not claim file changes."
+
+    for (const name of Object.keys(promptFiles) as Array<keyof typeof promptFiles>) {
+      const text = await readPrompt(name)
+      if (name === "delivery") {
+        expect(text).toContain("Delivery does not run git commits itself")
+        expect(text).toContain("host deliver round commit")
+        expect(text).toContain("Do not call git")
+      } else {
+        expect(text).toContain(principle)
+      }
     }
   })
 
@@ -48,17 +91,18 @@ describe("core prompt hygiene", () => {
   test("architect and orchestrator prompts seal the plan instead of re-planning ordinary shared edits", async () => {
     const architect = await readPrompt("architect")
     const orchestrator = await readPrompt("orchestrator")
+    const orchestratorFlat = orchestrator.replace(/\s+/g, " ")
 
     expect(architect).toContain("Produce the smallest executable goal graph")
     expect(architect).toContain("do not chase perfection in Architect")
 
     expect(orchestrator).toContain("Plan closure during execution")
-    expect(orchestrator).toContain("Treat the active architect goal graph as sealed")
-    expect(orchestrator.replace(/\s+/g, " ")).toContain("`owned_paths` are collaboration responsibilities, not a file sandbox")
+    expect(orchestratorFlat).toContain("Treat the active architect goal graph as sealed")
+    expect(orchestratorFlat).toContain("`owned_paths` are collaboration responsibilities, not a file sandbox")
     expect(orchestrator).toContain("Frequent Architect re-runs are a planning-quality indicator")
-    expect(orchestrator).toContain("use `modify_goal` instead of reopening the entire graph")
-    expect(orchestrator).toContain("try the smallest same-graph repair")
-    expect(orchestrator).toContain("Re-enter Architect only when the evidence shows a genuinely new prerequisite goal")
+    expect(orchestratorFlat).toContain("Use `modify_goal` instead of reopening the entire graph")
+    expect(orchestratorFlat).toContain("try the smallest same-graph repair")
+    expect(orchestratorFlat).toContain("Re-enter Architect only when the evidence shows a genuinely new prerequisite goal")
   })
 
   test("orchestrator source routes collaboration drift through durable closure lanes", async () => {
@@ -76,6 +120,38 @@ describe("core prompt hygiene", () => {
     expect(tools).not.toContain("run integrity against the corrected goal graph before dispatching build")
     expect(tools).toContain("post_build_architecture_review_input")
     expect(tools).toContain("architecture_review_rework")
+  })
+
+  test("runtime workflow guidance matches the live agent topology", async () => {
+    const orchestratorAgent = await readSource("orchestrator/agent.ts")
+    const orchestratorTools = await readSource("orchestrator/tools.ts")
+    const requirementsTools = await readSource("requirements/output-tools.ts")
+    const workflow = await readSource("engine/workflow.ts")
+    const orchestratorAgentFlat = orchestratorAgent.replace(/\s*\*\s*/g, " ").replace(/\s+/g, " ")
+
+    expect(orchestratorAgent).not.toContain("requirements → goals → plan → execute → eval → delivery verify → publish")
+    expect(orchestratorAgent).not.toContain("plan, eval, delivery")
+    expect(orchestratorAgentFlat).toContain("MiniWorkflow renders an advisory path")
+    expect(orchestratorAgentFlat).toContain("Specialist agents own their structured artifacts")
+
+    expect(orchestratorTools).not.toContain("Goal decomposition / metric specs /")
+    expect(orchestratorTools).not.toContain("metric specs, challenge seeds")
+    expect(orchestratorTools).not.toContain("Each goal build automatically records its build report and runs")
+    expect(orchestratorTools).not.toContain("Build already invokes the post-build review")
+    expect(orchestratorTools).toContain("acceptance_specs, traceability, source/reference coverage, and cross-goal")
+    expect(orchestratorTools).toContain("Goal builds record build reports as review input")
+
+    expect(requirementsTools).not.toContain("metric specs, challenge seeds")
+    expect(requirementsTools).toContain("Challenge metrics are produced by prosecutor/metrics")
+
+    expect(workflow).not.toContain("停止默认调度")
+    expect(workflow).not.toContain("goals / 度量 / 挑战种子 / 契约")
+    expect(workflow).not.toContain("evaluator as plan/build/evaluate phases")
+    expect(workflow).not.toContain("per-goal[build + architecture_review]")
+    expect(workflow).not.toContain("goal build 完成后自动跑一次 architecture_review")
+    expect(workflow).toContain("deliver rejected 返回结构化证据，下一步仍由 Orchestrator 基于证据决定")
+    expect(workflow).toContain("acceptance_specs / traceability / source-reference coverage / cross-goal contracts")
+    expect(workflow).toContain("build 报告会作为 review input 被记录，但不会自动触发 architecture_review")
   })
 
   test("architecture review findings are actionable feedback, not dispatch gates", async () => {
@@ -299,6 +375,20 @@ describe("core prompt hygiene", () => {
     expect(text).toContain("Do not create the task yourself")
   })
 
+  test("delivery prompt pins lifecycle, commit, and visual evidence boundaries", async () => {
+    const text = await readPrompt("delivery")
+    const normalized = text.replace(/\s+/g, " ")
+
+    expect(normalized).toContain("Delivery does not run git commits itself")
+    expect(normalized).toContain("let the host deliver round commit archive those changes")
+    expect(normalized).toContain("Do not call git commit from `run_command`")
+    expect(normalized).toContain("Delivery does not start, stop, retry, cancel, or create engine tasks")
+    expect(text).toContain("verify_page_integrity")
+    expect(text).toContain("compare_visual_artifacts")
+    expect(normalized).toContain("screenshot as supporting evidence")
+    expect(normalized).toContain("do not treat a screenshot alone as the full visual gate")
+  })
+
   test("design-analysis and delivery agree that visual_consistency_spec is delivery-gated", async () => {
     const design = await readPrompt("designAnalyst")
     const delivery = await readPrompt("delivery")
@@ -364,7 +454,7 @@ describe("core prompt hygiene", () => {
   test("orchestrator prompt sends multi-goal requests through workflow decomposition", async () => {
     const text = await readPrompt("orchestrator")
     const normalized = text.replace(/\s+/g, " ")
-    expect(normalized).toContain("explicitly decide whether the request needs multiple goals before the first implementation dispatch")
+    expect(normalized).toContain("Before first implementation dispatch, explicitly decide whether the request needs multiple goals")
     expect(normalized).toContain("implementation, acceptance, and verification goals")
     expect(normalized).toContain("Do not compress a multi-goal job into a task-level direct build")
     expect(normalized).toContain("Does the request naturally split into implementation, acceptance hardening, and verification/integration surfaces?")
@@ -373,19 +463,18 @@ describe("core prompt hygiene", () => {
   test("orchestrator prompt caps deliver retries and routes minor rejection fixes through build", async () => {
     const text = await readPrompt("orchestrator")
     const normalized = text.replace(/\s+/g, " ")
-    expect(normalized).toContain("If the user explicitly asks to keep repairing in the same turn, the two-deliver budget still applies")
+    expect(normalized).toContain("Rejected `deliver` returns evidence for the next orchestrator decision")
+    expect(normalized).toContain("not a host-side mandate to end the scheduler")
+    expect(normalized).toContain("Valid next actions include task-level build")
     expect(normalized).toContain("first acceptance attempt plus at most one post-rework verification")
-    expect(normalized).toContain("Do NOT call build, architect, restart_from_stage, fail_task, propose_task, or another deliver just to continue the loop automatically when auto iteration is disabled")
-    expect(normalized).toContain("Decision priors apply only when `assistant.auto_iteration=true` or the operator has explicitly asked")
-    expect(normalized).toContain('70-85%: minor / localized rejection → task-level `build({ request, directBuildIntent: "modify_files" })`')
-    expect(normalized).toContain("2-8%: separate follow-up scope before the second deliver → `propose_task`")
-    expect(normalized).toContain("After the second non-accepted deliver: no priors apply; call `question` and wait for the operator")
+    expect(normalized).toContain("After the second non-accepted deliver, no priors apply; call `question` and wait for the operator")
+    expect(normalized).toContain("the host will not open rework attempts or queue repair work by itself")
     expect(normalized).not.toContain("0-5%: no path to improve current task after the second deliver → `fail_task`")
-    expect(normalized).toContain('Minor / localized delivery issues → call `build({ request, directBuildIntent: "modify_files" })`')
-    expect(normalized).toContain("Do not re-run requirements, architect, design_analysis, or the whole workflow for these issues")
+    expect(normalized).toContain('Minor / localized delivery issues -> call `build({ request, directBuildIntent: "modify_files" })`')
+    expect(normalized).toContain("Do not re-run requirements, architect, design_analysis, or the whole workflow for import typos")
     expect(normalized).toContain("Re-enter **architect** only when the rejection proves a genuinely new prerequisite goal")
     expect(normalized).toContain("Task-fidelity shortfall recovery")
-    expect(normalized).toContain("First occurrence, when the missing or distorted capability is still inside the current task contract → use the lightest valid repair")
+    expect(normalized).toContain("First occurrence, when the missing or distorted capability is still inside the current task contract -> use the lightest valid repair")
     expect(normalized).toContain('`build({ request, directBuildIntent: "modify_files" })` with the exact fidelity delta as the request')
     expect(normalized).toContain("If the same fidelity shortfall repeats after that build retry")
     expect(normalized).toContain("use `modify_goal` or `architect` when the current task needs a corrected/new goal")
@@ -394,22 +483,26 @@ describe("core prompt hygiene", () => {
 
   test("orchestrator prompt routes follow-up task creation through confirmed proposals", async () => {
     const text = await readPrompt("orchestrator")
+    const normalized = text.replace(/\s+/g, " ")
     expect(text).toContain("propose_task")
-    expect(text).toContain("Orchestrator is the only agent-side owner of engine task lifecycle decisions")
-    expect(text).toContain("only creates the new task when the user")
-    expect(text).toContain("Base-rate prior: this is a low-frequency option, roughly 2-8%")
-    expect(text).toContain("remaining work is clearly outside the current")
-    expect(text).toContain("Never call generic `task` or control-plane `panel`")
+    expect(normalized).toContain("You are the only agent-side owner of engine task lifecycle decisions")
+    expect(normalized).toContain("only creates the new task when the user selects the confirmation action")
+    expect(normalized).toContain("Base-rate prior: low-frequency option, roughly 2-8%")
+    expect(normalized).toContain("remaining work is clearly outside the current task contract")
+    expect(normalized).toContain("Never call generic `task` or control-plane `panel`")
   })
 
   test("orchestrator prompt makes accepted deliver the terminal lifecycle path", async () => {
     const text = await readPrompt("orchestrator")
     const normalized = text.replace(/\s+/g, " ")
     expect(normalized).toContain("Accepted deliveries complete the task")
-    expect(normalized).toContain("accepted `deliver` already completed the task")
+    expect(normalized).toContain("Accepted `deliver` already completed the task")
+    expect(normalized).toContain("DeliveryAgent calls `submit_verdict` as semantic review input")
+    expect(normalized).toContain("the deliver tool's host arbiter converts that evidence into the persisted delivery verdict")
+    expect(normalized).toContain("Only an accepted host-arbiter verdict completes the task")
     expect(normalized).toContain("`publish_delivery` is explicit artifact export only; it does not decide lifecycle")
     expect(normalized).toContain("Completed does not mean context deletion")
-    expect(normalized).toContain("The historical accepted verdict is not proof that the new operator message is already handled")
+    expect(normalized).toContain("the historical accepted verdict is baseline evidence, not proof that a new operator message is already handled")
     expect(normalized).not.toContain("delivery has accepted and been published")
     expect(normalized).not.toContain("publish_delivery remains the normal terminal path")
   })
@@ -419,11 +512,11 @@ describe("core prompt hygiene", () => {
     const normalized = text.replace(/\s+/g, " ")
     expect(normalized).toContain("`design_analysis` MUST be first, before `analyze_intent`")
     expect(normalized).toContain("UI replication from visual reference")
-    expect(normalized).toContain("`design_analysis` (mandatory when an image or live page URL is the visual spec) → `analyze_intent`")
+    expect(normalized).toContain("`design_analysis` (mandatory when an image or live page URL is the visual spec) -> `analyze_intent`")
     expect(normalized).not.toContain("UI replication from visual reference` in `Kind: workflow` → `analyze_intent`")
     expect(normalized).not.toContain("verification` goals are integration checks; they stay pending until **deliver**")
-    expect(normalized).toContain("dispatch them with `build({ goalID })` like every other goal")
-    expect(normalized).toContain("Every non-delivery-only verification goal must be terminal before `deliver`")
+    expect(normalized).toContain("Dispatch them with `build({ goalID })` like every other goal")
+    expect(normalized).toContain("every non-delivery-only verification goal is terminal before `deliver`")
   })
 
   test("integrity prompt audits original request mining, not only generated REQ rows", async () => {
@@ -446,7 +539,7 @@ describe("core prompt hygiene", () => {
     expect(integrity).toContain("leave `requirement_ids` empty")
     expect(orchestrator).toContain("late-stage requirements-mining and system-integrity review")
     expect(orchestrator.replace(/\s+/g, " ")).toContain("after Delivery acceptance and before follow-up/failure decisions")
-    expect(orchestrator).toContain("No standalone wave-level integrity loop")
+    expect(orchestrator.replace(/\s+/g, " ")).toContain("No standalone wave-level integrity loop")
     expect(architect).toContain("near task end to audit the original user request, requirements extraction, and delivered system")
     expect(architect).not.toContain("integrity reviewer before build")
   })
@@ -475,15 +568,18 @@ describe("core prompt hygiene", () => {
 
   test("orchestrator prompt keeps pre-delivery work moving and cascades 1:1 reference fidelity to build", async () => {
     const text = await readPrompt("orchestrator")
+    const normalized = text.replace(/\s+/g, " ")
     expect(text).toContain("Do not stop to ask")
     expect(text).toContain("Would you like me")
-    expect(text).toContain("your build dispatch MUST say they are the authoritative source of truth")
-    expect(text.replace(/\s+/g, " ")).toContain("build must restore them 1:1 as closely as the stack allows")
+    expect(normalized).toContain("your build dispatch MUST say they are the authoritative source of truth")
+    expect(normalized).toContain("build must restore them 1:1 as closely as the stack allows")
   })
 
   test("prosecutor prompt references current delivery rejection surface", async () => {
     const text = await readPrompt("prosecutor")
     expect(text).not.toContain("Defender's own issues_found")
     expect(text).toContain("Defender's own rejection_details")
+    expect(text).toContain("Use `query_diff` only when it returns a real delivery snapshot")
+    expect(text).toContain("do not invent diff-grounded claims")
   })
 })

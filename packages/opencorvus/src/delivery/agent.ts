@@ -165,6 +165,11 @@ export namespace DeliveryAgent {
           reason: "delivery agent did not call submit_verdict before the step budget ran out",
         }
       },
+      terminalTool: {
+        toolName: "submit_verdict",
+        isSatisfied: (collector) => collector.finalized && !!collector.verdict,
+        shouldExposeOnlyTerminalTool: () => false,
+      },
       buildUserPrompt: () => textPrompt,
       buildUserParts: () => buildPromptParts(textPrompt),
     })
@@ -536,7 +541,7 @@ export const DELIVERY_AGENT_SYSTEM = DELIVERY_CORE
  *
  * Composition (strict order, no bypass):
  *   1. DELIVERY_AGENT_SYSTEM — code-owned canonical core (role, phases, rules)
- *   2. config.agent.delivery.prompt — optional user append (MUST NOT replace)
+ *   2. config.agent.delivery.prompt_append — optional user append (MUST NOT replace)
  *   3. resolveStageSkills output — invariant section + matched skills
  *
  * Returns the composed prompt and the union of required_tools declared by
@@ -544,7 +549,7 @@ export const DELIVERY_AGENT_SYSTEM = DELIVERY_CORE
  * (attachments, request URL) drive auto-detect alongside project files/deps. */
 export async function deliveryAgentSystem(input?: VerifyInput): Promise<{ prompt: string; requiredTools: string[] }> {
   const config = await Config.get()
-  const userAppend = (config.agent as Record<string, any> | undefined)?.delivery?.prompt
+  const userAppend = (config.agent as Record<string, any> | undefined)?.delivery?.prompt_append
   const core =
     typeof userAppend === "string" && userAppend.trim().length > 0
       ? DELIVERY_AGENT_SYSTEM + "\n\n" + userAppend

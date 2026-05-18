@@ -6,6 +6,8 @@ import { Agent } from "../../src/agent/agent"
 import { PermissionNext } from "../../src/permission/next"
 import { ToolRegistry } from "../../src/tool/registry"
 import { MIRROR_ANALYSIS_TOOL_IDS, MIRROR_DELIVERY_TOOL_IDS, MIRROR_TOOL_IDS } from "../../src/mirror/tools/ids"
+import BUILD_CORE from "../../src/prompt/core/build-core.txt"
+import PROMPT_CODING from "../../src/agent/prompt/coding.txt"
 
 // Helper to evaluate permission for a tool with wildcard pattern
 function evalPerm(agent: Agent.Info | undefined, permission: string): PermissionNext.Action | undefined {
@@ -20,6 +22,7 @@ test("returns default native agents when no config", async () => {
     fn: async () => {
       const agents = await Agent.list()
       const names = agents.map((a) => a.name)
+      expect(names).toContain("coding")
       expect(names).toContain("build")
       expect(names).toContain("general")
       expect(names).toContain("explore")
@@ -52,10 +55,28 @@ test("build agent has correct default properties", async () => {
       expect(build).toBeDefined()
       expect(build?.mode).toBe("primary")
       expect(build?.native).toBe(true)
+      expect(build?.hidden).toBe(true)
+      expect(build?.prompt).toBe(BUILD_CORE)
       expect(evalPerm(build, "edit")).toBe("allow")
       expect(evalPerm(build, "bash")).toBe("allow")
       expect(evalPerm(build, "todoread")).toBe("allow")
       expect(evalPerm(build, "todowrite")).toBe("allow")
+    },
+  })
+})
+
+test("coding agent owns direct assistant prompt", async () => {
+  await using tmp = await tmpdir()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const coding = await Agent.get("coding")
+      expect(coding).toBeDefined()
+      expect(coding?.mode).toBe("primary")
+      expect(coding?.native).toBe(true)
+      expect(coding?.hidden).toBeUndefined()
+      expect(coding?.prompt).toBe(PROMPT_CODING)
+      expect(await Agent.nativeDefaultPrompt("coding")).toBe(PROMPT_CODING)
     },
   })
 })
@@ -155,6 +176,7 @@ test("orchestrator does not receive the control-plane panel tool", async () => {
       const orchestrator = await Agent.get("orchestrator")
       expect(orchestrator).toBeDefined()
       expect(orchestrator?.tools?.include).toContain("cancel_subagent")
+      expect(orchestrator?.tools?.include).toContain("propose_task")
       expect(orchestrator?.tools?.include).not.toContain("panel")
       expect(orchestrator?.tools?.include).not.toContain("task")
       expect(orchestrator?.tools?.include).not.toContain("task_report")
@@ -182,6 +204,82 @@ test("orchestrator does not inherit the generic task-tool prompt policy", async 
       expect(orchestrator?.prompt).toContain("use `propose_task`")
       expect(orchestrator?.prompt).not.toContain("Use the Task tool")
       expect(orchestrator?.prompt).not.toContain("Proactively use the Task tool")
+    },
+  })
+})
+
+test("native stage agent registry tool surfaces match role boundaries", async () => {
+  await using tmp = await tmpdir()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const readonlyStageAgents = ["requirements", "architect", "intent-analysis"] as const
+      const allowedReadonly = [
+        "read_file",
+        "find_files",
+        "search_code",
+        "list_directory",
+        "memory_search",
+        "memory_get",
+        "todoread",
+        "todowrite",
+      ]
+      const forbidden = [
+        "bash",
+        "edit",
+        "write",
+        "apply_patch",
+        "task",
+        "panel",
+        "webfetch",
+        "websearch",
+        "deliver",
+        "build",
+        "propose_task",
+      ]
+
+      for (const name of readonlyStageAgents) {
+        const agent = await Agent.get(name)
+        expect(agent).toBeDefined()
+        expect(agent?.tools?.include?.sort()).toEqual([...allowedReadonly].sort())
+        for (const tool of forbidden) {
+          expect(agent?.tools?.include).not.toContain(tool)
+        }
+      }
+
+      const design = await Agent.get("design-analyst")
+      expect(design?.tools?.include).toContain("url_screenshot")
+      expect(design?.tools?.include).not.toContain("webpage_render")
+      expect(design?.tools?.include).not.toContain("task")
+
+      for (const name of ["integrity", "prosecutor", "delivery"] as const) {
+        const agent = await Agent.get(name)
+        expect(agent).toBeDefined()
+        expect(agent?.tools?.include).toEqual([])
+      }
+    },
+  })
+})
+
+test("orchestrator registry exposes lifecycle tools it teaches in prompt", async () => {
+  await using tmp = await tmpdir()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const orchestrator = await Agent.get("orchestrator")
+      expect(orchestrator).toBeDefined()
+      const include = orchestrator?.tools?.include ?? []
+      for (const tool of [
+        "propose_task",
+        "fail_task",
+        "cancel_task",
+        "retry_task",
+        "restart_from_stage",
+        "inject_operator_message",
+      ]) {
+        expect(include).toContain(tool)
+      }
+      expect(orchestrator?.prompt).toContain("propose_task")
     },
   })
 })
@@ -429,7 +527,7 @@ test("agent mode can be overridden", async () => {
   })
 })
 
-test("agent name can be overridden", async () => {
+test("agent name override is rejected because the config key is the identity", async () => {
   await using tmp = await tmpdir({
     config: {
       agent: {
@@ -437,20 +535,36 @@ test("agent name can be overridden", async () => {
       },
     },
   })
+  await expect(Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await Agent.get("build")
+    },
+  })).rejects.toThrow("config.agent.build.name cannot rename the agent identity")
+})
+
+test("coding prompt can be overridden from config", async () => {
+  await using tmp = await tmpdir({
+    config: {
+      agent: {
+        coding: { prompt: "Custom system prompt" },
+      },
+    },
+  })
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      const build = await Agent.get("build")
-      expect(build?.name).toBe("Builder")
+      const coding = await Agent.get("coding")
+      expect(coding?.prompt).toBe("Custom system prompt")
     },
   })
 })
 
-test("agent prompt can be set from config", async () => {
+test("workflow build prompt is code-owned and only accepts prompt_append", async () => {
   await using tmp = await tmpdir({
     config: {
       agent: {
-        build: { prompt: "Custom system prompt" },
+        build: { prompt_append: "Additional build instruction" },
       },
     },
   })
@@ -458,9 +572,26 @@ test("agent prompt can be set from config", async () => {
     directory: tmp.path,
     fn: async () => {
       const build = await Agent.get("build")
-      expect(build?.prompt).toBe("Custom system prompt")
+      expect(build?.prompt).toBe(BUILD_CORE)
+      expect(build?.options.prompt_append).toBeUndefined()
     },
   })
+})
+
+test("workflow build prompt rejects prompt override instead of ignoring it", async () => {
+  await using tmp = await tmpdir({
+    config: {
+      agent: {
+        build: { prompt: "Invalid replacement" },
+      },
+    },
+  })
+  await expect(Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await Agent.get("build")
+    },
+  })).rejects.toThrow("config.agent.build.prompt is invalid for append-mode agents")
 })
 
 test("unknown agent properties are placed into options", async () => {
@@ -602,7 +733,7 @@ test("only design-analyst receives mirror analysis tools from the registry", asy
         expect(designToolIds.has(id)).toBe(false)
       }
 
-      for (const name of ["build", "general", "explore", "requirements", "architect", "integrity", "prosecutor"]) {
+      for (const name of ["coding", "build", "general", "explore", "requirements", "architect", "integrity", "prosecutor"]) {
         const agent = await Agent.get(name)
         expect(agent).toBeDefined()
         const tools = await ToolRegistry.tools({ providerID: "", modelID: "" }, agent)
@@ -612,7 +743,7 @@ test("only design-analyst receives mirror analysis tools from the registry", asy
         }
       }
 
-      for (const name of ["build", "general", "explore", "compaction", "title", "delivery"]) {
+      for (const name of ["coding", "build", "general", "explore", "compaction", "title", "delivery"]) {
         const agent = await Agent.get(name)
         expect(agent).toBeDefined()
         for (const id of MIRROR_TOOL_IDS) {
@@ -736,13 +867,13 @@ description: Permission skill.
   }
 })
 
-test("defaultAgent returns build when no default_agent config", async () => {
+test("defaultAgent returns coding when no default_agent config", async () => {
   await using tmp = await tmpdir()
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
       const agent = await Agent.defaultAgent()
-      expect(agent).toBe("build")
+      expect(agent).toBe("coding")
     },
   })
 })
@@ -813,6 +944,7 @@ test("defaultAgent throws when all primary agents are disabled", async () => {
   await using tmp = await tmpdir({
     config: {
       agent: {
+        coding: { disable: true },
         build: { disable: true },
         plan: { disable: true },
         spec: { disable: true },

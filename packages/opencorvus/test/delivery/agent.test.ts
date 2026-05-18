@@ -247,6 +247,87 @@ test("DeliveryAgent prompt includes manifest gate, ownership, and executor chang
   expect(acceptedPayloadResult).toContain("verdict=accepted")
 }, 30_000)
 
+test("DeliveryAgent registers submit_verdict without same-session recovery", async () => {
+  await using tmp = await tmpdir({ git: true, config: { model: "test/mock" } })
+  let terminalToolName = ""
+  let satisfiedBefore = true
+  let satisfiedAfter = false
+  let hasSameSessionRecovery = true
+  spyOn(Provider, "getModel").mockResolvedValue(testDeliveryModel())
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      runnerImpl = async (input: any) => {
+        const kit = input.toolKitFactory()
+        const collector = kit.getCollector()
+        terminalToolName = input.terminalTool.toolName
+        satisfiedBefore = input.terminalTool.isSatisfied(collector)
+        hasSameSessionRecovery = "recovery" in input.terminalTool
+        await kit.tools.submit_verdict.execute!(
+          {
+            verdict: "rejected",
+            summary: "Host gate failed and requires rejection.",
+            startup_verification: { attempted: false, success: false },
+            frontend_check: { attempted: false },
+            deferred_checks: [],
+            tool_call_evidence: [{ tool: "DeliveryEvidenceManifest", passed: false, detail: "manifest gate failed" }],
+            rejection_details: [{
+              category: "test",
+              error: "Required check failed.",
+              suggestion: "Fix the required check.",
+            }],
+          },
+          {} as any,
+        )
+        satisfiedAfter = input.terminalTool.isSatisfied(collector)
+        return { collector, attempts: 1 }
+      }
+
+      await DeliveryAgent.verify({
+        task: {
+          id: "tsk_delivery_terminal_tool",
+          title: "Terminal verdict",
+          request: "Verify terminal verdict submission.",
+        },
+        goals: [],
+        delivery: {
+          summary: "No accepted delivery.",
+          changedFiles: ["src/App.tsx"],
+          manifestGate: {
+            status: "failed",
+            summary: "Delivery evidence gate failed 1 required check(s).",
+            failedCheckIds: ["test#1"],
+            failedCoverageIds: [],
+            failedRuntimeFlowIds: [],
+            failedReviewIds: [],
+          },
+          manifestFailureDetails: [{
+            kind: "check",
+            id: "test#1",
+            name: "Unit Tests",
+            status: "failed",
+            command: "pnpm run test",
+            exitCode: 1,
+            evidence: "unit tests failed",
+          }],
+          hostGateFailures: [{
+            kind: "manifest",
+            id: "artifact_manifest_terminal",
+            summary: "Delivery evidence gate failed 1 required check(s).",
+            evidence: ["[check] test#1 Unit Tests status=failed exit=1 command=pnpm run test: unit tests failed"],
+          }],
+        },
+      })
+    },
+  })
+
+  expect(terminalToolName).toBe("submit_verdict")
+  expect(satisfiedBefore).toBe(false)
+  expect(satisfiedAfter).toBe(true)
+  expect(hasSameSessionRecovery).toBe(false)
+}, 30_000)
+
 test("DeliveryAgent keeps visual images out of startup prompt and exposes exploration tools", async () => {
   await using tmp = await tmpdir({ git: true, config: { model: "test/mock" } })
   let capturedPrompt = ""

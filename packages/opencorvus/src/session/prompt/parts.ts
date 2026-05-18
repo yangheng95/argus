@@ -29,6 +29,9 @@ import { AttachmentStore } from "@/storage/attachment-store"
 
 const log = Log.create({ service: "session.prompt" })
 
+function hostFileContextLabel(args: Record<string, unknown>) {
+  return `Host-provided file context (not a model tool call): ${JSON.stringify(args)}`
+}
 
 export async function resolvePromptParts(template: string): Promise<PromptInput["parts"]> {
   const parts: PromptInput["parts"] = [
@@ -83,6 +86,9 @@ export async function resolvePromptParts(template: string): Promise<PromptInput[
 
 export async function createUserMessage(input: PromptInput) {
   const agentName = input.agent ?? (await Agent.defaultAgent())
+  if (agentName === "build" && input.systemMode !== "complete") {
+    throw new Error('The workflow build agent requires systemMode="complete"; use agent "coding" for direct coding assistant sessions.')
+  }
   const agent = await Agent.get(agentName)
   if (!agent) throw new Error(`Unknown agent: ${agentName}`)
 
@@ -226,7 +232,7 @@ export async function createUserMessage(input: PromptInput) {
                     messageID: info.id,
                     sessionID: input.sessionID,
                     type: "text",
-                    text: `Called the Read tool with the following input: ${JSON.stringify({ filePath: part.filename })}`,
+                    text: hostFileContextLabel({ filePath: part.filename }),
                   },
                   {
                     messageID: info.id,
@@ -291,7 +297,7 @@ export async function createUserMessage(input: PromptInput) {
                     messageID: info.id,
                     sessionID: input.sessionID,
                     type: "text",
-                    text: `Called the Read tool with the following input: ${JSON.stringify(args)}`,
+                    text: hostFileContextLabel(args),
                   },
                 ]
 
@@ -345,7 +351,7 @@ export async function createUserMessage(input: PromptInput) {
                       messageID: info.id,
                       sessionID: input.sessionID,
                       type: "text",
-                      text: `Read tool failed to read ${filepath} with the following error: ${message}`,
+                      text: `Host-provided file context failed to read ${filepath} with the following error: ${message}`,
                     })
                   })
 
@@ -370,7 +376,7 @@ export async function createUserMessage(input: PromptInput) {
                     messageID: info.id,
                     sessionID: input.sessionID,
                     type: "text",
-                    text: `Called the Read tool with the following input: ${JSON.stringify(args)}`,
+                    text: hostFileContextLabel(args),
                   },
                   {
                     messageID: info.id,
@@ -405,7 +411,7 @@ export async function createUserMessage(input: PromptInput) {
                   messageID: info.id,
                   sessionID: input.sessionID,
                   type: "text",
-                  text: `Called the Read tool with the following input: {"filePath":"${filepath}"}`,
+                  text: hostFileContextLabel({ filePath: filepath }),
                 },
                 {
                   id: part.id,

@@ -7,8 +7,8 @@
  *   2. **pipeline** — (design_analysis) → analyze_intent → requirements → architect → per-goal[build] → deliver
  *      用于多文件功能、UI 复刻、跨模块重构、需要验收标准的任务。
  *
- * 两条路径都以 build 做实现、以 deliver 做对抗式验收。deliver 是默认调度终点：
- * accepted 会自动发布并完成任务；rejected 会把交付结果报告给用户，后续返工等待用户继续指示。
+ * 两条路径都以 build 做实现、以 deliver 做对抗式验收。deliver 是唯一接受闸：
+ * accepted 会自动发布并完成任务；rejected 会把结构化证据交还编排器，由编排器决定下一步。
  *
  * MiniWorkflow 不是状态机，不是固定 pipeline。Orchestrator 仍可基于 agent 推理偏离推荐
  * 路径，每个步骤映射到一个已存在的 Orchestrator 工具，工作流只在 system prompt 中以
@@ -49,12 +49,10 @@ export interface MiniWorkflowStep {
   /** 前置步骤 ID（声明式依赖，非强制约束） */
   after: string[]
   /** Optional sub-phases within this step — only populated for goal-scope
-   *  steps whose single-tool-call invocation internally spawns multiple
-   *  sub-agents (e.g. pipeline.build dispatches build worker →
-   *  evaluator as plan/build/evaluate phases). Task-scope steps map 1:1
-   *  to an orchestrator tool call and have no phases. When present, the
-   *  overlay renders phase rows inside the step card and claims child
-   *  sessions by phase (not by step). */
+   *  steps whose single-tool-call invocation exposes more than one visible
+   *  execution phase. Task-scope steps map 1:1 to an orchestrator tool call
+   *  and have no phases. When present, the overlay renders phase rows inside
+   *  the step card and claims child sessions by phase (not by step). */
   phases?: MiniWorkflowPhase[]
 }
 
@@ -130,7 +128,8 @@ export interface WorkflowState {
  *
  *  适合：显式 kind=build 的单文件 / 局部 bugfix / 配置调整 / 短调试。无需 goal 分解。
  *  流程：build 实现 → deliver 验证；deliver accepted 自动发布并完成任务；
- *  deliver rejected 报告交付结果并停止默认调度，等待用户继续指示。delivery 只审查和出 verdict。
+ *  deliver rejected 返回结构化证据，下一步仍由 Orchestrator 基于证据决定。
+ *  delivery 只审查和出 verdict。
  */
 const DIRECT: MiniWorkflow = {
   id: "direct",
@@ -159,7 +158,7 @@ const DIRECT: MiniWorkflow = {
       id: "deliver",
       tool: "deliver",
       label: "Deliver",
-      hint: "delivery agent 端到端验收 + 发布判定。Accepted 会自动发布并完成任务；Rejected 默认直接报告结果并停止调度，等待用户继续指示。",
+      hint: "delivery agent 端到端验收 + 发布判定。Accepted 会自动发布并完成任务；Rejected 返回结构化证据，编排器继续基于证据选择修复、重规划、提问、失败或报告结果。",
       scope: "task",
       skippable: false,
       after: ["build"],
@@ -171,13 +170,13 @@ const DIRECT: MiniWorkflow = {
 /** pipeline — 完整开发流程。
  *
  *  适合：多文件功能 / UI 复刻 / 跨模块重构 / 需要明确验收标准的任务。
- *  流程：(design_analysis 可选) → analyze_intent → requirements → architect → per-goal[build + architecture_review] → deliver；
- *  deliver 是默认调度终点：accepted 自动发布并完成任务；rejected 报告结果后等待用户继续指示。
+ *  流程：(design_analysis 可选) → analyze_intent → requirements → architect → per-goal[build] → integrity? → deliver；
+ *  deliver 是唯一接受闸：accepted 自动发布并完成任务；rejected 返回证据后由编排器决定下一步。
  */
 const PIPELINE: MiniWorkflow = {
   id: "pipeline",
   name: "Pipeline",
-  description: "(design_analysis) → analyze_intent → requirements → architect → per-goal[build + architecture_review] → deliver。多文件功能 / UI 复刻 / 跨模块重构。",
+  description: "(design_analysis) → analyze_intent → requirements → architect → per-goal[build] → integrity? → deliver。多文件功能 / UI 复刻 / 跨模块重构。",
   steps: [
     {
       id: "design_analysis",
@@ -210,7 +209,7 @@ const PIPELINE: MiniWorkflow = {
       id: "architect",
       tool: "architect",
       label: "Architect",
-      hint: "权威分解者：读 REQ-N + 决策，产出 goals / 度量 / 挑战种子 / 契约。多 goal / 跨模块时按需调用；trivial 单文件改动可跳过。delivery 拒绝后可 re-run 精修 goal 集合。",
+      hint: "权威分解者：读 REQ-N + 决策，产出 goals / acceptance_specs / traceability / source-reference coverage / cross-goal contracts。多 goal / 跨模块时按需调用；trivial 单文件改动可跳过。delivery 拒绝后仅在结构性证据成立时 re-run 精修 goal 集合。",
       scope: "task",
       skippable: true,
       after: ["requirements"],
@@ -238,7 +237,7 @@ const PIPELINE: MiniWorkflow = {
       id: "integrity",
       tool: "integrity",
       label: "Review",
-      hint: "架构复核记录：goal build 完成后自动跑一次 architecture_review，完整反馈（含 issues / corrections / missing_goals 文本）随 build 工具结果回传。该阶段不是 build 前置门槛，host 不会自动改写 goal 图、不会自动 supersede attempt；orchestrator LLM 读完反馈后显式选择下一步。",
+      hint: "显式系统完整性复核：build 报告会作为 review input 被记录，但不会自动触发 architecture_review。只有当集成证据显示 requirements mining、语义完整性、contract graph 或 delivered system 存在真实疑点时才调用。该阶段不是 build 前置门槛或 routine wave gate，host 不会自动改写 goal 图、不会自动 supersede attempt；orchestrator LLM 读完反馈后显式选择下一步。",
       scope: "task",
       skippable: true,
       after: ["build"],
@@ -247,7 +246,7 @@ const PIPELINE: MiniWorkflow = {
       id: "deliver",
       tool: "deliver",
       label: "Deliver",
-      hint: "聚合所有 goal 交付物，delivery agent 端到端验收 + 发布判定。Accepted 会自动发布并完成任务；Rejected 默认直接报告结果并停止调度，等待用户继续指示。",
+      hint: "聚合所有 goal 交付物，delivery agent 端到端验收 + 发布判定。Accepted 会自动发布并完成任务；Rejected 返回结构化证据，编排器继续基于证据选择修复、重规划、提问、失败或报告结果。",
       scope: "task",
       skippable: false,
       after: ["build"],
@@ -637,8 +636,8 @@ export function renderWorkflowPrompt(workflow: MiniWorkflow, state: WorkflowStat
   lines.push(
     "NOTE: 上面是按需调用的可见进度，不是必须按序触发的状态机。每个 stage agent 是否调用由你 " +
     "（编排器）按 request 形态决定 —— 跳过等同于显式选择，理由要在 reasoning 里讲清楚。`deliver` " +
-    "始终是唯一的接受闸和默认调度终点；deliver accepted 自动发布并完成任务，" +
-    "deliver rejected 默认报告结果并等待用户继续指示。",
+    "始终是唯一的接受闸；deliver accepted 自动发布并完成任务，" +
+    "deliver rejected 返回结构化证据，下一步由编排器基于证据决定。",
   )
 
   return lines.join("\n")

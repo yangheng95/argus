@@ -120,13 +120,6 @@ export namespace DesignAnalystAgent {
         toolName: "submit_design_prd_spec",
         isSatisfied: (collector: DesignOutputCollector) => !!collector.final,
         shouldExposeOnlyTerminalTool: shouldScopeDesignSubmitTool,
-        recovery: {
-          maxTurns: 2,
-          buildUserPrompt: () =>
-            autoIteration
-              ? "Design-analysis has enough evidence for handoff. Submit the complete PRD/SPEC now with submit_design_prd_spec. Include at least two review-pass notes in prd_iteration_notes."
-              : "Design-analysis has enough evidence for handoff. Submit the complete PRD/SPEC now with submit_design_prd_spec. Include the bounded review-pass notes in prd_iteration_notes.",
-        },
       },
       skillsStage: "design_analyst",
       skillTaskSignals: {

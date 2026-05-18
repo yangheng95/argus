@@ -68,6 +68,8 @@ function initialQueueOrder(priority: PriorityInput | undefined, now: number) {
 
 // ---------------------------------------------------------------------------
 // persistQueuedTask — fast-path for POST /task (<10ms)
+// Historical name: queue=true persists a queued task; queue=false persists an
+// already-active task so creation genuinely bypasses the directory queue.
 // ---------------------------------------------------------------------------
 
 export function persistQueuedTask(input: {
@@ -87,7 +89,12 @@ export function persistQueuedTask(input: {
   metadata: Record<string, unknown>
   channelBinding?: ChannelBindingInput
   projectID: string
+  queue: boolean
 }) {
+  const taskStatus = input.queue ? "queued" : "active"
+  const progressStatus = input.queue ? "created" : "active"
+  const summary = input.queue ? "Task queued" : "Task started"
+  const source = input.queue ? "pipeline.queued" : "pipeline.direct"
   Database.transaction((db) => {
     db.insert(EngineTaskTable)
       .values({
@@ -105,7 +112,7 @@ export function persistQueuedTask(input: {
         queue_order: initialQueueOrder(input.priority, input.now),
         budget: budgetRow(input.budget),
         metadata: input.metadata,
-        time_started: null,
+        time_started: input.queue ? null : input.now,
         time_created: input.now,
         time_updated: input.now,
       })
@@ -128,9 +135,9 @@ export function persistQueuedTask(input: {
       .values({
         id: Identifier.ascending("progress"),
         task_id: input.taskID,
-        status: "created",
-        summary: "Task queued",
-        payload: { sessionID: input.sessionID },
+        status: progressStatus,
+        summary,
+        payload: { sessionID: input.sessionID, queue: input.queue },
         time_created: input.now,
         time_updated: input.now,
       })
@@ -138,9 +145,18 @@ export function persistQueuedTask(input: {
     Database.effect(() =>
       EngineProtocol.emit(Event.TaskCreated, {
         taskID: input.taskID,
-        status: "queued",
-        summary: "Task queued",
-      }, { source: "pipeline.queued" }),
+        status: taskStatus,
+        summary,
+      }, { source }),
     )
+    if (!input.queue) {
+      Database.effect(() =>
+        EngineProtocol.emit(Event.TaskUpdated, {
+          taskID: input.taskID,
+          status: taskStatus,
+          summary,
+        }, { source }),
+      )
+    }
   })
 }

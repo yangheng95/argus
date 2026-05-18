@@ -321,8 +321,9 @@ export async function savePromptEntry(entry: any, value: string): Promise<void> 
         current.agent?.[entry.key] && typeof current.agent[entry.key] === "object"
           ? { ...current.agent[entry.key] }
           : {};
-      if (value.trim()) item.prompt = value;
-      else delete (item as any).prompt;
+      const field = entry.prompt_mode === "append" ? "prompt_append" : "prompt";
+      if (value.trim()) item[field] = value;
+      else delete (item as any)[field];
       if (Object.keys(item).length === 0) delete current.agent[entry.key];
       else current.agent[entry.key] = item;
       if (Object.keys(current.agent).length === 0) delete current.agent;
@@ -356,7 +357,8 @@ export async function resetPromptEntry(entry: any): Promise<void> {
           current.agent[entry.key] && typeof current.agent[entry.key] === "object"
             ? { ...current.agent[entry.key] }
             : {};
-        delete (item as any).prompt;
+        const field = entry.prompt_mode === "append" ? "prompt_append" : "prompt";
+        delete (item as any)[field];
         if (Object.keys(item).length === 0) delete current.agent[entry.key];
         else current.agent[entry.key] = item;
         if (Object.keys(current.agent).length === 0) delete current.agent;

@@ -293,8 +293,8 @@ abstract class SessionAgent<TIn extends z.ZodType, TOut extends z.ZodType>
 
 | 目录 | 存放内容 |
 |---|---|
-| `src/agent/prompt/` | SessionAgent 的 prompt（实际盘上：`build.txt` / `general.txt` / `explore.txt` / `compaction.txt` / `title.txt` / `judge.txt`，**无** `summary.txt`） |
-| `src/prompt/core/` | PipelineAgent 的 prompt（实际盘上：`requirements-core.txt` / `architect-core.txt` / `delivery-core.txt` / `design-analyst-core.txt` / `intent-analysis-core.txt` / `orchestrator-core.txt` / `integrity-core.txt` / `prosecutor-core.txt` / `build-core.txt`——`build-core.txt` 服务于 `build/agent.ts` 这条 pipeline-agent 路径，与 `agent/prompt/build.txt` 的 SessionAgent 路径并行存在） |
+| `src/agent/prompt/` | SessionAgent 的 prompt（实际盘上：`coding.txt` / `general.txt` / `explore.txt` / `compaction.txt` / `title.txt` / `judge.txt`，**无** `summary.txt`） |
+| `src/prompt/core/` | PipelineAgent 的 prompt（实际盘上：`requirements-core.txt` / `architect-core.txt` / `delivery-core.txt` / `design-analyst-core.txt` / `intent-analysis-core.txt` / `orchestrator-core.txt` / `integrity-core.txt` / `prosecutor-core.txt` / `build-core.txt`——`build-core.txt` 服务于 `build/agent.ts` 这条 pipeline-agent 路径；direct interactive SessionAgent 路径使用 `agent/prompt/coding.txt`） |
 
 **迁移状态（2026-05-12）**：
 - ✅ `orchestrator/agent.ts:ORCHESTRATOR_INSTRUCTIONS` 已迁移：`= ORCHESTRATOR_CORE`（来自 `src/prompt/core/orchestrator-core.txt`，常量在 `orchestrator/agent.ts:642`）
