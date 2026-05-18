@@ -43,10 +43,13 @@ describe("Config.mergeOverlay (Phase 0)", () => {
     expect((out.agent?.coding as { temperature: number }).temperature).toBe(0.9)
   })
 
-  test("RFC 7396: null in overlay deletes the key (clears an override)", () => {
+  test("RFC 7396 null is schema-validated (no `as never`) and deletes the key", () => {
+    // null must parse through the gate — gate and merge API in lockstep.
+    const patch = Config.Overlay.parse({ model: null })
     const base = { model: "p/base", agent: { coding: { model: "p/x" } } } as never
-    const out = Config.mergeOverlay(base, { model: null as never })
+    const out = Config.mergeOverlay(base, patch)
     expect("model" in out).toBe(false)
+    expect(out.agent?.coding?.model).toBe("p/x")
   })
 
   test("base is treated as immutable (fresh object returned)", () => {
@@ -55,5 +58,15 @@ describe("Config.mergeOverlay (Phase 0)", () => {
     expect((base as { agent: { coding: { temperature: number } } }).agent.coding.temperature).toBe(0.1)
     expect(out.agent?.coding?.temperature).toBe(0.7)
     expect(out).not.toBe(base)
+  })
+
+  test("deep isolation: mutating an UNPATCHED nested subtree never pollutes base", () => {
+    // The §8.3 pollution guard: callers hold the resolved config and may
+    // mutate nested objects; that must not reach the Instance-cached base.
+    const base = { provider: { acme: { options: { region: "us" } } }, model: "p/base" } as never
+    const out = Config.mergeOverlay(base, { model: "p/session" })
+    // `provider` was not in the patch — it must be a structural copy, not an alias.
+    ;(out as { provider: { acme: { options: { region: string } } } }).provider.acme.options.region = "MUTATED"
+    expect((base as { provider: { acme: { options: { region: string } } } }).provider.acme.options.region).toBe("us")
   })
 })
