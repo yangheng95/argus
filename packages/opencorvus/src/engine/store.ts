@@ -686,7 +686,10 @@ export function findLatestDeliveryVerdictArtifact(taskID: string) {
       .select()
       .from(EngineArtifactTable)
       .where(and(eq(EngineArtifactTable.task_id, taskID), eq(EngineArtifactTable.label, "delivery-agent-verdict")))
-      .orderBy(desc(EngineArtifactTable.time_created))
+      // id is a monotonic ascending id — the secondary key breaks same-ms ties
+      // deterministically now that raw/host/final artifacts are written in the
+      // same Date.now() batch (specs/delivery-fresh-eyes-decoupling-2026-05-18.md §2.4).
+      .orderBy(desc(EngineArtifactTable.time_created), desc(EngineArtifactTable.id))
       .get(),
   )
 }
@@ -736,7 +739,7 @@ export function findLatestDeliveryVerdictArtifactForDelivery(deliveryID: string)
       .where(
         and(eq(EngineArtifactTable.delivery_id, deliveryID), eq(EngineArtifactTable.label, "delivery-agent-verdict")),
       )
-      .orderBy(desc(EngineArtifactTable.time_created))
+      .orderBy(desc(EngineArtifactTable.time_created), desc(EngineArtifactTable.id))
       .get(),
   )
 }

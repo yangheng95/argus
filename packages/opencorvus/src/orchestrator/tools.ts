@@ -29,7 +29,7 @@ import { EngineMemoryBridge } from "@/engine/memory-bridge"
 import { SubAgentProtocol } from "@/agent/sub-agent-protocol"
 import { Event as EngineEvent } from "@/engine/model"
 import { EngineProtocol } from "@/engine/protocol"
-import { renderDesignAnalysisHandoffReference } from "@/design-analyst/handoff"
+import { renderDesignAnalysisHandoffReference, designAnalysisArtifactPaths } from "@/design-analyst/handoff"
 import { materializeMcpToolResult } from "@/mcp/materialize"
 import { EngineArtifactTable, EngineExecutorSessionTable, EngineGoalTable, EngineTaskTable } from "@/engine/engine.sql"
 import {
@@ -337,16 +337,6 @@ function renderEvidenceSourceManifest(input: {
   return lines.join("\n")
 }
 
-function designAnalysisArtifactPaths(projectDir: string) {
-  const relativeDir = ".opencorvus/design-analysis"
-  return {
-    relativeDir,
-    prdRelative: `${relativeDir}/prd-spec.md`,
-    manifestRelative: `${relativeDir}/evidence-source-manifest.md`,
-    prdAbsolute: path.join(projectDir, ".opencorvus", "design-analysis", "prd-spec.md"),
-    manifestAbsolute: path.join(projectDir, ".opencorvus", "design-analysis", "evidence-source-manifest.md"),
-  }
-}
 
 function renderDesignAnalysisPrdSpecDocument(input: {
   analysis: {
@@ -3599,7 +3589,8 @@ export function createOrchestratorTools(input: {
         // delivery, every decision) was the dominant contributor to the
         // orchestrator session growing from ~10K to 125K tokens across 16 turns.
         // Caps below preserve the LATEST state per goal rather than history.
-        const DECISIONS_LIMIT = 20
+        // The decision-log cap is the shared DECISION_LOG_PROMPT_LIMIT (single
+        // source — see decision-log/index.ts), consumed at the call site below.
         const EVAL_CHECK_EVIDENCE_CAP = 200
 
         if (scope === "goals" || scope === "all") {
@@ -3669,7 +3660,7 @@ export function createOrchestratorTools(input: {
         }
 
         if (scope === "decisions" || scope === "all") {
-          const { createDecisionLog } = await import("@/decision-log")
+          const { createDecisionLog, DECISION_LOG_PROMPT_LIMIT } = await import("@/decision-log")
           const log = createDecisionLog(taskID)
           // Architecture review history gets its own section with its own
           // budget. Reviews fire frequently (one per goal build at the
@@ -3682,7 +3673,7 @@ export function createOrchestratorTools(input: {
           const reviewSection = log.phasePromptSection("review", "Architecture review history", { limit: 5 })
           if (reviewSection) sections.push(`\n${reviewSection}`)
           const section = log.toPromptSection({
-            limit: DECISIONS_LIMIT,
+            limit: DECISION_LOG_PROMPT_LIMIT,
             excludePhases: ["review"],
           })
           if (section) sections.push(`\n${section}`)
@@ -4306,10 +4297,15 @@ export function createOrchestratorTools(input: {
         }
 
         if (renderFailure) {
-          deliveryInfo.runtimeEvidenceFailures = [`[render] ${renderFailure.kind}: ${renderFailure.detail}`]
-          log.warn("deliver: render prerequisite failed — routing through delivery agent", {
+          // Fresh-eyes decoupling: a render prerequisite failure is an
+          // objective host fact. It is NOT fed to the agent as a prompt
+          // conclusion anymore — the host runtime/visual gate inside
+          // DeliveryService.verify owns it and will emit a host_gate
+          // rejection. See specs/delivery-fresh-eyes-decoupling-2026-05-18.md.
+          log.warn("deliver: render prerequisite failed — host runtime/visual gate will reject", {
             taskID,
             kind: renderFailure.kind,
+            detail: renderFailure.detail,
           })
         }
 
@@ -4358,7 +4354,7 @@ export function createOrchestratorTools(input: {
           // agent reads acceptance_specs as INFORMATION and verifies them
           // itself (Phase 2 / 2.5 in DELIVERY_AGENT_SYSTEM), including per-goal
           // subagent dispatch for adversarial review at scale.
-          const verdict: import("@/delivery/agent").DeliveryVerdictType = await DeliveryService.verify({
+          const deliveryDecision: import("@/delivery").DeliveryDecision = await DeliveryService.verify({
             task: {
               id: task.id,
               title: task.title,
@@ -4379,12 +4375,18 @@ export function createOrchestratorTools(input: {
             criteriaResults: Array.isArray(task.criteria_results) ? (task.criteria_results as any) : [],
           })
 
-          // Persist verdict as artifact
+          // Fresh-eyes decoupling (specs/delivery-fresh-eyes-decoupling-2026-05-18.md):
+          // exactly ONE business-consumable artifact — the composed final
+          // decision — under the compatibility label `delivery-agent-verdict`,
+          // so every existing reader keeps working unchanged. The raw agent
+          // verdict and the host gate result are persisted as their OWN
+          // evidence-only artifacts and MUST NOT be consumed by business code.
+          const verdict = deliveryDecision.final
           const { EngineArtifactTable } = await import("@/engine/engine.sql")
           const verdictArtifactId = Identifier.ascending("artifact")
-          Database.use((db) =>
-            db
-              .insert(EngineArtifactTable)
+          const now = Date.now()
+          Database.use((db) => {
+            db.insert(EngineArtifactTable)
               .values({
                 id: verdictArtifactId,
                 task_id: taskID,
@@ -4393,16 +4395,50 @@ export function createOrchestratorTools(input: {
                 kind: "verdict",
                 label: "delivery-agent-verdict",
                 payload: verdict,
-                time_created: Date.now(),
-                time_updated: Date.now(),
+                time_created: now,
+                time_updated: now,
               })
-              .run(),
-          )
+              .run()
+            if (deliveryDecision.rawAgentVerdict) {
+              db.insert(EngineArtifactTable)
+                .values({
+                  id: Identifier.ascending("artifact"),
+                  task_id: taskID,
+                  run_id: run?.id ?? null,
+                  delivery_id: deliveryID,
+                  kind: "verification-evidence",
+                  label: "delivery-agent-raw-verdict",
+                  payload: deliveryDecision.rawAgentVerdict,
+                  time_created: now,
+                  time_updated: now,
+                })
+                .run()
+            }
+            db.insert(EngineArtifactTable)
+              .values({
+                id: Identifier.ascending("artifact"),
+                task_id: taskID,
+                run_id: run?.id ?? null,
+                delivery_id: deliveryID,
+                kind: "verification-evidence",
+                label: "delivery-host-gate",
+                payload: {
+                  source: deliveryDecision.source,
+                  passed: deliveryDecision.hostGate.passed,
+                  manifest_id: deliveryDecision.hostGate.manifest.id,
+                  final_gate: deliveryDecision.hostGate.manifest.finalGate,
+                  failures: deliveryDecision.hostGate.failures,
+                },
+                time_created: now,
+                time_updated: now,
+              })
+              .run()
+          })
 
-          // Sink delivery agent's structured verdict into engine_task.criteria_results.
-          // The verdict carries three distinct typed surfaces — flatten them into the
-          // unified criteria stream so the overlay's Quality Gates panel reflects what
-          // the agent actually verified, not just a single pass/fail bit.
+          // Sink the FINAL decision into engine_task.criteria_results. The
+          // verdict carries three distinct typed surfaces — flatten them into
+          // the unified criteria stream so the overlay's Quality Gates panel
+          // reflects the consumable outcome, not a raw or host fragment.
           await sinkDeliveryVerdictToCriteria(taskID, verdict)
 
           const passedCount = goals.filter((g) => goalStatusByID(g.id) === "passed").length
@@ -5180,10 +5216,14 @@ export function createOrchestratorTools(input: {
 
         // Read Decision Log for architectural context. Refine runs once per
         // task (not per turn), but an unbounded decision log can still push
-        // this prompt past the model context; cap matches read_context.
-        const { createDecisionLog } = await import("@/decision-log")
+        // this prompt past the model context; cap is the shared
+        // DECISION_LOG_PROMPT_LIMIT (single source — previously a divergent
+        // literal 30, a rule-8 double-source). Refine is a rework step, so it
+        // intentionally keeps `phase:"review"` — prior verdicts are its repair
+        // signal, unlike the integrity reviewer which must stay independent.
+        const { createDecisionLog, DECISION_LOG_PROMPT_LIMIT } = await import("@/decision-log")
         const decisionLog = createDecisionLog(taskID)
-        const decisionSection = decisionLog.toPromptSection({ limit: 30 }) ?? ""
+        const decisionSection = decisionLog.toPromptSection({ limit: DECISION_LOG_PROMPT_LIMIT }) ?? ""
 
         // Run refine analysis via SessionPrompt. No tools, plain text
         // generation driven by system + user prompts; the child session

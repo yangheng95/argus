@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test"
-import { appendManifestEvidence, arbitrateDeliveryGate, arbitrateDeliveryVerdict } from "../../src/delivery/arbiter"
+import {
+  arbitrateDeliveryGate,
+  composeDeliveryDecision,
+  type HostGateResult,
+} from "../../src/delivery/arbiter"
 import {
   formatDeliveryManifestFailureDetails,
   repeatedDeliveryFailureSignatures,
@@ -7,6 +11,12 @@ import {
 } from "../../src/delivery/manifest"
 import { affectedGoalIDs, type DeliveryVerdictType } from "../../src/delivery/verdict"
 import { Event as EngineEvent } from "../../src/engine/model"
+
+// Fresh-eyes decoupling contract — see
+// specs/delivery-fresh-eyes-decoupling-2026-05-18.md. The verdict arbiter no
+// longer mutates / overrides the agent verdict. `composeDeliveryDecision` is a
+// pure projector: host gate fail → host-synthesized rejected `final` (agent
+// never the final author); host gate pass → agent verdict verbatim.
 
 describe("delivery arbiter", () => {
   test("delivery evidence event accepts readiness failure details", () => {
@@ -65,36 +75,93 @@ describe("delivery arbiter", () => {
     expect(verdict.summary).toContain("1 review item(s)")
   })
 
-  test("manifest gate failure overrides an LLM accept", () => {
-    const accepted: DeliveryVerdictType = {
-      verdict: "accepted",
-      summary: "accepted by reviewer",
-      startup_verification: { attempted: true, success: true },
-      frontend_check: { attempted: false },
-      deferred_checks: [],
-      tool_call_evidence: [{ tool: "run_command", passed: true, detail: "build passed" }],
-    }
+  // ── composeDeliveryDecision: host gate FAILED → agent never the final ────
 
-    expect(
-      arbitrateDeliveryVerdict({
-        manifest: manifestWithFailedBuildCheck(),
-        goalIds: ["gol_auth", "gol_ui"],
-      }),
-    ).toBeUndefined()
-
-    const decision = arbitrateDeliveryVerdict({
-      manifest: manifestWithFailedBuildCheck(),
-      goalIds: ["gol_auth", "gol_ui"],
-      llmVerdict: accepted,
+  test("host gate failure synthesizes the final rejected verdict without an agent", () => {
+    const decision = composeDeliveryDecision({
+      hostGate: failedHostGate(manifestWithFailedBuildCheck()),
     })
 
-    expect(decision?.source).toBe("host_gate")
-    expect(decision?.verdict.verdict).toBe("rejected")
-    expect(decision?.verdict.summary).toContain("Delivery rejected by required host gates")
-    expect(decision?.verdict.deferred_checks.some((item) => item.name === "check:build")).toBe(true)
+    expect(decision.source).toBe("host_gate")
+    expect(decision.rawAgentVerdict).toBeUndefined()
+    expect(decision.final.verdict).toBe("rejected")
+    if (decision.final.verdict !== "rejected") throw new Error("expected rejected")
+    expect(decision.final.summary).toContain("Delivery rejected by required host gates")
+    // §2.2: non-empty rejection_details, schema-enum category (never "manifest").
+    expect(decision.final.rejection_details.length).toBeGreaterThan(0)
+    for (const d of decision.final.rejection_details) {
+      expect(["build", "test", "lint", "runtime", "quality", "startup", "visual"]).toContain(d.category)
+      expect(d.error.length).toBeGreaterThanOrEqual(8)
+    }
+    // §2.2: tool_call_evidence carries the host evidence rows.
+    expect(decision.final.tool_call_evidence.some((e) => e.tool === "DeliveryEvidenceManifest")).toBe(true)
+    // deferred_checks projected from the manifest (advisory build check present).
+    expect(decision.final.deferred_checks.some((c) => c.name === "check:build")).toBe(true)
   })
 
-  test("preserves delivery agent goal attribution when manifest gate fails", () => {
+  test("host gate failure keeps a post-repair agent verdict as evidence only, never as final", () => {
+    const agentAccepted: DeliveryVerdictType = acceptedVerdict()
+    const decision = composeDeliveryDecision({
+      hostGate: failedHostGate(manifestWithFailedBuildCheck()),
+      agentVerdict: agentAccepted,
+    })
+
+    expect(decision.source).toBe("host_gate")
+    expect(decision.final.verdict).toBe("rejected")
+    // The agent's accepted verdict must NOT become the business `final`.
+    expect(decision.final).not.toBe(agentAccepted)
+    // It is retained verbatim as raw evidence.
+    expect(decision.rawAgentVerdict).toBe(agentAccepted)
+  })
+
+  test("runtime gate failure is now a hard host gate (category=runtime), not advisory", () => {
+    const decision = composeDeliveryDecision({
+      hostGate: {
+        passed: false,
+        manifest: baseManifest(),
+        failures: [
+          { kind: "runtime", id: "runtime-evidence", summary: "Runtime probe failed: empty root", evidence: ["root contains no hydrated children"] },
+        ],
+      },
+    })
+    expect(decision.source).toBe("host_gate")
+    if (decision.final.verdict !== "rejected") throw new Error("expected rejected")
+    expect(decision.final.rejection_details.some((d) => d.category === "runtime")).toBe(true)
+  })
+
+  test("visual gate failure is now a hard host gate (category=visual), not advisory", () => {
+    const decision = composeDeliveryDecision({
+      hostGate: {
+        passed: false,
+        manifest: baseManifest(),
+        failures: [
+          { kind: "visual", id: "visual-metric", summary: "SSIM 0.24 < 0.9", evidence: ["layout mismatch"] },
+        ],
+      },
+    })
+    expect(decision.source).toBe("host_gate")
+    if (decision.final.verdict !== "rejected") throw new Error("expected rejected")
+    expect(decision.final.rejection_details.some((d) => d.category === "visual")).toBe(true)
+  })
+
+  // ── composeDeliveryDecision: host gate PASSED → agent verdict verbatim ───
+
+  test("host gate pass returns the agent verdict verbatim with no host injection", () => {
+    const accepted = acceptedVerdict()
+    const decision = composeDeliveryDecision({
+      hostGate: passedHostGate(),
+      agentVerdict: accepted,
+    })
+
+    expect(decision.source).toBe("llm")
+    expect(decision.final).toBe(accepted)
+    expect(decision.rawAgentVerdict).toBe(accepted)
+    // No host evidence injected into the agent verdict (the prior rule-8/15 defect).
+    expect(decision.final.deferred_checks).toEqual([])
+    expect(decision.final.tool_call_evidence.some((e) => e.tool === "DeliveryEvidenceManifest")).toBe(false)
+  })
+
+  test("host gate pass preserves agent goal attribution unchanged", () => {
     const rejected: DeliveryVerdictType = {
       verdict: "rejected",
       summary: "Agent traced the build failure to the UI goal package wiring.",
@@ -111,181 +178,49 @@ describe("delivery arbiter", () => {
         },
       ],
     }
+    const decision = composeDeliveryDecision({ hostGate: passedHostGate(), agentVerdict: rejected })
 
-    const decision = arbitrateDeliveryVerdict({
-      manifest: manifestWithFailedBuildCheck(),
-      goalIds: ["gol_auth", "gol_ui"],
-      llmVerdict: rejected,
-    })
-
-    expect(decision?.source).toBe("llm")
-    expect(decision?.verdict.verdict).toBe("rejected")
-    if (decision?.verdict.verdict !== "rejected") throw new Error("expected rejected verdict")
-    expect(affectedGoalIDs(decision.verdict)).toEqual(["gol_ui"])
-    expect(decision.verdict.rejection_details).toEqual(rejected.rejection_details)
-    expect(decision.verdict.deferred_checks.some((item) => item.name === "check:build")).toBe(true)
-    expect(decision.verdict.summary).toContain("Host gate blockers:")
+    expect(decision.source).toBe("llm")
+    expect(decision.final).toBe(rejected)
+    if (decision.final.verdict !== "rejected") throw new Error("expected rejected")
+    expect(affectedGoalIDs(decision.final)).toEqual(["gol_ui"])
+    expect(decision.final.rejection_details).toEqual(rejected.rejection_details)
   })
 
-  test("keeps task-scope agent rejection task-scoped when manifest gate fails", () => {
-    const rejected: DeliveryVerdictType = {
-      verdict: "rejected",
-      summary: "Agent found the merged project has no runnable build output.",
-      startup_verification: { attempted: true, success: false, output: "build failed" },
-      frontend_check: { attempted: false },
-      deferred_checks: [],
-      tool_call_evidence: [{ tool: "run_command", passed: false, detail: "bun run build failed" }],
-      rejection_details: [
-        {
-          category: "build",
-          error: "merged worktree build fails before a responsible goal can be isolated",
-          suggestion: "Inspect the integrated build output and adjust the plan or task-level wiring.",
-        },
-      ],
-    }
-
-    const decision = arbitrateDeliveryVerdict({
-      manifest: manifestWithFailedBuildCheck(),
-      goalIds: ["gol_auth", "gol_ui", "gol_data"],
-      llmVerdict: rejected,
-    })
-
-    expect(decision?.source).toBe("llm")
-    expect(decision?.verdict.verdict).toBe("rejected")
-    if (decision?.verdict.verdict !== "rejected") throw new Error("expected rejected verdict")
-    expect(decision.verdict.rejection_details).toEqual(rejected.rejection_details)
-    expect(affectedGoalIDs(decision.verdict)).toEqual([])
+  test("host gate pass without an agent verdict is a hard error (cannot finalize blind)", () => {
+    expect(() => composeDeliveryDecision({ hostGate: passedHostGate() })).toThrow(
+      /host gate passed but no agent verdict/,
+    )
   })
 
-  test("manifest failure formatting reports checks and coverage before runtime and review details", () => {
-    const formatted = formatDeliveryManifestFailureDetails(manifestWithMixedFunctionalAndAuxiliaryFailures())
-    const checkIdx = formatted.findIndex((item) => item.includes("[check] check:build"))
-    const coverageIdx = formatted.findIndex((item) => item.includes("[coverage] goal:gol_ui"))
-    const runtimeIdx = formatted.findIndex((item) => item.includes("[runtime] runtime:web:."))
-    const reviewIdx = formatted.findIndex((item) => item.includes("[review] specialist:frontend"))
-    expect(checkIdx).toBeGreaterThanOrEqual(0)
-    expect(coverageIdx).toBeGreaterThanOrEqual(0)
-    expect(runtimeIdx).toBeGreaterThanOrEqual(0)
-    expect(reviewIdx).toBeGreaterThanOrEqual(0)
-    expect(checkIdx).toBeLessThan(runtimeIdx)
-    expect(checkIdx).toBeLessThan(reviewIdx)
-    expect(coverageIdx).toBeLessThan(runtimeIdx)
-    expect(coverageIdx).toBeLessThan(reviewIdx)
-  })
-
-  test("keeps delivery agent rejection text when manifest gate also fails", () => {
-    const rejected: DeliveryVerdictType = {
-      verdict: "rejected",
-      summary: "Agent inspected the failure and found the build script imports a missing module.",
-      startup_verification: { attempted: true, success: false, output: "build failed" },
-      frontend_check: { attempted: false },
-      deferred_checks: [],
-      tool_call_evidence: [{ tool: "read_file", passed: true, detail: "inspected src/main.ts" }],
-      rejection_details: [
-        {
-          category: "build",
-          error: "src/main.ts imports ./missing which does not exist",
-          suggestion: "Restore the missing module or correct the import.",
-        },
-      ],
-    }
-
-    const decision = arbitrateDeliveryVerdict({
-      manifest: manifestWithFailedBuildCheck(),
-      goalIds: ["gol_auth", "gol_ui", "gol_data"],
-      llmVerdict: rejected,
-    })
-
-    expect(decision?.source).toBe("llm")
-    expect(decision?.verdict.verdict).toBe("rejected")
-    if (decision?.verdict.verdict !== "rejected") throw new Error("expected rejected verdict")
-    expect(decision.verdict.summary).toContain("Agent inspected the failure")
-    expect(decision.verdict.summary).toContain("Host gate blockers:")
-    expect(decision.verdict.rejection_details.some((item) => item.error.includes("./missing"))).toBe(true)
-    expect(decision.verdict.rejection_details.some((item) => item.error.includes("tsc exited"))).toBe(false)
-    expect(decision.verdict.deferred_checks.some((item) => item.evidence.includes("tsc exited"))).toBe(true)
-  })
+  // ── arbitrateDeliveryGate blocking/advisory split (unchanged host data gate) ──
 
   describe("blocking vs advisory split (CLAUDE.md rule 7 — single semantic source)", () => {
     test("acceptance-spec coverage gap is a primary blocker", () => {
       const verdict = arbitrateDeliveryGate({
-        checks: {
-          status: "passed",
-          summary: "",
-          failedCheckIds: [],
-          failedCoverageIds: [],
-          failedRuntimeFlowIds: [],
-          failedReviewIds: [],
-        },
+        checks: { status: "passed", summary: "", failedCheckIds: [], failedCoverageIds: [], failedRuntimeFlowIds: [], failedReviewIds: [] },
         failedCoverageIds: ["goal:gol_one"],
         failedRuntimeFlowIds: [],
         failedReviewIds: [],
-        functionalAssessment: {
-          status: "incomplete",
-          summary: "incomplete",
-          primaryFailureIds: ["goal:gol_one"],
-          auxiliaryFailureIds: [],
-        },
+        functionalAssessment: { status: "incomplete", summary: "incomplete", primaryFailureIds: ["goal:gol_one"], auxiliaryFailureIds: [] },
       })
       expect(verdict.status).toBe("failed")
     })
 
     test("review:contract_audit failure is a primary blocker", () => {
       const verdict = arbitrateDeliveryGate({
-        checks: {
-          status: "passed",
-          summary: "",
-          failedCheckIds: [],
-          failedCoverageIds: [],
-          failedRuntimeFlowIds: [],
-          failedReviewIds: [],
-        },
+        checks: { status: "passed", summary: "", failedCheckIds: [], failedCoverageIds: [], failedRuntimeFlowIds: [], failedReviewIds: [] },
         failedCoverageIds: [],
         failedRuntimeFlowIds: [],
         failedReviewIds: ["review:contract_audit"],
-        functionalAssessment: {
-          status: "incomplete",
-          summary: "contract audit failed",
-          primaryFailureIds: ["review:contract_audit"],
-          auxiliaryFailureIds: [],
-        },
-      })
-      expect(verdict.status).toBe("failed")
-    })
-
-    test("runtime flow failure is a primary blocker for frontend completion", () => {
-      const verdict = arbitrateDeliveryGate({
-        checks: {
-          status: "passed",
-          summary: "",
-          failedCheckIds: [],
-          failedCoverageIds: [],
-          failedRuntimeFlowIds: [],
-          failedReviewIds: [],
-        },
-        failedCoverageIds: [],
-        failedRuntimeFlowIds: ["runtime:web:."],
-        failedReviewIds: [],
-        functionalAssessment: {
-          status: "incomplete",
-          summary: "runtime failed",
-          primaryFailureIds: ["runtime:web:."],
-          auxiliaryFailureIds: [],
-        },
+        functionalAssessment: { status: "incomplete", summary: "contract audit failed", primaryFailureIds: ["review:contract_audit"], auxiliaryFailureIds: [] },
       })
       expect(verdict.status).toBe("failed")
     })
 
     test("build/test/lint and non-contract reviews are advisory only", () => {
       const verdict = arbitrateDeliveryGate({
-        checks: {
-          status: "passed",
-          summary: "",
-          failedCheckIds: ["check:build", "check:test"],
-          failedCoverageIds: [],
-          failedRuntimeFlowIds: [],
-          failedReviewIds: [],
-        },
+        checks: { status: "passed", summary: "", failedCheckIds: ["check:build", "check:test"], failedCoverageIds: [], failedRuntimeFlowIds: [], failedReviewIds: [] },
         failedCoverageIds: [],
         failedRuntimeFlowIds: [],
         failedReviewIds: ["review:workspace_export", "specialist:frontend"],
@@ -299,22 +234,12 @@ describe("delivery arbiter", () => {
       expect(verdict.status).toBe("passed")
     })
 
-    test("contract audit failure overrides an LLM accept via host_gate", () => {
-      const accepted: DeliveryVerdictType = {
-        verdict: "accepted",
-        summary: "accepted by reviewer",
-        startup_verification: { attempted: true, success: true },
-        frontend_check: { attempted: false },
-        deferred_checks: [],
-        tool_call_evidence: [{ tool: "run_command", passed: true, detail: "build passed" }],
-      }
-      const decision = arbitrateDeliveryVerdict({
-        manifest: manifestWithFailedContractAuditReview(),
-        goalIds: ["gol_one"],
-        llmVerdict: accepted,
+    test("contract audit failure → host gate fail → host_gate final rejection", () => {
+      const decision = composeDeliveryDecision({
+        hostGate: failedHostGate(manifestWithFailedContractAuditReview()),
       })
-      expect(decision?.source).toBe("host_gate")
-      expect(decision?.verdict.verdict).toBe("rejected")
+      expect(decision.source).toBe("host_gate")
+      expect(decision.final.verdict).toBe("rejected")
     })
   })
 
@@ -324,189 +249,49 @@ describe("delivery arbiter", () => {
     ])
   })
 
+  test("manifest failure formatting reports checks and coverage before runtime and review details", () => {
+    const formatted = formatDeliveryManifestFailureDetails(manifestWithMixedFunctionalAndAuxiliaryFailures())
+    const checkIdx = formatted.findIndex((item) => item.includes("[check] check:build"))
+    const coverageIdx = formatted.findIndex((item) => item.includes("[coverage] goal:gol_ui"))
+    const runtimeIdx = formatted.findIndex((item) => item.includes("[runtime] runtime:web:."))
+    const reviewIdx = formatted.findIndex((item) => item.includes("[review] specialist:frontend"))
+    expect(checkIdx).toBeGreaterThanOrEqual(0)
+    expect(coverageIdx).toBeGreaterThanOrEqual(0)
+    expect(runtimeIdx).toBeGreaterThanOrEqual(0)
+    expect(reviewIdx).toBeGreaterThanOrEqual(0)
+    expect(checkIdx).toBeLessThan(runtimeIdx)
+    expect(coverageIdx).toBeLessThan(reviewIdx)
+  })
+
   test("detects repeated specialist failure signatures", () => {
     const current = manifestWithSpecialistClientContractFailure(20)
     const previous = manifestWithSpecialistClientContractFailure(10)
-
-    const result = repeatedDeliveryFailureSignatures({
-      current,
-      history: [previous],
-    })
-
+    const result = repeatedDeliveryFailureSignatures({ current, history: [previous] })
     expect(result.repeated).toBe(true)
     expect(result.signatures).toContain(
       "specialist:client_contract:evidence_quality:Client contract surface was selected without client file or endpoint evidence.",
     )
   })
-
-  test("final arbiter preserves accepted verdict shape when no review evidence exists", () => {
-    const accepted: DeliveryVerdictType = {
-      verdict: "accepted",
-      summary: "accepted by reviewer",
-      startup_verification: { attempted: true, success: true },
-      frontend_check: { attempted: false },
-      deferred_checks: [],
-      tool_call_evidence: [{ tool: "run_command", passed: true, detail: "build passed" }],
-    }
-
-    const decision = arbitrateDeliveryVerdict({
-      manifest: passedManifest(),
-      goalIds: ["gol_one"],
-      llmVerdict: accepted,
-    })
-
-    expect(decision?.source).toBe("llm")
-    expect(decision?.verdict.verdict).toBe("accepted")
-    expect(decision?.verdict.summary).toBe("accepted by reviewer")
-    expect(decision?.verdict.deferred_checks).toEqual([])
-  })
-
-  test("manifest auxiliary failures are projected as advisory_failed", () => {
-    const verdict = appendManifestEvidence(acceptedVerdict(), manifestWithAuxiliaryBuildAndReviewFailures())
-
-    expect(verdict.deferred_checks).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ name: "check:build", result: "advisory_failed" }),
-        expect.objectContaining({ name: "specialist:frontend", result: "advisory_failed" }),
-      ]),
-    )
-  })
-
-  test("runtime evidence failure stays advisory and does not override an LLM accept", () => {
-    const rejected: DeliveryVerdictType = {
-      verdict: "rejected",
-      summary: "Agent traced the empty DOM to the UI goal hydration code.",
-      startup_verification: { attempted: true, success: false, output: "DOM did not hydrate" },
-      frontend_check: { attempted: true, renders_correctly: false, issues: ["empty root"] },
-      deferred_checks: [],
-      tool_call_evidence: [{ tool: "read_file", passed: true, detail: "inspected src/App.tsx" }],
-      rejection_details: [
-        {
-          goal_id: "gol_ui",
-          category: "runtime",
-          error: "UI root never hydrates in the integrated runtime",
-          suggestion: "Fix the UI entrypoint hydration path.",
-        },
-      ],
-    }
-    const accepted: DeliveryVerdictType = {
-      verdict: "accepted",
-      summary: "accepted by reviewer",
-      startup_verification: { attempted: true, success: true },
-      frontend_check: { attempted: false },
-      deferred_checks: [],
-      tool_call_evidence: [{ tool: "run_command", passed: true, detail: "build passed" }],
-    }
-    const runtimeReport = {
-      passed: false,
-      violations: [{ kind: "empty_root_shell" as const, detail: "root contains no hydrated children" }],
-      evidence: {
-        projectDir: ".",
-        previewUrl: "http://127.0.0.1:4173/",
-        renderedPngPath: "rendered.png",
-        dom: {
-          textLength: 0,
-          nodeCount: 1,
-          hasBodyChildren: true,
-          isEmptyRootShell: true,
-        },
-      },
-    }
-
-    const acceptedDecision = arbitrateDeliveryVerdict({
-      manifest: baseManifest(),
-      goalIds: ["gol_ui"],
-      llmVerdict: accepted,
-      runtimeReport,
-    })
-    expect(acceptedDecision?.source).toBe("llm")
-    expect(acceptedDecision?.verdict.verdict).toBe("accepted")
-    expect(acceptedDecision?.verdict.deferred_checks.some((item) => item.name === "runtime_evidence")).toBe(true)
-    expect(acceptedDecision?.verdict.tool_call_evidence.some((item) => item.tool === "runtime_evidence")).toBe(true)
-
-    const decision = arbitrateDeliveryVerdict({
-      manifest: baseManifest(),
-      goalIds: ["gol_ui"],
-      llmVerdict: rejected,
-      runtimeReport,
-    })
-
-    expect(decision?.source).toBe("llm")
-    expect(decision?.verdict.verdict).toBe("rejected")
-    if (decision?.verdict.verdict !== "rejected") throw new Error("expected rejected verdict")
-    expect(decision.verdict.rejection_details).toEqual(rejected.rejection_details)
-    expect(decision.verdict.deferred_checks.some((item) => item.name === "runtime_evidence")).toBe(true)
-    expect(decision.verdict.tool_call_evidence.some((item) => item.tool === "runtime_evidence")).toBe(true)
-  })
-
-  test("visual metric failure stays advisory and does not override an LLM accept", () => {
-    const rejected: DeliveryVerdictType = {
-      verdict: "rejected",
-      summary: "Agent attributed the visual mismatch to the UI shell layout.",
-      startup_verification: { attempted: true, success: true },
-      frontend_check: { attempted: true, renders_correctly: false, issues: ["layout mismatch"] },
-      deferred_checks: [],
-      tool_call_evidence: [{ tool: "screenshot", passed: true, detail: "runtime screenshot" }],
-      rejection_details: [
-        {
-          goal_id: "gol_ui",
-          category: "visual",
-          error: "UI shell layout does not match the reference screenshot",
-          suggestion: "Realign the primary layout regions to the reference.",
-        },
-      ],
-    }
-    const accepted: DeliveryVerdictType = {
-      verdict: "accepted",
-      summary: "accepted by reviewer",
-      startup_verification: { attempted: true, success: true },
-      frontend_check: { attempted: true, renders_correctly: true },
-      deferred_checks: [],
-      tool_call_evidence: [{ tool: "screenshot", passed: true, detail: "runtime screenshot" }],
-    }
-    const visualMetric = {
-      passed: false,
-      score: 0.24,
-      gates: [
-        {
-          name: "ssim" as const,
-          passed: false,
-          threshold: 0.9,
-          value: 0.24,
-          note: "layout mismatch",
-        },
-      ],
-      renderedPath: "rendered.png",
-      referencePath: "reference.png",
-      capturedAt: 1,
-    }
-
-    const acceptedDecision = arbitrateDeliveryVerdict({
-      manifest: baseManifest(),
-      goalIds: ["gol_ui"],
-      llmVerdict: accepted,
-      visualMetric,
-    })
-    expect(acceptedDecision?.source).toBe("llm")
-    expect(acceptedDecision?.verdict.verdict).toBe("accepted")
-    expect(acceptedDecision?.verdict.deferred_checks.some((item) => item.name === "visual_metric")).toBe(true)
-
-    const decision = arbitrateDeliveryVerdict({
-      manifest: baseManifest(),
-      goalIds: ["gol_ui"],
-      llmVerdict: rejected,
-      visualMetric,
-    })
-
-    expect(decision?.source).toBe("llm")
-    expect(decision?.verdict.verdict).toBe("rejected")
-    if (decision?.verdict.verdict !== "rejected") throw new Error("expected rejected verdict")
-    expect(decision.verdict.rejection_details).toEqual(rejected.rejection_details)
-    expect(decision.verdict.deferred_checks.some((item) => item.name === "visual_metric")).toBe(true)
-    expect(decision.verdict.tool_call_evidence.some((item) => item.tool === "visual_metric")).toBe(true)
-    expect(affectedGoalIDs(decision.verdict)).toEqual(["gol_ui"])
-  })
 })
+
+function failedHostGate(manifest: DeliveryEvidenceManifest): HostGateResult {
+  return {
+    passed: false,
+    manifest,
+    failures: [
+      {
+        kind: "manifest",
+        id: manifest.id,
+        summary: manifest.finalGate.summary,
+        evidence: formatDeliveryManifestFailureDetails(manifest),
+      },
+    ],
+  }
+}
+
+function passedHostGate(): HostGateResult {
+  return { passed: true, manifest: baseManifest(), failures: [] }
+}
 
 function manifestWithMixedFunctionalAndAuxiliaryFailures(): DeliveryEvidenceManifest {
   return {
@@ -571,22 +356,11 @@ function acceptedVerdict(): DeliveryVerdictType {
   }
 }
 
-function passedManifest(): DeliveryEvidenceManifest {
-  return baseManifest()
-}
-
 function manifestWithFailedBuildCheck(): DeliveryEvidenceManifest {
   return {
     ...baseManifest(),
     requiredChecks: [
-      {
-        id: "check:build",
-        name: "build",
-        label: "Build",
-        family: "build",
-        command: "bun run build",
-        commandDigest: "digest:build",
-      },
+      { id: "check:build", name: "build", label: "Build", family: "build", command: "bun run build", commandDigest: "digest:build" },
     ],
     checkResults: [
       {
@@ -613,40 +387,6 @@ function manifestWithFailedBuildCheck(): DeliveryEvidenceManifest {
       failedCoverageIds: [],
       failedRuntimeFlowIds: [],
       failedReviewIds: [],
-    },
-  }
-}
-
-function manifestWithAuxiliaryBuildAndReviewFailures(): DeliveryEvidenceManifest {
-  return {
-    ...manifestWithFailedBuildCheck(),
-    reviewEvidence: [
-      {
-        id: "specialist:frontend",
-        name: "Specialist Review: frontend",
-        status: "failed",
-        evidence: ["advisory frontend finding"],
-      },
-    ],
-    functionalAssessment: {
-      status: "complete",
-      primaryFailureIds: [],
-      auxiliaryFailureIds: ["check:build", "specialist:frontend"],
-      summary: "Functional completion passed with advisory issues.",
-    },
-    finalGate: {
-      status: "passed",
-      summary: "Functional completion passed with advisory issues.",
-      failedCheckIds: ["check:build"],
-      failedCoverageIds: [],
-      failedRuntimeFlowIds: [],
-      failedReviewIds: ["specialist:frontend"],
-      functionalAssessment: {
-        status: "complete",
-        primaryFailureIds: [],
-        auxiliaryFailureIds: ["check:build", "specialist:frontend"],
-        summary: "Functional completion passed with advisory issues.",
-      },
     },
   }
 }
@@ -680,11 +420,7 @@ function manifestWithSpecialistClientContractFailure(timeCreated: number): Deliv
             category: "evidence_quality",
             claim: "Client contract surface was selected without client file or endpoint evidence.",
             evidence: [
-              {
-                kind: "log",
-                ref: "artifact_surface",
-                excerpt: "client_contract selected but client inventory is empty",
-              },
+              { kind: "log", ref: "artifact_surface", excerpt: "client_contract selected but client inventory is empty" },
             ],
             affectedRequirementIDs: [],
           },

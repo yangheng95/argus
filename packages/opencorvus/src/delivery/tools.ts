@@ -350,17 +350,13 @@ export function createDeliveryTools(input?: DeliveryToolContext) {
       description:
         "Fetch detailed delivery context on demand. The startup prompt is intentionally compact to avoid " +
         "provider input overflow; use this tool when you need full goal acceptance details, upstream contracts, " +
-        "manifest failures, host gate evidence, executor claims, changed files, diffs, or attachment inventory. " +
+        "executor claims, changed files, diffs, or attachment inventory. " +
         "Do not ask for sections you do not need.",
       inputSchema: z.object({
         section: z.enum([
           "overview",
           "goals",
           "upstream_context",
-          "manifest",
-          "host_gate_failures",
-          "runtime_failures",
-          "visual_failures",
           "executor_reports",
           "changed_files",
           "diffs",
@@ -922,10 +918,6 @@ type DeliveryContextSection =
   | "overview"
   | "goals"
   | "upstream_context"
-  | "manifest"
-  | "host_gate_failures"
-  | "runtime_failures"
-  | "visual_failures"
   | "executor_reports"
   | "changed_files"
   | "diffs"
@@ -951,7 +943,6 @@ function renderDeliveryContextSection(
         `executor_reports=${delivery?.goalReports?.length ?? 0}`,
         `diffs=${delivery?.diffs?.length ?? 0}`,
         `attachments=${input.attachments.length}`,
-        `manifest_status=${delivery?.manifestGate?.status ?? "(none)"}`,
       ].join("\n")
 
     case "goals":
@@ -964,24 +955,6 @@ function renderDeliveryContextSection(
         throw new Error(`Cannot inspect delivery upstream context for task ${input.taskID}: no upstream context sections.`)
       }
       return sections.join("\n\n---\n\n")
-
-    case "manifest":
-      return renderManifestContext(delivery)
-
-    case "host_gate_failures":
-      return renderHostGateFailures(delivery)
-
-    case "runtime_failures":
-      return (
-        "# Runtime Evidence Failures\n\n" +
-        ((delivery?.runtimeEvidenceFailures ?? []).map((item) => `- ${item}`).join("\n") || "(none)")
-      )
-
-    case "visual_failures":
-      return (
-        "# Visual Metric Failures\n\n" +
-        ((delivery?.visualMetricFailures ?? []).map((item) => `- ${item}`).join("\n") || "(none)")
-      )
 
     case "executor_reports":
       return renderExecutorReports(delivery)
@@ -1024,45 +997,6 @@ function renderGoalDetail(goal: GoalInfo): string {
     "Acceptance specs:",
     goal.criteria,
   ].join("\n")
-}
-
-function renderManifestContext(delivery: DeliveryInfo | undefined): string {
-  if (!delivery?.manifestGate) return "No DeliveryEvidenceManifest gate is available."
-  const gate = delivery.manifestGate
-  const lines = [
-    "# DeliveryEvidenceManifest Gate",
-    `finalGate.status=${gate.status}`,
-    `summary=${gate.summary}`,
-    `failedCheckIds=${gate.failedCheckIds.join(", ") || "(none)"}`,
-    `failedCoverageIds=${gate.failedCoverageIds.join(", ") || "(none)"}`,
-    `failedRuntimeFlowIds=${gate.failedRuntimeFlowIds.join(", ") || "(none)"}`,
-    `failedReviewIds=${gate.failedReviewIds.join(", ") || "(none)"}`,
-  ]
-  const details = delivery.manifestFailureDetails ?? []
-  if (details.length > 0) {
-    lines.push("", "Failure details:")
-    for (const item of details) {
-      const status = item.status ? ` status=${item.status}` : ""
-      const exitCode = item.exitCode === undefined ? "" : ` exit=${item.exitCode}`
-      const command = item.command ? ` command=${item.command}` : ""
-      lines.push(`- [${item.kind}] ${item.id} ${item.name}${status}${exitCode}${command}: ${item.evidence}`)
-    }
-  }
-  return lines.join("\n")
-}
-
-function renderHostGateFailures(delivery: DeliveryInfo | undefined): string {
-  const failures = delivery?.hostGateFailures ?? []
-  if (failures.length === 0) return "No host gate findings."
-  const lines = ["# Host Gate Findings"]
-  for (const failure of failures) {
-    lines.push("", `## ${failure.kind}:${failure.id}`, `Summary: ${failure.summary}`)
-    if (failure.evidence.length > 0) {
-      lines.push("Evidence:")
-      for (const item of failure.evidence) lines.push(`- ${item}`)
-    }
-  }
-  return lines.join("\n")
 }
 
 function renderExecutorReports(delivery: DeliveryInfo | undefined): string {
