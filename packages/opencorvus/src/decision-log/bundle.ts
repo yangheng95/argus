@@ -1,0 +1,102 @@
+// ── DecisionLogBundle ──
+//
+// Materializes the COMPLETE decision log for a task as a stable, on-disk file
+// that downstream agents (in-process build / delivery; external codex /
+// claude-code build executors) can reference by path.
+//
+// Why this exists:
+//
+// The decision log lives in the `decision_log` SQLite table and is injected
+// into agent prompts via `toPromptSection` / `phasePromptSection` — but those
+// renders are TRUNCATED (per-entry value cap, per-phase entry limit) to bound
+// prompt bytes. The full WHY behind a truncated decision was only reachable
+// via `readByKey()`, a TS function no LLM/shell agent can call. This writer
+// projects the full, untruncated log to disk so an agent can `read` it.
+//
+// Single source of truth: the `decision_log` table. This file is a
+// regenerated, read-only PROJECTION — never authored by an agent, never read
+// back by host code as authority. (Mirrors the design-analysis materialized
+// PRD/SPEC and the intent bundle: same "materialize a DB/context surface to
+// `.opencorvus/` for agent consumption" pattern.)
+//
+// Path resolution invariant (see artifacts/2026-05-18-decision-log-
+// materialization §8): the OpenCorvus `read` tool resolves a relative path
+// against `Instance.directory` (tool/read.ts), so in-process build / delivery
+// agents reach `.opencorvus/decision-log.md` by the RELATIVE path even though
+// their session cwd is a goal worktree. External executors (codex /
+// claude-code) run with cwd = goal worktree and use their own native file
+// tools — they must be given the ABSOLUTE path. `path()` returns both;
+// callers pick the form via the consumer's resolution model.
+
+import * as fs from "node:fs/promises"
+import * as path from "node:path"
+import { createDecisionLog } from "./index"
+import { Log } from "@/util/log"
+
+const log = Log.create({ service: "decision-log-bundle" })
+
+export namespace DecisionLogBundle {
+  /** Relative path used by agents whose file tools resolve against the
+   *  project directory (in-process OpenCorvus `read` tool). */
+  export const RELATIVE_PATH = ".opencorvus/decision-log.md"
+
+  /**
+   * Resolve the bundle paths for a project directory. `relative` is for
+   * consumers resolving against `Instance.directory`; `absolute` is for
+   * external executors whose cwd is a goal worktree.
+   */
+  export function paths(projectDir: string): { relative: string; absolute: string } {
+    return {
+      relative: RELATIVE_PATH,
+      absolute: path.join(projectDir, ".opencorvus", "decision-log.md"),
+    }
+  }
+
+  /**
+   * Render the complete decision log and write it to
+   * `<projectDir>/.opencorvus/decision-log.md`. Returns the absolute path.
+   *
+   * HARD FAIL (rule 7 — no fallback): a write failure throws. The caller must
+   * not swallow it and continue on the truncated prompt — a stale or missing
+   * "complete" projection that silently degrades is worse than a loud failure.
+   * An empty log writes an empty document (an honest projection of "no
+   * decisions yet" — not a fallback).
+   */
+  export async function write(projectDir: string, taskID: string): Promise<string> {
+    const { absolute } = paths(projectDir)
+    await fs.mkdir(path.dirname(absolute), { recursive: true })
+    const body = createDecisionLog(taskID).toFullDocument()
+    await fs.writeFile(absolute, body, "utf8")
+    log.info("decision log bundle written", {
+      taskID,
+      projectDir,
+      path: absolute,
+      bytes: body.length,
+    })
+    return absolute
+  }
+
+  /**
+   * Prompt-text pointer telling an agent the complete decision log is on disk
+   * and where. `mode` selects the path form for the consumer's file-tool
+   * resolution model (see the path-resolution invariant in the module header).
+   * This is NOT the canonical decision log — it points at a materialized
+   * read-only projection; the `decision_log` table remains the source of truth.
+   */
+  export function reference(input: {
+    projectDir: string
+    mode: "relative" | "absolute"
+  }): string {
+    const p = input.mode === "absolute" ? paths(input.projectDir).absolute : paths(input.projectDir).relative
+    return [
+      "## Decision Log (complete, on disk)",
+      "",
+      `The complete decision log for this task — every recorded decision with ` +
+        `its full untruncated WHY — is materialized at: ${p}`,
+      "",
+      "It is a regenerated, read-only projection of the decision_log table " +
+        "(the source of truth). When an inline Decision Log summary truncates " +
+        "a value you need in full, read this file.",
+    ].join("\n")
+  }
+}

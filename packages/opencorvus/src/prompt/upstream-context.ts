@@ -1,7 +1,9 @@
 import { createDecisionLog } from "@/decision-log"
+import { DecisionLogBundle } from "@/decision-log/bundle"
 import { renderDesignAnalysisHandoffReference } from "@/design-analyst/handoff"
 import { findActiveSpecForTask, findLatestArchitectContractGraph, findRequirements, listGoals } from "@/engine/store"
 import { renderContractGraphForPrompt } from "@/architect/contract-graph"
+import { Instance } from "@/project/instance"
 
 const ARCHITECT_CONTRACT_VALUE_CAP = 4_000
 
@@ -44,6 +46,12 @@ export function buildTaskUpstreamAgentContextSections(taskID: string): string[] 
     // Design-analysis is authoritative, but hot-path prompts should carry the
     // materialized PRD/SPEC source location instead of cloning the full spec.
     renderDesignAnalysisHandoffReference(taskID, { valueCap: 500 }),
+    // Delivery runs in-process with sessionDirectory = Instance.directory and
+    // reads via the OpenCorvus `read` tool (resolves relative paths against
+    // Instance.directory — tool/read.ts), so the RELATIVE bundle path is
+    // reachable. The inline Decision Log summary is truncated; this points
+    // delivery at the complete on-disk projection for the full WHY.
+    DecisionLogBundle.reference({ projectDir: Instance.directory, mode: "relative" }),
   ].filter(hasContent)
 }
 

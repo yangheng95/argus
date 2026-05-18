@@ -7,6 +7,11 @@ import { findActiveRunForTask, findRun, requireRun, requireTask, type RunRow, ty
 import { deriveTaskStatus } from "./task-status"
 import { isLiveRunStatus } from "./catalog"
 import { Identifier } from "@/id/id"
+import { Instance } from "@/project/instance"
+import { Log } from "@/util/log"
+import { DecisionLogBundle } from "@/decision-log/bundle"
+
+const log = Log.create({ service: "engine-state" })
 
 /**
  * Caller-facing task-update shape. `status` is a logical verb (queued /
@@ -193,6 +198,31 @@ async function finalizeLiveRunForTerminalTask(
 ) {
   const runStatus = intent ? TERMINAL_TASK_RUN_STATUS[intent] : undefined
   if (!runStatus) return
+
+  // Terminal final-write of the complete decision-log projection. This seam
+  // is reached on BOTH updateTask exit paths (the no-op / already-terminal
+  // guard AND the main write path) for every terminal intent, so the on-disk
+  // `.opencorvus/decision-log.md` reflects the last delivery / abort /
+  // agent_error decisions even when a retry re-enters a row that was already
+  // terminal (codex Q-TERM). Best-effort + loud: a failed audit-projection
+  // write must NOT cascade-break task termination or the live-run
+  // finalization below (rule 1 — a non-load-bearing audit refresh failing
+  // is not worth aborting the core terminal state write). This deliberately
+  // refines codex D5 "always hard fail": hard-fail belongs at
+  // write-BEFORE-consume (the consuming agent needs the file); at this
+  // post-consume terminal seam the file is an audit refresh, so failing
+  // loud (log.error, never swallowed) is correct and throwing is not.
+  // Flagged for codex re-consensus in
+  // artifacts/2026-05-18-decision-log-disk-materialization.md §11.
+  try {
+    await DecisionLogBundle.write(Instance.directory, task.id)
+  } catch (err) {
+    log.error("terminal decision-log bundle write failed (task termination unaffected)", {
+      taskID: task.id,
+      error: err instanceof Error ? err.message : String(err),
+    })
+  }
+
   const run = findActiveRunForTask(task.id)
   if (!isLiveRunStatus(run?.status)) return
   const completedAt = typeof resolved.time_completed === "number"
