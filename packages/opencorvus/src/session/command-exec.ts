@@ -3,7 +3,7 @@ import { Identifier } from "../id/id"
 import { Message } from "./message"
 import { Agent } from "../agent/agent"
 import { Provider } from "../provider/provider"
-import { resolveAgentModelRef, resolveConfiguredModelRef } from "../agent/model"
+import { resolveAgentModelRef } from "../agent/model"
 import { Bus } from "../bus"
 import { Plugin } from "../plugin"
 import { Command } from "../command"
@@ -151,9 +151,10 @@ export namespace SessionCommand {
 
     const userAgent = isSubtask ? (input.agent ?? (await Agent.defaultAgent())) : agentName
     const userModel = isSubtask
-      ? input.model
-        ? Provider.parseModel(input.model)
-        : await resolveConfiguredModelRef()
+      ? await resolveAgentModelRef(userAgent, {
+          explicitModel: input.model ? Provider.parseModel(input.model) : null,
+          sessionID: input.sessionID,
+        })
       : taskModel
 
     await Plugin.trigger(

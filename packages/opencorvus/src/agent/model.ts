@@ -131,19 +131,3 @@ async function sessionIDForTask(taskID: string): Promise<string | undefined> {
   const { requireTask } = await import("@/engine/store")
   return requireTask(taskID).session_id ?? undefined
 }
-
-/**
- * Resolve a Provider.Model from an optional explicit ref, falling back to the
- * supplied `fallback` argument (which the caller has already resolved through
- * the strict path above). This helper exists only to deduplicate the
- * "ref ? getModel(ref) : alreadyResolvedDefault" shape at subtask dispatch /
- * compaction sites. It is NOT a config fallback — the caller owns the
- * `fallback` argument and is responsible for it being valid.
- */
-export async function resolveModelRef(
-  ref: { providerID: string; modelID: string } | undefined | null,
-  fallback: Provider.Model,
-): Promise<Provider.Model> {
-  if (!ref) return fallback
-  return Provider.getModel(ref.providerID, ref.modelID)
-}
