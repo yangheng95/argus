@@ -772,24 +772,37 @@ export namespace Config {
   // (design principle 5): any key NOT listed here — permission, tools, mcp,
   // provider creds, paths — is rejected at the schema boundary, so a session
   // can never weaken project security/cost boundaries.
+  // Every overlay value is `.nullable()`: a session overlay is an RFC 7396
+  // merge-patch, so `null` is a first-class, schema-validated "delete this
+  // override" signal (NOT an out-of-band `as never`). This keeps the gate
+  // (Overlay) and the merge API (mergeOverlay) in lockstep.
   const OverlayAgent = z
     .object({
       // ModelId reused from the single source so model format stays in sync.
-      model: ModelId.optional(),
-      variant: z.string().optional(),
-      temperature: z.number().optional(),
-      top_p: z.number().optional(),
-      prompt: z.string().optional(),
-      prompt_append: z.string().optional(),
+      model: ModelId.nullable().optional(),
+      // variant selects a model variant for the agent's configured model — it
+      // is part of the model-selection family opened by decision §6-1.
+      variant: z.string().nullable().optional(),
+      temperature: z.number().nullable().optional(),
+      top_p: z.number().nullable().optional(),
+      prompt: z.string().nullable().optional(),
+      prompt_append: z.string().nullable().optional(),
     })
     .strict()
 
+  // Exact session-overridable surface (decision §6-1 "widest"; spec §5/§13):
+  // model + variant + temperature + top_p + agent prompt/prompt_append, plus
+  // the system-scope prompt record (same shape as Info.prompt by design — a
+  // session may override any prompt slot; prompts carry no security/cost
+  // boundary, unlike the .strict()-excluded permission/tools/mcp/provider).
   export const Overlay = z
     .object({
-      model: ModelId.optional(),
-      // System-scope prompt overrides (e.g. core_header) — same shape as Info.prompt.
-      prompt: z.record(z.string(), z.string()).optional(),
-      agent: z.record(z.string(), OverlayAgent).optional(),
+      model: ModelId.nullable().optional(),
+      prompt: z
+        .record(z.string(), z.string().nullable())
+        .nullable()
+        .optional(),
+      agent: z.record(z.string(), OverlayAgent.nullable()).nullable().optional(),
     })
     .strict()
   export type Overlay = z.output<typeof Overlay>
@@ -1745,9 +1758,14 @@ export namespace Config {
   // rather than reimplementing deep/null-delete merge (single source — the
   // overlay schema forbids array keys, so the file-load concat-array layering
   // in mergeConfigConcatArrays is a different operation, not a parallel impl).
-  // `base` is treated as immutable; a fresh object is always returned.
+  // `base` (the Instance-cached project config) MUST stay immutable: callers
+  // hold the resolved config and may mutate nested objects. mergeWithNullDelete
+  // only shallow-clones each touched level, so unpatched nested subtrees would
+  // alias `base` and a later mutation would silently pollute the shared cache
+  // (the exact §8.3 pollution this design exists to prevent). structuredClone
+  // fully de-aliases the result from `base`.
   export function mergeOverlay(base: Info, patch: Overlay): Info {
-    return mergeWithNullDelete(base, patch) as Info
+    return structuredClone(mergeWithNullDelete(base, patch)) as Info
   }
 
   // Serializes read-modify-write of each config file. Two concurrent

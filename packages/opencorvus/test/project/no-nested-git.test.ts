@@ -31,7 +31,12 @@ describe("repo hygiene: no nested .git in packages/opencorvus", () => {
     ).toBe(false)
   })
 
-  test("no stray .git in tracked source/test/script trees", () => {
+  // Primary hazard is a .git AT the package root (shadows the parent for
+  // every git command). A .git directly under src/test/script would do the
+  // same for tooling scoped there, so guard those direct children too. Not
+  // recursive: a deeper embedded repo is implausible and `git status` itself
+  // surfaces it as an embedded repo.
+  test("no .git directly under src/, test/, or script/", () => {
     for (const sub of ["src", "test", "script"]) {
       const strayGit = path.join(packageRoot, sub, ".git")
       expect(existsSync(strayGit), `Unexpected nested .git at ${strayGit}`).toBe(false)

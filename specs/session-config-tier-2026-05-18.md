@@ -207,3 +207,32 @@ R3 清单 + 新增：`agent/agent.ts:545 Agent.generate`（`input.model ?? defau
 
 R1→R4 收敛轨迹：架构方向自 R2 起未再被否定；R4 明确仅 §11.1 精度问题，且 codex 自陈"补齐后降级为纯实现细节"。§13 已按 codex 定解逐条写死 §11.1 边界、迁移清单、subagent 继承、Provider.defaultModel 删除、trace 修订。**架构共识达成且边界已定稿**；唯一解锁实施的人工前置 = §13.4 死代码删除需用户 rule 17 确认。剩余均为纯实现细节，可进入实施。
 
+---
+
+## 14. 实施阶段化 + 每阶段 codex review（用户指令 2026-05-18）
+
+实施分 7 阶段（Phase 0–6），每阶段 commit+push（走 hook）后由 codex 只读 review，NO 则修复后复审，YES 才进下一阶段。
+
+**会话级 git 陷阱（事故记录，已修复 + 守卫）**：`packages/opencorvus` 内曾存在嵌套 `.git`（seeded baseline，全 untracked），Bash 从该目录运行的 git 命令全部打到内层仓而非父仓 `C:/Users/chuan/myhexin-local/opecorvus`（分支 `codex/agent-boundary-role-contract`），导致 commit/push 静默丢失。已隔离内层 `.git`，并新增 `test/project/no-nested-git.test.ts` 守卫回归（用户指令）。后续所有 git 命令用 `git -C <workspace-root>` 显式定位。
+
+### 14.1 Phase 0 codex review 反馈与修订（rule 35 末条，禁止静默应用）
+
+codex Phase 0 裁定 **NO**，4 阻塞项，已逐条修订（commit 见 Phase 0 fix）：
+
+| # | codex 阻塞项 | 修订 |
+|---|---|---|
+| 1 | `Config.Overlay` 字段非 nullable，但 `mergeOverlay` 声称 RFC7396 null-delete；测试被迫 `null as never` 绕过校验，gate 与 merge API 脱节 | Overlay 全字段改 `.nullable()`：null 成为一等 schema 校验的删除信号；测试用真实 `null` 经 `Config.Overlay.parse` |
+| 2 | base "不可变" 仅合并过程不改 target，`mergeWithNullDelete` 只浅 clone 当前层，未 patch 的嵌套子树与 base 共享引用 → 调用方后续 mutate 会污染 Instance 缓存（正是 §8.3 要防的） | `mergeOverlay` 改 `structuredClone(mergeWithNullDelete(...))` 深隔离；新增"mutate 未 patch 嵌套子树不污染 base"测试 |
+| 3 | overlay 面比 spec 宽：`prompt` 任意 record、`variant` 未在 spec 记录（rule 35 implicit） | 精确化（见 §14.2）：`variant` 显式归入 model-selection 家族并写入 schema 注释；`prompt` 全 record 是**有意**（用户 §6-1 "最宽"，prompt 无安全/成本边界，区别于 .strict() 排除的 permission/tools/mcp/provider） |
+| 4 | `no-nested-git` 第二测试名说 "trees" 实际只查直接子目录 | 测试名/注释收窄为 "no .git directly under src/test/script"，并注明非递归的理由 |
+
+通过项：tryUse、session/context.ts（type-only import 避循环）、零行为变更、`.strict()` pinned-invariant 守门、OverlayAgent 显式声明不构成 rule 8/9 双源（Agent 是 `.transform()` 后 schema 无法 `.pick`）。
+
+### 14.2 会话可覆盖面（精确定稿，取代 §5 草案的模糊表述）
+
+`Config.Overlay`（`.strict()`，全字段 nullable 支持 RFC7396 删除）：
+- 顶层：`model`、`prompt`（`Record<string,string>` 系统级 prompt 槽，任意 key，用户 §6-1 最宽决策）
+- `agent.<name>`：`model`、`variant`、`temperature`、`top_p`、`prompt`、`prompt_append`
+
+pinned invariant（`.strict()` 在 schema 边界拒绝，session 永不可覆盖）：`permission`、`tools`、`mcp`、`provider`、路径、安全/成本闸门等所有未列键。
+
