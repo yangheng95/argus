@@ -116,7 +116,7 @@ test("DeliveryAgent prompt is host-gate blind and budgets large auxiliary eviden
   expect(capturedPrompt).not.toContain("# Code Diffs")
 }, 30_000)
 
-test("DeliveryAgent prompt includes manifest gate, ownership, and executor changed files", async () => {
+test("DeliveryAgent prompt is host-gate blind but carries ownership and changed files", async () => {
   await using tmp = await tmpdir({ git: true, config: { model: "test/mock" } })
   let capturedPrompt = ""
   let acceptedPayloadResult = ""
@@ -185,29 +185,6 @@ test("DeliveryAgent prompt includes manifest gate, ownership, and executor chang
         delivery: {
           summary: "Merged UI changes.",
           changedFiles: ["src/App.tsx", "package.json"],
-          manifestGate: {
-            status: "failed",
-            summary: "Delivery evidence gate failed 1 required check(s).",
-            failedCheckIds: ["check:build"],
-            failedCoverageIds: [],
-            failedRuntimeFlowIds: [],
-            failedReviewIds: [],
-          },
-          manifestFailureDetails: [{
-            kind: "check",
-            id: "check:build",
-            name: "Build",
-            status: "failed",
-            command: "bun run build",
-            exitCode: 1,
-            evidence: "Cannot find module './missing'",
-          }],
-          hostGateFailures: [{
-            kind: "manifest",
-            id: "artifact_manifest_test",
-            summary: "Delivery evidence gate failed 1 required check(s).",
-            evidence: ["[check] check:build Build status=failed exit=1 command=bun run build: Cannot find module './missing'"],
-          }],
           goalReports: [{
             goalTitle: "UI shell",
             report: {
@@ -219,15 +196,18 @@ test("DeliveryAgent prompt includes manifest gate, ownership, and executor chang
             },
           }],
         },
+        model: { providerID: "test", modelID: "mock" },
       })
     },
   })
 
-  expect(capturedPrompt).toContain("# DeliveryEvidenceManifest Gate")
-  expect(capturedPrompt).toContain("# Host Hard Gate Failures")
-  expect(capturedPrompt).toContain("finalGate.status=failed")
-  expect(capturedPrompt).toContain("failedCheckIds=check:build")
-  expect(capturedPrompt).toContain("Cannot find module './missing'")
+  // Fresh-eyes decoupling (specs/delivery-fresh-eyes-decoupling-2026-05-18.md):
+  // the agent runs blind after the host gate passed — NO host-gate conclusions
+  // in the prompt — but ownership and changed-file context are still present.
+  expect(capturedPrompt).not.toContain("# DeliveryEvidenceManifest Gate")
+  expect(capturedPrompt).not.toContain("# Host Hard Gate Failures")
+  expect(capturedPrompt).not.toContain("finalGate.status=failed")
+  expect(capturedPrompt).not.toContain("failedCheckIds=check:build")
   expect(capturedPrompt).toContain("owned_paths=src/App.tsx, package.json")
   expect(capturedPrompt).toContain("- src/App.tsx")
   expect(acceptedPayloadResult).toContain("verdict=accepted")
@@ -280,30 +260,8 @@ test("DeliveryAgent registers submit_verdict without same-session recovery", asy
         delivery: {
           summary: "No accepted delivery.",
           changedFiles: ["src/App.tsx"],
-          manifestGate: {
-            status: "failed",
-            summary: "Delivery evidence gate failed 1 required check(s).",
-            failedCheckIds: ["test#1"],
-            failedCoverageIds: [],
-            failedRuntimeFlowIds: [],
-            failedReviewIds: [],
-          },
-          manifestFailureDetails: [{
-            kind: "check",
-            id: "test#1",
-            name: "Unit Tests",
-            status: "failed",
-            command: "pnpm run test",
-            exitCode: 1,
-            evidence: "unit tests failed",
-          }],
-          hostGateFailures: [{
-            kind: "manifest",
-            id: "artifact_manifest_terminal",
-            summary: "Delivery evidence gate failed 1 required check(s).",
-            evidence: ["[check] test#1 Unit Tests status=failed exit=1 command=pnpm run test: unit tests failed"],
-          }],
         },
+        model: { providerID: "test", modelID: "mock" },
       })
     },
   })
@@ -387,6 +345,7 @@ test("DeliveryAgent keeps visual images out of startup prompt and exposes explor
           filename: "reference.png",
           intent: "visual_reference",
         }],
+        model: { providerID: "test", modelID: "mock" },
       })
     },
   })
@@ -437,6 +396,7 @@ test("DeliveryAgent parses collector verdict before returning to the arbiter", a
           summary: "Merged changes.",
           changedFiles: ["src/app.ts"],
         },
+        model: { providerID: "test", modelID: "mock" },
       })
 
       expect(verdict.deferred_checks).toEqual([])
