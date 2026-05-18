@@ -45,8 +45,49 @@ export namespace IntentBundle {
     createdAt?: number
   }
 
+  /** Relative path used by agents whose file tools resolve against the
+   *  project directory (in-process OpenCorvus `read` tool — tool/read.ts). */
+  export const RELATIVE_PATH = ".opencorvus/intent/request.md"
+
   function bundleDir(projectDir: string): string {
     return path.join(projectDir, ".opencorvus", "intent")
+  }
+
+  /**
+   * Resolve the request.md paths for a project. `relative` is for in-process
+   * consumers (OpenCorvus `read` resolves against the project dir);
+   * `absolute` is for EXTERNAL executors (codex / claude-code) whose cwd is a
+   * goal worktree and which use native file tools — a relative
+   * `.opencorvus/...` would not resolve there. `absolute` points at the real
+   * write location (`<project.worktree>/.opencorvus/intent/request.md`) so
+   * writer and reader agree (same resolution as `write`). Throws on unknown
+   * project (rule 7 — load-bearing, no silent fallback).
+   */
+  export function paths(projectID: string): { relative: string; absolute: string } {
+    const project = Project.get(projectID)
+    if (!project) {
+      throw new Error(`IntentBundle.paths: unknown project ${projectID}`)
+    }
+    return {
+      relative: RELATIVE_PATH,
+      absolute: path.join(bundleDir(project.worktree), "request.md"),
+    }
+  }
+
+  /**
+   * Prompt-text pointer to the materialized intent bundle. `pathMode` selects
+   * the path form for the consumer's file-tool resolution model. The user
+   * request (task row) is the source; this file is a deterministic projection.
+   */
+  export function reference(input: { projectID: string; pathMode: "relative" | "absolute" }): string {
+    const resolved = paths(input.projectID)
+    const p = input.pathMode === "absolute" ? resolved.absolute : resolved.relative
+    return [
+      "## Original User Request (intent bundle)",
+      "",
+      `The verbatim user request and attachment manifest for this task are at: ${p}`,
+      "Read it before implementing or decomposing — do not paraphrase from upstream summaries.",
+    ].join("\n")
   }
 
   function renderRequest(input: WriteInput): string {

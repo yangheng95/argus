@@ -105,6 +105,16 @@ export interface DecisionLogReader {
     heading: string,
     options?: { limit?: number; valueCap?: number },
   ): string
+  /**
+   * Render the COMPLETE decision log as a phase-sectioned markdown document —
+   * no value cap, no entry limit, every field (key/value/reason/goal/time).
+   * This is the body `DecisionLogBundle` materializes to
+   * `.opencorvus/decision-log.md` so a shell/worktree agent can read the full
+   * WHY behind any decision the truncated inline `toPromptSection` summary
+   * elided. The SQLite `decision_log` table stays the single source of truth;
+   * this is a regenerated, read-only projection. "" when the log is empty.
+   */
+  toFullDocument(): string
 }
 
 export type DecisionLog = DecisionLogWriter & DecisionLogReader
@@ -116,6 +126,20 @@ export type DecisionLog = DecisionLogWriter & DecisionLogReader
  * a larger budget pass `valueCap` explicitly.
  */
 const DEFAULT_ENTRY_VALUE_CAP = 600
+
+/**
+ * Single source of truth for the `toPromptSection({ limit })` entry cap used
+ * by every late-stage / per-task consumer (orchestrator read_context,
+ * orchestrator refine, integrity reviewer). Rationale: these prompts persist
+ * for the life of a session; an unbounded decision log was the dominant
+ * contributor to the orchestrator session growing ~10K → 125K tokens across
+ * 16 turns. Caps preserve the LATEST state rather than full history.
+ *
+ * This MUST stay one exported constant — three call sites previously carried
+ * divergent literals (20 vs 30), a rule-8 double-source. Do not reintroduce a
+ * local literal; import this instead (rule 10 / rule 35).
+ */
+export const DECISION_LOG_PROMPT_LIMIT = 20
 
 /**
  * Default entry-count cap for `phasePromptSectionForGoal`. Architect
@@ -130,7 +154,10 @@ function capEntryValue(value: string, cap: number): string {
   if (renderedIR) return renderedIR
   if (value.length <= cap) return value
   const omitted = value.length - cap
-  return `${value.slice(0, cap)}… [+${omitted} chars truncated; full body in decision_log row]`
+  // Point the reading agent at an actionable surface. The decision_log SQLite
+  // row is not reachable by an LLM/shell agent; the full untruncated body is
+  // materialized to `.opencorvus/decision-log.md` (DecisionLogBundle).
+  return `${value.slice(0, cap)}… [+${omitted} chars truncated; full body in .opencorvus/decision-log.md]`
 }
 
 function renderContractIRValue(value: string): string | undefined {
@@ -255,8 +282,9 @@ export function createDecisionLog(taskID: string): DecisionLog {
       // Per-entry value cap. Without this, a single LLM-written architect
       // decision of 20K chars would dominate the prompt even though entry
       // count is bounded. 600 chars ≈ one interface contract paragraph —
-      // the full body lives in the decision_log row and is reachable via
-      // readByKey() when an agent genuinely needs it.
+      // the full untruncated body is materialized to
+      // `.opencorvus/decision-log.md` (DecisionLogBundle) so a shell/worktree
+      // agent can read it directly when it needs the complete WHY.
       const valueCap = options?.valueCap ?? DEFAULT_ENTRY_VALUE_CAP
       const lines = entries.map((e) => {
         const value = capEntryValue(e.value, valueCap)
@@ -283,6 +311,41 @@ export function createDecisionLog(taskID: string): DecisionLog {
       options?: { limit?: number; valueCap?: number },
     ): string {
       return formatPromptSectionEntries(this.readByPhaseAndGoal(phase, goalID), heading, options)
+    },
+
+    toFullDocument(): string {
+      const all = this.read()
+      if (all.length === 0) return ""
+      // Group by phase, preserving first-seen phase order and (since read()
+      // is ascending by time_created) time order within each phase.
+      const byPhase = new Map<string, DecisionEntry[]>()
+      for (const e of all) {
+        const bucket = byPhase.get(e.phase)
+        if (bucket) bucket.push(e)
+        else byPhase.set(e.phase, [e])
+      }
+      const lines: string[] = [
+        "# Decision Log (complete)",
+        "",
+        "Materialized projection of this task's `decision_log` table. The " +
+          "SQLite table is the source of truth; this file is regenerated and " +
+          "read-only. Every entry carries WHY, not just WHAT.",
+      ]
+      for (const [phase, entries] of byPhase) {
+        lines.push("", `## Phase: ${phase} (${entries.length})`)
+        for (const e of entries) {
+          // Reuse the shared per-entry value primitive with NO cap: a
+          // contract-IR value still renders readably, but nothing is
+          // truncated (Number.POSITIVE_INFINITY ≥ any value length).
+          const value = capEntryValue(e.value, Number.POSITIVE_INFINITY)
+          lines.push("", `### ${e.key}`, value)
+          if (e.reason) lines.push(`_Why: ${e.reason}_`)
+          const meta = [new Date(e.timeCreated).toISOString()]
+          if (e.goalID) meta.push(`goal:${e.goalID}`)
+          lines.push(`<sub>${meta.join(" · ")}</sub>`)
+        }
+      }
+      return lines.join("\n")
     },
   }
 }
