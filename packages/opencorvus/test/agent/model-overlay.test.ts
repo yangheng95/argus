@@ -1,7 +1,11 @@
 import { afterEach, describe, expect, test, mock } from "bun:test"
 import { Config } from "../../src/config/config"
+import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { Instance } from "../../src/project/instance"
 import { SessionContext } from "../../src/session/context"
+import { Session } from "../../src/session"
+import { Database } from "../../src/storage/db"
+import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
 // Phase 2 (spec §11.1/§13.1): single model resolver, monotone precedence
@@ -14,7 +18,10 @@ function withSession<R>(overlay: unknown, fn: () => R): R {
 }
 
 describe("resolveAgentModelRef — single source + session overlay", () => {
-  afterEach(() => mock.restore())
+  afterEach(async () => {
+    mock.restore()
+    await resetDatabase()
+  })
 
   test("explicitModel wins over everything (incl. session overlay)", async () => {
     await using tmp = await tmpdir()
@@ -61,6 +68,69 @@ describe("resolveAgentModelRef — single source + session overlay", () => {
         const { resolveConfiguredModelRef } = await import("../../src/agent/model")
         expect(SessionContext.tryUse()).toBeUndefined()
         expect(await resolveConfiguredModelRef()).toEqual({ providerID: "base", modelID: "top" })
+      },
+    })
+  })
+
+  test("sessionID option resolves session overlay without ambient SessionContext", async () => {
+    await using tmp = await tmpdir({ config: { model: "base/top" } })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ kind: "assistant", title: "sessionID overlay" })
+        await Session.mergeConfigOverlay({
+          sessionID: session.id,
+          patch: { model: "sid/top", agent: { coding: { model: "sid/coding" } } },
+        })
+
+        const { resolveAgentModelRef, resolveConfiguredModelRef } = await import("../../src/agent/model")
+        expect(SessionContext.tryUse()).toBeUndefined()
+        await expect(resolveAgentModelRef("coding", { sessionID: session.id })).resolves.toEqual({
+          providerID: "sid",
+          modelID: "coding",
+        })
+        await expect(resolveConfiguredModelRef({ sessionID: session.id })).resolves.toEqual({
+          providerID: "sid",
+          modelID: "top",
+        })
+      },
+    })
+  })
+
+  test("taskID option resolves through task.session_id without ambient SessionContext", async () => {
+    await using tmp = await tmpdir({ config: { model: "base/top" } })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ kind: "root", title: "task overlay" })
+        await Session.mergeConfigOverlay({
+          sessionID: session.id,
+          patch: { model: "task/top", agent: { coding: { model: "task/coding" } } },
+        })
+        const taskID = "task-model-overlay"
+        Database.use((db) =>
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: session.id,
+              title: "task overlay",
+              request: "task overlay",
+            })
+            .run(),
+        )
+
+        const { resolveAgentModelRef, resolveConfiguredModelRef } = await import("../../src/agent/model")
+        expect(SessionContext.tryUse()).toBeUndefined()
+        await expect(resolveAgentModelRef("coding", { taskID })).resolves.toEqual({
+          providerID: "task",
+          modelID: "coding",
+        })
+        await expect(resolveConfiguredModelRef({ taskID })).resolves.toEqual({
+          providerID: "task",
+          modelID: "top",
+        })
       },
     })
   })
