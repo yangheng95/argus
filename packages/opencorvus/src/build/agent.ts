@@ -74,6 +74,7 @@ import { Question } from "@/question"
 import { buildBuildAgentReport } from "./report"
 
 import BUILD_CORE from "@/prompt/core/build-core.txt"
+import ENGINEERING_CRAFT from "@/prompt/core/engineering-craft.txt"
 
 const log = Log.create({ service: "build-agent" })
 
@@ -654,7 +655,7 @@ export namespace BuildAgent {
         if (executor === "opencorvus") {
           out = await runAgentSession({
             kind: "build",
-            core: [BUILD_CORE, renderBuildAutoIterationMode(autoIteration)].join("\n\n"),
+            core: composeBuildCore(autoIteration),
             sessionTitle: buildSessionTitle(input.target),
             sessionDirectory: worktreeDir!,
             parentSessionID: input.parentSessionID,
@@ -1198,6 +1199,15 @@ export function renderBuildAutoIterationMode(autoIteration: boolean): string {
       ? "- assistant.auto_iteration=true: after verification failures, continue focused repair attempts until every acceptance spec is satisfied or a concrete blocker remains."
       : "- assistant.auto_iteration=false: make one focused repair/verification pass, then report a concrete blocker through report_build_result(status=\"failed\") if failures remain.",
   ].join("\n")
+}
+
+/** Single composition point for the Build session core: role/mechanism core +
+ * the shared engineering-craft fragment + the dynamic auto-iteration mode.
+ * Exported so the composition (and the single-source craft injection) is
+ * directly assertable instead of grepping the call site (rule 9 — symmetric
+ * with delivery's DELIVERY_AGENT_SYSTEM). */
+export function composeBuildCore(autoIteration: boolean): string {
+  return [BUILD_CORE, ENGINEERING_CRAFT, renderBuildAutoIterationMode(autoIteration)].join("\n\n")
 }
 
 export function externalEventPartText(event: CodingEventInfo, executor: string): string | undefined {
