@@ -5,6 +5,7 @@ import { Auth } from "../../src/auth"
 import { tmpdir } from "../fixture/fixture"
 import path from "path"
 import fs from "fs/promises"
+import { existsSync } from "fs"
 import { pathToFileURL } from "url"
 import { Filesystem } from "../../src/util/filesystem"
 
@@ -24,15 +25,27 @@ async function writeConfig(dir: string, config: object, name = "opencorvus.json"
   await Filesystem.write(path.join(dir, name), JSON.stringify(config))
 }
 
-test("loads config with defaults when no files exist", async () => {
+test("no project config files: does NOT auto-write a project config and does NOT default model (spec §6-2, rule 7/8)", async () => {
   await using tmp = await tmpdir()
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
       const config = await Config.get()
-      const writtenConfig = await Filesystem.readJson(path.join(tmp.path, ".opencorvus", "opencorvus.jsonc"))
-      expect(config.model).toBe(Config.DEFAULT_MODEL)
-      expect(writtenConfig.model).toBe(Config.DEFAULT_MODEL)
+
+      // Removed auto-behavior MUST NOT happen: no project config file is
+      // materialized on first load (it used to freeze a copy of the
+      // global-merged config + DEFAULT_MODEL into the project dir, which
+      // permanently shadowed global — root cause of "model 反复覆盖").
+      for (const name of ["opencorvus.jsonc", "opencorvus.json"]) {
+        expect(existsSync(path.join(tmp.path, ".opencorvus", name))).toBe(false)
+      }
+
+      // No DEFAULT_MODEL fallback: model is simply unset when nothing
+      // configured anywhere (resolveAgentModel throws MissingModelConfigError
+      // downstream — strict & explicit, rule 7).
+      expect(config.model).toBeUndefined()
+
+      // In-memory computed defaults (NOT model, NOT a file write) still hold.
       expect(config.username).toBeDefined()
       expect(config.experimental?.auto_question).toBe(true)
     },
