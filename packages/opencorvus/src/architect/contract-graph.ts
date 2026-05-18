@@ -1,5 +1,5 @@
 import z from "zod"
-import { ContractIRSchema, auditEligibleFieldsForSymbols, renderContractIR, type ContractIR } from "./contract-ir"
+import { ContractIRSchema, renderContractIR, type ContractIR } from "./contract-ir"
 
 export const ArchitectContractKindSchema = z.enum([
   "type",
@@ -123,17 +123,6 @@ export function contractGraphIRIndex(graph: ArchitectContractGraph): Map<string,
       .filter((contract): contract is ArchitectContractRef & { ir: ContractIR } => !!contract.ir)
       .flatMap((contract) => [[contract.id, contract.ir] as const, [contract.name, contract.ir] as const]),
   )
-}
-
-export function auditEligibleContractIDs(graph: ArchitectContractGraph): string[] {
-  const index = contractGraphIRIndex(graph)
-  const ids: string[] = []
-  for (const contract of graph.contracts) {
-    if (!contract.ir) continue
-    const fields = auditEligibleFieldsForSymbols({ index, symbols: [contract.id, contract.name] })
-    if (fields.length > 0) ids.push(contract.id)
-  }
-  return ids
 }
 
 export function validateArchitectContractGraph(input: {
@@ -330,15 +319,17 @@ export function validateArchitectContractGraph(input: {
     }
   }
 
-  const auditIDs = acceptanceContractGraphIDs(input.goals)
-  for (const contractID of auditEligibleContractIDs(input.graph)) {
-    if (!auditIDs.has(contractID)) {
+  const essentialAuditCoverage = essentialAcceptanceContractGraphIDsByGoal(input.goals)
+  for (const contract of input.graph.contracts) {
+    const relatedGoalIDs = unique([contract.producer_goal_id, ...contract.consumer_goal_ids])
+    const covered = relatedGoalIDs.some((goalID) => essentialAuditCoverage.get(goalID)?.has(contract.id))
+    if (!covered) {
       findings.push(
         concern(
-          "contract_audit_missing_criterion",
-          `Typed contract ${contractID} has closed literal domains but no graph-owned contract_audit acceptance scorer references it.`,
-          { contract_ids: [contractID] },
-          ["register_goal"],
+          "contract_without_audit_coverage",
+          `Contract ${contract.id} is not covered by any related goal's essential contract_audit scorer; add an essential contract_audit acceptance spec that references this contract_ids entry or revise the graph contract.`,
+          { contract_ids: [contract.id], goal_ids: relatedGoalIDs },
+          ["register_goal", "modify_goal", "register_contract"],
         ),
       )
     }
@@ -427,21 +418,24 @@ export function graphContractsForGoal(
   }
 }
 
-function acceptanceContractGraphIDs(goals: readonly GraphValidationGoal[]): Set<string> {
-  const ids = new Set<string>()
+function essentialAcceptanceContractGraphIDsByGoal(goals: readonly GraphValidationGoal[]): Map<string, Set<string>> {
+  const idsByGoal = new Map<string, Set<string>>()
   for (const goal of goals) {
     for (const spec of goal.acceptance_specs) {
+      if (spec.severity !== "essential") continue
       for (const scorer of spec.scorers) {
         if (scorer.type !== "contract_audit") continue
         const scorerSpec = scorer.spec as { kind?: unknown; contract_ids?: unknown } | undefined
         if (scorerSpec?.kind !== "contract_graph" || !Array.isArray(scorerSpec.contract_ids)) continue
+        const ids = idsByGoal.get(goal.id) ?? new Set<string>()
         for (const contractID of scorerSpec.contract_ids) {
           if (typeof contractID === "string") ids.add(contractID)
         }
+        idsByGoal.set(goal.id, ids)
       }
     }
   }
-  return ids
+  return idsByGoal
 }
 
 function hasDependencyPath(goals: readonly GraphValidationGoal[], fromGoalID: string, ancestorGoalID: string): boolean {
