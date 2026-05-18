@@ -622,6 +622,16 @@ async function taskChecks(checks?: z.input<typeof CheckConfig>) {
   return CheckConfig.parse(next)
 }
 
+/** Thrown when the planner agent cannot produce a valid plan. Server routes
+ *  map this to a 4xx so the user sees the planner failure rather than a
+ *  generic 500. */
+export class PlannerFailureError extends Error {
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message, options)
+    this.name = "PlannerFailureError"
+  }
+}
+
 export class TaskQueueStartError extends Error {
   constructor(
     message: string,
