@@ -18,481 +18,6 @@ export type EventInstallationUpdateAvailable = {
   }
 }
 
-export type EventServerInstanceDisposed = {
-  type: "server.instance.disposed"
-  properties: {
-    directory: string
-  }
-}
-
-export type SessionStatus =
-  | {
-      type: "idle"
-    }
-  | {
-      type: "retry"
-      attempt: number
-      message: string
-      next: number
-    }
-  | {
-      type: "streaming"
-    }
-  | {
-      type: "terminal"
-      reason: "completed" | "error" | "aborted"
-      error?: string
-    }
-
-export type EventSessionStatus = {
-  type: "session.status"
-  properties: {
-    sessionID: string
-    status: SessionStatus
-  }
-}
-
-export type EventSessionIdle = {
-  type: "session.idle"
-  properties: {
-    sessionID: string
-  }
-}
-
-export type EventTaskCreated = {
-  type: "task.created"
-  properties: {
-    taskID: string
-    status: "queued" | "active" | "completed" | "failed" | "cancelled"
-    summary: string
-  }
-}
-
-export type EventTaskUpdated = {
-  type: "task.updated"
-  properties: {
-    taskID: string
-    status: "queued" | "active" | "completed" | "failed" | "cancelled"
-    summary: string
-  }
-}
-
-export type EventTaskCompleted = {
-  type: "task.completed"
-  properties: {
-    taskID: string
-    status: "queued" | "active" | "completed" | "failed" | "cancelled"
-    summary: string
-  }
-}
-
-export type EventTaskFailed = {
-  type: "task.failed"
-  properties: {
-    taskID: string
-    status: "queued" | "active" | "completed" | "failed" | "cancelled"
-    summary: string
-    error?: string
-  }
-}
-
-export type EventTaskCancelled = {
-  type: "task.cancelled"
-  properties: {
-    taskID: string
-    status: "queued" | "active" | "completed" | "failed" | "cancelled"
-    summary: string
-  }
-}
-
-export type EventSpecCreated = {
-  type: "spec.created"
-  properties: {
-    taskID: string
-    specID: string
-    summary: string
-  }
-}
-
-export type EventSpecUpdated = {
-  type: "spec.updated"
-  properties: {
-    taskID: string
-    specID: string
-    status: string
-    summary: string
-  }
-}
-
-export type EventSpecApproved = {
-  type: "spec.approved"
-  properties: {
-    taskID: string
-    specID: string
-    summary: string
-  }
-}
-
-export type EventPlanCreated = {
-  type: "plan.created"
-  properties: {
-    taskID: string
-    planID: string
-    summary: string
-  }
-}
-
-export type EventPlanActivated = {
-  type: "plan.activated"
-  properties: {
-    taskID: string
-    planID: string
-    summary: string
-  }
-}
-
-export type EventGoalProgress = {
-  type: "goal.progress"
-  properties: {
-    taskID: string
-    goalRunID: string
-    summary: string
-  }
-}
-
-export type EventGoalRunUpdated = {
-  type: "goal_run.updated"
-  properties: {
-    taskID: string
-    goalRunID: string
-    goalID: string
-    status: string
-    previousStatus: string
-    summary: string
-  }
-}
-
-export type EventGoalPassed = {
-  type: "goal.passed"
-  properties: {
-    taskID: string
-    goalID: string
-    summary: string
-  }
-}
-
-export type EventGoalFailed = {
-  type: "goal.failed"
-  properties: {
-    taskID: string
-    goalID: string
-    summary: string
-  }
-}
-
-export type EventTaskRewound = {
-  type: "task.rewound"
-  properties: {
-    taskID: string
-    cursorTime: number
-    anchorEventID?: string
-    reason?: string
-    rewindCount: number
-    resetWorktree: boolean
-    anchorKind: "cursorTime" | "message"
-  }
-}
-
-export type EventMilestoneActivated = {
-  type: "milestone.activated"
-  properties: {
-    taskID: string
-    milestoneID: string
-    summary: string
-  }
-}
-
-export type EventMilestonePassed = {
-  type: "milestone.passed"
-  properties: {
-    taskID: string
-    milestoneID: string
-    summary: string
-  }
-}
-
-export type EventMilestoneFailed = {
-  type: "milestone.failed"
-  properties: {
-    taskID: string
-    milestoneID: string
-    summary: string
-  }
-}
-
-export type EventRunCreated = {
-  type: "run.created"
-  properties: {
-    taskID: string
-    runID: string
-    status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
-    summary: string
-  }
-}
-
-export type EventRunUpdated = {
-  type: "run.updated"
-  properties: {
-    taskID: string
-    runID: string
-    status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
-    summary: string
-  }
-}
-
-export type EventInteractionRequested = {
-  type: "interaction.requested"
-  properties: {
-    taskID: string
-    runID?: string
-    interactionID: string
-    requestType: "permission" | "question"
-    summary: string
-  }
-}
-
-export type EventInteractionResolved = {
-  type: "interaction.resolved"
-  properties: {
-    taskID: string
-    runID?: string
-    interactionID: string
-    status: "pending" | "answered" | "rejected" | "expired"
-    summary: string
-  }
-}
-
-export type EventDeliveryReady = {
-  type: "delivery.ready"
-  properties: {
-    taskID: string
-    runID: string
-    deliveryID: string
-    summary: string
-  }
-}
-
-export type EventEvaluationCompleted = {
-  type: "evaluation.completed"
-  properties: {
-    taskID: string
-    runID: string
-    evaluationID: string
-    status: "pending" | "passed" | "failed" | "inconclusive"
-    verdict: "accepted" | "rejected" | "inconclusive"
-    summary: string
-  }
-}
-
-export type EventTaskMessage = {
-  type: "task.message"
-  properties: {
-    taskID: string
-    kind: "goal" | "plan" | "note"
-    source: string
-    text: string
-    summary: string
-  }
-}
-
-export type EventRunProgress = {
-  type: "run.progress"
-  properties: {
-    taskID: string
-    runID: string
-    type: string
-    summary: string
-    payload?: {
-      [key: string]: unknown
-    }
-  }
-}
-
-export type EventRunOutput = {
-  type: "run.output"
-  properties: {
-    taskID: string
-    runID: string
-    type: string
-    text: string
-  }
-}
-
-export type EventMessageInjected = {
-  type: "message.injected"
-  properties: {
-    taskID: string
-    runID: string
-    text: string
-    summary: string
-  }
-}
-
-export type EventWorkflowSelected = {
-  type: "workflow.selected"
-  properties: {
-    taskID: string
-    workflowID: string
-    workflowName: string
-    summary: string
-  }
-}
-
-export type EventWorkflowStepUpdated = {
-  type: "workflow.step.updated"
-  properties: {
-    taskID: string
-    stepID: string
-    goalID?: string
-    status: "pending" | "running" | "completed" | "skipped" | "failed"
-    summary: string
-  }
-}
-
-export type EventGoalWorkflowProgress = {
-  type: "goal.workflow.progress"
-  properties: {
-    taskID: string
-    goalID: string
-    completedSteps: number
-    totalSteps: number
-    currentStep?: string
-    summary: string
-  }
-}
-
-export type EventIntegrityReviewStarted = {
-  type: "integrity.review.started"
-  properties: {
-    taskID: string
-    sessionID: string
-  }
-}
-
-export type EventIntegrityReviewProgress = {
-  type: "integrity.review.progress"
-  properties: {
-    taskID: string
-    sessionID: string
-    attempt: number
-    elapsedMs: number
-  }
-}
-
-export type EventIntegrityReviewChunk = {
-  type: "integrity.review.chunk"
-  properties: {
-    taskID: string
-    sessionID: string
-    kind: "reasoning"
-    delta: string
-    attempt: number
-  }
-}
-
-export type EventDeliveryGateRejected = {
-  type: "delivery.gate.rejected"
-  properties: {
-    taskID: string
-    iteration: number
-    summary: string
-    violations: Array<{
-      kind: string
-      detail: string
-    }>
-  }
-}
-
-export type EventDeliveryEvidenceUpdated = {
-  type: "delivery.evidence.updated"
-  properties: {
-    taskID: string
-    runID?: string
-    deliveryID: string
-    manifestID: string
-    iteration: number
-    status: "passed" | "failed"
-    summary: string
-    failedCheckCount: number
-    failedRuntimeFlowCount: number
-    failedReviewCount: number
-    failureDetails: Array<{
-      kind: "readiness" | "check" | "coverage" | "runtime" | "review"
-      id: string
-      name: string
-      status?: string
-      command?: string
-      exitCode?: number
-      evidence: string
-    }>
-  }
-}
-
-export type EventDeliveryPreviewUpdated = {
-  type: "delivery.preview.updated"
-  properties: {
-    taskID: string
-    deliveryID: string
-    status: string
-    url?: string
-    reason?: string
-    command?: string
-    workspaceDir?: string
-  }
-}
-
-export type EventIntegrityReviewCompleted = {
-  type: "integrity.review.completed"
-  properties: {
-    taskID: string
-    sessionID: string
-    verdict: "pass" | "concerns" | "needs_correction"
-    summary: string
-    dimensions: Array<{
-      id: "requirement_fidelity" | "technical_feasibility" | "hallucination" | "solution_quality"
-      verdict: "pass" | "concerns" | "needs_correction"
-      issueCount: number
-      correctionCount: number
-      graphCorrectionCount?: number
-      missingGoalCount: number
-    }>
-    issues: Array<{
-      type: string
-      description: string
-      requirement_ids?: Array<string>
-      spec_ids?: Array<string>
-    }>
-    corrections: Array<{
-      action: "modify" | "split" | "remove"
-      goalID: string
-      reason: string
-      updatesTitle?: string
-      updatesObjective?: string
-    }>
-    graphCorrections?: Array<{
-      kind: string
-      action: string
-      reason: string
-    }>
-    missingGoals: Array<{
-      title: string
-      objective: string
-      reason?: string
-    }>
-    attempts: number
-  }
-}
-
 export type Project = {
   id: string
   worktree: string
@@ -519,6 +44,13 @@ export type Project = {
 export type EventProjectUpdated = {
   type: "project.updated"
   properties: Project
+}
+
+export type EventServerInstanceDisposed = {
+  type: "server.instance.disposed"
+  properties: {
+    directory: string
+  }
 }
 
 export type EventServerConnected = {
@@ -1100,128 +632,6 @@ export type EventSessionError = {
   }
 }
 
-export type PermissionRequest = {
-  id: string
-  sessionID: string
-  permission: string
-  patterns: Array<string>
-  metadata: {
-    [key: string]: unknown
-  }
-  always: Array<string>
-  tool?: {
-    messageID: string
-    callID: string
-  }
-}
-
-export type EventPermissionAsked = {
-  type: "permission.asked"
-  properties: PermissionRequest
-}
-
-export type EventPermissionReplied = {
-  type: "permission.replied"
-  properties: {
-    sessionID: string
-    requestID: string
-    reply: "once" | "always" | "reject"
-    autoReply: boolean
-  }
-}
-
-export type EventTaskQueueCompleted = {
-  type: "task-queue.completed"
-  properties: {
-    queueTaskID: string
-    sessionID: string
-  }
-}
-
-export type QuestionOption = {
-  /**
-   * Display text (1-5 words, concise)
-   */
-  label: string
-  /**
-   * Explanation of choice
-   */
-  description: string
-}
-
-export type QuestionInfo = {
-  /**
-   * Complete question
-   */
-  question: string
-  /**
-   * Very short label (max 30 chars)
-   */
-  header: string
-  /**
-   * Available choices
-   */
-  options: Array<QuestionOption>
-  /**
-   * Allow selecting multiple choices
-   */
-  multiple?: boolean
-  /**
-   * Allow typing a custom answer
-   */
-  custom?: boolean
-}
-
-export type QuestionRequest = {
-  id: string
-  sessionID: string
-  /**
-   * Questions to ask
-   */
-  questions: Array<QuestionInfo>
-  tool?: {
-    messageID: string
-    callID: string
-  }
-}
-
-export type EventQuestionAsked = {
-  type: "question.asked"
-  properties: QuestionRequest
-}
-
-export type QuestionAnswer = Array<string>
-
-export type EventQuestionReplied = {
-  type: "question.replied"
-  properties: {
-    sessionID: string
-    requestID: string
-    answers: Array<QuestionAnswer>
-  }
-}
-
-export type EventQuestionRejected = {
-  type: "question.rejected"
-  properties: {
-    sessionID: string
-    requestID: string
-  }
-}
-
-export type EventTaskReport = {
-  type: "task.report"
-  properties: {
-    sessionID: string
-    status: "progress" | "need_input" | "done" | "failed"
-    summary: string
-    question?: string
-    next_plan?: string
-    artifacts?: Array<string>
-    error?: string
-  }
-}
-
 export type EventTuiPromptAppend = {
   type: "tui.prompt.append"
   properties: {
@@ -1304,36 +714,6 @@ export type EventMcpResourcesChanged = {
   }
 }
 
-export type EventFileWatcherUpdated = {
-  type: "file.watcher.updated"
-  properties: {
-    file: string
-    event: "add" | "change" | "unlink"
-  }
-}
-
-export type EventVcsBranchUpdated = {
-  type: "vcs.branch.updated"
-  properties: {
-    branch?: string
-  }
-}
-
-export type EventWorktreeReady = {
-  type: "worktree.ready"
-  properties: {
-    name: string
-    branch: string
-  }
-}
-
-export type EventWorktreeFailed = {
-  type: "worktree.failed"
-  properties: {
-    message: string
-  }
-}
-
 export type EventCommandExecuted = {
   type: "command.executed"
   properties: {
@@ -1341,6 +721,164 @@ export type EventCommandExecuted = {
     sessionID: string
     arguments: string
     messageID: string
+  }
+}
+
+export type PermissionRequest = {
+  id: string
+  sessionID: string
+  permission: string
+  patterns: Array<string>
+  metadata: {
+    [key: string]: unknown
+  }
+  always: Array<string>
+  tool?: {
+    messageID: string
+    callID: string
+  }
+}
+
+export type EventPermissionAsked = {
+  type: "permission.asked"
+  properties: PermissionRequest
+}
+
+export type EventPermissionReplied = {
+  type: "permission.replied"
+  properties: {
+    sessionID: string
+    requestID: string
+    reply: "once" | "always" | "reject"
+    autoReply: boolean
+  }
+}
+
+export type Todo = {
+  /**
+   * Brief description of the task
+   */
+  content: string
+  /**
+   * Current status of the task: pending, in_progress, completed, cancelled
+   */
+  status: string
+  /**
+   * Priority level of the task: high, medium, low
+   */
+  priority: string
+}
+
+export type EventTodoUpdated = {
+  type: "todo.updated"
+  properties: {
+    sessionID: string
+    todos: Array<Todo>
+  }
+}
+
+export type SessionStatus =
+  | {
+      type: "idle"
+    }
+  | {
+      type: "retry"
+      attempt: number
+      message: string
+      next: number
+    }
+  | {
+      type: "streaming"
+    }
+  | {
+      type: "terminal"
+      reason: "completed" | "error" | "aborted"
+      error?: string
+    }
+
+export type EventSessionStatus = {
+  type: "session.status"
+  properties: {
+    sessionID: string
+    status: SessionStatus
+  }
+}
+
+export type EventSessionIdle = {
+  type: "session.idle"
+  properties: {
+    sessionID: string
+  }
+}
+
+export type QuestionOption = {
+  /**
+   * Display text (1-5 words, concise)
+   */
+  label: string
+  /**
+   * Explanation of choice
+   */
+  description: string
+}
+
+export type QuestionInfo = {
+  /**
+   * Complete question
+   */
+  question: string
+  /**
+   * Very short label (max 30 chars)
+   */
+  header: string
+  /**
+   * Available choices
+   */
+  options: Array<QuestionOption>
+  /**
+   * Allow selecting multiple choices
+   */
+  multiple?: boolean
+  /**
+   * Allow typing a custom answer
+   */
+  custom?: boolean
+}
+
+export type QuestionRequest = {
+  id: string
+  sessionID: string
+  /**
+   * Questions to ask
+   */
+  questions: Array<QuestionInfo>
+  tool?: {
+    messageID: string
+    callID: string
+  }
+}
+
+export type EventQuestionAsked = {
+  type: "question.asked"
+  properties: QuestionRequest
+}
+
+export type QuestionAnswer = Array<string>
+
+export type EventQuestionReplied = {
+  type: "question.replied"
+  properties: {
+    sessionID: string
+    requestID: string
+    answers: Array<QuestionAnswer>
+  }
+}
+
+export type EventQuestionRejected = {
+  type: "question.rejected"
+  properties: {
+    sessionID: string
+    requestID: string
   }
 }
 
@@ -1370,26 +908,488 @@ export type EventFileEdited = {
   }
 }
 
-export type Todo = {
-  /**
-   * Brief description of the task
-   */
-  content: string
-  /**
-   * Current status of the task: pending, in_progress, completed, cancelled
-   */
-  status: string
-  /**
-   * Priority level of the task: high, medium, low
-   */
-  priority: string
+export type EventFileWatcherUpdated = {
+  type: "file.watcher.updated"
+  properties: {
+    file: string
+    event: "add" | "change" | "unlink"
+  }
 }
 
-export type EventTodoUpdated = {
-  type: "todo.updated"
+export type EventTaskCreated = {
+  type: "task.created"
+  properties: {
+    taskID: string
+    status: "queued" | "active" | "completed" | "failed" | "cancelled"
+    summary: string
+  }
+}
+
+export type EventTaskUpdated = {
+  type: "task.updated"
+  properties: {
+    taskID: string
+    status: "queued" | "active" | "completed" | "failed" | "cancelled"
+    summary: string
+  }
+}
+
+export type EventTaskCompleted = {
+  type: "task.completed"
+  properties: {
+    taskID: string
+    status: "queued" | "active" | "completed" | "failed" | "cancelled"
+    summary: string
+  }
+}
+
+export type EventTaskFailed = {
+  type: "task.failed"
+  properties: {
+    taskID: string
+    status: "queued" | "active" | "completed" | "failed" | "cancelled"
+    summary: string
+    error?: string
+  }
+}
+
+export type EventTaskCancelled = {
+  type: "task.cancelled"
+  properties: {
+    taskID: string
+    status: "queued" | "active" | "completed" | "failed" | "cancelled"
+    summary: string
+  }
+}
+
+export type EventSpecCreated = {
+  type: "spec.created"
+  properties: {
+    taskID: string
+    specID: string
+    summary: string
+  }
+}
+
+export type EventSpecUpdated = {
+  type: "spec.updated"
+  properties: {
+    taskID: string
+    specID: string
+    status: string
+    summary: string
+  }
+}
+
+export type EventSpecApproved = {
+  type: "spec.approved"
+  properties: {
+    taskID: string
+    specID: string
+    summary: string
+  }
+}
+
+export type EventPlanCreated = {
+  type: "plan.created"
+  properties: {
+    taskID: string
+    planID: string
+    summary: string
+  }
+}
+
+export type EventPlanActivated = {
+  type: "plan.activated"
+  properties: {
+    taskID: string
+    planID: string
+    summary: string
+  }
+}
+
+export type EventGoalProgress = {
+  type: "goal.progress"
+  properties: {
+    taskID: string
+    goalRunID: string
+    summary: string
+  }
+}
+
+export type EventGoalRunUpdated = {
+  type: "goal_run.updated"
+  properties: {
+    taskID: string
+    goalRunID: string
+    goalID: string
+    status: string
+    previousStatus: string
+    summary: string
+  }
+}
+
+export type EventGoalPassed = {
+  type: "goal.passed"
+  properties: {
+    taskID: string
+    goalID: string
+    summary: string
+  }
+}
+
+export type EventGoalFailed = {
+  type: "goal.failed"
+  properties: {
+    taskID: string
+    goalID: string
+    summary: string
+  }
+}
+
+export type EventTaskRewound = {
+  type: "task.rewound"
+  properties: {
+    taskID: string
+    cursorTime: number
+    anchorEventID?: string
+    reason?: string
+    rewindCount: number
+    resetWorktree: boolean
+    anchorKind: "cursorTime" | "message"
+  }
+}
+
+export type EventMilestoneActivated = {
+  type: "milestone.activated"
+  properties: {
+    taskID: string
+    milestoneID: string
+    summary: string
+  }
+}
+
+export type EventMilestonePassed = {
+  type: "milestone.passed"
+  properties: {
+    taskID: string
+    milestoneID: string
+    summary: string
+  }
+}
+
+export type EventMilestoneFailed = {
+  type: "milestone.failed"
+  properties: {
+    taskID: string
+    milestoneID: string
+    summary: string
+  }
+}
+
+export type EventRunCreated = {
+  type: "run.created"
+  properties: {
+    taskID: string
+    runID: string
+    status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
+    summary: string
+  }
+}
+
+export type EventRunUpdated = {
+  type: "run.updated"
+  properties: {
+    taskID: string
+    runID: string
+    status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
+    summary: string
+  }
+}
+
+export type EventInteractionRequested = {
+  type: "interaction.requested"
+  properties: {
+    taskID: string
+    runID?: string
+    interactionID: string
+    requestType: "permission" | "question"
+    summary: string
+  }
+}
+
+export type EventInteractionResolved = {
+  type: "interaction.resolved"
+  properties: {
+    taskID: string
+    runID?: string
+    interactionID: string
+    status: "pending" | "answered" | "rejected" | "expired"
+    summary: string
+  }
+}
+
+export type EventDeliveryReady = {
+  type: "delivery.ready"
+  properties: {
+    taskID: string
+    runID: string
+    deliveryID: string
+    summary: string
+  }
+}
+
+export type EventEvaluationCompleted = {
+  type: "evaluation.completed"
+  properties: {
+    taskID: string
+    runID: string
+    evaluationID: string
+    status: "pending" | "passed" | "failed" | "inconclusive"
+    verdict: "accepted" | "rejected" | "inconclusive"
+    summary: string
+  }
+}
+
+export type EventTaskMessage = {
+  type: "task.message"
+  properties: {
+    taskID: string
+    kind: "goal" | "plan" | "note"
+    source: string
+    text: string
+    summary: string
+  }
+}
+
+export type EventRunProgress = {
+  type: "run.progress"
+  properties: {
+    taskID: string
+    runID: string
+    type: string
+    summary: string
+    payload?: {
+      [key: string]: unknown
+    }
+  }
+}
+
+export type EventRunOutput = {
+  type: "run.output"
+  properties: {
+    taskID: string
+    runID: string
+    type: string
+    text: string
+  }
+}
+
+export type EventMessageInjected = {
+  type: "message.injected"
+  properties: {
+    taskID: string
+    runID: string
+    text: string
+    summary: string
+  }
+}
+
+export type EventWorkflowSelected = {
+  type: "workflow.selected"
+  properties: {
+    taskID: string
+    workflowID: string
+    workflowName: string
+    summary: string
+  }
+}
+
+export type EventWorkflowStepUpdated = {
+  type: "workflow.step.updated"
+  properties: {
+    taskID: string
+    stepID: string
+    goalID?: string
+    status: "pending" | "running" | "completed" | "skipped" | "failed"
+    summary: string
+  }
+}
+
+export type EventGoalWorkflowProgress = {
+  type: "goal.workflow.progress"
+  properties: {
+    taskID: string
+    goalID: string
+    completedSteps: number
+    totalSteps: number
+    currentStep?: string
+    summary: string
+  }
+}
+
+export type EventIntegrityReviewStarted = {
+  type: "integrity.review.started"
+  properties: {
+    taskID: string
+    sessionID: string
+  }
+}
+
+export type EventIntegrityReviewProgress = {
+  type: "integrity.review.progress"
+  properties: {
+    taskID: string
+    sessionID: string
+    attempt: number
+    elapsedMs: number
+  }
+}
+
+export type EventIntegrityReviewChunk = {
+  type: "integrity.review.chunk"
+  properties: {
+    taskID: string
+    sessionID: string
+    kind: "reasoning"
+    delta: string
+    attempt: number
+  }
+}
+
+export type EventDeliveryGateRejected = {
+  type: "delivery.gate.rejected"
+  properties: {
+    taskID: string
+    runID?: string
+    iteration: number
+    violations: Array<{
+      kind: string
+      detail: string
+    }>
+  }
+}
+
+export type EventDeliveryEvidenceUpdated = {
+  type: "delivery.evidence.updated"
+  properties: {
+    taskID: string
+    runID?: string
+    deliveryID: string
+    manifestID: string
+    iteration: number
+    status: "passed" | "failed"
+    summary: string
+    failedCheckCount: number
+    failedRuntimeFlowCount: number
+    failedReviewCount: number
+    failureDetails: Array<{
+      kind: "readiness" | "check" | "coverage" | "runtime" | "review"
+      id: string
+      name: string
+      status?: string
+      command?: string
+      exitCode?: number
+      evidence: string
+    }>
+  }
+}
+
+export type EventDeliveryPreviewUpdated = {
+  type: "delivery.preview.updated"
+  properties: {
+    taskID: string
+    deliveryID: string
+    status: string
+    url?: string
+    reason?: string
+    command?: string
+    workspaceDir?: string
+  }
+}
+
+export type EventIntegrityReviewCompleted = {
+  type: "integrity.review.completed"
+  properties: {
+    taskID: string
+    sessionID: string
+    verdict: "pass" | "concerns" | "needs_correction"
+    summary: string
+    dimensions: Array<{
+      id: "requirement_fidelity" | "technical_feasibility" | "hallucination" | "solution_quality"
+      verdict: "pass" | "concerns" | "needs_correction"
+      issueCount: number
+      correctionCount: number
+      graphCorrectionCount?: number
+      missingGoalCount: number
+    }>
+    issues: Array<{
+      type: string
+      description: string
+      requirement_ids?: Array<string>
+      spec_ids?: Array<string>
+    }>
+    corrections: Array<{
+      action: "modify" | "split" | "remove"
+      goalID: string
+      reason: string
+      updatesTitle?: string
+      updatesObjective?: string
+    }>
+    graphCorrections?: Array<{
+      kind: string
+      action: string
+      reason: string
+    }>
+    missingGoals: Array<{
+      title: string
+      objective: string
+      reason?: string
+    }>
+    attempts: number
+  }
+}
+
+export type EventTaskQueueCompleted = {
+  type: "task-queue.completed"
+  properties: {
+    queueTaskID: string
+    sessionID: string
+  }
+}
+
+export type EventTaskReport = {
+  type: "task.report"
   properties: {
     sessionID: string
-    todos: Array<Todo>
+    status: "progress" | "need_input" | "done" | "failed"
+    summary: string
+    question?: string
+    next_plan?: string
+    artifacts?: Array<string>
+    error?: string
+  }
+}
+
+export type EventVcsBranchUpdated = {
+  type: "vcs.branch.updated"
+  properties: {
+    branch?: string
+  }
+}
+
+export type EventWorktreeReady = {
+  type: "worktree.ready"
+  properties: {
+    name: string
+    branch: string
+  }
+}
+
+export type EventWorktreeFailed = {
+  type: "worktree.failed"
+  properties: {
+    message: string
   }
 }
 
@@ -1559,9 +1559,39 @@ export type EventWorkspaceFailed = {
 export type Event =
   | EventInstallationUpdated
   | EventInstallationUpdateAvailable
+  | EventProjectUpdated
   | EventServerInstanceDisposed
+  | EventServerConnected
+  | EventGlobalDisposed
+  | EventLspClientDiagnostics
+  | EventLspUpdated
+  | EventMessageUpdated
+  | EventMessageRemoved
+  | EventMessagePartUpdated
+  | EventMessagePartDelta
+  | EventMessagePartRemoved
+  | EventSessionError
+  | EventTuiPromptAppend
+  | EventTuiCommandExecute
+  | EventTuiToastShow
+  | EventTuiSessionSelect
+  | EventMcpToolsChanged
+  | EventMcpBrowserOpenFailed
+  | EventMcpPromptsChanged
+  | EventMcpResourcesChanged
+  | EventCommandExecuted
+  | EventPermissionAsked
+  | EventPermissionReplied
+  | EventTodoUpdated
   | EventSessionStatus
   | EventSessionIdle
+  | EventQuestionAsked
+  | EventQuestionReplied
+  | EventQuestionRejected
+  | EventTaskPlanUpdated
+  | EventSessionCompacted
+  | EventFileEdited
+  | EventFileWatcherUpdated
   | EventTaskCreated
   | EventTaskUpdated
   | EventTaskCompleted
@@ -1600,41 +1630,11 @@ export type Event =
   | EventDeliveryEvidenceUpdated
   | EventDeliveryPreviewUpdated
   | EventIntegrityReviewCompleted
-  | EventProjectUpdated
-  | EventServerConnected
-  | EventGlobalDisposed
-  | EventLspClientDiagnostics
-  | EventLspUpdated
-  | EventMessageUpdated
-  | EventMessageRemoved
-  | EventMessagePartUpdated
-  | EventMessagePartDelta
-  | EventMessagePartRemoved
-  | EventSessionError
-  | EventPermissionAsked
-  | EventPermissionReplied
   | EventTaskQueueCompleted
-  | EventQuestionAsked
-  | EventQuestionReplied
-  | EventQuestionRejected
   | EventTaskReport
-  | EventTuiPromptAppend
-  | EventTuiCommandExecute
-  | EventTuiToastShow
-  | EventTuiSessionSelect
-  | EventMcpToolsChanged
-  | EventMcpBrowserOpenFailed
-  | EventMcpPromptsChanged
-  | EventMcpResourcesChanged
-  | EventFileWatcherUpdated
   | EventVcsBranchUpdated
   | EventWorktreeReady
   | EventWorktreeFailed
-  | EventCommandExecuted
-  | EventTaskPlanUpdated
-  | EventSessionCompacted
-  | EventFileEdited
-  | EventTodoUpdated
   | EventGoalReport
   | EventSessionCreated
   | EventSessionUpdated
@@ -2873,6 +2873,16 @@ export type Model = {
           field: "reasoning_content" | "reasoning_details"
         }
   }
+  transform?: {
+    sampling?: {
+      temperature?: number
+      topP?: number
+      topK?: number
+    }
+    options?: {
+      [key: string]: unknown
+    }
+  }
   cost: {
     input: number
     output: number
@@ -3031,6 +3041,16 @@ export type GlobalSession = {
   }
   permission?: PermissionRuleset
   project: ProjectSummary | null
+}
+
+export type SessionConfig = {
+  config: Config
+  /**
+   * Per-key origin tree. Leaf values are 'project' or 'session'.
+   */
+  origin: {
+    [key: string]: unknown
+  }
 }
 
 export type TextPartInput = {
@@ -3242,6 +3262,7 @@ export type Agent = {
   }
   variant?: string
   prompt?: string
+  promptAppend?: string
   options: {
     [key: string]: unknown
   }
@@ -4669,6 +4690,93 @@ export type SessionStatusResponses = {
 }
 
 export type SessionStatusResponse = SessionStatusResponses[keyof SessionStatusResponses]
+
+export type SessionConfigGetData = {
+  body?: never
+  path: {
+    /**
+     * Session ID
+     */
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/session/{sessionID}/config"
+}
+
+export type SessionConfigGetErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type SessionConfigGetError = SessionConfigGetErrors[keyof SessionConfigGetErrors]
+
+export type SessionConfigGetResponses = {
+  /**
+   * Effective session configuration
+   */
+  200: SessionConfig
+}
+
+export type SessionConfigGetResponse = SessionConfigGetResponses[keyof SessionConfigGetResponses]
+
+export type SessionConfigUpdateData = {
+  body?: {
+    model?: string | null
+    prompt?: {
+      [key: string]: string | null
+    } | null
+    agent?: {
+      [key: string]: {
+        model?: string | null
+        variant?: string | null
+        temperature?: number | null
+        top_p?: number | null
+        prompt?: string | null
+        prompt_append?: string | null
+      } | null
+    } | null
+  }
+  path: {
+    /**
+     * Session ID
+     */
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/session/{sessionID}/config"
+}
+
+export type SessionConfigUpdateErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type SessionConfigUpdateError = SessionConfigUpdateErrors[keyof SessionConfigUpdateErrors]
+
+export type SessionConfigUpdateResponses = {
+  /**
+   * Effective session configuration after update
+   */
+  200: SessionConfig
+}
+
+export type SessionConfigUpdateResponse = SessionConfigUpdateResponses[keyof SessionConfigUpdateResponses]
 
 export type SessionDeleteData = {
   body?: never
@@ -8339,6 +8447,10 @@ export type TaskListEventsResponses = {
     type: string
     taskID: string | null
     sequence: number
+    notify?: {
+      tier: 1 | 2 | 3
+      badge?: boolean
+    }
   }
 }
 
@@ -8732,6 +8844,10 @@ export type TaskEventsResponses = {
     summary: string
     payload: {
       [key: string]: unknown
+    }
+    notify?: {
+      tier: 1 | 2 | 3
+      badge?: boolean
     }
   }
 }
@@ -9163,6 +9279,10 @@ export type TaskConversationResponses = {
       payload: {
         [key: string]: unknown
       }
+      notify?: {
+        tier: 1 | 2 | 3
+        badge?: boolean
+      }
     }>
     eventReplay: {
       cursor: number
@@ -9231,6 +9351,10 @@ export type TaskConversationEventsResponses = {
       summary: string
       payload: {
         [key: string]: unknown
+      }
+      notify?: {
+        tier: 1 | 2 | 3
+        badge?: boolean
       }
     }>
     eventReplay: {

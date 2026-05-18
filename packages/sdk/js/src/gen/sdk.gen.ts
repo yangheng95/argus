@@ -28,7 +28,7 @@ import type {
   CodingMessageStreamResponses,
   CodingSessionMessagesResponses,
   CommandListResponses,
-  Config as Config3,
+  Config as Config4,
   ConfigGetResponses,
   ConfigPromptResponses,
   ConfigProvidersResponses,
@@ -184,6 +184,10 @@ import type {
   SessionChildrenResponses,
   SessionCommandErrors,
   SessionCommandResponses,
+  SessionConfigGetErrors,
+  SessionConfigGetResponses,
+  SessionConfigUpdateErrors,
+  SessionConfigUpdateResponses,
   SessionCreateErrors,
   SessionCreateResponses,
   SessionDeleteErrors,
@@ -390,7 +394,7 @@ export class Config extends HeyApiClient {
    */
   public update<ThrowOnError extends boolean = false>(
     parameters?: {
-      config?: Config3
+      config?: Config4
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -1730,6 +1734,94 @@ export class Experimental extends HeyApiClient {
   }
 }
 
+export class Config3 extends HeyApiClient {
+  /**
+   * Get session effective configuration
+   *
+   * Return project configuration with the session overlay applied, plus a per-key origin tree for project vs session values.
+   */
+  public get<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<SessionConfigGetResponses, SessionConfigGetErrors, ThrowOnError>({
+      url: "/session/{sessionID}/config",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Update session configuration overlay
+   *
+   * Merge a sparse session-scoped config overlay into session metadata. Project configuration is unchanged.
+   */
+  public update<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      directory?: string
+      model?: string | null
+      prompt?: {
+        [key: string]: string | null
+      } | null
+      agent?: {
+        [key: string]: {
+          model?: string | null
+          variant?: string | null
+          temperature?: number | null
+          top_p?: number | null
+          prompt?: string | null
+          prompt_append?: string | null
+        } | null
+      } | null
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+            { in: "body", key: "model" },
+            { in: "body", key: "prompt" },
+            { in: "body", key: "agent" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).patch<
+      SessionConfigUpdateResponses,
+      SessionConfigUpdateErrors,
+      ThrowOnError
+    >({
+      url: "/session/{sessionID}/config",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+}
+
 export class Session extends HeyApiClient {
   /**
    * List sessions
@@ -2620,6 +2712,11 @@ export class Session extends HeyApiClient {
       ...options,
       ...params,
     })
+  }
+
+  private _config?: Config3
+  get config(): Config3 {
+    return (this._config ??= new Config3({ client: this.client }))
   }
 }
 

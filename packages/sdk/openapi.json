@@ -3250,6 +3250,261 @@
         ]
       }
     },
+    "/session/{sessionID}/config": {
+      "get": {
+        "operationId": "session.config.get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sessionID",
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "description": "Session ID"
+          }
+        ],
+        "summary": "Get session effective configuration",
+        "description": "Return project configuration with the session overlay applied, plus a per-key origin tree for project vs session values.",
+        "responses": {
+          "200": {
+            "description": "Effective session configuration",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionConfig"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.session.config.get({\n  ...\n})"
+          }
+        ]
+      },
+      "patch": {
+        "operationId": "session.config.update",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sessionID",
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "description": "Session ID"
+          }
+        ],
+        "summary": "Update session configuration overlay",
+        "description": "Merge a sparse session-scoped config overlay into session metadata. Project configuration is unchanged.",
+        "responses": {
+          "200": {
+            "description": "Effective session configuration after update",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionConfig"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "model": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "prompt": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "additionalProperties": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "agent": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "additionalProperties": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "model": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "variant": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "temperature": {
+                                  "anyOf": [
+                                    {
+                                      "type": "number"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "top_p": {
+                                  "anyOf": [
+                                    {
+                                      "type": "number"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "prompt": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "prompt_append": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                }
+                              },
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.session.config.update({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/session/{sessionID}": {
       "get": {
         "operationId": "session.get",
@@ -14171,6 +14426,33 @@
                     },
                     "sequence": {
                       "type": "number"
+                    },
+                    "notify": {
+                      "type": "object",
+                      "properties": {
+                        "tier": {
+                          "anyOf": [
+                            {
+                              "type": "number",
+                              "const": 1
+                            },
+                            {
+                              "type": "number",
+                              "const": 2
+                            },
+                            {
+                              "type": "number",
+                              "const": 3
+                            }
+                          ]
+                        },
+                        "badge": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "tier"
+                      ]
                     }
                   },
                   "required": [
@@ -15642,6 +15924,33 @@
                         "type": "string"
                       },
                       "additionalProperties": {}
+                    },
+                    "notify": {
+                      "type": "object",
+                      "properties": {
+                        "tier": {
+                          "anyOf": [
+                            {
+                              "type": "number",
+                              "const": 1
+                            },
+                            {
+                              "type": "number",
+                              "const": 2
+                            },
+                            {
+                              "type": "number",
+                              "const": 3
+                            }
+                          ]
+                        },
+                        "badge": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "tier"
+                      ]
                     }
                   },
                   "required": [
@@ -17495,6 +17804,33 @@
                               "type": "string"
                             },
                             "additionalProperties": {}
+                          },
+                          "notify": {
+                            "type": "object",
+                            "properties": {
+                              "tier": {
+                                "anyOf": [
+                                  {
+                                    "type": "number",
+                                    "const": 1
+                                  },
+                                  {
+                                    "type": "number",
+                                    "const": 2
+                                  },
+                                  {
+                                    "type": "number",
+                                    "const": 3
+                                  }
+                                ]
+                              },
+                              "badge": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "tier"
+                            ]
                           }
                         },
                         "required": [
@@ -17750,6 +18086,33 @@
                               "type": "string"
                             },
                             "additionalProperties": {}
+                          },
+                          "notify": {
+                            "type": "object",
+                            "properties": {
+                              "tier": {
+                                "anyOf": [
+                                  {
+                                    "type": "number",
+                                    "const": 1
+                                  },
+                                  {
+                                    "type": "number",
+                                    "const": 2
+                                  },
+                                  {
+                                    "type": "number",
+                                    "const": 3
+                                  }
+                                ]
+                              },
+                              "badge": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "tier"
+                            ]
                           }
                         },
                         "required": [
@@ -26354,1934 +26717,6 @@
           "properties"
         ]
       },
-      "Event.server.instance.disposed": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "server.instance.disposed"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "directory": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "directory"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "SessionStatus": {
-        "anyOf": [
-          {
-            "type": "object",
-            "properties": {
-              "type": {
-                "type": "string",
-                "const": "idle"
-              }
-            },
-            "required": [
-              "type"
-            ]
-          },
-          {
-            "type": "object",
-            "properties": {
-              "type": {
-                "type": "string",
-                "const": "retry"
-              },
-              "attempt": {
-                "type": "number"
-              },
-              "message": {
-                "type": "string"
-              },
-              "next": {
-                "type": "number"
-              }
-            },
-            "required": [
-              "type",
-              "attempt",
-              "message",
-              "next"
-            ]
-          },
-          {
-            "type": "object",
-            "properties": {
-              "type": {
-                "type": "string",
-                "const": "streaming"
-              }
-            },
-            "required": [
-              "type"
-            ]
-          },
-          {
-            "type": "object",
-            "properties": {
-              "type": {
-                "type": "string",
-                "const": "terminal"
-              },
-              "reason": {
-                "type": "string",
-                "enum": [
-                  "completed",
-                  "error",
-                  "aborted"
-                ]
-              },
-              "error": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "type",
-              "reason"
-            ]
-          }
-        ]
-      },
-      "Event.session.status": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "session.status"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "sessionID": {
-                "type": "string"
-              },
-              "status": {
-                "$ref": "#/components/schemas/SessionStatus"
-              }
-            },
-            "required": [
-              "sessionID",
-              "status"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.session.idle": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "session.idle"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "sessionID": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "sessionID"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.task.created": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "task.created"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string",
-                "pattern": "^tsk.*"
-              },
-              "status": {
-                "type": "string",
-                "enum": [
-                  "queued",
-                  "active",
-                  "completed",
-                  "failed",
-                  "cancelled"
-                ]
-              },
-              "summary": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "taskID",
-              "status",
-              "summary"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.task.updated": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "task.updated"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string",
-                "pattern": "^tsk.*"
-              },
-              "status": {
-                "type": "string",
-                "enum": [
-                  "queued",
-                  "active",
-                  "completed",
-                  "failed",
-                  "cancelled"
-                ]
-              },
-              "summary": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "taskID",
-              "status",
-              "summary"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.task.completed": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "task.completed"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string",
-                "pattern": "^tsk.*"
-              },
-              "status": {
-                "type": "string",
-                "enum": [
-                  "queued",
-                  "active",
-                  "completed",
-                  "failed",
-                  "cancelled"
-                ]
-              },
-              "summary": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "taskID",
-              "status",
-              "summary"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.task.failed": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "task.failed"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string",
-                "pattern": "^tsk.*"
-              },
-              "status": {
-                "type": "string",
-                "enum": [
-                  "queued",
-                  "active",
-                  "completed",
-                  "failed",
-                  "cancelled"
-                ]
-              },
-              "summary": {
-                "type": "string"
-              },
-              "error": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "taskID",
-              "status",
-              "summary"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.task.cancelled": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "task.cancelled"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string",
-                "pattern": "^tsk.*"
-              },
-              "status": {
-                "type": "string",
-                "enum": [
-                  "queued",
-                  "active",
-                  "completed",
-                  "failed",
-                  "cancelled"
-                ]
-              },
-              "summary": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "taskID",
-              "status",
-              "summary"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.spec.created": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "spec.created"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string",
-                "pattern": "^tsk.*"
-              },
-              "specID": {
-                "type": "string",
-                "pattern": "^spc.*"
-              },
-              "summary": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "taskID",
-              "specID",
-              "summary"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.spec.updated": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "spec.updated"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string",
-                "pattern": "^tsk.*"
-              },
-              "specID": {
-                "type": "string",
-                "pattern": "^spc.*"
-              },
-              "status": {
-                "type": "string"
-              },
-              "summary": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "taskID",
-              "specID",
-              "status",
-              "summary"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.spec.approved": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "spec.approved"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string",
-                "pattern": "^tsk.*"
-              },
-              "specID": {
-                "type": "string",
-                "pattern": "^spc.*"
-              },
-              "summary": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "taskID",
-              "specID",
-              "summary"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.plan.created": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "plan.created"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string",
-                "pattern": "^tsk.*"
-              },
-              "planID": {
-                "type": "string",
-                "pattern": "^pln.*"
-              },
-              "summary": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "taskID",
-              "planID",
-              "summary"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.plan.activated": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "plan.activated"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string",
-                "pattern": "^tsk.*"
-              },
-              "planID": {
-                "type": "string",
-                "pattern": "^pln.*"
-              },
-              "summary": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "taskID",
-              "planID",
-              "summary"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.goal.progress": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "goal.progress"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string",
-                "pattern": "^tsk.*"
-              },
-              "goalRunID": {
-                "type": "string"
-              },
-              "summary": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "taskID",
-              "goalRunID",
-              "summary"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.goal_run.updated": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "goal_run.updated"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string",
-                "pattern": "^tsk.*"
-              },
-              "goalRunID": {
-                "type": "string",
-                "pattern": "^glr.*"
-              },
-              "goalID": {
-                "type": "string",
-                "pattern": "^gol.*"
-              },
-              "status": {
-                "type": "string"
-              },
-              "previousStatus": {
-                "type": "string"
-              },
-              "summary": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "taskID",
-              "goalRunID",
-              "goalID",
-              "status",
-              "previousStatus",
-              "summary"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.goal.passed": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "goal.passed"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string",
-                "pattern": "^tsk.*"
-              },
-              "goalID": {
-                "type": "string",
-                "pattern": "^gol.*"
-              },
-              "summary": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "taskID",
-              "goalID",
-              "summary"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.goal.failed": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "goal.failed"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string",
-                "pattern": "^tsk.*"
-              },
-              "goalID": {
-                "type": "string",
-                "pattern": "^gol.*"
-              },
-              "summary": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "taskID",
-              "goalID",
-              "summary"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.task.rewound": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "task.rewound"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string",
-                "pattern": "^tsk.*"
-              },
-              "cursorTime": {
-                "type": "integer",
-                "minimum": 0,
-                "maximum": 9007199254740991
-              },
-              "anchorEventID": {
-                "type": "string"
-              },
-              "reason": {
-                "type": "string"
-              },
-              "rewindCount": {
-                "type": "integer",
-                "minimum": 0,
-                "maximum": 9007199254740991
-              },
-              "resetWorktree": {
-                "type": "boolean"
-              },
-              "anchorKind": {
-                "type": "string",
-                "enum": [
-                  "cursorTime",
-                  "message"
-                ]
-              }
-            },
-            "required": [
-              "taskID",
-              "cursorTime",
-              "rewindCount",
-              "resetWorktree",
-              "anchorKind"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.milestone.activated": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "milestone.activated"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string",
-                "pattern": "^tsk.*"
-              },
-              "milestoneID": {
-                "type": "string"
-              },
-              "summary": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "taskID",
-              "milestoneID",
-              "summary"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.milestone.passed": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "milestone.passed"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string",
-                "pattern": "^tsk.*"
-              },
-              "milestoneID": {
-                "type": "string"
-              },
-              "summary": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "taskID",
-              "milestoneID",
-              "summary"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.milestone.failed": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "milestone.failed"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string",
-                "pattern": "^tsk.*"
-              },
-              "milestoneID": {
-                "type": "string"
-              },
-              "summary": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "taskID",
-              "milestoneID",
-              "summary"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.run.created": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "run.created"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string",
-                "pattern": "^tsk.*"
-              },
-              "runID": {
-                "type": "string",
-                "pattern": "^run.*"
-              },
-              "status": {
-                "type": "string",
-                "enum": [
-                  "queued",
-                  "accepted",
-                  "running",
-                  "blocked",
-                  "completed",
-                  "failed",
-                  "aborted"
-                ]
-              },
-              "summary": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "taskID",
-              "runID",
-              "status",
-              "summary"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.run.updated": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "run.updated"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string",
-                "pattern": "^tsk.*"
-              },
-              "runID": {
-                "type": "string",
-                "pattern": "^run.*"
-              },
-              "status": {
-                "type": "string",
-                "enum": [
-                  "queued",
-                  "accepted",
-                  "running",
-                  "blocked",
-                  "completed",
-                  "failed",
-                  "aborted"
-                ]
-              },
-              "summary": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "taskID",
-              "runID",
-              "status",
-              "summary"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.interaction.requested": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "interaction.requested"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string",
-                "pattern": "^tsk.*"
-              },
-              "runID": {
-                "type": "string",
-                "pattern": "^run.*"
-              },
-              "interactionID": {
-                "type": "string",
-                "pattern": "^int.*"
-              },
-              "requestType": {
-                "type": "string",
-                "enum": [
-                  "permission",
-                  "question"
-                ]
-              },
-              "summary": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "taskID",
-              "interactionID",
-              "requestType",
-              "summary"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.interaction.resolved": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "interaction.resolved"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string",
-                "pattern": "^tsk.*"
-              },
-              "runID": {
-                "type": "string",
-                "pattern": "^run.*"
-              },
-              "interactionID": {
-                "type": "string",
-                "pattern": "^int.*"
-              },
-              "status": {
-                "type": "string",
-                "enum": [
-                  "pending",
-                  "answered",
-                  "rejected",
-                  "expired"
-                ]
-              },
-              "summary": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "taskID",
-              "interactionID",
-              "status",
-              "summary"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.delivery.ready": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "delivery.ready"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string",
-                "pattern": "^tsk.*"
-              },
-              "runID": {
-                "type": "string",
-                "pattern": "^run.*"
-              },
-              "deliveryID": {
-                "type": "string",
-                "pattern": "^dlv.*"
-              },
-              "summary": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "taskID",
-              "runID",
-              "deliveryID",
-              "summary"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.evaluation.completed": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "evaluation.completed"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string",
-                "pattern": "^tsk.*"
-              },
-              "runID": {
-                "type": "string",
-                "pattern": "^run.*"
-              },
-              "evaluationID": {
-                "type": "string",
-                "pattern": "^evl.*"
-              },
-              "status": {
-                "type": "string",
-                "enum": [
-                  "pending",
-                  "passed",
-                  "failed",
-                  "inconclusive"
-                ]
-              },
-              "verdict": {
-                "type": "string",
-                "enum": [
-                  "accepted",
-                  "rejected",
-                  "inconclusive"
-                ]
-              },
-              "summary": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "taskID",
-              "runID",
-              "evaluationID",
-              "status",
-              "verdict",
-              "summary"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.task.message": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "task.message"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string",
-                "pattern": "^tsk.*"
-              },
-              "kind": {
-                "type": "string",
-                "enum": [
-                  "goal",
-                  "plan",
-                  "note"
-                ]
-              },
-              "source": {
-                "type": "string"
-              },
-              "text": {
-                "type": "string"
-              },
-              "summary": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "taskID",
-              "kind",
-              "source",
-              "text",
-              "summary"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.run.progress": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "run.progress"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string",
-                "pattern": "^tsk.*"
-              },
-              "runID": {
-                "type": "string",
-                "pattern": "^run.*"
-              },
-              "type": {
-                "type": "string"
-              },
-              "summary": {
-                "type": "string"
-              },
-              "payload": {
-                "type": "object",
-                "propertyNames": {
-                  "type": "string"
-                },
-                "additionalProperties": {}
-              }
-            },
-            "required": [
-              "taskID",
-              "runID",
-              "type",
-              "summary"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.run.output": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "run.output"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string",
-                "pattern": "^tsk.*"
-              },
-              "runID": {
-                "type": "string",
-                "pattern": "^run.*"
-              },
-              "type": {
-                "type": "string"
-              },
-              "text": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "taskID",
-              "runID",
-              "type",
-              "text"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.message.injected": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "message.injected"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string",
-                "pattern": "^tsk.*"
-              },
-              "runID": {
-                "type": "string",
-                "pattern": "^run.*"
-              },
-              "text": {
-                "type": "string"
-              },
-              "summary": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "taskID",
-              "runID",
-              "text",
-              "summary"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.workflow.selected": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "workflow.selected"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string",
-                "pattern": "^tsk.*"
-              },
-              "workflowID": {
-                "type": "string"
-              },
-              "workflowName": {
-                "type": "string"
-              },
-              "summary": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "taskID",
-              "workflowID",
-              "workflowName",
-              "summary"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.workflow.step.updated": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "workflow.step.updated"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string",
-                "pattern": "^tsk.*"
-              },
-              "stepID": {
-                "type": "string"
-              },
-              "goalID": {
-                "type": "string"
-              },
-              "status": {
-                "type": "string",
-                "enum": [
-                  "pending",
-                  "running",
-                  "completed",
-                  "skipped",
-                  "failed"
-                ]
-              },
-              "summary": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "taskID",
-              "stepID",
-              "status",
-              "summary"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.goal.workflow.progress": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "goal.workflow.progress"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string",
-                "pattern": "^tsk.*"
-              },
-              "goalID": {
-                "type": "string",
-                "pattern": "^gol.*"
-              },
-              "completedSteps": {
-                "type": "number"
-              },
-              "totalSteps": {
-                "type": "number"
-              },
-              "currentStep": {
-                "type": "string"
-              },
-              "summary": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "taskID",
-              "goalID",
-              "completedSteps",
-              "totalSteps",
-              "summary"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.integrity.review.started": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "integrity.review.started"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string",
-                "pattern": "^tsk.*"
-              },
-              "sessionID": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "taskID",
-              "sessionID"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.integrity.review.progress": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "integrity.review.progress"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string",
-                "pattern": "^tsk.*"
-              },
-              "sessionID": {
-                "type": "string"
-              },
-              "attempt": {
-                "type": "number"
-              },
-              "elapsedMs": {
-                "type": "number"
-              }
-            },
-            "required": [
-              "taskID",
-              "sessionID",
-              "attempt",
-              "elapsedMs"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.integrity.review.chunk": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "integrity.review.chunk"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string",
-                "pattern": "^tsk.*"
-              },
-              "sessionID": {
-                "type": "string"
-              },
-              "kind": {
-                "type": "string",
-                "const": "reasoning"
-              },
-              "delta": {
-                "type": "string"
-              },
-              "attempt": {
-                "type": "number"
-              }
-            },
-            "required": [
-              "taskID",
-              "sessionID",
-              "kind",
-              "delta",
-              "attempt"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.delivery.gate.rejected": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "delivery.gate.rejected"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string",
-                "pattern": "^tsk.*"
-              },
-              "iteration": {
-                "type": "number"
-              },
-              "summary": {
-                "type": "string"
-              },
-              "violations": {
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "properties": {
-                    "kind": {
-                      "type": "string"
-                    },
-                    "detail": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "kind",
-                    "detail"
-                  ]
-                }
-              }
-            },
-            "required": [
-              "taskID",
-              "iteration",
-              "summary",
-              "violations"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.delivery.evidence.updated": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "delivery.evidence.updated"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string",
-                "pattern": "^tsk.*"
-              },
-              "runID": {
-                "type": "string",
-                "pattern": "^run.*"
-              },
-              "deliveryID": {
-                "type": "string",
-                "pattern": "^dlv.*"
-              },
-              "manifestID": {
-                "type": "string",
-                "pattern": "^art.*"
-              },
-              "iteration": {
-                "type": "number"
-              },
-              "status": {
-                "type": "string",
-                "enum": [
-                  "passed",
-                  "failed"
-                ]
-              },
-              "summary": {
-                "type": "string"
-              },
-              "failedCheckCount": {
-                "type": "number"
-              },
-              "failedRuntimeFlowCount": {
-                "type": "number"
-              },
-              "failedReviewCount": {
-                "type": "number"
-              },
-              "failureDetails": {
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "properties": {
-                    "kind": {
-                      "type": "string",
-                      "enum": [
-                        "readiness",
-                        "check",
-                        "coverage",
-                        "runtime",
-                        "review"
-                      ]
-                    },
-                    "id": {
-                      "type": "string"
-                    },
-                    "name": {
-                      "type": "string"
-                    },
-                    "status": {
-                      "type": "string"
-                    },
-                    "command": {
-                      "type": "string"
-                    },
-                    "exitCode": {
-                      "type": "number"
-                    },
-                    "evidence": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "kind",
-                    "id",
-                    "name",
-                    "evidence"
-                  ]
-                }
-              }
-            },
-            "required": [
-              "taskID",
-              "deliveryID",
-              "manifestID",
-              "iteration",
-              "status",
-              "summary",
-              "failedCheckCount",
-              "failedRuntimeFlowCount",
-              "failedReviewCount",
-              "failureDetails"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.delivery.preview.updated": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "delivery.preview.updated"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string",
-                "pattern": "^tsk.*"
-              },
-              "deliveryID": {
-                "type": "string",
-                "pattern": "^dlv.*"
-              },
-              "status": {
-                "type": "string"
-              },
-              "url": {
-                "type": "string"
-              },
-              "reason": {
-                "type": "string"
-              },
-              "command": {
-                "type": "string"
-              },
-              "workspaceDir": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "taskID",
-              "deliveryID",
-              "status"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.integrity.review.completed": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "integrity.review.completed"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string",
-                "pattern": "^tsk.*"
-              },
-              "sessionID": {
-                "type": "string"
-              },
-              "verdict": {
-                "type": "string",
-                "enum": [
-                  "pass",
-                  "concerns",
-                  "needs_correction"
-                ]
-              },
-              "summary": {
-                "type": "string"
-              },
-              "dimensions": {
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "properties": {
-                    "id": {
-                      "type": "string",
-                      "enum": [
-                        "requirement_fidelity",
-                        "technical_feasibility",
-                        "hallucination",
-                        "solution_quality"
-                      ]
-                    },
-                    "verdict": {
-                      "type": "string",
-                      "enum": [
-                        "pass",
-                        "concerns",
-                        "needs_correction"
-                      ]
-                    },
-                    "issueCount": {
-                      "type": "number"
-                    },
-                    "correctionCount": {
-                      "type": "number"
-                    },
-                    "graphCorrectionCount": {
-                      "type": "number"
-                    },
-                    "missingGoalCount": {
-                      "type": "number"
-                    }
-                  },
-                  "required": [
-                    "id",
-                    "verdict",
-                    "issueCount",
-                    "correctionCount",
-                    "missingGoalCount"
-                  ]
-                }
-              },
-              "issues": {
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "properties": {
-                    "type": {
-                      "type": "string"
-                    },
-                    "description": {
-                      "type": "string"
-                    },
-                    "requirement_ids": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
-                    },
-                    "spec_ids": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
-                    }
-                  },
-                  "required": [
-                    "type",
-                    "description"
-                  ]
-                }
-              },
-              "corrections": {
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "properties": {
-                    "action": {
-                      "type": "string",
-                      "enum": [
-                        "modify",
-                        "split",
-                        "remove"
-                      ]
-                    },
-                    "goalID": {
-                      "type": "string"
-                    },
-                    "reason": {
-                      "type": "string"
-                    },
-                    "updatesTitle": {
-                      "type": "string"
-                    },
-                    "updatesObjective": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "action",
-                    "goalID",
-                    "reason"
-                  ]
-                }
-              },
-              "graphCorrections": {
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "properties": {
-                    "kind": {
-                      "type": "string"
-                    },
-                    "action": {
-                      "type": "string"
-                    },
-                    "reason": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "kind",
-                    "action",
-                    "reason"
-                  ]
-                }
-              },
-              "missingGoals": {
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "properties": {
-                    "title": {
-                      "type": "string"
-                    },
-                    "objective": {
-                      "type": "string"
-                    },
-                    "reason": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "title",
-                    "objective"
-                  ]
-                }
-              },
-              "attempts": {
-                "type": "number"
-              }
-            },
-            "required": [
-              "taskID",
-              "sessionID",
-              "verdict",
-              "summary",
-              "dimensions",
-              "issues",
-              "corrections",
-              "missingGoals",
-              "attempts"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
       "Project": {
         "type": "object",
         "properties": {
@@ -28358,6 +26793,30 @@
           },
           "properties": {
             "$ref": "#/components/schemas/Project"
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.server.instance.disposed": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "server.instance.disposed"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "directory": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "directory"
+            ]
           }
         },
         "required": [
@@ -30355,377 +28814,6 @@
           "properties"
         ]
       },
-      "PermissionRequest": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "pattern": "^per.*"
-          },
-          "sessionID": {
-            "type": "string",
-            "pattern": "^ses.*"
-          },
-          "permission": {
-            "type": "string"
-          },
-          "patterns": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "metadata": {
-            "type": "object",
-            "propertyNames": {
-              "type": "string"
-            },
-            "additionalProperties": {}
-          },
-          "always": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "tool": {
-            "type": "object",
-            "properties": {
-              "messageID": {
-                "type": "string"
-              },
-              "callID": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "messageID",
-              "callID"
-            ]
-          }
-        },
-        "required": [
-          "id",
-          "sessionID",
-          "permission",
-          "patterns",
-          "metadata",
-          "always"
-        ]
-      },
-      "Event.permission.asked": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "permission.asked"
-          },
-          "properties": {
-            "$ref": "#/components/schemas/PermissionRequest"
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.permission.replied": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "permission.replied"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "sessionID": {
-                "type": "string"
-              },
-              "requestID": {
-                "type": "string"
-              },
-              "reply": {
-                "type": "string",
-                "enum": [
-                  "once",
-                  "always",
-                  "reject"
-                ]
-              },
-              "autoReply": {
-                "type": "boolean"
-              }
-            },
-            "required": [
-              "sessionID",
-              "requestID",
-              "reply",
-              "autoReply"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.task-queue.completed": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "task-queue.completed"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "queueTaskID": {
-                "type": "string"
-              },
-              "sessionID": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "queueTaskID",
-              "sessionID"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "QuestionOption": {
-        "type": "object",
-        "properties": {
-          "label": {
-            "description": "Display text (1-5 words, concise)",
-            "type": "string"
-          },
-          "description": {
-            "description": "Explanation of choice",
-            "type": "string"
-          }
-        },
-        "required": [
-          "label",
-          "description"
-        ]
-      },
-      "QuestionInfo": {
-        "type": "object",
-        "properties": {
-          "question": {
-            "description": "Complete question",
-            "type": "string"
-          },
-          "header": {
-            "description": "Very short label (max 30 chars)",
-            "type": "string"
-          },
-          "options": {
-            "description": "Available choices",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/QuestionOption"
-            }
-          },
-          "multiple": {
-            "description": "Allow selecting multiple choices",
-            "type": "boolean"
-          },
-          "custom": {
-            "description": "Allow typing a custom answer",
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "question",
-          "header",
-          "options"
-        ]
-      },
-      "QuestionRequest": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "pattern": "^que.*"
-          },
-          "sessionID": {
-            "type": "string",
-            "pattern": "^ses.*"
-          },
-          "questions": {
-            "description": "Questions to ask",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/QuestionInfo"
-            }
-          },
-          "tool": {
-            "type": "object",
-            "properties": {
-              "messageID": {
-                "type": "string"
-              },
-              "callID": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "messageID",
-              "callID"
-            ]
-          }
-        },
-        "required": [
-          "id",
-          "sessionID",
-          "questions"
-        ]
-      },
-      "Event.question.asked": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "question.asked"
-          },
-          "properties": {
-            "$ref": "#/components/schemas/QuestionRequest"
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "QuestionAnswer": {
-        "type": "array",
-        "items": {
-          "type": "string"
-        }
-      },
-      "Event.question.replied": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "question.replied"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "sessionID": {
-                "type": "string"
-              },
-              "requestID": {
-                "type": "string"
-              },
-              "answers": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/QuestionAnswer"
-                }
-              }
-            },
-            "required": [
-              "sessionID",
-              "requestID",
-              "answers"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.question.rejected": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "question.rejected"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "sessionID": {
-                "type": "string"
-              },
-              "requestID": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "sessionID",
-              "requestID"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.task.report": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "task.report"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "sessionID": {
-                "type": "string"
-              },
-              "status": {
-                "type": "string",
-                "enum": [
-                  "progress",
-                  "need_input",
-                  "done",
-                  "failed"
-                ]
-              },
-              "summary": {
-                "type": "string"
-              },
-              "question": {
-                "type": "string"
-              },
-              "next_plan": {
-                "type": "string"
-              },
-              "artifacts": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              },
-              "error": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "sessionID",
-              "status",
-              "summary"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
       "Event.tui.prompt.append": {
         "type": "object",
         "properties": {
@@ -30960,120 +29048,6 @@
           "properties"
         ]
       },
-      "Event.file.watcher.updated": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "file.watcher.updated"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "file": {
-                "type": "string"
-              },
-              "event": {
-                "anyOf": [
-                  {
-                    "type": "string",
-                    "const": "add"
-                  },
-                  {
-                    "type": "string",
-                    "const": "change"
-                  },
-                  {
-                    "type": "string",
-                    "const": "unlink"
-                  }
-                ]
-              }
-            },
-            "required": [
-              "file",
-              "event"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.vcs.branch.updated": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "vcs.branch.updated"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "branch": {
-                "type": "string"
-              }
-            }
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.worktree.ready": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "worktree.ready"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "name": {
-                "type": "string"
-              },
-              "branch": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "name",
-              "branch"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.worktree.failed": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "worktree.failed"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "message": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "message"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
       "Event.command.executed": {
         "type": "object",
         "properties": {
@@ -31104,6 +29078,477 @@
               "sessionID",
               "arguments",
               "messageID"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "PermissionRequest": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^per.*"
+          },
+          "sessionID": {
+            "type": "string",
+            "pattern": "^ses.*"
+          },
+          "permission": {
+            "type": "string"
+          },
+          "patterns": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "metadata": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {}
+          },
+          "always": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "tool": {
+            "type": "object",
+            "properties": {
+              "messageID": {
+                "type": "string"
+              },
+              "callID": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "messageID",
+              "callID"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "sessionID",
+          "permission",
+          "patterns",
+          "metadata",
+          "always"
+        ]
+      },
+      "Event.permission.asked": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "permission.asked"
+          },
+          "properties": {
+            "$ref": "#/components/schemas/PermissionRequest"
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.permission.replied": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "permission.replied"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "sessionID": {
+                "type": "string"
+              },
+              "requestID": {
+                "type": "string"
+              },
+              "reply": {
+                "type": "string",
+                "enum": [
+                  "once",
+                  "always",
+                  "reject"
+                ]
+              },
+              "autoReply": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "sessionID",
+              "requestID",
+              "reply",
+              "autoReply"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Todo": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "description": "Brief description of the task",
+            "type": "string"
+          },
+          "status": {
+            "description": "Current status of the task: pending, in_progress, completed, cancelled",
+            "type": "string"
+          },
+          "priority": {
+            "description": "Priority level of the task: high, medium, low",
+            "type": "string"
+          }
+        },
+        "required": [
+          "content",
+          "status",
+          "priority"
+        ]
+      },
+      "Event.todo.updated": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "todo.updated"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "sessionID": {
+                "type": "string"
+              },
+              "todos": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Todo"
+                }
+              }
+            },
+            "required": [
+              "sessionID",
+              "todos"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "SessionStatus": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "idle"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "retry"
+              },
+              "attempt": {
+                "type": "number"
+              },
+              "message": {
+                "type": "string"
+              },
+              "next": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "type",
+              "attempt",
+              "message",
+              "next"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "streaming"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "terminal"
+              },
+              "reason": {
+                "type": "string",
+                "enum": [
+                  "completed",
+                  "error",
+                  "aborted"
+                ]
+              },
+              "error": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "type",
+              "reason"
+            ]
+          }
+        ]
+      },
+      "Event.session.status": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "session.status"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "sessionID": {
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/components/schemas/SessionStatus"
+              }
+            },
+            "required": [
+              "sessionID",
+              "status"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.session.idle": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "session.idle"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "sessionID": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "sessionID"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "QuestionOption": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "description": "Display text (1-5 words, concise)",
+            "type": "string"
+          },
+          "description": {
+            "description": "Explanation of choice",
+            "type": "string"
+          }
+        },
+        "required": [
+          "label",
+          "description"
+        ]
+      },
+      "QuestionInfo": {
+        "type": "object",
+        "properties": {
+          "question": {
+            "description": "Complete question",
+            "type": "string"
+          },
+          "header": {
+            "description": "Very short label (max 30 chars)",
+            "type": "string"
+          },
+          "options": {
+            "description": "Available choices",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/QuestionOption"
+            }
+          },
+          "multiple": {
+            "description": "Allow selecting multiple choices",
+            "type": "boolean"
+          },
+          "custom": {
+            "description": "Allow typing a custom answer",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "question",
+          "header",
+          "options"
+        ]
+      },
+      "QuestionRequest": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^que.*"
+          },
+          "sessionID": {
+            "type": "string",
+            "pattern": "^ses.*"
+          },
+          "questions": {
+            "description": "Questions to ask",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/QuestionInfo"
+            }
+          },
+          "tool": {
+            "type": "object",
+            "properties": {
+              "messageID": {
+                "type": "string"
+              },
+              "callID": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "messageID",
+              "callID"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "sessionID",
+          "questions"
+        ]
+      },
+      "Event.question.asked": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "question.asked"
+          },
+          "properties": {
+            "$ref": "#/components/schemas/QuestionRequest"
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "QuestionAnswer": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "Event.question.replied": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "question.replied"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "sessionID": {
+                "type": "string"
+              },
+              "requestID": {
+                "type": "string"
+              },
+              "answers": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/QuestionAnswer"
+                }
+              }
+            },
+            "required": [
+              "sessionID",
+              "requestID",
+              "answers"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.question.rejected": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "question.rejected"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "sessionID": {
+                "type": "string"
+              },
+              "requestID": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "sessionID",
+              "requestID"
             ]
           }
         },
@@ -31204,34 +29649,1856 @@
           "properties"
         ]
       },
-      "Todo": {
-        "type": "object",
-        "properties": {
-          "content": {
-            "description": "Brief description of the task",
-            "type": "string"
-          },
-          "status": {
-            "description": "Current status of the task: pending, in_progress, completed, cancelled",
-            "type": "string"
-          },
-          "priority": {
-            "description": "Priority level of the task: high, medium, low",
-            "type": "string"
-          }
-        },
-        "required": [
-          "content",
-          "status",
-          "priority"
-        ]
-      },
-      "Event.todo.updated": {
+      "Event.file.watcher.updated": {
         "type": "object",
         "properties": {
           "type": {
             "type": "string",
-            "const": "todo.updated"
+            "const": "file.watcher.updated"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "file": {
+                "type": "string"
+              },
+              "event": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "const": "add"
+                  },
+                  {
+                    "type": "string",
+                    "const": "change"
+                  },
+                  {
+                    "type": "string",
+                    "const": "unlink"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "file",
+              "event"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.task.created": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "task.created"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "queued",
+                  "active",
+                  "completed",
+                  "failed",
+                  "cancelled"
+                ]
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "status",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.task.updated": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "task.updated"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "queued",
+                  "active",
+                  "completed",
+                  "failed",
+                  "cancelled"
+                ]
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "status",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.task.completed": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "task.completed"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "queued",
+                  "active",
+                  "completed",
+                  "failed",
+                  "cancelled"
+                ]
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "status",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.task.failed": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "task.failed"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "queued",
+                  "active",
+                  "completed",
+                  "failed",
+                  "cancelled"
+                ]
+              },
+              "summary": {
+                "type": "string"
+              },
+              "error": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "status",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.task.cancelled": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "task.cancelled"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "queued",
+                  "active",
+                  "completed",
+                  "failed",
+                  "cancelled"
+                ]
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "status",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.spec.created": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "spec.created"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "specID": {
+                "type": "string",
+                "pattern": "^spc.*"
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "specID",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.spec.updated": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "spec.updated"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "specID": {
+                "type": "string",
+                "pattern": "^spc.*"
+              },
+              "status": {
+                "type": "string"
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "specID",
+              "status",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.spec.approved": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "spec.approved"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "specID": {
+                "type": "string",
+                "pattern": "^spc.*"
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "specID",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.plan.created": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "plan.created"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "planID": {
+                "type": "string",
+                "pattern": "^pln.*"
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "planID",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.plan.activated": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "plan.activated"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "planID": {
+                "type": "string",
+                "pattern": "^pln.*"
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "planID",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.goal.progress": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "goal.progress"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "goalRunID": {
+                "type": "string"
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "goalRunID",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.goal_run.updated": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "goal_run.updated"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "goalRunID": {
+                "type": "string",
+                "pattern": "^glr.*"
+              },
+              "goalID": {
+                "type": "string",
+                "pattern": "^gol.*"
+              },
+              "status": {
+                "type": "string"
+              },
+              "previousStatus": {
+                "type": "string"
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "goalRunID",
+              "goalID",
+              "status",
+              "previousStatus",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.goal.passed": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "goal.passed"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "goalID": {
+                "type": "string",
+                "pattern": "^gol.*"
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "goalID",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.goal.failed": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "goal.failed"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "goalID": {
+                "type": "string",
+                "pattern": "^gol.*"
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "goalID",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.task.rewound": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "task.rewound"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "cursorTime": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "anchorEventID": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "string"
+              },
+              "rewindCount": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "resetWorktree": {
+                "type": "boolean"
+              },
+              "anchorKind": {
+                "type": "string",
+                "enum": [
+                  "cursorTime",
+                  "message"
+                ]
+              }
+            },
+            "required": [
+              "taskID",
+              "cursorTime",
+              "rewindCount",
+              "resetWorktree",
+              "anchorKind"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.milestone.activated": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "milestone.activated"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "milestoneID": {
+                "type": "string"
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "milestoneID",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.milestone.passed": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "milestone.passed"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "milestoneID": {
+                "type": "string"
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "milestoneID",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.milestone.failed": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "milestone.failed"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "milestoneID": {
+                "type": "string"
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "milestoneID",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.run.created": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "run.created"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "runID": {
+                "type": "string",
+                "pattern": "^run.*"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "queued",
+                  "accepted",
+                  "running",
+                  "blocked",
+                  "completed",
+                  "failed",
+                  "aborted"
+                ]
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "runID",
+              "status",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.run.updated": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "run.updated"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "runID": {
+                "type": "string",
+                "pattern": "^run.*"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "queued",
+                  "accepted",
+                  "running",
+                  "blocked",
+                  "completed",
+                  "failed",
+                  "aborted"
+                ]
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "runID",
+              "status",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.interaction.requested": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "interaction.requested"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "runID": {
+                "type": "string",
+                "pattern": "^run.*"
+              },
+              "interactionID": {
+                "type": "string",
+                "pattern": "^int.*"
+              },
+              "requestType": {
+                "type": "string",
+                "enum": [
+                  "permission",
+                  "question"
+                ]
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "interactionID",
+              "requestType",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.interaction.resolved": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "interaction.resolved"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "runID": {
+                "type": "string",
+                "pattern": "^run.*"
+              },
+              "interactionID": {
+                "type": "string",
+                "pattern": "^int.*"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "pending",
+                  "answered",
+                  "rejected",
+                  "expired"
+                ]
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "interactionID",
+              "status",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.delivery.ready": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "delivery.ready"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "runID": {
+                "type": "string",
+                "pattern": "^run.*"
+              },
+              "deliveryID": {
+                "type": "string",
+                "pattern": "^dlv.*"
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "runID",
+              "deliveryID",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.evaluation.completed": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "evaluation.completed"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "runID": {
+                "type": "string",
+                "pattern": "^run.*"
+              },
+              "evaluationID": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "pending",
+                  "passed",
+                  "failed",
+                  "inconclusive"
+                ]
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "accepted",
+                  "rejected",
+                  "inconclusive"
+                ]
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "runID",
+              "evaluationID",
+              "status",
+              "verdict",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.task.message": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "task.message"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "goal",
+                  "plan",
+                  "note"
+                ]
+              },
+              "source": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "kind",
+              "source",
+              "text",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.run.progress": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "run.progress"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "runID": {
+                "type": "string",
+                "pattern": "^run.*"
+              },
+              "type": {
+                "type": "string"
+              },
+              "summary": {
+                "type": "string"
+              },
+              "payload": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {}
+              }
+            },
+            "required": [
+              "taskID",
+              "runID",
+              "type",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.run.output": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "run.output"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "runID": {
+                "type": "string",
+                "pattern": "^run.*"
+              },
+              "type": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "runID",
+              "type",
+              "text"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.message.injected": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "message.injected"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "runID": {
+                "type": "string",
+                "pattern": "^run.*"
+              },
+              "text": {
+                "type": "string"
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "runID",
+              "text",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.workflow.selected": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "workflow.selected"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "workflowID": {
+                "type": "string"
+              },
+              "workflowName": {
+                "type": "string"
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "workflowID",
+              "workflowName",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.workflow.step.updated": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "workflow.step.updated"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "stepID": {
+                "type": "string"
+              },
+              "goalID": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "pending",
+                  "running",
+                  "completed",
+                  "skipped",
+                  "failed"
+                ]
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "stepID",
+              "status",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.goal.workflow.progress": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "goal.workflow.progress"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "goalID": {
+                "type": "string",
+                "pattern": "^gol.*"
+              },
+              "completedSteps": {
+                "type": "number"
+              },
+              "totalSteps": {
+                "type": "number"
+              },
+              "currentStep": {
+                "type": "string"
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "goalID",
+              "completedSteps",
+              "totalSteps",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.integrity.review.started": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "integrity.review.started"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "sessionID": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "sessionID"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.integrity.review.progress": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "integrity.review.progress"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "sessionID": {
+                "type": "string"
+              },
+              "attempt": {
+                "type": "number"
+              },
+              "elapsedMs": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "taskID",
+              "sessionID",
+              "attempt",
+              "elapsedMs"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.integrity.review.chunk": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "integrity.review.chunk"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "sessionID": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string",
+                "const": "reasoning"
+              },
+              "delta": {
+                "type": "string"
+              },
+              "attempt": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "taskID",
+              "sessionID",
+              "kind",
+              "delta",
+              "attempt"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.delivery.gate.rejected": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "delivery.gate.rejected"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "runID": {
+                "type": "string",
+                "pattern": "^run.*"
+              },
+              "iteration": {
+                "type": "number"
+              },
+              "violations": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string"
+                    },
+                    "detail": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "detail"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "taskID",
+              "iteration",
+              "violations"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.delivery.evidence.updated": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "delivery.evidence.updated"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "runID": {
+                "type": "string",
+                "pattern": "^run.*"
+              },
+              "deliveryID": {
+                "type": "string",
+                "pattern": "^dlv.*"
+              },
+              "manifestID": {
+                "type": "string",
+                "pattern": "^art.*"
+              },
+              "iteration": {
+                "type": "number"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "passed",
+                  "failed"
+                ]
+              },
+              "summary": {
+                "type": "string"
+              },
+              "failedCheckCount": {
+                "type": "number"
+              },
+              "failedRuntimeFlowCount": {
+                "type": "number"
+              },
+              "failedReviewCount": {
+                "type": "number"
+              },
+              "failureDetails": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "readiness",
+                        "check",
+                        "coverage",
+                        "runtime",
+                        "review"
+                      ]
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "command": {
+                      "type": "string"
+                    },
+                    "exitCode": {
+                      "type": "number"
+                    },
+                    "evidence": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "id",
+                    "name",
+                    "evidence"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "taskID",
+              "deliveryID",
+              "manifestID",
+              "iteration",
+              "status",
+              "summary",
+              "failedCheckCount",
+              "failedRuntimeFlowCount",
+              "failedReviewCount",
+              "failureDetails"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.delivery.preview.updated": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "delivery.preview.updated"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "deliveryID": {
+                "type": "string",
+                "pattern": "^dlv.*"
+              },
+              "status": {
+                "type": "string"
+              },
+              "url": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "string"
+              },
+              "command": {
+                "type": "string"
+              },
+              "workspaceDir": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "deliveryID",
+              "status"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.integrity.review.completed": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "integrity.review.completed"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "sessionID": {
+                "type": "string"
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "pass",
+                  "concerns",
+                  "needs_correction"
+                ]
+              },
+              "summary": {
+                "type": "string"
+              },
+              "dimensions": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "enum": [
+                        "requirement_fidelity",
+                        "technical_feasibility",
+                        "hallucination",
+                        "solution_quality"
+                      ]
+                    },
+                    "verdict": {
+                      "type": "string",
+                      "enum": [
+                        "pass",
+                        "concerns",
+                        "needs_correction"
+                      ]
+                    },
+                    "issueCount": {
+                      "type": "number"
+                    },
+                    "correctionCount": {
+                      "type": "number"
+                    },
+                    "graphCorrectionCount": {
+                      "type": "number"
+                    },
+                    "missingGoalCount": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "verdict",
+                    "issueCount",
+                    "correctionCount",
+                    "missingGoalCount"
+                  ]
+                }
+              },
+              "issues": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "requirement_ids": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "spec_ids": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "description"
+                  ]
+                }
+              },
+              "corrections": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "action": {
+                      "type": "string",
+                      "enum": [
+                        "modify",
+                        "split",
+                        "remove"
+                      ]
+                    },
+                    "goalID": {
+                      "type": "string"
+                    },
+                    "reason": {
+                      "type": "string"
+                    },
+                    "updatesTitle": {
+                      "type": "string"
+                    },
+                    "updatesObjective": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "action",
+                    "goalID",
+                    "reason"
+                  ]
+                }
+              },
+              "graphCorrections": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string"
+                    },
+                    "action": {
+                      "type": "string"
+                    },
+                    "reason": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "action",
+                    "reason"
+                  ]
+                }
+              },
+              "missingGoals": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "title": {
+                      "type": "string"
+                    },
+                    "objective": {
+                      "type": "string"
+                    },
+                    "reason": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "title",
+                    "objective"
+                  ]
+                }
+              },
+              "attempts": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "taskID",
+              "sessionID",
+              "verdict",
+              "summary",
+              "dimensions",
+              "issues",
+              "corrections",
+              "missingGoals",
+              "attempts"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.task-queue.completed": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "task-queue.completed"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "queueTaskID": {
+                "type": "string"
+              },
+              "sessionID": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "queueTaskID",
+              "sessionID"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.task.report": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "task.report"
           },
           "properties": {
             "type": "object",
@@ -31239,16 +31506,111 @@
               "sessionID": {
                 "type": "string"
               },
-              "todos": {
+              "status": {
+                "type": "string",
+                "enum": [
+                  "progress",
+                  "need_input",
+                  "done",
+                  "failed"
+                ]
+              },
+              "summary": {
+                "type": "string"
+              },
+              "question": {
+                "type": "string"
+              },
+              "next_plan": {
+                "type": "string"
+              },
+              "artifacts": {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/Todo"
+                  "type": "string"
                 }
+              },
+              "error": {
+                "type": "string"
               }
             },
             "required": [
               "sessionID",
-              "todos"
+              "status",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.vcs.branch.updated": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "vcs.branch.updated"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "branch": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.worktree.ready": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "worktree.ready"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "branch": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "branch"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.worktree.failed": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "worktree.failed"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "message"
             ]
           }
         },
@@ -31741,13 +32103,103 @@
             "$ref": "#/components/schemas/Event.installation.update-available"
           },
           {
+            "$ref": "#/components/schemas/Event.project.updated"
+          },
+          {
             "$ref": "#/components/schemas/Event.server.instance.disposed"
+          },
+          {
+            "$ref": "#/components/schemas/Event.server.connected"
+          },
+          {
+            "$ref": "#/components/schemas/Event.global.disposed"
+          },
+          {
+            "$ref": "#/components/schemas/Event.lsp.client.diagnostics"
+          },
+          {
+            "$ref": "#/components/schemas/Event.lsp.updated"
+          },
+          {
+            "$ref": "#/components/schemas/Event.message.updated"
+          },
+          {
+            "$ref": "#/components/schemas/Event.message.removed"
+          },
+          {
+            "$ref": "#/components/schemas/Event.message.part.updated"
+          },
+          {
+            "$ref": "#/components/schemas/Event.message.part.delta"
+          },
+          {
+            "$ref": "#/components/schemas/Event.message.part.removed"
+          },
+          {
+            "$ref": "#/components/schemas/Event.session.error"
+          },
+          {
+            "$ref": "#/components/schemas/Event.tui.prompt.append"
+          },
+          {
+            "$ref": "#/components/schemas/Event.tui.command.execute"
+          },
+          {
+            "$ref": "#/components/schemas/Event.tui.toast.show"
+          },
+          {
+            "$ref": "#/components/schemas/Event.tui.session.select"
+          },
+          {
+            "$ref": "#/components/schemas/Event.mcp.tools.changed"
+          },
+          {
+            "$ref": "#/components/schemas/Event.mcp.browser.open.failed"
+          },
+          {
+            "$ref": "#/components/schemas/Event.mcp.prompts.changed"
+          },
+          {
+            "$ref": "#/components/schemas/Event.mcp.resources.changed"
+          },
+          {
+            "$ref": "#/components/schemas/Event.command.executed"
+          },
+          {
+            "$ref": "#/components/schemas/Event.permission.asked"
+          },
+          {
+            "$ref": "#/components/schemas/Event.permission.replied"
+          },
+          {
+            "$ref": "#/components/schemas/Event.todo.updated"
           },
           {
             "$ref": "#/components/schemas/Event.session.status"
           },
           {
             "$ref": "#/components/schemas/Event.session.idle"
+          },
+          {
+            "$ref": "#/components/schemas/Event.question.asked"
+          },
+          {
+            "$ref": "#/components/schemas/Event.question.replied"
+          },
+          {
+            "$ref": "#/components/schemas/Event.question.rejected"
+          },
+          {
+            "$ref": "#/components/schemas/Event.task_plan.updated"
+          },
+          {
+            "$ref": "#/components/schemas/Event.session.compacted"
+          },
+          {
+            "$ref": "#/components/schemas/Event.file.edited"
+          },
+          {
+            "$ref": "#/components/schemas/Event.file.watcher.updated"
           },
           {
             "$ref": "#/components/schemas/Event.task.created"
@@ -31864,85 +32316,10 @@
             "$ref": "#/components/schemas/Event.integrity.review.completed"
           },
           {
-            "$ref": "#/components/schemas/Event.project.updated"
-          },
-          {
-            "$ref": "#/components/schemas/Event.server.connected"
-          },
-          {
-            "$ref": "#/components/schemas/Event.global.disposed"
-          },
-          {
-            "$ref": "#/components/schemas/Event.lsp.client.diagnostics"
-          },
-          {
-            "$ref": "#/components/schemas/Event.lsp.updated"
-          },
-          {
-            "$ref": "#/components/schemas/Event.message.updated"
-          },
-          {
-            "$ref": "#/components/schemas/Event.message.removed"
-          },
-          {
-            "$ref": "#/components/schemas/Event.message.part.updated"
-          },
-          {
-            "$ref": "#/components/schemas/Event.message.part.delta"
-          },
-          {
-            "$ref": "#/components/schemas/Event.message.part.removed"
-          },
-          {
-            "$ref": "#/components/schemas/Event.session.error"
-          },
-          {
-            "$ref": "#/components/schemas/Event.permission.asked"
-          },
-          {
-            "$ref": "#/components/schemas/Event.permission.replied"
-          },
-          {
             "$ref": "#/components/schemas/Event.task-queue.completed"
           },
           {
-            "$ref": "#/components/schemas/Event.question.asked"
-          },
-          {
-            "$ref": "#/components/schemas/Event.question.replied"
-          },
-          {
-            "$ref": "#/components/schemas/Event.question.rejected"
-          },
-          {
             "$ref": "#/components/schemas/Event.task.report"
-          },
-          {
-            "$ref": "#/components/schemas/Event.tui.prompt.append"
-          },
-          {
-            "$ref": "#/components/schemas/Event.tui.command.execute"
-          },
-          {
-            "$ref": "#/components/schemas/Event.tui.toast.show"
-          },
-          {
-            "$ref": "#/components/schemas/Event.tui.session.select"
-          },
-          {
-            "$ref": "#/components/schemas/Event.mcp.tools.changed"
-          },
-          {
-            "$ref": "#/components/schemas/Event.mcp.browser.open.failed"
-          },
-          {
-            "$ref": "#/components/schemas/Event.mcp.prompts.changed"
-          },
-          {
-            "$ref": "#/components/schemas/Event.mcp.resources.changed"
-          },
-          {
-            "$ref": "#/components/schemas/Event.file.watcher.updated"
           },
           {
             "$ref": "#/components/schemas/Event.vcs.branch.updated"
@@ -31952,21 +32329,6 @@
           },
           {
             "$ref": "#/components/schemas/Event.worktree.failed"
-          },
-          {
-            "$ref": "#/components/schemas/Event.command.executed"
-          },
-          {
-            "$ref": "#/components/schemas/Event.task_plan.updated"
-          },
-          {
-            "$ref": "#/components/schemas/Event.session.compacted"
-          },
-          {
-            "$ref": "#/components/schemas/Event.file.edited"
-          },
-          {
-            "$ref": "#/components/schemas/Event.todo.updated"
           },
           {
             "$ref": "#/components/schemas/Event.goal.report"
@@ -34271,6 +34633,32 @@
               "interleaved"
             ]
           },
+          "transform": {
+            "type": "object",
+            "properties": {
+              "sampling": {
+                "type": "object",
+                "properties": {
+                  "temperature": {
+                    "type": "number"
+                  },
+                  "topP": {
+                    "type": "number"
+                  },
+                  "topK": {
+                    "type": "number"
+                  }
+                }
+              },
+              "options": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {}
+              }
+            }
+          },
           "cost": {
             "type": "object",
             "properties": {
@@ -34773,6 +35161,26 @@
           "kind",
           "time",
           "project"
+        ]
+      },
+      "SessionConfig": {
+        "type": "object",
+        "properties": {
+          "config": {
+            "$ref": "#/components/schemas/Config"
+          },
+          "origin": {
+            "description": "Per-key origin tree. Leaf values are 'project' or 'session'.",
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {}
+          }
+        },
+        "required": [
+          "config",
+          "origin"
         ]
       },
       "TextPartInput": {
@@ -35566,6 +35974,9 @@
             "type": "string"
           },
           "prompt": {
+            "type": "string"
+          },
+          "promptAppend": {
             "type": "string"
           },
           "options": {
