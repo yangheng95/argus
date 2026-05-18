@@ -19,7 +19,7 @@ afterEach(async () => {
   await Instance.disposeAll()
 })
 
-test("DeliveryAgent budgets large auxiliary evidence while preserving hard gates", async () => {
+test("DeliveryAgent prompt is host-gate blind and budgets large auxiliary evidence", async () => {
   await using tmp = await tmpdir({ git: true, config: { model: "test/mock" } })
   let capturedPrompt = ""
   const model = testDeliveryModel({ id: "tiny-delivery", providerID: "budget-test", context: 30_000 })
@@ -74,29 +74,6 @@ test("DeliveryAgent budgets large auxiliary evidence while preserving hard gates
         delivery: {
           summary: "Merged many files.",
           changedFiles: Array.from({ length: 300 }, (_, i) => `src/file-${i}.ts`),
-          manifestGate: {
-            status: "failed",
-            summary: "Delivery evidence gate failed 1 required check(s).",
-            failedCheckIds: ["build#1"],
-            failedCoverageIds: [],
-            failedRuntimeFlowIds: [],
-            failedReviewIds: [],
-          },
-          manifestFailureDetails: [{
-            kind: "check",
-            id: "build#1",
-            name: "Build",
-            status: "failed",
-            command: "bun run build",
-            exitCode: 1,
-            evidence: "TypeScript failed in src/App.tsx",
-          }],
-          hostGateFailures: [{
-            kind: "manifest",
-            id: "artifact_manifest_budget",
-            summary: "Delivery evidence gate failed 1 required check(s).",
-            evidence: ["[check] build#1 Build status=failed exit=1 command=bun run build: TypeScript failed in src/App.tsx"],
-          }],
           goalReports: Array.from({ length: 20 }, (_, i) => ({
             goalTitle: `Goal ${i}`,
             report: {
@@ -122,10 +99,19 @@ test("DeliveryAgent budgets large auxiliary evidence while preserving hard gates
   })
 
   expect(capturedPrompt.length).toBeLessThan(30_000)
-  expect(capturedPrompt).toContain("finalGate.status=failed")
-  expect(capturedPrompt).toContain("failedCheckIds=build#1")
-  expect(capturedPrompt).toContain("TypeScript failed in src/App.tsx")
+  // Fresh-eyes decoupling (specs/delivery-fresh-eyes-decoupling-2026-05-18.md):
+  // the agent runs only after the host gate passed, so its prompt must carry
+  // NO host-gate conclusions and NO burden-inverting / state-machine language.
+  expect(capturedPrompt).not.toContain("# DeliveryEvidenceManifest Gate")
+  expect(capturedPrompt).not.toContain("# Host Hard Gate Failures")
+  expect(capturedPrompt).not.toContain("# Runtime Evidence Failures")
+  expect(capturedPrompt).not.toContain("# Visual Metric Failures")
+  expect(capturedPrompt).not.toContain("You must submit verdict='rejected'")
+  expect(capturedPrompt).not.toContain("aligning your verdict with the gate")
+  expect(capturedPrompt).not.toContain("unless you can prove the probe is invalid")
+  // Exploration tooling is still offered, but without host-failure sections.
   expect(capturedPrompt).toContain("inspect_delivery_context")
+  expect(capturedPrompt).not.toContain("host failures")
   expect(capturedPrompt).not.toContain("# Executor Reports")
   expect(capturedPrompt).not.toContain("# Code Diffs")
 }, 30_000)

@@ -132,7 +132,6 @@ export namespace DeliveryService {
 
     // 2. Runtime-evidence front gate for visual-reference deliveries.
     let runtimeReport: RuntimeEvidenceReport | undefined
-    let runtimeEvidenceFailures: string[] = []
     if (referencePath && manifest.finalGate.status === "passed") {
       try {
         const manifestPreviewUrl = manifest.runtimeFlows.find((flow) => flow.previewUrl)?.previewUrl
@@ -158,10 +157,6 @@ export namespace DeliveryService {
           title: input.task.title,
           violations: summarizeRuntimeViolations(runtimeReport.violations),
         })
-        runtimeEvidenceFailures = [
-          ...runtimeEvidenceFailures,
-          ...runtimeFailureLines,
-        ]
         hostGateFailures.push({
           kind: "runtime",
           id: "runtime-evidence",
