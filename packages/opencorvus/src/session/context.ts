@@ -1,5 +1,6 @@
 import { Context } from "../util/context"
 import { Config } from "@/config/config"
+import { SessionObservability } from "@/util/session-observability"
 // Type-only import: erased at runtime, so config-layer consumers can read the
 // ambient session without creating a session<->config import cycle.
 import type { Session } from "./index"
@@ -14,6 +15,7 @@ import type { Session } from "./index"
 // tagging) — do NOT introduce a parallel session-propagation mechanism.
 export namespace SessionContext {
   const ctx = Context.create<Session.Info>("session")
+  SessionObservability.bindSessionContext(() => ctx.tryUse())
 
   // Wrap a session execution. Must cover EVERY entry that runs a session
   // (prompt loop, summarize, task-api reply, wake, shell resume).

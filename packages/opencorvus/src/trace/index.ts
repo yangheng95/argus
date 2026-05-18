@@ -18,17 +18,16 @@
  *     so a single task's orchestrator wake + every sub-agent dispatch sit in
  *     one file in time order. Underscore prefix sorts task files to the top
  *     of `ls` for quick navigation.
- *   - `_index.jsonl` — append-only manifest. One line per (sessionID,
- *     agentName, kind="session_open") tuple, written the first time the
- *     trace sees a session. Lets you `cat _index.jsonl | jq` to map
- *     sessionID → agentName → taskID without scanning every per-session
- *     file. Index lines also fire for helper LLM calls (no sessionID), so
- *     Agent.generate and generateFollowup show up.
- *   - `helper-<agentName>-<ts>.jsonl` — for direct structured helper LLM calls that
- *     have no session context (Agent.generate / generateFollowup).
+ *   - `_index.jsonl` — append-only manifest. One line per session bucket
+ *     (kind="session_open") or non-session domain bucket (kind="domain_open").
+ *     Lets you `cat _index.jsonl | jq` to map sessionID/domain → agentName →
+ *     taskID without scanning every detail file.
+ *   - `_non-session.jsonl` — direct structured helper LLM calls that have no
+ *     session context (Agent.generate / generateFollowup). These carry an
+ *     explicit non-session domain label and never masquerade as sessions.
  *
  * Event shape:
- *   { ts, kind, sessionID, parentSessionID?, taskID?, agentName, payload }
+ *   { ts, kind, domain, sessionID?, parentSessionID?, taskID?, agentName, payload }
  *
  *   kind="llm_request" — captured at `LLM.stream` entry (the single chokepoint
  *     in session/llm.ts), payload carries the resolved system messages, the
@@ -55,11 +54,13 @@ import fs from "node:fs"
 import path from "node:path"
 import { Log } from "@/util/log"
 import { Instance } from "@/project/instance"
+import { SessionObservability } from "@/util/session-observability"
 import type { AgentReport } from "@/agent/report"
 
 const log = Log.create({ service: "agent-trace" })
 
 export namespace AgentTrace {
+  export const NON_SESSION_DOMAIN = "non-session"
   // Auto-enabled. Opt out via `OPENCORVUS_AGENT_TRACE=0` (also accepts "false"
   // / "no" / "off" for ergonomics). The empty string and unset both keep
   // tracing on by design.
@@ -101,6 +102,10 @@ export namespace AgentTrace {
     return path.join(traceDir(), `${sessionID}.jsonl`)
   }
 
+  function domainFile(domain: string): string {
+    return path.join(traceDir(), `_${domain}.jsonl`)
+  }
+
   function taskFile(taskID: string): string {
     return path.join(traceDir(), `_task-${taskID}.jsonl`)
   }
@@ -109,28 +114,36 @@ export namespace AgentTrace {
     return path.join(traceDir(), "_index.jsonl")
   }
 
-  /** Sessions whose first event we have already indexed in `_index.jsonl`.
-   *  Used to dedupe the index — first-seen sessions write a session_open line,
-   *  subsequent events for the same session don't. Helper-call sessionIDs
-   *  (`helper-<agentName>-<ts>`) are unique-per-call, so they index once. */
-  const seenSessions = new Set<string>()
+  type TraceBucket = { sessionID: string } | { domain: string }
 
-  function maybeWriteIndex(event: {
-    sessionID: string
+  /** Buckets whose first event we have already indexed in `_index.jsonl`.
+   *  Used to dedupe the index — first-seen sessions write a session_open line,
+   *  and first-seen non-session domains write a domain_open line. */
+  const seenBuckets = new Set<string>()
+
+  function bucketKey(bucket: TraceBucket, agentName: string): string {
+    if ("sessionID" in bucket) return `session:${bucket.sessionID}`
+    return `domain:${bucket.domain}:${agentName}`
+  }
+
+  function maybeWriteIndex(bucket: TraceBucket, event: {
     parentSessionID?: string
     taskID?: string
     agentName: string
     kind: string
   }) {
-    if (seenSessions.has(event.sessionID)) return
-    seenSessions.add(event.sessionID)
+    const key = bucketKey(bucket, event.agentName)
+    if (seenBuckets.has(key)) return
+    seenBuckets.add(key)
     try {
       ensureDir()
+      const bucketFields = "sessionID" in bucket
+        ? { kind: "session_open", sessionID: bucket.sessionID }
+        : { kind: "domain_open", domain: bucket.domain }
       const line =
         safeStringify({
           ts: Date.now(),
-          kind: "session_open",
-          sessionID: event.sessionID,
+          ...bucketFields,
           parentSessionID: event.parentSessionID,
           taskID: event.taskID,
           agentName: event.agentName,
@@ -139,7 +152,7 @@ export namespace AgentTrace {
       fs.appendFileSync(indexFile(), line, { encoding: "utf-8" })
     } catch (err) {
       log.warn("trace index append failed", {
-        sessionID: event.sessionID,
+        ...bucket,
         error: err instanceof Error ? err.message : String(err),
       })
     }
@@ -160,7 +173,7 @@ export namespace AgentTrace {
   }
 
   function append(
-    sessionID: string,
+    bucket: TraceBucket,
     event: Record<string, unknown> & {
       taskID?: string
       parentSessionID?: string
@@ -171,28 +184,36 @@ export namespace AgentTrace {
     if (!ENABLED) return
     try {
       ensureDir()
-      maybeWriteIndex({
-        sessionID,
+      maybeWriteIndex(bucket, {
         parentSessionID: event.parentSessionID,
         taskID: event.taskID,
         agentName: event.agentName,
         kind: event.kind,
       })
       const line = safeStringify(event) + "\n"
-      fs.appendFileSync(sessionFile(sessionID), line, { encoding: "utf-8" })
+      if ("sessionID" in bucket) fs.appendFileSync(sessionFile(bucket.sessionID), line, { encoding: "utf-8" })
+      else fs.appendFileSync(domainFile(bucket.domain), line, { encoding: "utf-8" })
       // Per-task chronological rollup so a single task's full timeline (every
       // wake + every sub-agent dispatch) is grep-able in one file. The same
       // line is duplicated; consumers can dedupe on (sessionID, ts) or just
       // scan the rollup directly.
-      if (typeof event.taskID === "string" && event.taskID.length > 0) {
+      if ("sessionID" in bucket && typeof event.taskID === "string" && event.taskID.length > 0) {
         fs.appendFileSync(taskFile(event.taskID), line, { encoding: "utf-8" })
       }
     } catch (err) {
       log.warn("trace append failed", {
-        sessionID,
+        ...bucket,
         error: err instanceof Error ? err.message : String(err),
       })
     }
+  }
+
+  function sessionBucket(explicitSessionID: string): { sessionID: string } {
+    const ambient = SessionObservability.current()
+    if (ambient && ambient.id !== explicitSessionID) {
+      throw new Error(`Trace session mismatch: context=${ambient.id} input=${explicitSessionID}`)
+    }
+    return { sessionID: ambient?.id ?? explicitSessionID }
   }
 
   function redactMessages(messages: unknown[]): unknown[] {
@@ -230,10 +251,12 @@ export namespace AgentTrace {
     small?: boolean
   }) {
     if (!ENABLED) return
-    append(input.sessionID, {
+    const bucket = sessionBucket(input.sessionID)
+    append(bucket, {
       ts: Date.now(),
       kind: "llm_request",
-      sessionID: input.sessionID,
+      domain: "session",
+      sessionID: bucket.sessionID,
       parentSessionID: input.parentSessionID,
       taskID: input.taskID,
       agentName: input.agentName,
@@ -250,10 +273,10 @@ export namespace AgentTrace {
   }
 
   /** Capture a direct structured helper LLM call that bypasses the
-   *  session pipeline (Agent.generate, generateFollowup). Synthesises a
-   *  helper sessionID from agentName + timestamp so the event lands in its
-   *  own file under the same trace dir. Both the input and the structured
-   *  output go in one event since these helpers are single-shot. */
+   *  session pipeline (Agent.generate, generateFollowup). These are written
+   *  to the explicit non-session domain bucket, not to a fabricated session.
+   *  Both the input and the structured output go in one event since these
+   *  helpers are single-shot. */
   export function recordHelperLLMCall(input: {
     agentName: string
     model: { providerID: string; modelID: string }
@@ -263,11 +286,10 @@ export namespace AgentTrace {
     error?: string
   }): string {
     if (!ENABLED) return ""
-    const helperSessionID = `helper-${input.agentName}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-    append(helperSessionID, {
+    append({ domain: NON_SESSION_DOMAIN }, {
       ts: Date.now(),
       kind: "helper_llm_call",
-      sessionID: helperSessionID,
+      domain: NON_SESSION_DOMAIN,
       agentName: input.agentName,
       payload: {
         model: input.model,
@@ -277,7 +299,7 @@ export namespace AgentTrace {
         error: input.error,
       },
     })
-    return helperSessionID
+    return NON_SESSION_DOMAIN
   }
 
   // ── Read API for debug surfaces (overlay trace panel, etc.) ──
@@ -328,6 +350,19 @@ export namespace AgentTrace {
     return all
   }
 
+  /** Read every event for a non-session domain bucket. */
+  export function readDomainEvents(domain: string): TraceEvent[] {
+    if (!domain) return []
+    const file = domainFile(domain)
+    let raw: string
+    try {
+      raw = fs.readFileSync(file, { encoding: "utf-8" })
+    } catch {
+      return []
+    }
+    return parseJsonl(raw)
+  }
+
   function parseJsonl(raw: string): TraceEvent[] {
     if (!raw) return []
     const result: TraceEvent[] = []
@@ -367,10 +402,12 @@ export namespace AgentTrace {
     report: AgentReport
   }) {
     if (!ENABLED) return
-    append(input.sessionID, {
+    const bucket = sessionBucket(input.sessionID)
+    append(bucket, {
       ts: Date.now(),
       kind: input.kind,
-      sessionID: input.sessionID,
+      domain: "session",
+      sessionID: bucket.sessionID,
       parentSessionID: input.parentSessionID,
       taskID: input.taskID,
       agentName: input.agentName,
