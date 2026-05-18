@@ -55,11 +55,7 @@ export namespace SessionWake {
     }
 
     return SessionContext.provide(session, async () => {
-      // Resolve model: use override, or the configured default model
-      let model = input.model
-      if (!model) {
-        model = await resolveModel(sessionID)
-      }
+      const model = await resolveModel(agent, sessionID, input.model)
 
       const msg = await Session.updateMessage({
         id: Identifier.ascending("message"),
@@ -104,10 +100,14 @@ export namespace SessionWake {
     })
   }
 
-  /** Resolve the configured model (session overlay over project base, spec
-   * §13.2). Session message history must NOT influence runtime model. */
-  async function resolveModel(_sessionID: string): Promise<{ providerID: string; modelID: string }> {
-    const { resolveConfiguredModelRef } = await import("@/agent/model")
-    return resolveConfiguredModelRef()
+  /** Resolve the agent model through the single resolver. Session message
+   * history must NOT influence runtime model. */
+  async function resolveModel(
+    agent: string,
+    sessionID: string,
+    explicitModel?: { providerID: string; modelID: string },
+  ): Promise<{ providerID: string; modelID: string }> {
+    const { resolveAgentModelRef } = await import("@/agent/model")
+    return resolveAgentModelRef(agent, { sessionID, explicitModel: explicitModel ?? null })
   }
 }

@@ -14,7 +14,7 @@ import { Agent } from "@/agent/agent"
 import { Plugin } from "@/plugin"
 import { Config } from "@/config/config"
 import { MemoryFlush } from "@/memory/flush"
-import { resolveModelRef } from "@/agent/model"
+import { resolveAgentModel } from "@/agent/model"
 import { ContextBudget } from "./context-budget"
 import { CompactionHandoff } from "./compaction-handoff"
 import { InstructionPrompt } from "./instruction"
@@ -178,7 +178,10 @@ export namespace SessionCompaction {
       input.focus ? ["", "Manual compaction focus:", input.focus].join("\n") : "",
       taskPlan ? ["", "Current task plan:", taskPlan].join("\n") : "",
       scratchpad.trim()
-        ? ["", `Scratchpad is present with ${scratchpad.length} characters. Record scratchpad-present evidence; do not copy the scratchpad content.`].join("\n")
+        ? [
+            "",
+            `Scratchpad is present with ${scratchpad.length} characters. Record scratchpad-present evidence; do not copy the scratchpad content.`,
+          ].join("\n")
         : "",
       patches ? ["", patches].join("\n") : "",
       "</handoff-runtime-state>",
@@ -215,11 +218,7 @@ export namespace SessionCompaction {
     ].join("\n\n")
   }
 
-  export function requestBudget(input: {
-    messages: ModelMessage[]
-    config: Config.Info
-    model: Provider.Model
-  }) {
+  export function requestBudget(input: { messages: ModelMessage[]; config: Config.Info; model: Provider.Model }) {
     const estimatedTokens = Token.estimate(JSON.stringify(input.messages))
     const usableBudget = ContextBudget.usable({ config: input.config, model: input.model })
     return {
@@ -354,12 +353,10 @@ export namespace SessionCompaction {
     const userMessage = parent.info as Message.User
     const compactionPart = parent.parts.find((part): part is Message.CompactionPart => part.type === "compaction")
     const agent = await Agent.get("compaction")
-    const userModel = await Provider.getModel(userMessage.model.providerID, userMessage.model.modelID)
-    const model = await resolveModelRef(agent.model, userModel)
+    const model = await resolveAgentModel(agent.name, { sessionID: input.sessionID })
     const config = await Config.get()
-    const history = compactionPart && input.messages.at(-1)?.info.id === input.parentID
-      ? input.messages.slice(0, -1)
-      : input.messages
+    const history =
+      compactionPart && input.messages.at(-1)?.info.id === input.parentID ? input.messages.slice(0, -1) : input.messages
     const prior = completedCompactions(history)
     const hidden = new Set(prior.flatMap((item) => [item.userIndex, item.assistantIndex]))
     const selected = await selectCompactionInput({
@@ -411,7 +408,11 @@ export namespace SessionCompaction {
       selectedHead: selected.head,
       focus: compactionPart?.focus,
     })
-    const promptText = buildPrompt({ previousSummary: prior.at(-1)?.summary, context: compacting.context, runtime: runtime.text })
+    const promptText = buildPrompt({
+      previousSummary: prior.at(-1)?.summary,
+      context: compacting.context,
+      runtime: runtime.text,
+    })
     const providerMessages: ModelMessage[] = [
       ...(await Message.toModelMessages(selected.head, model, COMPACTION_PROJECTION)),
       {

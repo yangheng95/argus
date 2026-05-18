@@ -112,9 +112,7 @@ export namespace Agent {
       read: "allow",
     })
     const user = PermissionNext.fromConfig(cfg.permission ?? {})
-    const mirrorDenied = PermissionNext.fromConfig(
-      Object.fromEntries(MIRROR_TOOL_IDS.map((id) => [id, "deny"])),
-    )
+    const mirrorDenied = PermissionNext.fromConfig(Object.fromEntries(MIRROR_TOOL_IDS.map((id) => [id, "deny"])))
     const nonDesignPermissions = (...rulesets: PermissionNext.Ruleset[]) =>
       PermissionNext.merge(defaults, ...rulesets, user, mirrorDenied)
 
@@ -153,7 +151,9 @@ export namespace Agent {
       general: {
         name: "general",
         description: AgentRoleContract.description("general"),
-        tools: { exclude: ["planner", "panel", "task_report", "analytics", "todoread", "todowrite", ...MIRROR_TOOL_IDS] },
+        tools: {
+          exclude: ["planner", "panel", "task_report", "analytics", "todoread", "todowrite", ...MIRROR_TOOL_IDS],
+        },
         prompt: PROMPT_GENERAL,
         permission: nonDesignPermissions(
           PermissionNext.fromConfig({
@@ -170,7 +170,9 @@ export namespace Agent {
         name: "explore",
         permission: nonDesignPermissions(),
         description: AgentRoleContract.description("explore"),
-        tools: { include: ["read", "glob", "search_code", "bash", "external_code_search", "lsp", "webfetch", "memory"] },
+        tools: {
+          include: ["read", "glob", "search_code", "bash", "external_code_search", "lsp", "webfetch", "memory"],
+        },
         prompt: PROMPT_EXPLORE,
         options: {},
         mode: "subagent",
@@ -340,7 +342,18 @@ export namespace Agent {
         // todoread/todowrite expose the per-session private scratchpad so the
         // LLM can plan + check off steps; rule 23 says we don't infer plans
         // from internal state, the agent maintains its own.
-        tools: { include: ["read_file", "find_files", "search_code", "list_directory", "memory_search", "memory_get", "todoread", "todowrite"] },
+        tools: {
+          include: [
+            "read_file",
+            "find_files",
+            "search_code",
+            "list_directory",
+            "memory_search",
+            "memory_get",
+            "todoread",
+            "todowrite",
+          ],
+        },
         options: {},
         mode: "primary",
         native: true,
@@ -350,7 +363,18 @@ export namespace Agent {
         name: "architect",
         description: AgentRoleContract.description("architect"),
         prompt: ARCHITECT_CORE,
-        tools: { include: ["read_file", "find_files", "search_code", "list_directory", "memory_search", "memory_get", "todoread", "todowrite"] },
+        tools: {
+          include: [
+            "read_file",
+            "find_files",
+            "search_code",
+            "list_directory",
+            "memory_search",
+            "memory_get",
+            "todoread",
+            "todowrite",
+          ],
+        },
         steps: 1000,
         options: {},
         mode: "primary",
@@ -388,7 +412,18 @@ export namespace Agent {
         name: "intent-analysis",
         description: AgentRoleContract.description("intent-analysis"),
         prompt: INTENT_ANALYSIS_CORE,
-        tools: { include: ["read_file", "find_files", "search_code", "list_directory", "memory_search", "memory_get", "todoread", "todowrite"] },
+        tools: {
+          include: [
+            "read_file",
+            "find_files",
+            "search_code",
+            "list_directory",
+            "memory_search",
+            "memory_get",
+            "todoread",
+            "todowrite",
+          ],
+        },
         options: {},
         mode: "primary",
         native: true,
@@ -573,8 +608,8 @@ export namespace Agent {
     const cfg = await Config.get()
     // Single model resolver (spec §13.1/§13.2). Dynamic import avoids the
     // agent<->model import cycle (model.ts imports Agent).
-    const { resolveConfiguredModelRef } = await import("./model")
-    const defaultModel = input.model ?? (await resolveConfiguredModelRef())
+    const { resolveAgentModelRef } = await import("./model")
+    const defaultModel = await resolveAgentModelRef("agent-generate", { explicitModel: input.model ?? null })
     const model = await Provider.getModel(defaultModel.providerID, defaultModel.modelID)
     const language = await Provider.getLanguage(model)
 

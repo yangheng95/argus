@@ -7,6 +7,7 @@ import { Message } from "../../src/session/message"
 import { SessionWake } from "../../src/session/wake"
 import { SessionPrompt } from "../../src/session/prompt"
 import { Agent } from "../../src/agent/agent"
+import { resetDatabase } from "../fixture/db"
 
 async function seed(sessionID: string) {
   const msg: Message.User = {
@@ -27,8 +28,9 @@ async function seed(sessionID: string) {
   } satisfies Message.TextPart)
 }
 
-afterEach(() => {
+afterEach(async () => {
   mock.restore()
+  await resetDatabase()
 })
 
 test("wake injects the configured default model instead of inheriting the last session model", async () => {
@@ -64,6 +66,50 @@ test("wake injects the configured default model instead of inheriting the last s
       expect(text?.type).toBe("text")
       if (text?.type !== "text") throw new Error("expected text part")
       expect(text.text).toBe("resume scheduled work")
+    },
+  })
+})
+
+test("wake resolves the session agent model through the single resolver", async () => {
+  await using tmp = await tmpdir({
+    config: {
+      model: "base/default",
+      agent: {
+        build: { model: "base/build" },
+      },
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const loop = spyOn(SessionPrompt, "loop").mockResolvedValue(undefined as never)
+      const session = await Session.create({ kind: "assistant", title: "wake overlay" })
+      await Session.mergeConfigOverlay({
+        sessionID: session.id,
+        patch: {
+          model: "overlay/default",
+          agent: {
+            build: { model: "overlay/build" },
+          },
+        },
+      })
+
+      await SessionWake.wake({
+        sessionID: session.id,
+        agent: "build",
+        prompt: "resume build",
+      })
+
+      expect(loop).toHaveBeenCalled()
+      const msgs = await Session.messages({ sessionID: session.id })
+      const last = msgs.at(-1)
+      expect(last?.info.role).toBe("user")
+      if (last?.info.role !== "user") throw new Error("expected user message")
+      expect(last.info.model).toEqual({
+        providerID: "overlay",
+        modelID: "build",
+      })
+      expect(last.info.agent).toBe("build")
     },
   })
 })

@@ -37,6 +37,7 @@ import { Agent as AgentModule } from "../agent/agent"
 import { Installation } from "@/installation"
 import { Message, Todo } from "@/session"
 import { Config } from "@/config/config"
+import { Instance } from "@/project/instance"
 import { z } from "zod"
 import { LoadAPIKeyError } from "ai"
 import type { AssistantMessage, Event, OpencodeClient, SessionMessageResponse, ToolPart } from "@opencorvus-ai/sdk"
@@ -630,7 +631,12 @@ export namespace ACP {
           })
 
         const lastUser = messages?.findLast((m) => m.info.role === "user")?.info as
-          | (Record<string, unknown> & { id: string; role: string; model?: { providerID: string; modelID: string }; agent?: string })
+          | (Record<string, unknown> & {
+              id: string
+              role: string
+              model?: { providerID: string; modelID: string }
+              agent?: string
+            })
           | undefined
         if (lastUser?.role === "user" && lastUser.model) {
           result.models.currentModelId = `${lastUser.model.providerID}/${lastUser.model.modelID}`
@@ -1297,8 +1303,7 @@ export namespace ACP {
       const agent = session.modeId ?? (await AgentModule.defaultAgent())
 
       const parts: Array<
-        | { type: "text"; text: string }
-        | { type: "file"; url: string; filename: string; mime: string }
+        { type: "text"; text: string } | { type: "file"; url: string; filename: string; mime: string }
       > = []
       for (const part of params.prompt) {
         switch (part.type) {
@@ -1523,69 +1528,15 @@ export namespace ACP {
   }
 
   async function defaultModel(config: ACPConfig, cwd?: string) {
-    const sdk = config.sdk
     const configured = config.defaultModel
     if (configured) return configured
 
     const directory = cwd ?? process.cwd()
-
-    const specified = await sdk.config
-      .get({ directory }, { throwOnError: true })
-      .then((resp) => {
-        const cfg = resp.data
-        if (!cfg || !cfg.model) return undefined
-        const parsed = Provider.parseModel(cfg.model)
-        return {
-          providerID: parsed.providerID,
-          modelID: parsed.modelID,
-        }
-      })
-      .catch((error) => {
-        log.error("failed to load user config for default model", { error })
-        return undefined
-      })
-
-    const providers = await sdk.config
-      .providers({ directory }, { throwOnError: true })
-      .then((x) => x.data?.providers ?? [])
-      .catch((error) => {
-        log.error("failed to list providers for default model", { error })
-        return []
-      })
-
-    if (specified && providers.length) {
-      const provider = providers.find((p) => p.id === specified.providerID)
-      if (provider && provider.models[specified.modelID]) return specified
-    }
-
-    if (specified && !providers.length) return specified
-
-    const opencorvusProvider = providers.find((p) => p.id === "opencorvus")
-    if (opencorvusProvider) {
-      if (opencorvusProvider.models["big-pickle"]) {
-        return { providerID: "opencorvus", modelID: "big-pickle" }
-      }
-      const [best] = Provider.sort(Object.values(opencorvusProvider.models))
-      if (best) {
-        return {
-          providerID: best.providerID,
-          modelID: best.id,
-        }
-      }
-    }
-
-    const models = providers.flatMap((provider) => Object.values(provider.models) as Provider.Model[])
-    const [best] = Provider.sort(models)
-    if (best) {
-      return {
-        providerID: best.providerID,
-        modelID: best.id,
-      }
-    }
-
-    if (specified) return specified
-
-    return { providerID: "opencorvus", modelID: "big-pickle" }
+    const { resolveConfiguredModelRef } = await import("@/agent/model")
+    return Instance.provide({
+      directory,
+      fn: () => resolveConfiguredModelRef(),
+    })
   }
 
   function parseUri(

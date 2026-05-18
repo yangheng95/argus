@@ -3,7 +3,7 @@ import z from "zod"
 import { Output } from "ai"
 import { streamText } from "@/llm/api"
 import { Agent } from "@/agent/agent"
-import { resolveAgentModel, resolveConfiguredModelRef } from "@/agent/model"
+import { resolveAgentModel, resolveAgentModelRef, resolveConfiguredModelRef } from "@/agent/model"
 import { Bus } from "@/bus"
 import { Config } from "@/config/config"
 import { discoverChecks, resolveConfig, resolvedChecks } from "@/delivery/checks/discovery"
@@ -318,13 +318,15 @@ async function appendDirectAgentSessionReply(input: {
     parts,
     touchSessionID: target.session.id,
   })
-  void SessionContext.provide(target.session, () => SessionPrompt.loop({ sessionID: target.session.id })).catch((error) => {
-    log.error("direct agent session reply loop failed", {
-      sessionID: target.session.id,
-      taskID: input.taskID,
-      error,
-    })
-  })
+  void SessionContext.provide(target.session, () => SessionPrompt.loop({ sessionID: target.session.id })).catch(
+    (error) => {
+      log.error("direct agent session reply loop failed", {
+        sessionID: target.session.id,
+        taskID: input.taskID,
+        error,
+      })
+    },
+  )
   return {
     task_id: input.taskID,
     session_id: target.session.id,
@@ -477,7 +479,9 @@ async function messageContext(_sessionID: string) {
   // Single configured-model resolver (spec §13.2): session overlay > base.
   // Strict — no .catch; a missing model config is a hard project-setup error
   // and must surface to the caller, not be papered over with `undefined`.
-  const model = agent?.model ?? (await resolveConfiguredModelRef())
+  const model = name
+    ? await resolveAgentModelRef(name, { sessionID: _sessionID })
+    : await resolveConfiguredModelRef({ sessionID: _sessionID })
   if (!agent || !model) return
   return {
     agent: agent.name,
@@ -619,7 +623,10 @@ async function taskChecks(checks?: z.input<typeof CheckConfig>) {
 }
 
 export class TaskQueueStartError extends Error {
-  constructor(message: string, readonly code: "not_queued" | "no_directory") {
+  constructor(
+    message: string,
+    readonly code: "not_queued" | "no_directory",
+  ) {
     super(message)
     this.name = "TaskQueueStartError"
   }
