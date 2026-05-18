@@ -8,6 +8,7 @@ import { Global } from "../../src/global"
 import { Instance } from "../../src/project/instance"
 import { Provider } from "../../src/provider/provider"
 import { discoverHexinModels, refreshHexinCache } from "../../src/provider/hexin-discovery"
+import { GLM_EVALUATION_TEMPERATURE, THINKING_MODEL_TOP_P } from "../../src/provider/sampling"
 import { tmpdir } from "../fixture/fixture"
 
 const cacheFile = path.join(Global.Path.cache, "hexin-models.json")
@@ -99,6 +100,18 @@ describe("hexin model discovery", () => {
     expect(models["openai/glm-5.1"].limit).toMatchObject({
       context: 200_000,
       output: 128_000,
+    })
+    expect(models["openai/glm-5.1"].transform).toEqual({
+      sampling: {
+        temperature: GLM_EVALUATION_TEMPERATURE,
+        topP: THINKING_MODEL_TOP_P,
+      },
+      options: {
+        thinking: {
+          type: "enabled",
+          clear_thinking: false,
+        },
+      },
     })
   })
 

@@ -109,3 +109,17 @@ profile，断言其在 transform.ts 采样/thinking 表均有非默认配置—�
 - 一律 `git -C C:/Users/chuan/myhexin-local/opecorvus`（父仓根），按路径 stage 自己的文件。
 - 改前打 backup tag；禁止 `git stash` 做诊断；容忍预存的无关报错。
 - 改前后 commit + push 不绕 hook。
+
+## codex 审查反馈
+
+- 官方采样核对：Z.ai / zai-org GLM-4.6 模型卡写明通用评测推荐
+  `temperature=1.0`，代码相关评测推荐 `top_p=0.95`；zai-org GLM-5 模型卡
+  benchmark footnote 对 HLE / Claude Code 等推理任务使用
+  `temperature=1.0, top_p=0.95`。与方案预设不冲突，本次不修订采样值。
+- 修复 C 决策：采用真收敛，不再为 `hexin/glm-5.x` 在 `transform.ts`
+  新增并行 model-id 子串分支；由 `hexin-profiles.ts` 的 profile 携带
+  `transform.sampling` 与 `transform.options`，`ProviderTransform.temperature()` /
+  `topP()` / `topK()` / `options()` 先读取该单一 model 配置源。测试同时覆盖
+  profile、discovery 暴露出的 model transform、以及 transform 消费该字段。
+- 范围边界：未触碰 soft-pin、terminalToolChoice、structuredOutputToolChoice、
+  shouldEnterTerminalToolRecovery 或 delivery retry 控制流。

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { convertToOpenAICompatibleChatMessages } from "@ai-sdk/openai-compatible/internal"
 import { ProviderTransform } from "../../src/provider/transform"
+import { GLM_EVALUATION_TEMPERATURE, THINKING_MODEL_TOP_P } from "../../src/provider/sampling"
 
 describe("ProviderTransform.options - setCacheKey", () => {
   const sessionID = "test-session-123"
@@ -238,6 +239,181 @@ describe("ProviderTransform.options - gateway", () => {
         caching: "auto",
       },
     })
+  })
+})
+
+describe("ProviderTransform - Hexin GLM thinking configuration", () => {
+  const sessionID = "test-session-123"
+  const createGlmModel = (overrides: Partial<any> = {}) =>
+    ({
+      id: "hexin/glm-5.1",
+      providerID: "hexin",
+      api: {
+        id: "glm-5.1",
+        url: "https://arsenal-openai.10jqka.com.cn:8443/ai-gateway/v1",
+        npm: "@ai-sdk/openai-compatible",
+      },
+      name: "GLM-5.1",
+      family: "glm",
+      capabilities: {
+        temperature: true,
+        reasoning: true,
+        attachment: false,
+        toolcall: true,
+        input: { text: true, audio: false, image: false, video: false, pdf: false },
+        output: { text: true, audio: false, image: false, video: false, pdf: false },
+        interleaved: { field: "reasoning_content" },
+      },
+      transform: {
+        sampling: {
+          temperature: GLM_EVALUATION_TEMPERATURE,
+          topP: THINKING_MODEL_TOP_P,
+        },
+        options: {
+          thinking: {
+            type: "enabled",
+            clear_thinking: false,
+          },
+        },
+      },
+      cost: { input: 0, output: 0, cache: { read: 0, write: 0 } },
+      limit: { context: 200_000, output: 128_000 },
+      status: "active",
+      options: {},
+      headers: {},
+      release_date: "",
+      ...overrides,
+    }) as any
+
+  test("reads GLM-5.1 sampling from the model transform profile", () => {
+    const model = createGlmModel()
+
+    expect(ProviderTransform.temperature(model)).toBe(GLM_EVALUATION_TEMPERATURE)
+    expect(ProviderTransform.topP(model)).toBe(THINKING_MODEL_TOP_P)
+    expect(ProviderTransform.topK(model)).toBeUndefined()
+  })
+
+  test("does not leave GLM-5.1 in the unconfigured sampling branch", () => {
+    const model = createGlmModel()
+
+    expect(ProviderTransform.temperature(model)).not.toBeUndefined()
+    expect(ProviderTransform.topP(model)).not.toBeUndefined()
+  })
+
+  test("carries Hexin GLM-5.1 thinking options from the model transform profile", () => {
+    const model = createGlmModel()
+    const result = ProviderTransform.options({ model, sessionID, providerOptions: {} })
+
+    expect(result.thinking).toEqual({
+      type: "enabled",
+      clear_thinking: false,
+    })
+  })
+
+  test("serializes Hexin GLM-5.1 thinking options under the Hexin provider options key", () => {
+    const model = createGlmModel()
+    const options = ProviderTransform.options({ model, sessionID, providerOptions: {} })
+
+    expect(ProviderTransform.providerOptions(model, options)).toEqual({
+      hexin: {
+        thinking: {
+          type: "enabled",
+          clear_thinking: false,
+        },
+      },
+    })
+  })
+
+  test("extracts inline think tags into reasoning_content for Hexin GLM-5.1", () => {
+    const model = createGlmModel()
+    const result = ProviderTransform.message(
+      [
+        {
+          role: "assistant",
+          content: [{ type: "text", text: "<think>internal plan</think></think></think>\nVisible answer" }],
+        },
+      ] as any[],
+      model,
+      {},
+    ) as any[]
+
+    expect(result[0].content).toEqual([{ type: "text", text: "\nVisible answer" }])
+    expect(result[0].providerOptions.openaiCompatible.reasoning_content).toBe("internal plan")
+  })
+
+  test("removes stray closing think tags without inventing reasoning content", () => {
+    const model = createGlmModel()
+    const result = ProviderTransform.message(
+      [
+        {
+          role: "assistant",
+          content: [{ type: "text", text: "</think></think>Visible answer" }],
+        },
+      ] as any[],
+      model,
+      {},
+    ) as any[]
+
+    expect(result[0].content).toEqual([{ type: "text", text: "Visible answer" }])
+    expect(result[0].providerOptions.openaiCompatible.reasoning_content).toBe("")
+  })
+
+  test("leaves inline think tags untouched for non-interleaved models", () => {
+    const model = createGlmModel({
+      id: "hexin/glm-4.6",
+      api: {
+        id: "glm-4.6",
+        url: "https://arsenal-openai.10jqka.com.cn:8443/ai-gateway/v1",
+        npm: "@ai-sdk/openai-compatible",
+      },
+      capabilities: {
+        ...createGlmModel().capabilities,
+        interleaved: false,
+      },
+      transform: undefined,
+    })
+
+    const result = ProviderTransform.message(
+      [
+        {
+          role: "assistant",
+          content: [{ type: "text", text: "<think>not normalized</think>Visible answer" }],
+        },
+      ] as any[],
+      model,
+      {},
+    ) as any[]
+
+    expect(result[0].content).toEqual([{ type: "text", text: "<think>not normalized</think>Visible answer" }])
+    expect(result[0].providerOptions?.openaiCompatible?.reasoning_content).toBeUndefined()
+  })
+
+  test("leaves inline think tags untouched for non-GLM interleaved models", () => {
+    const model = createGlmModel({
+      id: "hexin/kimi-k2.6",
+      api: {
+        id: "kimi-k2.6",
+        url: "https://arsenal-openai.10jqka.com.cn:8443/ai-gateway/v1",
+        npm: "@ai-sdk/openai-compatible",
+      },
+      name: "Kimi K2.6",
+      family: "kimi",
+      transform: undefined,
+    })
+
+    const result = ProviderTransform.message(
+      [
+        {
+          role: "assistant",
+          content: [{ type: "text", text: "<think>visible literal</think>Answer" }],
+        },
+      ] as any[],
+      model,
+      {},
+    ) as any[]
+
+    expect(result[0].content).toEqual([{ type: "text", text: "<think>visible literal</think>Answer" }])
+    expect(result[0].providerOptions?.openaiCompatible?.reasoning_content).toBe("")
   })
 })
 
