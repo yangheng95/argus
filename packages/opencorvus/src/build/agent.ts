@@ -32,6 +32,7 @@ import { git as runGit } from "@/util/git"
 import { tool, type ToolSet } from "ai"
 import { Log } from "@/util/log"
 import { AgentRunError, runAgentSession } from "@/agent/runner"
+import { Agent } from "@/agent/agent"
 import { Instance } from "@/project/instance"
 import { Session } from "@/session"
 import { SessionContext } from "@/session/context"
@@ -41,7 +42,6 @@ import { BuildSemaphore } from "@/engine/build-semaphore"
 import { Ownership } from "@/engine/ownership"
 import { findActiveRunForTask, type TaskRow } from "@/engine/store"
 import { EngineConfig } from "@/engine/config"
-import { Config } from "@/config/config"
 import { ExecutorRegistry } from "@/executor/registry"
 import {
   record,
@@ -1415,8 +1415,10 @@ async function runWithExternalProviderImpl(args: {
   // design_analysis; build-stage skills describe implementation and
   // verification only.
   const orchCfg = await EngineConfig.get()
-  const config = Config.mergeOverlay(await Config.get(), SessionContext.overlay() ?? {})
-  const userAppend = (config.agent as Record<string, any> | undefined)?.build?.prompt_append
+  const buildAgent = await Agent.get("build")
+  const userAppend = buildAgent
+    ? Agent.resolveSessionAgent(buildAgent, SessionContext.overlay()).promptAppend
+    : undefined
   const buildSkillsCfg = (orchCfg as unknown as { build?: { skills?: string[] } }).build?.skills ?? []
   const { resolveStageSkills } = await import("@/engine/skill-inject")
   const resolvedSkills = await resolveStageSkills(buildSkillsCfg, "build", args.taskSignals)
