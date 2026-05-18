@@ -1,10 +1,7 @@
 import { afterEach, describe, expect, mock, test } from "bun:test"
-import {
-  MissingModelConfigError,
-  resolveConfiguredModelRef,
-} from "../../src/agent/model"
 import { Config } from "../../src/config/config"
 import { Instance } from "../../src/project/instance"
+import { Provider } from "../../src/provider/provider"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
@@ -25,12 +22,8 @@ describe("resolveConfiguredModelRef — strict, no fallback", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const fresh = (await import("../../src/agent/model"))
-          .resolveConfiguredModelRef
-        await expect(fresh()).resolves.toEqual({
-          providerID: "alibaba-coding-plan-cn",
-          modelID: "kimi-k2.5",
-        })
+        const fresh = (await import("../../src/agent/model")).resolveConfiguredModelRef
+        await expect(fresh()).resolves.toEqual(Provider.parseModel(Config.DEFAULT_MODEL))
       },
     })
   })
@@ -55,11 +48,8 @@ describe("resolveConfiguredModelRef — strict, no fallback", () => {
       await Instance.provide({
         directory: tmp.path,
         fn: async () => {
-          const fresh = (await import("../../src/agent/model"))
-            .resolveConfiguredModelRef
-          await expect(fresh()).rejects.toBeInstanceOf(
-            MissingModelConfigError,
-          )
+          const { MissingModelConfigError, resolveConfiguredModelRef } = await import("../../src/agent/model")
+          await expect(resolveConfiguredModelRef()).rejects.toBeInstanceOf(MissingModelConfigError)
         },
       })
     } finally {

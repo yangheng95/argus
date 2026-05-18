@@ -2,6 +2,7 @@ import { EOL } from "os"
 import { basename } from "path"
 import { Agent } from "../../../agent/agent"
 import { Provider } from "../../../provider/provider"
+import { resolveAgentModelRef } from "../../../agent/model"
 import { Session } from "../../../session"
 import type { Message } from "../../../session/message"
 import { Identifier } from "../../../id/id"
@@ -70,7 +71,7 @@ export const AgentCommand = cmd({
 })
 
 async function getAvailableTools(agent: Agent.Info) {
-  const model = agent.model ?? (await Provider.defaultModel())
+  const model = await resolveAgentModelRef(agent.name, { explicitModel: agent.model })
   return ToolRegistry.tools(model, agent)
 }
 
@@ -114,7 +115,7 @@ function parseToolParams(input?: string) {
 async function createToolContext(agent: Agent.Info) {
   const session = await Session.create({ kind: "assistant", title: `Debug tool run (${agent.name})` })
   const messageID = Identifier.ascending("message")
-  const model = agent.model ?? (await Provider.defaultModel())
+  const model = await resolveAgentModelRef(agent.name, { explicitModel: agent.model })
   const now = Date.now()
   const message: Message.Assistant = {
     id: messageID,

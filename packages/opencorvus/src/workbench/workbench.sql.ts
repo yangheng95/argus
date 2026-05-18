@@ -1,5 +1,5 @@
 import { integer, sqliteTable, text, index } from "drizzle-orm/sqlite-core"
-import { EnginePlanVersionTable, EngineTaskTable } from "@/engine"
+import { EnginePlanVersionTable, EngineTaskTable } from "@/engine/engine.sql"
 import { Timestamps } from "@/storage/schema.sql"
 
 export type WorkbenchNoteKind =

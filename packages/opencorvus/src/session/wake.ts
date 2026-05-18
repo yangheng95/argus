@@ -98,8 +98,10 @@ export namespace SessionWake {
     return sessionID
   }
 
-  /** Resolve the configured default model. Session history must not influence runtime model selection. */
+  /** Resolve the configured model (session overlay over project base, spec
+   * §13.2). Session message history must NOT influence runtime model. */
   async function resolveModel(_sessionID: string): Promise<{ providerID: string; modelID: string }> {
-    return Provider.defaultModel()
+    const { resolveConfiguredModelRef } = await import("@/agent/model")
+    return resolveConfiguredModelRef()
   }
 }

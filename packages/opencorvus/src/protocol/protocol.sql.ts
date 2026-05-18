@@ -1,6 +1,6 @@
 import { integer, index, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core"
 import { Identifier } from "@/id/id"
-import { EngineInteractionRequestTable, EngineTaskTable } from "@/engine"
+import { EngineInteractionRequestTable, EngineTaskTable } from "@/engine/engine.sql"
 import { SessionTable } from "@/session/session.sql"
 import { Timestamps } from "@/storage/schema.sql"
 import type { ProtocolAggregate, ProtocolInboxStatus, ProtocolKind } from "./schema"
@@ -68,4 +68,3 @@ export const ProtocolInboxTable = sqliteTable(
     index("protocol_inbox_lease_idx").on(table.actor, table.lease_until),
   ],
 )
-

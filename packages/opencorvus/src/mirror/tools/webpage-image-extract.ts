@@ -19,7 +19,7 @@ import z from "zod"
 import { Tool } from "../../tool/tool"
 import { Provider } from "../../provider/provider"
 import { ProviderLLM } from "../../provider/llm"
-import { Config } from "../../config/config"
+import { resolveConfiguredModelRef } from "../../agent/model"
 import { Log } from "../../util/log"
 import { Instance } from "../../project/instance"
 import { extractImage } from "../image/extract"
@@ -62,10 +62,8 @@ Use this only when image-reference evidence is missing for the requested output 
   async execute(params, ctx) {
     const outputDir = await resolveMirrorOutputDir(params.outputDir)
 
-    const cfg = await Config.get()
-    const parsed = cfg.model
-      ? Provider.parseModel(cfg.model)
-      : await Provider.defaultModel()
+    // Single configured-model resolver (spec §13.2): session overlay > base.
+    const parsed = await resolveConfiguredModelRef()
     const model = await Provider.getModel(parsed.providerID, parsed.modelID)
     if (!model.capabilities.input.image) {
       throw new Error(

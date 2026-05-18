@@ -104,7 +104,6 @@ export namespace Agent {
       external_code_search: "allow",
       lsp: "allow",
       memory: "allow",
-      schedule: "allow",
       skill: "allow",
       panel: "allow",
       todoread: "allow",
@@ -286,7 +285,7 @@ export namespace Agent {
         //   - dispatch tools (the orchestrator's actual job)
         //   - observation tools (read_context, query_failed_goals, goal_report)
         //   - user interaction (question)
-        //   - session-local bookkeeping (todoread, todowrite, schedule, skill)
+        //   - session-local bookkeeping (todoread, todowrite, skill)
         // Excluded:
         //   - filesystem / shell (bash, read, edit, write, glob, search_code,
         //     external_code_search, lsp, codesearch, list)
@@ -327,7 +326,6 @@ export namespace Agent {
             // own bookkeeping
             "todowrite",
             "todoread",
-            "schedule",
             "skill",
           ],
         },
@@ -544,7 +542,10 @@ export namespace Agent {
 
   export async function generate(input: { description: string; model?: { providerID: string; modelID: string } }) {
     const cfg = await Config.get()
-    const defaultModel = input.model ?? (await Provider.defaultModel())
+    // Single model resolver (spec §13.1/§13.2). Dynamic import avoids the
+    // agent<->model import cycle (model.ts imports Agent).
+    const { resolveConfiguredModelRef } = await import("./model")
+    const defaultModel = input.model ?? (await resolveConfiguredModelRef())
     const model = await Provider.getModel(defaultModel.providerID, defaultModel.modelID)
     const language = await Provider.getLanguage(model)
 

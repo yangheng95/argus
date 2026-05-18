@@ -1,4 +1,5 @@
 import { Context } from "../util/context"
+import { Config } from "@/config/config"
 // Type-only import: erased at runtime, so config-layer consumers can read the
 // ambient session without creating a session<->config import cycle.
 import type { Session } from "./index"
@@ -31,5 +32,17 @@ export namespace SessionContext {
   // reachable from within a session execution.
   export function use(): Session.Info {
     return ctx.use()
+  }
+
+  // THE single accessor for the active session's config overlay. Returns the
+  // parsed, schema-validated overlay (pinned-invariant keys already rejected
+  // by Config.Overlay) or undefined when there is no session / no overlay.
+  // Consumers (model resolution, resolveSessionAgent) apply it via
+  // Config.mergeOverlay onto the immutable project base — they never read
+  // session metadata directly, so the overlay surface stays single-source.
+  export function overlay(): Config.Overlay | undefined {
+    const raw = ctx.tryUse()?.metadata?.configOverlay
+    if (!raw) return undefined
+    return Config.Overlay.parse(raw)
   }
 }

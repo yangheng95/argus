@@ -215,19 +215,15 @@ function appendTimeline(input: z.infer<typeof ControlMessageInput>, result: z.in
 }
 
 async function resolveModel() {
-  // Agent.defaultAgent throws on config issues (no visible agent, hidden
-  // default, etc.) — those should surface, not silently disable the model.
-  const agentName = await Agent.defaultAgent()
-  const agent = await Agent.get(agentName)
-  const target = agent?.model
-  if (target) return target
-  // No .catch here — Provider.defaultModel() now reads only cfg.model and
-  // throws MissingModelConfigError if unset. The control plane relies on
-  // that contract: when the operator hasn't declared a model in
-  // opencorvus.jsonc there is no safe "default" to pick, and silently
-  // returning undefined would push the missing-config into downstream
-  // prompts where it surfaces as a confusing "no agent found" error.
-  return Provider.defaultModel()
+  // Single model resolver (spec §13.1/§13.2). Agent.defaultAgent throws on
+  // config issues (no visible agent, hidden default) — those surface.
+  // resolveAgentModelRef gives base agent.<name>.model then base cfg.model
+  // then MissingModelConfigError (control plane has no session overlay).
+  // The strict no-default contract is preserved: when the operator hasn't
+  // declared a model there is no safe pick — it must throw, not return
+  // undefined into downstream prompts.
+  const { resolveAgentModelRef } = await import("@/agent/model")
+  return resolveAgentModelRef(await Agent.defaultAgent())
 }
 
 async function systemPrompt(input: z.infer<typeof ControlMessageInput>) {

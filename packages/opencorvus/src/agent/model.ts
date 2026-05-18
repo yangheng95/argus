@@ -21,9 +21,9 @@
  * panel surfaces read-only). Everything else — env variables, recent-model
  * state, session user-message propagation — is a fallback and forbidden.
  */
-import { Agent } from "./agent"
 import { Config } from "@/config/config"
 import { Provider } from "@/provider/provider"
+import { SessionContext } from "@/session/context"
 import { NamedError } from "@opencorvus-ai/util/error"
 import z from "zod"
 
@@ -41,26 +41,41 @@ export const MissingModelConfigError = NamedError.create(
 )
 
 /**
- * Resolve the Provider.Model for a given agent by name.
+ * THE single model resolver (spec §11.1/§13.1). Monotone precedence — every
+ * other model-derivation path in the codebase funnels here; a new parallel
+ * derivation is a rule 8 violation:
  *
- * Throws `MissingModelConfigError` when neither `agent.<name>.model` nor
- * top-level `model` is configured. Callers must not catch-and-default this
- * error; the expected remediation is for the operator to set `model` in
- * opencorvus.jsonc (or a per-agent override).
+ *   1. explicitModel        — per-request, user-specified for THIS call only
+ *                             (the ONLY allowed input outside the resolver).
+ *   2. session overlay      — agent.<name>.model, then top-level model
+ *   3. project base         — agent.<name>.model, then top-level model
+ *   4. MissingModelConfigError — NO history-derived / DEFAULT_MODEL fallback.
+ *
+ * The session overlay comes from the ambient SessionContext (established at
+ * every session execution entry point). Subagents/out-of-context callers that
+ * need a specific session's choice pass `explicitModel` resolved by the caller
+ * (spec §13.3) — the resolver never does its own session/task DB lookup, so
+ * it stays cycle-free and single-source. `sessionID`/`taskID` are accepted for
+ * call-site provenance/telemetry only; overlay is read from the ambient scope.
  */
-export async function resolveAgentModel(
+export async function resolveAgentModelRef(
   name: string,
-  _opts?: { taskID?: string; sessionID?: string },
-): Promise<Provider.Model> {
+  opts?: { taskID?: string; sessionID?: string; explicitModel?: ModelRef | null },
+): Promise<ModelRef> {
+  if (opts?.explicitModel) {
+    return { providerID: opts.explicitModel.providerID, modelID: opts.explicitModel.modelID }
+  }
+  const overlay = SessionContext.overlay()
+  const overlayAgentModel = overlay?.agent?.[name]?.model
+  if (overlayAgentModel) return Provider.parseModel(overlayAgentModel)
+  if (overlay?.model) return Provider.parseModel(overlay.model)
+  const { Agent } = await import("./agent")
   const agent = await Agent.get(name)
   if (agent?.model) {
-    return Provider.getModel(agent.model.providerID, agent.model.modelID)
+    return { providerID: agent.model.providerID, modelID: agent.model.modelID }
   }
   const cfg = await Config.get()
-  if (cfg.model) {
-    const ref = Provider.parseModel(cfg.model)
-    return Provider.getModel(ref.providerID, ref.modelID)
-  }
+  if (cfg.model) return Provider.parseModel(cfg.model)
   throw new MissingModelConfigError({
     agent: name,
     message:
@@ -69,17 +84,33 @@ export async function resolveAgentModel(
   })
 }
 
+/** As resolveAgentModelRef, but returns the loaded Provider.Model. */
+export async function resolveAgentModel(
+  name: string,
+  opts?: { taskID?: string; sessionID?: string; explicitModel?: ModelRef | null },
+): Promise<Provider.Model> {
+  const ref = await resolveAgentModelRef(name, opts)
+  return Provider.getModel(ref.providerID, ref.modelID)
+}
+
 /**
- * Resolve a model ref from config only — used by paths that need the project
- * default without going through an agent (e.g. the overlay settings panel
- * asking "what's the configured default?"). Throws when `model` is missing.
+ * Resolve a model ref from config (session overlay over project base) without
+ * going through an agent — e.g. the overlay settings panel asking "what's the
+ * effective default?". Same single-source precedence as resolveAgentModel for
+ * the non-agent levels. Throws when no `model` anywhere (no fallback).
+ *
+ * This is also the ONLY "configured default model" entrypoint — Provider's old
+ * parallel defaultModel() (duplicate cfg.model→parse→throw, rule 8) is removed
+ * and delegates here.
  */
 export async function resolveConfiguredModelRef(): Promise<ModelRef> {
+  const overlay = SessionContext.overlay()
+  if (overlay?.model) return Provider.parseModel(overlay.model)
   const cfg = await Config.get()
   if (cfg.model) return Provider.parseModel(cfg.model)
   throw new MissingModelConfigError({
     message:
-      "No top-level `model` configured in opencorvus.jsonc. " +
+      "No `model` configured (session overlay or opencorvus.jsonc). " +
       "The project must declare a default model — fallbacks are not allowed.",
   })
 }

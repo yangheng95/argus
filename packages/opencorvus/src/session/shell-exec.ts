@@ -3,12 +3,10 @@ import z from "zod"
 import { Identifier } from "../id/id"
 import { Message } from "./message"
 import { Session } from "."
-import { Agent } from "../agent/agent"
 import { Instance } from "../project/instance"
 import { Plugin } from "../plugin"
 import { defer } from "../util/defer"
 import { ulid } from "ulid"
-import { clearRewindCursorForSession } from "@/engine/rewind"
 import { spawn } from "child_process"
 import { Shell } from "@/shell/shell"
 import { PidGuard } from "@/shell/pid-guard"
@@ -48,10 +46,12 @@ export namespace SessionShell {
       }
     })
 
-    await clearRewindCursorForSession(input.sessionID)
-    const agent = await Agent.get(input.agent)
-    const { Provider } = await import("../provider/provider")
-    const model = input.model ?? agent.model ?? (await Provider.defaultModel())
+    // Single model resolver (spec §13.1): explicit > session overlay > base.
+    const { resolveAgentModelRef } = await import("../agent/model")
+    const model = await resolveAgentModelRef(input.agent, {
+      explicitModel: input.model,
+      sessionID: input.sessionID,
+    })
     const userMsg: Message.User = {
       id: Identifier.ascending("message"),
       sessionID: input.sessionID,
