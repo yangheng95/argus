@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, mock, test } from "bun:test"
 import { Config } from "../../src/config/config"
 import { Instance } from "../../src/project/instance"
+import { Provider } from "../../src/provider/provider"
 import { tmpdir } from "../fixture/fixture"
 
-describe("Provider.defaultModel - strict config only", () => {
+describe("resolveConfiguredModelRef - strict configured model only", () => {
   afterEach(() => {
     mock.restore()
   })
@@ -20,8 +21,8 @@ describe("Provider.defaultModel - strict config only", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const fresh = (await import("../../src/provider/provider")).Provider
-        await expect(fresh.defaultModel()).rejects.toThrow("MissingModelConfigError")
+        const { resolveConfiguredModelRef } = await import("../../src/agent/model")
+        await expect(resolveConfiguredModelRef()).rejects.toThrow("MissingModelConfigError")
       },
     })
   })
@@ -38,11 +39,8 @@ describe("Provider.defaultModel - strict config only", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const fresh = (await import("../../src/provider/provider")).Provider
-        await expect(fresh.defaultModel()).resolves.toEqual({
-          providerID: "deepseek",
-          modelID: "deepseek-v4-pro",
-        })
+        const { resolveConfiguredModelRef } = await import("../../src/agent/model")
+        await expect(resolveConfiguredModelRef()).resolves.toEqual(Provider.parseModel(Config.DEFAULT_MODEL))
       },
     })
   })

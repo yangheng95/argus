@@ -4,7 +4,6 @@ import { Config } from "../config/config"
 import { mapValues, mergeDeep, omit, pickBy, sortBy } from "remeda"
 import { APICallError, NoSuchModelError, type LanguageModel } from "ai"
 import { Log } from "../util/log"
-import { Plugin } from "../plugin"
 import { ModelsDev } from "./models"
 import { NamedError } from "@opencorvus-ai/util/error"
 import { Auth } from "../auth"
@@ -524,6 +523,7 @@ export namespace Provider {
       }
     }
 
+    const { Plugin } = await import("../plugin")
     for (const plugin of await Plugin.list()) {
       if (!plugin.auth) continue
       const providerID = plugin.auth.provider
@@ -998,30 +998,11 @@ export namespace Provider {
     )
   }
 
-  /**
-   * Project default model, strict. Reads only `cfg.model` from opencorvus.jsonc.
-   *
-   * Previous versions walked a mutable fallback chain — `model.json`'s
-   * `recent` list (updated every time the operator clicked a model in the
-   * overlay), then the first model of the first registered provider. That
-   * chain caused goal retries to silently switch provider/model between runs
-   * whenever the operator changed the selected model in between, collapsing
-   * prompt cache across retries (Anthropic/GLM caches are physically
-   * isolated, so cross-provider continuity is impossible regardless of byte
-   * equality).
-   *
-   * Throws `MissingModelConfigError` if `cfg.model` is absent. Callers must
-   * not catch-and-default — the remediation is for the operator to set
-   * `model` in opencorvus.jsonc.
-   */
-  export async function defaultModel(): Promise<{ providerID: string; modelID: string }> {
-    const cfg = await Config.get()
-    if (cfg.model) return parseModel(cfg.model)
-    throw new MissingModelConfigError({
-      scope: "default",
-      hint: `Set top-level \`model\` in opencorvus.jsonc, e.g. "model": "${Config.DEFAULT_MODEL}".`,
-    })
-  }
+  // Provider.defaultModel() was removed (spec §13.2, rule 8). It duplicated
+  // `cfg.model → parseModel → throw` already owned by
+  // agent/model.ts:resolveConfiguredModelRef, which is now THE single
+  // configured-model entrypoint (and also applies session overlay). All
+  // former callers funnel through resolveConfiguredModelRef / resolveAgentModel.
 
   export function parseModel(model: string) {
     const [providerID, ...rest] = model.split("/")
@@ -1040,21 +1021,9 @@ export namespace Provider {
     }),
   )
 
-  /**
-   * Distinct from `ModelNotFoundError`. Thrown when NO model was selected at
-   * all (operator never set `model` / no per-agent override), not when a
-   * specific id failed registry lookup. Keeping the two separate prevents the
-   * old trick of throwing `ProviderModelNotFoundError({providerID:"",modelID:""})`
-   * which made every "config missing" bug look like a provider-registry miss.
-   */
-  export const MissingModelConfigError = NamedError.create(
-    "MissingModelConfigError",
-    z.object({
-      scope: z.enum(["default", "agent"]),
-      agent: z.string().optional(),
-      hint: z.string(),
-    }),
-  )
+  // Provider.MissingModelConfigError removed with defaultModel() (spec §13.2,
+  // rule 8). The single MissingModelConfigError lives in agent/model.ts;
+  // its NamedError name string is unchanged so name-based handling still works.
 
   export const InitError = NamedError.create(
     "ProviderInitError",

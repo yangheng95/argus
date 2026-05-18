@@ -3,7 +3,7 @@ import z from "zod"
 import { Output } from "ai"
 import { streamText } from "@/llm/api"
 import { Agent } from "@/agent/agent"
-import { resolveAgentModel } from "@/agent/model"
+import { resolveAgentModel, resolveConfiguredModelRef } from "@/agent/model"
 import { Bus } from "@/bus"
 import { Config } from "@/config/config"
 import { discoverChecks, resolveConfig, resolvedChecks } from "@/delivery/checks/discovery"
@@ -473,10 +473,10 @@ async function messageContext(_sessionID: string) {
   }
   const name = await Agent.defaultAgent().catch(() => undefined)
   const agent = name ? await Agent.get(name).catch(() => undefined) : undefined
-  // Provider.defaultModel() is strict now (reads only cfg.model, throws if
-  // unset). No .catch — a missing model config is a hard project-setup error
+  // Single configured-model resolver (spec §13.2): session overlay > base.
+  // Strict — no .catch; a missing model config is a hard project-setup error
   // and must surface to the caller, not be papered over with `undefined`.
-  const model = agent?.model ?? (await Provider.defaultModel())
+  const model = agent?.model ?? (await resolveConfiguredModelRef())
   if (!agent || !model) return
   return {
     agent: agent.name,
@@ -615,16 +615,6 @@ async function taskChecks(checks?: z.input<typeof CheckConfig>) {
   }
 
   return CheckConfig.parse(next)
-}
-
-/** Thrown when the planner agent cannot produce a valid plan. Server routes
- *  map this to a 4xx so the user sees the planner failure rather than a
- *  generic 500. */
-export class PlannerFailureError extends Error {
-  constructor(message: string, options?: { cause?: unknown }) {
-    super(message, options)
-    this.name = "PlannerFailureError"
-  }
 }
 
 export class TaskQueueStartError extends Error {

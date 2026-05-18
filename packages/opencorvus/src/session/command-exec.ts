@@ -3,6 +3,7 @@ import { Identifier } from "../id/id"
 import { Message } from "./message"
 import { Agent } from "../agent/agent"
 import { Provider } from "../provider/provider"
+import { resolveAgentModelRef, resolveConfiguredModelRef } from "../agent/model"
 import { Bus } from "../bus"
 import { Plugin } from "../plugin"
 import { Command } from "../command"
@@ -89,19 +90,20 @@ export namespace SessionCommand {
     }
     template = template.trim()
 
-    const taskModel = await (async () => {
-      if (cmd.model) {
-        return Provider.parseModel(cmd.model)
-      }
-      if (cmd.agent) {
-        const cmdAgent = await Agent.get(cmd.agent)
-        if (cmdAgent?.model) {
-          return cmdAgent.model
-        }
-      }
-      if (input.model) return Provider.parseModel(input.model)
-      return await Provider.defaultModel()
-    })()
+    // Single model resolver (spec §13.1). Deliberately normalizes the old
+    // ad-hoc order (cmd.model > cmd.agent.model > input.model > default) to
+    // the canonical precedence: per-request explicit (cmd.model, else
+    // input.model) > session overlay > base agent.<name>.model > base model.
+    // Consolidating the parallel derivation is the rule 8 goal.
+    const explicitModel = cmd.model
+      ? Provider.parseModel(cmd.model)
+      : input.model
+        ? Provider.parseModel(input.model)
+        : null
+    const taskModel = await resolveAgentModelRef(cmd.agent ?? (await Agent.defaultAgent()), {
+      explicitModel,
+      sessionID: input.sessionID,
+    })
 
     try {
       await Provider.getModel(taskModel.providerID, taskModel.modelID)
@@ -151,7 +153,7 @@ export namespace SessionCommand {
     const userModel = isSubtask
       ? input.model
         ? Provider.parseModel(input.model)
-        : await Provider.defaultModel()
+        : await resolveConfiguredModelRef()
       : taskModel
 
     await Plugin.trigger(

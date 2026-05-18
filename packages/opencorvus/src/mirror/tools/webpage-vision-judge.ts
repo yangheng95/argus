@@ -30,7 +30,7 @@ import { Output } from "ai"
 import { Tool } from "../../tool/tool"
 import { Provider } from "../../provider/provider"
 import { ProviderLLM } from "../../provider/llm"
-import { Config } from "../../config/config"
+import { resolveConfiguredModelRef } from "../../agent/model"
 import { Log } from "../../util/log"
 import {
   withLLMActivity,
@@ -143,10 +143,8 @@ Pure transformation, no network besides the LLM call. Deterministic per (model, 
       fs.readFile(renderedPath),
     ])
 
-    const cfg = await Config.get()
-    const parsed = cfg.model
-      ? Provider.parseModel(cfg.model)
-      : await Provider.defaultModel()
+    // Single configured-model resolver (spec §13.2): session overlay > base.
+    const parsed = await resolveConfiguredModelRef()
     const model = await Provider.getModel(parsed.providerID, parsed.modelID)
     const language = ProviderLLM.wrapModel(
       await Provider.getLanguage(model),

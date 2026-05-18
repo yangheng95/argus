@@ -8,6 +8,7 @@ import { Log } from "../../util/log"
 import { Session } from ".."
 import { Agent } from "../../agent/agent"
 import { Provider } from "../../provider/provider"
+import { resolveAgentModelRef } from "../../agent/model"
 import { Instance } from "../../project/instance"
 import { Bus } from "../../bus"
 import { InstructionPrompt } from "../instruction"
@@ -92,7 +93,8 @@ export async function createUserMessage(input: PromptInput) {
   const agent = await Agent.get(agentName)
   if (!agent) throw new Error(`Unknown agent: ${agentName}`)
 
-  const model = input.model ?? agent.model ?? (await Provider.defaultModel())
+  // Single model resolver (spec §13.1): explicit > session overlay > base.
+  const model = await resolveAgentModelRef(agentName, { explicitModel: input.model, sessionID: input.sessionID })
   const full =
     !input.variant && agent.variant
       ? await Provider.getModel(model.providerID, model.modelID).catch((error) => {
