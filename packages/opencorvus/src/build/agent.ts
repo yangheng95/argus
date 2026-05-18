@@ -34,6 +34,7 @@ import { Log } from "@/util/log"
 import { AgentRunError, runAgentSession } from "@/agent/runner"
 import { Instance } from "@/project/instance"
 import { Session } from "@/session"
+import { SessionContext } from "@/session/context"
 import { SessionStatus } from "@/session/status"
 import { Worktree } from "@/worktree"
 import { BuildSemaphore } from "@/engine/build-semaphore"
@@ -1414,7 +1415,7 @@ async function runWithExternalProviderImpl(args: {
   // design_analysis; build-stage skills describe implementation and
   // verification only.
   const orchCfg = await EngineConfig.get()
-  const config = await Config.get()
+  const config = Config.mergeOverlay(await Config.get(), SessionContext.overlay() ?? {})
   const userAppend = (config.agent as Record<string, any> | undefined)?.build?.prompt_append
   const buildSkillsCfg = (orchCfg as unknown as { build?: { skills?: string[] } }).build?.skills ?? []
   const { resolveStageSkills } = await import("@/engine/skill-inject")

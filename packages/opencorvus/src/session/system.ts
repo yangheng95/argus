@@ -5,6 +5,7 @@ import { Shell } from "@/shell/shell"
 import { Config } from "@/config/config"
 import { Skill } from "@/skill"
 import { PermissionNext } from "@/permission/next"
+import { SessionContext } from "./context"
 
 import PROMPT_SYSTEM from "./prompt/system.txt"
 import type { Provider } from "@/provider/provider"
@@ -73,12 +74,12 @@ export namespace SystemPrompt {
 
   /** Resolve the core system prompt string, respecting config.prompt.core_header override. */
   export async function instructions(): Promise<string> {
-    const cfg = await Config.get()
+    const cfg = Config.mergeOverlay(await Config.get(), SessionContext.overlay() ?? {})
     return cfg.prompt?.["core_header"] ?? PROMPT_SYSTEM
   }
 
   export async function provider(model: Provider.Model) {
-    const cfg = await Config.get()
+    const cfg = Config.mergeOverlay(await Config.get(), SessionContext.overlay() ?? {})
     const override = cfg.prompt?.["core_header"]
     if (override) return [override]
     return [PROMPT_SYSTEM]

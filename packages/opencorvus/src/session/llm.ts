@@ -15,7 +15,7 @@ import { mergeDeep, pipe } from "remeda"
 import { ProviderTransform } from "@/provider/transform"
 import { Config } from "@/config/config"
 import { Instance } from "@/project/instance"
-import type { Agent } from "@/agent/agent"
+import { Agent } from "@/agent/agent"
 import { Message } from "./message"
 import { SessionEvents } from "./events"
 import { Plugin } from "@/plugin"
@@ -25,6 +25,7 @@ import { PermissionNext } from "@/permission/next"
 import { Auth } from "@/auth"
 import { AgentTrace } from "@/trace"
 import { sessionParentID, taskIDForSession } from "@/orchestrator/task-event"
+import { SessionContext } from "./context"
 
 export namespace LLM {
   const log = Log.create({ service: "llm" })
@@ -65,11 +66,12 @@ export namespace LLM {
     system: string[]
     user: Message.User
   }) {
+    const agent = Agent.resolveSessionAgent(input.agent, SessionContext.overlay())
     const providerPrompt =
       input.user.systemMode === "complete"
         ? []
-        : input.agent.prompt
-          ? [input.agent.prompt]
+        : agent.prompt
+          ? [agent.prompt]
           : await SystemPrompt.provider(input.model)
 
     return [
@@ -88,14 +90,15 @@ export namespace LLM {
   }
 
   export async function stream(input: StreamInput): Promise<StreamResult> {
+    const agent = Agent.resolveSessionAgent(input.agent, SessionContext.overlay())
     const l = log
       .clone()
       .tag("providerID", input.model.providerID)
       .tag("modelID", input.model.id)
       .tag("sessionID", input.sessionID)
       .tag("small", (input.small ?? false).toString())
-      .tag("agent", input.agent.name)
-      .tag("mode", input.agent.mode)
+      .tag("agent", agent.name)
+      .tag("mode", agent.mode)
     l.info("stream", {
       modelID: input.model.id,
       providerID: input.model.providerID,
@@ -108,7 +111,7 @@ export namespace LLM {
     ])
     const isOpenaiOauth = provider.id === "openai" && auth?.type === "oauth"
 
-    const system = await composeSystem(input)
+    const system = await composeSystem({ ...input, agent })
     const responseLanguage = SystemPrompt.responseLanguage(cfg.locale)
     if (responseLanguage) {
       system[0] = [system[0], responseLanguage].filter(Boolean).join("\n\n")
@@ -139,7 +142,7 @@ export namespace LLM {
     const options: Record<string, any> = pipe(
       base,
       mergeDeep(input.model.options),
-      mergeDeep(input.agent.options),
+      mergeDeep(agent.options),
       mergeDeep(variant),
     )
     if (isOpenaiOauth) {
@@ -150,16 +153,16 @@ export namespace LLM {
       "chat.params",
       {
         sessionID: input.sessionID,
-        agent: input.agent,
+        agent,
         model: input.model,
         provider,
         message: input.user,
       },
       {
         temperature: input.model.capabilities.temperature
-          ? (input.agent.temperature ?? ProviderTransform.temperature(input.model))
+          ? (agent.temperature ?? ProviderTransform.temperature(input.model))
           : undefined,
-        topP: input.agent.topP ?? ProviderTransform.topP(input.model),
+        topP: agent.topP ?? ProviderTransform.topP(input.model),
         topK: ProviderTransform.topK(input.model),
         options,
       },
@@ -169,7 +172,7 @@ export namespace LLM {
       "chat.headers",
       {
         sessionID: input.sessionID,
-        agent: input.agent,
+        agent,
         model: input.model,
         provider,
         message: input.user,
@@ -181,7 +184,7 @@ export namespace LLM {
 
     const maxOutputTokens = ProviderTransform.maxOutputTokens(input.model)
 
-    const tools = await resolveTools(input)
+    const tools = await resolveTools({ ...input, agent })
     const toolChoice = input.toolChoice
     const providerOptions = ProviderTransform.providerOptions(
       input.model,
@@ -208,8 +211,8 @@ export namespace LLM {
         sessionID: input.sessionID,
         parentSessionID,
         taskID,
-        agentName: input.agent.name,
-        agentMode: input.agent.mode,
+        agentName: agent.name,
+        agentMode: agent.mode,
         model: { providerID: input.model.providerID, modelID: input.model.id },
         small: input.small,
         toolChoice,
