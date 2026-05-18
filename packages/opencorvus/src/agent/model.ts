@@ -51,12 +51,10 @@ export const MissingModelConfigError = NamedError.create(
  *   3. project base         — agent.<name>.model, then top-level model
  *   4. MissingModelConfigError — NO history-derived / DEFAULT_MODEL fallback.
  *
- * The session overlay comes from the ambient SessionContext (established at
- * every session execution entry point). Subagents/out-of-context callers that
- * need a specific session's choice pass `explicitModel` resolved by the caller
- * (spec §13.3) — the resolver never does its own session/task DB lookup, so
- * it stays cycle-free and single-source. `sessionID`/`taskID` are accepted for
- * call-site provenance/telemetry only; overlay is read from the ambient scope.
+ * The session overlay comes from the ambient SessionContext first. Callers
+ * outside that scope may pass `sessionID`, or `taskID` when only the owning
+ * engine task is known; the resolver then dynamically loads the session/task
+ * stores to avoid a model<->session/engine import cycle.
  */
 export async function resolveAgentModelRef(
   name: string,
@@ -65,7 +63,7 @@ export async function resolveAgentModelRef(
   if (opts?.explicitModel) {
     return { providerID: opts.explicitModel.providerID, modelID: opts.explicitModel.modelID }
   }
-  const overlay = SessionContext.overlay()
+  const overlay = await resolveSessionOverlay(opts)
   const overlayAgentModel = overlay?.agent?.[name]?.model
   if (overlayAgentModel) return Provider.parseModel(overlayAgentModel)
   if (overlay?.model) return Provider.parseModel(overlay.model)
@@ -103,8 +101,8 @@ export async function resolveAgentModel(
  * parallel defaultModel() (duplicate cfg.model→parse→throw, rule 8) is removed
  * and delegates here.
  */
-export async function resolveConfiguredModelRef(): Promise<ModelRef> {
-  const overlay = SessionContext.overlay()
+export async function resolveConfiguredModelRef(opts?: { taskID?: string; sessionID?: string }): Promise<ModelRef> {
+  const overlay = await resolveSessionOverlay(opts)
   if (overlay?.model) return Provider.parseModel(overlay.model)
   const cfg = await Config.get()
   if (cfg.model) return Provider.parseModel(cfg.model)
@@ -113,6 +111,25 @@ export async function resolveConfiguredModelRef(): Promise<ModelRef> {
       "No `model` configured (session overlay or opencorvus.jsonc). " +
       "The project must declare a default model — fallbacks are not allowed.",
   })
+}
+
+async function resolveSessionOverlay(opts?: {
+  taskID?: string
+  sessionID?: string
+}): Promise<Config.Overlay | undefined> {
+  const ambient = SessionContext.overlay()
+  if (ambient) return ambient
+  const sessionID = opts?.sessionID ?? (opts?.taskID ? await sessionIDForTask(opts.taskID) : undefined)
+  if (!sessionID) return undefined
+  const { Session } = await import("@/session")
+  const session = await Session.get(sessionID)
+  const raw = session.metadata?.configOverlay
+  return raw ? Config.Overlay.parse(raw) : undefined
+}
+
+async function sessionIDForTask(taskID: string): Promise<string | undefined> {
+  const { requireTask } = await import("@/engine/store")
+  return requireTask(taskID).session_id ?? undefined
 }
 
 /**
