@@ -252,6 +252,15 @@ export interface RunAgentSessionOutput<C> {
   requiredTools: string[]
 }
 
+function recordAgentTraceReportForSession(
+  session: Awaited<ReturnType<typeof Session.createNext>>,
+  input: Parameters<typeof AgentTrace.recordAgentReport>[0],
+): void {
+  SessionContext.provide(session, () => {
+    AgentTrace.recordAgentReport(input)
+  })
+}
+
 function errorReport(message: string): AgentReport {
   const text = message.trim() || "agent failed"
   return { summary: text, detail: text }
@@ -863,7 +872,7 @@ export async function runAgentSession<C>(
       streamErrors,
     })
     if (AgentTrace.isEnabled()) {
-      AgentTrace.recordAgentReport({
+      recordAgentTraceReportForSession(session, {
         sessionID: session.id,
         parentSessionID: input.parentSessionID,
         taskID: input.taskID,
@@ -909,7 +918,7 @@ export async function runAgentSession<C>(
   })
 
   if (AgentTrace.isEnabled()) {
-    AgentTrace.recordAgentReport({
+    recordAgentTraceReportForSession(session, {
       sessionID: session.id,
       parentSessionID: input.parentSessionID,
       taskID: input.taskID,
@@ -1159,7 +1168,7 @@ export async function runAgentSessionWithRetry<C>(
         )
       }
       if (AgentTrace.isEnabled()) {
-        AgentTrace.recordAgentReport({
+        recordAgentTraceReportForSession(out.session, {
           sessionID: out.session.id,
           parentSessionID: input.parentSessionID,
           taskID: input.taskID,

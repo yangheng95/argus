@@ -81,3 +81,78 @@ test("runAgentSession appends config.agent.build.prompt_append after build core"
   expect(promptCalls[0].systemMode).toBe("complete")
   expect(promptCalls[0].system).toBe(`${BUILD_CORE}\n\nAdditional build instruction`)
 })
+
+test("runAgentSession writes child agent report while called from parent session context", async () => {
+  mock.module("@/agent/model", () => ({
+    resolveAgentModel: async () => ({
+      providerID: "test",
+      api: { id: "mock" },
+    }),
+  }))
+  const { runAgentSession } = await import("../../src/agent/runner")
+  const { AgentTrace } = await import("../../src/trace")
+  const { Session } = await import("../../src/session")
+  const { SessionContext } = await import("../../src/session/context")
+
+  await using tmp = await tmpdir({ git: true })
+
+  spyOn(SessionPrompt, "prompt").mockImplementation(async (input) => {
+    return {
+      info: {
+        id: "msg_runner_context_assistant",
+        sessionID: input.sessionID,
+        role: "assistant",
+        parentID: input.messageID,
+        time: { created: Date.now() },
+        agent: input.agent ?? "build",
+        providerID: input.model?.providerID ?? "test",
+        modelID: input.model?.modelID ?? "mock",
+        cost: 0,
+        tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+        path: { cwd: tmp.path, root: tmp.path },
+      },
+      parts: [{
+        id: "prt_runner_context_assistant",
+        sessionID: input.sessionID,
+        messageID: "msg_runner_context_assistant",
+        type: "text",
+        text: "done",
+      }],
+    } as Awaited<ReturnType<typeof SessionPrompt.prompt>>
+  })
+
+  const toolKit: AgentToolKit<Record<string, never>> = {
+    tools: {},
+    getCollector: () => ({}),
+    buildReport: () => ({ summary: "ok", detail: "ok" }),
+  }
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const parent = await Session.createNext({
+        kind: "orchestrator",
+        title: "Parent orchestrator",
+        directory: tmp.path,
+      })
+      let childSessionID = ""
+
+      await SessionContext.provide(parent, async () => {
+        const out = await runAgentSession({
+          kind: "build",
+          core: BUILD_CORE,
+          sessionTitle: "child build",
+          parentSessionID: parent.id,
+          taskID: "tsk_runner_context",
+          toolKit,
+          buildUserPrompt: () => "implement the request",
+        })
+        childSessionID = out.session.id
+      })
+
+      const childEvents = AgentTrace.readSessionEvents(childSessionID)
+      expect(childEvents.some((event) => event.kind === "agent_report")).toBe(true)
+      expect(AgentTrace.readSessionEvents(parent.id).some((event) => event.kind === "agent_report")).toBe(false)
+    },
+  })
+})
