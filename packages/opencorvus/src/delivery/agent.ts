@@ -363,7 +363,7 @@ function buildUserPrompt(
     pushOptional(
       "# Exploration Tools",
       "# Exploration Tools\n\n" +
-        "Initial context is intentionally compact. Use inspect_delivery_context to fetch goals, upstream context, executor reports, diffs, manifest details, host failures, runtime failures, visual failures, or attachments only when needed.",
+        "Initial context is intentionally compact. Use inspect_delivery_context to fetch goals, upstream context, executor reports, diffs, changed files, or attachments only when needed.",
       1_500,
     )
   }
