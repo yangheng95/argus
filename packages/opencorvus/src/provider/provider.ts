@@ -200,6 +200,18 @@ export namespace Provider {
           }),
         ]),
       }),
+      transform: z
+        .object({
+          sampling: z
+            .object({
+              temperature: z.number().optional(),
+              topP: z.number().optional(),
+              topK: z.number().optional(),
+            })
+            .optional(),
+          options: z.record(z.string(), z.any()).optional(),
+        })
+        .optional(),
       cost: z.object({
         input: z.number(),
         output: z.number(),

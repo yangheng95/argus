@@ -109,6 +109,18 @@ const mistralToolCallIdPadAndSeq: NormalizeMessages = (msgs) => {
   return result
 }
 
+function extractInlineThink(text: string) {
+  const reasoning: string[] = []
+  const withoutBlocks = text.replace(/<think\b[^>]*>([\s\S]*?)<\/think>/gi, (_match, inner) => {
+    reasoning.push(inner)
+    return ""
+  })
+  return {
+    text: withoutBlocks.replace(/<\/?think\b[^>]*>/gi, ""),
+    reasoning: reasoning.join(""),
+  }
+}
+
 const interleavedReasoning: NormalizeMessages = (msgs, model) => {
   // For models that carry reasoning inline in the assistant message via a
   // provider-specific field (qwen: reasoning_content, etc.), extract the
@@ -116,12 +128,21 @@ const interleavedReasoning: NormalizeMessages = (msgs, model) => {
   if (typeof model.capabilities.interleaved !== "object") return msgs
   const field = model.capabilities.interleaved.field
   if (!field) return msgs
+  const extractsInlineThinkTags = model.providerID === "hexin" && model.family === "glm"
   return msgs.map((msg) => {
     if (msg.role === "assistant" && Array.isArray(msg.content)) {
-      const reasoningParts = msg.content.filter((part: any) => part.type === "reasoning")
+      const contentWithInlineThink = msg.content.flatMap((part: any) => {
+        if (!extractsInlineThinkTags || part.type !== "text" || typeof part.text !== "string") return [part]
+        const extracted = extractInlineThink(part.text)
+        const parts: any[] = []
+        if (extracted.reasoning) parts.push({ type: "reasoning", text: extracted.reasoning })
+        if (extracted.text) parts.push({ ...part, text: extracted.text })
+        return parts
+      })
+      const reasoningParts = contentWithInlineThink.filter((part: any) => part.type === "reasoning")
       const reasoningText = reasoningParts.map((part: any) => part.text).join("")
       const existingReasoningText = (msg.providerOptions as any)?.openaiCompatible?.[field]
-      const filteredContent = msg.content.filter((part: any) => part.type !== "reasoning")
+      const filteredContent = contentWithInlineThink.filter((part: any) => part.type !== "reasoning")
 
       return {
         ...msg,

@@ -7,6 +7,7 @@ import type { ModelsDev } from "./models"
 import { iife } from "@/util/iife"
 import { Flag } from "@/flag/flag"
 import { normalizeVendorMessages } from "./vendor-messages"
+import { GLM_EVALUATION_TEMPERATURE, THINKING_MODEL_TOP_P } from "./sampling"
 
 type Modality = NonNullable<ModelsDev.Model["modalities"]>["input"][number]
 
@@ -209,12 +210,15 @@ export namespace ProviderTransform {
   }
 
   export function temperature(model: Provider.Model) {
+    if (model.transform?.sampling && "temperature" in model.transform.sampling) {
+      return model.transform.sampling.temperature
+    }
     const id = model.id.toLowerCase()
     if (id.includes("qwen")) return 0.55
     if (id.includes("claude")) return undefined
     if (id.includes("gemini")) return 1.0
-    if (id.includes("glm-4.6")) return 1.0
-    if (id.includes("glm-4.7")) return 1.0
+    if (id.includes("glm-4.6")) return GLM_EVALUATION_TEMPERATURE
+    if (id.includes("glm-4.7")) return GLM_EVALUATION_TEMPERATURE
     if (id.includes("minimax-m2")) return 1.0
     if (id === "kimi-k2.6" || id.endsWith("/kimi-k2.6")) return undefined
     if (id.includes("kimi-k2")) {
@@ -240,15 +244,21 @@ export namespace ProviderTransform {
   }
 
   export function topP(model: Provider.Model) {
+    if (model.transform?.sampling && "topP" in model.transform.sampling) {
+      return model.transform.sampling.topP
+    }
     const id = model.id.toLowerCase()
     if (id.includes("qwen")) return 1
     if (["minimax-m2", "gemini", "kimi-k2.5", "kimi-k2p5", "kimi-k2-5"].some((s) => id.includes(s))) {
-      return 0.95
+      return THINKING_MODEL_TOP_P
     }
     return undefined
   }
 
   export function topK(model: Provider.Model) {
+    if (model.transform?.sampling && "topK" in model.transform.sampling) {
+      return model.transform.sampling.topK
+    }
     const id = model.id.toLowerCase()
     if (id.includes("minimax-m2")) {
       if (["m2.", "m25", "m21"].some((s) => id.includes(s))) return 40
@@ -592,7 +602,7 @@ export namespace ProviderTransform {
     sessionID: string
     providerOptions?: Record<string, any>
   }): Record<string, any> {
-    const result: Record<string, any> = {}
+    const result: Record<string, any> = { ...(input.model.transform?.options ?? {}) }
 
     // openai and providers using openai package should set store to false by default.
     if (input.model.providerID === "openai" || input.model.api.npm === "@ai-sdk/openai") {
