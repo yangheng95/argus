@@ -13,6 +13,7 @@
 import { createDeliveryTools } from "./tools"
 import { createDeliveryOutputTools } from "./output-tools"
 import DELIVERY_CORE from "@/prompt/core/delivery-core.txt"
+import ENGINEERING_CRAFT from "@/prompt/core/engineering-craft.txt"
 import { runAgentSessionWithRetry } from "@/agent/runner"
 import { Agent } from "@/agent/agent"
 import { resolveAgentModel } from "@/agent/model"
@@ -149,8 +150,6 @@ export namespace DeliveryAgent {
         const outputToolKit = createDeliveryOutputTools({
           requiredTools: systemResolved.requiredTools,
           requiredEvidenceFacets,
-          manifestGate: input.delivery.manifestGate,
-          hostGateFailures: input.delivery.hostGateFailures,
         })
         const guard = toolGuard({ ...reviewTools, ...outputToolKit.tools })
         return {
@@ -353,91 +352,12 @@ function buildUserPrompt(
     10_000,
   )
 
-  if (input.delivery.manifestGate) {
-    const gate = input.delivery.manifestGate
-    const gateLines = [
-      `finalGate.status=${gate.status}`,
-      `summary=${gate.summary}`,
-      `failedCheckIds=${gate.failedCheckIds.join(", ") || "(none)"}`,
-      `failedCoverageIds=${gate.failedCoverageIds.join(", ") || "(none)"}`,
-      `failedRuntimeFlowIds=${gate.failedRuntimeFlowIds.join(", ") || "(none)"}`,
-      `failedReviewIds=${gate.failedReviewIds.join(", ") || "(none)"}`,
-    ]
-    const detailLines = (input.delivery.manifestFailureDetails ?? []).slice(0, 10).map((item) => {
-      const status = item.status ? ` status=${item.status}` : ""
-      const exitCode = item.exitCode === undefined ? "" : ` exit=${item.exitCode}`
-      const command = item.command ? ` command=${item.command}` : ""
-      return `- [${item.kind}] ${item.id} ${item.name}${status}${exitCode}${command}: ${truncate(item.evidence, 300)}`
-    })
-    pushOptional(
-      "# DeliveryEvidenceManifest Gate",
-      `# DeliveryEvidenceManifest Gate\n\n` +
-        gateLines.join("\n") +
-        (detailLines.length > 0 ? `\n\nFailure details:\n${detailLines.join("\n")}` : "") +
-        (gate.status === "failed"
-          ? `\n\nThe manifest gate failed on required delivery evidence: functional ` +
-            `completion, configured checks, runtime flows, or contract audit. ` +
-            `You must submit verdict='rejected'. For each rejection_details ` +
-            `entry, include goal_id only when the listed goal's owned_paths, files_changed, or ` +
-            `report evidence identify it as responsible; otherwise leave the entry task-scoped ` +
-            `and explain the project-level blocker.`
-          : ""),
-      8_000,
-    )
-  }
-
-  if (input.delivery.hostGateFailures && input.delivery.hostGateFailures.length > 0) {
-    const lines: string[] = []
-    for (const failure of input.delivery.hostGateFailures) {
-      lines.push(`## ${failure.kind}:${failure.id}`)
-      lines.push(`Summary: ${failure.summary}`)
-      if (failure.evidence.length > 0) {
-        lines.push("Evidence:")
-        for (const item of failure.evidence.slice(0, 3)) lines.push(`- ${truncate(item, 300)}`)
-        if (failure.evidence.length > 3)
-          lines.push(`- ... ${failure.evidence.length - 3} more evidence item(s); call inspect_delivery_context.`)
-      }
-      lines.push("")
-    }
-    pushOptional(
-      "# Host Hard Gate Failures",
-      `# Host Hard Gate Failures\n\n` +
-        `These are deterministic host observations, not synthetic verdicts. They block acceptance, ` +
-        `but attribution still belongs to your submit_verdict rejection_details. Do not drop any ` +
-        `runtime or visual gate evidence when writing the rejected verdict.\n\n` +
-        lines.join("\n").trim(),
-      8_000,
-    )
-  }
-
-  if (input.delivery.runtimeEvidenceFailures && input.delivery.runtimeEvidenceFailures.length > 0) {
-    pushOptional(
-      "# Runtime Evidence Failures",
-      `# Runtime Evidence Failures\n\n` +
-        `The host runtime probe found blocking runtime failures. Analyze them as delivery evidence ` +
-        `and reject with concrete reproduction details unless you can prove the probe is invalid.\n\n` +
-        input.delivery.runtimeEvidenceFailures
-          .slice(0, 10)
-          .map((item) => `- ${truncate(item, 400)}`)
-          .join("\n"),
-      5_000,
-    )
-  }
-
-  if (input.delivery.visualMetricFailures && input.delivery.visualMetricFailures.length > 0) {
-    pushOptional(
-      "# Visual Metric Failures",
-      `# Visual Metric Failures\n\n` +
-        `The host visual metric found blocking visual failures. Use these as evidence, inspect the ` +
-        `rendered output and reference yourself, and reject with concrete visual rejection_details ` +
-        `unless you can prove the metric is invalid.\n\n` +
-        input.delivery.visualMetricFailures
-          .slice(0, 10)
-          .map((item) => `- ${truncate(item, 400)}`)
-          .join("\n"),
-      5_000,
-    )
-  }
+  // Host deterministic-gate failure sections (manifest gate, host hard gate
+  // failures, runtime evidence failures, visual metric failures) were REMOVED.
+  // The fresh-eyes DeliveryAgent runs only after the host gate has passed and
+  // investigates the merged tree blind — injecting host conclusions here is
+  // exactly the anchoring that turned delivery into a parrot.
+  // See specs/delivery-fresh-eyes-decoupling-2026-05-18.md.
 
   if (input.delivery.goalReports?.length || input.delivery.diffs?.length) {
     pushOptional(
@@ -536,12 +456,17 @@ function truncate(text: string, maxLen: number): string {
 // System prompt
 // ---------------------------------------------------------------------------
 
-export const DELIVERY_AGENT_SYSTEM = DELIVERY_CORE
+// DELIVERY_CORE is the role/phases/rules core; ENGINEERING_CRAFT is the shared
+// engineering-craft fragment (single source: prompt/core/engineering-craft.txt)
+// injected only into agents that actually mutate code — here Delivery's narrow
+// edit_file/write_file repair path (delivery-core: "limited final repairer").
+export const DELIVERY_AGENT_SYSTEM = [DELIVERY_CORE, ENGINEERING_CRAFT].join("\n\n")
 
 /** Single-source delivery system prompt.
  *
  * Composition (strict order, no bypass):
  *   1. DELIVERY_AGENT_SYSTEM — code-owned canonical core (role, phases, rules)
+ *      + shared engineering-craft fragment
  *   2. config.agent.delivery.prompt_append — optional user append (MUST NOT replace)
  *   3. resolveStageSkills output — invariant section + matched skills
  *

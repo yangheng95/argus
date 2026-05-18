@@ -13,7 +13,8 @@
  * phase-4 of the isomorphic-agent refactor (CLAUDE.md rule 22).
  */
 export { DeliveryAgent, DELIVERY_AGENT_SYSTEM } from "./agent"
-export { arbitrateDeliveryGate, arbitrateDeliveryVerdict } from "./arbiter"
+export { arbitrateDeliveryGate, composeDeliveryDecision } from "./arbiter"
+export type { DeliveryDecision, HostGateResult, HostGateFailureGroup } from "./arbiter"
 export type { DeliveryVerdictType } from "./verdict"
 export {
   createDeliverySpecialistReview,

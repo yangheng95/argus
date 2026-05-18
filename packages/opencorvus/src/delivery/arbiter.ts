@@ -1,26 +1,21 @@
 import type { VisualMetricResult } from "./visual-metric"
 import type { RuntimeEvidenceReport } from "./checks/runtime-evidence"
 import type { DeliveryEvidenceManifest, DeliveryGateVerdict, DeliveryManifestFunctionalAssessment } from "./manifest"
-import type { DeliveryVerdictType } from "./verdict"
-
-export type DeliveryArbiterDecision = {
-  verdict: DeliveryVerdictType
-  source: "llm" | "host_gate"
-}
+import type { DeliveryVerdictType, RejectedVerdictType, DeferredCheckType, ToolCallEvidenceType } from "./verdict"
 
 /**
  * Delivery gate semantics:
  *   - Blocking: runtime-readiness failures, acceptance-spec coverage gaps,
  *     failed runtime probes, and required contract-audit failures.
  *   - Advisory: required checks (build/typecheck/test/lint),
- *     workspace_export reviews, and specialist reviews. The delivery agent
- *     (LLM) reads the full evidence and decides whether they materially block
- *     acceptance.
+ *     workspace_export reviews, and specialist reviews.
  *
  * functionalAssessment.primaryFailureIds is the ground truth for the
  * blocking set; the gate just mirrors it. This keeps a single source of
  * truth for "what blocks delivery" — see `assessFunctionalCompletion` in
- * `delivery/checks/project-gate.ts`.
+ * `delivery/checks/project-gate.ts`. This function is a pure host data gate
+ * (rule 6.1 data-integrity exception) and is intentionally left untouched by
+ * the fresh-eyes decoupling — see specs/delivery-fresh-eyes-decoupling-2026-05-18.md.
  */
 export function arbitrateDeliveryGate(input: {
   checks: DeliveryGateVerdict
@@ -73,173 +68,231 @@ function deliveryGateSummary(input: {
   return `${input.functionalAssessment.summary} Evidence gate failed ${counts}. Primary: ${primary}. Auxiliary: ${auxiliary}.`
 }
 
-/**
- * Delivery verdict arbiter. The delivery agent owns goal-level attribution;
- * required host gates own final acceptability. If manifest/runtime/visual
- * evidence fails and the agent still returns accepted, the final verdict is
- * rejected so the UI cannot display "Accepted" for an incomplete deliverable.
- */
-export function arbitrateDeliveryVerdict(input: {
+// ---------------------------------------------------------------------------
+// Fresh-eyes delivery decision (specs/delivery-fresh-eyes-decoupling-2026-05-18.md)
+//
+// The host deterministic gate and the fresh-eyes DeliveryAgent decide DIFFERENT
+// questions (rule 8 — one owner per concern):
+//   - host gate: objective data-integrity facts (build/test/lint/coverage,
+//     runtime probe, visual SSIM). Owned entirely by the host. When it fails,
+//     the agent is NOT run to "restate" the failure — the host emits the final
+//     decision directly.
+//   - DeliveryAgent: semantic completeness + goal attribution, formed blind
+//     (no host failure conclusions in its prompt) and only when the host gate
+//     has already passed.
+//
+// `composeDeliveryDecision` is the SINGLE pure projector. It never mutates the
+// agent verdict and never injects host evidence into it (that was the prior
+// rule-8/15 dual-author defect). The host gate result and the raw agent verdict
+// are persisted as their OWN evidence artifacts; only `final` is business-
+// consumable.
+// ---------------------------------------------------------------------------
+
+export type HostGateFailureGroup = {
+  kind: "manifest" | "runtime" | "visual"
+  id: string
+  summary: string
+  evidence: string[]
+}
+
+export type HostGateResult = {
+  /** Composite: manifest finalGate passed AND no runtime/visual gate failure. */
+  passed: boolean
   manifest: DeliveryEvidenceManifest
-  goalIds: readonly string[]
-  llmVerdict?: DeliveryVerdictType
   runtimeReport?: RuntimeEvidenceReport
   visualMetric?: VisualMetricResult | null
-}): DeliveryArbiterDecision | undefined {
-  if (!input.llmVerdict) return undefined
+  /** Pre-grouped host failures (manifest/runtime/visual). Empty when passed. */
+  failures: HostGateFailureGroup[]
+}
 
-  const hostBlocker = hostGateBlockingSummary(input)
-  const verdict = hostBlocker
-    ? {
-        ...input.llmVerdict,
-        summary: `${input.llmVerdict.summary}\n\nHost gate blockers: ${hostBlocker}`,
-      }
-    : input.llmVerdict
+export type DeliveryDecision = {
+  /** The ONLY business-consumable verdict. Persisted under the compatibility
+   *  label `delivery-agent-verdict` so every existing reader keeps working
+   *  unchanged; its CONTENT is this composed final, not a raw agent verdict. */
+  final: DeliveryVerdictType
+  /** Raw agent verdict — evidence only. Undefined when the host gate failed
+   *  and the agent never ran. Persisted under `delivery-agent-raw-verdict`. */
+  rawAgentVerdict?: DeliveryVerdictType
+  /** Host deterministic gate — evidence only. Persisted under
+   *  `delivery-host-gate`. */
+  hostGate: HostGateResult
+  source: "llm" | "host_gate"
+}
 
-  if (hostBlocker && verdict.verdict === "accepted") {
+/**
+ * The single delivery-decision projector. Pure, no side effects, no mutation
+ * of the agent verdict.
+ *
+ *   - host gate failed  → agent never ran; synthesize the host-gate rejected
+ *     verdict as `final`. `agentVerdict` MUST be absent.
+ *   - host gate passed  → `final` is the agent verdict verbatim. No host
+ *     evidence injected (host already passed; its result is its own artifact).
+ *     `agentVerdict` MUST be present.
+ */
+export function composeDeliveryDecision(input: {
+  hostGate: HostGateResult
+  agentVerdict?: DeliveryVerdictType
+}): DeliveryDecision {
+  if (!input.hostGate.passed) {
+    // Host owns objective facts: a failed deterministic gate is the final
+    // verdict. If the agent already ran (e.g. it made a narrow repair that the
+    // post-repair gate then rejected), its verdict is kept as evidence only —
+    // never as `final` (that would re-introduce the dual-author defect).
     return {
+      final: synthesizeHostGateRejected(input.hostGate),
+      rawAgentVerdict: input.agentVerdict,
+      hostGate: input.hostGate,
       source: "host_gate",
-      verdict: appendHostGateEvidence(
-        {
-          verdict: "rejected",
-          summary: `Delivery rejected by required host gates: ${hostBlocker}`,
-          startup_verification: verdict.startup_verification,
-          frontend_check: verdict.frontend_check,
-          deferred_checks: verdict.deferred_checks,
-          tool_call_evidence: verdict.tool_call_evidence,
-          rejection_details: [
-            {
-              category: hostBlocker.includes("Visual")
-                ? "visual"
-                : hostBlocker.includes("Runtime")
-                  ? "runtime"
-                  : "quality",
-              error: hostBlocker,
-              suggestion: "Fix the required delivery evidence gate, then rerun delivery.",
-            },
-          ],
-        },
-        input,
-      ),
     }
   }
-
+  if (!input.agentVerdict) {
+    throw new Error(
+      "composeDeliveryDecision: host gate passed but no agent verdict was supplied — " +
+        "delivery cannot finalize without the fresh-eyes verdict.",
+    )
+  }
   return {
+    final: input.agentVerdict,
+    rawAgentVerdict: input.agentVerdict,
+    hostGate: input.hostGate,
     source: "llm",
-    verdict: appendHostGateEvidence(verdict, input),
   }
 }
 
-export function appendManifestEvidence(
-  verdict: DeliveryVerdictType,
-  manifest: DeliveryEvidenceManifest,
-): DeliveryVerdictType {
+/**
+ * Build the host-gate rejected `final` verdict. Satisfies the rejected shape
+ * the orchestrator retry chain already consumes
+ * (`composeLatestDeliveryFeedbackForBuild`): non-empty `rejection_details`
+ * with schema-enum categories, non-empty `tool_call_evidence` carrying the
+ * host evidence rows, and projected `deferred_checks`. No goal_id is attached
+ * — host gate failures are task-scope; goal routing falls back to the raw
+ * packet + manifest failure details the orchestrator fetches by delivery_id.
+ */
+function synthesizeHostGateRejected(hostGate: HostGateResult): RejectedVerdictType {
+  const summary = `Delivery rejected by required host gates: ${hostGate.manifest.finalGate.summary}`
+  const groups = hostGate.failures.length > 0
+    ? hostGate.failures
+    : [
+        {
+          kind: "manifest" as const,
+          id: hostGate.manifest.id,
+          summary: hostGate.manifest.finalGate.summary,
+          evidence: [],
+        },
+      ]
+  const rejection_details = groups.map((group) => {
+    const detail = [group.summary, ...group.evidence].filter((s) => s.trim().length > 0).join("\n")
+    return {
+      // category must stay within the verdict schema enum — never "manifest".
+      category: group.kind === "visual" ? ("visual" as const) : group.kind === "runtime" ? ("runtime" as const) : ("quality" as const),
+      error: padEvidence(detail || group.summary || `host ${group.kind} gate failed`),
+      suggestion: "Fix the failing required delivery evidence gate, then rerun delivery.",
+    }
+  })
+  const deferred_checks = buildHostDeferredChecks(hostGate)
+  const tool_call_evidence = buildHostToolCallEvidence(hostGate)
+  return {
+    verdict: "rejected",
+    summary,
+    deferred_checks,
+    tool_call_evidence,
+    rejection_details,
+  }
+}
+
+/** `error` has a schema floor of 8 chars; never emit a thinner signal. */
+function padEvidence(text: string): string {
+  const trimmed = text.trim()
+  if (trimmed.length >= 8) return trimmed
+  return `${trimmed} (host gate failure)`.trim()
+}
+
+function buildHostDeferredChecks(hostGate: HostGateResult): DeferredCheckType[] {
+  const manifest = hostGate.manifest
   const auxiliary = new Set(manifest.functionalAssessment?.auxiliaryFailureIds ?? [])
-  const projected = manifest.checkResults.map((item) => ({
+  const checks: DeferredCheckType[] = manifest.checkResults.map((item) => ({
     name: item.id,
-    result: item.status === "failed" && auxiliary.has(item.id) ? ("advisory_failed" as const) : item.status,
-    evidence: [
-      item.command,
-      item.exitCode === undefined ? undefined : `exit_code=${item.exitCode}`,
-      item.failureSignature ? `failure_signature=${item.failureSignature.normalizedError}` : undefined,
-      item.outputExcerpt,
-    ]
-      .filter(Boolean)
-      .join("\n"),
+    result:
+      item.status === "failed" && auxiliary.has(item.id) ? ("advisory_failed" as const) : item.status,
+    evidence:
+      [
+        item.command,
+        item.exitCode === undefined ? undefined : `exit_code=${item.exitCode}`,
+        item.failureSignature ? `failure_signature=${item.failureSignature.normalizedError}` : undefined,
+        item.outputExcerpt,
+      ]
+        .filter(Boolean)
+        .join("\n") || `${item.id} ${item.status}`,
   }))
-  return {
-    ...verdict,
-    deferred_checks: [
-      ...verdict.deferred_checks,
-      ...projected,
-      ...manifest.reviewEvidence.map((item) => ({
-        name: item.id,
-        result: item.status === "failed" && auxiliary.has(item.id) ? ("advisory_failed" as const) : item.status,
-        evidence: item.evidence.join("\n"),
-      })),
-    ],
+  for (const review of manifest.reviewEvidence) {
+    checks.push({
+      name: review.id,
+      result:
+        review.status === "failed" && auxiliary.has(review.id) ? ("advisory_failed" as const) : review.status,
+      evidence: review.evidence.join("\n") || `${review.id} ${review.status}`,
+    })
   }
-}
-
-function hostGateBlockingSummary(input: {
-  manifest: DeliveryEvidenceManifest
-  runtimeReport?: RuntimeEvidenceReport
-  visualMetric?: VisualMetricResult | null
-}): string {
-  // Only acceptance-spec coverage gaps are host-side blockers that override an
-  // "accepted" verdict. Runtime / visual / specialist findings flow through as
-  // advisory evidence — the delivery agent already sees them and decides.
-  if (input.manifest.finalGate.status === "passed") return ""
-  return input.manifest.finalGate.summary
-}
-
-function appendHostGateEvidence(
-  verdict: DeliveryVerdictType,
-  input: {
-    manifest: DeliveryEvidenceManifest
-    runtimeReport?: RuntimeEvidenceReport
-    visualMetric?: VisualMetricResult | null
-  },
-): DeliveryVerdictType {
-  let next = appendManifestEvidence(verdict, input.manifest)
-  if (input.runtimeReport) next = appendRuntimeEvidence(next, input.runtimeReport)
-  if (input.visualMetric) next = appendVisualMetricEvidence(next, input.visualMetric)
-  return next
-}
-
-function appendRuntimeEvidence(verdict: DeliveryVerdictType, report: RuntimeEvidenceReport): DeliveryVerdictType {
-  const runtimeDetail = report.evidence.previewUrl
-    ? `previewUrl=${report.evidence.previewUrl} dom.textLength=${report.evidence.dom?.textLength ?? "n/a"} nodes=${report.evidence.dom?.nodeCount ?? "n/a"}`
-    : "no live preview URL"
-  const violations = report.violations.map((v) => `${v.kind}: ${v.detail}`)
-  return {
-    ...verdict,
-    deferred_checks: [
-      ...verdict.deferred_checks,
-      {
-        name: "runtime_evidence",
-        result: report.passed ? "passed" : "failed",
-        evidence: [runtimeDetail, ...violations].join("\n"),
-      },
-    ],
-    tool_call_evidence: [
-      ...verdict.tool_call_evidence,
-      {
-        tool: "runtime_evidence",
-        passed: report.passed,
-        detail: `${report.violations.length} violation(s): ${runtimeDetail}`,
-      },
-    ],
+  if (hostGate.runtimeReport) {
+    const r = hostGate.runtimeReport
+    const runtimeDetail = r.evidence.previewUrl
+      ? `previewUrl=${r.evidence.previewUrl} dom.textLength=${r.evidence.dom?.textLength ?? "n/a"} nodes=${r.evidence.dom?.nodeCount ?? "n/a"}`
+      : "no live preview URL"
+    checks.push({
+      name: "runtime_evidence",
+      result: r.passed ? "passed" : "failed",
+      evidence: [runtimeDetail, ...r.violations.map((v) => `${v.kind}: ${v.detail}`)].join("\n") || runtimeDetail,
+    })
   }
-}
-
-function appendVisualMetricEvidence(verdict: DeliveryVerdictType, metric: VisualMetricResult): DeliveryVerdictType {
-  const gateLines = metric.gates.map(
-    (gate) =>
-      `${gate.name}: ${gate.passed ? "passed" : "failed"} value=${gate.value} threshold=${gate.threshold} ${gate.note}`,
-  )
-  return {
-    ...verdict,
-    deferred_checks: [
-      ...verdict.deferred_checks,
-      {
-        name: "visual_metric",
-        result: metric.passed ? "passed" : "failed",
-        evidence: [
-          `score=${metric.score.toFixed(3)}`,
-          `rendered=${metric.renderedPath}`,
-          `reference=${metric.referencePath}`,
-          ...gateLines,
+  if (hostGate.visualMetric) {
+    const m = hostGate.visualMetric
+    checks.push({
+      name: "visual_metric",
+      result: m.passed ? "passed" : "failed",
+      evidence:
+        [
+          `score=${m.score.toFixed(3)}`,
+          `rendered=${m.renderedPath}`,
+          `reference=${m.referencePath}`,
+          ...m.gates.map(
+            (g) => `${g.name}: ${g.passed ? "passed" : "failed"} value=${g.value} threshold=${g.threshold} ${g.note}`,
+          ),
         ].join("\n"),
-      },
-    ],
-    tool_call_evidence: [
-      ...verdict.tool_call_evidence,
-      {
-        tool: "visual_metric",
-        passed: metric.passed,
-        detail: `score=${metric.score.toFixed(3)} failed_gates=${metric.gates.filter((gate) => !gate.passed).length}`,
-      },
-    ],
+    })
   }
+  return checks
+}
+
+function buildHostToolCallEvidence(hostGate: HostGateResult): ToolCallEvidenceType[] {
+  const manifest = hostGate.manifest
+  const evidence: ToolCallEvidenceType[] = [
+    {
+      tool: "DeliveryEvidenceManifest",
+      passed: manifest.finalGate.status === "passed",
+      detail: padEvidence(
+        `finalGate.status=${manifest.finalGate.status} ${manifest.finalGate.summary}`,
+      ),
+    },
+  ]
+  if (hostGate.runtimeReport) {
+    const r = hostGate.runtimeReport
+    const runtimeDetail = r.evidence.previewUrl
+      ? `previewUrl=${r.evidence.previewUrl} dom.textLength=${r.evidence.dom?.textLength ?? "n/a"} nodes=${r.evidence.dom?.nodeCount ?? "n/a"}`
+      : "no live preview URL"
+    evidence.push({
+      tool: "runtime_evidence",
+      passed: r.passed,
+      detail: padEvidence(`${r.violations.length} violation(s): ${runtimeDetail}`),
+    })
+  }
+  if (hostGate.visualMetric) {
+    const m = hostGate.visualMetric
+    evidence.push({
+      tool: "visual_metric",
+      passed: m.passed,
+      detail: padEvidence(
+        `score=${m.score.toFixed(3)} failed_gates=${m.gates.filter((g) => !g.passed).length}`,
+      ),
+    })
+  }
+  return evidence
 }

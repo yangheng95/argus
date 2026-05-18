@@ -56,15 +56,6 @@ export function buildDeliveryReport(collector: DeliveryCollector) {
 export function createDeliveryOutputTools(input?: {
   requiredTools?: string[]
   requiredEvidenceFacets?: DeliveryEvidenceFacetType[]
-  manifestGate?: {
-    status: "passed" | "failed"
-    summary: string
-  }
-  hostGateFailures?: Array<{
-    kind: "manifest" | "runtime" | "visual"
-    id: string
-    summary: string
-  }>
 }) {
   let collector: DeliveryCollector = emptyCollector()
   const requiredEvidenceFacets = Array.from(new Set(input?.requiredEvidenceFacets ?? []))
@@ -74,8 +65,6 @@ export function createDeliveryOutputTools(input?: {
       ? ["start_frontend_preview"]
       : []),
   ]))
-  const manifestGate = input?.manifestGate
-  const hostGateFailures = input?.hostGateFailures ?? []
   const requires = (facet: DeliveryEvidenceFacetType) => requiredEvidenceFacets.includes(facet)
 
   const tools = {
@@ -97,7 +86,6 @@ export function createDeliveryOutputTools(input?: {
         "\nCross-field rules for verdict='accepted' (enforced here — payload is rejected and you re-submit if any fails):\n" +
         "- If startup is host-required, startup_verification.attempted MUST be true AND .success MUST be true.\n" +
         "- If frontend or visual is host-required, frontend_check.attempted MUST be true and renders_correctly MUST NOT be false.\n" +
-        "- If the startup prompt listed host hard gate failures, verdict='accepted' must cite post-repair verification evidence that supersedes them; otherwise submit a rejected verdict with evidence-backed rejection_details.\n" +
         "- Any supplied failed startup/frontend evidence contradicts acceptance even when that facet was not required.\n" +
         "- deferred_checks MUST carry no primary result='failed' entries; result='advisory_failed' is allowed as diagnostic evidence.\n" +
         "- tool_call_evidence MUST contain ≥1 entry with passed=true.\n" +
@@ -121,9 +109,6 @@ export function createDeliveryOutputTools(input?: {
             const trimmed = obj.launch_command.trim().replace(/^`+|`+$/g, "").trim()
             obj.launch_command = trimmed.length > 0 ? trimmed : undefined
           }
-
-          void manifestGate
-          void hostGateFailures
 
           // Cross-field semantic checks — Zod cannot express "field A=true
           // implies field B!=false". These protect against the "time's up,

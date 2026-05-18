@@ -99,33 +99,12 @@ export interface DeliveryInfo {
     deletions?: number
     status?: string
   }>
-  hostGateFailures?: Array<{
-    kind: "manifest" | "runtime" | "visual"
-    id: string
-    summary: string
-    evidence: string[]
-  }>
-  manifestGate?: {
-    status: "passed" | "failed"
-    summary: string
-    failedReadinessIds?: string[]
-    failedCheckIds: string[]
-    failedCoverageIds: string[]
-    failedRuntimeFlowIds: string[]
-    failedReviewIds: string[]
-  }
-  manifestFailureDetails?: Array<{
-    kind: "readiness" | "check" | "coverage" | "runtime" | "review"
-    id: string
-    name: string
-    status?: string
-    command?: string
-    exitCode?: number
-    evidence: string
-  }>
-  manifestFailures?: string[]
-  runtimeEvidenceFailures?: string[]
-  visualMetricFailures?: string[]
+  // Host deterministic-gate conclusions (manifestGate / hostGateFailures /
+  // manifestFailureDetails / manifestFailures / runtimeEvidenceFailures /
+  // visualMetricFailures) were intentionally REMOVED. The fresh-eyes
+  // DeliveryAgent runs only after the host gate has already passed and must
+  // investigate the merged tree blind — it never receives host failure
+  // conclusions. See specs/delivery-fresh-eyes-decoupling-2026-05-18.md.
   /**
    * Structured per-goal implementation reports emitted by goal executors via
    * the `goal_report` tool call. One entry per delivered goal. Length 1 for
