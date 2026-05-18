@@ -115,6 +115,8 @@
 | POST | `/session/{sessionID}/abort` | Abort session | `session.abort` |
 | GET | `/session/{sessionID}/children` | Get session children | `session.children` |
 | POST | `/session/{sessionID}/command` | Send command | `session.command` |
+| GET | `/session/{sessionID}/config` | Get session effective configuration | `session.config.get` |
+| PATCH | `/session/{sessionID}/config` | Update session configuration overlay | `session.config.update` |
 | GET | `/session/{sessionID}/diff` | Get message diff | `session.diff` |
 | POST | `/session/{sessionID}/fork` | Fork session | `session.fork` |
 | POST | `/session/{sessionID}/init` | Initialize session | `session.init` |
