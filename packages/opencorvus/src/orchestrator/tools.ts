@@ -1960,6 +1960,10 @@ export function createOrchestratorTools(input: {
         "intend to call `architect` next (architect needs the REQ-N rows), OR " +
         "foundational decisions are ambiguous and the build agent would otherwise " +
         "guess.\n" +
+        "SKIP WHEN: a previous `requirements` result already succeeded and the active " +
+        "spec snapshot still matches the current user scope; call `architect` next. " +
+        "Only rerun after an operator scope change, `restart_from_stage(\"requirements\")`, " +
+        "or concrete evidence that the active REQ snapshot is invalid.\n" +
         "SKIP WHEN: trivial direct edit (single-file bug fix, typo / config tweak); " +
         "build agent can run against the user's text alone and `deliver` has enough " +
         "signal in the request to verify. For visual/reference tasks, design_analysis is a hard prerequisite: " +
@@ -1970,8 +1974,9 @@ export function createOrchestratorTools(input: {
       execute: async () => {
         let task = requireTask(taskID)
         log.info("requirements guard check", { taskID, hasSpec: !!findActiveSpecForTask(task.id) })
-        // Rule 23: no status gate. LLM may choose to re-parse requirements
-        // (supersedes the prior spec and inserts a new v1 snapshot).
+        // Rule 23: no host-side status gate. Tool selection is governed by
+        // the orchestrator prompt/tool contract; reruns supersede the prior
+        // spec and insert a new v1 snapshot only when task evidence justifies it.
 
         const designGate = requireDesignAnalysisBefore("requirements", task)
         if (designGate) return designGate
