@@ -476,6 +476,8 @@ export function createTauriTransport(kind: Extract<HostKind, "tauri" | "browser"
           return invokeTauri("overlay_toggle_devtools")
         case "tray.attention.set":
           return invokeTauri("overlay_attention_set", { active: command.active })
+        case "badge.set":
+          return invokeTauri("overlay_badge_set", { count: command.count })
         case "workspace.pickDir":
           return invokeTauri("overlay_pick_dir", { start: command.start || undefined })
         case "workspace.pickFiles":

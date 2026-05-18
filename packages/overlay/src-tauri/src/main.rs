@@ -1124,6 +1124,37 @@ fn overlay_attention_set<R: Runtime>(app: AppHandle<R>, active: bool) -> Result<
     Ok(true)
 }
 
+fn badge_count_value(count: i64) -> Option<i64> {
+    if count > 0 { Some(count) } else { None }
+}
+
+#[tauri::command]
+#[cfg(windows)]
+fn overlay_badge_set<R: Runtime>(app: AppHandle<R>, count: i64) -> Result<bool, String> {
+    if let Some(window) = app.get_webview_window("main") {
+        let icon = if count > 0 {
+            Some(create_attention_tray_icon())
+        } else {
+            None
+        };
+        window.set_overlay_icon(icon).map_err(|err| err.to_string())?;
+        Ok(true)
+    } else {
+        Ok(false)
+    }
+}
+
+#[tauri::command]
+#[cfg(not(windows))]
+fn overlay_badge_set<R: Runtime>(app: AppHandle<R>, count: i64) -> Result<bool, String> {
+    if let Some(window) = app.get_webview_window("main") {
+        window.set_badge_count(badge_count_value(count)).map_err(|err| err.to_string())?;
+        Ok(true)
+    } else {
+        Ok(false)
+    }
+}
+
 #[tauri::command]
 #[cfg(feature = "devtools")]
 fn overlay_toggle_devtools<R: Runtime>(app: AppHandle<R>) -> Result<bool, String> {
@@ -1160,6 +1191,7 @@ fn main() {
             overlay_pick_dir,
             overlay_pick_files,
             overlay_attention_set,
+            overlay_badge_set,
             overlay_toggle_devtools
     ]);
 
@@ -1176,7 +1208,8 @@ fn main() {
             overlay_write_file,
             overlay_pick_dir,
             overlay_pick_files,
-            overlay_attention_set
+            overlay_attention_set,
+            overlay_badge_set
     ]);
 
     builder
@@ -1478,5 +1511,12 @@ mod tests {
             tmp,
             dir
         );
+    }
+
+    #[test]
+    fn badge_count_value_clears_zero_and_preserves_i64_positive_counts() {
+        assert_eq!(badge_count_value(0), None);
+        assert_eq!(badge_count_value(-1), None);
+        assert_eq!(badge_count_value(42_i64), Some(42_i64));
     }
 }

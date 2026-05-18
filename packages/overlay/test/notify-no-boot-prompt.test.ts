@@ -73,7 +73,7 @@ import {
   clearNotifications,
   ensureDesktopNotificationPermission,
   notificationStore,
-  notifyTaskLifecycle,
+  routeNotification,
   requestNotificationPermission,
 } from "../src/services/notify";
 import * as notifyModule from "../src/services/notify";
@@ -104,20 +104,20 @@ describe("notify: startup permission request and in-app fallback", () => {
     expect(fixture.log.permissionRequests).toBe(0);
   });
 
-  test("notifyTaskLifecycle (non-gesture path) does NOT prompt for permission", async () => {
-    notifyTaskLifecycle("tsk_test_001", "task.completed");
+  test("routeNotification (non-gesture path) does NOT prompt for permission", async () => {
+    routeNotification({ taskID: "tsk_test_001", type: "task.completed", notify: { tier: 2 } });
     // Dispatch is async; flush a few microtasks so any deferred request
     // would have fired.
     await Promise.resolve();
     await Promise.resolve();
     await Promise.resolve();
     expect(fixture.log.permissionRequests).toBe(0);
-    expect(notificationStore.items.some((item) => item.id === "task:tsk_test_001:completed")).toBe(true);
+    expect(notificationStore.items.some((item) => item.id === "event:tsk_test_001:task.completed:2")).toBe(true);
   });
 
-  test("notifyTaskLifecycle sends an OS notification when permission is granted", async () => {
+  test("routeNotification sends an OS notification when permission is granted and tier allows it", async () => {
     fixture.setPermission("granted");
-    notifyTaskLifecycle("tsk_test_send_001", "task.completed");
+    routeNotification({ taskID: "tsk_test_send_001", type: "task.completed", notify: { tier: 2 } });
     await Promise.resolve();
     await Promise.resolve();
     await Promise.resolve();

@@ -16,6 +16,7 @@ import { clearEventQueue, setSseConnected } from "../store/messages"
 import { boardStore, loadTasks } from "../store/board"
 import { routeSSEEvent, handleEventStreamEvent, handleTaskListNotification } from "./events"
 import { hydrateTaskConversation } from "./conversation"
+import { recomputeBadgeFromTasks } from "./notify"
 import { getHostTransport, type StreamHandle } from "./host-transport"
 import {
   recordConversationRecoveryAborted,
@@ -165,7 +166,11 @@ export function startSSE(taskID: string, after = 0) {
             taskID,
             after,
             currentTaskID: () => boardStore.selectedTaskID,
-            hydrate: hydrateTaskConversation,
+            hydrate: async (id) => {
+              const sequence = await hydrateTaskConversation(id)
+              recomputeBadgeFromTasks()
+              return sequence
+            },
             restart: startSSE,
             scheduleRetry: (fn, ms) => {
               sseRetryTimer = setTimeout(() => {
@@ -196,8 +201,8 @@ export function stopSSE() {
 
 // ── Global task-list change stream ──
 // One long-lived stream connected to GET /task/events. On every persisted
-// task aggregate event the server emits a tiny {type, taskID, sequence}
-// notification; we translate that into a debounced loadTasks(). This
+// task aggregate event the server emits a tiny {type, taskID, sequence,
+// notify?} notification; we translate that into a debounced loadTasks(). This
 // closes the gap where status changes on non-selected tasks (or new
 // tasks created by other clients) would otherwise only arrive via
 // manual refresh.
@@ -232,6 +237,9 @@ export function startTaskListSSE() {
   const handle = transport.openStream(
     { path: "task/events" },
     {
+      onOpen: () => {
+        recomputeBadgeFromTasks()
+      },
       onEvent: (data) => {
         // Same split as startSSE above: parse errors silent, dispatch
         // errors surfaced.
@@ -243,7 +251,7 @@ export function startTaskListSSE() {
         }
         if (event.type === "task-list.heartbeat" || event.type === "task-list.connected") return
         try {
-          // Task-list stream emits only `{type, taskID, sequence}` — not
+          // Task-list stream emits only `{type, taskID, sequence, notify?}` — not
           // the full task-scope event shape. Route to the notification
           // handler, NOT handleEventStreamEvent (which feeds tree-writer
           // and would throw on every missing payload).
