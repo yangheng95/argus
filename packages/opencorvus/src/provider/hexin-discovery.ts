@@ -103,6 +103,7 @@ function buildModel(id: string): Model {
       output: { text: true, audio: false, image: false, video: false, pdf: false },
       interleaved: profile.interleaved ?? false,
     },
+    transform: profile.transform,
     cost: { input: 0, output: 0, cache: { read: 0, write: 0 } },
     limit: { context: profile.context, input: profile.input, output: profile.output },
     options: {},

@@ -10,6 +10,7 @@
  * updated.
  */
 import { Log } from "../util/log"
+import { GLM_EVALUATION_TEMPERATURE, THINKING_MODEL_TOP_P } from "./sampling"
 
 const log = Log.create({ service: "hexin-profiles" })
 
@@ -26,6 +27,14 @@ export interface HexinModelProfile {
   context: number
   input?: number
   output: number
+  transform?: {
+    sampling?: {
+      temperature?: number
+      topP?: number
+      topK?: number
+    }
+    options?: Record<string, unknown>
+  }
 }
 
 const DEFAULT_PROFILE: HexinModelProfile = {
@@ -45,6 +54,7 @@ const DEFAULT_PROFILE: HexinModelProfile = {
 interface Matcher {
   test: (id: string) => boolean
   profile: Omit<HexinModelProfile, "name">
+  contractIDs?: readonly string[]
 }
 
 const MATCHERS: Matcher[] = [
@@ -177,6 +187,7 @@ const MATCHERS: Matcher[] = [
   // reasoning_content round-tripping are required by Moonshot's API contract.
   {
     test: (id) => /(^|\/)kimi-k2\.6$/i.test(id),
+    contractIDs: ["kimi-k2.6"],
     profile: {
       family: "kimi",
       reasoning: true,
@@ -204,10 +215,11 @@ const MATCHERS: Matcher[] = [
       output: 16_384,
     },
   },
-  // GLM (General Language Model) 5.1 defaults to thinking mode and carries
+  // GLM (General Language Model) 5.x defaults to thinking mode and carries
   // preserved reasoning through reasoning_content on OpenAI-compatible APIs.
   {
-    test: (id) => /(^|\/)glm-5\.1$/i.test(id),
+    test: (id) => /(^|\/)glm-5(?:\.\d+)?$/i.test(id),
+    contractIDs: ["glm-5", "glm-5.1"],
     profile: {
       family: "glm",
       reasoning: true,
@@ -218,6 +230,18 @@ const MATCHERS: Matcher[] = [
       interleaved: { field: "reasoning_content" },
       context: 200_000,
       output: 128_000,
+      transform: {
+        sampling: {
+          temperature: GLM_EVALUATION_TEMPERATURE,
+          topP: THINKING_MODEL_TOP_P,
+        },
+        options: {
+          thinking: {
+            type: "enabled",
+            clear_thinking: false,
+          },
+        },
+      },
     },
   },
   // GLM (General Language Model)
@@ -293,4 +317,15 @@ export function profileFor(id: string): HexinModelProfile {
   }
   log.warn("no profile for hexin model — using conservative default", { id })
   return { ...DEFAULT_PROFILE, name: displayName(id) }
+}
+
+export function interleavedReasoningProfileContractIDs(): string[] {
+  return MATCHERS.flatMap((matcher) =>
+    typeof matcher.profile.interleaved === "object" ? Array.from(matcher.contractIDs ?? []) : [],
+  )
+}
+
+export function interleavedReasoningProfileContractGaps(): string[] {
+  return MATCHERS.filter((matcher) => typeof matcher.profile.interleaved === "object" && !matcher.contractIDs?.length)
+    .map((matcher) => matcher.profile.family)
 }
