@@ -50,8 +50,16 @@ import { Log } from "@/util/log"
 import { sessionGoalID, sessionRole, taskIDForSession, taskSession } from "@/orchestrator/task-event"
 import { ensureTaskMessageProtocolBridge, overlayMeta } from "@/orchestrator/protocol/message-bridge"
 import { DIRECT_REPLY_AGENT_KINDS } from "@/orchestrator/direct-reply"
+import { BusEvent } from "@/bus/bus-event"
 const log = Log.create({ service: "server.routes.orchestrator" })
 const CONVERSATION_EVENT_PAGE_LIMIT = 500
+
+export const TaskListEvent = z.object({
+  type: z.string(),
+  taskID: z.string().nullable(),
+  sequence: z.number(),
+  notify: BusEvent.NotifyDescriptorSchema.optional(),
+})
 
 const ConversationEventPageQuery = z.object({
   after: z.coerce.number().int().nonnegative().default(0),
@@ -276,13 +284,7 @@ export const EngineRoutes = lazy(() =>
             description: "Task-list change stream",
             content: {
               "text/event-stream": {
-                schema: resolver(
-                  z.object({
-                    type: z.string(),
-                    taskID: z.string().nullable(),
-                    sequence: z.number(),
-                  }),
-                ),
+                schema: resolver(TaskListEvent),
               },
             },
           },
@@ -299,11 +301,7 @@ export const EngineRoutes = lazy(() =>
           }
           const stop = ProtocolStore.subscribeEvents(
             (event) => {
-              const payload = JSON.stringify({
-                type: event.type,
-                taskID: event.taskID ?? null,
-                sequence: event.sequence,
-              })
+              const payload = JSON.stringify(taskListProtocolEvent(event))
               void writeData(payload)
             },
             { aggregate: "task" },
@@ -1419,7 +1417,17 @@ function conversationEventPage(
   }
 }
 
-function protocolTaskEvent(event: ReturnType<typeof ProtocolStore.listTaskEventsAfter>[number]) {
+export function taskListProtocolEvent(event: ReturnType<typeof ProtocolStore.listTaskEventsAfter>[number]) {
+  const notify = BusEvent.resolveNotify(event.type, event.payload ?? {})
+  return {
+    type: event.type.replace("engine.", ""),
+    taskID: event.taskID ?? null,
+    sequence: event.sequence,
+    ...(notify ? { notify } : {}),
+  }
+}
+
+export function protocolTaskEvent(event: ReturnType<typeof ProtocolStore.listTaskEventsAfter>[number]) {
   // Schema (protocol/schema.ts) requires `emitted_at` to be a positive int.
   // Reading `time.emitted || time.created || Date.now()` was a rule-1
   // fallback chain that silently repaired schema-invalid rows — if we ever
@@ -1431,6 +1439,7 @@ function protocolTaskEvent(event: ReturnType<typeof ProtocolStore.listTaskEvents
       `protocolTaskEvent: event ${event.id} missing time.emitted (schema-invariant violated)`,
     )
   }
+  const notify = BusEvent.resolveNotify(event.type, event.payload ?? {})
   return {
     event_id: event.id,
     task_id: event.taskID,
@@ -1441,5 +1450,6 @@ function protocolTaskEvent(event: ReturnType<typeof ProtocolStore.listTaskEvents
     sequence: event.sequence,
     summary: event.summary,
     payload: event.payload || {},
+    ...(notify ? { notify } : {}),
   }
 }

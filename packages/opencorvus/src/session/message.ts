@@ -524,6 +524,7 @@ export namespace Message {
       z.object({
         info: Info,
       }),
+      { tier: 3 },
     ),
     Removed: BusEvent.define(
       "message.removed",
@@ -531,12 +532,14 @@ export namespace Message {
         sessionID: z.string(),
         messageID: z.string(),
       }),
+      { tier: 3 },
     ),
     PartUpdated: BusEvent.define(
       "message.part.updated",
       z.object({
         part: Part,
       }),
+      { tier: 3 },
     ),
     PartDelta: BusEvent.define(
       "message.part.delta",
@@ -547,6 +550,7 @@ export namespace Message {
         field: z.string(),
         delta: z.string(),
       }),
+      { tier: 3 },
     ),
     PartRemoved: BusEvent.define(
       "message.part.removed",
@@ -555,6 +559,7 @@ export namespace Message {
         messageID: z.string(),
         partID: z.string(),
       }),
+      { tier: 3 },
     ),
   }
 

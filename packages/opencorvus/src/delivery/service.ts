@@ -34,6 +34,8 @@ import {
   persistDeliveryEvidenceManifest,
   type DeliveryEvidenceManifest,
 } from "./manifest"
+import { Event } from "@/engine/model"
+import { EngineProtocol } from "@/engine/protocol"
 
 const log = Log.create({ service: "delivery-service" })
 
@@ -295,6 +297,14 @@ export namespace DeliveryService {
     const decision = arbitrateDeliveryVerdict({ manifest: finalManifest, goalIds, llmVerdict, runtimeReport, visualMetric })
     if (!decision) throw new DeliveryFailureError("delivery arbiter did not decide final verdict")
     const finalVerdict = decision.verdict
+    if (decision.source === "host_gate" && input.task.id) {
+      await EngineProtocol.emit(Event.DeliveryGateRejected, {
+        taskID: input.task.id,
+        runID: input.runID,
+        iteration: input.iteration ?? 0,
+        violations: deliveryGateNotificationViolations(hostGateFailures),
+      }, { source: "delivery.service" })
+    }
 
     log.info("delivery service verify completed", {
       title: input.task.title,
@@ -307,6 +317,18 @@ export namespace DeliveryService {
     })
     return finalVerdict
   }
+}
+
+function deliveryGateNotificationViolations(
+  failures: NonNullable<DeliveryInfo["hostGateFailures"]>,
+): Array<{ kind: string; detail: string }> {
+  return failures.map((failure) => ({
+    kind: failure.kind,
+    detail: [
+      failure.summary,
+      ...failure.evidence,
+    ].filter((item) => item.trim().length > 0).join("\n"),
+  }))
 }
 
 /**
