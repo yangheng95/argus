@@ -815,6 +815,12 @@ export namespace Session {
       throw new InlineBase64InPartError(id, snippet)
     }
     const time = Date.now()
+    const publishPartUpdated = () =>
+      Bus.publish(Message.Event.PartUpdated, {
+        part,
+      })
+    const publishAfterCommit = Database.hasActiveContext()
+    let wrotePart = false
     Database.use((db) => {
       // Tool status monotonicity: never regress a tool part's status
       if (part.type === "tool" && part.state?.status) {
@@ -838,12 +844,15 @@ export namespace Session {
         })
         .onConflictDoUpdate({ target: PartTable.id, set: { data } })
         .run()
-      Database.effect(() =>
-        Bus.publish(Message.Event.PartUpdated, {
-          part,
-        }),
-      )
+      wrotePart = true
+      if (publishAfterCommit) Database.effect(publishPartUpdated)
     })
+    // SSE (Server-Sent Events) stream deltas depend on the part-created
+    // event already being visible to live subscribers. Outside an existing
+    // DB transaction, publish and await that event before callers emit
+    // message.part.delta. Inside a transaction, keep the post-commit effect
+    // boundary so observers never see uncommitted parts.
+    if (wrotePart && !publishAfterCommit) await publishPartUpdated()
     return part
   })
 

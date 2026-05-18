@@ -122,3 +122,54 @@ test("updatePartDelta publishes ephemeral stream deltas without mutating transcr
     },
   })
 })
+
+test("updatePart waits for live part event before callers emit deltas", async () => {
+  await using tmp = await tmpdir({ git: true })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const session = await Session.create({ kind: "assistant", title: "part-event-order" })
+      const messageID = Identifier.ascending("message")
+      const partID = Identifier.ascending("part")
+
+      await Session.updateMessage({
+        id: messageID,
+        sessionID: session.id,
+        role: "assistant",
+        time: { created: Date.now() },
+        parentID: "",
+        modelID: "agent",
+        providerID: "agent",
+        mode: "agent",
+        agent: "executor",
+        path: { cwd: "", root: "" },
+        cost: 0,
+        tokens: {
+          input: 0,
+          output: 0,
+          reasoning: 0,
+          cache: { read: 0, write: 0 },
+        },
+      } as any)
+
+      let partEventDelivered = false
+      const unsubscribe = Bus.subscribe(Message.Event.PartUpdated, async (event) => {
+        if (event.properties.part.id !== partID) return
+        await Bun.sleep(10)
+        partEventDelivered = true
+      })
+
+      await Session.updatePart({
+        id: partID,
+        messageID,
+        sessionID: session.id,
+        type: "text",
+        text: "",
+      })
+      unsubscribe()
+
+      expect(partEventDelivered).toBe(true)
+    },
+  })
+})
