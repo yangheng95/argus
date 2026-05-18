@@ -14,6 +14,7 @@ import { createDeliveryTools } from "./tools"
 import { createDeliveryOutputTools } from "./output-tools"
 import DELIVERY_CORE from "@/prompt/core/delivery-core.txt"
 import { runAgentSessionWithRetry } from "@/agent/runner"
+import { Agent } from "@/agent/agent"
 import { resolveAgentModel } from "@/agent/model"
 import { Instance } from "@/project/instance"
 import { Identifier } from "@/id/id"
@@ -21,7 +22,6 @@ import { Log } from "@/util/log"
 import { toolGuard } from "@/util/tool-guard"
 import { type TextHooks } from "@/llm/api"
 import { deliveryUserPromptCharBudget, PromptBudget } from "@/llm/prompt-budget"
-import { Config } from "@/config/config"
 import { EngineConfig, clarificationTranscriptSection, operatorNotesSection } from "@/engine"
 import { deriveUrlSignals, resolveStageSkills, type TaskSignals } from "@/engine/skill-inject"
 import { Provider } from "@/provider/provider"
@@ -549,8 +549,10 @@ export const DELIVERY_AGENT_SYSTEM = DELIVERY_CORE
  * every matched skill so submit_verdict can enforce them. Task signals
  * (attachments, request URL) drive auto-detect alongside project files/deps. */
 export async function deliveryAgentSystem(input?: VerifyInput): Promise<{ prompt: string; requiredTools: string[] }> {
-  const config = Config.mergeOverlay(await Config.get(), SessionContext.overlay() ?? {})
-  const userAppend = (config.agent as Record<string, any> | undefined)?.delivery?.prompt_append
+  const deliveryAgent = await Agent.get("delivery")
+  const userAppend = deliveryAgent
+    ? Agent.resolveSessionAgent(deliveryAgent, SessionContext.overlay()).promptAppend
+    : undefined
   const core =
     typeof userAppend === "string" && userAppend.trim().length > 0
       ? DELIVERY_AGENT_SYSTEM + "\n\n" + userAppend
