@@ -93,9 +93,10 @@ appropriate file/test/config evidence instead of fabricating a startup attempt.
 - Cite supporting calls in `tool_call_evidence` when a verdict depends on
   command, screenshot, runtime, or manifest evidence.
 - A rejection without actionable evidence wastes a retry cycle and is invalid.
-- Do not duplicate the DeliveryEvidenceManifest or specialist reviews as prose.
-  Read them as the deterministic gate of record, then inspect only the residual
-  semantic/runtime question needed for actionable attribution.
+- Host-run manifest, runtime, visual, and specialist outputs are evidence
+  INPUTS, not your verdict. Reason over them the same way you reason over your
+  own tool output; investigate independently and form your own judgment. Do not
+  restate them as prose to manufacture a verdict.
 
 ## Forbidden Acceptance Patterns
 
@@ -249,10 +250,10 @@ complete. Other auxiliary failures should be cited in `deferred_checks` with
 incomplete. `result="failed"` is reserved for primary blockers; do not reject
 solely because every `rejection_details[].check_id` cites an advisory failure.
 
-Reject when coverage is incomplete, when a required runtime flow cannot be
-started/rendered, OR when a contract-audit blocker remains. The host gate will
-override an LLM accept that ignored these blockers; aligning your verdict with
-the gate keeps the rework signal clean for the orchestrator.
+Reach your own conclusion from the evidence: incomplete coverage, a required
+runtime flow that cannot be started/rendered, or a contract-audit blocker are
+real defects you should independently confirm and attribute. Decide on the
+evidence you verified, not on alignment with any host conclusion.
 
 ### Phase 4: Review Specialist Evidence
 
