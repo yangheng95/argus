@@ -678,18 +678,37 @@ export async function openDirectoryInEditor(
   editor: ProjectEditorID,
   target?: string,
 ): Promise<void> {
-  const dir = target ?? activeDirectory();
-  if (!dir) return;
+  await openProjectPathInEditor(editor, target ?? activeDirectory());
+}
+
+/**
+ * Open a project path (directory or file) in the selected IDE.
+ * Relative paths are resolved against the active project directory.
+ */
+export async function openProjectPathInEditor(
+  editor: ProjectEditorID,
+  target?: string,
+): Promise<void> {
+  const rawTarget = typeof target === "string" ? target.trim() : "";
+  if (!rawTarget) return;
+  const baseDirectory = activeDirectory();
+  const resolvedTarget = absolutePath(rawTarget)
+    ? rawTarget
+    : baseDirectory
+      ? joinPath(baseDirectory, rawTarget)
+      : "";
+  if (!resolvedTarget) return;
   try {
     await getHostTransport().native({
       kind: "workspace.openProjectEditor",
       editor,
-      path: dir,
+      path: resolvedTarget,
     });
   } catch (e) {
     const label = PROJECT_EDITORS.find((item) => item.id === editor)?.label ?? editor;
-    AppLog.error("ui", "Failed to open working directory in editor", {
+    AppLog.error("ui", "Failed to open project path in editor", {
       editor,
+      path: resolvedTarget,
       error: String(e),
     });
     await nativeMessage(errorText("cwd.open_editor_failed", e), {
@@ -697,6 +716,15 @@ export async function openDirectoryInEditor(
       kind: "error",
     });
   }
+}
+
+/**
+ * Open a file in the user's preferred IDE selection from the workspace dock.
+ */
+export async function openFileInPreferredEditor(path: string): Promise<void> {
+  const target = typeof path === "string" ? path.trim() : "";
+  if (!target) return;
+  await openProjectPathInEditor(settingsStore.preferredProjectEditor, target);
 }
 
 // ── setDirectory ──

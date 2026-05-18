@@ -1,6 +1,7 @@
 import { For, createSignal } from "solid-js";
 import { type ProjectEditorID } from "../services/host-transport";
 import { activeDirectory, openDirectoryInEditor, PROJECT_EDITORS } from "../services/workspace";
+import { saveSettings, setSettingsStore, settingsStore } from "../store/settings";
 import { t } from "../utils/i18n";
 import { Icon, type IconName } from "./Icon";
 import { WorkspaceSplitLauncher } from "./WorkspaceSplitLauncher";
@@ -24,13 +25,23 @@ const EDITOR_ICON_SIZES: Record<ProjectEditorID, number> = {
 export function WorkspaceEditorLaunchers() {
   const disabled = () => !activeDirectory();
   const [open, setOpen] = createSignal(false);
+  const currentEditor = () =>
+    PROJECT_EDITORS.find((item) => item.id === settingsStore.preferredProjectEditor)?.id ?? "vscode";
+  const currentEditorLabel = () =>
+    PROJECT_EDITORS.find((item) => item.id === currentEditor())?.label ?? "VS Code";
 
   function close() {
     setOpen(false);
   }
 
+  function setPreferredEditor(editor: ProjectEditorID) {
+    setSettingsStore("preferredProjectEditor", editor);
+    saveSettings();
+  }
+
   async function openEditor(editor: ProjectEditorID) {
     close();
+    setPreferredEditor(editor);
     await openDirectoryInEditor(editor);
   }
 
@@ -43,15 +54,15 @@ export function WorkspaceEditorLaunchers() {
       disabled={disabled()}
       open={open()}
       title={t("workspace.editor_launchers")}
-      primaryAriaLabel={t("cwd.open_in_editor", { name: "VS Code" })}
+      primaryAriaLabel={t("cwd.open_in_editor", { name: currentEditorLabel() })}
       menuAriaLabel={t("workspace.editor_launchers_menu")}
       primaryDataUI="workspace-editor-open-default"
       menuDataUI="workspace-editor-menu"
-      onPrimaryClick={() => openEditor("vscode")}
+      onPrimaryClick={() => openEditor(currentEditor())}
       onOpenChange={setOpen}
       primaryChildren={(
-        <span class="workspace-editor-select-icon" data-editor="vscode" aria-hidden="true">
-          <Icon name="editor-vscode" size={18} />
+        <span class="workspace-editor-select-icon" data-editor={currentEditor()} aria-hidden="true">
+          <Icon name={EDITOR_ICONS[currentEditor()]} size={EDITOR_ICON_SIZES[currentEditor()]} />
         </span>
       )}
       menuButtonChildren={(

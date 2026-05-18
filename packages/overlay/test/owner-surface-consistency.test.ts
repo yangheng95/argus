@@ -84,8 +84,7 @@ test("structured card body content does not create nested card chrome", () => {
 test("conversation agent rail and conversation owner surfaces stay flat", () => {
   expect(bodyOf(CONVERSATION_CSS, ".conversation-agent-rail")).toMatch(/overflow:\s*hidden/)
   expect(bodyOf(CONVERSATION_CSS, ".conversation-agent-rail__row")).toMatch(/display:\s*grid/)
-  expect(bodyOf(CONVERSATION_CSS, ".conversation-agent-rail__run")).toMatch(/background:\s*transparent/)
-  expect(bodyOf(CONVERSATION_CSS, ".conversation-agent-rail__run")).toMatch(/border:\s*0/)
+  expect(bodyOf(CONVERSATION_CSS, ".conversation-agent-rail__report")).toMatch(/display:\s*inline-flex/)
   expect(bodyOf(CONVERSATION_CSS, ".conversation-agent-rail__avatar-button:hover,\n.conversation-agent-rail__report:hover")).toMatch(/background:\s*var\(--subtle-2\)/)
   expect(bodyOf(CONVERSATION_CSS, ".goal-chip")).toMatch(/border:\s*0 solid transparent/)
   expect(bodyOf(CONVERSATION_CSS, ".goal-chip")).toMatch(/background:\s*transparent/)

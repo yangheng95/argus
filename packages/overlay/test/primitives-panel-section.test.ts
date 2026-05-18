@@ -285,26 +285,6 @@ describe("DiffPreviewPanel.tsx — Panel primitive adoption", () => {
   })
 })
 
-describe("FileViewPanel.tsx — Panel primitive adoption", () => {
-  const tsx = readText(join(OVERLAY_ROOT, "src/components/FileViewPanel.tsx"))
-
-  test("imports Panel primitive", () => {
-    expect(tsx).toContain("from \"./primitives/Panel\"")
-  })
-
-  test("uses <Panel> element", () => {
-    expect(tsx).toMatch(/<Panel\b/)
-  })
-
-  test("no bare <div class=\"file-view-panel\"", () => {
-    expect(tsx).not.toMatch(/<div[^>]*class="file-view-panel"/)
-  })
-
-  test("no bare <header class=\"file-view-head\"", () => {
-    expect(tsx).not.toContain("class=\"file-view-head\"")
-  })
-})
-
 describe("TracePanel.tsx — Panel primitive adoption", () => {
   const tsx = readText(join(OVERLAY_ROOT, "src/components/TracePanel.tsx"))
 

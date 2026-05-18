@@ -4,8 +4,9 @@ import {
   type HostTransport,
   type NativeCommand,
 } from "../src/services/host-transport"
-import { openDirectoryInEditor } from "../src/services/workspace"
+import { openDirectoryInEditor, openFileInPreferredEditor } from "../src/services/workspace"
 import { pathBreadcrumb } from "../src/utils/dom-utils"
+import { setSettingsStore } from "../src/store/settings"
 import { setLocaleData } from "../src/utils/i18n"
 
 afterEach(() => __setHostTransportForTest(undefined))
@@ -40,6 +41,25 @@ test("openDirectoryInEditor routes the selected project editor through HostTrans
       kind: "workspace.openProjectEditor",
       editor: "vscode",
       path: "D:/workspace/app",
+    },
+  ])
+})
+
+test("openFileInPreferredEditor resolves relative paths through the selected IDE", async () => {
+  const calls: NativeCommand[] = []
+  __setHostTransportForTest(fakeTransport(calls))
+  setSettingsStore({
+    directory: "D:/workspace/app",
+    preferredProjectEditor: "cursor",
+  })
+
+  await openFileInPreferredEditor("src/main.ts")
+
+  expect(calls).toEqual([
+    {
+      kind: "workspace.openProjectEditor",
+      editor: "cursor",
+      path: "D:/workspace/app/src/main.ts",
     },
   ])
 })
