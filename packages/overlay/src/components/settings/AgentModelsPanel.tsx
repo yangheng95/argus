@@ -17,7 +17,7 @@
 // and collapsed prompt cache.
 
 import { createSignal, createMemo, createResource, For, Show } from "solid-js"
-import { patchConfig } from "../../services/config"
+import { getSessionConfig, patchConfig, patchSessionConfig, type SessionConfigResponse } from "../../services/config"
 import { appStore } from "../../store/app"
 import { settingsStore } from "../../store/settings"
 import { t } from "../../utils/i18n"
@@ -44,10 +44,13 @@ const TIER_LABEL: Record<string, string> = {
   internal: "Internal — background tasks",
 }
 
-export default function AgentModelsPanel() {
+export default function AgentModelsPanel(props: { scope?: "project" | "session"; sessionID?: string }) {
   const [savingAgents, setSavingAgents] = createSignal<Set<string>>(new Set())
   const [savingDefault, setSavingDefault] = createSignal(false)
   const [activeSelect, setActiveSelect] = createSignal<string>("")
+  const [sessionRefreshToken, setSessionRefreshToken] = createSignal(0)
+  const scope = () => props.scope ?? "project"
+  const sessionID = () => (props.sessionID ?? "").trim()
   const providerConfigVersion = createMemo(() => JSON.stringify(appStore.config?.provider ?? null))
   const providerCatalogVersion = createMemo(() =>
     JSON.stringify({
@@ -69,6 +72,14 @@ export default function AgentModelsPanel() {
   // subsequent re-render reading stale createResource data) snapped it back.
   const [refreshToken, setRefreshToken] = createSignal(0)
 
+  const [sessionConfig, { mutate: mutateSessionConfig }] = createResource(
+    () => scope() === "session" && sessionID() ? `${sessionID()}:${sessionRefreshToken()}` : null,
+    async (key): Promise<SessionConfigResponse> => {
+      const sid = String(key).split(":")[0]
+      return await getSessionConfig(sid)
+    },
+  )
+
   const [data] = createResource(
     () => `${refreshToken()}:${settingsStore.directory.trim()}:${providerConfigVersion()}:${providerCatalogVersion()}`,
     () => loadAgentModelsData(),
@@ -77,15 +88,37 @@ export default function AgentModelsPanel() {
     if (data.loading || data.error) return undefined
     return data()
   })
+  const readyPayload = createMemo(() => {
+    const payload = readyData()
+    if (!payload) return undefined
+    if (scope() === "session" && !sessionConfig()) return undefined
+    return payload
+  })
+
+  const sourceConfig = createMemo<Record<string, any>>(() => {
+    if (scope() === "session") return sessionConfig()?.config ?? {}
+    return (appStore.config as Record<string, any> | null | undefined) ?? {}
+  })
 
   // Single source of truth for the currently-persisted project default model.
   // Reads directly from appStore.config.model — the same value SSE
   // `config.changed` refreshes via loadConfigInfo(). Any write path below must
   // update appStore.config so this memo reflects reality without a re-fetch.
   const projectModel = createMemo<string>(() => {
-    const m = (appStore.config as { model?: unknown } | null | undefined)?.model
+    const m = sourceConfig().model
     return typeof m === "string" ? m : ""
   })
+
+  async function patchActiveConfig(diff: Record<string, any>) {
+    if (scope() === "session") {
+      const sid = sessionID()
+      if (!sid) throw new Error("Session model settings require a sessionID")
+      const saved = await patchSessionConfig(sid, diff)
+      mutateSessionConfig(saved)
+      return saved.config
+    }
+    return await patchConfig(diff)
+  }
 
   async function onSelectProjectDefault(value: string) {
     setSavingDefault(true)
@@ -94,7 +127,7 @@ export default function AgentModelsPanel() {
       // config to appStore.config. projectModel() is a memo over
       // appStore.config.model, so the UI reflects the new value the moment
       // the PATCH returns — no re-fetch window, no two-source drift.
-      await patchConfig({ model: value ? value : null })
+      await patchActiveConfig({ model: value ? value : null })
     } catch (e) {
       console.error("[project-default-model] save failed", e)
     } finally {
@@ -103,7 +136,7 @@ export default function AgentModelsPanel() {
   }
 
   function configAgentEntry(agentName: string): Record<string, any> | null {
-    const agents = (appStore.config as { agent?: unknown } | null | undefined)?.agent
+    const agents = sourceConfig().agent
     if (!agents || typeof agents !== "object" || Array.isArray(agents)) return null
     const entry = (agents as Record<string, unknown>)[agentName]
     if (!entry || typeof entry !== "object" || Array.isArray(entry)) return null
@@ -133,12 +166,13 @@ export default function AgentModelsPanel() {
   async function onSelect(agentName: string, value: string) {
     setAgentSaving(agentName, true)
     try {
-      await patchConfig({
+      await patchActiveConfig({
         agent: {
           [agentName]: value ? { model: value } : configAgentHasNonModelFields(agentName) ? { model: null } : null,
         },
       })
-      setRefreshToken((x) => x + 1)
+      if (scope() === "session") setSessionRefreshToken((x) => x + 1)
+      else setRefreshToken((x) => x + 1)
     } catch (e) {
       console.error("[agent-models] save failed", e)
     } finally {
@@ -244,7 +278,7 @@ export default function AgentModelsPanel() {
         <SurfaceHeader variant="settings-group" title="Agent Models" />
         <p class="agent-models-info">{t("agent_models.intro")}</p>
 
-        <Show when={data.loading}>
+        <Show when={data.loading || (scope() === "session" && sessionConfig.loading)}>
           <div class="agent-models-loading" role="status" aria-live="polite">
             <span class="agent-models-loading-spinner" aria-hidden="true" />
             <span>{t("agent_models.loading")}</span>
@@ -269,7 +303,25 @@ export default function AgentModelsPanel() {
           </div>
         </Show>
 
-        <Show when={readyData()} keyed>
+        <Show when={scope() === "session" && sessionConfig.error}>
+          <div class="agent-models-error" role="alert">
+            <div class="agent-models-error-msg">
+              {t("agent_models.load_failed", { error: String((sessionConfig.error as any)?.message ?? sessionConfig.error) })}
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              tone="neutral"
+              onClick={() => setSessionRefreshToken((x) => x + 1)}
+              disabled={sessionConfig.loading}
+            >
+              {sessionConfig.loading ? t("common.retrying") : t("common.retry")}
+            </Button>
+          </div>
+        </Show>
+
+        <Show when={readyPayload()} keyed>
           {(payload) => {
             const groups = providerGroups(payload.providers)
             const available = allModelValues(groups)

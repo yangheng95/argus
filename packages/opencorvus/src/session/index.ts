@@ -18,7 +18,6 @@ import { Log } from "../util/log"
 import { Message } from "./message"
 import { SessionEvents } from "./events"
 import { Instance } from "../project/instance"
-import { SessionPrompt } from "./prompt"
 import path from "path"
 import { fn } from "@/util/fn"
 import { Command } from "../command"
@@ -401,6 +400,34 @@ export namespace Session {
         const updated = db
           .update(SessionTable)
           .set({ metadata: next })
+          .where(eq(SessionTable.id, input.sessionID))
+          .returning()
+          .get()!
+        const info = fromRow(updated)
+        Database.effect(() => Bus.publish(Event.Updated, { info }))
+        return info
+      })
+    },
+  )
+
+  export const mergeConfigOverlay = fn(
+    z.object({
+      sessionID: Identifier.schema("session"),
+      patch: Config.Overlay,
+    }),
+    async (input) => {
+      return Database.transaction((db) => {
+        const row = db.select().from(SessionTable).where(eq(SessionTable.id, input.sessionID)).get()
+        if (!row) throw new NotFoundError({ message: `Session not found: ${input.sessionID}` })
+        const current = Config.Overlay.parse((row.metadata as Record<string, unknown> | null | undefined)?.configOverlay ?? {})
+        const nextOverlay = Config.Overlay.parse(Config.mergeOverlay(current as Config.Info, input.patch))
+        const metadata = {
+          ...((row.metadata ?? {}) as Record<string, unknown>),
+          configOverlay: nextOverlay,
+        }
+        const updated = db
+          .update(SessionTable)
+          .set({ metadata, time_updated: Date.now() })
           .where(eq(SessionTable.id, input.sessionID))
           .returning()
           .get()!
@@ -1002,6 +1029,7 @@ export namespace Session {
       messageID: Identifier.schema("message"),
     }),
     async (input) => {
+      const { SessionPrompt } = await import("./prompt")
       await SessionPrompt.command({
         sessionID: input.sessionID,
         messageID: input.messageID,

@@ -75,6 +75,7 @@ export function CardHeader(props: {
    *  body — see Card.tsx. */
   agentSessionID?: string;
   onAgentCancel?: (sessionID: string) => Promise<void>;
+  onAgentModelSettings?: (sessionID: string) => void;
 }) {
   const badge = () => statusBadge(props.node);
   const glyph = () => leadingGlyph(props.node);
@@ -344,6 +345,28 @@ export function CardHeader(props: {
             }}
           >
             <Icon name="inspect" size={13} />
+          </button>
+        </Show>
+        <Show when={!!props.agentSessionID && !!props.onAgentModelSettings}>
+          <button
+            type="button"
+            class="card__trace"
+            title="Session model settings"
+            aria-label="Session model settings"
+            data-testid="card-open-session-agent-models"
+            onClick={(e) => {
+              e.stopPropagation();
+              props.onAgentModelSettings?.(props.agentSessionID!);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                e.stopPropagation();
+                props.onAgentModelSettings?.(props.agentSessionID!);
+              }
+            }}
+          >
+            <Icon name="executor" size={13} />
           </button>
         </Show>
         <Show when={headActions.caps.canCancel()}>

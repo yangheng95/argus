@@ -271,7 +271,12 @@ export function ConfigDialogHost() {
       case "providers":
         return <ProvidersPanel />;
       case "agent-models":
-        return <AgentModelsPanel />;
+        return (
+          <AgentModelsPanel
+            scope={dialogStore.config.agentModelsScope}
+            sessionID={dialogStore.config.agentModelsSessionID ?? undefined}
+          />
+        );
       case "about":
         return (
           <>

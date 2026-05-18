@@ -3,6 +3,7 @@ import { describeRoute, validator, resolver } from "hono-openapi"
 import z from "zod"
 import { Session } from "../../session"
 import { SessionStatus } from "@/session"
+import { Config } from "@/config/config"
 import { SessionPrompt } from "../../session/prompt"
 import { SessionContext } from "@/session/context"
 import { clearRewindCursorForSession } from "@/engine/rewind"
@@ -19,6 +20,48 @@ import { errors } from "../error"
 import { lazy } from "../../util/lazy"
 
 const log = Log.create({ service: "server" })
+
+const SessionConfigResponse = z
+  .object({
+    config: Config.Info,
+    origin: z.record(z.string(), z.unknown()).meta({
+      description: "Per-key origin tree. Leaf values are 'project' or 'session'.",
+    }),
+  })
+  .meta({ ref: "SessionConfig" })
+
+type Origin = "project" | "session"
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object" && !Array.isArray(value)
+}
+
+function originTree(effective: unknown, overlay: unknown): unknown {
+  if (!isRecord(effective)) return overlay === undefined ? ("project" as Origin) : ("session" as Origin)
+  const out: Record<string, unknown> = {}
+  const overlayRecord = isRecord(overlay) ? overlay : undefined
+  for (const [key, value] of Object.entries(effective)) {
+    if (overlayRecord && Object.hasOwn(overlayRecord, key)) {
+      const override = overlayRecord[key]
+      if (override === null) continue
+      out[key] = isRecord(value) && isRecord(override) ? originTree(value, override) : "session"
+      continue
+    }
+    out[key] = isRecord(value) ? originTree(value, undefined) : "project"
+  }
+  return out
+}
+
+async function sessionConfig(sessionID: string): Promise<z.output<typeof SessionConfigResponse>> {
+  const session = await Session.get(sessionID)
+  const base = await Config.get()
+  const overlay = Config.Overlay.parse(session.metadata?.configOverlay ?? {})
+  const config = Config.mergeOverlay(base, overlay)
+  return {
+    config,
+    origin: originTree(config, overlay) as Record<string, unknown>,
+  }
+}
 
 export const SessionRoutes = lazy(() =>
   new Hono()
@@ -135,6 +178,59 @@ export const SessionRoutes = lazy(() =>
       }),
       async (c) => {
         return c.json(SessionStatus.list())
+      },
+    )
+    .get(
+      "/:sessionID/config",
+      describeRoute({
+        summary: "Get session effective configuration",
+        description:
+          "Return project configuration with the session overlay applied, plus a per-key origin tree for project vs session values.",
+        operationId: "session.config.get",
+        responses: {
+          200: {
+            description: "Effective session configuration",
+            content: { "application/json": { schema: resolver(SessionConfigResponse) } },
+          },
+          ...errors(400, 404),
+        },
+      }),
+      validator(
+        "param",
+        z.object({
+          sessionID: z.string().meta({ description: "Session ID" }),
+        }),
+      ),
+      async (c) => {
+        return c.json(await sessionConfig(c.req.valid("param").sessionID))
+      },
+    )
+    .patch(
+      "/:sessionID/config",
+      describeRoute({
+        summary: "Update session configuration overlay",
+        description:
+          "Merge a sparse session-scoped config overlay into session metadata. Project configuration is unchanged.",
+        operationId: "session.config.update",
+        responses: {
+          200: {
+            description: "Effective session configuration after update",
+            content: { "application/json": { schema: resolver(SessionConfigResponse) } },
+          },
+          ...errors(400, 404),
+        },
+      }),
+      validator(
+        "param",
+        z.object({
+          sessionID: z.string().meta({ description: "Session ID" }),
+        }),
+      ),
+      validator("json", Config.Overlay),
+      async (c) => {
+        const sessionID = c.req.valid("param").sessionID
+        await Session.mergeConfigOverlay({ sessionID, patch: c.req.valid("json") })
+        return c.json(await sessionConfig(sessionID))
       },
     )
     .get(
