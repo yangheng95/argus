@@ -2,13 +2,28 @@ import { describe, test, expect } from "bun:test"
 import z from "zod"
 import { Bus } from "../../src/bus"
 import { BusEvent } from "../../src/bus/bus-event"
+import { Event } from "../../src/engine/model"
 import { Instance } from "../../src/project/instance"
+import { Message } from "../../src/session/message"
+import { SessionEvents } from "../../src/session/events"
+import { Workspace } from "../../src/workspace/workspace"
 import { tmpdir } from "../fixture/fixture"
 
 // Define a test event for use in tests
 const TestEvent = BusEvent.define("test.event", z.object({ value: z.string() }))
 
 const CounterEvent = BusEvent.define("test.counter", z.object({ count: z.number() }))
+const NotifyDescriptorEvent = BusEvent.define(
+  "test.notify.descriptor",
+  z.object({ value: z.string() }),
+  { tier: 1, badge: true },
+)
+const NotifyResolverEvent = BusEvent.define(
+  "test.notify.resolver",
+  z.object({ verdict: z.enum(["accepted", "rejected"]) }),
+  (payload) => payload.verdict === "rejected" ? { tier: 1, badge: true } : { tier: 2 },
+)
+const NotifyOmittedEvent = BusEvent.define("test.notify.omitted", z.object({ value: z.string() }))
 
 describe("Bus.subscribe / Bus.publish", () => {
   test("subscriber receives published event", async () => {
@@ -90,6 +105,36 @@ describe("Bus.subscribe / Bus.publish", () => {
         expect(received).toEqual(["once"])
       },
     })
+  })
+})
+
+describe("BusEvent notification registry", () => {
+  test("resolveNotify handles descriptor, payload resolver, and omitted NOOP entries", () => {
+    expect(BusEvent.resolveNotify(NotifyDescriptorEvent.type, { value: "x" })).toEqual({ tier: 1, badge: true })
+    expect(BusEvent.resolveNotify(NotifyResolverEvent.type, { verdict: "rejected" })).toEqual({
+      tier: 1,
+      badge: true,
+    })
+    expect(BusEvent.resolveNotify(NotifyResolverEvent.type, { verdict: "accepted" })).toEqual({ tier: 2 })
+    expect(BusEvent.resolveNotify(NotifyOmittedEvent.type, { value: "x" })).toBeUndefined()
+  })
+
+  test("actual event annotations keep bridged tiers and global NOOPs explicit", () => {
+    expect(BusEvent.resolveNotify(Event.InteractionResolved.type, {
+      taskID: "tsk_notify_actual",
+      interactionID: "int_notify_actual",
+      status: "answered",
+      summary: "answered",
+    })).toBeUndefined()
+    expect(BusEvent.resolveNotify(Message.Event.PartDelta.type, {
+      sessionID: "ses_notify_actual",
+      messageID: "msg_notify_actual",
+      partID: "prt_notify_actual",
+      field: "text",
+      delta: "hello",
+    })).toEqual({ tier: 3 })
+    expect(BusEvent.resolveNotify(SessionEvents.Error.type, {})).toEqual({ tier: 1 })
+    expect(BusEvent.resolveNotify(Workspace.Event.Failed.type, { message: "workspace failed" })).toBeUndefined()
   })
 })
 

@@ -4,7 +4,7 @@ import { Identifier } from "../../src/id/id"
 import { Database, eq } from "../../src/storage/db"
 import { ProjectTable } from "../../src/project/project.sql"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
-import { Event } from "../../src/engine/model"
+import { Event, TaskEvent } from "../../src/engine/model"
 import { EngineProtocol } from "../../src/engine/protocol"
 import { EngineService } from "@/task-api"
 import { ProtocolStore } from "../../src/protocol/store"
@@ -17,6 +17,7 @@ import { ensureTaskMessageProtocolBridge } from "../../src/orchestrator/protocol
 import { SessionStatus } from "../../src/session/status"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
+import { protocolTaskEvent, taskListProtocolEvent, TaskListEvent } from "../../src/server/routes/orchestrator"
 
 let projectID = ""
 let taskID = ""
@@ -62,6 +63,78 @@ afterEach(async () => {
 })
 
 describe("orchestrator protocol", () => {
+  test("stamps notify metadata onto per-task and task-list protocol events", () => {
+    const event = {
+      id: "pev_notify",
+      type: "task.failed",
+      taskID,
+      runID: undefined,
+      sequence: 7,
+      summary: "Task failed",
+      payload: { taskID, status: "failed", summary: "Task failed" },
+      time: { emitted: Date.now(), created: Date.now(), updated: Date.now() },
+    } as any
+
+    const perTask = protocolTaskEvent(event)
+    expect(perTask.notify).toEqual({ tier: 1, badge: true })
+    expect(TaskEvent.parse(perTask).notify).toEqual({ tier: 1, badge: true })
+
+    const taskList = taskListProtocolEvent(event)
+    expect(taskList.notify).toEqual({ tier: 1, badge: true })
+    expect(TaskListEvent.parse(taskList).notify).toEqual({ tier: 1, badge: true })
+  })
+
+  test("omits notify metadata for NOOP protocol events", () => {
+    const event = {
+      id: "pev_noop",
+      type: "spec.approved",
+      taskID,
+      sequence: 8,
+      summary: "Spec approved",
+      payload: { taskID, specID: "spc_test", summary: "Spec approved" },
+      time: { emitted: Date.now(), created: Date.now(), updated: Date.now() },
+    } as any
+
+    expect(protocolTaskEvent(event)).not.toHaveProperty("notify")
+    expect(taskListProtocolEvent(event)).not.toHaveProperty("notify")
+  })
+
+  test("evaluation.completed notify tier is resolved from payload at the protocol stamp seam", () => {
+    const base = {
+      id: "pev_eval",
+      type: "evaluation.completed",
+      taskID,
+      runID: "run_eval",
+      sequence: 9,
+      summary: "Evaluation completed",
+      time: { emitted: Date.now(), created: Date.now(), updated: Date.now() },
+    }
+
+    expect(protocolTaskEvent({
+      ...base,
+      payload: {
+        taskID,
+        runID: "run_eval",
+        evaluationID: "art_rejected",
+        status: "failed",
+        verdict: "rejected",
+        summary: "Rejected",
+      },
+    } as any).notify).toEqual({ tier: 1, badge: true })
+
+    expect(protocolTaskEvent({
+      ...base,
+      payload: {
+        taskID,
+        runID: "run_eval",
+        evaluationID: "art_accepted",
+        status: "passed",
+        verdict: "accepted",
+        summary: "Accepted",
+      },
+    } as any).notify).toEqual({ tier: 2 })
+  })
+
   test("persists emitted control-plane events in task order", async () => {
     await Instance.provide({
       directory: tmp.path,

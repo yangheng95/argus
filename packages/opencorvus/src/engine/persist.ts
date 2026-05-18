@@ -1301,7 +1301,7 @@ export function updateEvaluationFromDeliveryVerdict(input: {
   }
   const existingChecks = Array.isArray(existingPayload.checks) ? existingPayload.checks : []
   const checks = input.checks ?? existingChecks
-  persistEvidence({
+  const evidence = persistEvidence({
     taskID: existing.task_id,
     // delivery-kind artifacts always have run_id set by writeDeliveryRow.
     // run_id is nullable on the table only for kind="orchestrator-stream-error".
@@ -1315,6 +1315,14 @@ export function updateEvaluationFromDeliveryVerdict(input: {
     timeCompleted: now,
     now,
   })
+  void EngineProtocol.emit(Event.EvaluationCompleted, {
+    taskID: evidence.taskID,
+    runID: evidence.runID,
+    evaluationID: evidence.id,
+    status,
+    verdict: input.verdict,
+    summary: input.summary,
+  }, { source: "evaluation.delivery" })
 }
 
 export function persistFailedRunEvaluation(input: {

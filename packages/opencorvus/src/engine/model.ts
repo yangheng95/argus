@@ -919,6 +919,7 @@ export const TaskEvent = z.object({
   sequence: z.number().int().nonnegative().optional(),
   summary: z.string(),
   payload: z.record(z.string(), z.any()),
+  notify: BusEvent.NotifyDescriptorSchema.optional(),
 })
 
 export const TaskConversationPhaseLocation = z.object({
@@ -1057,10 +1058,12 @@ export const Event = {
   TaskCreated: BusEvent.define(
     "task.created",
     z.object({ taskID: Identifier.schema("task"), status: Task.shape.status, summary: z.string() }),
+    { tier: 3 },
   ),
   TaskUpdated: BusEvent.define(
     "task.updated",
     z.object({ taskID: Identifier.schema("task"), status: Task.shape.status, summary: z.string() }),
+    { tier: 3 },
   ),
   /** Terminal task transition events. Emitted alongside TaskUpdated when the
    *  derived status (`deriveTaskStatus`) crosses from non-terminal to one of
@@ -1071,6 +1074,7 @@ export const Event = {
   TaskCompleted: BusEvent.define(
     "task.completed",
     z.object({ taskID: Identifier.schema("task"), status: Task.shape.status, summary: z.string() }),
+    { tier: 2 },
   ),
   TaskFailed: BusEvent.define(
     "task.failed",
@@ -1080,10 +1084,12 @@ export const Event = {
       summary: z.string(),
       error: z.string().optional(),
     }),
+    { tier: 1, badge: true },
   ),
   TaskCancelled: BusEvent.define(
     "task.cancelled",
     z.object({ taskID: Identifier.schema("task"), status: Task.shape.status, summary: z.string() }),
+    { tier: 2 },
   ),
   SpecCreated: BusEvent.define(
     "spec.created",
@@ -1105,14 +1111,17 @@ export const Event = {
   PlanCreated: BusEvent.define(
     "plan.created",
     z.object({ taskID: Identifier.schema("task"), planID: Identifier.schema("plan"), summary: z.string() }),
+    { tier: 3 },
   ),
   PlanActivated: BusEvent.define(
     "plan.activated",
     z.object({ taskID: Identifier.schema("task"), planID: Identifier.schema("plan"), summary: z.string() }),
+    { tier: 2 },
   ),
   GoalProgress: BusEvent.define(
     "goal.progress",
     z.object({ taskID: Identifier.schema("task"), goalRunID: z.string(), summary: z.string() }),
+    { tier: 3 },
   ),
   GoalRunUpdated: BusEvent.define(
     "goal_run.updated",
@@ -1124,14 +1133,17 @@ export const Event = {
       previousStatus: z.string(),
       summary: z.string(),
     }),
+    { tier: 3 },
   ),
   GoalPassed: BusEvent.define(
     "goal.passed",
     z.object({ taskID: Identifier.schema("task"), goalID: Identifier.schema("goal"), summary: z.string() }),
+    { tier: 2 },
   ),
   GoalFailed: BusEvent.define(
     "goal.failed",
     z.object({ taskID: Identifier.schema("task"), goalID: Identifier.schema("goal"), summary: z.string() }),
+    { tier: 1 },
   ),
   /** User rewound the task timeline to a specific anchor event. Events
    *  with time_created > cursorTime are filtered from UI-facing queries.
@@ -1168,6 +1180,7 @@ export const Event = {
       status: Run.shape.status,
       summary: z.string(),
     }),
+    { tier: 3 },
   ),
   RunUpdated: BusEvent.define(
     "run.updated",
@@ -1177,6 +1190,7 @@ export const Event = {
       status: Run.shape.status,
       summary: z.string(),
     }),
+    { tier: 3 },
   ),
   InteractionRequested: BusEvent.define(
     "interaction.requested",
@@ -1187,6 +1201,7 @@ export const Event = {
       requestType: Interaction.shape.type,
       summary: z.string(),
     }),
+    { tier: 1, badge: true },
   ),
   InteractionResolved: BusEvent.define(
     "interaction.resolved",
@@ -1206,17 +1221,23 @@ export const Event = {
       deliveryID: Identifier.schema("delivery"),
       summary: z.string(),
     }),
+    { tier: 2 },
   ),
   EvaluationCompleted: BusEvent.define(
     "evaluation.completed",
     z.object({
       taskID: Identifier.schema("task"),
       runID: Identifier.schema("run"),
-      evaluationID: Identifier.schema("evaluation"),
+      evaluationID: z.string(),
       status: Evaluation.shape.status,
       verdict: Evaluation.shape.verdict,
       summary: z.string(),
     }),
+    (payload) => payload.verdict === "rejected"
+      ? { tier: 1, badge: true }
+      : payload.verdict === "accepted"
+        ? { tier: 2 }
+        : undefined,
   ),
   TaskMessageRecorded: BusEvent.define(
     "task.message",
@@ -1227,6 +1248,7 @@ export const Event = {
       text: z.string(),
       summary: z.string(),
     }),
+    { tier: 3 },
   ),
   RunProgress: BusEvent.define(
     "run.progress",
@@ -1237,6 +1259,7 @@ export const Event = {
       summary: z.string(),
       payload: z.record(z.string(), z.any()).optional(),
     }),
+    { tier: 3 },
   ),
   RunOutput: BusEvent.define(
     "run.output",
@@ -1246,6 +1269,7 @@ export const Event = {
       type: z.string(),
       text: z.string(),
     }),
+    { tier: 3 },
   ),
   MessageInjected: BusEvent.define(
     "message.injected",
@@ -1266,6 +1290,7 @@ export const Event = {
       workflowName: z.string(),
       summary: z.string(),
     }),
+    { tier: 2 },
   ),
   WorkflowStepUpdated: BusEvent.define(
     "workflow.step.updated",
@@ -1276,6 +1301,7 @@ export const Event = {
       status: z.enum(["pending", "running", "completed", "skipped", "failed"]),
       summary: z.string(),
     }),
+    { tier: 3 },
   ),
   GoalWorkflowProgress: BusEvent.define(
     "goal.workflow.progress",
@@ -1287,6 +1313,7 @@ export const Event = {
       currentStep: z.string().optional(),
       summary: z.string(),
     }),
+    { tier: 3 },
   ),
 
   /** Integrity review lifecycle markers. The review makes a non-streaming LLM
@@ -1302,6 +1329,7 @@ export const Event = {
       taskID: Identifier.schema("task"),
       sessionID: z.string(),
     }),
+    { tier: 3 },
   ),
   IntegrityReviewProgress: BusEvent.define(
     "integrity.review.progress",
@@ -1311,6 +1339,7 @@ export const Event = {
       attempt: z.number(),
       elapsedMs: z.number(),
     }),
+    { tier: 3 },
   ),
   /** Integrity review streaming chunk. Forwarded from the LLM stream while
    *  the tool-use loop is in flight. ONLY `reasoning-delta` is forwarded —
@@ -1330,6 +1359,7 @@ export const Event = {
       delta: z.string(),
       attempt: z.number(),
     }),
+    { tier: 3 },
   ),
   /** Integrity review verdict with the full structured result. Emitted once
    *  per reviewIntegrity() call after the LLM submits every dimension verdict
@@ -1353,8 +1383,8 @@ export const Event = {
     "delivery.gate.rejected",
     z.object({
       taskID: Identifier.schema("task"),
+      runID: Identifier.schema("run").optional(),
       iteration: z.number(),
-      summary: z.string(),
       violations: z.array(
         z.object({
           kind: z.string(),
@@ -1362,6 +1392,7 @@ export const Event = {
         }),
       ),
     }),
+    { tier: 1 },
   ),
   DeliveryEvidenceUpdated: BusEvent.define(
     "delivery.evidence.updated",
@@ -1388,6 +1419,7 @@ export const Event = {
         }),
       ),
     }),
+    { tier: 3 },
   ),
   IntegrityReviewCompleted: BusEvent.define(
     "integrity.review.completed",
@@ -1448,5 +1480,6 @@ export const Event = {
       ),
       attempts: z.number(),
     }),
+    { tier: 2 },
   ),
 }

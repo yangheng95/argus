@@ -9,5 +9,6 @@ export namespace SessionEvents {
       sessionID: z.string().optional(),
       error: Message.Assistant.shape.error,
     }),
+    { tier: 1 },
   )
 }
