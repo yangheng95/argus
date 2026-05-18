@@ -1,7 +1,7 @@
 // ── Desktop notifications ──
 //
-// Surfaces task lifecycle (success / failure / cancellation / pending
-// interaction) as an OS-level notification. In the bundled overlay we
+// Surfaces task-aggregate events with stamped notify metadata as in-app
+// and OS-level notifications. In the bundled overlay we
 // route through `tauri-plugin-notification` (host.native), which uses
 // the OS's native Toast API and survives Windows' AppUserModelID gate
 // that silently swallows raw `new Notification(...)` calls inside
@@ -9,10 +9,12 @@
 // Web Notification API so dev still works.
 //
 // Quiet rules:
-//   * Skip when settingsStore.desktopNotifications is false.
-//   * Skip when document.hasFocus() AND boardStore.selectedTaskID is the
-//     task that just changed — the operator is already looking at it.
-//   * Skip if the host reports the notification surface as unsupported.
+//   * Tier 1 always shows an in-app toast; OS notification is skipped only
+//     when the focused task detail is already showing the selected task.
+//   * Tier 2 always shows an in-app toast; OS notification fires only when
+//     the overlay window is unfocused.
+//   * Tier 3 stays in the existing in-app event feed only.
+//   * Skip OS delivery when desktop notifications are disabled or unsupported.
 //
 // Permission is requested only from the Settings toggle, which is a real
 // user gesture in every host. Task lifecycle events keep the permission
@@ -20,16 +22,28 @@
 // during startup or background SSE dispatch.
 
 import { settingsStore } from "../store/settings";
-import { boardStore } from "../store/board";
-import { messageStore } from "../store/messages";
+import { boardStore, setTaskListProjectionHandler } from "../store/board";
+import { isGatewayPage } from "../store/page-mode";
 import { t } from "../utils/i18n";
 import { createStore } from "solid-js/store";
 import { getHostTransport } from "./host-transport";
+import { setDockBadge, setTrayAttention } from "./window";
+import { loadBadgeAckKeys, saveBadgeAckKeys } from "./overlay-settings-storage";
 
 type HostPermission = "granted" | "denied" | "default" | "unsupported";
 
-type NotificationKind = "completed" | "failed" | "cancelled" | "interaction";
 export type AppNotificationTone = "info" | "success" | "warning" | "error" | "progress";
+
+export interface NotifyDescriptor {
+  tier: 1 | 2 | 3;
+  badge?: boolean;
+}
+
+export interface RoutedNotificationEvent {
+  type: string;
+  taskID?: string | null;
+  notify?: NotifyDescriptor;
+}
 
 export interface AppNotificationInput {
   id?: string;
@@ -226,87 +240,156 @@ function lookupTaskTitle(taskID: string): string {
   return taskID;
 }
 
-function shouldSuppressDesktop(taskID: string): boolean {
-  if (!settingsStore.desktopNotifications) return true;
-  // The operator is already looking at the task that just changed and the
-  // window has focus — no need to vibrate the OS shell about it.
-  const focused = typeof document !== "undefined" && typeof document.hasFocus === "function" && document.hasFocus();
-  return focused && boardStore.selectedTaskID === taskID;
+function windowFocused(): boolean {
+  return typeof document !== "undefined" && typeof document.hasFocus === "function" && document.hasFocus();
 }
 
-// (Title / body keys are resolved inline at the t() call site below using
-// template literals — `notify.task.${kind}.title`. The check-panel-i18n
-// linter only sees template literals when they appear directly in t()'s
-// first argument, so we cannot route through a helper that returns a
-// string. Same constraint that BoardIntro hits with intro.mode.${mode}.)
+function taskIDForEvent(event: RoutedNotificationEvent): string {
+  return String(event.taskID || "");
+}
 
-async function dispatch(taskID: string, kind: NotificationKind, override?: { body?: string }): Promise<void> {
-  if (!taskID) return;
-  const title = t(`notify.task.${kind}.title`);
-  const taskTitle = lookupTaskTitle(taskID);
-  const body = override?.body ?? t(`notify.task.${kind}.body`, { title: taskTitle });
-  const tone: AppNotificationTone =
-    kind === "completed" ? "success" :
-      kind === "failed" ? "error" :
-        kind === "cancelled" ? "warning" : "info";
+function eventCopyKey(type: string, notify: NotifyDescriptor): string {
+  const normalized = type.replace(/\./g, "_").replace(/-/g, "_");
+  const suffix = type === "evaluation.completed" && notify.tier === 1 && notify.badge
+    ? "rejected"
+    : type === "evaluation.completed" && notify.tier === 2
+      ? "accepted"
+      : notify.tier === 1
+        ? "urgent"
+        : "notice";
+  return `${normalized}.${suffix}`;
+}
+
+function toneForTier(notify: NotifyDescriptor): AppNotificationTone {
+  if (notify.tier === 1) return "error";
+  if (notify.tier === 2) return "info";
+  return "info";
+}
+
+function shouldSendDesktop(event: RoutedNotificationEvent, taskID: string): boolean {
+  if (!settingsStore.desktopNotifications) return false;
+  const focused = windowFocused();
+  if (event.notify?.tier === 2) return !focused;
+  if (event.notify?.tier !== 1) return false;
+  return !(focused && taskID && boardStore.selectedTaskID === taskID && !isGatewayPage());
+}
+
+async function sendDesktopIfAllowed(
+  event: RoutedNotificationEvent,
+  taskID: string,
+  title: string,
+  body: string,
+): Promise<void> {
+  if (!shouldSendDesktop(event, taskID)) return;
+  const permission = await readHostPermission();
+  if (permission !== "granted") return;
+  await sendHostNotification(title, body, `oc:${taskID || "global"}:${event.type}`);
+}
+
+export function routeNotification(event: RoutedNotificationEvent): void {
+  const notify = event.notify;
+  if (!notify || notify.tier === 3) return;
+  const taskID = taskIDForEvent(event);
+  const copyKey = eventCopyKey(event.type, notify);
+  const title = t(`notify.event.${copyKey}.title`);
+  const body = t(`notify.event.${copyKey}.body`, { title: lookupTaskTitle(taskID) });
   showNotification({
-    id: `task:${taskID}:${kind}`,
-    tone,
+    id: `event:${taskID || "global"}:${event.type}:${notify.tier}`,
+    tone: toneForTier(notify),
     title,
     message: body,
   });
-  if (shouldSuppressDesktop(taskID)) return;
-  const permission = await readHostPermission();
-  if (permission !== "granted") return;
-  // tag coalesces successive notifications for the same task into a
-  // single notification slot in the OS shell (tauri-plugin-notification
-  // forwards it to WinRT's Group/Tag identifiers; Web Notification API
-  // honors `tag` natively in dev).
-  await sendHostNotification(title, body, `oc:${taskID}:${kind}`);
+  void sendDesktopIfAllowed(event, taskID, title, body);
 }
 
-// Public entry points called from the SSE event router.
+export type BadgeAckKey =
+  | `task-failed:${string}:${number}`
+  | `evaluation-rejected:${string}:${number}`;
 
-const lastDispatched = new Map<string, NotificationKind>();
-
-export function notifyTaskLifecycle(taskID: string, type: string): void {
-  if (!taskID || !type) return;
-  let kind: NotificationKind | null = null;
-  if (type === "task.completed") kind = "completed";
-  else if (type === "task.failed") kind = "failed";
-  else if (type === "task.cancelled") kind = "cancelled";
-  if (!kind) return;
-  // Coalesce: the orchestrator emits both task.updated and task.completed in
-  // quick succession; we only want the terminal event to ring once per task.
-  const prev = lastDispatched.get(taskID);
-  if (prev === kind) return;
-  lastDispatched.set(taskID, kind);
-  void dispatch(taskID, kind);
+export interface BadgeProjection {
+  count: number;
 }
 
-export function notifyInteractionRequested(taskID: string, summary?: string): void {
-  if (!taskID) return;
-  const body = summary
-    ? t("notify.task.interaction.body_with_detail", { title: lookupTaskTitle(taskID), detail: summary })
-    : undefined;
-  void dispatch(taskID, "interaction", body ? { body } : undefined);
-}
-
-// Reset the per-task dedupe map when the task is removed, so a re-run of
-// the same task ID can ring again. Hook the messageStore reset path.
-export function clearTaskNotificationState(taskID?: string): void {
-  if (!taskID) {
-    lastDispatched.clear();
-    return;
+function factVersion(value: unknown, label: string): number {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0) {
+    throw new Error(`computeBadge: ${label} is missing a positive version timestamp`);
   }
-  lastDispatched.delete(taskID);
+  return number;
 }
+
+export function taskFailedAckKey(item: any): BadgeAckKey {
+  const task = item?.task ?? item;
+  const taskID = String(task?.id || "");
+  if (!taskID) throw new Error("computeBadge: failed task is missing task.id");
+  const version = factVersion(task?.time?.completed ?? task?.time?.updated, `task ${taskID} failure time`);
+  return `task-failed:${taskID}:${version}`;
+}
+
+export function evaluationRejectedAckKey(evaluation: any): BadgeAckKey {
+  const evaluationID = String(evaluation?.id || "");
+  if (!evaluationID) throw new Error("computeBadge: rejected evaluation is missing evaluation.id");
+  const version = factVersion(
+    evaluation?.time?.completed ?? evaluation?.time?.updated,
+    `evaluation ${evaluationID} rejection time`,
+  );
+  return `evaluation-rejected:${evaluationID}:${version}`;
+}
+
+export function computeBadge(globalSummary: readonly any[], acks: ReadonlySet<string>): BadgeProjection {
+  let count = 0;
+  for (const item of globalSummary) {
+    const pending = Number(item?.pending_interactions ?? 0);
+    if (Number.isFinite(pending) && pending > 0) count += pending;
+    if ((item?.task ?? item)?.status === "failed" && !acks.has(taskFailedAckKey(item))) count += 1;
+    const evaluation = item?.evaluation;
+    if (evaluation?.verdict === "rejected" && !acks.has(evaluationRejectedAckKey(evaluation))) count += 1;
+  }
+  return { count };
+}
+
+let badgeAcks = new Set<string>(loadBadgeAckKeys());
+let pendingBadgeCount = 0;
+let badgePushQueued = false;
+
+function persistBadgeAcks(): void {
+  saveBadgeAckKeys(badgeAcks);
+}
+
+function pushBadgeProjection(count: number): void {
+  pendingBadgeCount = count;
+  if (badgePushQueued) return;
+  badgePushQueued = true;
+  queueMicrotask(() => {
+    badgePushQueued = false;
+    const next = pendingBadgeCount;
+    void setDockBadge(next);
+    void setTrayAttention(next > 0);
+  });
+}
+
+export function recomputeBadgeFromTasks(tasks: any[] = boardStore.tasks): BadgeProjection {
+  const projection = computeBadge(tasks, badgeAcks);
+  pushBadgeProjection(projection.count);
+  return projection;
+}
+
+export function ackBadge(key: BadgeAckKey): BadgeProjection {
+  badgeAcks.add(key);
+  persistBadgeAcks();
+  return recomputeBadgeFromTasks();
+}
+
+export function replaceBadgeAcksForTest(keys: Iterable<string>): void {
+  badgeAcks = new Set(keys);
+  persistBadgeAcks();
+}
+
+setTaskListProjectionHandler((tasks) => {
+  recomputeBadgeFromTasks(tasks);
+});
 
 // W2-V34: primeNotificationPermission() removed. Permission prompting now
 // only goes through ensureDesktopNotificationPermission() from the Settings
 // toggle. Lifecycle event handlers keep using the read-only permission path
 // so startup and task events do not prompt.
-
-// Touch a store reference so eslint / tree-shake knows we depend on it
-// (the import is here for createEffect-driven future enhancements).
-void messageStore;

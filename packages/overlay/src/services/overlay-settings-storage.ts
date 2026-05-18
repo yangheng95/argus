@@ -2,6 +2,8 @@ import { DEFAULT_SERVER } from "./default-server";
 
 export type BrowserOverlaySettings = Record<string, unknown>;
 
+const BADGE_ACKS_KEY = "oc_badge_acks";
+
 function storage(): Storage | undefined {
   try {
     return (globalThis as any).window?.localStorage ?? (globalThis as any).localStorage;
@@ -76,4 +78,20 @@ export function saveBrowserOverlaySettings(input: BrowserOverlaySettings): boole
   writeOptional("oc_workspace_directory", input.workspaceDirectory);
   writeOptional("oc_directory", input.directory);
   return true;
+}
+
+export function loadBadgeAckKeys(): string[] {
+  const raw = read(BADGE_ACKS_KEY);
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === "string" && item.length > 0) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveBadgeAckKeys(keys: Iterable<string>): void {
+  const unique = Array.from(new Set(Array.from(keys).filter((item) => item.trim().length > 0))).sort();
+  write(BADGE_ACKS_KEY, JSON.stringify(unique));
 }

@@ -73,7 +73,7 @@ bun run build:overlay   # 生成平台安装包（.msi / .dmg / .deb）
    ```
    GET http://127.0.0.1:7878/task/events
    ```
-   代码：`src/services/sse.ts:104` `startTaskListSSE()`
+   代码：`src/services/sse.ts:104` `startTaskListSSE()`。这条流根据服务端盖章的 `notify` 元数据统一负责系统通知，并刷新任务列表徽标投影。
 
 ### 事件路由
 
@@ -85,7 +85,8 @@ bun run build:overlay   # 生成平台安装包（.msi / .dmg / .deb）
 | `run.progress / run.output` | 转换为标准 message 事件 |
 | `agent.updated` | agentEvents |
 | `config.changed` | 触发 `loadConfigInfo()` |
-| `task.* / goal.* / plan.*` | `handleEventStreamEvent`，debounce 刷新 Board |
+| 任务详情流里的 `task.* / goal.* / plan.*` | `handleEventStreamEvent`，debounce 刷新 Board |
+| 全局任务列表流里带 `notify` 的事件 | `routeNotification()`；界面 toast / 系统通知的唯一入口 |
 
 ## Rust 侧原生能力
 
@@ -98,6 +99,7 @@ bun run build:overlay   # 生成平台安装包（.msi / .dmg / .deb）
 | `overlay_pick_dir` / `overlay_pick_files` | 目录 / 文件选择对话框 |
 | `overlay_open_url` / `overlay_open_path` | 外部打开 |
 | `overlay_attention_set` | 托盘闪烁提示 |
+| `overlay_badge_set` | 持久化 Dock / 任务栏徽标投影（macOS/Linux 使用 `set_badge_count`，Windows 使用警示圆点 overlay icon） |
 | `overlay_toggle_devtools` | 开发者工具切换 |
 
 进程清理：Windows 用 Job Object + `KILL_ON_JOB_CLOSE`；Unix 用 SIGKILL 进程组——确保 overlay 退出时后端进程及子进程全部回收。

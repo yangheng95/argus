@@ -142,6 +142,7 @@ export type NativeCommand =
   | { kind: "devtools.toggle" }
   // services/window.ts
   | { kind: "tray.attention.set"; active: boolean }
+  | { kind: "badge.set"; count: number }
   // services/workspace.ts
   | { kind: "workspace.pickDir"; start?: string }
   | { kind: "workspace.pickFiles"; start?: string; multiple?: boolean }

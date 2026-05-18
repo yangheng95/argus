@@ -91,6 +91,7 @@ let _orphanedSelectionHandler: (() => void) | null = null;
 // projection runs exactly once after each applied board delta instead of
 // relying on a shallow reactive read of `boardStore.board`.
 let _boardProjectionHandler: (() => void) | null = null;
+let _taskListProjectionHandler: ((tasks: any[]) => void) | null = null;
 
 export function setOrphanedSelectionHandler(
   handler: (() => void) | null,
@@ -106,6 +107,16 @@ export function setBoardProjectionHandler(
 
 function notifyBoardProjection(): void {
   _boardProjectionHandler?.();
+}
+
+export function setTaskListProjectionHandler(
+  handler: ((tasks: any[]) => void) | null,
+): void {
+  _taskListProjectionHandler = handler;
+}
+
+function notifyTaskListProjection(tasks: any[]): void {
+  _taskListProjectionHandler?.(tasks);
 }
 
 function selectionIsOrphaned(tasks: any[], pending: any[]): boolean {
@@ -366,6 +377,7 @@ export function applyTasks(
   if (selectionIsOrphaned(list, pending) && _orphanedSelectionHandler) {
     _orphanedSelectionHandler();
   }
+  notifyTaskListProjection(list);
 }
 
 function taskStableKey(item: any): string {

@@ -12,7 +12,7 @@ import {
 } from "../store/board";
 import { configRefreshIncludesSettingsData, loadConfigInfo, loadSettingsInfo } from "./init";
 import { applyEvent as applyTreeWriterEvent } from "./tree-writer";
-import { notifyTaskLifecycle, notifyInteractionRequested } from "./notify";
+import { routeNotification } from "./notify";
 import {
   isBoardInvalidatingEventType,
   isRouterConsumedNoopEventType,
@@ -23,23 +23,6 @@ import {
 // message array on the hot path.
 function writeToTree(event: any): void {
   applyTreeWriterEvent(event);
-  // Permission / question prompts surface as `interaction.requested`; ring
-  // the OS so an operator who has tabbed away gets pulled back. Lifecycle
-  // events live in the global task-list stream and are handled by
-  // handleTaskListNotification — this branch only handles the per-task
-  // stream's interaction signal. The producer name is `interaction.requested`
-  // (engine/model.ts::Event.InteractionRequested); a previous typo
-  // (`interaction.created`) silently never matched and left the OS toast for
-  // "LLM is waiting on your answer" inert.
-  const type = String(event?.type || "");
-  if (type === "interaction.requested") {
-    const props = event?.properties ?? event?.payload ?? {};
-    const taskID = String(props.taskID || "");
-    const summary = typeof props.summary === "string" ? props.summary
-      : typeof props.title === "string" ? props.title
-      : "";
-    if (taskID) notifyInteractionRequested(taskID, summary);
-  }
 }
 
 function isMessageStreamEvent(type: string): boolean {
@@ -675,11 +658,8 @@ export function handleEventStreamEvent(event: any): void {
   const type = normalizedEventType(event);
   // tree-writer projection has already happened upstream in
   // `routeSSEEvent` (unconditional `writeToTree(event)` before its
-  // early returns). Calling it here again would double every side
-  // effect — in particular `notifyInteractionRequested` fired twice
-  // per `interaction.requested` event. This function now only owns the
-  // board / task-sequence refresh path; tree projection is single-
-  // sourced through routeSSEEvent.
+  // early returns). This function now only owns the board / task-sequence
+  // refresh path; tree projection is single-sourced through routeSSEEvent.
   if (type.startsWith("message.")) {
     if (shouldRecoverForMessageEvent({ ...event, type })) {
       scheduleSelectedTaskRecovery(`message writer prerequisites missing: ${type}`);
@@ -722,9 +702,9 @@ export function handleEventStreamEvent(event: any): void {
  * Handler for the GLOBAL task-list SSE stream (`GET /task/events`).
  *
  * Server contract (see server/routes/orchestrator.ts): this stream emits a
- * pure change-notification shape — `{type, taskID, sequence}` — with NO
- * payload / properties. It is meant to tell the sidebar "some task changed,
- * refetch the list"; it is NOT the per-task message stream.
+ * pure change-notification shape — `{type, taskID, sequence, notify?}` —
+ * with NO payload / properties. It is meant to tell the sidebar "some task
+ * changed, refetch the list"; it is NOT the per-task message stream.
  *
  * The previous implementation routed these notifications through
  * `handleEventStreamEvent`, which feeds events into `writeToTree` →
@@ -746,14 +726,7 @@ export function handleEventStreamEvent(event: any): void {
  */
 export function handleTaskListNotification(event: any): void {
   const type = normalizedEventType(event);
-  // Desktop notifications fire BEFORE the refresh path so the OS shell
-  // pings even if loadTasks fails to refetch. notifyTaskLifecycle
-  // de-dupes per (taskID, kind), so the orchestrator emitting both
-  // task.updated and task.completed only rings once.
-  if (type === "task.completed" || type === "task.failed" || type === "task.cancelled") {
-    const lifecycleTaskID = String(event?.taskID || "");
-    if (lifecycleTaskID) notifyTaskLifecycle(lifecycleTaskID, type);
-  }
+  routeNotification({ ...event, type });
   if (type === "task.replay_expired") {
     if (boardStore.selectedTaskID) {
       scheduleSelectedTaskRecovery("task-list replay expired", boardStore.selectedTaskID);
