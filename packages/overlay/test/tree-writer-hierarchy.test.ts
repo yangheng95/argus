@@ -576,10 +576,8 @@ test("channel-stamped part.updated materializes the correct session card immedia
 // regular session card (kind="agent", stage="integrity") materialized
 // via ensureSessionCard; the structured verdict lives on
 // `node.integrity` and the IntegrityBody renderer keys off that field.
-// (The handler also listens to `integrity.review.started` /
-// `integrity.review.progress` for the running placeholder; those are
-// covered indirectly through the snapshot tests above and don't need
-// dedicated assertions here.)
+// Running integrity cards now come from the shared `review.stream.*`
+// lifecycle; completed integrity verdicts remain phase-specific.
 
 test("integrity completed event materializes an integrity session card with structured verdict", () => {
   resetWriter();
@@ -722,14 +720,26 @@ test("integrity progress no longer writes elapsed string into subtitle", () => {
   setBoardStore("selectedTaskID", TASK_ID);
 
   applyEvent({
-    type: "integrity.review.started",
+    type: "review.stream.started",
     emittedAt: 1_776_000_001_000,
-    properties: { taskID: TASK_ID, sessionID: INTEGRITY_SID },
+    properties: {
+      taskID: TASK_ID,
+      reviewID: `integrity:${INTEGRITY_SID}`,
+      phase: "integrity",
+      sessionID: INTEGRITY_SID,
+    },
   });
   applyEvent({
-    type: "integrity.review.progress",
+    type: "review.stream.progress",
     emittedAt: 1_776_000_021_000,
-    properties: { taskID: TASK_ID, sessionID: INTEGRITY_SID, attempt: 0, elapsedMs: 20_000 },
+    properties: {
+      taskID: TASK_ID,
+      reviewID: `integrity:${INTEGRITY_SID}`,
+      phase: "integrity",
+      currentStep: "agent",
+      attempt: 0,
+      elapsedMs: 20_000,
+    },
   });
 
   const integrityCardID = `integrity:session:${INTEGRITY_SID}`;
@@ -740,9 +750,16 @@ test("integrity progress no longer writes elapsed string into subtitle", () => {
   expect(beforeRetry!.subtitle).toBeUndefined();
 
   applyEvent({
-    type: "integrity.review.progress",
+    type: "review.stream.progress",
     emittedAt: 1_776_000_101_000,
-    properties: { taskID: TASK_ID, sessionID: INTEGRITY_SID, attempt: 2, elapsedMs: 100_000 },
+    properties: {
+      taskID: TASK_ID,
+      reviewID: `integrity:${INTEGRITY_SID}`,
+      phase: "integrity",
+      currentStep: "agent",
+      attempt: 2,
+      elapsedMs: 100_000,
+    },
   });
 
   const afterRetry = cardTreeStore.cards[integrityCardID]!;
@@ -775,18 +792,24 @@ test("integrity reasoning chunks append byte-identical text without changing the
   setBoardStore("selectedTaskID", TASK_ID);
 
   applyEvent({
-    type: "integrity.review.started",
+    type: "review.stream.started",
     emittedAt: 1_776_000_001_000,
-    properties: { taskID: TASK_ID, sessionID: INTEGRITY_SID },
+    properties: {
+      taskID: TASK_ID,
+      reviewID: `integrity:${INTEGRITY_SID}`,
+      phase: "integrity",
+      sessionID: INTEGRITY_SID,
+    },
   });
 
   for (const delta of ["plan ", "then ", "verify"]) {
     applyEvent({
-      type: "integrity.review.chunk",
+      type: "review.stream.chunk",
       emittedAt: 1_776_000_001_100,
       properties: {
         taskID: TASK_ID,
-        sessionID: INTEGRITY_SID,
+        reviewID: `integrity:${INTEGRITY_SID}`,
+        phase: "integrity",
         kind: "reasoning",
         attempt: 1,
         delta,
@@ -796,11 +819,11 @@ test("integrity reasoning chunks append byte-identical text without changing the
 
   const integrityCardID = `integrity:session:${INTEGRITY_SID}`;
   const part = cardTreeStore.cards[integrityCardID]?.parts.find((entry: any) =>
-    entry?.partID === `integrity:${INTEGRITY_SID}:reasoning:1`
+    entry?.partID === `review:integrity:${INTEGRITY_SID}:reasoning:1`
   );
   expect(part).toEqual({
     type: "reasoning",
-    partID: `integrity:${INTEGRITY_SID}:reasoning:1`,
+    partID: `review:integrity:${INTEGRITY_SID}:reasoning:1`,
     text: "plan then verify",
   });
   expect(String(part?.text || "")).toBe("plan then verify");
