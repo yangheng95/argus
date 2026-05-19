@@ -90,22 +90,6 @@ orchestrator（agent.ts diff: include 新增 `explore`）现在会主动派 expl
 context-tools.ts / exa-mcp.ts 单源收敛与 explore/requirements/architect websearch **不回退**
 （rule 8 正确且与本纠偏正交）。
 
-### 6. 再纠偏（2026-05-19，用户指令：撤掉编排器的 explore 权限）
-
-prompt 纪律仍压不住 deepseek-v4-flash：复测 task tsk_e40e9b21c…（C#→TS 转写）编排器
-**循环调用 explore ×6**，每次"Let me read the C# source directly"把 explore 当逐字源码
-读管道，42 条消息 0 goals，最终 abort。用户决定从能力契约层根治：
-
-- `agent.ts` orchestrator `tools.include` **移除 `explore`**（pull 曾新增，现撤销）。
-- `orchestrator-core.txt`：删 `- explore:` 工具教学 bullet + 改写 L112 投查段为
-  "你没有 read/explore 工具，repo investigation 属 analyze_intent/requirements/
-  architect，禁止自己读/explore 源码"（rule 8/17 — 不留教不存在工具的悬空引用）。
-- `agent.test.ts`：回归锁 orchestrator include 不含 explore + prompt 不教 explore。
-
-依据 rule 6.1：这是 host 端能力契约（声明式 include），合法；prompt 软约束已证不足，
-硬移除工具是正解。investigation 改由 analyze_intent/requirements/architect 承载
-（它们本就有只读 codebase 工具）。
-
 ### 仍未解决（需用户决策，超出 1/2 范围）
 "写一份学术简历"这类纯文档/调研交付物与代码流水线（intent→requirements→architect→build
 →integrity + pnpm build/test/typecheck 检查）根本不匹配。编排器纪律修好后会正确 dispatch，
