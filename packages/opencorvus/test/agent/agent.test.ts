@@ -123,6 +123,13 @@ test("explore agent limits exposed tools without permission denials", async () =
       expect(explore?.tools?.include).not.toContain("write")
       expect(evalPerm(explore, "edit")).toBe("allow")
       expect(evalPerm(explore, "write")).toBe("allow")
+      // BUG① regression: explore is a research subagent — webfetch alone
+      // (fetch a known URL, bot-blocked on search/scholar) is not enough; it
+      // must also resolve `websearch`.
+      expect(explore?.tools?.include).toContain("websearch")
+      expect(explore?.tools?.include).toContain("webfetch")
+      const exploreTools = await ToolRegistry.tools({ providerID: "", modelID: "" }, explore)
+      expect(exploreTools.map((t) => t.id)).toContain("websearch")
     },
   })
 })
@@ -221,6 +228,11 @@ test("native stage agent registry tool surfaces match role boundaries", async ()
         "list_directory",
         "memory_search",
         "memory_get",
+        // websearch is part of the read-only research surface (BUG② fix):
+        // these stage agents must verify external facts, not assume them.
+        // webfetch stays out — they search by query, they don't fetch
+        // operator-supplied URLs (that is explore/build/coding/general).
+        "websearch",
         "todoread",
         "todowrite",
       ]
@@ -232,7 +244,6 @@ test("native stage agent registry tool surfaces match role boundaries", async ()
         "task",
         "panel",
         "webfetch",
-        "websearch",
         "deliver",
         "build",
         "propose_task",
@@ -249,6 +260,7 @@ test("native stage agent registry tool surfaces match role boundaries", async ()
 
       const design = await Agent.get("design-analyst")
       expect(design?.tools?.include).toContain("url_screenshot")
+      expect(design?.tools?.include).toContain("websearch")
       expect(design?.tools?.include).not.toContain("webpage_render")
       expect(design?.tools?.include).not.toContain("task")
 

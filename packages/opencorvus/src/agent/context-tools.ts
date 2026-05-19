@@ -15,10 +15,9 @@ import { createCodebaseTools } from "@/engine/codebase-tools"
 import { Memory } from "@/memory"
 import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
+import { exaMcpCall } from "@/tool/exa-mcp"
 
 const log = Log.create({ service: "agent-context-tools" })
-
-const EXA_BASE_URL = "https://mcp.exa.ai"
 
 /**
  * Creates the full shared context tool set for read-only stage agents.
@@ -29,7 +28,9 @@ const EXA_BASE_URL = "https://mcp.exa.ai"
  * Includes:
  * - 4 codebase tools: read_file, find_files, search_code, list_directory
  * - 2 memory tools: memory_search, memory_get
- * - 1 web search tool: web_search
+ * - 1 web search tool: websearch (same canonical name as the registry tool;
+ *   each stage agent must still list `websearch` in its tools.include — the
+ *   shared set offers the capability, the agent contract opts in)
  */
 export function createAgentContextTools(taskWorkDir?: string) {
   const codebase = createCodebaseTools(taskWorkDir)
@@ -100,63 +101,38 @@ export function createAgentContextTools(taskWorkDir?: string) {
       },
     }),
 
-    // --- Web search (Exa) — disabled by default; set OPENCORVUS_ENABLE_WEB_SEARCH=1 to enable ---
-    ...(process.env.OPENCORVUS_ENABLE_WEB_SEARCH === "1" ? {
-      web_search: tool({
-        description:
-          "Search the web for current documentation, API references, changelogs, best practices, " +
-          "framework comparisons, and recommended tooling. USE PROACTIVELY for any greenfield project " +
-          "or when choosing frameworks/libraries. Do NOT assume — verify what is current and recommended.",
-        inputSchema: z.object({
-          query: z.string().describe("Web search query"),
-          num_results: z.number().default(5).describe("Number of results"),
-        }),
-        execute: async ({ query, num_results }, options) => {
-          const exaKey = process.env.EXA_API_KEY
-          const headers: Record<string, string> = {
-            accept: "application/json, text/event-stream",
-            "content-type": "application/json",
-          }
-          if (exaKey) headers["x-api-key"] = exaKey
-          const signals = [AbortSignal.timeout(20_000)]
-          if (options?.abortSignal) signals.push(options.abortSignal)
-          const response = await fetch(`${EXA_BASE_URL}/mcp`, {
-            method: "POST",
-            headers,
-            body: JSON.stringify({
-              jsonrpc: "2.0",
-              id: 1,
-              method: "tools/call",
-              params: {
-                name: "web_search_exa",
-                arguments: {
-                  query,
-                  type: "auto",
-                  numResults: num_results,
-                  livecrawl: "fallback",
-                },
-              },
-            }),
-            signal: AbortSignal.any(signals),
-          })
-          if (!response.ok) {
-            throw new Error(`Web search failed (HTTP ${response.status})`)
-          }
-
-          const text = await response.text()
-          for (const line of text.split("\n")) {
-            if (line.startsWith("data: ")) {
-              const data = JSON.parse(line.substring(6))
-              if (data.result?.content?.[0]?.text) {
-                const content = data.result.content[0].text
-                return content.length > 4000 ? content.slice(0, 4000) + "\n... (truncated)" : content
-              }
-            }
-          }
-          throw new Error("Web search returned no results")
-        },
+    // --- Web search (Exa) — single source via exaMcpCall, canonical name
+    // `websearch` (matches the registry WebSearchTool). Always offered here;
+    // per-agent opt-in is the tools.include whitelist in agent.ts. There is
+    // intentionally no enable/disable env switch — disabling websearch for an
+    // agent is done by leaving it out of that agent's include list (rule 7/10:
+    // one mechanism, no dead parallel switch).
+    websearch: tool({
+      description:
+        "Search the web for current documentation, API references, changelogs, best practices, " +
+        "framework comparisons, and recommended tooling. USE PROACTIVELY for any greenfield project " +
+        "or when choosing frameworks/libraries. Do NOT assume — verify what is current and recommended.",
+      inputSchema: z.object({
+        query: z.string().describe("Web search query"),
+        num_results: z.number().default(5).describe("Number of results"),
       }),
-    } : {}),
+      execute: async ({ query, num_results }, options) => {
+        const text = await exaMcpCall({
+          name: "web_search_exa",
+          arguments: {
+            query,
+            type: "auto",
+            numResults: num_results,
+            livecrawl: "fallback",
+          },
+          timeoutMs: 20_000,
+          signal: options?.abortSignal,
+          label: "Web search",
+        })
+        if (!text) throw new Error("Web search returned no results")
+        return text.length > 4000 ? text.slice(0, 4000) + "\n... (truncated)" : text
+      },
+    }),
   }
 }
 

@@ -136,6 +136,8 @@ Call `submit_requirements({ "final": true })` exactly once after all requirement
 
 Codebase tools (read_file, find_files, search_code, …) are available for light exploration. Do NOT try to design goals from here.
 
+`websearch({ query })` is available for external knowledge the codebase cannot answer: current library/framework choices, API references, version-specific behavior, domain facts about named people/organizations/standards. Use it PROACTIVELY for greenfield requests and before recording a technical `register_decision` — verify what is current and recommended instead of assuming. Do not guess and `webfetch` URLs; search first.
+
 ## Rules
 
 1. **No goal decomposition here.** No acceptance_specs, no owned_paths, no contract graph, no metric specs, no traceability, no cross-goal contracts. Those are the Architect's surface. You produce REQ-N + decisions. Full stop.
