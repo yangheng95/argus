@@ -16,7 +16,7 @@ import DELIVERY_CORE from "@/prompt/core/delivery-core.txt"
 import ENGINEERING_CRAFT from "@/prompt/core/engineering-craft.txt"
 import { runAgentSessionWithRetry } from "@/agent/runner"
 import { Agent } from "@/agent/agent"
-import { resolveAgentModel } from "@/agent/model"
+import { resolveAgentModel, resolveSessionOverlay } from "@/agent/model"
 import { Instance } from "@/project/instance"
 import { Identifier } from "@/id/id"
 import { Log } from "@/util/log"
@@ -27,8 +27,8 @@ import { EngineConfig, clarificationTranscriptSection, operatorNotesSection } fr
 import { deriveUrlSignals, resolveStageSkills, type TaskSignals } from "@/engine/skill-inject"
 import { Provider } from "@/provider/provider"
 import { createDecisionLog } from "@/decision-log"
-import { SessionContext } from "@/session/context"
 import type { GoalInfo, DeliveryInfo } from "@/delivery/checks"
+import { createReviewReasoningForwarder } from "@/review/stream"
 import {
   DeliveryVerdict,
   type DeliveryEvidenceFacetType,
@@ -84,6 +84,7 @@ type VerifyInput = {
   stream?: TextHooks
   signal?: AbortSignal
   deliveryID?: string
+  reviewID?: string
 }
 
 export namespace DeliveryAgent {
@@ -126,6 +127,7 @@ export namespace DeliveryAgent {
     // retries. The helper handles abort propagation, stream-error retry, and
     // exhausted-attempts surfacing — delivery only declares: how many
     // retries, how to mint a kit, and what counts as "complete".
+    let currentAttempt = 0
     const out = await runAgentSessionWithRetry({
       kind: "delivery",
       core: systemResolved.prompt,
@@ -138,6 +140,7 @@ export namespace DeliveryAgent {
       signal: input.signal,
       maxRetries: deliveryCfg.max_retries,
       toolKitFactory: () => {
+        currentAttempt += 1
         const reviewTools = createDeliveryTools({
           sessionID: input.task.sessionID,
           taskID: input.task.id,
@@ -170,6 +173,13 @@ export namespace DeliveryAgent {
         isSatisfied: (collector) => collector.finalized && !!collector.verdict,
         shouldExposeOnlyTerminalTool: () => false,
       },
+      stream: createReviewReasoningForwarder({
+        taskID: input.task.id,
+        reviewID: input.reviewID,
+        phase: "delivery",
+        attempt: () => Math.max(1, currentAttempt),
+        source: "delivery.agent",
+      }),
       buildUserPrompt: () => textPrompt,
       buildUserParts: () => buildPromptParts(textPrompt),
     })
@@ -476,7 +486,7 @@ export const DELIVERY_AGENT_SYSTEM = [DELIVERY_CORE, ENGINEERING_CRAFT].join("\n
 export async function deliveryAgentSystem(input?: VerifyInput): Promise<{ prompt: string; requiredTools: string[] }> {
   const deliveryAgent = await Agent.get("delivery")
   const userAppend = deliveryAgent
-    ? Agent.resolveSessionAgent(deliveryAgent, SessionContext.overlay()).promptAppend
+    ? Agent.resolveSessionAgent(deliveryAgent, await resolveSessionOverlay()).promptAppend
     : undefined
   const core =
     typeof userAppend === "string" && userAppend.trim().length > 0

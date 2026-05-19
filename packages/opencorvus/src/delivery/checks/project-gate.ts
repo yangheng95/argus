@@ -34,6 +34,7 @@ import {
   type DeliveryRuntimeFlowResult,
 } from "../manifest"
 import type { DeliverySpecialistReview } from "../specialist-review"
+import type { ReviewStreamStep } from "@/review/stream"
 
 const COMMAND_TIMEOUT_MS = 180_000
 const CHECK_WORKSPACE_EXCLUDED_NAMES = new Set([
@@ -76,7 +77,9 @@ export async function buildDeliveryEvidenceManifest(input: {
     goal_id?: string
     goal_run_id?: string
   }>
+  progress?: (event: { currentStep: ReviewStreamStep; summary?: string }) => void
 }): Promise<DeliveryEvidenceManifest> {
+  input.progress?.({ currentStep: "manifest", summary: "Discovering project surfaces and required checks." })
   const projectRoot = await discoverPackageRoot(input.changedFiles)
   const surfaceManifest = await detectDeliverySurfaces({
     taskID: input.taskID,
@@ -94,6 +97,7 @@ export async function buildDeliveryEvidenceManifest(input: {
   const requiredChecks = await requiredChecksFromGroups(groups)
   const coverage = buildCoverage(input.goals ?? [])
   const failedCoverageIds = validateDeliveryCoverage(coverage)
+  input.progress?.({ currentStep: "runtime", summary: "Checking project runtime readiness." })
   const runtimeReadiness = await ensureProjectReadyForRuntime({ projectRoot })
   const failedReadinessIds = runtimeReadiness.failedReadinessIds
   const preRuntimeAssessment = assessFunctionalCompletion({
@@ -122,9 +126,11 @@ export async function buildDeliveryEvidenceManifest(input: {
           goals: input.goals,
           metadata: input.metadata,
           runtimeReadiness,
+          progress: input.progress,
         })
       : []
   const failedRuntimeFlowIds = runtimeFlows.filter((item) => item.status === "failed").map((item) => item.id)
+  input.progress?.({ currentStep: "specialist", summary: "Running delivery specialist reviews." })
   const specialistReviews = await runSpecialistReviews({
     taskID: input.taskID,
     runID: input.runID,
@@ -135,6 +141,7 @@ export async function buildDeliveryEvidenceManifest(input: {
     checkResults,
     runtimeFlows,
     goals: input.goals ?? [],
+    progress: input.progress,
   })
   const reviewEvidence = [
     ...buildReviewEvidence({
@@ -274,14 +281,18 @@ async function runSpecialistReviews(input: {
     requirement_ids: string[]
     acceptance_spec_count?: number
   }>
+  progress?: (event: { currentStep: ReviewStreamStep; summary?: string }) => void
 }): Promise<DeliverySpecialistReview[]> {
   const reviews: DeliverySpecialistReview[] = []
+  input.progress?.({ currentStep: "specialist", summary: "Reviewing backend API surface." })
   const backendReview = await runBackendApiReview(input)
   if (backendReview) reviews.push(backendReview)
+  input.progress?.({ currentStep: "specialist", summary: "Reviewing client contract surface." })
   const clientReview = await runClientContractReview(input)
   if (clientReview) reviews.push(clientReview)
   // Frontend and visual runtime are covered by the concrete runtime flow above.
   // Keeping parallel specialist rows made delivery slower and duplicated failures.
+  input.progress?.({ currentStep: "specialist", summary: "Reviewing security and data surface." })
   const securityReview = await runSecurityDataReview(input)
   if (securityReview) reviews.push(securityReview)
   // Test command failures already appear under required checks. The deeper
@@ -369,6 +380,7 @@ async function runRuntimeFlows(input: {
   goals?: Array<{ acceptance_scenarios?: AcceptanceSpec[] }>
   metadata?: Record<string, unknown>
   runtimeReadiness: ProjectRuntimeReadiness
+  progress?: (event: { currentStep: ReviewStreamStep; summary?: string }) => void
 }): Promise<DeliveryRuntimeFlowResult[]> {
   const flows: DeliveryRuntimeFlowResult[] = []
   if (!input.surfaceManifest.surfaces.includes("frontend")) {
@@ -381,12 +393,14 @@ async function runRuntimeFlows(input: {
   const id = `runtime:web:${path.relative(Instance.directory, root).replaceAll("\\", "/") || "."}`
   let preview: Awaited<ReturnType<typeof resolveRuntimeFlowPreview>> | undefined
   try {
+    input.progress?.({ currentStep: "runtime", summary: "Starting managed runtime preview." })
     preview = await resolveRuntimeFlowPreview({
       taskID: input.taskID,
       projectDir: root,
       metadata: input.metadata,
       runtimeReadiness: input.runtimeReadiness,
     })
+    input.progress?.({ currentStep: "runtime", summary: "Capturing runtime page evidence." })
     const report = await computeRuntimeEvidence({
       projectDir: root,
       previewUrl: preview.url,
@@ -399,6 +413,7 @@ async function runRuntimeFlows(input: {
       ),
       viewport: { width: 1440, height: 900 },
       scenarios,
+      progress: input.progress,
     })
     const baseViolations = report.violations.filter((item) => item.kind !== "walkthrough_failed")
     flows.push({

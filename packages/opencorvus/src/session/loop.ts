@@ -7,6 +7,7 @@ import { Session } from "."
 import { Agent } from "../agent/agent"
 import { Provider } from "../provider/provider"
 import { type Tool as AITool, tool, jsonSchema, type ToolExecutionOptions, asSchema, type ModelMessage } from "ai"
+import type { TextHooks } from "@/llm/api"
 import { SessionCompaction } from "./compaction"
 import { ContextBudget } from "./context-budget"
 import { Instance } from "../project/instance"
@@ -74,6 +75,7 @@ export namespace SessionLoop {
     tools?: Record<string, AITool>
     terminalToolContract?: TerminalToolContract
     structuredOutputGuard?: StructuredOutputGuard
+    stream?: TextHooks
   }
 
   // ---------------------------------------------------------------------------
@@ -105,7 +107,8 @@ export namespace SessionLoop {
       !contract ||
       ((!contract.tools || Object.keys(contract.tools).length === 0) &&
         !contract.terminalToolContract &&
-        !contract.structuredOutputGuard)
+        !contract.structuredOutputGuard &&
+        !contract.stream)
     ) {
       sessionRuntimeContracts.delete(sessionID)
       return
@@ -1491,6 +1494,7 @@ export namespace SessionLoop {
       tools,
       model: input.model,
       toolChoice: turnToolChoice,
+      stream: getSessionRuntimeContract(input.sessionID)?.stream,
     })
 
     if (structured !== undefined) {

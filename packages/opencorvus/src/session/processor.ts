@@ -88,6 +88,7 @@ export namespace SessionProcessor {
             const stream = await LLM.stream({ ...streamInput, abort: run.signal })
 
             for await (const value of abortableIterable(stream.fullStream, run.signal)) {
+              await streamInput.stream?.onChunk?.({ chunk: value } as never)
               run.bump(chunkHeartbeatKind(value))
               run.signal.throwIfAborted()
               switch (value.type) {
@@ -464,6 +465,7 @@ export namespace SessionProcessor {
                   break
 
                 case "finish":
+                  await streamInput.stream?.onFinish?.(value as never)
                   break
 
                 default:

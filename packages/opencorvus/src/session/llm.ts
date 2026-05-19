@@ -11,6 +11,7 @@ import type { ModelMessage, Tool, ToolSet } from "ai"
 // build) for 14–25 min during alibaba-coding-plan-cn streams (audit §12,
 // 2026-04-30 r5/r6/r7 bench evidence). Rule 8 — single source.
 import { streamText } from "@/llm/api"
+import type { TextHooks } from "@/llm/api"
 import { mergeDeep, pipe } from "remeda"
 import { ProviderTransform } from "@/provider/transform"
 import { Config } from "@/config/config"
@@ -25,7 +26,7 @@ import { PermissionNext } from "@/permission/next"
 import { Auth } from "@/auth"
 import { AgentTrace } from "@/trace"
 import { sessionParentID, taskIDForSession } from "@/orchestrator/task-event"
-import { SessionContext } from "./context"
+import { resolveSessionOverlay } from "@/agent/model"
 
 export namespace LLM {
   const log = Log.create({ service: "llm" })
@@ -54,6 +55,7 @@ export namespace LLM {
      * work tools are no longer needed.
      */
     toolChoice?: "auto" | "required" | "none" | { type: "tool"; toolName: string }
+    stream?: TextHooks
   }
 
   export type StreamOutput = ReturnType<typeof streamText<ToolSet>>
@@ -66,7 +68,7 @@ export namespace LLM {
     system: string[]
     user: Message.User
   }) {
-    const agent = Agent.resolveSessionAgent(input.agent, SessionContext.overlay())
+    const agent = Agent.resolveSessionAgent(input.agent, await resolveSessionOverlay())
     const providerPrompt =
       input.user.systemMode === "complete"
         ? []
@@ -90,7 +92,7 @@ export namespace LLM {
   }
 
   export async function stream(input: StreamInput): Promise<StreamResult> {
-    const agent = Agent.resolveSessionAgent(input.agent, SessionContext.overlay())
+    const agent = Agent.resolveSessionAgent(input.agent, await resolveSessionOverlay())
     const l = log
       .clone()
       .tag("providerID", input.model.providerID)
@@ -230,6 +232,7 @@ export namespace LLM {
 
     const result = streamText({
       onError(event) {
+        void input.stream?.onError?.(event)
         const error = Message.fromError(event.error, { providerID: input.model.providerID })
         Bus.publish(SessionEvents.Error, {
           sessionID: input.sessionID,
@@ -239,30 +242,10 @@ export namespace LLM {
           error,
         })
       },
-      async experimental_repairToolCall(failed) {
-        // Sole legitimate repair: case-normalize a model-emitted tool name
-        // (e.g. "Register_Traceability" → "register_traceability"). Anything
-        // else — unknown tool, malformed input, schema violation — must
-        // surface to the model as a real tool-error so it can retry with
-        // the corrected call. Rewriting to a sentinel "invalid" tool was a
-        // fallback (CLAUDE.md rule 1) that hid the real error and trapped
-        // the model in a "tool 'invalid' unavailable" dead end with no
-        // feedback path.
-        const lower = failed.toolCall.toolName.toLowerCase()
-        if (lower !== failed.toolCall.toolName && tools[lower]) {
-          l.info("repairing tool call", {
-            tool: failed.toolCall.toolName,
-            repaired: lower,
-          })
-          return {
-            ...failed.toolCall,
-            toolName: lower,
-          }
-        }
-        // Returning null tells AI SDK "I couldn't fix it" — the SDK then
-        // emits a tool-error part the model can read and retry against.
-        return null
-      },
+      // Tool-call repair (name-normalization + discriminated-union legal-value
+      // enumeration) is installed once at the `@/llm/api` streamText wrapper —
+      // single source for every caller (see session/repair-hint.ts
+      // createToolCallRepair). Do not re-add a per-call repair here.
       temperature: params.temperature,
       topP: params.topP,
       topK: params.topK,

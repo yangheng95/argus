@@ -1,5 +1,6 @@
-import { afterEach, expect, mock, test } from "bun:test"
+import { afterEach, expect, mock, spyOn, test } from "bun:test"
 import type { GoalContractFields } from "../../src/pipeline/types"
+import { EngineProtocol } from "../../src/engine/protocol"
 
 let runnerImpl: ((input: any) => Promise<any>) | undefined
 
@@ -114,6 +115,53 @@ test("integrity accepts only complete dimension submissions plus submit_integrit
     "hallucination",
     "solution_quality",
   ])
+})
+
+test("integrity lifecycle emits shared review stream events", async () => {
+  const { reviewIntegrity } = await import("../../src/integrity/agent")
+  const emitted: Array<{ type: string; payload: any }> = []
+  const emitSpy = spyOn(EngineProtocol, "emit").mockImplementation(async (event: any, payload: any) => {
+    emitted.push({ type: event.type, payload })
+  })
+  runnerImpl = async (input: any) => {
+    input.onSessionCreated?.({ id: "ses_integrity_stream" })
+    await input.stream.onChunk({ chunk: { type: "reasoning-delta", text: "checking" } })
+    await input.stream.onFinish({} as never)
+    for (const [name, tool] of Object.entries(input.toolKit.tools)) {
+      if (name === "submit_integrity_review") continue
+      await (tool as any).execute({ verdict: "pass", issues: [], corrections: [], missing_goals: [] }, {})
+    }
+    await input.toolKit.tools.submit_integrity_review.execute({ final: true }, {})
+    return {
+      session: { id: "ses_integrity_stream" },
+      streamErrors: [],
+      structured: undefined,
+      collector: input.toolKit.getCollector(),
+      finalMessage: { info: {} },
+      model: { providerID: "test", modelID: "mock", id: "test/mock" },
+      requiredTools: [],
+    }
+  }
+
+  await reviewIntegrity({
+    userRequest: "Build UI",
+    taskTitle: "Test",
+    goals: [baseGoal],
+    contractGraph: baseGraph,
+    taskID: "tsk_integrity_stream",
+    parentSessionID: "ses_parent",
+  })
+
+  expect(emitted.map((item) => item.type)).toContain("review.stream.started")
+  expect(emitted.map((item) => item.type)).toContain("review.stream.chunk")
+  expect(emitted.map((item) => item.type)).toContain("integrity.review.completed")
+  expect(emitted.find((item) => item.type === "review.stream.started")?.payload).toMatchObject({
+    taskID: "tsk_integrity_stream",
+    reviewID: "integrity:ses_integrity_stream",
+    phase: "integrity",
+    sessionID: "ses_integrity_stream",
+  })
+  emitSpy.mockRestore()
 })
 
 test("integrity preserves correction-bearing concerns verdict (no host reconciliation)", async () => {

@@ -11,6 +11,14 @@ import {
 
 import { Env } from "@/env"
 import { abortableIterable } from "@/util/stream-activity"
+import { createToolCallRepair } from "@/session/repair-hint"
+import { Log } from "@/util/log"
+
+// Single source for tool-call repair across EVERY streamText caller (rule 8).
+// Per-call injection previously left direct callers (walkthrough translation)
+// uncovered — the rule-35 gap codex flagged. Installing it here makes the
+// omission structurally impossible.
+const repairLog = Log.create({ service: "llm-repair" })
 
 type StreamTextOnAbortCallback<TOOLS extends ToolSet> = (event: {
   readonly steps: StepResult<TOOLS>[]
@@ -65,11 +73,26 @@ export function streamText<
 ) {
   const { timeoutMs: timeout, retries: count, abortSignal, ...rest } = input
   const composed = signal(abortSignal, timeout)
+  type StreamTextInput = Parameters<typeof streamTextBase<TOOLS, STRUCTURED_OUTPUT>>[0]
+  type StreamTextInputWithRepair = StreamTextInput & {
+    experimental_repairToolCall?: ReturnType<typeof createToolCallRepair>
+  }
+  const restInput = rest as StreamTextInputWithRepair
+  const repairToolCall =
+    restInput.experimental_repairToolCall ??
+    createToolCallRepair(
+      (restInput.tools ?? {}) as Parameters<typeof createToolCallRepair>[0],
+      repairLog,
+    )
   const result = streamTextBase({
-    ...(rest as Parameters<typeof streamTextBase<TOOLS, STRUCTURED_OUTPUT>>[0]),
+    ...restInput,
     abortSignal: composed,
     maxRetries: retries(count),
-  })
+    // Caller-supplied repair wins (none currently); otherwise the single
+    // wrapper-level repair covers this call. `tools` is read off the same
+    // input so name-normalization keeps working.
+    experimental_repairToolCall: repairToolCall,
+  } as StreamTextInput)
   // The AI SDK's fullStream/textStream are AsyncIterableStreams whose
   // backing reader.read() can park indefinitely on a stalled upstream
   // socket; the abortSignal closes the connection but does not reject the

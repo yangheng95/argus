@@ -35,6 +35,12 @@ import {
 } from "./manifest"
 import { Event } from "@/engine/model"
 import { EngineProtocol } from "@/engine/protocol"
+import {
+  emitReviewStreamProgress,
+  emitReviewStreamStarted,
+  reviewIDForDelivery,
+  type ReviewStreamStep,
+} from "@/review/stream"
 
 const log = Log.create({ service: "delivery-service" })
 
@@ -88,11 +94,35 @@ export namespace DeliveryService {
       changedFiles: input.delivery.changedFiles.length,
     })
 
+    const taskID = input.task.id
+    const iteration = input.iteration ?? 0
+    const reviewID = taskID ? reviewIDForDelivery(taskID, iteration) : undefined
+    const startedAt = Date.now()
+    const progress = (currentStep: ReviewStreamStep, summary?: string) => {
+      emitReviewStreamProgress({
+        taskID,
+        reviewID,
+        phase: "delivery",
+        currentStep,
+        attempt: 1,
+        elapsedMs: Date.now() - startedAt,
+        summary,
+        source: "delivery.service",
+      })
+    }
+    emitReviewStreamStarted({
+      taskID,
+      reviewID,
+      phase: "delivery",
+      source: "delivery.service",
+    })
+
     const referencePath = resolveReferenceAttachmentPath(input.attachments)
 
     // 1. Project evidence manifest hard gate.
     let manifest: DeliveryEvidenceManifest
     try {
+      progress("manifest", "Building delivery evidence manifest.")
       manifest = await buildDeliveryEvidenceManifest({
         taskID: input.task.id,
         runID: input.runID,
@@ -104,6 +134,7 @@ export namespace DeliveryService {
         metadata: input.task.metadata,
         goals: input.goals,
         criteriaResults: input.criteriaResults ?? [],
+        progress: (event) => progress(event.currentStep, event.summary),
       })
       persistDeliveryEvidenceManifest({ manifest })
     } catch (err) {
@@ -134,6 +165,7 @@ export namespace DeliveryService {
     let runtimeReport: RuntimeEvidenceReport | undefined
     if (referencePath && manifest.finalGate.status === "passed") {
       try {
+        progress("runtime", "Computing runtime evidence for visual reference.")
         const manifestPreviewUrl = manifest.runtimeFlows.find((flow) => flow.previewUrl)?.previewUrl
         runtimeReport = await computeRuntimeEvidence({
           projectDir: Filesystem.resolve(Instance.directory),
@@ -145,6 +177,7 @@ export namespace DeliveryService {
             input.task.id ?? "no-task",
           ),
           referenceForViewport: referencePath,
+          progress: (event) => progress(event.currentStep, event.summary),
         })
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
@@ -194,10 +227,13 @@ export namespace DeliveryService {
         && !!referencePath
         && !!runtimeReport?.evidence.renderedPngPath
       visualMetric = canRunVisualMetric
-        ? await runVisualHardGate({
-            referencePath,
-            preRenderedPath: runtimeReport?.evidence.renderedPngPath,
-          })
+        ? await (async () => {
+            progress("visual", "Evaluating visual hard gate.")
+            return runVisualHardGate({
+              referencePath,
+              preRenderedPath: runtimeReport?.evidence.renderedPngPath,
+            })
+          })()
         : null
       if (visualMetric) {
         log.info("delivery visual hard gate", {
@@ -239,6 +275,7 @@ export namespace DeliveryService {
     // (fresh-eyes decoupling, specs/delivery-fresh-eyes-decoupling-2026-05-18.md).
     // The host emits the final rejected decision directly.
     if (!hostGatePassedPreAgent) {
+      progress("agent", "Host gate rejected delivery before the delivery agent.")
       const decision = composeDeliveryDecision({
         hostGate: {
           passed: false,
@@ -254,6 +291,7 @@ export namespace DeliveryService {
         iteration: input.iteration,
         failures: hostGateFailures,
       })
+      await emitDeliveryReviewCompleted(decision.final, { taskID, runID: input.runID, reviewID })
       log.info("delivery service verify completed", {
         title: input.task.title,
         llmVerdict: "skipped (host gate failed before agent)",
@@ -269,6 +307,7 @@ export namespace DeliveryService {
     // conclusions; it investigates the merged tree independently.
     let llmVerdict: DeliveryVerdictType
     try {
+      progress("agent", "Running fresh-eyes delivery review.")
       llmVerdict = await DeliveryAgent.verify({
         task: input.task,
         goals: input.goals,
@@ -276,6 +315,7 @@ export namespace DeliveryService {
         attachments: input.attachments,
         signal: input.signal,
         deliveryID: input.deliveryID,
+        reviewID,
       })
     } catch (error) {
       log.error("delivery service verify failed", {
@@ -293,6 +333,7 @@ export namespace DeliveryService {
     let finalManifest = manifest
     if (llmVerdict.verdict === "accepted") {
       try {
+        progress("post_repair", "Rebuilding evidence manifest after delivery repair.")
         finalManifest = await buildDeliveryEvidenceManifest({
           taskID: input.task.id,
           runID: input.runID,
@@ -304,6 +345,7 @@ export namespace DeliveryService {
           metadata: input.task.metadata,
           goals: input.goals,
           criteriaResults: input.criteriaResults ?? [],
+          progress: (event) => progress(event.currentStep, event.summary),
         })
         persistDeliveryEvidenceManifest({ manifest: finalManifest })
       } catch (err) {
@@ -343,6 +385,7 @@ export namespace DeliveryService {
       iteration: input.iteration,
       failures: decision.hostGate.failures,
     })
+    await emitDeliveryReviewCompleted(decision.final, { taskID, runID: input.runID, reviewID })
 
     log.info("delivery service verify completed", {
       title: input.task.title,
@@ -372,6 +415,35 @@ async function emitGateRejectedIfNeeded(
       runID: ctx.runID,
       iteration: ctx.iteration ?? 0,
       violations: deliveryGateNotificationViolations(ctx.failures),
+    },
+    { source: "delivery.service" },
+  )
+}
+
+async function emitDeliveryReviewCompleted(
+  final: DeliveryVerdictType,
+  ctx: { taskID?: string; runID?: string; reviewID?: string },
+): Promise<void> {
+  if (!ctx.taskID || !ctx.reviewID) return
+  const rejectionDetails = final.verdict === "rejected" ? final.rejection_details : []
+  const hostEvidence = final.tool_call_evidence.some((item) => item.tool === "DeliveryEvidenceManifest")
+  await EngineProtocol.emit(
+    Event.DeliveryReviewCompleted,
+    {
+      taskID: ctx.taskID,
+      runID: ctx.runID,
+      reviewID: ctx.reviewID,
+      verdict: final.verdict,
+      source: hostEvidence ? "host_gate" : "llm",
+      summary: final.summary,
+      hostGatePassed: !hostEvidence,
+      failureKinds: [...new Set(rejectionDetails.map((item) => item.category))],
+      rejectionCount: rejectionDetails.length,
+      deferredCount: final.deferred_checks.length,
+      details:
+        final.verdict === "rejected"
+          ? rejectionDetails.map((item) => item.error)
+          : final.tool_call_evidence.map((item) => item.detail),
     },
     { source: "delivery.service" },
   )

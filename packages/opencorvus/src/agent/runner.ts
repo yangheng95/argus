@@ -66,7 +66,7 @@
  */
 import type { LanguageModel } from "ai"
 import type { TextHooks } from "@/llm/api"
-import { resolveAgentModel } from "@/agent/model"
+import { resolveAgentModel, resolveSessionOverlay } from "@/agent/model"
 import { Agent } from "@/agent/agent"
 import { Provider } from "@/provider/provider"
 import { Config } from "@/config/config"
@@ -586,11 +586,12 @@ export async function runAgentSession<C>(
   // without having to memory.search for it (rule 23 / rule 22).
   const composed = input.rawSystemPrompt
     ? { prompt: input.core, requiredTools: [] as string[] }
-    : await composeSystemPrompt(
+      : await composeSystemPrompt(
         agentName,
         input.core,
         input.skillsStage,
         input.skillTaskSignals,
+        input.taskID,
       )
   const liveContext = input.taskID ? TaskContext.snapshot(input.taskID) : ""
   // INFORMATION MISSING debug toggle: when on, append the fallback block
@@ -768,6 +769,7 @@ export async function runAgentSession<C>(
     tools: input.toolKit.tools,
     terminalToolContract,
     structuredOutputGuard: input.format?.validate,
+    stream: input.stream,
   })
   try {
     try {
@@ -1282,8 +1284,9 @@ async function composeSystemPrompt(
   core: string,
   skillsStage: SkillStage | undefined,
   taskSignals: TaskSignals | undefined,
+  taskID: string | undefined,
 ): Promise<{ prompt: string; requiredTools: string[] }> {
-  const overlay = SessionContext.overlay()
+  const overlay = await resolveSessionOverlay(taskID ? { taskID } : undefined)
   const config = Config.mergeOverlay(await Config.get(), overlay ?? {})
   const baseAgent = await Agent.get(agentName)
   const effectiveAgent = baseAgent ? Agent.resolveSessionAgent(baseAgent, overlay) : undefined

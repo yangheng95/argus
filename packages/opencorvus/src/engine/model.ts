@@ -1053,6 +1053,9 @@ export const RunMetrics = z.object({
 
 export type AgentStageType = "assistant" | "requirements" | "spec" | "goal" | "architect" | "evaluator" | "delivery"
 
+export const ReviewStreamPhase = z.enum(["integrity", "delivery"])
+export const ReviewStreamStep = z.enum(["manifest", "runtime", "visual", "specialist", "agent", "post_repair"])
+
 export const Event = {
   TaskCreated: BusEvent.define(
     "task.created",
@@ -1315,45 +1318,35 @@ export const Event = {
     { tier: 3 },
   ),
 
-  /** Integrity review lifecycle markers. The review makes a non-streaming LLM
-   *  call that can take 60–180s; without these events the SSE stream falls
-   *  silent long enough to trip the benchmark alive-stall detector (cap
-   *  120s) and mask real progress. `Started` fires once before the first
-   *  LLM attempt; `Progress` fires on an interval while we wait for the
-   *  verdict so the stream keeps ticking. Neither is rendered by the
-   *  overlay — they exist purely to expose liveness. */
-  IntegrityReviewStarted: BusEvent.define(
-    "integrity.review.started",
+  ReviewStreamStarted: BusEvent.define(
+    "review.stream.started",
     z.object({
       taskID: Identifier.schema("task"),
-      sessionID: z.string(),
+      reviewID: z.string().min(1),
+      phase: ReviewStreamPhase,
+      sessionID: z.string().optional(),
     }),
     { tier: 3 },
   ),
-  IntegrityReviewProgress: BusEvent.define(
-    "integrity.review.progress",
+  ReviewStreamProgress: BusEvent.define(
+    "review.stream.progress",
     z.object({
       taskID: Identifier.schema("task"),
-      sessionID: z.string(),
+      reviewID: z.string().min(1),
+      phase: ReviewStreamPhase,
+      currentStep: ReviewStreamStep,
       attempt: z.number(),
       elapsedMs: z.number(),
+      summary: z.string().optional(),
     }),
     { tier: 3 },
   ),
-  /** Integrity review streaming chunk. Forwarded from the LLM stream while
-   *  the tool-use loop is in flight. ONLY `reasoning-delta` is forwarded —
-   *  the per-dimension `submit_<id>_verdict` and terminal
-   *  `submit_integrity_review` tool-input JSON are protocol payload and must never surface as visible
-   *  text (that would defeat the point of the tool-call architecture; verdict
-   *  is delivered structurally via IntegrityReviewCompleted). Non-reasoning
-   *  models emit no reasoning chunks; their sub-15s tool calls need no
-   *  streaming. Throttled to ~2 events/s to keep protocol_event row counts
-   *  sane. */
-  IntegrityReviewChunk: BusEvent.define(
-    "integrity.review.chunk",
+  ReviewStreamChunk: BusEvent.define(
+    "review.stream.chunk",
     z.object({
       taskID: Identifier.schema("task"),
-      sessionID: z.string(),
+      reviewID: z.string().min(1),
+      phase: ReviewStreamPhase,
       kind: z.literal("reasoning"),
       delta: z.string(),
       attempt: z.number(),
@@ -1431,6 +1424,23 @@ export const Event = {
       command: z.string().optional(),
       workspaceDir: z.string().optional(),
     }),
+  ),
+  DeliveryReviewCompleted: BusEvent.define(
+    "delivery.review.completed",
+    z.object({
+      taskID: Identifier.schema("task"),
+      runID: Identifier.schema("run").optional(),
+      reviewID: z.string().min(1),
+      verdict: z.enum(["accepted", "rejected"]),
+      source: z.enum(["llm", "host_gate"]),
+      summary: z.string(),
+      hostGatePassed: z.boolean(),
+      failureKinds: z.array(z.string()),
+      rejectionCount: z.number().int().nonnegative(),
+      deferredCount: z.number().int().nonnegative(),
+      details: z.array(z.string()),
+    }),
+    { tier: 1 },
   ),
   IntegrityReviewCompleted: BusEvent.define(
     "integrity.review.completed",

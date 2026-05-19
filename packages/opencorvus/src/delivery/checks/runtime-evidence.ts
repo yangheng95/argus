@@ -16,6 +16,7 @@
 import { captureRuntimePage, type RuntimeCaptureSuccess } from "@/delivery/runtime-capture"
 import type { AcceptanceSpec } from "@/acceptance/types"
 import { runWalkthrough, type WalkthroughResult } from "./walkthrough/run"
+import type { ReviewStreamStep } from "@/review/stream"
 
 export type RuntimeEvidenceViolationKind =
   | "no_live_preview"
@@ -90,6 +91,7 @@ export async function computeRuntimeEvidence(input: {
   requireInteraction?: boolean
   scenarios?: AcceptanceSpec[]
   walkthroughRunner?: typeof runWalkthrough
+  progress?: (event: { currentStep: ReviewStreamStep; summary?: string }) => void
 }): Promise<RuntimeEvidenceReport> {
   const violations: RuntimeEvidenceViolation[] = []
   const report: RuntimeEvidenceReport = {
@@ -111,6 +113,7 @@ export async function computeRuntimeEvidence(input: {
   report.evidence.previewUrl = input.previewUrl
 
   // 2. 真实 render + DOM 快照。delivery 只从 RuntimeCapture 读取截图和页面层证据。
+  input.progress?.({ currentStep: "runtime", summary: "Capturing runtime DOM and screenshot." })
   const render = await captureRuntimePage({
     url: input.previewUrl,
     outDir: input.outDir,
@@ -169,6 +172,7 @@ export async function computeRuntimeEvidence(input: {
     const walkthroughs: RuntimeEvidenceWalkthrough[] = []
     const runner = input.walkthroughRunner ?? runWalkthrough
     for (const spec of scenarios) {
+      input.progress?.({ currentStep: "runtime", summary: `Running runtime walkthrough ${spec.id}.` })
       const walkthrough = await runner({ spec, baseUrl: input.previewUrl, outDir: input.outDir })
       walkthroughs.push(toRuntimeEvidenceWalkthrough(walkthrough))
       if (!walkthrough.passed) {
