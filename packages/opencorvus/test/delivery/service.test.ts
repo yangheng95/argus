@@ -6,6 +6,7 @@ import type { DeliveryEvidenceManifest } from "../../src/delivery/manifest"
 import { type DeliveryVerdictType } from "../../src/delivery/verdict"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
+import { EngineProtocol } from "../../src/engine/protocol"
 
 // Fresh-eyes decoupling — specs/delivery-fresh-eyes-decoupling-2026-05-18.md.
 // The DeliveryAgent runs ONLY after the host deterministic gate has already
@@ -20,7 +21,17 @@ afterEach(async () => {
 test("manifest gate failure does NOT run DeliveryAgent and emits a host_gate final", async () => {
   await using tmp = await tmpdir({ git: true })
   const verify = spyOn(DeliveryAgent, "verify").mockResolvedValue(agentRejected())
-  spyOn(ProjectGate, "buildDeliveryEvidenceManifest").mockResolvedValue(failedManifest())
+  const emitted: Array<{ type: string; payload: any }> = []
+  spyOn(EngineProtocol, "emit").mockImplementation(async (event: any, payload: any) => {
+    emitted.push({ type: event.type, payload })
+  })
+  spyOn(ProjectGate, "buildDeliveryEvidenceManifest").mockImplementation(async () => {
+    expect(emitted[0]).toMatchObject({
+      type: "review.stream.started",
+      payload: { taskID: "tsk_service", reviewID: "delivery:tsk_service:0", phase: "delivery" },
+    })
+    return failedManifest()
+  })
 
   await Instance.provide({
     directory: tmp.path,
@@ -47,11 +58,29 @@ test("manifest gate failure does NOT run DeliveryAgent and emits a host_gate fin
 
   // The headline de-parrot guarantee: the agent is NOT invoked on gate failure.
   expect(verify).toHaveBeenCalledTimes(0)
+  expect(emitted.map((event) => event.type)).toEqual([
+    "review.stream.started",
+    "review.stream.progress",
+    "review.stream.progress",
+    "delivery.gate.rejected",
+    "delivery.review.completed",
+  ])
+  expect(emitted.at(-1)?.payload).toMatchObject({
+    taskID: "tsk_service",
+    reviewID: "delivery:tsk_service:0",
+    verdict: "rejected",
+    source: "host_gate",
+    hostGatePassed: false,
+  })
 })
 
 test("gate pass → agent accepts → post-repair gate still passes → accepted final (llm)", async () => {
   await using tmp = await tmpdir({ git: true })
   const verify = spyOn(DeliveryAgent, "verify").mockResolvedValue(agentAcceptedAfterRepair())
+  const emitted: Array<{ type: string; payload: any }> = []
+  spyOn(EngineProtocol, "emit").mockImplementation(async (event: any, payload: any) => {
+    emitted.push({ type: event.type, payload })
+  })
   const manifest = spyOn(ProjectGate, "buildDeliveryEvidenceManifest")
     .mockResolvedValueOnce(passedManifest())
     .mockResolvedValueOnce(passedManifest())
@@ -81,12 +110,26 @@ test("gate pass → agent accepts → post-repair gate still passes → accepted
   expect(deliveryInput.runtimeEvidenceFailures).toBeUndefined()
   expect(deliveryInput.visualMetricFailures).toBeUndefined()
   expect(manifest).toHaveBeenCalledTimes(2)
+  expect(emitted.some((event) =>
+    event.type === "review.stream.progress" && event.payload.currentStep === "agent"
+  )).toBe(true)
+  expect(emitted.at(-1)?.type).toBe("delivery.review.completed")
+  expect(emitted.at(-1)?.payload).toMatchObject({
+    reviewID: "delivery:tsk_service_repair:0",
+    verdict: "accepted",
+    source: "llm",
+    hostGatePassed: true,
+  })
 })
 
 test("gate pass → agent accepts → post-repair gate FAILS → host_gate final, agent kept as evidence", async () => {
   await using tmp = await tmpdir({ git: true })
   const accepted = agentAcceptedAfterRepair()
   const verify = spyOn(DeliveryAgent, "verify").mockResolvedValue(accepted)
+  const emitted: Array<{ type: string; payload: any }> = []
+  spyOn(EngineProtocol, "emit").mockImplementation(async (event: any, payload: any) => {
+    emitted.push({ type: event.type, payload })
+  })
   const manifest = spyOn(ProjectGate, "buildDeliveryEvidenceManifest")
     .mockResolvedValueOnce(passedManifest())
     .mockResolvedValueOnce(failedManifest())
@@ -111,6 +154,14 @@ test("gate pass → agent accepts → post-repair gate FAILS → host_gate final
 
   expect(verify).toHaveBeenCalledTimes(1)
   expect(manifest).toHaveBeenCalledTimes(2)
+  expect(emitted.some((event) =>
+    event.type === "review.stream.progress" && event.payload.currentStep === "post_repair"
+  )).toBe(true)
+  expect(emitted.at(-1)?.payload).toMatchObject({
+    reviewID: "delivery:tsk_service_regress:0",
+    verdict: "rejected",
+    source: "host_gate",
+  })
 })
 
 function agentRejected(): DeliveryVerdictType {

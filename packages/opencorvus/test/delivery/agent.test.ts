@@ -3,6 +3,7 @@ import { DeliveryAgent } from "../../src/delivery/agent"
 import { Instance } from "../../src/project/instance"
 import { Provider } from "../../src/provider/provider"
 import { tmpdir } from "../fixture/fixture"
+import { EngineProtocol } from "../../src/engine/protocol"
 
 let runnerImpl: ((input: any) => Promise<any>) | undefined
 
@@ -402,6 +403,65 @@ test("DeliveryAgent parses collector verdict before returning to the arbiter", a
       expect(verdict.deferred_checks).toEqual([])
     },
   })
+}, 30_000)
+
+test("DeliveryAgent forwards reasoning deltas to the shared review stream", async () => {
+  await using tmp = await tmpdir({ git: true, config: { model: "test/mock" } })
+  const emitted: Array<{ type: string; payload: any }> = []
+  spyOn(Provider, "getModel").mockResolvedValue(testDeliveryModel())
+  spyOn(EngineProtocol, "emit").mockImplementation(async (event: any, payload: any) => {
+    emitted.push({ type: event.type, payload })
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      runnerImpl = async (input: any) => {
+        const kit = input.toolKitFactory()
+        await input.stream.onChunk({ chunk: { type: "reasoning-delta", text: "reviewing " } })
+        await input.stream.onChunk({ chunk: { type: "reasoning-delta", text: "runtime" } })
+        await input.stream.onFinish({} as never)
+        const collector = kit.getCollector()
+        collector.verdict = {
+          verdict: "accepted",
+          summary: "Accepted after review.",
+          deferred_checks: [],
+          tool_call_evidence: [{ tool: "run_command", passed: true, detail: "build passed" }],
+        }
+        collector.finalized = true
+        return { collector, attempts: 1 }
+      }
+
+      await DeliveryAgent.verify({
+        task: {
+          id: "tsk_delivery_stream",
+          title: "Stream review",
+          request: "Verify stream forwarding.",
+        },
+        goals: [],
+        delivery: {
+          summary: "Merged changes.",
+          changedFiles: ["src/app.ts"],
+        },
+        model: { providerID: "test", modelID: "mock" },
+        reviewID: "delivery:tsk_delivery_stream:0",
+      })
+    },
+  })
+
+  expect(emitted).toEqual([
+    {
+      type: "review.stream.chunk",
+      payload: {
+        taskID: "tsk_delivery_stream",
+        reviewID: "delivery:tsk_delivery_stream:0",
+        phase: "delivery",
+        kind: "reasoning",
+        delta: "reviewing runtime",
+        attempt: 1,
+      },
+    },
+  ])
 }, 30_000)
 
 function scenarioSpec() {

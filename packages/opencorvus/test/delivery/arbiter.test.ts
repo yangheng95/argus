@@ -43,6 +43,51 @@ describe("delivery arbiter", () => {
     expect(parsed.success).toBe(true)
   })
 
+  test("review stream and delivery review event schemas accept the new live-card contract", () => {
+    expect(EngineEvent.ReviewStreamStarted.properties.parse({
+      taskID: "tsk_review",
+      reviewID: "delivery:tsk_review:0",
+      phase: "delivery",
+    }).reviewID).toBe("delivery:tsk_review:0")
+
+    expect(EngineEvent.ReviewStreamProgress.properties.parse({
+      taskID: "tsk_review",
+      reviewID: "delivery:tsk_review:0",
+      phase: "delivery",
+      currentStep: "runtime",
+      attempt: 1,
+      elapsedMs: 123,
+      summary: "Runtime evidence",
+    }).currentStep).toBe("runtime")
+
+    expect(EngineEvent.ReviewStreamChunk.properties.parse({
+      taskID: "tsk_review",
+      reviewID: "integrity:ses_review",
+      phase: "integrity",
+      kind: "reasoning",
+      delta: "thinking",
+      attempt: 1,
+    }).phase).toBe("integrity")
+
+    expect(EngineEvent.DeliveryReviewCompleted.properties.parse({
+      taskID: "tsk_review",
+      runID: "run_review",
+      reviewID: "delivery:tsk_review:0",
+      verdict: "rejected",
+      source: "host_gate",
+      summary: "Rejected by host gate",
+      hostGatePassed: false,
+      failureKinds: ["runtime"],
+      rejectionCount: 1,
+      deferredCount: 0,
+      details: ["Runtime failed"],
+    }).source).toBe("host_gate")
+
+    expect("IntegrityReviewStarted" in EngineEvent).toBe(false)
+    expect("IntegrityReviewProgress" in EngineEvent).toBe(false)
+    expect("IntegrityReviewChunk" in EngineEvent).toBe(false)
+  })
+
   test("arbitrates manifest gate failures from evidence inputs", () => {
     const verdict = arbitrateDeliveryGate({
       checks: {

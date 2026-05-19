@@ -41,6 +41,12 @@ import { Log } from "@/util/log"
 import { runAgentSession } from "@/agent/runner"
 import { EngineProtocol } from "@/engine/protocol"
 import { Event as EngineEvent } from "@/engine/model"
+import {
+  createReviewReasoningForwarder,
+  emitReviewStreamProgress,
+  emitReviewStreamStarted,
+  reviewIDForIntegrity,
+} from "@/review/stream"
 import type { GoalContractFields } from "@/pipeline/types"
 import { renderSpecsAsText } from "@/acceptance/types"
 import type { AcceptanceSpec } from "@/acceptance/types"
@@ -576,6 +582,7 @@ export async function reviewIntegrity(input: {
   const startedAt = Date.now()
   let lastDroppedCorrections = 0
   const collector = buildIntegrityCollector()
+  let activeReviewID: string | undefined
   const out = await runAgentSession<IntegrityCollector>({
     kind: "integrity",
     core: INTEGRITY_CORE,
@@ -609,8 +616,16 @@ export async function reviewIntegrity(input: {
       shouldExposeOnlyTerminalTool: (collector) =>
         INTEGRITY_DIMENSIONS.every((dimension) => collector.dimensions.has(dimension.id)),
     },
+    stream: createReviewReasoningForwarder({
+      taskID: input.taskID,
+      reviewID: () => activeReviewID,
+      phase: "integrity",
+      attempt: () => 1,
+      source: "architect.integrity",
+    }),
     onSessionCreated: (session) => {
       input.onSessionCreated?.(session.id)
+      activeReviewID = reviewIDForIntegrity(session.id)
       emitIntegrityLifecycle("started", input.taskID, session.id, 0, 0)
       const ticker = input.taskID
         ? setInterval(() => {
@@ -775,16 +790,20 @@ function emitIntegrityLifecycle(
     })
     return
   }
-  const def = phase === "started" ? EngineEvent.IntegrityReviewStarted : EngineEvent.IntegrityReviewProgress
-  const properties = phase === "started" ? { taskID, sessionID } : { taskID, sessionID, attempt, elapsedMs }
   log.info("integrity lifecycle emit", { phase, taskID, sessionID, attempt, elapsedMs })
-  EngineProtocol.emit(def as any, properties as any, { source: "architect.integrity" }).catch((err) => {
-    log.error("integrity lifecycle emit failed", {
-      phase,
-      taskID,
-      sessionID,
-      error: err instanceof Error ? err.message : String(err),
-    })
+  const reviewID = reviewIDForIntegrity(sessionID)
+  if (phase === "started") {
+    emitReviewStreamStarted({ taskID, reviewID, phase: "integrity", sessionID, source: "architect.integrity" })
+    return
+  }
+  emitReviewStreamProgress({
+    taskID,
+    reviewID,
+    phase: "integrity",
+    currentStep: "agent",
+    attempt,
+    elapsedMs,
+    source: "architect.integrity",
   })
 }
 
