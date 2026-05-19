@@ -109,9 +109,11 @@ task-level edit is the smallest responsible path; direct `build({ request,
 directBuildIntent: "modify_files" })` is allowed when that is the smallest
 responsible tool. Build is an implementation tool, not a repository
 investigation tool. Fresh workflow direct builds must use `directBuildIntent:
-"modify_files"` for scoped implementation. Repository investigation belongs to
-`analyze_intent`, `requirements`, or the registered `explore` subagent surface;
-do not route investigation through Build.
+"modify_files"` for scoped implementation. Repository investigation is NOT your
+job and you have no read/explore tool — it belongs inside `analyze_intent`,
+`requirements`, and `architect`, which own read-only codebase tools. Do not
+route investigation through Build, and never try to read or explore source
+yourself; dispatch the stage that owns it.
 
 Use decomposition when the request naturally has multiple implementation,
 acceptance, and verification goals. Before first implementation dispatch,
@@ -162,9 +164,6 @@ not invent a second numbering scheme in prose or metadata.
 
 - `analyze_intent`: use for short, ambiguous, or re-entry requests when scope
   needs structured reading before Requirements/Architect.
-- `explore`: use for focused read-only repository investigation when you need
-  file, symbol, or architecture facts before requirements or implementation.
-  Its findings are returned to you and persisted under `phase=explore`.
 - `design_analysis`: use before visual reference implementation; it owns mirror
   acquisition and the binding visual PRD/SPEC.
 - `requirements`: produce acceptance-level REQ-N rows and foundational
