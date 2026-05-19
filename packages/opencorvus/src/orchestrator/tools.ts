@@ -4297,12 +4297,10 @@ export function createOrchestratorTools(input: {
         }
 
         if (renderFailure) {
-          // Fresh-eyes decoupling: a render prerequisite failure is an
-          // objective host fact. It is NOT fed to the agent as a prompt
-          // conclusion anymore — the host runtime/visual gate inside
-          // DeliveryService.verify owns it and will emit a host_gate
-          // rejection. See specs/delivery-fresh-eyes-decoupling-2026-05-18.md.
-          log.warn("deliver: render prerequisite failed — host runtime/visual gate will reject", {
+          // Host evidence deblocking: render prerequisite failures are kept as
+          // delivery evidence and never fed to the agent as prompt conclusions.
+          // DeliveryService.verify still runs the agent for the final verdict.
+          log.warn("deliver: render prerequisite failed — host runtime/visual evidence will be recorded", {
             taskID,
             kind: renderFailure.kind,
             detail: renderFailure.detail,
@@ -4835,18 +4833,18 @@ export function createOrchestratorTools(input: {
               key: `delivery_repeated_failure_signature_${iteration}`,
               value: `Repeated delivery failure signatures: ${repeatedFailure.signatures.join(" | ")}`,
               reason:
-                "Current DeliveryEvidenceManifest repeats the prior manifest failure set; the orchestrator must change strategy, ask the operator, or fail_task from evidence instead of blindly repeating the same rework.",
+                "Current DeliveryEvidenceManifest repeats the prior manifest failure set; the orchestrator must not call another task-level direct build for the same signature. Ask the operator, change architecture/goal strategy, or fail_task from evidence.",
             })
             await trackStepComplete("deliver", undefined, true)
             return SubAgentProtocol.yieldResult({
               headline:
                 `Delivery rejected with repeated failure signatures (iteration=${iteration}). ` +
-                `No host rule may end scheduling here; decide from the manifest evidence whether to ask, change strategy, or fail the task.`,
+                `Do not repeat task-level direct build for the same signature; ask the operator, change strategy, or fail the task from evidence.`,
               fields: [
                 ["failure_signatures", repeatedFailure.signatures],
                 ["manifest_failures", manifestFailureDetails],
                 ["iteration", String(iteration)],
-                ["auto_iteration", autoIteration ? "enabled_but_blocked_by_repetition" : "disabled"],
+                ["auto_iteration", autoIteration ? "enabled_blocked_by_repetition" : "disabled"],
                 ["prior_repeated_signals", String(priorSignalCount)],
                 ["agent_summary", verdict.summary],
               ],
@@ -4860,8 +4858,7 @@ export function createOrchestratorTools(input: {
               value: verdict.summary,
               reason:
                 "Delivery rejected at task scope: no rejection_details entry carried a concrete goal_id, " +
-                "so no goal attempt was reopened. The orchestrator must fix the integrated deliverable " +
-                "with build({ request }) or change strategy before calling deliver again.",
+                "so no goal attempt was reopened and no automatic task-level rework is queued. The orchestrator must ask, change strategy, or use direct build only with new concrete evidence.",
             })
             log.info("deliver: task-scope rejection processed without goal reset", {
               taskID,
@@ -4870,20 +4867,14 @@ export function createOrchestratorTools(input: {
               affected_goal_ids: rejectionAffectedGoalIDs,
               auto_iteration: autoIteration,
             })
-            if (autoIteration) {
-              await queueDeliveryReworkWake({
-                iteration,
-                summary: verdict.summary,
-                affectedGoalCount: 0,
-              })
-            }
             await trackStepComplete("deliver", undefined, true)
             return SubAgentProtocol.yieldResult({
               headline:
                 autoIteration
-                  ? `Delivery rejected at task scope — iteration ${iteration}; assistant.auto_iteration=true queued a rework wake from manifest evidence, but this tool did not stop the current scheduler turn.`
+                  ? `Delivery rejected at task scope — iteration ${iteration}; assistant.auto_iteration=true but no automatic task-level rework is queued without concrete goal attribution.`
                   : `Delivery rejected at task scope — iteration ${iteration}; no goal attempts were reopened. ` +
-                    `Use the manifest evidence to choose the next orchestrator action; the host did not request a scheduler stop.`,
+                    `No automatic task-level rework is queued without concrete goal attribution. ` +
+                    `Use the manifest evidence to choose question, architect, goal-scoped build, or fail_task.`,
               fields: [
                 ["issues_found", rejectionIssues],
                 ["manifest_failures", manifestFailureDetails],

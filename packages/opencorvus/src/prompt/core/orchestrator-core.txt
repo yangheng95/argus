@@ -184,6 +184,11 @@ next actions include task-level build, goal build, modify_goal, architect,
 restart_from_stage, fail_task, propose_task, question, or reporting the current
 result when the evidence shows no responsible repair inside this task.
 
+When `deliver` reports repeated failure signatures, do not call another
+task-level direct build for the same signature. Repeated identical evidence
+means the next action must change strategy: ask a concrete operator question,
+repair the goal/architecture contract, or fail the task from evidence.
+
 Minor / localized delivery issues -> call
 `build({ request, directBuildIntent: "modify_files" })` with the exact rejection
 delta. Do not re-run requirements, architect, design_analysis, or the whole

@@ -80,6 +80,7 @@ describe("delivery project evidence gate", () => {
     expect(readiness.failedReadinessIds).toEqual(["runtime-readiness:lockfile"])
     expect(readiness.checks.find((item) => item.id === "runtime-readiness:lockfile")?.evidence).toEqual([
       "missing_lockfile=package-lock.json",
+      "lockfile_owner=.",
       "conflicting_lockfiles=bun.lock",
     ])
   })
@@ -128,6 +129,35 @@ describe("delivery project evidence gate", () => {
     expect(readiness.status).toBe("passed")
     expect(readiness.packageManagerName).toBe("bun")
     expect(readiness.failedReadinessIds).toEqual([])
+  })
+
+  test("runtime readiness accepts workspace root lockfile for a package project root", async () => {
+    const dir = await runtimePackageFixture({
+      packageJson: {
+        type: "module",
+        packageManager: "pnpm@10.32.1",
+        workspaces: ["src/web"],
+      },
+      files: {
+        "pnpm-workspace.yaml": "packages:\n  - src/web\n",
+        "pnpm-lock.yaml": "lockfileVersion: '9.0'\n",
+        "src/web/package.json": JSON.stringify({
+          type: "module",
+          packageManager: "pnpm@10.32.1",
+          scripts: { build: "vite build" },
+        }),
+      },
+    })
+
+    const readiness = await ensureProjectReadyForRuntime({ projectRoot: path.join(dir, "src", "web") })
+
+    expect(readiness.status).toBe("passed")
+    expect(readiness.packageManagerName).toBe("pnpm")
+    expect(readiness.failedReadinessIds).toEqual([])
+    expect(readiness.checks.find((item) => item.id === "runtime-readiness:lockfile")?.evidence).toEqual([
+      "lockfile=pnpm-lock.yaml",
+      "lockfile_owner=../..",
+    ])
   })
 
   test("runtime readiness failures are primary delivery blockers", async () => {
@@ -880,10 +910,12 @@ describe("delivery repeated failure tracking", () => {
     ).toBe(2)
   })
 
-  test("delivery refusal guards remain non-terminal strategy feedback", async () => {
+  test("delivery repeated failure blocks blind task-level rebuild guidance", async () => {
     const orchestratorTools = await fs.readFile(path.join(import.meta.dir, "../../src/orchestrator/tools.ts"), "utf8")
 
     expect(orchestratorTools).toContain("delivery_repeated_failure_signature_")
+    expect(orchestratorTools).toContain("must not call another task-level direct build for the same signature")
+    expect(orchestratorTools).toContain("no automatic task-level rework is queued")
     expect(orchestratorTools).not.toContain(["delivery", "budget", "exhausted_"].join("_"))
     expect(orchestratorTools).not.toContain("delivery_loop_hard_fail")
     expect(orchestratorTools).not.toContain("delivery_repeated_loop_hard_escalation")
@@ -894,8 +926,6 @@ describe("delivery repeated failure tracking", () => {
     expect(orchestratorTools).not.toContain('requestStopAfterCurrentStep("delivery_threw")')
     expect(orchestratorTools).not.toContain("forced plan restart")
     expect(orchestratorTools).not.toContain("Task was automatically restarted from plan")
-    expect(orchestratorTools).not.toContain("call fail_task with a final summary")
-    expect(orchestratorTools).not.toContain("fail_task if the failure is fundamental")
     expect(orchestratorTools).not.toContain('status: "failed", error: hardFailReason')
   })
 })

@@ -12,11 +12,11 @@ import {
 import { affectedGoalIDs, type DeliveryVerdictType } from "../../src/delivery/verdict"
 import { Event as EngineEvent } from "../../src/engine/model"
 
-// Fresh-eyes decoupling contract — see
-// specs/delivery-fresh-eyes-decoupling-2026-05-18.md. The verdict arbiter no
-// longer mutates / overrides the agent verdict. `composeDeliveryDecision` is a
-// pure projector: host gate fail → host-synthesized rejected `final` (agent
-// never the final author); host gate pass → agent verdict verbatim.
+// Host evidence deblocking contract — see
+// specs/delivery-host-gate-deblocking-2026-05-19.md. The verdict arbiter never
+// mutates / overrides the agent verdict. `composeDeliveryDecision` is a pure
+// projector: host evidence is attached separately; final is always the agent
+// verdict verbatim.
 
 describe("delivery arbiter", () => {
   test("delivery evidence event accepts readiness failure details", () => {
@@ -75,46 +75,31 @@ describe("delivery arbiter", () => {
     expect(verdict.summary).toContain("1 review item(s)")
   })
 
-  // ── composeDeliveryDecision: host gate FAILED → agent never the final ────
+  // ── composeDeliveryDecision: host evidence NEVER authors final ───────────
 
-  test("host gate failure synthesizes the final rejected verdict without an agent", () => {
-    const decision = composeDeliveryDecision({
-      hostGate: failedHostGate(manifestWithFailedBuildCheck()),
-    })
-
-    expect(decision.source).toBe("host_gate")
-    expect(decision.rawAgentVerdict).toBeUndefined()
-    expect(decision.final.verdict).toBe("rejected")
-    if (decision.final.verdict !== "rejected") throw new Error("expected rejected")
-    expect(decision.final.summary).toContain("Delivery rejected by required host gates")
-    // §2.2: non-empty rejection_details, schema-enum category (never "manifest").
-    expect(decision.final.rejection_details.length).toBeGreaterThan(0)
-    for (const d of decision.final.rejection_details) {
-      expect(["build", "test", "lint", "runtime", "quality", "startup", "visual"]).toContain(d.category)
-      expect(d.error.length).toBeGreaterThanOrEqual(8)
-    }
-    // §2.2: tool_call_evidence carries the host evidence rows.
-    expect(decision.final.tool_call_evidence.some((e) => e.tool === "DeliveryEvidenceManifest")).toBe(true)
-    // deferred_checks projected from the manifest (advisory build check present).
-    expect(decision.final.deferred_checks.some((c) => c.name === "check:build")).toBe(true)
+  test("host gate failure without an agent verdict cannot finalize delivery", () => {
+    expect(() =>
+      composeDeliveryDecision({
+        hostGate: failedHostGate(manifestWithFailedBuildCheck()),
+      }),
+    ).toThrow(/no agent verdict/)
   })
 
-  test("host gate failure keeps a post-repair agent verdict as evidence only, never as final", () => {
+  test("host gate failure returns the agent verdict verbatim", () => {
     const agentAccepted: DeliveryVerdictType = acceptedVerdict()
     const decision = composeDeliveryDecision({
       hostGate: failedHostGate(manifestWithFailedBuildCheck()),
       agentVerdict: agentAccepted,
     })
 
-    expect(decision.source).toBe("host_gate")
-    expect(decision.final.verdict).toBe("rejected")
-    // The agent's accepted verdict must NOT become the business `final`.
-    expect(decision.final).not.toBe(agentAccepted)
-    // It is retained verbatim as raw evidence.
+    expect(decision.source).toBe("llm")
+    expect(decision.final).toBe(agentAccepted)
     expect(decision.rawAgentVerdict).toBe(agentAccepted)
+    expect(decision.hostGate.passed).toBe(false)
   })
 
-  test("runtime gate failure is now a hard host gate (category=runtime), not advisory", () => {
+  test("runtime gate failure is evidence only, not a hard final verdict", () => {
+    const accepted = acceptedVerdict()
     const decision = composeDeliveryDecision({
       hostGate: {
         passed: false,
@@ -123,13 +108,15 @@ describe("delivery arbiter", () => {
           { kind: "runtime", id: "runtime-evidence", summary: "Runtime probe failed: empty root", evidence: ["root contains no hydrated children"] },
         ],
       },
+      agentVerdict: accepted,
     })
-    expect(decision.source).toBe("host_gate")
-    if (decision.final.verdict !== "rejected") throw new Error("expected rejected")
-    expect(decision.final.rejection_details.some((d) => d.category === "runtime")).toBe(true)
+    expect(decision.source).toBe("llm")
+    expect(decision.final).toBe(accepted)
+    expect(decision.hostGate.failures[0]?.kind).toBe("runtime")
   })
 
-  test("visual gate failure is now a hard host gate (category=visual), not advisory", () => {
+  test("visual gate failure is evidence only, not a hard final verdict", () => {
+    const accepted = acceptedVerdict()
     const decision = composeDeliveryDecision({
       hostGate: {
         passed: false,
@@ -138,10 +125,11 @@ describe("delivery arbiter", () => {
           { kind: "visual", id: "visual-metric", summary: "SSIM 0.24 < 0.9", evidence: ["layout mismatch"] },
         ],
       },
+      agentVerdict: accepted,
     })
-    expect(decision.source).toBe("host_gate")
-    if (decision.final.verdict !== "rejected") throw new Error("expected rejected")
-    expect(decision.final.rejection_details.some((d) => d.category === "visual")).toBe(true)
+    expect(decision.source).toBe("llm")
+    expect(decision.final).toBe(accepted)
+    expect(decision.hostGate.failures[0]?.kind).toBe("visual")
   })
 
   // ── composeDeliveryDecision: host gate PASSED → agent verdict verbatim ───
@@ -189,7 +177,7 @@ describe("delivery arbiter", () => {
 
   test("host gate pass without an agent verdict is a hard error (cannot finalize blind)", () => {
     expect(() => composeDeliveryDecision({ hostGate: passedHostGate() })).toThrow(
-      /host gate passed but no agent verdict/,
+      /no agent verdict/,
     )
   })
 
@@ -234,12 +222,15 @@ describe("delivery arbiter", () => {
       expect(verdict.status).toBe("passed")
     })
 
-    test("contract audit failure → host gate fail → host_gate final rejection", () => {
+    test("contract audit failure remains host evidence and does not author final", () => {
+      const accepted = acceptedVerdict()
       const decision = composeDeliveryDecision({
         hostGate: failedHostGate(manifestWithFailedContractAuditReview()),
+        agentVerdict: accepted,
       })
-      expect(decision.source).toBe("host_gate")
-      expect(decision.final.verdict).toBe("rejected")
+      expect(decision.source).toBe("llm")
+      expect(decision.final).toBe(accepted)
+      expect(decision.hostGate.passed).toBe(false)
     })
   })
 
@@ -264,12 +255,12 @@ describe("delivery arbiter", () => {
   })
 
   test("detects repeated specialist failure signatures", () => {
-    const current = manifestWithSpecialistClientContractFailure(20)
-    const previous = manifestWithSpecialistClientContractFailure(10)
+    const current = manifestWithSpecialistBackendApiFailure(20)
+    const previous = manifestWithSpecialistBackendApiFailure(10)
     const result = repeatedDeliveryFailureSignatures({ current, history: [previous] })
     expect(result.repeated).toBe(true)
     expect(result.signatures).toContain(
-      "specialist:client_contract:evidence_quality:Client contract surface was selected without client file or endpoint evidence.",
+      "specialist:backend_api:evidence_quality:Backend API surface was selected without route file or route literal evidence.",
     )
   })
 })
@@ -391,42 +382,42 @@ function manifestWithFailedBuildCheck(): DeliveryEvidenceManifest {
   }
 }
 
-function manifestWithSpecialistClientContractFailure(timeCreated: number): DeliveryEvidenceManifest {
+function manifestWithSpecialistBackendApiFailure(timeCreated: number): DeliveryEvidenceManifest {
   return {
     ...baseManifest(),
     timeCreated,
     reviewEvidence: [
       {
-        id: "specialist:client_contract",
-        name: "Specialist Review: client_contract",
+        id: "specialist:backend_api",
+        name: "Specialist Review: backend_api",
         status: "failed",
         evidence: [
-          "blocking:evidence_quality: Client contract surface was selected without client file or endpoint evidence.",
+          "blocking:evidence_quality: Backend API surface was selected without route file or route literal evidence.",
         ],
       },
     ],
     specialistReviews: [
       {
-        id: `artifact_client_contract_${timeCreated}`,
+        id: `artifact_backend_api_${timeCreated}`,
         taskId: "tsk_arbiter",
         runId: "run_arbiter",
         deliveryId: "dlv_arbiter",
-        reviewer: "client_contract",
+        reviewer: "backend_api",
         executionStatus: "completed",
-        summary: "Client contract review found 1 issue(s).",
+        summary: "Backend API review found 1 issue(s).",
         findings: [
           {
             proposedSeverity: "blocking",
             category: "evidence_quality",
-            claim: "Client contract surface was selected without client file or endpoint evidence.",
+            claim: "Backend API surface was selected without route file or route literal evidence.",
             evidence: [
-              { kind: "log", ref: "artifact_surface", excerpt: "client_contract selected but client inventory is empty" },
+              { kind: "log", ref: "artifact_surface", excerpt: "backend_api selected but route inventory is empty" },
             ],
             affectedRequirementIDs: [],
           },
         ],
         evidenceRefs: ["surface:artifact_surface"],
-        reviewedSurfaces: ["client_contract"],
+        reviewedSurfaces: ["backend_api"],
         timeCreated,
       },
     ],
@@ -437,7 +428,7 @@ function manifestWithSpecialistClientContractFailure(timeCreated: number): Deliv
       failedCheckIds: [],
       failedCoverageIds: [],
       failedRuntimeFlowIds: [],
-      failedReviewIds: ["specialist:client_contract"],
+      failedReviewIds: ["specialist:backend_api"],
     },
   }
 }

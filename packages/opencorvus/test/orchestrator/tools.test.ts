@@ -129,6 +129,30 @@ async function markBuildSlotAcquired(input: any) {
   await input.onSlotAcquired?.()
 }
 
+function deliveryDecisionFromVerdict(verdict: any, passed = true) {
+  return {
+    final: verdict,
+    rawAgentVerdict: verdict,
+    hostGate: {
+      passed,
+      manifest: {
+        id: "artifact_mock_delivery_manifest",
+        finalGate: {
+          status: passed ? "passed" : "failed",
+          summary: passed ? "mock host evidence passed" : "mock host evidence failed",
+          failedReadinessIds: [],
+          failedCheckIds: [],
+          failedCoverageIds: [],
+          failedRuntimeFlowIds: [],
+          failedReviewIds: [],
+        },
+      },
+      failures: [],
+    },
+    source: "llm",
+  }
+}
+
 function insertWorkflowTaskWithGoal(input: {
   projectID: string
   taskID: string
@@ -792,7 +816,7 @@ describe("orchestrator tools", () => {
     let verifyInput: any
     deliveryServiceVerifyImpl = async (input: any) => {
       verifyInput = input
-      return {
+      return deliveryDecisionFromVerdict({
         verdict: "rejected",
         summary: "Direct build delivery inspected the run-bound evidence.",
         deferred_checks: [],
@@ -810,7 +834,7 @@ describe("orchestrator tools", () => {
             error: "Direct build needs one more verification pass.",
           },
         ],
-      }
+      })
     }
 
     await Instance.provide({
@@ -844,8 +868,8 @@ describe("orchestrator tools", () => {
         )
 
         expect(deliverResult).toContain("Delivery rejected at task scope")
-        expect(deliverResult).toContain("the host did not request a scheduler stop")
-        expect(deliverResult).not.toContain("wait for follow-up")
+        expect(deliverResult).toContain("No automatic task-level rework is queued")
+        expect(deliverResult).not.toContain("queued a rework wake")
         expect(verifyInput.runID).toBe(run?.id)
         expect(verifyInput.delivery.changedFiles).toContain("direct-output.txt")
         expect(findDeliveryByRun(run!.id)?.run_id).toBe(run?.id)
@@ -908,18 +932,19 @@ describe("orchestrator tools", () => {
         diffs: [{ file: "accepted-output.txt", diff: "New file:\naccepted delivery output\n" }],
       }
     }
-    deliveryServiceVerifyImpl = async () => ({
-      verdict: "accepted",
-      summary: "Delivery accepted the integrated output.",
-      deferred_checks: [],
-      tool_call_evidence: [
-        {
-          tool: "inspect_delivery_context",
-          passed: true,
-          detail: "accepted delivery evidence",
-        },
-      ],
-    })
+    deliveryServiceVerifyImpl = async () =>
+      deliveryDecisionFromVerdict({
+        verdict: "accepted",
+        summary: "Delivery accepted the integrated output.",
+        deferred_checks: [],
+        tool_call_evidence: [
+          {
+            tool: "inspect_delivery_context",
+            passed: true,
+            detail: "accepted delivery evidence",
+          },
+        ],
+      })
 
     await Instance.provide({
       directory: tmp.path,

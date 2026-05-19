@@ -33,8 +33,6 @@ import {
   persistDeliveryEvidenceManifest,
   type DeliveryEvidenceManifest,
 } from "./manifest"
-import { Event } from "@/engine/model"
-import { EngineProtocol } from "@/engine/protocol"
 
 const log = Log.create({ service: "delivery-service" })
 
@@ -235,38 +233,10 @@ export namespace DeliveryService {
       (runtimeReport ? runtimeReport.passed : true) &&
       (visualMetric ? visualMetric.passed : true)
 
-    // 4a. Host gate failed → the agent is NOT run to restate the failure
-    // (fresh-eyes decoupling, specs/delivery-fresh-eyes-decoupling-2026-05-18.md).
-    // The host emits the final rejected decision directly.
-    if (!hostGatePassedPreAgent) {
-      const decision = composeDeliveryDecision({
-        hostGate: {
-          passed: false,
-          manifest,
-          runtimeReport,
-          visualMetric,
-          failures: hostGateFailures,
-        },
-      })
-      await emitGateRejectedIfNeeded(decision, {
-        taskID: input.task.id,
-        runID: input.runID,
-        iteration: input.iteration,
-        failures: hostGateFailures,
-      })
-      log.info("delivery service verify completed", {
-        title: input.task.title,
-        llmVerdict: "skipped (host gate failed before agent)",
-        finalVerdict: decision.final.verdict,
-        arbiterSource: decision.source,
-        issuesFound: issuesFound(decision.final).length,
-      })
-      return decision
-    }
-
-    // 4b. Host gate passed → the fresh-eyes DeliveryAgent runs BLIND. It does
-    // NOT receive manifestGate / hostGateFailures / runtime / visual failure
-    // conclusions; it investigates the merged tree independently.
+    // 4. The fresh-eyes DeliveryAgent always runs BLIND. It does NOT receive
+    // manifestGate / hostGateFailures / runtime / visual failure conclusions;
+    // host evidence remains a separate packet and never authors the final
+    // delivery verdict.
     let llmVerdict: DeliveryVerdictType
     try {
       llmVerdict = await DeliveryAgent.verify({
@@ -313,80 +283,40 @@ export namespace DeliveryService {
       }
     }
 
-    const postRepairPassed = finalManifest.finalGate.status === "passed"
-    const decision = postRepairPassed
-      ? composeDeliveryDecision({
-          hostGate: { passed: true, manifest: finalManifest, runtimeReport, visualMetric, failures: [] },
-          agentVerdict: llmVerdict,
-        })
-      : composeDeliveryDecision({
-          hostGate: {
-            passed: false,
-            manifest: finalManifest,
-            runtimeReport,
-            visualMetric,
-            failures: [
-              {
-                kind: "manifest",
-                id: finalManifest.id,
-                summary: finalManifest.finalGate.summary,
-                evidence: formatDeliveryManifestFailureDetails(finalManifest),
-              },
-            ],
-          },
-          agentVerdict: llmVerdict,
-        })
-
-    await emitGateRejectedIfNeeded(decision, {
-      taskID: input.task.id,
-      runID: input.runID,
-      iteration: input.iteration,
-      failures: decision.hostGate.failures,
+    const finalHostGateFailures = [...hostGateFailures]
+    if (finalManifest !== manifest && finalManifest.finalGate.status === "failed") {
+      finalHostGateFailures.push({
+        kind: "manifest",
+        id: finalManifest.id,
+        summary: finalManifest.finalGate.summary,
+        evidence: formatDeliveryManifestFailureDetails(finalManifest),
+      })
+    }
+    const hostGatePassed =
+      hostGatePassedPreAgent &&
+      finalManifest.finalGate.status === "passed"
+    const decision = composeDeliveryDecision({
+      hostGate: {
+        passed: hostGatePassed,
+        manifest: finalManifest,
+        runtimeReport,
+        visualMetric,
+        failures: hostGatePassed ? [] : finalHostGateFailures,
+      },
+      agentVerdict: llmVerdict,
     })
 
     log.info("delivery service verify completed", {
       title: input.task.title,
       llmVerdict: llmVerdict.verdict,
       finalVerdict: decision.final.verdict,
-      overridden: llmVerdict.verdict !== decision.final.verdict,
+      hostEvidencePassed: decision.hostGate.passed,
       arbiterSource: decision.source,
       issuesFound: issuesFound(decision.final).length,
       startupSuccess: decision.final.startup_verification?.success,
     })
     return decision
   }
-}
-
-/** Emit the overlay DeliveryGateRejected card only when the host gate is the
- *  rejecting source. The card namespaces by iteration so a rework cycle
- *  replaces (not stacks on) the prior card. */
-async function emitGateRejectedIfNeeded(
-  decision: DeliveryDecision,
-  ctx: { taskID?: string; runID?: string; iteration?: number; failures: HostGateFailureGroup[] },
-): Promise<void> {
-  if (decision.source !== "host_gate" || !ctx.taskID) return
-  await EngineProtocol.emit(
-    Event.DeliveryGateRejected,
-    {
-      taskID: ctx.taskID,
-      runID: ctx.runID,
-      iteration: ctx.iteration ?? 0,
-      violations: deliveryGateNotificationViolations(ctx.failures),
-    },
-    { source: "delivery.service" },
-  )
-}
-
-function deliveryGateNotificationViolations(
-  failures: HostGateFailureGroup[],
-): Array<{ kind: string; detail: string }> {
-  return failures.map((failure) => ({
-    kind: failure.kind,
-    detail: [
-      failure.summary,
-      ...failure.evidence,
-    ].filter((item) => item.trim().length > 0).join("\n"),
-  }))
 }
 
 /**
