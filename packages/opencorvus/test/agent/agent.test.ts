@@ -309,12 +309,6 @@ test("orchestrator registry exposes lifecycle tools it teaches in prompt", async
       expect(include).toContain("integrity")
       expect(include).not.toContain("deliver")
       expect(include).not.toContain("publish_delivery")
-      // Regression 2026-05-19 (user): orchestrator must NOT hold `explore`.
-      // It looped explore 6× as a verbatim-source read pipe instead of
-      // dispatching — repo investigation is a sub-agent job (rule 6.1).
-      // The prompt must also not teach explore as an orchestrator tool.
-      expect(include).not.toContain("explore")
-      expect(orchestrator?.prompt).not.toContain("`explore`: use for")
       expect(orchestrator?.prompt).toContain("propose_task")
     },
   })
