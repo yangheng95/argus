@@ -26,7 +26,7 @@ import { ConnectionBadge } from "./components/ConnectionBadge"
 import { FrontendPreviewPanel } from "./components/FrontendPreviewPanel"
 import { ConversationAgentRail } from "./components/ConversationAgentRail"
 import { LogViewer } from "./components/LogViewer"
-import { WorkspacePanel, type WorkspaceView } from "./components/WorkspacePanel"
+import { WorkspacePanel } from "./components/WorkspacePanel"
 import type { DiffTarget } from "./services/diff"
 import { initApp } from "./services/init"
 import { loadTasks, boardStore, loadBoard } from "./store/board"
@@ -121,13 +121,10 @@ const [frontendPreviewError, setFrontendPreviewError] = createSignal("")
 let frontendPreviewRequest = 0
 
 // ── Workspace (secondary panel, stacked above composer) state ──
-// workspaceOpen drives diff panel visibility; workspaceView is remembered
-// across open/close cycles so reopening restores the last diff target.
+// workspaceOpen drives layout visibility; workspaceTarget is remembered across
+// open/close cycles so reopening restores the last active diff target.
 const [workspaceOpen, setWorkspaceOpen] = createSignal(false)
-const [workspaceView, setWorkspaceView] = createSignal<WorkspaceView>({
-  kind: "diff",
-  target: { filePath: "" },
-})
+const [workspaceTarget, setWorkspaceTarget] = createSignal<DiffTarget>({ filePath: "" })
 
 function currentPreviewKey(): string {
   return previewRequestKey(boardStore.selectedTaskID || boardStore.board?.task?.id, boardStore.snapshotVersion)
@@ -466,12 +463,8 @@ function buildTaskDebugBlob(board: any): string {
   return lines.join("\n")
 }
 
-/**
- * Open the workspace panel, optionally with a specific view. If no view is
- * supplied, the last-used view is restored.
- */
-function openWorkspace(view?: WorkspaceView): void {
-  if (view) setWorkspaceView(view)
+/** Open the workspace panel. */
+function openWorkspace(): void {
   setWorkspaceOpen(true)
 }
 
@@ -482,7 +475,8 @@ function closeWorkspace(): void {
 
 /** Open (or switch to) a diff file in the workspace. */
 function openWorkspaceDiff(target: DiffTarget): void {
-  openWorkspace({ kind: "diff", target })
+  setWorkspaceTarget(target)
+  openWorkspace()
 }
 
 // Exposed for services and window-level bridges that need to trigger the
@@ -644,13 +638,13 @@ if (conversationAgentRailMount) {
   render(() => <ConversationAgentRail />, conversationAgentRailMount)
 }
 
-// ── Mount: WorkspacePanel (Diff / File) ──
+// ── Mount: WorkspacePanel (Diff) ──
 
 const workspaceMountEl = document.getElementById("solidWorkspaceMount")
 if (workspaceMountEl) {
   workspaceMountEl.innerHTML = ""
   render(
-    () => <WorkspacePanel view={workspaceView()} onSelectView={setWorkspaceView} onClose={closeWorkspace} />,
+    () => <WorkspacePanel target={workspaceTarget()} onClose={closeWorkspace} />,
     workspaceMountEl,
   )
 }

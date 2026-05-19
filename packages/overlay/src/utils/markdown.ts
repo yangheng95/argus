@@ -195,7 +195,7 @@ const FILE_EXT_RE =
 
 /**
  * Decide whether a codespan's text is a file path reference. Returns the
- * path to open (stripped of trailing ":line[:col]") and the display label
+ * path to open in the preferred IDE (stripped of trailing ":line[:col]") and the display label
  * (original text). Returns null for non-path content (commands, identifiers,
  * URLs, etc.).
  */

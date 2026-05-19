@@ -6,10 +6,15 @@ import {
   type HostTransport,
   type NativeCommand,
 } from "../src/services/host-transport"
-import { editorTargetPath, openDirectoryInEditor, openPathInSelectedEditor } from "../src/services/workspace"
-import { applySettings, DEFAULT_SETTINGS } from "../src/store/settings"
-import { pathBreadcrumb } from "../src/utils/dom-utils"
 import { setLocaleData } from "../src/utils/i18n"
+
+;(globalThis as typeof globalThis & { __OPENCORVUS_OVERLAY_VERSION__?: string }).__OPENCORVUS_OVERLAY_VERSION__ = "test"
+
+const { editorTargetPath, openDirectoryInEditor, openPathInSelectedEditor } = await import(
+  "../src/services/workspace"
+)
+const { applySettings, DEFAULT_SETTINGS } = await import("../src/store/settings")
+const { pathBreadcrumb } = await import("../src/utils/dom-utils")
 
 afterEach(() => {
   __setHostTransportForTest(undefined)

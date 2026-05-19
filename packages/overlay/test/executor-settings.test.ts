@@ -120,22 +120,26 @@ describe("executor settings", () => {
   test("browser host settings use browser storage as the single source", async () => {
     localStorage.setItem("oc_executor", "opencode");
     localStorage.setItem("oc_theme", "dark");
+    localStorage.setItem("oc_preferred_project_editor", "cursor");
     __setHostTransportForTest(createTauriTransport("browser"));
 
     await loadSettings();
 
     expect(settingsStore.executor).toBe("opencorvus");
     expect(settingsStore.theme).toBe("dark");
+    expect(settingsStore.preferredProjectEditor).toBe("cursor");
 
     setSettingsStore({
       theme: "light",
       savedDirectory: "D:/browser-source",
+      preferredProjectEditor: "pycharm",
     });
     saveSettings();
     await Promise.resolve();
 
     expect(localStorage.getItem("oc_theme")).toBe("light");
     expect(localStorage.getItem("oc_directory")).toBe("D:/browser-source");
+    expect(localStorage.getItem("oc_preferred_project_editor")).toBe("pycharm");
   });
 
   test("tauri settings save writes only through the native store", async () => {
@@ -159,6 +163,7 @@ describe("executor settings", () => {
       sidebarCollapsed: true,
       workspacePanelHeight: 420,
       desktopNotifications: false,
+      preferredProjectEditor: "cursor",
     });
 
     saveSettings();
@@ -171,6 +176,7 @@ describe("executor settings", () => {
       sidebarCollapsed: true,
       workspacePanelHeight: 420,
       desktopNotifications: false,
+      preferredProjectEditor: "cursor",
     });
   });
 
@@ -213,5 +219,23 @@ describe("executor settings", () => {
     setSettingsStore("workspaceTaskID", "tsk_saved");
 
     expect((bootstrapOverlaySettings(settingsStore) as any).workspaceTaskId).toBe("tsk_saved");
+  });
+
+  test("invalid persisted preferred editor falls back to vscode", async () => {
+    __setHostTransportForTest(
+      fakeTransport(
+        () => {
+          throw new Error("request not used in settings load test");
+        },
+        (command) => {
+          expect(command.kind).toBe("settings.load");
+          return { preferredProjectEditor: "notepad" };
+        },
+      ),
+    );
+
+    await loadSettings();
+
+    expect(settingsStore.preferredProjectEditor).toBe("vscode");
   });
 });

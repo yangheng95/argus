@@ -53,6 +53,7 @@ export function loadBrowserOverlaySettings(): BrowserOverlaySettings {
     theme: read("oc_theme") || undefined,
     locale: read("oc_locale") || undefined,
     directory: (read("oc_directory") || "").trim(),
+    preferredProjectEditor: read("oc_preferred_project_editor") || undefined,
     workspaceTaskId: read("oc_workspace_task") || undefined,
     workspaceDirectory: read("oc_workspace_directory") || undefined,
     desktopNotifications: read("oc_desktop_notifications") !== "false",
@@ -76,6 +77,7 @@ export function saveBrowserOverlaySettings(input: BrowserOverlaySettings): boole
   write("oc_theme", input.theme ?? "light");
   writeOptional("oc_locale", input.locale);
   write("oc_desktop_notifications", input.desktopNotifications !== false);
+  writeOptional("oc_preferred_project_editor", input.preferredProjectEditor);
   writeOptional("oc_workspace_task", input.workspaceTaskId ?? input.workspaceTaskID);
   writeOptional("oc_workspace_directory", input.workspaceDirectory);
   writeOptional("oc_directory", input.directory);
