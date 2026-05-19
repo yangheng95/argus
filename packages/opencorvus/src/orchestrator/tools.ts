@@ -466,66 +466,12 @@ function acceptanceSpecsToPromptLines(raw: unknown): string[] {
   })
 }
 
-const GOAL_UPDATE_SCORER_TYPES = ["heuristic", "llm_judge", "prebuilt", "contract_audit"] as const
-
-const goalUpdateAcceptanceGuidance = [
-  'Legal acceptance scorer type values are "heuristic", "llm_judge", "prebuilt", and "contract_audit".',
-  'Shell checks are heuristic scorers: { "type": "heuristic", "name": "...", "spec": { "kind": "shell", "cmd": "..." }, "expect": { "exit_code": 0 } }.',
-  'Do not use scorer type "shell" or "script_ref"; those are spec.kind values under type="heuristic".',
-].join(" ")
-
 const ModifyGoalInputSchema = z
   .object({
-    goalID: z.unknown().describe("Required string. The goal ID to modify."),
-    updates: z
-      .unknown()
-      .describe(`Required object containing the goal fields to update; id is immutable. ${goalUpdateAcceptanceGuidance}`),
-    reason: z.unknown().describe("Required string. Why you decided to modify this goal."),
+    goalID: z.string().min(1).describe("The goal ID to modify."),
+    updates: GoalContractUpdateSchema,
+    reason: z.string().min(1).describe("Why you decided to modify this goal."),
   })
-  .passthrough()
-
-export function parseModifyGoalUpdates(input: unknown): { ok: true; updates: z.infer<typeof GoalContractUpdateSchema> } | {
-  ok: false
-  message: string
-} {
-  const parsed = GoalContractUpdateSchema.safeParse(input)
-  if (parsed.success) return { ok: true, updates: parsed.data }
-  return {
-    ok: false,
-    message: [
-      "Error: modify_goal output did not match the goal update contract; database unchanged.",
-      ...parsed.error.issues.slice(0, 8).map((issue) => {
-        const pathLabel = issue.path.length > 0 ? `updates.${issue.path.join(".")}` : "updates"
-        return `- ${pathLabel}: ${issue.message}`
-      }),
-      ...modifyGoalAcceptanceHints(input).map((hint) => `- ${hint}`),
-      `Resubmit modify_goal with the corrected update shape. ${goalUpdateAcceptanceGuidance}`,
-    ].join("\n"),
-  }
-}
-
-function modifyGoalAcceptanceHints(input: unknown): string[] {
-  const hints: string[] = []
-  const specs = isObjectRecord(input) && Array.isArray(input.acceptance_specs) ? input.acceptance_specs : []
-  for (const [specIndex, spec] of specs.entries()) {
-    if (!isObjectRecord(spec) || !Array.isArray(spec.scorers)) continue
-    for (const [scorerIndex, scorer] of spec.scorers.entries()) {
-      if (!isObjectRecord(scorer) || typeof scorer.type !== "string") continue
-      if ((GOAL_UPDATE_SCORER_TYPES as readonly string[]).includes(scorer.type)) continue
-      const pathLabel = `updates.acceptance_specs.${specIndex}.scorers.${scorerIndex}.type`
-      if (scorer.type === "shell") {
-        hints.push(`${pathLabel}: "shell" is not a scorer type. Use type="heuristic" with spec.kind="shell".`)
-      } else if (scorer.type === "script_ref") {
-        hints.push(`${pathLabel}: "script_ref" is not a scorer type. Use type="heuristic" with spec.kind="script_ref".`)
-      } else {
-        hints.push(
-          `${pathLabel}: "${scorer.type}" is not a scorer type. Legal values: ${GOAL_UPDATE_SCORER_TYPES.join(", ")}.`,
-        )
-      }
-    }
-  }
-  return [...new Set(hints)]
-}
 
 function resolveSteerTarget(input: {
   taskID: string
@@ -3395,17 +3341,14 @@ export function createOrchestratorTools(input: {
       description:
         "Modify an existing goal's contract. Use when eval feedback suggests " +
         "acceptance_specs need refinement, or owned_paths need adjustment. " +
-        "If the submitted shape is invalid, the tool returns a correction " +
-        "diagnostic and leaves the database unchanged.",
+        "The submitted shape is schema-validated before execution.",
       inputSchema: ModifyGoalInputSchema,
       execute: async (input) => {
         if (!isObjectRecord(input) || typeof input.goalID !== "string" || input.goalID.trim().length === 0) {
           return 'Error: modify_goal requires a non-empty string "goalID"; database unchanged.'
         }
         const goalID = input.goalID
-        const parsedUpdates = parseModifyGoalUpdates(input.updates)
-        if (!parsedUpdates.ok) return parsedUpdates.message
-        const updates = parsedUpdates.updates
+        const updates = input.updates
         requireTask(taskID)
         const dbGoals = listGoals(taskID)
         const goal = dbGoals.find((g) => g.id === goalID)
