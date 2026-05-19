@@ -51,6 +51,7 @@ export type CardKind =
   | "phase"     // phase row inside a step (plan / build / evaluate inside pipeline.build)
   | "tool"      // promoted tool call (nested card for task/subagent)
   | "message"   // user / system message bubble
+  | "review"    // top-level running/completed review stream card
   | "integrity"; // architecture integrity review verdict
 
 export type CardStatus =
@@ -250,6 +251,22 @@ export interface CardNode {
     }>;
     missingGoals: Array<{ title: string; objective: string; reason?: string }>;
     attempts: number;
+  };
+  reviewStream?: {
+    phase: "integrity" | "delivery";
+    currentStep?: "manifest" | "runtime" | "visual" | "specialist" | "agent" | "post_repair";
+    elapsedMs?: number;
+    summary?: string;
+  };
+  deliveryReview?: {
+    verdict: "accepted" | "rejected";
+    source: "llm" | "host_gate";
+    summary: string;
+    hostGatePassed: boolean;
+    failureKinds: string[];
+    rejectionCount: number;
+    deferredCount: number;
+    details: string[];
   };
 }
 

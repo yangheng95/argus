@@ -11,7 +11,6 @@ import {
 import { cardExpanded, setCardExpanded } from "../store/conversation-ui";
 import { boardStore, rootTaskSessionID } from "../store/board";
 import { cancelAgentSession, replyToAgentSession } from "../services/task";
-import { openSessionAgentModels } from "../services/dialog";
 import { apiRequest } from "../services/api";
 import { normalizeAgentRole } from "../utils/message";
 import { AgentSessionReplyBox } from "./AgentSessionReplyBox";
@@ -21,6 +20,7 @@ import { InlineToolPart } from "./InlineToolPart";
 import { StaticTextPart } from "./TextPart";
 import { StepPayloadBody } from "./StepPayloadBody";
 import { IntegrityBody } from "./IntegrityCard";
+import { DeliveryReviewBody } from "./DeliveryReviewCard";
 import { TracePanel } from "./TracePanel";
 import { t } from "../utils/i18n";
 import { StoreCardNode } from "./StoreCardNode";
@@ -281,7 +281,7 @@ export function Card(props: { node: CardNode; depth: number }) {
         onTrace={traceSessionID() ? onTraceToggle : undefined}
         agentSessionID={directAgentSessionID() ?? toolCancelSessionID()}
         onAgentCancel={(directAgentSessionID() ?? toolCancelSessionID()) ? onAgentCancel : undefined}
-        onAgentModelSettings={(directAgentSessionID() ?? toolCancelSessionID()) ? openSessionAgentModels : undefined}
+        onAgentModelSettings={undefined}
       />
       <Show when={expanded()}>
         <div class="card__body">
@@ -319,6 +319,21 @@ export function Card(props: { node: CardNode; depth: number }) {
               preserving the underlying reasoning/tool parts. */}
           <Show when={props.node.integrity}>
             <IntegrityBody integrity={props.node.integrity!} />
+          </Show>
+          <Show when={props.node.deliveryReview}>
+            <DeliveryReviewBody review={props.node.deliveryReview!} />
+          </Show>
+          <Show when={props.node.reviewStream && !props.node.deliveryReview}>
+            <section class="integrity__section review-stream">
+              <h4 class="integrity__section-title">
+                {props.node.reviewStream?.currentStep
+                  ? t(`review.stream.step.${props.node.reviewStream.currentStep}`)
+                  : t("delivery.review.title")}
+              </h4>
+              <Show when={props.node.reviewStream?.summary}>
+                <p class="integrity__summary">{props.node.reviewStream!.summary}</p>
+              </Show>
+            </section>
           </Show>
 
           {/* Generic parts */}

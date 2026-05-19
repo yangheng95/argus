@@ -1,14 +1,15 @@
 import { afterEach, expect, mock, test } from "bun:test";
-import { routeSSEEvent, handleEventStreamEvent, handleTaskListNotification } from "../src/services/events";
-import { boardStore, loadTasks, setBoardStore } from "../src/store/board";
-import { appStore, setAppStore } from "../src/store/app";
-import { resetWriter } from "../src/services/tree-writer";
-import {
-  __setHostTransportForTest,
-  type HostTransport,
-  type TransportRequest,
-  type TransportResponse,
-} from "../src/services/host-transport";
+import type { HostTransport, TransportRequest, TransportResponse } from "../src/services/host-transport";
+
+(globalThis as typeof globalThis & { __OPENCORVUS_OVERLAY_VERSION__?: string }).__OPENCORVUS_OVERLAY_VERSION__ = "test";
+
+const { routeSSEEvent, handleEventStreamEvent, handleTaskListNotification } = await import("../src/services/events");
+const { boardStore, loadTasks, setBoardStore } = await import("../src/store/board");
+const { appStore, setAppStore } = await import("../src/store/app");
+const { resetWriter } = await import("../src/services/tree-writer");
+const { cardTreeStore } = await import("../src/store/card-tree");
+const { sessionConfigRefreshToken } = await import("../src/services/config");
+const { __setHostTransportForTest } = await import("../src/services/host-transport");
 
 function fakeConfigTransport(paths: string[]): HostTransport {
   return {
@@ -144,6 +145,337 @@ test("selected-task message events update card tree without board refresh", () =
   expect(boardStore.boardSyncPending).toBe(false);
 });
 
+test("selected-task message events advance the visible cursor without recovery", async () => {
+  resetWriter();
+  const streams: Array<{ path: string; query?: Record<string, string> }> = [];
+  __setHostTransportForTest(fakeRecoveryTransport(streams, 9));
+  setBoardStore("selectedTaskID", "tsk_refresh");
+  setBoardStore("taskSequence", 5);
+  setBoardStore("board", {
+    task: {
+      id: "tsk_refresh",
+      sessionID: "ses_refresh",
+      status: "active",
+      request: "refresh",
+      time: { created: 1_776_000_100_000 },
+      attachments: [],
+    },
+  });
+
+  expect(routeSSEEvent({
+    type: "message.updated",
+    taskID: "tsk_refresh",
+    sequence: 6,
+    properties: {
+      info: {
+        id: "msg_refresh_seq",
+        sessionID: "ses_refresh",
+        role: "assistant",
+        resolvedRole: "assistant",
+        channel: "assistant",
+        agent: "assistant",
+        time: { created: 1_776_000_200_000 },
+      },
+    },
+  })).toBe(true);
+  expect(boardStore.taskSequence).toBe(6);
+
+  expect(routeSSEEvent({
+    type: "message.part.updated",
+    taskID: "tsk_refresh",
+    sequence: 7,
+    properties: {
+      part: {
+        id: "part_refresh_seq",
+        messageID: "msg_refresh_seq",
+        sessionID: "ses_refresh",
+        resolvedRole: "assistant",
+        channel: "assistant",
+        type: "text",
+        text: "hello",
+      },
+    },
+  })).toBe(true);
+  expect(boardStore.taskSequence).toBe(7);
+
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(streams).toEqual([]);
+});
+
+test("selected-task protocol task_id envelope advances the visible cursor", async () => {
+  resetWriter();
+  const streams: Array<{ path: string; query?: Record<string, string> }> = [];
+  __setHostTransportForTest(fakeRecoveryTransport(streams, 9));
+  setBoardStore("selectedTaskID", "tsk_refresh");
+  setBoardStore("taskSequence", 5);
+  setBoardStore("board", {
+    task: {
+      id: "tsk_refresh",
+      sessionID: "ses_refresh",
+      status: "active",
+      request: "refresh",
+      time: { created: 1_776_000_100_000 },
+      attachments: [],
+    },
+  });
+
+  expect(routeSSEEvent({
+    type: "message.updated",
+    task_id: "tsk_refresh",
+    sequence: 6,
+    properties: {
+      info: {
+        id: "msg_snake_seq",
+        sessionID: "ses_refresh",
+        role: "assistant",
+        resolvedRole: "assistant",
+        channel: "assistant",
+        agent: "assistant",
+        time: { created: 1_776_000_200_000 },
+      },
+    },
+  })).toBe(true);
+  expect(boardStore.taskSequence).toBe(6);
+
+  expect(routeSSEEvent({
+    type: "message.part.updated",
+    task_id: "tsk_refresh",
+    sequence: 7,
+    properties: {
+      part: {
+        id: "part_snake_seq",
+        messageID: "msg_snake_seq",
+        sessionID: "ses_refresh",
+        resolvedRole: "assistant",
+        channel: "assistant",
+        type: "text",
+        text: "hello",
+      },
+    },
+  })).toBe(true);
+  expect(boardStore.taskSequence).toBe(7);
+
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(streams).toEqual([]);
+});
+
+test("selected-task part removal updates the card tree in real time", () => {
+  resetWriter();
+  setBoardStore("selectedTaskID", "tsk_refresh");
+  setBoardStore("taskSequence", 7);
+  setBoardStore("board", {
+    task: {
+      id: "tsk_refresh",
+      sessionID: "ses_refresh",
+      status: "active",
+      request: "refresh",
+      time: { created: 1_776_000_100_000 },
+      attachments: [],
+    },
+  });
+
+  expect(routeSSEEvent({
+    type: "message.updated",
+    task_id: "tsk_refresh",
+    sequence: 8,
+    properties: {
+      info: {
+        id: "msg_remove_part",
+        sessionID: "ses_refresh",
+        role: "assistant",
+        resolvedRole: "assistant",
+        channel: "assistant",
+        agent: "assistant",
+        time: { created: 1_776_000_200_000 },
+      },
+    },
+  })).toBe(true);
+  expect(routeSSEEvent({
+    type: "message.part.updated",
+    task_id: "tsk_refresh",
+    sequence: 9,
+    properties: {
+      part: {
+        id: "part_remove_me",
+        messageID: "msg_remove_part",
+        sessionID: "ses_refresh",
+        resolvedRole: "assistant",
+        channel: "assistant",
+        type: "text",
+        text: "remove me",
+      },
+    },
+  })).toBe(true);
+
+  const cardID = "assistant:session:ses_refresh:message:msg_remove_part";
+  expect(cardTreeStore.cards[cardID]?.parts).toHaveLength(1);
+
+  expect(routeSSEEvent({
+    type: "message.part.removed",
+    task_id: "tsk_refresh",
+    sequence: 10,
+    properties: {
+      sessionID: "ses_refresh",
+      messageID: "msg_remove_part",
+      partID: "part_remove_me",
+    },
+  })).toBe(true);
+
+  expect(cardTreeStore.cards[cardID]?.parts).toEqual([]);
+  expect(boardStore.taskSequence).toBe(10);
+});
+
+test("selected-task message removal removes its visible card in real time", () => {
+  resetWriter();
+  setBoardStore("selectedTaskID", "tsk_refresh");
+  setBoardStore("taskSequence", 3);
+  setBoardStore("board", {
+    task: {
+      id: "tsk_refresh",
+      sessionID: "ses_refresh",
+      status: "active",
+      request: "refresh",
+      time: { created: 1_776_000_100_000 },
+      attachments: [],
+    },
+  });
+
+  expect(routeSSEEvent({
+    type: "message.updated",
+    task_id: "tsk_refresh",
+    sequence: 4,
+    properties: {
+      info: {
+        id: "msg_remove_all",
+        sessionID: "ses_refresh",
+        role: "assistant",
+        resolvedRole: "assistant",
+        channel: "assistant",
+        agent: "assistant",
+        time: { created: 1_776_000_200_000 },
+      },
+    },
+  })).toBe(true);
+  expect(routeSSEEvent({
+    type: "message.part.updated",
+    task_id: "tsk_refresh",
+    sequence: 5,
+    properties: {
+      part: {
+        id: "part_remove_all",
+        messageID: "msg_remove_all",
+        sessionID: "ses_refresh",
+        resolvedRole: "assistant",
+        channel: "assistant",
+        type: "text",
+        text: "remove card",
+      },
+    },
+  })).toBe(true);
+
+  const cardID = "assistant:session:ses_refresh:message:msg_remove_all";
+  expect(cardTreeStore.cards[cardID]).toBeDefined();
+
+  expect(routeSSEEvent({
+    type: "message.removed",
+    task_id: "tsk_refresh",
+    sequence: 6,
+    properties: {
+      sessionID: "ses_refresh",
+      messageID: "msg_remove_all",
+    },
+  })).toBe(true);
+
+  expect(cardTreeStore.cards[cardID]).toBeUndefined();
+  expect(boardStore.taskSequence).toBe(6);
+});
+
+test("selected-task message payload is still applied when board cursor is ahead", () => {
+  resetWriter();
+  setBoardStore("selectedTaskID", "tsk_refresh");
+  setBoardStore("taskSequence", 10);
+  setBoardStore("board", {
+    task: {
+      id: "tsk_refresh",
+      sessionID: "ses_refresh",
+      status: "active",
+      request: "refresh",
+      time: { created: 1_776_000_100_000 },
+      attachments: [],
+    },
+  });
+
+  expect(routeSSEEvent({
+    type: "message.updated",
+    task_id: "tsk_refresh",
+    sequence: 7,
+    properties: {
+      info: {
+        id: "msg_late_payload",
+        sessionID: "ses_refresh",
+        role: "assistant",
+        resolvedRole: "assistant",
+        channel: "assistant",
+        agent: "assistant",
+        time: { created: 1_776_000_200_000 },
+      },
+    },
+  })).toBe(true);
+
+  expect(boardStore.taskSequence).toBe(10);
+  expect(cardTreeStore.cards["assistant:session:ses_refresh:message:msg_late_payload"]).toBeDefined();
+});
+
+test("board-owned run progress advances selected-task cursor", async () => {
+  resetWriter();
+  const streams: Array<{ path: string; query?: Record<string, string> }> = [];
+  __setHostTransportForTest(fakeRecoveryTransport(streams, 9));
+  setBoardStore("selectedTaskID", "tsk_refresh");
+  setBoardStore("taskSequence", 5);
+  setBoardStore("board", {
+    task: {
+      id: "tsk_refresh",
+      sessionID: "ses_refresh",
+      status: "active",
+      request: "refresh",
+      time: { created: 1_776_000_100_000 },
+      attachments: [],
+    },
+  });
+
+  expect(routeSSEEvent({
+    type: "run.progress",
+    task_id: "tsk_refresh",
+    sequence: 6,
+    properties: { type: "executor.status", status: "running" },
+  })).toBe(true);
+  expect(boardStore.taskSequence).toBe(6);
+
+  expect(routeSSEEvent({
+    type: "message.updated",
+    task_id: "tsk_refresh",
+    sequence: 7,
+    properties: {
+      info: {
+        id: "msg_after_run_progress",
+        sessionID: "ses_refresh",
+        role: "assistant",
+        resolvedRole: "assistant",
+        channel: "assistant",
+        agent: "assistant",
+        time: { created: 1_776_000_200_000 },
+      },
+    },
+  })).toBe(true);
+  expect(boardStore.taskSequence).toBe(7);
+
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(streams).toEqual([]);
+});
+
 test("message delta with missing tree prerequisites triggers selected-task recovery", async () => {
   resetWriter();
   const streams: Array<{ path: string; query?: Record<string, string> }> = [];
@@ -220,11 +552,13 @@ test("production dispatch gates sequence gap before tree writer prerequisites ca
   setBoardStore("taskSequence", 5);
 
   const event = {
-    type: "integrity.review.chunk",
+    type: "review.stream.chunk",
     taskID: "tsk_refresh",
     sequence: 7,
     properties: {
       taskID: "tsk_refresh",
+      reviewID: "integrity:missing-started",
+      phase: "integrity",
       kind: "dimension",
       dimensionID: "missing-started",
       delta: "would throw if routed before gap recovery",
@@ -257,11 +591,13 @@ test("task-list notification does not advance visible cursor before per-task pay
   expect(boardStore.taskSequence).toBe(5);
 
   const event = {
-    type: "integrity.review.chunk",
+    type: "review.stream.chunk",
     taskID: "tsk_refresh",
     sequence: 7,
     properties: {
       taskID: "tsk_refresh",
+      reviewID: "integrity:missing-started",
+      phase: "integrity",
       kind: "dimension",
       dimensionID: "missing-started",
       delta: "would throw if task-list advanced the cursor",
@@ -378,13 +714,28 @@ test("config.changed SSE burst coalesces into one config refresh", async () => {
   resetWriter();
   const paths: string[] = [];
   __setHostTransportForTest(fakeConfigTransport(paths));
+  const beforeToken = sessionConfigRefreshToken();
 
   expect(routeSSEEvent({ type: "config.changed" })).toBe(true);
   expect(routeSSEEvent({ type: "config.changed" })).toBe(true);
   expect(routeSSEEvent({ type: "config.changed" })).toBe(true);
+  expect(sessionConfigRefreshToken()).toBe(beforeToken + 3);
 
   await new Promise((resolve) => setTimeout(resolve, 90));
 
   expect(paths.filter((path) => path === "config").length).toBe(1);
   expect(appStore.config).toEqual({ model: "openai/coalesced" });
+});
+
+test("session.updated invalidates session config resources", () => {
+  const beforeSession = sessionConfigRefreshToken();
+  expect(routeSSEEvent({
+    type: "session.updated",
+    properties: {
+      info: {
+        id: "ses_config_refresh",
+      },
+    },
+  })).toBe(true);
+  expect(sessionConfigRefreshToken()).toBe(beforeSession + 1);
 });

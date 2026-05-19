@@ -189,8 +189,8 @@ interface BufferedPartDelta {
   delta: string;
 }
 
-const bufferedPartDeltas = new Map<string, BufferedPartDelta>();
-let bufferedPartDeltaFrame: number | null = null;
+var bufferedPartDeltas = new Map<string, BufferedPartDelta>();
+var bufferedPartDeltaFrame: number | null = null;
 
 // ── Entry point ──
 
@@ -213,7 +213,7 @@ export function resetWriter(options: {
   knownGoalIDs.clear();
   integrityCardOwners.clear();
   pendingIntegrity.clear();
-  runningIntegrity.clear();
+  runningReviews.clear();
   pendingSessionStatus.clear();
   latestConversationCardID = undefined;
   // Drop every key explicitly — plain assignment on a store merges instead of
@@ -318,6 +318,8 @@ export function applyEvent(event: any): void {
   // ── Message stream ──
   if (type === "message.updated") return applyVisibleCardTreeEvent(() => handleMessageUpdated(event));
   if (type === "message.part.updated") return applyVisibleCardTreeEvent(() => handlePartUpdated(event));
+  if (type === "message.removed") return applyVisibleCardTreeEvent(() => handleMessageRemoved(event));
+  if (type === "message.part.removed") return applyVisibleCardTreeEvent(() => handlePartRemoved(event));
 
   // ── Task / board ──
   if (type === "task.created" || type === "task.updated" || type === "task.completed") {
@@ -336,21 +338,17 @@ export function applyEvent(event: any): void {
     return handleInteraction(event);
   }
 
-  // ── Integrity review lifecycle ──
-  // started/progress put a running placeholder card under the requirements
-  // session (kind="integrity", status="running"), so the operator sees the
-  // non-streaming LLM review in flight during its 60–180s window. completed
-  // upserts the same cardID with the parsed verdict / issues / corrections.
-  // Identity is `integrity:<taskID>` (stable per task) so all three events
-  // land on the same card.
-  if (type === "integrity.review.started") {
-    return applyVisibleCardTreeEvent(() => handleIntegrityStarted(event));
+  if (type === "review.stream.started") {
+    return applyVisibleCardTreeEvent(() => handleReviewStreamStarted(event));
   }
-  if (type === "integrity.review.progress") {
-    return applyVisibleCardTreeEvent(() => handleIntegrityProgress(event));
+  if (type === "review.stream.progress") {
+    return applyVisibleCardTreeEvent(() => handleReviewStreamProgress(event));
   }
-  if (type === "integrity.review.chunk") {
-    return applyVisibleCardTreeEvent(() => handleIntegrityChunk(event));
+  if (type === "review.stream.chunk") {
+    return applyVisibleCardTreeEvent(() => handleReviewStreamChunk(event));
+  }
+  if (type === "delivery.review.completed") {
+    return applyVisibleCardTreeEvent(() => handleDeliveryReviewCompleted(event));
   }
   if (type === "integrity.review.completed") {
     return applyVisibleCardTreeEvent(() => handleIntegrityCompleted(event));
@@ -706,6 +704,102 @@ function handlePartDelta(event: any): void {
   syncExecutorTopLevelVisibility(session);
 }
 
+function removeCardReferences(cardID: string): void {
+  if (cardTreeStore.order.includes(cardID)) {
+    setCardTreeStore("order", cardTreeStore.order.filter((id) => id !== cardID));
+  }
+  setCardTreeStore(
+    "cards",
+    produce((cards: Record<string, CardNode>) => {
+      for (const card of Object.values(cards)) {
+        if (!Array.isArray(card.childIDs) || !card.childIDs.includes(cardID)) continue;
+        card.childIDs = card.childIDs.filter((id) => id !== cardID);
+      }
+      delete cards[cardID];
+    }),
+  );
+}
+
+function removeIndexedParts(
+  session: SessionInfo,
+  cardID: string,
+  shouldRemove: (part: any, index: number) => boolean,
+): number {
+  const card = cardTreeStore.cards[cardID];
+  const parts = Array.isArray(card?.parts) ? card.parts : [];
+  const nextParts: any[] = [];
+  const indexMap = new Map<number, number>();
+  let removed = 0;
+  for (let i = 0; i < parts.length; i++) {
+    const part = parts[i];
+    if (shouldRemove(part, i)) {
+      removed += 1;
+      continue;
+    }
+    indexMap.set(i, nextParts.length);
+    nextParts.push(part);
+  }
+  if (removed === 0) return 0;
+  setCardTreeStore("cards", cardID, "parts", nextParts);
+  for (const [partID, target] of [...session.partIndex]) {
+    if (target.cardID !== cardID) continue;
+    const nextIndex = indexMap.get(target.index);
+    if (nextIndex === undefined) {
+      session.partIndex.delete(partID);
+    } else {
+      session.partIndex.set(partID, { cardID, index: nextIndex });
+    }
+  }
+  return removed;
+}
+
+function cardStillOwnsSessionMessage(session: SessionInfo, cardID: string): boolean {
+  for (const mappedCardID of session.messageCardIDs.values()) {
+    if (mappedCardID === cardID) return true;
+  }
+  return false;
+}
+
+function handleMessageRemoved(event: any): void {
+  const p = propsOf(event);
+  const sessionID = String(p.sessionID || "");
+  const messageID = String(p.messageID || "");
+  if (!sessionID || !messageID) throw new Error("message.removed missing sessionID/messageID");
+
+  const session = sessions.get(sessionID);
+  if (!session) throw new Error(`message.removed: unknown session ${sessionID}`);
+  const cardID = session.messageCardIDs.get(messageID);
+  if (!cardID) throw new Error(`message.removed: unknown message ${messageID} in session ${sessionID}`);
+
+  session.messageIDs.delete(messageID);
+  session.messageCardIDs.delete(messageID);
+  messages.delete(messageID);
+
+  removeIndexedParts(session, cardID, (part) => String(part?.messageID || "") === messageID);
+
+  if (!cardStillOwnsSessionMessage(session, cardID)) {
+    removeCardReferences(cardID);
+    if (session.activeCardID === cardID) session.activeCardID = undefined;
+    if (latestConversationCardID === cardID) latestConversationCardID = undefined;
+  }
+  syncExecutorTopLevelVisibility(session);
+}
+
+function handlePartRemoved(event: any): void {
+  const p = propsOf(event);
+  const sessionID = String(p.sessionID || "");
+  const partID = String(p.partID || "");
+  if (!sessionID || !partID) throw new Error("message.part.removed missing sessionID/partID");
+
+  const session = sessions.get(sessionID);
+  if (!session) throw new Error(`message.part.removed: unknown session ${sessionID}`);
+  const target = session.partIndex.get(partID);
+  if (!target) throw new Error(`message.part.removed: unknown part ${partID} in session ${sessionID}`);
+
+  removeIndexedParts(session, target.cardID, (_part, index) => index === target.index);
+  syncExecutorTopLevelVisibility(session);
+}
+
 function handleTaskChanged(event: any): void {
   // Source of truth for task.request + goalWorkflows is boardStore.board — the
   // live overlay writes to it via applyBoardDelta / loadBoard, tests write via
@@ -891,112 +985,145 @@ function handleInteraction(event: any): void {
   rebuildBoardDerivedCards();
 }
 
-// ── Integrity review ──
+// ── Shared review stream + completed review bodies ──
 
 function integrityCardID(sessionID: string): string {
   return sessionCardID("integrity", sessionID);
 }
 
-/** Buffered running-phase payload so `rebuildCardHierarchy` can re-attach a
- *  running card if its owning requirements session card disappears + reappears
- *  (task reselect / replay). Keyed by taskID. Separate from `pendingIntegrity`
- *  because that map is for COMPLETED payloads that predate their session. */
-interface RunningIntegrityPayload {
-  sessionID: string
+type ReviewStreamPhase = "integrity" | "delivery";
+type ReviewStreamStep = "manifest" | "runtime" | "visual" | "specialist" | "agent" | "post_repair";
+
+interface RunningReviewPayload {
+  taskID: string
+  reviewID: string
+  phase: ReviewStreamPhase
+  sessionID?: string
   startedAt: number
   attempt: number
   elapsedMs: number
+  currentStep?: ReviewStreamStep
+  summary?: string
 }
-const runningIntegrity = new Map<string, RunningIntegrityPayload>()
+const runningReviews = new Map<string, RunningReviewPayload>()
 
-function handleIntegrityStarted(event: any): void {
+function normalizeReviewPhase(raw: string): ReviewStreamPhase {
+  if (raw === "integrity" || raw === "delivery") return raw;
+  throw new Error(`review.stream phase unsupported: ${raw}`);
+}
+
+function normalizeReviewStep(raw: string): ReviewStreamStep {
+  if (
+    raw === "manifest" ||
+    raw === "runtime" ||
+    raw === "visual" ||
+    raw === "specialist" ||
+    raw === "agent" ||
+    raw === "post_repair"
+  ) return raw;
+  throw new Error(`review.stream progress currentStep unsupported: ${raw}`);
+}
+
+function deliveryReviewCardID(reviewID: string): string {
+  const match = /^delivery:([^:]+):(\d+)$/.exec(reviewID);
+  if (!match) throw new Error(`delivery reviewID must match delivery:<taskID>:<iteration>, got ${reviewID}`);
+  return `review:delivery:${match[1]}:${match[2]}`;
+}
+
+function reviewCardID(p: Pick<RunningReviewPayload, "phase" | "reviewID" | "sessionID">): string {
+  if (p.phase === "integrity") {
+    if (!p.sessionID) throw new Error(`review.stream.${p.phase} missing sessionID (reviewID=${p.reviewID})`);
+    return integrityCardID(p.sessionID);
+  }
+  return deliveryReviewCardID(p.reviewID);
+}
+
+function handleReviewStreamStarted(event: any): void {
   const props = propsOf(event);
   const taskID = String(props.taskID || "");
-  const sessionID = String(props.sessionID || "");
-  if (!taskID) throw new Error("integrity.review.started missing taskID");
-  if (!sessionID) {
-    throw new Error(
-      `integrity.review.started missing sessionID (taskID=${taskID})`,
-    );
-  }
+  const reviewID = String(props.reviewID || "");
+  const phase = normalizeReviewPhase(String(props.phase || ""));
+  const sessionID = typeof props.sessionID === "string" ? props.sessionID : undefined;
+  if (!taskID) throw new Error("review.stream.started missing taskID");
+  if (!reviewID) throw new Error(`review.stream.started missing reviewID (taskID=${taskID})`);
+  if (phase === "integrity" && !sessionID) throw new Error(`review.stream.started integrity missing sessionID (taskID=${taskID})`);
   const emittedAt = Number(event?.emittedAt || event?.emitted_at || 0);
-  const payload: RunningIntegrityPayload = {
+  const payload: RunningReviewPayload = {
+    taskID,
+    reviewID,
+    phase,
     sessionID,
     startedAt: emittedAt > 0 ? emittedAt : Date.now(),
     attempt: 0,
     elapsedMs: 0,
   };
-  runningIntegrity.set(sessionID, payload);
-  materializeRunningIntegrity(payload);
+  runningReviews.set(reviewID, payload);
+  materializeRunningReview(payload);
 }
 
-function handleIntegrityProgress(event: any): void {
+function handleReviewStreamProgress(event: any): void {
   const props = propsOf(event);
   const taskID = String(props.taskID || "");
-  const sessionID = String(props.sessionID || "");
-  if (!taskID) throw new Error("integrity.review.progress missing taskID");
-  if (!sessionID) {
-    throw new Error(
-      `integrity.review.progress missing sessionID (taskID=${taskID})`,
-    );
-  }
+  const reviewID = String(props.reviewID || "");
+  const phase = normalizeReviewPhase(String(props.phase || ""));
+  if (!taskID) throw new Error("review.stream.progress missing taskID");
+  if (!reviewID) throw new Error(`review.stream.progress missing reviewID (taskID=${taskID})`);
   const attempt = Number(props.attempt || 0);
   const elapsedMs = Number(props.elapsedMs || props.elapsed_ms || 0);
-  const existing = runningIntegrity.get(sessionID);
-  const payload: RunningIntegrityPayload = {
-    sessionID,
+  const existing = runningReviews.get(reviewID);
+  if (!existing) {
+    throw new Error(`review.stream.progress arrived before started (taskID=${taskID}, reviewID=${reviewID})`);
+  }
+  const payload: RunningReviewPayload = {
+    ...existing,
+    taskID,
+    reviewID,
+    phase,
     startedAt: existing?.startedAt ?? (Date.now() - elapsedMs),
     attempt,
     elapsedMs,
+    currentStep: normalizeReviewStep(String(props.currentStep || props.current_step || "")),
+    summary: typeof props.summary === "string" ? props.summary : undefined,
   };
-  runningIntegrity.set(sessionID, payload);
-  materializeRunningIntegrity(payload);
+  runningReviews.set(reviewID, payload);
+  materializeRunningReview(payload);
 }
 
-/** Append a reasoning delta onto the running integrity card. The backend
- *  (`integrity/agent.ts` createIntegrityChunkForwarder) emits
- *  IntegrityReviewChunk at ~2 Hz with accumulated 500ms batches. One stable
- *  part per attempt — a Zod-retry boundary opens a fresh reasoning part,
- *  same-attempt chunks append to the existing part.
- *
- *  Only `kind: "reasoning"` is valid. tool-input deltas are intentionally
- *  NOT forwarded by the backend (they're protocol payload — the verdict
- *  lands structured via IntegrityReviewCompleted).
- *
- *  Silently skips when the card has already upgraded to the completed
- *  verdict state (card.integrity populated) — late chunks after Completed
- *  lands would otherwise pollute the verdict render. */
-function handleIntegrityChunk(event: any): void {
+function handleReviewStreamChunk(event: any): void {
   const props = propsOf(event);
   const taskID = String(props.taskID || "");
-  const sessionID = String(props.sessionID || "");
-  if (!taskID) throw new Error("integrity.review.chunk missing taskID");
-  if (!sessionID) {
-    throw new Error(
-      `integrity.review.chunk missing sessionID (taskID=${taskID})`,
-    );
-  }
+  const reviewID = String(props.reviewID || "");
+  const phase = normalizeReviewPhase(String(props.phase || ""));
+  if (!taskID) throw new Error("review.stream.chunk missing taskID");
+  if (!reviewID) throw new Error(`review.stream.chunk missing reviewID (taskID=${taskID})`);
   const kind = String(props.kind || "");
   const delta = String(props.delta || "");
   const attempt = Number(props.attempt || 1);
   if (kind !== "reasoning") {
-    throw new Error(`integrity.review.chunk unexpected kind: ${kind}`);
+    throw new Error(`review.stream.chunk unexpected kind: ${kind}`);
   }
   if (!delta) return;
 
-  const cardID = integrityCardID(sessionID);
+  const running = runningReviews.get(reviewID);
+  const completedCardID = phase === "delivery"
+    ? deliveryReviewCardID(reviewID)
+    : /^integrity:(.+)$/.test(reviewID)
+      ? integrityCardID(reviewID.replace(/^integrity:/, ""))
+      : "";
+  const completedCard = completedCardID ? cardTreeStore.cards[completedCardID] : undefined;
+  if (completedCard?.integrity || completedCard?.deliveryReview) return;
+  if (!running) {
+    throw new Error(`review.stream.chunk arrived before started (taskID=${taskID}, reviewID=${reviewID})`);
+  }
+  const cardID = reviewCardID({ ...running, phase });
   const existing = cardTreeStore.cards[cardID];
   // Completed event already upserted the verdict — ignore trailing chunks.
-  if (existing?.integrity) return;
-  // Started must fire before Chunk. If the card is missing, this is a
-  // backend ordering bug (chunk before started) — loud-fail per rule 1.
+  if (existing?.integrity || existing?.deliveryReview) return;
   if (!existing) {
-    throw new Error(
-      `integrity.review.chunk arrived before started (taskID=${taskID}, sessionID=${sessionID})`,
-    );
+    throw new Error(`review.stream.chunk missing materialized card (taskID=${taskID}, reviewID=${reviewID})`);
   }
 
-  const partID = `integrity:${sessionID}:reasoning:${attempt}`;
+  const partID = `review:${reviewID}:reasoning:${attempt}`;
 
   setCardTreeStore(
     "cards",
@@ -1041,7 +1168,26 @@ function ensureIntegritySession(sessionID: string, time: number): { session: Ses
 
 /** Upsert the running-phase integrity session card. Integrity is now a normal
  *  agent session, so lifecycle events target the session card directly. */
-function materializeRunningIntegrity(p: RunningIntegrityPayload): void {
+function materializeRunningReview(p: RunningReviewPayload): void {
+  if (p.phase === "integrity") {
+    if (!p.sessionID) throw new Error(`review.stream integrity missing sessionID (reviewID=${p.reviewID})`);
+    materializeRunningIntegrity({
+      taskID: p.taskID,
+      reviewID: p.reviewID,
+      sessionID: p.sessionID,
+      startedAt: p.startedAt,
+      attempt: p.attempt,
+      elapsedMs: p.elapsedMs,
+      phase: p.phase,
+      currentStep: p.currentStep,
+      summary: p.summary,
+    });
+    return;
+  }
+  materializeRunningDeliveryReview(p);
+}
+
+function materializeRunningIntegrity(p: RunningReviewPayload & { sessionID: string }): void {
   const { cardID } = ensureIntegritySession(p.sessionID, p.startedAt);
   const existing = cardTreeStore.cards[cardID];
   // If the completed event has already landed, don't downgrade the verdict
@@ -1067,10 +1213,105 @@ function materializeRunningIntegrity(p: RunningIntegrityPayload): void {
       stage: "integrity",
       accent: stageAccent("integrity"),
       title: roleTitleKey("integrity"),
+      reviewStream: {
+        phase: "integrity",
+        currentStep: p.currentStep,
+        elapsedMs: p.elapsedMs,
+        summary: p.summary,
+      },
     });
     return;
   }
   throw new Error(`integrity session card missing after ensureIntegritySession (sessionID=${p.sessionID})`);
+}
+
+function materializeRunningDeliveryReview(p: RunningReviewPayload): void {
+  const cardID = deliveryReviewCardID(p.reviewID);
+  const title = "chat.role.delivery_review";
+  const summary = p.summary || (p.currentStep ? t(`review.stream.step.${p.currentStep}`) : undefined);
+  const reviewStream = {
+    phase: "delivery" as const,
+    currentStep: p.currentStep,
+    elapsedMs: p.elapsedMs,
+    summary,
+  };
+  const existing = cardTreeStore.cards[cardID];
+  if (existing?.deliveryReview) return;
+  if (existing) {
+    setCardTreeStore("cards", cardID, {
+      ...existing,
+      status: "running",
+      title,
+      reviewStream,
+    });
+    return;
+  }
+  setCardTreeStore("cards", cardID, {
+    id: cardID,
+    kind: "review",
+    stage: "delivery_review",
+    accent: stageAccent("delivery"),
+    status: "running",
+    title,
+    parts: [],
+    childIDs: [],
+    time: p.startedAt,
+    reviewStream,
+  });
+  rebuildTopLevelOrder();
+}
+
+function handleDeliveryReviewCompleted(event: any): void {
+  const props = propsOf(event);
+  const taskID = String(props.taskID || "");
+  const reviewID = String(props.reviewID || "");
+  if (!taskID) throw new Error("delivery.review.completed missing taskID");
+  if (!reviewID) throw new Error(`delivery.review.completed missing reviewID (taskID=${taskID})`);
+  const emittedAt = Number(event?.emittedAt || event?.emitted_at || 0);
+  if (!(emittedAt > 0)) {
+    throw new Error(`delivery.review.completed missing emittedAt (taskID=${taskID}); server emitter is the single source of truth`);
+  }
+  const verdict: "accepted" | "rejected" = props.verdict === "accepted" ? "accepted" : "rejected";
+  const source: "llm" | "host_gate" = props.source === "llm" ? "llm" : "host_gate";
+  const cardID = deliveryReviewCardID(reviewID);
+  const existing = cardTreeStore.cards[cardID];
+  const deliveryReview = {
+    verdict,
+    source,
+    summary: String(props.summary || ""),
+    hostGatePassed: props.hostGatePassed === true,
+    failureKinds: Array.isArray(props.failureKinds)
+      ? props.failureKinds.filter((item: unknown): item is string => typeof item === "string")
+      : [],
+    rejectionCount: Number(props.rejectionCount || 0),
+    deferredCount: Number(props.deferredCount || 0),
+    details: Array.isArray(props.details)
+      ? props.details.filter((item: unknown): item is string => typeof item === "string")
+      : [],
+  };
+  setCardTreeStore("cards", cardID, {
+    ...(existing ?? {
+      id: cardID,
+      kind: "review" as const,
+      stage: "delivery_review",
+      accent: stageAccent("delivery"),
+      title: "chat.role.delivery_review",
+      parts: [],
+      childIDs: [],
+      time: emittedAt,
+    }),
+    status: verdict === "accepted" ? "completed" : "error",
+    title: "chat.role.delivery_review",
+    deliveryReview,
+    reviewStream: {
+      phase: "delivery",
+      currentStep: existing?.reviewStream?.currentStep,
+      elapsedMs: existing?.reviewStream?.elapsedMs,
+      summary: deliveryReview.summary,
+    },
+  });
+  runningReviews.delete(reviewID);
+  rebuildTopLevelOrder();
 }
 
 function handleIntegrityCompleted(event: any): void {
@@ -1157,9 +1398,9 @@ function handleIntegrityCompleted(event: any): void {
 
   materializeIntegrity(session, payload);
   // Running-card lifecycle: the completed upsert now owns this cardID; drop
-  // the runningIntegrity entry so a late `progress` event for the same task
+  // the running review entry so a late `progress` event for the same task
   // doesn't rewrite the verdict back to a running placeholder.
-  runningIntegrity.delete(sessionID);
+  runningReviews.delete(`integrity:${sessionID}`);
 }
 
 /** Atomically write the integrity verdict onto the session card itself. */
@@ -1560,6 +1801,7 @@ function ensureBoundaryPart(
   if (session.partIndex.has(boundaryKey)) return;
   const part: any = {
     type: "boundary",
+    messageID,
     role,
     roleLabel: roleLabel(role),
     time: time > 0 ? time : undefined,
