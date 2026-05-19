@@ -166,6 +166,25 @@ describe("delivery surface detector", () => {
     expect(manifest.surfaces).toEqual(["frontend", "visual_runtime"])
     expect(evidenceRefs(manifest, "client_contract")).toEqual([])
   })
+
+  test("does not select client contract from axios dependency without client files", async () => {
+    const dir = await packageFixture({
+      dependencies: { react: "latest", vite: "latest", axios: "latest" },
+      files: {
+        "src/components/KeyStatistics.tsx": "export function KeyStatistics() { return <section /> }\n",
+      },
+    })
+
+    const manifest = await detectDeliverySurfaces({
+      taskID: "tsk_dependency_only_client",
+      deliveryID: "dlv_dependency_only_client",
+      projectRoot: dir,
+      changedFiles: ["src/components/KeyStatistics.tsx"],
+    })
+
+    expect(manifest.surfaces).toEqual(["frontend", "visual_runtime"])
+    expect(evidenceRefs(manifest, "client_contract")).toEqual([])
+  })
 })
 
 async function packageFixture(input: {

@@ -1,6 +1,7 @@
 // ── WorkspacePanel ──
-// Right-hand secondary workspace. Hosts the diff preview with a close
-// affordance. Plain file links open in the selected IDE instead of this panel.
+// Right-hand secondary workspace. Hosts the diff view with a close
+// affordance. File links now open in the selected IDE instead of rendering an
+// inline file preview surface.
 
 import { Show } from "solid-js";
 import { DiffPreviewPanel } from "./DiffPreviewPanel";
@@ -8,25 +9,15 @@ import type { DiffTarget } from "../services/diff";
 import { t } from "../utils/i18n";
 import { Icon } from "./Icon";
 
-export type WorkspaceView = { kind: "diff"; target: DiffTarget };
-
 export interface WorkspacePanelProps {
-  /** Current view to foreground. */
-  view: WorkspaceView;
-  /** Called when the user clicks a tab to refresh the view contract. */
-  onSelectView: (view: WorkspaceView) => void;
+  /** Current diff target to foreground. */
+  target: DiffTarget;
   /** Called when the user clicks the close (×) button. */
   onClose: () => void;
 }
 
 export function WorkspacePanel(props: WorkspacePanelProps) {
-  const isDiff = () => props.view.kind === "diff";
-  const diffTarget = () => props.view.target;
-  const diffFilePath = () => props.view.target.filePath;
-
-  function selectDiff() {
-    props.onSelectView(props.view);
-  }
+  const diffFilePath = () => props.target?.filePath || null;
   return (
     <section class="workspace" id="workspacePanel">
       <header class="workspace-header">
@@ -35,9 +26,8 @@ export function WorkspacePanel(props: WorkspacePanelProps) {
             type="button"
             class="workspace-tab"
             role="tab"
-            aria-selected={isDiff()}
-            data-active={isDiff() ? "true" : "false"}
-            onClick={selectDiff}
+            aria-selected="true"
+            data-active="true"
           >
             <span class="workspace-tab-label">
               {t("workspace.diff")}
@@ -61,13 +51,12 @@ export function WorkspacePanel(props: WorkspacePanelProps) {
         </button>
       </header>
       <div class="workspace-body">
-        {/* Diff view only. Plain file links open in the selected IDE. */}
         <div
           class="workspace-view"
           data-kind="diff"
-          data-active={isDiff() ? "true" : "false"}
+          data-active="true"
         >
-          <DiffPreviewPanel target={diffTarget()} />
+          <DiffPreviewPanel target={props.target} />
         </div>
       </div>
     </section>

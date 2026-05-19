@@ -11,6 +11,11 @@ const { cardTreeStore } = await import("../src/store/card-tree");
 const { sessionConfigRefreshToken } = await import("../src/services/config");
 const { __setHostTransportForTest } = await import("../src/services/host-transport");
 
+if (typeof globalThis.requestAnimationFrame === "undefined") {
+  (globalThis as any).requestAnimationFrame = (() => 1) as any;
+  (globalThis as any).cancelAnimationFrame = (() => {}) as any;
+}
+
 function fakeConfigTransport(paths: string[]): HostTransport {
   return {
     kind: "tauri",
@@ -520,6 +525,111 @@ test("board-owned run progress still schedules board refresh", () => {
   })).toBe(true);
 
   expect(boardStore.boardSyncPending).toBe(true);
+});
+
+test("consumed sequenced run progress advances selected cursor and avoids false recovery", async () => {
+  resetWriter();
+  const streams: Array<{ path: string; query?: Record<string, string> }> = [];
+  __setHostTransportForTest(fakeRecoveryTransport(streams, 9));
+  setBoardStore("selectedTaskID", "tsk_refresh");
+  setBoardStore("taskSequence", 5);
+
+  expect(routeSSEEvent({
+    type: "run.progress",
+    taskID: "tsk_refresh",
+    sequence: 6,
+    properties: {
+      type: "executor.status",
+      taskID: "tsk_refresh",
+      status: "running",
+    },
+  })).toBe(true);
+
+  expect(boardStore.taskSequence).toBe(6);
+
+  const event = {
+    type: "goal.updated",
+    taskID: "tsk_refresh",
+    sequence: 7,
+  };
+  const handled = routeSSEEvent(event);
+  if (!handled) handleEventStreamEvent(event);
+
+  expect(boardStore.taskSequence).toBe(7);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(streams).toEqual([]);
+});
+
+test("consumed sequenced run output advances selected cursor and avoids false recovery", async () => {
+  resetWriter();
+  const streams: Array<{ path: string; query?: Record<string, string> }> = [];
+  __setHostTransportForTest(fakeRecoveryTransport(streams, 9));
+  setBoardStore("selectedTaskID", "tsk_refresh");
+  setBoardStore("taskSequence", 5);
+
+  expect(routeSSEEvent({
+    type: "run.output",
+    taskID: "tsk_refresh",
+    event_id: "evt_output_1",
+    sequence: 6,
+    summary: "partial output",
+    properties: {
+      taskID: "tsk_refresh",
+      runID: "run_refresh",
+      sessionID: "ses_refresh",
+      text: "partial output",
+    },
+  })).toBe(true);
+
+  expect(boardStore.taskSequence).toBe(6);
+
+  const event = {
+    type: "goal.updated",
+    taskID: "tsk_refresh",
+    sequence: 7,
+  };
+  const handled = routeSSEEvent(event);
+  if (!handled) handleEventStreamEvent(event);
+
+  expect(boardStore.taskSequence).toBe(7);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(streams).toEqual([]);
+});
+
+test("consumed sequenced task rewound advances selected cursor and avoids false recovery", async () => {
+  resetWriter();
+  const streams: Array<{ path: string; query?: Record<string, string> }> = [];
+  __setHostTransportForTest(fakeRecoveryTransport(streams, 9));
+  setBoardStore("selectedTaskID", "tsk_refresh");
+  setBoardStore("taskSequence", 5);
+
+  expect(routeSSEEvent({
+    type: "task.rewound",
+    taskID: "tsk_refresh",
+    sequence: 6,
+    properties: {
+      taskID: "tsk_refresh",
+      cursorTime: 1_776_000_100_000,
+      resetWorktree: false,
+    },
+  })).toBe(true);
+
+  expect(boardStore.taskSequence).toBe(6);
+
+  const event = {
+    type: "goal.updated",
+    taskID: "tsk_refresh",
+    sequence: 7,
+  };
+  const handled = routeSSEEvent(event);
+  if (!handled) handleEventStreamEvent(event);
+
+  expect(boardStore.taskSequence).toBe(7);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(streams).toEqual([]);
 });
 
 test("selected task sequence gap triggers recovery without advancing cursor", async () => {

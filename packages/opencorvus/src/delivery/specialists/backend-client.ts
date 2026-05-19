@@ -80,21 +80,6 @@ export async function runClientContractReview(input: {
     input.surfaceManifest,
   )
   const findings: DeliveryReviewFinding[] = []
-  if (inventory.clientFiles.length === 0 && inventory.clientPaths.length === 0) {
-    findings.push({
-      proposedSeverity: "blocking",
-      category: "evidence_quality",
-      claim: "Client contract surface was selected without client file or endpoint evidence.",
-      evidence: [
-        {
-          kind: "log",
-          ref: input.surfaceManifest.id,
-          excerpt: "client_contract selected but client inventory is empty",
-        },
-      ],
-      affectedRequirementIDs: requirementIDs(input.goals),
-    })
-  }
   const backendPaths = new Set(inventory.backendPaths)
   const drift = inventory.clientPaths.filter((item) => !backendPaths.has(item))
   if (backendPaths.size > 0 && drift.length > 0) {
@@ -126,7 +111,9 @@ export async function runClientContractReview(input: {
     executionStatus: "completed",
     summary:
       findings.length === 0
-        ? `Client contract review passed with ${inventory.clientFiles.length} client file(s).`
+        ? inventory.clientFiles.length === 0 && inventory.clientPaths.length === 0
+          ? "Client contract review skipped blocking checks because no concrete client file or endpoint evidence was present."
+          : `Client contract review passed with ${inventory.clientFiles.length} client file(s).`
         : `Client contract review found ${findings.length} issue(s).`,
     findings,
     evidenceRefs: evidenceRefs(input.surfaceManifest, "client_contract", inventory),

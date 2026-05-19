@@ -205,11 +205,19 @@ async function validateLockfile(input: {
   packageManagerName: SupportedPackageManager
 }): Promise<RuntimeReadinessCheck> {
   const expected = PACKAGE_MANAGER_LOCKFILES[input.packageManagerName]
-  const present = await presentLockfiles(input.projectRoot)
+  const owner = await findLockfileOwner({
+    projectRoot: input.projectRoot,
+    expected,
+  })
+  const present = owner ? await presentLockfiles(owner) : []
   const hasExpected = present.includes(expected)
   const conflicts = present.filter((item) => item !== expected)
+  const ownerEvidence = owner
+    ? `lockfile_owner=${(path.relative(input.projectRoot, owner) || ".").replaceAll("\\", "/")}`
+    : undefined
   const evidence = [
     hasExpected ? `lockfile=${expected}` : `missing_lockfile=${expected}`,
+    ownerEvidence,
     conflicts.length > 0 ? `conflicting_lockfiles=${conflicts.join(",")}` : undefined,
   ].filter((item): item is string => Boolean(item))
   return {
@@ -218,6 +226,38 @@ async function validateLockfile(input: {
     status: hasExpected && conflicts.length === 0 ? "passed" : "failed",
     evidence,
   }
+}
+
+async function findLockfileOwner(input: {
+  projectRoot: string
+  expected: string
+}): Promise<string | undefined> {
+  let current = path.resolve(input.projectRoot)
+  while (true) {
+    const present = await presentLockfiles(current)
+    if (present.includes(input.expected)) return current
+    if (present.length > 0) return current
+    if (await isWorkspaceOwner(current)) return current
+    const parent = path.dirname(current)
+    if (parent === current) return undefined
+    current = parent
+  }
+}
+
+async function isWorkspaceOwner(dir: string) {
+  if (await pathExists(path.join(dir, "pnpm-workspace.yaml"))) return true
+  const pkg = await readRuntimePackage(dir)
+  return hasWorkspaceDeclaration(pkg)
+}
+
+function hasWorkspaceDeclaration(pkg: RuntimePackage | undefined) {
+  const workspaces = (pkg as { workspaces?: unknown } | undefined)?.workspaces
+  if (Array.isArray(workspaces)) return workspaces.length > 0
+  if (workspaces && typeof workspaces === "object") {
+    const packages = (workspaces as { packages?: unknown }).packages
+    return Array.isArray(packages) && packages.length > 0
+  }
+  return false
 }
 
 async function presentLockfiles(projectRoot: string) {

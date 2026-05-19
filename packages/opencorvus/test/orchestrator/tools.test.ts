@@ -414,7 +414,7 @@ describe("orchestrator tools", () => {
           taskID,
           agentSessionID: parent.id,
           signal: new AbortController().signal,
-          workflow: direct,
+          workflow: pipeline,
           workflowState,
         })
 
@@ -2166,7 +2166,7 @@ describe("orchestrator tools", () => {
         // and the next-step prompt directs the LLM to call integrity.
         expect(result).toContain("status=passed")
         expect(result).not.toContain("architecture_review:")
-        expect(result).toContain("call `integrity`")
+        expect(result).toContain("Call `integrity` as the final workflow gate")
         expect(buildCalls).toBe(1)
         expect(buildTarget).toMatchObject({
           kind: "goal",
@@ -2558,7 +2558,7 @@ describe("orchestrator tools", () => {
         expect(result).not.toContain("architecture_review:")
         expect(result).not.toContain("### Architecture review")
         expect(result).not.toContain("architecture_review_rework: opened")
-        expect(result).toContain("call `integrity`")
+        expect(result).toContain("Call `integrity` as the final workflow gate")
         expect(buildCalls).toBe(1)
         const runs = listGoalRunsByGoal(goalID)
         expect(runs).toHaveLength(1)
@@ -2659,7 +2659,7 @@ describe("orchestrator tools", () => {
         expect(result).not.toContain("architecture_review:")
         expect(result).not.toContain("### Architecture review")
         expect(result).not.toContain("architecture_review_rework: opened")
-        expect(result).toContain("call `integrity`")
+        expect(result).toContain("Call `integrity` as the final workflow gate")
         expect(listGoalRunsByGoal(goalID)[0]?.superseded_reason).toBeFalsy()
       },
     })
@@ -2832,7 +2832,7 @@ describe("orchestrator tools", () => {
         expect(result).not.toContain("architecture_review:")
         expect(result).not.toContain("### Architecture review")
         expect(result).not.toContain(`goal=${goalID} superseded_tip`)
-        expect(result).toContain("call `integrity`")
+        expect(result).toContain("Call `integrity` as the final workflow gate")
         // No auto-supersede.
         expect(goalStatusByID(goalID)).toBe("passed")
         expect(listGoalRunsByGoal(goalID)[0]?.superseded_reason).toBeFalsy()
@@ -3009,7 +3009,7 @@ describe("orchestrator tools", () => {
         expect(result).not.toContain("architecture_review:")
         expect(result).not.toContain("### Architecture review")
         expect(result).not.toContain("architecture_review_dependency_rework")
-        expect(result).toContain("call `integrity`")
+        expect(result).toContain("Call `integrity` as the final workflow gate")
         expect(listGoalRunsByGoal(goalID)[0]?.superseded_reason).toBeFalsy()
         expect(listGoalRunsByGoal(childGoalID)[0]?.id).toBe(childRunID)
         expect(listGoalRunsByGoal(childGoalID)[0]?.status).toBe("running")
@@ -3093,7 +3093,7 @@ describe("orchestrator tools", () => {
         expect(result).not.toContain("architecture_review:")
         // Next-step still directs orchestrator to call integrity at wave
         // boundary (when applicable).
-        expect(result).toContain("call `integrity`")
+        expect(result).toContain("Call `integrity` as the final workflow gate")
         expect(goalStatusByID(goalID)).toBe("pending")
         expect(listGoalRunsByGoal(goalID)[0]?.status).toBe("aborted")
       },
@@ -3228,7 +3228,7 @@ describe("orchestrator tools", () => {
         expect(result).toContain("Integrity verdict: needs_correction")
         // Post-fix: review headline now states the advisory contract
         // explicitly without referring to the deleted auto-route mechanism.
-        expect(result).toContain("nothing in code supersedes goals")
+        expect(result).toContain("Nothing in code supersedes goals")
         expect(findGoal(goalID)).toBeTruthy()
         const artifact = findLatestIntegrityAttemptArtifact({ taskID, specSnapshotID: specID })
         expect(artifact?.label).toBe("verdict-needs_correction")
@@ -4218,7 +4218,11 @@ describe("orchestrator tools", () => {
         })
 
         const result = await tools.prosecute.execute({}, {} as any)
-        expect(result).toContain("no delivery row to prosecute")
+        // Retirement: prosecute reports no legacy delivery row and redirects
+        // workflow review to integrity (delivery host-gate is retired).
+        expect(result).toContain(
+          "prosecute: no legacy delivery row to prosecute against. Delivery is retired; use integrity for workflow review.",
+        )
 
         const plans = Database.use((db) =>
           db.select().from(EnginePlanVersionTable).where(eq(EnginePlanVersionTable.task_id, taskID)).all(),

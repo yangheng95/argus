@@ -33,5 +33,9 @@ test("orchestrator workflow retires deliver and uses integrity as the final gate
   expect(tools).not.toContain("requestStopAfterCurrentStep")
   expect(tools).not.toContain("finalizeDeferredStop")
   expect(tools).not.toContain("stopAfterDispatch")
-  expect(tools).toContain("dispatchTaskLoop({")
+  // Retirement removed the delivery-rework auto-wake loop: the host no longer
+  // re-dispatches the task loop to queue repair work after a verdict.
+  expect(tools).not.toContain("dispatchTaskLoop({")
+  expect(tools).not.toContain("queueDeliveryReworkWake")
+  expect(tools).not.toContain("deliveryRework")
 })

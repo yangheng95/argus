@@ -5,7 +5,6 @@
 //   - ArchitectPanel    -> .arch-empty
 //   - RequirementsPanel -> .req-empty
 //   - IntegrityCard     -> .integrity__empty
-//   - DeliveryPanel     -> .delivery-empty-hint
 //
 // Each rolled its own font, padding, color, italic-or-not, bordered-card-
 // or-bare, so a user staring at a fresh task saw four different visual
@@ -15,9 +14,12 @@
 // PromptCatalog used it. The right panel didn't.
 //
 // This test pins the contract:
-//   1. The five components above render their empty-state DOM with the
+//   1. The three components above that still render explicit empty-state DOM
+//      do so with the
 //      shared `.empty-hint` class plus the `.empty-hint--card`
 //      modifier, never the legacy per-panel class.
+//   2. DeliveryPanel retired its bespoke empty placeholder entirely; when
+//      there is no delivery payload, it no longer renders a fake empty card.
 //   2. styles.css advertises `.empty-hint--card` on the same card-chrome
 //      selector group as the existing nested-`.empty-hint` cards
 //      (single source — rule 8). That way every empty card looks the
@@ -61,7 +63,6 @@ describe("right-panel components emit the shared empty-hint primitive", () => {
     { panel: "ArchitectPanel", file: "ArchitectPanel.tsx", legacyClass: "arch-empty" },
     { panel: "RequirementsPanel", file: "RequirementsPanel.tsx", legacyClass: "req-empty" },
     { panel: "IntegrityCard", file: "IntegrityCard.tsx", legacyClass: "integrity__empty" },
-    { panel: "Board (DeliveryPanel)", file: "Board.tsx", legacyClass: "delivery-empty-hint" },
   ]
 
   for (const c of cases) {
@@ -74,6 +75,14 @@ describe("right-panel components emit the shared empty-hint primitive", () => {
       expect(src).toContain('class="empty-hint empty-hint--card"')
     })
   }
+})
+
+describe("DeliveryPanel retires the bespoke empty placeholder", () => {
+  test("Board.tsx keeps the legacy empty class deleted and does not fake a shared empty-hint card", () => {
+    const src = readComponent("Board.tsx")
+    expect(src).not.toContain("delivery-empty-hint")
+    expect(src).not.toContain('class="empty-hint empty-hint--card"')
+  })
 })
 
 describe("surface CSS declares .empty-hint--card on the shared card-chrome group", () => {

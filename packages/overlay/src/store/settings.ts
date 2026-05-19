@@ -47,6 +47,8 @@ export interface OverlaySettings {
   /** Last persisted directory value; used to detect uncommitted changes and
    *  restored on next cold start by loadSettings(). */
   savedDirectory: string;
+  /** Preferred IDE used by the workspace launcher and file-link open actions. */
+  preferredProjectEditor: ProjectEditorID;
   /** Incremented each time the workspace is invalidated/reset */
   workspaceEpoch: number;
   /** Incremented each time the working directory changes */
@@ -156,6 +158,7 @@ export const DEFAULT_SETTINGS: OverlaySettings = {
   workspaceTaskID: "",
   workspaceDirectory: "",
   savedDirectory: "",
+  preferredProjectEditor: "vscode",
   workspaceEpoch: 0,
   directoryEpoch: 0,
   toolPermissions: {
@@ -230,6 +233,7 @@ export function applySettings(input: Partial<OverlaySettings>): void {
       typeof input?.workspaceDirectory === "string"
         ? input.workspaceDirectory.trim()
         : DEFAULT_SETTINGS.workspaceDirectory,
+    preferredProjectEditor: sanitizeProjectEditor((input as any)?.preferredProjectEditor),
     desktopNotifications: input?.desktopNotifications !== false,
   });
 }
@@ -295,6 +299,7 @@ export function bootstrapOverlaySettings(
   sidebarWidth?: number;
   sectionsWidth?: number;
   workspacePanelHeight?: number;
+  preferredProjectEditor?: ProjectEditorID;
   workspaceTaskID?: string;
   workspaceTaskId?: string;
   workspaceDirectory?: string;
@@ -319,6 +324,7 @@ export function bootstrapOverlaySettings(
     locale: input.locale ?? DEFAULT_SETTINGS.locale,
     desktopNotifications: input.desktopNotifications ?? DEFAULT_SETTINGS.desktopNotifications,
     directory: input.savedDirectory || undefined,
+    preferredProjectEditor: sanitizeProjectEditor(input.preferredProjectEditor),
     workspaceTaskID,
     workspaceTaskId: workspaceTaskID,
     workspaceDirectory: input.workspaceDirectory || undefined,

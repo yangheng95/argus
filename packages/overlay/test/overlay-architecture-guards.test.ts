@@ -2445,7 +2445,6 @@ describe("overlay architecture guards", () => {
 
     const railBody = soloRuleBody(surface, ".conversation-agent-rail")
     for (const declaration of [
-      "position: relative",
       "width: 100%",
       "height: calc(42px * var(--ui-scale))",
       "min-height: calc(42px * var(--ui-scale))",

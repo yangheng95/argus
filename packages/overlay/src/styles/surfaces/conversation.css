@@ -58,14 +58,13 @@
 }
 
 .conversation-agent-rail {
-  position: relative;
   flex: 0 0 auto;
   width: 100%;
   height: calc(42px * var(--ui-scale));
   min-height: calc(42px * var(--ui-scale));
   display: flex;
   flex-direction: row;
-  align-items: center;
+  align-items: stretch;
   gap: calc(8px * var(--ui-scale));
   min-width: 0;
   padding: calc(5px * var(--ui-scale)) calc(10px * var(--ui-scale));
@@ -74,6 +73,9 @@
     linear-gradient(180deg, color-mix(in srgb, var(--surface-inset) 76%, transparent), transparent 88%),
     var(--chat-canvas);
   overflow: hidden;
+  transition:
+    padding var(--ui-duration-base) var(--ui-timing-standard),
+    background var(--ui-duration-base) var(--ui-timing-standard);
 }
 
 .conversation-agent-rail .chat-avatar {
@@ -133,9 +135,6 @@
   min-width: 0;
   min-height: calc(34px * var(--ui-scale));
   padding: 0;
-  border: 0;
-  background: transparent;
-  box-shadow: none;
 }
 
 .conversation-agent-rail__avatar-button {
