@@ -55,6 +55,7 @@ Goal requirements:
 - Shell scorer shape: `{ "type": "heuristic", "name": "tests", "spec": { "kind": "shell", "cmd": "..." }, "expect": { "exit_code": 0 } }`.
 - Script scorer shape: `{ "type": "heuristic", "name": "script", "spec": { "kind": "script_ref", "path": "...", "args": [] }, "expect": { "exit_code": 0 } }`.
 - Use `contract_audit` only with `{ "kind": "contract_graph", "contract_ids": [...] }` and `expect: { "status": "passed" }`.
+- contract_audit.contract_ids must be copied from already-registered contract ids returned by register_contract; unknown ids are rejected.
 - The verification goal's `acceptance_specs` are the quality contract for final integration and regression checks.
 
 ## Contract Graph Tools

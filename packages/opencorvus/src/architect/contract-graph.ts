@@ -319,6 +319,21 @@ export function validateArchitectContractGraph(input: {
     }
   }
 
+  const allAuditReferences = essentialAcceptanceContractGraphIDsByGoal(input.goals, { essentialOnly: false })
+  for (const [goalID, referencedContractIDs] of allAuditReferences) {
+    for (const contractID of referencedContractIDs) {
+      if (contractIDs.has(contractID)) continue
+      findings.push(
+        blocker(
+          "contract_audit_unknown_contract",
+          `Goal ${goalID} contract_audit references unknown graph contract ${contractID}. Use contract ids registered in the architect contract graph.`,
+          { goal_ids: [goalID], contract_ids: [contractID] },
+          ["register_goal", "modify_goal", "register_contract"],
+        ),
+      )
+    }
+  }
+
   const essentialAuditCoverage = essentialAcceptanceContractGraphIDsByGoal(input.goals)
   for (const contract of input.graph.contracts) {
     const relatedGoalIDs = unique([contract.producer_goal_id, ...contract.consumer_goal_ids])
@@ -418,11 +433,15 @@ export function graphContractsForGoal(
   }
 }
 
-function essentialAcceptanceContractGraphIDsByGoal(goals: readonly GraphValidationGoal[]): Map<string, Set<string>> {
+function essentialAcceptanceContractGraphIDsByGoal(
+  goals: readonly GraphValidationGoal[],
+  input?: { essentialOnly?: boolean },
+): Map<string, Set<string>> {
   const idsByGoal = new Map<string, Set<string>>()
+  const essentialOnly = input?.essentialOnly !== false
   for (const goal of goals) {
     for (const spec of goal.acceptance_specs) {
-      if (spec.severity !== "essential") continue
+      if (essentialOnly && spec.severity !== "essential") continue
       for (const scorer of spec.scorers) {
         if (scorer.type !== "contract_audit") continue
         const scorerSpec = scorer.spec as { kind?: unknown; contract_ids?: unknown } | undefined

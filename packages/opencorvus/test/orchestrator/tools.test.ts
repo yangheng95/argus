@@ -401,6 +401,89 @@ describe("orchestrator tools", () => {
     })
   })
 
+  test("goal build rejects persisted contract_audit graph id mismatch before build starts", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_audit_drift_${stamp}`
+    const taskID = `tsk_audit_drift_${stamp}`
+    const goalID = `goal_audit_drift_${stamp}`
+
+    insertWorkflowTaskWithGoal({
+      projectID,
+      taskID,
+      goalID,
+      sessionID: null,
+      worktree: tmp.path,
+      projectName: "contract audit drift predispatch",
+      taskTitle: "contract audit drift predispatch",
+      request: "Reject drifted contract audit ids before build",
+      goalTitle: "Build drifted audit goal",
+      goalSlug: "build-drifted-audit-goal",
+      objective: "Attempt to build a goal whose persisted audit contract id is absent from the graph.",
+      now,
+    })
+    Database.use((db) =>
+      db
+        .update(EngineGoalTable)
+        .set({
+          acceptance_specs: [
+            {
+              id: "acc-contract-audit-drift",
+              source_requirement_id: "REQ-1",
+              goal_id: goalID,
+              title: "Contract audit drift",
+              severity: "essential",
+              scorers: [
+                {
+                  type: "contract_audit",
+                  name: "graph-contract",
+                  spec: { kind: "contract_graph", contract_ids: ["missing_contract"] },
+                  expect: { status: "passed" },
+                },
+              ],
+            },
+          ],
+        })
+        .where(eq(EngineGoalTable.id, goalID))
+        .run(),
+    )
+
+    let buildStarted = false
+    buildAgentRunImpl = async () => {
+      buildStarted = true
+      return {
+        result: { status: "passed", summary: "should not run", files_changed: [], tests: [] },
+        sessionID: "ses_should_not_start",
+        worktreeDir: tmp.path,
+        diffs: [],
+      }
+    }
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "contract audit drift predispatch" })
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        await expect(
+          tools.build.execute(
+            {
+              goalID,
+              reason: "Per-goal build should reject persisted graph/audit mismatch before starting build.",
+            },
+            {} as any,
+          ),
+        ).rejects.toThrow("contract_audit references unknown graph contract")
+        expect(buildStarted).toBe(false)
+        expect(listGoalRunsByGoal(goalID)).toHaveLength(0)
+      },
+    })
+  })
+
   test("steer_subagent resolves a live goal_run id to the child build session", async () => {
     const now = Date.now()
     const stamp = now.toString(16)
