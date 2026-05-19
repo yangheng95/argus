@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
-import { computeContractFieldChanges, parseModifyGoalUpdates } from "../../src/orchestrator/tools"
+import { GoalContractUpdateSchema } from "../../src/pipeline/goal-contract.schema"
+import { computeContractFieldChanges } from "../../src/orchestrator/tools"
 
 /**
  * Spec build-missing-terminal-signal-restore-2026-05-07.md §5.3.
@@ -144,9 +145,34 @@ describe("computeContractFieldChanges", () => {
   })
 })
 
-describe("parseModifyGoalUpdates", () => {
-  test("malformed acceptance scorer returns actionable guidance instead of throwing", () => {
-    const result = parseModifyGoalUpdates({
+describe("GoalContractUpdateSchema", () => {
+  test("valid goal update passes canonical schema validation", () => {
+    const result = GoalContractUpdateSchema.safeParse({
+      title: "Updated goal title",
+      acceptance_specs: [
+        {
+          id: "acc-valid",
+          source_requirement_id: "REQ-1",
+          goal_id: "goal_ui",
+          title: "Valid shell scorer",
+          severity: "essential",
+          scorers: [
+            {
+              type: "heuristic",
+              name: "files-exist",
+              spec: { kind: "shell", cmd: "bun test" },
+              expect: { exit_code: 0 },
+            },
+          ],
+        },
+      ],
+    })
+
+    expect(result.success).toBe(true)
+  })
+
+  test("malformed acceptance scorer is rejected by canonical schema validation", () => {
+    const result = GoalContractUpdateSchema.safeParse({
       acceptance_specs: [
         {
           id: "acc-bad",
@@ -165,11 +191,15 @@ describe("parseModifyGoalUpdates", () => {
       ],
     })
 
-    expect(result.ok).toBe(false)
-    if (!result.ok) {
-      expect(result.message).toContain("database unchanged")
-      expect(result.message).toContain('"shell" is not a scorer type')
-      expect(result.message).toContain('type="heuristic" with spec.kind="shell"')
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(
+        result.error.issues.some(
+          (issue) =>
+            issue.code === "invalid_union" &&
+            issue.path.join(".") === "acceptance_specs.0.scorers.0.type",
+        ),
+      ).toBe(true)
     }
   })
 })
