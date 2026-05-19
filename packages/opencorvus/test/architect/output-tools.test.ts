@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test"
 import { validateArchitectContractGraph, type ArchitectContractGraph } from "@/architect/contract-graph"
 import { createArchitectOutputTools, architectValidationFindings } from "@/architect/output-tools"
+import { GoalContractFieldsSchema } from "@/pipeline/goal-contract.schema"
 
 function acceptance(goalID: string, contractIDs: string[] = []) {
   return {
@@ -343,10 +344,8 @@ test("submit_architect reports zero graph contracts as a concern without blockin
   expect(kit.getCollector().finalized).toBe(true)
 })
 
-test("register_goal returns actionable guidance for malformed scorer type without mutating collector", async () => {
-  const kit = createArchitectOutputTools({ existingGoals: [], workDir: process.cwd() })
-
-  const out = await kit.tools.register_goal.execute!(
+test("register_goal schema rejects malformed scorer type before execute", () => {
+  const parsed = GoalContractFieldsSchema.safeParse(
     {
       id: "goal_bad_acceptance",
       title: "Bad acceptance",
@@ -373,14 +372,19 @@ test("register_goal returns actionable guidance for malformed scorer type withou
       priority: "blocking",
       kind: "feature",
       requirement_ids: ["REQ-1"],
-    } as any,
-    {} as any,
+    },
   )
 
-  expect(out).toContain("collector unchanged")
-  expect(out).toContain('"shell" is not a scorer type')
-  expect(out).toContain('type="heuristic" with spec.kind="shell"')
-  expect(kit.getCollector().goals).toHaveLength(0)
+  expect(parsed.success).toBe(false)
+  if (!parsed.success) {
+    expect(
+      parsed.error.issues.some(
+        (issue) =>
+          issue.code === "invalid_union" &&
+          issue.path.join(".") === "acceptance_specs.0.scorers.0.type",
+      ),
+    ).toBe(true)
+  }
 })
 
 test("register_dependency_contract rejects unknown contract id without mutating collector", async () => {
