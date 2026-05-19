@@ -44,8 +44,6 @@ Do not read `mirror/extracted-page.json` or `mirror/image-analysis.json` wholesa
 
 If no visual/material evidence exists, produce only the facts explicitly present in the textual brief and mark missing details as open questions. Do not fabricate exact values.
 
-`websearch({ query })` is available for external design knowledge that the references and brief do not pin down: current component-library conventions, accessibility/standard guidelines, established UX patterns for the product domain, factual details about a named brand/product being cloned. Use it to ground PRD/SPEC facts — it does NOT replace mirror extraction (pixels remain the binding visual source); use it alongside, and search before guessing a URL to `webfetch`.
-
 ## PRD/SPEC Review
 
 Your deliverable is a complete PRD/SPEC, not an exhaustive per-node visual database.
