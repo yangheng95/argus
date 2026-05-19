@@ -90,7 +90,7 @@ import {
   SourceCoverageEntrySchema,
   type ArchitectFidelityState,
 } from "@/architect/fidelity"
-import { contractGraphIRIndex } from "@/architect/contract-graph"
+import { contractGraphIRIndex, validateArchitectContractGraph } from "@/architect/contract-graph"
 import type { GoalCorrection, IntegrityDimensionResult, IntegrityGraphCorrection, IntegrityResult, MissingGoal } from "@/integrity"
 import { renderIntegrityMarkdown } from "@/integrity/render-markdown"
 
@@ -5628,6 +5628,30 @@ export function createOrchestratorTools(input: {
                 `while active spec is ${activeSpec.id}. Re-read the active goal graph before dispatching build.`
               )
             }
+            const contractGraph = findLatestArchitectContractGraph(taskID)
+            if (!contractGraph) {
+              throw new Error(
+                `Cannot build goal ${goal.id}: missing architect_contract_graph artifact for task ${taskID}. ` +
+                  "Re-run architect so dependency reasons and graph contracts are available before build.",
+              )
+            }
+
+            const siblingGoals = listGoals(taskID)
+            const contractAuditUnknownContractFindings = validateArchitectContractGraph({
+              goals: siblingGoals.map((g) => ({
+                id: g.id,
+                depends_on: g.depends_on as string[],
+                acceptance_specs: g.acceptance_specs as AcceptanceSpec[],
+              })),
+              graph: contractGraph,
+            }).filter((finding) => finding.code === "contract_audit_unknown_contract")
+            if (contractAuditUnknownContractFindings.length > 0) {
+              throw new Error(
+                `Cannot build goal ${goal.id}: architect contract_audit references unknown graph contract ids. ` +
+                  `${contractAuditUnknownContractFindings.map((finding) => finding.message).join(" ")} ` +
+                  "Re-run architect so contract_audit.contract_ids are copied from registered graph contract ids.",
+              )
+            }
             // Phase B (2026-05-05): persistent worktree pointer comes from
             // the latest goal_run_attempt artifact, not engine_goal columns.
             // findGoalLatestWorkspace returns the triple from the newest
@@ -5741,15 +5765,6 @@ export function createOrchestratorTools(input: {
 
             const { createDecisionLog } = await import("@/decision-log")
             const decisionLog = createDecisionLog(taskID)
-            const contractGraph = findLatestArchitectContractGraph(taskID)
-            if (!contractGraph) {
-              throw new Error(
-                `Cannot build goal ${goal.id}: missing architect_contract_graph artifact for task ${taskID}. ` +
-                  "Re-run architect so dependency reasons and graph contracts are available before build.",
-              )
-            }
-
-            const siblingGoals = listGoals(taskID)
             const dependencies =
               dependsOn.length > 0
                 ? siblingGoals

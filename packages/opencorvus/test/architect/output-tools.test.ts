@@ -71,6 +71,28 @@ function baseGraph(contractIDs: string[] = ["contract_order"]): ArchitectContrac
   }
 }
 
+function contractRef(id: string = "contract_order", consumerGoalIDs: string[] = ["goal_ui"]) {
+  return {
+    id,
+    kind: "type" as const,
+    name: "Order",
+    producer_goal_id: "goal_model",
+    consumer_goal_ids: consumerGoalIDs,
+    summary: "Shared order status model for UI rendering.",
+    ir: {
+      kind: "type" as const,
+      name: "Order",
+      fields: [
+        {
+          name: "status",
+          typeExpr: "string",
+          valueDomain: { kind: "literal_union" as const, values: ["new", "paid"] },
+        },
+      ],
+    },
+  }
+}
+
 function graphGoals(uiAcceptanceSpecs: Array<{ scorers: Array<{ type: string; spec?: unknown }>; severity?: string }>) {
   return [
     { id: "goal_model", depends_on: [], acceptance_specs: [] },
@@ -110,7 +132,7 @@ async function registerTwoGoalGraph() {
       id: "goal_ui",
       title: "UI",
       objective: "Render the UI using only the graph contract produced by the model goal.",
-      acceptance_specs: [acceptance("goal_ui", ["contract_order"])],
+      acceptance_specs: [acceptance("goal_ui")],
       owned_paths: ["src/ui.tsx"],
       depends_on: ["goal_model"],
       priority: "blocking",
@@ -139,25 +161,7 @@ test("architect registers graph contracts and finalizes without goal imports or 
   const { tools } = kit
 
   await tools.register_contract.execute!(
-    {
-      id: "contract_order",
-      kind: "type",
-      name: "Order",
-      producer_goal_id: "goal_model",
-      consumer_goal_ids: ["goal_ui"],
-      summary: "Shared order status model for UI rendering.",
-      ir: {
-        kind: "type",
-        name: "Order",
-        fields: [
-          {
-            name: "status",
-            typeExpr: "string",
-            valueDomain: { kind: "literal_union", values: ["new", "paid"] },
-          },
-        ],
-      },
-    } as any,
+    contractRef() as any,
     {} as any,
   )
   await tools.register_dependency_contract.execute!(
@@ -190,6 +194,31 @@ test("contract covered by related essential contract_audit has no audit coverage
   })
 
   expect(findings).toHaveLength(0)
+})
+
+test("contract_audit scorer referencing absent graph contract is a blocker", () => {
+  const findings = validateArchitectContractGraph({
+    goals: graphGoals([contractAuditSpec(["missing_contract"])]),
+    graph: baseGraph(["contract_order"]),
+  })
+
+  expect(findings).toContainEqual(
+    expect.objectContaining({
+      code: "contract_audit_unknown_contract",
+      severity: "blocker",
+      scope: { goal_ids: ["goal_ui"], contract_ids: ["missing_contract"] },
+    }),
+  )
+})
+
+test("known contract_audit ids avoid unknown blocker and audit coverage concern", () => {
+  const findings = validateArchitectContractGraph({
+    goals: graphGoals([contractAuditSpec(["contract_order"])]),
+    graph: baseGraph(["contract_order"]),
+  })
+
+  expect(findings.some((finding) => finding.code === "contract_audit_unknown_contract")).toBe(false)
+  expect(findings.some((finding) => finding.code === "contract_without_audit_coverage")).toBe(false)
 })
 
 test("contract without essential contract_audit coverage reports audit coverage concern", () => {
@@ -268,6 +297,36 @@ test("typed closed-domain contract without scorers reports only unified audit co
   expect(findings.some((finding) => finding.code === "contract_audit_missing_criterion")).toBe(false)
 })
 
+test("incident regression flags only drifted contract_audit ids as blockers", () => {
+  const graphIDs = [
+    "ct-types-viewmodel",
+    "ct-types-messageargs",
+    "ct-data-accessor",
+    "ct-sync-broadcast-fn",
+    "ct-mcp-export",
+  ]
+  const auditIDs = [
+    "ct-data-keyvalueitem",
+    "ct-data-hookresult",
+    "ct-config-accessor",
+    "ct-sync-broadcast-fn",
+    "ct-types-viewmodel",
+  ]
+  const findings = validateArchitectContractGraph({
+    goals: graphGoals([contractAuditSpec(auditIDs)]),
+    graph: baseGraph(graphIDs),
+  }).filter((finding) => finding.code === "contract_audit_unknown_contract")
+
+  expect(findings).toHaveLength(3)
+  expect(findings.map((finding) => finding.scope.contract_ids?.[0]).sort()).toEqual([
+    "ct-config-accessor",
+    "ct-data-hookresult",
+    "ct-data-keyvalueitem",
+  ])
+  expect(findings.some((finding) => finding.scope.contract_ids?.[0] === "ct-sync-broadcast-fn")).toBe(false)
+  expect(findings.some((finding) => finding.scope.contract_ids?.[0] === "ct-types-viewmodel")).toBe(false)
+})
+
 test("submit_architect blocks single large goal decomposition", async () => {
   const kit = createArchitectOutputTools({ existingGoals: [], workDir: process.cwd() })
   await kit.tools.register_goal.execute!(
@@ -296,6 +355,36 @@ test("submit_architect blocks single large goal decomposition", async () => {
 
   expect(out).toContain("BLOCKERS")
   expect(out).toContain("insufficient_goal_decomposition")
+  expect(kit.getCollector().finalized).toBe(false)
+})
+
+test("submit_architect blocks contract_audit ids absent from graph contracts", async () => {
+  const kit = await registerTwoGoalGraph()
+  await kit.tools.register_contract.execute!(contractRef() as any, {} as any)
+  await kit.tools.register_dependency_contract.execute!(
+    {
+      from_goal_id: "goal_model",
+      to_goal_id: "goal_ui",
+      reason: "contract",
+      contract_ids: ["contract_order"],
+    } as any,
+    {} as any,
+  )
+  const uiGoal = kit.getCollector().goals.find((goal) => goal.id === "goal_ui")
+  expect(uiGoal).toBeDefined()
+  uiGoal!.acceptance_specs = [acceptance("goal_ui", ["missing_contract"])]
+
+  const out = await kit.tools.submit_architect.execute!(
+    {
+      summary: "Graph with a drifted audit reference.",
+      decomposition_analysis:
+        "The model goal owns the reusable data contract, while the UI goal consumes that handoff for rendering. The dependency is necessary and the goals are individually modest, but the audit reference is intentionally drifted for validation.",
+    } as any,
+    {} as any,
+  )
+
+  expect(out).toContain("BLOCKERS")
+  expect(out).toContain("contract_audit_unknown_contract")
   expect(kit.getCollector().finalized).toBe(false)
 })
 
@@ -342,6 +431,89 @@ test("submit_architect reports zero graph contracts as a concern without blockin
   expect(out).toContain("PASS")
   expect(out).toContain("missing_contract_graph_contract")
   expect(kit.getCollector().finalized).toBe(true)
+})
+
+test("register_goal rejects unknown contract_audit ids without mutating collector goals", async () => {
+  const kit = await registerTwoGoalGraph()
+  const before = JSON.stringify(kit.getCollector().goals)
+
+  const out = await kit.tools.register_goal.execute!(
+    {
+      id: "goal_ui",
+      title: "UI",
+      objective: "Render the UI using a graph contract that has not been registered.",
+      acceptance_specs: [acceptance("goal_ui", ["missing_contract"])],
+      owned_paths: ["src/ui.tsx"],
+      depends_on: ["goal_model"],
+      priority: "blocking",
+      kind: "feature",
+      requirement_ids: ["REQ-1"],
+    } as any,
+    {} as any,
+  )
+
+  expect(out).toContain("unknown contract id(s): missing_contract")
+  expect(out).toContain("collector unchanged")
+  expect(JSON.stringify(kit.getCollector().goals)).toBe(before)
+})
+
+test("modify_goal rejects unknown contract_audit ids without mutating prior goal", async () => {
+  const kit = await registerTwoGoalGraph()
+  const before = JSON.stringify(kit.getCollector().goals.find((goal) => goal.id === "goal_ui"))
+
+  const out = await kit.tools.modify_goal.execute!(
+    {
+      id: "goal_ui",
+      updates: {
+        acceptance_specs: [acceptance("goal_ui", ["missing_contract"])],
+      },
+    } as any,
+    {} as any,
+  )
+
+  expect(out).toContain("unknown contract id(s): missing_contract")
+  expect(out).toContain("collector unchanged")
+  expect(JSON.stringify(kit.getCollector().goals.find((goal) => goal.id === "goal_ui"))).toBe(before)
+})
+
+test("register_goal and modify_goal accept contract_audit ids after contract registration", async () => {
+  const kit = await registerTwoGoalGraph()
+  const registerContractOut = await kit.tools.register_contract.execute!(contractRef() as any, {} as any)
+  expect(registerContractOut).toContain("Registered contract ids: contract_order")
+
+  const registerGoalOut = await kit.tools.register_goal.execute!(
+    {
+      id: "goal_ui",
+      title: "UI",
+      objective: "Render the UI using only the graph contract produced by the model goal.",
+      acceptance_specs: [acceptance("goal_ui", ["contract_order"])],
+      owned_paths: ["src/ui.tsx"],
+      depends_on: ["goal_model"],
+      priority: "blocking",
+      kind: "feature",
+      requirement_ids: ["REQ-1"],
+    } as any,
+    {} as any,
+  )
+  expect(registerGoalOut).toContain('OK: goal "goal_ui" updated in-place')
+
+  const modifyGoalOut = await kit.tools.modify_goal.execute!(
+    {
+      id: "goal_ui",
+      updates: {
+        acceptance_specs: [acceptance("goal_ui", ["contract_order"])],
+      },
+    } as any,
+    {} as any,
+  )
+
+  expect(modifyGoalOut).toContain('OK: goal "goal_ui" fields updated')
+  expect(kit.getCollector().goals.find((goal) => goal.id === "goal_ui")?.acceptance_specs[0]?.scorers[0]).toMatchObject(
+    {
+      type: "contract_audit",
+      spec: { contract_ids: ["contract_order"] },
+    },
+  )
 })
 
 test("register_goal schema rejects malformed scorer type before execute", () => {
