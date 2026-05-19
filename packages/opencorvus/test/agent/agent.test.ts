@@ -220,19 +220,13 @@ test("native stage agent registry tool surfaces match role boundaries", async ()
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      const readonlyStageAgents = ["requirements", "architect", "intent-analysis"] as const
-      const allowedReadonly = [
+      const baseReadonly = [
         "read_file",
         "find_files",
         "search_code",
         "list_directory",
         "memory_search",
         "memory_get",
-        // websearch is part of the read-only research surface (BUG② fix):
-        // these stage agents must verify external facts, not assume them.
-        // webfetch stays out — they search by query, they don't fetch
-        // operator-supplied URLs (that is explore/build/coding/general).
-        "websearch",
         "todoread",
         "todowrite",
       ]
@@ -249,18 +243,38 @@ test("native stage agent registry tool surfaces match role boundaries", async ()
         "propose_task",
       ]
 
-      for (const name of readonlyStageAgents) {
+      // requirements / architect make durable technical decisions; on
+      // greenfield they must verify current framework/library choices, so
+      // they keep `websearch` (BUG① sibling — explore is the other research
+      // surface). webfetch stays out — they search by query, they do not
+      // fetch operator-supplied URLs.
+      const webResearchStageAgents = ["requirements", "architect"] as const
+      const allowedWebResearch = [...baseReadonly, "websearch"]
+      for (const name of webResearchStageAgents) {
         const agent = await Agent.get(name)
         expect(agent).toBeDefined()
-        expect(agent?.tools?.include?.sort()).toEqual([...allowedReadonly].sort())
+        expect(agent?.tools?.include?.sort()).toEqual([...allowedWebResearch].sort())
+        expect(agent?.tools?.include).toContain("websearch")
         for (const tool of forbidden) {
           expect(agent?.tools?.include).not.toContain(tool)
         }
       }
 
+      // intent-analysis is the first cheap classification step. It must NOT
+      // research — websearch ×8 at the intent stage was the observed
+      // anti-pattern (2026-05-19). websearch is forbidden here.
+      const intent = await Agent.get("intent-analysis")
+      expect(intent).toBeDefined()
+      expect(intent?.tools?.include?.sort()).toEqual([...baseReadonly].sort())
+      for (const tool of [...forbidden, "websearch"]) {
+        expect(intent?.tools?.include).not.toContain(tool)
+      }
+
+      // design-analyst owns mirror extraction (URL/Figma/pixels); generic
+      // websearch is redundant with that chain and risks score loops.
       const design = await Agent.get("design-analyst")
       expect(design?.tools?.include).toContain("url_screenshot")
-      expect(design?.tools?.include).toContain("websearch")
+      expect(design?.tools?.include).not.toContain("websearch")
       expect(design?.tools?.include).not.toContain("webpage_render")
       expect(design?.tools?.include).not.toContain("task")
 

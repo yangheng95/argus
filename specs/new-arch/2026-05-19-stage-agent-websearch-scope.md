@@ -63,3 +63,34 @@ orchestrator（agent.ts diff: include 新增 `explore`）现在会主动派 expl
 - 断言: explore/requirements/architect/design-analyst/intent-analysis 解析后工具集均含 `websearch`；
   context-tools 默认（无 env）即产出 `websearch`；`web_search` 名不再存在（防双源回归）。
 - 复测原失败任务形态: explore 调研类任务能调 websearch，不再退化 webfetch 撞反爬。
+
+## 5. 用户审查纠偏（2026-05-19，rule 35 — 显式标注，非静默重写）
+
+复测 task tsk_e40e99078001TKQEEbeisRhuFw（同"写简历"请求，本修复 push 后）暴露原方案选错靶：
+
+- 同一 `Model tried to call unavailable tool 'websearch'` 报错有**两个病灶**。原方案
+  只采样到第一个任务的 explore 路径（rule 35 单点泛化违规），漏掉了：**编排器自己**
+  （deepseek-v4-flash）面对非代码任务时 `skill(research-report)` + `todowrite` +
+  `websearch` 亲自下场。host 守门正确拦截（agent.ts:278-296 故意不给编排器 websearch）。
+- 真根因是编排器**角色纪律**（rule 6.1：host 守门已正确工作，修 prompt 不修 host）。
+- 原方案给 intent-analysis / design-analyst 加 websearch 属**过度扩张**（rule 5）：
+  intent-analysis 实测在分类阶段 `websearch ×8` = 反模式；design-analyst 本职 mirror
+  提取，通用 web 搜索与其证据链冗余且诱发 score loop。
+
+修订（保留 §1-4 的单源收敛 + exa-mcp + explore/requirements/architect websearch）：
+
+| Agent | §1-4 原方案 | 修订后 | 理由 |
+|---|---|---|---|
+| explore | 加 websearch | **保留** | 名副其实调研子 agent，webfetch 被反爬不够 |
+| requirements / architect | 加 websearch | **保留** | 产出持久技术决策，greenfield 核实选型是本职 |
+| intent-analysis | 加 websearch | **回退** | 首个廉价分类步，研究违背职责（×8 实证） |
+| design-analyst | 加 websearch | **回退** | 本职 mirror 提取，通用 web 搜索冗余 |
+| orchestrator | 未涉及 | **新增 prompt 纪律** | `orchestrator-core.txt` Mission 段：deliverable-shape-agnostic 禁止自产；显式禁 skill/websearch/webfetch/todowrite 自干，一律 dispatch |
+
+context-tools.ts / exa-mcp.ts 单源收敛与 explore/requirements/architect websearch **不回退**
+（rule 8 正确且与本纠偏正交）。
+
+### 仍未解决（需用户决策，超出 1/2 范围）
+"写一份学术简历"这类纯文档/调研交付物与代码流水线（intent→requirements→architect→build
+→integrity + pnpm build/test/typecheck 检查）根本不匹配。编排器纪律修好后会正确 dispatch，
+但下游代码管道是否能产出非代码交付物，是独立的架构决策（原方案 §未覆盖）。

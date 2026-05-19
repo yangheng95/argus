@@ -17,10 +17,14 @@ describe("agent context tools", () => {
     })
   })
 
-  // BUG② regression: even with the shared set offering websearch, each stage
-  // agent only receives it because its tools.include opts in. filterAgentTools
-  // is the include gate that previously (silently) stripped it.
-  for (const agentName of ["requirements", "architect", "design-analyst", "intent-analysis"] as const) {
+  // The shared set offers websearch, but each agent only receives it if its
+  // tools.include opts in (filterAgentTools is the include gate). Decision
+  // matrix locked 2026-05-19 after intent-analysis abused websearch ×8 at the
+  // classification stage:
+  //   requirements / architect  → keep  (durable greenfield tech decisions)
+  //   design-analyst            → drop  (owns mirror extraction; redundant)
+  //   intent-analysis           → drop  (first cheap classifier; must not research)
+  for (const agentName of ["requirements", "architect"] as const) {
     test(`${agentName} resolves websearch through its include whitelist`, async () => {
       await Instance.provide({
         directory: process.cwd(),
@@ -28,6 +32,18 @@ describe("agent context tools", () => {
           const tools = await filterAgentTools(createAgentContextTools(), agentName)
           expect("websearch" in tools).toBe(true)
           expect("web_search" in tools).toBe(false)
+        },
+      })
+    })
+  }
+
+  for (const agentName of ["design-analyst", "intent-analysis"] as const) {
+    test(`${agentName} does NOT resolve websearch (research is not its job)`, async () => {
+      await Instance.provide({
+        directory: process.cwd(),
+        fn: async () => {
+          const tools = await filterAgentTools(createAgentContextTools(), agentName)
+          expect("websearch" in tools).toBe(false)
         },
       })
     })
