@@ -72,10 +72,10 @@ export type BuildFileChange = z.infer<typeof BuildFileChange>
  * whether to call `deliver`, `build` again with feedback, or stop.
  *
  * `status="passed"` means the build agent believes every acceptance_spec is met
- * AND its own verification commands passed. For explicit no-edit analysis
- * requests, it means the requested investigation completed and left no project
- * file changes. `deliver` still runs as an adversarial double-check — build's
- * self-report is trust-but-verify.
+ * AND its own verification commands passed. For honest no-change implementation
+ * outcomes, it may also mean the requested behavior was already present and no
+ * project file changes were needed. `deliver` still runs as an adversarial
+ * double-check — build's self-report is trust-but-verify.
  *
  * When `status="failed"` the payload MUST describe why (`error`), not just be a
  * rejection. The orchestrator wants actionable feedback so it can decide
@@ -86,7 +86,7 @@ const BuildResultBase = {
   summary: z
     .string()
     .min(1)
-    .describe("One-line plain-prose description of what changed, what was found, or why it failed."),
+    .describe("One-line plain-prose description of what changed or why it failed."),
   files_changed: z
     .array(BuildFileChange)
     .describe(

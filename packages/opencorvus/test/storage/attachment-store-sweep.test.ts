@@ -5,7 +5,7 @@
  *
  * The store is content-addressed and write-only — every part / session /
  * task that ever referenced a file leaves its bytes behind on disk
- * forever. Now that delivery's compare_visual_artifacts persists through
+ * forever. Now that compare_visual_artifacts persists through
  * the store instead of inlining base64 into part.data, an unswept store
  * just moves the unbounded growth from DB to FS. These tests pin the
  * sweep contract:

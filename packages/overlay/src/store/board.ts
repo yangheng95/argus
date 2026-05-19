@@ -543,10 +543,34 @@ export function scheduleBoard(delay = 0): void {
 
 // ── Derived accessors ──
 
-/** Returns the root task sessionID (mirrors app.js rootTaskSessionID). */
+/**
+ * Returns the selected task's ROOT sessionID.
+ *
+ * R5.1 item 9: this resolver must not look only at `boardStore.board` — a
+ * task can be selected (boardStore.selectedTaskID) before its board has
+ * loaded, in which case the root session lives on the task-list entry. So we
+ * prefer the loaded board's task sessionID and fall back to the
+ * selectedTaskID's entry in `boardStore.tasks`. Returns "" when the selected
+ * task's root session is not yet resolved — callers MUST treat "" as
+ * "do not write /config" (never silently fall back to the project config).
+ */
 export function rootTaskSessionID(): string {
-  const sessionID = boardStore.board?.task?.sessionID;
-  return typeof sessionID === "string" ? sessionID : "";
+  const boardSession = boardStore.board?.task?.sessionID;
+  if (typeof boardSession === "string" && boardSession) return boardSession;
+  const taskID = boardStore.selectedTaskID;
+  if (!taskID) return "";
+  const entry = boardStore.tasks.find((item: any) => item?.task?.id === taskID);
+  return typeof entry?.task?.sessionID === "string" ? entry.task.sessionID : "";
+}
+
+/**
+ * True when a task is selected (a task scope is active). Under a selected
+ * task the model picker must target the task-root session config and NEVER
+ * the project /config — even when the root session is not yet resolved
+ * (R5.1 item 9). When false, the picker is in project scope.
+ */
+export function hasSelectedTask(): boolean {
+  return !!boardStore.selectedTaskID;
 }
 
 

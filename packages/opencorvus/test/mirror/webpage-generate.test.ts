@@ -44,7 +44,7 @@ describe("webpage-generate dependency guards", () => {
     expect(parsed.content).not.toMatch(/static mode|Live-server mode/i)
   })
 
-  test("reference generation skills are design-analysis only and never claim delivery gates", () => {
+  test("reference generation skills are design-analysis only and never claim acceptance gates", () => {
     for (const md of [webpageGenerateMd, imageGenerateMd]) {
       const parsed = matter(md)
       expect(parsed.data.stage).toBe("design_analyst")

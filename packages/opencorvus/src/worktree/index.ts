@@ -886,6 +886,194 @@ export namespace Worktree {
     return true
   }
 
+  type Gitlink = { object: string; path: string }
+
+  async function readGitlinks(directory: string): Promise<Gitlink[]> {
+    const listed = await runGit(["ls-files", "--stage", "-z"], {
+      cwd: directory, timeoutProfile: "default",
+    })
+    if (listed.exitCode !== 0) {
+      throw new Error(errorText(listed) || "Failed to read gitlinks")
+    }
+
+    return new TextDecoder()
+      .decode(listed.stdout)
+      .split("\0")
+      .flatMap((record): Gitlink[] => {
+        if (!record) return []
+        const match = record.match(/^160000\s+([0-9a-f]+)\s+\d+\t(.+)$/)
+        if (!match?.[1] || !match[2]) return []
+        return [{ object: match[1], path: match[2] }]
+      })
+  }
+
+  async function readUrlBackedSubmodulePaths(directory: string): Promise<Set<string>> {
+    if (!(await exists(path.join(directory, ".gitmodules")))) return new Set()
+
+    const paths = await runGit(["config", "-f", ".gitmodules", "--get-regexp", "^submodule\\..*\\.path$"], {
+      cwd: directory, timeoutProfile: "fast",
+    })
+    if (paths.exitCode === 1) return new Set()
+    if (paths.exitCode !== 0) {
+      throw new Error(errorText(paths) || "Failed to read .gitmodules paths")
+    }
+
+    const result = new Set<string>()
+    for (const line of outputText(paths.stdout).split("\n")) {
+      const trimmed = line.trim()
+      if (!trimmed) continue
+      const separator = trimmed.search(/\s/)
+      if (separator < 0) continue
+      const key = trimmed.slice(0, separator)
+      const submodulePath = trimmed.slice(separator).trim()
+      const urlKey = key.replace(/\.path$/, ".url")
+      const url = await runGit(["config", "-f", ".gitmodules", "--get", urlKey], {
+        cwd: directory, timeoutProfile: "fast",
+      })
+      if (url.exitCode === 0 && outputText(url.stdout)) result.add(submodulePath)
+    }
+    return result
+  }
+
+  async function isGitWorkTree(directory: string) {
+    const checked = await runGit(["rev-parse", "--is-inside-work-tree"], {
+      cwd: directory, timeoutProfile: "fast",
+    }).catch(() => undefined)
+    return checked?.exitCode === 0 && outputText(checked.stdout) === "true"
+  }
+
+  function pathInside(root: string, relativePath: string) {
+    const base = path.resolve(root)
+    const target = path.resolve(base, relativePath)
+    const relative = path.relative(base, target)
+    if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) {
+      throw new Error(`Gitlink path escapes worktree root: ${relativePath}`)
+    }
+    return target
+  }
+
+  async function updateUrlBackedGitlinks(directory: string, paths: string[], input?: { force?: boolean }) {
+    if (!paths.length) return
+
+    const args = ["-c", "protocol.file.allow=always", "submodule", "update", "--init"]
+    if (input?.force) args.push("--force")
+    args.push("--", ...paths)
+
+    const updated = await runGit(args, {
+      cwd: directory, timeoutProfile: "network",
+    })
+    if (updated.exitCode !== 0) {
+      throw new Error(errorText(updated) || "Failed to update URL-backed gitlinks")
+    }
+  }
+
+  async function materializeLocalGitlink(input: {
+    sourceRoot: string
+    targetRoot: string
+    gitlink: Gitlink
+  }) {
+    const source = pathInside(input.sourceRoot, input.gitlink.path)
+    const target = pathInside(input.targetRoot, input.gitlink.path)
+    if (!(await isGitWorkTree(source))) {
+      throw new Error(
+        `Gitlink ${input.gitlink.path} has no .gitmodules URL and no local nested Git checkout at ${source}`,
+      )
+    }
+
+    const commit = await runGit(["cat-file", "-e", `${input.gitlink.object}^{commit}`], {
+      cwd: source, timeoutProfile: "fast",
+    })
+    if (commit.exitCode !== 0) {
+      throw new Error(
+        `Local nested Git checkout ${source} does not contain gitlink commit ${input.gitlink.object}: ${errorText(commit)}`,
+      )
+    }
+
+    await fs.rm(target, { recursive: true, force: true })
+    await fs.mkdir(path.dirname(target), { recursive: true })
+
+    const cloned = await runGit(["-c", "protocol.file.allow=always", "clone", "--local", "--no-checkout", source, target], {
+      cwd: input.targetRoot, timeoutProfile: "network",
+    })
+    if (cloned.exitCode !== 0) {
+      throw new Error(errorText(cloned) || `Failed to clone local gitlink ${input.gitlink.path}`)
+    }
+
+    const reset = await runGit(["reset", "--hard", input.gitlink.object], {
+      cwd: target, timeoutProfile: "default",
+    })
+    if (reset.exitCode !== 0) {
+      throw new Error(errorText(reset) || `Failed to checkout local gitlink ${input.gitlink.path}`)
+    }
+  }
+
+  async function materializeGitlinks(input: { sourceRoot: string; targetRoot: string; force?: boolean }) {
+    const gitlinks = await readGitlinks(input.targetRoot)
+    if (!gitlinks.length) return
+
+    const urlBackedPaths = await readUrlBackedSubmodulePaths(input.targetRoot)
+    const urlBacked = gitlinks.filter((gitlink) => urlBackedPaths.has(gitlink.path))
+    await updateUrlBackedGitlinks(input.targetRoot, urlBacked.map((gitlink) => gitlink.path), {
+      force: input.force,
+    })
+
+    for (const gitlink of gitlinks) {
+      if (urlBackedPaths.has(gitlink.path)) continue
+      await materializeLocalGitlink({
+        sourceRoot: input.sourceRoot,
+        targetRoot: input.targetRoot,
+        gitlink,
+      })
+    }
+
+    for (const gitlink of gitlinks) {
+      const target = pathInside(input.targetRoot, gitlink.path)
+      if (!(await isGitWorkTree(target))) {
+        throw new Error(`Gitlink ${gitlink.path} was not materialized at ${target}`)
+      }
+      const source = pathInside(input.sourceRoot, gitlink.path)
+      await materializeGitlinks({
+        sourceRoot: (await isGitWorkTree(source)) ? source : target,
+        targetRoot: target,
+        force: input.force,
+      })
+    }
+  }
+
+  async function resetMaterializedGitlinks(directory: string) {
+    const gitlinks = await readGitlinks(directory)
+    for (const gitlink of gitlinks) {
+      const target = pathInside(directory, gitlink.path)
+      if (!(await isGitWorkTree(target))) {
+        throw new Error(`Gitlink ${gitlink.path} was not materialized at ${target}`)
+      }
+
+      const reset = await runGit(["reset", "--hard"], {
+        cwd: target, timeoutProfile: "default",
+      })
+      if (reset.exitCode !== 0) {
+        throw new Error(errorText(reset) || `Failed to reset gitlink ${gitlink.path}`)
+      }
+
+      const clean = await runGit(["clean", "-ffdx"], {
+        cwd: target, timeoutProfile: "default",
+      })
+      if (clean.exitCode !== 0) {
+        throw new Error(errorText(clean) || `Failed to clean gitlink ${gitlink.path}`)
+      }
+
+      await resetMaterializedGitlinks(target)
+    }
+  }
+
+  async function initializeSubmodules(input: { sourceRoot: string; targetRoot: string }) {
+    await materializeGitlinks(input).catch((error) => {
+      const message = error instanceof Error ? error.message : String(error)
+      log.error("worktree gitlink materialization failed", { directory: input.targetRoot, message })
+      throw new CreateFailedError({ message })
+    })
+  }
+
   export const create = fn(CreateInput.optional(), async (input) => {
     if (!Project.isGitRepo(Instance.directory)) {
       throw new NotGitError({ message: "Worktrees are only supported for git projects" })
@@ -991,6 +1179,20 @@ export namespace Worktree {
         })
         throw new CreateFailedError({ message })
       }
+
+      await initializeSubmodules({ sourceRoot: primaryDir, targetRoot: info.directory }).catch((error) => {
+        const message = error instanceof Error ? error.message : String(error)
+        GlobalBus.emit("event", {
+          directory: info.directory,
+          payload: {
+            type: Event.Failed.type,
+            properties: {
+              message,
+            },
+          },
+        })
+        throw error
+      })
 
       const started = await runStartScripts(info.directory, { projectID, extra })
       if (!started) {
@@ -1298,26 +1500,15 @@ export namespace Worktree {
         throw new ResetFailedError({ message: errorText(clean) || "Failed to clean worktree" })
       }
 
-      const update = await runGit(["submodule", "update", "--init", "--recursive", "--force"], {
-        cwd: worktreePath, timeoutProfile: "network",
-      })
-      if (update.exitCode !== 0) {
-        throw new ResetFailedError({ message: errorText(update) || "Failed to update submodules" })
-      }
+      await materializeGitlinks({ sourceRoot: primaryInfo.directory, targetRoot: worktreePath, force: true }).catch(
+        (error) => {
+          throw new ResetFailedError({ message: error instanceof Error ? error.message : String(error) })
+        },
+      )
 
-      const subReset = await runGit(["submodule", "foreach", "--recursive", "git reset --hard"], {
-        cwd: worktreePath, timeoutProfile: "default",
+      await resetMaterializedGitlinks(worktreePath).catch((error) => {
+        throw new ResetFailedError({ message: error instanceof Error ? error.message : String(error) })
       })
-      if (subReset.exitCode !== 0) {
-        throw new ResetFailedError({ message: errorText(subReset) || "Failed to reset submodules" })
-      }
-
-      const subClean = await runGit(["submodule", "foreach", "--recursive", "git clean -fdx"], {
-        cwd: worktreePath, timeoutProfile: "default",
-      })
-      if (subClean.exitCode !== 0) {
-        throw new ResetFailedError({ message: errorText(subClean) || "Failed to clean submodules" })
-      }
 
       const status = await runGit(["status", "--porcelain=v1"], {
         cwd: worktreePath, timeoutProfile: "default",

@@ -5,7 +5,7 @@ import { Shell } from "@/shell/shell"
 import { Config } from "@/config/config"
 import { Skill } from "@/skill"
 import { PermissionNext } from "@/permission/next"
-import { SessionContext } from "./context"
+import { resolveSessionOverlay } from "@/agent/model"
 
 import PROMPT_SYSTEM from "./prompt/system.txt"
 import type { Provider } from "@/provider/provider"
@@ -66,7 +66,7 @@ export namespace SystemPrompt {
       return [
         "## Response Language",
         "",
-        "Please respond in English. Unless the user explicitly asks for another language, user-facing summaries, questions, status updates, plans, and delivery notes should be written in English; keep code, commands, file paths, API names, and required source text unchanged.",
+        "Please respond in English. Unless the user explicitly asks for another language, user-facing summaries, questions, status updates, plans, and acceptance notes should be written in English; keep code, commands, file paths, API names, and required source text unchanged.",
       ].join("\n")
     }
     return
@@ -74,12 +74,12 @@ export namespace SystemPrompt {
 
   /** Resolve the core system prompt string, respecting config.prompt.core_header override. */
   export async function instructions(): Promise<string> {
-    const cfg = Config.mergeOverlay(await Config.get(), SessionContext.overlay() ?? {})
+    const cfg = Config.mergeOverlay(await Config.get(), (await resolveSessionOverlay()) ?? {})
     return cfg.prompt?.["core_header"] ?? PROMPT_SYSTEM
   }
 
   export async function provider(model: Provider.Model) {
-    const cfg = Config.mergeOverlay(await Config.get(), SessionContext.overlay() ?? {})
+    const cfg = Config.mergeOverlay(await Config.get(), (await resolveSessionOverlay()) ?? {})
     const override = cfg.prompt?.["core_header"]
     if (override) return [override]
     return [PROMPT_SYSTEM]
@@ -133,7 +133,7 @@ export namespace SystemPrompt {
     return [
       "## Skill Policy",
       "",
-      "Skills are curated, tested workflows for recurring task shapes (webpage cloning, spec research, delivery verification, etc.). Each skill bundles the task contract, evidence expectations, and resource files.",
+      "Skills are curated, tested workflows for recurring task shapes (webpage cloning, spec research, acceptance verification, etc.). Each skill bundles the task contract, evidence expectations, and resource files.",
       "",
       "### Check First",
       "1. Before planning, scan `<available_skills>` below for any entry whose description matches the current task.",

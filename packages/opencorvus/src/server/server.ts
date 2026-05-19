@@ -72,6 +72,9 @@ export namespace Server {
             else if (err instanceof Provider.ModelNotFoundError) status = 400
             else if (err instanceof DirectoryRequiredError) status = 400
             else if (err instanceof Filesystem.InvalidDirectoryError) status = 400
+            // R5.1 item 2: a child session does not own a config overlay;
+            // "fix your input — target the root session" is a 400.
+            else if (err.name === "ChildSessionConfigError") status = 400
             // WorktreeNotGitError is a precondition (the directory is reachable
             // and valid, but does not contain a `.git` repository). 412 lets
             // the overlay distinguish "fix your input" (400) from "init the

@@ -137,6 +137,7 @@ interface PendingIntegrityPayload {
   emittedAt: number;
   verdict: "pass" | "concerns" | "needs_correction";
   summary: string;
+  acceptance?: NonNullable<CardNode["integrity"]>["acceptance"];
   dimensions: Array<{
     id: "requirement_fidelity" | "technical_feasibility" | "hallucination" | "solution_quality";
     verdict: "pass" | "concerns" | "needs_correction";
@@ -346,9 +347,6 @@ export function applyEvent(event: any): void {
   }
   if (type === "review.stream.chunk") {
     return applyVisibleCardTreeEvent(() => handleReviewStreamChunk(event));
-  }
-  if (type === "delivery.review.completed") {
-    return applyVisibleCardTreeEvent(() => handleDeliveryReviewCompleted(event));
   }
   if (type === "integrity.review.completed") {
     return applyVisibleCardTreeEvent(() => handleIntegrityCompleted(event));
@@ -991,7 +989,7 @@ function integrityCardID(sessionID: string): string {
   return sessionCardID("integrity", sessionID);
 }
 
-type ReviewStreamPhase = "integrity" | "delivery";
+type ReviewStreamPhase = "integrity";
 type ReviewStreamStep = "manifest" | "runtime" | "visual" | "specialist" | "agent" | "post_repair";
 
 interface RunningReviewPayload {
@@ -1008,7 +1006,7 @@ interface RunningReviewPayload {
 const runningReviews = new Map<string, RunningReviewPayload>()
 
 function normalizeReviewPhase(raw: string): ReviewStreamPhase {
-  if (raw === "integrity" || raw === "delivery") return raw;
+  if (raw === "integrity") return raw;
   throw new Error(`review.stream phase unsupported: ${raw}`);
 }
 
@@ -1024,18 +1022,9 @@ function normalizeReviewStep(raw: string): ReviewStreamStep {
   throw new Error(`review.stream progress currentStep unsupported: ${raw}`);
 }
 
-function deliveryReviewCardID(reviewID: string): string {
-  const match = /^delivery:([^:]+):(\d+)$/.exec(reviewID);
-  if (!match) throw new Error(`delivery reviewID must match delivery:<taskID>:<iteration>, got ${reviewID}`);
-  return `review:delivery:${match[1]}:${match[2]}`;
-}
-
 function reviewCardID(p: Pick<RunningReviewPayload, "phase" | "reviewID" | "sessionID">): string {
-  if (p.phase === "integrity") {
-    if (!p.sessionID) throw new Error(`review.stream.${p.phase} missing sessionID (reviewID=${p.reviewID})`);
-    return integrityCardID(p.sessionID);
-  }
-  return deliveryReviewCardID(p.reviewID);
+  if (!p.sessionID) throw new Error(`review.stream.${p.phase} missing sessionID (reviewID=${p.reviewID})`);
+  return integrityCardID(p.sessionID);
 }
 
 function handleReviewStreamStarted(event: any): void {
@@ -1105,20 +1094,18 @@ function handleReviewStreamChunk(event: any): void {
   if (!delta) return;
 
   const running = runningReviews.get(reviewID);
-  const completedCardID = phase === "delivery"
-    ? deliveryReviewCardID(reviewID)
-    : /^integrity:(.+)$/.test(reviewID)
-      ? integrityCardID(reviewID.replace(/^integrity:/, ""))
-      : "";
+  const completedCardID = /^integrity:(.+)$/.test(reviewID)
+    ? integrityCardID(reviewID.replace(/^integrity:/, ""))
+    : "";
   const completedCard = completedCardID ? cardTreeStore.cards[completedCardID] : undefined;
-  if (completedCard?.integrity || completedCard?.deliveryReview) return;
+  if (completedCard?.integrity) return;
   if (!running) {
     throw new Error(`review.stream.chunk arrived before started (taskID=${taskID}, reviewID=${reviewID})`);
   }
   const cardID = reviewCardID({ ...running, phase });
   const existing = cardTreeStore.cards[cardID];
   // Completed event already upserted the verdict — ignore trailing chunks.
-  if (existing?.integrity || existing?.deliveryReview) return;
+  if (existing?.integrity) return;
   if (!existing) {
     throw new Error(`review.stream.chunk missing materialized card (taskID=${taskID}, reviewID=${reviewID})`);
   }
@@ -1169,22 +1156,18 @@ function ensureIntegritySession(sessionID: string, time: number): { session: Ses
 /** Upsert the running-phase integrity session card. Integrity is now a normal
  *  agent session, so lifecycle events target the session card directly. */
 function materializeRunningReview(p: RunningReviewPayload): void {
-  if (p.phase === "integrity") {
-    if (!p.sessionID) throw new Error(`review.stream integrity missing sessionID (reviewID=${p.reviewID})`);
-    materializeRunningIntegrity({
-      taskID: p.taskID,
-      reviewID: p.reviewID,
-      sessionID: p.sessionID,
-      startedAt: p.startedAt,
-      attempt: p.attempt,
-      elapsedMs: p.elapsedMs,
-      phase: p.phase,
-      currentStep: p.currentStep,
-      summary: p.summary,
-    });
-    return;
-  }
-  materializeRunningDeliveryReview(p);
+  if (!p.sessionID) throw new Error(`review.stream integrity missing sessionID (reviewID=${p.reviewID})`);
+  materializeRunningIntegrity({
+    taskID: p.taskID,
+    reviewID: p.reviewID,
+    sessionID: p.sessionID,
+    startedAt: p.startedAt,
+    attempt: p.attempt,
+    elapsedMs: p.elapsedMs,
+    phase: p.phase,
+    currentStep: p.currentStep,
+    summary: p.summary,
+  });
 }
 
 function materializeRunningIntegrity(p: RunningReviewPayload & { sessionID: string }): void {
@@ -1225,95 +1208,6 @@ function materializeRunningIntegrity(p: RunningReviewPayload & { sessionID: stri
   throw new Error(`integrity session card missing after ensureIntegritySession (sessionID=${p.sessionID})`);
 }
 
-function materializeRunningDeliveryReview(p: RunningReviewPayload): void {
-  const cardID = deliveryReviewCardID(p.reviewID);
-  const title = "chat.role.delivery_review";
-  const summary = p.summary || (p.currentStep ? t(`review.stream.step.${p.currentStep}`) : undefined);
-  const reviewStream = {
-    phase: "delivery" as const,
-    currentStep: p.currentStep,
-    elapsedMs: p.elapsedMs,
-    summary,
-  };
-  const existing = cardTreeStore.cards[cardID];
-  if (existing?.deliveryReview) return;
-  if (existing) {
-    setCardTreeStore("cards", cardID, {
-      ...existing,
-      status: "running",
-      title,
-      reviewStream,
-    });
-    return;
-  }
-  setCardTreeStore("cards", cardID, {
-    id: cardID,
-    kind: "review",
-    stage: "delivery_review",
-    accent: stageAccent("delivery"),
-    status: "running",
-    title,
-    parts: [],
-    childIDs: [],
-    time: p.startedAt,
-    reviewStream,
-  });
-  rebuildTopLevelOrder();
-}
-
-function handleDeliveryReviewCompleted(event: any): void {
-  const props = propsOf(event);
-  const taskID = String(props.taskID || "");
-  const reviewID = String(props.reviewID || "");
-  if (!taskID) throw new Error("delivery.review.completed missing taskID");
-  if (!reviewID) throw new Error(`delivery.review.completed missing reviewID (taskID=${taskID})`);
-  const emittedAt = Number(event?.emittedAt || event?.emitted_at || 0);
-  if (!(emittedAt > 0)) {
-    throw new Error(`delivery.review.completed missing emittedAt (taskID=${taskID}); server emitter is the single source of truth`);
-  }
-  const verdict: "accepted" | "rejected" = props.verdict === "accepted" ? "accepted" : "rejected";
-  const source: "llm" | "host_gate" = props.source === "llm" ? "llm" : "host_gate";
-  const cardID = deliveryReviewCardID(reviewID);
-  const existing = cardTreeStore.cards[cardID];
-  const deliveryReview = {
-    verdict,
-    source,
-    summary: String(props.summary || ""),
-    hostGatePassed: props.hostGatePassed === true,
-    failureKinds: Array.isArray(props.failureKinds)
-      ? props.failureKinds.filter((item: unknown): item is string => typeof item === "string")
-      : [],
-    rejectionCount: Number(props.rejectionCount || 0),
-    deferredCount: Number(props.deferredCount || 0),
-    details: Array.isArray(props.details)
-      ? props.details.filter((item: unknown): item is string => typeof item === "string")
-      : [],
-  };
-  setCardTreeStore("cards", cardID, {
-    ...(existing ?? {
-      id: cardID,
-      kind: "review" as const,
-      stage: "delivery_review",
-      accent: stageAccent("delivery"),
-      title: "chat.role.delivery_review",
-      parts: [],
-      childIDs: [],
-      time: emittedAt,
-    }),
-    status: verdict === "accepted" ? "completed" : "error",
-    title: "chat.role.delivery_review",
-    deliveryReview,
-    reviewStream: {
-      phase: "delivery",
-      currentStep: existing?.reviewStream?.currentStep,
-      elapsedMs: existing?.reviewStream?.elapsedMs,
-      summary: deliveryReview.summary,
-    },
-  });
-  runningReviews.delete(reviewID);
-  rebuildTopLevelOrder();
-}
-
 function handleIntegrityCompleted(event: any): void {
   const props = propsOf(event);
   const taskID = String(props.taskID || "");
@@ -1339,6 +1233,67 @@ function handleIntegrityCompleted(event: any): void {
   const dimensionsRaw = Array.isArray(props.dimensions) ? props.dimensions : [];
   const attempts = Number(props.attempts || 0);
   const summary = typeof props.summary === "string" ? props.summary : "";
+  if (!props.acceptance || typeof props.acceptance !== "object") {
+    // acceptance is a required field on integrity.review.completed — the
+    // opencorvus integrity agent cannot finalize without an acceptance
+    // verdict (agent.ts submit guards), so a missing one is a backend
+    // contract breach, not a renderable state. Loud-fail like the
+    // sessionID/emittedAt guards above (backend emitter is the single
+    // source of truth) instead of silently dropping the acceptance section.
+    throw new Error(
+      `integrity.review.completed missing acceptance verdict (taskID=${taskID})`,
+    );
+  }
+  const acceptanceRaw = props.acceptance as Record<string, any>;
+  const acceptance = acceptanceRaw
+    ? {
+        verdict: acceptanceRaw.verdict === "accepted" ? "accepted" as const : "rejected" as const,
+        summary: String(acceptanceRaw.summary || ""),
+        startup_verification: acceptanceRaw.startup_verification && typeof acceptanceRaw.startup_verification === "object"
+          ? {
+              attempted: acceptanceRaw.startup_verification.attempted === true,
+              command: typeof acceptanceRaw.startup_verification.command === "string" ? acceptanceRaw.startup_verification.command : undefined,
+              success: acceptanceRaw.startup_verification.success === true,
+              output: typeof acceptanceRaw.startup_verification.output === "string" ? acceptanceRaw.startup_verification.output : undefined,
+            }
+          : undefined,
+        frontend_check: acceptanceRaw.frontend_check && typeof acceptanceRaw.frontend_check === "object"
+          ? {
+              attempted: acceptanceRaw.frontend_check.attempted === true,
+              renders_correctly: typeof acceptanceRaw.frontend_check.renders_correctly === "boolean" ? acceptanceRaw.frontend_check.renders_correctly : undefined,
+              issues: Array.isArray(acceptanceRaw.frontend_check.issues)
+                ? acceptanceRaw.frontend_check.issues.filter((item: unknown): item is string => typeof item === "string")
+                : undefined,
+            }
+          : undefined,
+        deferred_checks: Array.isArray(acceptanceRaw.deferred_checks)
+          ? acceptanceRaw.deferred_checks.map((item: any) => ({
+              name: String(item?.name || ""),
+              result: String(item?.result || ""),
+              evidence: String(item?.evidence || ""),
+            }))
+          : [],
+        tool_call_evidence: Array.isArray(acceptanceRaw.tool_call_evidence)
+          ? acceptanceRaw.tool_call_evidence.map((item: any) => ({
+              tool: String(item?.tool || ""),
+              passed: item?.passed === true,
+              detail: String(item?.detail || ""),
+            }))
+          : [],
+        rejection_details: Array.isArray(acceptanceRaw.rejection_details)
+          ? acceptanceRaw.rejection_details.map((item: any) => ({
+              goal_id: typeof item?.goal_id === "string" ? item.goal_id : undefined,
+              category: String(item?.category || ""),
+              check_id: typeof item?.check_id === "string" ? item.check_id : undefined,
+              file: typeof item?.file === "string" ? item.file : undefined,
+              error: String(item?.error || ""),
+              suggestion: typeof item?.suggestion === "string" ? item.suggestion : undefined,
+              visual_spec_id: typeof item?.visual_spec_id === "string" ? item.visual_spec_id : undefined,
+            }))
+          : [],
+        launch_command: typeof acceptanceRaw.launch_command === "string" ? acceptanceRaw.launch_command : undefined,
+      }
+    : undefined;
   const verdict: "pass" | "concerns" | "needs_correction" =
     props.verdict === "pass" ? "pass"
       : props.verdict === "concerns" ? "concerns"
@@ -1354,6 +1309,7 @@ function handleIntegrityCompleted(event: any): void {
     emittedAt,
     verdict,
     summary,
+    acceptance,
     dimensions: dimensionsRaw
       .filter((d: any) => isDimensionID(String(d?.id || "")))
       .map((d: any) => {
@@ -1429,6 +1385,7 @@ function materializeIntegrity(session: SessionInfo, p: PendingIntegrityPayload):
     integrity: {
       verdict: p.verdict,
       summary: p.summary,
+      acceptance: p.acceptance,
       dimensions: p.dimensions,
       issues: p.issues,
       corrections: p.corrections,

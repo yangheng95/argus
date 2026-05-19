@@ -17,7 +17,13 @@
 // and collapsed prompt cache.
 
 import { createSignal, createMemo, createResource, For, Show } from "solid-js"
-import { getSessionConfig, patchConfig, patchSessionConfig, type SessionConfigResponse } from "../../services/config"
+import {
+  getSessionConfig,
+  patchConfig,
+  patchSessionConfig,
+  sessionConfigRefreshToken,
+  type SessionConfigResponse,
+} from "../../services/config"
 import { appStore } from "../../store/app"
 import { settingsStore } from "../../store/settings"
 import { t } from "../../utils/i18n"
@@ -27,7 +33,7 @@ import { SurfaceHeader } from "../ui/SurfaceHeader"
 
 // Tier groupings are display-only: they organize the UI list but no longer
 // affect default model resolution (all agents inherit the project default).
-const CORE_AGENTS = ["orchestrator", "build", "delivery", "general"]
+const CORE_AGENTS = ["orchestrator", "build", "integrity", "general"]
 const INTERNAL_AGENTS = ["compaction", "title", "summary"]
 
 function tierOf(name: string): "core" | "internal" | "lightweight" {
@@ -73,7 +79,7 @@ export default function AgentModelsPanel(props: { scope?: "project" | "session";
   const [refreshToken, setRefreshToken] = createSignal(0)
 
   const [sessionConfig, { mutate: mutateSessionConfig }] = createResource(
-    () => scope() === "session" && sessionID() ? `${sessionID()}:${sessionRefreshToken()}` : null,
+    () => scope() === "session" && sessionID() ? `${sessionID()}:${sessionRefreshToken()}:${sessionConfigRefreshToken()}` : null,
     async (key): Promise<SessionConfigResponse> => {
       const sid = String(key).split(":")[0]
       return await getSessionConfig(sid)

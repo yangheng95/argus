@@ -559,6 +559,32 @@ test("register_goal schema rejects malformed scorer type before execute", () => 
   }
 })
 
+test("register_goal execute normalizes canonical schema defaults before collector mutation", async () => {
+  const kit = createArchitectOutputTools({ existingGoals: [], workDir: process.cwd() })
+
+  const out = await kit.tools.register_goal.execute!(
+    {
+      id: "goal_defaults",
+      title: "Defaults",
+      objective:
+        "Define a goal whose omitted defaulted fields are normalized by the canonical goal contract schema.",
+      acceptance_specs: [acceptance("goal_defaults")],
+      owned_paths: ["src/defaults.ts"],
+    } as any,
+    {} as any,
+  )
+
+  expect(out).toContain('OK: goal "goal_defaults" registered')
+  expect(out).toContain("depends_on=[(none)]")
+  expect(kit.getCollector().goals[0]).toMatchObject({
+    id: "goal_defaults",
+    depends_on: [],
+    priority: "blocking",
+    kind: "feature",
+    requirement_ids: [],
+  })
+})
+
 test("register_dependency_contract rejects unknown contract id without mutating collector", async () => {
   const kit = await registerTwoGoalGraph()
   const out = await kit.tools.register_dependency_contract.execute!(

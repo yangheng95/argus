@@ -1,6 +1,9 @@
 import { afterEach, expect, mock, spyOn, test } from "bun:test"
 import type { GoalContractFields } from "../../src/pipeline/types"
 import { EngineProtocol } from "../../src/engine/protocol"
+import { Instance } from "../../src/project/instance"
+import { resetDatabase } from "../fixture/db"
+import { tmpdir } from "../fixture/fixture"
 
 let runnerImpl: ((input: any) => Promise<any>) | undefined
 
@@ -41,8 +44,48 @@ const baseGoal: GoalContractFields = {
 
 const baseGraph = { version: 1 as const, contracts: [], dependency_contracts: [] }
 
-afterEach(() => {
+function acceptedAcceptance() {
+  return {
+    verdict: "accepted",
+    summary: "Acceptance passed",
+    deferred_checks: [],
+    tool_call_evidence: [{ tool: "unit_test", passed: true, detail: "unit test passed" }],
+    rejection_details: [],
+  }
+}
+
+function rejectedAcceptance() {
+  return {
+    verdict: "rejected",
+    summary: "Runtime acceptance failed",
+    deferred_checks: [],
+    tool_call_evidence: [{ tool: "unit_test", passed: false, detail: "runtime smoke failed with exit code 1" }],
+    rejection_details: [
+      {
+        goal_id: "goal_ui",
+        category: "runtime",
+        error: "Runtime smoke failed before the UI could render.",
+      },
+    ],
+  }
+}
+
+async function submitPassingIntegrityTools(tools: Record<string, any>) {
+  for (const [name, tool] of Object.entries(tools)) {
+    if (name === "submit_integrity_review") continue
+    if (name === "submit_acceptance_verdict") {
+      await tool.execute(acceptedAcceptance(), {})
+      continue
+    }
+    if (!name.startsWith("submit_")) continue
+    await tool.execute({ verdict: "pass", issues: [], corrections: [], missing_goals: [] }, {})
+  }
+}
+
+afterEach(async () => {
   runnerImpl = undefined
+  await Instance.disposeAll()
+  await resetDatabase()
 })
 
 test("integrity uses dimension collectors plus submit_integrity_review terminator", async () => {
@@ -50,6 +93,7 @@ test("integrity uses dimension collectors plus submit_integrity_review terminato
   runnerImpl = async (input: any) => {
     expect(input.toolKit.tools.finalize_integrity_review).toBeUndefined()
     expect(Object.keys(input.toolKit.tools).sort()).toEqual([
+      "submit_acceptance_verdict",
       "submit_hallucination_verdict",
       "submit_integrity_review",
       "submit_requirement_fidelity_verdict",
@@ -81,11 +125,7 @@ test("integrity uses dimension collectors plus submit_integrity_review terminato
 test("integrity accepts only complete dimension submissions plus submit_integrity_review", async () => {
   const { reviewIntegrity } = await import("../../src/integrity/agent")
   runnerImpl = async (input: any) => {
-    for (const [name, tool] of Object.entries(input.toolKit.tools)) {
-      if (name === "submit_integrity_review") continue
-      const payload = { verdict: "pass", issues: [], corrections: [], missing_goals: [] }
-      await (tool as any).execute(payload, {})
-    }
+    await submitPassingIntegrityTools(input.toolKit.tools)
     expect(input.terminalTool.shouldExposeOnlyTerminalTool(input.toolKit.getCollector())).toBe(true)
     await input.toolKit.tools.submit_integrity_review.execute({ final: true }, {})
     return {
@@ -108,13 +148,175 @@ test("integrity accepts only complete dimension submissions plus submit_integrit
 
   expect(result.sessionID).toBe("ses_integrity_complete")
   expect(result.verdict).toBe("pass")
-  expect(result.summary).toBe("Integrity pass: 0 issue(s), 0 correction action(s).")
+  expect(result.summary).toBe("Integrity pass: 0 issue(s), 0 correction action(s), acceptance accepted.")
   expect(result.dimensions.map((d) => d.id)).toEqual([
     "requirement_fidelity",
     "technical_feasibility",
     "hallucination",
     "solution_quality",
   ])
+})
+
+test("rejected acceptance forces aggregate needs_correction from inside integrity", async () => {
+  const { reviewIntegrity } = await import("../../src/integrity/agent")
+  runnerImpl = async (input: any) => {
+    for (const [name, tool] of Object.entries(input.toolKit.tools)) {
+      if (name === "submit_integrity_review" || name === "submit_acceptance_verdict") continue
+      if (!name.startsWith("submit_")) continue
+      await (tool as any).execute({ verdict: "pass", issues: [], corrections: [], missing_goals: [] }, {})
+    }
+    await input.toolKit.tools.submit_acceptance_verdict.execute({
+      verdict: "rejected",
+      summary: "Runtime acceptance failed",
+      deferred_checks: [],
+      tool_call_evidence: [{ tool: "unit_test", passed: false, detail: "runtime smoke failed with exit code 1" }],
+      rejection_details: [{
+        goal_id: "goal_ui",
+        category: "runtime",
+        error: "Runtime smoke failed before the UI could render.",
+      }],
+    }, {})
+    await input.toolKit.tools.submit_integrity_review.execute({ final: true }, {})
+    return {
+      session: { id: "ses_integrity_rejected_acceptance" },
+      streamErrors: [],
+      structured: undefined,
+      collector: input.toolKit.getCollector(),
+      finalMessage: { info: {} },
+      model: { providerID: "test", modelID: "mock", id: "test/mock" },
+      requiredTools: [],
+    }
+  }
+
+  const result = await reviewIntegrity({
+    userRequest: "Build UI",
+    taskTitle: "Test",
+    goals: [baseGoal],
+    contractGraph: baseGraph,
+  })
+
+  expect(result.acceptance.verdict).toBe("rejected")
+  expect(result.verdict).toBe("needs_correction")
+  expect(result.summary).toContain("acceptance rejected")
+})
+
+// spec-2 Test Expectations L60 ("Integrity cannot accept without the required
+// acceptance verdict"); remediation spec ITEM 3 测试 A. Guards the
+// missing-acceptance-verdict invariant. With every dimension submitted but no
+// acceptance verdict: (1) submit_integrity_review returns the missing-verdict
+// error and returns BEFORE setting collector.finalized (agent.ts:586-589);
+// (2) because finalized stays false, the post-session path hard-throws
+// (agent.ts:690-694) — this guard fires before the acceptanceVerdict throw at
+// 696-698, which is therefore unreachable when the submit tool itself blocks;
+// (3) the terminal tool is never exposed-only while collector.acceptanceVerdict
+// is unset (agent.ts:655). reviewIntegrity must NOT resolve to a
+// passing/accepted result. This must FAIL if the line 586-588 guard is
+// removed (submit would set finalized=true and reviewIntegrity would resolve).
+test("integrity cannot finalize without an acceptance verdict", async () => {
+  const { reviewIntegrity } = await import("../../src/integrity/agent")
+  let submitVerdictResult: string | undefined
+  let terminalGateBeforeVerdict: boolean | undefined
+  runnerImpl = async (input: any) => {
+    // Submit every per-dimension verdict as pass, but deliberately SKIP
+    // submit_acceptance_verdict so collector.acceptanceVerdict stays unset.
+    for (const [name, tool] of Object.entries(input.toolKit.tools)) {
+      if (name === "submit_integrity_review" || name === "submit_acceptance_verdict") continue
+      if (!name.startsWith("submit_")) continue
+      await (tool as any).execute({ verdict: "pass", issues: [], corrections: [], missing_goals: [] }, {})
+    }
+    // agent.ts:654-655 — terminal tool must NOT be exposed-only without an
+    // acceptance verdict even though every dimension is satisfied.
+    terminalGateBeforeVerdict = input.terminalTool.shouldExposeOnlyTerminalTool(input.toolKit.getCollector())
+    // agent.ts:586-588 — submit_integrity_review returns the missing-verdict
+    // error instead of finalizing.
+    submitVerdictResult = await input.toolKit.tools.submit_integrity_review.execute({ final: true }, {})
+    return {
+      session: { id: "ses_integrity_no_acceptance" },
+      streamErrors: [],
+      structured: undefined,
+      collector: input.toolKit.getCollector(),
+      finalMessage: { info: {} },
+      model: { providerID: "test", modelID: "mock", id: "test/mock" },
+      requiredTools: [],
+    }
+  }
+
+  // agent.ts:690-694 — post-session hard throw. submit_integrity_review
+  // returned the missing-verdict error at agent.ts:587 BEFORE `finalized =
+  // true` (agent.ts:589), so finalized stays false and the finalized-guard
+  // fires (the acceptanceVerdict-specific throw at 696-698 is unreachable
+  // here). Either way reviewIntegrity rejects and never resolves to a
+  // passing/accepted result.
+  await expect(reviewIntegrity({
+    userRequest: "Build UI",
+    taskTitle: "Test",
+    goals: [baseGoal],
+    contractGraph: baseGraph,
+  })).rejects.toThrow("integrity reviewer did not call submit_integrity_review after submitting 4 dimension verdict(s).")
+
+  // The terminal tool stayed gated (agent.ts:655 `&& !!collector.acceptanceVerdict`).
+  expect(terminalGateBeforeVerdict).toBe(false)
+  // submit_integrity_review surfaced the missing-acceptance-verdict error
+  // (agent.ts:587) and never returned a PASS line — proof finalization was
+  // blocked at the source guard, not merely at the post-session check.
+  expect(submitVerdictResult).toBe(
+    "Error: missing acceptance verdict. Call submit_acceptance_verdict before submit_integrity_review.",
+  )
+  expect(submitVerdictResult).not.toContain("PASS")
+})
+
+// spec-2 Test Expectations L61-62 ("rejected acceptance forces aggregate
+// needs_correction"); remediation spec ITEM 3 测试 B. Complementary to
+// "rejected acceptance forces aggregate needs_correction from inside
+// integrity": that test only checks the aggregate verdict + a summary
+// substring. This one pins the *mechanism* — every per-dimension verdict
+// stays individually `pass` (so `aggregateVerdict` alone would yield `pass`),
+// proving the downgrade comes specifically from
+// aggregateIntegrityVerdict's `if (acceptance.verdict === "rejected") return
+// "needs_correction"` branch (agent.ts:811), propagated through
+// synthesizeResult (agent.ts:728) and reflected by summarizeIntegrity's
+// rejected-acceptance shape (agent.ts:828). Must FAIL if line 811's mapping
+// is removed (aggregate would fall back to the all-pass dimension verdict).
+test("rejected acceptance forces aggregate needs_correction", async () => {
+  const { reviewIntegrity } = await import("../../src/integrity/agent")
+  runnerImpl = async (input: any) => {
+    for (const [name, tool] of Object.entries(input.toolKit.tools)) {
+      if (name === "submit_integrity_review" || name === "submit_acceptance_verdict") continue
+      if (!name.startsWith("submit_")) continue
+      await (tool as any).execute({ verdict: "pass", issues: [], corrections: [], missing_goals: [] }, {})
+    }
+    await input.toolKit.tools.submit_acceptance_verdict.execute(rejectedAcceptance(), {})
+    await input.toolKit.tools.submit_integrity_review.execute({ final: true }, {})
+    return {
+      session: { id: "ses_integrity_rejected_downgrade" },
+      streamErrors: [],
+      structured: undefined,
+      collector: input.toolKit.getCollector(),
+      finalMessage: { info: {} },
+      model: { providerID: "test", modelID: "mock", id: "test/mock" },
+      requiredTools: [],
+    }
+  }
+
+  const result = await reviewIntegrity({
+    userRequest: "Build UI",
+    taskTitle: "Test",
+    goals: [baseGoal],
+    contractGraph: baseGraph,
+  })
+
+  // Every dimension individually passed — without the rejected-acceptance
+  // override the aggregate would be `pass`.
+  expect(result.dimensions.map((d) => d.verdict)).toEqual(["pass", "pass", "pass", "pass"])
+  expect(result.acceptance.verdict).toBe("rejected")
+  // aggregateIntegrityVerdict (agent.ts:811) downgrades to needs_correction
+  // and synthesizeResult (agent.ts:728) propagates it to IntegrityResult.verdict.
+  expect(result.verdict).toBe("needs_correction")
+  expect(result.verdict).not.toBe("pass")
+  // summarizeIntegrity (agent.ts:819/828) reflects the downgrade with the
+  // rejected-acceptance phrasing including the rejection_details count.
+  expect(result.summary).toContain("Integrity needs_correction")
+  expect(result.summary).toContain("acceptance rejected with 1 rejection detail(s)")
 })
 
 test("integrity lifecycle emits shared review stream events", async () => {
@@ -127,10 +329,7 @@ test("integrity lifecycle emits shared review stream events", async () => {
     input.onSessionCreated?.({ id: "ses_integrity_stream" })
     await input.stream.onChunk({ chunk: { type: "reasoning-delta", text: "checking" } })
     await input.stream.onFinish({} as never)
-    for (const [name, tool] of Object.entries(input.toolKit.tools)) {
-      if (name === "submit_integrity_review") continue
-      await (tool as any).execute({ verdict: "pass", issues: [], corrections: [], missing_goals: [] }, {})
-    }
+    await submitPassingIntegrityTools(input.toolKit.tools)
     await input.toolKit.tools.submit_integrity_review.execute({ final: true }, {})
     return {
       session: { id: "ses_integrity_stream" },
@@ -143,13 +342,17 @@ test("integrity lifecycle emits shared review stream events", async () => {
     }
   }
 
-  await reviewIntegrity({
-    userRequest: "Build UI",
-    taskTitle: "Test",
-    goals: [baseGoal],
-    contractGraph: baseGraph,
-    taskID: "tsk_integrity_stream",
-    parentSessionID: "ses_parent",
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: () => reviewIntegrity({
+      userRequest: "Build UI",
+      taskTitle: "Test",
+      goals: [baseGoal],
+      contractGraph: baseGraph,
+      taskID: "tsk_integrity_stream",
+      parentSessionID: "ses_parent",
+    }),
   })
 
   expect(emitted.map((item) => item.type)).toContain("review.stream.started")
@@ -196,6 +399,7 @@ test("integrity preserves correction-bearing concerns verdict (no host reconcili
       }],
       missing_goals: [],
     }, {})
+    await input.toolKit.tools.submit_acceptance_verdict.execute(acceptedAcceptance(), {})
     await input.toolKit.tools.submit_integrity_review.execute({ final: true }, {})
     return {
       session: { id: "ses_integrity_correction_concern" },
@@ -265,6 +469,7 @@ test("hallucination findings can propose executable requirement-id repairs", asy
       corrections: [],
       missing_goals: [],
     }, {})
+    await input.toolKit.tools.submit_acceptance_verdict.execute(acceptedAcceptance(), {})
     await input.toolKit.tools.submit_integrity_review.execute({ final: true }, {})
     return {
       session: { id: "ses_integrity_hallucination_repair" },
@@ -319,6 +524,7 @@ test("requirement_fidelity issue carries requirement_ids and spec_ids through to
     await input.toolKit.tools.submit_solution_quality_verdict.execute({
       verdict: "pass", issues: [], corrections: [], missing_goals: [],
     }, {})
+    await input.toolKit.tools.submit_acceptance_verdict.execute(acceptedAcceptance(), {})
     await input.toolKit.tools.submit_integrity_review.execute({ final: true }, {})
     return {
       session: { id: "ses_integrity_post_build" },
@@ -354,10 +560,7 @@ test("buildIntegrityPrompt omits the Requirement Status Snapshot section when th
   let capturedPrompt = ""
   runnerImpl = async (input: any) => {
     capturedPrompt = input.buildUserPrompt()
-    for (const [name, t] of Object.entries(input.toolKit.tools)) {
-      if (name === "submit_integrity_review") continue
-      await (t as any).execute({ verdict: "pass", issues: [], corrections: [], missing_goals: [] }, {})
-    }
+    await submitPassingIntegrityTools(input.toolKit.tools)
     await input.toolKit.tools.submit_integrity_review.execute({ final: true }, {})
     return {
       session: { id: "ses_prompt_pre_build" },
@@ -408,6 +611,7 @@ test("IntegrityReviewCompleted event payload schema accepts requirement_ids and 
     }],
     corrections: [],
     missingGoals: [],
+    acceptance: acceptedAcceptance(),
     attempts: 1,
   }
   const parsed = Event.IntegrityReviewCompleted.properties.parse(payload)
@@ -451,6 +655,7 @@ test("when every claiming goal's essential spec fails, the LLM-driven verdict ro
     await input.toolKit.tools.submit_solution_quality_verdict.execute({
       verdict: "pass", issues: [], corrections: [], missing_goals: [],
     }, {})
+    await input.toolKit.tools.submit_acceptance_verdict.execute(acceptedAcceptance(), {})
     await input.toolKit.tools.submit_integrity_review.execute({ final: true }, {})
     return {
       session: { id: "ses_all_fail" },
@@ -517,10 +722,7 @@ test("buildIntegrityPrompt renders the snapshot table and foregrounds REQ → go
   let capturedPrompt = ""
   runnerImpl = async (input: any) => {
     capturedPrompt = input.buildUserPrompt()
-    for (const [name, t] of Object.entries(input.toolKit.tools)) {
-      if (name === "submit_integrity_review") continue
-      await (t as any).execute({ verdict: "pass", issues: [], corrections: [], missing_goals: [] }, {})
-    }
+    await submitPassingIntegrityTools(input.toolKit.tools)
     await input.toolKit.tools.submit_integrity_review.execute({ final: true }, {})
     return {
       session: { id: "ses_prompt_post_build" },

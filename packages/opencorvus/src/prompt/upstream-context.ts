@@ -32,7 +32,7 @@ export function buildGoalUpstreamAgentContextSections(taskID: string, goalID: st
  * gate. Two ground-truth catalogs (rendered from canonical DB tables, not
  * decision-log summaries) plus a narrative design-analysis section.
  *
- * Rationale: delivery's verdict must trace every accept/reject to a concrete
+ * Rationale: acceptance verdicts must trace every accept/reject to a concrete
  * contract. Decision-log phase summaries are LLM-written narrative — they drift,
  * truncate, and re-summarise across iterations. The catalogs go straight from
  * `engine_requirement` and `engine_goal` so the contract surface delivery

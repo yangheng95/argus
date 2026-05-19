@@ -65,6 +65,66 @@ export function IntegrityBody(props: { integrity: Integrity }) {
         <p class="integrity__summary">{props.integrity.summary}</p>
       </Show>
 
+      <Show when={props.integrity.acceptance}>
+        {(acceptance) => (
+          <section class="integrity__section">
+            <h4 class="integrity__section-title">{t("integrity.acceptance_heading")}</h4>
+            <div class="integrity__header">
+              <span class="verdict-pill" data-verdict={acceptance().verdict}>
+                {acceptance().verdict === "accepted"
+                  ? t("integrity.acceptance.accepted")
+                  : t("integrity.acceptance.rejected")}
+              </span>
+              <span class="integrity__dimension-counts">
+                {t("integrity.acceptance.evidence_counts", {
+                  evidence: String(acceptance().tool_call_evidence.length),
+                  rejections: String(acceptance().rejection_details.length),
+                })}
+              </span>
+            </div>
+            <Show when={acceptance().summary}>
+              <p class="integrity__summary">{acceptance().summary}</p>
+            </Show>
+            <Show when={acceptance().startup_verification}>
+              {(startup) => (
+                <p class="integrity__summary">
+                  {t("integrity.acceptance.startup", {
+                    status: startup().success ? t("integrity.acceptance.ok") : t("integrity.acceptance.failed"),
+                    command: startup().command || "-",
+                  })}
+                </p>
+              )}
+            </Show>
+            <Show when={acceptance().frontend_check}>
+              {(frontend) => (
+                <p class="integrity__summary">
+                  {t("integrity.acceptance.frontend", {
+                    status: frontend().renders_correctly === false
+                      ? t("integrity.acceptance.failed")
+                      : t("integrity.acceptance.ok"),
+                  })}
+                </p>
+              )}
+            </Show>
+            <Show when={acceptance().rejection_details.length > 0}>
+              <ul class="integrity__list">
+                <For each={acceptance().rejection_details}>
+                  {(detail) => (
+                    <li class="integrity__issue">
+                      <span class="integrity__tag">{detail.category}</span>
+                      <span class="integrity__issue-desc">{detail.error}</span>
+                      <Show when={detail.goal_id}>
+                        <code class="integrity__goal-id">{detail.goal_id}</code>
+                      </Show>
+                    </li>
+                  )}
+                </For>
+              </ul>
+            </Show>
+          </section>
+        )}
+      </Show>
+
       <Show when={hasDimensions()}>
         <section class="integrity__section">
           <h4 class="integrity__section-title">

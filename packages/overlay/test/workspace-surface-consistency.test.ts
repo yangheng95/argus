@@ -19,11 +19,9 @@ test("workspace panels share a neutral surface family", () => {
   expect(bodyOf(".workspace-mount")).toMatch(/background:\s*var\(--surface-inset\)/)
   expect(bodyOf(".workspace-header")).toMatch(/background:\s*var\(--surface-strong\)/)
   expect(bodyOf(".diff-preview-panel > \.oc-panel__header")).toMatch(/background:\s*var\(--surface-strong\)/)
-  expect(bodyOf(".file-view-panel > \.oc-panel__header")).toMatch(/background:\s*var\(--surface-strong\)/)
 
-  for (const selector of [".diff-preview-empty", ".file-view-empty"]) {
-    const body = bodyOf(selector)
-    expect(body).toContain("linear-gradient(180deg, var(--ui-highlight-tone), transparent 72%)")
-    expect(body).toContain("color-mix(in srgb, var(--surface-inset) 92%, transparent)")
-  }
+  const emptyBody = bodyOf(".diff-preview-empty")
+  expect(emptyBody).toContain("linear-gradient(180deg, var(--ui-highlight-tone), transparent 72%)")
+  expect(emptyBody).toContain("color-mix(in srgb, var(--surface-inset) 92%, transparent)")
+  expect(WORKSPACE_CSS).not.toContain("file-view")
 })

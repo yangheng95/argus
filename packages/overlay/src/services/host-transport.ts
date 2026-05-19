@@ -119,12 +119,15 @@ export interface PickFilesOptions {
   multiple?: boolean
 }
 
-export type ProjectEditorID =
-  | "vscode"
-  | "pycharm"
-  | "webstorm"
-  | "intellij"
-  | "cursor"
+export const PROJECT_EDITOR_IDS = [
+  "vscode",
+  "pycharm",
+  "webstorm",
+  "intellij",
+  "cursor",
+] as const
+
+export type ProjectEditorID = (typeof PROJECT_EDITOR_IDS)[number]
 
 export type NativeCommand =
   // utils/native.ts

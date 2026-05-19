@@ -202,8 +202,8 @@
   /* Agent stage palette. Each pipeline stage carries a stable identity
      hue so users can spot which agent emitted a card in a long log:
      goal=violet, architect=teal, planner=cobalt, executor=amber,
-     evaluator=ochre, delivery=jade. The default fallback is the same
-     cobalt as planner. The hues are intentional metadata, not theme-
+     evaluator=ochre. The default fallback is the same cobalt as planner.
+     The hues are intentional metadata, not theme-
      adaptive: stage identity must read the same in every overlay
      theme so muscle memory stays portable. Surfaces consume these
      through color-mix() with the alpha they need; raw alpha values
@@ -214,7 +214,6 @@
   --oc-stage-planner: #64a0dc;
   --oc-stage-executor: #e68c32;
   --oc-stage-evaluator: #c8b43c;
-  --oc-stage-delivery: #50be64;
 }
 
 /* Theme-wired tokens MUST live at body scope, not :root. CSS custom

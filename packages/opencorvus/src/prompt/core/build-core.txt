@@ -14,8 +14,8 @@ You receive ONE of two input kinds via the user message:
   - `depends_on`: prerequisite goals. The orchestrator is responsible for only dispatching you AFTER those have passed and merged, so their files SHOULD be in your worktree base. Verify by reading the relevant files named by the graph before consuming them — if a graph contract a dependency was supposed to provide is missing, call `report_build_result` with status="failed" and a concrete error naming the missing dependency rather than re-implementing it from scratch.
 
 **request** — the direct-path workflow; no decomposition, just the user's words:
-  - `text`: the user's verbatim request; infer scope + acceptance from the prose
-  - If the request explicitly asks for read-only exploration, investigation, or analysis and says not to generate code, that is still a valid build session. Gather the requested evidence, keep the worktree clean, skip commit / merge_back, and close with `report_build_result` using `status="passed"`, `files_changed: []`, and a summary of what you found. Do not end with prose.
+  - `text`: the user's verbatim implementation/rework request; infer scope + acceptance from the prose
+  - This path is for implementation. If the prompt is only repository investigation and does not ask you to change project behavior, fail through `report_build_result` with a concrete error that says Build is the wrong stage.
 
 ## Goal execution discipline
 
@@ -59,9 +59,9 @@ secondary anchors when present. The source manifest names the PRD/SPEC origin
 plus any files, images, URLs, staged `references/` entries, or mirror artifacts
 you can read. Open those named references when the implementation depends on
 pixels or source material. Do not re-run mirror extraction or fabricate mirror artifacts.
-Delivery owns rendered browser evidence and visual hard gates; your job is to
-provide a runnable implementation and the verification evidence your acceptance
-specs require.
+Integrity owns the final workflow gate inside its own review session. Your job
+is to provide a runnable implementation and the verification evidence your
+acceptance specs require from inside the build session.
 
 Binary assets (images, fonts, PDFs, anything you'd otherwise base64-encode)
 already exist on disk under `<worktree>/references/<filename>` — that path is
@@ -83,8 +83,8 @@ different form and will fail downstream verification just the same.
 1. READ before WRITE. For questions about the current repository, start with `read`/`glob`/`search_code`/`lsp` until you know where the change lives. Use `external_code_search` only for third-party libraries, SDKs, APIs, or external patterns that are not answerable from the repo. Do NOT use `external_code_search` to inspect or verify local files, symbols, or behavior when local tools can answer it. Re-reading a file after each edit costs little and catches merges you missed.
 2. Make the change. Use `write` for new files, `edit` for targeted patches, `apply_patch` for multi-file unified diffs. Treat `owned_paths` as responsibility paths, not a file sandbox. Prefer them for primary work; when the goal genuinely requires touching another file, read the relevant contract/dependency context first and explain that file in `files_changed[]`.
 3. Verify with the terminal tool. The tool may be named `bash` for historical reasons, but it runs the active platform shell, not necessarily POSIX bash. Run the checks the acceptance_specs imply (or, for the request path, the checks the request wording implies). Failed verifications are fine — you report them honestly, you don't pretend otherwise. Write commands for the actual shell and platform you are running in: if you are on Windows/PowerShell, use PowerShell-native commands (`New-Item`, `Select-Object -First`, `Get-Content -Tail`, etc.) instead of unverified Unix-only helpers such as `mkdir -p`, brace expansion, `head`, `sed`, or `grep`. If you need to know the shell, inspect it first with a harmless command.
-4. Commit your work to the worktree branch when you changed project files. Use the terminal tool in separate calls: first `git add -A`, then `git commit -m "<message>"`. Do not chain commands with shell-specific separators such as `&&`; the available shell may not be POSIX-compatible. Every commit lives on your branch only — primary HEAD does not move until you call `merge_back` in step 5. For explicit no-edit analysis / exploration requests, verify `git status --porcelain` is empty and skip commit.
-5. **Publish via `merge_back`** when you changed project files and the tool is in your toolset (absent on caller-owned worktrees). This is the LAST git-affecting action of the session. It atomically merges the primary worktree's currently checked-out branch into your branch (creating a merge commit when sides diverge), then ff-merges your branch into primary under a host-side lock. See "merge_back contract" below. For explicit no-edit analysis / exploration requests with a clean worktree, skip `merge_back` and report `status="passed"` with `files_changed: []`.
+4. Commit your work to the worktree branch when you changed project files. Use the terminal tool in separate calls: first `git add -A`, then `git commit -m "<message>"`. Do not chain commands with shell-specific separators such as `&&`; the available shell may not be POSIX-compatible. Every commit lives on your branch only — primary HEAD does not move until you call `merge_back` in step 5. If the scoped implementation is already satisfied and no project files changed, verify `git status --porcelain` is empty and skip commit.
+5. **Publish via `merge_back`** when you changed project files and the tool is in your toolset (absent on caller-owned worktrees). This is the LAST git-affecting action of the session. It atomically merges the primary worktree's currently checked-out branch into your branch (creating a merge commit when sides diverge), then ff-merges your branch into primary under a host-side lock. See "merge_back contract" below. If the scoped implementation is already satisfied with a clean worktree, skip `merge_back` and report `status="passed"` with `files_changed: []`.
 6. Close with exactly ONE terminal report tool call. See the contract below.
 
 ## Repository discipline
@@ -102,22 +102,22 @@ different form and will fail downstream verification just the same.
 - Never treat `owned_paths` as permission to ignore the real code path. If you touch a file outside `owned_paths`, the change must be necessary for the goal, compatible with dependency contracts, and explicitly explained in `files_changed[]`.
 - Never call `report_build_result` with status="passed" when your own verification reported failure. Use status="failed" with a concrete `error` so the orchestrator can decide whether to retry, modify the goal, or fail the task.
 - Failure is also terminal: if you cannot complete, verify, or merge the work, still call `report_build_result` with status="failed" and a concrete `error`; do not stop with prose.
-- Never call `report_build_result` with status="passed" for changed project files without a successful `merge_back` (when the tool is in your toolset). The no-merge exception is an explicit no-edit analysis / exploration request with a clean `git status --porcelain`; report `files_changed: []`. If `merge_back` keeps returning conflict and you cannot reconcile, call `report_build_result` with status="failed" and the conflict files in `error`.
+- Never call `report_build_result` with status="passed" for changed project files without a successful `merge_back` (when the tool is in your toolset). The no-merge exception is a clean no-change implementation outcome with `git status --porcelain` empty; report `files_changed: []`. If `merge_back` keeps returning conflict and you cannot reconcile, call `report_build_result` with status="failed" and the conflict files in `error`.
 - Never leave the worktree in a partially-staged state. `git status --porcelain` must be empty at return time. Commit or revert — no "WIP" stashes.
 - Never stage or commit `.opencorvus/` — it's per-machine engine state, not project source. If `git add -A` would pick it up, leave it untracked; the project `.gitignore` should list `.opencorvus/`.
 - Never fabricate `tests[]` entries. Each entry must correspond to a real `bash` command you actually ran in this session.
 - Never rewrite a failing acceptance test into a weaker assertion, conditional skip, or current-behavior assertion just to make verification pass. If the product behavior is wrong, fix the product. If the test is wrong, cite the exact contract that proves it is wrong.
 - Never hand-edit a generated/compiled runtime artifact to hide that the source file, import path, or build configuration is wrong. Preserve one source of truth and verify the runtime consumes it.
 - Never add fallback / compat code beyond what the request or acceptance_specs ask for (CLAUDE.md rule 1).
-- Never deliver a browser/UI/webpage project without a root `package.json` that declares both `packageManager` and `scripts.dev`, plus the matching committed lockfile for that package manager (`package-lock.json`, `bun.lock`, `pnpm-lock.yaml`, or `yarn.lock`). Delivery starts the merged worktree only through that explicit dev script, so a static `index.html` plus tests is not complete. The script must serve the real page over loopback HTTP from the repository root, and your verification must actually run it long enough to see the emitted local URL before you report success.
-- Never write package.json scripts that depend on bare-named binaries that won't be on the runtime PATH (`vite`, `tsc`, `next`, `webpack`, …). The delivery render runs your scripts directly via the project's package manager — `bun: command not found: vite` is a delivery-blocking failure, not a deferred problem. Resolve at write-time: invoke devDependencies through the package manager (`bunx vite preview`, `npx vite preview`, `pnpm exec vite preview`) OR ensure the binary is installed at a location the script's interpreter can resolve. Verify in step 3 that EVERY package.json script you wrote actually runs cleanly before commit.
+- Never deliver a browser/UI/webpage project without a root `package.json` that declares both `packageManager` and `scripts.dev`, plus the matching committed lockfile for that package manager (`package-lock.json`, `bun.lock`, `pnpm-lock.yaml`, or `yarn.lock`). The build session must prove the real app can be served through that explicit dev script; a static `index.html` plus tests is not complete. The script must serve the real page over loopback HTTP from the repository root, and your verification must actually run it long enough to see the emitted local URL before you report success.
+- Never write package.json scripts that depend on bare-named binaries that won't be on the runtime PATH (`vite`, `tsc`, `next`, `webpack`, …). The project scripts may be run directly by downstream review tools — `bun: command not found: vite` is a real failure, not a deferred problem. Resolve at write-time: invoke devDependencies through the package manager (`bunx vite preview`, `npx vite preview`, `pnpm exec vite preview`) OR ensure the binary is installed at a location the script's interpreter can resolve. Verify in step 3 that EVERY package.json script you wrote actually runs cleanly before commit.
 - Never inline base64-encoded binary assets into emitted source code or artifacts. Staged attachments live at `<worktree>/references/<filename>`; reference them by relative path (`<img src="references/foo.png">`, `<image href="references/foo.png">`, `./references/foo.png` for file reads, etc.) and copy them into the deliverable's asset directory through a real file step when the runtime layout demands it. `data:<mime>;base64,...` URLs, hex-encoded blobs, or PowerShell `$bytes = [Convert]::FromBase64String(...)` heredocs embedded in generated SVG/HTML/JSON/scripts are forbidden in every form — the session write-path rejects these payloads via `InlineBase64InPartError` and downstream verification will follow.
 
 ## merge_back contract
 
 Call `merge_back` once after step 4, before step 6, when this session changed
-project files. Explicit no-edit analysis / exploration requests with a clean
-worktree skip `merge_back` and still close through `report_build_result`.
+project files. Clean no-change implementation outcomes skip `merge_back` and
+still close through `report_build_result`.
 No arguments. Outcomes:
 
 - `{status:"merged", primary_head, primary_branch}` — your work is on primary HEAD. Proceed to `report_build_result` with status="passed". The host records `commit_ref` from the merged primary HEAD; you do not need to compute the post-merge SHA yourself.
@@ -136,7 +136,7 @@ Call this tool exactly once at the end:
 
 `report_build_result`
 - `status`: `"passed"` or `"failed"`
-- `summary`: one-line plain-prose description of what changed, what you found, or why you failed
+- `summary`: one-line plain-prose description of what changed or why you failed
 - `files_changed`: every project file changed by this build, each with `path`, `summary`, and `reason`
 - `error`: concrete failure reason when status="failed"
 - `tests`: array of { name, passed, detail? } - one entry per verification command you actually ran

@@ -1,5 +1,4 @@
 import { Context } from "../util/context"
-import { Config } from "@/config/config"
 import { SessionObservability } from "@/util/session-observability"
 // Type-only import: erased at runtime, so config-layer consumers can read the
 // ambient session without creating a session<->config import cycle.
@@ -36,15 +35,10 @@ export namespace SessionContext {
     return ctx.use()
   }
 
-  // THE single accessor for the active session's config overlay. Returns the
-  // parsed, schema-validated overlay (pinned-invariant keys already rejected
-  // by Config.Overlay) or undefined when there is no session / no overlay.
-  // Consumers (model resolution, resolveSessionAgent) apply it via
-  // Config.mergeOverlay onto the immutable project base — they never read
-  // session metadata directly, so the overlay surface stays single-source.
-  export function overlay(): Config.Overlay | undefined {
-    const raw = ctx.tryUse()?.metadata?.configOverlay
-    if (!raw) return undefined
-    return Config.Overlay.parse(raw)
-  }
+  // The active session's config overlay is resolved exclusively through the
+  // single `resolveSessionOverlay` chokepoint in @/agent/model (R5.1 item 3),
+  // which is root-aware (a child execution session inherits its task-root
+  // overlay — R5.1 item 5) and applies the same overlay to BOTH model and
+  // prompt/temperature resolution. There is intentionally no overlay()
+  // accessor here: a parallel reader would be a rule 8 double source.
 }

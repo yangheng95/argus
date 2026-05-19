@@ -23,6 +23,41 @@ export function renderIntegrityMarkdown(input: {
   const lines: string[] = []
   lines.push(`### Architecture review (verdict=${verdict.verdict}; session ${sessionID})`)
   if (verdict.summary) lines.push(`Summary: ${verdict.summary}`)
+  lines.push("")
+  lines.push(`**acceptance = ${verdict.acceptance.verdict}**`)
+  lines.push(`- summary: ${verdict.acceptance.summary}`)
+  if (verdict.acceptance.startup_verification) {
+    const startup = verdict.acceptance.startup_verification
+    lines.push(`- startup: attempted=${startup.attempted} success=${startup.success}${startup.command ? ` command=${startup.command}` : ""}`)
+  }
+  if (verdict.acceptance.frontend_check) {
+    const frontend = verdict.acceptance.frontend_check
+    lines.push(`- frontend: attempted=${frontend.attempted} renders_correctly=${String(frontend.renders_correctly)}`)
+    for (const issue of frontend.issues ?? []) lines.push(`  - frontend issue: ${issue}`)
+  }
+  if (verdict.acceptance.deferred_checks.length > 0) {
+    lines.push("- deferred_checks:")
+    for (const check of verdict.acceptance.deferred_checks) {
+      lines.push(`  - ${check.name}: ${check.result} — ${check.evidence}`)
+    }
+  }
+  if (verdict.acceptance.tool_call_evidence.length > 0) {
+    lines.push("- tool_call_evidence:")
+    for (const evidence of verdict.acceptance.tool_call_evidence) {
+      lines.push(`  - ${evidence.tool}: passed=${evidence.passed} — ${evidence.detail}`)
+    }
+  }
+  if (verdict.acceptance.verdict === "rejected") {
+    lines.push("- rejection_details:")
+    for (const detail of verdict.acceptance.rejection_details) {
+      const goal = detail.goal_id ? ` goal=${detail.goal_id}` : ""
+      const check = detail.check_id ? ` check=${detail.check_id}` : ""
+      const file = detail.file ? ` file=${detail.file}` : ""
+      const visual = detail.visual_spec_id ? ` visual_spec=${detail.visual_spec_id}` : ""
+      lines.push(`  - [${detail.category}]${goal}${check}${file}${visual} ${detail.error}`)
+      if (detail.suggestion) lines.push(`    suggestion: ${detail.suggestion}`)
+    }
+  }
   for (const dim of verdict.dimensions) {
     const issues = dim.issues ?? []
     const corrections = dim.corrections ?? []

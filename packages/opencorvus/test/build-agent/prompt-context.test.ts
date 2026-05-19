@@ -10,7 +10,7 @@ describe("build agent prompt context", () => {
       },
       {
         deliveryFeedback:
-          "Delivery agent rejected the integrated deliverable.\n" +
+          "Acceptance review rejected the integrated deliverable.\n" +
           "Canonical delivery feedback packet (JSON, copied from persisted artifacts):\n" +
           "```json\n{\"manifest\":{\"finalGate\":{\"failedRuntimeFlowIds\":[\"runtime:web:.\"]}}}\n```",
       },
@@ -106,7 +106,7 @@ describe("build agent prompt context", () => {
     expect(prompt.indexOf("## Canonical Delivery Rejection Feedback")).toBeLessThan(prompt.indexOf("# Request"))
   })
 
-  test("request-path exposes no-edit analysis terminal-report instructions", () => {
+  test("request-path rejects repository-investigation-only work instead of exposing success instructions", () => {
     const prompt = buildUserPrompt(
       {
         kind: "request",
@@ -115,10 +115,12 @@ describe("build agent prompt context", () => {
       {},
     )
 
-    expect(prompt).toContain("exploration, investigation, or analysis")
-    expect(prompt).toContain("skip commit / merge_back")
-    expect(prompt).toContain('status="passed"')
-    expect(prompt).toContain("files_changed: []")
+    expect(prompt).toContain("This direct request path is for implementation/rework")
+    expect(prompt).toContain("Build is the wrong stage")
+    expect(prompt).not.toContain(["exploration", "investigation", "or analysis"].join(", "))
+    expect(prompt).not.toContain("skip commit / merge_back")
+    expect(prompt).not.toContain('status="passed"')
+    expect(prompt).not.toContain("files_changed: []")
   })
 
   test("retryGuidance section is dropped when undefined / empty / whitespace-only", () => {

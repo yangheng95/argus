@@ -1158,19 +1158,6 @@ export type EventReviewStreamChunk = {
   }
 }
 
-export type EventDeliveryGateRejected = {
-  type: "delivery.gate.rejected"
-  properties: {
-    taskID: string
-    runID?: string
-    iteration: number
-    violations: Array<{
-      kind: string
-      detail: string
-    }>
-  }
-}
-
 export type EventDeliveryEvidenceUpdated = {
   type: "delivery.evidence.updated"
   properties: {
@@ -1206,23 +1193,6 @@ export type EventDeliveryPreviewUpdated = {
     reason?: string
     command?: string
     workspaceDir?: string
-  }
-}
-
-export type EventDeliveryReviewCompleted = {
-  type: "delivery.review.completed"
-  properties: {
-    taskID: string
-    runID?: string
-    reviewID: string
-    verdict: "accepted" | "rejected"
-    source: "llm" | "host_gate"
-    summary: string
-    hostGatePassed: boolean
-    failureKinds: Array<string>
-    rejectionCount: number
-    deferredCount: number
-    details: Array<string>
   }
 }
 
@@ -1264,6 +1234,41 @@ export type EventIntegrityReviewCompleted = {
       objective: string
       reason?: string
     }>
+    acceptance: {
+      verdict: "accepted" | "rejected"
+      summary: string
+      startup_verification?: {
+        attempted: boolean
+        command?: string
+        success: boolean
+        output?: string
+      }
+      frontend_check?: {
+        attempted: boolean
+        renders_correctly?: boolean
+        issues?: Array<string>
+      }
+      deferred_checks: Array<{
+        name: string
+        result: "passed" | "failed" | "skipped" | "advisory_failed"
+        evidence: string
+      }>
+      tool_call_evidence: Array<{
+        tool: string
+        passed: boolean
+        detail: string
+      }>
+      rejection_details: Array<{
+        goal_id?: string
+        category: "build" | "test" | "lint" | "runtime" | "quality" | "startup" | "visual"
+        check_id?: string
+        file?: string
+        error: string
+        suggestion?: string
+        visual_spec_id?: string
+      }>
+      launch_command?: string
+    }
     attempts: number
   }
 }
@@ -1642,10 +1647,8 @@ export type Event =
   | EventReviewStreamStarted
   | EventReviewStreamProgress
   | EventReviewStreamChunk
-  | EventDeliveryGateRejected
   | EventDeliveryEvidenceUpdated
   | EventDeliveryPreviewUpdated
-  | EventDeliveryReviewCompleted
   | EventIntegrityReviewCompleted
   | EventTaskQueueCompleted
   | EventQuestionAsked
@@ -2551,11 +2554,11 @@ export type Config = {
     preserve_recent_tokens?: number
   }
   /**
-   * Assistant agent configuration — controls orchestration policy, requirements, architect, build, design-analysis, intent-analysis, and delivery agent behavior
+   * Assistant agent configuration — controls orchestration policy, requirements, architect, build, design-analysis, intent-analysis, and integrity review behavior
    */
   assistant?: {
     /**
-     * Enable OpenCorvus host-side automatic repair iteration after failed goal waves or rejected deliveries. Default false: delivery rejection is reported and waits for operator follow-up.
+     * Enable OpenCorvus host-side automatic repair iteration after failed goal waves or rejected acceptance reviews. Default false: acceptance rejection is reported and waits for operator follow-up.
      */
     auto_iteration?: boolean
     /**
@@ -2585,24 +2588,7 @@ export type Config = {
       skills?: Array<string>
     }
     /**
-     * Delivery agent configuration
-     */
-    delivery?: {
-      /**
-       * Maximum agentic steps for delivery agent
-       */
-      max_steps?: number
-      /**
-       * Maximum delivery generation retries
-       */
-      max_retries?: number
-      /**
-       * Additional skill paths for delivery agent
-       */
-      skills?: Array<string>
-    }
-    /**
-     * P0-B delivery visual numeric hard-gate thresholds.
+     * P0-B visual numeric evidence thresholds.
      */
     delivery_visual?: {
       /**
@@ -2705,7 +2691,7 @@ export type Config = {
      */
     max_executor_groups?: number
     /**
-     * Default workflow for new tasks: 'direct' (build → deliver iter), 'pipeline' (design_analysis → requirements → architect → per-goal build → deliver iter), or custom ID
+     * Default workflow for new tasks: 'direct' (build), 'pipeline' (design_analysis → requirements → architect → per-goal build → integrity), or custom ID
      */
     default_workflow?: string
     /**
@@ -7879,9 +7865,9 @@ export type TaskCreateData = {
         >
         severity: "essential" | "important" | "optional" | "pitfall"
         /**
-         * Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_delivery.
+         * Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_integrity. on_delivery is legacy and maps to on_integrity.
          */
-        trigger?: "on_goal" | "on_delivery"
+        trigger?: "on_goal" | "on_integrity" | "on_delivery"
       }>
       kind?: "bootstrap" | "feature" | "verification" | "integration" | "system"
       metadata?: {
@@ -8024,9 +8010,9 @@ export type TaskCreateData = {
           >
           severity: "essential" | "important" | "optional" | "pitfall"
           /**
-           * Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_delivery.
+           * Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_integrity. on_delivery is legacy and maps to on_integrity.
            */
-          trigger?: "on_goal" | "on_delivery"
+          trigger?: "on_goal" | "on_integrity" | "on_delivery"
         }>
         kind?: "bootstrap" | "feature" | "verification" | "integration" | "system"
         metadata?: {
@@ -11200,9 +11186,9 @@ export type GoalUpdateData = {
       >
       severity: "essential" | "important" | "optional" | "pitfall"
       /**
-       * Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_delivery.
+       * Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_integrity. on_delivery is legacy and maps to on_integrity.
        */
-      trigger?: "on_goal" | "on_delivery"
+      trigger?: "on_goal" | "on_integrity" | "on_delivery"
     }>
   }
   path: {

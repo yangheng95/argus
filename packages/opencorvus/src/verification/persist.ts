@@ -162,7 +162,7 @@ export function persistEvidence(input: PersistEvidenceInput): VerificationEviden
 
 /** Latest evidence for a given goal (across all goal_runs for that goal).
  *  Returns undefined when the goal has never been evaluated. Shared by the
- *  retry-prompt builder and delivery's short-circuit check.
+ *  retry-prompt builder and acceptance evidence checks.
  *
  *  Joins against `engine_goal_run` to resolve goal → goal_run; the JOIN
  *  dependency goes away in phase 6-d when that table is removed in favour
@@ -247,4 +247,3 @@ export function findLatestDeliveryEvidence(taskID: string): VerificationEvidence
   if (!row) return undefined
   return rowToEvidence(row)
 }
-

@@ -865,7 +865,7 @@ describe("overlay architecture guards", () => {
     expect(composerSurface).toMatch(/\.executor-chip-model\[data-empty="true"\]/)
   })
 
-  test("workspace panel, diff preview, and file view are owned by surfaces/workspace.css", () => {
+  test("workspace panel and diff preview are owned by surfaces/workspace.css", () => {
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const workspaceSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/workspace.css"))
     const html = readText(join(OVERLAY_ROOT, "src/index.html"))
@@ -889,21 +889,15 @@ describe("overlay architecture guards", () => {
       "diff-preview-meta",
       "diff-preview-body",
       "diff-preview-empty",
-      "file-view-panel",
-      // file-view-head replaced by .oc-panel__header override in Step 9.E
-      "file-view-path",
-      "file-view-body",
-      "file-view-empty",
     ]) {
       expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
       expect(workspaceSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
     }
 
-    // diff-preview-head and file-view-head were replaced by .oc-panel__header overrides
+    // diff-preview-head was replaced by a .oc-panel__header override
     expect(workspaceSurface).toMatch(/\.diff-preview-panel > \.oc-panel__header\s*\{/)
-    expect(workspaceSurface).toMatch(/\.file-view-panel > \.oc-panel__header\s*\{/)
     expect(workspaceSurface).not.toMatch(/(^|\n)\.diff-preview-head\s*\{/)
-    expect(workspaceSurface).not.toMatch(/(^|\n)\.file-view-head\s*\{/)
+    expect(workspaceSurface).not.toContain("file-view")
 
     expect(styles).not.toMatch(/(^|\n)\.pane-resizer\.pane-resizer-workspace\s*\{/)
     expect(workspaceSurface).toMatch(/\.pane-resizer\.pane-resizer-workspace\s*\{/)
@@ -929,7 +923,6 @@ describe("overlay architecture guards", () => {
     expect(workspaceSurface).toMatch(/\.workspace-tab\[data-active="true"\]\s*\{/)
     expect(workspaceSurface).toMatch(/\.workspace-close:hover\s*\{/)
     expect(workspaceSurface).toMatch(/\.workspace-view\[data-active="false"\]\s*\{/)
-    expect(workspaceSurface).toMatch(/\.file-view-body pre\s*\{/)
     expect(workspaceSurface).toMatch(/code \.file-link:hover\s*\{/)
   })
 
@@ -2442,7 +2435,7 @@ describe("overlay architecture guards", () => {
       const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(
         selector,
       )
-      const targetsRail = /\.(?:conversation-agent-rail|agent-report-dialog)\b/.test(selector)
+      const targetsRail = /\.conversation-agent-rail\b/.test(selector)
       if (!isThemeSelector || !targetsRail) continue
 
       expect(body).not.toMatch(
@@ -2454,7 +2447,7 @@ describe("overlay architecture guards", () => {
     for (const declaration of [
       "position: relative",
       "width: 100%",
-      "height: calc(var(--conversation-agent-rail-height, 42) * 1px * var(--ui-scale))",
+      "height: calc(42px * var(--ui-scale))",
       "min-height: calc(42px * var(--ui-scale))",
       "display: flex",
       "flex-direction: row",
@@ -2471,21 +2464,11 @@ describe("overlay architecture guards", () => {
 
     const rowBody = soloRuleBody(surface, ".conversation-agent-rail__row")
     expect(rowBody).toContain("display: grid")
-    expect(rowBody).toContain("grid-template-columns: calc(26px * var(--ui-scale)) minmax(0, 1fr) calc(24px * var(--ui-scale))")
-    expect(rowBody).toContain("border-left: calc(2px * var(--ui-scale)) solid color-mix(in srgb, var(--card-stage, var(--accent)) 72%, transparent)")
-
-    const runBody = soloRuleBody(surface, ".conversation-agent-rail__run")
-    expect(runBody).toContain("background: transparent")
-    expect(runBody).toContain("border: 0")
-
-    const reportPanelBody = soloRuleBody(surface, ".agent-report-dialog__panel")
-    expect(reportPanelBody).toContain("display: flex")
-    expect(reportPanelBody).toContain("flex-direction: column")
-    expect(reportPanelBody).toContain("overflow: hidden")
-
-    const reportBody = soloRuleBody(surface, ".agent-report-dialog__content,\n.agent-report-dialog__empty")
-    expect(reportBody).toContain("min-height: 0")
-    expect(reportBody).toContain("overflow: auto")
+    expect(rowBody).toContain("grid-template-columns: calc(34px * var(--ui-scale))")
+    expect(surface).not.toContain("conversation-agent-rail__run")
+    expect(surface).not.toContain("conversation-agent-rail__report")
+    expect(surface).not.toContain("conversation-agent-rail__resize")
+    expect(surface).not.toContain("agent-report-dialog")
   })
 
   test("panel body shell chrome is canonical, not theme scoped", () => {

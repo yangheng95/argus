@@ -4,10 +4,12 @@ import { setSettingsStore } from "../src/store/settings";
 import { appStore, setAppStore } from "../src/store/app";
 import { apiUrl } from "../src/services/api";
 import { activeDirectory, closeProject } from "../src/services/workspace";
+import { startTaskListSSE, stopTaskListSSE } from "../src/services/sse";
 import { __setHostTransportForTest, type HostTransport } from "../src/services/host-transport";
 
 describe("workspace active directory", () => {
   afterEach(() => {
+    stopTaskListSSE();
     __setHostTransportForTest(undefined);
     setBoardStore({
       board: null,
@@ -131,5 +133,30 @@ describe("workspace active directory", () => {
       kind: "settings.save",
       payload: expect.objectContaining({ directory: undefined }),
     });
+  });
+
+  test("closeProject stops the task-list SSE stream bound to the old directory", () => {
+    let openCalls = 0;
+    let closeCalls = 0;
+    __setHostTransportForTest({
+      kind: "browser",
+      request: async () => ({ status: 200, ok: true, headers: {}, body: null }),
+      openStream: () => {
+        openCalls += 1;
+        return { close: () => { closeCalls += 1; } };
+      },
+      native: async () => true,
+      subscribeUiCommand: () => ({ unsubscribe: () => undefined }),
+    } satisfies HostTransport);
+
+    setSettingsStore("directory", "D:/repo/current");
+
+    startTaskListSSE();
+    expect(openCalls).toBe(1);
+    expect(closeCalls).toBe(0);
+
+    closeProject();
+
+    expect(closeCalls).toBe(1);
   });
 });

@@ -156,6 +156,15 @@ function scriptKeys(file: string, text: string) {
     ) {
       for (const key of callKey(node.initializer)) keys.add(key)
     }
+    if (
+      ts.isPropertyAssignment(node) &&
+      ts.isIdentifier(node.name) &&
+      node.name.text === "title"
+    ) {
+      for (const key of callKey(node.initializer)) {
+        if (key.startsWith("chat.role.")) keys.add(key)
+      }
+    }
     if (ts.isCallExpression(node)) {
       const name = callName(node.expression)
       if (names.has(name)) {

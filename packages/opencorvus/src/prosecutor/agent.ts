@@ -41,7 +41,7 @@ import {
   upsertCounterexample,
 } from "@/metrics/store"
 import type { Counterexample } from "@/metrics/types"
-import type { DeliveryVerdictType } from "@/delivery/agent"
+import type { DeliveryVerdictType } from "@/delivery/verdict"
 import { limitSummary, markdownList, requireReportString, type AgentReportContext } from "@/agent/report"
 
 const log = Log.create({ service: "prosecutor" })
@@ -449,7 +449,7 @@ function buildProsecutorBrief(input: {
     `- current-iteration metric_result rows: ${input.currentResultCount}`,
     `- open counterexamples before you run: ${input.openCounterexampleCount}`,
     ``,
-    `## Defender (DeliveryAgent) verdict — advisory, not authoritative`,
+    `## Defender acceptance verdict — advisory, not authoritative`,
     `verdict=${input.defenderVerdict.verdict}`,
     `summary: ${input.defenderVerdict.summary}`,
     issues.length > 0 ? `\nissues (${issues.length}):` : "",

@@ -4,9 +4,9 @@
 // picker.
 //
 //   - OpenCorvus picker lists only the models from providers that the
-//     server reports as connected (auth'd). Picking writes the project
-//     default via `patchConfig({ model })` — same write path as
-//     AgentModelsPanel project-default row.
+//     server reports as connected (auth'd). In task context it writes the
+//     task root session overlay; outside task context it writes the project
+//     default.
 //   - External picker lists every model from the provider IDs mapped to
 //     that executor (EXECUTOR_PROVIDER_MAP). These provider buckets are
 //     only a model taxonomy for the picker; they must not be treated as
@@ -15,11 +15,13 @@
 // State sources (rule 8 single source):
 //   - active external executor → settingsStore.executor
 //   - per-executor model → appStore.executors via setExecutorModel
-//   - project default model → appStore.config.model via patchConfig
+//   - OpenCorvus model → current task root session config when bound,
+//     otherwise appStore.config.model via patchConfig
 
-import { createMemo, createSignal, For, onCleanup, Show } from "solid-js";
+import { createMemo, createResource, createSignal, For, onCleanup, Show } from "solid-js";
 import { useHotkey } from "../solid/hotkey";
 import { appStore } from "../store/app";
+import { rootTaskSessionID, hasSelectedTask } from "../store/board";
 import { settingsStore, setSettingsStore, saveSettings, sanitizeExecutor } from "../store/settings";
 import { Icon } from "./Icon";
 import { useDisclosure, type Disclosure } from "../solid/disclosure";
@@ -31,7 +33,13 @@ import {
   executorTitle,
   setExecutorModel,
 } from "../services/executor";
-import { patchConfig } from "../services/config";
+import {
+  getSessionConfig,
+  patchConfig,
+  patchSessionConfig,
+  sessionConfigRefreshToken,
+  type SessionConfigResponse,
+} from "../services/config";
 import { loadProviderInfo } from "../services/init";
 import { t } from "../utils/i18n";
 import { Button } from "./ui/Button";
@@ -167,8 +175,27 @@ export function ExecutorSelector() {
   const activeID = createMemo(() => sanitizeExecutor(settingsStore.executor));
   const isExternalActive = createMemo(() => activeID() !== INTERNAL_EXECUTOR_ID);
   const externalActiveID = createMemo(() => (isExternalActive() ? activeID() : ""));
+  const taskRootSessionID = createMemo(() => rootTaskSessionID().trim());
 
-  const openCorvusModel = createMemo(projectModelFromConfig);
+  const sessionConfigKey = createMemo((): { sessionID: string; baseModel: string; refresh: number } | null => {
+    const sessionID = taskRootSessionID();
+    if (!sessionID) return null;
+    return { sessionID, baseModel: projectModelFromConfig(), refresh: sessionConfigRefreshToken() };
+  });
+  const [sessionConfig, { mutate: mutateSessionConfig }] = createResource(
+    sessionConfigKey,
+    async (key): Promise<SessionConfigResponse> => {
+      return await getSessionConfig(key.sessionID);
+    },
+  );
+
+  const openCorvusModel = createMemo(() => {
+    if (taskRootSessionID()) {
+      const model = sessionConfig()?.config?.model;
+      return typeof model === "string" ? model : "";
+    }
+    return projectModelFromConfig();
+  });
   const externalModel = createMemo(() => {
     const id = externalActiveID();
     return id ? executorCurrentModel(id) : "";
@@ -201,6 +228,7 @@ export function ExecutorSelector() {
   const focusedCurrentModel = createMemo(() => executorCurrentModel(focusedExternalID()));
 
   function openMirror() {
+    if (mirrorWriteDisabled()) return;
     external.close();
     void ensureProviderInfoLoaded();
     mirror.openIt();
@@ -254,9 +282,30 @@ export function ExecutorSelector() {
       mirror.close();
       return;
     }
+    // R5.1 item 9: under a selected task the model picker writes ONLY the
+    // task-root session overlay, never the project /config. If a task is
+    // selected but its root session is not yet resolved, the write is
+    // suppressed entirely (no fallback to /config) — the picker is disabled
+    // in that state (see mirrorWriteDisabled()).
+    if (hasSelectedTask()) {
+      const sessionID = taskRootSessionID();
+      if (!sessionID) {
+        mirror.close();
+        return;
+      }
+      const saved = await patchSessionConfig(sessionID, { model: value ? value : null });
+      mutateSessionConfig(saved);
+      mirror.close();
+      return;
+    }
     await patchConfig({ model: value ? value : null });
     mirror.close();
   }
+
+  // True when a task is selected but its root session is not yet resolved:
+  // the OpenCorvus model picker must be disabled (R5.1 item 9) rather than
+  // silently writing the project /config.
+  const mirrorWriteDisabled = createMemo(() => hasSelectedTask() && !taskRootSessionID());
 
   async function pickExternalModel(executorID: string, model: string) {
     if (executorID !== activeID()) {
@@ -300,6 +349,7 @@ export function ExecutorSelector() {
         ariaLabel={t("executor.mirror_chip_aria", {
           model: openCorvusModel() || t("agent_models.option_not_set"),
         })}
+        disabled={mirrorWriteDisabled()}
       >
         <div class="executor-popover" data-section="mirror">
           <div class="executor-popover-header">
@@ -324,6 +374,7 @@ export function ExecutorSelector() {
                   <ProviderModelGroup
                     group={group}
                     currentModel={openCorvusModel()}
+                    disabled={mirrorWriteDisabled()}
                     onPick={(modelID) => void pickMirrorModel(modelID)}
                   />
                 )}
@@ -440,6 +491,7 @@ interface ExecutorChipProps {
   modelPlaceholder: string;
   title: string;
   ariaLabel: string;
+  disabled?: boolean;
   children: any;
 }
 
@@ -461,8 +513,10 @@ function ExecutorChip(props: ExecutorChipProps) {
         aria-expanded={props.disclosure.open() ? "true" : "false"}
         title={props.title}
         aria-label={props.ariaLabel}
+        disabled={props.disabled}
         onClick={(event) => {
           event.stopPropagation();
+          if (props.disabled) return;
           props.onActivate();
         }}
       >
@@ -480,6 +534,7 @@ function ExecutorChip(props: ExecutorChipProps) {
 interface ProviderModelGroupProps {
   group: ProviderGroup;
   currentModel: string;
+  disabled?: boolean;
   onPick: (modelID: string) => void;
 }
 
@@ -497,6 +552,7 @@ function ProviderModelGroup(props: ProviderModelGroupProps) {
               class="executor-popover-model"
               data-active={modelID === props.currentModel ? "true" : "false"}
               title={modelID}
+              disabled={props.disabled}
               onClick={() => props.onPick(modelID)}
             >
               <span class="executor-popover-model-name">

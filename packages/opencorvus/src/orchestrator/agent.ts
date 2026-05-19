@@ -666,7 +666,7 @@ export const OrchestratorEventNote = {
       lines.push(
         input.affectedGoalCount > 0
           ? `${input.affectedGoalCount} affected goal attempt(s) were reopened for rework; dispatch them again or escalate.`
-          : "No goal attempt was reopened; inspect the delivery gate failure and choose the next repair strategy from manifest evidence.",
+          : "No goal attempt was reopened; inspect the integrity acceptance evidence and choose the next repair strategy from manifest evidence.",
       )
     } else {
       lines.push("Affected goal attempts were reopened for rework; dispatch them again or escalate.")
@@ -714,16 +714,16 @@ async function buildSystemParts(task: TaskRow, _event: OrchestratorEvent | undef
   // flipping `assistant.auto_iteration` changes the next wake immediately.
   ctx.push("## Auto Iteration Mode")
   if (autoIteration) {
-    ctx.push("- assistant.auto_iteration=true: rejected deliveries and failed terminal waves may queue same-task repair work automatically when evidence is concrete and not a repeated identical failure.")
-    ctx.push("- Keep repairs scoped to the latest delivery evidence, then run `deliver` again; stop and ask when the failure repeats or needs operator judgment.")
+    ctx.push("- assistant.auto_iteration=true: rejected acceptance reviews and failed terminal waves may queue same-task repair work automatically when evidence is concrete and not a repeated identical failure.")
+    ctx.push("- Keep repairs scoped to the latest integrity acceptance evidence, then run the integrity review again; stop and ask when the failure repeats or needs operator judgment.")
   } else {
-    ctx.push("- assistant.auto_iteration=false: rejected deliveries and failed terminal waves do not open host-side rework attempts or queue a new build loop by themselves.")
+    ctx.push("- assistant.auto_iteration=false: rejected acceptance reviews and failed terminal waves do not open host-side rework attempts or queue a new build loop by themselves.")
     ctx.push("- The current reasoning turn still owns the next decision: use the evidence to repair, replan, ask a concrete question, fail the task, or report the current result.")
   }
   ctx.push("")
 
   // ── Follow-up task context ──
-  // When the delivery agent's `submit_next_task` spawned this task (for any
+  // When an acceptance follow-up spawned this task (for any
   // reason — repair, iteration, or a queued recommendation), we attach the
   // predecessor task id, any failed-criteria evidence, and scope hints so
   // the agent knows what came before and what (if anything) must be fixed.

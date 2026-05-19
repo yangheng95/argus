@@ -26,6 +26,7 @@ import { Snapshot } from "@/snapshot"
 import type { Provider } from "@/provider/provider"
 import { PermissionNext } from "@/permission/next"
 import { iife } from "@/util/iife"
+import { NamedError } from "@opencorvus-ai/util/error"
 
 export namespace Session {
   const log = Log.create({ service: "session" })
@@ -381,6 +382,49 @@ export namespace Session {
   )
 
   /**
+   * A session config overlay (model / prompt / temperature) is owned by the
+   * ROOT session only (task root or standalone root) — R5.1 item 2. Child
+   * execution sessions run normally but never own a config overlay; they
+   * inherit the task-root overlay at resolution time (R5.1 item 5). The
+   * settings UI must target the root session, so both GET and PATCH of the
+   * session config reject a child session here (single guard, rule 8).
+   */
+  export const ChildSessionConfigError = NamedError.create(
+    "ChildSessionConfigError",
+    z.object({
+      sessionID: z.string(),
+      parentID: z.string(),
+      message: z.string(),
+    }),
+  )
+
+  export function assertConfigurableRoot(session: Info): void {
+    if (session.parentID) {
+      throw new ChildSessionConfigError({
+        sessionID: session.id,
+        parentID: session.parentID,
+        message:
+          `Session ${session.id} is a child session (parent ${session.parentID}); ` +
+          `it does not own a config overlay. Target its root session for model/prompt settings.`,
+      })
+    }
+  }
+
+  function assertNoStoredConfigOverlayNull(value: unknown, path = "configOverlay"): void {
+    if (value === null) {
+      throw new Error(
+        `Stored session overlay contains a null at ${path}; ` +
+          `configOverlay must be normalized before it is persisted.`,
+      )
+    }
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+        assertNoStoredConfigOverlayNull(child, `${path}.${key}`)
+      }
+    }
+  }
+
+  /**
    * Merge `patch` into `session.metadata`, preserving keys not listed in patch.
    * Atomic at row-level (single UPDATE under transaction). Caller-side merges
    * race with concurrent writers; collapse all metadata writes for one session
@@ -419,8 +463,12 @@ export namespace Session {
       return Database.transaction((db) => {
         const row = db.select().from(SessionTable).where(eq(SessionTable.id, input.sessionID)).get()
         if (!row) throw new NotFoundError({ message: `Session not found: ${input.sessionID}` })
-        const current = Config.Overlay.parse((row.metadata as Record<string, unknown> | null | undefined)?.configOverlay ?? {})
+        assertConfigurableRoot(fromRow(row))
+        const stored = (row.metadata as Record<string, unknown> | null | undefined)?.configOverlay ?? {}
+        assertNoStoredConfigOverlayNull(stored)
+        const current = Config.Overlay.parse(stored)
         const nextOverlay = Config.Overlay.parse(Config.mergeOverlay(current as Config.Info, input.patch))
+        assertNoStoredConfigOverlayNull(nextOverlay)
         const metadata = {
           ...((row.metadata ?? {}) as Record<string, unknown>),
           configOverlay: nextOverlay,

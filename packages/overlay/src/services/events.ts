@@ -11,6 +11,7 @@ import {
   setSnapshotVersion,
 } from "../store/board";
 import { configRefreshIncludesSettingsData, loadConfigInfo, loadSettingsInfo } from "./init";
+import { markSessionConfigStale } from "./config";
 import { applyEvent as applyTreeWriterEvent } from "./tree-writer";
 import { routeNotification } from "./notify";
 import {
@@ -29,7 +30,9 @@ function isMessageStreamEvent(type: string): boolean {
   return (
     type === "message.updated" ||
     type === "message.part.updated" ||
-    type === "message.part.delta"
+    type === "message.part.delta" ||
+    type === "message.removed" ||
+    type === "message.part.removed"
   );
 }
 
@@ -76,11 +79,25 @@ function shouldRecoverSelectedTaskSequenceGap(event: any): boolean {
   return current > 0 && sequence > current + 1;
 }
 
+function markSelectedTaskSequenceConsumed(event: any): void {
+  const taskID = eventTaskID(event);
+  if (!taskID || taskID !== boardStore.selectedTaskID) return;
+  const sequence = eventSequence(event);
+  if (sequence <= 0) return;
+  const current = boardStore.taskSequence;
+  if (current > 0 && sequence <= current) return;
+  setTaskSequence(sequence);
+}
+
 function isMessageWriterPrerequisiteError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error || "");
   return (
     message.startsWith("message.part.delta: unknown session ") ||
-    message.startsWith("message.part.delta: unknown part ")
+    message.startsWith("message.part.delta: unknown part ") ||
+    message.startsWith("message.removed: unknown session ") ||
+    message.startsWith("message.removed: unknown message ") ||
+    message.startsWith("message.part.removed: unknown session ") ||
+    message.startsWith("message.part.removed: unknown part ")
   );
 }
 
@@ -501,7 +518,20 @@ export function routeSSEEvent(event: any): boolean {
     } catch (error) {
       if (!isMessageWriterPrerequisiteError(error)) throw error;
       scheduleSelectedTaskRecovery(`message writer prerequisites missing: ${type}`);
+      return true;
     }
+    markSelectedTaskSequenceConsumed(event);
+    return true;
+  }
+
+  if (type === "session.updated") {
+    const properties = record(event?.properties)
+      ? event.properties
+      : record(event?.payload)
+        ? event.payload
+        : {};
+    const sessionID = String(properties?.info?.id || properties?.sessionID || properties?.session_id || "");
+    if (sessionID) markSessionConfigStale(sessionID);
     return true;
   }
 
@@ -540,6 +570,7 @@ export function routeSSEEvent(event: any): boolean {
         // cursorTime === 0 means "undo the undo"; reload to bring events back.
         void clearPruneCursor;
       })();
+      markSelectedTaskSequenceConsumed(event);
     } else if (evtTaskID === boardStore.selectedTaskID && cursorTime === 0) {
       // Rewind cleared by backend — full reload to restore the suppressed tail.
       scheduleSelectedTaskRecovery("task rewind cleared", evtTaskID);
@@ -557,6 +588,7 @@ export function routeSSEEvent(event: any): boolean {
   if (type === "run.progress") {
     if (!shouldConvertRunProgress(properties)) {
       scheduleBoard(BOARD_EVENT_DEBOUNCE);
+      markSelectedTaskSequenceConsumed(event);
       return true;
     }
 
@@ -565,6 +597,7 @@ export function routeSSEEvent(event: any): boolean {
     for (const msg of messages) {
       writeToTree(msg);
     }
+    markSelectedTaskSequenceConsumed(event);
     return true;
   }
 
@@ -578,11 +611,13 @@ export function routeSSEEvent(event: any): boolean {
     for (const msg of messages) {
       writeToTree(msg);
     }
+    markSelectedTaskSequenceConsumed(event);
     return true;
   }
 
   // ── Config changed → refresh appStore.config ──
   if (type === "config.changed") {
+    markSessionConfigStale();
     scheduleConfigReload();
     return true;
   }
@@ -624,7 +659,15 @@ function normalizedEventType(event: any): string {
 }
 
 function eventTaskID(event: any): string {
-  return String(event?.taskID || event?.properties?.taskID || event?.payload?.taskID || "");
+  return String(
+    event?.taskID ||
+      event?.task_id ||
+      event?.properties?.taskID ||
+      event?.properties?.task_id ||
+      event?.payload?.taskID ||
+      event?.payload?.task_id ||
+      "",
+  );
 }
 
 function eventSequence(event: any): number {

@@ -6,7 +6,6 @@ import { createArchitectOutputTools } from "../src/architect/output-tools"
 import { createRequirementsOutputTools } from "../src/requirements/output-tools"
 import { createIntentOutputTools } from "../src/intent-analysis/output-tools"
 import { createDesignOutputTools } from "../src/design-analyst/output-tools"
-import { createDeliveryOutputTools } from "../src/delivery/output-tools"
 import { createProsecutorTools } from "../src/prosecutor/agent"
 import { buildBuildAgentReport } from "../src/build/report"
 import { buildGoalReport } from "../src/tool/goal-report"
@@ -31,6 +30,8 @@ test("agent output toolkits build explicit non-empty reports", async () => {
   const architect = createArchitectOutputTools({ workDir: traceDir })
   const architectCollector = architect.getCollector()
   architectCollector.summary = "Coordinated workflow report cards."
+  architectCollector.decomposition_analysis =
+    "Split the work into a UI reporting goal with explicit ownership and verification boundaries so the build agent can execute without cross-goal ambiguity."
   architectCollector.goals.push({
     id: "goal_ui",
     title: "Readable workflow cards",
@@ -76,15 +77,6 @@ test("agent output toolkits build explicit non-empty reports", async () => {
     open_questions: [],
   }, {} as any)
   expectReport(design.buildReport())
-
-  const delivery = createDeliveryOutputTools()
-  await delivery.tools.submit_verdict.execute({
-    verdict: "accepted",
-    summary: "Report contract is implemented.",
-    deferred_checks: [],
-    tool_call_evidence: [{ tool: "bun test", passed: true, detail: "target tests passed" }],
-  }, {} as any)
-  expectReport(delivery.buildReport())
 
   const prosecutor = createProsecutorTools({ task_id: "tsk_report", iteration: 1 })
   expectReport(prosecutor.buildReport({ finalText: "No counterexample found after reviewing the current delivery." }))

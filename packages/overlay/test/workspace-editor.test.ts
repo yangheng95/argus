@@ -1,14 +1,20 @@
 import { afterEach, expect, test } from "bun:test"
+import { readFileSync } from "node:fs"
+import { join } from "node:path"
 import {
   __setHostTransportForTest,
   type HostTransport,
   type NativeCommand,
 } from "../src/services/host-transport"
-import { openDirectoryInEditor } from "../src/services/workspace"
+import { editorTargetPath, openDirectoryInEditor, openPathInSelectedEditor } from "../src/services/workspace"
+import { applySettings, DEFAULT_SETTINGS } from "../src/store/settings"
 import { pathBreadcrumb } from "../src/utils/dom-utils"
 import { setLocaleData } from "../src/utils/i18n"
 
-afterEach(() => __setHostTransportForTest(undefined))
+afterEach(() => {
+  __setHostTransportForTest(undefined)
+  applySettings(DEFAULT_SETTINGS)
+})
 
 function fakeTransport(calls: NativeCommand[]): HostTransport {
   return {
@@ -42,6 +48,46 @@ test("openDirectoryInEditor routes the selected project editor through HostTrans
       path: "D:/workspace/app",
     },
   ])
+})
+
+test("openPathInSelectedEditor routes file links through the persisted top-right IDE", async () => {
+  const calls: NativeCommand[] = []
+  __setHostTransportForTest(fakeTransport(calls))
+  applySettings({ ...DEFAULT_SETTINGS, projectEditor: "cursor" })
+
+  await openPathInSelectedEditor("D:/workspace/app/src/main.ts")
+
+  expect(calls).toEqual([
+    {
+      kind: "workspace.openProjectEditor",
+      editor: "cursor",
+      path: "D:/workspace/app/src/main.ts",
+    },
+  ])
+})
+
+test("editorTargetPath resolves relative file links against the active directory", () => {
+  applySettings({ ...DEFAULT_SETTINGS, directory: "D:/workspace/app" })
+
+  expect(editorTargetPath("src/main.ts")).toBe("D:/workspace/app/src/main.ts")
+  expect(editorTargetPath("C:/other/file.ts")).toBe("C:/other/file.ts")
+})
+
+test("editorTargetPath refuses unresolved relative file links without an active directory", () => {
+  applySettings(DEFAULT_SETTINGS)
+
+  expect(editorTargetPath("src/main.ts")).toBe("")
+  expect(editorTargetPath("C:/other/file.ts")).toBe("C:/other/file.ts")
+})
+
+test("markdown file links no longer open the built-in workspace file preview", () => {
+  const main = readFileSync(join(import.meta.dir, "../src/main.tsx"), "utf8")
+  const panel = readFileSync(join(import.meta.dir, "../src/components/WorkspacePanel.tsx"), "utf8")
+
+  expect(main).toContain("openPathInSelectedEditor(path)")
+  expect(main).not.toContain("openWorkspaceFile")
+  expect(panel).not.toContain('kind: "file"')
+  expect(panel).not.toContain("FileViewPanel")
 })
 
 test("cwd breadcrumb keeps editor launchers out of the directory control", () => {

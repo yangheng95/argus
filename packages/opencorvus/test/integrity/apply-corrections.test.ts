@@ -16,11 +16,21 @@ const baseGoal: GoalContractFields = {
   requirement_ids: [],
 }
 
+function acceptedAcceptance(): IntegrityResult["acceptance"] {
+  return {
+    verdict: "accepted",
+    summary: "Acceptance passed",
+    deferred_checks: [],
+    tool_call_evidence: [{ tool: "unit_test", passed: true, detail: "unit test passed" }],
+  }
+}
+
 describe("integrity correction application", () => {
   test("modify corrections can repair topology fields integrity audits", () => {
     const result: IntegrityResult = {
       verdict: "needs_correction",
       summary: "Repair dependency topology",
+      acceptance: acceptedAcceptance(),
       dimensions: [],
       issues: [],
       corrections: [{

@@ -7,7 +7,6 @@ export type AgentRoleID =
   | "title"
   | "summary"
   | "control"
-  | "delivery"
   | "orchestrator"
   | "requirements"
   | "architect"
@@ -82,13 +81,6 @@ export namespace AgentRoleContract {
       defaultPromptRequired: true,
       promptConfigMode: "override",
     },
-    delivery: {
-      id: "delivery",
-      description: "Delivery agent. Performs delivery evidence review, bounded simple repairs, and semantic accept/reject judgments; deterministic arbiter finalizes the delivery-stage verdict.",
-      promptEditable: true,
-      defaultPromptRequired: true,
-      promptConfigMode: "append",
-    },
     orchestrator: {
       id: "orchestrator",
       description: "Orchestrator agent. Owns task lifecycle decisions and dispatches explicit workflow tools.",
@@ -126,7 +118,7 @@ export namespace AgentRoleContract {
     },
     integrity: {
       id: "integrity",
-      description: "Integrity reviewer. Audits requirement and goal integrity, including post-build requirement-status fidelity; it does not run delivery verification.",
+      description: "Integrity reviewer. Audits requirement and goal integrity and owns final session-bound acceptance review, including runtime, frontend, visual, and rejection-detail evidence.",
       promptEditable: true,
       defaultPromptRequired: true,
       promptConfigMode: "append",

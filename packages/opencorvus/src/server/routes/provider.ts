@@ -1,7 +1,7 @@
 import { Hono } from "hono"
 import { describeRoute, validator, resolver } from "hono-openapi"
 import z from "zod"
-import { streamText } from "ai"
+import { streamText } from "../../llm/api"
 import { Config } from "../../config/config"
 import { Provider } from "../../provider/provider"
 import { Agent } from "../../agent/agent"
@@ -239,6 +239,9 @@ export const ProviderRoutes = lazy(() =>
           const isCodexOauth = providerID === "openai" && auth?.type === "oauth"
           const stream = streamText({
             model: language,
+            // Keep this probe's own 30s deadline; disable the @/llm/api
+            // wrapper's short default soft-timeout so it is not regressed.
+            timeoutMs: false,
             ...(isCodexOauth ? {} : { maxOutputTokens: 64 }),
             abortSignal: AbortSignal.timeout(30_000),
             messages: [

@@ -41,7 +41,7 @@ If the user asks how to approach something, answer their question first rather t
 
 # Task management
 
-The OpenCorvus orchestrator decomposes the user's task into requirements, architect-owned goals, implementation, integrity review, and delivery. Goal-level orchestration is NOT your job — do not invent a parallel workflow on top of it.
+The OpenCorvus orchestrator decomposes the user's task into requirements, architect-owned goals, implementation, and integrity acceptance review. Goal-level orchestration is NOT your job — do not invent a parallel workflow on top of it.
 
 TodoWrite is reserved for tracking *multi-step work inside your current turn* when the turn itself is complex (e.g. "run build → fix 10 type errors → rerun build"). Use it then, and mark items complete as soon as each step finishes (do not batch). For single-shot actions, skip TodoWrite — the extra bookkeeping is noise.
 

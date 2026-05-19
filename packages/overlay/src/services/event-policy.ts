@@ -31,12 +31,17 @@ const TREE_WRITER_PASS_THROUGH_PREFIXES = [
   "plan.",
   "goal.",
   "goal_run.",
-  "delivery.",
   "evaluation.",
   "workflow.",
   "task.",
   "interaction.",
 ] as const;
+
+const TREE_WRITER_PASS_THROUGH_EXACT_TYPES = new Set([
+  "delivery.ready",
+  "delivery.evidence.updated",
+  "delivery.preview.updated",
+])
 
 const BOARD_INVALIDATING_EXACT_TYPES = new Set([
   "task.created",
@@ -54,11 +59,16 @@ const BOARD_INVALIDATING_PREFIXES = [
   "plan.",
   "goal.",
   "goal_run.",
-  "delivery.",
   "evaluation.",
   "interaction.",
   "workflow.",
 ] as const;
+
+const BOARD_INVALIDATING_EXACT_DELIVERY_TYPES = new Set([
+  "delivery.ready",
+  "delivery.evidence.updated",
+  "delivery.preview.updated",
+])
 
 const ROUTER_CONSUMED_NOOP_TYPES = new Set([
   "agent.updated",
@@ -70,11 +80,13 @@ export function isTreeWriterNoopEventType(type: string): boolean {
 }
 
 export function isTreeWriterPassThroughEventType(type: string): boolean {
-  return hasPrefix(type, TREE_WRITER_PASS_THROUGH_PREFIXES);
+  return TREE_WRITER_PASS_THROUGH_EXACT_TYPES.has(type) || hasPrefix(type, TREE_WRITER_PASS_THROUGH_PREFIXES);
 }
 
 export function isBoardInvalidatingEventType(type: string): boolean {
-  return BOARD_INVALIDATING_EXACT_TYPES.has(type) || hasPrefix(type, BOARD_INVALIDATING_PREFIXES);
+  return BOARD_INVALIDATING_EXACT_TYPES.has(type) ||
+    BOARD_INVALIDATING_EXACT_DELIVERY_TYPES.has(type) ||
+    hasPrefix(type, BOARD_INVALIDATING_PREFIXES);
 }
 
 export function isRouterConsumedNoopEventType(type: string): boolean {

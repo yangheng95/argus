@@ -11,7 +11,7 @@
 // or-bare, so a user staring at a fresh task saw four different visual
 // treatments for the same semantic state. There IS a shared primitive
 // already — `.empty-hint` plus a card-chrome shell at styles.css:2444 —
-// but only DiffView / FileViewPanel / LogViewer / MemoryPanel /
+// but only DiffView / LogViewer / MemoryPanel /
 // PromptCatalog used it. The right panel didn't.
 //
 // This test pins the contract:

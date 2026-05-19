@@ -149,7 +149,7 @@ export const INTEGRITY_DIMENSIONS: readonly IntegrityDimension[] = [
       "Merged-tree completeness. The union of all goals' `owned_paths` must materialise " +
         "every prerequisite the user's deliverable needs to be exercised end-to-end. " +
         "For visual / browser deliverables that includes the runnable entrypoint (root " +
-        "`index.html` or framework equivalent that delivery's renderer can load); for " +
+        "`index.html` or framework equivalent that the acceptance renderer can load); for " +
         "any goal whose acceptance command invokes project-wide tooling (`npm test`, " +
         "`bun test`, `pnpm test`, root `package.json` scripts, framework binaries via " +
         "root devDependencies), it includes the root config that makes those commands " +

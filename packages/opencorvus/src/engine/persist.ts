@@ -1993,6 +1993,7 @@ export function recordIntegrityAttempt(input: {
     priority: "blocking" | "advisory"
     reason: string
   }>
+  acceptance?: unknown
   now?: number
 }): string {
   const id = Identifier.ascending("artifact")
@@ -2011,6 +2012,7 @@ export function recordIntegrityAttempt(input: {
     corrections: input.corrections ?? null,
     graph_corrections: input.graphCorrections ?? null,
     missing_goals: input.missingGoals ?? null,
+    acceptance: input.acceptance ?? null,
     time_completed: now,
   }
   Database.use((db) =>

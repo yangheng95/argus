@@ -1301,7 +1301,7 @@ export namespace Config {
             .boolean()
             .optional()
             .describe(
-              "Enable OpenCorvus host-side automatic repair iteration after failed goal waves or rejected deliveries. Default false: delivery rejection is reported and waits for operator follow-up.",
+              "Enable OpenCorvus host-side automatic repair iteration after failed goal waves or rejected acceptance reviews. Default false: acceptance rejection is reported and waits for operator follow-up.",
             ),
           requirements: z
             .object({
@@ -1321,14 +1321,6 @@ export namespace Config {
             .describe(
               "Architect agent configuration — cross-goal coordination, interface contracts. Model is configured via agent.architect.model.",
             ),
-          delivery: z
-            .object({
-              max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for delivery agent"),
-              max_retries: z.number().int().min(0).optional().describe("Maximum delivery generation retries"),
-              skills: z.array(z.string()).optional().describe("Additional skill paths for delivery agent"),
-            })
-            .optional()
-            .describe("Delivery agent configuration"),
           delivery_visual: z
             .object({
               phash_hamming_max: z
@@ -1373,7 +1365,7 @@ export namespace Config {
                 .describe("Composite score weights; four values must sum to 1 (runtime-enforced)"),
             })
             .optional()
-            .describe("P0-B delivery visual numeric hard-gate thresholds."),
+            .describe("P0-B visual numeric evidence thresholds."),
           design_analyst: z
             .object({
               max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for design analyst agent"),
@@ -1447,7 +1439,7 @@ export namespace Config {
             .string()
             .optional()
             .describe(
-              "Default workflow for new tasks: 'direct' (build → deliver iter), 'pipeline' (design_analysis → requirements → architect → per-goal build → deliver iter), or custom ID",
+              "Default workflow for new tasks: 'direct' (build), 'pipeline' (design_analysis → requirements → architect → per-goal build → integrity), or custom ID",
             ),
           workflows: z
             .array(
@@ -1477,7 +1469,7 @@ export namespace Config {
         })
         .optional()
         .describe(
-          "Assistant agent configuration — controls orchestration policy, requirements, architect, build, design-analysis, intent-analysis, and delivery agent behavior",
+          "Assistant agent configuration — controls orchestration policy, requirements, architect, build, design-analysis, intent-analysis, and integrity review behavior",
         ),
       experimental: z
         .object({
@@ -1763,7 +1755,7 @@ export namespace Config {
   }
 
   // Serializes read-modify-write of each config file. Two concurrent
-  // PATCH /config requests (e.g. user picks build=A then delivery=B in the
+  // PATCH /config requests (e.g. user picks build=A then integrity=B in the
   // overlay panel before the first save returns) would otherwise both
   // readText() against the same "before" snapshot and the second write would
   // clobber the first agent's override. Keyed by absolute filepath so the

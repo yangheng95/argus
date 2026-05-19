@@ -216,43 +216,37 @@ async function latestSessionPromptEnvelope(sessionID: string) {
       return acc
     }, {})
 
+  // R5.1 item 6: the envelope carries ONLY conversational context — the
+  // session's stable agent role plus system/tools/format/extra. The
+  // historical model/variant are deliberately NOT carried; the model is
+  // resolved fresh from the single resolver (keyed by current taskID + agent)
+  // at the call site, so there is no history-derived model double source.
   return {
     agent: latest.agent,
-    model: latest.model,
-    ...(pickLatestDefined("variant") ? { variant: pickLatestDefined("variant") } : {}),
     ...(pickLatestDefined("system") ? { system: pickLatestDefined("system") } : {}),
     ...(pickLatestDefined("systemMode") ? { systemMode: pickLatestDefined("systemMode") } : {}),
     ...(pickLatestDefined("tools") ? { tools: pickLatestDefined("tools") } : {}),
     ...(pickLatestDefined("format") ? { format: pickLatestDefined("format") } : {}),
     ...(Object.keys(mergedExtra).length > 0 ? { extra: mergedExtra } : {}),
-  } satisfies Pick<Message.User, "agent" | "model" | "variant" | "system" | "systemMode" | "tools" | "format" | "extra">
+  } satisfies Pick<Message.User, "agent" | "system" | "systemMode" | "tools" | "format" | "extra">
 }
 
-async function latestSessionModelIdentity(sessionID: string) {
+/**
+ * The session's stable agent (its conversation role) from the latest
+ * user/assistant message. R5.1 item 6: history may carry conversational
+ * context (agent role / system / tools / format / extra) but it must NEVER
+ * decide the MODEL — the model is resolved fresh from the single resolver
+ * keyed by the current taskID + agent. So this returns the agent only; the
+ * historical model/variant are deliberately dropped (rule 8: no
+ * history-derived model double source).
+ */
+async function latestSessionAgent(sessionID: string): Promise<string | undefined> {
   const messages = await Session.messages({ sessionID })
   const latest = messages
     .map((message) => message.info)
     .filter((info) => info.role === "user" || info.role === "assistant")
     .sort((left, right) => (right.time?.created ?? 0) - (left.time?.created ?? 0))[0]
-
-  if (!latest) return
-
-  if (latest.role === "user") {
-    return {
-      agent: latest.agent,
-      model: latest.model,
-      variant: latest.variant,
-    }
-  }
-
-  return {
-    agent: latest.agent,
-    model: {
-      providerID: latest.providerID,
-      modelID: latest.modelID,
-    },
-    variant: latest.variant,
-  }
+  return latest?.agent
 }
 
 async function appendDirectAgentSessionReply(input: {
@@ -265,14 +259,20 @@ async function appendDirectAgentSessionReply(input: {
   if (!text) throw new Error("message is required")
   const target = await resolveDirectReplyTarget(input.taskID, input.sessionID)
   const messageID = Identifier.ascending("message")
+  // R5.1 item 6: the agent is the session's stable conversation role from the
+  // envelope, but the MODEL is resolved fresh from the single resolver keyed
+  // by the current taskID + agent — never reused from the history envelope.
+  // The historical `variant` (model-selection family, §14.2) is dropped for
+  // the same single-source reason; the effective variant comes from the
+  // session overlay at stream time, not from a pinned history value.
+  const resolvedModel = await resolveAgentModelRef(target.prompt.agent, { taskID: input.taskID })
   const message: Message.User = {
     id: messageID,
     sessionID: target.session.id,
     role: "user",
     time: { created: Date.now() },
     agent: target.prompt.agent,
-    model: target.prompt.model,
-    ...(target.prompt.variant ? { variant: target.prompt.variant } : {}),
+    model: { providerID: resolvedModel.providerID, modelID: resolvedModel.modelID },
     ...(target.prompt.system ? { system: target.prompt.system } : {}),
     ...(target.prompt.systemMode ? { systemMode: target.prompt.systemMode } : {}),
     ...(target.prompt.tools ? { tools: target.prompt.tools } : {}),
@@ -413,7 +413,7 @@ async function appendTaskSessionMessage(
       `Task ${task.id} has no root session — cannot append operator message; recreate the task or repair task.session_id`,
     )
   }
-  const ctx = await messageContext(task.session_id)
+  const ctx = await messageContext(task.session_id, task.id)
   if (!ctx) {
     throw new Error(
       `Task ${task.id} session ${task.session_id} has no agent/model context — cannot append operator message`,
@@ -466,22 +466,20 @@ async function appendTaskSessionMessage(
   return { info: enrichedInfo, parts }
 }
 
-async function messageContext(_sessionID: string) {
-  const latest = await latestSessionModelIdentity(_sessionID)
-  if (latest) {
-    return {
-      agent: latest.agent,
-      model: latest.model,
-    }
-  }
-  const name = await Agent.defaultAgent().catch(() => undefined)
+/**
+ * Resolve the {agent, model} a task-owned operator/direct-reply message
+ * should carry. R5.1 item 6: the agent is the session's stable conversation
+ * role (history-derived agent is conversation context, allowed); the MODEL is
+ * resolved fresh from the single resolver keyed by the CURRENT taskID + agent
+ * — never reused from history. Strict — a missing model config is a hard
+ * project-setup error that must surface, not be papered over.
+ */
+async function messageContext(sessionID: string, taskID: string) {
+  const name = (await latestSessionAgent(sessionID)) ?? (await Agent.defaultAgent().catch(() => undefined))
   const agent = name ? await Agent.get(name).catch(() => undefined) : undefined
-  // Single configured-model resolver (spec §13.2): session overlay > base.
-  // Strict — no .catch; a missing model config is a hard project-setup error
-  // and must surface to the caller, not be papered over with `undefined`.
   const model = name
-    ? await resolveAgentModelRef(name, { sessionID: _sessionID })
-    : await resolveConfiguredModelRef({ sessionID: _sessionID })
+    ? await resolveAgentModelRef(name, { taskID })
+    : await resolveConfiguredModelRef({ taskID })
   if (!agent || !model) return
   return {
     agent: agent.name,

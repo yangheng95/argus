@@ -99,9 +99,11 @@ test("resetWriter advances the card tree epoch for transcript replacement bounda
   }
 });
 
-test("Conversation re-arms follow lock from the card tree epoch", () => {
+test("Conversation respects replacement scroll intent from the card tree epoch", () => {
   const source = readFileSync(join(import.meta.dir, "../src/components/Conversation.tsx"), "utf8");
   expect(source).toContain("() => cardTreeStore.treeEpoch");
+  expect(source).toContain('cardTreeStore.treeReplacementScrollIntent === "preserve"');
+  expect(source).toContain("scrollController?.contentChanged();");
   expect(source).toContain("setTracking(true);");
   expect(source).toContain("scrollController?.scrollToBottom();");
 });

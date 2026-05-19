@@ -1,7 +1,7 @@
 /* ── Workspace Panel Surface ──
  * Owns: workspace-mount shell,
  * pane-resizer (row variant), workspace panel + tabs + body,
- * diff-preview panel, file-view panel, code .file-link inline.
+ * diff-preview panel, code .file-link inline.
  * Loaded in index.html before styles.css.
  * Do not add solo rules for these classes anywhere else. */
 
@@ -230,59 +230,7 @@
     color-mix(in srgb, var(--surface-inset) 92%, transparent);
 }
 
-/* ── File View Panel ── */
-.file-view-panel {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-
-/* file-view-head replaced by oc-panel__header override below */
-.file-view-panel > .oc-panel__header {
-  gap: calc(8px * var(--ui-scale));
-  padding: calc(6px * var(--ui-scale)) calc(10px * var(--ui-scale));
-  border-bottom: var(--oc-border-width) solid var(--border);
-  background: var(--surface-strong);
-}
-
-.file-view-panel > .oc-panel__body {
-  display: flex;
-  flex-direction: column;
-}
-
-.file-view-path {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-family: var(--mono);
-  font-size: var(--ui-font-code);
-  color: var(--text-strong);
-}
-
-.file-view-body {
-  /* flex:1 and overflow:auto removed — oc-panel__body handles those */
-  padding: calc(6px * var(--ui-scale));
-}
-
-.file-view-body pre {
-  margin: 0;
-}
-
-.file-view-empty {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: calc(24px * var(--ui-scale));
-  background:
-    linear-gradient(180deg, var(--ui-highlight-tone), transparent 72%),
-    color-mix(in srgb, var(--surface-inset) 92%, transparent);
-}
-
-/* ── File Link (inline code → workspace file opener) ── */
+/* ── File Link (inline code → selected IDE opener) ── */
 code .file-link {
   color: var(--accent);
   text-decoration: none;

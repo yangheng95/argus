@@ -8,7 +8,6 @@ const workerAgentFiles = [
   "packages/opencorvus/src/requirements/agent.ts",
   "packages/opencorvus/src/design-analyst/agent.ts",
   "packages/opencorvus/src/build/agent.ts",
-  "packages/opencorvus/src/delivery/agent.ts",
   "packages/opencorvus/src/integrity/agent.ts",
   "packages/opencorvus/src/prosecutor/agent.ts",
 ]
@@ -20,7 +19,7 @@ const forbiddenVisibleBriefSnippets = [
   "Then call submit_requirements",
   "call report_build_result exactly once",
   "Final Output (REQUIRED)",
-  "submit_verdict tool exactly once",
+  "submit_acceptance_verdict tool exactly once",
   "For EACH dimension call its own",
   "submit_<dimension_id>_verdict` tool exactly once",
   "Call query_metric_trajectory first",

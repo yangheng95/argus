@@ -6,14 +6,11 @@ import path from "node:path"
 import { createDeliveryTools } from "../../src/delivery/tools"
 import { EngineGoalTable, EngineSpecSnapshotTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import { Identifier } from "../../src/id/id"
-import { Agent } from "../../src/agent/agent"
 import { Instance } from "../../src/project/instance"
 import { stopAllManagedPreviewSessions } from "../../src/preview/session"
 import { AttachmentStore } from "../../src/storage/attachment-store"
 import { Database } from "../../src/storage/db"
 import { resetDatabase } from "../fixture/db"
-
-const repoRoot = path.resolve(import.meta.dir, "../../../..")
 
 afterEach(async () => {
   await stopAllManagedPreviewSessions()
@@ -80,26 +77,6 @@ describe("delivery bounded repair tool surface", () => {
     } finally {
       await fs.rm(dir, { recursive: true, force: true })
     }
-  })
-
-  test("core prompt treats delivery as limited repair plus gate", async () => {
-    const prompt = await Bun.file(
-      path.join(repoRoot, "packages/opencorvus/src/prompt/core/delivery-core.txt"),
-    ).text()
-
-    expect(prompt).toContain("limited final repairer")
-    expect(prompt).toContain("simple localized")
-    expect(prompt).toContain("edit_file")
-    expect(prompt).toContain("write_file")
-    expect(prompt).toContain("orchestrator can send the affected goal(s) back")
-    expect(prompt).toContain("start_frontend_preview")
-    expect(prompt).toContain("run_integrity_review")
-    expect(prompt).toContain("suspicion-triggered semantic integrity review")
-    expect(prompt).toContain("publishes the ready URL to the Overlay")
-    expect(prompt).toContain("Orchestrator is the only agent allowed")
-    expect(prompt).not.toContain("submit_next_task")
-    expect(prompt).not.toContain("Fix aggressively")
-    expect(prompt).not.toContain(" or criteria")
   })
 
   test("delivery tools cannot create follow-up engine tasks", async () => {
@@ -198,22 +175,6 @@ describe("delivery bounded repair tool surface", () => {
           await expect(
             tools.inspect_delivery_context.execute!({ section: "upstream_context", max_chars: 12_000 }, {} as any),
           ).rejects.toThrow("missing architect_contract_graph artifact")
-        },
-      })
-    } finally {
-      await fs.rm(dir, { recursive: true, force: true })
-    }
-  })
-
-  test("delivery agent exposes no registry tools", async () => {
-    const dir = await mkdtemp(path.join(os.tmpdir(), "opencorvus-delivery-agent-readonly-"))
-    try {
-      await Instance.provide({
-        directory: dir,
-        fn: async () => {
-          const agent = await Agent.get("delivery")
-          expect(agent?.description).toContain("semantic accept/reject judgments")
-          expect(agent?.tools).toEqual({ include: [] })
         },
       })
     } finally {

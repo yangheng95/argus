@@ -1,6 +1,6 @@
 ---
 name: image-generate
-description: Produce a mirror-grounded PRD/SPEC from screenshot-only visual references. Design-analysis owns the image mirror evidence tools, then writes visual specs plus frontend/backend implementation contracts. Build implements from the persisted SPEC; delivery performs visual gates.
+description: Produce a mirror-grounded PRD/SPEC from screenshot-only visual references. Design-analysis owns the image mirror evidence tools, then writes visual specs plus frontend/backend implementation contracts. Build implements from the persisted SPEC; integrity performs the final session-bound visual acceptance review.
 stage: design_analyst
 auto_detect:
   task_signals:
@@ -45,4 +45,4 @@ Use the screenshot pixels, `mirror/shared-context.md`, `mirror/page-ir.xml`, and
 
 ## Downstream Contract
 
-Build agents consume the persisted PRD/SPEC, especially `visual_consistency_spec`, plus optional `task.design_specs` anchors. They do not call mirror tools. Delivery owns rendered browser evidence and visual hard gates.
+Build agents consume the persisted PRD/SPEC, especially `visual_consistency_spec`, plus optional `task.design_specs` anchors. They do not call mirror tools. Build records its own runtime/visual evidence; Integrity owns the final workflow gate inside a review session.

@@ -14,6 +14,7 @@ import { restoreWorkspaceDirectory } from "./workspace";
 import { loadTasks, clearTasksForMissingDirectory } from "../store/board";
 import { getHostTransport } from "./host-transport";
 import { sanitizeLocale } from "../utils/i18n";
+import { createSignal } from "solid-js";
 
 // ── Check Config Accessors ──
 
@@ -142,6 +143,16 @@ export interface SessionConfigResponse {
   origin: Record<string, any>;
 }
 
+const [sessionConfigRefreshTokenValue, setSessionConfigRefreshTokenValue] = createSignal(0);
+
+export function sessionConfigRefreshToken(): number {
+  return sessionConfigRefreshTokenValue();
+}
+
+export function markSessionConfigStale(_sessionID?: string): void {
+  setSessionConfigRefreshTokenValue((value) => value + 1);
+}
+
 export async function getSessionConfig(sessionID: string): Promise<SessionConfigResponse> {
   if (!appStore.connected) {
     throw new Error("Cannot load session config while disconnected");
@@ -153,11 +164,13 @@ export async function patchSessionConfig(sessionID: string, diff: Record<string,
   if (!appStore.connected) {
     throw new Error("Cannot patch session config while disconnected");
   }
-  return await apiJson(`session/${encodeURIComponent(sessionID)}/config`, {
+  const saved = await apiJson(`session/${encodeURIComponent(sessionID)}/config`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(diff),
   });
+  markSessionConfigStale(sessionID);
+  return saved;
 }
 
 export async function syncAgentPromptLocale(locale: string): Promise<void> {

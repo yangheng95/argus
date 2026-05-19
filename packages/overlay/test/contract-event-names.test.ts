@@ -94,7 +94,6 @@ test("every event the overlay's OS-notification path listens to is a known wire 
     "review.stream.started",
     "review.stream.progress",
     "review.stream.chunk",
-    "delivery.review.completed",
     "integrity.review.completed",
   ];
   const producer = await loadProducerEventNames();

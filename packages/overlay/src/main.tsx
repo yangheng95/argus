@@ -77,6 +77,7 @@ import {
   activeDirectory,
   loadRecentDirectories,
   removeRecentDirectory,
+  openPathInSelectedEditor,
 } from "./services/workspace"
 import { openConfigDialog, openGoalDialog, renderAboutVersion, setupDialogBackdropClose } from "./services/dialog"
 import { cardTreeStore } from "./store/card-tree"
@@ -120,8 +121,8 @@ const [frontendPreviewError, setFrontendPreviewError] = createSignal("")
 let frontendPreviewRequest = 0
 
 // ── Workspace (secondary panel, stacked above composer) state ──
-// workspaceOpen drives layout visibility; workspaceView is remembered across
-// open/close cycles so reopening restores the last active view.
+// workspaceOpen drives diff panel visibility; workspaceView is remembered
+// across open/close cycles so reopening restores the last diff target.
 const [workspaceOpen, setWorkspaceOpen] = createSignal(false)
 const [workspaceView, setWorkspaceView] = createSignal<WorkspaceView>({
   kind: "diff",
@@ -484,15 +485,9 @@ function openWorkspaceDiff(target: DiffTarget): void {
   openWorkspace({ kind: "diff", target })
 }
 
-/** Open (or switch to) a file preview in the workspace. */
-function openWorkspaceFile(filePath: string): void {
-  openWorkspace({ kind: "file", filePath })
-}
-
 // Exposed for services and window-level bridges that need to trigger the
 // workspace from outside this module (e.g. ChangesPanel clicks).
 ;(window as any).openWorkspaceDiff = openWorkspaceDiff
-;(window as any).openWorkspaceFile = openWorkspaceFile
 
 // Delegate clicks on rendered-markdown file links (see utils/markdown.ts —
 // codespans that look like file paths are emitted with data-file-path).
@@ -508,7 +503,7 @@ document.addEventListener(
     const path = link.getAttribute("data-file-path")
     if (!path) return
     ev.preventDefault()
-    openWorkspaceFile(path)
+    void openPathInSelectedEditor(path)
   },
   listenerOpts,
 )

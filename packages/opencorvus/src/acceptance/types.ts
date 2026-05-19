@@ -13,7 +13,7 @@
 import z from "zod"
 
 export const AcceptanceSeverity = z.enum(["essential", "important", "optional", "pitfall"])
-export const AcceptanceTrigger = z.enum(["on_goal", "on_delivery"])
+export const AcceptanceTrigger = z.enum(["on_goal", "on_integrity", "on_delivery"])
 
 const GherkinScenarioSchema = z
   .object({
@@ -31,16 +31,24 @@ export const RubricLevelSchema = z.object({
 })
 
 const HeuristicScorerSchema = z.object({
-  type: z.literal("heuristic"),
+  type: z
+    .literal("heuristic")
+    .describe(
+      "heuristic — deterministic shell/script check, pass/fail by exit code. Requires: name, spec{kind}.",
+    ),
   name: z.string().min(1),
   spec: z.discriminatedUnion("kind", [
     z.object({
-      kind: z.literal("shell"),
+      kind: z
+        .literal("shell")
+        .describe("shell — run an inline command. Requires: cmd; optional cwd."),
       cmd: z.string().min(1).describe("Shell command. Exit 0 = pass unless expect.exit_code set."),
       cwd: z.string().optional(),
     }),
     z.object({
-      kind: z.literal("script_ref"),
+      kind: z
+        .literal("script_ref")
+        .describe("script_ref — run a repo script. Requires: path; optional args."),
       path: z.string().min(1).describe("Repo-relative script path."),
       args: z.array(z.string()).optional(),
     }),
@@ -53,7 +61,11 @@ const HeuristicScorerSchema = z.object({
 })
 
 const LlmJudgeScorerSchema = z.object({
-  type: z.literal("llm_judge"),
+  type: z
+    .literal("llm_judge")
+    .describe(
+      "llm_judge — natural-language rubric evaluation. Requires: name, criteria; optional rubric, inputs.",
+    ),
   name: z.string().min(1),
   criteria: z.string().min(10).describe("Single-criterion evaluation question in natural language."),
   rubric: z
@@ -78,13 +90,21 @@ const PREBUILT_SCORER_NAMES = [
 ] as const
 
 const PrebuiltScorerSchema = z.object({
-  type: z.literal("prebuilt"),
+  type: z
+    .literal("prebuilt")
+    .describe(
+      "prebuilt — a named library metric. Requires: name from the fixed PREBUILT_SCORER_NAMES set; optional config.",
+    ),
   name: z.enum(PREBUILT_SCORER_NAMES),
   config: z.record(z.string(), z.unknown()).default({}),
 })
 
 const ContractAuditScorerSchema = z.object({
-  type: z.literal("contract_audit"),
+  type: z
+    .literal("contract_audit")
+    .describe(
+      "contract_audit — static audit of typed-contract field literals against registered graph contract_ids. Requires: name, spec.contract_ids, expect.status='passed'.",
+    ),
   name: z.string().min(1),
   spec: z.object({
     kind: z.literal("contract_graph"),
@@ -114,7 +134,7 @@ export const AcceptanceSpecSchema = z.object({
   scorers: z.array(ScorerSchema).min(1).describe("At least one scorer — a spec without a scorer is untestable."),
   severity: AcceptanceSeverity,
   trigger: AcceptanceTrigger.optional().describe(
-    "Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_delivery.",
+    "Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_integrity. on_delivery is legacy and maps to on_integrity.",
   ),
 })
 
@@ -130,11 +150,12 @@ export type RubricLevel = z.infer<typeof RubricLevelSchema>
  * Resolve the effective trigger for a scorer given its spec's severity.
  * Centralizes the default rules so evaluator/architect/tests agree.
  */
-export function resolveTrigger(spec: AcceptanceSpec, scorer: AcceptanceScorer): "on_goal" | "on_delivery" {
-  if (spec.trigger) return spec.trigger
+export function resolveTrigger(spec: AcceptanceSpec, scorer: AcceptanceScorer): "on_goal" | "on_integrity" {
+  if (spec.trigger === "on_goal") return "on_goal"
+  if (spec.trigger === "on_integrity" || spec.trigger === "on_delivery") return "on_integrity"
   if (scorer.type === "heuristic" || scorer.type === "prebuilt" || scorer.type === "contract_audit") return "on_goal"
-  // llm_judge: essential runs per-goal so failures fail fast; others batch at delivery.
-  return spec.severity === "essential" ? "on_goal" : "on_delivery"
+  // llm_judge: essential runs per-goal so failures fail fast; others batch at integrity acceptance.
+  return spec.severity === "essential" ? "on_goal" : "on_integrity"
 }
 
 /**

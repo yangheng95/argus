@@ -58,7 +58,6 @@ export type IconName =
   | "avatar-executor"
   | "avatar-build"
   | "avatar-evaluator"
-  | "avatar-delivery"
   | "avatar-integrity"
   // Empty-state / cwd
   | "folder"
@@ -589,14 +588,6 @@ const ICON_PATHS: Record<IconName, IconRecord> = {
         <path d="M6 5.4 4.4 8.8h3.2Z" />
         <path d="M10 5.4 8.4 8.8h3.2Z" />
         <path d="M4.4 10.8h7.2" />
-      </>
-    ),
-  },
-  "avatar-delivery": {
-    body: () => (
-      <>
-        <path d="M3.8 5.5 8 3.2l4.2 2.3v5L8 12.8l-4.2-2.3Z" />
-        <path d="M3.8 5.5 8 7.8l4.2-2.3M8 7.8v5" />
       </>
     ),
   },

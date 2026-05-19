@@ -1,23 +1,19 @@
 // ── WorkspacePanel ──
-// Right-hand secondary workspace. Hosts Diff / File views behind a shared
-// tab bar with a close affordance. Each view is display-toggled so that
-// cache/resource state is preserved when switching tabs.
+// Right-hand secondary workspace. Hosts the diff preview with a close
+// affordance. Plain file links open in the selected IDE instead of this panel.
 
 import { Show } from "solid-js";
 import { DiffPreviewPanel } from "./DiffPreviewPanel";
-import { FileViewPanel } from "./FileViewPanel";
 import type { DiffTarget } from "../services/diff";
 import { t } from "../utils/i18n";
 import { Icon } from "./Icon";
 
-export type WorkspaceView =
-  | { kind: "diff"; target: DiffTarget }
-  | { kind: "file"; filePath: string };
+export type WorkspaceView = { kind: "diff"; target: DiffTarget };
 
 export interface WorkspacePanelProps {
   /** Current view to foreground. */
   view: WorkspaceView;
-  /** Called when the user clicks a tab to change views. */
+  /** Called when the user clicks a tab to refresh the view contract. */
   onSelectView: (view: WorkspaceView) => void;
   /** Called when the user clicks the close (×) button. */
   onClose: () => void;
@@ -25,23 +21,11 @@ export interface WorkspacePanelProps {
 
 export function WorkspacePanel(props: WorkspacePanelProps) {
   const isDiff = () => props.view.kind === "diff";
-  const isFile = () => props.view.kind === "file";
-  const diffTarget = () =>
-    props.view.kind === "diff" ? props.view.target : null;
-  const diffFilePath = () =>
-    props.view.kind === "diff" ? props.view.target.filePath : null;
-  const fileFilePath = () =>
-    props.view.kind === "file" ? props.view.filePath : null;
+  const diffTarget = () => props.view.target;
+  const diffFilePath = () => props.view.target.filePath;
 
   function selectDiff() {
-    if (props.view.kind !== "diff") {
-      props.onSelectView({ kind: "diff", target: { filePath: "" } });
-    }
-  }
-  function selectFile() {
-    if (props.view.kind !== "file") {
-      props.onSelectView({ kind: "file", filePath: "" });
-    }
+    props.onSelectView(props.view);
   }
   return (
     <section class="workspace" id="workspacePanel">
@@ -65,24 +49,6 @@ export function WorkspacePanel(props: WorkspacePanelProps) {
               </Show>
             </span>
           </button>
-          <button
-            type="button"
-            class="workspace-tab"
-            role="tab"
-            aria-selected={isFile()}
-            data-active={isFile() ? "true" : "false"}
-            onClick={selectFile}
-          >
-            <span class="workspace-tab-label">
-              {t("workspace.file")}
-              <Show when={fileFilePath()}>
-                <span class="workspace-tab-file">
-                  {" · "}
-                  {shortFileName(fileFilePath() || "")}
-                </span>
-              </Show>
-            </span>
-          </button>
         </div>
         <button
           type="button"
@@ -95,23 +61,13 @@ export function WorkspacePanel(props: WorkspacePanelProps) {
         </button>
       </header>
       <div class="workspace-body">
-        {/* Diff view — always mounted so resource cache is retained.
-            data-active drives display via CSS so the inline style toggle
-            doesn't have to reproduce the layout's `display: flex`. */}
+        {/* Diff view only. Plain file links open in the selected IDE. */}
         <div
           class="workspace-view"
           data-kind="diff"
           data-active={isDiff() ? "true" : "false"}
         >
           <DiffPreviewPanel target={diffTarget()} />
-        </div>
-        {/* File view — lazy fetches file content via /file/content */}
-        <div
-          class="workspace-view"
-          data-kind="file"
-          data-active={isFile() ? "true" : "false"}
-        >
-          <FileViewPanel filePath={fileFilePath()} />
         </div>
       </div>
     </section>

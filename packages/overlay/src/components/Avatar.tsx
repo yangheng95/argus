@@ -16,7 +16,6 @@ export const AVATAR_ICON_BY_ROLE: Record<AgentRole, IconName> = {
   executor: "avatar-executor",
   build: "avatar-build",
   evaluator: "avatar-evaluator",
-  delivery: "avatar-delivery",
   integrity: "avatar-integrity",
 }
 

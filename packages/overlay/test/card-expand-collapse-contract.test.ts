@@ -59,6 +59,12 @@ describe("card expand and collapse contract", () => {
     expect(src).not.toContain("card__chevron")
   })
 
+  test("child execution cards do not expose per-session model settings", () => {
+    const src = read("src/components/Card.tsx")
+    expect(src).not.toContain("openSessionAgentModels")
+    expect(src).toContain("onAgentModelSettings={undefined}")
+  })
+
   test("GoalWorkflowGroup follows the same header toggle contract", () => {
     const src = read("src/components/GoalWorkflowGroup.tsx")
     expect(src).toContain("import { cardExpanded, setCardExpanded }")

@@ -337,7 +337,7 @@ function buildBoard(task: typeof EngineTaskTable.$inferSelect) {
       },
       // Task-level criteria rollup. Sourced from engine_task.criteria_results,
       // populated by:
-      //   - delivery agent verdict (deferred_checks + rejection_details + overall),
+      //   - integrity acceptance verdict (deferred_checks + rejection_details + overall),
       //     sunk via orchestrator/tools.ts → sinkDeliveryVerdictToCriteria()
       //   - in-process visual-diff gate (orchestrator/tools.ts, when task carries
       //     image attachments and a rendered index.html exists)
@@ -1146,7 +1146,7 @@ function buildStepSummary(step: MiniWorkflowStep, goalID: string, status?: strin
 
   // Use the latest *delivered* goal_run, not the tip. After a delivery
   // rejection, resetTaskGoalsToPending supersedes every goal's tip with a
-  // fresh pending row that has no delivery yet — but the prior delivery's
+  // fresh pending row that has no delivery yet — but the prior delivery row's
   // files are still merged into master and remain the canonical "built"
   // surface. Falling through to currentGoalRun() here would silently zero
   // out the file count for every previously-passed goal until the next

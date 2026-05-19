@@ -53,9 +53,22 @@ describe("ExecutorSelector dual chip bar", () => {
     expect(SRC).not.toMatch(/showAvailability/)
   })
 
-  test("mirror selection writes appStore.config.model via patchConfig", () => {
-    expect(SRC).toMatch(/import \{ patchConfig \} from "\.\.\/services\/config"/)
-    expect(SRC).toMatch(/patchConfig\(\{ model: value \? value : null \}\)/)
+  test("mirror selection writes task root session config before project config", () => {
+    expect(SRC).toMatch(/import \{ rootTaskSessionID, hasSelectedTask \} from "\.\.\/store\/board"/)
+    expect(SRC).toMatch(/import \{[\s\S]*?getSessionConfig,[\s\S]*?patchConfig,[\s\S]*?patchSessionConfig/)
+    expect(SRC).toMatch(/const taskRootSessionID = createMemo\(\(\) => rootTaskSessionID\(\)\.trim\(\)\)/)
+    expect(SRC).toMatch(/const saved = await patchSessionConfig\(sessionID, \{ model: value \? value : null \}\)/)
+    expect(SRC).toMatch(/mutateSessionConfig\(saved\)/)
+    expect(SRC).toMatch(/await patchConfig\(\{ model: value \? value : null \}\)/)
+    expect(SRC.indexOf("patchSessionConfig(sessionID")).toBeLessThan(SRC.indexOf("patchConfig({ model"))
+  })
+
+  test("selected task without resolved root session disables mirror writes instead of falling back to project config", () => {
+    expect(SRC).toMatch(/const mirrorWriteDisabled = createMemo\(\(\) => hasSelectedTask\(\) && !taskRootSessionID\(\)\)/)
+    expect(SRC).toMatch(/function openMirror\(\)[\s\S]*?if \(mirrorWriteDisabled\(\)\) return/)
+    expect(SRC).toMatch(/if \(hasSelectedTask\(\)\)[\s\S]*?if \(!sessionID\)[\s\S]*?return/)
+    expect(SRC).toMatch(/disabled=\{mirrorWriteDisabled\(\)\}/)
+    expect(SRC).toMatch(/disabled=\{props\.disabled\}/)
   })
 
   test("external selection switches settingsStore.executor and calls setExecutorModel", () => {

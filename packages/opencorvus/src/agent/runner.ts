@@ -2,7 +2,7 @@
  * runAgentSession — the single entry point every OpenCorvus WORKER agent runs through.
  *
  * Position in the architecture: agents have one shape. Each agent module
- * (architect / requirements / build / delivery / integrity / prosecutor /
+ * (architect / requirements / build / integrity / prosecutor /
  * intent-analysis / design-analyst / orchestrator-children…) contributes only
  * what is genuinely agent-specific:
  *
@@ -41,7 +41,7 @@
  *      is a 1h-cache optimisation that has no analog for worker agents.
  *
  *   2. Orchestrator tools return evidence to the same reasoning turn. Worker
- *      agents terminate on the collector's contract being met (build/delivery)
+ *      agents terminate on the collector's contract being met (build)
  *      or stepCountIs (integrity / prosecutor), while the orchestrator owns the
  *      next decision itself instead of relying on a worker-style collector.
  *
@@ -116,7 +116,7 @@ export interface AgentToolKit<C> {
 export type SkillStage =
   | "requirements"
   | "architect"
-  | "delivery"
+  | "acceptance"
   | "design_analyst"
   | "intent_analysis"
   | "build"
@@ -164,8 +164,8 @@ export interface RunAgentSessionInput<C> {
    *  this column to stamp goalID on every emitted message / part event,
    *  which is what the overlay tree-writer needs to route the session
    *  card under its goal phase instead of leaking it as a top-level card.
-   *  Per-task agents (orchestrator, requirements, architect, integrity,
-   *  delivery, …) leave this undefined. */
+   *  Per-task agents (orchestrator, requirements, architect, integrity, …)
+   *  leave this undefined. */
   goalID?: string
   /** Task id for cache stickiness + per-agent model resolution. */
   taskID?: string
@@ -221,11 +221,10 @@ export interface RunAgentSessionInput<C> {
   /** When true, treat `core` as the already-composed system prompt and
    *  skip the runner's config-append + skill-injection pass. The caller
    *  owns `resolveStageSkills` (and, when it cares, the returned
-   *  `requiredTools` list). Used by delivery because its output tool
-   *  kit needs `requiredTools` at registration time — the caller calls
-   *  `resolveStageSkills` once to bind the output tools, then hands the
-   *  resulting composed prompt through here so the runner does not
-   *  re-resolve the same skill set. */
+   *  `requiredTools` list). Used by callers that must bind output-tool
+   *  validators before the session starts: the caller resolves skills once,
+   *  binds the output tools, then hands the composed prompt through here so
+   *  the runner does not re-resolve the same skill set. */
   rawSystemPrompt?: boolean
   /** Legacy passthrough; not wired after the SessionPrompt migration. */
   stream?: TextHooks
@@ -247,8 +246,7 @@ export interface RunAgentSessionOutput<C> {
   model: { providerID: string; modelID: string; id: string }
   /** Union of `required_tools` declared by every matched skill, when
    *  `skillsStage` was set. Empty array otherwise. Consumed by agents
-   *  (currently delivery) that wire skill-declared tool requirements
-   *  into their output-tool validation. */
+   *  that wire skill-declared tool requirements into output-tool validation. */
   requiredTools: string[]
 }
 
@@ -947,15 +945,15 @@ export async function runAgentSession<C>(
 
 // ---------------------------------------------------------------------------
 // Retry helper — wraps `runAgentSession` for agents whose successful run is
-// gated by a stateful collector (e.g. delivery's `submit_verdict`) and that
+// gated by a stateful collector and that
 // need a fresh child session + fresh tool kit per attempt so collector state
 // does not bleed across retries.
 //
 // Per rule 22 / rule 24: any agent that needs retry MUST go through this
 // helper. The retry logic does not live inside individual agent modules —
-// previously delivery owned its own copy of this loop, which was the only
+// previously the retired delivery path owned its own copy of this loop, which was the only
 // blocker preventing other stage agents from gaining bounded retry without
-// duplicating delivery's loop verbatim.
+// duplicating that loop verbatim.
 //
 // Single-shot agents (architect, requirements, integrity, prosecutor,
 // design-analyst, intent-analysis, build) keep calling `runAgentSession`

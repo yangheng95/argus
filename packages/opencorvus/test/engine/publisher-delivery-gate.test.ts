@@ -9,8 +9,8 @@ import { Publisher } from "../../src/engine/publisher"
 import { EngineGit } from "../../src/engine/git"
 import type { DeliveryRow, RunRow, TaskRow } from "../../src/engine/store"
 
-describe("Publisher delivery gate", () => {
-  test("publisher does not run a second declared-files acceptance gate", async () => {
+describe("Publisher delivery export", () => {
+  test("publisher does not run a second declared-files acceptance check", async () => {
     const dir = await mkdtemp(path.join(os.tmpdir(), "oc-publisher-gate-"))
     try {
       await fs.writeFile(path.join(dir, "file.txt"), "initial\n")

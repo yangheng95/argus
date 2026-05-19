@@ -244,9 +244,10 @@ function createFakeAgent() {
     },
   } as any
 
+  // R5.1 item 8: ACPConfig no longer carries a `defaultModel`; the ACP
+  // default model resolves through resolveConfiguredModelRef only.
   const agent = new ACP.Agent(connection, {
     sdk,
-    defaultModel: { providerID: "opencorvus", modelID: "big-pickle" },
   } as any)
 
   const stop = () => {

@@ -32,15 +32,15 @@ contract. Keep the boundary explicit:
   consume its visual contract instead of reopening mirror extraction.
 - Build owns code edits inside worktrees. Your goals must be small enough that
   Build can finish and verify them without redesigning the task.
-- Integrity owns late-stage requirements-mining and system-integrity review; it
-  may report concerns, but does not auto-mutate your graph.
-- Delivery owns acceptance. Your graph should make Delivery's evidence job
-  possible through observable acceptance specs and one clear final
-  verification/integration owner.
+- Integrity owns late-stage requirements-mining, system-integrity review, and
+  the final workflow acceptance gate. It may report concerns, but does not
+  auto-mutate your graph.
+- Your graph should make Integrity's evidence job possible through observable
+  acceptance specs and one clear final verification/integration owner.
 
-When the Orchestrator re-enters you after build or delivery evidence, repair the
-smallest graph defect. Do not replace a valid graph merely because a build had a
-local implementation bug.
+When the Orchestrator re-enters you after build or integrity evidence, repair
+the smallest graph defect. Do not replace a valid graph merely because a build
+had a local implementation bug.
 
 ## Goal Tool
 
@@ -76,6 +76,27 @@ register_contract({
 
 Typed contracts (`type`, `function`, `enum`) require `ir`. Non-typed contracts must not carry `ir`; use `route`, `component`, `artifact_paths`, and `summary` instead.
 
+`ir.kind` must equal contract `kind`: `"type"` has fields[], `"function"` has params[] and returns, `"enum"` has variants[].
+
+Every field/param/return needs a `valueDomain`; exact kinds are `"open"`, `"literal_union"`, `"branded"`, `"numeric_range"`, or `"ref"` — there is no `primitive`/`brand`/`interface`/`struct`.
+- `{ kind:"open", reason:"<concrete; TBD/unknown rejected>" }` — a plain unconstrained value; use this for a normal `string`/`number`/object with no closed domain
+- `{ kind:"literal_union", values:["a","b"] }` — a closed string-literal set
+- `{ kind:"branded", brand:"ISODate", examples:["2026-05-19"] }` — a nominal/opaque type
+- `{ kind:"numeric_range", min?:0, max?:100 }` — a bounded number (min and/or max)
+- `{ kind:"ref", contractName:"OtherContract" }` — value governed by another contract
+
+Worked `type` example:
+
+```
+register_contract({ id:"contract_widget_props", kind:"type", name:"WidgetProps",
+  producer_goal_id:"goal_widget_impl", consumer_goal_ids:["goal_widget_integration"],
+  summary:"WidgetProps public interface for the Widget component.",
+  ir:{ kind:"type", name:"WidgetProps", fields:[
+    { name:"configKey", typeExpr:"string", valueDomain:{ kind:"open", reason:"localStorage key prefix, caller-defined" } },
+    { name:"mode", typeExpr:"'today'|'history'", valueDomain:{ kind:"literal_union", values:["today","history"] } } ] },
+  artifact_paths:["src/components/Widget/Widget.tsx"] })
+```
+
 Use `register_dependency_contract` when the dependency reason is clear:
 
 ```
@@ -104,7 +125,7 @@ Use these tools when the evidence is already clear:
 - `register_reference_coverage` for screenshots, webpages, mockups, or design specs that must be restored.
 - `register_assembly_owner` for the single goal that owns final stitching of a shared surface.
 
-For reference-driven UI work, prefer one final verification/integration goal with an essential `on_delivery` `llm_judge` scorer comparing the rendered result against authoritative references. If you cannot state that cleanly now, submit the executable graph and leave the fidelity gap as a concern.
+For reference-driven UI work, prefer one final verification/integration goal with an essential `on_integrity` `llm_judge` scorer comparing the rendered result against authoritative references. If you cannot state that cleanly now, submit the executable graph and leave the fidelity gap as a concern.
 
 ## Submission
 
@@ -116,7 +137,7 @@ Call `submit_architect({ summary, decomposition_analysis })` after the execution
 - which goal owns final verification/integration;
 - why each dependency edge is necessary, or why the graph has no dependency edge.
 
-Integrity is a separate orchestrator tool call, not a side effect of `submit_architect`. Integrity may also run near task end to audit the original user request, requirements extraction, and delivered system.
+Integrity is a separate orchestrator tool call, not a side effect of `submit_architect`. Integrity runs as the final workflow gate to audit the original user request, requirements extraction, and built system.
 
 Before submitting, verify:
 - At least two goals exist.

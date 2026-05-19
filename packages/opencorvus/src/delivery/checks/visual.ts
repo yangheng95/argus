@@ -496,7 +496,7 @@ async function probeRuntimeInteractions(page: Page): Promise<RuntimeInteractionP
 /** SSIM visual diff — retained for the external benchmark CLI and operator
  *  verification workflows only. The delivery pipeline no longer gates on
  *  SSIM: the LLM compares rendered vs reference via vision (see `renderPage`
- *  + delivery agent multimodal attachments), which produces actionable
+ *  + integrity acceptance multimodal attachments), which produces actionable
  *  "header is missing N button, sidebar 20px too wide" feedback instead of
  *  a single opaque similarity number. */
 export async function runVisualDiff(opts: VisualDiffOptions): Promise<VisualDiffReport> {

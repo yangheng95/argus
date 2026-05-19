@@ -1,6 +1,6 @@
 /**
- * Query helpers for verification evidence — shared between the delivery-agent
- * `query_evidence` tool and the orchestrator's internal drill-down.
+ * Query helpers for verification evidence — shared between acceptance review
+ * tools and the orchestrator's internal drill-down.
  *
  * These helpers render the structured evaluation row for audit. Gating
  * decisions now live in src/metrics/arbiter.ts (engine_metric_result +
@@ -49,8 +49,8 @@ export function queryEvidence(
 }
 
 /** Human-readable rendering of an evidence row — tagged so strict failures
- *  stand out. Delivery agent prompts this into its context via the tool
- *  result; orchestrator logs it when it short-circuits. */
+ *  stand out. Acceptance review tools prompt this into their context via the
+ *  tool result; orchestrator logs it when it short-circuits. */
 export function renderEvidence(evidence: VerificationEvidence): string {
   const parts: string[] = []
   parts.push(

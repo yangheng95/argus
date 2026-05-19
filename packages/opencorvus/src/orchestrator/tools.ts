@@ -10,7 +10,7 @@ import path from "node:path"
 import fs from "node:fs/promises"
 import { createHash } from "node:crypto"
 import { Session } from "@/session"
-import { resolveAgentModel } from "@/agent/model"
+import { resolveAgentModel, resolveAgentModelRef } from "@/agent/model"
 import { SessionPrompt } from "@/session/prompt"
 import { SessionStatus } from "@/session/status"
 import { Database, eq, and, inArray, sql } from "@/storage/db"
@@ -33,13 +33,10 @@ import { renderDesignAnalysisHandoffReference, designAnalysisArtifactPaths } fro
 import { materializeMcpToolResult } from "@/mcp/materialize"
 import { EngineArtifactTable, EngineExecutorSessionTable, EngineGoalTable, EngineTaskTable } from "@/engine/engine.sql"
 import {
-  markDeliveryPublishing,
-  finalizeDeliveryResult,
   supersedePriorActivePlansForTask,
   updateGoalWorkspace,
   updateGoalRun,
   updateGoalRunExecutorSessionStatus,
-  updateEvaluationFromDeliveryVerdict,
 } from "@/engine/persist"
 import {
   findActivePlanForTask,
@@ -169,6 +166,7 @@ type IntegrityReviewOutcome =
   | {
       status: "reviewed"
       specSnapshotID: string
+      phase: "pre_build" | "post_build"
       verdict: "pass" | "concerns" | "needs_correction"
       summary: string
       sessionID: string
@@ -915,138 +913,6 @@ async function materializeFigmaMcpReference(input: {
   return 1
 }
 
-// The delivery agent emits a structured DeliveryVerdict with three typed
-// surfaces (deferred_checks, rejection_details, the verdict itself). Each is
-// already per-check-shaped — flatten all three into engine_task.criteria_results
-// so the panel reflects what was actually verified, not just an aggregate bit.
-async function sinkDeliveryVerdictToCriteria(
-  taskID: string,
-  verdict: import("@/delivery/agent").DeliveryVerdictType,
-): Promise<void> {
-  const checks: Array<{
-    name: string
-    status: "passed" | "failed" | "skipped" | "inconclusive"
-    family: string
-    evidence?: string
-    label?: string
-  }> = []
-
-  for (const dc of verdict.deferred_checks) {
-    checks.push({
-      name: dc.name,
-      status: dc.result === "advisory_failed" ? "failed" : dc.result,
-      family: "delivery",
-      evidence: dc.evidence,
-    })
-  }
-
-  // rejection_details only exists on RejectedVerdict (discriminated union).
-  // Accepted verdicts have nothing to flatten here.
-  if (verdict.verdict === "rejected") {
-    for (const rd of verdict.rejection_details) {
-      const fileSuffix = rd.file ? ` @ ${rd.file}` : ""
-      const suggestion = rd.suggestion ? ` → ${rd.suggestion}` : ""
-      checks.push({
-        name: `${rd.category}${fileSuffix}`,
-        status: "failed",
-        family: rd.category,
-        evidence: `${rd.error}${suggestion}`,
-      })
-    }
-  }
-
-  checks.push({
-    name: "delivery_verdict",
-    status: verdict.verdict === "accepted" ? "passed" : "failed",
-    family: "delivery",
-    evidence: verdict.summary,
-    label: "Delivery agent overall verdict",
-  })
-
-  await EngineService.upsertTaskCriteria(taskID, checks)
-}
-
-async function persistDeliveryVerificationThrow(input: {
-  taskID: string
-  runID?: string | null
-  deliveryID: string
-  error: string
-  iteration: number
-}): Promise<import("@/delivery/agent").DeliveryVerdictType> {
-  const now = Date.now()
-  const detail = `DeliveryService.verify threw before producing a verdict: ${input.error}`
-  const verdict: import("@/delivery/agent").DeliveryVerdictType = {
-    verdict: "rejected",
-    summary: detail,
-    startup_verification: {
-      attempted: false,
-      success: false,
-      output: input.error,
-    },
-    deferred_checks: [
-      {
-        name: "delivery_verification",
-        result: "failed",
-        evidence: detail,
-      },
-    ],
-    tool_call_evidence: [
-      {
-        tool: "DeliveryService.verify",
-        passed: false,
-        detail,
-      },
-    ],
-    rejection_details: [
-      {
-        category: "runtime",
-        error: detail,
-        suggestion: "Repair the delivery verification path and run deliver again in the same task context.",
-      },
-    ],
-  }
-  Database.use((db) => {
-    db.insert(EngineArtifactTable)
-      .values({
-        id: Identifier.ascending("artifact"),
-        task_id: input.taskID,
-        run_id: input.runID ?? null,
-        delivery_id: input.deliveryID,
-        kind: "delivery_verification_threw",
-        label: "delivery_verification_threw",
-        payload: {
-          error: input.error,
-          iteration: input.iteration,
-          verdict: "rejected",
-        },
-        time_created: now,
-        time_updated: now,
-      })
-      .run()
-    db.insert(EngineArtifactTable)
-      .values({
-        id: Identifier.ascending("artifact"),
-        task_id: input.taskID,
-        run_id: input.runID ?? null,
-        delivery_id: input.deliveryID,
-        kind: "verdict",
-        label: "delivery-agent-verdict",
-        payload: verdict,
-        time_created: now,
-        time_updated: now,
-      })
-      .run()
-  })
-  await sinkDeliveryVerdictToCriteria(input.taskID, verdict)
-  updateEvaluationFromDeliveryVerdict({
-    deliveryID: input.deliveryID,
-    verdict: "rejected",
-    summary: verdict.summary,
-    now,
-  })
-  return verdict
-}
-
 // Re-export the stateful-tool registry (defined in a dependency-free module
 // so `session/message.ts` can import it without creating a circular graph
 // through `@/session`). Surfacing it from this module keeps it visible to
@@ -1069,34 +935,6 @@ export function createOrchestratorTools(input: {
   }
 }) {
   const { taskID } = input
-
-  async function queueDeliveryReworkWake(input: {
-    iteration: number
-    summary?: string
-    affectedGoalCount: number
-  }): Promise<void> {
-    const [{ dispatchTaskLoop }, { OrchestratorEventNote }] = await Promise.all([
-      import("@/engine/queue"),
-      import("./agent"),
-    ])
-    void dispatchTaskLoop({
-      taskID,
-      event: {
-        note: OrchestratorEventNote.deliveryRework({
-          reason: "delivery_rework",
-          iteration: input.iteration,
-          summary: input.summary,
-          affectedGoalCount: input.affectedGoalCount,
-        }),
-      },
-    }).catch((error) => {
-      log.error("deliver: failed to queue delivery_rework wake", {
-        taskID,
-        iteration: input.iteration,
-        error: error instanceof Error ? error.message : String(error),
-      })
-    })
-  }
 
   async function cleanupTerminalGoalWorkspaces(reason: string): Promise<number> {
     const { cleanupGoalWorkspaceForGoal } = await import("@/engine/writer")
@@ -1142,7 +980,7 @@ export function createOrchestratorTools(input: {
     const detail =
       `Publish gate blocked delivery ${input.deliveryID}: ${input.summary}. ` +
       `This is an artifact/export failure, not a delivery verdict. Task lifecycle is unchanged; ` +
-      `accepted deliver is the completion authority.`
+      `integrity is the workflow completion authority.`
     try {
       const { createDecisionLog } = await import("@/decision-log")
       createDecisionLog(taskID).append({
@@ -1163,7 +1001,7 @@ export function createOrchestratorTools(input: {
         ["publish_gate", input.summary],
         [
           "next",
-          "inspect declared changed files vs exported workspace; retry publish_delivery only if explicit artifact export is still needed",
+          "inspect declared changed files vs exported workspace; artifact export needs a separate non-gate tool",
         ],
       ],
       pointer: `delivery ${input.deliveryID}; publish gate failure is post-delivery export feedback`,
@@ -1530,17 +1368,21 @@ export function createOrchestratorTools(input: {
     }
     if (outcome.status === "reviewed") {
       const headline =
-        outcome.verdict === "pass"
+        outcome.verdict === "pass" && outcome.phase === "post_build"
           ? `Integrity verdict: pass — ${outcome.perDimension.join(", ")}. ` +
-            `Review is advisory; orchestrator decides next step (deliver / build per goal / architect / fail_task).`
+            `Integrity is the workflow gate; task completed.`
+          : outcome.verdict === "pass"
+          ? `Integrity verdict: pass — ${outcome.perDimension.join(", ")}. ` +
+            `Pre-build integrity passed, but task is not complete until post-build integrity passes after terminal build evidence exists.`
           : `Integrity verdict: ${outcome.verdict} — ${outcome.perDimension.join(", ")}. ` +
-            `Review is advisory: nothing in code supersedes goals, opens new attempts, or mutates the graph based on this verdict. ` +
-            `Read the full markdown below and choose modify_goal / build({goalID}) / architect / deliver / fail_task explicitly.`
+            `Task is not accepted. Nothing in code supersedes goals, opens new attempts, or mutates the graph based on this verdict. ` +
+            `Read the full markdown below and choose modify_goal / build({goalID}) / architect / fail_task explicitly.`
       return SubAgentProtocol.yieldResult({
         headline,
         fields: [
           ["goal_count", String(outcome.goalCount)],
           ["spec_snapshot_id", outcome.specSnapshotID],
+          ["phase", outcome.phase],
           ["per_dimension", outcome.perDimension],
           ["corrections_count", String(outcome.correctionsCount)],
           ["graph_corrections_count", String(outcome.graphCorrectionsCount)],
@@ -1597,7 +1439,7 @@ export function createOrchestratorTools(input: {
   }): Promise<IntegrityReviewOutcome> {
     const { task, activeSpec, dbGoals } = ctx
 
-    const { findRequirements } = await import("@/engine/store")
+    const { findDeliveriesForTask, findRequirements } = await import("@/engine/store")
     const reqRows = findRequirements(activeSpec.id)
     const requirements = reqRows.map((r) => {
       const meta = (r.metadata ?? {}) as Record<string, unknown>
@@ -1629,6 +1471,43 @@ export function createOrchestratorTools(input: {
       requirement_ids:
         typeof g.requirement_ids === "string" ? JSON.parse(g.requirement_ids) : (g.requirement_ids ?? []),
     }))
+    const deliveriesForAcceptance = findDeliveriesForTask(taskID)
+    const acceptanceChangedFiles = Array.from(
+      new Set(
+        deliveriesForAcceptance.flatMap((delivery) => {
+          const result = delivery.result as
+            | { changed_files?: string[]; changedFiles?: string[]; diffs?: Array<{ file?: string }> }
+            | null
+            | undefined
+          return [
+            ...(Array.isArray(result?.changed_files) ? result.changed_files : []),
+            ...(Array.isArray(result?.changedFiles) ? result.changedFiles : []),
+            ...(Array.isArray(result?.diffs) ? result.diffs.map((diff) => diff.file).filter((file): file is string => typeof file === "string") : []),
+          ]
+        }),
+      ),
+    )
+    const acceptanceDiffs = deliveriesForAcceptance.flatMap((delivery) => {
+      const result = delivery.result as
+        | {
+            diffs?: Array<{
+              file: string
+              diff?: string
+              before?: string
+              after?: string
+              additions?: number
+              deletions?: number
+              status?: string
+            }>
+          }
+        | null
+        | undefined
+      return Array.isArray(result?.diffs) ? result.diffs : []
+    })
+    const acceptanceSummary =
+      deliveriesForAcceptance.length > 0
+        ? deliveriesForAcceptance.map((delivery) => delivery.summary).filter(Boolean).join("\n")
+        : "No delivery artifact rows were found; review the requirement status snapshot and repository directly."
 
     const { reviewIntegrity, computeRequirementStatusSnapshot } = await import("@/integrity")
     // Project REQ status from DB BEFORE the review fires. The host does not
@@ -1675,6 +1554,11 @@ export function createOrchestratorTools(input: {
       contractGraph,
       decisionLog,
       attachments: Array.isArray(task.attachments) ? (task.attachments as any) : undefined,
+      acceptance: {
+        summary: acceptanceSummary,
+        changedFiles: acceptanceChangedFiles,
+        diffs: acceptanceDiffs,
+      },
       signal: input.signal,
       taskID,
       parentSessionID: input.agentSessionID,
@@ -1706,6 +1590,7 @@ export function createOrchestratorTools(input: {
           })),
         graphCorrections: verdict.graphCorrections,
         missingGoals: verdict.missingGoals,
+        acceptance: verdict.acceptance,
       })
     } catch (err) {
       log.error("integrity: recordIntegrityAttempt failed", {
@@ -1752,6 +1637,7 @@ export function createOrchestratorTools(input: {
     return {
       status: "reviewed",
       specSnapshotID: activeSpec.id,
+      phase,
       verdict: verdict.verdict,
       summary: verdict.summary,
       sessionID: verdict.sessionID,
@@ -2647,12 +2533,12 @@ export function createOrchestratorTools(input: {
         "traceability, source/reference coverage, and cross-goal contracts.\n\n" +
         "USE WHEN: the work fans into multiple parallel goals (independent " +
         "owned_paths, cross-goal contracts), OR you need explicit acceptance specs " +
-        "per goal so per-goal builds and `deliver` have something concrete to verify " +
+        "per goal so per-goal builds and `integrity` have something concrete to verify " +
         "against. Requires a `requirements` spec snapshot to run against — call " +
         "`requirements` first.\n" +
         "SKIP WHEN: the work fits one goal (the build agent's own todo list is " +
         "enough); every fix lives inside one file or one symbol's call sites.\n" +
-        "Re-run on delivery rejection or explicit structural restart when evidence " +
+        "Re-run on integrity non-pass or explicit structural restart when evidence " +
         "points at structural / coverage problems. During an active run, do not " +
         "re-run architect merely to widen owned_paths or bless ordinary shared-file " +
         "edits; build sessions may edit outside responsibility paths when needed " +
@@ -2951,7 +2837,7 @@ export function createOrchestratorTools(input: {
             headline:
               `Architect decomposition complete: ${persisted.length} goals, ${result.contractGraph.contracts.length} contracts.` +
               (deletedIDs.length > 0 ? ` Removed ${deletedIDs.length} prior goal(s).` : "") +
-              ` NEXT: dispatch eligible per-goal \`build({ goalID })\`; read each build report and worktree facts, then decide modify_goal / build / architect / deliver / fail_task explicitly (no auto-routing).`,
+              ` NEXT: dispatch eligible per-goal \`build({ goalID })\`; read each build report and worktree facts, then decide modify_goal / build / architect / integrity / fail_task explicitly (no auto-routing).`,
             summary: result.summary,
             fields: [
               ["goals", persisted.map((g) => `${g.id} ${g.title}`)],
@@ -3015,7 +2901,7 @@ export function createOrchestratorTools(input: {
 
     integrity: tool({
       description:
-        "OPTIONAL architecture-review agent. Multi-dimension review of the active " +
+        "FINAL workflow gate. Multi-dimension review of the active " +
         "architect graph along four " +
         "axes: requirement_fidelity (REQ-N keyed coverage + system completion when " +
         "post-build evidence is available), technical_feasibility (contract graph / " +
@@ -3024,17 +2910,15 @@ export function createOrchestratorTools(input: {
         "(granularity, acceptance-spec strength, ownership, ordering). Returns a " +
         "per-dimension verdict (pass / concerns / needs_correction) plus an aggregate " +
         "(worst-of) AND the full per-dimension issue / correction / missing-goal text " +
-        "as a markdown block. Findings are persisted as evidence only: this review " +
-        "never rewrites requirements, never upserts goals, and the host never " +
-        "auto-supersedes attempts or auto-routes findings — you read the markdown " +
-        "and choose modify_goal / build({goalID}) / architect / deliver / fail_task " +
-        "explicitly. Goal builds record build reports as review input, but they do " +
-        "not automatically run this review; call `integrity` explicitly when the " +
-        "integrated evidence raises a concrete requirements-mining or system-integrity " +
-        "question.\n\n" +
+        "as a markdown block. A pass verdict completes the task. Non-pass findings " +
+        "are persisted as evidence only: this review never rewrites requirements, " +
+        "never upserts goals, and the host never auto-supersedes attempts or " +
+        "auto-routes findings — you read the markdown and choose modify_goal / " +
+        "build({goalID}) / architect / fail_task explicitly. Goal builds record " +
+        "build reports as review input.\n\n" +
         "USE WHEN: architect just produced a non-trivial goal graph (≥3 goals, OR " +
         "cross-goal contracts, OR foundational decisions architect derived rather " +
-        "than user-stated), OR a Build / Delivery result needs architecture feedback. " +
+        "than user-stated), OR build evidence needs architecture feedback. " +
         "Build reports are already recorded as review input for goal builds.\n" +
         "SKIP WHEN: architect produced exactly one goal whose contract trivially " +
         "matches the user request, OR you already ran integrity for this spec " +
@@ -3046,32 +2930,47 @@ export function createOrchestratorTools(input: {
       execute: async () => {
         const designGate = requireDesignAnalysisBefore("integrity", requireTask(taskID))
         if (designGate) return designGate
-        return renderIntegrityOutcome(await runIntegrityReview())
+        const outcome = await runIntegrityReview()
+        if (outcome.status === "reviewed" && outcome.verdict === "pass" && outcome.phase === "post_build") {
+          const task = requireTask(taskID)
+          const completed = Date.now()
+          const activeRun = findActiveRunForTask(taskID)
+          if (activeRun) {
+            await updateRun(
+              activeRun,
+              {
+                status: "completed",
+                blocking_reason: null,
+                error: null,
+                time_completed: completed,
+              },
+              "Run completed by passing integrity gate",
+            )
+          }
+          await updateTask(
+            task,
+            { status: "completed", error: null, time_completed: completed },
+            "Task completed by passing integrity gate",
+          )
+        }
+        return renderIntegrityOutcome(outcome)
       },
     }),
 
     // -----------------------------------------------------------------------
     // Prosecute — orchestrator-driven adversarial probe.
     //
-    // Lifted out of the deliver tool (audit 2026-04-25): the prosecutor
-    // (kind: "evaluator") was previously called inside `deliver` between
-    // metric execution and snapshot writing. Per the agent boundary rule
-    // it must be the orchestrator that decides when to run the adversarial
-    // pass and consumes its yield. Accepted deliver already completes the
-    // task; prosecutor is optional post-delivery hardening evidence, not a
-    // publish gate or part of the default deliver endpoint.
+    // Legacy adversarial probe over persisted delivery evidence. It is not
+    // part of the default workflow now that delivery host-gate verification is
+    // retired; integrity is the workflow completion gate.
     // -----------------------------------------------------------------------
 
     prosecute: tool({
       description:
-        "Run the adversarial Prosecutor against the most recent delivery " +
-        "iteration when the user explicitly asks for post-deliver hardening: " +
-        "file concrete counterexamples for failure modes the delivery agent " +
-        "missed, or propose at most one diagnostic challenge metric per " +
-        "iteration (capped at 3 per task). This is not part of the default " +
-        "deliver endpoint. Side-effects land in DB " +
-        "(engine_counterexample, engine_metric_spec) and feed the next " +
-        "deliver iteration's trajectory query.",
+        "Legacy adversarial probe over the most recent persisted delivery evidence. " +
+        "Use only for historical delivery evidence when explicitly requested; it is not " +
+        "part of the workflow gate and cannot accept or reject the task. " +
+        "New workflow completion is owned by integrity.",
       inputSchema: z.object({
         reason: z.string().optional().describe("Why you decided to run the prosecutor now"),
       }),
@@ -3090,7 +2989,7 @@ export function createOrchestratorTools(input: {
         const delivery = run ? findDeliveryByRun(run.id) : undefined
         if (!delivery) {
           return SubAgentProtocol.yieldResult({
-            headline: "prosecute: no delivery row to prosecute against — call `deliver` first to produce one.",
+            headline: "prosecute: no legacy delivery row to prosecute against. Delivery is retired; use integrity for workflow review.",
             pointer: run ? `run ${run.id}` : `task ${taskID}`,
           })
         }
@@ -3107,11 +3006,11 @@ export function createOrchestratorTools(input: {
         )
         if (!verdictArtifact) {
           return SubAgentProtocol.yieldResult({
-            headline: "prosecute: no delivery verdict artifact — call `deliver` first.",
+            headline: "prosecute: no legacy delivery verdict artifact. Delivery is retired; use integrity for workflow review.",
             pointer: `delivery ${delivery.id}`,
           })
         }
-        const verdict = verdictArtifact.payload as unknown as import("@/delivery/agent").DeliveryVerdictType
+        const verdict = verdictArtifact.payload as unknown as import("@/delivery/verdict").DeliveryVerdictType
 
         const { readIterationHistory } = await import("@/metrics/store")
         const priorIterations = readIterationHistory(taskID)
@@ -3165,7 +3064,7 @@ export function createOrchestratorTools(input: {
           headline:
             `Prosecutor iter ${iteration}: filed ${pRes.counterexamples_filed} counterexample(s), ` +
             `proposed ${pRes.challenges_proposed} challenge(s), resolved ${pRes.counterexamples_resolved}. ` +
-            `NEXT: ${verdict.verdict === "accepted" ? "review the post-delivery evidence or create a follow-up if it found real scope" : "address feedback then call `build`/`deliver` again"}.`,
+            `NEXT: review the prosecutor evidence and choose build / integrity / fail_task / propose_task explicitly.`,
           summary: pRes.rationale,
           fields: [
             ["iteration", String(iteration)],
@@ -3329,6 +3228,122 @@ export function createOrchestratorTools(input: {
             ["nice_questions", nices.map((c) => c.question)],
           ],
           pointer: `intent session ${out.sessionID}; decision log keys: intent_summary${r.extracted_slots.length > 0 ? " + intent_slots" : ""}${r.missing_info.length > 0 ? " + intent_missing_info" : ""}${blockers.length > 0 ? " + intent_blocker_clarifications" : ""}${nices.length > 0 ? " + intent_nice_clarifications" : ""}`,
+        })
+      },
+    }),
+
+    explore: tool({
+      description:
+        "Read-only repository investigation dispatcher. Runs the registered explore subagent as an explicit " +
+        "orchestrator tool so workflow investigation does not get routed through build. Use this for focused " +
+        "file, symbol, architecture, or dependency facts needed before requirements or implementation. The " +
+        "result is returned to this orchestrator turn and persisted to phase=explore decision log plus an " +
+        "exploration artifact for later wakes. Do not use for implementation or file edits.",
+      inputSchema: z.object({
+        question: z
+          .string()
+          .min(1)
+          .describe("The focused repository question the explore subagent must answer with file/symbol evidence."),
+        reason: z.string().optional().describe("Why this repository investigation is needed before the next stage."),
+      }),
+      execute: async ({ question, reason }) => {
+        const task = requireTask(taskID)
+        const model = await resolveAgentModelRef("explore", { taskID, sessionID: input.agentSessionID })
+        const exploreSession = await Session.createNext({
+          kind: "assistant",
+          parentID: input.agentSessionID,
+          title: `Explore: ${question.slice(0, 80)}`,
+          directory: Instance.directory,
+        })
+        const promptLines = [
+          "# Repository Investigation",
+          "",
+          "You are the Explore subagent. Answer the focused repository question using read-only repository evidence.",
+          "Do not modify files, run write-oriented commands, create reports on disk, or delegate to another agent.",
+          "Return concrete findings with exact file paths, symbols, and commands/tool evidence where relevant.",
+          "",
+          `## Task`,
+          task.title,
+          "",
+          `## Original Request`,
+          task.request,
+          "",
+        ]
+        if (reason && reason.trim().length > 0) {
+          promptLines.push("## Reason", reason.trim(), "")
+        }
+        promptLines.push("## Question", question.trim())
+        const prompt = promptLines.join("\n")
+
+        let finalMessage: Awaited<ReturnType<typeof SessionPrompt.prompt>>
+        try {
+          finalMessage = await SessionPrompt.prompt({
+            sessionID: exploreSession.id,
+            model,
+            agent: "explore",
+            tools: {
+              bash: false,
+              edit: false,
+              write: false,
+              task: false,
+              todowrite: false,
+              todoread: false,
+            },
+            parts: [{ type: "text", text: prompt, id: Identifier.ascending("part") }],
+          })
+        } catch (err) {
+          SessionStatus.set(exploreSession.id, {
+            type: "terminal",
+            reason: "error",
+            error: err instanceof Error ? err.message : String(err),
+          })
+          throw err
+        }
+        SessionStatus.set(exploreSession.id, { type: "terminal", reason: "completed" })
+        const resultText = (finalMessage?.parts ?? [])
+          .filter((part) => part.type === "text" && typeof (part as any).text === "string")
+          .map((part) => (part as any).text as string)
+          .join("\n\n")
+          .trim()
+        if (resultText.length === 0) {
+          throw new Error(`explore: subagent returned no text result (sessionID=${exploreSession.id})`)
+        }
+
+        const now = Date.now()
+        const decisionLog = createDecisionLog(taskID)
+        decisionLog.append({
+          phase: "explore",
+          key: `repo_investigation_${exploreSession.id}`,
+          value: resultText,
+          reason: reason?.trim() || question.trim(),
+        })
+        Database.use((db) => {
+          db.insert(EngineArtifactTable)
+            .values({
+              id: Identifier.ascending("artifact"),
+              task_id: taskID,
+              kind: "exploration",
+              label: "explore",
+              payload: {
+                question: question.trim(),
+                reason: reason?.trim() || null,
+                session_id: exploreSession.id,
+                result: resultText,
+              },
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+        })
+
+        return SubAgentProtocol.yieldResult({
+          headline: "Explore complete. Repository findings were persisted under phase=explore.",
+          summary: resultText,
+          fields: [
+            ["session", exploreSession.id],
+            ["question", question.trim()],
+          ],
+          pointer: `read_context scope=decisions; decision_log phase=explore key=repo_investigation_${exploreSession.id}`,
         })
       },
     }),
@@ -3693,7 +3708,7 @@ export function createOrchestratorTools(input: {
               // missing-goal proposals) so the orchestrator LLM can act on
               // the same evidence it had at review time, not a count.
               // Architecture review is advisory: the orchestrator decides
-              // modify_goal / build / architect / deliver / fail_task
+          // modify_goal / build / architect / integrity / fail_task
               // explicitly based on this text.
               if (reviewMarkdown) sections.push("", reviewMarkdown)
             }
@@ -3925,1199 +3940,29 @@ export function createOrchestratorTools(input: {
 
     deliver: tool({
       description:
-        "FINAL acceptance gate — call ONLY after every dispatchable goal is terminal (passed/failed) and no eligible wave remains uncalled. Aggregates goal deliveries and runs DeliveryAgent for build/test/startup verification. NEVER call while goals are pending/dispatched/running, NEVER call as a progress check, NEVER call before any build has produced material in direct mode. Always read_context first to verify the goal graph is fully resolved.",
+        "DISABLED. Delivery host-gate verification is retired. Do not call this tool. Use integrity as the workflow final gate after all blocking builds are terminal.",
       inputSchema: z.object({
         reason: z.string().optional().describe("Why you decided to deliver now"),
       }),
       execute: async () => {
-        const task = requireTask(taskID)
-        const designGate = requireDesignAnalysisBefore("deliver", task)
-        if (designGate) return designGate
-
-        // Stateless / unconditional deliver (rule 23): every task ends through
-        // this agent regardless of upstream state. No "execute goals first"
-        // gate. Delivery persistence is run-scoped: goal tasks can create a
-        // dispatchable run from the goal graph, while direct task-level builds
-        // must have created their run in `build`.
-        let activeRun = findActiveRunForTask(task.id)
-        if (!activeRun && listGoals(taskID).length > 0) {
-          const ensured = await ensureDispatchableRunForSingleGoal()
-          if ("error" in ensured) return `deliver: cannot ensure coordinator run — ${ensured.error}`
-          activeRun = ensured.run
-        }
-        if (!activeRun) {
-          return "deliver: no coordinator run exists for this task. Run build first so delivery can bind evidence to the build run."
-        }
-        const run = activeRun
-
-        await trackStepStart("deliver")
-
-        const goals = listGoals(taskID)
-
-        // Aggregate per-goal deliveries by task. Every valid delivery has a
-        // coordinator run; goal_run_attempt rows also carry that run_id.
-        const { listGoalRunsForTask, findDeliveryByGoalRun } = await import("@/engine/store")
-        const goalRuns = listGoalRunsForTask(task.id)
-        const allDiffs: Array<{ file: string; diff?: string; [key: string]: unknown }> = []
-        const seenFiles = new Set<string>()
-        const summaries: string[] = []
-        const aggregatedGoalReports: Array<{ goalTitle: string; report: import("@/delivery/checks").GoalReportClaim }> =
-          []
-        for (const gr of goalRuns) {
-          const d = findDeliveryByGoalRun(gr.id)
-          if (!d) continue
-          if (d.summary) summaries.push(d.summary)
-          const result = d.result as {
-            diffs?: Array<{ file: string; diff?: string; [key: string]: unknown }>
-            report?: import("@/delivery/checks").GoalReportClaim
-          } | null
-          if (result?.report) {
-            const goalRow = gr.goal_id
-              ? Database.use((db) => db.select().from(EngineGoalTable).where(eq(EngineGoalTable.id, gr.goal_id!)).get())
-              : undefined
-            aggregatedGoalReports.push({
-              goalTitle: goalRow?.title ?? gr.goal_id ?? gr.id,
-              report: result.report,
-            })
-          }
-          if (!result?.diffs) continue
-          for (const diff of result.diffs) {
-            if (!seenFiles.has(diff.file)) {
-              seenFiles.add(diff.file)
-              allDiffs.push(diff)
-            }
-          }
-        }
-
-        // Direct-workflow material collection: when the task is explicit
-        // kind=build (build → deliver, no per-goal dispatch), there are zero
-        // goal_runs and therefore zero aggregated diffs — but the build
-        // agent still wrote files to the main worktree. Without material
-        // here the delivery agent sees an empty workspace and rubber-stamps
-        // "accepted", which defeats the "build mode also undergoes delivery
-        // acceptance" contract. Read the working-tree diff directly so the
-        // delivery agent judges the actual changes.
-        if (allDiffs.length === 0 && goalRuns.length === 0) {
-          try {
-            const cwd = Instance.directory
-            const statusResult = await runGit(["status", "--porcelain=v1", "-uall"], { cwd, timeoutProfile: "default" })
-            const statusLines = statusResult.stdout
-              .toString()
-              .split("\n")
-              .filter((line) => line.trim().length > 0)
-            for (const raw of statusLines) {
-              // Porcelain format: "XY file" (X=index status, Y=worktree status). Extract the path.
-              const file = raw
-                .slice(3)
-                .trim()
-                .replace(/^"(.+)"$/, "$1")
-              if (!file || seenFiles.has(file)) continue
-              let diff = ""
-              const diffResult = await runGit(["diff", "HEAD", "--", file], { cwd, timeoutProfile: "default" })
-              if (diffResult.exitCode === 0) diff = diffResult.stdout.toString()
-              if (!diff) {
-                // New / untracked — read raw contents so the delivery agent
-                // has real bytes instead of an empty diff.
-                const fs = await import("node:fs/promises")
-                const path = await import("node:path")
-                const full = path.join(cwd, file)
-                const content = await fs.readFile(full, "utf8").catch(() => "")
-                if (content) diff = `New file:\n${content}`
-              }
-              seenFiles.add(file)
-              allDiffs.push({ file, diff })
-            }
-            if (allDiffs.length > 0) {
-              summaries.push(`Direct build produced ${allDiffs.length} changed file(s) in the main worktree.`)
-              log.info("deliver: direct-mode diff captured from main worktree", {
-                taskID,
-                fileCount: allDiffs.length,
-              })
-            } else {
-              log.warn("deliver: direct mode with no per-goal deliveries AND empty working tree", {
-                taskID,
-                cwd,
-              })
-            }
-          } catch (err) {
-            log.warn("deliver: direct-mode diff capture failed (non-fatal)", {
-              taskID,
-              error: err instanceof Error ? err.message : String(err),
-            })
-          }
-        }
-
-        const allGoals = listGoals(taskID)
-        const activeSpecSnapshot = findActiveSpecForTask(taskID)
-        const goalInfos = allGoals.map((g) => {
-          const acceptanceSpecs = (g.acceptance_specs ?? []) as AcceptanceSpec[]
-          const latestGoalRun = findLatestTipGoalRun(g.id)
-          return {
-            id: g.id,
-            latest_goal_run_id: latestGoalRun?.id,
-            title: g.title,
-            description: g.objective,
-            criteria: renderSpecsAsText(acceptanceSpecs),
-            priority: g.priority as "blocking" | "advisory",
-            acceptance_spec_count: acceptanceSpecs.length,
-            acceptance_scenarios: acceptanceSpecs.filter((spec) => !!spec.scenario),
-            acceptance_specs: acceptanceSpecs,
-            requirement_ids: Array.isArray(g.requirement_ids) ? (g.requirement_ids as string[]) : [],
-            depends_on: Array.isArray(g.depends_on) ? (g.depends_on as string[]) : [],
-            owned_paths: Array.isArray(g.owned_paths) ? (g.owned_paths as string[]) : [],
-          }
-        })
-
-        // Persist aggregated delivery — task-scoped variant, which is the
-        // only path that creates the `scope='delivery'` evaluation row the
-        // delivery-agent later settles via updateEvaluationFromDeliveryVerdict.
-        const { persistTaskDelivery } = await import("@/engine/persist")
-        const deliveryID = Identifier.ascending("delivery")
-        persistTaskDelivery({
-          task,
-          run,
-          deliveryID,
-          delivery: {
-            summary: summaries.length > 0 ? summaries.join("\n") : "Aggregated delivery",
-            diffs: allDiffs,
-          },
-          now: Date.now(),
-        })
-
-        // Run DeliveryAgent to verify build/test/startup
-        const deliveryInfo: import("@/delivery/checks").DeliveryInfo = {
-          summary: summaries.join("\n"),
-          changedFiles: allDiffs.map((d) => d.file),
-          diffs: allDiffs.map((d) => ({ file: d.file, diff: d.diff })),
-          goalReports: aggregatedGoalReports,
-        }
-
-        // Render the merged delivery output to a screenshot and register it
-        // as a task attachment with intent="rendered_output". The delivery
-        // agent consumes both the reference image(s) AND this rendered PNG
-        // as multimodal attachments, and produces actionable spatial
-        // feedback ("sidebar 20px wider than reference, primary color too
-        // dark, hero CTA missing") that the executor can act on during
-        // rework. No SSIM gate: a single similarity number told the
-        // executor "different" but never "different where" — the metric
-        // also made delivery lazy, rubber-stamping "visual_diff passed"
-        // without really comparing. Rendering lives here rather than in
-        // per-goal evaluator because only the merged worktree represents
-        // the final artifact users see.
-        let renderedAttachment:
-          | {
-              sha: string
-              url: string
-              mime: string
-              size: number
-              filename?: string
-              intent: "rendered_output"
-              source: "runtime_capture"
-            }
-          | undefined
-        // P0-0.B — for any task that ships visual references (user attachments
-        // or design-analysis screenshots), rendering the merged worktree to a
-        // PNG is a HARD prerequisite, not a best-effort. Failure to render a
-        // visual deliverable means the delivery agent can never see what was
-        // built — judging only against the reference is the exact "LLM only
-        // sees reference" downgrade path the spec forbids (rule 1, no
-        // fallback). We surface the failure as a structured reject signal and
-        // skip the agent run entirely.
-        let renderFailure: { kind: "no_live_preview" | "render_threw"; detail: string } | undefined
-        try {
-          const liveTask = requireTask(taskID)
-          // Visual references for sizing the render viewport: union of user
-          // attachments (figma/user-upload) and system_artifacts (URL
-          // screenshots). The previous rendered_output (if any) is excluded —
-          // the new render is what sets the comparison baseline this round.
-          const visualPool = [
-            ...(Array.isArray(liveTask.attachments) ? (liveTask.attachments as any[]) : []),
-            ...(Array.isArray(liveTask.system_artifacts) ? (liveTask.system_artifacts as any[]) : []),
-          ].filter((a) => a?.intent !== "rendered_output")
-          const tagged = visualPool.filter((a) => a?.intent === "visual_reference" && typeof a?.url === "string")
-          const imageAttachments =
-            tagged.length > 0
-              ? tagged
-              : visualPool.filter(
-                  (a) => typeof a?.mime === "string" && a.mime.startsWith("image/") && typeof a?.url === "string",
-                )
-          if (imageAttachments.length > 0) {
-            const { captureRuntimePage } = await import("@/delivery/runtime-capture")
-            const { ManagedPreviewStartError, startManagedPreview } = await import("@/preview/managed")
-            const { AttachmentStore } = await import("@/storage/attachment-store")
-            let preview:
-              | {
-                  projectRoot: string
-                  session: {
-                    status: string
-                    url?: string
-                    reason?: string
-                  }
-                }
-              | undefined
-            try {
-              preview = await startManagedPreview({
-                taskID,
-                workspaceDir: Instance.directory,
-                changedFiles: allDiffs.map((diff) => diff.file),
-                metadata: liveTask.metadata as Record<string, unknown> | undefined,
-              })
-            } catch (error) {
-              if (error instanceof ManagedPreviewStartError) {
-                renderFailure = {
-                  kind: "no_live_preview",
-                  detail: error.evidence.join(" | "),
-                }
-              } else {
-                throw error
-              }
-            }
-            if (!preview) {
-              // renderFailure already recorded above.
-            } else if (preview.session.status !== "ready" || !preview.session.url) {
-              renderFailure = {
-                kind: "no_live_preview",
-                detail:
-                  `merged worktree at ${preview.projectRoot} has no live preview URL — ` +
-                  `visual deliverable cannot be rendered; status=${preview.session.status} ` +
-                  `reason=${preview.session.reason ?? "none"}`,
-              }
-            } else {
-              // Pick the first image attachment to size the viewport. All
-              // references are later shown to the delivery LLM multimodally
-              // so the choice here is purely about matching the rendered
-              // viewport to the primary reference's native size.
-              const ref = imageAttachments[0]
-              const located = AttachmentStore.nameFromUrl(String(ref.url))
-              const refPath = located ? AttachmentStore.resolveAbsolute(located.projectID, located.name) : undefined
-              if (!refPath) {
-                log.warn("deliver: reference attachment could not be resolved — rendering at default viewport", {
-                  taskID,
-                  url: ref.url,
-                })
-              }
-              const visualOut = path.join(Instance.directory, ".opencorvus", "visual-diff")
-              const rendered = await captureRuntimePage({
-                url: preview.session.url,
-                outDir: visualOut,
-                referenceForViewport: refPath,
-                viewport_width: refPath ? undefined : 1440,
-                viewport_height: refPath ? undefined : 900,
-                fileLabel: "rendered",
-              })
-              if (!rendered.captured) throw new Error(rendered.capture_error.message)
-              // Persist the rendered screenshot to the attachment store so
-              // the delivery agent's multimodal prompt can inline it the
-              // same way it inlines user-provided references.
-              const bytes = await (await import("node:fs/promises")).readFile(rendered.path)
-              const written = await AttachmentStore.write(liveTask.project_id, bytes, "image/png", "rendered.png")
-              renderedAttachment = {
-                sha: written.sha,
-                url: written.url,
-                mime: written.mime,
-                size: written.size,
-                filename: written.filename,
-                intent: "rendered_output",
-                source: "runtime_capture",
-              }
-              // System-generated visual evidence — lives in system_artifacts,
-              // not the user-contract attachments column. Replace-by-intent so
-              // reruns don't accumulate stale rendered PNGs.
-              await EngineService.replaceTaskSystemArtifactByIntent(taskID, "rendered_output", renderedAttachment)
-              log.info("deliver: rendered merged worktree", {
-                taskID,
-                renderedPath: rendered.path,
-                size: rendered.size,
-                sha: renderedAttachment.sha,
-              })
-            }
-          }
-        } catch (renderErr) {
-          renderFailure = {
-            kind: "render_threw",
-            detail: renderErr instanceof Error ? renderErr.message : String(renderErr),
-          }
-        }
-
-        if (renderFailure) {
-          // Fresh-eyes decoupling: a render prerequisite failure is an
-          // objective host fact. It is NOT fed to the agent as a prompt
-          // conclusion anymore — the host runtime/visual gate inside
-          // DeliveryService.verify owns it and will emit a host_gate
-          // rejection. See specs/delivery-fresh-eyes-decoupling-2026-05-18.md.
-          log.warn("deliver: render prerequisite failed — host runtime/visual gate will reject", {
-            taskID,
-            kind: renderFailure.kind,
-            detail: renderFailure.detail,
-          })
-        }
-
-        // Single session per sub-agent (rule 22). DeliveryService.verify
-        // creates the runner session internally under the orchestrator parent.
-        try {
-          const { DeliveryService } = await import("@/delivery/service")
-          const { DeliveryVerdict } = await import("@/delivery/agent")
-          // Re-read the task row to pick up references materialized during
-          // design_analysis. Delivery sees BOTH columns: user-contract
-          // attachments (figma frames, user uploads) AND system_artifacts
-          // (URL screenshots from design_analysis, plus the just-rendered
-          // PNG of the merged worktree). The visual-comparison loop needs
-          // both to diff "what we built" against "what the user asked for".
-          const taskForDelivery = requireTask(taskID)
-          type AttachmentRef = {
-            sha: string
-            url: string
-            mime: string
-            size: number
-            filename?: string
-            intent?: string
-            source?: string
-          }
-          const deliveryAttachments = [
-            ...(Array.isArray(taskForDelivery.attachments) ? (taskForDelivery.attachments as AttachmentRef[]) : []),
-            ...(Array.isArray(taskForDelivery.system_artifacts)
-              ? (taskForDelivery.system_artifacts as AttachmentRef[])
-              : []),
-          ].filter((a) => typeof a?.mime === "string" && a.mime.startsWith("image/") && typeof a?.url === "string")
-
-          // Compute current iteration up-front so DeliveryService.verify can
-          // namespace its deterministic-gate rejection card by iteration. The
-          // metrics block below recomputes the same thing for its own use; both
-          // read from the same readIterationHistory source so the value is
-          // identical (no double-source — metrics still owns the snapshot
-          // write, this just shares the read).
-          const { readIterationHistory: readIterHistForVerify } = await import("@/metrics/store")
-          const deliverIteration = readIterHistForVerify(taskID).length
-
-          // Short-circuit: if the per-goal evaluator already flagged strict
-          // checks as failed, the delivery LLM cannot rescue the outcome —
-          // the post-hoc hard gate below would force-reject anyway. Skipping
-          // Delivery agent runs unconditionally — no pre-flight evaluator gate,
-          // no strict-check short-circuit, no post-hoc verdict override. The
-          // agent reads acceptance_specs as INFORMATION and verifies them
-          // itself (Phase 2 / 2.5 in DELIVERY_AGENT_SYSTEM), including per-goal
-          // subagent dispatch for adversarial review at scale.
-          const deliveryDecision: import("@/delivery").DeliveryDecision = await DeliveryService.verify({
-            task: {
-              id: task.id,
-              title: task.title,
-              request: task.request,
-              sessionID: task.session_id ?? undefined,
-              metadata: task.metadata ?? undefined,
-              design_specs: Array.isArray(task.design_specs) ? (task.design_specs as any) : undefined,
-            },
-            goals: goalInfos,
-            delivery: deliveryInfo,
-            attachments: deliveryAttachments,
-            signal: input.signal,
-            iteration: deliverIteration,
-            parentSessionID: input.agentSessionID,
-            runID: run?.id,
-            deliveryID,
-            specSnapshotID: activeSpecSnapshot?.id,
-            criteriaResults: Array.isArray(task.criteria_results) ? (task.criteria_results as any) : [],
-          })
-
-          // Fresh-eyes decoupling (specs/delivery-fresh-eyes-decoupling-2026-05-18.md):
-          // exactly ONE business-consumable artifact — the composed final
-          // decision — under the compatibility label `delivery-agent-verdict`,
-          // so every existing reader keeps working unchanged. The raw agent
-          // verdict and the host gate result are persisted as their OWN
-          // evidence-only artifacts and MUST NOT be consumed by business code.
-          const verdict = deliveryDecision.final
-          const { EngineArtifactTable } = await import("@/engine/engine.sql")
-          const verdictArtifactId = Identifier.ascending("artifact")
-          const now = Date.now()
-          Database.use((db) => {
-            db.insert(EngineArtifactTable)
-              .values({
-                id: verdictArtifactId,
-                task_id: taskID,
-                run_id: run?.id ?? null,
-                delivery_id: deliveryID,
-                kind: "verdict",
-                label: "delivery-agent-verdict",
-                payload: verdict,
-                time_created: now,
-                time_updated: now,
-              })
-              .run()
-            if (deliveryDecision.rawAgentVerdict) {
-              db.insert(EngineArtifactTable)
-                .values({
-                  id: Identifier.ascending("artifact"),
-                  task_id: taskID,
-                  run_id: run?.id ?? null,
-                  delivery_id: deliveryID,
-                  kind: "verification-evidence",
-                  label: "delivery-agent-raw-verdict",
-                  payload: deliveryDecision.rawAgentVerdict,
-                  time_created: now,
-                  time_updated: now,
-                })
-                .run()
-            }
-            db.insert(EngineArtifactTable)
-              .values({
-                id: Identifier.ascending("artifact"),
-                task_id: taskID,
-                run_id: run?.id ?? null,
-                delivery_id: deliveryID,
-                kind: "verification-evidence",
-                label: "delivery-host-gate",
-                payload: {
-                  source: deliveryDecision.source,
-                  passed: deliveryDecision.hostGate.passed,
-                  manifest_id: deliveryDecision.hostGate.manifest.id,
-                  final_gate: deliveryDecision.hostGate.manifest.finalGate,
-                  failures: deliveryDecision.hostGate.failures,
-                },
-                time_created: now,
-                time_updated: now,
-              })
-              .run()
-          })
-
-          // Sink the FINAL decision into engine_task.criteria_results. The
-          // verdict carries three distinct typed surfaces — flatten them into
-          // the unified criteria stream so the overlay's Quality Gates panel
-          // reflects the consumable outcome, not a raw or host fragment.
-          await sinkDeliveryVerdictToCriteria(taskID, verdict)
-
-          const passedCount = goals.filter((g) => goalStatusByID(g.id) === "passed").length
-          const failedCount = goals.filter((g) => goalStatusByID(g.id) === "failed").length
-          // ── Run metric executor + record trajectory snapshot ───────────
-          // The delivery agent's verdict is the AUTHORITATIVE decision. The
-          // old deterministic Arbiter (`metrics/arbiter.ts::arbitrate`) that
-          // used to re-derive accept/continue/stalled/abort from snapshot
-          // counts was a coded FSM (CLAUDE.md rule 23) — it silently
-          // overrode the agent's verdict and caused the benchmark deadlock
-          // on skipped metrics. The snapshot is still written for
-          // observability (LLM reads it via query_metric_trajectory).
-          const { executeMetrics } = await import("@/metrics/executor")
-          const { computeIterationSnapshot } = await import("@/metrics/score")
-          const {
-            readCounterexamplesForTask,
-            readIterationHistory,
-            readPreviousAggregateScore,
-            readResultsForIteration,
-            readSpecsForTask,
-            writeIterationSnapshot,
-          } = await import("@/metrics/store")
-
-          const priorIterations = readIterationHistory(taskID)
-          const iteration = priorIterations.length
-          await executeMetrics({
-            task_id: taskID,
-            iteration,
-            delivery: {
-              summary: verdict.summary,
-              changed_files: Array.isArray((deliveryInfo as any)?.changed_files)
-                ? ((deliveryInfo as any).changed_files as string[])
-                : undefined,
-              requirement_text: task.request,
-            },
-          })
-
-          // Prosecutor is no longer invoked here (audit 2026-04-25). The
-          // adversarial pass is a sibling agent call driven by the
-          // orchestrator via the `prosecute` tool, which the orchestrator
-          // calls AFTER `deliver` returns. Counterexamples filed in the
-          // prosecute step land before the next deliver iteration's
-          // trajectory query reads them, which is the only ordering
-          // requirement; the iteration snapshot below is recomputed by the
-          // next `deliver` run without needing the prosecutor's output to
-          // be present in this snapshot.
-          const specs = readSpecsForTask(taskID)
-          const currentResults = readResultsForIteration(taskID, iteration)
-          const previousResults = iteration > 0 ? readResultsForIteration(taskID, iteration - 1) : []
-          const counterexamples = readCounterexamplesForTask(taskID)
-          const previousAggregateScore = readPreviousAggregateScore(taskID, iteration)
-          const snapshot = computeIterationSnapshot({
-            task_id: taskID,
-            iteration,
-            specs,
-            currentResults,
-            previousResults,
-            counterexamples,
-            previousAggregateScore,
-          })
-          // Project agent verdict onto the legacy snapshot column so prompts
-          // that already cite "arbiter_verdict" (delivery/tools, prosecutor,
-          // orchestrator summary) keep rendering without churn. accepted →
-          // "accept"; anything else → "continue" (rework).
-          const projectedVerdict = verdict.verdict === "accepted" ? ("accept" as const) : ("continue" as const)
-          writeIterationSnapshot({ ...snapshot, arbiter_verdict: projectedVerdict })
-          log.info("deliver: agent verdict recorded", {
-            taskID,
-            iteration,
-            agentVerdict: verdict.verdict,
-            aggregate_score: snapshot.aggregate_score.toFixed(3),
-            blocking_unmet: snapshot.blocking_unmet_count,
-          })
-
-          // P0-C.1 — anchor every delivery picky-loop iteration in git so
-          // (a) the LKG rollback (P0-C.4) has commits to reset to, (b) the
-          // publisher computes changedFiles from git history (P0-C.3), and
-          // (c) `git log --grep="delivery round"` reads the round timeline.
-          // Allow-empty so a "no edits this round" verdict still anchors.
-          log.info("deliver: round commit START", { taskID, iteration })
-          const roundCommitTask = requireTask(taskID)
-          log.info("deliver: round commit, requireTask done", { taskID })
-          const roundCommitVerdict = {
-            verdict: verdict.verdict,
-            summary: verdict.summary,
-            rejection_count: verdict.verdict === "rejected" ? verdict.rejection_details.length : 0,
-          }
-          log.info("deliver: round commit, verdict shape built", {
-            taskID,
-            verdict: roundCommitVerdict.verdict,
-            rejection_count: roundCommitVerdict.rejection_count,
-          })
-          const roundCommit = await EngineGit.commitDeliveryRound({
-            task: roundCommitTask,
-            iteration,
-            verdict: roundCommitVerdict,
-            declaredChangedFiles: deliveryInfo.changedFiles,
-          })
-          log.info("deliver: round commit", {
-            taskID,
-            iteration,
-            mode: roundCommit.mode,
-            commit: roundCommit.commit,
-            error: roundCommit.error,
-          })
-
-          // P0-C.4 — Last-Known-Good rollback. Compute the visual score for
-          // this round, compare against task.metadata.git.delivery_lkg, and
-          // either advance the LKG anchor (improvement) or reset --hard back
-          // to it (regression past tolerance). Skipped silently for tasks
-          // that have no rendered_output + reference pair (lib/api projects
-          // do not have a meaningful visual score). Score / outcome flow
-          // into the verdict artifact + decision log so Stream G's replay
-          // reads them without a separate table.
-          let lkgOutcome: import("@/engine/git").LKGOutcome | undefined
-          let lkgMetric: import("@/delivery/visual-metric").VisualMetricResult | undefined
-          let lkgRenderedPath: string | undefined
-          try {
-            const taskAfterRound = requireTask(taskID)
-            const renderedRef = (taskAfterRound.system_artifacts ?? []).find(
-              (a: any) => a?.intent === "rendered_output" && typeof a?.url === "string",
-            ) as { url: string } | undefined
-            const referencePool = [
-              ...((taskAfterRound.attachments ?? []) as any[]),
-              ...((taskAfterRound.system_artifacts ?? []) as any[]),
-            ].filter(
-              (a) =>
-                a?.intent !== "rendered_output" &&
-                typeof a?.mime === "string" &&
-                a.mime.startsWith("image/") &&
-                typeof a?.url === "string",
-            )
-            const tagged = referencePool.filter((a) => a?.intent === "visual_reference")
-            const referenceRef = (tagged[0] ?? referencePool[0]) as { url: string } | undefined
-
-            if (renderedRef && referenceRef) {
-              if (!roundCommit.commit) {
-                throw new Error("deliver: LKG isolated evaluation requires a round commit sha")
-              }
-              const { evaluateLKGInIsolatedWorktree } = await import("@/delivery/lkg-isolated-eval")
-              const lkg = await evaluateLKGInIsolatedWorktree({
-                task: taskAfterRound,
-                iteration,
-                roundCommitSha: roundCommit.commit,
-                renderedRefUrl: renderedRef.url,
-                referenceRefUrl: referenceRef.url,
-              })
-              lkgMetric = lkg.metric
-              lkgRenderedPath = lkg.renderedArtifactPath
-              lkgOutcome = lkg.outcome
-              log.info("deliver: LKG outcome", {
-                taskID,
-                iteration,
-                kind: lkg.outcome.kind,
-                score: lkg.metric.score.toFixed(3),
-                best_score: "previous" in lkg.outcome ? lkg.outcome.previous.best_score.toFixed(3) : undefined,
-                evaluatedSha: lkg.evaluatedSha,
-                renderedArtifact: lkg.renderedArtifactPath,
-                rolledBackTo: "rolledBackTo" in lkg.outcome ? lkg.outcome.rolledBackTo : undefined,
-                activeSiblings: "activeSiblings" in lkg.outcome ? lkg.outcome.activeSiblings : undefined,
-              })
-              try {
-                const { createDecisionLog } = await import("@/decision-log")
-                const rolledBackTo = "rolledBackTo" in lkg.outcome ? lkg.outcome.rolledBackTo : undefined
-                const activeSiblings = "activeSiblings" in lkg.outcome ? lkg.outcome.activeSiblings : undefined
-                createDecisionLog(taskID).append({
-                  phase: "delivery",
-                  key: lkg.outcome.kind === "blocked_by_siblings"
-                    ? `delivery_lkg_blocked_${iteration}`
-                    : `delivery_lkg_${iteration}`,
-                  value:
-                    `score=${lkg.metric.score.toFixed(3)} outcome=${lkg.outcome.kind} ` +
-                    `evaluated_sha=${lkg.evaluatedSha} rendered_artifact=${lkg.renderedArtifactPath}` +
-                    (rolledBackTo ? ` rolled_back_to=${rolledBackTo}` : "") +
-                    (activeSiblings ? ` active_siblings=${JSON.stringify(activeSiblings)}` : ""),
-                  reason: lkg.outcome.kind === "blocked_by_siblings"
-                    ? "reset skipped due to concurrent sibling goals"
-                    : rolledBackTo ? `rollback_to=${rolledBackTo}` : "",
-                })
-              } catch {
-                /* best effort */
-              }
-            }
-          } catch (lkgErr) {
-            // Rollback failure is structural — surface loudly but do NOT
-            // silently swallow it. The next iteration would compound the bad
-            // state. Log error and continue: verdict still records the
-            // (untrustworthy) state, and the orchestrator LLM sees the
-            // rollback failure in the decision log on its next turn.
-            log.error("deliver: LKG evaluation/rollback failed", {
-              taskID,
-              iteration,
-              error: lkgErr instanceof Error ? lkgErr.message : String(lkgErr),
-            })
-            try {
-              const { createDecisionLog } = await import("@/decision-log")
-              createDecisionLog(taskID).append({
-                phase: "delivery",
-                key: `delivery_lkg_failed_${iteration}`,
-                value: lkgErr instanceof Error ? lkgErr.message : String(lkgErr),
-                reason: "lkg_evaluation_threw",
-              })
-            } catch {
-              /* best effort */
-            }
-          }
-
-          // Phase-6-c: engine_delivery_round was an observability side-channel
-          // (writer: this site; reader: script/delivery/replay.ts). Per
-          // specs/new-arch/16-unified-teardown.md §7-6-c + rule 22 (禁双源),
-          // picky-loop verdict signal lives in decision_log + artifact stream
-          // (`changed_file` / `report` / `verdict` kinds), so the parallel
-          // delivery_round table was removed. Rolled-back / regressed outcomes
-          // still get surfaced via the decision log appended above.
-          if (
-            verdict.verdict === "accepted" &&
-            (lkgOutcome?.kind === "regressed" || lkgOutcome?.kind === "blocked_by_siblings")
-          ) {
-            await trackStepComplete("deliver", undefined, true)
-            const detail = lkgOutcome.kind === "regressed"
-              ? `rolled_back_to=${lkgOutcome.rolledBackTo}`
-              : `active_siblings=${lkgOutcome.activeSiblings.join(",")}`
-            return (
-              `Delivery agent accepted, but isolated LKG evaluation detected ${lkgOutcome.kind}; ` +
-              `${detail}; score=${lkgMetric?.score.toFixed(3) ?? "n/a"}; ` +
-              `rendered_artifact=${lkgRenderedPath ?? "n/a"}. Current primary HEAD was not reset or published.`
-            )
-          }
-
-          if (verdict.verdict === "accepted") {
-            await trackStepComplete("deliver")
-            log.info("deliver: agent accepted, completing task", { taskID, runID: run.id, deliveryID })
-            const delivery = findDeliveryByRun(run.id)
-            if (!delivery) {
-              throw new Error(`Delivery verified and accepted, but no delivery record found for run ${run.id}`)
-            }
-
-            const completed = Date.now()
-            updateEvaluationFromDeliveryVerdict({
-              deliveryID: delivery.id,
-              verdict: verdict.verdict,
-              summary: verdict.summary,
-              now: completed,
-            })
-
-            const preComplete = requireTask(taskID)
-            if (isTaskQueued(preComplete)) {
-              await updateTask(preComplete, { status: "active" }, "Activating for accepted delivery completion")
-            }
-            const completedTask = await updateTask(
-              requireTask(taskID),
-              { status: "completed", error: null, time_completed: completed },
-              "Task completed by accepted delivery",
-            )
-
-            let cleanupNote = ""
-            try {
-              const cleanedGoalWorkspaces = await cleanupTerminalGoalWorkspaces("accepted deliver")
-              cleanupNote = cleanedGoalWorkspaces > 0 ? ` ${cleanedGoalWorkspaces} goal worktree(s) cleaned.` : ""
-            } catch (cleanupErr) {
-              const cleanupMsg = cleanupErr instanceof Error ? cleanupErr.message : String(cleanupErr)
-              cleanupNote = ` Goal workspace cleanup failed: ${cleanupMsg}`
-              log.error("deliver: accepted task cleanup failed", { taskID, deliveryID: delivery.id, error: cleanupMsg })
-            }
-
-            const { Plugin } = await import("@/plugin")
-            await Plugin.trigger(
-              "delivery.ready",
-              { taskID, runID: run.id, deliveryID: delivery.id },
-              { actions: [] },
-            ).catch((err) => log.warn("plugin 'delivery.ready' trigger failed (non-fatal)", { error: String(err) }))
-
-            const currentPlan = run.plan_version_id ? findPlan(run.plan_version_id) : undefined
-            Promise.race([
-              EngineMemoryBridge.flushTaskLearnings({
-                task: completedTask,
-                run,
-                delivery,
-                evaluation: findEvaluationByRun(run.id),
-                plan: currentPlan,
-              }),
-              new Promise<void>((_, reject) =>
-                setTimeout(() => reject(new Error("flushTaskLearnings timeout (30s)")), 30_000),
-              ),
-            ]).catch((err) => log.warn("failed to flush task learnings", { error: String(err) }))
-
-            return (
-              `Delivery result: ACCEPTED. Task completed successfully.${cleanupNote} ` +
-              `Report this delivery result directly to the user and tell them they can continue with follow-up questions or further changes in this task.`
-            )
-          }
-          await trackStepComplete("deliver", undefined, true)
-
-          // Schema invariant: at this point `verdict.verdict === "rejected"`,
-          // so `rejection_details` is the discriminated-union branch with
-          // `.min(1)` non-empty. Entries with `goal_id` are goal-scope; entries
-          // without `goal_id` are task-scope and must not reopen every goal.
-          const { affectedGoalIDs, issuesFound } = await import("@/delivery/verdict")
-          const rejectionAffectedGoalIDs = affectedGoalIDs(verdict)
-          const rejectionIssues = issuesFound(verdict)
-
-          // Persist the delivery-agent's advisory verdict into the evaluation
-          // row for operator-facing drill-down. Convergence lives in
-          // engine_iteration — this row is for audit only.
-          updateEvaluationFromDeliveryVerdict({
-            deliveryID,
-            verdict: verdict.verdict,
-            summary: verdict.summary,
-            checks: rejectionIssues.map((evidence, i) => ({
-              name: `issue-${i + 1}`,
-              status: "failed" as const,
-              evidence,
-              scorer_kind: "delivery_verdict" as const,
-            })),
-            now: Date.now(),
-          })
-
-          // Agent verdict is "rejected" — open a fresh attempt only for goals
-          // the delivery brain explicitly attributed the rejection to. The orchestrator's
-          // next turn reads engine_iteration + the verdict artifact and
-          // chooses strategy (modify_goal / build retry / restart_from_stage / fail_task);
-          // the old deterministic "stalled/abort" branches were an FSM over
-          // metric counts (CLAUDE.md rule 23) and are gone — give-up decisions
-          // belong to the orchestrator LLM.
-          //
-          // engine_iteration + the verdict artifact persisted above are the
-          // canonical source of truth for the rejection details — the
-          // orchestrator reads them via query_metric_trajectory and the
-          // task loop watermarks the verdict artifact to synthesize a
-          // rejection wake note for the next orchestrator decision.
-          // No task.metadata signal.
-          const { startNewAttempt } = await import("@/engine/persist")
-          // Attribution is the delivery brain's job. Task-scope rejections
-          // deliberately carry no `goal_id`; they wake the orchestrator with
-          // manifest evidence instead of falling back to blanket reset.
-          const goalByID = new Map(goals.map((g) => [g.id, g]))
-          const unknownAffected: string[] = []
-          const toReset: typeof goals = []
-          for (const gid of rejectionAffectedGoalIDs) {
-            const g = goalByID.get(gid)
-            if (!g) {
-              unknownAffected.push(gid)
-              continue
-            }
-            toReset.push(g)
-          }
-          if (unknownAffected.length > 0) {
-            // Delivery agent cited a goal id that is not in this task's goal
-            // set. Surface loud — either the agent hallucinated an id, or the
-            // prompt forgot to list a real goal. Either way the rejection is
-            // not actionable as-is; fail the delivery so the orchestrator
-            // re-runs instead of silently dropping those ids.
-            throw new Error(
-              `Delivery verdict cites unknown goal_ids in rejection_details: ${unknownAffected.join(", ")}. ` +
-                `Known goals for this task: ${[...goalByID.keys()].join(", ") || "(none)"}.`,
-            )
-          }
-
-          const {
-            findLatestDeliveryEvidenceManifest,
-            findDeliveryEvidenceManifestHistory,
-            formatDeliveryManifestFailureDetails,
-            repeatedDeliveryFailureSignatures,
-          } = await import("@/delivery/manifest")
-          const currentManifest = findLatestDeliveryEvidenceManifest({ deliveryID })
-          const manifestFailureDetails = currentManifest ? formatDeliveryManifestFailureDetails(currentManifest) : []
-          const priorManifests = currentManifest?.taskId
-            ? findDeliveryEvidenceManifestHistory({
-                taskID: currentManifest.taskId,
-                beforeTime: currentManifest.timeCreated,
-                limit: 5,
-              })
-            : []
-          const repeatedFailure = currentManifest
-            ? repeatedDeliveryFailureSignatures({
-                current: currentManifest,
-                history: priorManifests,
-              })
-            : { repeated: false, signatures: [] }
-          const autoIteration = (await EngineConfig.get()).auto_iteration === true
-          if (repeatedFailure.repeated) {
-            log.info("deliver: repeated failure signatures — refusing identical delivery_rework", {
-              taskID,
-              iteration,
-              signatures: repeatedFailure.signatures.length,
-              auto_iteration: autoIteration,
-            })
-            const { countPriorRepeatedDeliveryFailureSignals } = await import("@/delivery/manifest")
-            const priorSignalCount = countPriorRepeatedDeliveryFailureSignals(
-              createDecisionLog(taskID).readByPhase("delivery"),
-            )
-            createDecisionLog(taskID).append({
-              phase: "delivery",
-              key: `delivery_repeated_failure_signature_${iteration}`,
-              value: `Repeated delivery failure signatures: ${repeatedFailure.signatures.join(" | ")}`,
-              reason:
-                "Current DeliveryEvidenceManifest repeats the prior manifest failure set; the orchestrator must change strategy, ask the operator, or fail_task from evidence instead of blindly repeating the same rework.",
-            })
-            await trackStepComplete("deliver", undefined, true)
-            return SubAgentProtocol.yieldResult({
-              headline:
-                `Delivery rejected with repeated failure signatures (iteration=${iteration}). ` +
-                `No host rule may end scheduling here; decide from the manifest evidence whether to ask, change strategy, or fail the task.`,
-              fields: [
-                ["failure_signatures", repeatedFailure.signatures],
-                ["manifest_failures", manifestFailureDetails],
-                ["iteration", String(iteration)],
-                ["auto_iteration", autoIteration ? "enabled_but_blocked_by_repetition" : "disabled"],
-                ["prior_repeated_signals", String(priorSignalCount)],
-                ["agent_summary", verdict.summary],
-              ],
-              pointer: `verdict artifact ${verdictArtifactId}; repeated manifest failures require an orchestrator decision`,
-            })
-          }
-          if (toReset.length === 0) {
-            createDecisionLog(taskID).append({
-              phase: "delivery",
-              key: `delivery_task_scope_rejection_${iteration}`,
-              value: verdict.summary,
-              reason:
-                "Delivery rejected at task scope: no rejection_details entry carried a concrete goal_id, " +
-                "so no goal attempt was reopened. The orchestrator must fix the integrated deliverable " +
-                "with build({ request }) or change strategy before calling deliver again.",
-            })
-            log.info("deliver: task-scope rejection processed without goal reset", {
-              taskID,
-              iteration,
-              issues: rejectionIssues.length,
-              affected_goal_ids: rejectionAffectedGoalIDs,
-              auto_iteration: autoIteration,
-            })
-            if (autoIteration) {
-              await queueDeliveryReworkWake({
-                iteration,
-                summary: verdict.summary,
-                affectedGoalCount: 0,
-              })
-            }
-            await trackStepComplete("deliver", undefined, true)
-            return SubAgentProtocol.yieldResult({
-              headline:
-                autoIteration
-                  ? `Delivery rejected at task scope — iteration ${iteration}; assistant.auto_iteration=true queued a rework wake from manifest evidence, but this tool did not stop the current scheduler turn.`
-                  : `Delivery rejected at task scope — iteration ${iteration}; no goal attempts were reopened. ` +
-                    `Use the manifest evidence to choose the next orchestrator action; the host did not request a scheduler stop.`,
-              fields: [
-                ["issues_found", rejectionIssues],
-                ["manifest_failures", manifestFailureDetails],
-                ["iteration", String(iteration)],
-                ["auto_iteration", autoIteration ? "enabled" : "disabled"],
-                ["agent_summary", verdict.summary],
-              ],
-              pointer: currentManifest
-                ? `verdict artifact ${verdictArtifactId}; manifest ${currentManifest.id}; task-scope rejection requires an orchestrator decision`
-                : `verdict artifact ${verdictArtifactId}; task-scope rejection requires an orchestrator decision`,
-            })
-          }
-          // Per-goal rejection slice: only the explicit auto-iteration mode
-          // reopens goal attempts and re-wakes the orchestrator. Default-off
-          // mode keeps attempts untouched; the same reasoning turn receives
-          // the rejection evidence and chooses the next action.
-          if (autoIteration) {
-            for (const g of toReset) {
-              const ownDetails = verdict.rejection_details.filter((d) => d.goal_id === g.id)
-              const value = composeDeliveryRetryFeedback({
-                iteration,
-                verdict: verdict.verdict,
-                summary: verdict.summary,
-                manifestFailureDetails,
-                ownDetails,
-              })
-              const reason = `Delivery rejection; ${rejectionIssues.length} issue(s): ${rejectionIssues.slice(0, 3).join("; ")}`
-              startNewAttempt({
-                goalID: g.id,
-                reason: "delivery_rework",
-                feedback: { value, reason },
-              })
-            }
-            await queueDeliveryReworkWake({
-              iteration,
-              summary: verdict.summary,
-              affectedGoalCount: toReset.length,
-            })
-          }
-
-          try {
-            const { createDecisionLog } = await import("@/decision-log")
-            const decisionLog = createDecisionLog(taskID)
-            decisionLog.append({
-              phase: "delivery",
-              key: `delivery_rejection_${iteration}`,
-              value: verdict.summary,
-              reason: rejectionIssues.join("; "),
-            })
-          } catch {
-            /* best effort */
-          }
-
-          log.info("deliver: rejection processed", {
-            taskID,
-            iteration,
-            issues: rejectionIssues.length,
-            reset_goals: autoIteration ? toReset.length : 0,
-            affected_goal_ids: rejectionAffectedGoalIDs,
-            auto_iteration: autoIteration,
-          })
-
-          return SubAgentProtocol.yieldResult({
-            headline:
-              autoIteration
-                ? `Delivery rejected — iteration ${iteration}, agent_verdict=${verdict.verdict}. assistant.auto_iteration=true reopened ${toReset.length} affected goal attempt(s) and queued a rework wake; the host did not stop this scheduler turn.`
-                : `Delivery rejected — iteration ${iteration}, agent_verdict=${verdict.verdict}. ` +
-                  `Use the rejection evidence to choose whether to repair, replan, ask, fail, or report; the host did not request a scheduler stop.`,
-            fields: [
-              ["issues_found", rejectionIssues],
-              ["manifest_failures", manifestFailureDetails],
-              ["iteration", String(iteration)],
-              ["auto_iteration", autoIteration ? "enabled" : "disabled"],
-              ["agent_summary", verdict.summary],
-              [
-                "next_user_message",
-                "The user can continue with follow-up questions or ask for further changes in this same task.",
-              ],
-            ],
-            pointer: currentManifest
-              ? `verdict artifact ${verdictArtifactId}; manifest ${currentManifest.id}; use manifest_failures above before deciding the next tool`
-              : `verdict artifact ${verdictArtifactId}; call query_metric_trajectory for full trajectory`,
-          })
-        } catch (err) {
-          await trackStepComplete("deliver", undefined, true)
-
-          const msg = err instanceof Error ? err.message : String(err)
-          log.error("deliver: verification failed", { taskID, error: msg })
-          // Delivery verification threw — infrastructure fault (network /
-          // parse-retry exhaustion / tool crash). Write a snapshot for
-          // trajectory visibility; do NOT run any deterministic arbiter
-          // here. The old `decisionErr.verdict === "abort" | "stalled"`
-          // branch was a metric-count state machine and is retired.
-          const { computeIterationSnapshot: computeSnapshotErr } = await import("@/metrics/score")
-          const {
-            readCounterexamplesForTask: readCeErr,
-            readIterationHistory: readHistErr,
-            readPreviousAggregateScore: readPrevErr,
-            readResultsForIteration: readResErr,
-            readSpecsForTask: readSpecsErr,
-            writeIterationSnapshot: writeSnapshotErr,
-          } = await import("@/metrics/store")
-          const priorItersErr = readHistErr(taskID)
-          const iterationErr = priorItersErr.length
-          const snapshotErr = computeSnapshotErr({
-            task_id: taskID,
-            iteration: iterationErr,
-            specs: readSpecsErr(taskID),
-            currentResults: readResErr(taskID, iterationErr),
-            previousResults: iterationErr > 0 ? readResErr(taskID, iterationErr - 1) : [],
-            counterexamples: readCeErr(taskID),
-            previousAggregateScore: readPrevErr(taskID, iterationErr),
-          })
-          writeSnapshotErr({ ...snapshotErr, arbiter_verdict: "continue" })
-
-          // A throw carries no per-goal attribution. Record the failure in
-          // the decision log and keep the task active so the orchestrator can
-          // either fix the delivery tool path or change strategy in the same
-          // task context.
-          try {
-            const { createDecisionLog } = await import("@/decision-log")
-            const decisionLog = createDecisionLog(taskID)
-            decisionLog.append({
-              phase: "delivery",
-              key: `delivery_verification_threw_${iterationErr}`,
-              value: `Delivery agent threw: ${msg}`,
-              reason: `infrastructure fault (no verdict produced); iteration ${iterationErr}`,
-            })
-          } catch {
-            /* best effort */
-          }
-          await persistDeliveryVerificationThrow({
-            taskID,
-            runID: run?.id,
-            deliveryID,
-            error: msg,
-            iteration: iterationErr,
-          })
-
-          return (
-            `Delivery verification threw and was persisted as a structured rejection: ${msg}. ` +
-            `Iteration ${iterationErr}. No goals were reset — the throw is an ` +
-            `infrastructure fault and carries no per-goal attribution. Read the ` +
-            `delivery_verification_threw artifact, the delivery-agent-verdict artifact, ` +
-            `and decision log entry delivery_verification_threw_${iterationErr}; then ` +
-            `continue in this task context: repair the delivery tool path if it is broken, ` +
-            `build({ goalID }) on a suspect goal, or modify_goal if the contract looks wrong.`
-          )
-        }
+        return (
+          "deliver: disabled. Delivery host-gate verification has been retired because workflow acceptance must stay inside agent sessions. " +
+          "Run `integrity` after all blocking builds are terminal; a post-build integrity pass is the workflow completion gate."
+        )
       },
     }),
 
     publish_delivery: tool({
       description:
-        "Post-delivery artifact export for an already accepted delivery. " +
-        "`deliver` accepted is the task completion authority; this tool must not decide lifecycle. " +
-        "Use only when the operator explicitly needs a patch/git preview/export artifact after completion.",
+        "DISABLED. Legacy post-delivery artifact export depends on retired delivery verdicts. Do not call this tool.",
       inputSchema: z.object({
         reason: z.string().optional().describe("Confirmation that both verifications passed"),
       }),
       execute: async () => {
-        const task = requireTask(taskID)
-        const designGate = requireDesignAnalysisBefore("publish_delivery", task)
-        if (designGate) return designGate
-
-        type DeliveryVerdictPayload =
-          | (import("@/delivery/agent").DeliveryVerdictType & { verdict: "accepted" | "rejected" })
-          | null
-          | undefined
-        let delivery: ReturnType<typeof findDeliveriesForTask>[number] | undefined
-
-        for (const candidate of findDeliveriesForTask(task.id)) {
-          const artifact = findLatestDeliveryVerdictArtifactForDelivery(candidate.id)
-          const payload = artifact?.payload as DeliveryVerdictPayload
-          if (payload?.verdict !== "accepted") continue
-          delivery = candidate
-          break
-        }
-        if (!delivery) return "publish_delivery: no accepted delivery found. Run deliver first and publish only after an accepted verdict."
-
-        const run = findRun(delivery.run_id)
-        if (!run) {
-          throw new Error(
-            `publish_delivery invariant violation: accepted delivery ${delivery.id} references missing run ${delivery.run_id}`,
-          )
-        }
-
-        const verdictArtifact = findLatestDeliveryVerdictArtifactForDelivery(delivery.id)
-        const confirmedVerdictPayload = verdictArtifact?.payload as
-          | (import("@/delivery/agent").DeliveryVerdictType & { verdict: "accepted" | "rejected" })
-          | null
-        if (confirmedVerdictPayload?.verdict !== "accepted") {
-          throw new Error(
-            `publish_delivery invariant violation: accepted delivery ${delivery.id} lost its accepted verdict artifact`,
-          )
-        }
-        const verdictPayload = confirmedVerdictPayload
-        const { findLatestDeliveryEvidenceManifest } = await import("@/delivery/manifest")
-        const manifest = findLatestDeliveryEvidenceManifest({ deliveryID: delivery.id })
-        if (!manifest) {
-          return "Delivery evidence manifest is missing; publish blocked until deliver reruns the project gates."
-        }
-        if (manifest.finalGate.status !== "passed") {
-          return `Delivery evidence manifest gate is ${manifest.finalGate.status}: ${manifest.finalGate.summary}`
-        }
-
-        markDeliveryPublishing(delivery.id, Date.now())
-
-        const PUBLISH_TIMEOUT_MS = 60_000
-        let result: Awaited<ReturnType<typeof Publisher.deliver>>
-        try {
-          result = await Promise.race([
-            Publisher.deliver({ task, run, delivery }),
-            new Promise<never>((_, reject) =>
-              setTimeout(() => reject(new Error("Publisher.deliver() timeout")), PUBLISH_TIMEOUT_MS),
-            ),
-          ])
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err)
-          log.error("publish_delivery failed", { taskID: task.id, runID: run.id, error: msg })
-          return `Publish failed: ${msg}. Task lifecycle is unchanged; retry only if explicit artifact export is still needed.`
-        }
-
-        const completed = Date.now()
-        finalizeDeliveryResult({
-          deliveryId: delivery.id,
-          taskId: task.id,
-          runId: run.id,
-          delivery,
-          result,
-          now: completed,
-        })
-
-        if (result.status === "delivered") {
-          const current = requireTask(task.id)
-          const currentPlan = run.plan_version_id ? findPlan(run.plan_version_id) : undefined
-          const published = findDeliveryByRun(run.id) ?? delivery
-
-          // Update the evaluation row persistTaskDelivery() created for this
-          // delivery. 1:1 task-delivery↔evaluation invariant: the row always
-          // exists here (per-goal deliveries never touch this path).
-          // No `checks` argument: the `deliver` tool already wrote the full
-          // structured check set; updateEvaluationFromDeliveryVerdict
-          // preserves existing checks when none are supplied.
-          if (verdictPayload?.verdict) {
-            updateEvaluationFromDeliveryVerdict({
-              deliveryID: delivery.id,
-              verdict: verdictPayload.verdict,
-              summary: verdictPayload.summary ?? "Delivery agent verification",
-              now: completed,
-            })
-          }
-
-          const finalized = await EngineGit.complete(current, currentPlan, published)
-          if (finalized.error) {
-            return `Delivery artifact export succeeded, but git checkpoint failed: ${finalized.error}. Task lifecycle is unchanged.`
-          }
-          const cleanedGoalWorkspaces = await cleanupTerminalGoalWorkspaces("publish_delivery")
-          const cleanupNote = cleanedGoalWorkspaces > 0 ? ` ${cleanedGoalWorkspaces} goal worktree(s) cleaned.` : ""
-
-          // Auto-launch the deliverable if the delivery agent recorded a
-          // launch command. `launch_command` exists only on AcceptedVerdict
-          // (the discriminated-union accepted branch); a published delivery
-          // is always accepted, but the verdict could nominally be malformed
-          // — narrow defensively without coercion.
-          const launchCmd = verdictPayload?.verdict === "accepted" ? verdictPayload.launch_command : undefined
-          if (launchCmd) {
-            try {
-              const { Shell } = await import("@/shell/shell")
-              const { Filesystem } = await import("@/util/filesystem")
-              const projectDir = Filesystem.resolve(Instance.directory)
-              const launched = await Shell.launch(launchCmd, { cwd: projectDir })
-              const addrNote = launched.address ? ` — running at ${launched.address}` : ` (PID ${launched.pid})`
-              log.info("deliverable launched", { pid: launched.pid, address: launched.address, command: launchCmd })
-              return `Delivery artifacts published.${cleanupNote} Deliverable launched${addrNote}. Task lifecycle is unchanged.`
-            } catch (err) {
-              const msg = err instanceof Error ? err.message : String(err)
-              log.warn("auto-launch failed after publish", { error: msg, command: launchCmd })
-              return `Delivery artifacts published.${cleanupNote} Auto-launch failed: ${msg}. Launch manually with: ${launchCmd}. Task lifecycle is unchanged.`
-            }
-          }
-
-          return `Delivery artifacts published.${cleanupNote} Task lifecycle is unchanged; accepted deliver is already the completion source.`
-        }
-
-        return publishGateArtifactResult({
-          deliveryID: delivery.id,
-          runID: run.id,
-          summary: result.summary,
-          source: "publish_delivery",
-        })
+        return (
+          "publish_delivery: disabled. Accepted delivery verdicts are retired; post-build `integrity` pass is the workflow completion gate. " +
+          "Artifact export needs a separate non-gate tool before it can be used again."
+        )
       },
     }),
 
@@ -5347,7 +4192,7 @@ export function createOrchestratorTools(input: {
         "Offer the user one polished follow-up task candidate that improves or completes the current/previous request. " +
         "This is the orchestrator's ONLY new-engine-task creation path: it first asks the user to confirm, then creates " +
         "a new task only if the user selects `创建任务`. Do not use this for normal workflow progress, do not use it " +
-        "instead of build/deliver on the current task, and do not call generic `task` or control-plane `panel`.",
+        "instead of build/integrity on the current task, and do not call generic `task` or control-plane `panel`.",
       inputSchema: z.object({
         title: z.string().min(1).describe("Concise title for the proposed new task."),
         request: z
@@ -5454,20 +4299,21 @@ export function createOrchestratorTools(input: {
         "owned_paths) is preserved untouched and your `request` is rendered as a separate " +
         "'Retry Guidance From Orchestrator' section ahead of historical retry feedback, so filling it " +
         "never costs you any architect-committed contract. `build({ request, directBuildIntent })` without goalID is a task-level " +
-        "direct build. It is supported for explicit `kind=build` tasks, whole-task rework after delivery " +
-        "rejection, and operator/orchestrator decisions to bypass goal decomposition for a scoped workflow " +
-        "task. For fresh `kind=workflow` tasks, requirements → architect → per-goal build remains the " +
-        "recommended path. Fresh workflow direct builds must declare directBuildIntent='modify_files'. " +
-        "directBuildIntent='inspect_only' is not a workflow execution path; use analyze_intent / requirements / " +
-        "architect and then per-goal build instead. " +
-        "After build returns, you MUST call `deliver` next: build does NOT auto-complete the task; the only " +
-        "way to mark a task accepted is through delivery's adversarial verification. Rejected delivery returns " +
-        "structured evidence to this same reasoning turn; choose the next action from that evidence instead of " +
-        "treating `deliver` as a host-forced terminal point. Only when `assistant.auto_iteration=true` may " +
-        "OpenCorvus automatically queue another build/deliver repair pass with rejection feedback. " +
+        "direct implementation build. It is supported for explicit `kind=build` tasks, whole-task rework after " +
+        "delivery rejection, and rare operator/orchestrator decisions to bypass goal decomposition for a scoped " +
+        "workflow implementation task. It is not a repository investigation tool. For " +
+        "fresh `kind=workflow` tasks, requirements → architect → per-goal build remains the recommended path " +
+        "when the request needs durable requirements, goal contracts, or decomposition. Fresh workflow direct " +
+        "builds must declare directBuildIntent='modify_files' for scoped implementation. Repository investigation " +
+        "belongs to analyze_intent, requirements, or the registered explore subagent surface; do not route that work " +
+        "through build. " +
+        "After build returns, read the build report and current goal/run state. Build does NOT auto-complete " +
+        "workflow tasks. The final workflow gate is `integrity`, and it is valid only after all blocking builds " +
+        "are terminal. Non-pass integrity returns session-bound review evidence to this same reasoning turn; " +
+        "choose the next action from that evidence. " +
         "DO NOT USE FOR: multi-file features, UI replication from designs, anything with explicit acceptance " +
         "criteria, cross-module refactors, new subsystems — those go through requirements → architect → " +
-        "per-goal build → deliver (the pipeline workflow). For visual/reference tasks, design_analysis must " +
+        "per-goal build → integrity (the pipeline workflow). For visual/reference tasks, design_analysis must " +
         "already have produced PRD/SPEC review entries, especially visual_consistency_spec, before any build dispatch.",
       inputSchema: z.object({
         request: z
@@ -5488,21 +4334,22 @@ export function createOrchestratorTools(input: {
             "Optional goal id this build is scoped to. Set when build is invoked as a per-goal worker inside the pipeline workflow. Omit for task-level direct builds.",
           ),
         directBuildIntent: z
-          .enum(["modify_files", "inspect_only"])
+          .literal("modify_files")
           .optional()
           .describe(
-            "Required for task-level direct builds on kind=workflow tasks. Use modify_files only when the direct build is expected to change project files. Use inspect_only when the requested work is read-only exploration / investigation / analysis; workflow tasks reject that path so the orchestrator must use stage agents instead.",
+            "Required for task-level direct builds on kind=workflow tasks. The only valid direct intent is modify_files: a scoped implementation/rework build. Build is not a repository investigation endpoint.",
           ),
       }),
       execute: async ({ request = "", reason, goalID, directBuildIntent }) => {
         const task = requireTask(taskID)
         const requestText = request.trim()
+        const declaredDirectBuildIntent = directBuildIntent as string | undefined
         log.info("build tool invoked", {
           taskID,
           reason,
           requestLen: request.length,
           goalID: goalID || "",
-          directBuildIntent: directBuildIntent ?? "",
+          directBuildIntent: declaredDirectBuildIntent ?? "",
         })
 
         const designGate = requireDesignAnalysisBefore("build", task)
@@ -5522,20 +4369,18 @@ export function createOrchestratorTools(input: {
           if (requestText.length === 0) {
             return `build: rejected task-level build. request is required when build is not scoped to a goal.`
           }
+          if (declaredDirectBuildIntent && declaredDirectBuildIntent !== "modify_files") {
+            return (
+              `build: rejected task-level build. directBuildIntent="${declaredDirectBuildIntent}" is not supported; ` +
+              `build is implementation-only. Repository investigation belongs to analyze_intent, requirements, or explore.`
+            )
+          }
           if (task.kind === "workflow") {
-            if (!directBuildIntent) {
+            if (!declaredDirectBuildIntent) {
               return (
                 `build: rejected task-level workflow build. directBuildIntent is required when build is not scoped ` +
-                `to a goal; use directBuildIntent="modify_files" only for a scoped direct implementation. ` +
-                `For read-only exploration / investigation / analysis, call analyze_intent / requirements / ` +
-                `architect and then build({ goalID }) instead.`
-              )
-            }
-            if (directBuildIntent === "inspect_only") {
-              return (
-                `build: rejected inspect-only task-level workflow build. Workflow exploration belongs in the ` +
-                `stage-agent path (analyze_intent / requirements / architect) so the task gets durable ` +
-                `requirements, acceptance specs, and per-goal build contracts before execution.`
+                `to a goal; use directBuildIntent="modify_files" for scoped direct implementation. ` +
+                `Repository investigation belongs in analyze_intent, requirements, or explore.`
               )
             }
           }
@@ -6261,10 +5106,10 @@ export function createOrchestratorTools(input: {
           // BuildAgent.run's underlying actor closes. The structured build
           // report below is the orchestrator-facing tool result.
 
-          // Build does NOT mark the task complete — deliver must accept.
-          // Return the structured payload so the orchestrator can judge
-          // whether build actually addressed the prior rejection before
-          // re-dispatching (avoids the build/deliver death spiral).
+          // Build does NOT mark workflow tasks complete. The final gate is a
+          // post-build integrity session after all blocking build evidence is
+          // terminal. Return the structured payload so the orchestrator can
+          // judge the next explicit action.
           const testLines =
             result.tests.length > 0
               ? result.tests
@@ -6313,8 +5158,8 @@ export function createOrchestratorTools(input: {
             `${factBlock}\n\n` +
             `### Next step\n` +
             `Read the build report and the worktree facts above. Cross-check the LLM's files_changed/commit_ref against the worktree facts; if they disagree, factor that into your next call. ` +
-            `When the current eligible wave reaches terminal state, choose deliver / build({goalID}) / modify_goal / architect / fail_task / restart_from_stage from the build evidence and task context. ` +
-            `call \`integrity\` only when the integrated evidence raises a real question about requirement mining or system integrity; it is not a routine wave-level step.`
+            `When the current eligible wave reaches terminal state, choose integrity / build({goalID}) / modify_goal / architect / fail_task / restart_from_stage from the build evidence and task context. ` +
+            `Call \`integrity\` as the final workflow gate after all blocking builds are terminal; before that, use it only when integrated evidence raises a real question about requirement mining or system integrity.`
           )
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err)

@@ -1,10 +1,9 @@
 /**
- * Tool set for the DeliveryAgent.
+ * Legacy delivery evidence tool set.
  *
- * Includes exploration tools, bounded repair tools, execution tools,
- * screenshot tools, and memory tools. Delivery may fix simple localized
- * defects it can verify immediately; larger repair still belongs to
- * orchestrator retry/replan and build agents.
+ * Integrity acceptance review reuses the evidence-gathering subset through
+ * `integrity/acceptance-tools.ts`. The retired legacy runtime no longer owns
+ * these tools.
  */
 import { tool } from "ai"
 import z from "zod"
@@ -58,7 +57,7 @@ type DeliveryToolAttachment = {
   source?: string
 }
 
-type DeliveryToolContext = {
+export type DeliveryToolContext = {
   sessionID?: string
   taskID?: string
   deliveryID?: string
@@ -275,7 +274,7 @@ async function runDeliveryIntegrityReview(input: {
 }
 
 /**
- * Creates the tool set for the DeliveryAgent.
+ * Creates the legacy delivery evidence tool set.
  *
  * Includes:
  * - 4 codebase read tools: read_file, find_files, search_code, list_directory
@@ -604,7 +603,7 @@ export function createDeliveryTools(input?: DeliveryToolContext) {
             )
             .join("\n\n---\n\n")
         } catch (err) {
-          log.warn("memory search failed in delivery agent", { query, err })
+          log.warn("memory search failed in legacy delivery evidence tool", { query, err })
           return "Memory search unavailable."
         }
       },
@@ -631,7 +630,7 @@ export function createDeliveryTools(input?: DeliveryToolContext) {
           })
           return `Saved: ${title} (id: ${file.id})`
         } catch (err) {
-          log.warn("memory write failed in delivery agent", { title, err })
+          log.warn("memory write failed in legacy delivery evidence tool", { title, err })
           return "Memory write failed."
         }
       },
@@ -744,7 +743,7 @@ export function createDeliveryTools(input?: DeliveryToolContext) {
           if (result.stderr.trim()) parts.push(`stderr:\n${result.stderr.slice(0, 5000)}`)
           return parts.join("\n") || `exit_code: ${result.exitCode} (no output)`
         } catch (e) {
-          log.warn("run_command failed in delivery agent", { command, err: e })
+          log.warn("run_command failed in legacy delivery evidence tool", { command, err: e })
           return `Error running command: ${e instanceof Error ? e.message : String(e)}`
         }
       },
@@ -756,7 +755,7 @@ export function createDeliveryTools(input?: DeliveryToolContext) {
         "project's .opencorvus/delivery-screenshots/ directory. Use this to produce visual evidence " +
         "that the running application actually renders, or to capture before/after images around a " +
         "fix. The screenshot is saved to disk; reference the returned absolute path and sha when " +
-        "citing this call in submit_verdict.tool_call_evidence. The tool returns the shot's size " +
+        "citing this call in acceptance tool_call_evidence. The tool returns the shot's size " +
         "(bytes + dimensions) and a pixel-variance signal — a near-zero variance means the page " +
         "rendered blank/uniform (JSON error, pre-hydration stub, loading state) and the capture " +
         "itself does NOT count as a passed check. Capture viewport is capped at 1440x1080 " +
@@ -840,7 +839,7 @@ export function createDeliveryTools(input?: DeliveryToolContext) {
         "     the body's textContent.\n" +
         "Returns a structured report per layer. The call PASSES only when every layer with an " +
         "assertion passes — any single layer failure marks the whole call failed. Cite the returned " +
-        "JSON in submit_verdict.tool_call_evidence with detail=the failure list (or the key numbers " +
+        "JSON in acceptance tool_call_evidence with detail=the failure list (or the key numbers " +
         "when passed).",
       inputSchema: z.object({
         url: z
@@ -1128,7 +1127,7 @@ function renderDeliveryEditResult(input: { filePath: string; before: string; aft
   return [
     `delivery repair updated ${input.filePath}`,
     `additions=${additions} deletions=${deletions}`,
-    "Run a focused verification command or runtime probe before submit_verdict. " +
+    "Run a focused verification command or runtime probe before submitting the acceptance verdict. " +
       "If the issue is not fully fixed, submit verdict='rejected'.",
     "diff:",
     diff.slice(0, 8000),

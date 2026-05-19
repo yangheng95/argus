@@ -45,7 +45,7 @@ export const EvaluatorAnalysis = z.object({
 
 export type EvaluatorAnalysisType = z.infer<typeof EvaluatorAnalysis>
 
-/** Alias used by the orchestrator persist layer and delivery agent. */
+/** Alias used by the orchestrator persist layer and legacy delivery evidence. */
 export type GoalJudgmentType = EvaluatorAnalysisType
 
 // ---------------------------------------------------------------------------
@@ -59,7 +59,7 @@ export interface CheckResult {
 }
 
 export interface GoalInfo {
-  /** Goal DB id (e.g. `gol_...`). Required: the delivery agent must cite it
+  /** Goal DB id (e.g. `gol_...`). Required: acceptance review must cite it
    *  when writing rejection_details[].goal_id so the orchestrator can route
    *  each rejection back to the correct goal without string-matching. */
   id: string
@@ -101,15 +101,14 @@ export interface DeliveryInfo {
   }>
   // Host deterministic-gate conclusions (manifestGate / hostGateFailures /
   // manifestFailureDetails / manifestFailures / runtimeEvidenceFailures /
-  // visualMetricFailures) were intentionally REMOVED. The fresh-eyes
-  // DeliveryAgent runs only after the host gate has already passed and must
-  // investigate the merged tree blind — it never receives host failure
-  // conclusions. See specs/delivery-fresh-eyes-decoupling-2026-05-18.md.
+  // visualMetricFailures) were intentionally REMOVED. New acceptance review
+  // runs inside the integrity session and must investigate from session-owned
+  // evidence, not host failure conclusions.
   /**
    * Structured per-goal implementation reports emitted by goal executors via
    * the `goal_report` tool call. One entry per delivered goal. Length 1 for
    * per-goal evaluator input; length N for the aggregated final-delivery
-   * context. Authoritative source for the delivery agent's adversarial
+   * context. Authoritative source for acceptance review's adversarial
    * cross-check: `implementation_approach` is matched against the diff and
    * `design_decisions[].reason` is challenged. Absence of the array (or an
    * empty array) means the executor never produced a report — the pipeline

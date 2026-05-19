@@ -2,11 +2,11 @@ import { describe, expect, test } from "bun:test"
 import { composeDeliveryRetryFeedback } from "../../src/orchestrator/delivery-retry-feedback"
 
 describe("delivery retry feedback", () => {
-  test("includes host manifest gate details in per-goal retry feedback", () => {
+  test("includes manifest evidence details in per-goal retry feedback", () => {
     const text = composeDeliveryRetryFeedback({
       iteration: 2,
       verdict: "rejected",
-      summary: "Delivery is blocked by deterministic host gates.",
+      summary: "Acceptance review is blocked by deterministic evidence.",
       manifestFailureDetails: [
         "[review] specialist:client_contract Specialist Review: client_contract status=failed: blocking:evidence_quality: missing client evidence",
         "[runtime] runtime:web:. Web Runtime Render status=failed: render_failed: ETIMEDOUT",
@@ -28,7 +28,7 @@ describe("delivery retry feedback", () => {
       },
     })
 
-    expect(text).toContain("Host manifest gate failures:")
+    expect(text).toContain("Manifest evidence failures:")
     expect(text).toContain("specialist:client_contract")
     expect(text).toContain("render_failed: ETIMEDOUT")
     expect(text).toContain("[runtime] calculator render failed")
@@ -42,7 +42,7 @@ describe("delivery retry feedback", () => {
     const text = composeDeliveryRetryFeedback({
       iteration: 3,
       verdict: "rejected",
-      summary: "Task-scope host gate failure.",
+      summary: "Task-scope evidence failure.",
       manifestFailureDetails: [
         "[runtime] runtime:web:. Web Runtime Render status=failed: dom_too_thin: nodes=43 threshold=60",
       ],

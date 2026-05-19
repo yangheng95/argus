@@ -547,7 +547,7 @@ export namespace AttachmentStore {
   // added below, nothing ever deleted those files — every removed part /
   // session / task left its referenced bytes behind on disk. The first
   // OOM forensic pass (specs/delivery-attachment-store-single-source-2026-05-11.md)
-  // found that delivery's screenshot tools were bloating `part.data` with
+  // found that screenshot tools were bloating `part.data` with
   // inline base64 instead of using the store at all. As the migration
   // moves them onto the store, the on-disk directory becomes the single
   // source — and that source needs reaping.
