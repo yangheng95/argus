@@ -143,3 +143,43 @@ describe("orchestrator-core grain ladder hardening", () => {
     )
   })
 })
+
+/**
+ * 2026-05-20 (user directive): the system delivers a project through its
+ * specialist agent team via the workflow pipeline. The orchestrator was
+ * shortcutting `kind=workflow` tasks straight to `build({ request })`,
+ * skipping requirements/architect (no goal graph, no contracts, nothing
+ * for integrity to gate). Direct build is reserved for kind=build and
+ * post-review scoped fixes only. Prompt-only fix (rule 6.1); pin the
+ * load-bearing copy + the absence of the prior permissive phrasing so a
+ * future edit cannot silently re-open the bypass.
+ */
+describe("orchestrator-core workflow-bypass prohibition", () => {
+  test("states the agent-team delivery principle", async () => {
+    const text = await Bun.file(promptPath).text()
+    expect(text).toContain("The system delivers a project through its specialist agent team")
+    expect(text).toContain("the team IS the\ndelivery mechanism")
+  })
+
+  test("prohibits jumping straight to direct build on a fresh workflow task", async () => {
+    const text = await Bun.file(promptPath).text()
+    expect(text).toContain("Bypassing the workflow is prohibited in principle")
+    expect(text).toMatch(/MUST NOT jump straight to `build\(\{ request \}\)`/)
+    expect(text).toContain("task simplicity is the Architect's call")
+  })
+
+  test("direct build is the narrow exception: kind=build or post-review fix", async () => {
+    const text = await Bun.file(promptPath).text()
+    expect(text).toMatch(/Direct `build\(\{ request, directBuildIntent: "modify_files" \}\)` is the narrow\nexception/)
+    expect(text).toContain("explicit `kind=build` tasks")
+    expect(text).toContain("subsequent, concretely-scoped problem fix after a `build`/`integrity`")
+  })
+
+  test("does NOT advertise the prior permissive direct-build copy", async () => {
+    const text = await Bun.file(promptPath).text()
+    // Pre-fix copy invited direct build whenever it was "the smallest
+    // responsible path" for a workflow task — the exact bypass loophole.
+    expect(text).not.toContain("workflow tasks where a direct\ntask-level edit is the smallest responsible path")
+    expect(text).not.toContain("Direct build is supported:")
+  })
+})
