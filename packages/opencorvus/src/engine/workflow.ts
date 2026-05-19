@@ -2,13 +2,13 @@
  * MiniWorkflow — 两个声明式工作流模板
  *
  * 系统只内置两条路径：
- *   1. **direct**   — build → deliver（对抗式迭代）
+ *   1. **direct**   — build
  *      用于显式 kind=build 的单文件改动 / bugfix / 配置调整 / 短篇调试。无需 requirements / architect / goals。
- *   2. **pipeline** — (design_analysis) → analyze_intent → requirements → architect → per-goal[build] → deliver
+ *   2. **pipeline** — (design_analysis) → analyze_intent → requirements → architect → per-goal[build] → integrity
  *      用于多文件功能、UI 复刻、跨模块重构、需要验收标准的任务。
  *
- * 两条路径都以 build 做实现、以 deliver 做对抗式验收。deliver 是唯一接受闸：
- * accepted 会自动发布并完成任务；rejected 会把结构化证据交还编排器，由编排器决定下一步。
+ * Pipeline 以 build 做实现、以 integrity 做 session-bound final gate。deliver
+ * host gate 已禁用，不再作为推荐 workflow 的验收步骤。
  *
  * MiniWorkflow 不是状态机，不是固定 pipeline。Orchestrator 仍可基于 agent 推理偏离推荐
  * 路径，每个步骤映射到一个已存在的 Orchestrator 工具，工作流只在 system prompt 中以
@@ -21,7 +21,6 @@ import {
   findActiveSpecForTask,
   findLatestIntegrityAttemptArtifact,
   integrityAttemptVerdict,
-  findLatestDeliveryVerdictArtifact,
   findRuns,
   findTask,
   listGoals,
@@ -124,17 +123,16 @@ export interface WorkflowState {
 // 内置 Workflow 定义 — 只有两个
 // ═══════════════════════════════════════════════════════════════════
 
-/** direct — 即时调用 build，然后 deliver 对抗式验收。
+/** direct — 即时调用 build。
  *
  *  适合：显式 kind=build 的单文件 / 局部 bugfix / 配置调整 / 短调试。无需 goal 分解。
- *  流程：build 实现 → deliver 验证；deliver accepted 自动发布并完成任务；
- *  deliver rejected 返回结构化证据，下一步仍由 Orchestrator 基于证据决定。
- *  delivery 只审查和出 verdict。
+ *  流程：build 实现。需要结构化验收的任务应走 pipeline，这样 integrity
+ *  可以读取 requirements / architect / goal build evidence 后做最终 gate。
  */
 const DIRECT: MiniWorkflow = {
   id: "direct",
   name: "Direct",
-  description: "analyze_intent → build → deliver 对抗式迭代。用于显式 kind=build 的单文件 / bugfix / 配置 / 短调试 — 无需 goal 分解。",
+  description: "analyze_intent → build。用于显式 kind=build 的单文件 / bugfix / 配置 / 短调试 — 无需 goal 分解。",
   steps: [
     {
       id: "analyze_intent",
@@ -149,19 +147,10 @@ const DIRECT: MiniWorkflow = {
       id: "build",
       tool: "build",
       label: "Build",
-      hint: "调用 build agent 实现请求（read/write/edit/bash）。无 goalID 是受支持的 direct build：推荐用于显式 kind=build、delivery 拒绝后的整体 rework，或编排器明确判断无需 goal 分解的 scoped workflow 任务；Pipeline 推荐链路在 architect 之后用有 goalID 的 per-goal build。完成后必须 call deliver。",
+      hint: "调用 build agent 实现请求（read/write/edit/bash）。无 goalID 是受支持的 direct build：推荐用于显式 kind=build、完整性复核后的整体 rework，或编排器明确判断无需 goal 分解的 scoped workflow 任务；Pipeline 推荐链路在 architect 之后用有 goalID 的 per-goal build。",
       scope: "task",
       skippable: false,
       after: ["analyze_intent"],
-    },
-    {
-      id: "deliver",
-      tool: "deliver",
-      label: "Deliver",
-      hint: "delivery agent 端到端验收 + 发布判定。Accepted 会自动发布并完成任务；Rejected 返回结构化证据，编排器继续基于证据选择修复、重规划、提问、失败或报告结果。",
-      scope: "task",
-      skippable: false,
-      after: ["build"],
     },
   ],
   goalLoopStepIDs: [],
@@ -170,13 +159,13 @@ const DIRECT: MiniWorkflow = {
 /** pipeline — 完整开发流程。
  *
  *  适合：多文件功能 / UI 复刻 / 跨模块重构 / 需要明确验收标准的任务。
- *  流程：(design_analysis 可选) → analyze_intent → requirements → architect → per-goal[build] → integrity? → deliver；
- *  deliver 是唯一接受闸：accepted 自动发布并完成任务；rejected 返回证据后由编排器决定下一步。
+ *  流程：(design_analysis 可选) → analyze_intent → requirements → architect → per-goal[build] → integrity；
+ *  integrity 是 session-bound final gate：pass 完成任务；非 pass 返回证据后由编排器决定下一步。
  */
 const PIPELINE: MiniWorkflow = {
   id: "pipeline",
   name: "Pipeline",
-  description: "(design_analysis) → analyze_intent → requirements → architect → per-goal[build] → integrity? → deliver。多文件功能 / UI 复刻 / 跨模块重构。",
+  description: "(design_analysis) → analyze_intent → requirements → architect → per-goal[build] → integrity。多文件功能 / UI 复刻 / 跨模块重构。",
   steps: [
     {
       id: "design_analysis",
@@ -209,7 +198,7 @@ const PIPELINE: MiniWorkflow = {
       id: "architect",
       tool: "architect",
       label: "Architect",
-      hint: "权威分解者：读 REQ-N + 决策，产出 goals / acceptance_specs / traceability / source-reference coverage / cross-goal contracts。多 goal / 跨模块时按需调用；trivial 单文件改动可跳过。delivery 拒绝后仅在结构性证据成立时 re-run 精修 goal 集合。",
+      hint: "权威分解者：读 REQ-N + 决策，产出 goals / acceptance_specs / traceability / source-reference coverage / cross-goal contracts。多 goal / 跨模块时按需调用；trivial 单文件改动可跳过。integrity 非 pass 后仅在结构性证据成立时 re-run 精修 goal 集合。",
       scope: "task",
       skippable: true,
       after: ["requirements"],
@@ -225,7 +214,7 @@ const PIPELINE: MiniWorkflow = {
       id: "build",
       tool: "build",
       label: "Executor",
-      hint: "执行器在隔离 worktree 中完成一个 goal。每个 build 收到架构共识输入；build 完成后 architecture_review 的完整反馈会原文返回给 orchestrator，由 orchestrator LLM 自行决定后续动作（modify_goal / build / architect / deliver / fail_task）。",
+      hint: "执行器在隔离 worktree 中完成一个 goal。每个 build 收到架构共识输入；build 完成后 architecture_review 的完整反馈会原文返回给 orchestrator，由 orchestrator LLM 自行决定后续动作（modify_goal / build / architect / integrity / fail_task）。",
       scope: "goal",
       skippable: false,
       after: ["architect"],
@@ -237,16 +226,7 @@ const PIPELINE: MiniWorkflow = {
       id: "integrity",
       tool: "integrity",
       label: "Review",
-      hint: "显式系统完整性复核：build 报告会作为 review input 被记录，但不会自动触发 architecture_review。只有当集成证据显示 requirements mining、语义完整性、contract graph 或 delivered system 存在真实疑点时才调用。该阶段不是 build 前置门槛或 routine wave gate，host 不会自动改写 goal 图、不会自动 supersede attempt；orchestrator LLM 读完反馈后显式选择下一步。",
-      scope: "task",
-      skippable: true,
-      after: ["build"],
-    },
-    {
-      id: "deliver",
-      tool: "deliver",
-      label: "Deliver",
-      hint: "聚合所有 goal 交付物，delivery agent 端到端验收 + 发布判定。Accepted 会自动发布并完成任务；Rejected 返回结构化证据，编排器继续基于证据选择修复、重规划、提问、失败或报告结果。",
+      hint: "最终系统完整性 gate：在所有 blocking goal build 完成后调用。Integrity 在自己的 session 内审查 requirement mining、语义完整性、contract graph 与 delivered system。pass 完成任务；非 pass 返回可操作反馈，orchestrator 显式选择 modify_goal / build / architect / fail_task。",
       scope: "task",
       skippable: false,
       after: ["build"],
@@ -383,35 +363,12 @@ function taskStepStatusByTool(
         specSnapshotID: activeSpec.id,
       })
       const verdict = integrityAttemptVerdict(latest)
-      // Architecture review is advisory in the workflow strip too. A
-      // needs_correction verdict, a non-zero corrections_count, or a
-      // non-zero missing_count is no longer a workflow "failed" — it's
-      // information for the orchestrator LLM to act on. The host does
-      // not declare the integrity step "failed" based on counts; if the
-      // LLM didn't address the review's corrections, downstream stages
-      // (build feedback / delivery decision) will surface that as
-      // evidence. Spec architecture-rework-loosening-plan-2026-05-06.md
-      // (C2). CLAUDE.md rule 13.
-      return verdict ? "completed" : "pending"
+      if (!verdict) return "pending"
+      return verdict === "pass" ? "completed" : "failed"
     }
     case "build":
       // direct workflow: any run (artifact kind="run") means a build occurred
       return findRuns(taskID).length > 0 ? "completed" : "pending"
-    case "deliver": {
-      // Single source of truth (rule 22): the latest delivery-agent-verdict
-      // artifact dictates this step's terminal status. Counting raw delivery
-      // artifacts conflates "some delivery row was written" (the deliver
-      // tool produces a candidate-delivery artifact BEFORE asking the agent
-      // for a verdict) with "deliver passed", which kept the workflow strip
-      // showing ✓ on rejected tasks. The transient `running` state still
-      // arrives via WorkflowStepUpdated; absence of a verdict means we never
-      // reached a terminal state for the current attempt — `pending`.
-      const verdict = findLatestDeliveryVerdictArtifact(taskID)
-      const v = (verdict?.payload as { verdict?: string } | null | undefined)?.verdict
-      if (v === "rejected") return "failed"
-      if (v === "accepted") return "completed"
-      return "pending"
-    }
     default:
       return "pending"
   }
@@ -635,9 +592,8 @@ export function renderWorkflowPrompt(workflow: MiniWorkflow, state: WorkflowStat
   lines.push("")
   lines.push(
     "NOTE: 上面是按需调用的可见进度，不是必须按序触发的状态机。每个 stage agent 是否调用由你 " +
-    "（编排器）按 request 形态决定 —— 跳过等同于显式选择，理由要在 reasoning 里讲清楚。`deliver` " +
-    "始终是唯一的接受闸；deliver accepted 自动发布并完成任务，" +
-    "deliver rejected 返回结构化证据，下一步由编排器基于证据决定。",
+    "（编排器）按 request 形态决定 —— 跳过等同于显式选择，理由要在 reasoning 里讲清楚。Pipeline 的最后 gate 是 `integrity`；" +
+    "integrity pass 完成任务，非 pass 返回 session-bound review evidence，下一步由编排器基于证据决定。",
   )
 
   return lines.join("\n")

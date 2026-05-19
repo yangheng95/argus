@@ -163,7 +163,7 @@ export namespace DesignAnalystAgent {
 
   /**
    * Render optional VisualSpec anchors into a prompt section suitable for
-   * delivery's user-prompt "Design Contract" block.
+   * integrity acceptance review's user-prompt "Design Contract" block.
    */
   export function renderForDelivery(specs: readonly VisualSpec[], designSystem?: string): string {
     if (specs.length === 0) return ""

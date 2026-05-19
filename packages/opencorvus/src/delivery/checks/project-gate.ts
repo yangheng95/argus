@@ -224,11 +224,11 @@ async function runRequiredChecks(requiredChecks: DeliveryRequiredCheck[]) {
  *   - failedRuntimeFlowIds: requested frontend/runtime surfaces did not render.
  *   - review:contract_audit: declared cross-goal contracts are broken.
  *
- * Advisory criteria — the delivery agent (LLM) weighs these in context and
+ * Advisory criteria — integrity acceptance review weighs these in context and
  * decides whether they materially block acceptance:
  *   - failedCheckIds: build / typecheck / lint / unit-test commands.
  *   - non-contract review-shaped evidence (review:workspace_export,
- *     specialist:*): the delivery agent reads the full evidence and decides.
+ *     specialist:*): the acceptance reviewer reads the full evidence and decides.
  */
 function assessFunctionalCompletion(input: {
   failedReadinessIds: string[]
@@ -253,7 +253,7 @@ function assessFunctionalCompletion(input: {
   const status = primaryFailureIds.length === 0 ? "complete" : "incomplete"
   const advisoryNote =
     auxiliaryFailureIds.length > 0
-      ? ` ${auxiliaryFailureIds.length} advisory issue(s) recorded for the delivery agent to weigh.`
+      ? ` ${auxiliaryFailureIds.length} advisory issue(s) recorded for acceptance review.`
       : ""
   const summary =
     status === "complete"
@@ -297,7 +297,7 @@ async function runSpecialistReviews(input: {
   if (securityReview) reviews.push(securityReview)
   // Test command failures already appear under required checks. The deeper
   // test_integration reviewer remains available as a direct specialist helper,
-  // but the default delivery gate no longer runs it on every delivery.
+  // but the default legacy evidence collector no longer runs it on every delivery.
   return reviews
 }
 

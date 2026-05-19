@@ -52,10 +52,37 @@ function originTree(effective: unknown, overlay: unknown): unknown {
   return out
 }
 
+/**
+ * A persisted session overlay is normalized by `Session.mergeConfigOverlay`
+ * (it re-parses the result of `Config.mergeOverlay`, which strips RFC 7396
+ * null-deletes). A `null` therefore must NEVER appear in the STORED overlay —
+ * if one does, the write path is corrupt and we fail fast (R5.1 item 7)
+ * instead of serving a half-deleted config. Pinned keys are already rejected
+ * by `Config.Overlay` `.strict()` at parse time (same single schema).
+ */
+function assertNoStoredNull(value: unknown, path = "configOverlay"): void {
+  if (value === null) {
+    throw new Error(
+      `Stored session overlay contains a null at ${path}; the persisted overlay must be ` +
+        `null-normalized. This indicates a corrupt write path (R5.1 item 7).`,
+    )
+  }
+  if (isRecord(value)) {
+    for (const [key, child] of Object.entries(value)) assertNoStoredNull(child, `${path}.${key}`)
+  }
+}
+
 async function sessionConfig(sessionID: string): Promise<z.output<typeof SessionConfigResponse>> {
   const session = await Session.get(sessionID)
+  // R5.1 item 2: only a root session (task root or standalone root) owns a
+  // config overlay; a child session is rejected (same guard as the write path).
+  Session.assertConfigurableRoot(session)
   const base = await Config.get()
-  const overlay = Config.Overlay.parse(session.metadata?.configOverlay ?? {})
+  const stored = session.metadata?.configOverlay ?? {}
+  // R5.1 item 7: fail fast on a null or pinned key in the STORED overlay.
+  // `.strict()` rejects pinned/unknown keys; assertNoStoredNull rejects nulls.
+  const overlay = Config.Overlay.parse(stored)
+  assertNoStoredNull(stored)
   const config = Config.mergeOverlay(base, overlay)
   return {
     config,

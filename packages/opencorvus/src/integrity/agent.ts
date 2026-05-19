@@ -37,6 +37,7 @@
 import { tool } from "ai"
 import z from "zod"
 import INTEGRITY_CORE from "@/prompt/core/integrity-core.txt"
+import ACCEPTANCE_REVIEW_CORE from "@/prompt/core/acceptance-review-core.txt"
 import { Log } from "@/util/log"
 import { runAgentSession } from "@/agent/runner"
 import { EngineProtocol } from "@/engine/protocol"
@@ -67,6 +68,10 @@ import type { ParsedRequirement, RequirementsDecision } from "@/requirements/typ
 import type { RequirementStatusRow } from "./requirement-status"
 import { AttachmentStore } from "@/storage/attachment-store"
 import { limitSummary, markdownList } from "@/agent/report"
+import { createIntegrityAcceptanceTools } from "./acceptance-tools"
+import { createIntegrityAcceptanceOutputTools, type IntegrityAcceptanceCollector } from "./acceptance-output-tools"
+import type { AcceptanceEvidenceFacetType, AcceptanceReviewVerdictType } from "@/acceptance/review-verdict"
+import type { DeliveryInfo, GoalInfo } from "@/delivery/checks"
 import {
   INTEGRITY_DIMENSIONS,
   renderDimensionCatalogue,
@@ -178,7 +183,11 @@ export interface IntegrityResult {
   graphCorrections: IntegrityGraphCorrection[]
   /** Cross-dimension union of proposed missing goals. */
   missingGoals: MissingGoal[]
+  /** Final deliverable acceptance verdict produced from inside this integrity session. */
+  acceptance: AcceptanceReviewVerdictType
 }
+
+export interface IntegrityAcceptanceContext extends DeliveryInfo {}
 
 // ---------------------------------------------------------------------------
 // Tool input schemas (snake_case at the wire to match AcceptanceSpec naming;
@@ -384,6 +393,7 @@ export async function reviewIntegrity(input: {
    *  multimodal user-message parts so visual goal-fidelity judgements have the
    *  pixels in front of them, not just text design_specs. */
   attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>
+  acceptance?: IntegrityAcceptanceContext
   signal?: AbortSignal
   /** Task ID for cache stickiness + the IntegrityReviewCompleted aggregate. */
   taskID?: string
@@ -415,7 +425,7 @@ export async function reviewIntegrity(input: {
       graphCorrections: [],
       missingGoals: [],
     }
-    const result = synthesizeResult([dim], "No goals produced — architect must rerun.")
+    const result = synthesizeResult([dim], "No goals produced — architect must rerun.", syntheticAcceptanceRejection("No goals produced"))
     const softSessionID = await emitSoftIntegrity(input, result)
     if (softSessionID) input.onSessionCreated?.(softSessionID)
     return { ...result, sessionID: softSessionID ?? "" }
@@ -433,7 +443,7 @@ export async function reviewIntegrity(input: {
     dimensions: Map<IntegrityDimension["id"], IntegrityDimensionResult>
     droppedCorrections: string[]
     finalized: boolean
-  }
+  } & IntegrityAcceptanceCollector
   function buildIntegrityCollector(): IntegrityCollector {
     return {
       dimensions: new Map(),
@@ -458,6 +468,7 @@ export async function reviewIntegrity(input: {
       detail: [
         `## Summary\n${summary}`,
         `## Dimensions\n${lines.length ? markdownList(lines) : "- no dimension verdicts submitted"}`,
+        createIntegrityAcceptanceOutputTools({ collector }).buildReport().detail,
       ].join("\n\n"),
     }
   }
@@ -572,8 +583,14 @@ export async function reviewIntegrity(input: {
         if (missing.length > 0) {
           return `Error: missing dimension verdicts: ${missing.join(", ")}. Submit each missing dimension before submit_integrity_review.`
         }
+        if (!collector.acceptanceVerdict) {
+          return "Error: missing acceptance verdict. Call submit_acceptance_verdict before submit_integrity_review."
+        }
         collector.finalized = true
-        const aggregate = aggregateVerdict(INTEGRITY_DIMENSIONS.map((d) => collector.dimensions.get(d.id)!))
+        const aggregate = aggregateIntegrityVerdict(
+          INTEGRITY_DIMENSIONS.map((d) => collector.dimensions.get(d.id)!),
+          collector.acceptanceVerdict,
+        )
         return `PASS: integrity review finalized with aggregate verdict ${aggregate}.`
       },
     })
@@ -582,10 +599,29 @@ export async function reviewIntegrity(input: {
   const startedAt = Date.now()
   let lastDroppedCorrections = 0
   const collector = buildIntegrityCollector()
+  const acceptanceFacets = deriveIntegrityAcceptanceFacets({
+    designSpecs: input.designSpecs,
+    attachments: input.attachments,
+    changedFiles: input.acceptance?.changedFiles ?? [],
+    goals,
+  })
+  const acceptanceOutput = createIntegrityAcceptanceOutputTools({
+    collector,
+    requiredEvidenceFacets: acceptanceFacets,
+  })
+  const acceptanceTools = input.taskID
+    ? createIntegrityAcceptanceTools({
+        taskID: input.taskID,
+        goals: goals.map(goalToDeliveryGoalInfo),
+        delivery: input.acceptance,
+        attachments: input.attachments,
+        signal: input.signal,
+      })
+    : {}
   let activeReviewID: string | undefined
   const out = await runAgentSession<IntegrityCollector>({
     kind: "integrity",
-    core: INTEGRITY_CORE,
+    core: [INTEGRITY_CORE, ACCEPTANCE_REVIEW_CORE].join("\n\n"),
     sessionTitle: `Integrity Review: ${input.taskTitle}`,
     parentSessionID: input.parentSessionID,
     taskID: input.taskID,
@@ -595,6 +631,8 @@ export async function reviewIntegrity(input: {
         ...Object.fromEntries(
           INTEGRITY_DIMENSIONS.map((d) => [`submit_${d.id}_verdict`, buildDimensionTool(collector, d)] as const),
         ),
+        ...acceptanceTools,
+        ...acceptanceOutput.tools,
         submit_integrity_review: buildSubmitIntegrityTool(collector),
       },
       getCollector: () => collector,
@@ -614,7 +652,7 @@ export async function reviewIntegrity(input: {
       toolName: "submit_integrity_review",
       isSatisfied: (collector) => collector.finalized,
       shouldExposeOnlyTerminalTool: (collector) =>
-        INTEGRITY_DIMENSIONS.every((dimension) => collector.dimensions.has(dimension.id)),
+        INTEGRITY_DIMENSIONS.every((dimension) => collector.dimensions.has(dimension.id)) && !!collector.acceptanceVerdict,
     },
     stream: createReviewReasoningForwarder({
       taskID: input.taskID,
@@ -655,9 +693,12 @@ export async function reviewIntegrity(input: {
         `${finalCollector.dimensions.size} dimension verdict(s).`,
     )
   }
+  if (!finalCollector.acceptanceVerdict) {
+    throw new Error("integrity reviewer did not call submit_acceptance_verdict before submit_integrity_review.")
+  }
   lastDroppedCorrections = finalCollector.droppedCorrections.length
   const normalised = INTEGRITY_DIMENSIONS.map((d) => finalCollector.dimensions.get(d.id)!)
-  const result = synthesizeResult(normalised, summarizeIntegrity(normalised))
+  const result = synthesizeResult(normalised, summarizeIntegrity(normalised, finalCollector.acceptanceVerdict), finalCollector.acceptanceVerdict)
 
   log.info("integrity review completed", {
     verdict: result.verdict,
@@ -678,26 +719,114 @@ export async function reviewIntegrity(input: {
 // Result synthesis — fold per-dimension results into the public IntegrityResult
 // ---------------------------------------------------------------------------
 
-function synthesizeResult(dimensions: readonly IntegrityDimensionResult[], summary: string): IntegrityResult {
+function synthesizeResult(
+  dimensions: readonly IntegrityDimensionResult[],
+  summary: string,
+  acceptance: AcceptanceReviewVerdictType,
+): IntegrityResult {
   return {
-    verdict: aggregateVerdict(dimensions),
+    verdict: aggregateIntegrityVerdict(dimensions, acceptance),
     summary,
     dimensions: [...dimensions],
     issues: dimensions.flatMap((d) => d.issues),
     corrections: dimensions.flatMap((d) => d.corrections),
     graphCorrections: dimensions.flatMap((d) => d.graphCorrections),
     missingGoals: dimensions.flatMap((d) => d.missingGoals),
+    acceptance,
   }
 }
 
-function summarizeIntegrity(dimensions: readonly IntegrityDimensionResult[]): string {
-  const verdict = aggregateVerdict(dimensions)
+function syntheticAcceptanceRejection(summary: string): AcceptanceReviewVerdictType {
+  return {
+    verdict: "rejected",
+    summary,
+    deferred_checks: [],
+    tool_call_evidence: [
+      {
+        tool: "integrity_contract",
+        passed: false,
+        detail: summary.length >= 8 ? summary : "integrity contract failed",
+      },
+    ],
+    rejection_details: [
+      {
+        category: "quality",
+        error: summary.length >= 8 ? summary : "integrity contract failed",
+      },
+    ],
+  }
+}
+
+function deriveIntegrityAcceptanceFacets(input: {
+  designSpecs?: VisualSpec[]
+  attachments?: Array<{ mime: string }>
+  changedFiles: string[]
+  goals: GoalContractFields[]
+}): AcceptanceEvidenceFacetType[] {
+  const facets = new Set<AcceptanceEvidenceFacetType>()
+  const files = input.changedFiles.map((file) => file.replaceAll("\\", "/"))
+  const hasRuntimeScenario = input.goals.some((goal) => (goal.acceptance_specs ?? []).some((spec) => spec.scenario))
+  const hasImageReference = (input.attachments ?? []).some((a) => (a.mime ?? "").startsWith("image/"))
+  const hasDesignSpecs = (input.designSpecs ?? []).length > 0
+  const touchesFrontend = files.some(
+    (file) =>
+      /(^|\/)(src\/)?(app|pages|components)\//.test(file) ||
+      /\.(tsx|jsx|vue|svelte|astro|css|scss)$/.test(file) ||
+      /(^|\/)(index\.html|vite\.config\.|next\.config\.)/.test(file),
+  )
+  const touchesRuntime = files.some(
+    (file) =>
+      /(^|\/)(api|routes|server|controllers|handlers|bin|cli)\//.test(file) ||
+      /(^|\/)app\/api\//.test(file) ||
+      /(server|routes|api|cli|main|index)\.[cm]?[jt]sx?$/.test(file) ||
+      /^package\.json$/.test(file),
+  )
+  if (hasRuntimeScenario || touchesRuntime || touchesFrontend) facets.add("runtime")
+  if (touchesRuntime || touchesFrontend || hasRuntimeScenario) facets.add("startup")
+  if (touchesFrontend || hasDesignSpecs || hasImageReference) facets.add("frontend")
+  if (hasDesignSpecs || hasImageReference || touchesFrontend) facets.add("visual")
+  return [...facets].sort()
+}
+
+function goalToDeliveryGoalInfo(goal: GoalContractFields): GoalInfo {
+  return {
+    id: goal.id,
+    title: goal.title,
+    description: goal.objective,
+    criteria: renderSpecsAsText(goal.acceptance_specs ?? []),
+    priority: goal.priority,
+    acceptance_spec_count: goal.acceptance_specs?.length ?? 0,
+    acceptance_scenarios: (goal.acceptance_specs ?? []).filter((spec) => Boolean(spec.scenario)),
+    acceptance_specs: goal.acceptance_specs ?? [],
+    requirement_ids: goal.requirement_ids ?? [],
+    depends_on: goal.depends_on ?? [],
+    owned_paths: goal.owned_paths ?? [],
+  }
+}
+
+function aggregateIntegrityVerdict(
+  dimensions: readonly IntegrityDimensionResult[],
+  acceptance: AcceptanceReviewVerdictType,
+): IntegrityVerdict {
+  if (acceptance.verdict === "rejected") return "needs_correction"
+  return aggregateVerdict(dimensions)
+}
+
+function summarizeIntegrity(
+  dimensions: readonly IntegrityDimensionResult[],
+  acceptance: AcceptanceReviewVerdictType,
+): string {
+  const verdict = aggregateIntegrityVerdict(dimensions, acceptance)
   const issueCount = dimensions.reduce((sum, d) => sum + d.issues.length, 0)
   const correctionCount = dimensions.reduce(
     (sum, d) => sum + d.corrections.length + d.graphCorrections.length + d.missingGoals.length,
     0,
   )
-  return `Integrity ${verdict}: ${issueCount} issue(s), ${correctionCount} correction action(s).`
+  const acceptancePart =
+    acceptance.verdict === "accepted"
+      ? `acceptance accepted`
+      : `acceptance rejected with ${acceptance.rejection_details.length} rejection detail(s)`
+  return `Integrity ${verdict}: ${issueCount} issue(s), ${correctionCount} correction action(s), ${acceptancePart}.`
 }
 
 // ---------------------------------------------------------------------------
@@ -770,6 +899,18 @@ function emitIntegrityEvent(
       objective: g.objective,
       reason: g.reason,
     })),
+    acceptance: {
+      verdict: result.acceptance.verdict,
+      summary: result.acceptance.summary,
+      startup_verification: result.acceptance.startup_verification,
+      frontend_check: result.acceptance.frontend_check,
+      deferred_checks: result.acceptance.deferred_checks,
+      tool_call_evidence: result.acceptance.tool_call_evidence,
+      rejection_details:
+        result.acceptance.verdict === "rejected" ? result.acceptance.rejection_details : [],
+      launch_command:
+        result.acceptance.verdict === "accepted" ? result.acceptance.launch_command : undefined,
+    },
     attempts,
   }
   void EngineProtocol.emit(EngineEvent.IntegrityReviewCompleted, payload, { source: "architect.integrity" })
@@ -885,6 +1026,7 @@ function buildIntegrityPrompt(input: {
   designSpecs?: VisualSpec[]
   contractGraph: ArchitectContractGraph
   decisionLog?: DecisionLog
+  acceptance?: IntegrityAcceptanceContext
 }): string {
   const sections: string[] = []
 
@@ -957,6 +1099,33 @@ function buildIntegrityPrompt(input: {
       }
     }
     sections.push(lines.join("\n"))
+  }
+
+  if (input.acceptance) {
+    const changed = input.acceptance.changedFiles.slice(0, 80)
+    const omitted = input.acceptance.changedFiles.length - changed.length
+    const diffLines = (input.acceptance.diffs ?? []).slice(0, 12).map((diff) => {
+      const stats = [diff.status, diff.additions != null ? `+${diff.additions}` : "", diff.deletions != null ? `-${diff.deletions}` : ""]
+        .filter(Boolean)
+        .join(" ")
+      return `- ${diff.file}${stats ? ` (${stats})` : ""}`
+    })
+    sections.push(
+      [
+        "# Integrated Acceptance Context",
+        "",
+        `Summary: ${input.acceptance.summary || "(no summary)"}`,
+        "",
+        `Changed files (${input.acceptance.changedFiles.length}${omitted > 0 ? `; first ${changed.length}, ${omitted} omitted` : ""}):`,
+        ...changed.map((file) => `- ${file}`),
+        diffLines.length > 0 ? "\nRepresentative diffs:" : "",
+        ...diffLines,
+        "",
+        "Use inspect_delivery_context for full goal reports, diffs, changed files, attachments, and upstream context when needed. The tool is exposed inside this integrity session; evidence from that tool is session-bound acceptance evidence.",
+      ]
+        .filter((line) => line !== "")
+        .join("\n"),
+    )
   }
 
   if (input.requirementDecisions && input.requirementDecisions.length > 0) {

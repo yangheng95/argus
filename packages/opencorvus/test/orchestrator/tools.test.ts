@@ -17,6 +17,7 @@ import {
 import { createDecisionLog } from "../../src/decision-log"
 import { createWorkflowState, WorkflowRegistry } from "../../src/engine/workflow"
 import { createOrchestratorTools } from "../../src/orchestrator/tools"
+import { SessionPrompt } from "../../src/session/prompt"
 import { goalStatusByID } from "../../src/engine/describe"
 import { openTaskForOperatorMessage } from "../../src/engine/task-message-open"
 import { Session } from "../../src/session"
@@ -54,11 +55,21 @@ import { deriveTaskStatus } from "../../src/engine/task-status"
 
 let buildAgentRunImpl: ((input: any) => Promise<any>) | undefined
 let reviewIntegrityImpl: ((input: any) => Promise<any>) | undefined
+let computeRequirementStatusSnapshotImpl: ((input: any) => any[]) | undefined
 let architectCoordinateImpl: ((input: any) => Promise<any>) | undefined
 let deliveryServiceVerifyImpl: ((input: any) => Promise<any>) | undefined
 let designAnalyzeImpl: ((input: any) => Promise<any>) | undefined
 let mcpServerToolsImpl: (() => Promise<any[]>) | undefined
 let mcpCallToolImpl: ((input: { key: string; args: Record<string, unknown> }) => Promise<any>) | undefined
+
+function acceptedAcceptance() {
+  return {
+    verdict: "accepted",
+    summary: "Acceptance passed",
+    deferred_checks: [],
+    tool_call_evidence: [{ tool: "unit_test", passed: true, detail: "unit test passed" }],
+  }
+}
 
 mock.module("@/build/agent", () => ({
   BuildAgent: {
@@ -70,9 +81,10 @@ mock.module("@/build/agent", () => ({
 }))
 
 mock.module("@/integrity", () => ({
-  reviewIntegrity: (input: any) => {
+  reviewIntegrity: async (input: any) => {
     if (!reviewIntegrityImpl) throw new Error("reviewIntegrity mock not configured")
-    return reviewIntegrityImpl(input)
+    const result = await reviewIntegrityImpl(input)
+    return result?.acceptance ? result : { ...result, acceptance: acceptedAcceptance() }
   },
   // Pure projection — empty snapshot is the right answer for orchestrator
   // tests, which don't seed the goal_run / verification-evidence rows the
@@ -80,7 +92,7 @@ mock.module("@/integrity", () => ({
   // the snapshot live in test/integrity/agent.test.ts and use the real
   // function; this mock is just a non-throwing stub so the orchestrator's
   // pre-review wiring doesn't blow up in the legacy test suites.
-  computeRequirementStatusSnapshot: () => [],
+  computeRequirementStatusSnapshot: (input: any) => computeRequirementStatusSnapshotImpl?.(input) ?? [],
   applyIntegrityCorrections: (goals: any) => goals,
 }))
 
@@ -125,8 +137,49 @@ mock.module("@/delivery/service", () => ({
   },
 }))
 
+mock.module("@/plugin", () => ({
+  Plugin: {
+    trigger: async () => {},
+  },
+}))
+
 async function markBuildSlotAcquired(input: any) {
   await input.onSlotAcquired?.()
+}
+
+function deliveryDecisionFixture(verdict: any) {
+  return {
+    final: verdict,
+    rawAgentVerdict: verdict,
+    hostGate: {
+      passed: true,
+      manifest: {
+        id: "artifact_delivery_manifest_fixture",
+        taskId: "tsk_delivery_fixture",
+        runId: "run_delivery_fixture",
+        deliveryId: "dlv_delivery_fixture",
+        iteration: 0,
+        requiredChecks: [],
+        checkResults: [],
+        goalCoverage: [],
+        requirementCoverage: [],
+        runtimeFlows: [],
+        reviewEvidence: [],
+        changedFiles: [],
+        finalGate: {
+          status: "passed",
+          summary: "Delivery evidence gate passed 0 required check(s).",
+          failedCheckIds: [],
+          failedCoverageIds: [],
+          failedRuntimeFlowIds: [],
+          failedReviewIds: [],
+        },
+        timeCreated: 1,
+      },
+      failures: [],
+    },
+    source: "llm",
+  }
 }
 
 function insertWorkflowTaskWithGoal(input: {
@@ -265,10 +318,24 @@ describe("orchestrator tools", () => {
       verdict: "pass",
       summary: "Integrity pass",
       dimensions: [
-        { id: "requirement_fidelity", verdict: "pass", issues: [] },
-        { id: "technical_feasibility", verdict: "pass", issues: [] },
-        { id: "hallucination", verdict: "pass", issues: [] },
-        { id: "solution_quality", verdict: "pass", issues: [] },
+        {
+          id: "requirement_fidelity",
+          verdict: "pass",
+          issues: [],
+          corrections: [],
+          graphCorrections: [],
+          missingGoals: [],
+        },
+        {
+          id: "technical_feasibility",
+          verdict: "pass",
+          issues: [],
+          corrections: [],
+          graphCorrections: [],
+          missingGoals: [],
+        },
+        { id: "hallucination", verdict: "pass", issues: [], corrections: [], graphCorrections: [], missingGoals: [] },
+        { id: "solution_quality", verdict: "pass", issues: [], corrections: [], graphCorrections: [], missingGoals: [] },
       ],
       issues: [],
       corrections: [],
@@ -281,6 +348,7 @@ describe("orchestrator tools", () => {
   afterEach(async () => {
     buildAgentRunImpl = undefined
     reviewIntegrityImpl = undefined
+    computeRequirementStatusSnapshotImpl = undefined
     architectCoordinateImpl = undefined
     deliveryServiceVerifyImpl = undefined
     designAnalyzeImpl = undefined
@@ -289,6 +357,97 @@ describe("orchestrator tools", () => {
     mock.restore()
     await resetDatabase()
     await tmp?.[Symbol.asyncDispose]?.()
+  })
+
+  test("explore dispatches registered explore subagent and persists findings for orchestrator", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_explore_${stamp}`
+    const taskID = `tsk_explore_${stamp}`
+    const pipeline = WorkflowRegistry.resolveSync("pipeline")!
+    await fs.writeFile(path.join(tmp.path, "opencorvus.json"), JSON.stringify({ model: "test/model" }))
+
+    Database.use((db) => {
+      db.insert(ProjectTable)
+        .values({
+          id: projectID,
+          worktree: tmp.path,
+          name: "Explore dispatch project",
+          sandboxes: "[]",
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+      db.insert(EngineTaskTable)
+        .values({
+          id: taskID,
+          project_id: projectID,
+          source: "test",
+          title: "Explore dispatch task",
+          request: "Find the AuctionData component source.",
+          kind: "workflow",
+          priority: "normal",
+          time_created: now,
+          time_updated: now,
+          time_started: now,
+        })
+        .run()
+    })
+
+    const promptSpy = spyOn(SessionPrompt, "prompt").mockResolvedValue({
+      parts: [{ type: "text", text: "AuctionData lives under Hithink.PrefabLibrary/PrefabLibrary/Business." }],
+    } as any)
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "explore dispatch parent" })
+        Database.use((db) =>
+          db
+            .update(EngineTaskTable)
+            .set({ session_id: parent.id, time_updated: Date.now() })
+            .where(eq(EngineTaskTable.id, taskID))
+            .run(),
+        )
+        const workflowState = createWorkflowState(pipeline)
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+          workflow: direct,
+          workflowState,
+        })
+
+        expect(tools.explore).toBeDefined()
+        const result = await tools.explore.execute(
+          {
+            question: "Locate the AuctionData source component and summarize the relevant files.",
+            reason: "Need repository facts before requirements.",
+          },
+          {} as any,
+        )
+
+        expect(result).toContain("Explore complete")
+        expect(result).toContain("AuctionData lives under Hithink.PrefabLibrary")
+        expect(promptSpy).toHaveBeenCalledTimes(1)
+        const promptInput = promptSpy.mock.calls[0][0] as any
+        expect(promptInput.agent).toBe("explore")
+        expect(promptInput.tools.bash).toBe(false)
+        expect(promptInput.tools.write).toBe(false)
+        expect(promptInput.tools.edit).toBe(false)
+        expect(promptInput.tools.task).toBe(false)
+
+        const decisions = createDecisionLog(taskID).readByPhase("explore")
+        expect(decisions).toHaveLength(1)
+        expect(decisions[0].value).toContain("AuctionData lives under Hithink.PrefabLibrary")
+        const artifacts = Database.use((db) =>
+          db.select().from(EngineArtifactTable).where(eq(EngineArtifactTable.kind, "exploration")).all(),
+        )
+        expect(artifacts).toHaveLength(1)
+        expect(typeof (artifacts[0].payload as any).session_id).toBe("string")
+        expect((artifacts[0].payload as any).result).toContain("AuctionData lives under Hithink.PrefabLibrary")
+      },
+    })
   })
 
   test("workflow tasks allow task-level direct build when the orchestrator chooses it", async () => {
@@ -814,7 +973,7 @@ describe("orchestrator tools", () => {
     })
   })
 
-  test("task-level direct build creates the run that deliver uses for delivery evidence", async () => {
+  test("task-level direct build creates a run and deliver stays disabled", async () => {
     await tmp?.[Symbol.asyncDispose]?.()
     tmp = await tmpdir({ git: true })
 
@@ -872,28 +1031,8 @@ describe("orchestrator tools", () => {
         diffs: [{ file: "direct-output.txt", diff: "New file:\ndirect build output\n" }],
       }
     }
-    let verifyInput: any
     deliveryServiceVerifyImpl = async (input: any) => {
-      verifyInput = input
-      return {
-        verdict: "rejected",
-        summary: "Direct build delivery inspected the run-bound evidence.",
-        deferred_checks: [],
-        tool_call_evidence: [
-          {
-            tool: "inspect_delivery_context",
-            passed: true,
-            detail: "inspected direct build delivery evidence",
-          },
-        ],
-        rejection_details: [
-          {
-            category: "quality",
-            file: "direct-output.txt",
-            error: "Direct build needs one more verification pass.",
-          },
-        ],
-      }
+      throw new Error(`DeliveryService.verify must not run after deliver retirement: ${input?.runID ?? "no-run"}`)
     }
 
     await Instance.provide({
@@ -926,53 +1065,29 @@ describe("orchestrator tools", () => {
           {} as any,
         )
 
-        expect(deliverResult).toContain("Delivery rejected at task scope")
-        expect(deliverResult).toContain("the host did not request a scheduler stop")
-        expect(deliverResult).not.toContain("wait for follow-up")
-        expect(verifyInput.runID).toBe(run?.id)
-        expect(verifyInput.delivery.changedFiles).toContain("direct-output.txt")
-        expect(findDeliveryByRun(run!.id)?.run_id).toBe(run?.id)
+        expect(deliverResult).toContain("deliver: disabled")
+        expect(deliverResult).toContain("integrity")
+        expect(findRun(run!.id)?.phase).not.toBe("deliver")
+        expect(findDeliveryByRun(run!.id)).toBeUndefined()
       },
     })
   })
 
-  test("accepted deliver completes the task without publish_delivery", async () => {
+  test("post-build integrity pass completes the task and publish_delivery stays disabled", async () => {
+    await tmp?.[Symbol.asyncDispose]?.()
+    tmp = await tmpdir({ git: true })
+
     const now = Date.now()
     const stamp = now.toString(16)
-    const projectID = `project_deliver_completed_${stamp}`
-    const taskID = `tsk_deliver_completed_${stamp}`
-    const direct = WorkflowRegistry.resolveSync("direct")!
-    const workflowState = createWorkflowState(direct)
+    const projectID = `project_integrity_completed_${stamp}`
+    const taskID = `tsk_integrity_completed_${stamp}`
+    const goalID = `goal_integrity_completed_${stamp}`
+    const pipeline = WorkflowRegistry.resolveSync("pipeline")!
+    const workflowState = createWorkflowState(pipeline)
 
-    Database.use((db) => {
-      db.insert(ProjectTable)
-        .values({
-          id: projectID,
-          worktree: tmp.path,
-          name: "Accepted deliver completion test",
-          sandboxes: "[]",
-          time_created: now,
-          time_updated: now,
-        })
-        .run()
-      db.insert(EngineTaskTable)
-        .values({
-          id: taskID,
-          project_id: projectID,
-          source: "test",
-          title: "Accepted deliver completion task",
-          request: "Verify accepted deliver is the completion authority",
-          kind: "build",
-          priority: "normal",
-          time_created: now,
-          time_updated: now,
-          time_started: now,
-        })
-        .run()
-    })
-
-    buildAgentRunImpl = async () => {
-      await fs.writeFile(path.join(tmp.path, "accepted-output.txt"), "accepted delivery output\n")
+    buildAgentRunImpl = async (input: any) => {
+      await markBuildSlotAcquired(input)
+      await fs.writeFile(path.join(tmp.path, "accepted-output.txt"), "accepted integrity output\n")
       return {
         result: {
           status: "passed",
@@ -986,47 +1101,55 @@ describe("orchestrator tools", () => {
           ],
           tests: [],
         },
-        sessionID: "ses_direct_build_accepted_deliver",
-        worktreeDir: tmp.path,
-        diffs: [{ file: "accepted-output.txt", diff: "New file:\naccepted delivery output\n" }],
+        sessionID: "ses_goal_build_integrity_completed",
+        worktreeDir: input.managedWorktree.directory,
+        worktreeBranch: input.managedWorktree.branch,
+        worktreeBaseRef: input.managedWorktree.baseRef,
+        diffs: [{ file: "accepted-output.txt", diff: "New file:\naccepted integrity output\n" }],
       }
     }
-    deliveryServiceVerifyImpl = async () => ({
-      verdict: "accepted",
-      summary: "Delivery accepted the integrated output.",
-      deferred_checks: [],
-      tool_call_evidence: [
-        {
-          tool: "inspect_delivery_context",
-          passed: true,
-          detail: "accepted delivery evidence",
-        },
-      ],
-    })
+    deliveryServiceVerifyImpl = async () => {
+      throw new Error("DeliveryService.verify must not complete the task after deliver retirement")
+    }
+    computeRequirementStatusSnapshotImpl = () => [
+      {
+        requirementID: "REQ-1",
+        status: "satisfied",
+        claimingGoals: [{ goalID: "direct-task", runStatus: "completed" }],
+      },
+    ]
 
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const parent = await Session.create({ kind: "root", title: "accepted deliver completion test" })
-        Database.use((db) =>
-          db
-            .update(EngineTaskTable)
-            .set({ session_id: parent.id, time_updated: Date.now() })
-            .where(eq(EngineTaskTable.id, taskID))
-            .run(),
-        )
+        const parent = await Session.create({ kind: "root", title: "integrity completion test" })
+        insertWorkflowTaskWithGoal({
+          projectID,
+          taskID,
+          goalID,
+          sessionID: parent.id,
+          worktree: tmp.path,
+          projectName: "Integrity completion project",
+          taskTitle: "Integrity completion task",
+          request: "Verify post-build integrity is the completion authority",
+          goalTitle: "Integrity completion goal",
+          goalSlug: "integrity-completion",
+          objective: "Produce terminal build evidence for integrity completion",
+          now,
+        })
         const { tools } = createOrchestratorTools({
           taskID,
           agentSessionID: parent.id,
           signal: new AbortController().signal,
-          workflow: direct,
+          workflow: pipeline,
           workflowState,
         })
 
         const buildResult = await tools.build.execute(
           {
+            goalID,
             request: "Write the accepted output file.",
-            reason: "Explicit kind=build task-level implementation.",
+            reason: "Per-goal pipeline implementation before integrity.",
           },
           {} as any,
         )
@@ -1035,12 +1158,14 @@ describe("orchestrator tools", () => {
         const run = findActiveRunForTask(taskID)
         expect(run).toBeDefined()
 
-        const deliverResult = await tools.deliver.execute(
-          { reason: "Direct build finished and delivery should complete the task." },
+        insertArchitectContractGraphArtifact({ taskID, now: now + 1 })
+        const integrityResult = await tools.integrity.execute(
+          { reason: "Goal build finished and post-build integrity should complete the task." },
           {} as any,
         )
 
-        expect(deliverResult).toContain("Delivery result: ACCEPTED")
+        expect(integrityResult).toContain("Integrity verdict: pass")
+        expect(integrityResult).toContain("task completed")
         const taskRow = Database.use((db) =>
           db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get(),
         )
@@ -1048,17 +1173,14 @@ describe("orchestrator tools", () => {
         expect(taskRow?.time_completed).toBeNumber()
         expect(deriveTaskStatus(taskRow!)).toBe("completed")
         expect(findRun(run!.id)?.status).toBe("completed")
-        expect(findDeliveryByRun(run!.id)?.run_id).toBe(run?.id)
-        const evaluation = findEvaluationByRun(run!.id)
-        expect(evaluation?.status).toBe("passed")
-        expect(evaluation?.verdict).toBe("accepted")
+        expect(findDeliveryByRun(run!.id)).toBeUndefined()
+        expect(findEvaluationByRun(run!.id)).toBeUndefined()
 
         const publishResult = await tools.publish_delivery.execute(
-          { reason: "Explicit artifact export after accepted delivery completion." },
+          { reason: "Explicit artifact export after integrity completion." },
           {} as any,
         )
-        expect(publishResult).toContain("Delivery evidence manifest is missing")
-        expect(publishResult).not.toContain("no coordinator run")
+        expect(publishResult).toContain("publish_delivery: disabled")
         const taskAfterPublishAttempt = Database.use((db) =>
           db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get(),
         )
@@ -1069,8 +1191,8 @@ describe("orchestrator tools", () => {
         expect(reopened.time_completed).toBeNull()
         expect(deriveTaskStatus(reopened)).toBe("queued")
         expect(findRun(run!.id)?.status).toBe("completed")
-        expect(findDeliveryByRun(run!.id)?.run_id).toBe(run?.id)
-        expect(findEvaluationByRun(run!.id)?.verdict).toBe("accepted")
+        expect(findDeliveryByRun(run!.id)).toBeUndefined()
+        expect(findEvaluationByRun(run!.id)).toBeUndefined()
       },
     })
   })
@@ -1136,11 +1258,13 @@ describe("orchestrator tools", () => {
 
         expect(result).toContain("rejected task-level workflow build")
         expect(result).toContain("directBuildIntent is required")
+        expect(result).toContain('directBuildIntent="modify_files"')
+        expect(result).not.toContain(["inspect", "only"].join("_"))
       },
     })
   })
 
-  test("workflow task-level inspect-only build is rejected before starting build agent", async () => {
+  test("workflow task-level investigation build is rejected before starting build agent", async () => {
     const now = Date.now()
     const stamp = now.toString(16)
     const projectID = `project_build_inspect_${stamp}`
@@ -1174,8 +1298,9 @@ describe("orchestrator tools", () => {
         .run()
     })
 
+    const retiredIntent = ["inspect", "only"].join("_")
     buildAgentRunImpl = async () => {
-      throw new Error("BuildAgent.run must not start for inspect-only workflow direct build")
+      throw new Error("BuildAgent.run must not start for retired investigation intent")
     }
 
     await Instance.provide({
@@ -1194,15 +1319,18 @@ describe("orchestrator tools", () => {
         const result = await tools.build.execute(
           {
             request: "Explore the component tree without changing files.",
-            reason: "Need read-only exploration before implementation.",
-            directBuildIntent: "inspect_only",
-          },
+            reason: "Need repository investigation before implementation.",
+            directBuildIntent: retiredIntent,
+          } as any,
           {} as any,
         )
 
-        expect(result).toContain("rejected inspect-only task-level workflow build")
-        expect(result).toContain("stage-agent path")
-        expect(result).toContain("per-goal build contracts")
+        expect(result).toContain("rejected task-level build")
+        expect(result).toContain(`directBuildIntent="${retiredIntent}" is not supported`)
+        expect(result).toContain("build is implementation-only")
+        expect(result).toContain("Repository investigation belongs to analyze_intent, requirements, or explore")
+        const run = findActiveRunForTask(taskID)
+        expect(run).toBeUndefined()
       },
     })
   })
@@ -3582,7 +3710,7 @@ describe("orchestrator tools", () => {
     })
   })
 
-  test("deliver no longer runs integrity before delivery verification", async () => {
+  test("deliver is disabled and does not run integrity or delivery verification", async () => {
     await tmp?.[Symbol.asyncDispose]?.()
     tmp = await tmpdir({ git: true })
 
@@ -3593,7 +3721,6 @@ describe("orchestrator tools", () => {
     const goalID = `goal_deliver_integrity_prereq_${stamp}`
     const specID = `spec_${goalID}`
     const order: string[] = []
-    let verifySawIntegrity = false
 
     await Instance.provide({
       directory: tmp.path,
@@ -3619,8 +3746,7 @@ describe("orchestrator tools", () => {
         }
         deliveryServiceVerifyImpl = async () => {
           order.push("verify")
-          verifySawIntegrity = Boolean(findLatestIntegrityAttemptArtifact({ taskID, specSnapshotID: specID }))
-          throw new Error("stop_after_delivery_service")
+          throw new Error("deliver must not call DeliveryService.verify")
         }
 
         const { tools } = createOrchestratorTools({
@@ -3631,10 +3757,9 @@ describe("orchestrator tools", () => {
 
         const result = await tools.deliver.execute({ reason: "All goals are ready for final delivery" }, {} as any)
 
-        expect(result).toContain("stop_after_delivery_service")
-        expect(result).toContain("persisted as a structured rejection")
-        expect(order).toEqual(["verify"])
-        expect(verifySawIntegrity).toBe(false)
+        expect(result).toContain("deliver: disabled")
+        expect(result).toContain("integrity")
+        expect(order).toEqual([])
         const artifact = findLatestIntegrityAttemptArtifact({ taskID, specSnapshotID: specID })
         expect(artifact).toBeUndefined()
         const throwArtifact = Database.use((db) =>
@@ -3646,10 +3771,7 @@ describe("orchestrator tools", () => {
             )
             .get(),
         )
-        expect(throwArtifact?.payload).toMatchObject({
-          error: "stop_after_delivery_service",
-          verdict: "rejected",
-        })
+        expect(throwArtifact).toBeUndefined()
         const verdictArtifact = Database.use((db) =>
           db
             .select()
@@ -3659,15 +3781,7 @@ describe("orchestrator tools", () => {
             )
             .get(),
         )
-        expect(verdictArtifact?.payload).toMatchObject({
-          verdict: "rejected",
-          rejection_details: [
-            {
-              category: "runtime",
-              error: expect.stringContaining("stop_after_delivery_service"),
-            },
-          ],
-        })
+        expect(verdictArtifact).toBeUndefined()
       },
     })
   })

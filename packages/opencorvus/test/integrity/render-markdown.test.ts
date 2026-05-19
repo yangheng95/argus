@@ -2,10 +2,20 @@ import { expect, test } from "bun:test"
 import { renderIntegrityMarkdown } from "../../src/integrity/render-markdown"
 import type { IntegrityResult } from "../../src/integrity"
 
+function acceptedAcceptance(): IntegrityResult["acceptance"] {
+  return {
+    verdict: "accepted",
+    summary: "Acceptance passed",
+    deferred_checks: [],
+    tool_call_evidence: [{ tool: "unit_test", passed: true, detail: "unit test passed" }],
+  }
+}
+
 test("renderIntegrityMarkdown emits requirement_ids and spec_ids on issue lines", () => {
   const result: IntegrityResult = {
     verdict: "needs_correction",
     summary: "REQ-1 incomplete",
+    acceptance: acceptedAcceptance(),
     dimensions: [
       {
         id: "requirement_fidelity",
@@ -38,6 +48,7 @@ test("renderIntegrityMarkdown omits requirement_ids / spec_ids segments when tho
   const result: IntegrityResult = {
     verdict: "concerns",
     summary: "Minor concern",
+    acceptance: acceptedAcceptance(),
     dimensions: [
       {
         id: "solution_quality",

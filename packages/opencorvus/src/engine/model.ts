@@ -863,7 +863,7 @@ export const TaskBoard = z.object({
   /** Per-goal workflow groups with step-level progress */
   goalWorkflows: TaskBoardGoalWorkflow.array().optional(),
   /** Task-level rollup of every quality criterion that touched this task —
-   *  per-goal evaluator outcomes, delivery agent verifications, and external
+   *  per-goal evaluator outcomes, integrity acceptance review, and external
    *  quality gates (e.g. visual-diff). Persisted in engine_task.criteria_results
    *  and exposed here so the overlay's EvaluationCriteriaPanel and the delivery
    *  agent's `query_criteria` tool both read from the same place. */
@@ -1223,7 +1223,6 @@ export const Event = {
       deliveryID: Identifier.schema("delivery"),
       summary: z.string(),
     }),
-    { tier: 2 },
   ),
   EvaluationCompleted: BusEvent.define(
     "evaluation.completed",
@@ -1365,27 +1364,6 @@ export const Event = {
    *  can chip-render REQ-N / acc-* references and downstream consumers can
    *  navigate from a fidelity issue to the failing REQ row or acceptance spec
    *  surfaced post-build by the Requirement Status Snapshot. */
-  /** Delivery deterministic pre-gate rejection. Fires when DeliveryService.verify
-   *  short-circuits via runtime-evidence (e.g. empty_root_shell, no build artifact)
-   *  and never invokes the LLM agent — so no agent session is created and no
-   *  agent message card surfaces in the overlay. Without this event the operator
-   *  sees verdict=rejected with no visible explanation card.
-   *  Stable identity: one card per (taskID, iteration). */
-  DeliveryGateRejected: BusEvent.define(
-    "delivery.gate.rejected",
-    z.object({
-      taskID: Identifier.schema("task"),
-      runID: Identifier.schema("run").optional(),
-      iteration: z.number(),
-      violations: z.array(
-        z.object({
-          kind: z.string(),
-          detail: z.string(),
-        }),
-      ),
-    }),
-    { tier: 1 },
-  ),
   DeliveryEvidenceUpdated: BusEvent.define(
     "delivery.evidence.updated",
     z.object({
@@ -1424,23 +1402,6 @@ export const Event = {
       command: z.string().optional(),
       workspaceDir: z.string().optional(),
     }),
-  ),
-  DeliveryReviewCompleted: BusEvent.define(
-    "delivery.review.completed",
-    z.object({
-      taskID: Identifier.schema("task"),
-      runID: Identifier.schema("run").optional(),
-      reviewID: z.string().min(1),
-      verdict: z.enum(["accepted", "rejected"]),
-      source: z.enum(["llm", "host_gate"]),
-      summary: z.string(),
-      hostGatePassed: z.boolean(),
-      failureKinds: z.array(z.string()),
-      rejectionCount: z.number().int().nonnegative(),
-      deferredCount: z.number().int().nonnegative(),
-      details: z.array(z.string()),
-    }),
-    { tier: 1 },
   ),
   IntegrityReviewCompleted: BusEvent.define(
     "integrity.review.completed",
@@ -1499,8 +1460,55 @@ export const Event = {
           reason: z.string().optional(),
         }),
       ),
+      acceptance: z.object({
+        verdict: z.enum(["accepted", "rejected"]),
+        summary: z.string(),
+        startup_verification: z
+          .object({
+            attempted: z.boolean(),
+            command: z.string().optional(),
+            success: z.boolean(),
+            output: z.string().optional(),
+          })
+          .optional(),
+        frontend_check: z
+          .object({
+            attempted: z.boolean(),
+            renders_correctly: z.boolean().optional(),
+            issues: z.array(z.string()).optional(),
+          })
+          .optional(),
+        deferred_checks: z.array(
+          z.object({
+            name: z.string(),
+            result: z.enum(["passed", "failed", "skipped", "advisory_failed"]),
+            evidence: z.string(),
+          }),
+        ),
+        tool_call_evidence: z.array(
+          z.object({
+            tool: z.string(),
+            passed: z.boolean(),
+            detail: z.string(),
+          }),
+        ),
+        rejection_details: z.array(
+          z.object({
+            goal_id: z.string().optional(),
+            category: z.enum(["build", "test", "lint", "runtime", "quality", "startup", "visual"]),
+            check_id: z.string().optional(),
+            file: z.string().optional(),
+            error: z.string(),
+            suggestion: z.string().optional(),
+            visual_spec_id: z.string().optional(),
+          }),
+        ),
+        launch_command: z.string().optional(),
+      }),
       attempts: z.number(),
     }),
-    { tier: 2 },
+    (payload) => payload.verdict === "pass" && payload.acceptance.verdict === "accepted"
+      ? { tier: 2 }
+      : { tier: 1, badge: true },
   ),
 }

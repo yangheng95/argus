@@ -9,9 +9,8 @@
  *   3. 产出的 rendered.png 与 dom metrics 向下游（P0-B 硬门 / 调试 artifact）复用
  *      单次 render（rule 22：禁双源）
  *
- * 失败 ⇒ 作为 host hard gate evidence 注入 DeliveryAgent，由 agent 产出
- * rejected verdict 和 goal attribution；host 只负责阻止 accepted，不合成
- * rejection_details。
+ * 失败 ⇒ 作为 integrity acceptance evidence 进入 session 内复核；host 不再
+ * 合成最终拒收，也不再启动 legacy delivery runtime。
  */
 import { captureRuntimePage, type RuntimeCaptureSuccess } from "@/delivery/runtime-capture"
 import type { AcceptanceSpec } from "@/acceptance/types"

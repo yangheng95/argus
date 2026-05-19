@@ -5301,9 +5301,9 @@ export class Task2 extends HeyApiClient {
           >
           severity: "essential" | "important" | "optional" | "pitfall"
           /**
-           * Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_delivery.
+           * Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_integrity. on_delivery is legacy and maps to on_integrity.
            */
-          trigger?: "on_goal" | "on_delivery"
+          trigger?: "on_goal" | "on_integrity" | "on_delivery"
         }>
         kind?: "bootstrap" | "feature" | "verification" | "integration" | "system"
         metadata?: {
@@ -5446,9 +5446,9 @@ export class Task2 extends HeyApiClient {
             >
             severity: "essential" | "important" | "optional" | "pitfall"
             /**
-             * Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_delivery.
+             * Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_integrity. on_delivery is legacy and maps to on_integrity.
              */
-            trigger?: "on_goal" | "on_delivery"
+            trigger?: "on_goal" | "on_integrity" | "on_delivery"
           }>
           kind?: "bootstrap" | "feature" | "verification" | "integration" | "system"
           metadata?: {
@@ -6648,9 +6648,9 @@ export class Goal extends HeyApiClient {
         >
         severity: "essential" | "important" | "optional" | "pitfall"
         /**
-         * Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_delivery.
+         * Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_integrity. on_delivery is legacy and maps to on_integrity.
          */
-        trigger?: "on_goal" | "on_delivery"
+        trigger?: "on_goal" | "on_integrity" | "on_delivery"
       }>
     },
     options?: Options<never, ThrowOnError>,

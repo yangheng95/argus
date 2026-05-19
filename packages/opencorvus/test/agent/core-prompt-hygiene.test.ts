@@ -8,13 +8,17 @@ const sourceDir = path.join(repoRoot, "packages/opencorvus/src")
 const promptFiles = {
   architect: "architect-core.txt",
   build: "build-core.txt",
-  delivery: "delivery-core.txt",
   designAnalyst: "design-analyst-core.txt",
   integrity: "integrity-core.txt",
   intentAnalysis: "intent-analysis-core.txt",
   orchestrator: "orchestrator-core.txt",
   prosecutor: "prosecutor-core.txt",
   requirements: "requirements-core.txt",
+}
+
+const sharedPromptFiles = {
+  acceptanceReview: "acceptance-review-core.txt",
+  engineeringCraft: "engineering-craft.txt",
 }
 
 async function readPrompt(name: keyof typeof promptFiles) {
@@ -28,14 +32,15 @@ async function readSource(relativePath: string) {
 describe("core prompt hygiene", () => {
   test("core prompt file inventory is fully covered by hygiene tests", async () => {
     const files = await Array.fromAsync(new Bun.Glob("*.txt").scan({ cwd: coreDir }))
-    expect(files.sort()).toEqual(Object.values(promptFiles).sort())
+    expect(files.sort()).toEqual(
+      [...Object.values(promptFiles), ...Object.values(sharedPromptFiles)].sort(),
+    )
   })
 
   test("core prompt size budgets keep roles concise", async () => {
     const maxLines: Record<keyof typeof promptFiles, number> = {
       architect: 150,
       build: 175,
-      delivery: 320,
       designAnalyst: 125,
       integrity: 175,
       intentAnalysis: 130,
@@ -51,14 +56,13 @@ describe("core prompt hygiene", () => {
     }
   })
 
-  test("shared file-mutation ownership principle appears exactly once per non-delivery core prompt", async () => {
+  test("shared file-mutation ownership principle appears exactly once per core prompt", async () => {
     const principle =
       "Every agent owns its file mutations: if you modify project files, commit your own changes before finishing; if your role is read-only or only emits structured records, do not claim file changes."
 
     for (const name of Object.keys(promptFiles) as Array<keyof typeof promptFiles>) {
       const text = await readPrompt(name)
-      const expected = name === "delivery" ? 0 : 1
-      expect(text.split(principle).length - 1, `${name} prompt`).toBe(expected)
+      expect(text.split(principle).length - 1, `${name} prompt`).toBe(1)
     }
   })
 
@@ -68,12 +72,31 @@ describe("core prompt hygiene", () => {
 
     for (const name of Object.keys(promptFiles) as Array<keyof typeof promptFiles>) {
       const text = await readPrompt(name)
-      if (name === "delivery") {
-        expect(text).toContain("Delivery does not run git commits itself")
-        expect(text).toContain("host deliver round commit")
-        expect(text).toContain("Do not call git")
-      } else {
-        expect(text).toContain(principle)
+      expect(text).toContain(principle)
+    }
+  })
+
+  test("no core prompt routes final acceptance authority to the retired Delivery role", async () => {
+    // Regression guard (rule 8 single-source): delivery is retired; integrity
+    // owns final acceptance. No active agent core prompt may name Delivery as
+    // the acceptance/verdict authority. Lowercase generic "deliver" verbs are
+    // fine — these patterns target the retired role-as-authority constructs
+    // that prosecutor-core / requirements-core used to carry.
+    const forbidden = [
+      /Delivery owns/,
+      /Delivery reviewer/,
+      /\bto Delivery\b/,
+      /delivery-surface evidence/,
+      /not Delivery, Build/,
+      /Delivery's own/,
+    ]
+    for (const name of Object.keys(promptFiles) as Array<keyof typeof promptFiles>) {
+      const text = await readPrompt(name)
+      for (const pat of forbidden) {
+        expect(
+          text,
+          `${name} prompt still routes acceptance authority to the retired Delivery role (${pat})`,
+        ).not.toMatch(pat)
       }
     }
   })
@@ -139,7 +162,8 @@ describe("core prompt hygiene", () => {
     expect(orchestratorTools).not.toContain("Each goal build automatically records its build report and runs")
     expect(orchestratorTools).not.toContain("Build already invokes the post-build review")
     expect(orchestratorTools).toContain("acceptance_specs, traceability, source/reference coverage, and cross-goal")
-    expect(orchestratorTools).toContain("Goal builds record build reports as review input")
+    expect(orchestratorTools).toContain("Goal builds record ")
+    expect(orchestratorTools).toContain("build reports as review input")
 
     expect(requirementsTools).not.toContain("metric specs, challenge seeds")
     expect(requirementsTools).toContain("Challenge metrics are produced by prosecutor/metrics")
@@ -149,9 +173,9 @@ describe("core prompt hygiene", () => {
     expect(workflow).not.toContain("evaluator as plan/build/evaluate phases")
     expect(workflow).not.toContain("per-goal[build + architecture_review]")
     expect(workflow).not.toContain("goal build 完成后自动跑一次 architecture_review")
-    expect(workflow).toContain("deliver rejected 返回结构化证据，下一步仍由 Orchestrator 基于证据决定")
+    expect(workflow).toContain("integrity 是 session-bound final gate")
     expect(workflow).toContain("acceptance_specs / traceability / source-reference coverage / cross-goal contracts")
-    expect(workflow).toContain("build 报告会作为 review input 被记录，但不会自动触发 architecture_review")
+    expect(workflow).toContain("最终系统完整性 gate")
   })
 
   test("architecture review findings are actionable feedback, not dispatch gates", async () => {
@@ -165,7 +189,7 @@ describe("core prompt hygiene", () => {
     expect(integrityFlat).toContain("unsupported REQ IDs")
     expect(integrityFlat).toContain("requirement_ids")
     expect(integrity).toContain("does not apply graph mutations automatically")
-    expect(orchestrator.replace(/\s+/g, " ")).toContain("not a pre-build or wave-level dispatch gate")
+    expect(orchestrator.replace(/\s+/g, " ")).toContain("Integrity is the workflow acceptance gate")
     expect(orchestrator).not.toContain("zero correction")
     expect(tools).not.toContain("integrityAttemptExecutionBlockReason")
     expect(tools).not.toContain("Diagnostic-only findings require upstream repair")
@@ -317,12 +341,15 @@ describe("core prompt hygiene", () => {
     expect(build).toContain("do not stop with prose")
   })
 
-  test("build prompt defines the explicit no-edit analysis terminal branch", async () => {
+  test("build prompt does not define a repository-investigation success branch", async () => {
     const build = await readPrompt("build")
-    expect(build).toContain("read-only exploration, investigation, or analysis")
-    expect(build).toContain("skip commit / merge_back")
+    expect(build).toContain("This path is for implementation")
+    expect(build).toContain("Build is the wrong stage")
+    const retiredInvestigationBranch = ["read-only", ["exploration", "investigation", "or analysis"].join(", ")].join(" ")
+    const retiredNoEditBranch = ["explicit", ["no-edit", "analysis / exploration"].join(" ")].join(" ")
+    expect(build).not.toContain(retiredInvestigationBranch)
+    expect(build).not.toContain(retiredNoEditBranch)
     expect(build).toContain("files_changed: []")
-    expect(build).toContain("Do not end with prose")
   })
 
   test("requirements prompt keeps REQ extraction at acceptance granularity", async () => {
@@ -353,60 +380,16 @@ describe("core prompt hygiene", () => {
     expect(normalized).toContain("Minimum: runtime + one framework + test_framework + affected_modules + affected_concepts + impact_size")
   })
 
-  test("delivery prompt matches DeliveryVerdict schema single-source fields", async () => {
-    const text = await readPrompt("delivery")
-    expect(text).not.toContain("`affected_goal_ids`")
-    expect(text).not.toContain("`issues_found`")
-    expect(text).not.toContain("Issues Found / Rejection Details")
-    expect(text).not.toContain("There is no deterministic per-goal evaluator before you")
-    expect(text).not.toContain("Nothing has been scored yet. YOU run every spec")
-    expect(text).not.toContain('category="missing_requirement"')
-    expect(text).toContain("DeliveryEvidenceManifest")
-    expect(text).toContain("host arbiter is the only owner")
-    expect(text).toContain("`tool_call_evidence`")
-    expect(text).toContain("Only entries with a truthful")
-    expect(text).toContain("`goal_id` are used for goal routing")
-    expect(text).toContain("Test edits that convert a failing required behavior")
-    expect(text).toContain("Inspect changed tests when a goal claims verification coverage")
-    expect(text).toContain("rewritten to match broken current behavior")
-    expect(text).toContain("Hand-edited generated or compiled runtime artifacts")
-    expect(text).toContain("Inspect source/runtime entry alignment")
-    expect(text).toContain("`start_frontend_preview`")
-    expect(text).toContain("board `delivery.previewUrl`")
-    expect(text).toContain("required runtime flow cannot be")
-    expect(text).toContain("run_integrity_review")
-    expect(text).toContain("suspicion-triggered semantic integrity review")
-    expect(text.replace(/\s+/g, " ")).toContain("not a routine internal Delivery gate")
-    expect(text).not.toContain("create follow-up tasks")
-    expect(text).toContain("recommend follow-up")
-    expect(text).toContain("Do not create the task yourself")
-  })
-
-  test("delivery prompt pins lifecycle, commit, and visual evidence boundaries", async () => {
-    const text = await readPrompt("delivery")
-    const normalized = text.replace(/\s+/g, " ")
-
-    expect(normalized).toContain("Delivery does not run git commits itself")
-    expect(normalized).toContain("let the host deliver round commit archive those changes")
-    expect(normalized).toContain("Do not call git commit from `run_command`")
-    expect(normalized).toContain("Delivery does not start, stop, retry, cancel, or create engine tasks")
-    expect(text).toContain("verify_page_integrity")
-    expect(text).toContain("compare_visual_artifacts")
-    expect(normalized).toContain("screenshot as supporting evidence")
-    expect(normalized).toContain("do not treat a screenshot alone as the full visual gate")
-  })
-
-  test("design-analysis and delivery agree that visual_consistency_spec is delivery-gated", async () => {
+  test("design-analysis routes visual_consistency_spec to integrity acceptance review", async () => {
     const design = await readPrompt("designAnalyst")
-    const delivery = await readPrompt("delivery")
     expect(design).not.toContain("ADVISORY")
     expect(design).not.toContain("not automatically scored or gated")
     expect(design).not.toContain("soft preference")
     expect(design).toContain("`visual_consistency_spec`: binding visual-fidelity specification")
     expect(design).not.toContain("register_color_spec")
     expect(design).not.toContain("register_layout_spec")
-    expect(delivery).toContain("the design-analysis")
-    expect(delivery).toContain("`visual_consistency_spec` is gating")
+    const acceptanceReview = await readPrompt("integrity")
+    expect(acceptanceReview).toContain("final acceptance reviewer")
   })
 
   test("design-analysis treats raw mirror JSON as evidence, not PRD working context", async () => {
@@ -455,7 +438,10 @@ describe("core prompt hygiene", () => {
     const normalized = text.replace(/\s+/g, " ")
     expect(normalized).toContain('`build({ request, directBuildIntent: "modify_files" })` is still supported')
     expect(normalized).toContain('direct `build({ request, directBuildIntent: "modify_files" })` is allowed')
-    expect(normalized).toContain("Task-level inspect-only build is not a workflow path")
+    expect(normalized).toContain("Build is an implementation tool, not a repository investigation tool")
+    expect(normalized).toContain("Repository investigation belongs to `analyze_intent`, `requirements`, or the registered `explore` subagent surface")
+    expect(normalized).not.toContain(["inspect", "only"].join("_"))
+    expect(normalized).not.toContain("Task-level inspect-only build is not a workflow path")
   })
 
   test("orchestrator prompt sends multi-goal requests through workflow decomposition", async () => {
@@ -476,19 +462,16 @@ describe("core prompt hygiene", () => {
     expect(normalized).toContain("concrete task evidence proves the active REQ snapshot is invalid")
   })
 
-  test("orchestrator prompt caps deliver retries and routes minor rejection fixes through build", async () => {
+  test("orchestrator prompt routes non-pass integrity fixes through explicit repair", async () => {
     const text = await readPrompt("orchestrator")
     const normalized = text.replace(/\s+/g, " ")
-    expect(normalized).toContain("Rejected `deliver` returns evidence for the next orchestrator decision")
-    expect(normalized).toContain("not a host-side mandate to end the scheduler")
+    expect(normalized).toContain("Integrity is the workflow acceptance gate")
+    expect(normalized).toContain("The host no longer runs a host-owned final acceptance gate")
+    expect(normalized).toContain("Non-pass `integrity` returns evidence for the next orchestrator decision")
     expect(normalized).toContain("Valid next actions include task-level build")
-    expect(normalized).toContain("first acceptance attempt plus at most one post-rework verification")
-    expect(normalized).toContain("After the second non-accepted deliver, no priors apply; call `question` and wait for the operator")
-    expect(normalized).toContain("the host will not open rework attempts or queue repair work by itself")
-    expect(normalized).not.toContain("0-5%: no path to improve current task after the second deliver → `fail_task`")
-    expect(normalized).toContain('Minor / localized delivery issues -> call `build({ request, directBuildIntent: "modify_files" })`')
+    expect(normalized).toContain('Minor / localized integrity issues -> call `build({ request, directBuildIntent: "modify_files" })`')
     expect(normalized).toContain("Do not re-run requirements, architect, design_analysis, or the whole workflow for import typos")
-    expect(normalized).toContain("Re-enter **architect** only when the rejection proves a genuinely new prerequisite goal")
+    expect(normalized).toContain("Re-enter **architect** only when the review proves a genuinely new prerequisite goal")
     expect(normalized).toContain("Task-fidelity shortfall recovery")
     expect(normalized).toContain("First occurrence, when the missing or distorted capability is still inside the current task contract -> use the lightest valid repair")
     expect(normalized).toContain('`build({ request, directBuildIntent: "modify_files" })` with the exact fidelity delta as the request')
@@ -508,17 +491,16 @@ describe("core prompt hygiene", () => {
     expect(normalized).toContain("Never call generic `task` or control-plane `panel`")
   })
 
-  test("orchestrator prompt makes accepted deliver the terminal lifecycle path", async () => {
+  test("orchestrator prompt makes post-build integrity pass the terminal lifecycle path", async () => {
     const text = await readPrompt("orchestrator")
     const normalized = text.replace(/\s+/g, " ")
-    expect(normalized).toContain("Accepted deliveries complete the task")
-    expect(normalized).toContain("Accepted `deliver` already completed the task")
-    expect(normalized).toContain("DeliveryAgent calls `submit_verdict` as semantic review input")
-    expect(normalized).toContain("the deliver tool's host arbiter converts that evidence into the persisted delivery verdict")
-    expect(normalized).toContain("Only an accepted host-arbiter verdict completes the task")
-    expect(normalized).toContain("`publish_delivery` is explicit artifact export only; it does not decide lifecycle")
+    expect(normalized).toContain("Pipeline workflow tasks complete only after the `integrity` reviewer returns a pass verdict")
+    expect(normalized).toContain("The `deliver` endpoint is disabled and must not be used")
+    expect(normalized).toContain("`publish_delivery` is also disabled because it depends on retired delivery verdicts")
+    expect(normalized).toContain("A pass verdict completes the task")
     expect(normalized).toContain("Completed does not mean context deletion")
-    expect(normalized).toContain("the historical accepted verdict is baseline evidence, not proof that a new operator message is already handled")
+    expect(normalized).toContain("historical terminal review is baseline evidence")
+    expect(normalized).not.toContain("Only an accepted host-arbiter verdict completes the task")
     expect(normalized).not.toContain("delivery has accepted and been published")
     expect(normalized).not.toContain("publish_delivery remains the normal terminal path")
   })
@@ -532,7 +514,7 @@ describe("core prompt hygiene", () => {
     expect(normalized).not.toContain("UI replication from visual reference` in `Kind: workflow` → `analyze_intent`")
     expect(normalized).not.toContain("verification` goals are integration checks; they stay pending until **deliver**")
     expect(normalized).toContain("Dispatch them with `build({ goalID })` like every other goal")
-    expect(normalized).toContain("every non-delivery-only verification goal is terminal before `deliver`")
+    expect(normalized).toContain("every verification/integration goal is terminal before `integrity`")
   })
 
   test("integrity prompt audits original request mining, not only generated REQ rows", async () => {
@@ -554,19 +536,17 @@ describe("core prompt hygiene", () => {
     expect(integrity).toContain("If the original request implies a requirement that has no corresponding REQ-N row")
     expect(integrity).toContain("leave `requirement_ids` empty")
     expect(orchestrator).toContain("late-stage requirements-mining and system-integrity review")
-    expect(orchestrator.replace(/\s+/g, " ")).toContain("after Delivery acceptance and before follow-up/failure decisions")
-    expect(orchestrator.replace(/\s+/g, " ")).toContain("No standalone wave-level integrity loop")
-    expect(architect).toContain("near task end to audit the original user request, requirements extraction, and delivered system")
+    expect(orchestrator.replace(/\s+/g, " ")).toContain("final workflow gate")
+    expect(orchestrator.replace(/\s+/g, " ")).toContain("Pipeline workflow tasks complete only after the `integrity` reviewer returns a pass verdict")
+    expect(architect).toContain("final workflow gate to audit the original user request, requirements extraction, and built system")
     expect(architect).not.toContain("integrity reviewer before build")
   })
 
-  test("orchestrator prompt forbids `deliver` while non-terminal goals remain", async () => {
+  test("orchestrator prompt forbids final integrity while non-terminal goals remain", async () => {
     const text = await readPrompt("orchestrator")
-    // Strengthened post-r23: bench observed orchestrator calling deliver
-    // after only 1/7 goals passed, then the rejection's reset wiped the
-    // passed work. The pre-deliver audit ritual must enumerate every goal
-    // explicitly and the verification-goal blanket exception must be gone.
-    expect(text).toContain("Mandatory pre-`deliver` audit ritual")
+    // The pre-integrity audit ritual must enumerate every goal explicitly and
+    // the verification-goal blanket exception must stay gone.
+    expect(text).toContain("Mandatory pre-`integrity` audit ritual")
     expect(text).toContain("enumerate every goal id with its current status")
     // The buggy old "verification-only as terminal for this gate" exception
     // must be removed — it was the documentation mistake that authorised
@@ -574,12 +554,8 @@ describe("core prompt hygiene", () => {
     expect(text).not.toContain("treat verification-only as terminal for")
     // The strengthened rule explicitly calls verification a non-exception.
     expect(text).toContain("Verification goals are NOT an")
-    // The premature-deliver patterns list must call out the exact bench-
-    // observed antipattern (one passed goal triggering a deliver). Accept
-    // soft wraps in the prose so a future re-flow doesn't trip the assert.
-    expect(text.replace(/\s+/g, " ")).toContain("A single passed goal is not a delivery")
-    // Cost-of-premature-deliver is part of the rationale.
-    expect(text).toContain("blanket-reset path then wipes the goals that ALREADY")
+    expect(text.replace(/\s+/g, " ")).toContain("A single passed goal is not task acceptance")
+    expect(text).toContain("The `deliver` endpoint is disabled and must not be used")
   })
 
   test("orchestrator prompt keeps pre-delivery work moving and cascades 1:1 reference fidelity to build", async () => {
@@ -591,11 +567,15 @@ describe("core prompt hygiene", () => {
     expect(normalized).toContain("build must restore them 1:1 as closely as the stack allows")
   })
 
-  test("prosecutor prompt references current delivery rejection surface", async () => {
+  test("prosecutor prompt references the current integrity acceptance rejection surface", async () => {
     const text = await readPrompt("prosecutor")
     expect(text).not.toContain("Defender's own issues_found")
     expect(text).toContain("Defender's own rejection_details")
-    expect(text).toContain("Use `query_diff` only when it returns a real delivery snapshot")
+    expect(text).toContain("Use `query_diff` only when it returns a real diff snapshot")
     expect(text).toContain("do not invent diff-grounded claims")
+    // delivery is retired — the prosecutor challenges the integrity
+    // acceptance verdict, not a delivery verdict (rule 8 single-source).
+    expect(text).not.toContain("real delivery snapshot")
+    expect(text).toContain("acceptance-surface evidence")
   })
 })

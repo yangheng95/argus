@@ -4,7 +4,11 @@ const unknownOpenReason = /\b(tbd|unknown|unsure|unclear|n\/a|todo)\b/i
 
 export const ValueDomainSchema = z.discriminatedUnion("kind", [
   z.object({
-    kind: z.literal("open"),
+    kind: z
+      .literal("open")
+      .describe(
+        "open — value is an unconstrained instance of typeExpr. Requires a concrete reason (TBD/unknown rejected).",
+      ),
     reason: z.string()
       .refine((value) => value.trim().length > 0, {
         message: "open valueDomain requires a concrete reason",
@@ -14,23 +18,33 @@ export const ValueDomainSchema = z.discriminatedUnion("kind", [
       }),
   }),
   z.object({
-    kind: z.literal("literal_union"),
+    kind: z
+      .literal("literal_union")
+      .describe("literal_union — a closed set of string literals. Requires values (>=1)."),
     values: z.array(z.string().min(1)).min(1),
   }),
   z.object({
-    kind: z.literal("branded"),
+    kind: z
+      .literal("branded")
+      .describe(
+        "branded — a nominal/opaque type such as a branded id or ISO date string. Requires brand and examples (>=1).",
+      ),
     brand: z.string().min(1),
     examples: z.array(z.string().min(1)).min(1),
   }),
   z.object({
-    kind: z.literal("numeric_range"),
+    kind: z
+      .literal("numeric_range")
+      .describe("numeric_range — a bounded number. Requires min and/or max."),
     min: z.number().optional(),
     max: z.number().optional(),
   }).refine((value) => value.min !== undefined || value.max !== undefined, {
     message: "numeric_range requires min or max",
   }),
   z.object({
-    kind: z.literal("ref"),
+    kind: z
+      .literal("ref")
+      .describe("ref — value is governed by another contract. Requires contractName."),
     contractName: z.string().min(1),
   }),
 ])
@@ -51,18 +65,30 @@ export type FieldSpec = z.infer<typeof FieldSpecSchema>
 
 export const ContractIRSchema = z.discriminatedUnion("kind", [
   z.object({
-    kind: z.literal("type"),
+    kind: z
+      .literal("type")
+      .describe(
+        "type — object/interface contract. Requires name and fields[] (typeExpr, valueDomain, optional semantic). ir.kind must equal the graph contract kind.",
+      ),
     name: z.string().min(1),
     fields: z.array(FieldSpecSchema).min(1),
   }),
   z.object({
-    kind: z.literal("function"),
+    kind: z
+      .literal("function")
+      .describe(
+        "function — callable contract. Requires name, params (FieldSpec[]), returns (TypeSpec). ir.kind must equal the graph contract kind.",
+      ),
     name: z.string().min(1),
     params: z.array(FieldSpecSchema),
     returns: TypeSpecSchema,
   }),
   z.object({
-    kind: z.literal("enum"),
+    kind: z
+      .literal("enum")
+      .describe(
+        "enum — closed enumeration. Requires name and variants[] (value + meaning). ir.kind must equal the graph contract kind.",
+      ),
     name: z.string().min(1),
     variants: z.array(z.object({
       value: z.string().min(1),

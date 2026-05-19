@@ -84,7 +84,7 @@ test("coding agent owns direct assistant prompt", async () => {
 // audit-2026-04-29 W2-V27 — `Agent.get("plan")` returns undefined in
 // the current build: there is no "plan" entry in agent.ts's BUILT_IN
 // dict (only build / general / explore / compaction / title /
-// summary / delivery / orchestrator / requirements / architect /
+// summary / orchestrator / requirements / architect /
 // integrity / prosecutor — see agent.ts). The
 // plan-mode feature was either renamed or removed; the
 // `plan_enter`/`plan_exit` permission keys are no longer in the
@@ -252,11 +252,12 @@ test("native stage agent registry tool surfaces match role boundaries", async ()
       expect(design?.tools?.include).not.toContain("webpage_render")
       expect(design?.tools?.include).not.toContain("task")
 
-      for (const name of ["integrity", "prosecutor", "delivery"] as const) {
+      for (const name of ["integrity", "prosecutor"] as const) {
         const agent = await Agent.get(name)
         expect(agent).toBeDefined()
         expect(agent?.tools?.include).toEqual([])
       }
+      expect(await Agent.get("delivery")).toBeUndefined()
     },
   })
 })
@@ -279,6 +280,9 @@ test("orchestrator registry exposes lifecycle tools it teaches in prompt", async
       ]) {
         expect(include).toContain(tool)
       }
+      expect(include).toContain("integrity")
+      expect(include).not.toContain("deliver")
+      expect(include).not.toContain("publish_delivery")
       expect(orchestrator?.prompt).toContain("propose_task")
     },
   })
@@ -743,7 +747,7 @@ test("only design-analyst receives mirror analysis tools from the registry", asy
         }
       }
 
-      for (const name of ["coding", "build", "general", "explore", "compaction", "title", "delivery"]) {
+      for (const name of ["coding", "build", "general", "explore", "compaction", "title"]) {
         const agent = await Agent.get(name)
         expect(agent).toBeDefined()
         for (const id of MIRROR_TOOL_IDS) {

@@ -13,7 +13,7 @@ import path from "node:path"
  * goal-<id>/`, and the project-root `.gitignore` (which goal worktrees
  * share via the parent repo) lists `.opencorvus`. Running
  * `git add -- .gitignore` from inside that worktree triggers git's
- * "ignored path" guard. publish_delivery's goal workspace terminal
+ * "ignored path" guard. the goal workspace terminal
  * cleanup then aborts and orchestrator loops trying to redeliver,
  * burning the budget without ever publishing.
  *

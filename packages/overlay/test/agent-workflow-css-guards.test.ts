@@ -4,22 +4,11 @@ import { join } from "node:path";
 
 const css = readFileSync(join(import.meta.dir, "../src/styles/surfaces/conversation.css"), "utf8");
 
-function ruleBody(selector: string): string {
-  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const match = css.match(new RegExp(`${escaped}\\s*\\{([\\s\\S]*?)\\}`));
-  if (!match) throw new Error(`missing selector ${selector}`);
-  return match[1] || "";
-}
-
-test("agent report dialog uses one scroll owner for dialog body", () => {
-  const body = ruleBody(".agent-report-dialog__content,\n.agent-report-dialog__empty");
-  expect(body).toContain("min-height: 0");
-  expect(body).toContain("overflow: auto");
-
-  const panel = ruleBody(".agent-report-dialog__panel");
-  expect(panel).toContain("display: flex");
-  expect(panel).toContain("flex-direction: column");
-  expect(panel).toContain("overflow: hidden");
+test("agent rail expanded report surface stays deleted", () => {
+  expect(css).not.toContain("agent-report-dialog");
+  expect(css).not.toContain("conversation-agent-rail__resize");
+  expect(css).not.toContain("conversation-agent-rail__report");
+  expect(css).not.toContain("conversation-agent-rail__run");
 });
 
 test("old workflow report section and pre scroll rules stay deleted", () => {

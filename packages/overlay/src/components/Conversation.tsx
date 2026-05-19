@@ -109,6 +109,10 @@ export function Conversation(props: { container: HTMLElement }) {
   createEffect(on(
     () => cardTreeStore.treeEpoch,
     () => {
+      if (cardTreeStore.treeReplacementScrollIntent === "preserve") {
+        scrollController?.contentChanged();
+        return;
+      }
       setTracking(true);
       scrollController?.scrollToBottom();
     },

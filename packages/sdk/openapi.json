@@ -12213,10 +12213,11 @@
                                 ]
                               },
                               "trigger": {
-                                "description": "Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_delivery.",
+                                "description": "Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_integrity. on_delivery is legacy and maps to on_integrity.",
                                 "type": "string",
                                 "enum": [
                                   "on_goal",
+                                  "on_integrity",
                                   "on_delivery"
                                 ]
                               }
@@ -12633,10 +12634,11 @@
                                       ]
                                     },
                                     "trigger": {
-                                      "description": "Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_delivery.",
+                                      "description": "Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_integrity. on_delivery is legacy and maps to on_integrity.",
                                       "type": "string",
                                       "enum": [
                                         "on_goal",
+                                        "on_integrity",
                                         "on_delivery"
                                       ]
                                     }
@@ -23772,10 +23774,11 @@
                           ]
                         },
                         "trigger": {
-                          "description": "Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_delivery.",
+                          "description": "Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_integrity. on_delivery is legacy and maps to on_integrity.",
                           "type": "string",
                           "enum": [
                             "on_goal",
+                            "on_integrity",
                             "on_delivery"
                           ]
                         }
@@ -30812,58 +30815,6 @@
           "properties"
         ]
       },
-      "Event.delivery.gate.rejected": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "delivery.gate.rejected"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string",
-                "pattern": "^tsk.*"
-              },
-              "runID": {
-                "type": "string",
-                "pattern": "^run.*"
-              },
-              "iteration": {
-                "type": "number"
-              },
-              "violations": {
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "properties": {
-                    "kind": {
-                      "type": "string"
-                    },
-                    "detail": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "kind",
-                    "detail"
-                  ]
-                }
-              }
-            },
-            "required": [
-              "taskID",
-              "iteration",
-              "violations"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
       "Event.delivery.evidence.updated": {
         "type": "object",
         "properties": {
@@ -31012,90 +30963,6 @@
               "taskID",
               "deliveryID",
               "status"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.delivery.review.completed": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "delivery.review.completed"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string",
-                "pattern": "^tsk.*"
-              },
-              "runID": {
-                "type": "string",
-                "pattern": "^run.*"
-              },
-              "reviewID": {
-                "type": "string",
-                "minLength": 1
-              },
-              "verdict": {
-                "type": "string",
-                "enum": [
-                  "accepted",
-                  "rejected"
-                ]
-              },
-              "source": {
-                "type": "string",
-                "enum": [
-                  "llm",
-                  "host_gate"
-                ]
-              },
-              "summary": {
-                "type": "string"
-              },
-              "hostGatePassed": {
-                "type": "boolean"
-              },
-              "failureKinds": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              },
-              "rejectionCount": {
-                "type": "integer",
-                "minimum": 0,
-                "maximum": 9007199254740991
-              },
-              "deferredCount": {
-                "type": "integer",
-                "minimum": 0,
-                "maximum": 9007199254740991
-              },
-              "details": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              }
-            },
-            "required": [
-              "taskID",
-              "reviewID",
-              "verdict",
-              "source",
-              "summary",
-              "hostGatePassed",
-              "failureKinds",
-              "rejectionCount",
-              "deferredCount",
-              "details"
             ]
           }
         },
@@ -31282,6 +31149,164 @@
                   ]
                 }
               },
+              "acceptance": {
+                "type": "object",
+                "properties": {
+                  "verdict": {
+                    "type": "string",
+                    "enum": [
+                      "accepted",
+                      "rejected"
+                    ]
+                  },
+                  "summary": {
+                    "type": "string"
+                  },
+                  "startup_verification": {
+                    "type": "object",
+                    "properties": {
+                      "attempted": {
+                        "type": "boolean"
+                      },
+                      "command": {
+                        "type": "string"
+                      },
+                      "success": {
+                        "type": "boolean"
+                      },
+                      "output": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "attempted",
+                      "success"
+                    ]
+                  },
+                  "frontend_check": {
+                    "type": "object",
+                    "properties": {
+                      "attempted": {
+                        "type": "boolean"
+                      },
+                      "renders_correctly": {
+                        "type": "boolean"
+                      },
+                      "issues": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "required": [
+                      "attempted"
+                    ]
+                  },
+                  "deferred_checks": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "result": {
+                          "type": "string",
+                          "enum": [
+                            "passed",
+                            "failed",
+                            "skipped",
+                            "advisory_failed"
+                          ]
+                        },
+                        "evidence": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "result",
+                        "evidence"
+                      ]
+                    }
+                  },
+                  "tool_call_evidence": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "tool": {
+                          "type": "string"
+                        },
+                        "passed": {
+                          "type": "boolean"
+                        },
+                        "detail": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "tool",
+                        "passed",
+                        "detail"
+                      ]
+                    }
+                  },
+                  "rejection_details": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "goal_id": {
+                          "type": "string"
+                        },
+                        "category": {
+                          "type": "string",
+                          "enum": [
+                            "build",
+                            "test",
+                            "lint",
+                            "runtime",
+                            "quality",
+                            "startup",
+                            "visual"
+                          ]
+                        },
+                        "check_id": {
+                          "type": "string"
+                        },
+                        "file": {
+                          "type": "string"
+                        },
+                        "error": {
+                          "type": "string"
+                        },
+                        "suggestion": {
+                          "type": "string"
+                        },
+                        "visual_spec_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "category",
+                        "error"
+                      ]
+                    }
+                  },
+                  "launch_command": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "verdict",
+                  "summary",
+                  "deferred_checks",
+                  "tool_call_evidence",
+                  "rejection_details"
+                ]
+              },
               "attempts": {
                 "type": "number"
               }
@@ -31295,6 +31320,7 @@
               "issues",
               "corrections",
               "missingGoals",
+              "acceptance",
               "attempts"
             ]
           }
@@ -32430,16 +32456,10 @@
             "$ref": "#/components/schemas/Event.review.stream.chunk"
           },
           {
-            "$ref": "#/components/schemas/Event.delivery.gate.rejected"
-          },
-          {
             "$ref": "#/components/schemas/Event.delivery.evidence.updated"
           },
           {
             "$ref": "#/components/schemas/Event.delivery.preview.updated"
-          },
-          {
-            "$ref": "#/components/schemas/Event.delivery.review.completed"
           },
           {
             "$ref": "#/components/schemas/Event.integrity.review.completed"
@@ -34072,11 +34092,11 @@
             }
           },
           "assistant": {
-            "description": "Assistant agent configuration — controls orchestration policy, requirements, architect, build, design-analysis, intent-analysis, and delivery agent behavior",
+            "description": "Assistant agent configuration — controls orchestration policy, requirements, architect, build, design-analysis, intent-analysis, and integrity review behavior",
             "type": "object",
             "properties": {
               "auto_iteration": {
-                "description": "Enable OpenCorvus host-side automatic repair iteration after failed goal waves or rejected deliveries. Default false: delivery rejection is reported and waits for operator follow-up.",
+                "description": "Enable OpenCorvus host-side automatic repair iteration after failed goal waves or rejected acceptance reviews. Default false: acceptance rejection is reported and waits for operator follow-up.",
                 "type": "boolean"
               },
               "requirements": {
@@ -34117,33 +34137,8 @@
                   }
                 }
               },
-              "delivery": {
-                "description": "Delivery agent configuration",
-                "type": "object",
-                "properties": {
-                  "max_steps": {
-                    "description": "Maximum agentic steps for delivery agent",
-                    "type": "integer",
-                    "minimum": 1,
-                    "maximum": 9007199254740991
-                  },
-                  "max_retries": {
-                    "description": "Maximum delivery generation retries",
-                    "type": "integer",
-                    "minimum": 0,
-                    "maximum": 9007199254740991
-                  },
-                  "skills": {
-                    "description": "Additional skill paths for delivery agent",
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
-                  }
-                }
-              },
               "delivery_visual": {
-                "description": "P0-B delivery visual numeric hard-gate thresholds.",
+                "description": "P0-B visual numeric evidence thresholds.",
                 "type": "object",
                 "properties": {
                   "phash_hamming_max": {
@@ -34302,7 +34297,7 @@
                 "maximum": 9007199254740991
               },
               "default_workflow": {
-                "description": "Default workflow for new tasks: 'direct' (build → deliver iter), 'pipeline' (design_analysis → requirements → architect → per-goal build → deliver iter), or custom ID",
+                "description": "Default workflow for new tasks: 'direct' (build), 'pipeline' (design_analysis → requirements → architect → per-goal build → integrity), or custom ID",
                 "type": "string"
               },
               "workflows": {

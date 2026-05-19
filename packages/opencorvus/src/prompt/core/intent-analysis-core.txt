@@ -26,9 +26,9 @@ Do not solve downstream responsibilities here:
 - Design Analysis owns visual PRD/SPEC synthesis and mirror evidence.
 - Architect owns goal graph, acceptance specs, owned paths, and contracts.
 - Build owns implementation.
-- Delivery owns final acceptance evidence.
+- Integrity owns final workflow acceptance evidence inside its own review session.
 
-When prior delivery/build evidence exists, summarize the delta the user is
+When prior integrity/build evidence exists, summarize the delta the user is
 responding to; do not relitigate the whole task unless the latest message
 actually changes the contract.
 

@@ -36,12 +36,6 @@
   --agent-border: color-mix(in srgb, var(--oc-stage-evaluator) 22%, transparent);
 }
 
-.agent-card[data-agent-stage="delivery"] {
-  --agent-accent: color-mix(in srgb, var(--oc-stage-delivery) 80%, transparent);
-  --agent-bg: color-mix(in srgb, var(--oc-stage-delivery) 8%, transparent);
-  --agent-border: color-mix(in srgb, var(--oc-stage-delivery) 22%, transparent);
-}
-
 .agent-card-header {
   display: flex;
   align-items: center;

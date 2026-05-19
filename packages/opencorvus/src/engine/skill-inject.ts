@@ -1,5 +1,5 @@
 /**
- * Skill injection for headless agents (spec, delivery, goal).
+ * Skill injection for headless agents (spec, acceptance, goal).
  *
  * Loads skills by:
  * 1. Explicit names from config (orchestrator.{stage}.skills)
@@ -21,13 +21,13 @@ const log = Log.create({ service: "skill-inject" })
 /**
  * Per-stage invariants that the skill system ALWAYS prepends to the skills
  * section, whether or not any skill matched. These are contract-level
- * reminders ("if any loaded skill declares required_tools, submit_verdict
- * will enforce them") — the LLM must see them so it knows why the schema
+ * reminders ("if any loaded skill declares required_tools, the stage-owned
+ * terminal output tool will enforce them") — the LLM must see them so it knows why the schema
  * validation will reject a verdict that skips the mandatory tool calls.
  *
  * These are NOT overridable: no config field can replace or suppress this
  * section. That is the whole point — bypassing the skill system bypasses
- * the contract, which historically let delivery accept a JSON-404 screenshot.
+ * the contract, which historically let acceptance pass on weak evidence.
  * Single source of truth for stage contracts lives here, not in per-stage
  * CORE constants that could drift.
  */
@@ -39,25 +39,20 @@ build-stage skill declares required tools, \`status='passed'\` is rejected by
 BuildAgent unless every required tool completed in the build session. Mirror
 extraction tools are not build-stage tools; visual/page references must arrive
 from design_analysis as PRD/SPEC decision-log entries plus optional task.design_specs anchors.
-Delivery owns rendered browser evidence and visual hard gates.`,
+Build records its own verification evidence; Integrity owns the final workflow gate inside a review session.`,
   design_analyst: `## Skill-system invariants (design-analysis)
 
 Design-analysis is the only stage that owns mirror extraction. Use the matched
 reference skill to gather mirror artifacts, then persist both visual specs and
 the complete PRD/SPEC through StructuredOutput. Do not implement application
 source files in this stage.`,
-  delivery: `## Skill-system invariants (enforced by submit_verdict)
+  acceptance: `## Skill-system invariants (acceptance review)
 
-The delivery verdict schema carries a \`tool_call_evidence[]\` array. Injected
-skills declare \`required_tools\` in their frontmatter. When one or more of the
-auto-loaded skills declares required tools, **verdict='accepted' will be
-rejected** by submit_verdict unless every required tool appears in
-tool_call_evidence with \`passed=true\` and a reproducer-grade \`detail\`
-(minimum 8 non-trivial characters — numbers, URLs, exit codes, selectors, not
-prose like "looks fine"). If a check cannot be made to pass, switch to
-verdict='rejected' with the failing call recorded verbatim in
-tool_call_evidence so the orchestrator can hand the executor exact
-reproduction steps.`,
+Injected skills can declare \`required_tools\` in their frontmatter. When an
+acceptance-stage skill declares required tools, \`verdict='accepted'\` is
+invalid unless the integrity session contains concrete evidence that every
+required tool completed successfully. If a check cannot be made to pass,
+submit a rejected acceptance verdict with exact reproduction steps.`,
 }
 
 /** Characteristics of the active task used to auto-detect skills. */
@@ -102,20 +97,20 @@ export function deriveUrlSignals(text: string | undefined): {
 }
 
 /** Result of resolving the skills for one stage invocation. Exposed so callers
- *  that need more than the prompt string (e.g. delivery's `required_tools`
+ *  that need more than the prompt string (e.g. acceptance `required_tools`
  *  enforcement) can inspect the matched skill set. */
 export interface ResolvedSkills {
   prompt: string
   skills: Skill.Info[]
-  /** Union of `required_tools` across all matched skills — what the delivery
-   *  agent MUST have called (and passed) before submit_verdict(accepted). */
+  /** Union of `required_tools` across all matched skills — what the stage
+   *  agent MUST have called (and passed) before reporting success. */
   requiredTools: string[]
 }
 
 /**
  * Load skills for a pipeline stage: explicit config + auto-detected.
  * @param explicitNames - skill names from orchestrator config
- * @param stage - pipeline stage ("spec", "delivery", "goal")
+ * @param stage - pipeline stage ("spec", "acceptance", "goal")
  * @param taskSignals - task-level detection signals (attachments, request text)
  */
 export async function loadStageSkills(

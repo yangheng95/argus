@@ -109,7 +109,7 @@ test(
         if (path === "/agent") {
           return send([
             { name: "build", description: "Build agent", mode: "primary", native: true, options: {} },
-            { name: "delivery", description: "Delivery agent", mode: "primary", native: true, options: {} },
+            { name: "integrity", description: "Integrity review agent", mode: "primary", native: true, options: {} },
           ])
         }
         if (path === "/channel") return send([])
@@ -166,7 +166,7 @@ test(
       await page.waitForSelector('[data-testid="titlebar-open-agent-models"]')
       await page.click('[data-testid="titlebar-open-agent-models"]')
       await page.waitForSelector('[data-testid="agent-model-select-build"]')
-      await page.waitForSelector('[data-testid="agent-model-select-delivery"]')
+      await page.waitForSelector('[data-testid="agent-model-select-integrity"]')
 
       const initialOptionCount = await page.$$eval(".agent-model-select option", (nodes) => nodes.length)
       expect(initialOptionCount).toBeLessThanOrEqual(6)
@@ -185,30 +185,30 @@ test(
           "anthropic/claude-sonnet-4-6",
       )
 
-      await page.waitForSelector('[data-testid="agent-model-select-delivery"]')
-      await page.focus('[data-testid="agent-model-select-delivery"]')
+      await page.waitForSelector('[data-testid="agent-model-select-integrity"]')
+      await page.focus('[data-testid="agent-model-select-integrity"]')
       await page.waitForFunction(
         () =>
           !!(document.querySelector(
-            '[data-testid="agent-model-select-delivery"] option[value="openai/gpt-4.1"]',
+            '[data-testid="agent-model-select-integrity"] option[value="openai/gpt-4.1"]',
           ) as HTMLOptionElement | null),
       )
-      await page.select('[data-testid="agent-model-select-delivery"]', "openai/gpt-4.1")
+      await page.select('[data-testid="agent-model-select-integrity"]', "openai/gpt-4.1")
       await page.waitForFunction(
         () =>
-          (document.querySelector('[data-testid="agent-model-select-delivery"]') as HTMLSelectElement | null)?.value ===
+          (document.querySelector('[data-testid="agent-model-select-integrity"]') as HTMLSelectElement | null)?.value ===
           "openai/gpt-4.1",
       )
 
       const modelPatches = patches.filter((patch) => "agent" in patch)
       expect(modelPatches).toEqual([
         { agent: { build: { model: "anthropic/claude-sonnet-4-6" } } },
-        { agent: { delivery: { model: "openai/gpt-4.1" } } },
+        { agent: { integrity: { model: "openai/gpt-4.1" } } },
       ])
       expect(config).toMatchObject({
         agent: {
           build: { model: "anthropic/claude-sonnet-4-6" },
-          delivery: { model: "openai/gpt-4.1" },
+          integrity: { model: "openai/gpt-4.1" },
         },
       })
       await page.close()

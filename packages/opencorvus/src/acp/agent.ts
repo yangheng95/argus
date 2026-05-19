@@ -588,7 +588,7 @@ export namespace ACP {
         }
       } catch (e) {
         const error = Message.fromError(e, {
-          providerID: this.config.defaultModel?.providerID ?? "unknown",
+          providerID: "unknown",
         })
         if (LoadAPIKeyError.isInstance(error)) {
           throw RequestError.authRequired()
@@ -660,7 +660,7 @@ export namespace ACP {
         return result
       } catch (e) {
         const error = Message.fromError(e, {
-          providerID: this.config.defaultModel?.providerID ?? "unknown",
+          providerID: "unknown",
         })
         if (LoadAPIKeyError.isInstance(error)) {
           throw RequestError.authRequired()
@@ -705,7 +705,7 @@ export namespace ACP {
         return response
       } catch (e) {
         const error = Message.fromError(e, {
-          providerID: this.config.defaultModel?.providerID ?? "unknown",
+          providerID: "unknown",
         })
         if (LoadAPIKeyError.isInstance(error)) {
           throw RequestError.authRequired()
@@ -770,7 +770,7 @@ export namespace ACP {
         return mode
       } catch (e) {
         const error = Message.fromError(e, {
-          providerID: this.config.defaultModel?.providerID ?? "unknown",
+          providerID: "unknown",
         })
         if (LoadAPIKeyError.isInstance(error)) {
           throw RequestError.authRequired()
@@ -801,7 +801,7 @@ export namespace ACP {
         return result
       } catch (e) {
         const error = Message.fromError(e, {
-          providerID: this.config.defaultModel?.providerID ?? "unknown",
+          providerID: "unknown",
         })
         if (LoadAPIKeyError.isInstance(error)) {
           throw RequestError.authRequired()
@@ -1527,10 +1527,11 @@ export namespace ACP {
     }
   }
 
-  async function defaultModel(config: ACPConfig, cwd?: string) {
-    const configured = config.defaultModel
-    if (configured) return configured
-
+  // R5.1 item 8: the ACP default model has exactly ONE source — the single
+  // `resolveConfiguredModelRef` resolver (session overlay > project base).
+  // The previous `config.defaultModel` short-circuit was a parallel
+  // production model source (rule 8) and is removed (rule 16, no compat).
+  async function defaultModel(_config: ACPConfig, cwd?: string) {
     const directory = cwd ?? process.cwd()
     const { resolveConfiguredModelRef } = await import("@/agent/model")
     return Instance.provide({

@@ -13,8 +13,8 @@ import ARCHITECT_CORE from "@/prompt/core/architect-core.txt"
 import BUILD_CORE from "@/prompt/core/build-core.txt"
 import REQUIREMENTS_CORE from "@/prompt/core/requirements-core.txt"
 import DESIGN_ANALYST_CORE from "@/prompt/core/design-analyst-core.txt"
-import DELIVERY_CORE from "@/prompt/core/delivery-core.txt"
 import INTEGRITY_CORE from "@/prompt/core/integrity-core.txt"
+import ACCEPTANCE_REVIEW_CORE from "@/prompt/core/acceptance-review-core.txt"
 import INTENT_ANALYSIS_CORE from "@/prompt/core/intent-analysis-core.txt"
 import PROSECUTOR_CORE from "@/prompt/core/prosecutor-core.txt"
 import PROMPT_CODING from "./prompt/coding.txt"
@@ -31,7 +31,7 @@ import { MIRROR_ANALYSIS_TOOL_IDS, MIRROR_TOOL_IDS } from "@/mirror/tools/ids"
 const ORCHESTRATOR_RUNTIME_PROMPT = [
   "You are the OpenCorvus Orchestrator.",
   "Follow the per-wake orchestrator instructions and task context supplied by the orchestrator runtime.",
-  "Use only the tools exposed in the current turn. The generic `task` tool is not an orchestrator tool; dispatch work through the explicit workflow tools such as `requirements`, `design_analysis`, `architect`, `build`, `deliver`, and `refine`. You are the only agent-side owner of engine task lifecycle decisions. If you need to offer a separate follow-up engine task, use `propose_task`; never call `task` or control-plane `panel`.",
+  "Use only the tools exposed in the current turn. The generic `task` tool is not an orchestrator tool; dispatch work through the explicit workflow tools such as `requirements`, `design_analysis`, `architect`, `build`, `integrity`, and `refine`. You are the only agent-side owner of engine task lifecycle decisions. If you need to offer a separate follow-up engine task, use `propose_task`; never call `task` or control-plane `panel`.",
 ].join("\n")
 
 const CONTROL_RUNTIME_PROMPT = [
@@ -39,6 +39,8 @@ const CONTROL_RUNTIME_PROMPT = [
   "Follow the per-request control-plane system prompt supplied by the control runtime.",
   "Use only the panel tool exposed in the current turn.",
 ].join("\n")
+
+const INTEGRITY_RUNTIME_PROMPT = [INTEGRITY_CORE, ACCEPTANCE_REVIEW_CORE].join("\n\n")
 
 export namespace Agent {
   export const Info = z
@@ -54,7 +56,7 @@ export namespace Agent {
       // Permission ruleset — consumed only by SessionProcessor / SessionPrompt
       // flow (build / spec / plan / general / explore / compaction / title).
       // Stage agents dispatched through SessionPrompt (orchestrator / requirements /
-      // architect / design-analyst / delivery / summary) do NOT consult
+      // architect / design-analyst / summary) do NOT consult
       // permission; they may omit this field. Code that iterates Agent.Info
       // permission must therefore handle `undefined`.
       permission: PermissionNext.Ruleset.optional(),
@@ -236,31 +238,6 @@ export namespace Agent {
         native: true,
         hidden: true,
       },
-      delivery: {
-        name: "delivery",
-        description: AgentRoleContract.description("delivery"),
-        // Hard step budget. Mirrors EngineConfig.delivery.max_steps (default
-        // 160); SessionLoop reads this value directly. Operators that tune
-        // EngineConfig.delivery.max_steps should also update this — an
-        // EngineConfig-linked dynamic read here would couple the Agent
-        // registry to runtime state (CLAUDE.md rule 26), so we keep both
-        // in sync by convention.
-        steps: 1000,
-        // Delivery has a bounded final-repair lane. Registry mutation tools
-        // (`edit`, `write`, `apply_patch`, `bash`, `task`) are too broad for
-        // that lane, so this stage exposes no registry tools. Its review,
-        // bounded repair, and output tools are injected by
-        // DeliveryAgent.verify via SessionLoop extra tools.
-        tools: { include: [] as string[] },
-        // Permission remains merged for consistency with the shared Agent.Info
-        // shape, but registry tool exposure above is the delivery authority.
-        permission: nonDesignPermissions(),
-        options: {},
-        prompt: DELIVERY_CORE,
-        mode: "primary",
-        native: true,
-        hidden: true,
-      },
       orchestrator: {
         name: "orchestrator",
         description: AgentRoleContract.description("orchestrator"),
@@ -302,11 +279,10 @@ export namespace Agent {
             "design_analysis",
             "architect",
             "integrity",
-            "deliver",
             "prosecute",
-            "publish_delivery",
             "propose_task",
             "analyze_intent",
+            "explore",
             "modify_goal",
             "refine",
             "restart_from_stage",
@@ -388,7 +364,7 @@ export namespace Agent {
         // design-analyst is the only stage that owns mirror extraction.
         // Requirements / architect / build consume the persisted SPEC and
         // visual specs rather than calling mirror tools themselves.
-        // Render/evaluate/diff/judge mirror tools are delivery quality-gate
+        // Render/evaluate/diff/judge mirror tools are acceptance quality
         // surfaces, not PRD/SPEC extraction surfaces, so they stay out of
         // design-analysis to prevent implementation-style score loops.
         tools: {
@@ -432,8 +408,9 @@ export namespace Agent {
       integrity: {
         name: "integrity",
         description: AgentRoleContract.description("integrity"),
+        prompt: INTEGRITY_RUNTIME_PROMPT,
         steps: 1000,
-        // Verdict tools are injected per run; registry tools only bloat the schema.
+        // Verdict and acceptance tools are injected per run; registry tools only bloat the schema.
         tools: { include: [] as string[] },
         options: {},
         mode: "primary",
@@ -450,7 +427,7 @@ export namespace Agent {
         // prosecutor/agent.ts. Registry tools (read/edit/bash/mirror/...)
         // have no role here; without this empty include the prosecutor would
         // pull in the full registry and bloat its system prompt with ~30
-        // unused tool schemas. Mirrors integrity / delivery contract.
+        // unused tool schemas. Mirrors integrity's scoped-tool contract.
         tools: { include: [] as string[] },
         options: {},
         mode: "primary",
@@ -521,14 +498,11 @@ export namespace Agent {
     requirements: REQUIREMENTS_CORE,
     "design-analyst": DESIGN_ANALYST_CORE,
     "intent-analysis": INTENT_ANALYSIS_CORE,
-    integrity: INTEGRITY_CORE,
+    integrity: INTEGRITY_RUNTIME_PROMPT,
     prosecutor: PROSECUTOR_CORE,
   }
 
-  /** Returns the built-in default prompt for a native agent (before config overrides).
-   *  `delivery` is resolved lazily inside state() (async import) so its prompt
-   *  is stamped directly on the Agent.Info row and read by the catalog via
-   *  `agent.prompt` rather than this helper. */
+  /** Returns the built-in default prompt for a native agent (before config overrides). */
   export function nativeDefaultPrompt(name: string): string | undefined {
     return NATIVE_DEFAULTS[name]
   }

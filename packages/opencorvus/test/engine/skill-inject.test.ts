@@ -48,14 +48,14 @@ describe("deriveUrlSignals", () => {
 })
 
 describe("resolveStageSkills", () => {
-  test("always prepends the stage invariant for delivery, even with zero skills matched", async () => {
+  test("always prepends the stage invariant for acceptance, even with zero skills matched", async () => {
     await using tmp = await tmpdir()
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const result = await resolveStageSkills([], "delivery", undefined)
+        const result = await resolveStageSkills([], "acceptance", undefined)
         expect(result.prompt).toContain("Skill-system invariants")
-        expect(result.prompt).toContain("tool_call_evidence")
+        expect(result.prompt).toContain("acceptance-stage skill")
       },
     })
   })

@@ -95,3 +95,83 @@ canonical schema（保持不变，单一来源）：
 - 上述测试全绿。
 - 二次复核（rule 24）：codex review 确认无双源残留、无 curated 路径残留、
   无对模型隐藏的 `z.unknown()` goal-contract 入参。
+
+---
+
+## 6. 审计反馈修订（2026-05-19 — 4-agent 全域 schema 审计 + register_contract 死循环实证；禁止静默重写本段以上原决策，rule 35 末条）
+
+### 6.1 §2 核心假设被实证证伪
+
+§2 原文断言："可见的 discriminated union 本身已告诉模型 `type` 合法值与各自形状，
+curated scorer 提示随之冗余 …… repairToolCall 返回 null → 模型读后重试"。
+
+实证证伪（task `tsk_e3f3a5e13001sIKjGs1nVHLkBD`，architect 真实运行）：
+`register_contract` 注册 `type` 合约时，`ir`（`ContractIRSchema` 嵌套
+`ValueDomainSchema`，`architect/contract-ir.ts:5,52`）连续 9 次判别值猜错
+（`ir.kind` 猜 `interface`/`struct`，`valueDomain.kind` 猜 `primitive`/`brand`，
+全部 schema 外），**后 6 次逐字节相同**，architect 死循环、task 永久卡死。
+
+根因（逐项实测）：
+- `z.toJSONSchema(ContractIRSchema).anyOf[].properties.kind.const` 实测 =
+  `["type","function","enum"]`——合法值**在给模型的 JSON Schema 里可见**。
+  故 §2 "schema 可见即够" 的前半不成立：可见 ≠ 模型据此自纠。
+- zod4 `z.discriminatedUnion` 失配只产唯一 issue
+  `{"code":"invalid_union","errors":[],"note":"No matching discriminator",
+  "discriminator":"kind","path":[...]}`——**结构性不含合法判别值**。
+- `session/llm.ts` `experimental_repairToolCall` 对该错 `return null`，AI SDK
+  把上面那段裸 JSON 原样回灌模型；模型无新信息 → 同输入重试 → 死循环。
+  §2 "repair 返回 null → 模型读后重试" 对**非判别联合** Zod 错（`min`/类型错，
+  文本自带信息）成立，对 `z.discriminatedUnion` 失配**不成立**。
+
+### 6.2 §3 的 rule 35 穷举遗漏
+
+§3 调用点表只 grep 了 goal-contract 符号，**未 grep
+`register_contract`/`ContractIRSchema`/`ValueDomainSchema`**。§2"删 curated 提示"
+决策据此外推到从未审计的 `register_contract.ir` 字段——本段即 rule 35
+"遗漏一处即 rule 8 违规" 的实例。同源风险面（同一 canonical schema / 同一
+`ContractIR` 树，4-agent 审计确认）：orchestrator `modify_goal`
+（`orchestrator/tools.ts` → `GoalContractUpdateSchema` → `AcceptanceSpecSchema`）、
+integrity `submit_<dimension>_verdict`
+（`integrity/agent.ts` → `graph_corrections[].contract.ir` → 同 `ContractIRSchema`）。
+
+### 6.3 例外条款（补强 §2，方向不变、不回退 curated 业务校验）
+
+§2 "纯 schema 方案 / inputSchema = canonical schema / 不要 host 端 curated
+业务校验" **保持不变且正确**（消 rule 8/9 双源）。本次仅补一条 §2 未覆盖的例外：
+
+> **discriminated-union（含嵌套）拒绝不得依赖裸 `return null`。**
+> `experimental_repairToolCall` 检出 `InvalidToolInputError` 且 issue 为
+> `invalid_union`/`No matching discriminator` 时，必须从 SDK 回调提供的
+> `inputSchema({toolName})` JSON Schema **现取**失败 `path` 处
+> `anyOf[].properties[<discriminator>].const` 合法值集合，`throw` 携带
+> 合法值的 Error（SDK 包成 `ToolCallRepairError`，`.message =
+> "Error repairing tool call: …"`，经现有下游成为模型可读 tool-error）。
+
+此例外符合：rule 6.1（schema 仍是唯一数据闸门，host 仅把闸门拒绝原因翻译为
+合法值清单 = 数据完整性反馈，非状态机教路）；rule 8（合法值运行时从 schema
+现取，不另维护枚举）；rule 15（同一条真实 tool-error，非合成/隐藏/双路）。
+通道层单点修复，对所有 agent 的所有 discriminated-union 工具一并生效（rule 4）。
+落点是 `@/llm/api` streamText wrapper（`createToolCallRepair` 单一来源），覆盖
+**src/ 生产**的每一个 streamText 调用（架构师 / 编排器 / build / integrity /
+delivery walkthrough 翻译等）。明确豁免（rule 35 末条，不静默）：
+`script/cache-probe/` 下的一次性诊断脚本（如 `trace-aisdk-wire.ts`）有意 import
+raw SDK 以观测**未包装**的 wire 行为，不在此单一来源范围内，强行包装会破坏其
+探针目的；`src/**` 的 raw `import {…streamText…} from "ai"` 由回归测试结构性
+锁死（仅 wrapper 自身 `llm/api.ts` 合法）。
+
+### 6.4 配套（纵深防御，非根治；rule 6.1 prompt-over-host）
+
+- canonical schema 判别分支补 `.describe()`（`contract-ir.ts`
+  `ContractIRSchema`/`ValueDomainSchema`、`acceptance/types.ts`
+  `ScorerSchema`/`HeuristicScorer.spec`），单一来源、integrity/orchestrator import 复用。
+- `architect-core.txt` 像 scorer（line 53-58）那样写清 `ir`/`valueDomain` 形状
+  + 一个完整 `type` contract worked example；`orchestrator-core.txt`
+  /`integrity-core.txt` 补对应黑盒字段。prompt 不手抄枚举，测试锁 prompt↔schema 一致。
+
+### 6.5 受影响测试增量（在 §4 基础上追加，rule 28/36）
+
+断"旧行为消失"而非仅"新行为对"：repair 对 `invalid_union` **不再 return null**
+（裸 JSON 不再直达模型）；`register_contract` 传 `ir.kind:"interface"` →
+repair 产出 error message 含 `type`/`function`/`enum`；`valueDomain.kind:"primitive"`
+→ 含 `open|literal_union|branded|numeric_range|ref`；`architect-core.txt` 的
+`kind` 枚举 == `ArchitectContractKindSchema` 逐值相等（锁 rule 8 双源不漂移）。

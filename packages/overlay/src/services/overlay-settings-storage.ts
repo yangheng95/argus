@@ -41,6 +41,7 @@ export function loadBrowserOverlaySettings(): BrowserOverlaySettings {
     password: read("oc_password") || "",
     username: read("oc_username") || "opencorvus",
     executor: read("oc_executor") || undefined,
+    projectEditor: read("oc_project_editor") || undefined,
     initGit: true,
     sidebarCollapsed: read("oc_sidebar_collapsed") === "true",
     rightPanelCollapsed: read("oc_right_panel_collapsed") === "true",
@@ -64,6 +65,7 @@ export function saveBrowserOverlaySettings(input: BrowserOverlaySettings): boole
   write("oc_password", input.password ?? "");
   write("oc_username", input.username ?? "opencorvus");
   write("oc_executor", input.executor ?? "opencorvus");
+  write("oc_project_editor", input.projectEditor ?? "vscode");
   write("oc_sidebar_collapsed", input.sidebarCollapsed === true);
   write("oc_right_panel_collapsed", input.rightPanelCollapsed === true);
   writeOptional("oc_sidebar_width", input.sidebarWidth);

@@ -25,7 +25,6 @@ const promptDir = path.join(repoRoot, "packages/opencorvus/src/prompt/core")
 const AGENT_PROMPTS = [
   "architect-core.txt",
   "build-core.txt",
-  "delivery-core.txt",
   "design-analyst-core.txt",
   "integrity-core.txt",
   "intent-analysis-core.txt",

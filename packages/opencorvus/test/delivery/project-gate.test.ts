@@ -659,9 +659,9 @@ await new Promise(() => {});
       claim: expect.stringContaining("hardcoded secret-like value"),
     })
     expect(manifest.finalGate.failedReviewIds).toContain("specialist:security_data")
-    // Specialist reviews are advisory under the current model. The host gate
-    // stays `passed`; the security_data finding surfaces in failedReviewIds
-    // + auxiliaryFailureIds for the LLM agent to weigh.
+    // Specialist reviews are advisory under the current model. The evidence
+    // status stays `passed`; the security_data finding surfaces in
+    // failedReviewIds + auxiliaryFailureIds for acceptance review to weigh.
     expect(manifest.functionalAssessment?.primaryFailureIds).not.toContain("specialist:security_data")
     expect(manifest.functionalAssessment?.auxiliaryFailureIds).toContain("specialist:security_data")
     expect(manifest.finalGate.status).toBe("passed")

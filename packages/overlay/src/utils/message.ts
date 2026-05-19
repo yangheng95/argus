@@ -18,7 +18,6 @@ export type AgentRole =
   | "goal"
   | "executor"
   | "evaluator"
-  | "delivery"
   | "build"
   | "integrity"
   | "system";
@@ -35,7 +34,6 @@ export const AGENT_CARD_STAGES = new Set<AgentRole>([
   "goal",
   "executor",
   "evaluator",
-  "delivery",
   "build",
   "integrity",
 ]);
@@ -61,7 +59,8 @@ export function normalizeAgentRole(name: string): AgentRole {
       text === "opencorvus" || text === "codex" || text === "claude-code") return "executor";
   if (text === "judge" || text === "evaluator" || text === "evaluation" || text === "eval" ||
       text === "scheduler" || text === "review" || text === "evaluate") return "evaluator";
-  if (text === "delivery" || text === "deliver" || text === "files" || text === "publish") return "delivery";
+  if (text === "delivery" || text === "deliver" || text === "publish") return "assistant";
+  if (text === "files") return "assistant";
   if (text === "integrity") return "integrity";
   if (text === "system" || text === "compaction" || text === "title" || text === "summary") return "system";
   return "assistant";
@@ -80,7 +79,6 @@ export function agentRoleToSectionPhase(role: AgentRole): string {
   if (role === "goal") return "goals";
   if (role === "executor") return "executor";
   if (role === "evaluator") return "evaluation";
-  if (role === "delivery") return "files";
   return "";
 }
 
@@ -123,7 +121,6 @@ export function roleLabel(role: string): string {
   if (role === "architect") return t("chat.role.architect");
   if (role === "planner") return t("chat.role.planner");
   if (role === "evaluator") return t("chat.role.evaluator");
-  if (role === "delivery") return t("chat.role.delivery");
   if (role === "spec") return t("chat.role.spec");
   if (role === "system") return t("chat.role.system");
   if (role === "goal" || role === "goal_gate") return t("chat.role.goal");
@@ -183,7 +180,6 @@ export function agentStageLabel(stage: string): string {
   if (role === "planner") return t("chat.role.planner");
   if (role === "goal") return t("chat.role.goal");
   if (role === "evaluator") return t("chat.role.evaluator");
-  if (role === "delivery") return t("chat.role.delivery");
   if (role === "executor") return t("chat.role.executor");
   if (role === "build") return t("chat.role.build");
   if (role === "integrity") return t("chat.role.integrity");

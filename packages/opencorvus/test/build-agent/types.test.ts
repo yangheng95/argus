@@ -130,10 +130,10 @@ describe("BuildResultSchema", () => {
     expect(parsed.success).toBe(true)
   })
 
-  test("accepts passed no-edit analysis result with empty files_changed", () => {
+  test("accepts passed no-change implementation result with empty files_changed", () => {
     const parsed = BuildResultSchema.safeParse({
       status: "passed",
-      summary: "Completed read-only KeyStatistics component analysis; no project files changed",
+      summary: "Verified the requested behavior was already implemented; no project files changed",
       files_changed: [],
       tests: [],
     })

@@ -2,7 +2,7 @@
  * EvaluationCriteriaPanel
  *
  * Renders the task-level rollup of every quality criterion that touched the
- * task — per-goal evaluator outcomes, delivery agent verifications, and
+ * task — per-goal evaluator outcomes, integrity acceptance review, and
  * external quality gates (e.g. visual-diff). Data comes from
  * `board.criteriaResults`, which the backend assembles from
  * `task.metadata.criteria_results`.
@@ -12,7 +12,7 @@
  * it back as a data-driven view: whatever the backend reports gets grouped
  * by `family` and displayed with status + evidence. There is no client-side
  * list of "known checks" — the source of truth is whoever recorded the
- * criterion (delivery agent, benchmark, etc).
+ * criterion (integrity review, benchmark, etc).
  */
 import { For, Show } from "solid-js";
 import { familyOrder, familyLabel } from "../utils/criteria";

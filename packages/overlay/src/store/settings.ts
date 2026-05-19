@@ -3,7 +3,7 @@
 
 import { createStore } from "solid-js/store";
 import { DEFAULT_SERVER } from "../services/default-server";
-import { getHostTransport } from "../services/host-transport";
+import { PROJECT_EDITOR_IDS, getHostTransport, type ProjectEditorID } from "../services/host-transport";
 import { requireInitialVsCodeHostTheme } from "../services/host-theme";
 import { DEFAULT_THEME_ID, sanitizeThemeForHost } from "../services/theme-registry";
 import { sanitizeLocale } from "../utils/i18n";
@@ -28,6 +28,7 @@ export interface OverlaySettings {
   password: string;
   username: string;
   executor: ExecutorID;
+  projectEditor: ProjectEditorID;
   initGit: boolean;
   sidebarCollapsed: boolean;
   rightPanelCollapsed: boolean;
@@ -115,6 +116,11 @@ export function sanitizeExecutor(value: any): ExecutorID {
   return DEFAULT_SETTINGS.executor;
 }
 
+export function sanitizeProjectEditor(value: any): ProjectEditorID {
+  const text = String(value || "").trim();
+  return PROJECT_EDITOR_IDS.includes(text as ProjectEditorID) ? text as ProjectEditorID : "vscode";
+}
+
 // ── Default locale ──
 
 const DEFAULT_LOCALE = sanitizeLocale(
@@ -135,6 +141,7 @@ export const DEFAULT_SETTINGS: OverlaySettings = {
   password: "",
   username: "opencorvus",
   executor: "opencorvus",
+  projectEditor: "vscode",
   initGit: true,
   sidebarCollapsed: false,
   rightPanelCollapsed: false,
@@ -201,6 +208,8 @@ export function applySettings(input: Partial<OverlaySettings>): void {
         : DEFAULT_SETTINGS.username,
     executor:
       sanitizeExecutor(input?.executor),
+    projectEditor:
+      sanitizeProjectEditor(input?.projectEditor),
     initGit: true,
     sidebarCollapsed: input?.sidebarCollapsed === true,
     rightPanelCollapsed: input?.rightPanelCollapsed === true,
@@ -297,6 +306,7 @@ export function bootstrapOverlaySettings(
     password: input.password ?? DEFAULT_SETTINGS.password,
     username: input.username ?? DEFAULT_SETTINGS.username,
     executor: sanitizeExecutor(input.executor),
+    projectEditor: sanitizeProjectEditor(input.projectEditor),
     initGit: true,
     sidebarCollapsed: input.sidebarCollapsed ?? DEFAULT_SETTINGS.sidebarCollapsed,
     rightPanelCollapsed: input.rightPanelCollapsed ?? DEFAULT_SETTINGS.rightPanelCollapsed,

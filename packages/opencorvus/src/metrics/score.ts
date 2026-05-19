@@ -47,10 +47,10 @@ export interface SnapshotInput {
 
 /**
  * Materialise an IterationSnapshot. The returned row has arbiter_verdict set
- * to a placeholder "continue"; the caller projects the delivery agent's own
+ * to a placeholder "continue"; the caller projects the acceptance review's own
  * verdict (accepted → "accept", otherwise "continue") onto this column before
  * persisting. The deterministic `arbitrate()` function that used to re-derive
- * this value was retired — verdict ownership moved to the delivery agent
+ * this value was retired — verdict ownership moved to integrity acceptance review
  * (CLAUDE.md rule 23: no coded state machines).
  */
 export function computeIterationSnapshot(input: SnapshotInput): IterationSnapshot {

@@ -1,9 +1,5 @@
-import { afterEach, beforeEach, expect, mock, spyOn, test } from "bun:test"
-import { DeliveryAgent } from "../../src/delivery/agent"
+import { afterEach, beforeEach, expect, mock, test } from "bun:test"
 import { DeliveryService } from "../../src/delivery/service"
-import * as ProjectGate from "../../src/delivery/checks/project-gate"
-import type { DeliveryEvidenceManifest } from "../../src/delivery/manifest"
-import type { DeliveryVerdictType } from "../../src/delivery/verdict"
 import { EngineArtifactTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import { updateEvaluationFromDeliveryVerdict } from "../../src/engine/persist"
 import { ProtocolStore } from "../../src/protocol/store"
@@ -55,21 +51,17 @@ test("updateEvaluationFromDeliveryVerdict emits one evaluation.completed event",
   expect(ProtocolStore.listTaskEvents(taskID).filter((item) => item.type === "evaluation.completed")).toHaveLength(1)
 })
 
-test("DeliveryService.verify emits one delivery.gate.rejected at final host-gate rejection", async () => {
+test("DeliveryService.verify is retired and emits no legacy gate event", async () => {
   await using tmp = await tmpdir({ git: true })
-  spyOn(DeliveryAgent, "verify").mockResolvedValue(agentAccepted())
-  spyOn(ProjectGate, "buildDeliveryEvidenceManifest")
-    .mockResolvedValueOnce(failedManifest(`art_notification_manifest_1_${taskID}`))
-    .mockResolvedValueOnce(failedManifest(`art_notification_manifest_2_${taskID}`))
 
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      const verdict = await DeliveryService.verify({
+      await expect(DeliveryService.verify({
         task: {
           id: taskID,
           title: "Notification publisher",
-          request: "Deliver with a host gate failure.",
+          request: "Verify retired delivery service.",
         },
         goals: [goal()],
         delivery: {
@@ -78,24 +70,11 @@ test("DeliveryService.verify emits one delivery.gate.rejected at final host-gate
         },
         runID,
         iteration: 3,
-      })
-      expect(verdict.verdict).toBe("rejected")
+      })).rejects.toThrow("DeliveryService.verify is retired")
     },
   })
 
-  const event = await waitForEvent("delivery.gate.rejected")
-  expect(event?.payload).toMatchObject({
-    taskID,
-    runID,
-    iteration: 3,
-    violations: [
-      {
-        kind: "manifest",
-        detail: expect.stringContaining("Delivery evidence gate failed"),
-      },
-    ],
-  })
-  expect(ProtocolStore.listTaskEvents(taskID).filter((item) => item.type === "delivery.gate.rejected")).toHaveLength(1)
+  expect(ProtocolStore.listTaskEvents(taskID).filter((item) => item.type === "delivery.gate.rejected")).toHaveLength(0)
 })
 
 function seedTask() {
@@ -155,21 +134,12 @@ async function waitForEvent(type: string) {
   return ProtocolStore.listTaskEvents(taskID).find((item) => item.type === type)
 }
 
-function agentAccepted(): DeliveryVerdictType {
-  return {
-    verdict: "accepted",
-    summary: "Agent accepted the delivery.",
-    deferred_checks: [],
-    tool_call_evidence: [],
-  }
-}
-
 function goal() {
   return {
     id: "gol_notification",
     title: "Notification goal",
-    description: "Trigger host gate rejection.",
-    criteria: "Host gate emits notification event.",
+    description: "Exercise retired delivery service.",
+    criteria: "No legacy gate event is emitted.",
     priority: "blocking" as const,
     acceptance_spec_count: 1,
     acceptance_scenarios: [],
@@ -179,28 +149,5 @@ function goal() {
     imports: [],
     exports: [],
     owned_paths: ["src/App.tsx"],
-  }
-}
-
-function failedManifest(id: string): DeliveryEvidenceManifest {
-  return {
-    id,
-    iteration: 3,
-    requiredChecks: [],
-    checkResults: [],
-    goalCoverage: [],
-    requirementCoverage: [],
-    runtimeFlows: [],
-    reviewEvidence: [],
-    changedFiles: ["src/App.tsx"],
-    finalGate: {
-      status: "failed",
-      summary: "Delivery evidence gate failed acceptance coverage.",
-      failedCheckIds: [],
-      failedCoverageIds: ["coverage:goal"],
-      failedRuntimeFlowIds: [],
-      failedReviewIds: [],
-    },
-    timeCreated: Date.now(),
   }
 }

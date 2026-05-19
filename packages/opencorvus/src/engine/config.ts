@@ -1,7 +1,7 @@
 /**
  * EngineConfig — 编排 agent 的统一配置中心
  *
- * 所有 agent（requirements / architect / delivery）和编排策略的默认值
+ * 所有 agent（requirements / architect / integrity）和编排策略的默认值
  * 集中定义在此，并从 opencorvus.jsonc 的 `assistant` 字段加载用户自定义值。
  *
  * 优先级：opencorvus.jsonc > 此处硬编码默认值
@@ -25,21 +25,6 @@ interface RequirementsConfig {
 
 interface ArchitectConfig {
   max_steps: number
-  skills: string[]
-}
-
-/**
- * Evaluator config — controls the deterministic per-goal check pipeline
- * (build / test / lint / spec heuristics in `delivery/checks/per-goal.ts`).
- *
- * NOTE: there is no longer an "evaluator agent" — that LLM agent was
- * collapsed into the delivery agent. What remains is purely deterministic
- * runner config: which check tier to apply and whether to run them inside
- * the goal-pool dispatch loop.
- */
-interface DeliveryConfig {
-  max_steps: number
-  max_retries: number
   skills: string[]
 }
 
@@ -140,11 +125,10 @@ interface DebugConfig {
 }
 
 export interface EngineConfigType {
-  /** Enable host-driven repair iteration after rejected deliveries / failed waves. Default: false. */
+  /** Enable host-driven repair iteration after failed waves. Default: false. */
   auto_iteration: boolean
   requirements: RequirementsConfig
   architect: ArchitectConfig
-  delivery: DeliveryConfig
   delivery_visual: DeliveryVisualConfig
   design_analyst: DesignAnalystConfig
   intent_analysis: IntentAnalysisConfig
@@ -163,7 +147,7 @@ export interface EngineConfigType {
 // ═══════════════════════════════════════════════════════════════════
 
 const DEFAULTS: EngineConfigType = {
-  // Default off: delivery rejection is a visible endpoint unless an operator
+  // Default off: failed waves are visible endpoints unless an operator
   // explicitly enables OpenCorvus' host-side algorithmic rework loop.
   auto_iteration: false,
   // Step budgets sized for sonnet-tier sub-agents on large PRDs.
@@ -178,11 +162,6 @@ const DEFAULTS: EngineConfigType = {
   },
   architect: {
     max_steps: 1000,
-    skills: [],
-  },
-  delivery: {
-    max_steps: 1000,
-    max_retries: 2,
     skills: [],
   },
   delivery_visual: {
@@ -284,11 +263,6 @@ function merge(user?: Config.Info["assistant"]): EngineConfigType {
     architect: {
       max_steps: user?.architect?.max_steps ?? DEFAULTS.architect.max_steps,
       skills: user?.architect?.skills ?? DEFAULTS.architect.skills,
-    },
-    delivery: {
-      max_steps: user?.delivery?.max_steps ?? DEFAULTS.delivery.max_steps,
-      max_retries: user?.delivery?.max_retries ?? DEFAULTS.delivery.max_retries,
-      skills: user?.delivery?.skills ?? DEFAULTS.delivery.skills,
     },
     delivery_visual: {
       phash_hamming_max:

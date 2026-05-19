@@ -137,15 +137,17 @@ describe("overlay contract", () => {
           }
         }
 
-        // direct workflow specifically — optional intent check, then build → deliver
+        // direct workflow specifically — optional intent check, then build
         const direct = list.find((w) => w.id === "direct")!
-        expect(direct.steps.map((s) => s.id)).toEqual(["analyze_intent", "build", "deliver"])
+        expect(direct.steps.map((s) => s.id)).toEqual(["analyze_intent", "build"])
 
-        // pipeline workflow — has goal-scope build step
+        // pipeline workflow — has goal-scope build step and final integrity gate
         const pipeline = list.find((w) => w.id === "pipeline")!
         expect(pipeline.goalLoopStepIDs).toContain("build")
         const buildStep = pipeline.steps.find((s) => s.id === "build")
         expect(buildStep?.scope).toBe("goal")
+        expect(pipeline.steps.at(-1)?.id).toBe("integrity")
+        expect(pipeline.steps.some((s) => s.id === "deliver")).toBe(false)
       },
     })
   })

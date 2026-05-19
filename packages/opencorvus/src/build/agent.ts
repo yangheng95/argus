@@ -35,7 +35,7 @@ import { AgentRunError, runAgentSession } from "@/agent/runner"
 import { Agent } from "@/agent/agent"
 import { Instance } from "@/project/instance"
 import { Session } from "@/session"
-import { SessionContext } from "@/session/context"
+import { resolveSessionOverlay } from "@/agent/model"
 import { SessionStatus } from "@/session/status"
 import { Worktree } from "@/worktree"
 import { BuildSemaphore } from "@/engine/build-semaphore"
@@ -158,8 +158,8 @@ export namespace BuildAgent {
       depends_on: string[]
     }>
     /** Pre-formatted multimodal file parts produced by upstream evidence —
-     *  typically the previous attempt's rendered.png from delivery's visual
-     *  hard gate so the build LLM can see what it actually produced versus
+     *  typically the previous attempt's rendered.png from acceptance visual
+     *  evidence so the build LLM can see what it actually produced versus
      *  the user reference. Each entry's `url` MUST be the canonical
      *  `/attachment/<projectID>/<name>` URL; AttachmentStore is the single
      *  source that reads bytes and splices them into the user message after
@@ -509,7 +509,7 @@ export namespace BuildAgent {
             "Both facts are returned to the orchestrator alongside your report (merge_back_status, actual_changed_files), " +
             "so the orchestrator LLM cross-checks honesty itself. " +
             "Be honest: if you changed project files but didn't merge, report status='failed' with a concrete error. " +
-            "If you legitimately reused a prior attempt's worktree without further edits, or completed an explicit no-edit analysis request with a clean worktree, status='passed' with files_changed=[] is fine.",
+            "If you legitimately reused a prior attempt's worktree without further edits, or the scoped implementation was already satisfied with a clean worktree, status='passed' with files_changed=[] is fine.",
           inputSchema: BuildResultSchema,
           execute: async (result) => {
             const parsedResult = BuildResultSchema.safeParse(result)
@@ -1204,8 +1204,7 @@ export function renderBuildAutoIterationMode(autoIteration: boolean): string {
 /** Single composition point for the Build session core: role/mechanism core +
  * the shared engineering-craft fragment + the dynamic auto-iteration mode.
  * Exported so the composition (and the single-source craft injection) is
- * directly assertable instead of grepping the call site (rule 9 — symmetric
- * with delivery's DELIVERY_AGENT_SYSTEM). */
+ * directly assertable instead of grepping the call site (rule 9). */
 export function composeBuildCore(autoIteration: boolean): string {
   return [BUILD_CORE, ENGINEERING_CRAFT, renderBuildAutoIterationMode(autoIteration)].join("\n\n")
 }
@@ -1427,7 +1426,7 @@ async function runWithExternalProviderImpl(args: {
   const orchCfg = await EngineConfig.get()
   const buildAgent = await Agent.get("build")
   const userAppend = buildAgent
-    ? Agent.resolveSessionAgent(buildAgent, SessionContext.overlay()).promptAppend
+    ? Agent.resolveSessionAgent(buildAgent, await resolveSessionOverlay()).promptAppend
     : undefined
   const buildSkillsCfg = (orchCfg as unknown as { build?: { skills?: string[] } }).build?.skills ?? []
   const { resolveStageSkills } = await import("@/engine/skill-inject")
@@ -2362,7 +2361,7 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
     "",
     "Orchestrator is asking build to implement this request, verify it, and report the result.",
     "If the request depends on screenshots, webpage references, uploaded visuals, or staged `references/` files, those references are authoritative and the implementation must restore them 1:1 rather than treating them as inspiration.",
-    'If this request explicitly asks only for exploration, investigation, or analysis and says not to generate code, keep the worktree clean, skip commit / merge_back, and report the findings through the terminal build report with `status="passed"` and `files_changed: []`.',
+    "This direct request path is for implementation/rework. If the prompt is only repository investigation and does not ask you to change project behavior, fail through the terminal build report with a concrete error that says Build is the wrong stage.",
     "",
     ...contextLines,
     "# Request",

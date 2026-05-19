@@ -135,6 +135,111 @@ describe("resolveAgentModelRef — single source + session overlay", () => {
     })
   })
 
+  test("explicit taskID root overlay wins over ambient child session context", async () => {
+    await using tmp = await tmpdir({ config: { model: "base/top" } })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const taskRoot = await Session.create({ kind: "root", title: "task root overlay" })
+        await Session.mergeConfigOverlay({
+          sessionID: taskRoot.id,
+          patch: { model: "task/top" },
+        })
+        const ambientRoot = await Session.create({ kind: "root", title: "ambient root overlay" })
+        await Session.mergeConfigOverlay({
+          sessionID: ambientRoot.id,
+          patch: { model: "ambient/top" },
+        })
+        const ambientChild = await Session.create({
+          kind: "build",
+          parentID: ambientRoot.id,
+          title: "ambient child",
+        })
+        const taskID = "task-model-overlay-ambient-precedence"
+        Database.use((db) =>
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: taskRoot.id,
+              title: "task overlay",
+              request: "task overlay",
+            })
+            .run(),
+        )
+
+        const { resolveConfiguredModelRef } = await import("../../src/agent/model")
+        const ref = await SessionContext.provide(ambientChild, () => resolveConfiguredModelRef({ taskID }))
+        expect(ref).toEqual({ providerID: "task", modelID: "top" })
+      },
+    })
+  })
+
+  test("taskID with null task.session_id is a hard error, not project-base fallback", async () => {
+    await using tmp = await tmpdir({ config: { model: "base/top" } })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const taskID = "task-model-overlay-null-session"
+        Database.use((db) =>
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: null,
+              title: "orphaned task",
+              request: "orphaned task",
+            })
+            .run(),
+        )
+
+        const { resolveConfiguredModelRef } = await import("../../src/agent/model")
+        await expect(resolveConfiguredModelRef({ taskID })).rejects.toThrow("engine_task.session_id is null")
+      },
+    })
+  })
+
+  test("taskID and sessionID reject only when they resolve to different roots", async () => {
+    await using tmp = await tmpdir({ config: { model: "base/top" } })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const taskRoot = await Session.create({ kind: "root", title: "task root overlay" })
+        await Session.mergeConfigOverlay({ sessionID: taskRoot.id, patch: { model: "task/top" } })
+        const otherRoot = await Session.create({ kind: "root", title: "other root overlay" })
+        const otherChild = await Session.create({
+          kind: "build",
+          parentID: otherRoot.id,
+          title: "other child",
+        })
+        const taskID = "task-model-overlay-conflicting-session"
+        Database.use((db) =>
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: taskRoot.id,
+              title: "task overlay",
+              request: "task overlay",
+            })
+            .run(),
+        )
+
+        const { resolveConfiguredModelRef } = await import("../../src/agent/model")
+        await expect(resolveConfiguredModelRef({ taskID, sessionID: taskRoot.id })).resolves.toEqual({
+          providerID: "task",
+          modelID: "top",
+        })
+        await expect(resolveConfiguredModelRef({ taskID, sessionID: otherChild.id })).rejects.toThrow(
+          "Contradictory model-resolution inputs",
+        )
+      },
+    })
+  })
+
   test("no model anywhere → MissingModelConfigError (no DEFAULT_MODEL / history fallback)", async () => {
     await using tmp = await tmpdir()
     mock.module("../../src/config/config", () => ({

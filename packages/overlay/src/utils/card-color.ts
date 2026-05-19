@@ -18,7 +18,6 @@ const KNOWN_STAGES = new Set([
   "executor",
   "build",
   "evaluator",
-  "delivery",
   "integrity",
   "tool",
 ]);

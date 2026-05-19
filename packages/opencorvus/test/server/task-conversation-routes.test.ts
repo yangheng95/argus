@@ -56,6 +56,13 @@ describe("task conversation routes", () => {
           sessionID: session.id,
           verdict: "pass",
           summary: "faithful",
+          acceptance: {
+            verdict: "accepted",
+            summary: "Acceptance passed",
+            deferred_checks: [],
+            tool_call_evidence: [{ tool: "unit_test", passed: true, detail: "unit test passed" }],
+            rejection_details: [],
+          },
           dimensions: [
             {
               id: "requirement_fidelity",
@@ -261,6 +268,17 @@ describe("task conversation routes", () => {
           kind: "root",
           title: "task root",
         })
+        await Session.mergeConfigOverlay({
+          sessionID: root.id,
+          patch: {
+            model: "overlay/default",
+            agent: {
+              build: {
+                model: "overlay/build",
+              },
+            },
+          },
+        })
         const requirements = await Session.create({
           kind: "requirements",
           parentID: root.id,
@@ -359,7 +377,8 @@ describe("task conversation routes", () => {
           },
           retryCount: 2,
         })
-        expect(message.info.variant).toBe("worker")
+        expect(message.info.model).toEqual({ providerID: "overlay", modelID: "build" })
+        expect(message.info.variant).toBeUndefined()
         expect(message.info.extra?.resume_scope).toBe("requirements")
         expect(message.parts[0]?.type).toBe("text")
         const part = message.parts[0]

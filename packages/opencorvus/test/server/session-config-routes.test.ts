@@ -1,6 +1,12 @@
-import { describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, test } from "bun:test"
 import { readFile } from "fs/promises"
 import path from "path"
+import { Instance } from "../../src/project/instance"
+import { Session } from "../../src/session"
+import { SessionTable } from "../../src/session/session.sql"
+import { Database, eq } from "../../src/storage/db"
+import { resetDatabase } from "../fixture/db"
+import { tmpdir } from "../fixture/fixture"
 
 const ROOT = path.resolve(import.meta.dir, "..", "..", "..", "..")
 
@@ -9,6 +15,10 @@ async function repoFile(...parts: string[]) {
 }
 
 describe("session config route contract", () => {
+  afterEach(async () => {
+    await resetDatabase()
+  })
+
   test("Session.mergeConfigOverlay is a transaction-local read/merge/write path", async () => {
     const source = await repoFile("packages", "opencorvus", "src", "session", "index.ts")
     const start = source.indexOf("export const mergeConfigOverlay")
@@ -16,6 +26,8 @@ describe("session config route contract", () => {
     const body = source.slice(start, source.indexOf("export const setArchived", start))
 
     expect(body).toContain("Database.transaction")
+    expect(body).toContain("assertConfigurableRoot")
+    expect(body).toContain("assertNoStoredConfigOverlayNull")
     expect(body).toContain("Config.Overlay.parse")
     expect(body).toContain("Config.mergeOverlay")
     expect(body).toContain("configOverlay: nextOverlay")
@@ -39,9 +51,64 @@ describe("session config route contract", () => {
     expect(source).toContain('operationId: "session.config.get"')
     expect(source).toContain('operationId: "session.config.update"')
     expect(source).toContain("validator(\"json\", Config.Overlay)")
+    expect(source).toContain("Session.assertConfigurableRoot(session)")
+    expect(source).toContain("assertNoStoredNull(stored)")
     expect(source).toContain("Session.mergeConfigOverlay")
     expect(source).toContain("Config.mergeOverlay(base, overlay)")
     expect(source).toContain("origin: originTree(config, overlay)")
+  })
+
+  test("child sessions cannot own session config overlays", async () => {
+    await using tmp = await tmpdir({ config: { model: "base/top" } })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const root = await Session.create({ kind: "root", title: "root config owner" })
+        const child = await Session.create({ kind: "build", parentID: root.id, title: "child config reject" })
+
+        await expect(
+          Session.mergeConfigOverlay({
+            sessionID: child.id,
+            patch: { model: "child/model" },
+          }),
+        ).rejects.toThrow("ChildSessionConfigError")
+      },
+    })
+  })
+
+  test("stored configOverlay cannot contain persisted null delete markers", async () => {
+    await using tmp = await tmpdir({ config: { model: "base/top" } })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ kind: "root", title: "corrupt stored overlay" })
+        Database.use((db) =>
+          db
+            .update(SessionTable)
+            .set({
+              metadata: {
+                configOverlay: {
+                  model: "overlay/top",
+                  agent: {
+                    build: {
+                      model: null,
+                    },
+                  },
+                },
+              },
+            })
+            .where(eq(SessionTable.id, session.id))
+            .run(),
+        )
+
+        await expect(
+          Session.mergeConfigOverlay({
+            sessionID: session.id,
+            patch: { prompt: { core: "override" } },
+          }),
+        ).rejects.toThrow("Stored session overlay contains a null")
+      },
+    })
   })
 
   test("SDK/OpenAPI generation points stay explicit", async () => {

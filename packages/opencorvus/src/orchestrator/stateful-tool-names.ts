@@ -35,10 +35,6 @@ export const STATEFUL_SNAPSHOT_TOOL_NAMES = [
   "requirements",
   "architect",
   "refine",
-  // Delivery verification — rejection issues string can carry kilobytes
-  // of build/test output; full verdict is persisted as an artifact id
-  // referenced in the tool return.
-  "deliver",
 ] as const
 
 export type StatefulSnapshotToolName = (typeof STATEFUL_SNAPSHOT_TOOL_NAMES)[number]

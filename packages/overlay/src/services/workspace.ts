@@ -24,6 +24,7 @@ import { nativeOpen, nativePrompt } from "../utils/native";
 import { checkConnection } from "./connection";
 import { reloadProjectScope } from "./config";
 import { initGitCurrent } from "../utils/git";
+import { startTaskListSSE, stopSSE, stopTaskListSSE } from "./sse";
 
 // ── Types ──
 
@@ -130,10 +131,18 @@ export function setWorkspaceDirectory(
 
   if (source === "task" && next && next !== prev) {
     setSettingsStore("directoryEpoch", (n: number) => n + 1);
+    stopTaskListSSE();
     clearProjectScopeData();
-    void reloadProjectScope({ restoreWorkspace: false }).catch((e: unknown) =>
-      console.error("[setWorkspaceDirectory/task] reload failed", e),
-    );
+    const epoch = settingsStore.directoryEpoch;
+    void reloadProjectScope({ restoreWorkspace: false })
+      .then(() => {
+        if (settingsStore.directoryEpoch === epoch && settingsStore.directory === next) {
+          startTaskListSSE();
+        }
+      })
+      .catch((e: unknown) =>
+        console.error("[setWorkspaceDirectory/task] reload failed", e),
+      );
   }
 
   return next;
@@ -305,6 +314,8 @@ export function clearProjectScopeData(): void {
  * This is the single lifecycle path for Project -> Close Project.
  */
 export function closeProject(): void {
+  stopSSE();
+  stopTaskListSSE();
   setSettingsStore("directoryEpoch", (n: number) => n + 1);
   setSettingsStore({
     directory: "",
@@ -522,6 +533,8 @@ export async function applyDirectory(
 
   console.log("[applyDir] switching", { from: curDir, to: next, save });
 
+  stopSSE();
+  stopTaskListSSE();
   setSettingsStore("directoryEpoch", (n: number) => n + 1);
   setSettingsStore("directory", next);
   if (save !== null) setSettingsStore("savedDirectory", save);
@@ -577,6 +590,7 @@ export async function applyDirectory(
     console.log("[applyDir] superseded after reload, discarding");
     return;
   }
+  startTaskListSSE();
   console.log("[applyDir] done, tasks=", boardStore.tasks.length);
 }
 
@@ -671,8 +685,8 @@ export async function openDirectory(target?: string): Promise<void> {
 // ── openDirectoryInEditor ──
 
 /**
- * Open the given directory (or the current active directory) with the selected
- * project editor.
+ * Open the given directory or file path (or the current active directory) with
+ * the requested project editor.
  */
 export async function openDirectoryInEditor(
   editor: ProjectEditorID,
@@ -688,7 +702,7 @@ export async function openDirectoryInEditor(
     });
   } catch (e) {
     const label = PROJECT_EDITORS.find((item) => item.id === editor)?.label ?? editor;
-    AppLog.error("ui", "Failed to open working directory in editor", {
+    AppLog.error("ui", "Failed to open workspace path in editor", {
       editor,
       error: String(e),
     });
@@ -697,6 +711,33 @@ export async function openDirectoryInEditor(
       kind: "error",
     });
   }
+}
+
+export async function openPathInSelectedEditor(target: string): Promise<void> {
+  const path = editorTargetPath(target);
+  if (!path) {
+    if (typeof target === "string" && target.trim()) {
+      await nativeMessage(t("cwd.path_required"), {
+        title: t("cwd.title"),
+        kind: "error",
+      });
+    }
+    return;
+  }
+  await openDirectoryInEditor(settingsStore.projectEditor, path);
+}
+
+function isAbsoluteEditorPath(path: string): boolean {
+  return /^(?:[A-Za-z]:[\\/]|[\\/]{2}|\/)/.test(path);
+}
+
+export function editorTargetPath(target: string): string {
+  const path = typeof target === "string" ? target.trim() : "";
+  if (!path || isAbsoluteEditorPath(path)) return path;
+  const base = activeDirectory().trim();
+  if (!base) return "";
+  const separator = base.includes("\\") ? "\\" : "/";
+  return `${base.replace(/[\\/]+$/, "")}${separator}${path.replace(/^[\\/]+/, "")}`;
 }
 
 // ── setDirectory ──

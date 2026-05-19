@@ -132,7 +132,7 @@ describe("orchestrator build feedback context", () => {
               label: "delivery-agent-verdict",
               payload: {
                 verdict: "rejected",
-                summary: "Calculator render rejected by host gates.",
+                summary: "Calculator render rejected by acceptance evidence.",
                 rejection_details: [
                   {
                     goal_id: goalID,
@@ -155,7 +155,7 @@ describe("orchestrator build feedback context", () => {
         })
 
         const taskScopeFeedback = await composeLatestDeliveryFeedbackForBuild({ taskID })
-        expect(taskScopeFeedback).toContain("Delivery agent rejected the integrated deliverable")
+        expect(taskScopeFeedback).toContain("Acceptance review rejected the integrated deliverable")
         expect(taskScopeFeedback).toContain("Canonical delivery feedback packet")
         expect(taskScopeFeedback).toContain("runtime:web:.")
         expect(taskScopeFeedback).toContain("review:contract_audit")

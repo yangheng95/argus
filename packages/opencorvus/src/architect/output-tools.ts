@@ -330,9 +330,9 @@ export function architectValidationFindings(
       concern(
         "missing_final_visual_acceptance",
         [
-          "Missing essential delivery visual acceptance: reference-driven tasks must include a blocking verification/integration goal with an essential on_delivery llm_judge acceptance spec for final rendered-vs-reference fidelity.",
+          "Missing essential integrity visual acceptance: reference-driven tasks must include a blocking verification/integration goal with an essential on_integrity llm_judge acceptance spec for final rendered-vs-reference fidelity.",
           `Reference coverage requirement: ${formatReferenceCoverageReason(input)}`,
-          "Required shape: priority=blocking kind=verification|integration acceptance_specs includes severity=essential trigger=on_delivery scorer=llm_judge.",
+          "Required shape: priority=blocking kind=verification|integration acceptance_specs includes severity=essential trigger=on_integrity scorer=llm_judge.",
           `Goal candidates: ${formatGoalCandidateList(collector.goals)}`,
         ].join(" "),
         { goal_ids: collector.goals.map((goal) => goal.id) },
@@ -384,7 +384,7 @@ function formatAcceptanceSpecSnapshot(spec: AcceptanceSpec): string {
 function isEssentialDeliveryJudgeSpec(spec: AcceptanceSpec): boolean {
   return (
     spec.severity === "essential" &&
-    spec.trigger === "on_delivery" &&
+    (spec.trigger === "on_integrity" || spec.trigger === "on_delivery") &&
     spec.scorers.some((scorer) => scorer.type === "llm_judge")
   )
 }
@@ -476,12 +476,13 @@ export function createArchitectOutputTools(input: {
         "next unused G number.",
       inputSchema: GoalContractFieldsSchema,
       execute: async (goal) => {
-        const unknownContractIDs = unknownContractAuditContractIDs(collector, goal.acceptance_specs)
+        const parsedGoal = toRegisteredGoal(goal)
+        const unknownContractIDs = unknownContractAuditContractIDs(collector, parsedGoal.acceptance_specs)
         if (unknownContractIDs.length > 0) {
-          return `Error: goal "${goal.id}" contract_audit references unknown contract id(s): ${unknownContractIDs.join(", ")}. Use contract ids returned by register_contract; collector unchanged.`
+          return `Error: goal "${parsedGoal.id}" contract_audit references unknown contract id(s): ${unknownContractIDs.join(", ")}. Use contract ids returned by register_contract; collector unchanged.`
         }
         const warnings: string[] = []
-        for (const p of goal.owned_paths) {
+        for (const p of parsedGoal.owned_paths) {
           try {
             const abs = path.resolve(dir, p)
             if (!fs.existsSync(abs) && !fs.existsSync(path.dirname(abs))) {
@@ -492,21 +493,21 @@ export function createArchitectOutputTools(input: {
           }
         }
 
-        const existingIdx = collector.goals.findIndex((g) => g.id === goal.id)
+        const existingIdx = collector.goals.findIndex((g) => g.id === parsedGoal.id)
         let msg: string
         if (existingIdx >= 0) {
-          collector.goals[existingIdx] = goal
-          msg = `OK: goal "${goal.id}" updated in-place (${collector.goals.length} total)`
+          collector.goals[existingIdx] = parsedGoal
+          msg = `OK: goal "${parsedGoal.id}" updated in-place (${collector.goals.length} total)`
         } else {
-          collector.goals.push(goal)
-          msg = `OK: goal "${goal.id}" registered (${collector.goals.length} total)`
+          collector.goals.push(parsedGoal)
+          msg = `OK: goal "${parsedGoal.id}" registered (${collector.goals.length} total)`
         }
         // A newly registered/updated id cannot also be in the removal list.
-        collector.removed_goal_ids = collector.removed_goal_ids.filter((id) => id !== goal.id)
+        collector.removed_goal_ids = collector.removed_goal_ids.filter((id) => id !== parsedGoal.id)
         if (warnings.length > 0) {
           msg += `\nWarning: paths without an existing parent directory: ${warnings.join(", ")}. Verify these are intentional.`
         }
-        return `${msg}\nCurrent: ${formatGoalSnapshot(goal)}`
+        return `${msg}\nCurrent: ${formatGoalSnapshot(parsedGoal)}`
       },
     }),
 

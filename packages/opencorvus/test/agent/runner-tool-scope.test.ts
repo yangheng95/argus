@@ -17,7 +17,7 @@ describe("agent runner build tool scope", () => {
     expect(switches.external_code_search).toBe(false)
     expect(switches.skill).toBe(false)
     expect(switches.memory).toBe(false)
-    expect(switches.schedule).toBe(false)
+    expect(switches.schedule).toBeUndefined()
     expect(switches.planner).toBe(false)
     expect(switches.goal_report).toBe(false)
   })
@@ -51,12 +51,12 @@ describe("agent runner build tool scope", () => {
 
   test("non-build agents are not silently scoped by build skill policy", () => {
     const switches = promptToolSwitchesForAgentRun({
-      extraToolNames: ["submit_verdict"],
-      skillsStage: "delivery",
+      extraToolNames: ["submit_acceptance_verdict"],
+      skillsStage: "acceptance",
       requiredTools: [],
     })
 
-    expect(switches).toEqual({ submit_verdict: true })
+    expect(switches).toEqual({ submit_acceptance_verdict: true })
   })
 
   test("build visual reference contract is a hard gate when reference bytes are filtered", () => {

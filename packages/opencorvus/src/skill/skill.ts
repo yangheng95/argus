@@ -30,10 +30,10 @@ export namespace Skill {
     builtin: z.boolean().optional().default(false),
     location: z.string(),
     content: z.string(),
-    /** Which pipeline stage this skill is for (e.g. "delivery", "spec",
+    /** Which pipeline stage this skill is for (e.g. "acceptance", "spec",
      *  "build"). Skills are instruction manuals for ONE stage at a time:
      *  executors read implementation skills ("build"), validators read
-     *  verification skills ("delivery"), etc. Planning-stage agents
+     *  verification skills ("acceptance"), etc. Planning-stage agents
      *  (requirements / architect / planner) must NOT see executor skills —
      *  they plan goals, they don't implement. */
     stage: z.string().optional(),
@@ -54,11 +54,10 @@ export namespace Skill {
     }).optional(),
     /** Priority for ordering when multiple skills match (higher = first). */
     priority: z.number().optional().default(0),
-    /** Tools the stage agent MUST call before it can report success. Delivery
-     *  enforces this through output-tools.submit_verdict and
-     *  tool_call_evidence[]. Build enforces it from the session's completed
-     *  tool parts and any machine-readable artifacts the skill requires. Empty
-     *  or omitted = no enforcement. */
+    /** Tools the stage agent MUST call before it can report success. Build
+     *  enforces this from the session's completed tool parts and any
+     *  machine-readable artifacts the skill requires. Empty or omitted =
+     *  no enforcement. */
     required_tools: z.array(z.string()).optional().default([]),
   })
   export type Info = z.infer<typeof Info>

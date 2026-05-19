@@ -1,6 +1,7 @@
 import { For, createSignal } from "solid-js";
 import { type ProjectEditorID } from "../services/host-transport";
 import { activeDirectory, openDirectoryInEditor, PROJECT_EDITORS } from "../services/workspace";
+import { saveSettings, settingsStore, setSettingsStore } from "../store/settings";
 import { t } from "../utils/i18n";
 import { Icon, type IconName } from "./Icon";
 import { WorkspaceSplitLauncher } from "./WorkspaceSplitLauncher";
@@ -23,6 +24,9 @@ const EDITOR_ICON_SIZES: Record<ProjectEditorID, number> = {
 
 export function WorkspaceEditorLaunchers() {
   const disabled = () => !activeDirectory();
+  const selectedEditor = () => settingsStore.projectEditor;
+  const selectedEditorLabel = () =>
+    PROJECT_EDITORS.find((editor) => editor.id === selectedEditor())?.label ?? selectedEditor();
   const [open, setOpen] = createSignal(false);
 
   function close() {
@@ -31,6 +35,8 @@ export function WorkspaceEditorLaunchers() {
 
   async function openEditor(editor: ProjectEditorID) {
     close();
+    setSettingsStore("projectEditor", editor);
+    saveSettings();
     await openDirectoryInEditor(editor);
   }
 
@@ -43,15 +49,15 @@ export function WorkspaceEditorLaunchers() {
       disabled={disabled()}
       open={open()}
       title={t("workspace.editor_launchers")}
-      primaryAriaLabel={t("cwd.open_in_editor", { name: "VS Code" })}
+      primaryAriaLabel={t("cwd.open_in_editor", { name: selectedEditorLabel() })}
       menuAriaLabel={t("workspace.editor_launchers_menu")}
       primaryDataUI="workspace-editor-open-default"
       menuDataUI="workspace-editor-menu"
-      onPrimaryClick={() => openEditor("vscode")}
+      onPrimaryClick={() => openEditor(selectedEditor())}
       onOpenChange={setOpen}
       primaryChildren={(
-        <span class="workspace-editor-select-icon" data-editor="vscode" aria-hidden="true">
-          <Icon name="editor-vscode" size={18} />
+        <span class="workspace-editor-select-icon" data-editor={selectedEditor()} aria-hidden="true">
+          <Icon name={EDITOR_ICONS[selectedEditor()]} size={EDITOR_ICON_SIZES[selectedEditor()]} />
         </span>
       )}
       menuButtonChildren={(

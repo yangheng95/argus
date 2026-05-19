@@ -55,7 +55,7 @@ body {
 
   /* Per-stage rail tokens. Each agent / phase has its own hue so
      the conversation reads as a multi-actor stream; restored after
-     iter51's 4-tone fold left non-(delivery|evaluator|requirements)
+     iter51's 4-tone fold left non-(evaluator|requirements)
      stages without a rail because `card-color.ts` keeps emitting
      `var(--card-stage-<name>)` for these 14 known stages.
 
@@ -76,7 +76,6 @@ body {
   --card-stage-executor:       color-mix(in oklch, var(--warn) 80%, var(--bad) 20%);
   --card-stage-build:          color-mix(in oklch, var(--warn) 55%, var(--bad) 45%);
   --card-stage-evaluator:      color-mix(in oklch, var(--good) 70%, var(--accent) 30%);
-  --card-stage-delivery:       var(--good);
   --card-stage-integrity:      color-mix(in oklch, var(--good) 45%, var(--bad) 55%);
   --card-stage-tool:           color-mix(in srgb, var(--text-soft) 70%, transparent);
 
@@ -182,11 +181,9 @@ body {
 }
 
 /* Stage tone overrides — folded from the prior 14-color stage
-   palette to 4 semantic tones. Delivery / evaluator are success
-   (green); requirements is warn (amber); failed / rejected
-   states surface via [data-status]. Everything else stays info
-   (accent). */
-.card[data-depth="0"][data-stage="delivery"],
+   palette to 4 semantic tones. Evaluator is success (green);
+   requirements is warn (amber); failed / rejected states surface
+   via [data-status]. Everything else stays info (accent). */
 .card[data-depth="0"][data-stage="evaluator"] {
   border-left-color: var(--card-stage-success);
 }

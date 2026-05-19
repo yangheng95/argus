@@ -2020,7 +2020,7 @@ export namespace SessionLoop {
     if (!original.execute) return raw
     const execute = original.execute
     // Mirror the attachment stamping the registry-tools wrapper applies
-    // (loop.ts:967-987). Extras (e.g. delivery's screenshot,
+    // (loop.ts:967-987). Extras (e.g. screenshot,
     // verify_page_integrity) build attachments via buildMultimodalToolResult
     // which returns `{ type, mime, url, filename }` — missing the
     // PartBase fields (id/sessionID/messageID) that ToolStateCompleted's

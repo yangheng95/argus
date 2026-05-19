@@ -14,10 +14,14 @@ import { abortableIterable } from "@/util/stream-activity"
 import { createToolCallRepair } from "@/session/repair-hint"
 import { Log } from "@/util/log"
 
-// Single source for tool-call repair across EVERY streamText caller (rule 8).
-// Per-call injection previously left direct callers (walkthrough translation)
-// uncovered — the rule-35 gap codex flagged. Installing it here makes the
-// omission structurally impossible.
+// Single source for tool-call repair across every PRODUCTION streamText
+// caller (rule 8). Per-call injection previously left direct callers
+// (walkthrough translation) uncovered — the rule-35 gap codex flagged.
+// Installing it here makes the omission structurally impossible for src/.
+// Out of scope on purpose: one-off diagnostic scripts under
+// script/cache-probe/ (e.g. trace-aisdk-wire.ts) deliberately import the
+// raw SDK because their job is to observe UNWRAPPED wire behaviour;
+// wrapping them would defeat the probe.
 const repairLog = Log.create({ service: "llm-repair" })
 
 type StreamTextOnAbortCallback<TOOLS extends ToolSet> = (event: {

@@ -3,7 +3,7 @@
  *
  * A VisualSpec is a visual-contract row extracted from visual references.
  * It is NOT an AcceptanceSpec — no deterministic scorer runs at registration
- * time. The delivery agent reads the list during its own visual review and may
+ * time. The integrity acceptance reviewer reads the list during visual review and may
  * cite a spec id in `rejection_details.visual_spec_id` when a rejection traces
  * back to a violated constraint. That's the enforcement model: delivery
  * verifies the contract from rendered evidence.

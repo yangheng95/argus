@@ -8,6 +8,7 @@ import { Provider } from "../../src/provider/provider"
 import { NotFoundError } from "../../src/storage/db"
 import { Filesystem } from "../../src/util/filesystem"
 import { Log } from "../../src/util/log"
+import { Session } from "../../src/session"
 import type { ContentfulStatusCode } from "hono/utils/http-status"
 
 Log.init({ print: false })
@@ -47,6 +48,7 @@ function buildOnErrorProbe(throwFn: () => never): Hono {
       else if (err instanceof Provider.ModelNotFoundError) status = 400
       else if (err instanceof Server.DirectoryRequiredError) status = 400
       else if (err instanceof Filesystem.InvalidDirectoryError) status = 400
+      else if (err.name === "ChildSessionConfigError") status = 400
       else if (err.name === "WorktreeNotGitError") status = 412
       else if (err.name.startsWith("Worktree")) status = 400
       else status = 500
@@ -137,6 +139,20 @@ describe("server onError NamedError → status code mapping (W2-V31)", () => {
       },
       404,
       "NotFoundError",
+    )
+  })
+
+  test("ChildSessionConfigError maps to 400", async () => {
+    await expectMapping(
+      () => {
+        throw new Session.ChildSessionConfigError({
+          sessionID: "ses_child",
+          parentID: "ses_root",
+          message: "child session cannot own config",
+        })
+      },
+      400,
+      "ChildSessionConfigError",
     )
   })
 

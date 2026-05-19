@@ -1,6 +1,6 @@
 ---
 name: webpage-generate
-description: Produce a mirror-grounded PRD/SPEC for a live webpage reference. Design-analysis owns the webpage mirror evidence tools, then writes visual specs plus frontend/backend implementation contracts for downstream build agents. This skill no longer belongs to build; build implements from the persisted SPEC and delivery performs visual gates.
+description: Produce a mirror-grounded PRD/SPEC for a live webpage reference. Design-analysis owns the webpage mirror evidence tools, then writes visual specs plus frontend/backend implementation contracts for downstream build agents. This skill no longer belongs to build; build implements from the persisted SPEC and integrity performs the final session-bound visual acceptance review.
 stage: design_analyst
 auto_detect:
   task_signals:
@@ -45,4 +45,4 @@ Use `mirror/prd-evidence-summary.md`, `mirror/shared-context.md`, `mirror/page-i
 
 ## Downstream Contract
 
-Build agents consume the persisted PRD/SPEC, especially `visual_consistency_spec`, plus optional `task.design_specs` anchors. They do not call mirror tools. Delivery owns rendered browser evidence and visual hard gates.
+Build agents consume the persisted PRD/SPEC, especially `visual_consistency_spec`, plus optional `task.design_specs` anchors. They do not call mirror tools. Build records its own runtime/visual evidence; Integrity owns the final workflow gate inside a review session.

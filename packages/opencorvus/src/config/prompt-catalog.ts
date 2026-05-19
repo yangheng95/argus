@@ -112,11 +112,11 @@ export namespace PromptCatalog {
     // Agent-scope prompts — every native agent surfaces with its own default.
     //
     // The previous implementation used a SYSTEM_COVERS_AGENT mask to hide
-    // agents whose system-scope slot existed (spec/goal/plan/evaluator/delivery).
+    // agents whose system-scope slot existed (spec/goal/plan/evaluator).
     // That mask was removed together with those legacy slots, so every native
     // agent now renders as one distinct card. `Agent.nativeDefaultPrompt` is
     // the single source of truth for the default prompt; dynamically-loaded
-    // agents (e.g. delivery) use `agent.prompt` populated in state().
+    // dynamically-loaded agents use `agent.prompt` populated in state().
     // `prompt_mode` makes the write semantics explicit:
     // - override entries replace the runtime prompt with `config.agent.X.prompt`.
     // - append entries keep the code-owned core and append

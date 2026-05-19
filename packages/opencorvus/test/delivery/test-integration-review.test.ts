@@ -94,7 +94,7 @@ describe("delivery test integration specialist review", () => {
     expect(review?.findings).toEqual([])
   })
 
-  test("default delivery gate omits the expensive test integration specialist", async () => {
+  test("default delivery evidence omits the expensive test integration specialist", async () => {
     const dir = await packageFixture({
       scripts: { test: "bun test" },
       files: {

@@ -1,18 +1,11 @@
 /**
- * `delivery` agent — adversarial verification + verdict gate.
+ * Legacy delivery data helpers.
  *
- * Public surface:
- *   - DeliveryAgent.verify(input) → DeliveryVerdictType
- *   - DELIVERY_AGENT_SYSTEM (re-export of prompt/core/delivery-core.txt
- *     content) — kept for legacy consumers in agent/agent.ts.
- *   - createDeliveryTools / createDeliveryOutputTools — exposed for the
- *     orchestrator wiring layer.
- *
- * Note: `service.ts` still wraps DeliveryAgent.verify with error
- * normalization for backwards compatibility; that wrapper is removed in
- * phase-4 of the isomorphic-agent refactor (CLAUDE.md rule 22).
+ * The legacy delivery runtime is retired. New workflow
+ * acceptance is produced by the integrity review session. This index only
+ * exports legacy artifact readers/types still needed for historical tasks and
+ * diagnostics.
  */
-export { DeliveryAgent, DELIVERY_AGENT_SYSTEM } from "./agent"
 export { arbitrateDeliveryGate, composeDeliveryDecision } from "./arbiter"
 export type { DeliveryDecision, HostGateResult, HostGateFailureGroup } from "./arbiter"
 export type { DeliveryVerdictType } from "./verdict"

@@ -994,6 +994,9 @@ Output: Creates directory 'foo'"
             ],
             "type": "string",
           },
+          "queue": {
+            "type": "boolean",
+          },
           "request": {
             "type": "string",
           },
