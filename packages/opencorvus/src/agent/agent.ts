@@ -281,6 +281,12 @@ export namespace Agent {
         //   - sub-agent dispatch via the generic `task` tool — orchestrator uses
         //     the explicit `build` / `requirements` / etc. tools instead
         //   - control-plane `panel` — the gateway surface owns that boundary
+        //   - `explore` — removed 2026-05-19 (user). The orchestrator looped it
+        //     6× as a verbatim-source read pipe on a C#→TS port, never producing
+        //     goals (DIY repository investigation = a sub-agent's job). Repo
+        //     investigation now flows through `analyze_intent` / `requirements`
+        //     / `architect`, which own read-only codebase tools themselves.
+        //     Rule 6.1 — capability contract, not host routing.
         tools: {
           include: [
             // dispatch
@@ -292,7 +298,6 @@ export namespace Agent {
             "prosecute",
             "propose_task",
             "analyze_intent",
-            "explore",
             "modify_goal",
             "refine",
             "restart_from_stage",
