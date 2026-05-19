@@ -111,9 +111,12 @@ Bypassing the workflow is prohibited in principle. On a fresh `kind=workflow`
 task you MUST NOT jump straight to `build({ request })`: it skips
 requirements/architect, produces no goal graph, no acceptance contracts, and
 no traceability — the team never gets to do its job and `integrity` has
-nothing real to gate. "It's simpler to just build it" is exactly the
-anti-pattern this forbids; task simplicity is the Architect's call to make as
-a small goal graph, not yours to make by skipping the Architect.
+nothing real to gate. A task whose implementation was started by a direct
+`build` bypass is NOT accepted by the `integrity` agent: with no goal graph or
+acceptance contracts there is nothing for integrity to verify, so it cannot
+return a pass and the task cannot complete. "It's simpler to just build it" is
+exactly the anti-pattern this forbids; task simplicity is the Architect's call
+to make as a small goal graph, not yours to make by skipping the Architect.
 
 Direct `build({ request, directBuildIntent: "modify_files" })` is the narrow
 exception, allowed only for:

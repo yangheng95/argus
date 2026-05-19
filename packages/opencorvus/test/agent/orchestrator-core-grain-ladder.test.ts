@@ -166,6 +166,11 @@ describe("orchestrator-core workflow-bypass prohibition", () => {
     expect(text).toContain("Bypassing the workflow is prohibited in principle")
     expect(text).toMatch(/MUST NOT jump straight to `build\(\{ request \}\)`/)
     expect(text).toContain("task simplicity is the Architect's call")
+    // Concrete consequence (user 2026-05-20): a direct-build bypass task is
+    // not accepted by integrity — nothing for it to gate, cannot complete.
+    const norm = text.replace(/\s+/g, " ")
+    expect(norm).toContain("started by a direct `build` bypass is NOT accepted by the `integrity` agent")
+    expect(norm).toContain("it cannot return a pass and the task cannot complete")
   })
 
   test("direct build is the narrow exception: kind=build or post-review fix", async () => {
