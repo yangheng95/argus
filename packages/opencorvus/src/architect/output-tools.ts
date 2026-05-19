@@ -126,6 +126,24 @@ function dependencyDirectionGuidance(fromGoalID: string, toGoalID: string): stri
   return `Dependency contract direction is producer/prerequisite -> consumer/dependent. If ${toGoalID}.depends_on includes ${fromGoalID}, call register_dependency_contract({ from_goal_id: "${fromGoalID}", to_goal_id: "${toGoalID}", ... }).`
 }
 
+function registeredContractIDs(collector: ArchitectCollector): Set<string> {
+  return new Set(collector.contract_graph.contracts.map((contract) => contract.id))
+}
+
+function unknownContractAuditContractIDs(collector: ArchitectCollector, specs: readonly AcceptanceSpec[]): string[] {
+  const contractIDs = registeredContractIDs(collector)
+  const unknownIDs: string[] = []
+  for (const spec of specs) {
+    for (const scorer of spec.scorers) {
+      if (scorer.type !== "contract_audit") continue
+      for (const contractID of scorer.spec.contract_ids) {
+        if (!contractIDs.has(contractID)) unknownIDs.push(contractID)
+      }
+    }
+  }
+  return [...new Set(unknownIDs)]
+}
+
 export function architectValidationFindings(
   collector: ArchitectCollector,
   input?: ArchitectValidationInput,
@@ -458,6 +476,10 @@ export function createArchitectOutputTools(input: {
         "next unused G number.",
       inputSchema: GoalContractFieldsSchema,
       execute: async (goal) => {
+        const unknownContractIDs = unknownContractAuditContractIDs(collector, goal.acceptance_specs)
+        if (unknownContractIDs.length > 0) {
+          return `Error: goal "${goal.id}" contract_audit references unknown contract id(s): ${unknownContractIDs.join(", ")}. Use contract ids returned by register_contract; collector unchanged.`
+        }
         const warnings: string[] = []
         for (const p of goal.owned_paths) {
           try {
@@ -518,6 +540,12 @@ export function createArchitectOutputTools(input: {
           ].join("\n")
         }
         const next = parsedNext.data
+        if (updates.acceptance_specs !== undefined) {
+          const unknownContractIDs = unknownContractAuditContractIDs(collector, next.acceptance_specs)
+          if (unknownContractIDs.length > 0) {
+            return `Error: goal "${id}" contract_audit references unknown contract id(s): ${unknownContractIDs.join(", ")}. Use contract ids returned by register_contract; collector unchanged.`
+          }
+        }
         collector.goals[idx] = next
         return `OK: goal "${id}" fields updated (${Object.keys(normalizedUpdates).length} change(s))\nCurrent: ${formatGoalSnapshot(next)}`
       },
@@ -733,10 +761,10 @@ export function createArchitectOutputTools(input: {
         const existingIdx = collector.contract_graph.contracts.findIndex((row) => row.id === contract.id)
         if (existingIdx >= 0) {
           collector.contract_graph.contracts[existingIdx] = contract
-          return `OK: contract "${contract.id}" overwritten (${collector.contract_graph.contracts.length} contracts total)`
+          return `OK: contract "${contract.id}" overwritten (${collector.contract_graph.contracts.length} contracts total)\nRegistered contract ids: ${[...registeredContractIDs(collector)].join(", ")}`
         }
         collector.contract_graph.contracts.push(contract)
-        return `OK: contract "${contract.id}" registered (${collector.contract_graph.contracts.length} contracts total)`
+        return `OK: contract "${contract.id}" registered (${collector.contract_graph.contracts.length} contracts total)\nRegistered contract ids: ${[...registeredContractIDs(collector)].join(", ")}`
       },
     }),
 

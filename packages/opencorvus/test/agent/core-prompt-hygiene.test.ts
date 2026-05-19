@@ -187,6 +187,13 @@ describe("core prompt hygiene", () => {
     expect(text).toContain("Use `contract_audit` only with")
   })
 
+  test("architect prompt binds contract_audit ids to registered contract ids", async () => {
+    const text = await readPrompt("architect")
+    expect(text).toContain(
+      "contract_audit.contract_ids must be copied from already-registered contract ids returned by register_contract; unknown ids are rejected.",
+    )
+  })
+
   test("architect prompt pins acceptance scorer discriminator values", async () => {
     const text = await readPrompt("architect")
     expect(text).toContain('Scorer `type` is exactly one of `"heuristic"`, `"llm_judge"`, `"prebuilt"`, or `"contract_audit"`')
