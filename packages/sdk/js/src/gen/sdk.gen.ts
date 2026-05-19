@@ -5206,10 +5206,16 @@ export class Task2 extends HeyApiClient {
            */
           scorers: Array<
             | {
+                /**
+                 * heuristic — deterministic shell/script check, pass/fail by exit code. Requires: name, spec{kind}.
+                 */
                 type: "heuristic"
                 name: string
                 spec:
                   | {
+                      /**
+                       * shell — run an inline command. Requires: cmd; optional cwd.
+                       */
                       kind: "shell"
                       /**
                        * Shell command. Exit 0 = pass unless expect.exit_code set.
@@ -5218,6 +5224,9 @@ export class Task2 extends HeyApiClient {
                       cwd?: string
                     }
                   | {
+                      /**
+                       * script_ref — run a repo script. Requires: path; optional args.
+                       */
                       kind: "script_ref"
                       /**
                        * Repo-relative script path.
@@ -5230,6 +5239,9 @@ export class Task2 extends HeyApiClient {
                 }
               }
             | {
+                /**
+                 * llm_judge — natural-language rubric evaluation. Requires: name, criteria; optional rubric, inputs.
+                 */
                 type: "llm_judge"
                 name: string
                 /**
@@ -5263,6 +5275,9 @@ export class Task2 extends HeyApiClient {
                 inputs?: Array<"delivery_summary" | "changed_files" | "requirement_text">
               }
             | {
+                /**
+                 * prebuilt — a named library metric. Requires: name from the fixed PREBUILT_SCORER_NAMES set; optional config.
+                 */
                 type: "prebuilt"
                 name: "factuality" | "relevance" | "contains" | "exact_match" | "length_within" | "json_schema"
                 config?: {
@@ -5270,6 +5285,9 @@ export class Task2 extends HeyApiClient {
                 }
               }
             | {
+                /**
+                 * contract_audit — static audit of typed-contract field literals against registered graph contract_ids. Requires: name, spec.contract_ids, expect.status='passed'.
+                 */
                 type: "contract_audit"
                 name: string
                 spec: {
@@ -5333,10 +5351,16 @@ export class Task2 extends HeyApiClient {
              */
             scorers: Array<
               | {
+                  /**
+                   * heuristic — deterministic shell/script check, pass/fail by exit code. Requires: name, spec{kind}.
+                   */
                   type: "heuristic"
                   name: string
                   spec:
                     | {
+                        /**
+                         * shell — run an inline command. Requires: cmd; optional cwd.
+                         */
                         kind: "shell"
                         /**
                          * Shell command. Exit 0 = pass unless expect.exit_code set.
@@ -5345,6 +5369,9 @@ export class Task2 extends HeyApiClient {
                         cwd?: string
                       }
                     | {
+                        /**
+                         * script_ref — run a repo script. Requires: path; optional args.
+                         */
                         kind: "script_ref"
                         /**
                          * Repo-relative script path.
@@ -5357,6 +5384,9 @@ export class Task2 extends HeyApiClient {
                   }
                 }
               | {
+                  /**
+                   * llm_judge — natural-language rubric evaluation. Requires: name, criteria; optional rubric, inputs.
+                   */
                   type: "llm_judge"
                   name: string
                   /**
@@ -5390,6 +5420,9 @@ export class Task2 extends HeyApiClient {
                   inputs?: Array<"delivery_summary" | "changed_files" | "requirement_text">
                 }
               | {
+                  /**
+                   * prebuilt — a named library metric. Requires: name from the fixed PREBUILT_SCORER_NAMES set; optional config.
+                   */
                   type: "prebuilt"
                   name: "factuality" | "relevance" | "contains" | "exact_match" | "length_within" | "json_schema"
                   config?: {
@@ -5397,6 +5430,9 @@ export class Task2 extends HeyApiClient {
                   }
                 }
               | {
+                  /**
+                   * contract_audit — static audit of typed-contract field literals against registered graph contract_ids. Requires: name, spec.contract_ids, expect.status='passed'.
+                   */
                   type: "contract_audit"
                   name: string
                   spec: {
@@ -6517,10 +6553,16 @@ export class Goal extends HeyApiClient {
          */
         scorers: Array<
           | {
+              /**
+               * heuristic — deterministic shell/script check, pass/fail by exit code. Requires: name, spec{kind}.
+               */
               type: "heuristic"
               name: string
               spec:
                 | {
+                    /**
+                     * shell — run an inline command. Requires: cmd; optional cwd.
+                     */
                     kind: "shell"
                     /**
                      * Shell command. Exit 0 = pass unless expect.exit_code set.
@@ -6529,6 +6571,9 @@ export class Goal extends HeyApiClient {
                     cwd?: string
                   }
                 | {
+                    /**
+                     * script_ref — run a repo script. Requires: path; optional args.
+                     */
                     kind: "script_ref"
                     /**
                      * Repo-relative script path.
@@ -6541,6 +6586,9 @@ export class Goal extends HeyApiClient {
               }
             }
           | {
+              /**
+               * llm_judge — natural-language rubric evaluation. Requires: name, criteria; optional rubric, inputs.
+               */
               type: "llm_judge"
               name: string
               /**
@@ -6574,6 +6622,9 @@ export class Goal extends HeyApiClient {
               inputs?: Array<"delivery_summary" | "changed_files" | "requirement_text">
             }
           | {
+              /**
+               * prebuilt — a named library metric. Requires: name from the fixed PREBUILT_SCORER_NAMES set; optional config.
+               */
               type: "prebuilt"
               name: "factuality" | "relevance" | "contains" | "exact_match" | "length_within" | "json_schema"
               config?: {
@@ -6581,6 +6632,9 @@ export class Goal extends HeyApiClient {
               }
             }
           | {
+              /**
+               * contract_audit — static audit of typed-contract field literals against registered graph contract_ids. Requires: name, spec.contract_ids, expect.status='passed'.
+               */
               type: "contract_audit"
               name: string
               spec: {

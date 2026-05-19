@@ -11965,6 +11965,7 @@
                                       "type": "object",
                                       "properties": {
                                         "type": {
+                                          "description": "heuristic — deterministic shell/script check, pass/fail by exit code. Requires: name, spec{kind}.",
                                           "type": "string",
                                           "const": "heuristic"
                                         },
@@ -11978,6 +11979,7 @@
                                               "type": "object",
                                               "properties": {
                                                 "kind": {
+                                                  "description": "shell — run an inline command. Requires: cmd; optional cwd.",
                                                   "type": "string",
                                                   "const": "shell"
                                                 },
@@ -11999,6 +12001,7 @@
                                               "type": "object",
                                               "properties": {
                                                 "kind": {
+                                                  "description": "script_ref — run a repo script. Requires: path; optional args.",
                                                   "type": "string",
                                                   "const": "script_ref"
                                                 },
@@ -12042,6 +12045,7 @@
                                       "type": "object",
                                       "properties": {
                                         "type": {
+                                          "description": "llm_judge — natural-language rubric evaluation. Requires: name, criteria; optional rubric, inputs.",
                                           "type": "string",
                                           "const": "llm_judge"
                                         },
@@ -12114,6 +12118,7 @@
                                       "type": "object",
                                       "properties": {
                                         "type": {
+                                          "description": "prebuilt — a named library metric. Requires: name from the fixed PREBUILT_SCORER_NAMES set; optional config.",
                                           "type": "string",
                                           "const": "prebuilt"
                                         },
@@ -12146,6 +12151,7 @@
                                       "type": "object",
                                       "properties": {
                                         "type": {
+                                          "description": "contract_audit — static audit of typed-contract field literals against registered graph contract_ids. Requires: name, spec.contract_ids, expect.status='passed'.",
                                           "type": "string",
                                           "const": "contract_audit"
                                         },
@@ -12379,6 +12385,7 @@
                                             "type": "object",
                                             "properties": {
                                               "type": {
+                                                "description": "heuristic — deterministic shell/script check, pass/fail by exit code. Requires: name, spec{kind}.",
                                                 "type": "string",
                                                 "const": "heuristic"
                                               },
@@ -12392,6 +12399,7 @@
                                                     "type": "object",
                                                     "properties": {
                                                       "kind": {
+                                                        "description": "shell — run an inline command. Requires: cmd; optional cwd.",
                                                         "type": "string",
                                                         "const": "shell"
                                                       },
@@ -12413,6 +12421,7 @@
                                                     "type": "object",
                                                     "properties": {
                                                       "kind": {
+                                                        "description": "script_ref — run a repo script. Requires: path; optional args.",
                                                         "type": "string",
                                                         "const": "script_ref"
                                                       },
@@ -12456,6 +12465,7 @@
                                             "type": "object",
                                             "properties": {
                                               "type": {
+                                                "description": "llm_judge — natural-language rubric evaluation. Requires: name, criteria; optional rubric, inputs.",
                                                 "type": "string",
                                                 "const": "llm_judge"
                                               },
@@ -12528,6 +12538,7 @@
                                             "type": "object",
                                             "properties": {
                                               "type": {
+                                                "description": "prebuilt — a named library metric. Requires: name from the fixed PREBUILT_SCORER_NAMES set; optional config.",
                                                 "type": "string",
                                                 "const": "prebuilt"
                                               },
@@ -12560,6 +12571,7 @@
                                             "type": "object",
                                             "properties": {
                                               "type": {
+                                                "description": "contract_audit — static audit of typed-contract field literals against registered graph contract_ids. Requires: name, spec.contract_ids, expect.status='passed'.",
                                                 "type": "string",
                                                 "const": "contract_audit"
                                               },
@@ -23512,6 +23524,7 @@
                                 "type": "object",
                                 "properties": {
                                   "type": {
+                                    "description": "heuristic — deterministic shell/script check, pass/fail by exit code. Requires: name, spec{kind}.",
                                     "type": "string",
                                     "const": "heuristic"
                                   },
@@ -23525,6 +23538,7 @@
                                         "type": "object",
                                         "properties": {
                                           "kind": {
+                                            "description": "shell — run an inline command. Requires: cmd; optional cwd.",
                                             "type": "string",
                                             "const": "shell"
                                           },
@@ -23546,6 +23560,7 @@
                                         "type": "object",
                                         "properties": {
                                           "kind": {
+                                            "description": "script_ref — run a repo script. Requires: path; optional args.",
                                             "type": "string",
                                             "const": "script_ref"
                                           },
@@ -23589,6 +23604,7 @@
                                 "type": "object",
                                 "properties": {
                                   "type": {
+                                    "description": "llm_judge — natural-language rubric evaluation. Requires: name, criteria; optional rubric, inputs.",
                                     "type": "string",
                                     "const": "llm_judge"
                                   },
@@ -23661,6 +23677,7 @@
                                 "type": "object",
                                 "properties": {
                                   "type": {
+                                    "description": "prebuilt — a named library metric. Requires: name from the fixed PREBUILT_SCORER_NAMES set; optional config.",
                                     "type": "string",
                                     "const": "prebuilt"
                                   },
@@ -23693,6 +23710,7 @@
                                 "type": "object",
                                 "properties": {
                                   "type": {
+                                    "description": "contract_audit — static audit of typed-contract field literals against registered graph contract_ids. Requires: name, spec.contract_ids, expect.status='passed'.",
                                     "type": "string",
                                     "const": "contract_audit"
                                   },
@@ -29382,314 +29400,6 @@
           "properties"
         ]
       },
-      "QuestionOption": {
-        "type": "object",
-        "properties": {
-          "label": {
-            "description": "Display text (1-5 words, concise)",
-            "type": "string"
-          },
-          "description": {
-            "description": "Explanation of choice",
-            "type": "string"
-          }
-        },
-        "required": [
-          "label",
-          "description"
-        ]
-      },
-      "QuestionInfo": {
-        "type": "object",
-        "properties": {
-          "question": {
-            "description": "Complete question",
-            "type": "string"
-          },
-          "header": {
-            "description": "Very short label (max 30 chars)",
-            "type": "string"
-          },
-          "options": {
-            "description": "Available choices",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/QuestionOption"
-            }
-          },
-          "multiple": {
-            "description": "Allow selecting multiple choices",
-            "type": "boolean"
-          },
-          "custom": {
-            "description": "Allow typing a custom answer",
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "question",
-          "header",
-          "options"
-        ]
-      },
-      "QuestionRequest": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "pattern": "^que.*"
-          },
-          "sessionID": {
-            "type": "string",
-            "pattern": "^ses.*"
-          },
-          "questions": {
-            "description": "Questions to ask",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/QuestionInfo"
-            }
-          },
-          "tool": {
-            "type": "object",
-            "properties": {
-              "messageID": {
-                "type": "string"
-              },
-              "callID": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "messageID",
-              "callID"
-            ]
-          }
-        },
-        "required": [
-          "id",
-          "sessionID",
-          "questions"
-        ]
-      },
-      "Event.question.asked": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "question.asked"
-          },
-          "properties": {
-            "$ref": "#/components/schemas/QuestionRequest"
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "QuestionAnswer": {
-        "type": "array",
-        "items": {
-          "type": "string"
-        }
-      },
-      "Event.question.replied": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "question.replied"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "sessionID": {
-                "type": "string"
-              },
-              "requestID": {
-                "type": "string"
-              },
-              "answers": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/QuestionAnswer"
-                }
-              }
-            },
-            "required": [
-              "sessionID",
-              "requestID",
-              "answers"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.question.rejected": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "question.rejected"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "sessionID": {
-                "type": "string"
-              },
-              "requestID": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "sessionID",
-              "requestID"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.task_plan.updated": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "task_plan.updated"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "task": {
-                "type": "object",
-                "properties": {
-                  "id": {
-                    "type": "string"
-                  },
-                  "sessionID": {
-                    "type": "string"
-                  },
-                  "goal": {
-                    "type": "string"
-                  },
-                  "status": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "id",
-                  "sessionID",
-                  "goal",
-                  "status"
-                ]
-              }
-            },
-            "required": [
-              "task"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.session.compacted": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "session.compacted"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "sessionID": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "sessionID"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.file.edited": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "file.edited"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "file": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "file"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.file.watcher.updated": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "file.watcher.updated"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "file": {
-                "type": "string"
-              },
-              "event": {
-                "anyOf": [
-                  {
-                    "type": "string",
-                    "const": "add"
-                  },
-                  {
-                    "type": "string",
-                    "const": "change"
-                  },
-                  {
-                    "type": "string",
-                    "const": "unlink"
-                  }
-                ]
-              }
-            },
-            "required": [
-              "file",
-              "event"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
       "Event.task.created": {
         "type": "object",
         "properties": {
@@ -30949,12 +30659,12 @@
           "properties"
         ]
       },
-      "Event.integrity.review.started": {
+      "Event.review.stream.started": {
         "type": "object",
         "properties": {
           "type": {
             "type": "string",
-            "const": "integrity.review.started"
+            "const": "review.stream.started"
           },
           "properties": {
             "type": "object",
@@ -30963,13 +30673,25 @@
                 "type": "string",
                 "pattern": "^tsk.*"
               },
+              "reviewID": {
+                "type": "string",
+                "minLength": 1
+              },
+              "phase": {
+                "type": "string",
+                "enum": [
+                  "integrity",
+                  "delivery"
+                ]
+              },
               "sessionID": {
                 "type": "string"
               }
             },
             "required": [
               "taskID",
-              "sessionID"
+              "reviewID",
+              "phase"
             ]
           }
         },
@@ -30978,12 +30700,12 @@
           "properties"
         ]
       },
-      "Event.integrity.review.progress": {
+      "Event.review.stream.progress": {
         "type": "object",
         "properties": {
           "type": {
             "type": "string",
-            "const": "integrity.review.progress"
+            "const": "review.stream.progress"
           },
           "properties": {
             "type": "object",
@@ -30992,19 +30714,43 @@
                 "type": "string",
                 "pattern": "^tsk.*"
               },
-              "sessionID": {
-                "type": "string"
+              "reviewID": {
+                "type": "string",
+                "minLength": 1
+              },
+              "phase": {
+                "type": "string",
+                "enum": [
+                  "integrity",
+                  "delivery"
+                ]
+              },
+              "currentStep": {
+                "type": "string",
+                "enum": [
+                  "manifest",
+                  "runtime",
+                  "visual",
+                  "specialist",
+                  "agent",
+                  "post_repair"
+                ]
               },
               "attempt": {
                 "type": "number"
               },
               "elapsedMs": {
                 "type": "number"
+              },
+              "summary": {
+                "type": "string"
               }
             },
             "required": [
               "taskID",
-              "sessionID",
+              "reviewID",
+              "phase",
+              "currentStep",
               "attempt",
               "elapsedMs"
             ]
@@ -31015,12 +30761,12 @@
           "properties"
         ]
       },
-      "Event.integrity.review.chunk": {
+      "Event.review.stream.chunk": {
         "type": "object",
         "properties": {
           "type": {
             "type": "string",
-            "const": "integrity.review.chunk"
+            "const": "review.stream.chunk"
           },
           "properties": {
             "type": "object",
@@ -31029,8 +30775,16 @@
                 "type": "string",
                 "pattern": "^tsk.*"
               },
-              "sessionID": {
-                "type": "string"
+              "reviewID": {
+                "type": "string",
+                "minLength": 1
+              },
+              "phase": {
+                "type": "string",
+                "enum": [
+                  "integrity",
+                  "delivery"
+                ]
               },
               "kind": {
                 "type": "string",
@@ -31045,7 +30799,8 @@
             },
             "required": [
               "taskID",
-              "sessionID",
+              "reviewID",
+              "phase",
               "kind",
               "delta",
               "attempt"
@@ -31257,6 +31012,90 @@
               "taskID",
               "deliveryID",
               "status"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.delivery.review.completed": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "delivery.review.completed"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "runID": {
+                "type": "string",
+                "pattern": "^run.*"
+              },
+              "reviewID": {
+                "type": "string",
+                "minLength": 1
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "accepted",
+                  "rejected"
+                ]
+              },
+              "source": {
+                "type": "string",
+                "enum": [
+                  "llm",
+                  "host_gate"
+                ]
+              },
+              "summary": {
+                "type": "string"
+              },
+              "hostGatePassed": {
+                "type": "boolean"
+              },
+              "failureKinds": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "rejectionCount": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "deferredCount": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "details": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "taskID",
+              "reviewID",
+              "verdict",
+              "source",
+              "summary",
+              "hostGatePassed",
+              "failureKinds",
+              "rejectionCount",
+              "deferredCount",
+              "details"
             ]
           }
         },
@@ -31493,6 +31332,181 @@
           "properties"
         ]
       },
+      "QuestionOption": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "description": "Display text (1-5 words, concise)",
+            "type": "string"
+          },
+          "description": {
+            "description": "Explanation of choice",
+            "type": "string"
+          }
+        },
+        "required": [
+          "label",
+          "description"
+        ]
+      },
+      "QuestionInfo": {
+        "type": "object",
+        "properties": {
+          "question": {
+            "description": "Complete question",
+            "type": "string"
+          },
+          "header": {
+            "description": "Very short label (max 30 chars)",
+            "type": "string"
+          },
+          "options": {
+            "description": "Available choices",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/QuestionOption"
+            }
+          },
+          "multiple": {
+            "description": "Allow selecting multiple choices",
+            "type": "boolean"
+          },
+          "custom": {
+            "description": "Allow typing a custom answer",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "question",
+          "header",
+          "options"
+        ]
+      },
+      "QuestionRequest": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^que.*"
+          },
+          "sessionID": {
+            "type": "string",
+            "pattern": "^ses.*"
+          },
+          "questions": {
+            "description": "Questions to ask",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/QuestionInfo"
+            }
+          },
+          "tool": {
+            "type": "object",
+            "properties": {
+              "messageID": {
+                "type": "string"
+              },
+              "callID": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "messageID",
+              "callID"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "sessionID",
+          "questions"
+        ]
+      },
+      "Event.question.asked": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "question.asked"
+          },
+          "properties": {
+            "$ref": "#/components/schemas/QuestionRequest"
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "QuestionAnswer": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "Event.question.replied": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "question.replied"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "sessionID": {
+                "type": "string"
+              },
+              "requestID": {
+                "type": "string"
+              },
+              "answers": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/QuestionAnswer"
+                }
+              }
+            },
+            "required": [
+              "sessionID",
+              "requestID",
+              "answers"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.question.rejected": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "question.rejected"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "sessionID": {
+                "type": "string"
+              },
+              "requestID": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "sessionID",
+              "requestID"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
       "Event.task.report": {
         "type": "object",
         "properties": {
@@ -31538,6 +31552,47 @@
               "sessionID",
               "status",
               "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.file.watcher.updated": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "file.watcher.updated"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "file": {
+                "type": "string"
+              },
+              "event": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "const": "add"
+                  },
+                  {
+                    "type": "string",
+                    "const": "change"
+                  },
+                  {
+                    "type": "string",
+                    "const": "unlink"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "file",
+              "event"
             ]
           }
         },
@@ -31611,6 +31666,98 @@
             },
             "required": [
               "message"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.task_plan.updated": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "task_plan.updated"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "task": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "sessionID": {
+                    "type": "string"
+                  },
+                  "goal": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "sessionID",
+                  "goal",
+                  "status"
+                ]
+              }
+            },
+            "required": [
+              "task"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.session.compacted": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "session.compacted"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "sessionID": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "sessionID"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.file.edited": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "file.edited"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "file": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "file"
             ]
           }
         },
@@ -32181,27 +32328,6 @@
             "$ref": "#/components/schemas/Event.session.idle"
           },
           {
-            "$ref": "#/components/schemas/Event.question.asked"
-          },
-          {
-            "$ref": "#/components/schemas/Event.question.replied"
-          },
-          {
-            "$ref": "#/components/schemas/Event.question.rejected"
-          },
-          {
-            "$ref": "#/components/schemas/Event.task_plan.updated"
-          },
-          {
-            "$ref": "#/components/schemas/Event.session.compacted"
-          },
-          {
-            "$ref": "#/components/schemas/Event.file.edited"
-          },
-          {
-            "$ref": "#/components/schemas/Event.file.watcher.updated"
-          },
-          {
             "$ref": "#/components/schemas/Event.task.created"
           },
           {
@@ -32295,13 +32421,13 @@
             "$ref": "#/components/schemas/Event.goal.workflow.progress"
           },
           {
-            "$ref": "#/components/schemas/Event.integrity.review.started"
+            "$ref": "#/components/schemas/Event.review.stream.started"
           },
           {
-            "$ref": "#/components/schemas/Event.integrity.review.progress"
+            "$ref": "#/components/schemas/Event.review.stream.progress"
           },
           {
-            "$ref": "#/components/schemas/Event.integrity.review.chunk"
+            "$ref": "#/components/schemas/Event.review.stream.chunk"
           },
           {
             "$ref": "#/components/schemas/Event.delivery.gate.rejected"
@@ -32313,13 +32439,28 @@
             "$ref": "#/components/schemas/Event.delivery.preview.updated"
           },
           {
+            "$ref": "#/components/schemas/Event.delivery.review.completed"
+          },
+          {
             "$ref": "#/components/schemas/Event.integrity.review.completed"
           },
           {
             "$ref": "#/components/schemas/Event.task-queue.completed"
           },
           {
+            "$ref": "#/components/schemas/Event.question.asked"
+          },
+          {
+            "$ref": "#/components/schemas/Event.question.replied"
+          },
+          {
+            "$ref": "#/components/schemas/Event.question.rejected"
+          },
+          {
             "$ref": "#/components/schemas/Event.task.report"
+          },
+          {
+            "$ref": "#/components/schemas/Event.file.watcher.updated"
           },
           {
             "$ref": "#/components/schemas/Event.vcs.branch.updated"
@@ -32329,6 +32470,15 @@
           },
           {
             "$ref": "#/components/schemas/Event.worktree.failed"
+          },
+          {
+            "$ref": "#/components/schemas/Event.task_plan.updated"
+          },
+          {
+            "$ref": "#/components/schemas/Event.session.compacted"
+          },
+          {
+            "$ref": "#/components/schemas/Event.file.edited"
           },
           {
             "$ref": "#/components/schemas/Event.goal.report"
