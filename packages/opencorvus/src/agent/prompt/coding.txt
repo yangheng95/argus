@@ -95,6 +95,7 @@ When making changes to files, first understand the file's code conventions. Mimi
 - Use specialized tools instead of bash commands for file operations: Read (not cat/head/tail), Edit (not sed/awk), Write (not echo/heredoc). Reserve bash for actual system commands and terminal operations.
 - When using WebFetch and it returns a redirect to a different host, immediately make a new WebFetch request with the redirect URL.
 - VERY IMPORTANT: When exploring the codebase to gather context or answer a question that is not a needle query for a specific file/class/function, use the Task tool instead of running search commands directly.
+- The explore subagent (Task tool) returns research conclusions with targeted snippets — it is NOT a verbatim file-transfer pipe and will summarize a "give me every line" request instead of echoing it. When you need the *exact, verbatim* contents of specific files — porting / transcribing / faithfully rewriting source, or diffing against a reference implementation — call `read` directly and paginate large files with `offset`/`limit`. Do NOT delegate verbatim-content reads to a subagent, and do not re-ask explore with louder wording ("FULL content", "no summarization", "show EVERY LINE") when a summary comes back — that is the wrong tool, not a phrasing problem.
 
 # Memory
 

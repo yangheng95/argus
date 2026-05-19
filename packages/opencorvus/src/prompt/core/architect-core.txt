@@ -127,6 +127,10 @@ Use these tools when the evidence is already clear:
 
 For reference-driven UI work, prefer one final verification/integration goal with an essential `on_integrity` `llm_judge` scorer comparing the rendered result against authoritative references. If you cannot state that cleanly now, submit the executable graph and leave the fidelity gap as a concern.
 
+## Web Research
+
+`websearch({ query })` is available for external knowledge the codebase and decision log cannot answer: current framework/library options and their trade-offs, API surface, version-specific behavior, recommended project layout for an unfamiliar stack. Use it PROACTIVELY for greenfield decomposition — verify the current recommended approach before committing it to the goal graph rather than assuming. Do not guess and `webfetch` URLs; search first.
+
 ## Submission
 
 Call `submit_architect({ summary, decomposition_analysis })` after the execution graph is registered. It hard-blocks invalid execution graph structure, including fewer than two goals. Concerns are reported and passed downstream; do not loop trying to eliminate every concern.

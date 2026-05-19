@@ -92,6 +92,15 @@ async function exists(file: string) {
   return fs.access(file).then(() => true).catch(() => false)
 }
 
+// fs.copyFile fails with EPERM on Windows when the destination already exists
+// with the ReadOnly attribute (left behind by a prior extracted/archived copy).
+// Unlink the dest first — same `force: true` removal convention used for the
+// stale-binary cleanup above — so the copy always overwrites cleanly.
+async function copyFileForce(src: string, dst: string) {
+  await fs.rm(dst, { force: true })
+  await fs.copyFile(src, dst)
+}
+
 async function cargoPath() {
   if (!isWindows) return process.env.PATH
   const cargoDir = process.env.USERPROFILE
@@ -193,7 +202,7 @@ if (!(await exists(builtOverlay))) {
 // ── Step 6: Copy to dist/ ──
 step("Copy binary to dist/")
 await fs.mkdir(distRoot, { recursive: true })
-await fs.copyFile(builtOverlay, packagedOverlay)
+await copyFileForce(builtOverlay, packagedOverlay)
 console.log(`→ ${packagedOverlay}`)
 
 // WebView2Loader.dll — only present under the *-pc-windows-gnu target.
@@ -205,7 +214,7 @@ if (isWindows) {
   const dllSrc = path.join(release, "WebView2Loader.dll")
   if (await exists(dllSrc)) {
     const dllDst = path.join(distRoot, "WebView2Loader.dll")
-    await fs.copyFile(dllSrc, dllDst)
+    await copyFileForce(dllSrc, dllDst)
     console.log(`→ ${dllDst}`)
   } else {
     console.log("WebView2Loader.dll not present (statically linked) — skip")

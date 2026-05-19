@@ -4,7 +4,7 @@
  *
  *   {
  *     "agent": {
- *       "architect": { "tools": { "exclude": ["web_search"] } }
+ *       "architect": { "tools": { "exclude": ["websearch"] } }
  *     }
  *   }
  *
