@@ -86,133 +86,7 @@ function toRegisteredGoal(input: unknown): RegisteredGoal {
   }
 }
 
-const ACCEPTANCE_SCORER_TYPES = ["heuristic", "llm_judge", "prebuilt", "contract_audit"] as const
 const MIN_ARCHITECT_GOAL_COUNT = 2
-
-const acceptanceScorerGuidance = [
-  'Legal scorer type values are "heuristic", "llm_judge", "prebuilt", and "contract_audit".',
-  'Shell checks are heuristic scorers: { "type": "heuristic", "name": "...", "spec": { "kind": "shell", "cmd": "..." }, "expect": { "exit_code": 0 } }.',
-  'Script checks are also heuristic scorers with spec.kind="script_ref".',
-  'Do not use scorer type "shell" or "script_ref"; those are spec.kind values under type="heuristic".',
-  'Contract audits use { "type": "contract_audit", "spec": { "kind": "contract_graph", "contract_ids": [...] }, "expect": { "status": "passed" } }.',
-].join(" ")
-
-const ArchitectGoalRegistrationInputSchema = z
-  .object({
-    id: z.unknown().describe("Required string. Unique goal ID, e.g. goal_bootstrap, goal_api, goal_ui."),
-    title: z.unknown().describe("Required string. Short human-readable goal title."),
-    objective: z
-      .unknown()
-      .describe("Required string, at least 50 characters. Execution directive for this goal only."),
-    acceptance_specs: z
-      .unknown()
-      .describe(`Required non-empty array of typed acceptance specs. ${acceptanceScorerGuidance}`),
-    owned_paths: z
-      .unknown()
-      .describe("Required non-empty string array. Responsibility paths grounded in repository exploration."),
-    depends_on: z.unknown().describe("Optional string array of prerequisite goal IDs. Defaults to []."),
-    priority: z.unknown().describe('Optional "blocking" or "advisory". Defaults to "blocking".'),
-    kind: z
-      .unknown()
-      .describe('Optional "bootstrap", "feature", "verification", "integration", or "system". Defaults to "feature".'),
-    requirement_ids: z.unknown().describe("Optional string array of REQ-N references. Defaults to []."),
-  })
-  .passthrough()
-
-const ArchitectGoalModificationInputSchema = z
-  .object({
-    id: z.unknown().describe("Required string. Existing goal id to modify."),
-    updates: z.unknown().describe(`Required object containing only fields to overwrite. ${acceptanceScorerGuidance}`),
-  })
-  .passthrough()
-
-function parseRegisteredGoalForTool(toolName: "register_goal" | "modify_goal", input: unknown):
-  | { ok: true; goal: RegisteredGoal }
-  | { ok: false; message: string } {
-  const parsed = GoalContractFieldsSchema.safeParse(withGoalContractDefaults(input))
-  if (parsed.success) {
-    return { ok: true, goal: { ...parsed.data, kind: parsed.data.kind } }
-  }
-  return {
-    ok: false,
-    message: formatGoalContractError(toolName, parsed.error, input),
-  }
-}
-
-function parseGoalUpdatesForTool(input: unknown): { ok: true; updates: z.infer<typeof GoalContractUpdateSchema> } | {
-  ok: false
-  message: string
-} {
-  const parsed = GoalContractUpdateSchema.safeParse(input)
-  if (parsed.success) {
-    return {
-      ok: true,
-      updates: Object.fromEntries(Object.entries(parsed.data).filter(([, value]) => value !== undefined)),
-    }
-  }
-  return {
-    ok: false,
-    message: formatGoalContractError("modify_goal", parsed.error, { updates: input }),
-  }
-}
-
-function withGoalContractDefaults(input: unknown): unknown {
-  if (!isRecord(input)) return input
-  return {
-    ...input,
-    depends_on: input.depends_on === undefined ? [] : input.depends_on,
-    priority: input.priority === undefined ? "blocking" : input.priority,
-    kind: input.kind === undefined ? "feature" : input.kind,
-    requirement_ids: input.requirement_ids === undefined ? [] : input.requirement_ids,
-  }
-}
-
-function formatGoalContractError(toolName: string, error: z.ZodError, input: unknown): string {
-  const hints = acceptanceScorerHints(input)
-  const issueLines = error.issues.slice(0, 8).map((issue) => {
-    const pathLabel = issue.path.length > 0 ? issue.path.join(".") : "(root)"
-    return `- ${pathLabel}: ${issue.message}`
-  })
-  return [
-    `Error: ${toolName} output did not match the goal contract; collector unchanged.`,
-    ...issueLines,
-    ...hints.map((hint) => `- ${hint}`),
-    `Resubmit the same ${toolName} call with the corrected shape. ${acceptanceScorerGuidance}`,
-  ].join("\n")
-}
-
-function acceptanceScorerHints(input: unknown): string[] {
-  const hints: string[] = []
-  const specsSource = isRecord(input) && Array.isArray(input.acceptance_specs)
-    ? input.acceptance_specs
-    : isRecord(input) && isRecord(input.updates) && Array.isArray(input.updates.acceptance_specs)
-      ? input.updates.acceptance_specs
-      : []
-  for (const [specIndex, spec] of specsSource.entries()) {
-    if (!isRecord(spec) || !Array.isArray(spec.scorers)) continue
-    for (const [scorerIndex, scorer] of spec.scorers.entries()) {
-      if (!isRecord(scorer)) continue
-      const rawType = scorer.type
-      if (typeof rawType !== "string") continue
-      if ((ACCEPTANCE_SCORER_TYPES as readonly string[]).includes(rawType)) continue
-      const pathLabel = `acceptance_specs.${specIndex}.scorers.${scorerIndex}.type`
-      if (rawType === "shell") {
-        hints.push(`${pathLabel}: "shell" is not a scorer type. Use type="heuristic" with spec.kind="shell".`)
-      } else if (rawType === "script_ref") {
-        hints.push(
-          `${pathLabel}: "script_ref" is not a scorer type. Use type="heuristic" with spec.kind="script_ref".`,
-        )
-      } else {
-        hints.push(`${pathLabel}: "${rawType}" is not a scorer type. Legal values: ${ACCEPTANCE_SCORER_TYPES.join(", ")}.`)
-      }
-    }
-  }
-  return [...new Set(hints)]
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
-}
 
 function emptyCollector(): ArchitectCollector {
   return {
@@ -582,11 +456,8 @@ export function createArchitectOutputTools(input: {
         "the same logical goal; use a new id only for a genuinely new goal. " +
         "Persistence preserves existing G numbers and assigns new goals the " +
         "next unused G number.",
-      inputSchema: ArchitectGoalRegistrationInputSchema,
-      execute: async (input) => {
-        const parsedGoal = parseRegisteredGoalForTool("register_goal", input)
-        if (!parsedGoal.ok) return parsedGoal.message
-        const goal = parsedGoal.goal
+      inputSchema: GoalContractFieldsSchema,
+      execute: async (goal) => {
         const warnings: string[] = []
         for (const p of goal.owned_paths) {
           try {
@@ -624,24 +495,29 @@ export function createArchitectOutputTools(input: {
         "ids are rejected — use register_goal if you intend a brand-new goal. " +
         "A modified goal keeps its stable G number; the next implementation " +
         "attempt increments V.",
-      inputSchema: ArchitectGoalModificationInputSchema,
-      execute: async (input) => {
-        if (!isRecord(input) || typeof input.id !== "string" || input.id.trim().length === 0) {
-          return 'Error: modify_goal requires a non-empty string "id"; collector unchanged.'
-        }
-        const id = input.id
-        const updates = input.updates
+      inputSchema: z.object({
+        id: z.string().min(1).describe("Existing goal id to modify."),
+        updates: GoalContractUpdateSchema,
+      }),
+      execute: async ({ id, updates }) => {
         const idx = collector.goals.findIndex((g) => g.id === id)
         if (idx < 0) {
           return `Error: goal "${id}" not registered. Use register_goal to add new goals.`
         }
         const prior = collector.goals[idx]
-        const parsedUpdates = parseGoalUpdatesForTool(updates)
-        if (!parsedUpdates.ok) return parsedUpdates.message
-        const normalizedUpdates = parsedUpdates.updates
-        const parsedNext = parseRegisteredGoalForTool("modify_goal", { ...prior, ...normalizedUpdates })
-        if (!parsedNext.ok) return parsedNext.message
-        const next = parsedNext.goal
+        const normalizedUpdates = Object.fromEntries(Object.entries(updates).filter(([, value]) => value !== undefined))
+        const parsedNext = GoalContractFieldsSchema.safeParse({ ...prior, ...normalizedUpdates })
+        if (!parsedNext.success) {
+          const issueLines = parsedNext.error.issues.slice(0, 8).map((issue) => {
+            const pathLabel = issue.path.length > 0 ? issue.path.join(".") : "(root)"
+            return `- ${pathLabel}: ${issue.message}`
+          })
+          return [
+            `Error: modify_goal produced an invalid goal after merge; collector unchanged.`,
+            ...issueLines,
+          ].join("\n")
+        }
+        const next = parsedNext.data
         collector.goals[idx] = next
         return `OK: goal "${id}" fields updated (${Object.keys(normalizedUpdates).length} change(s))\nCurrent: ${formatGoalSnapshot(next)}`
       },

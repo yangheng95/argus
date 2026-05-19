@@ -19,17 +19,30 @@ const essentialDeliveryVisualSpec: AcceptanceSpec = {
 
 function collectorForReferenceTask(specs: AcceptanceSpec[]): ArchitectCollector {
   return {
-    goals: [{
-      id: "goal_verify",
-      title: "Verification",
-      objective: "Verify the final reference-driven page against the PRD/SPEC and rendered browser output.",
-      acceptance_specs: specs,
-      owned_paths: ["tests/e2e/visual.test.ts"],
-      depends_on: [],
-      priority: "blocking",
-      kind: "verification",
-      requirement_ids: ["REQ-visual"],
-    }],
+    goals: [
+      {
+        id: "goal_feature",
+        title: "Feature implementation",
+        objective: "Implement the reference-driven page surface that the verification goal evaluates.",
+        acceptance_specs: [],
+        owned_paths: ["src/page.tsx"],
+        depends_on: [],
+        priority: "blocking",
+        kind: "feature",
+        requirement_ids: [],
+      },
+      {
+        id: "goal_verify",
+        title: "Verification",
+        objective: "Verify the final reference-driven page against the PRD/SPEC and rendered browser output.",
+        acceptance_specs: specs,
+        owned_paths: ["tests/e2e/visual.test.ts"],
+        depends_on: [],
+        priority: "blocking",
+        kind: "verification",
+        requirement_ids: ["REQ-visual"],
+      },
+    ],
     traceability: [{ requirementID: "REQ-visual", goalIDs: ["goal_verify"] }],
     source_coverage: [],
     reference_coverage: [{
