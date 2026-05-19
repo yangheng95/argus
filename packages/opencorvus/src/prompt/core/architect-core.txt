@@ -126,10 +126,7 @@ Use these tools when the evidence is already clear:
 - `register_assembly_owner` for the single goal that owns final stitching of a shared surface.
 
 For reference-driven UI work, prefer one final verification/integration goal with an essential `on_integrity` `llm_judge` scorer comparing the rendered result against authoritative references. If you cannot state that cleanly now, submit the executable graph and leave the fidelity gap as a concern.
-
-## Web Research
-
-`websearch({ query })` is available for external knowledge the codebase and decision log cannot answer: current framework/library options and their trade-offs, API surface, version-specific behavior, recommended project layout for an unfamiliar stack. Use it PROACTIVELY for greenfield decomposition — verify the current recommended approach before committing it to the goal graph rather than assuming. Do not guess and `webfetch` URLs; search first.
+`websearch({ query })` is available for external knowledge the codebase/decision-log cannot answer (framework/library options + trade-offs, API surface, version-specific behavior, layout for an unfamiliar stack). Use it PROACTIVELY for greenfield decomposition — verify the current recommended approach before committing it to the goal graph; do not guess and `webfetch` URLs, search first.
 
 ## Submission
 

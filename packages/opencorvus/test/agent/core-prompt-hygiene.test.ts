@@ -44,7 +44,7 @@ describe("core prompt hygiene", () => {
       designAnalyst: 125,
       integrity: 175,
       intentAnalysis: 130,
-      orchestrator: 260,
+      orchestrator: 300,
       prosecutor: 80,
       requirements: 180,
     }
@@ -429,16 +429,25 @@ describe("core prompt hygiene", () => {
     }
   })
 
-  test("orchestrator prompt treats direct build as supported but not always recommended", async () => {
+  test("orchestrator prompt forbids workflow bypass; direct build is the narrow exception", async () => {
+    // 2026-05-20 (user directive): the agent team delivers via the workflow
+    // pipeline. Direct task-level build is NOT a casually-"supported" option
+    // for kind=workflow — it is reserved for kind=build and post-review fixes.
+    // This replaces the prior "direct build is still supported" policy copy.
     const text = await readPrompt("orchestrator")
     expect(text).not.toContain("A trivial bug fix calls `build → deliver`, full stop.")
     expect(text).not.toContain("NOT a prescriptive workflow")
-    expect(text).not.toContain("Fresh `Kind: workflow` cannot start with task-level `build({ request })`")
     expect(text).not.toContain("never violate the task-kind contract")
+    // The prior permissive copy must be gone (it was the bypass loophole).
+    expect(text).not.toContain("Direct build is supported:")
     const normalized = text.replace(/\s+/g, " ")
-    expect(normalized).toContain('`build({ request, directBuildIntent: "modify_files" })` is still supported')
-    expect(normalized).toContain('direct `build({ request, directBuildIntent: "modify_files" })` is allowed')
-    expect(normalized).toContain("Build is an implementation tool, not a repository investigation tool")
+    expect(normalized).not.toContain('`build({ request, directBuildIntent: "modify_files" })` is still supported')
+    expect(normalized).toContain("The system delivers a project through its specialist agent team")
+    expect(normalized).toContain("Bypassing the workflow is prohibited in principle")
+    expect(normalized).toContain("you MUST NOT jump straight to `build({ request })`")
+    expect(normalized).toContain('Direct `build({ request, directBuildIntent: "modify_files" })` is the narrow exception')
+    expect(normalized).toContain("explicit `kind=build` tasks")
+    expect(normalized).toContain("Build is an implementation tool, never a repository-investigation tool")
     expect(normalized).toContain("Repository investigation belongs to `analyze_intent`, `requirements`, or the registered `explore` subagent surface")
     expect(normalized).not.toContain(["inspect", "only"].join("_"))
     expect(normalized).not.toContain("Task-level inspect-only build is not a workflow path")

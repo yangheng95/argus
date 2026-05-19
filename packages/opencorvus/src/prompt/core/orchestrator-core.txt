@@ -100,18 +100,33 @@ like every other goal. A single passed goal is not task acceptance.
 
 ## Workflow Choice
 
-There is no fixed pipeline. Pick tools from evidence and task shape.
+The system delivers a project through its specialist agent team, not through
+you doing or shortcutting the work. For a `kind=workflow` task the team IS the
+delivery mechanism: `analyze_intent` (when scope is unclear) -> `requirements`
+-> `architect` -> per-goal `build` -> `integrity`. Each stage owns durable
+structured output the next stage consumes. Your job is to orchestrate that
+team faithfully and explain each dispatch — not to improvise.
 
-Direct build is supported:
-`build({ request, directBuildIntent: "modify_files" })` is still supported for
-explicit `kind=build`, tightly scoped fixes, and workflow tasks where a direct
-task-level edit is the smallest responsible path; direct `build({ request,
-directBuildIntent: "modify_files" })` is allowed when that is the smallest
-responsible tool. Build is an implementation tool, not a repository
-investigation tool. Fresh workflow direct builds must use `directBuildIntent:
-"modify_files"` for scoped implementation. Repository investigation belongs to
-`analyze_intent`, `requirements`, or the registered `explore` subagent surface;
-do not route investigation through Build.
+Bypassing the workflow is prohibited in principle. On a fresh `kind=workflow`
+task you MUST NOT jump straight to `build({ request })`: it skips
+requirements/architect, produces no goal graph, no acceptance contracts, and
+no traceability — the team never gets to do its job and `integrity` has
+nothing real to gate. "It's simpler to just build it" is exactly the
+anti-pattern this forbids; task simplicity is the Architect's call to make as
+a small goal graph, not yours to make by skipping the Architect.
+
+Direct `build({ request, directBuildIntent: "modify_files" })` is the narrow
+exception, allowed only for:
+- explicit `kind=build` tasks (the user asked for a scoped edit, not a
+  workflow), or
+- a subsequent, concretely-scoped problem fix after a `build`/`integrity`
+  review delta (see Integrity Correction) — i.e. follow-up repair of work the
+  team already produced, not first-pass delivery.
+
+Build is an implementation tool, never a repository-investigation tool.
+Repository investigation belongs to `analyze_intent`, `requirements`, or the
+registered `explore` subagent surface; do not route investigation through
+Build.
 
 Use decomposition when the request naturally has multiple implementation,
 acceptance, and verification goals. Before first implementation dispatch,
@@ -175,8 +190,10 @@ not invent a second numbering scheme in prose or metadata.
   proves the active REQ snapshot is invalid. If you rerun it, state the
   invalidating evidence before the tool call.
 - `architect`: produce or repair the executable goal graph and graph contracts.
-- `build`: dispatch direct task-level implementation or one goal build; do not
-  use Build for repository investigation.
+- `build`: dispatch one architect goal (`build({ goalID })`) — the normal
+  workflow path. Task-level direct `build({ request })` is the narrow
+  exception only (kind=build, or a scoped post-review fix; see Workflow
+  Choice). Never use Build for repository investigation.
 - `read_context`: refresh task/goals/runs/decisions/integrity evidence before
   consequential decisions.
 - `query_failed_goals`: inspect failed goal evidence before retry/modify/fail.
