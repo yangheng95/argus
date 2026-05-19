@@ -1,7 +1,7 @@
 # DeliveryAgent Fresh-Eyes 解耦方案
 
 - 日期：2026-05-18
-- 状态：已与 codex 两轮共识闭环（rule 35）；待实施
+- 状态：已被 `delivery-host-gate-deblocking-2026-05-19.md` 修订；其中 host_gate 终局拒绝设计废止
 - 分支：codex/agent-boundary-role-contract
 - 关联规则：rule 5/6/6.1（禁过度工程、信任 LLM、prompt-over-host）、rule 8（禁双源）、rule 13（禁状态机）、rule 15（禁合成/代写消息）、rule 32/35（落盘+穷举调用点）、rule 36（配测试）
 

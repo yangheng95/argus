@@ -7,19 +7,19 @@ import { type DeliveryVerdictType } from "../../src/delivery/verdict"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
 
-// Fresh-eyes decoupling — specs/delivery-fresh-eyes-decoupling-2026-05-18.md.
-// The DeliveryAgent runs ONLY after the host deterministic gate has already
-// passed. A failed gate short-circuits to a host-synthesized final decision;
-// the agent is never invoked to restate the failure (de-parroting).
+// Host evidence deblocking — specs/delivery-host-gate-deblocking-2026-05-19.md.
+// The DeliveryAgent is the only final verdict author. Host evidence remains
+// available on the decision but must not short-circuit or synthesize final.
 
 afterEach(async () => {
   mock.restore()
   await Instance.disposeAll()
 })
 
-test("manifest gate failure does NOT run DeliveryAgent and emits a host_gate final", async () => {
+test("manifest gate failure still runs DeliveryAgent and keeps the agent final", async () => {
   await using tmp = await tmpdir({ git: true })
-  const verify = spyOn(DeliveryAgent, "verify").mockResolvedValue(agentRejected())
+  const rejected = agentRejected()
+  const verify = spyOn(DeliveryAgent, "verify").mockResolvedValue(rejected)
   spyOn(ProjectGate, "buildDeliveryEvidenceManifest").mockResolvedValue(failedManifest())
 
   await Instance.provide({
@@ -31,22 +31,16 @@ test("manifest gate failure does NOT run DeliveryAgent and emits a host_gate fin
         delivery: { summary: "Merged UI changes.", changedFiles: ["src/App.tsx"] },
       })
 
-      expect(decision.source).toBe("host_gate")
+      expect(decision.source).toBe("llm")
       expect(decision.final.verdict).toBe("rejected")
-      if (decision.final.verdict !== "rejected") throw new Error("expected rejected")
-      // §2.2: routable rejected shape for the existing orchestrator retry chain.
-      expect(decision.final.rejection_details.length).toBeGreaterThan(0)
-      for (const d of decision.final.rejection_details) {
-        expect(["build", "test", "lint", "runtime", "quality", "startup", "visual"]).toContain(d.category)
-      }
-      expect(decision.final.tool_call_evidence.some((e) => e.tool === "DeliveryEvidenceManifest")).toBe(true)
-      // The agent never ran, so there is no raw agent verdict.
-      expect(decision.rawAgentVerdict).toBeUndefined()
+      expect(decision.final).toBe(rejected)
+      expect(decision.rawAgentVerdict).toBe(rejected)
+      expect(decision.hostGate.passed).toBe(false)
+      expect(decision.hostGate.failures[0]?.kind).toBe("manifest")
     },
   })
 
-  // The headline de-parrot guarantee: the agent is NOT invoked on gate failure.
-  expect(verify).toHaveBeenCalledTimes(0)
+  expect(verify).toHaveBeenCalledTimes(1)
 })
 
 test("gate pass → agent accepts → post-repair gate still passes → accepted final (llm)", async () => {
@@ -83,7 +77,7 @@ test("gate pass → agent accepts → post-repair gate still passes → accepted
   expect(manifest).toHaveBeenCalledTimes(2)
 })
 
-test("gate pass → agent accepts → post-repair gate FAILS → host_gate final, agent kept as evidence", async () => {
+test("gate pass → agent accepts → post-repair gate FAILS → accepted final with failed host evidence", async () => {
   await using tmp = await tmpdir({ git: true })
   const accepted = agentAcceptedAfterRepair()
   const verify = spyOn(DeliveryAgent, "verify").mockResolvedValue(accepted)
@@ -100,12 +94,11 @@ test("gate pass → agent accepts → post-repair gate FAILS → host_gate final
         delivery: { summary: "Merged UI changes.", changedFiles: ["src/App.tsx"] },
       })
 
-      // The repair broke the build: host gate owns the final, not the agent.
-      expect(decision.source).toBe("host_gate")
-      expect(decision.final.verdict).toBe("rejected")
-      // The agent's accepted verdict survives only as raw evidence.
+      expect(decision.source).toBe("llm")
+      expect(decision.final.verdict).toBe("accepted")
+      expect(decision.hostGate.passed).toBe(false)
       expect(decision.rawAgentVerdict).toBe(accepted)
-      expect(decision.final).not.toBe(accepted)
+      expect(decision.final).toBe(accepted)
     },
   })
 

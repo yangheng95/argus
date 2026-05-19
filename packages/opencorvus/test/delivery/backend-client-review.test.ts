@@ -57,7 +57,7 @@ describe("delivery backend API and client contract specialist reviews", () => {
     expect(review?.evidenceRefs).toContain("route:src/routes/users.ts")
   })
 
-  test("client contract review requires client evidence", async () => {
+  test("client contract review does not block when selected without concrete client evidence", async () => {
     const review = await runClientContractReview({
       taskID: "tsk_client_missing",
       runID: "run_client_missing",
@@ -66,11 +66,8 @@ describe("delivery backend API and client contract specialist reviews", () => {
       surfaceManifest: manifest(["client_contract"], { clientEvidence: false }),
     })
 
-    expect(review?.findings[0]).toMatchObject({
-      proposedSeverity: "blocking",
-      category: "evidence_quality",
-      claim: expect.stringContaining("without client file or endpoint evidence"),
-    })
+    expect(review?.findings).toEqual([])
+    expect(review?.summary).toContain("skipped blocking checks")
   })
 
   test("client contract review flags route/client endpoint drift", async () => {

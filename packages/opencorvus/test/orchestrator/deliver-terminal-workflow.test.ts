@@ -1,18 +1,18 @@
 import { expect, test } from "bun:test"
 
-test("orchestrator workflow treats deliver as verdict evidence, not a host-forced stop", async () => {
+test("orchestrator workflow blocks repeated blind delivery rebuilds without host-forced task failure", async () => {
   const prompt = await Bun.file(new URL("../../src/prompt/core/orchestrator-core.txt", import.meta.url)).text()
   const agent = await Bun.file(new URL("../../src/orchestrator/agent.ts", import.meta.url)).text()
   const workflow = await Bun.file(new URL("../../src/engine/workflow.ts", import.meta.url)).text()
   const tools = await Bun.file(new URL("../../src/orchestrator/tools.ts", import.meta.url)).text()
   const normalizedPrompt = prompt.replace(/\s+/g, " ")
 
-  expect(normalizedPrompt).toContain("Rejected `deliver` returns evidence for the next orchestrator decision")
+  expect(normalizedPrompt).toContain("Repeated identical evidence means the next action must change strategy")
   expect(prompt).toContain("assistant.auto_iteration=false")
   expect(prompt).toContain("assistant.auto_iteration=true")
-  expect(normalizedPrompt).toContain("not a host-side mandate to end the scheduler")
   expect(prompt).toContain("Accepted deliveries complete the task inside the tool")
   expect(normalizedPrompt).toContain("Valid next actions include task-level build")
+  expect(normalizedPrompt).toContain("do not call another task-level direct build for the same signature")
   expect(normalizedPrompt).toContain("the host will not open rework attempts or queue repair work by itself")
   expect(prompt).not.toContain("default scheduler endpoint")
   expect(prompt).not.toContain("Stop\nthe scheduler when `deliver` returns")
@@ -29,7 +29,8 @@ test("orchestrator workflow treats deliver as verdict evidence, not a host-force
   expect(agent).not.toContain("withStepHook")
   expect(agent).not.toContain("stopSignal")
 
-  expect(tools).toContain("the host did not request a scheduler stop")
+  expect(tools).toContain("must not call another task-level direct build for the same signature")
+  expect(tools).toContain("no automatic task-level rework is queued")
   expect(tools).toContain("const autoIteration = (await EngineConfig.get()).auto_iteration === true")
   expect(tools).toContain("if (autoIteration)")
   expect(tools).not.toContain("requestStopAfterCurrentStep")

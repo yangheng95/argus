@@ -141,14 +141,24 @@ export async function detectDeliverySurfaces(input: {
     addEvidence(evidence, surfaces, "backend_api", "API route files detected", ...routeRefs(routeFiles))
   }
 
-  addDependencySurface({ evidence, surfaces, surface: "client_contract", deps, names: CLIENT_DEPS })
   const clientFiles = allFileRefs.filter(
     (file) =>
       /(^|\/)(sdk|client|clients|lib\/api|services\/api|generated)\//.test(file) ||
       /(openapi|graphql|fetch|api-client|client)\.[cm]?[jt]sx?$/.test(file),
   )
   if (clientFiles.length > 0) {
-    addEvidence(evidence, surfaces, "client_contract", "client/API contract files detected", ...fileRefs(clientFiles))
+    const clientDependencyRefs = [...deps].filter((dep) => CLIENT_DEPS.includes(dep)).map((dep) => ({
+      kind: "dependency" as const,
+      ref: dep,
+    }))
+    addEvidence(
+      evidence,
+      surfaces,
+      "client_contract",
+      "client/API contract files detected",
+      ...fileRefs(clientFiles),
+      ...clientDependencyRefs,
+    )
   }
   const testFiles = allFileRefs.filter(
     (file) =>
