@@ -50,7 +50,12 @@ import { Provider } from "@/provider/provider"
 import { resolveAgentModel } from "@/agent/model"
 import { EngineConfig } from "@/engine"
 import { INFORMATION_MISSING_FALLBACK_TEXT } from "@/prompt/information-missing"
-import { messageHasInformationMissing, extractInformationMissingBlock } from "@/agent/runner"
+import {
+  AgentRunError,
+  buildHardErrorFromFinalMessage,
+  messageHasInformationMissing,
+  extractInformationMissingBlock,
+} from "@/agent/runner"
 import { Session } from "@/session"
 import { SessionPrompt } from "@/session/prompt"
 import type { Message } from "@/session/message"
@@ -122,22 +127,78 @@ function serializeOrchestratorTaskError(error: unknown): {
   message: string
   taskError: string
 } {
-  const message = error instanceof Error ? error.message : String(error)
-  const errorName =
-    error instanceof Error
-      ? (typeof error.name === "string" && error.name.length > 0 ? error.name : error.constructor.name || "Error")
-      : "UnknownError"
-  const envelope: OrchestratorTaskErrorEnvelope = {
-    errorName,
-    message,
-    ...(error instanceof NamedError ? { data: (error as NamedError & { data: unknown }).data } : {}),
-  }
+  const envelope = orchestratorErrorEnvelope(error)
+  const message = envelope.message
   return {
     envelope,
     message,
     taskError:
       `Orchestrator error: ${message}` +
       `${ORCHESTRATOR_TASK_ERROR_ENVELOPE_MARKER}${JSON.stringify(envelope)}`,
+  }
+}
+
+function orchestratorErrorEnvelope(error: unknown): OrchestratorTaskErrorEnvelope {
+  const candidate = error as { name?: unknown; message?: unknown; data?: unknown; constructor?: { name?: string } }
+  const data = candidate && typeof candidate === "object" ? candidate.data : undefined
+  const dataMessage =
+    data && typeof data === "object" && typeof (data as { message?: unknown }).message === "string"
+      ? (data as { message: string }).message
+      : undefined
+  const message =
+    dataMessage ??
+    (typeof candidate?.message === "string" ? candidate.message : String(error))
+  const errorName =
+    typeof candidate?.name === "string" && candidate.name.length > 0
+      ? candidate.name
+      : error instanceof Error && error.constructor.name
+        ? error.constructor.name
+        : "UnknownError"
+  return {
+    errorName,
+    message,
+    ...(error instanceof NamedError ? { data: (error as NamedError & { data: unknown }).data } : {}),
+  }
+}
+
+function hardErrorEnvelope(error: AgentRunError): OrchestratorTaskErrorEnvelope {
+  return error.cause === undefined
+    ? orchestratorErrorEnvelope(error)
+    : orchestratorErrorEnvelope(error.cause)
+}
+
+async function recordOrchestratorSessionHardError(input: {
+  taskID: string
+  sessionID: string
+  error: AgentRunError
+}) {
+  const { recordOrchestratorStreamError, maybeTripOrchestratorStreamErrorFuse } = await import("@/engine/persist")
+  const now = Date.now()
+  const envelope = hardErrorEnvelope(input.error)
+  const reason = `${envelope.errorName}: ${envelope.message}`
+  recordOrchestratorStreamError({
+    taskID: input.taskID,
+    reason,
+    errorName: envelope.errorName,
+    sessionID: input.sessionID,
+    now,
+  })
+  await blockActiveRunForTask(input.taskID, {
+    blockingReason: "orchestrator_stream_error",
+    error: reason,
+    summary: `Orchestrator session hard error: ${reason}`,
+  })
+  const fuse = await maybeTripOrchestratorStreamErrorFuse({
+    taskID: input.taskID,
+    now,
+    lastReason: reason,
+  })
+  if (fuse.tripped) {
+    log.error("orchestrator stream-error fuse tripped — task marked failed", {
+      taskID: input.taskID,
+      consecutive: fuse.consecutive,
+      windowMs: fuse.windowMs,
+    })
   }
 }
 
@@ -454,6 +515,15 @@ export namespace Orchestrator {
         process.exit(99)
       }
 
+      if (finalMessage) {
+        const hardError = buildHardErrorFromFinalMessage({
+          kind: "orchestrator",
+          agentName: "orchestrator",
+          finalMessage,
+        })
+        if (hardError) throw hardError
+      }
+
       if (AgentTrace.isEnabled()) {
         const finalText = finalMessage?.parts
           ?.filter((p) => p.type === "text")
@@ -550,6 +620,13 @@ export namespace Orchestrator {
           kind: "orchestrator_wake_failure",
           error: structured.message,
           report: { summary: structured.message, detail: structured.message },
+        })
+      }
+      if (error instanceof AgentRunError && agentSessionID) {
+        await recordOrchestratorSessionHardError({
+          taskID,
+          sessionID: agentSessionID,
+          error,
         })
       }
       // Surface the error on the task so UI/orphan-recovery can see it.
@@ -718,7 +795,7 @@ async function buildSystemParts(task: TaskRow, _event: OrchestratorEvent | undef
     ctx.push("- Keep repairs scoped to the latest integrity acceptance evidence, then run the integrity review again; stop and ask when the failure repeats or needs operator judgment.")
   } else {
     ctx.push("- assistant.auto_iteration=false: rejected acceptance reviews and failed terminal waves do not open host-side rework attempts or queue a new build loop by themselves.")
-    ctx.push("- The current reasoning turn still owns the next decision: use the evidence to repair, replan, ask a concrete question, fail the task, or report the current result.")
+    ctx.push("- The current reasoning turn still owns the next decision: use the evidence to repair, replan, ask a concrete question, or fail the task.")
   }
   ctx.push("")
 

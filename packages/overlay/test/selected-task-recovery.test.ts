@@ -18,6 +18,7 @@ const { resetWriter } = await import("../src/services/tree-writer");
 function conversationBody(taskID: string, sequence: number) {
   return {
     board: {
+      snapshotVersion: `board:${taskID}:${sequence}`,
       task: {
         id: taskID,
         status: "active",

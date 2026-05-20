@@ -20,12 +20,12 @@ Frontmatter 字段（`src/skill/skill.ts:23-63`）：
 | `name` | string（必需） | 全局唯一 ID，被 permission 引用 |
 | `description` | string（必需） | 一句话描述，告诉 agent 何时激活 |
 | `platforms` | `("win32" \| "darwin" \| "linux")[]` | 平台过滤，空数组 = 全平台 |
-| `stage` | string | 阶段：`spec` / `delivery` / `build` … |
+| `stage` | string | `required_tools` 所属阶段，例如 `requirements` / `design_analyst` / `build` |
 | `auto_detect.files` | string[] | 项目中存在这些文件时自动加载 |
 | `auto_detect.deps` | string[] | `package.json` 中存在这些依赖时自动加载 |
 | `auto_detect.task_signals` | object | 任务级信号（`has_attachment_image` / `request_contains_url` / `request_contains_figma_url` / `package_has_script[]` / `request_text_any[]`） |
 | `priority` | number | 多 skill 命中时的排序（大在前，默认 0） |
-| `required_tools` | string[] | 必须调过的 tool 名；delivery 通过 `submit_verdict` + `tool_call_evidence` 强制 |
+| `required_tools` | string[] | 该 skill 所属 stage 必须可用/执行的 tool 名；跨 stage 注入正文时不会强制其他 stage 调用这些工具 |
 
 ## 2. 内置 Skills
 
@@ -33,11 +33,11 @@ Frontmatter 字段（`src/skill/skill.ts:23-63`）：
 
 | Skill | 用途 |
 |---|---|
-| `webpage-generate` | 生成静态 HTML/CSS 网页（webpage replication 等场景的脚手架） |
-| `image-generate` | 调用外部图像生成接口产出参考图 |
-| `research-report` | 调研类任务的输出骨架 |
+| `webpage-generate` | 针对 live webpage reference 产出带 mirror 证据的 PRD/SPEC |
+| `image-generate` | 针对纯截图视觉参考产出带 mirror 证据的 PRD/SPEC |
+| `research-report` | 用 `websearch` 和按需 `webfetch` 产出带来源的 Markdown 调研报告 |
 
-> 历史文档曾把 `spec-research` / `prd-spec` / `delivery-verify-web` / `delivery-verify-api` / `opencorvus-<channel>-channel-config` 等列入"内置"——这些**不是 builtin**，它们是社区或本仓库 `skills-market/` 里的 Skill，需要通过 `skills.paths` / `skills.urls` 显式加载。
+> 其他 skill 需要通过 `skills.paths` / `skills.urls` 显式加载。
 >
 > `panel-control` builtin skill 已在 commit `f94f56231` 删除，仍引用它的客户端会找不到该 skill。
 
@@ -105,14 +105,14 @@ opencorvus skill install owner/repo
 
 ## 6. Skill ↔ Agent 调用关系
 
-Skill 指令在 session 初始化时注入对应 stage agent 的 system prompt：
+Session 初始化时会把命中的 `SKILL.md` 正文注入 agent 的 system prompt。`auto_detect` 命中的 skill 会跨 stage 注入，避免相关经验因为 stage 标记不一致而缺失：
 
-- `stage: "build"` 的 skill 只注入 build agent
-- `stage: "delivery"` 的 skill 只注入 delivery agent
-- 未声明 `stage` 的 skill 注入所有 agent
-- Planning-stage agent（`requirements` / `architect`）**不**接收 executor skills——他们规划目标，不实现
+- `stage` 表示该 skill 的 `required_tools` 由哪个 stage 拥有，不控制正文可见性
+- `stage: "build"` 的 skill 若命中，可作为上下文注入其他 stage，但其 `required_tools` 只由 build 强制
+- `stage: "design_analyst"` 的 skill 若命中，可作为上下文注入 build，但 mirror 采集类 `required_tools` 仍只由 design-analysis 强制
+- 未声明 `stage` 的 skill 视为全局 skill，其 `required_tools` 会随当前 agent 调用链生效；没有 active stage 的解析路径只强制全局 skill 的 `required_tools`
 
-Agent 按 `description` 决定是否激活；`auto_detect` 提供文件 / 依赖 / 任务信号的自动匹配。**Skill 本身不能直接调用工具**——它通过注入上下文影响 agent 行为。
+`auto_detect` 提供文件 / 依赖 / 任务信号的自动匹配。**Skill 本身不能直接调用工具**——它通过注入指令和 stage-owned required-tool contract 影响 agent 行为。
 
 ## 7. Permission 配置
 
@@ -121,7 +121,7 @@ Agent 按 `description` 决定是否激活；`auto_detect` 提供文件 / 依赖
   "permission": {
     "skill": {
       "*": "ask",
-      "prd-spec": "allow",
+      "research-report": "allow",
       "local-note": "deny"
     }
   }

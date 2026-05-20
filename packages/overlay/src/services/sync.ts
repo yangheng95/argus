@@ -52,10 +52,11 @@ export function retryBoard(sync?: boolean): void {
 
 /**
  * Extract the snapshotVersion string from a board response object.
- * Returns an empty string when absent.
+ * Board payloads without a canonical snapshot version are invalid.
  */
 export function boardSnapshot(board: any): string {
-  return typeof board?.snapshotVersion === "string" ? board.snapshotVersion : "";
+  if (typeof board?.snapshotVersion === "string" && board.snapshotVersion.length > 0) return board.snapshotVersion;
+  throw new Error("board.snapshotVersion must be a non-empty string");
 }
 
 // ── stopTimers ──

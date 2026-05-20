@@ -10,7 +10,6 @@ import {
 } from "./engine.sql"
 import { Event } from "./model"
 import { EngineProtocol } from "./protocol"
-import { buildOperatorPrompt } from "./helpers"
 import { orchestratorState } from "./orchestrator-state"
 import {
   persistFailedRunEvaluation,
@@ -29,14 +28,15 @@ import {
   findTask,
   listActiveGoalRunsForRun,
   listGoalRunsForRun,
+  listLiveExecutorSessionsForTask,
   listLiveRunsForProject,
   requireTask,
   type RunRow,
-  type TaskRow,
 } from "./store"
 import { Identifier } from "@/id/id"
-import { EXECUTOR_ACTIVE_RUN_STATUSES, RUNTIME_MONITORED_RUN_STATUSES } from "./catalog"
+import { EXECUTOR_ACTIVE_RUN_STATUSES, RUNTIME_MONITORED_RUN_STATUSES, isLiveGoalRunStatus } from "./catalog"
 import { PerRunState } from "./per-run-state"
+import { isInteractionBlockingReason } from "./run-blocking"
 
 const log = Log.create({ service: "engine-runtime" })
 const DELIVERY_FETCH_TIMEOUT_MS = parseInt(process.env.OPENCORVUS_DELIVERY_FETCH_TIMEOUT_MS || "300000", 10) // 5 min for executor.delivery() (git operations can be slow on Windows with large repos)
@@ -44,9 +44,9 @@ const SYNC_RUN_TIMEOUT_MS = parseInt(process.env.OPENCORVUS_SYNC_RUN_TIMEOUT_MS 
 const EXECUTOR_STATUS_TIMEOUT_MS = 30_000 // 30s for executor.status()
 
 const eventBridgeAborts = new Map<string, AbortController>() // goalRunID or runID → AbortController
+const goalBatchNotifications = new Map<string, string>()
 
 const INTERACTION_STALE_MS = parseInt(process.env.OPENCORVUS_INTERACTION_TIMEOUT_MS || "300000", 10) // auto-reject stale interactions (5min default)
-const INTERACTION_BLOCKING_REASONS = new Set(["permission", "question"])
 
 
 /** Check if any executor session is active for the current project. Used as a guard before Instance.dispose(). */
@@ -100,8 +100,52 @@ export namespace EngineRuntime {
    * no longer tries to reconcile previous-process state here.
    */
   async function syncGoalRuns(runID: string, hooks: RuntimeHooks) {
-    void runID
-    void hooks
+    const run = findRun(runID)
+    if (!run) throw new Error(`Run not found: ${runID}`)
+    const goalRuns = listGoalRunsForRun(runID)
+    if (goalRuns.length === 0) return
+    if (goalRuns.some((goalRun) => isLiveGoalRunStatus(goalRun.status))) return
+
+    const pending = findPendingInteractions(run.id)
+    if (pending.length > 0) {
+      if (run.status !== "blocked") {
+        await hooks.updateRun(run, { status: "blocked", blocking_reason: pending[0].request_type }, "Run blocked")
+      }
+      return
+    }
+
+    if (listLiveExecutorSessionsForTask(run.task_id).length > 0) return
+
+    if (run.status === "blocked") {
+      await hooks.updateRun(run, { status: "running", blocking_reason: null, error: null }, "Goal runs settled")
+    }
+
+    const fingerprint = terminalGoalBatchFingerprint(goalRuns)
+    if (goalBatchNotifications.get(run.id) === fingerprint) return
+    goalBatchNotifications.set(run.id, fingerprint)
+
+    const passed = goalRuns.filter((goalRun) => goalRun.status === "completed").length
+    const failed = goalRuns.filter((goalRun) => goalRun.status === "failed" || goalRun.status === "aborted").length
+    const [{ dispatchTaskLoop }, { OrchestratorEventNote }] = await Promise.all([
+      import("@/engine/queue"),
+      import("@/orchestrator/agent"),
+    ])
+    try {
+      await dispatchTaskLoop({
+        taskID: run.task_id,
+        event: {
+          note: OrchestratorEventNote.batchComplete({
+            runID: run.id,
+            passed,
+            failed,
+            total: goalRuns.length,
+          }),
+        },
+      })
+    } catch (error) {
+      goalBatchNotifications.delete(run.id)
+      throw error
+    }
   }
 
   export async function syncTask(taskID: string, hooks: RuntimeHooks) {
@@ -173,7 +217,7 @@ export namespace EngineRuntime {
     }
 
     if (!queueTaskID) {
-      if (run.status === "blocked" && INTERACTION_BLOCKING_REASONS.has(run.blocking_reason ?? "")) {
+      if (run.status === "blocked" && isInteractionBlockingReason(run.blocking_reason)) {
         await hooks.updateRun(run, { status: "running", blocking_reason: null }, "Run resumed")
       }
       return
@@ -255,28 +299,6 @@ export namespace EngineRuntime {
     }
   }
 
-  export async function createOperatorRun(task: TaskRow, run: RunRow, note: string) {
-    const { openTaskForOperatorMessage } = await import("./task-message-open")
-    const openedTask = await openTaskForOperatorMessage(task, "Operator note opened task")
-    const { createRun } = await import("./writer")
-    const { findActivePlanForTask } = await import("./store")
-    const created = createRun({
-      taskID: openedTask.id,
-      planVersionID: findActivePlanForTask(openedTask.id)?.id ?? null,
-      sessionID: run.session_id ?? null,
-      executor: run.executor,
-      status: "queued",
-      phase: "execute",
-      metadata: {
-        previous_run_id: run.id,
-        strategy: "operator_note",
-        prompt_override: buildOperatorPrompt(note),
-      },
-      summary: "Run queued from operator note",
-    })
-    return created.id
-  }
-
 }
 
 
@@ -317,6 +339,25 @@ function stopEventBridge(runID: string) {
 }
 
 type RuntimeHooks = import("./runtime-hooks").RuntimeHooks
+
+function terminalGoalBatchFingerprint(
+  goalRuns: Array<{
+    id: string
+    status: string
+    time_completed: number | null
+    time_updated: number | null
+  }>,
+) {
+  return goalRuns
+    .map((goalRun) => [
+      goalRun.id,
+      goalRun.status,
+      goalRun.time_completed ?? "",
+      goalRun.time_updated ?? "",
+    ].join(":"))
+    .sort()
+    .join("|")
+}
 
 
 function upsertExecutorInteraction(

@@ -1,0 +1,303 @@
+import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
+import {
+  EngineArtifactTable,
+  EngineExecutorSessionTable,
+  EngineInteractionRequestTable,
+  EngineTaskTable,
+} from "../../src/engine/engine.sql"
+import { EngineRuntime } from "../../src/engine/runtime"
+import { hooks } from "../../src/engine/state"
+import { findRun, findTask } from "../../src/engine/store"
+import { deriveTaskStatus } from "../../src/engine/task-status"
+import { Instance } from "../../src/project/instance"
+import * as TaskLoop from "../../src/orchestrator/loop"
+import { Database } from "../../src/storage/db"
+import { Log } from "../../src/util/log"
+import { resetDatabase } from "../fixture/db"
+import { tmpdir } from "../fixture/fixture"
+
+Log.init({ print: false })
+
+describe("EngineRuntime goal-run convergence", () => {
+  afterEach(async () => {
+    mock.restore()
+    await resetDatabase()
+  })
+
+  test("all terminal goal runs wake the orchestrator without completing the task", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
+        const taskID = `task_goal_converge_${Date.now()}`
+        const runID = `run_goal_converge_${Date.now()}`
+        const now = Date.now()
+        seedTaskRun(taskID, runID, now, {
+          status: "blocked",
+          blocking_reason: "integrity verdict needs_correction",
+          error: "Integrity needs correction",
+        })
+        seedGoalRun(taskID, runID, "grun_completed", "completed", now + 1)
+        seedGoalRun(taskID, runID, "grun_failed", "failed", now + 2)
+
+        await EngineRuntime.syncRun(runID, hooks())
+        await new Promise((resolve) => setTimeout(resolve, 0))
+
+        const run = findRun(runID)
+        expect(run?.status).toBe("running")
+        expect(run?.blocking_reason).toBeNull()
+        expect(run?.error).toBeNull()
+        expect(deriveTaskStatus(findTask(taskID)!)).toBe("active")
+        expect(runTaskLoop).toHaveBeenCalledTimes(1)
+        expect(runTaskLoop.mock.calls[0]?.[0]).toMatchObject({
+          taskID,
+          event: {
+            note: expect.stringContaining(`Goal batch complete on run ${runID}.`),
+          },
+        })
+      },
+    })
+  })
+
+  test("live goal runs do not wake the orchestrator", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
+        const taskID = `task_goal_live_${Date.now()}`
+        const runID = `run_goal_live_${Date.now()}`
+        const now = Date.now()
+        seedTaskRun(taskID, runID, now, {
+          status: "running",
+          blocking_reason: null,
+          error: null,
+        })
+        seedGoalRun(taskID, runID, "grun_live", "running", now + 1)
+
+        await EngineRuntime.syncRun(runID, hooks())
+        await new Promise((resolve) => setTimeout(resolve, 0))
+
+        expect(findRun(runID)?.status).toBe("running")
+        expect(runTaskLoop).not.toHaveBeenCalled()
+      },
+    })
+  })
+
+  test("a later terminal goal batch under the same parent run wakes again", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
+        const taskID = `task_goal_second_batch_${Date.now()}`
+        const runID = `run_goal_second_batch_${Date.now()}`
+        const now = Date.now()
+        seedTaskRun(taskID, runID, now, {
+          status: "running",
+          blocking_reason: null,
+          error: null,
+        })
+        seedGoalRun(taskID, runID, "grun_batch_one", "completed", now + 1)
+
+        await EngineRuntime.syncRun(runID, hooks())
+        await new Promise((resolve) => setTimeout(resolve, 0))
+        expect(runTaskLoop).toHaveBeenCalledTimes(1)
+
+        seedGoalRun(taskID, runID, "grun_batch_two", "completed", now + 2)
+
+        await EngineRuntime.syncRun(runID, hooks())
+        await new Promise((resolve) => setTimeout(resolve, 0))
+
+        expect(runTaskLoop).toHaveBeenCalledTimes(2)
+        expect(runTaskLoop.mock.calls[1]?.[0]).toMatchObject({
+          taskID,
+          event: {
+            note: expect.stringContaining("Goal batch complete"),
+          },
+        })
+      },
+    })
+  })
+
+  test("live executor sessions prevent goal batch dispatch", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
+        const taskID = `task_goal_live_executor_${Date.now()}`
+        const runID = `run_goal_live_executor_${Date.now()}`
+        const now = Date.now()
+        seedTaskRun(taskID, runID, now, {
+          status: "blocked",
+          blocking_reason: "integrity verdict needs_correction",
+          error: "Integrity needs correction",
+        })
+        seedGoalRun(taskID, runID, "grun_completed", "completed", now + 1)
+        seedExecutorSession(taskID, runID, "grun_completed", now + 2)
+
+        await EngineRuntime.syncRun(runID, hooks())
+        await new Promise((resolve) => setTimeout(resolve, 0))
+
+        const run = findRun(runID)
+        expect(run?.status).toBe("blocked")
+        expect(run?.blocking_reason).toBe("integrity verdict needs_correction")
+        expect(runTaskLoop).not.toHaveBeenCalled()
+      },
+    })
+  })
+
+  test("pending interactions preserve the parent run blocker", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
+        const taskID = `task_goal_pending_${Date.now()}`
+        const runID = `run_goal_pending_${Date.now()}`
+        const now = Date.now()
+        seedTaskRun(taskID, runID, now, {
+          status: "blocked",
+          blocking_reason: "question",
+          error: null,
+        })
+        seedGoalRun(taskID, runID, "grun_completed", "completed", now + 1)
+        Database.use((db) =>
+          db.insert(EngineInteractionRequestTable)
+            .values({
+              id: `int_goal_pending_${now}`,
+              task_id: taskID,
+              run_id: runID,
+              session_id: null,
+              external_id: `ext_goal_pending_${now}`,
+              request_type: "question",
+              status: "pending",
+              title: "Need answer",
+              body: "Need answer",
+              payload: {},
+              time_created: now,
+              time_updated: now,
+            } as any)
+            .run(),
+        )
+
+        await EngineRuntime.syncRun(runID, hooks())
+        await new Promise((resolve) => setTimeout(resolve, 0))
+
+        const run = findRun(runID)
+        expect(run?.status).toBe("blocked")
+        expect(run?.blocking_reason).toBe("question")
+        expect(runTaskLoop).not.toHaveBeenCalled()
+      },
+    })
+  })
+})
+
+function seedTaskRun(
+  taskID: string,
+  runID: string,
+  now: number,
+  run: { status: string; blocking_reason: string | null; error: string | null },
+) {
+  Database.use((db) => {
+    db.insert(EngineTaskTable)
+      .values({
+        id: taskID,
+        project_id: Instance.project.id,
+        source: "test",
+        title: "Goal convergence",
+        request: "converge goals",
+        priority: "normal",
+        time_created: now,
+        time_updated: now,
+        time_started: now,
+      } as any)
+      .run()
+    db.insert(EngineArtifactTable)
+      .values({
+        id: runID,
+        task_id: taskID,
+        run_id: runID,
+        kind: "run",
+        label: `run-${run.status}`,
+        payload: {
+          plan_version_id: null,
+          session_id: null,
+          executor: "opencorvus",
+          status: run.status,
+          phase: "dispatch",
+          blocking_reason: run.blocking_reason,
+          error: run.error,
+          retry_count: 0,
+          executor_ref: null,
+          metadata: null,
+          time_started: now,
+          time_completed: null,
+        },
+        time_created: now,
+        time_updated: now,
+      })
+      .run()
+  })
+}
+
+function seedExecutorSession(taskID: string, runID: string, goalRunID: string, now: number) {
+  Database.use((db) =>
+    db.insert(EngineExecutorSessionTable)
+      .values({
+        id: `executor_session_${now}`,
+        task_id: taskID,
+        run_id: runID,
+        goal_run_id: goalRunID,
+        provider: "opencorvus",
+        protocol: "test-protocol",
+        protocol_version: "1",
+        transport: "inproc",
+        status: "active",
+        refs: null,
+        capabilities: null,
+        settings: null,
+        lease_owner: null,
+        lease_until: null,
+        time_started: now,
+        time_completed: null,
+        time_created: now,
+        time_updated: now,
+      } as any)
+      .run(),
+  )
+}
+
+function seedGoalRun(taskID: string, runID: string, goalRunID: string, status: string, now: number) {
+  Database.use((db) =>
+    db.insert(EngineArtifactTable)
+      .values({
+        id: `${goalRunID}_${now}`,
+        task_id: taskID,
+        run_id: runID,
+        goal_run_id: goalRunID,
+        kind: "goal_run_attempt",
+        label: `goal-run-${status}`,
+        payload: {
+          goal_id: `goal_${goalRunID}`,
+          session_id: null,
+          status,
+          retry_count: 0,
+          blocking_reason: null,
+          error: status === "failed" ? "failed" : null,
+          workspace_dir: null,
+          workspace_branch: null,
+          workspace_base_ref: null,
+          merge_ref: null,
+          metadata: null,
+          time_started: now,
+          time_completed: status === "completed" || status === "failed" || status === "aborted" ? now : null,
+        },
+        time_created: now,
+        time_updated: now,
+      } as any)
+      .run(),
+  )
+}

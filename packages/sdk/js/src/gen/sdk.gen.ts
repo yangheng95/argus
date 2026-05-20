@@ -1881,6 +1881,7 @@ export class Session extends HeyApiClient {
         | "delivery"
         | "executor"
         | "build"
+        | "explore"
         | "evaluator"
         | "system"
       goalID?: string

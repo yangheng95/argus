@@ -2160,13 +2160,14 @@ Output: Creates directory 'foo'"
     "additionalProperties": false,
     "properties": {
       "name": {
-        "description": "The name of the skill from available_skills (e.g., 'webpage-generate', 'image-generate', 'research-report', ...)",
+        "description": "Exact skill name to load. Omit name to search/list skills instead of loading full instructions.",
+        "type": "string",
+      },
+      "query": {
+        "description": "Search terms for skill name, description, stage, or required_tools. Omit to list compatible skills.",
         "type": "string",
       },
     },
-    "required": [
-      "name",
-    ],
     "type": "object",
   },
   "task": {

@@ -1,13 +1,19 @@
-import { test, expect } from "bun:test"
+import { afterEach, test, expect } from "bun:test"
 import path from "path"
 import { tmpdir } from "../fixture/fixture"
 import { Instance } from "../../src/project/instance"
 import { Agent } from "../../src/agent/agent"
+import { Config } from "../../src/config/config"
 import { PermissionNext } from "../../src/permission/next"
 import { ToolRegistry } from "../../src/tool/registry"
 import { MIRROR_ANALYSIS_TOOL_IDS, MIRROR_DELIVERY_TOOL_IDS, MIRROR_TOOL_IDS } from "../../src/mirror/tools/ids"
 import BUILD_CORE from "../../src/prompt/core/build-core.txt"
 import PROMPT_CODING from "../../src/agent/prompt/coding.txt"
+
+afterEach(async () => {
+  Config.global.reset()
+  await Instance.disposeAll()
+})
 
 // Helper to evaluate permission for a tool with wildcard pattern
 function evalPerm(agent: Agent.Info | undefined, permission: string): PermissionNext.Action | undefined {
@@ -227,6 +233,7 @@ test("native stage agent registry tool surfaces match role boundaries", async ()
         "list_directory",
         "memory_search",
         "memory_get",
+        "skill",
         "todoread",
         "todowrite",
       ]
@@ -274,6 +281,7 @@ test("native stage agent registry tool surfaces match role boundaries", async ()
       // websearch is redundant with that chain and risks score loops.
       const design = await Agent.get("design-analyst")
       expect(design?.tools?.include).toContain("url_screenshot")
+      expect(design?.tools?.include).toContain("skill")
       expect(design?.tools?.include).not.toContain("websearch")
       expect(design?.tools?.include).not.toContain("webpage_render")
       expect(design?.tools?.include).not.toContain("task")

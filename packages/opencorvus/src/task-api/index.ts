@@ -60,7 +60,7 @@ import {
   startQueuedTaskInCwd,
   taskCwd,
 } from "@/engine/queue"
-import { openTaskForOperatorMessage } from "@/engine/task-message-open"
+import { openTaskForOperatorMessage, reopenActiveRunForOperatorWake } from "@/engine/task-message-open"
 import { OrchestratorEventNote } from "@/orchestrator/agent"
 import { updateGoal as updateGoalRow, deleteGoal as deleteGoalRow } from "@/engine/persist"
 import { EngineInteraction } from "@/engine/interaction"
@@ -373,6 +373,7 @@ async function appendAndWakeTaskOperatorMessage(input: {
   // task-level operator-message owner for /message and /inject.
   const userMessage = await appendTaskSessionMessage(task, input.text, input.attachments ?? [])
   const openedTask = await openTaskForOperatorMessage(task)
+  await reopenActiveRunForOperatorWake(openedTask)
 
   void dispatchTaskLoop({
     taskID: input.taskID,
@@ -1506,11 +1507,11 @@ export namespace EngineService {
         ? { ...(task.metadata as Record<string, unknown>) }
         : {}
     delete metadata.cancelled
-    // Reset to queued and hand scheduling back to the single queue/coordinator entry.
-    // The previous terminal-only guard treated derived status as a lifecycle
-    // gate. Status is now display/audit context; retry is a user/operator
-    // action that may be applied to the same task from any displayed state.
-    await updateTask(task, { status: "queued", error: null, metadata }, "Retry requested by operator")
+    const liveRun = findActiveRunForTask(task.id)
+    const openedTask = isTaskTerminal(task) || !liveRun
+      ? await updateTask(task, { status: "queued", error: null, metadata }, "Retry requested by operator")
+      : await updateTask(task, { error: null, metadata }, "Retry requested by operator")
+    await reopenActiveRunForOperatorWake(openedTask, "Retry reopened blocked run")
     void dispatchTaskLoop({ taskID, event: { note: OrchestratorEventNote.retry(task) } })
     return viewTask(requireTask(taskID))
   }
@@ -1540,10 +1541,10 @@ export namespace EngineService {
       return { resumed: false, status: deriveTaskStatus(task) }
     }
     const openedTask = await openTaskForOperatorMessage(task, "Operator note opened task")
-    if (["accepted", "running"].includes(run.status)) {
-      return { resumed: false, status: run.status }
+    const reopenedRun = await reopenActiveRunForOperatorWake(openedTask, "Operator note reopened blocked run")
+    if (!reopenedRun || reopenedRun.status === run.status) {
+      return { resumed: false, status: reopenedRun?.status ?? deriveTaskStatus(requireTask(taskID)) }
     }
-    const nextRunID = await EngineRuntime.createOperatorRun(openedTask, run, note)
     void dispatchTaskLoop({ taskID: task.id, event: { note: OrchestratorEventNote.retry(task) } })
     return { resumed: true, status: deriveTaskStatus(requireTask(taskID)) as string }
   }

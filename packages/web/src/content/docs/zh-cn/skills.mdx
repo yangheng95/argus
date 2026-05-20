@@ -23,23 +23,24 @@ Frontmatter 字段（`src/skill/skill.ts:26-45`）：
 | `name` | string（必需） | 全局唯一 ID，被 permission 引用 |
 | `description` | string（必需） | 一句话描述，告诉 agent 何时激活 |
 | `platforms` | `("win32"\|"darwin"\|"linux")[]` | 平台过滤，空数组 = 全平台 |
-| `stage` | string | 流水线阶段：`spec` / `delivery` / ... |
+| `stage` | string | `required_tools` 所属阶段，例如 `requirements` / `design_analyst` / `build` |
 | `auto_detect.files` | string[] | 项目中存在这些文件时自动加载 |
 | `auto_detect.deps` | string[] | `package.json` 中存在这些依赖时自动加载 |
+| `auto_detect.task_signals` | object | 任务级信号：图片附件、非 Figma URL、Figma URL、package scripts、请求文本 |
 | `priority` | number | 多 skill 命中时的排序（大在前，默认 0） |
+| `required_tools` | string[] | owning stage 在成功上报前必须完成的 tool 调用 |
 
 ## 2. 内置 Skills
 
-随二进制打包（`src/skill/skill.ts:74-81`）：
+随二进制打包（`src/skill/skill.ts` 的 `builtins` 数组），**只有三个**：
 
-| Skill | 阶段 | 说明 |
-|---|---|---|
-| `spec-research` | spec | web 搜索研究技术选型，priority=10 |
-| `prd-spec` | spec | 完整 PRD+SPEC 文档（含 ADR），priority=50 |
-| `delivery-verify-web` | delivery | 前端验收清单（MIME、SPA、SSE），auto-detect |
-| `delivery-verify-api` | delivery | 后端 API 验收清单，auto-detect |
-| `opencorvus-channel-config-wizard` | 通用 | 14 个 channel 统一配置向导 |
-| `opencorvus-<channel>-channel-config` | 通用 | 单 channel 配置引导（Slack / Telegram / Feishu / ...） |
+| Skill | 用途 |
+|---|---|
+| `webpage-generate` | 针对 live webpage reference 产出带 mirror 证据的 PRD/SPEC |
+| `image-generate` | 针对纯截图视觉参考产出带 mirror 证据的 PRD/SPEC |
+| `research-report` | 用 `websearch` 和按需 `webfetch` 产出带来源的 Markdown 调研报告 |
+
+其他 skill 需要通过 `skills.paths` / `skills.urls` 显式加载。
 
 内置 Skill 默认权限为 `allow`（`src/skill/manager.ts:493-495`）。
 
@@ -106,9 +107,13 @@ Git 方式克隆到 `~/.config/opencorvus/skills-market/<slug>/` 并自动追加
 
 ## 6. Skill ↔ Agent 调用关系
 
-Skill 指令在 session 初始化时注入到 agent 的 system prompt。Agent 按 `description` 决定是否激活；`auto_detect` 提供文件/依赖自动匹配；`stage` 让流水线在对应阶段优先推送。
+Session 初始化时会把命中的 `SKILL.md` 正文注入 agent 的 system prompt。`auto_detect` 命中的 skill 会跨 stage 注入，避免相关经验因为 stage 标记不一致而缺失；`stage` 只表示该 skill 的 `required_tools` 由哪个 stage 拥有，不控制正文可见性。
 
-Skill 本身不能直接调用工具；它通过注入上下文影响 agent 行为。
+- `stage: "build"` 的 skill 若命中，可作为上下文注入其他 stage，但其 `required_tools` 只由 build 强制。
+- `stage: "design_analyst"` 的 skill 若命中，可作为上下文注入 build，但 mirror 采集类 `required_tools` 仍只由 design-analysis 强制。
+- 未声明 `stage` 的 skill 视为全局 skill，其 `required_tools` 会随当前 agent 调用链生效；没有 active stage 的解析路径只强制全局 skill 的 `required_tools`。
+
+`auto_detect` 提供文件 / 依赖 / 任务信号的自动匹配。Skill 本身不能直接调用工具；它通过注入指令和 stage-owned required-tool contract 影响 agent 行为。
 
 ## 7. Permission 配置
 
@@ -117,7 +122,7 @@ Skill 本身不能直接调用工具；它通过注入上下文影响 agent 行�
   "permission": {
     "skill": {
       "*": "ask",
-      "prd-spec": "allow",
+      "research-report": "allow",
       "local-note": "deny"
     }
   }

@@ -1,14 +1,14 @@
 /**
- * Skill injection for headless agents (spec, acceptance, goal).
+ * Skill injection for headless agents (requirements, architect, design, build,
+ * acceptance).
  *
  * Loads skills by:
  * 1. Explicit names from config (orchestrator.{stage}.skills)
  * 2. Auto-detect from project files/deps AND task signals
- *    (skill.auto_detect + skill.stage)
  *
- * Skills declare which stage they belong to and what project / task
- * characteristics trigger them. Adding a new SKILL.md file with stage +
- * auto_detect is sufficient — no code changes needed.
+ * Skills can declare which stage owns their required tools, but auto-detected
+ * skill bodies are visible cross-stage. The prompt receives the matched
+ * SKILL.md instructions; `stage` only scopes required-tool ownership.
  */
 import { existsSync } from "node:fs"
 import { join } from "node:path"
@@ -66,16 +66,18 @@ export interface TaskSignals {
    *  mirror skill. */
   request_contains_url?: boolean
   /** The request text contains a figma.com URL (file / design / proto /
-   *  board path). When true, `request_contains_url` is forced false by
-   *  `deriveUrlSignals` so the two are never simultaneously true. */
+   *  board path). `request_contains_url` only tracks non-Figma URLs, so both
+   *  signals can be true when the text contains both URL kinds. */
   request_contains_figma_url?: boolean
   /** Raw request text — matchers may peek for keywords; prefer signals over regex. */
   request_text?: string
 }
 
 const FIGMA_URL_REGEX =
-  /\bhttps?:\/\/(?:[\w-]+\.)?figma\.com\/(?:file|design|proto|board)\b/i
-const HTTP_URL_REGEX = /\bhttps?:\/\/\S+/i
+  /\bhttps?:\/\/(?:[\w-]+\.)?figma\.com\/(?:file|design|proto|board)(?:\/[^\s<>"'`)\]]*)?/i
+const FIGMA_URL_GLOBAL_REGEX =
+  /\bhttps?:\/\/(?:[\w-]+\.)?figma\.com\/(?:file|design|proto|board)(?:\/[^\s<>"'`)\]]*)?/gi
+const HTTP_URL_REGEX = /\bhttps?:\/\/[^\s<>"'`)\]]+/i
 
 /** Derive the URL-shaped signals from the active task's request text in
  *  one place (rule 22 single source). Figma URLs are partitioned off the
@@ -86,9 +88,9 @@ export function deriveUrlSignals(text: string | undefined): {
 } {
   const raw = text ?? ""
   const hasFigma = FIGMA_URL_REGEX.test(raw)
-  // Strip figma URLs before testing for any other URL so the generic
+  // Strip every figma URL before testing for any other URL so the generic
   // signal means "non-figma http(s) URL is present".
-  const stripped = raw.replace(FIGMA_URL_REGEX, "")
+  const stripped = raw.replace(FIGMA_URL_GLOBAL_REGEX, "")
   const hasGeneric = HTTP_URL_REGEX.test(stripped)
   return {
     request_contains_url: hasGeneric,
@@ -110,7 +112,9 @@ export interface ResolvedSkills {
 /**
  * Load skills for a pipeline stage: explicit config + auto-detected.
  * @param explicitNames - skill names from orchestrator config
- * @param stage - pipeline stage ("spec", "acceptance", "goal")
+ * @param stage - active pipeline stage. Skill instruction visibility is no
+ * longer gated by this value; it only selects the stage invariant and stage-owned
+ * required_tools.
  * @param taskSignals - task-level detection signals (attachments, request text)
  */
 export async function loadStageSkills(
@@ -143,38 +147,64 @@ export async function resolveStageSkills(
     loaded.push(skill)
   }
 
-  // 2. Auto-detect skills matching this stage + project / task signals.
-  if (stage) {
-    const candidates = all.filter((s) =>
-      s.stage === stage &&
-      s.auto_detect &&
-      !seen.has(s.name),
-    )
-    for (const skill of candidates) {
-      if (matchesProjectOrTask(skill.auto_detect!, taskSignals)) {
-        seen.add(skill.name)
-        loaded.push(skill)
-        log.info("auto-detected skill", { name: skill.name, stage })
-      }
+  // 2. Auto-detect skills matching the project / task signals. Stage no longer
+  // gates instruction visibility: a candidate from another stage is still
+  // useful context, but stage ownership still controls required_tools below.
+  const candidates = all.filter((s) => s.auto_detect && !seen.has(s.name))
+  for (const skill of candidates) {
+    if (matchesProjectOrTask(skill.auto_detect!, taskSignals)) {
+      seen.add(skill.name)
+      loaded.push(skill)
+      log.info("auto-detected skill", { name: skill.name, stage, skillStage: skill.stage })
     }
   }
 
   // Sort by priority (higher first), then by name for stability
   loaded.sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0) || a.name.localeCompare(b.name))
 
-  const requiredTools = Array.from(
-    new Set(loaded.flatMap((s) => s.required_tools ?? [])),
-  )
+  const stageOwned = loaded.filter((s) => skillOwnsRequiredToolsInStage(s, stage))
+  const requiredTools = Array.from(new Set(stageOwned.flatMap((s) => s.required_tools ?? [])))
 
   const invariant = stage ? STAGE_INVARIANTS[stage] : undefined
-  const sections = loaded.map((s) => `## Skill: ${s.name}\n\n${s.content.trim()}`)
+  const sections = loaded.map((s) => {
+    const sourceStage = s.stage ?? "global"
+    const stageNote = s.stage && stage && s.stage !== stage
+      ? `Context-only in ${stage}: full instructions are injected for task guidance, but required_tools remain owned by ${s.stage}.`
+      : s.stage && !stage
+        ? "Context-only without an active stage: staged required_tools are not enforced."
+        : `Required_tools owner: ${sourceStage}.`
+    const required = (s.required_tools ?? []).length > 0 ? s.required_tools.join(", ") : "none"
+    return [
+      `## Skill: ${s.name}`,
+      "",
+      `Description: ${s.description}`,
+      `Source stage: ${sourceStage}.`,
+      stageNote,
+      `Declared required_tools: ${required}`,
+      "",
+      s.content.trim(),
+    ].join("\n")
+  })
 
   const parts: string[] = []
   if (invariant) parts.push(invariant)
-  if (sections.length > 0) parts.push("# Injected Skills\n\n" + sections.join("\n\n---\n\n"))
+  if (sections.length > 0) {
+    parts.push([
+      "# Injected Skills",
+      "",
+      "The following skill bodies matched this task. Stage labels only decide required_tools ownership; they do not hide matched instructions.",
+      "",
+      sections.join("\n\n---\n\n"),
+    ].join("\n"))
+  }
 
   const prompt = parts.length > 0 ? "\n\n" + parts.join("\n\n") : ""
   return { prompt, skills: loaded, requiredTools }
+}
+
+function skillOwnsRequiredToolsInStage(skill: Skill.Info, stage: string | undefined): boolean {
+  if (!skill.stage) return true
+  return stage !== undefined && skill.stage === stage
 }
 
 function matchesProjectOrTask(

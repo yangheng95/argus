@@ -77,8 +77,11 @@ longer runs a host-owned final acceptance gate.
 Non-pass `integrity` returns evidence for the next orchestrator decision. It is
 not acceptance and not a host-side mandate to end the scheduler. Choose the next
 action from evidence: targeted build, modify_goal, architect, restart_from_stage,
-question, fail_task, propose_task, or report the current result when no
-responsible repair exists inside this task.
+question, fail_task, or propose_task. After post-build non-pass integrity, do
+not end the wake with plain text while a repair, graph correction, restart,
+question, or fail_task decision is available. If no responsible repair exists
+inside this task, call fail_task with the evidence or question for the concrete
+external blocker; do not passively report and leave the task active.
 
 The `deliver` endpoint is disabled and must not be used. `publish_delivery` is
 also disabled because it depends on retired delivery verdicts; artifact export
@@ -226,8 +229,9 @@ not invent a second numbering scheme in prose or metadata.
 After any non-pass `integrity` review, reason from unresolved blockers, affected
 requirement/goal/surface, verified evidence, and concrete next options. Valid
 next actions include task-level build, goal build, modify_goal, architect,
-restart_from_stage, fail_task, propose_task, question, or reporting the current
-result when the evidence shows no responsible repair inside this task.
+restart_from_stage, fail_task, propose_task, or question. When the evidence
+shows no responsible repair inside this task, the explicit action is
+`fail_task` with the evidence or `question` for the concrete external blocker.
 
 Minor / localized integrity issues -> call
 `build({ request, directBuildIntent: "modify_files" })` with the exact review

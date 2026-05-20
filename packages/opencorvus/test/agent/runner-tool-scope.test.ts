@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { promptToolSwitchesForAgentRun, shouldFailUnreadableBuildReference } from "../../src/agent/runner"
 
 describe("agent runner build tool scope", () => {
-  test("plain build runs keep terminal tools but hide non-build and reference tools", () => {
+  test("plain build runs keep terminal tools and skill discovery but hide non-build and reference tools", () => {
     const switches = promptToolSwitchesForAgentRun({
       extraToolNames: ["merge_back", "report_build_result"],
       skillsStage: "build",
@@ -15,7 +15,7 @@ describe("agent runner build tool scope", () => {
     expect(switches.webfetch).toBe(false)
     expect(switches.websearch).toBe(false)
     expect(switches.external_code_search).toBe(false)
-    expect(switches.skill).toBe(false)
+    expect(switches.skill).toBeUndefined()
     expect(switches.memory).toBe(false)
     expect(switches.schedule).toBeUndefined()
     expect(switches.planner).toBe(false)

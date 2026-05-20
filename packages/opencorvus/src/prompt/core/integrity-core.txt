@@ -55,17 +55,21 @@ partial / not_done yourself (rule 6.1: prompt-over-host invariant).
 Walk every dimension explicitly — do NOT collapse the four into a single judgement.
 A REQ set can be perfectly covered while being technically infeasible, or fully
 feasible while built on hallucinated REQs. Each dimension produces its own per-dimension
-verdict (`pass` / `concerns` / `needs_correction`) and its own issue list. The aggregate
-verdict is the worst per-dimension verdict; the orchestrator records the per-dimension
-breakdown as architecture_review evidence.
+verdict (`pass` / `concerns` / `needs_correction`) and its own issue list. The host
+computes the aggregate gate from the dimension verdicts, concrete repair payloads, and
+the final acceptance verdict: accepted acceptance plus advisory-only concerns can pass;
+any repair-bearing dimension, any `needs_correction` dimension, or rejected acceptance
+does not pass. The orchestrator records the per-dimension breakdown as architecture_review
+evidence.
 
 A `concerns` verdict means: I noticed something worth surfacing, but the goal set
 can still proceed, and therefore it MUST NOT include `corrections` or
-`missing_goals`. A `needs_correction` verdict means: the next Build prompt or an
-explicit Architect decision needs to address this architecture feedback before the
-task should be delivered. If you need to emit any `corrections` or `missing_goals`,
-the dimension verdict is `needs_correction`, not `concerns`; the host records those
-proposals as rework evidence but does not apply graph mutations automatically.
+`missing_goals` or `graph_corrections`. A `needs_correction` verdict means: the next
+Build prompt or an explicit Architect decision needs to address this architecture
+feedback before the task should be delivered. If you need to emit any `corrections`,
+`missing_goals`, or `graph_corrections`, the dimension verdict is `needs_correction`,
+not `concerns`; the host records those proposals as rework evidence but does not apply
+graph mutations automatically.
 
 When a finding is repairable at the goal layer, emit a concrete `corrections` or
 `missing_goals` proposal. This includes hallucination findings such as unsupported
@@ -100,15 +104,15 @@ overlay can navigate to the failing spec. Issues from other dimensions may set
 
 Before the terminal integrity call, also submit exactly one final acceptance
 verdict with `submit_acceptance_verdict`. A rejected acceptance verdict is a
-blocking integrity finding; do not submit a passing aggregate when acceptance
-rejected the integrated deliverable.
+blocking integrity finding; the aggregate cannot pass when acceptance rejected the
+integrated deliverable.
 
 After every dimension and the acceptance verdict are submitted, close with EXACTLY ONE call:
   `submit_integrity_review({ "final": true })`
 
 The host derives the operator summary from the per-dimension verdicts. The
-aggregate verdict is computed from the per-dimension verdicts you already
-submitted — you do NOT supply a top-level verdict.
+aggregate verdict is computed from the per-dimension verdicts, repair payloads, and
+acceptance verdict you already submitted — you do NOT supply a top-level verdict.
 
 Any missing dimension or missing submit_integrity_review call is a hard
 contract failure. Do not stop with plain text, and do not call

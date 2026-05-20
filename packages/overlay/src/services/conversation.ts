@@ -5,16 +5,11 @@ import {
   boardStore,
   setBoardData,
   setBoardUpdatedAt,
-  setSnapshotVersion,
   setTaskSequence,
 } from "../store/board";
 import {
   mergeLoadedConversationMessages,
 } from "../store/messages";
-
-function boardSnapshot(board: any): string {
-  return typeof board?.snapshotVersion === "string" ? board.snapshotVersion : "";
-}
 
 type EventReplay = {
   cursor: number;
@@ -167,7 +162,6 @@ export async function hydrateTaskConversation(
 
     resetWriter();
     setBoardData(board);
-    setSnapshotVersion(boardSnapshot(board));
     setTaskSequence(Number.isFinite(lastSequence) && lastSequence > 0 ? lastSequence : 0);
     setBoardUpdatedAt(Date.now());
     hydrateConversationView(view, mergedMessages);

@@ -63,6 +63,7 @@ export namespace Snapshot {
   )
   const coreAutocrlf =
     process.env.OPENCORVUS_SNAPSHOT_CORE_AUTOCRLF || (process.platform === "win32" ? "input" : "false")
+  const coreSafecrlf = "false"
   const coreSymlinks =
     process.env.OPENCORVUS_SNAPSHOT_CORE_SYMLINKS || (process.platform === "win32" ? "false" : "true")
   const pendingGitDirs = new Map<string, Promise<void>>()
@@ -140,6 +141,7 @@ export namespace Snapshot {
         runGit(
           [
             "-c", `core.autocrlf=${coreAutocrlf}`,
+            "-c", `core.safecrlf=${coreSafecrlf}`,
             "-c", "core.longpaths=true",
             "-c", `core.symlinks=${coreSymlinks}`,
             "-c", "core.quotepath=false",
@@ -223,6 +225,7 @@ export namespace Snapshot {
           runGit(
             [
               "-c", `core.autocrlf=${coreAutocrlf}`,
+              "-c", `core.safecrlf=${coreSafecrlf}`,
               "-c", "core.longpaths=true",
               "-c", `core.symlinks=${coreSymlinks}`,
               "-c", "core.quotepath=false",
@@ -257,6 +260,7 @@ export namespace Snapshot {
       runGit(
         [
           "-c", `core.autocrlf=${coreAutocrlf}`,
+          "-c", `core.safecrlf=${coreSafecrlf}`,
           "-c", "core.longpaths=true",
           "-c", `core.symlinks=${coreSymlinks}`,
           "-c", "core.quotepath=false",
@@ -281,6 +285,7 @@ export namespace Snapshot {
       runGit(
         [
           "-c", `core.autocrlf=${coreAutocrlf}`,
+          "-c", `core.safecrlf=${coreSafecrlf}`,
           "-c", "core.longpaths=true",
           "-c", `core.symlinks=${coreSymlinks}`,
           "-c", "core.quotepath=false",
@@ -391,6 +396,13 @@ export namespace Snapshot {
       "snapshot config core.autocrlf",
     )
     await gitText(
+      runGit(["--git-dir", git, "config", "core.safecrlf", coreSafecrlf], {
+        cwd: Instance.directory,
+        timeoutProfile: "fast",
+      }),
+      "snapshot config core.safecrlf",
+    )
+    await gitText(
       runGit(["--git-dir", git, "config", "core.longpaths", "true"], {
         cwd: Instance.directory,
         timeoutProfile: "fast",
@@ -432,6 +444,7 @@ export namespace Snapshot {
     const text = await gitText(
       runGit(
         [
+          "-c", `core.safecrlf=${coreSafecrlf}`,
           "-c", "core.quotepath=false",
           "--git-dir", git,
           "--work-tree", Instance.worktree,
@@ -604,6 +617,7 @@ export namespace Snapshot {
       runGit(
         [
           "-c", `core.autocrlf=${coreAutocrlf}`,
+          "-c", `core.safecrlf=${coreSafecrlf}`,
           "-c", "core.longpaths=true",
           "-c", `core.symlinks=${coreSymlinks}`,
           "--git-dir", git,

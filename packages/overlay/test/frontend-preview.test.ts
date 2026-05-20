@@ -6,9 +6,18 @@ import {
 import {
   isLoopbackHttpUrl,
   nextTabForPreviewResolution,
+  previewRequestKey,
   resolveFrontendPreviewFromBoard,
   structuredPreviewUrlFromBoard,
 } from "../src/services/frontend-preview"
+
+test("preview request key uses the backend board snapshot version", () => {
+  expect(previewRequestKey("tsk_preview", "board-revision-1")).toBe("tsk_preview:board-revision-1")
+  expect(previewRequestKey(undefined, undefined)).toBe("no-task")
+  expect(previewRequestKey("", "")).toBe("no-task")
+  expect(() => previewRequestKey("tsk_preview", "")).toThrow(/snapshotVersion/)
+  expect(() => previewRequestKey("tsk_preview", undefined)).toThrow(/snapshotVersion/)
+})
 
 test("structured preview URL prefers delivery.previewUrl over runtime flow rows", () => {
   const result = structuredPreviewUrlFromBoard({

@@ -111,7 +111,7 @@ describe("pipeline workflow architecture review step", () => {
     expect(taskSteps.design_analysis?.status).toBe("completed")
   })
 
-  test("projects integrity as completed when the active spec has an integrity attempt", () => {
+  test("projects integrity as completed when top-level pass has advisory concerns evidence", () => {
     const now = Date.now()
     const stamp = now.toString(16)
     const projectID = `proj_workflow_integrity_${stamp}`
@@ -162,11 +162,12 @@ describe("pipeline workflow architecture review step", () => {
         { id: "requirement_fidelity", verdict: "pass" },
         { id: "technical_feasibility", verdict: "pass" },
         { id: "hallucination", verdict: "pass" },
-        { id: "solution_quality", verdict: "pass" },
+        { id: "solution_quality", verdict: "concerns" },
       ],
-      issuesCount: 0,
+      issuesCount: 1,
       correctionsCount: 0,
       missingCount: 0,
+      reason: "Advisory solution-quality concern without repair payload.",
       now,
     })
 
@@ -240,7 +241,7 @@ describe("pipeline workflow architecture review step", () => {
     expect(taskSteps.integrity?.status).toBe("failed")
   })
 
-  test("projects concerns with correction work as failed because integrity is the workflow gate", () => {
+  test("projects historical top-level concerns payload with correction work as failed", () => {
     const now = Date.now()
     const stamp = now.toString(16)
     const projectID = `proj_workflow_integrity_concern_failed_${stamp}`
@@ -281,6 +282,10 @@ describe("pipeline workflow architecture review step", () => {
       }).run()
     })
 
+    // New aggregate semantics no longer produce a top-level `concerns` verdict:
+    // repair-bearing concerns aggregate to `needs_correction`, while advisory-only
+    // concerns aggregate to `pass`. This row pins projection behavior for older
+    // persisted non-pass artifacts that already carry top-level `concerns`.
     recordIntegrityAttempt({
       taskID,
       sessionID: "ses_integrity_projection_concern_failed",

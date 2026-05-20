@@ -18,7 +18,7 @@ const baseCtx: Omit<Tool.Context, "ask"> = {
 }
 
 describe("tool.skill", () => {
-  test("description lists skill location URL", async () => {
+  test("execute without name searches compatible skill metadata", async () => {
     await using tmp = await tmpdir({
       git: true,
       init: async (dir) => {
@@ -44,8 +44,27 @@ description: Skill for tool tests.
         directory: tmp.path,
         fn: async () => {
           const tool = await SkillTool.init()
+          const requests: Array<Omit<PermissionNext.Request, "id" | "sessionID" | "tool">> = []
+          const ctx: Tool.Context = {
+            ...baseCtx,
+            ask: async (req) => {
+              requests.push(req)
+            },
+          }
           const skillPath = path.join(tmp.path, ".opencorvus", "skill", "tool-skill", "SKILL.md")
-          expect(tool.description).toContain(`<location>${pathToFileURL(skillPath).href}</location>`)
+
+          expect(tool.description).not.toContain(pathToFileURL(skillPath).href)
+
+          const result = await tool.execute({ query: "tool" }, ctx)
+
+          expect(requests).toEqual([])
+          expect(result.title).toBe("Skill search: tool")
+          expect(result.metadata.names).toContain("tool-skill")
+          expect(result.output).toContain("<skill_search>")
+          expect(result.output).toContain("<name>tool-skill</name>")
+          expect(result.output).toContain("<description>Skill for tool tests.</description>")
+          expect(result.output).toContain(`<location>${pathToFileURL(skillPath).href}</location>`)
+          expect(result.output).not.toContain("<skill_content")
         },
       })
     } finally {
@@ -151,4 +170,3 @@ Use this skill.
     }
   })
 })
-
