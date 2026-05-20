@@ -34,8 +34,10 @@ import {
 import {
   ArchitectContractRefSchema,
   GoalDependencyContractSchema,
+  contractSurfaceKey,
   emptyArchitectContractGraph,
   validateArchitectContractGraph,
+  type ArchitectContractRef,
   type ArchitectContractGraph,
   type ArchitectValidationFinding,
 } from "./contract-graph"
@@ -133,6 +135,23 @@ function dependencyDirectionGuidance(fromGoalID: string, toGoalID: string): stri
 
 function registeredContractIDs(collector: ArchitectCollector): Set<string> {
   return new Set(collector.contract_graph.contracts.map((contract) => contract.id))
+}
+
+function duplicateContractSurface(
+  collector: ArchitectCollector,
+  contract: ArchitectContractRef,
+): ArchitectContractRef | undefined {
+  const key = contractSurfaceKey(contract)
+  return collector.contract_graph.contracts.find(
+    (existing) => existing.id !== contract.id && contractSurfaceKey(existing) === key,
+  )
+}
+
+function contractConsumerRepairHint(contract: ArchitectContractRef, toGoalID: string): string {
+  return (
+    `Re-register contract id "${contract.id}" with consumer_goal_ids including "${toGoalID}" ` +
+    `if this edge should consume that surface; do not create a new id for the same surface.`
+  )
 }
 
 function unknownContractAuditContractIDs(collector: ArchitectCollector, specs: readonly AcceptanceSpec[]): string[] {
@@ -784,12 +803,23 @@ export function createArchitectOutputTools(input: {
         if (unknownGoals.length > 0) {
           return `Error: contract "${contract.id}" references unknown goal id(s): ${[...new Set(unknownGoals)].join(", ")}. Register the goals first; collector unchanged.`
         }
+        const existingIdx = collector.contract_graph.contracts.findIndex((row) => row.id === contract.id)
+        if (existingIdx < 0) {
+          const duplicate = duplicateContractSurface(collector, contract)
+          if (duplicate) {
+            return (
+              `Error: contract "${contract.id}" duplicates existing contract surface "${duplicate.id}" ` +
+              `(${duplicate.kind}:${duplicate.name} produced by ${duplicate.producer_goal_id}); ` +
+              `collector unchanged. Re-register contract id "${duplicate.id}" to overwrite its ` +
+              `consumer_goal_ids, summary, or metadata. Do not create a new id for the same surface.`
+            )
+          }
+        }
         for (const consumerID of contract.consumer_goal_ids) {
           if (!hasCollectorDependencyPath(collector, consumerID, contract.producer_goal_id)) {
             return `Error: contract "${contract.id}" producer ${contract.producer_goal_id} is not in dependency ancestry for consumer ${consumerID}. The consumer goal must list the producer in depends_on before this contract is valid; collector unchanged.`
           }
         }
-        const existingIdx = collector.contract_graph.contracts.findIndex((row) => row.id === contract.id)
         if (existingIdx >= 0) {
           collector.contract_graph.contracts[existingIdx] = contract
           return `OK: contract "${contract.id}" overwritten (${collector.contract_graph.contracts.length} contracts total)\nRegistered contract ids: ${[...registeredContractIDs(collector)].join(", ")}`
@@ -834,7 +864,18 @@ export function createArchitectOutputTools(input: {
             contract.producer_goal_id !== edge.from_goal_id ||
             !contract.consumer_goal_ids.includes(edge.to_goal_id)
           ) {
-            return `Error: contract "${contractID}" belongs to ${contract.producer_goal_id} -> [${contract.consumer_goal_ids.join(", ")}], not ${edge.from_goal_id} -> ${edge.to_goal_id}; collector unchanged. ${dependencyDirectionGuidance(contract.producer_goal_id, contract.consumer_goal_ids[0] ?? edge.to_goal_id)}`
+            const guidance =
+              contract.producer_goal_id === edge.from_goal_id
+                ? contractConsumerRepairHint(contract, edge.to_goal_id)
+                : dependencyDirectionGuidance(
+                    contract.producer_goal_id,
+                    contract.consumer_goal_ids[0] ?? edge.to_goal_id,
+                  )
+            return (
+              `Error: contract "${contractID}" belongs to ${contract.producer_goal_id} -> ` +
+              `[${contract.consumer_goal_ids.join(", ")}], not ${edge.from_goal_id} -> ${edge.to_goal_id}; ` +
+              `collector unchanged. ${guidance}`
+            )
           }
         }
         const existingIdx = collector.contract_graph.dependency_contracts.findIndex(

@@ -6,9 +6,16 @@ import {
   EngineGoalTable,
   EngineTaskTable,
 } from "../../src/engine/engine.sql"
-import { beginBuildAttempt, finalizeBuildAttempt, startNewAttempt, updateGoalWorkspace } from "../../src/engine/persist"
+import {
+  beginBuildAttempt,
+  ensureBuildRetryFeedbackForGoal,
+  finalizeBuildAttempt,
+  startNewAttempt,
+  updateGoalWorkspace,
+} from "../../src/engine/persist"
 import { goalStatusByID } from "../../src/engine/describe"
 import { findGoalLatestWorkspace, findGoalRun, getGoalRetryCount } from "../../src/engine/store"
+import { createDecisionLog } from "../../src/decision-log"
 import { resetDatabase } from "../fixture/db"
 
 /**
@@ -102,6 +109,7 @@ function insertGoalRun(input: {
   id: string
   status: "queued" | "running" | "completed" | "failed" | "aborted" | "evaluating" | "blocked" | "accepted" | "planning"
   supersedeOf?: string
+  error?: string
 }) {
   const now = Date.now()
   const terminal = input.status === "completed" || input.status === "failed" || input.status === "aborted"
@@ -120,7 +128,7 @@ function insertGoalRun(input: {
         status: input.status,
         retry_count: 0,
         blocking_reason: null,
-        error: null,
+        error: input.error ?? null,
         workspace_dir: null,
         base_ref: null,
         merge_ref: null,
@@ -303,7 +311,7 @@ describe("Goal.startNewAttempt — options", () => {
 
   test("beginBuildAttempt advances version when retrying a failed goal directly", () => {
     const gr = `grun_direct_build_retry_${Date.now()}`
-    insertGoalRun({ id: gr, status: "failed" })
+    insertGoalRun({ id: gr, status: "failed", error: "merge_back conflict in IndustryCardListMTts.tsx" })
 
     const nextRunID = beginBuildAttempt({
       taskID,
@@ -314,6 +322,46 @@ describe("Goal.startNewAttempt — options", () => {
     expect(getGoalRetryCount(goalID)).toBe(1)
     expect(findGoalRun(gr)?.superseded_reason).toBe("build_retry")
     expect(findGoalRun(nextRunID)?.retry_count).toBe(1)
+    const retryEntries = createDecisionLog(taskID).readByPhase("retry").filter((entry) => entry.goalID === goalID)
+    expect(retryEntries).toHaveLength(1)
+    expect(retryEntries[0]?.key).toBe(`build_retry_previous_${gr}`)
+    expect(retryEntries[0]?.value).toContain("merge_back conflict in IndustryCardListMTts.tsx")
+  })
+
+  test("ensureBuildRetryFeedbackForGoal writes retry feedback before prompt context is composed", () => {
+    const gr = `grun_prompt_feedback_${Date.now()}`
+    insertGoalRun({ id: gr, status: "failed", error: "Merge left worktree in MERGING state" })
+    createDecisionLog(taskID).append({
+      goalID,
+      phase: "build",
+      key: "build_report_for_architecture_review",
+      value: JSON.stringify({
+        status: "failed",
+        summary: "merge_back hit conflicts on one file",
+        error: "Resolve markers in the same worktree before retrying.",
+      }),
+      reason: "test build report",
+    })
+
+    const created = ensureBuildRetryFeedbackForGoal({
+      taskID,
+      goalID,
+      source: "test.prompt_context",
+    })
+
+    expect(created).toBe(true)
+    const retryEntries = createDecisionLog(taskID).readByPhase("retry").filter((entry) => entry.goalID === goalID)
+    expect(retryEntries).toHaveLength(1)
+    expect(retryEntries[0]?.value).toContain("Merge left worktree in MERGING state")
+    expect(retryEntries[0]?.value).toContain("merge_back hit conflicts on one file")
+
+    const second = ensureBuildRetryFeedbackForGoal({
+      taskID,
+      goalID,
+      source: "test.prompt_context",
+    })
+    expect(second).toBe(false)
+    expect(createDecisionLog(taskID).readByPhase("retry").filter((entry) => entry.goalID === goalID)).toHaveLength(1)
   })
 
   test("finalizeBuildAttempt preserves workspace branch when failed finalize omits it", () => {

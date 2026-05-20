@@ -53,6 +53,7 @@ import {
   listOrchestratorStreamErrorArtifacts,
   requireTask,
   type GoalRow,
+  type GoalRunRow,
   type RunRow,
   type TaskRow,
 } from "./store"
@@ -67,6 +68,128 @@ import {
 } from "@/architect/contract-graph"
 
 const log = Log.create({ service: "engine-transition" })
+
+function terminalGoalRunStatus(status: GoalRunRow["status"]): boolean {
+  return status === "failed" || status === "aborted" || status === "completed"
+}
+
+function compactRetryFeedbackText(value: string, max = 2400): string {
+  if (value.length <= max) return value
+  return `${value.slice(0, max)}... [truncated; full build report remains in decision_log phase=build]`
+}
+
+function latestBuildReportForGoal(taskID: string, goalID: string): string | undefined {
+  const entry = createDecisionLog(taskID)
+    .readByPhase("build")
+    .filter((item) => item.goalID === goalID && item.key === "build_report_for_architecture_review")
+    .at(-1)
+  if (!entry) return undefined
+  const parsed = JSON.parse(entry.value) as {
+    status?: unknown
+    summary?: unknown
+    error?: unknown
+    commit_ref?: unknown
+  }
+  const lines = [
+    typeof parsed.status === "string" ? `Report status: ${parsed.status}` : undefined,
+    typeof parsed.summary === "string" ? `Report summary: ${compactRetryFeedbackText(parsed.summary)}` : undefined,
+    typeof parsed.error === "string" && parsed.error.length > 0
+      ? `Report error: ${compactRetryFeedbackText(parsed.error)}`
+      : undefined,
+    typeof parsed.commit_ref === "string" && parsed.commit_ref.length > 0
+      ? `Report commit_ref: ${parsed.commit_ref}`
+      : undefined,
+  ].filter((line): line is string => Boolean(line))
+  if (lines.length === 0) {
+    throw new Error(`latestBuildReportForGoal: malformed empty build report ${entry.id} for goal ${goalID}`)
+  }
+  return lines.join("\n")
+}
+
+function retryFeedbackValueFromGoalRun(input: {
+  taskID: string
+  goalID: string
+  priorRun: GoalRunRow
+}): string {
+  const lines = [
+    `Previous build attempt ${input.priorRun.id} ended with status=${input.priorRun.status} before this retry.`,
+    `Retry count on previous attempt: ${input.priorRun.retry_count}.`,
+  ]
+  if (input.priorRun.session_id) lines.push(`Previous build session: ${input.priorRun.session_id}.`)
+  if (input.priorRun.workspace_dir) {
+    lines.push(`Worktree to repair in place: ${input.priorRun.workspace_dir}.`)
+  }
+  if (input.priorRun.error && input.priorRun.error.trim().length > 0) {
+    lines.push(`Terminal error: ${compactRetryFeedbackText(input.priorRun.error.trim())}`)
+  } else {
+    lines.push("Terminal error: none recorded on the goal_run artifact.")
+  }
+  const report = latestBuildReportForGoal(input.taskID, input.goalID)
+  if (report) {
+    lines.push("", "Latest persisted build report:", report)
+  }
+  lines.push(
+    "",
+    "Required for this retry:",
+    "- Address the terminal error above before implementing unrelated changes.",
+    "- Reuse and repair the preserved goal worktree when one is listed.",
+    "- Do not repeat the prior merge_back / delivery path without resolving the recorded failure.",
+  )
+  return lines.join("\n")
+}
+
+function appendRetryFeedbackOnce(input: {
+  taskID: string
+  goalID: string
+  key: string
+  value: string
+  reason: string
+}): boolean {
+  const decisionLog = createDecisionLog(input.taskID)
+  const existing = decisionLog.readByKey(input.key)
+  if (existing) return false
+  decisionLog.append({
+    goalID: input.goalID,
+    phase: "retry",
+    key: input.key,
+    value: input.value,
+    reason: input.reason,
+  })
+  return true
+}
+
+function appendBuildRetryFeedbackForPriorRun(input: {
+  taskID: string
+  goalID: string
+  priorRun: GoalRunRow
+  source: string
+}): boolean {
+  if (!terminalGoalRunStatus(input.priorRun.status)) return false
+  return appendRetryFeedbackOnce({
+    taskID: input.taskID,
+    goalID: input.goalID,
+    key: `build_retry_previous_${input.priorRun.id}`,
+    value: retryFeedbackValueFromGoalRun(input),
+    reason:
+      `${input.source}: superseding previous goal_run ${input.priorRun.id} ` +
+      `status=${input.priorRun.status}${input.priorRun.error ? ` error=${compactRetryFeedbackText(input.priorRun.error, 500)}` : ""}`,
+  })
+}
+
+export function ensureBuildRetryFeedbackForGoal(input: {
+  taskID: string
+  goalID: string
+  source: string
+}): boolean {
+  const tip = findLatestTipGoalRun(input.goalID)
+  if (!tip) return false
+  return appendBuildRetryFeedbackForPriorRun({
+    taskID: input.taskID,
+    goalID: input.goalID,
+    priorRun: tip,
+    source: input.source,
+  })
+}
 
 /**
  * Derive a human-readable slug from a goal title. Display-only — goal_id
@@ -955,19 +1078,17 @@ export function startNewAttempt(input: {
       resetWorkspace = true
     }
   }
-  // Single writer of retry feedback into decision_log. Every path that opens
-  // a new attempt (delivery_rework / manual_retry / modify_contract) routes
-  // its per-goal analysis through this one write — `buildRetryFeedbackSection`
-  // reads `phase="retry"` filtered by goalID. Previously the `feedback`
-  // parameter existed on the signature but was dropped silently; only the
-  // manual retry paths duplicated a parallel decisionLog.append, so
+  // Retry feedback writes route through appendRetryFeedbackOnce so direct
+  // build retries and explicit rework retries share one decision_log shape.
+  // Build prompts read `phase="retry"` filtered by goalID. Previously the
+  // `feedback` parameter existed on the signature but was dropped silently;
   // executors on delivery_rework/modify_contract rework cycles ran with no
   // rejection context — i.e. blind retries.
   if (input.feedback) {
-    createDecisionLog(goal.task_id).append({
+    appendRetryFeedbackOnce({
+      taskID: goal.task_id,
       goalID: input.goalID,
-      phase: "retry",
-      key: `retry_analysis_${input.goalID}`,
+      key: `retry_analysis_${input.goalID}_${supersededTipID ?? "no_terminal_tip"}`,
       value: input.feedback.value,
       reason: input.feedback.reason,
     })
@@ -1756,6 +1877,14 @@ export function beginBuildAttempt(input: {
       `beginBuildAttempt: goal ${input.goalID} already has live goal_run ${priorTip.id} ` +
         `with status=${priorTip.status}; refusing to open a second live build attempt.`,
     )
+  }
+  if (priorTip) {
+    appendBuildRetryFeedbackForPriorRun({
+      taskID: input.taskID,
+      goalID: input.goalID,
+      priorRun: priorTip,
+      source: "beginBuildAttempt",
+    })
   }
 
   const version = openGoalImplementationVersion({
