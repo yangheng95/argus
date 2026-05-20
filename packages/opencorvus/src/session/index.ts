@@ -11,7 +11,7 @@ import { Installation } from "../installation"
 
 import { Database, NotFoundError, eq, and, gte, isNull, desc, like, inArray, lt } from "../storage/db"
 import type { SQL } from "../storage/db"
-import { SessionTable, MessageTable, PartTable, type SessionKind } from "./session.sql"
+import { SessionTable, MessageTable, PartTable, SESSION_KINDS, type SessionKind } from "./session.sql"
 import { ProjectTable } from "../project/project.sql"
 import { Storage } from "@/storage/storage"
 import { Log } from "../util/log"
@@ -142,23 +142,7 @@ export namespace Session {
       /** Session's role/purpose, fixed at creation. Authoritative source of
        *  "what is this session for"; UI channel routing reads this column
        *  directly. See SessionKind in session.sql.ts. */
-      kind: z.enum([
-        "root",
-        "orchestrator",
-        "assistant",
-        "gateway",
-        "intent-analysis",
-        "requirements",
-        "design-analyst",
-        "goal",
-        "architect",
-        "integrity",
-        "delivery",
-        "executor",
-        "build",
-        "evaluator",
-        "system",
-      ]),
+      kind: z.enum(SESSION_KINDS),
       /** Goal this session belongs to (executor container / build
        *  worker / evaluator only); drives overlay card nesting. Fixed at
        *  creation. */

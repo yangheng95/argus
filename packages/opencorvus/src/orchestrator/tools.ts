@@ -3250,7 +3250,7 @@ export function createOrchestratorTools(input: {
         const task = requireTask(taskID)
         const model = await resolveAgentModelRef("explore", { taskID, sessionID: input.agentSessionID })
         const exploreSession = await Session.createNext({
-          kind: "assistant",
+          kind: "explore",
           parentID: input.agentSessionID,
           title: `Explore: ${question.slice(0, 80)}`,
           directory: Instance.directory,

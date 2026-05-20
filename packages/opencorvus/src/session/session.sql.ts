@@ -44,25 +44,36 @@ import { Timestamps } from "@/storage/schema.sql"
  *                  Direct workflow: task-level worker under the orchestrator
  *                  root. Pipeline workflow: per-goal worker under the
  *                  executor container (build phase).
+ *   explore        read-only repository-investigation subagent dispatched by
+ *                  the orchestrator `explore` tool. Distinct from "assistant"
+ *                  so the overlay splits each explore call into its own agent
+ *                  card instead of collapsing them into the generic lane.
  *   evaluator      LLM judge / evaluator sessions
  *   system         internal maintenance (compaction, summary, title generation)
  */
-export type SessionKind =
-  | "root"
-  | "orchestrator"
-  | "assistant"
-  | "gateway"
-  | "intent-analysis"
-  | "requirements"
-  | "design-analyst"
-  | "goal"
-  | "architect"
-  | "integrity"
-  | "delivery"
-  | "executor"
-  | "build"
-  | "evaluator"
-  | "system"
+// Single source for SessionKind. The Zod enum in session/index.ts (Info.kind)
+// and any other validator MUST derive from this tuple — do not re-list the
+// values (rule 8: that duplicate is exactly what silently dropped "explore").
+export const SESSION_KINDS = [
+  "root",
+  "orchestrator",
+  "assistant",
+  "gateway",
+  "intent-analysis",
+  "requirements",
+  "design-analyst",
+  "goal",
+  "architect",
+  "integrity",
+  "delivery",
+  "executor",
+  "build",
+  "explore",
+  "evaluator",
+  "system",
+] as const
+
+export type SessionKind = (typeof SESSION_KINDS)[number]
 
 type PartData = Omit<Message.Part, "id" | "sessionID" | "messageID">
 type InfoData = Omit<Message.Info, "id" | "sessionID">
