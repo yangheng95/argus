@@ -65,7 +65,7 @@ import {
 import { describeTask, goalStatusByID, renderCollaborationClosure } from "@/engine/describe"
 import { isLiveGoalRunStatus } from "@/engine/catalog"
 import { GoalContractUpdateSchema } from "@/pipeline/goal-contract.schema"
-import { updateRun, updateTask } from "@/engine/state"
+import { blockActiveRunForTask, updateRun, updateTask } from "@/engine/state"
 import { deriveTaskStatus, isTaskQueued } from "@/engine/task-status"
 
 import {
@@ -88,7 +88,13 @@ import {
   type ArchitectFidelityState,
 } from "@/architect/fidelity"
 import { contractGraphIRIndex, validateArchitectContractGraph } from "@/architect/contract-graph"
-import type { GoalCorrection, IntegrityDimensionResult, IntegrityGraphCorrection, IntegrityResult, MissingGoal } from "@/integrity"
+import type {
+  GoalCorrection,
+  IntegrityDimensionResult,
+  IntegrityGraphCorrection,
+  IntegrityResult,
+  MissingGoal,
+} from "@/integrity"
 import { renderIntegrityMarkdown } from "@/integrity/render-markdown"
 
 const log = Log.create({ service: "task-tools" })
@@ -335,7 +341,6 @@ function renderEvidenceSourceManifest(input: {
   return lines.join("\n")
 }
 
-
 function renderDesignAnalysisPrdSpecDocument(input: {
   analysis: {
     designSystem: string
@@ -464,18 +469,17 @@ function acceptanceSpecsToPromptLines(raw: unknown): string[] {
   })
 }
 
-const ModifyGoalInputSchema = z
-  .object({
-    goalID: z.string().min(1).describe("The goal ID to modify."),
-    updates: GoalContractUpdateSchema,
-    reason: z.string().min(1).describe("Why you decided to modify this goal."),
-  })
+const ModifyGoalInputSchema = z.object({
+  goalID: z.string().min(1).describe("The goal ID to modify."),
+  updates: GoalContractUpdateSchema,
+  reason: z.string().min(1).describe("Why you decided to modify this goal."),
+})
 
-function resolveSteerTarget(input: {
-  taskID: string
-  sessionID?: string
-  goalID?: string
-}): { sessionID: string; source: string; goalRunID?: string } {
+function resolveSteerTarget(input: { taskID: string; sessionID?: string; goalID?: string }): {
+  sessionID: string
+  source: string
+  goalRunID?: string
+} {
   if (input.goalID) {
     const goal = findGoal(input.goalID)
     if (!goal || goal.task_id !== input.taskID) {
@@ -522,10 +526,7 @@ function resolveSteerTarget(input: {
   }
 }
 
-function assertDirectReplySessionOwnership(input: {
-  taskID: string
-  sessionID: string
-}): { kind: string } {
+function assertDirectReplySessionOwnership(input: { taskID: string; sessionID: string }): { kind: string } {
   const owningTask = taskIDForSession(input.sessionID)
   if (owningTask !== input.taskID) {
     throw new Error(`Session ${input.sessionID} does not belong to task ${input.taskID}`)
@@ -584,6 +585,7 @@ export function computeContractFieldChanges(
     "depends_on",
     "priority",
     "kind",
+    "requirement_ids",
   ] as const
   const setValues: Record<string, unknown> = {}
   for (const f of contractFields) {
@@ -993,8 +995,7 @@ export function createOrchestratorTools(input: {
       /* best effort */
     }
     return SubAgentProtocol.yieldResult({
-      headline:
-        `Publish gate blocked delivery artifact export. Task lifecycle is unchanged.`,
+      headline: `Publish gate blocked delivery artifact export. Task lifecycle is unchanged.`,
       fields: [
         ["delivery_id", input.deliveryID],
         ["run_id", input.runID],
@@ -1372,11 +1373,11 @@ export function createOrchestratorTools(input: {
           ? `Integrity verdict: pass — ${outcome.perDimension.join(", ")}. ` +
             `Integrity is the workflow gate; task completed.`
           : outcome.verdict === "pass"
-          ? `Integrity verdict: pass — ${outcome.perDimension.join(", ")}. ` +
-            `Pre-build integrity passed, but task is not complete until post-build integrity passes after terminal build evidence exists.`
-          : `Integrity verdict: ${outcome.verdict} — ${outcome.perDimension.join(", ")}. ` +
-            `Task is not accepted. Nothing in code supersedes goals, opens new attempts, or mutates the graph based on this verdict. ` +
-            `Read the full markdown below and choose modify_goal / build({goalID}) / architect / fail_task explicitly.`
+            ? `Integrity verdict: pass — ${outcome.perDimension.join(", ")}. ` +
+              `Pre-build integrity passed, but task is not complete until post-build integrity passes after terminal build evidence exists.`
+            : `Integrity verdict: ${outcome.verdict} — ${outcome.perDimension.join(", ")}. ` +
+              `Task is not accepted. Nothing in code supersedes goals, opens new attempts, or mutates the graph based on this verdict. ` +
+              `Read the full markdown below and choose modify_goal / build({goalID}) / architect / fail_task explicitly.`
       return SubAgentProtocol.yieldResult({
         headline,
         fields: [
@@ -1482,7 +1483,9 @@ export function createOrchestratorTools(input: {
           return [
             ...(Array.isArray(result?.changed_files) ? result.changed_files : []),
             ...(Array.isArray(result?.changedFiles) ? result.changedFiles : []),
-            ...(Array.isArray(result?.diffs) ? result.diffs.map((diff) => diff.file).filter((file): file is string => typeof file === "string") : []),
+            ...(Array.isArray(result?.diffs)
+              ? result.diffs.map((diff) => diff.file).filter((file): file is string => typeof file === "string")
+              : []),
           ]
         }),
       ),
@@ -1506,7 +1509,10 @@ export function createOrchestratorTools(input: {
     })
     const acceptanceSummary =
       deliveriesForAcceptance.length > 0
-        ? deliveriesForAcceptance.map((delivery) => delivery.summary).filter(Boolean).join("\n")
+        ? deliveriesForAcceptance
+            .map((delivery) => delivery.summary)
+            .filter(Boolean)
+            .join("\n")
         : "No delivery artifact rows were found; review the requirement status snapshot and repository directly."
 
     const { reviewIntegrity, computeRequirementStatusSnapshot } = await import("@/integrity")
@@ -1586,8 +1592,8 @@ export function createOrchestratorTools(input: {
           action: c.action,
           goalID: c.goalID,
           reason: c.reason,
-            updates: c.updates as Record<string, unknown> | undefined,
-          })),
+          updates: c.updates as Record<string, unknown> | undefined,
+        })),
         graphCorrections: verdict.graphCorrections,
         missingGoals: verdict.missingGoals,
         acceptance: verdict.acceptance,
@@ -1784,7 +1790,7 @@ export function createOrchestratorTools(input: {
         "guess.\n" +
         "SKIP WHEN: a previous `requirements` result already succeeded and the active " +
         "spec snapshot still matches the current user scope; call `architect` next. " +
-        "Only rerun after an operator scope change, `restart_from_stage(\"requirements\")`, " +
+        'Only rerun after an operator scope change, `restart_from_stage("requirements")`, ' +
         "or concrete evidence that the active REQ snapshot is invalid.\n" +
         "SKIP WHEN: trivial direct edit (single-file bug fix, typo / config tweak); " +
         "build agent can run against the user's text alone and `deliver` has enough " +
@@ -2745,8 +2751,9 @@ export function createOrchestratorTools(input: {
                 const goalID = llmToDBID.get(g.id) ?? g.id
                 return `- **${goalID}** (${g.kind}, ${g.priority}): ${g.title}`
               })
-              const mappedTraceLines = result.traceability.map((t) =>
-                `- ${t.requirementID} → ${t.goalIDs.map((goalID) => llmToDBID.get(goalID) ?? goalID).join(", ")}`,
+              const mappedTraceLines = result.traceability.map(
+                (t) =>
+                  `- ${t.requirementID} → ${t.goalIDs.map((goalID) => llmToDBID.get(goalID) ?? goalID).join(", ")}`,
               )
               const mappedSourceCoverageLines = mappedArchitectFidelity.sourceCoverage.map(
                 (row) =>
@@ -2952,6 +2959,12 @@ export function createOrchestratorTools(input: {
             { status: "completed", error: null, time_completed: completed },
             "Task completed by passing integrity gate",
           )
+        } else if (outcome.status === "reviewed" && outcome.phase === "post_build") {
+          await blockActiveRunForTask(taskID, {
+            blockingReason: `integrity verdict ${outcome.verdict}`,
+            error: outcome.summary,
+            summary: "Run blocked by non-pass integrity gate",
+          })
         }
         return renderIntegrityOutcome(outcome)
       },
@@ -2989,7 +3002,8 @@ export function createOrchestratorTools(input: {
         const delivery = run ? findDeliveryByRun(run.id) : undefined
         if (!delivery) {
           return SubAgentProtocol.yieldResult({
-            headline: "prosecute: no legacy delivery row to prosecute against. Delivery is retired; use integrity for workflow review.",
+            headline:
+              "prosecute: no legacy delivery row to prosecute against. Delivery is retired; use integrity for workflow review.",
             pointer: run ? `run ${run.id}` : `task ${taskID}`,
           })
         }
@@ -3006,7 +3020,8 @@ export function createOrchestratorTools(input: {
         )
         if (!verdictArtifact) {
           return SubAgentProtocol.yieldResult({
-            headline: "prosecute: no legacy delivery verdict artifact. Delivery is retired; use integrity for workflow review.",
+            headline:
+              "prosecute: no legacy delivery verdict artifact. Delivery is retired; use integrity for workflow review.",
             pointer: `delivery ${delivery.id}`,
           })
         }
@@ -3563,6 +3578,7 @@ export function createOrchestratorTools(input: {
             const label = `#G${g.order_index + 1}V${getGoalRetryCount(g.id) + 1}`
             sections.push(`- [${goalStatusByID(g.id)}] ${label} ${g.id}: ${g.title} [${g.priority}]`)
             sections.push(`  objective: ${g.objective.slice(0, 200)}`)
+            sections.push(`  requirement_ids: ${(g.requirement_ids ?? []).join(", ") || "(none)"}`)
             sections.push(
               `  acceptance_specs:\n${renderSpecsAsText((g.acceptance_specs ?? []) as AcceptanceSpec[]).slice(0, 400)}`,
             )
@@ -3708,7 +3724,7 @@ export function createOrchestratorTools(input: {
               // missing-goal proposals) so the orchestrator LLM can act on
               // the same evidence it had at review time, not a count.
               // Architecture review is advisory: the orchestrator decides
-          // modify_goal / build / architect / integrity / fail_task
+              // modify_goal / build / architect / integrity / fail_task
               // explicitly based on this text.
               if (reviewMarkdown) sections.push("", reviewMarkdown)
             }
@@ -3837,7 +3853,9 @@ export function createOrchestratorTools(input: {
             .string()
             .min(1)
             .optional()
-            .describe("Child agent session id to steer. Backward-compatible: also accepts the live goal_run_id reported by read_context."),
+            .describe(
+              "Child agent session id to steer. Backward-compatible: also accepts the live goal_run_id reported by read_context.",
+            ),
           goal_id: z
             .string()
             .min(1)
@@ -3872,13 +3890,17 @@ export function createOrchestratorTools(input: {
             .string()
             .min(1)
             .optional()
-            .describe("Child agent session id to cancel. Backward-compatible: also accepts the live goal_run_id reported by read_context."),
+            .describe(
+              "Child agent session id to cancel. Backward-compatible: also accepts the live goal_run_id reported by read_context.",
+            ),
           goal_id: z
             .string()
             .min(1)
             .optional()
             .describe("Goal id whose latest live child session should be cancelled."),
-          reason: z.string().describe("Why this child session must be cancelled before re-dispatching the same stage/goal"),
+          reason: z
+            .string()
+            .describe("Why this child session must be cancelled before re-dispatching the same stage/goal"),
         })
         .refine((value) => !!value.session_id || !!value.goal_id, {
           message: "cancel_subagent requires either session_id or goal_id",
@@ -4209,7 +4231,9 @@ export function createOrchestratorTools(input: {
         queue: z
           .boolean()
           .default(false)
-          .describe("Set true when this confirmed follow-up task should wait in the directory queue; set false when it should start immediately and bypass the directory queue."),
+          .describe(
+            "Set true when this confirmed follow-up task should wait in the directory queue; set false when it should start immediately and bypass the directory queue.",
+          ),
         kind: z.enum(["workflow", "build"]).default("workflow"),
       }),
       execute: async ({ title, request, reason, priority, queue, kind }) => {

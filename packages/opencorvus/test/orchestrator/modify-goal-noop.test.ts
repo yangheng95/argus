@@ -30,6 +30,7 @@ describe("computeContractFieldChanges", () => {
     depends_on: ["gol_a", "gol_b"],
     priority: "high",
     kind: "feature",
+    requirement_ids: ["REQ-1", "REQ-2"],
   }
 
   test("no fields submitted → empty setValues", () => {
@@ -46,16 +47,14 @@ describe("computeContractFieldChanges", () => {
       depends_on: [...baseGoal.depends_on],
       priority: baseGoal.priority,
       kind: baseGoal.kind,
+      requirement_ids: [...baseGoal.requirement_ids],
     }
     const result = computeContractFieldChanges(updates, baseGoal)
     expect(result).toEqual({})
   })
 
   test("string field actually differs → only that field appears in setValues", () => {
-    const result = computeContractFieldChanges(
-      { title: "New chat title", objective: baseGoal.objective },
-      baseGoal,
-    )
+    const result = computeContractFieldChanges({ title: "New chat title", objective: baseGoal.objective }, baseGoal)
     expect(result).toEqual({ title: "New chat title" })
   })
 
@@ -72,10 +71,7 @@ describe("computeContractFieldChanges", () => {
     // to express priority); honour that as a real change. The cost is
     // minor (a single retry-feedback entry) and matches "submit the
     // exact array I want persisted" semantics.
-    const result = computeContractFieldChanges(
-      { depends_on: ["gol_b", "gol_a"] },
-      baseGoal,
-    )
+    const result = computeContractFieldChanges({ depends_on: ["gol_b", "gol_a"] }, baseGoal)
     expect(result.depends_on).toEqual(["gol_b", "gol_a"])
   })
 
@@ -99,10 +95,7 @@ describe("computeContractFieldChanges", () => {
     // Passing `title: undefined` is the same as not passing title at all —
     // the helper treats undefined as "field not submitted". This matches
     // modify_goal's pre-fix behaviour (line 2436: `if (updates.title !== undefined)`).
-    const result = computeContractFieldChanges(
-      { title: undefined, objective: "Different." },
-      baseGoal,
-    )
+    const result = computeContractFieldChanges({ title: undefined, objective: "Different." }, baseGoal)
     expect(result).toEqual({ objective: "Different." })
   })
 
@@ -119,18 +112,12 @@ describe("computeContractFieldChanges", () => {
   })
 
   test("array length change (added element) → counted as changed", () => {
-    const result = computeContractFieldChanges(
-      { owned_paths: ["src/components", "src/message-bubble.tsx"] },
-      baseGoal,
-    )
+    const result = computeContractFieldChanges({ owned_paths: ["src/components", "src/message-bubble.tsx"] }, baseGoal)
     expect(result.owned_paths).toEqual(["src/components", "src/message-bubble.tsx"])
   })
 
   test("array shrunk → counted as changed (intentional removal must propagate)", () => {
-    const result = computeContractFieldChanges(
-      { acceptance_specs: ["MessageList renders streaming"] },
-      baseGoal,
-    )
+    const result = computeContractFieldChanges({ acceptance_specs: ["MessageList renders streaming"] }, baseGoal)
     expect(result.acceptance_specs).toEqual(["MessageList renders streaming"])
   })
 
@@ -142,6 +129,16 @@ describe("computeContractFieldChanges", () => {
   test("priority transition counted when actually different", () => {
     const result = computeContractFieldChanges({ priority: "medium" }, baseGoal)
     expect(result.priority).toBe("medium")
+  })
+
+  test("requirement_ids exactly match persisted values → empty setValues", () => {
+    const result = computeContractFieldChanges({ requirement_ids: ["REQ-1", "REQ-2"] }, baseGoal)
+    expect(result).toEqual({})
+  })
+
+  test("requirement_ids actually differs → returned in setValues", () => {
+    const result = computeContractFieldChanges({ requirement_ids: ["REQ-1", "REQ-3"] }, baseGoal)
+    expect(result).toEqual({ requirement_ids: ["REQ-1", "REQ-3"] })
   })
 })
 
@@ -195,9 +192,7 @@ describe("GoalContractUpdateSchema", () => {
     if (!result.success) {
       expect(
         result.error.issues.some(
-          (issue) =>
-            issue.code === "invalid_union" &&
-            issue.path.join(".") === "acceptance_specs.0.scorers.0.type",
+          (issue) => issue.code === "invalid_union" && issue.path.join(".") === "acceptance_specs.0.scorers.0.type",
         ),
       ).toBe(true)
     }

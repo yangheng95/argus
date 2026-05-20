@@ -198,6 +198,7 @@ function insertWorkflowTaskWithGoal(input: {
   workspaceDir?: string
   workspaceBranch?: string
   specID?: string
+  requirementIDs?: string[]
 }) {
   const specID = input.specID ?? `spec_${input.goalID}`
   Database.use((db) => {
@@ -253,7 +254,7 @@ function insertWorkflowTaskWithGoal(input: {
         exports: [],
         imports: [],
         kind: "feature",
-        requirement_ids: [],
+        requirement_ids: input.requirementIDs ?? [],
         priority: "blocking",
         source: "test",
         status: "pending",
@@ -335,7 +336,14 @@ describe("orchestrator tools", () => {
           missingGoals: [],
         },
         { id: "hallucination", verdict: "pass", issues: [], corrections: [], graphCorrections: [], missingGoals: [] },
-        { id: "solution_quality", verdict: "pass", issues: [], corrections: [], graphCorrections: [], missingGoals: [] },
+        {
+          id: "solution_quality",
+          verdict: "pass",
+          issues: [],
+          corrections: [],
+          graphCorrections: [],
+          missingGoals: [],
+        },
       ],
       issues: [],
       corrections: [],
@@ -798,19 +806,22 @@ describe("orchestrator tools", () => {
 
         const executorSessionID = `exec_cancel_subagent_${stamp}`
         Database.use((db) =>
-          db.insert(EngineExecutorSessionTable).values({
-            id: executorSessionID,
-            task_id: taskID,
-            run_id: runID,
-            goal_run_id: goalRunID,
-            provider: "opencorvus",
-            protocol: "session-prompt",
-            protocol_version: "v1",
-            transport: "inproc",
-            status: "active",
-            time_created: now,
-            time_updated: now,
-          }).run(),
+          db
+            .insert(EngineExecutorSessionTable)
+            .values({
+              id: executorSessionID,
+              task_id: taskID,
+              run_id: runID,
+              goal_run_id: goalRunID,
+              provider: "opencorvus",
+              protocol: "session-prompt",
+              protocol_version: "v1",
+              transport: "inproc",
+              status: "active",
+              time_created: now,
+              time_updated: now,
+            })
+            .run(),
         )
 
         const { tools } = createOrchestratorTools({
@@ -881,19 +892,22 @@ describe("orchestrator tools", () => {
         })
         const executorSessionID = `exec_cancel_subagent_goal_${stamp}`
         Database.use((db) =>
-          db.insert(EngineExecutorSessionTable).values({
-            id: executorSessionID,
-            task_id: taskID,
-            run_id: runID,
-            goal_run_id: goalRunID,
-            provider: "opencorvus",
-            protocol: "session-prompt",
-            protocol_version: "v1",
-            transport: "inproc",
-            status: "active",
-            time_created: now,
-            time_updated: now,
-          }).run(),
+          db
+            .insert(EngineExecutorSessionTable)
+            .values({
+              id: executorSessionID,
+              task_id: taskID,
+              run_id: runID,
+              goal_run_id: goalRunID,
+              provider: "opencorvus",
+              protocol: "session-prompt",
+              protocol_version: "v1",
+              transport: "inproc",
+              status: "active",
+              time_created: now,
+              time_updated: now,
+            })
+            .run(),
         )
 
         const { tools } = createOrchestratorTools({
@@ -938,6 +952,7 @@ describe("orchestrator tools", () => {
       goalSlug: "surface-live-runtime-ids",
       objective: "Show latest goal_run and child session ids so the orchestrator can steer the live build correctly",
       now,
+      requirementIDs: ["REQ-1", "REQ-3"],
     })
 
     await Instance.provide({
@@ -966,6 +981,7 @@ describe("orchestrator tools", () => {
 
         const result = await tools.read_context.execute({ scope: "goals" }, {} as any)
 
+        expect(result).toContain("requirement_ids: REQ-1, REQ-3")
         expect(result).toContain(`latest_goal_run_id: ${goalRunID}`)
         expect(result).toContain("latest_goal_run_status: running")
         expect(result).toContain(`latest_goal_session_id: ${child.id}`)
@@ -1186,13 +1202,160 @@ describe("orchestrator tools", () => {
         )
         expect(deriveTaskStatus(taskAfterPublishAttempt!)).toBe("completed")
 
-        const reopened = await openTaskForOperatorMessage(taskAfterPublishAttempt!, "Operator continuation reopened task")
+        const reopened = await openTaskForOperatorMessage(
+          taskAfterPublishAttempt!,
+          "Operator continuation reopened task",
+        )
         expect(reopened.session_id).toBe(parent.id)
         expect(reopened.time_completed).toBeNull()
         expect(deriveTaskStatus(reopened)).toBe("queued")
         expect(findRun(run!.id)?.status).toBe("completed")
         expect(findDeliveryByRun(run!.id)).toBeUndefined()
         expect(findEvaluationByRun(run!.id)).toBeUndefined()
+      },
+    })
+  })
+
+  test("post-build integrity needs_correction blocks the active run and keeps the task active", async () => {
+    await tmp?.[Symbol.asyncDispose]?.()
+    tmp = await tmpdir({ git: true })
+
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_integrity_blocked_${stamp}`
+    const taskID = `tsk_integrity_blocked_${stamp}`
+    const goalID = `goal_integrity_blocked_${stamp}`
+    const pipeline = WorkflowRegistry.resolveSync("pipeline")!
+    const workflowState = createWorkflowState(pipeline)
+
+    buildAgentRunImpl = async (input: any) => {
+      await markBuildSlotAcquired(input)
+      await fs.writeFile(path.join(tmp.path, "correction-output.txt"), "needs correction output\n")
+      return {
+        result: {
+          status: "passed",
+          summary: "Build produced output that integrity will reject.",
+          files_changed: [
+            {
+              path: "correction-output.txt",
+              summary: "Added output requiring integrity correction.",
+              reason: "The mocked build needs terminal evidence before integrity.",
+            },
+          ],
+          tests: [],
+        },
+        sessionID: "ses_goal_build_integrity_blocked",
+        worktreeDir: input.managedWorktree.directory,
+        worktreeBranch: input.managedWorktree.branch,
+        worktreeBaseRef: input.managedWorktree.baseRef,
+        diffs: [{ file: "correction-output.txt", diff: "New file:\nneeds correction output\n" }],
+      }
+    }
+    computeRequirementStatusSnapshotImpl = () => [
+      {
+        requirementID: "REQ-1",
+        status: "satisfied",
+        claimingGoals: [{ goalID, runStatus: "completed" }],
+      },
+    ]
+    reviewIntegrityImpl = async () => ({
+      verdict: "needs_correction",
+      summary: "Integrity found a post-build requirement mismatch.",
+      dimensions: [
+        {
+          id: "requirement_fidelity",
+          verdict: "needs_correction",
+          issues: [{ description: "REQ-1 is not fully satisfied by the build output.", type: "uncovered" }],
+          corrections: [
+            { action: "modify", goalID, reason: "Cover REQ-1 completely.", updates: { objective: "cover REQ-1" } },
+          ],
+          graphCorrections: [],
+          missingGoals: [],
+        },
+        {
+          id: "technical_feasibility",
+          verdict: "pass",
+          issues: [],
+          corrections: [],
+          graphCorrections: [],
+          missingGoals: [],
+        },
+        { id: "hallucination", verdict: "pass", issues: [], corrections: [], graphCorrections: [], missingGoals: [] },
+        {
+          id: "solution_quality",
+          verdict: "pass",
+          issues: [],
+          corrections: [],
+          graphCorrections: [],
+          missingGoals: [],
+        },
+      ],
+      issues: [{ description: "REQ-1 is not fully satisfied by the build output.", type: "uncovered" }],
+      corrections: [
+        { action: "modify", goalID, reason: "Cover REQ-1 completely.", updates: { objective: "cover REQ-1" } },
+      ],
+      graphCorrections: [],
+      missingGoals: [],
+      sessionID: "ses_integrity_blocked",
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "integrity blocked test" })
+        insertWorkflowTaskWithGoal({
+          projectID,
+          taskID,
+          goalID,
+          sessionID: parent.id,
+          worktree: tmp.path,
+          projectName: "Integrity blocked project",
+          taskTitle: "Integrity blocked task",
+          request: "Verify non-pass post-build integrity blocks the active run",
+          goalTitle: "Integrity blocked goal",
+          goalSlug: "integrity-blocked",
+          objective: "Produce terminal build evidence for a non-pass integrity review",
+          now,
+        })
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+          workflow: pipeline,
+          workflowState,
+        })
+
+        const buildResult = await tools.build.execute(
+          {
+            goalID,
+            request: "Write output that will need correction.",
+            reason: "Per-goal pipeline implementation before integrity.",
+          },
+          {} as any,
+        )
+        expect(buildResult).toContain("Build agent finished")
+
+        const run = findActiveRunForTask(taskID)
+        expect(run).toBeDefined()
+
+        insertArchitectContractGraphArtifact({ taskID, now: now + 1 })
+        const integrityResult = await tools.integrity.execute(
+          { reason: "Goal build finished and post-build integrity should block the run." },
+          {} as any,
+        )
+
+        expect(integrityResult).toContain("Integrity verdict: needs_correction")
+        const blockedRun = findRun(run!.id)
+        expect(blockedRun?.status).toBe("blocked")
+        expect(blockedRun?.blocking_reason).toContain("needs_correction")
+        expect(blockedRun?.blocking_reason).toContain("integrity")
+        expect(blockedRun?.error).toBe("Integrity found a post-build requirement mismatch.")
+
+        const taskRow = Database.use((db) =>
+          db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get(),
+        )
+        expect(taskRow?.time_completed).toBeNull()
+        expect(deriveTaskStatus(taskRow!)).toBe("active")
       },
     })
   })

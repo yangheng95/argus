@@ -1,11 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { Database } from "../../src/storage/db"
 import { ProjectTable } from "../../src/project/project.sql"
-import {
-  EngineGoalTable,
-  EngineTaskTable,
-  EngineArtifactTable,
-} from "../../src/engine/engine.sql"
+import { EngineGoalTable, EngineTaskTable, EngineArtifactTable } from "../../src/engine/engine.sql"
 import { describeTask, renderTaskDescription } from "../../src/engine/describe"
 import { Instance } from "../../src/project/instance"
 import { resetDatabase } from "../fixture/db"
@@ -38,79 +34,90 @@ let taskID = ""
 let runID = ""
 let stamp = ""
 
-function seedTaskWithGoals(goals: Array<{
-  id: string
-  kind: "feature" | "bootstrap" | "system" | "verification"
-  status: "pending" | "running" | "passed" | "failed"
-  depends_on?: string[]
-}>) {
+function seedTaskWithGoals(
+  goals: Array<{
+    id: string
+    kind: "feature" | "bootstrap" | "system" | "verification"
+    status: "pending" | "running" | "passed" | "failed"
+    depends_on?: string[]
+    requirement_ids?: string[]
+  }>,
+) {
   const now = Date.now()
   Database.transaction((db) => {
-    db.insert(ProjectTable).values({
-      id: projectID,
-      worktree: process.cwd(),
-      name: "P5 describe bootstrap test",
-      sandboxes: [],
-      time_created: now,
-      time_updated: now,
-    }).run()
-    db.insert(EngineTaskTable).values({
-      id: taskID,
-      project_id: projectID,
-      source: "test",
-      title: "P5 describe bootstrap",
-      request: "test",
-      kind: "workflow",
-      priority: "normal",
-      time_created: now,
-      time_updated: now,
-      time_started: now,
-    }).run()
-    db.insert(EngineArtifactTable).values({
-      id: runID,
-      task_id: taskID,
-      run_id: runID,
-      kind: "run",
-      label: "run-running",
-      payload: {
-        plan_version_id: null,
-        session_id: null,
-        executor: "opencorvus",
-        status: "running",
-        phase: "execute",
-        blocking_reason: null,
-        error: null,
-        retry_count: 0,
-        executor_ref: null,
-        metadata: null,
-        time_started: now,
-        time_completed: null,
-      },
-      time_created: now,
-      time_updated: now,
-    }).run()
-    let order = 0
-    for (const g of goals) {
-      db.insert(EngineGoalTable).values({
-        id: g.id,
-        task_id: taskID,
-        title: `Goal ${g.id}`,
-        slug: g.id,
-        objective: "obj",
-        acceptance_specs: [],
-        owned_paths: [],
-        depends_on: g.depends_on ?? [],
-        exports: [],
-        imports: [],
-        kind: g.kind,
-        requirement_ids: [],
-        priority: "blocking",
-        source: "test",
-        status: g.status,
-        order_index: order++,
+    db.insert(ProjectTable)
+      .values({
+        id: projectID,
+        worktree: process.cwd(),
+        name: "P5 describe bootstrap test",
+        sandboxes: [],
         time_created: now,
         time_updated: now,
-      }).run()
+      })
+      .run()
+    db.insert(EngineTaskTable)
+      .values({
+        id: taskID,
+        project_id: projectID,
+        source: "test",
+        title: "P5 describe bootstrap",
+        request: "test",
+        kind: "workflow",
+        priority: "normal",
+        time_created: now,
+        time_updated: now,
+        time_started: now,
+      })
+      .run()
+    db.insert(EngineArtifactTable)
+      .values({
+        id: runID,
+        task_id: taskID,
+        run_id: runID,
+        kind: "run",
+        label: "run-running",
+        payload: {
+          plan_version_id: null,
+          session_id: null,
+          executor: "opencorvus",
+          status: "running",
+          phase: "execute",
+          blocking_reason: null,
+          error: null,
+          retry_count: 0,
+          executor_ref: null,
+          metadata: null,
+          time_started: now,
+          time_completed: null,
+        },
+        time_created: now,
+        time_updated: now,
+      })
+      .run()
+    let order = 0
+    for (const g of goals) {
+      db.insert(EngineGoalTable)
+        .values({
+          id: g.id,
+          task_id: taskID,
+          title: `Goal ${g.id}`,
+          slug: g.id,
+          objective: "obj",
+          acceptance_specs: [],
+          owned_paths: [],
+          depends_on: g.depends_on ?? [],
+          exports: [],
+          imports: [],
+          kind: g.kind,
+          requirement_ids: g.requirement_ids ?? [],
+          priority: "blocking",
+          source: "test",
+          status: g.status,
+          order_index: order++,
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
       // engine_goal.status is a cache (rule 8 — derived). goalStatusByID
       // reads from goal_run rows. To force a non-pending status in the
       // test, seed a goal_run_attempt artifact reflecting the desired
@@ -120,34 +127,36 @@ function seedTaskWithGoals(goals: Array<{
         const grunID = `${g.id}_run`
         const terminal = g.status === "passed" ? "completed" : g.status === "failed" ? "failed" : "running"
         const isTerminal = g.status === "passed" || g.status === "failed"
-        db.insert(EngineArtifactTable).values({
-          id: grunID,
-          task_id: taskID,
-          run_id: runID,
-          goal_run_id: grunID,
-          kind: "goal_run_attempt",
-          label: `attempt-${terminal}`,
-          payload: {
-            goal_id: g.id,
-            plan_node_id: null,
-            session_id: null,
-            status: terminal,
-            retry_count: 0,
-            blocking_reason: null,
-            error: null,
-            workspace_dir: null,
-            base_ref: null,
-            merge_ref: null,
-            supersede_of: null,
-            superseded_reason: null,
-            superseded_at: null,
-            metadata: null,
-            time_started: now,
-            time_completed: isTerminal ? now : null,
-          },
-          time_created: now,
-          time_updated: now,
-        }).run()
+        db.insert(EngineArtifactTable)
+          .values({
+            id: grunID,
+            task_id: taskID,
+            run_id: runID,
+            goal_run_id: grunID,
+            kind: "goal_run_attempt",
+            label: `attempt-${terminal}`,
+            payload: {
+              goal_id: g.id,
+              plan_node_id: null,
+              session_id: null,
+              status: terminal,
+              retry_count: 0,
+              blocking_reason: null,
+              error: null,
+              workspace_dir: null,
+              base_ref: null,
+              merge_ref: null,
+              supersede_of: null,
+              superseded_reason: null,
+              superseded_at: null,
+              metadata: null,
+              time_started: now,
+              time_completed: isTerminal ? now : null,
+            },
+            time_created: now,
+            time_updated: now,
+          })
+          .run()
       }
     }
   })
@@ -278,9 +287,7 @@ describe("P5 — renderTaskDescription emits the bootstrap-first paragraph", () 
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        seedTaskWithGoals([
-          { id: `gol_feat_1_${stamp}`, kind: "feature", status: "pending" },
-        ])
+        seedTaskWithGoals([{ id: `gol_feat_1_${stamp}`, kind: "feature", status: "pending" }])
         const desc = await describeTask(taskID)
         const md = renderTaskDescription(desc)
         expect(md).not.toContain("Bootstrap-first dispatch order")
@@ -318,6 +325,22 @@ describe("collaboration closure projection", () => {
     })
   })
 
+  test("rendered goal description includes requirement ids for integrity traceability repairs", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const goal = `gol_trace_${stamp}`
+        seedTaskWithGoals([{ id: goal, kind: "feature", status: "pending", requirement_ids: ["REQ-1", "REQ-3"] }])
+
+        const desc = await describeTask(taskID)
+        const md = renderTaskDescription(desc)
+
+        expect(md).toContain("Requirement IDs: REQ-1, REQ-3")
+      },
+    })
+  })
+
   test("dependency-blocked goals render their blockers instead of implying replanning", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
@@ -349,9 +372,7 @@ describe("collaboration closure projection", () => {
       directory: tmp.path,
       fn: async () => {
         const failed = `gol_failed_${stamp}`
-        seedTaskWithGoals([
-          { id: failed, kind: "feature", status: "failed" },
-        ])
+        seedTaskWithGoals([{ id: failed, kind: "feature", status: "failed" }])
 
         const desc = await describeTask(taskID)
         expect(desc.collaboration_closure?.execution_started).toBe(true)
@@ -378,9 +399,7 @@ describe("collaboration closure projection", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        seedTaskWithGoals([
-          { id: `gol_feature_${stamp}`, kind: "feature", status: "pending" },
-        ])
+        seedTaskWithGoals([{ id: `gol_feature_${stamp}`, kind: "feature", status: "pending" }])
 
         const desc = await describeTask(taskID)
         expect(desc.collaboration_closure?.execution_started).toBe(false)

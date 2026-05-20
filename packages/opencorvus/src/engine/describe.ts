@@ -88,6 +88,7 @@ export interface GoalDesc {
   priority: "blocking" | "advisory"
   objective: string
   acceptance_summary: string
+  requirement_ids?: string[]
   owned_paths: string[]
   depends_on: string[]
   /** All historical goal_runs in chronological order (oldest → newest). */
@@ -258,6 +259,7 @@ export function describeGoal(goal: GoalRow, rewindCursor?: number | null): GoalD
     priority: goal.priority as "blocking" | "advisory",
     objective: goal.objective,
     acceptance_summary: renderSpecsAsText((goal.acceptance_specs ?? []) as AcceptanceSpec[]).slice(0, 300),
+    requirement_ids: (goal.requirement_ids ?? []) as string[],
     owned_paths: (goal.owned_paths ?? []) as string[],
     depends_on: (goal.depends_on ?? []) as string[],
     attempts,
@@ -491,8 +493,10 @@ function describeDerivedState(g: GoalDesc): string {
 
 function renderGoal(g: GoalDesc): string[] {
   const lines: string[] = []
+  const requirementIDs = g.requirement_ids ?? []
   lines.push(`### Goal ${g.id}: ${g.title} [${g.priority}, ${g.kind}]`)
   lines.push(`Objective: ${g.objective}`)
+  if (requirementIDs.length > 0) lines.push(`Requirement IDs: ${requirementIDs.join(", ")}`)
   if (g.owned_paths.length > 0) lines.push(`Responsibility paths: ${g.owned_paths.join(", ")}`)
   if (g.depends_on.length > 0) lines.push(`Depends on: ${g.depends_on.join(", ")}`)
   if (g.acceptance_summary) lines.push(`Acceptance (first 300): ${g.acceptance_summary}`)

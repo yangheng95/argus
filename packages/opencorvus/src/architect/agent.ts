@@ -104,6 +104,7 @@ export namespace ArchitectAgent {
         ...((input.designSpecs?.length ?? 0) > 0 ? ["designSpecs are present"] : []),
         ...(input.designAnalysis?.trim() ? ["designAnalysis handoff is present"] : []),
       ],
+      knownRequirementIDs: input.requirements?.map((requirement) => requirement.id),
     })
     const contextTools = await filterAgentTools(createAgentContextTools(), "architect")
 
@@ -178,7 +179,9 @@ export namespace ArchitectAgent {
     }
 
     if (collector.goals.length < 2) {
-      throw new Error("Architect finalized with fewer than two goals — a task must be decomposed into at least two goals.")
+      throw new Error(
+        "Architect finalized with fewer than two goals — a task must be decomposed into at least two goals.",
+      )
     }
 
     // Architect produces the goal set as facts. Integrity (multi-dimension
