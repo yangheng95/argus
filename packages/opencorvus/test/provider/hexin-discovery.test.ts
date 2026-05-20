@@ -7,7 +7,11 @@ import { Env } from "../../src/env"
 import { Global } from "../../src/global"
 import { Instance } from "../../src/project/instance"
 import { Provider } from "../../src/provider/provider"
-import { discoverHexinModels, refreshHexinCache } from "../../src/provider/hexin-discovery"
+import {
+  discoverHexinModels,
+  discoverHexinModelsForStartup,
+  refreshHexinCache,
+} from "../../src/provider/hexin-discovery"
 import { GLM_EVALUATION_TEMPERATURE, THINKING_MODEL_TOP_P } from "../../src/provider/sampling"
 import { tmpdir } from "../fixture/fixture"
 
@@ -151,17 +155,31 @@ describe("hexin model discovery", () => {
     }
   })
 
-  test("provider list surfaces hexin live discovery failure when a key is configured", async () => {
+  test("Provider.list does not reject when hexin /v1/models returns budget_exceeded — /config/providers stays 200", async () => {
+    // Regression: previously Provider.list() rejected when hexin /v1/models
+    // returned 4xx (e.g. budget exceeded). That 500-ed /config/providers and
+    // erased every other provider from the Settings UI, locking the operator
+    // out of switching keys or disabling hexin. discoverHexinModelsForStartup
+    // now soft-fails so state() resolves regardless of hexin's upstream
+    // health. The Provider.database() catalog (used by /provider) still
+    // exposes hexin for the refresh button; the connected list (used by
+    // /config/providers) drops hexin only because models is empty, which is
+    // the same pre-existing rule applied to any zero-model provider.
     const previousAuth = await Auth.get("hexin")
     await Auth.set("hexin", {
       type: "api",
       key: "auth-hexin-key",
     })
     globalThis.fetch = (async () =>
-      new Response(JSON.stringify({ error: { message: "bad key" } }), {
-        status: 401,
-        headers: { "content-type": "application/json" },
-      })) as typeof fetch
+      new Response(
+        JSON.stringify({
+          error: {
+            message: "Budget has been exceeded! Current cost: 1000.95, Max budget: 1000.0",
+            type: "budget_exceeded",
+          },
+        }),
+        { status: 400, headers: { "content-type": "application/json" } },
+      )) as typeof fetch
 
     try {
       await using tmp = await tmpdir()
@@ -171,13 +189,125 @@ describe("hexin model discovery", () => {
           Env.remove("HEXIN_API_KEY")
         },
         fn: async () => {
-          await expect(Provider.list()).rejects.toThrow("hexin /models HTTP 401")
+          // Hard invariant: must not throw. /config/providers builds its
+          // response from this same call; a reject here = a 500 there.
+          const providers = await Provider.list()
+          expect(providers).toBeDefined()
+          // hexin is still registered in the underlying database so the
+          // catalog route can render it; database() never filters zero-model.
+          const database = await Provider.database()
+          expect(database.hexin).toBeDefined()
+          expect(Object.keys(database.hexin.models)).toEqual([])
         },
       })
     } finally {
       if (previousAuth) await Auth.set("hexin", previousAuth)
       else await Auth.remove("hexin").catch(() => undefined)
     }
+  })
+
+  test("startup discovery falls back to cached ids when live fetch fails", async () => {
+    await fs.mkdir(path.dirname(cacheFile), { recursive: true })
+    await fs.writeFile(
+      cacheFile,
+      JSON.stringify({ fetched: Date.now() - 60_000, ids: ["cached-hexin-model"] }),
+    )
+    globalThis.fetch = (async () =>
+      new Response(JSON.stringify({ error: { message: "budget exceeded" } }), {
+        status: 400,
+        headers: { "content-type": "application/json" },
+      })) as typeof fetch
+
+    const outcome = await discoverHexinModelsForStartup({ apiKey: "test-hexin-key" })
+
+    expect(outcome.source).toBe("cache")
+    expect(Object.keys(outcome.models)).toEqual(["cached-hexin-model"])
+    expect(outcome.error).toBeInstanceOf(Error)
+    expect(outcome.error?.message).toContain("hexin /models HTTP 400")
+  })
+
+  test("startup discovery returns empty + error when live fails and no cache exists", async () => {
+    // cacheFile was wiped in beforeEach
+    globalThis.fetch = (async () =>
+      new Response(JSON.stringify({ error: { message: "nope" } }), {
+        status: 401,
+        headers: { "content-type": "application/json" },
+      })) as typeof fetch
+
+    const outcome = await discoverHexinModelsForStartup({ apiKey: "test-hexin-key" })
+
+    expect(outcome.source).toBe("empty")
+    expect(outcome.models).toEqual({})
+    expect(outcome.error?.message).toContain("hexin /models HTTP 401")
+  })
+
+  test("startup discovery writes cache + reports live source on success", async () => {
+    let called = 0
+    globalThis.fetch = (async () => {
+      called++
+      return new Response(JSON.stringify({ data: [{ id: "kimi-k2.6" }, { id: "openai/glm-5.1" }] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      })
+    }) as typeof fetch
+
+    const outcome = await discoverHexinModelsForStartup({ apiKey: "test-hexin-key" })
+    const cached = JSON.parse(await Bun.file(cacheFile).text()) as { ids: string[] }
+
+    expect(called).toBe(1)
+    expect(outcome.source).toBe("live")
+    expect(outcome.error).toBeUndefined()
+    expect(Object.keys(outcome.models).sort()).toEqual(["kimi-k2.6", "openai/glm-5.1"])
+    expect(cached.ids.sort()).toEqual(["kimi-k2.6", "openai/glm-5.1"])
+  })
+
+  test("startup discovery never touches network when no key + no cache, returns empty", async () => {
+    delete process.env.HEXIN_API_KEY
+    let called = false
+    globalThis.fetch = (async () => {
+      called = true
+      throw new Error("network must not be touched without a key")
+    }) as typeof fetch
+
+    const outcome = await discoverHexinModelsForStartup({})
+
+    expect(called).toBe(false)
+    expect(outcome.source).toBe("empty")
+    expect(outcome.models).toEqual({})
+    expect(outcome.error).toBeUndefined()
+  })
+
+  test("startup discovery returns cached models when no key + cache present", async () => {
+    delete process.env.HEXIN_API_KEY
+    await fs.mkdir(path.dirname(cacheFile), { recursive: true })
+    await fs.writeFile(cacheFile, JSON.stringify({ fetched: Date.now(), ids: ["legacy-model"] }))
+    let called = false
+    globalThis.fetch = (async () => {
+      called = true
+      throw new Error("must not fetch when no key supplied")
+    }) as typeof fetch
+
+    const outcome = await discoverHexinModelsForStartup({})
+
+    expect(called).toBe(false)
+    expect(outcome.source).toBe("cache")
+    expect(Object.keys(outcome.models)).toEqual(["legacy-model"])
+    expect(outcome.error).toBeUndefined()
+  })
+
+  test("refresh button (refreshHexinCache) still throws hard on live failure — user must see budget errors", async () => {
+    // Regression guard: the startup softening must not bleed into the user-
+    // initiated refresh path. UI refresh / Provider.refreshHexin must surface
+    // the upstream HTTP error verbatim so the operator can act on it.
+    globalThis.fetch = (async () =>
+      new Response(
+        JSON.stringify({
+          error: { message: "Budget has been exceeded", type: "budget_exceeded" },
+        }),
+        { status: 400, headers: { "content-type": "application/json" } },
+      )) as typeof fetch
+
+    await expect(refreshHexinCache("test-hexin-key")).rejects.toThrow("hexin /models HTTP 400")
   })
 
   test("provider refresh lets project config override the global auth key and exposes models to config/providers", async () => {

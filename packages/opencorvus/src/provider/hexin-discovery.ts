@@ -1,13 +1,26 @@
 /**
  * Hexin OpenAI Gateway — explicit model discovery with cache.
  *
- * Flow:
- *   - Read cache at Global.Path.cache/hexin-models.json
- *   - Normal provider-list reads always use that cache, even when stale
- *   - No cache on normal reads → register hexin with an empty model list
- *   - force:true, used by the UI refresh button and provider startup when a
- *     Hexin credential is already configured, calls /v1/models
- *   - Forced fetch writes cache; forced fetch failure is returned to caller
+ * Two distinct entry points with *different* failure semantics — do not
+ * collapse them, callers depend on the split:
+ *
+ *   1. discoverHexinModels({ force?: boolean }) / refreshHexinCache
+ *      — user-initiated (UI refresh button, CLI refresh command, explicit
+ *      Provider.refreshHexin). force:true performs a live /v1/models call
+ *      and writes the cache on success; any HTTP / network / parse failure
+ *      throws so the operator sees the upstream error verbatim. force:false
+ *      (the default) only reads the cache and returns {} when none exists.
+ *
+ *   2. discoverHexinModelsForStartup({ apiKey? })
+ *      — invoked during Provider.state() lazy init. Tries a live fetch when
+ *      a key is supplied, falls back to the on-disk cache when the live call
+ *      fails, and finally falls back to an empty map. NEVER throws: hexin
+ *      upstream errors (e.g. budget exceeded, 401, network) must not reject
+ *      the global provider state, because that would 500 /config/providers
+ *      and remove every other provider from the Settings UI, locking the
+ *      operator out of switching keys or disabling hexin. Returns
+ *      { models, error?, source } so the caller can log and the UI can
+ *      surface the cause.
  *
  * Gateway only exposes {id, object, created, owned_by}. Capability shape
  * is assigned by hexin-profiles.ts.
@@ -121,9 +134,11 @@ export interface DiscoveryOptions {
 /**
  * Returns { modelID → Model } for the hexin provider.
  *
- * Normal provider-list reads never touch the network. On force:true, fetches
- * live IDs and refreshes the cache; if that forced fetch fails and a cache is
- * present, returns the cached IDs with a warning.
+ * User-initiated entry. Normal reads (force:false) only consult the cache.
+ * Forced reads hit /v1/models live and throw on any failure so the refresh
+ * button / CLI surfaces the upstream error verbatim. Callers that need a
+ * non-throwing path (provider startup) must use
+ * {@link discoverHexinModelsForStartup} instead.
  */
 export async function discoverHexinModels(opts: DiscoveryOptions = {}): Promise<Record<string, Model>> {
   const cached = await readCache()
@@ -164,4 +179,89 @@ function toModelMap(ids: string[]): Record<string, Model> {
 /** Exposed so UI can trigger a refresh without restarting the process. */
 export async function refreshHexinCache(apiKey?: string): Promise<Record<string, Model>> {
   return discoverHexinModels({ force: true, apiKey })
+}
+
+/**
+ * Outcome of {@link discoverHexinModelsForStartup}. `source` records which
+ * tier produced the model list so the caller can log/warn appropriately and
+ * the UI can choose how to nudge the operator.
+ *
+ *   - `live`   — fetched fresh from /v1/models, cache rewritten.
+ *   - `cache`  — live fetch failed (or no key supplied) and the on-disk
+ *                cache provided a fallback list.
+ *   - `empty`  — no key + no cache, or live fetch failed with no cache.
+ *                Provider is still registered but with zero models.
+ *
+ * `error` is set when the live fetch was attempted and threw, regardless of
+ * whether cache fallback succeeded. Callers should log it.
+ */
+export interface StartupDiscoveryOutcome {
+  models: Record<string, Model>
+  source: "live" | "cache" | "empty"
+  error?: Error
+}
+
+export interface StartupDiscoveryOptions {
+  apiKey?: string
+}
+
+/**
+ * Non-throwing discovery for Provider.state() lazy init.
+ *
+ * Resolution order:
+ *   1. If a key is supplied, attempt /v1/models. On success write the cache
+ *      and return source:"live".
+ *   2. On live failure (or no key), fall back to the on-disk cache when
+ *      present and return source:"cache" (with `error` set if a live attempt
+ *      was made and threw).
+ *   3. Otherwise return source:"empty" — hexin is still registered, but with
+ *      zero models. The UI can prompt the operator to paste a key / refresh.
+ *
+ * This function MUST NOT throw. A single provider's upstream outage (budget
+ * exceeded, 401, DNS) must not cascade into a global Provider.list reject —
+ * that would 500 /config/providers and hide every other provider from the
+ * Settings UI, leaving the operator no way to switch keys or disable hexin.
+ */
+export async function discoverHexinModelsForStartup(
+  opts: StartupDiscoveryOptions = {},
+): Promise<StartupDiscoveryOutcome> {
+  const apiKey = opts.apiKey?.trim() || process.env.HEXIN_API_KEY?.trim()
+  const cached = await readCache()
+
+  if (apiKey) {
+    try {
+      const ids = await fetchModelIDs(apiKey)
+      if (ids.length === 0) {
+        throw new Error("hexin /models returned empty list")
+      }
+      await writeCache(ids)
+      log.info("fetched hexin models on startup", { count: ids.length })
+      return { models: toModelMap(ids), source: "live" }
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err))
+      if (cached) {
+        log.warn("hexin live discovery failed on startup — falling back to cached model list", {
+          error: error.message,
+          cached: cached.ids.length,
+          age_ms: Date.now() - cached.fetched,
+        })
+        return { models: toModelMap(cached.ids), source: "cache", error }
+      }
+      log.warn("hexin live discovery failed on startup and no cache exists — registering empty model list", {
+        error: error.message,
+      })
+      return { models: {}, source: "empty", error }
+    }
+  }
+
+  if (cached) {
+    log.info("hexin startup: no key configured, using cached model list", {
+      count: cached.ids.length,
+      age_ms: Date.now() - cached.fetched,
+    })
+    return { models: toModelMap(cached.ids), source: "cache" }
+  }
+
+  log.info("hexin startup: no key + no cache, registering empty model list")
+  return { models: {}, source: "empty" }
 }

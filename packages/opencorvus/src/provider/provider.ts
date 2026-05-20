@@ -40,7 +40,7 @@ import { ProviderTransform } from "./transform"
 import { applyProviderPolicy } from "./policy"
 import { CUSTOM_LOADERS, smallModelPriority, type CustomModelLoader } from "./vendor"
 import { installProvider, loadProviderModule } from "./install"
-import { discoverHexinModels } from "./hexin-discovery"
+import { discoverHexinModelsForStartup } from "./hexin-discovery"
 
 export namespace Provider {
   const log = Log.create({ service: "provider" })
@@ -365,17 +365,29 @@ export namespace Provider {
 
     const configProviders = entries((config.provider ?? {}) as NonNullable<Config.Info["provider"]>)
 
-    // Built-in: Hexin OpenAI Gateway — models discovered dynamically from /v1/models
+    // Built-in: Hexin OpenAI Gateway — models discovered dynamically from /v1/models.
+    // discoverHexinModelsForStartup is fault-isolated by contract: a hexin
+    // upstream outage (budget exceeded, 401, DNS) MUST NOT reject state(),
+    // because that would 500 /config/providers and erase every other provider
+    // from the Settings UI — leaving the operator no way to switch keys or
+    // disable hexin. The helper falls back cache → empty and never throws.
     if (!database["hexin"] && !disabled.has("hexin")) {
       const key = await hexinApiKey(config)
-      const models = key ? await discoverHexinModels({ force: true, apiKey: key }) : await discoverHexinModels()
+      const outcome = await discoverHexinModelsForStartup({ apiKey: key })
+      if (outcome.error) {
+        log.warn("hexin discovery failed on startup; provider registered with fallback list", {
+          source: outcome.source,
+          modelCount: Object.keys(outcome.models).length,
+          error: outcome.error.message,
+        })
+      }
       database["hexin"] = {
         id: "hexin",
         name: "Hexin OpenAI Gateway",
         env: ["HEXIN_API_KEY"],
         options: {},
         source: "custom",
-        models,
+        models: outcome.models,
       }
     }
 
