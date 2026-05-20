@@ -76,6 +76,7 @@ type ArchitectValidationInput = {
   designSpecs?: VisualSpec[]
   requireReferenceCoverage?: boolean
   referenceCoverageReasons?: string[]
+  knownRequirementIDs?: string[]
 }
 
 function toRegisteredGoal(input: unknown): RegisteredGoal {
@@ -108,7 +109,11 @@ function collectorGoalByID(collector: ArchitectCollector): Map<string, Registere
   return new Map(collector.goals.map((goal) => [goal.id, goal]))
 }
 
-function hasCollectorDependencyPath(collector: ArchitectCollector, fromGoalID: string, ancestorGoalID: string): boolean {
+function hasCollectorDependencyPath(
+  collector: ArchitectCollector,
+  fromGoalID: string,
+  ancestorGoalID: string,
+): boolean {
   const byID = collectorGoalByID(collector)
   const seen = new Set<string>()
   const stack = [...(byID.get(fromGoalID)?.depends_on ?? [])]
@@ -163,12 +168,9 @@ export function architectValidationFindings(
   ) => findings.push({ code, severity: "concern", scope, message, repair_tools: repairTools })
 
   if (collector.goals.length === 0) {
-    blocker(
-      "no_goals",
-      `No goals registered - Architect must produce at least ${MIN_ARCHITECT_GOAL_COUNT} goals`,
-      {},
-      ["register_goal"],
-    )
+    blocker("no_goals", `No goals registered - Architect must produce at least ${MIN_ARCHITECT_GOAL_COUNT} goals`, {}, [
+      "register_goal",
+    ])
   } else if (collector.goals.length < MIN_ARCHITECT_GOAL_COUNT) {
     blocker(
       "insufficient_goal_decomposition",
@@ -185,13 +187,14 @@ export function architectValidationFindings(
     )
   }
   const knownGoalIDs = new Set(collector.goals.map((g) => g.id))
+  const knownRequirementIDs = new Set(input?.knownRequirementIDs ?? [])
   const requiredTraceability = new Map<string, Set<string>>()
   const bootstrapGoals = collector.goals.filter((g) => g.kind === "bootstrap")
   if (bootstrapGoals.length > 1) {
-      concern(
-        "multiple_bootstrap_goals",
-        `Exactly one bootstrap goal is allowed in an active goal graph; found ${bootstrapGoals.length}`,
-        { goal_ids: bootstrapGoals.map((goal) => goal.id) },
+    concern(
+      "multiple_bootstrap_goals",
+      `Exactly one bootstrap goal is allowed in an active goal graph; found ${bootstrapGoals.length}`,
+      { goal_ids: bootstrapGoals.map((goal) => goal.id) },
       ["modify_goal", "remove_goal"],
     )
   } else if (bootstrapGoals.length === 1) {
@@ -231,8 +234,32 @@ export function architectValidationFindings(
           ["register_goal", "modify_goal"],
         )
       }
+      if (knownRequirementIDs.size > 0 && !knownRequirementIDs.has(spec.source_requirement_id)) {
+        blocker(
+          "acceptance_unknown_requirement",
+          `Goal ${g.id}: acceptance spec ${spec.id} uses unknown source_requirement_id "${spec.source_requirement_id}"`,
+          { goal_ids: [g.id] },
+          ["register_goal", "modify_goal"],
+        )
+      }
+      if (knownRequirementIDs.size > 0 && !g.requirement_ids.includes(spec.source_requirement_id)) {
+        blocker(
+          "acceptance_requirement_not_claimed",
+          `Goal ${g.id}: acceptance spec ${spec.id} source_requirement_id "${spec.source_requirement_id}" is not listed in goal.requirement_ids`,
+          { goal_ids: [g.id] },
+          ["register_goal", "modify_goal"],
+        )
+      }
     }
     for (const requirementID of g.requirement_ids) {
+      if (knownRequirementIDs.size > 0 && !knownRequirementIDs.has(requirementID)) {
+        blocker(
+          "goal_unknown_requirement",
+          `Goal ${g.id}: requirement_ids contains unknown requirement "${requirementID}"`,
+          { goal_ids: [g.id] },
+          ["register_goal", "modify_goal"],
+        )
+      }
       if (!requiredTraceability.has(requirementID)) {
         requiredTraceability.set(requirementID, new Set())
       }
@@ -439,6 +466,7 @@ export function createArchitectOutputTools(input: {
   designSpecs?: VisualSpec[]
   requireReferenceCoverage?: boolean
   referenceCoverageReasons?: string[]
+  knownRequirementIDs?: string[]
 }) {
   let collector = emptyCollector()
   const dir = input.workDir ?? Instance.directory
@@ -455,6 +483,7 @@ export function createArchitectOutputTools(input: {
       designSpecs: input.designSpecs,
       requireReferenceCoverage: input.requireReferenceCoverage,
       referenceCoverageReasons: input.referenceCoverageReasons,
+      knownRequirementIDs: input.knownRequirementIDs,
     })
 
   // Seed the collector with existing goals so modify_goal / remove_goal work
@@ -535,10 +564,9 @@ export function createArchitectOutputTools(input: {
             const pathLabel = issue.path.length > 0 ? issue.path.join(".") : "(root)"
             return `- ${pathLabel}: ${issue.message}`
           })
-          return [
-            `Error: modify_goal produced an invalid goal after merge; collector unchanged.`,
-            ...issueLines,
-          ].join("\n")
+          return [`Error: modify_goal produced an invalid goal after merge; collector unchanged.`, ...issueLines].join(
+            "\n",
+          )
         }
         const next = parsedNext.data
         if (updates.acceptance_specs !== undefined) {
@@ -750,7 +778,9 @@ export function createArchitectOutputTools(input: {
       execute: async (input) => {
         const contract = ArchitectContractRefSchema.parse(input)
         const byID = collectorGoalByID(collector)
-        const unknownGoals = [contract.producer_goal_id, ...contract.consumer_goal_ids].filter((goalID) => !byID.has(goalID))
+        const unknownGoals = [contract.producer_goal_id, ...contract.consumer_goal_ids].filter(
+          (goalID) => !byID.has(goalID),
+        )
         if (unknownGoals.length > 0) {
           return `Error: contract "${contract.id}" references unknown goal id(s): ${[...new Set(unknownGoals)].join(", ")}. Register the goals first; collector unchanged.`
         }
@@ -800,7 +830,10 @@ export function createArchitectOutputTools(input: {
           if (!contract) {
             return `Error: dependency contract ${edge.from_goal_id} -> ${edge.to_goal_id} references unknown contract "${contractID}"; collector unchanged.`
           }
-          if (contract.producer_goal_id !== edge.from_goal_id || !contract.consumer_goal_ids.includes(edge.to_goal_id)) {
+          if (
+            contract.producer_goal_id !== edge.from_goal_id ||
+            !contract.consumer_goal_ids.includes(edge.to_goal_id)
+          ) {
             return `Error: contract "${contractID}" belongs to ${contract.producer_goal_id} -> [${contract.consumer_goal_ids.join(", ")}], not ${edge.from_goal_id} -> ${edge.to_goal_id}; collector unchanged. ${dependencyDirectionGuidance(contract.producer_goal_id, contract.consumer_goal_ids[0] ?? edge.to_goal_id)}`
           }
         }

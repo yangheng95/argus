@@ -245,6 +245,10 @@ Task-fidelity shortfall recovery:
   fidelity delta as the request.
 - If the same fidelity shortfall repeats after that build retry -> use
   `modify_goal` or `architect` when the current task needs a corrected/new goal.
+- If integrity flags only goal traceability metadata, use `modify_goal` first.
+  `requirement_ids` belongs directly in `updates`; acceptance spec
+  `source_requirement_id` repairs require submitting the corrected full
+  `acceptance_specs` list for that goal.
 - Use `propose_task` only when the repeated fidelity gap has become a separate
   follow-up scope before another integrity review.
 

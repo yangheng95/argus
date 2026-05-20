@@ -3,10 +3,10 @@ import { validateArchitectContractGraph, type ArchitectContractGraph } from "@/a
 import { createArchitectOutputTools, architectValidationFindings } from "@/architect/output-tools"
 import { GoalContractFieldsSchema } from "@/pipeline/goal-contract.schema"
 
-function acceptance(goalID: string, contractIDs: string[] = []) {
+function acceptance(goalID: string, contractIDs: string[] = [], sourceRequirementID = "REQ-1") {
   return {
     id: `acc-${goalID}`,
-    source_requirement_id: "REQ-1",
+    source_requirement_id: sourceRequirementID,
     goal_id: goalID,
     title: `${goalID} acceptance`,
     severity: "essential" as const,
@@ -160,10 +160,7 @@ test("architect registers graph contracts and finalizes without goal imports or 
   const kit = await registerTwoGoalGraph()
   const { tools } = kit
 
-  await tools.register_contract.execute!(
-    contractRef() as any,
-    {} as any,
-  )
+  await tools.register_contract.execute!(contractRef() as any, {} as any)
   await tools.register_dependency_contract.execute!(
     {
       from_goal_id: "goal_model",
@@ -517,43 +514,39 @@ test("register_goal and modify_goal accept contract_audit ids after contract reg
 })
 
 test("register_goal schema rejects malformed scorer type before execute", () => {
-  const parsed = GoalContractFieldsSchema.safeParse(
-    {
-      id: "goal_bad_acceptance",
-      title: "Bad acceptance",
-      objective: "Define a goal whose malformed scorer should be rejected without entering the collector.",
-      acceptance_specs: [
-        {
-          id: "acc-bad",
-          source_requirement_id: "REQ-1",
-          goal_id: "goal_bad_acceptance",
-          title: "Bad shell scorer",
-          severity: "essential",
-          scorers: [
-            {
-              type: "shell",
-              name: "files-exist",
-              spec: { kind: "shell", cmd: "bun test" },
-              expect: { exit_code: 0 },
-            },
-          ],
-        },
-      ],
-      owned_paths: ["src/example.ts"],
-      depends_on: [],
-      priority: "blocking",
-      kind: "feature",
-      requirement_ids: ["REQ-1"],
-    },
-  )
+  const parsed = GoalContractFieldsSchema.safeParse({
+    id: "goal_bad_acceptance",
+    title: "Bad acceptance",
+    objective: "Define a goal whose malformed scorer should be rejected without entering the collector.",
+    acceptance_specs: [
+      {
+        id: "acc-bad",
+        source_requirement_id: "REQ-1",
+        goal_id: "goal_bad_acceptance",
+        title: "Bad shell scorer",
+        severity: "essential",
+        scorers: [
+          {
+            type: "shell",
+            name: "files-exist",
+            spec: { kind: "shell", cmd: "bun test" },
+            expect: { exit_code: 0 },
+          },
+        ],
+      },
+    ],
+    owned_paths: ["src/example.ts"],
+    depends_on: [],
+    priority: "blocking",
+    kind: "feature",
+    requirement_ids: ["REQ-1"],
+  })
 
   expect(parsed.success).toBe(false)
   if (!parsed.success) {
     expect(
       parsed.error.issues.some(
-        (issue) =>
-          issue.code === "invalid_union" &&
-          issue.path.join(".") === "acceptance_specs.0.scorers.0.type",
+        (issue) => issue.code === "invalid_union" && issue.path.join(".") === "acceptance_specs.0.scorers.0.type",
       ),
     ).toBe(true)
   }
@@ -566,8 +559,7 @@ test("register_goal execute normalizes canonical schema defaults before collecto
     {
       id: "goal_defaults",
       title: "Defaults",
-      objective:
-        "Define a goal whose omitted defaulted fields are normalized by the canonical goal contract schema.",
+      objective: "Define a goal whose omitted defaulted fields are normalized by the canonical goal contract schema.",
       acceptance_specs: [acceptance("goal_defaults")],
       owned_paths: ["src/defaults.ts"],
     } as any,
@@ -583,6 +575,78 @@ test("register_goal execute normalizes canonical schema defaults before collecto
     kind: "feature",
     requirement_ids: [],
   })
+})
+
+test("architect validation blocks acceptance specs whose source requirement is not claimed by the same goal", async () => {
+  const kit = createArchitectOutputTools({
+    existingGoals: [],
+    workDir: process.cwd(),
+    knownRequirementIDs: ["REQ-1", "REQ-3"],
+  })
+
+  await kit.tools.register_goal.execute!(
+    {
+      id: "goal_trace",
+      title: "Trace",
+      objective: "Implement the traceable behavior while preserving exact requirement ownership metadata for review.",
+      acceptance_specs: [acceptance("goal_trace", [], "REQ-1")],
+      owned_paths: ["src/trace.ts"],
+      depends_on: [],
+      priority: "blocking",
+      kind: "feature",
+      requirement_ids: ["REQ-3"],
+    } as any,
+    {} as any,
+  )
+
+  const findings = architectValidationFindings(kit.getCollector(), {
+    workDir: process.cwd(),
+    knownRequirementIDs: ["REQ-1", "REQ-3"],
+  })
+
+  expect(findings).toContainEqual(
+    expect.objectContaining({
+      code: "acceptance_requirement_not_claimed",
+      severity: "blocker",
+    }),
+  )
+})
+
+test("architect validation blocks unknown requirement ids in goals and acceptance specs", async () => {
+  const kit = createArchitectOutputTools({ existingGoals: [], workDir: process.cwd(), knownRequirementIDs: ["REQ-1"] })
+
+  await kit.tools.register_goal.execute!(
+    {
+      id: "goal_unknown_req",
+      title: "Unknown requirement",
+      objective: "Implement a behavior while intentionally using unknown requirement metadata to exercise validation.",
+      acceptance_specs: [acceptance("goal_unknown_req", [], "REQ-999")],
+      owned_paths: ["src/unknown.ts"],
+      depends_on: [],
+      priority: "blocking",
+      kind: "feature",
+      requirement_ids: ["REQ-999"],
+    } as any,
+    {} as any,
+  )
+
+  const findings = architectValidationFindings(kit.getCollector(), {
+    workDir: process.cwd(),
+    knownRequirementIDs: ["REQ-1"],
+  })
+
+  expect(findings).toContainEqual(
+    expect.objectContaining({
+      code: "acceptance_unknown_requirement",
+      severity: "blocker",
+    }),
+  )
+  expect(findings).toContainEqual(
+    expect.objectContaining({
+      code: "goal_unknown_requirement",
+      severity: "blocker",
+    }),
+  )
 })
 
 test("register_dependency_contract rejects unknown contract id without mutating collector", async () => {
