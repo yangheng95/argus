@@ -57,6 +57,7 @@ export type IconName =
   | "avatar-goal"
   | "avatar-executor"
   | "avatar-build"
+  | "avatar-explore"
   | "avatar-evaluator"
   | "avatar-integrity"
   // Empty-state / cwd
@@ -578,6 +579,14 @@ const ICON_PATHS: Record<IconName, IconRecord> = {
         <path d="M7.8 5.7 10.3 8.2" />
         <path d="M4.2 8.1 7.9 11.8" />
         <path d="M5.1 6.9 3.5 8.5l1.3 1.3 1.6-1.6" />
+      </>
+    ),
+  },
+  "avatar-explore": {
+    body: () => (
+      <>
+        <circle cx="7" cy="7" r="3.2" />
+        <path d="M9.4 9.4 12.6 12.6" />
       </>
     ),
   },

@@ -19,6 +19,7 @@ export type AgentRole =
   | "executor"
   | "evaluator"
   | "build"
+  | "explore"
   | "integrity"
   | "system";
 
@@ -35,6 +36,7 @@ export const AGENT_CARD_STAGES = new Set<AgentRole>([
   "executor",
   "evaluator",
   "build",
+  "explore",
   "integrity",
 ]);
 
@@ -53,9 +55,16 @@ export function normalizeAgentRole(name: string): AgentRole {
   if (text === "architect" || text === "architecture" || text === "coordination") return "architect";
   if (text === "planner" || text === "plan" || text === "planning" || text === "replan") return "planner";
   if (text === "goal" || text === "goal_gate") return "goal";
-  if (text === "build") return "build";
-  if (text === "executor" || text === "coding" ||
-      text === "general" || text === "explore" || text === "execute" ||
+  // "coding" is the post-rename name of the build worker (commit 2bda4d8a22
+  // build→coding). It must share the build lane/icon, not collapse into the
+  // generic executor bucket — otherwise the code-writing agent is not split.
+  if (text === "build" || text === "coding") return "build";
+  // Read-only repository-investigation subagent. Its own lane/icon so explore
+  // dispatches are split out of the executor bucket (matches SessionKind
+  // "explore" on the backend).
+  if (text === "explore") return "explore";
+  if (text === "executor" ||
+      text === "general" || text === "execute" ||
       text === "opencorvus" || text === "codex" || text === "claude-code") return "executor";
   if (text === "judge" || text === "evaluator" || text === "evaluation" || text === "eval" ||
       text === "scheduler" || text === "review" || text === "evaluate") return "evaluator";
