@@ -295,6 +295,59 @@ describe("hexin model discovery", () => {
     expect(outcome.error).toBeUndefined()
   })
 
+  test("startup helper does NOT bypass per-Instance Env isolation by reading process.env", async () => {
+    // Regression for codex review #1 (rule 8 — single credential source).
+    // process.env.HEXIN_API_KEY is set globally by beforeEach. Inside an
+    // Instance scope the test calls Env.remove("HEXIN_API_KEY") which
+    // clears the per-instance shallow copy but leaves process.env untouched.
+    // hexinApiKey(config) → Env.get returns undefined; with no Auth and no
+    // Config override, the canonical key is undefined and startup must
+    // honor that — even though raw process.env still has a value.
+    // If the helper ever falls back to process.env, this assertion fires.
+    const previousAuth = await Auth.get("hexin")
+    await Auth.remove("hexin").catch(() => undefined)
+    let liveFetchCalls = 0
+    globalThis.fetch = (async () => {
+      liveFetchCalls++
+      throw new Error("startup must not touch network when Env-scoped key is absent")
+    }) as typeof fetch
+
+    try {
+      expect(process.env.HEXIN_API_KEY).toBe("test-hexin-key") // beforeEach set this
+      await using tmp = await tmpdir()
+      await Instance.provide({
+        directory: tmp.path,
+        init: async () => {
+          Env.remove("HEXIN_API_KEY") // per-instance shallow copy only
+        },
+        fn: async () => {
+          await Provider.list() // must not throw, must not fetch hexin
+          expect(liveFetchCalls).toBe(0)
+        },
+      })
+    } finally {
+      if (previousAuth) await Auth.set("hexin", previousAuth)
+    }
+  })
+
+  test("startup helper ignores process.env when called directly with no apiKey — unit-call shape", async () => {
+    // Companion unit test: even outside an Instance, the startup helper
+    // never reads process.env. The user-initiated discoverHexinModels still
+    // does (see its dedicated `requires a live key` test above).
+    process.env.HEXIN_API_KEY = "leak-key-must-not-fetch"
+    let called = false
+    globalThis.fetch = (async () => {
+      called = true
+      throw new Error("startup helper must not read process.env")
+    }) as typeof fetch
+
+    const outcome = await discoverHexinModelsForStartup({})
+
+    expect(called).toBe(false)
+    expect(outcome.source).toBe("empty")
+    expect(outcome.error).toBeUndefined()
+  })
+
   test("refresh button (refreshHexinCache) still throws hard on live failure — user must see budget errors", async () => {
     // Regression guard: the startup softening must not bleed into the user-
     // initiated refresh path. UI refresh / Provider.refreshHexin must surface

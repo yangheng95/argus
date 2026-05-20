@@ -1,8 +1,9 @@
 /**
  * Hexin OpenAI Gateway — explicit model discovery with cache.
  *
- * Two distinct entry points with *different* failure semantics — do not
- * collapse them, callers depend on the split:
+ * Two distinct entry points with *different* failure semantics and
+ * *different* credential sources — do not collapse them, callers depend
+ * on the split:
  *
  *   1. discoverHexinModels({ force?: boolean }) / refreshHexinCache
  *      — user-initiated (UI refresh button, CLI refresh command, explicit
@@ -10,17 +11,30 @@
  *      and writes the cache on success; any HTTP / network / parse failure
  *      throws so the operator sees the upstream error verbatim. force:false
  *      (the default) only reads the cache and returns {} when none exists.
+ *      Direct callers (scripts and unit tests outside any Instance scope)
+ *      may rely on the process.env.HEXIN_API_KEY fallback when opts.apiKey
+ *      is empty.
  *
  *   2. discoverHexinModelsForStartup({ apiKey? })
- *      — invoked during Provider.state() lazy init. Tries a live fetch when
- *      a key is supplied, falls back to the on-disk cache when the live call
- *      fails, and finally falls back to an empty map. NEVER throws: hexin
- *      upstream errors (e.g. budget exceeded, 401, network) must not reject
- *      the global provider state, because that would 500 /config/providers
- *      and remove every other provider from the Settings UI, locking the
- *      operator out of switching keys or disabling hexin. Returns
- *      { models, error?, source } so the caller can log and the UI can
- *      surface the cause.
+ *      — invoked during Provider.state() lazy init. Tries a live fetch only
+ *      when opts.apiKey is non-empty, falls back to the on-disk cache when
+ *      the live call fails or no key was supplied, and finally falls back
+ *      to an empty map. NEVER throws: hexin upstream errors (e.g. budget
+ *      exceeded, 401, network) must not reject the global provider state,
+ *      because that would 500 /config/providers and remove every other
+ *      provider from the Settings UI, locking the operator out of switching
+ *      keys or disabling hexin. Returns { models, source, error? } so the
+ *      caller can log the failure (no UI contract is added in this PR —
+ *      Provider.Info has no error field today; the catalog route is the
+ *      operator's path back to hexin).
+ *
+ *      Note: this helper deliberately does NOT consult process.env directly.
+ *      The canonical key is resolved at the Provider.state() boundary by
+ *      hexinApiKey(config), which goes through the per-Instance Env shim
+ *      (Env.get reads a per-instance shallow copy of process.env so tests
+ *      and concurrent instances can mask vars independently). Reading
+ *      process.env from inside this helper would re-introduce a parallel
+ *      credential source and defeat that isolation (rule 8).
  *
  * Gateway only exposes {id, object, created, owned_by}. Capability shape
  * is assigned by hexin-profiles.ts.
@@ -183,8 +197,7 @@ export async function refreshHexinCache(apiKey?: string): Promise<Record<string,
 
 /**
  * Outcome of {@link discoverHexinModelsForStartup}. `source` records which
- * tier produced the model list so the caller can log/warn appropriately and
- * the UI can choose how to nudge the operator.
+ * tier produced the model list — log metadata only, not driver state.
  *
  *   - `live`   — fetched fresh from /v1/models, cache rewritten.
  *   - `cache`  — live fetch failed (or no key supplied) and the on-disk
@@ -193,7 +206,10 @@ export async function refreshHexinCache(apiKey?: string): Promise<Record<string,
  *                Provider is still registered but with zero models.
  *
  * `error` is set when the live fetch was attempted and threw, regardless of
- * whether cache fallback succeeded. Callers should log it.
+ * whether cache fallback succeeded. Callers should log it. The error is NOT
+ * propagated to Provider.Info today: /config/providers has no contract for
+ * per-provider error state. Operators recover via the catalog route
+ * (/provider, sourced from Provider.database()) and the hexin refresh button.
  */
 export interface StartupDiscoveryOutcome {
   models: Record<string, Model>
@@ -202,6 +218,11 @@ export interface StartupDiscoveryOutcome {
 }
 
 export interface StartupDiscoveryOptions {
+  /**
+   * Hexin API key resolved at the Provider.state() boundary via hexinApiKey().
+   * The startup helper trusts this value as the only credential source — it
+   * does NOT consult process.env. See module header for the rationale.
+   */
   apiKey?: string
 }
 
@@ -209,13 +230,14 @@ export interface StartupDiscoveryOptions {
  * Non-throwing discovery for Provider.state() lazy init.
  *
  * Resolution order:
- *   1. If a key is supplied, attempt /v1/models. On success write the cache
- *      and return source:"live".
- *   2. On live failure (or no key), fall back to the on-disk cache when
- *      present and return source:"cache" (with `error` set if a live attempt
- *      was made and threw).
- *   3. Otherwise return source:"empty" — hexin is still registered, but with
- *      zero models. The UI can prompt the operator to paste a key / refresh.
+ *   1. If opts.apiKey is non-empty, attempt /v1/models. On success write the
+ *      cache and return source:"live".
+ *   2. On live failure (or no key supplied), fall back to the on-disk cache
+ *      when present and return source:"cache" (with `error` set if a live
+ *      attempt was made and threw).
+ *   3. Otherwise return source:"empty" — hexin is still registered in the
+ *      database, but with zero models. The operator can recover by pasting
+ *      a key from the /provider catalog UI and hitting the refresh button.
  *
  * This function MUST NOT throw. A single provider's upstream outage (budget
  * exceeded, 401, DNS) must not cascade into a global Provider.list reject —
@@ -225,7 +247,10 @@ export interface StartupDiscoveryOptions {
 export async function discoverHexinModelsForStartup(
   opts: StartupDiscoveryOptions = {},
 ): Promise<StartupDiscoveryOutcome> {
-  const apiKey = opts.apiKey?.trim() || process.env.HEXIN_API_KEY?.trim()
+  // Trust opts.apiKey as the single credential source. The state() boundary
+  // is responsible for going through Env (per-instance shim) + Auth + Config
+  // before calling us; reading process.env here would defeat that isolation.
+  const apiKey = opts.apiKey?.trim()
   const cached = await readCache()
 
   if (apiKey) {
