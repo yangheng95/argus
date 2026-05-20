@@ -53,7 +53,7 @@ describe("hexin model discovery", () => {
         headers: { "content-type": "application/json" },
       })) as typeof fetch
 
-    const models = await refreshHexinCache()
+    const models = await refreshHexinCache("test-hexin-key")
     const cached = JSON.parse(await Bun.file(cacheFile).text()) as { ids: string[] }
 
     expect(Object.keys(models)).toEqual(["hexin-test-model"])
@@ -69,15 +69,26 @@ describe("hexin model discovery", () => {
         headers: { "content-type": "application/json" },
       })) as typeof fetch
 
-    await expect(refreshHexinCache()).rejects.toThrow("hexin /models HTTP 401")
+    await expect(refreshHexinCache("test-hexin-key")).rejects.toThrow("hexin /models HTTP 401")
   })
 
-  test("explicit refresh requires a live key even when stale cache exists", async () => {
+  test("explicit refresh requires an explicit apiKey — never falls back to process.env", async () => {
+    // Round-2 hardening: even with process.env.HEXIN_API_KEY set by
+    // beforeEach, refreshHexinCache(undefined) must throw. The force path
+    // refuses to consult process.env so that Provider.refreshHexin() — which
+    // resolves the key via hexinApiKey(cfg) inside an Instance — cannot fall
+    // through to raw env when Env.remove masked the per-instance shim.
     await fs.mkdir(path.dirname(cacheFile), { recursive: true })
     await fs.writeFile(cacheFile, JSON.stringify({ fetched: Date.now(), ids: ["stale-model"] }))
-    delete process.env.HEXIN_API_KEY
+    expect(process.env.HEXIN_API_KEY).toBe("test-hexin-key")
+    let called = false
+    globalThis.fetch = (async () => {
+      called = true
+      throw new Error("network must not be touched without an explicit key")
+    }) as typeof fetch
 
     await expect(refreshHexinCache()).rejects.toThrow("HEXIN_API_KEY unset")
+    expect(called).toBe(false)
   })
 
   test("target reasoning models are exposed with provider-safe capabilities", async () => {
@@ -87,7 +98,7 @@ describe("hexin model discovery", () => {
         headers: { "content-type": "application/json" },
       })) as typeof fetch
 
-    const models = await refreshHexinCache()
+    const models = await refreshHexinCache("test-hexin-key")
 
     expect(models["kimi-k2.6"].capabilities).toMatchObject({
       reasoning: true,
@@ -361,6 +372,37 @@ describe("hexin model discovery", () => {
       )) as typeof fetch
 
     await expect(refreshHexinCache("test-hexin-key")).rejects.toThrow("hexin /models HTTP 400")
+  })
+
+  test("Provider.refreshHexin throws HEXIN_API_KEY unset when Env-scoped key is masked — does NOT fall through to process.env", async () => {
+    // Regression for codex round-2 finding: Provider.refreshHexin resolves the
+    // key via hexinApiKey(cfg). If that returns "" because Env.remove masked
+    // the per-instance shim and no Auth/config key exists, the helper must
+    // refuse to proceed instead of silently using the raw process.env key.
+    const previousAuth = await Auth.get("hexin")
+    await Auth.remove("hexin").catch(() => undefined)
+    let liveFetchCalls = 0
+    globalThis.fetch = (async () => {
+      liveFetchCalls++
+      throw new Error("Provider.refreshHexin must not touch network without an Env-scoped key")
+    }) as typeof fetch
+
+    try {
+      expect(process.env.HEXIN_API_KEY).toBe("test-hexin-key") // beforeEach
+      await using tmp = await tmpdir()
+      await Instance.provide({
+        directory: tmp.path,
+        init: async () => {
+          Env.remove("HEXIN_API_KEY") // mask per-instance shim only
+        },
+        fn: async () => {
+          await expect(Provider.refreshHexin()).rejects.toThrow("HEXIN_API_KEY unset")
+          expect(liveFetchCalls).toBe(0)
+        },
+      })
+    } finally {
+      if (previousAuth) await Auth.set("hexin", previousAuth)
+    }
   })
 
   test("provider refresh lets project config override the global auth key and exposes models to config/providers", async () => {
