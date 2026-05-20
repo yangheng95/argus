@@ -8,6 +8,7 @@ import { tool } from "ai"
 import z from "zod"
 import path from "node:path"
 import fs from "node:fs/promises"
+import { spawn } from "node:child_process"
 import { createHash } from "node:crypto"
 import { Session } from "@/session"
 import { resolveAgentModel, resolveAgentModelRef } from "@/agent/model"
@@ -25,6 +26,8 @@ import { sessionGoalID, sessionRole, taskIDForSession } from "./task-event"
 import { Publisher } from "@/engine/publisher"
 import { EngineGit } from "@/engine/git"
 import { git as runGit } from "@/util/git"
+import { Shell } from "@/shell/shell"
+import { isHostKillingCommand } from "@/tool/bash"
 import { EngineMemoryBridge } from "@/engine/memory-bridge"
 import { SubAgentProtocol } from "@/agent/sub-agent-protocol"
 import { Event as EngineEvent } from "@/engine/model"
@@ -34,6 +37,7 @@ import { materializeMcpToolResult } from "@/mcp/materialize"
 import { EngineArtifactTable, EngineExecutorSessionTable, EngineGoalTable, EngineTaskTable } from "@/engine/engine.sql"
 import {
   supersedePriorActivePlansForTask,
+  ensureBuildRetryFeedbackForGoal,
   updateGoalWorkspace,
   updateGoalRun,
   updateGoalRunExecutorSessionStatus,
@@ -98,6 +102,64 @@ import type {
 import { renderIntegrityMarkdown } from "@/integrity/render-markdown"
 
 const log = Log.create({ service: "task-tools" })
+
+/**
+ * Orchestrator-side bash is narrowly scoped to git merge-state repair only
+ * (per the operator's binding directive). The schema rejects any non-git
+ * invocation, any pipeline / redirect / command substitution, and any
+ * process-killing pattern. This is data-integrity guarding for an
+ * irreversible-by-LLM surface (shell execution); prompt-level rules still
+ * carry the "what counts as a merge repair" scoping. See the
+ * `## Git Merge Repair Bash` section of `orchestrator-core.txt` for the
+ * positive/negative scope catalog.
+ */
+export function validateOrchestratorBashCommand(
+  command: string,
+): { ok: true } | { ok: false; reason: string } {
+  const trimmed = command.trim()
+  if (!trimmed) return { ok: false, reason: "empty command" }
+  if (trimmed !== "git" && !/^git[\s]/.test(trimmed)) {
+    const head = trimmed.split(/\s+/, 1)[0] ?? ""
+    return {
+      ok: false,
+      reason: `command must begin with 'git' (got '${head}'). Orchestrator bash is git-merge-only — dispatch a sub-agent for any other surface.`,
+    }
+  }
+  // Reject shell metacharacters that turn a single git invocation into a
+  // multi-step pipeline / redirect / subshell. Longer tokens first so the
+  // reason string reports the most specific match.
+  const dangerous: Array<[string, string]> = [
+    ["&&", "chain (&&)"],
+    ["||", "chain (||)"],
+    ["$(", "command substitution ($(...))"],
+    ["<(", "process substitution (<(...))"],
+    [">(", "process substitution (>(...))"],
+    [">>", "redirection (>>)"],
+    ["|", "pipeline (|)"],
+    [";", "command separator (;)"],
+    ["&", "background / chain (&)"],
+    [">", "redirection (>)"],
+    ["<", "redirection / heredoc (<)"],
+    ["`", "command substitution (backtick)"],
+    ["\n", "newline command separator"],
+    ["\r", "carriage-return command separator"],
+  ]
+  for (const [tok, why] of dangerous) {
+    if (trimmed.includes(tok)) {
+      return {
+        ok: false,
+        reason: `disallowed shell metacharacter ${why}. Orchestrator bash runs a single git invocation only; chain orchestrator tool calls instead of shell.`,
+      }
+    }
+  }
+  if (isHostKillingCommand(trimmed)) {
+    return {
+      ok: false,
+      reason: "command matches host-process-killing pattern. Use a process-specific path (kill a PID you own); never name-killing.",
+    }
+  }
+  return { ok: true }
+}
 
 async function runGoalContractAuditCriteria(input: {
   taskID: string
@@ -4659,8 +4721,14 @@ export function createOrchestratorTools(input: {
             const designSpecs = Array.isArray(task.design_specs) ? (task.design_specs as any) : undefined
             const designAnalysis = renderDesignAnalysisHandoffReference(taskID)
 
-            // Retry feedback from decision log (per-goal "retry" entries the
-            // orchestrator wrote on prior delivery rejection).
+            // Retry feedback from decision log. Materialize the terminal
+            // build-attempt facts before reading so this new session receives
+            // the previous failure context in its first prompt.
+            ensureBuildRetryFeedbackForGoal({
+              taskID,
+              goalID: goal.id,
+              source: "orchestrator.build.prompt_context",
+            })
             const retryEntries = decisionLog.readByPhase("retry").filter((e) => e.goalID === goal.id)
             const retryFeedback =
               retryEntries.length > 0
@@ -5197,6 +5265,119 @@ export function createOrchestratorTools(input: {
           // agent's actor close path.
           throw err
         }
+      },
+    }),
+
+    bash: tool({
+      description:
+        "Git-only merge-state repair shell. Runs ONE `git ...` invocation " +
+        "against the project root for resolving an in-progress merge that no " +
+        "sub-agent can clear by itself. The schema rejects any non-git " +
+        "command, any pipeline / redirect / command substitution, and any " +
+        "process-killing pattern. This is NOT a code editor, NOT a test " +
+        "runner, NOT a repository inspector for general investigation, NOT a " +
+        "research tool, and NOT a shortcut around requirements / architect / " +
+        "build / integrity. See the 'Git Merge Repair Bash' section of your " +
+        "system prompt for the positive scope and the full forbidden list.",
+      inputSchema: z.object({
+        command: z
+          .string()
+          .min(1)
+          .superRefine((cmd, ctx) => {
+            const result = validateOrchestratorBashCommand(cmd)
+            if (!result.ok) {
+              ctx.addIssue({ code: z.ZodIssueCode.custom, message: result.reason })
+            }
+          })
+          .describe(
+            "Single git invocation. MUST start with `git ` and contain no " +
+              "pipeline (|), command separator (; / && / ||), background (&), " +
+              "redirection (> / <), command substitution ($() / backticks), or " +
+              "process-killing pattern. Examples: `git status`, " +
+              "`git merge --abort`, `git checkout --ours -- path/to/file`, " +
+              "`git diff --name-only --diff-filter=U`.",
+          ),
+        description: z
+          .string()
+          .min(1)
+          .describe(
+            "Concise 5-15 word statement of the git merge-state symptom you are repairing.",
+          ),
+        timeout: z
+          .number()
+          .int()
+          .positive()
+          .max(60_000)
+          .optional()
+          .describe("Timeout in ms. Default 30000. Hard ceiling 60000."),
+      }),
+      execute: async ({ command, description, timeout }) => {
+        // Schema-level refine already rejected non-git / pipeline / kill
+        // shapes, but re-validate defensively so a future schema regression
+        // does not turn into silent shell exposure.
+        const validation = validateOrchestratorBashCommand(command)
+        if (!validation.ok) {
+          log.info("orchestrator bash refused", { taskID, command, reason: validation.reason })
+          return `bash refused: ${validation.reason}`
+        }
+        const cwd = Instance.directory
+        const ms = timeout ?? 30_000
+        const shell = await Shell.acceptable()
+        const proc = spawn(command, {
+          shell,
+          cwd,
+          env: { ...process.env },
+          stdio: ["ignore", "pipe", "pipe"],
+        })
+        let output = ""
+        const append = (chunk: Buffer | string) => {
+          output += typeof chunk === "string" ? chunk : chunk.toString()
+        }
+        proc.stdout?.on("data", append)
+        proc.stderr?.on("data", append)
+
+        let timedOut = false
+        const timer = setTimeout(() => {
+          timedOut = true
+          try {
+            proc.kill("SIGTERM")
+          } catch {}
+          setTimeout(() => {
+            try {
+              proc.kill("SIGKILL")
+            } catch {}
+          }, 1500)
+        }, ms)
+
+        const onAbort = () => {
+          try {
+            proc.kill("SIGTERM")
+          } catch {}
+        }
+        input.signal?.addEventListener("abort", onAbort, { once: true })
+
+        const exitCode: number | null = await new Promise((resolve) => {
+          proc.once("exit", (code) => resolve(code))
+          proc.once("error", () => resolve(null))
+        })
+        clearTimeout(timer)
+        input.signal?.removeEventListener("abort", onAbort)
+
+        const MAX_OUTPUT = 30_000
+        const clipped =
+          output.length > MAX_OUTPUT
+            ? output.slice(0, MAX_OUTPUT) +
+              `\n\n[truncated ${output.length - MAX_OUTPUT} bytes — bash is single-shot repair, not a debugger; if you need more output route through a sub-agent]`
+            : output
+        const trailer = timedOut ? `\n\n[command terminated after ${ms}ms timeout]` : ""
+        log.info("orchestrator bash executed", {
+          taskID,
+          command,
+          exit: exitCode,
+          timedOut,
+          outputBytes: output.length,
+        })
+        return `purpose=${description}; exit=${exitCode ?? "?"}; cmd=${command}\n\n${clipped}${trailer}`
       },
     }),
   }

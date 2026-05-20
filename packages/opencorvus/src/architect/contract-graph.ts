@@ -125,6 +125,29 @@ export function contractGraphIRIndex(graph: ArchitectContractGraph): Map<string,
   )
 }
 
+export function contractSurfaceKey(contract: ArchitectContractRef): string {
+  return stableJSONStringify({
+    producer_goal_id: contract.producer_goal_id,
+    kind: contract.kind,
+    name: contract.name,
+    ir: contract.ir ?? null,
+    route: contract.route ?? null,
+    component: contract.component ?? null,
+    artifact_paths: [...contract.artifact_paths].sort(),
+  })
+}
+
+function stableJSONStringify(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJSONStringify).join(",")}]`
+  if (value && typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b))
+    return `{${entries
+      .map(([key, entry]) => `${JSON.stringify(key)}:${stableJSONStringify(entry)}`)
+      .join(",")}}`
+  }
+  return JSON.stringify(value)
+}
+
 export function validateArchitectContractGraph(input: {
   goals: readonly GraphValidationGoal[]
   graph: ArchitectContractGraph
@@ -133,6 +156,7 @@ export function validateArchitectContractGraph(input: {
   const goalIDs = new Set(input.goals.map((goal) => goal.id))
   const contractIDs = new Set<string>()
   const contractsByID = new Map<string, ArchitectContractRef>()
+  const contractsBySurface = new Map<string, ArchitectContractRef>()
   const dependencyPairs = new Set<string>()
 
   for (const goal of input.goals) {
@@ -176,6 +200,21 @@ export function validateArchitectContractGraph(input: {
     }
     contractIDs.add(contract.id)
     contractsByID.set(contract.id, contract)
+    const surfaceKey = contractSurfaceKey(contract)
+    const duplicateSurface = contractsBySurface.get(surfaceKey)
+    if (duplicateSurface && duplicateSurface.id !== contract.id) {
+      findings.push(
+        blocker(
+          "duplicate_contract_surface",
+          `Contract ${contract.id} duplicates existing contract surface ${duplicateSurface.id}; ` +
+            `re-register the existing id to update consumers or metadata instead of creating a new id.`,
+          { contract_ids: [duplicateSurface.id, contract.id], goal_ids: [contract.producer_goal_id] },
+          ["register_contract"],
+        ),
+      )
+    } else {
+      contractsBySurface.set(surfaceKey, contract)
+    }
 
     const unknownGoals = [contract.producer_goal_id, ...contract.consumer_goal_ids].filter(
       (goalID) => !goalIDs.has(goalID),

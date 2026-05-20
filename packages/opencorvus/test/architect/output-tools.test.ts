@@ -218,6 +218,21 @@ test("known contract_audit ids avoid unknown blocker and audit coverage concern"
   expect(findings.some((finding) => finding.code === "contract_without_audit_coverage")).toBe(false)
 })
 
+test("contract graph validation blocks duplicate semantic surfaces", () => {
+  const findings = validateArchitectContractGraph({
+    goals: graphGoals([contractAuditSpec(["contract_order"])]),
+    graph: baseGraph(["contract_order", "contract_order_copy"]),
+  })
+
+  expect(findings).toContainEqual(
+    expect.objectContaining({
+      code: "duplicate_contract_surface",
+      severity: "blocker",
+      scope: { goal_ids: ["goal_model"], contract_ids: ["contract_order", "contract_order_copy"] },
+    }),
+  )
+})
+
 test("contract without essential contract_audit coverage reports audit coverage concern", () => {
   const findings = contractWithoutAuditCoverageFindings({
     graph: baseGraph(),
@@ -666,6 +681,35 @@ test("register_dependency_contract rejects unknown contract id without mutating 
   expect(kit.getCollector().contract_graph.dependency_contracts).toHaveLength(0)
 })
 
+test("register_contract rejects duplicate semantic surface under a new id without mutating collector", async () => {
+  const kit = await registerTwoGoalGraph()
+  await kit.tools.register_contract.execute!(contractRef("contract_order", []) as any, {} as any)
+
+  const out = await kit.tools.register_contract.execute!(
+    {
+      ...contractRef("contract_order_v2", ["goal_ui"]),
+    } as any,
+    {} as any,
+  )
+
+  expect(out).toContain('duplicates existing contract surface "contract_order"')
+  expect(out).toContain('Re-register contract id "contract_order"')
+  expect(out).toContain("collector unchanged")
+  expect(kit.getCollector().contract_graph.contracts).toHaveLength(1)
+  expect(kit.getCollector().contract_graph.contracts[0].consumer_goal_ids).toEqual([])
+})
+
+test("register_contract overwrites the same id when repairing contract consumers", async () => {
+  const kit = await registerTwoGoalGraph()
+  await kit.tools.register_contract.execute!(contractRef("contract_order", []) as any, {} as any)
+
+  const out = await kit.tools.register_contract.execute!(contractRef("contract_order", ["goal_ui"]) as any, {} as any)
+
+  expect(out).toContain('contract "contract_order" overwritten')
+  expect(kit.getCollector().contract_graph.contracts).toHaveLength(1)
+  expect(kit.getCollector().contract_graph.contracts[0].consumer_goal_ids).toEqual(["goal_ui"])
+})
+
 test("register_dependency_contract rejects contract reason without contract id", async () => {
   const kit = await registerTwoGoalGraph()
   const out = await kit.tools.register_dependency_contract.execute!(
@@ -718,6 +762,7 @@ test("register_dependency_contract rejects contract id that does not belong to t
   )
 
   expect(out).toContain('contract "contract_order" belongs to goal_model -> []')
+  expect(out).toContain('Re-register contract id "contract_order"')
   expect(out).toContain("collector unchanged")
   expect(kit.getCollector().contract_graph.dependency_contracts).toHaveLength(0)
 })

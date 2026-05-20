@@ -42,7 +42,7 @@ const HOST_KILLING_PATTERNS = [
   /\bkill\b.*`/i,                                // kill `pgrep bun`
 ]
 
-function isHostKillingCommand(command: string): boolean {
+export function isHostKillingCommand(command: string): boolean {
   return HOST_KILLING_PATTERNS.some(pattern => pattern.test(command))
 }
 

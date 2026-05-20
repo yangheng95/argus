@@ -44,7 +44,10 @@ describe("core prompt hygiene", () => {
       designAnalyst: 125,
       integrity: 175,
       intentAnalysis: 130,
-      orchestrator: 300,
+      // Raised from 300 → 360 on 2026-05-20 to absorb the `Git Merge Repair
+      // Bash` section that documents the orchestrator's narrow bash scope
+      // (single git invocations only, no replacement of sub-agent surfaces).
+      orchestrator: 360,
       prosecutor: 80,
       requirements: 180,
     }
@@ -197,6 +200,34 @@ describe("core prompt hygiene", () => {
     expect(tools).not.toContain("Goal-layer Integrity corrections did not converge")
     expect(tools).toContain("the review itself does not rewrite requirements or goals")
     expect(tools).toContain("architecture_review_rework")
+  })
+
+  test("orchestrator prompt scopes bash to git merge repair only and forbids replacing sub-agents", async () => {
+    // The orchestrator bash tool is a narrow git-only repair surface; the
+    // prompt must (a) declare the section, (b) explicitly forbid using bash
+    // as a code editor / test runner / investigation surface, and (c) repeat
+    // the no-chain-bash discipline so a non-zero exit cannot escalate into a
+    // multi-call loop. Spec — 2026-05-20 orchestrator-bash-git-only.
+    const orchestrator = await readPrompt("orchestrator")
+    const flat = orchestrator.replace(/\s+/g, " ")
+
+    expect(orchestrator).toContain("## Git Merge Repair Bash")
+    expect(flat).toContain("single repair surface for a stuck merge")
+    expect(flat).toContain("schema HARD-rejects anything that is not a single `git <subcommand>` invocation")
+    expect(flat).toContain("Build is the only code-author path")
+    expect(flat).toContain("Network git (`fetch`, `pull`, `push`, `clone`, `remote ...`)")
+    expect(flat).toContain("worktrees are Build's surface")
+    expect(flat).toContain("`bash` is one shot, not a debugger")
+
+    // The MUST-NOT block calls out bash explicitly so the LLM cannot
+    // claim "bash isn't listed".
+    expect(flat).toContain("use `bash` for anything outside the narrow git merge-state repair scope")
+    expect(flat).toContain("NOT a code editor")
+    expect(flat).toContain("NOT a test runner")
+    expect(flat).toContain("NOT a research tool")
+
+    // Tool Selection entry must point back to the scoped section.
+    expect(flat).toContain("`bash`: git-only merge-state repair shell")
   })
 
   test("architect prompt documents graph contracts as the only cross-goal handoff shape", async () => {
