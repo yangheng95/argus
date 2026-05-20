@@ -89,6 +89,7 @@ interface SessionInfo {
 interface MessageInfo {
   id: string;
   sessionID: string;
+  stage: string;
   role: string;
   resolvedRole: string;
   agent: string;
@@ -179,12 +180,6 @@ interface ProjectedSessionStatus {
   timeCompleted?: number;
 }
 const pendingSessionStatus = new Map<string, ProjectedSessionStatus>();
-/** Latest conversation card opened by the writer. Consecutive messages from
- *  the same runtime session reuse that card; a message from another session,
- *  including a phase-absorbed session, updates this pointer and therefore
- *  splits the original session when it resumes later. */
-let latestConversationCardID: string | undefined;
-
 interface BufferedPartDelta {
   event: any;
   delta: string;
@@ -216,7 +211,6 @@ export function resetWriter(options: {
   pendingIntegrity.clear();
   runningReviews.clear();
   pendingSessionStatus.clear();
-  latestConversationCardID = undefined;
   // Drop every key explicitly — plain assignment on a store merges instead of
   // replacing (see setMessages's messagesBySession fix in store/messages.ts).
   setCardTreeStore("order", []);
@@ -561,10 +555,16 @@ function handleMessageUpdated(event: any): void {
   }
   const completed = Number.isFinite(info?.time?.completed) && Number(info.time.completed) > 0;
 
+  // Channel-driven stage. Bridge stamps it on every event; an absent
+  // channel is a bridge bug, not a case we silently accommodate.
+  const stage = deriveSessionStage(info);
+  if (stage === "filtered") return;
+
   // Index the message.
   messages.set(id, {
     id,
     sessionID,
+    stage,
     role,
     resolvedRole,
     agent,
@@ -574,27 +574,25 @@ function handleMessageUpdated(event: any): void {
     completed,
   });
 
-  // Channel-driven stage. Bridge stamps it on every event; an absent
-  // channel is a bridge bug, not a case we silently accommodate.
-  const stage = deriveSessionStage(info);
-  if (stage === "filtered") return;
-
   const session = ensureSession(sessionID, { stage, parentSessionID, goalID });
   session.messageIDs.add(id);
 
-  const { cardID, isPhase, groupedIntoExistingCard } = ensureTurnCard(session, id, {
+  const { cardID, isPhase } = ensureTurnCard(session, id, {
     stage,
     goalID,
     role: resolvedRole,
     time: timeCreated,
     stampServerTime: true,
+    deferHierarchy: !isPhaseAbsorbedSession(stage, goalID),
   });
 
-  // Phase cards always need in-card message boundaries. Non-phase cards only
-  // need one when consecutive messages from the same session were grouped
-  // into an existing card; a freshly split card is already the boundary.
-  if (isPhase || groupedIntoExistingCard) {
+  // Phase cards always need in-card message boundaries. Non-phase cards are
+  // regrouped by the authoritative message timeline below; doing that from
+  // live arrival order is the regression this path avoids.
+  if (isPhase) {
     ensureBoundaryPart(session, cardID, id, resolvedRole, timeCreated);
+  } else {
+    regroupTimelineSegments();
   }
 
   drainPendingSessionStatus(sessionID);
@@ -641,7 +639,7 @@ function handlePartUpdated(event: any): void {
       stampServerTime: false,
     });
     cardID = ensured.cardID;
-    if (ensured.isPhase || ensured.groupedIntoExistingCard) {
+    if (ensured.isPhase) {
       ensureBoundaryPart(
         session,
         cardID,
@@ -778,8 +776,8 @@ function handleMessageRemoved(event: any): void {
   if (!cardStillOwnsSessionMessage(session, cardID)) {
     removeCardReferences(cardID);
     if (session.activeCardID === cardID) session.activeCardID = undefined;
-    if (latestConversationCardID === cardID) latestConversationCardID = undefined;
   }
+  regroupTimelineSegments();
   syncExecutorTopLevelVisibility(session);
 }
 
@@ -1581,7 +1579,7 @@ function ensureTurnCard(
   session: SessionInfo,
   messageID: string,
   opts: EnsureTurnCardOpts,
-): { cardID: string; isPhase: boolean; groupedIntoExistingCard: boolean } {
+): { cardID: string; isPhase: boolean } {
   const stage = opts.stage || session.stage || "";
   const goalID = opts.goalID || session.goalID || "";
   const resolved = resolveTurnCardID(
@@ -1591,12 +1589,6 @@ function ensureTurnCard(
   const isPhase = resolved.isPhase;
 
   const prior = session.messageCardIDs.get(messageID);
-  let groupedIntoExistingCard = false;
-  if (!prior && !isPhase && session.activeCardID && latestConversationCardID === session.activeCardID) {
-    cardID = session.activeCardID;
-    groupedIntoExistingCard = true;
-  }
-
   if (prior && prior !== resolved.cardID && isPhase) {
     cardID = resolved.cardID;
     migrateTurnCard(session, prior, cardID);
@@ -1632,10 +1624,6 @@ function ensureTurnCard(
     ) {
       setCardTreeStore("cards", prevCardID, "status", "completed");
     }
-    latestConversationCardID = cardID;
-  }
-  if (isPhase) {
-    latestConversationCardID = cardID;
   }
 
   session.messageCardIDs.set(messageID, cardID);
@@ -1643,7 +1631,207 @@ function ensureTurnCard(
   session.activeCardID = cardID;
 
   if (!opts.deferHierarchy) rebuildCardHierarchy();
-  return { cardID, isPhase, groupedIntoExistingCard };
+  return { cardID, isPhase };
+}
+
+interface TimelineSegment {
+  cardID: string;
+  session: SessionInfo;
+  stage: string;
+  goalID: string;
+  messages: MessageInfo[];
+}
+
+function messageTimeOrder(left: MessageInfo, right: MessageInfo): number {
+  const byTime = left.time - right.time;
+  if (byTime !== 0) return byTime;
+  return left.id.localeCompare(right.id);
+}
+
+function nonPhaseMessageTurnCardID(cardID: string): boolean {
+  return cardID.includes(":session:") && cardID.includes(":message:");
+}
+
+function collectTimelineParts(messageIDs: Set<string>): Map<string, any[]> {
+  const byMessage = new Map<string, any[]>();
+  const seenPartIDs = new Set<string>();
+  for (const card of Object.values(cardTreeStore.cards)) {
+    for (const part of card?.parts || []) {
+      if (!part || part.type === "boundary") continue;
+      const messageID = String(part.messageID || "");
+      if (!messageIDs.has(messageID)) continue;
+      const partID = String(part.id || "");
+      if (partID && seenPartIDs.has(partID)) continue;
+      if (partID) seenPartIDs.add(partID);
+      const list = byMessage.get(messageID);
+      if (list) list.push(part);
+      else byMessage.set(messageID, [part]);
+    }
+  }
+  return byMessage;
+}
+
+function clearTimelinePartIndexes(messageIDs: Set<string>): void {
+  for (const session of sessions.values()) {
+    for (const [partID, target] of [...session.partIndex]) {
+      const part = cardTreeStore.cards[target.cardID]?.parts?.[target.index];
+      const indexedMessageID =
+        part?.messageID ||
+        (partID.startsWith("__boundary__:") ? partID.slice(partID.lastIndexOf(":") + 1) : "");
+      if (messageIDs.has(String(indexedMessageID || ""))) {
+        session.partIndex.delete(partID);
+      }
+    }
+  }
+}
+
+/** Rebuild non-phase message-turn card ownership from the authoritative
+ *  message timeline. Live `message.*` events are ephemeral and can arrive
+ *  out of chronological order, so "same session as the latest event" is not
+ *  a valid definition of an uninterrupted visible run. */
+function regroupTimelineSegments(opts: { deferHierarchy?: boolean } = {}): void {
+  const ordered = [...messages.values()]
+    .filter((message) => sessions.has(message.sessionID))
+    .sort(messageTimeOrder);
+  if (ordered.length === 0) return;
+
+  const segments: TimelineSegment[] = [];
+  const desiredCardByMessage = new Map<string, string>();
+  const targetMessageIDs = new Set<string>();
+  let previousVisibleSessionID = "";
+  let previousNonPhaseCardID = "";
+
+  for (const message of ordered) {
+    const session = sessions.get(message.sessionID);
+    if (!session) continue;
+    const stage = message.stage || session.stage;
+    const goalID = message.goalID || session.goalID;
+    if (isPhaseAbsorbedSession(stage, goalID)) {
+      previousVisibleSessionID = message.sessionID;
+      previousNonPhaseCardID = "";
+      continue;
+    }
+
+    const cardID =
+      previousVisibleSessionID === message.sessionID && previousNonPhaseCardID
+        ? previousNonPhaseCardID
+        : messageTurnCardID(stage, message.sessionID, message.id);
+    let segment = segments[segments.length - 1];
+    if (!segment || segment.cardID !== cardID) {
+      segment = { cardID, session, stage, goalID, messages: [] };
+      segments.push(segment);
+    }
+    segment.messages.push(message);
+    desiredCardByMessage.set(message.id, cardID);
+    targetMessageIDs.add(message.id);
+    previousVisibleSessionID = message.sessionID;
+    previousNonPhaseCardID = cardID;
+  }
+  if (segments.length === 0) return;
+
+  const oldOwnedCardIDs = new Set<string>();
+  for (const session of sessions.values()) {
+    for (const cardID of session.messageCardIDs.values()) {
+      if (nonPhaseMessageTurnCardID(cardID)) oldOwnedCardIDs.add(cardID);
+    }
+  }
+
+  const partsByMessage = collectTimelineParts(targetMessageIDs);
+  clearTimelinePartIndexes(targetMessageIDs);
+
+  const activeBySession = new Map<string, { messageID: string; cardID: string; time: number }>();
+  for (const message of ordered) {
+    const cardID = desiredCardByMessage.get(message.id);
+    if (!cardID) continue;
+    const current = activeBySession.get(message.sessionID);
+    if (!current || message.time >= current.time) {
+      activeBySession.set(message.sessionID, { messageID: message.id, cardID, time: message.time });
+    }
+  }
+
+  for (const [messageID, cardID] of desiredCardByMessage) {
+    const message = messages.get(messageID);
+    const session = message ? sessions.get(message.sessionID) : undefined;
+    if (session) session.messageCardIDs.set(messageID, cardID);
+  }
+
+  for (const segment of segments) {
+    const first = segment.messages[0];
+    if (!first) continue;
+    const existing = cardTreeStore.cards[segment.cardID];
+    const active = activeBySession.get(first.sessionID)?.cardID === segment.cardID;
+    const status = (() => {
+      if (active) {
+        if (existing?.status === "error") return "error";
+        if (existing?.terminalReason) return existing.status ?? "completed";
+        return "running";
+      }
+      return existing?.status === "error" ? "error" : "completed";
+    })();
+    const base = existing ?? createSessionCardNode(
+      segment.cardID,
+      segment.stage,
+      segment.goalID,
+      first.time,
+      first.sessionID,
+      first.id,
+    );
+    setCardTreeStore("cards", segment.cardID, {
+      ...base,
+      sessionID: first.sessionID,
+      messageID: first.id,
+      stage: segment.stage,
+      accent: !isUserStage(segment.stage) && segment.stage ? stageAccent(segment.stage) : undefined,
+      title: roleTitleKey(segment.stage),
+      time: first.time,
+      status,
+      parts: [],
+    });
+
+    const rebuiltParts: any[] = [];
+    for (const [index, message] of segment.messages.entries()) {
+      if (index > 0 && !isUserStage(segment.stage)) {
+        const boundaryKey = `__boundary__:${segment.session.sessionID}:${message.id}`;
+        const boundary = {
+          type: "boundary",
+          messageID: message.id,
+          role: message.resolvedRole,
+          roleLabel: roleLabel(message.resolvedRole),
+          time: message.time > 0 ? message.time : undefined,
+        };
+        segment.session.partIndex.set(boundaryKey, {
+          cardID: segment.cardID,
+          index: rebuiltParts.length,
+        });
+        rebuiltParts.push(boundary);
+      }
+      for (const part of partsByMessage.get(message.id) || []) {
+        const partID = String(part.id || "");
+        if (partID) {
+          segment.session.partIndex.set(partID, {
+            cardID: segment.cardID,
+            index: rebuiltParts.length,
+          });
+        }
+        rebuiltParts.push(part);
+      }
+    }
+    setCardTreeStore("cards", segment.cardID, "parts", rebuiltParts);
+  }
+
+  const targetCardIDs = new Set(segments.map((segment) => segment.cardID));
+  for (const cardID of oldOwnedCardIDs) {
+    if (!targetCardIDs.has(cardID)) removeCardReferences(cardID);
+  }
+
+  for (const [sessionID, active] of activeBySession) {
+    const session = sessions.get(sessionID);
+    if (!session) continue;
+    session.activeMessageID = active.messageID;
+    session.activeCardID = active.cardID;
+  }
+
+  if (!opts.deferHierarchy) rebuildCardHierarchy();
 }
 
 /** Replay a persisted task into the exact same visible card identity the
@@ -1704,6 +1892,7 @@ export function hydrateConversationView(view: any, transcript: any[]): void {
     messages.set(messageID, {
       id: messageID,
       sessionID,
+      stage,
       role,
       resolvedRole,
       agent: String(info.agent || ""),
@@ -1714,15 +1903,15 @@ export function hydrateConversationView(view: any, transcript: any[]): void {
     });
     const session = ensureSession(sessionID, { stage, parentSessionID, goalID });
     session.messageIDs.add(messageID);
-  const { cardID, isPhase, groupedIntoExistingCard } = ensureTurnCard(session, messageID, {
-    stage,
-    goalID,
-    role: resolvedRole,
+    const { cardID, isPhase } = ensureTurnCard(session, messageID, {
+      stage,
+      goalID,
+      role: resolvedRole,
       time: timeCreated,
-    stampServerTime: true,
-    deferHierarchy: true,
-  });
-    if (isPhase || groupedIntoExistingCard) {
+      stampServerTime: true,
+      deferHierarchy: true,
+    });
+    if (isPhase) {
       ensureBoundaryPart(session, cardID, messageID, resolvedRole, timeCreated);
     }
     const parts = Array.isArray(message?.parts) ? message.parts : [];
@@ -1735,6 +1924,7 @@ export function hydrateConversationView(view: any, transcript: any[]): void {
     }
     touched.add(sessionID);
   }
+  regroupTimelineSegments({ deferHierarchy: true });
   rebuildCardHierarchy();
   for (const sessionID of touched) {
     drainPendingIntegrity(sessionID);
