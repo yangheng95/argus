@@ -343,8 +343,10 @@ describe("hexin model discovery", () => {
 
   test("startup helper ignores process.env when called directly with no apiKey — unit-call shape", async () => {
     // Companion unit test: even outside an Instance, the startup helper
-    // never reads process.env. The user-initiated discoverHexinModels still
-    // does (see its dedicated `requires a live key` test above).
+    // never reads process.env. Round-3 hardening extended this no-env policy
+    // to the user-initiated discoverHexinModels force path as well (see the
+    // "requires an explicit apiKey — never falls back to process.env" test
+    // above) — process.env is no longer consulted anywhere in hexin-discovery.
     process.env.HEXIN_API_KEY = "leak-key-must-not-fetch"
     let called = false
     globalThis.fetch = (async () => {
