@@ -9,11 +9,15 @@
  *      — user-initiated (UI refresh button, CLI refresh command, explicit
  *      Provider.refreshHexin). force:true performs a live /v1/models call
  *      and writes the cache on success; any HTTP / network / parse failure
- *      throws so the operator sees the upstream error verbatim. force:false
- *      (the default) only reads the cache and returns {} when none exists.
- *      Direct callers (scripts and unit tests outside any Instance scope)
- *      may rely on the process.env.HEXIN_API_KEY fallback when opts.apiKey
- *      is empty.
+ *      throws so the operator sees the upstream error verbatim. force:true
+ *      requires `opts.apiKey` to be supplied — throws `HEXIN_API_KEY unset`
+ *      otherwise. We never consult process.env here because that would let
+ *      Provider.refreshHexin (called inside an Instance) silently fall
+ *      through to raw env when hexinApiKey(cfg) returned "" because
+ *      Env.remove masked the per-instance shim. Direct unit/CLI callers
+ *      that want env-derived behavior must pass
+ *      `apiKey: process.env.HEXIN_API_KEY` themselves. force:false (the
+ *      default) only reads the cache and returns {} when none exists.
  *
  *   2. discoverHexinModelsForStartup({ apiKey? })
  *      — invoked during Provider.state() lazy init. Tries a live fetch only
@@ -167,10 +171,13 @@ export async function discoverHexinModels(opts: DiscoveryOptions = {}): Promise<
     return {}
   }
 
-  // Operator must supply a Hexin key explicitly. The provider layer passes the
-  // canonical key resolved from env / auth / config; keep the env read here
-  // only for direct unit callers of this module.
-  const apiKey = opts.apiKey?.trim() || process.env.HEXIN_API_KEY?.trim()
+  // Caller MUST supply the key explicitly. We do not consult process.env
+  // here — that would let provider-layer refresh (Provider.refreshHexin)
+  // silently fall through to raw env when hexinApiKey(cfg) returned "" due
+  // to Env.remove masking the per-instance shim, defeating Env's isolation
+  // (rule 8). Direct unit/CLI callers that want env-derived behavior must
+  // pass `apiKey: process.env.HEXIN_API_KEY` themselves.
+  const apiKey = opts.apiKey?.trim()
   if (!apiKey) {
     throw new Error("HEXIN_API_KEY unset")
   }
