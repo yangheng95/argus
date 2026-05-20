@@ -836,6 +836,7 @@ export const TaskBoardGoalWorkflow = z.object({
 
 export const TaskBoard = z.object({
   lastSequence: z.number().optional(),
+  snapshotVersion: z.string().min(1),
   task: Task,
   spec: SpecSnapshot.optional(),
   plan: PlanVersion.optional(),
@@ -1358,8 +1359,10 @@ export const Event = {
    *  Carries the per-dimension breakdown (requirement_fidelity / technical_feasibility
    *  / hallucination / solution_quality) plus the cross-dimension union of
    *  issues / corrections / missing goals so the overlay can render a native
-   *  verdict card. The runtime aggregates `verdict` from per-dimension worst-
-   *  case; the LLM does NOT supply a top-level verdict.
+   *  verdict card. The runtime derives `verdict` from final acceptance plus
+   *  per-dimension blockers: advisory-only concerns can still pass, while
+   *  repair-bearing concerns, needs_correction dimensions, or rejected
+   *  acceptance block completion. The LLM does NOT supply a top-level verdict.
    *  Issue rows carry optional `requirement_ids` and `spec_ids` so the overlay
    *  can chip-render REQ-N / acc-* references and downstream consumers can
    *  navigate from a fidelity issue to the failing REQ row or acceptance spec

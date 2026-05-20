@@ -326,11 +326,12 @@ test("integrity lifecycle emits shared review stream events", async () => {
     emitted.push({ type: event.type, payload })
   })
   runnerImpl = async (input: any) => {
-    input.onSessionCreated?.({ id: "ses_integrity_stream" })
+    const lifecycle = input.onSessionCreated?.({ id: "ses_integrity_stream" })
     await input.stream.onChunk({ chunk: { type: "reasoning-delta", text: "checking" } })
     await input.stream.onFinish({} as never)
     await submitPassingIntegrityTools(input.toolKit.tools)
     await input.toolKit.tools.submit_integrity_review.execute({ final: true }, {})
+    lifecycle?.dispose?.()
     return {
       session: { id: "ses_integrity_stream" },
       streamErrors: [],
@@ -367,8 +368,9 @@ test("integrity lifecycle emits shared review stream events", async () => {
   emitSpy.mockRestore()
 })
 
-test("integrity preserves correction-bearing concerns verdict (no host reconciliation)", async () => {
+test("accepted acceptance plus advisory concerns returns top-level pass and keeps evidence", async () => {
   const { reviewIntegrity } = await import("../../src/integrity/agent")
+  const { renderIntegrityMarkdown } = await import("../../src/integrity/render-markdown")
   runnerImpl = async (input: any) => {
     await input.toolKit.tools.submit_requirement_fidelity_verdict.execute({
       verdict: "pass",
@@ -391,18 +393,13 @@ test("integrity preserves correction-bearing concerns verdict (no host reconcili
     await input.toolKit.tools.submit_solution_quality_verdict.execute({
       verdict: "concerns",
       issues: [{ type: "weak_acceptance", description: "goal_ui has no executable acceptance spec for REQ-1." }],
-      corrections: [{
-        action: "modify",
-        goal_id: "goal_ui",
-        reason: "Add an executable acceptance contract.",
-        updates: { acceptance_specs: [] },
-      }],
+      corrections: [],
       missing_goals: [],
     }, {})
     await input.toolKit.tools.submit_acceptance_verdict.execute(acceptedAcceptance(), {})
     await input.toolKit.tools.submit_integrity_review.execute({ final: true }, {})
     return {
-      session: { id: "ses_integrity_correction_concern" },
+      session: { id: "ses_integrity_advisory_concern" },
       streamErrors: [],
       structured: undefined,
       collector: input.toolKit.getCollector(),
@@ -419,14 +416,103 @@ test("integrity preserves correction-bearing concerns verdict (no host reconcili
     contractGraph: baseGraph,
   })
 
-  // B11 (spec architecture-rework-loosening-plan-2026-05-06.md): the host
-  // no longer rewrites the integrity LLM's submitted verdict. The LLM said
-  // "concerns" — that's what flows out, even with a correction attached.
-  // The orchestrator LLM reads the full review markdown (issues +
-  // corrections) and decides whether to act. CLAUDE.md rule 13.
-  expect(result.verdict).toBe("concerns")
-  expect(result.dimensions.find((d) => d.id === "solution_quality")?.verdict).toBe("concerns")
+  expect(result.acceptance.verdict).toBe("accepted")
+  expect(result.verdict).toBe("pass")
+  const quality = result.dimensions.find((d) => d.id === "solution_quality")
+  expect(quality?.verdict).toBe("concerns")
+  expect(quality?.issues[0]?.description).toBe("goal_ui has no executable acceptance spec for REQ-1.")
+  expect(result.issues).toHaveLength(1)
+
+  const markdown = renderIntegrityMarkdown({ verdict: result, sessionID: result.sessionID })
+  expect(markdown).toContain("Architecture review (verdict=pass; session ses_integrity_advisory_concern)")
+  expect(markdown).toContain("**solution_quality = concerns**")
+  expect(markdown).toContain("[weak_acceptance] goal_ui has no executable acceptance spec for REQ-1.")
+})
+
+test("repair-bearing concerns aggregate to needs_correction while preserving dimension evidence", async () => {
+  const { reviewIntegrity } = await import("../../src/integrity/agent")
+  let finalizeResult: string | undefined
+  runnerImpl = async (input: any) => {
+    await input.toolKit.tools.submit_requirement_fidelity_verdict.execute({
+      verdict: "pass",
+      issues: [],
+      corrections: [],
+      missing_goals: [],
+    }, {})
+    await input.toolKit.tools.submit_technical_feasibility_verdict.execute({
+      verdict: "concerns",
+      issues: [{
+        type: "missing_capability",
+        description: "goal_ui lacks the integration contract needed by REQ-1.",
+        goal_ids: ["goal_ui"],
+      }],
+      corrections: [{
+        action: "modify",
+        goal_id: "goal_ui",
+        reason: "Make the integration responsibility explicit.",
+        updates: { objective: "Build the requested interface and expose its integration contract." },
+      }],
+      graph_corrections: [{
+        kind: "audit_criterion",
+        action: "attach",
+        reason: "Attach the missing integration contract as an audit criterion.",
+        goal_id: "goal_ui",
+        contract_ids: ["contract_ui"],
+      }],
+      missing_goals: [{
+        title: "Integration verification",
+        objective: "Verify the UI integration contract end to end.",
+        acceptance_spec_hints: ["Integration contract is exercised through the rendered UI."],
+        owned_paths: ["src/App.tsx"],
+        kind: "verification",
+        priority: "blocking",
+        reason: "The existing goal cannot prove the integration contract by itself.",
+      }],
+    }, {})
+    await input.toolKit.tools.submit_hallucination_verdict.execute({
+      verdict: "pass",
+      issues: [],
+      corrections: [],
+      missing_goals: [],
+    }, {})
+    await input.toolKit.tools.submit_solution_quality_verdict.execute({
+      verdict: "pass",
+      issues: [],
+      corrections: [],
+      missing_goals: [],
+    }, {})
+    await input.toolKit.tools.submit_acceptance_verdict.execute(acceptedAcceptance(), {})
+    finalizeResult = await input.toolKit.tools.submit_integrity_review.execute({ final: true }, {})
+    return {
+      session: { id: "ses_integrity_repair_concern" },
+      streamErrors: [],
+      structured: undefined,
+      collector: input.toolKit.getCollector(),
+      finalMessage: { info: {} },
+      model: { providerID: "test", modelID: "mock", id: "test/mock" },
+      requiredTools: [],
+    }
+  }
+
+  const result = await reviewIntegrity({
+    userRequest: "Build UI",
+    taskTitle: "Test",
+    goals: [baseGoal],
+    contractGraph: baseGraph,
+  })
+
+  expect(finalizeResult).toBe("PASS: integrity review finalized with aggregate verdict needs_correction.")
+  expect(result.acceptance.verdict).toBe("accepted")
+  expect(result.verdict).toBe("needs_correction")
+  const feasibility = result.dimensions.find((d) => d.id === "technical_feasibility")
+  expect(feasibility?.verdict).toBe("concerns")
+  expect(feasibility?.corrections).toHaveLength(1)
+  expect(feasibility?.graphCorrections).toHaveLength(1)
+  expect(feasibility?.missingGoals).toHaveLength(1)
   expect(result.corrections).toHaveLength(1)
+  expect(result.graphCorrections).toHaveLength(1)
+  expect(result.missingGoals).toHaveLength(1)
+  expect(result.summary).toContain("Integrity needs_correction")
 })
 
 test("hallucination findings can propose executable requirement-id repairs", async () => {
@@ -709,8 +795,8 @@ test("when every claiming goal's essential spec fails, the LLM-driven verdict ro
   expect(capturedPrompt).toContain("goal_fe")
   expect(capturedPrompt).toContain("goal_be")
   expect(capturedPrompt.match(/FAILED/g)?.length ?? 0).toBeGreaterThanOrEqual(2)
-  // Aggregate verdict is the worst per-dimension verdict — derived from the
-  // LLM's submission, not host-recomputed from snapshot rows.
+  // Aggregate verdict is derived from the LLM's submitted dimension verdicts,
+  // not host-recomputed from snapshot rows.
   expect(result.verdict).toBe("needs_correction")
   const fidelity = result.dimensions.find((d) => d.id === "requirement_fidelity")
   expect(fidelity?.verdict).toBe("needs_correction")

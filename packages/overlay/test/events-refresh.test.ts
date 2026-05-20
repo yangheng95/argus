@@ -64,6 +64,7 @@ function fakeRecoveryTransport(
           headers: {},
           body: {
             board: {
+              snapshotVersion: "board:refresh",
               task: {
                 id: "tsk_refresh",
                 sessionID: "ses_refresh",
@@ -119,6 +120,7 @@ test("selected-task message events update card tree without board refresh", () =
   resetWriter();
   setBoardStore("selectedTaskID", "tsk_refresh");
   setBoardStore("board", {
+    snapshotVersion: "board:refresh",
     task: {
       id: "tsk_refresh",
       sessionID: "ses_refresh",
@@ -157,6 +159,7 @@ test("selected-task message events advance the visible cursor without recovery",
   setBoardStore("selectedTaskID", "tsk_refresh");
   setBoardStore("taskSequence", 5);
   setBoardStore("board", {
+    snapshotVersion: "board:refresh",
     task: {
       id: "tsk_refresh",
       sessionID: "ses_refresh",
@@ -215,6 +218,7 @@ test("selected-task protocol task_id envelope advances the visible cursor", asyn
   setBoardStore("selectedTaskID", "tsk_refresh");
   setBoardStore("taskSequence", 5);
   setBoardStore("board", {
+    snapshotVersion: "board:refresh",
     task: {
       id: "tsk_refresh",
       sessionID: "ses_refresh",
@@ -271,6 +275,7 @@ test("selected-task part removal updates the card tree in real time", () => {
   setBoardStore("selectedTaskID", "tsk_refresh");
   setBoardStore("taskSequence", 7);
   setBoardStore("board", {
+    snapshotVersion: "board:refresh",
     task: {
       id: "tsk_refresh",
       sessionID: "ses_refresh",
@@ -337,6 +342,7 @@ test("selected-task message removal removes its visible card in real time", () =
   setBoardStore("selectedTaskID", "tsk_refresh");
   setBoardStore("taskSequence", 3);
   setBoardStore("board", {
+    snapshotVersion: "board:refresh",
     task: {
       id: "tsk_refresh",
       sessionID: "ses_refresh",
@@ -402,6 +408,7 @@ test("selected-task message payload is still applied when board cursor is ahead"
   setBoardStore("selectedTaskID", "tsk_refresh");
   setBoardStore("taskSequence", 10);
   setBoardStore("board", {
+    snapshotVersion: "board:refresh",
     task: {
       id: "tsk_refresh",
       sessionID: "ses_refresh",
@@ -440,6 +447,7 @@ test("board-owned run progress advances selected-task cursor", async () => {
   setBoardStore("selectedTaskID", "tsk_refresh");
   setBoardStore("taskSequence", 5);
   setBoardStore("board", {
+    snapshotVersion: "board:refresh",
     task: {
       id: "tsk_refresh",
       sessionID: "ses_refresh",
@@ -487,6 +495,7 @@ test("message delta with missing tree prerequisites triggers selected-task recov
   __setHostTransportForTest(fakeRecoveryTransport(streams));
   setBoardStore("selectedTaskID", "tsk_refresh");
   setBoardStore("board", {
+    snapshotVersion: "board:refresh",
     task: {
       id: "tsk_refresh",
       sessionID: "ses_refresh",

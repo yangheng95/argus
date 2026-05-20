@@ -1517,6 +1517,7 @@ export type Session = {
     | "delivery"
     | "executor"
     | "build"
+    | "explore"
     | "evaluator"
     | "system"
   goalID?: string
@@ -3037,6 +3038,7 @@ export type GlobalSession = {
     | "delivery"
     | "executor"
     | "build"
+    | "explore"
     | "evaluator"
     | "system"
   goalID?: string
@@ -4595,6 +4597,7 @@ export type SessionCreateData = {
       | "delivery"
       | "executor"
       | "build"
+      | "explore"
       | "evaluator"
       | "system"
     goalID?: string
@@ -8928,6 +8931,7 @@ export type TaskConversationResponses = {
     lastSequence: number
     board: {
       lastSequence?: number
+      snapshotVersion: string
       task: {
         id: string
         projectID: string
@@ -9479,6 +9483,7 @@ export type TaskBoardResponses = {
    */
   200: {
     lastSequence?: number
+    snapshotVersion: string
     task: {
       id: string
       projectID: string

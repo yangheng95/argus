@@ -57,7 +57,7 @@ export function compileBoard(input: { taskID: string }) {
   const tag = boardTagForTask(task)
   const cached = boardCache.get(task.id)
   if (cached?.tag === tag) return cached.board
-  const board = buildBoard(task)
+  const board = buildBoard(task, tag)
   boardCache.set(task.id, { tag, board })
   return board
 }
@@ -68,7 +68,7 @@ export function boardTag(input: { taskID: string }) {
   return boardTagForTask(task)
 }
 
-function buildBoard(task: typeof EngineTaskTable.$inferSelect) {
+function buildBoard(task: typeof EngineTaskTable.$inferSelect, snapshotVersion: string) {
   const run = findActiveRunForTask(task.id)
   const plan = findActivePlanForTask(task.id)
   // Query goals by plan if available, otherwise fall back to task_id so that
@@ -203,6 +203,7 @@ function buildBoard(task: typeof EngineTaskTable.$inferSelect) {
   const workflowFields = buildWorkflowFields(task, goals)
 
   return {
+      snapshotVersion,
       lastSequence,
       ...workflowFields,
       spec: specSnapshot,

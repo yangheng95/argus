@@ -29,66 +29,57 @@ export const SkillTool = Tool.define("skill", async (ctx) => {
 
   const description =
     accessibleSkills.length === 0
-      ? "Load a specialized skill that provides domain-specific instructions and workflows. No skills are currently available."
+      ? "Search for or load a specialized skill that provides domain-specific instructions and workflows. No skills are currently available."
       : [
-          "Load a specialized skill that provides domain-specific instructions and workflows.",
+          "Search for or load a specialized skill that provides domain-specific instructions and workflows.",
           `Current platform: ${platform}`,
-          "Prefer skills compatible with the current platform to avoid incorrect OS-specific shortcuts.",
+          "Call without a name to search/list skill metadata. Call with an exact name to load the full skill instructions.",
           "",
-          "When you recognize that a task matches one of the available skills listed below, use this tool to load the full skill instructions.",
+          "Use search before planning when the task may match a specialized workflow.",
           "",
-          "The skill will inject detailed instructions, workflows, and access to bundled resources (scripts, references, templates) into the conversation context.",
-          "",
-          'Tool output includes a `<skill_content name="...">` block with the loaded content.',
-          "",
-          "The following skills provide specialized sets of instructions for particular tasks",
-          "Invoke this tool to load a skill when a task matches one of the available skills listed below:",
-          "",
-          "<available_skills>",
-          ...compatible.flatMap((skill) => [
-            `  <skill>`,
-            `    <name>${skill.name}</name>`,
-            `    <description>${skill.description}</description>`,
-            `    <platforms>${skill.platforms.length ? skill.platforms.join(",") : "all"}</platforms>`,
-            `    <location>${pathToFileURL(skill.location).href}</location>`,
-            `  </skill>`,
-          ]),
-          ...iife(() => {
-            if (incompatible.length === 0) return []
-            return [
-              "",
-              "<incompatible_skills>",
-              ...incompatible.flatMap((skill) => [
-                `  <skill>`,
-                `    <name>${skill.name}</name>`,
-                `    <platforms>${skill.platforms.join(",")}</platforms>`,
-                `  </skill>`,
-              ]),
-              "</incompatible_skills>",
-            ]
-          }),
-          "</available_skills>",
+          "Search output returns names, descriptions, stages, required tools, and locations only. Loading by name returns a `<skill_content name=\"...\">` block with the full SKILL.md body and sampled bundled files.",
+          incompatible.length > 0
+            ? `${incompatible.length} skill(s) are incompatible with the current platform and will not appear in search results.`
+            : "",
         ].join("\n")
 
-  const examples = compatible
-    .map((skill) => `'${skill.name}'`)
-    .slice(0, 3)
-    .join(", ")
-  const hint = examples.length > 0 ? ` (e.g., ${examples}, ...)` : ""
-
   const parameters = z.object({
-    name: z.string().describe(`The name of the skill from available_skills${hint}`),
+    query: z
+      .string()
+      .optional()
+      .describe("Search terms for skill name, description, stage, or required_tools. Omit to list compatible skills."),
+    name: z
+      .string()
+      .optional()
+      .describe("Exact skill name to load. Omit name to search/list skills instead of loading full instructions."),
   })
 
   return {
     description,
     parameters,
     async execute(params: z.infer<typeof parameters>, ctx) {
-      const skill = await Skill.get(params.name)
+      if (!params.name) {
+        const matches = searchSkills(compatible, params.query).slice(0, 20)
+        const query = params.query?.trim()
+        return {
+          title: query ? `Skill search: ${query}` : "Skill list",
+          output: renderSkillSearch(matches, compatible.length, query),
+          metadata: {
+            query: query ?? "",
+            count: matches.length,
+            total: compatible.length,
+            names: matches.map((skill) => skill.name),
+            name: "",
+            dir: "",
+          },
+        }
+      }
+
+      const skill = accessibleSkills.find((item) => item.name === params.name)
 
       if (!skill) {
-        const available = await Skill.all().then((x) => Object.keys(x).join(", "))
-        throw new Error(`Skill "${params.name}" not found. Available skills: ${available || "none"}`)
+        const available = compatible.map((x) => x.name).join(", ")
+        throw new Error(`Skill "${params.name}" not found or not allowed. Compatible skills: ${available || "none"}`)
       }
 
       if (skill.platforms.length > 0 && !skill.platforms.includes(platform as "win32" | "darwin" | "linux")) {
@@ -146,6 +137,10 @@ export const SkillTool = Tool.define("skill", async (ctx) => {
           "</skill_content>",
         ].join("\n"),
         metadata: {
+          query: "",
+          count: 1,
+          total: compatible.length,
+          names: [skill.name],
           name: skill.name,
           dir,
         },
@@ -153,3 +148,39 @@ export const SkillTool = Tool.define("skill", async (ctx) => {
     },
   }
 })
+
+function searchSkills(skills: Skill.Info[], query: string | undefined): Skill.Info[] {
+  const needle = query?.trim().toLocaleLowerCase()
+  if (!needle) return skills
+  return skills.filter((skill) => {
+    const haystack = [
+      skill.name,
+      skill.description,
+      skill.stage ?? "",
+      ...(skill.required_tools ?? []),
+    ].join("\n").toLocaleLowerCase()
+    return haystack.includes(needle)
+  })
+}
+
+function renderSkillSearch(skills: Skill.Info[], total: number, query: string | undefined): string {
+  const header = [
+    "<skill_search>",
+    query ? `<query>${query}</query>` : "<query></query>",
+    `<matched>${skills.length}</matched>`,
+    `<total_compatible>${total}</total_compatible>`,
+    "Use the exact <name> value with this tool to load full instructions.",
+    "<skills>",
+  ]
+  const rows = skills.flatMap((skill) => [
+    "  <skill>",
+    `    <name>${skill.name}</name>`,
+    `    <description>${skill.description}</description>`,
+    `    <stage>${skill.stage ?? "global"}</stage>`,
+    `    <required_tools>${(skill.required_tools ?? []).join(",") || "none"}</required_tools>`,
+    `    <platforms>${skill.platforms.length ? skill.platforms.join(",") : "all"}</platforms>`,
+    `    <location>${pathToFileURL(skill.location).href}</location>`,
+    "  </skill>",
+  ])
+  return [...header, ...rows, "</skills>", "</skill_search>"].join("\n")
+}

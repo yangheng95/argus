@@ -185,10 +185,11 @@ describe("core prompt hygiene", () => {
     const integrityFlat = integrity.replace(/\s+/g, " ")
 
     expect(integrity).toContain("MUST NOT include `corrections` or")
-    expect(integrity).toContain("If you need to emit any `corrections` or")
+    expect(integrityFlat).toContain("If you need to emit any `corrections`, `missing_goals`, or `graph_corrections`")
+    expect(integrityFlat).toContain("the dimension verdict is `needs_correction`, not `concerns`")
     expect(integrityFlat).toContain("unsupported REQ IDs")
     expect(integrityFlat).toContain("requirement_ids")
-    expect(integrity).toContain("does not apply graph mutations automatically")
+    expect(integrityFlat).toContain("does not apply graph mutations automatically")
     expect(orchestrator.replace(/\s+/g, " ")).toContain("Integrity is the workflow acceptance gate")
     expect(orchestrator).not.toContain("zero correction")
     expect(tools).not.toContain("integrityAttemptExecutionBlockReason")
@@ -473,10 +474,22 @@ describe("core prompt hygiene", () => {
 
   test("orchestrator prompt routes non-pass integrity fixes through explicit repair", async () => {
     const text = await readPrompt("orchestrator")
+    const source = await readSource("orchestrator/agent.ts")
     const normalized = text.replace(/\s+/g, " ")
+    const sourceNormalized = source.replace(/\s+/g, " ")
     expect(normalized).toContain("Integrity is the workflow acceptance gate")
     expect(normalized).toContain("The host no longer runs a host-owned final acceptance gate")
     expect(normalized).toContain("Non-pass `integrity` returns evidence for the next orchestrator decision")
+    expect(normalized).toContain("After post-build non-pass integrity, do not end the wake with plain text")
+    expect(normalized).toContain("do not passively report and leave the task active")
+    expect(normalized).not.toContain("or report the current result when no responsible repair exists inside this task")
+    expect(normalized).not.toContain("or reporting the current result")
+    expect(normalized).not.toContain("report the current result")
+    expect(normalized).not.toContain("report and wait")
+    expect(normalized).not.toContain("report blockers and wait")
+    expect(sourceNormalized).not.toContain("report the current result")
+    expect(normalized).toContain("When the evidence shows no responsible repair inside this task")
+    expect(normalized).toContain("the explicit action is `fail_task` with the evidence or `question`")
     expect(normalized).toContain("Valid next actions include task-level build")
     expect(normalized).toContain('Minor / localized integrity issues -> call `build({ request, directBuildIntent: "modify_files" })`')
     expect(normalized).toContain("Do not re-run requirements, architect, design_analysis, or the whole workflow for import typos")
@@ -487,6 +500,19 @@ describe("core prompt hygiene", () => {
     expect(normalized).toContain("If the same fidelity shortfall repeats after that build retry")
     expect(normalized).toContain("use `modify_goal` or `architect` when the current task needs a corrected/new goal")
     expect(normalized).toContain("Use `propose_task` only when the repeated fidelity gap has become a separate follow-up scope")
+  })
+
+  test("integrity aggregate docs do not describe the retired worst-of gate", async () => {
+    const integrityPrompt = await readPrompt("integrity")
+    const orchestratorTools = await readSource("orchestrator/tools.ts")
+    const engineModel = await readSource("engine/model.ts")
+    const text = [integrityPrompt, orchestratorTools, engineModel].join("\n").replace(/\s+/g, " ")
+
+    expect(text).not.toContain("worst-of")
+    expect(text).not.toContain("worst per-dimension")
+    expect(text).not.toContain("per-dimension worst")
+    expect(text).toContain("advisory-only concerns")
+    expect(text).toContain("repair-bearing concerns")
   })
 
   test("orchestrator prompt routes follow-up task creation through confirmed proposals", async () => {

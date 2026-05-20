@@ -2916,7 +2916,8 @@ export function createOrchestratorTools(input: {
         "hallucination (ungrounded REQs / specs / contracts), solution_quality " +
         "(granularity, acceptance-spec strength, ownership, ordering). Returns a " +
         "per-dimension verdict (pass / concerns / needs_correction) plus an aggregate " +
-        "(worst-of) AND the full per-dimension issue / correction / missing-goal text " +
+        "verdict from accepted final acceptance, advisory-only concerns, and any repair-bearing blockers, " +
+        "plus the full per-dimension issue / correction / missing-goal text " +
         "as a markdown block. A pass verdict completes the task. Non-pass findings " +
         "are persisted as evidence only: this review never rewrites requirements, " +
         "never upserts goals, and the host never auto-supersedes attempts or " +

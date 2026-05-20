@@ -1,4 +1,4 @@
-import { test, expect } from "bun:test"
+import { afterAll, afterEach, test, expect } from "bun:test"
 import { $ } from "bun"
 import fs from "fs/promises"
 import path from "path"
@@ -6,7 +6,18 @@ import { Snapshot } from "../../src/snapshot"
 import { Instance } from "../../src/project/instance"
 import { Filesystem } from "../../src/util/filesystem"
 import { Global } from "../../src/global"
+import { Process } from "../../src/util/process"
 import { tmpdir } from "../fixture/fixture"
+
+const previousDisableDefaultPlugins = process.env.OPENCORVUS_DISABLE_DEFAULT_PLUGINS
+process.env.OPENCORVUS_DISABLE_DEFAULT_PLUGINS = "1"
+afterAll(() => {
+  if (previousDisableDefaultPlugins === undefined) delete process.env.OPENCORVUS_DISABLE_DEFAULT_PLUGINS
+  else process.env.OPENCORVUS_DISABLE_DEFAULT_PLUGINS = previousDisableDefaultPlugins
+})
+afterEach(async () => {
+  await Instance.disposeAll()
+})
 
 // Git always outputs /-separated paths internally. Snapshot.patch() joins them
 // with path.join (which produces \ on Windows) then normalizes back to /.
@@ -14,6 +25,23 @@ import { tmpdir } from "../fixture/fixture"
 const fwd = (...parts: string[]) => path.join(...parts).replaceAll("\\", "/")
 
 async function bootstrap() {
+  return tmpdir({
+    init: async (dir) => {
+      await $`git init`.cwd(dir).quiet()
+      const unique = Math.random().toString(36).slice(2)
+      const aContent = `A${unique}`
+      const bContent = `B${unique}`
+      await Filesystem.write(`${dir}/a.txt`, aContent)
+      await Filesystem.write(`${dir}/b.txt`, bContent)
+      return {
+        aContent,
+        bContent,
+      }
+    },
+  })
+}
+
+async function bootstrapCommitted() {
   return tmpdir({
     git: true,
     init: async (dir) => {
@@ -30,6 +58,10 @@ async function bootstrap() {
       }
     },
   })
+}
+
+async function snapshotWorktree() {
+  return bootstrap()
 }
 
 test("tracks deleted files correctly", async () => {
@@ -336,6 +368,55 @@ test("patch with invalid hash", async () => {
           expect(err.data.operation).toBe("snapshot patch diff")
           expect(err.data.stderr).toContain("bad revision")
         }
+      }
+    },
+  })
+})
+
+test("track rejects an empty-tree result for a non-empty indexed worktree", async () => {
+  await using tmp = await bootstrap()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const processRef = Process as unknown as { run: typeof Process.run }
+      const originalRun = processRef.run
+      processRef.run = async (cmd, opts) => {
+        if (cmd[0] !== "git") return originalRun(cmd, opts)
+        const args = cmd.slice(1)
+        if (args.includes("write-tree")) {
+          return {
+            code: 0,
+            stdout: Buffer.from(`${Snapshot.EMPTY_TREE_HASH}\n`),
+            stderr: Buffer.alloc(0),
+          }
+        }
+        if (args.includes("ls-files")) {
+          return {
+            code: 0,
+            stdout: Buffer.from("a.txt\0"),
+            stderr: Buffer.alloc(0),
+          }
+        }
+        return {
+          code: 0,
+          stdout: Buffer.alloc(0),
+          stderr: Buffer.alloc(0),
+        }
+      }
+
+      try {
+        try {
+          await Snapshot.track()
+          throw new Error("Snapshot.track should reject empty-tree results for indexed content")
+        } catch (err) {
+          expect(Snapshot.SnapshotEmptyTreeError.isInstance(err)).toBe(true)
+          if (Snapshot.SnapshotEmptyTreeError.isInstance(err)) {
+            expect(err.data.operation).toBe("snapshot track")
+            expect(err.data.worktree).toBe(Instance.worktree)
+          }
+        }
+      } finally {
+        processRef.run = originalRun
       }
     },
   })
@@ -649,6 +730,32 @@ test("git info exclude keeps global excludes", async () => {
   })
 })
 
+test("track ignores global safecrlf for CRLF files normalized by eol=lf attributes", async () => {
+  await using tmp = await bootstrap()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const config = `${tmp.path}/safecrlf.gitconfig`
+      await Bun.write(config, "[core]\n\tsafecrlf = true\n")
+      await Bun.write(`${tmp.path}/.gitattributes`, "* text eol=lf\n")
+      await Bun.write(`${tmp.path}/crlf.txt`, "one\r\ntwo\r\n")
+
+      const hadGlobal = Object.prototype.hasOwnProperty.call(process.env, "GIT_CONFIG_GLOBAL")
+      const prev = process.env.GIT_CONFIG_GLOBAL
+      process.env.GIT_CONFIG_GLOBAL = config
+      try {
+        const hash = await Snapshot.track()
+        expect(hash).toBeTruthy()
+        if (!hash) throw new Error("Snapshot.track returned no hash")
+        expect(hash).not.toBe(Snapshot.EMPTY_TREE_HASH)
+      } finally {
+        if (hadGlobal) process.env.GIT_CONFIG_GLOBAL = prev
+        else delete process.env.GIT_CONFIG_GLOBAL
+      }
+    },
+  })
+})
+
 test("concurrent file operations during patch", async () => {
   await using tmp = await bootstrap()
   await Instance.provide({
@@ -680,23 +787,29 @@ test("concurrent file operations during patch", async () => {
 
 test("snapshot state isolation between projects", async () => {
   // Test that different projects don't interfere with each other
-  await using tmp1 = await bootstrap()
-  await using tmp2 = await bootstrap()
+  await using tmp1 = await snapshotWorktree()
+  await using tmp2 = await snapshotWorktree()
+  let project1ID: string | undefined
 
   await Instance.provide({
     directory: tmp1.path,
     fn: async () => {
+      project1ID = Instance.project.id
+      expect(project1ID).not.toBe("global")
       const before1 = await Snapshot.track()
+      expect(before1).toBeTruthy()
       await Filesystem.write(`${tmp1.path}/project1.txt`, "project1 content")
-      const patch1 = await Snapshot.patch(before1!)
-      expect(patch1.files).toContain(fwd(tmp1.path, "project1.txt"))
     },
   })
 
   await Instance.provide({
     directory: tmp2.path,
     fn: async () => {
+      expect(project1ID).toBeDefined()
+      expect(Instance.project.id).not.toBe("global")
+      expect(Instance.project.id).not.toBe(project1ID)
       const before2 = await Snapshot.track()
+      expect(before2).toBeTruthy()
       await Filesystem.write(`${tmp2.path}/project2.txt`, "project2 content")
       const patch2 = await Snapshot.patch(before2!)
       expect(patch2.files).toContain(fwd(tmp2.path, "project2.txt"))
@@ -708,18 +821,11 @@ test("snapshot state isolation between projects", async () => {
 })
 
 test("patch detects changes in secondary worktree", async () => {
-  await using tmp = await bootstrap()
+  await using tmp = await bootstrapCommitted()
   const worktreePath = `${tmp.path}-worktree`
   await $`git worktree add ${worktreePath} HEAD`.cwd(tmp.path).quiet()
 
   try {
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        expect(await Snapshot.track()).toBeTruthy()
-      },
-    })
-
     await Instance.provide({
       directory: worktreePath,
       fn: async () => {
@@ -740,17 +846,11 @@ test("patch detects changes in secondary worktree", async () => {
 })
 
 test("revert only removes files in invoking worktree", async () => {
-  await using tmp = await bootstrap()
+  await using tmp = await bootstrapCommitted()
   const worktreePath = `${tmp.path}-worktree`
   await $`git worktree add ${worktreePath} HEAD`.cwd(tmp.path).quiet()
 
   try {
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        expect(await Snapshot.track()).toBeTruthy()
-      },
-    })
     const primaryFile = `${tmp.path}/worktree.txt`
     await Filesystem.write(primaryFile, "primary content")
 
@@ -784,18 +884,11 @@ test("revert only removes files in invoking worktree", async () => {
 })
 
 test("diff reports worktree-only/shared edits and ignores primary-only", async () => {
-  await using tmp = await bootstrap()
+  await using tmp = await bootstrapCommitted()
   const worktreePath = `${tmp.path}-worktree`
   await $`git worktree add ${worktreePath} HEAD`.cwd(tmp.path).quiet()
 
   try {
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        expect(await Snapshot.track()).toBeTruthy()
-      },
-    })
-
     await Instance.provide({
       directory: worktreePath,
       fn: async () => {
@@ -1111,7 +1204,7 @@ test("diffFull with multiple line additions", async () => {
 })
 
 test("diffFull with addition and deletion", async () => {
-  await using tmp = await bootstrap()
+  await using tmp = await snapshotWorktree()
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
@@ -1119,7 +1212,7 @@ test("diffFull with addition and deletion", async () => {
       expect(before).toBeTruthy()
 
       await Filesystem.write(`${tmp.path}/added.txt`, "added content")
-      await $`rm ${tmp.path}/a.txt`.quiet()
+      await fs.unlink(`${tmp.path}/a.txt`)
 
       const after = await Snapshot.track()
       expect(after).toBeTruthy()

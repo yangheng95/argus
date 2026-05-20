@@ -110,8 +110,9 @@ export interface AgentToolKit<C> {
  * Agents not in this set (orchestrator, integrity, prosecutor) get no
  * automatic skill injection — they are special-cased by intent. Skill
  * injection is opt-in: pass `skillsStage` to enable it. The runner
- * appends matched skills to the SYSTEM prompt — auto-load semantics, never
- * stuffed into the user message.
+ * appends matched skill bodies to the SYSTEM prompt. The `skill` tool remains
+ * available for explicit search/loading, but prompt injection is the primary
+ * contract for auto-detected stage skills.
  */
 export type SkillStage =
   | "requirements"
@@ -290,7 +291,6 @@ const BUILD_SKILL_GATED_TOOLS = [
   "webfetch",
   "websearch",
   "external_code_search",
-  "skill",
   "memory",
   "planner",
   "goal_report",
@@ -1270,8 +1270,9 @@ export async function runAgentSessionWithRetry<C>(
 // Order:
 //   1. core prompt (from `prompt/core/<kind>-core.txt`)
 //   2. user-config append: `config.agent.<kind>.prompt_append`, when present
-//   3. skill injection: `loadStageSkills(EngineConfig.<stage>.skills, stage)`
-//      when `skillsStage` is set on the input.
+//   3. skill body injection: `loadStageSkills(EngineConfig.<stage>.skills, stage)`
+//      when `skillsStage` is set on the input. Matched auto-detected skill
+//      bodies are injected; stage labels only scope required_tools ownership.
 //
 // Per rule 22 / rule 25 this is the only path. Agents do not roll their
 // own composition.

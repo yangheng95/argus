@@ -57,6 +57,7 @@ afterAll(() => {
 test("hydration replay projects persisted executor output into the card tree", () => {
   resetWriter();
   setBoardStore("board", {
+    snapshotVersion: "board:hydrate",
     task: {
       id: "tsk_hydrate",
       status: "active",
@@ -116,6 +117,7 @@ test("hydrateTaskConversation waits for persisted event replay before returning 
           headers: {},
           body: {
             board: {
+              snapshotVersion: "board:replay",
               task: {
                 id: "tsk_replay",
                 status: "active",

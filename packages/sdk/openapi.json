@@ -3080,6 +3080,7 @@
                       "delivery",
                       "executor",
                       "build",
+                      "explore",
                       "evaluator",
                       "system"
                     ]
@@ -16031,6 +16032,10 @@
                         "lastSequence": {
                           "type": "number"
                         },
+                        "snapshotVersion": {
+                          "type": "string",
+                          "minLength": 1
+                        },
                         "task": {
                           "type": "object",
                           "properties": {
@@ -17761,6 +17766,7 @@
                         }
                       },
                       "required": [
+                        "snapshotVersion",
                         "task",
                         "interactions",
                         "channels",
@@ -18327,6 +18333,10 @@
                   "properties": {
                     "lastSequence": {
                       "type": "number"
+                    },
+                    "snapshotVersion": {
+                      "type": "string",
+                      "minLength": 1
                     },
                     "task": {
                       "type": "object",
@@ -20058,6 +20068,7 @@
                     }
                   },
                   "required": [
+                    "snapshotVersion",
                     "task",
                     "interactions",
                     "channels",
@@ -32030,6 +32041,7 @@
               "delivery",
               "executor",
               "build",
+              "explore",
               "evaluator",
               "system"
             ]
@@ -35246,6 +35258,7 @@
               "delivery",
               "executor",
               "build",
+              "explore",
               "evaluator",
               "system"
             ]

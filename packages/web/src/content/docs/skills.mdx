@@ -3,7 +3,7 @@ title: Skills
 description: SKILL.md-based extensions for OpenCorvus agents.
 ---
 
-A Skill is OpenCorvus's lightest extension unit: a Markdown file with YAML frontmatter that tells agents _when_ and _how_ to behave at a specific pipeline stage. No TypeScript, no compilation — drop a `SKILL.md` into a directory or pull one from a URL.
+A Skill is OpenCorvus's lightest extension unit: a Markdown file with YAML frontmatter that tells agents _when_ and _how_ to behave for recurring task shapes. No TypeScript, no compilation — drop a `SKILL.md` into a directory or pull one from a URL.
 
 Source: `packages/opencorvus/src/skill/skill.ts`, `packages/opencorvus/src/skill/manager.ts`
 
@@ -23,25 +23,38 @@ Frontmatter fields (`src/skill/skill.ts:26-45`):
 | `name` | string (required) | Global unique ID |
 | `description` | string (required) | One-line description used by the agent to decide when to activate |
 | `platforms` | `("win32"\|"darwin"\|"linux")[]` | Platform filter; empty = all |
-| `stage` | string | `spec`, `delivery`, … |
+| `stage` | string | Owning pipeline stage, for example `design_analyst` or `build` |
 | `auto_detect.files` | string[] | Load when these files exist |
 | `auto_detect.deps` | string[] | Load when `package.json` lists these deps |
+| `auto_detect.task_signals` | object | Load from task signals such as image attachment, non-Figma URL, Figma URL, package scripts, or request text |
 | `priority` | number | Sort order (higher first, default 0) |
+| `required_tools` | string[] | Tool calls the owning stage must complete before reporting success |
+
+## Skill ↔ agent relationship
+
+When `auto_detect` matches the project or task signals, the session prompt receives the matched `SKILL.md` instruction body. Matching skills are visible across stages, so relevant guidance is not lost because a stage label differs.
+
+`stage` means ownership for `required_tools`, not discovery visibility:
+
+- A `stage: "build"` skill can be injected into other stages as context, but build owns its `required_tools`.
+- A `stage: "design_analyst"` skill can be injected into build as context, but design-analysis owns mirror acquisition `required_tools`.
+- A skill without `stage` is global, and its `required_tools` apply through the active agent invocation. If no active stage is provided, only global skills contribute `required_tools`.
+
+Skills cannot directly call tools. They influence the agent through injected instructions plus stage-owned required-tool contracts.
 
 ## Built-in skills
 
-Shipped with the binary (`src/skill/skill.ts:74-81`):
+Shipped with the binary (`src/skill/skill.ts`), exactly three:
 
 | Name | Stage | Purpose |
 |---|---|---|
-| `spec-research` | spec | Web-search research for stack selection |
-| `prd-spec` | spec | Full PRD + SPEC authoring with ADR |
-| `delivery-verify-web` | delivery | Frontend acceptance (MIME, SPA, SSE) |
-| `delivery-verify-api` | delivery | Backend API acceptance |
-| `opencorvus-channel-config-wizard` | general | Unified setup wizard for 14 channels |
-| `opencorvus-<channel>-channel-config` | general | Per-channel guided setup |
+| `webpage-generate` | design_analyst | Produce a mirror-grounded PRD/SPEC for a live webpage reference |
+| `image-generate` | design_analyst | Produce a mirror-grounded PRD/SPEC from screenshot-only visual references |
+| `research-report` | build | Produce a sourced Markdown research report using `websearch` and targeted `webfetch` |
 
-Built-in skills get `allow` policy by default (`src/skill/manager.ts:493-495`).
+Other skills must be loaded through configured skill paths or URLs if you need them.
+
+Built-in skills get `allow` policy by default (`src/skill/manager.ts`).
 
 ## Adding a local skill
 
@@ -81,7 +94,7 @@ Clones into `~/.config/opencorvus/skills-market/<slug>/`, appends to `skills.pat
   "permission": {
     "skill": {
       "*": "ask",
-      "prd-spec": "allow",
+      "research-report": "allow",
       "local-note": "deny"
     }
   }

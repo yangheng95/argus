@@ -27,6 +27,19 @@ describe("deriveUrlSignals", () => {
     expect(out.request_contains_url).toBe(true)
   })
 
+  test("multiple figma URLs are all excluded from the generic URL signal", () => {
+    const out = deriveUrlSignals(
+      [
+        "Compare https://www.figma.com/design/abc/title?node-id=1-2",
+        "and https://figma.com/file/xyz/second?node-id=3-4",
+      ].join(" "),
+    )
+    expect(out).toEqual({
+      request_contains_url: false,
+      request_contains_figma_url: true,
+    })
+  })
+
   test("recognises figma proto / board / design / file paths", () => {
     for (const path of ["file", "design", "proto", "board"]) {
       expect(
@@ -84,7 +97,7 @@ describe("resolveStageSkills", () => {
     })
   })
 
-  test("webpage reference skill belongs to design_analyst, not build", async () => {
+  test("webpage reference skill is visible to build but design_analyst owns mirror required tools", async () => {
     await using tmp = await tmpdir()
     await Instance.provide({
       directory: tmp.path,
@@ -93,7 +106,11 @@ describe("resolveStageSkills", () => {
           request_contains_url: true,
           request_text: "复刻 https://www.baidu.com/",
         })
-        expect(build.skills.map((s) => s.name)).not.toContain("webpage-generate")
+        expect(build.skills.map((s) => s.name)).toContain("webpage-generate")
+        expect(build.prompt).toContain("# Injected Skills")
+        expect(build.prompt).toContain("## Skill: webpage-generate")
+        expect(build.prompt).toContain("Context-only in build")
+        expect(build.prompt).toContain("# Webpage Reference SPEC Skill")
         expect(build.requiredTools).toEqual([])
 
         const design = await resolveStageSkills([], "design_analyst", {
@@ -105,7 +122,8 @@ describe("resolveStageSkills", () => {
         expect(design.requiredTools).toContain("webpage_analyze")
         expect(design.requiredTools).not.toContain("webpage_render")
         expect(design.prompt).toContain("Design-analysis is the only stage")
-        expect(design.prompt).toContain("Skill: webpage-generate")
+        expect(design.prompt).toContain("## Skill: webpage-generate")
+        expect(design.prompt).toContain("# Webpage Reference SPEC Skill")
       },
     })
   })
@@ -128,7 +146,7 @@ describe("resolveStageSkills", () => {
     })
   })
 
-  test("image-only request fires image-generate in design_analyst only", async () => {
+  test("image-only request exposes image-generate across stages but only design_analyst enforces it", async () => {
     await using tmp = await tmpdir()
     await Instance.provide({
       directory: tmp.path,
@@ -138,7 +156,12 @@ describe("resolveStageSkills", () => {
           request_contains_url: false,
           request_text: "复刻附图所示页面（无 URL，仅截图）",
         })
-        expect(build.skills.map((s) => s.name)).not.toContain("image-generate")
+        expect(build.skills.map((s) => s.name)).toContain("image-generate")
+        expect(build.prompt).toContain("# Injected Skills")
+        expect(build.prompt).toContain("## Skill: image-generate")
+        expect(build.prompt).toContain("Context-only in build")
+        expect(build.prompt).toContain("# Image Reference SPEC Skill")
+        expect(build.requiredTools).toEqual([])
 
         const result = await resolveStageSkills([], "design_analyst", {
           has_attachment_image: true,
@@ -189,6 +212,26 @@ describe("resolveStageSkills", () => {
     })
   })
 
+  test("no-stage resolution injects matched staged bodies without enforcing staged required tools", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const result = await resolveStageSkills([], undefined, {
+          request_contains_url: true,
+          request_text: "Write a research report using https://example.com/ as one input",
+        })
+        const skillNames = result.skills.map((s) => s.name)
+        expect(skillNames).toContain("webpage-generate")
+        expect(skillNames).toContain("research-report")
+        expect(result.prompt).toContain("# Webpage Reference SPEC Skill")
+        expect(result.prompt).toContain("# Research Report Skill")
+        expect(result.prompt).toContain("Context-only without an active stage")
+        expect(result.requiredTools).toEqual([])
+      },
+    })
+  })
+
   test("figma URL does not route to mirror generation skills", async () => {
     await using tmp = await tmpdir()
     await Instance.provide({
@@ -204,6 +247,8 @@ describe("resolveStageSkills", () => {
           request_text: "复刻 https://www.figma.com/design/abc/title",
         })
         expect(build.skills.map((s) => s.name)).not.toContain("figma-generate")
+        expect(build.skills.map((s) => s.name)).not.toContain("webpage-generate")
+        expect(build.skills.map((s) => s.name)).not.toContain("image-generate")
 
         const result = await resolveStageSkills([], "design_analyst", {
           has_attachment_image: true,

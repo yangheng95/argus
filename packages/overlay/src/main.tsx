@@ -127,7 +127,9 @@ const [workspaceOpen, setWorkspaceOpen] = createSignal(false)
 const [workspaceTarget, setWorkspaceTarget] = createSignal<DiffTarget>({ filePath: "" })
 
 function currentPreviewKey(): string {
-  return previewRequestKey(boardStore.selectedTaskID || boardStore.board?.task?.id, boardStore.snapshotVersion)
+  const taskID = boardStore.selectedTaskID || boardStore.board?.task?.id
+  if (!taskID || !boardStore.snapshotVersion) return previewRequestKey(undefined, undefined)
+  return previewRequestKey(taskID, boardStore.snapshotVersion)
 }
 
 function selectRightPanelTab(tab: RightPanelTab): void {
@@ -963,14 +965,21 @@ disposers.push(
     createEffect(() => {
       const taskID = boardStore.selectedTaskID || boardStore.board?.task?.id || ""
       const snapshot = boardStore.snapshotVersion || ""
-      const key = previewRequestKey(taskID, snapshot)
       if (!taskID) {
-        lastFrontendPreviewKey = key
+        lastFrontendPreviewKey = previewRequestKey(undefined, undefined)
         setFrontendPreviewResolution(null)
         setFrontendPreviewError("")
         setFrontendPreviewLoading(false)
         return
       }
+      if (!snapshot) {
+        lastFrontendPreviewKey = previewRequestKey(undefined, undefined)
+        setFrontendPreviewResolution(null)
+        setFrontendPreviewError("")
+        setFrontendPreviewLoading(false)
+        return
+      }
+      const key = previewRequestKey(taskID, snapshot)
       if (key === lastFrontendPreviewKey) return
       lastFrontendPreviewKey = key
       refreshFrontendPreview()

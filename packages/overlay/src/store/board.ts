@@ -138,8 +138,15 @@ function selectionIsOrphaned(tasks: any[], pending: any[]): boolean {
   return !inPending;
 }
 
-function boardSnapshot(board: any): string {
-  return typeof board?.snapshotVersion === "string" ? board.snapshotVersion : "";
+function requireBoardSnapshotVersion(board: any): string {
+  if (board == null || typeof board !== "object") {
+    throw new Error("board payload must include snapshotVersion");
+  }
+  const version = board?.snapshotVersion;
+  if (typeof version !== "string" || version.length === 0) {
+    throw new Error("board.snapshotVersion must be a non-empty string");
+  }
+  return version;
 }
 
 // ── Fine-grained board update ──
@@ -174,10 +181,10 @@ function fieldChanged(a: unknown, b: unknown): boolean {
 // papered over here. We throw — `loadBoard`'s catch will retry with backoff
 // and console.error makes the corruption visible.
 function assertBoardInvariants(data: any): void {
-  if (data == null) return;
-  if (typeof data !== "object") {
-    throw new Error(`board payload must be object, got ${typeof data}`);
+  if (data == null || typeof data !== "object") {
+    throw new Error(`board payload must be object, got ${data === null ? "null" : typeof data}`);
   }
+  requireBoardSnapshotVersion(data);
   const task = (data as any).task;
   if (task) {
     const created = task?.time?.created;
@@ -208,19 +215,18 @@ function assertBoardInvariants(data: any): void {
   }
 }
 
-function applyBoardDelta(data: any): void {
+function applyBoardDelta(data: any): boolean {
   if (data == null || typeof data !== "object") {
     if (boardStore.board !== null) {
       setBoardStore("board", null);
-      notifyBoardProjection();
+      return true;
     }
-    return;
+    return false;
   }
   const old = boardStore.board;
   if (!old || typeof old !== "object") {
     setBoardStore("board", data);
-    notifyBoardProjection();
-    return;
+    return true;
   }
   // Update keys present in the new payload, only when their content changed.
   const seenKeys = new Set<string>();
@@ -239,7 +245,7 @@ function applyBoardDelta(data: any): void {
     setBoardStore("board", key as any, undefined);
     changed = true;
   }
-  if (changed) notifyBoardProjection();
+  return changed;
 }
 
 function clearBoardRetry(): void {
@@ -312,8 +318,13 @@ export async function loadBoard(options: LoadBoardOptions = {}): Promise<void> {
         return;
       }
       assertBoardInvariants(data);
-      applyBoardDelta(data);
-      setSnapshotVersion(boardSnapshot(data));
+      const snapshotVersion = requireBoardSnapshotVersion(data);
+      let boardChanged = false;
+      batch(() => {
+        boardChanged = applyBoardDelta(data);
+        setSnapshotVersion(snapshotVersion);
+      });
+      if (boardChanged) notifyBoardProjection();
       if (Number.isFinite(lastSequence) && lastSequence > 0) {
         setTaskSequence(lastSequence);
       }
@@ -495,7 +506,13 @@ export function clearBoard(): void {
 
 export function setBoardData(data: any): void {
   assertBoardInvariants(data);
-  applyBoardDelta(data);
+  const snapshotVersion = requireBoardSnapshotVersion(data);
+  let boardChanged = false;
+  batch(() => {
+    boardChanged = applyBoardDelta(data);
+    setSnapshotVersion(snapshotVersion);
+  });
+  if (boardChanged) notifyBoardProjection();
 }
 
 export function setTasksData(tasks: any[]): void {
@@ -628,7 +645,18 @@ export function setBoardUpdatedAt(ms: number): void {
 }
 
 export function setSnapshotVersion(version: string): void {
-  setBoardStore("snapshotVersion", typeof version === "string" ? version : "");
+  const next = typeof version === "string" ? version : "";
+  const board = boardStore.board;
+  if (board && typeof board === "object") {
+    const boardVersion = (board as any).snapshotVersion;
+    if (typeof boardVersion !== "string" || boardVersion.length === 0) {
+      throw new Error("loaded board must include snapshotVersion");
+    }
+    if (next !== boardVersion) {
+      throw new Error("boardStore.snapshotVersion must match board.snapshotVersion");
+    }
+  }
+  setBoardStore("snapshotVersion", next);
 }
 
 export function setTaskSequence(sequence: number): void {

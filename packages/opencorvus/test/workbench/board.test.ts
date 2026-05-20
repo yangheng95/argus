@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test"
-import { currentGoalRunFromRows, compileBoard } from "../../src/workbench/board"
+import { boardTag, currentGoalRunFromRows, compileBoard } from "../../src/workbench/board"
 import { latestDeliveredGoalRunFromRows } from "../../src/engine/store"
 import { Database } from "../../src/storage/db"
 import { ProjectTable } from "../../src/project/project.sql"
@@ -102,7 +102,9 @@ test("compileBoard cache and task-scope status include workflow step protocol ev
     directory: tmp.path,
     fn: async () => {
       const before = compileBoard({ taskID })
+      const beforeTag = boardTag({ taskID })
       expect(before.lastSequence).toBe(0)
+      expect(before.snapshotVersion).toBe(beforeTag)
       expect(before.workflow?.steps.find((step) => step.id === "architect")?.status).toBe("pending")
 
       await EngineProtocol.emit(Event.WorkflowStepUpdated, {
@@ -113,7 +115,10 @@ test("compileBoard cache and task-scope status include workflow step protocol ev
       }, { source: "test.board" })
 
       const after = compileBoard({ taskID })
+      const afterTag = boardTag({ taskID })
       expect(after.lastSequence).toBe(1)
+      expect(after.snapshotVersion).toBe(afterTag)
+      expect(after.snapshotVersion).not.toBe(before.snapshotVersion)
       expect(after.workflow?.steps.find((step) => step.id === "architect")?.status).toBe("running")
     },
   })

@@ -30,9 +30,10 @@
  *     enforcement).
  *   • The LLM closes with `submit_integrity_review({ final: true })`. The runtime accepts
  *     the run only when every dimension has been submitted and the terminal
- *     review tool has validated the collector. Aggregate
- *     verdict is the worst per-dimension verdict (computed here, not by the
- *     LLM).
+ *     review tool has validated the collector. Aggregate verdict is computed
+ *     here: rejected acceptance, any `needs_correction` dimension, or any
+ *     repair-bearing dimension blocks; advisory-only `concerns` remain
+ *     visible evidence on the dimension while the aggregate can still pass.
  */
 import { tool } from "ai"
 import z from "zod"
@@ -168,7 +169,7 @@ export interface IntegrityDimensionResult {
 }
 
 export interface IntegrityResult {
-  /** Aggregate verdict: worst per-dimension verdict. Derived, not LLM-supplied. */
+  /** Aggregate gate verdict. Derived, not LLM-supplied. */
   verdict: IntegrityVerdict
   /** One-sentence operator-readable headline supplied by the LLM. */
   summary: string
@@ -341,21 +342,21 @@ function buildDimensionInput(d: IntegrityDimension) {
 }
 
 // ---------------------------------------------------------------------------
-// Verdict aggregation — pure function, single source for "what beats what"
+// Verdict aggregation — pure function, single source for gate semantics.
 // ---------------------------------------------------------------------------
 
-const VERDICT_SEVERITY: Record<IntegrityVerdict, number> = {
-  pass: 0,
-  concerns: 1,
-  needs_correction: 2,
+function dimensionHasRepairPayload(dimension: IntegrityDimensionResult): boolean {
+  return (
+    dimension.corrections.length > 0 ||
+    dimension.graphCorrections.length > 0 ||
+    dimension.missingGoals.length > 0
+  )
 }
 
 function aggregateVerdict(dimensions: readonly IntegrityDimensionResult[]): IntegrityVerdict {
-  let worst: IntegrityVerdict = "pass"
-  for (const d of dimensions) {
-    if (VERDICT_SEVERITY[d.verdict] > VERDICT_SEVERITY[worst]) worst = d.verdict
-  }
-  return worst
+  return dimensions.some((d) => d.verdict === "needs_correction" || dimensionHasRepairPayload(d))
+    ? "needs_correction"
+    : "pass"
 }
 
 // ---------------------------------------------------------------------------
@@ -556,14 +557,10 @@ export async function reviewIntegrity(input: {
           }))
         }
 
-        // No verdict reconciliation. The integrity LLM's submitted verdict
-        // is taken at face value. Any auto-rewriting of the verdict
-        // (e.g. "promote pass-with-issues to concerns" or "demote
-        // needs_correction-without-corrections to concerns") is a
-        // state-machine layer that the orchestrator LLM doesn't need —
-        // it sees the full per-dimension breakdown including issues,
-        // corrections, and missing_goals via the rendered markdown and
-        // decides next steps itself. CLAUDE.md rule 13.
+        // Preserve the submitted per-dimension verdict. The public aggregate
+        // gate is derived separately from verdicts plus concrete repair
+        // payloads, so a repair proposal cannot disappear behind advisory
+        // wording while the original dimension evidence stays intact.
         const verdict = sub.verdict as IntegrityVerdict
 
         collector.dimensions.set(d.id, { id: d.id, verdict, issues, corrections, graphCorrections, missingGoals })

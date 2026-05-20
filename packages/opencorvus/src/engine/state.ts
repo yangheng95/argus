@@ -254,6 +254,7 @@ export async function updateRun(
   const nextStarted = values.time_started === undefined ? row.time_started : values.time_started
   const nextCompleted = values.time_completed === undefined ? row.time_completed : values.time_completed
   const nextRef = values.executor_ref === undefined ? row.executor_ref : values.executor_ref
+  const nextMetadata = values.metadata === undefined ? row.metadata : values.metadata
   const nextPhase = values.phase ?? row.phase
   if (
     nextStatus === row.status &&
@@ -262,7 +263,8 @@ export async function updateRun(
     nextStarted === row.time_started &&
     nextCompleted === row.time_completed &&
     nextPhase === row.phase &&
-    JSON.stringify(nextRef ?? {}) === JSON.stringify(row.executor_ref ?? {})
+    JSON.stringify(nextRef ?? {}) === JSON.stringify(row.executor_ref ?? {}) &&
+    JSON.stringify(nextMetadata ?? {}) === JSON.stringify(row.metadata ?? {})
   ) {
     return row
   }
@@ -282,7 +284,7 @@ export async function updateRun(
     error: nextError,
     retry_count: values.retry_count ?? row.retry_count,
     executor_ref: nextRef,
-    metadata: values.metadata === undefined ? row.metadata : values.metadata,
+    metadata: nextMetadata,
     time_started:
       !row.time_started && ["accepted", "running", "blocked", "completed"].includes(nextStatus) && values.time_started === undefined
         ? now

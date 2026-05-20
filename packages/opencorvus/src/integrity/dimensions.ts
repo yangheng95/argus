@@ -237,9 +237,11 @@ export function renderDimensionCatalogue(): string {
   sections.push("")
   sections.push(
     "Every check below produces a per-dimension verdict (`pass` / `concerns` / " +
-      "`needs_correction`). The aggregate verdict is the worst per-dimension verdict; " +
-      "the orchestrator routes recovery based on which dimensions failed and which " +
-      "executable corrections were proposed.",
+      "`needs_correction`). The aggregate gate passes only when final acceptance is " +
+      "accepted and every non-pass signal is advisory-only: no dimension is " +
+      "`needs_correction`, and no dimension carries `corrections`, " +
+      "`graph_corrections`, or `missing_goals`. Advisory `concerns` remain visible " +
+      "evidence without blocking completion.",
   )
   for (const d of INTEGRITY_DIMENSIONS) {
     const correctionsNote = d.canProposeCorrections

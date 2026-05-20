@@ -20,7 +20,11 @@ export type PreviewAutoActivationInput = {
 }
 
 export function previewRequestKey(taskID: string | undefined, snapshotVersion: string | undefined): string {
-  return `${taskID || "no-task"}:${snapshotVersion || "no-snapshot"}`
+  if (!taskID) return "no-task"
+  if (typeof snapshotVersion !== "string" || snapshotVersion.length === 0) {
+    throw new Error("task-scoped preview requires board.snapshotVersion")
+  }
+  return `${taskID}:${snapshotVersion}`
 }
 
 export function nextTabForPreviewResolution(input: PreviewAutoActivationInput): RightPanelTab {
