@@ -6,7 +6,6 @@ import {
   collectTodoSummary,
   type CardNode,
 } from "../utils/card-tree";
-import { statusBadge } from "../utils/status-badge";
 import { t } from "../utils/i18n";
 import { formatDuration } from "../utils/time";
 import { useNowTick } from "../services/clock";
@@ -77,7 +76,6 @@ export function CardHeader(props: {
   onAgentCancel?: (sessionID: string) => Promise<void>;
   onAgentModelSettings?: (sessionID: string) => void;
 }) {
-  const badge = () => statusBadge(props.node);
   const glyph = () => leadingGlyph(props.node);
   const [reasonCopied, setReasonCopied] = createSignal(false);
   const headActions = useCardHeadActions({
@@ -154,18 +152,6 @@ export function CardHeader(props: {
         }
       }}
     >
-      <Show
-        when={props.node.status !== "running"}
-        fallback={
-          <span class="card__badge card__badge--running" title="running">
-            <span class="card__spinner" />
-          </span>
-        }
-      >
-        <span class={`card__badge card__badge--${badge().tone}`} title={props.node.status || ""}>
-          {badge().glyph}
-        </span>
-      </Show>
       <Show when={glyph()}>
         <span class="card__icon">{glyph()}</span>
       </Show>
@@ -303,26 +289,6 @@ export function CardHeader(props: {
               </span>
             );
           }}
-        </Show>
-        <Show when={headActions.caps.canCopy()}>
-          <button
-            type="button"
-            class="card__copy"
-            classList={{ "card__copy--done": headActions.state.copied() }}
-            title={headActions.state.copied() ? headActions.labels.copied() : headActions.labels.copy()}
-            aria-label={headActions.state.copied() ? headActions.labels.copied() : headActions.labels.copy()}
-            onClick={headActions.onCopy}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                headActions.onCopy(e);
-              }
-            }}
-          >
-            <Show when={headActions.state.copied()} fallback={<Icon name="copy" size={13} />}>
-              <Icon name="check" size={13} />
-            </Show>
-          </button>
         </Show>
         <Show when={!!props.traceSessionID && !!props.onTrace}>
           <button

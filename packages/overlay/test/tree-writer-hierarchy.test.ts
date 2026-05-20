@@ -609,6 +609,7 @@ test("integrity completed event materializes an integrity session card with stru
       issues: [{ type: "uncovered", description: "missing goal X" }],
       corrections: [],
       missingGoals: [{ title: "Add X", objective: "support X" }],
+      acceptance: { verdict: "rejected", summary: "missing goal X" },
       attempts: 1,
     },
   });
@@ -653,6 +654,7 @@ test("integrity completed event can materialize before any message stream arrive
       issues: [],
       corrections: [],
       missingGoals: [],
+      acceptance: { verdict: "accepted", summary: "all clean" },
       attempts: 1,
     },
   });
@@ -857,6 +859,7 @@ test("resetWriter clears integrity session cards materialized from protocol even
       issues: [],
       corrections: [],
       missingGoals: [],
+      acceptance: { verdict: "accepted", summary: "" },
       attempts: 1,
     },
   });
@@ -1035,6 +1038,39 @@ test("orchestrator turns interleave with child agent cards by message time", () 
   expect(cardTreeStore.cards[o2]?.status).toBe("running");
   expect(cardTreeStore.cards[o2]?.sessionID).toBe(ROOT_SID);
   expect(cardTreeStore.cards[o2]?.messageID).toBe("msg_o2");
+});
+
+test("late child agent event splits an already-arrived orchestrator resume turn by message time", () => {
+  seedTurnBoard("out-of-order interleave turns");
+
+  const o1 = `assistant:session:${ROOT_SID}:message:msg_late_o1`;
+  const childCard = "architect:session:ses_late_child:message:msg_late_child";
+  const o2 = `assistant:session:${ROOT_SID}:message:msg_late_o2`;
+
+  applyEvent({ type: "message.updated", properties: { taskID: TASK_ID, info: stampedInfo("assistant", {
+    id: "msg_late_o1", sessionID: ROOT_SID, role: "assistant", resolvedRole: "assistant", agent: "assistant",
+    time: { created: 1_776_000_000_100 } }) } });
+  applyEvent({ type: "message.part.updated", properties: { taskID: TASK_ID, part: stampedPart("assistant", {
+    id: "prt_late_o1", messageID: "msg_late_o1", sessionID: ROOT_SID, type: "text", text: "turn one before late child" }) } });
+
+  // The orchestrator resume event can reach the overlay before the child
+  // agent's ephemeral message event even though the child belongs between
+  // O1/O2 in the persisted message timeline.
+  applyEvent({ type: "message.updated", properties: { taskID: TASK_ID, info: stampedInfo("assistant", {
+    id: "msg_late_o2", sessionID: ROOT_SID, role: "assistant", resolvedRole: "assistant", agent: "assistant",
+    time: { created: 1_776_000_000_300 } }) } });
+  applyEvent({ type: "message.part.updated", properties: { taskID: TASK_ID, part: stampedPart("assistant", {
+    id: "prt_late_o2", messageID: "msg_late_o2", sessionID: ROOT_SID, type: "text", text: "turn two after late child" }) } });
+
+  applyEvent({ type: "message.updated", properties: { taskID: TASK_ID, info: stampedInfo("architect", {
+    id: "msg_late_child", sessionID: "ses_late_child", role: "assistant", resolvedRole: "architect", agent: "architect",
+    parentSessionID: ROOT_SID, time: { created: 1_776_000_000_200 } }) } });
+
+  const ordered = cardTreeStore.order.filter((id) => id === o1 || id === childCard || id === o2);
+  expect(ordered).toEqual([o1, childCard, o2]);
+  expect(cardTreeStore.cards[o2]).toBeDefined();
+  expect((cardTreeStore.cards[o1]?.parts || []).map((p: any) => p.text)).not.toContain("turn two after late child");
+  expect((cardTreeStore.cards[o2]?.parts || []).map((p: any) => p.text)).toContain("turn two after late child");
 });
 
 test("consecutive messages from the same agent stay in one card", () => {

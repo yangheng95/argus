@@ -500,34 +500,6 @@ body {
   color: color-mix(in srgb, var(--text) 90%, transparent);
 }
 
-.card__copy {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: calc(22px * var(--ui-scale, 1));
-  height: calc(22px * var(--ui-scale, 1));
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-  border-radius: var(--oc-radius-soft);
-  opacity: var(--ui-opacity-disabled);
-  transition: opacity var(--ui-duration-base) var(--ui-timing-standard), color var(--ui-duration-base) var(--ui-timing-standard), background-color var(--ui-duration-base) var(--ui-timing-standard);
-}
-.card__head:hover .card__copy,
-.card__copy:focus-visible {
-  opacity: var(--ui-opacity-full);
-}
-.card__copy:hover {
-  color: var(--text-strong);
-  background: var(--surface-hover);
-}
-.card__copy--done {
-  color: var(--good);
-  opacity: var(--ui-opacity-full);
-}
 .card__rewind {
   flex: none;
   display: inline-flex;
