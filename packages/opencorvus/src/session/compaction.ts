@@ -21,6 +21,8 @@ import { InstructionPrompt } from "./instruction"
 import { TaskPlan } from "@/memory/task-plan"
 import { Scratchpad } from "@/memory/scratchpad"
 import { Snapshot } from "@/snapshot"
+import { Database, and, desc, eq, sql } from "@/storage/db"
+import { EngineArtifactTable } from "@/engine/engine.sql"
 import type { ModelMessage } from "ai"
 
 export namespace SessionCompaction {
@@ -158,6 +160,34 @@ export namespace SessionCompaction {
     }
   }
 
+  function activeBuildContractsForSession(sessionID: string): CompactionHandoff.Info["activeBuildContracts"] {
+    const rows = Database.use((db) =>
+      db
+        .select()
+        .from(EngineArtifactTable)
+        .where(and(
+          eq(EngineArtifactTable.kind, "build_session_contract"),
+          sql`json_extract(${EngineArtifactTable.payload}, '$.session_id') = ${sessionID}`,
+        ))
+        .orderBy(desc(EngineArtifactTable.time_created), desc(EngineArtifactTable.id))
+        .limit(8)
+        .all(),
+    )
+    return rows.map((row) => {
+      const payload = row.payload as Record<string, any>
+      return {
+        sessionID: String(payload.session_id ?? sessionID),
+        goalID: String(payload.goal_id),
+        goalRunID: String(payload.goal_run_id),
+        artifactID: row.id,
+        sourceArtifactIDs: Array.isArray(payload.source_artifact_ids)
+          ? payload.source_artifact_ids.filter((item: unknown): item is string => typeof item === "string" && item.length > 0)
+          : [],
+        digest: String(payload.digest),
+      }
+    })
+  }
+
   async function runtimeContext(input: {
     sessionID: string
     userMessage: Message.User
@@ -168,6 +198,7 @@ export namespace SessionCompaction {
     const taskPlan = TaskPlan.toMarkdown(input.sessionID)
     const scratchpad = Scratchpad.get(input.sessionID)
     const patches = patchEvidence(input.selectedHead)
+    const activeBuildContracts = activeBuildContractsForSession(input.sessionID)
     const text = [
       "<handoff-runtime-state>",
       "Authoritative instruction files. Do not copy their full contents into the handoff; list these paths in durableInstructionSources.",
@@ -175,6 +206,9 @@ export namespace SessionCompaction {
       "",
       "Source user message contract:",
       JSON.stringify(sourceUserMessage(input.userMessage), null, 2),
+      "",
+      "Active build-session contracts for this session. Copy these exact ids into activeBuildContracts; they are the durable source for build retry context after compaction:",
+      JSON.stringify(activeBuildContracts, null, 2),
       input.focus ? ["", "Manual compaction focus:", input.focus].join("\n") : "",
       taskPlan ? ["", "Current task plan:", taskPlan].join("\n") : "",
       scratchpad.trim()

@@ -46,22 +46,28 @@ describe("mcp.serve", () => {
   })
 
   test("exposes the executor MCP toolset", async () => {
-    expect(MCPServe.executorToolNames().sort()).toEqual(["memory", "task_report"].sort())
+    expect(MCPServe.executorToolNames().sort()).toEqual(["skill", "memory", "task_report"].sort())
   })
 
   test("exports Claude-compatible object input schemas", async () => {
-    const defs = await MCPServe.toolDefinitions("executor", { includeProxied: false })
-    for (const def of defs) {
-      expect(def.inputSchema.type).toBe("object")
-      expect(def.inputSchema.anyOf).toBeUndefined()
-      expect(def.inputSchema.oneOf).toBeUndefined()
-      expect(def.inputSchema.allOf).toBeUndefined()
-    }
-    const memory = defs.find((item) => item.name === "memory")
-    expect(memory?.inputSchema.required).toEqual(["action"])
-    expect(memory?.inputSchema.properties?.action).toEqual({
-      type: "string",
-      enum: ["search", "get", "write", "list", "delete"],
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const defs = await MCPServe.toolDefinitions("executor", { includeProxied: false })
+        for (const def of defs) {
+          expect(def.inputSchema.type).toBe("object")
+          expect(def.inputSchema.anyOf).toBeUndefined()
+          expect(def.inputSchema.oneOf).toBeUndefined()
+          expect(def.inputSchema.allOf).toBeUndefined()
+        }
+        const memory = defs.find((item) => item.name === "memory")
+        expect(memory?.inputSchema.required).toEqual(["action"])
+        expect(memory?.inputSchema.properties?.action).toEqual({
+          type: "string",
+          enum: ["search", "get", "write", "list", "delete"],
+        })
+      },
     })
   })
 
@@ -69,6 +75,7 @@ describe("mcp.serve", () => {
     expect(MCPServe.codingExecutorToolName("memory")).toBe("mcp__opencorvus__memory")
     expect(MCPServe.normalizeCodingExecutorToolName("mcp__opencorvus__task_report")).toBe("task_report")
     const prompt = MCPServe.codingExecutorPromptSection()
+    expect(prompt).toContain("skill => mcp__opencorvus__skill")
     expect(prompt).toContain("memory => mcp__opencorvus__memory")
     expect(prompt).toContain("task_report => mcp__opencorvus__task_report")
     expect(prompt).not.toContain("webpage_extract =>")

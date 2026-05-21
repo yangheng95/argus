@@ -351,6 +351,12 @@ describe("core prompt hygiene", () => {
     expect(build).toContain("unverified Unix-only helpers")
     expect(build).toContain("Commit your work to the worktree branch when you changed project files")
     expect(build).toContain("first `git add -A`, then `git commit -m")
+    expect(build).toContain("## Implementation-bound source fidelity")
+    expect(build).toContain("If the request is a port, migration, rewrite, clone, parity restoration, or")
+    expect(build).toContain("component translation, investigation of the named source surface")
+    expect(build).toContain("context-menu/right-click")
+    expect(build).toContain("does not mean sampling one file and guessing the rest")
+    expect(build).toContain("Do not invent")
   })
 
   test("build prompt requires explicit browser dev scripts for delivery preview", async () => {
@@ -605,7 +611,7 @@ describe("core prompt hygiene", () => {
     expect(normalized).not.toContain("UI replication from visual reference` in `Kind: workflow` → `analyze_intent`")
     expect(normalized).not.toContain("verification` goals are integration checks; they stay pending until **deliver**")
     expect(normalized).toContain("Dispatch them with `build({ goalID })` like every other goal")
-    expect(normalized).toContain("every verification/integration goal is terminal before `integrity`")
+    expect(normalized).toContain("every verification/integration goal still needed for evidence is terminal before `integrity`")
   })
 
   test("integrity prompt audits original request mining, not only generated REQ rows", async () => {

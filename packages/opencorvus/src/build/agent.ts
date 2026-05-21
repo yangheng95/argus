@@ -50,7 +50,12 @@ import {
   type CodingProvider,
   type CodingProviderOptions,
 } from "@/executor/contract"
-import { extractExecutorSessionRef, persistExecutorSessionRef } from "@/executor/session-ref"
+import {
+  extractExecutorSessionRef,
+  persistExecutorSessionRef,
+  readExecutorSessionRef,
+  resolveNativeResumeRef,
+} from "@/executor/session-ref"
 import { Identifier } from "@/id/id"
 import { Message } from "@/session/message"
 import { MCPServe } from "@/mcp/serve"
@@ -185,18 +190,20 @@ export namespace BuildAgent {
      *  the orchestrator's own child session so overlay nesting stays
      *  intuitive. Optional: when absent the build session is top-level. */
     parentSessionID?: string
+    /** Existing build session to continue for retry attempts. When set,
+     *  BuildAgent appends the new user message to this session and replaces
+     *  its runtime contract instead of creating a new build session. */
+    existingSessionID?: string
     /** Explicit model override (provider / model). Skips `resolveAgentModel`. */
     model?: { providerID: string; modelID: string }
     signal?: AbortSignal
-    /** Fires as soon as the child build session exists, before model work starts.
-     *  Orchestrator uses this to bind the already-open goal_run attempt to the
-     *  real build session while the build is still in flight. */
-    onSessionCreated?: (sessionID: string) => void | Promise<void>
-    /** Fires after this invocation has acquired the per-task build semaphore,
-     *  before worktree setup and before the child build session exists.
-     *  Orchestrator creates the live goal_run here so semaphore waiters do
-     *  not appear as running goals. */
-    onSlotAcquired?: () => void | Promise<void>
+    /** Fires after the child build session exists, before model work starts.
+     *  Goal builds return the newly opened logical goal_run_id so the runtime
+     *  contract and the visible user message carry the same attempt identity. */
+    onSessionCreated?: (
+      sessionID: string,
+      context: { worktreeDir?: string; worktreeBranch?: string; worktreeBaseRef?: string },
+    ) => string | void | Promise<string | void>
     /** Optional pre-allocated worktree dir. When provided, the build agent
      *  uses it as-is and does NOT manage its lifecycle (caller owns cleanup).
      *  When absent the agent creates a managed worktree under
@@ -282,7 +289,6 @@ export namespace BuildAgent {
     executor: Exclude<TaskRow["executor"], "opencorvus">
     baseSystem?: string
     userAppend?: string
-    skillPrompt?: string
   }) {
     const mcpPrompt = input.executor === "codex" ? MCPServe.codingExecutorPromptSection() : ""
     const system = [
@@ -290,7 +296,6 @@ export namespace BuildAgent {
       externalBuildSystemContract(input.executor),
       input.userAppend ?? "",
       mcpPrompt,
-      input.skillPrompt ?? "",
     ]
       .map((s) => s.trim())
       .filter(Boolean)
@@ -309,7 +314,6 @@ export namespace BuildAgent {
    */
   export async function run(input: RunInput): Promise<RunOutput> {
     return BuildSemaphore.withSlot(input.task, async () => {
-      await input.onSlotAcquired?.()
       const autoIteration = (await EngineConfig.get()).auto_iteration === true
       // ── Worktree acquisition ─────────────────────────────────────────────
       // Happens OUTSIDE runAgentSession because the worktree is the
@@ -368,6 +372,39 @@ export namespace BuildAgent {
         baseRef = result.exitCode === 0 ? result.text().trim() || undefined : undefined
       }
 
+      if (!worktreeDir) {
+        throw new Error("BuildAgent.run: worktree directory was not resolved")
+      }
+
+      const buildSession = input.existingSessionID
+        ? await Session.get(input.existingSessionID)
+        : await Session.createNext({
+          kind: "build",
+          parentID: input.parentSessionID,
+          goalID: input.target.kind === "goal" ? input.target.id : undefined,
+          title: buildSessionTitle(input.target),
+          directory: worktreeDir,
+        })
+      if (buildSession.kind !== "build") {
+        throw new Error(`BuildAgent.run: existing session ${buildSession.id} has kind=${buildSession.kind}, expected build`)
+      }
+      if ((buildSession.goalID ?? undefined) !== (input.target.kind === "goal" ? input.target.id : undefined)) {
+        throw new Error(
+          `BuildAgent.run: existing session ${buildSession.id} has goalID=${buildSession.goalID ?? "<unset>"}, expected ${input.target.kind === "goal" ? input.target.id : "<unset>"}`,
+        )
+      }
+      if (buildSession.directory !== worktreeDir) {
+        throw new Error(
+          `BuildAgent.run: existing session ${buildSession.id} has directory=${buildSession.directory}, expected ${worktreeDir}`,
+        )
+      }
+      const openedGoalRunID = await input.onSessionCreated?.(buildSession.id, {
+        worktreeDir,
+        worktreeBranch,
+        worktreeBaseRef: baseRef,
+      })
+      const runtimeGoalRunID = typeof openedGoalRunID === "string" ? openedGoalRunID : undefined
+
       const buildReferenceAttachments = collectBuildReferenceAttachments(input.task)
 
       // Stage authoritative visual/reference attachments into `<worktree>/references/`
@@ -408,19 +445,10 @@ export namespace BuildAgent {
         }
       }
 
-      // Skill auto-load goes through the runner's system-prompt path
-      // (rule 22: single-source skill injection lives on the system side
-      // for every agent — auto-detected, never stuffed into user prompt).
-      const { deriveUrlSignals } = await import("@/engine/skill-inject")
-      const taskSignals: import("@/engine/skill-inject").TaskSignals = {
-        has_attachment_image: buildReferenceAttachments.some(
-          (a) => typeof a?.mime === "string" && a.mime.startsWith("image/"),
-        ),
-        ...deriveUrlSignals(input.task.request ?? ""),
-        request_text: input.task.request ?? "",
-      }
-
-      const buildPromptText = () => buildUserPrompt(input.target, input.context)
+      const buildPromptText = () =>
+        input.existingSessionID
+          ? buildRetryFeedbackPrompt(input.target, input.context)
+          : buildUserPrompt(input.target, input.context)
       // Forward the same authoritative references named in the
       // design-analysis evidence manifest as multimodal user-message parts so
       // the build LLM physically sees what to clone. This includes user
@@ -658,6 +686,7 @@ export namespace BuildAgent {
             core: composeBuildCore(autoIteration),
             sessionTitle: buildSessionTitle(input.target),
             sessionDirectory: worktreeDir!,
+            existingSessionID: buildSession.id,
             parentSessionID: input.parentSessionID,
             // Goal-scoped builds need goalID on the session row so the
             // protocol bridge stamps it onto every part event; without it
@@ -671,11 +700,10 @@ export namespace BuildAgent {
             toolKit: buildToolKit,
             buildUserPrompt: buildPromptText,
             buildUserParts: buildUserPartsFn,
-            skillsStage: "build",
-            skillTaskSignals: taskSignals,
-            onSessionCreated: async (session) => {
-              await input.onSessionCreated?.(session.id)
-              return { dispose() {} }
+            runtimeContract: {
+              goalRunID: runtimeGoalRunID,
+              attemptID: runtimeGoalRunID,
+              contractKind: "stage-attempt",
             },
             terminalTool: {
               toolName: "report_build_result",
@@ -705,13 +733,13 @@ export namespace BuildAgent {
             target: input.target,
             taskID: input.task.id,
             parentSessionID: input.parentSessionID,
+            existingSessionID: buildSession.id,
+            resumeExistingProviderSession: !!input.existingSessionID,
             worktreeDir: worktreeDir!,
             worktreeBranch,
             ownsWorktree,
             buildPromptText: buildExternalPromptText,
-            taskSignals,
             signal: input.signal,
-            onSessionCreated: input.onSessionCreated,
           })
           out = { session: { id: externalOut.sessionID }, structured: externalOut.structured }
           parsed = BuildResultSchema.safeParse(externalOut.structured)
@@ -890,9 +918,11 @@ function externalBuildSystemContract(executor: Exclude<TaskRow["executor"], "ope
     "",
     "Hard contract:",
     "- Treat the user prompt as a build contract, not as a chat request.",
-    "- Read only the files needed to confirm dependencies and local patterns, then edit the files required by the milestone.",
+    "- Read the files needed to confirm dependencies, local patterns, and implementation evidence, then edit the files required by the milestone.",
+    "- For ports, migrations, rewrites, clones, parity fixes, or component translations, complete source/target investigation is implementation work: inspect every relevant source file/class, public property, event, data/API hook, styling rule, context-menu/right-click behavior, tests/examples, and existing target convention before writing.",
     "- Explain every changed file in the final report; shared-file edits are valid only when they preserve sibling-goal contracts and are explicitly justified.",
-    "- Do not perform broad inventories or spawn exploratory subagents unless a concrete missing dependency blocks implementation.",
+    "- Do not perform unrelated broad inventories or spawn exploratory subagents; keep investigation scoped to the source and target surfaces needed to implement the build contract.",
+    "- If required source evidence is absent or incomplete, finish with a concise failure summary naming the missing evidence instead of inventing behavior or substituting guesses.",
     "- Keep reasoning, plans, prompt/rule details, and progress narration out of assistant text. Use tools to act.",
     "- When the prompt or staged references define a screenshot, mockup, or webpage target, those references are authoritative. Match them 1:1 as closely as the stack allows; do not substitute your own design or silently drop referenced assets.",
     "- Run the acceptance commands from the prompt before claiming success.",
@@ -1265,13 +1295,13 @@ async function runWithExternalProvider(args: {
   target: BuildTarget
   taskID: string
   parentSessionID?: string
+  existingSessionID: string
+  resumeExistingProviderSession: boolean
   worktreeDir: string
   worktreeBranch: string | undefined
   ownsWorktree: boolean
   buildPromptText: () => string
-  taskSignals?: import("@/engine/skill-inject").TaskSignals
   signal?: AbortSignal
-  onSessionCreated?: (sessionID: string) => void | Promise<void>
 }): Promise<{ sessionID: string; structured: unknown; mergedHead?: string }> {
   // External-build dispatch boundary: surface terminal to the overlay when
   // the inner function returns (every return below structures failure as a
@@ -1305,24 +1335,30 @@ async function runWithExternalProviderImpl(args: {
   target: BuildTarget
   taskID: string
   parentSessionID?: string
+  existingSessionID: string
+  resumeExistingProviderSession: boolean
   worktreeDir: string
   worktreeBranch: string | undefined
   ownsWorktree: boolean
   buildPromptText: () => string
-  taskSignals?: import("@/engine/skill-inject").TaskSignals
   signal?: AbortSignal
-  onSessionCreated?: (sessionID: string) => void | Promise<void>
 }): Promise<{ sessionID: string; structured: unknown; mergedHead?: string }> {
   const { provider, options } = ExecutorRegistry.requireCoding(args.executor)
 
-  const session = await Session.createNext({
-    kind: "build",
-    parentID: args.parentSessionID,
-    goalID: args.target.kind === "goal" ? args.target.id : undefined,
-    title: buildSessionTitle(args.target),
-    directory: args.worktreeDir,
-  })
-  await args.onSessionCreated?.(session.id)
+  const session = await Session.get(args.existingSessionID)
+  if (session.kind !== "build") {
+    throw new Error(`runWithExternalProvider: existing session ${session.id} has kind=${session.kind}, expected build`)
+  }
+  if ((session.goalID ?? undefined) !== (args.target.kind === "goal" ? args.target.id : undefined)) {
+    throw new Error(
+      `runWithExternalProvider: existing session ${session.id} has goalID=${session.goalID ?? "<unset>"}, expected ${args.target.kind === "goal" ? args.target.id : "<unset>"}`,
+    )
+  }
+  if (session.directory !== args.worktreeDir) {
+    throw new Error(
+      `runWithExternalProvider: existing session ${session.id} has directory=${session.directory}, expected ${args.worktreeDir}`,
+    )
+  }
 
   log.info("build agent (external) starting", {
     executor: args.executor,
@@ -1370,10 +1406,12 @@ async function runWithExternalProviderImpl(args: {
     tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
   }
   await Session.updateMessage(assistantMessage)
-  await persistExecutorSessionRef({
-    sessionID: session.id,
-    provider: args.executor,
-  })
+  if (!args.resumeExistingProviderSession) {
+    await persistExecutorSessionRef({
+      sessionID: session.id,
+      provider: args.executor,
+    })
+  }
 
   const prompt = promptText
   const events: CodingEventInfo[] = []
@@ -1417,20 +1455,11 @@ async function runWithExternalProviderImpl(args: {
     })
   }
 
-  // Auto-detect build-stage skills for the same taskSignals the in-process
-  // OpenCorvus path uses, and append the skill bundle (stage invariant +
-  // matched skill bodies) to the system prompt forwarded to the external
-  // coding provider. Reference extraction skills now belong to
-  // design_analysis; build-stage skills describe implementation and
-  // verification only.
   const orchCfg = await EngineConfig.get()
   const buildAgent = await Agent.get("build")
   const userAppend = buildAgent
     ? Agent.resolveSessionAgent(buildAgent, await resolveSessionOverlay()).promptAppend
     : undefined
-  const buildSkillsCfg = (orchCfg as unknown as { build?: { skills?: string[] } }).build?.skills ?? []
-  const { resolveStageSkills } = await import("@/engine/skill-inject")
-  const resolvedSkills = await resolveStageSkills(buildSkillsCfg, "build", args.taskSignals)
   const baseSystem = resolveOption<string>(options.system)
   const systemWithAutoIteration = [baseSystem, renderBuildAutoIterationMode(orchCfg.auto_iteration === true)]
     .filter((part): part is string => typeof part === "string" && part.trim().length > 0)
@@ -1439,7 +1468,6 @@ async function runWithExternalProviderImpl(args: {
     executor: args.executor,
     baseSystem: systemWithAutoIteration,
     userAppend,
-    skillPrompt: resolvedSkills.prompt,
   })
 
   const configuredTools = resolveOption(options.tools)
@@ -1471,22 +1499,30 @@ async function runWithExternalProviderImpl(args: {
     tools: configuredTools,
     signal: gate.signal,
   }
+  const providerInput = args.resumeExistingProviderSession
+    ? {
+      ...runInput,
+      sessionID: resolveNativeResumeRef(args.executor, await readExecutorSessionRef(session.id)),
+    }
+    : runInput
 
   log.info("build agent (external) provider input ready", {
     executor: args.executor,
-    executorModel: runInput.model ?? null,
+    executorModel: providerInput.model ?? null,
     taskID: args.taskID,
     sessionID: session.id,
+    providerSessionID: providerInput.sessionID,
+    resume: args.resumeExistingProviderSession,
     toolCount: configuredTools?.length ?? 0,
-    skillCount: resolvedSkills.skills.length,
-    skillNames: resolvedSkills.skills.map((s) => s.name),
-    requiredTools: resolvedSkills.requiredTools,
     mcpPromptInjected: composedSystem.mcpPromptInjected,
     systemChars: composedSystem.system?.length ?? 0,
   })
 
   try {
-    for await (const event of provider.run(runInput)) {
+    const stream = args.resumeExistingProviderSession
+      ? provider.resume(providerInput)
+      : provider.run(providerInput)
+    for await (const event of stream) {
       gate.observe()
       events.push(event)
       const sessionRef = extractExecutorSessionRef(event)
@@ -2361,6 +2397,7 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
     "",
     "Orchestrator is asking build to implement this request, verify it, and report the result.",
     "If the request depends on screenshots, webpage references, uploaded visuals, or staged `references/` files, those references are authoritative and the implementation must restore them 1:1 rather than treating them as inspiration.",
+    "If the request is a port, migration, rewrite, clone, parity restoration, or component translation, complete investigation of the named source surface and existing target conventions is required implementation work before writing.",
     "This direct request path is for implementation/rework. If the prompt is only repository investigation and does not ask you to change project behavior, fail through the terminal build report with a concrete error that says Build is the wrong stage.",
     "",
     ...contextLines,
@@ -2372,4 +2409,54 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
     "",
     "Before reporting success, list every project file you changed in `files_changed[]` with a concrete summary and reason. The host compares this list to the git diff; unexplained or phantom files fail collaboration review.",
   ].join("\n")
+}
+
+export function buildRetryFeedbackPrompt(target: BuildTarget, context?: BuildAgent.BuildContext): string {
+  const lines: string[] = [
+    "# Build Retry Feedback",
+    "",
+    "Continue this same build session. Do not restart from the full original prompt; use the existing conversation and files in this worktree as context.",
+    "",
+  ]
+  if (target.kind === "goal") {
+    lines.push(`Goal: ${target.id} — ${target.title}`)
+  } else {
+    lines.push("Target: direct build request")
+  }
+  lines.push("")
+  if (context?.retryGuidance && context.retryGuidance.trim().length > 0) {
+    lines.push("## Current Orchestrator Feedback")
+    lines.push("")
+    lines.push(context.retryGuidance.trim())
+    lines.push("")
+  }
+  if (context?.retryFeedback && context.retryFeedback.trim().length > 0) {
+    lines.push("## Prior Attempt Failure Facts")
+    lines.push("")
+    lines.push(context.retryFeedback.trim())
+    lines.push("")
+  }
+  if (context?.deliveryFeedback && context.deliveryFeedback.trim().length > 0) {
+    lines.push("## Delivery Rejection Feedback")
+    lines.push("")
+    lines.push(context.deliveryFeedback.trim())
+    lines.push("")
+  }
+  if (
+    (!context?.retryGuidance || context.retryGuidance.trim().length === 0) &&
+    (!context?.retryFeedback || context.retryFeedback.trim().length === 0) &&
+    (!context?.deliveryFeedback || context.deliveryFeedback.trim().length === 0)
+  ) {
+    lines.push("## Required Fix")
+    lines.push("")
+    lines.push("The previous build attempt did not pass. Inspect the current worktree state, identify the concrete blocker, fix it in place, verify, and report the result.")
+    lines.push("")
+  }
+  lines.push("## Instructions")
+  lines.push("")
+  lines.push("- Edit the existing worktree in place.")
+  lines.push("- Preserve all prior upstream contracts already present in this conversation.")
+  lines.push("- Run the relevant verification commands before reporting success.")
+  lines.push("- Finish by calling report_build_result with the current attempt result.")
+  return lines.join("\n")
 }

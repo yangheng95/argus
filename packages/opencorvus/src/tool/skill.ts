@@ -37,7 +37,7 @@ export const SkillTool = Tool.define("skill", async (ctx) => {
           "",
           "Use search before planning when the task may match a specialized workflow.",
           "",
-          "Search output returns names, descriptions, stages, required tools, and locations only. Loading by name returns a `<skill_content name=\"...\">` block with the full SKILL.md body and sampled bundled files.",
+          "Search output returns names, descriptions, required tool hints, and locations only. Loading by name returns a `<skill_content name=\"...\">` block with the full SKILL.md body and sampled bundled files.",
           incompatible.length > 0
             ? `${incompatible.length} skill(s) are incompatible with the current platform and will not appear in search results.`
             : "",
@@ -47,7 +47,7 @@ export const SkillTool = Tool.define("skill", async (ctx) => {
     query: z
       .string()
       .optional()
-      .describe("Search terms for skill name, description, stage, or required_tools. Omit to list compatible skills."),
+      .describe("Search terms for skill name, description, or required_tools. Omit to list compatible skills."),
     name: z
       .string()
       .optional()
@@ -156,7 +156,6 @@ function searchSkills(skills: Skill.Info[], query: string | undefined): Skill.In
     const haystack = [
       skill.name,
       skill.description,
-      skill.stage ?? "",
       ...(skill.required_tools ?? []),
     ].join("\n").toLocaleLowerCase()
     return haystack.includes(needle)
@@ -176,7 +175,6 @@ function renderSkillSearch(skills: Skill.Info[], total: number, query: string | 
     "  <skill>",
     `    <name>${skill.name}</name>`,
     `    <description>${skill.description}</description>`,
-    `    <stage>${skill.stage ?? "global"}</stage>`,
     `    <required_tools>${(skill.required_tools ?? []).join(",") || "none"}</required_tools>`,
     `    <platforms>${skill.platforms.length ? skill.platforms.join(",") : "all"}</platforms>`,
     `    <location>${pathToFileURL(skill.location).href}</location>`,

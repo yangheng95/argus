@@ -1838,7 +1838,7 @@ export function deleteGoal(goalID: string) {
  * so overlay's `startedAt > 0` gate was only met post-completion and the goal
  * card "appeared" already-finished).
  *
- * The orchestrator's build tool calls this before `BuildAgent.run`; the same
+ * The orchestrator's build tool calls this after the build session exists; the same
  * goal_run id is later threaded into `finalizeBuildAttempt` to write the
  * terminal state via `updateGoalRun` (which appends a second artifact row
  * collapsed by `latestPerGoalRun` to the newest per goal_run_id).
@@ -1848,11 +1848,9 @@ export function beginBuildAttempt(input: {
   goalID: string
   /** Coordinator run id (may be undefined for synthetic / direct paths). */
   runID?: string
-  /** The agent's child session id, when the orchestrator pre-allocated one.
-   *  Often undefined at begin-time because BuildAgent.run owns session creation;
-   *  the column stays null and is not required for overlay's goal-step routing
-   *  (which keys on goalID, not goal_run.session_id). */
-  sessionID?: string
+  /** Concrete build session id. Required in the first running artifact so
+   *  retry continuation has one durable session identity source. */
+  sessionID: string
   /** Worktree directory if known at dispatch (per-goal worktree). Caller-owned
    *  worktrees may know the path up-front; greenfield BuildAgent-managed
    *  worktrees do not — leave undefined and let the row stay null. */
@@ -1863,6 +1861,15 @@ export function beginBuildAttempt(input: {
    *  the full triple from a single source. */
   workspaceBranch?: string | null
   workspaceBaseRef?: string | null
+  extraArtifacts?: (input: { goalRunID: string; now: number }) => Array<{
+    id: string
+    kind: EngineArtifactKind
+    label: string
+    payload: Record<string, unknown>
+    runID?: string | null
+    goalRunID?: string | null
+    deliveryID?: string | null
+  }>
   now?: number
 }): string {
   const id = Identifier.ascending("goal_run")
@@ -1921,7 +1928,7 @@ export function beginBuildAttempt(input: {
   const payload = {
     goal_id: input.goalID,
     plan_node_id: null,
-    session_id: input.sessionID ?? null,
+    session_id: input.sessionID,
     status: "running" as const,
     retry_count: version.retryCount,
     blocking_reason: null,
@@ -1952,6 +1959,22 @@ export function beginBuildAttempt(input: {
         time_updated: now,
       })
       .run()
+    for (const artifact of input.extraArtifacts?.({ goalRunID: id, now }) ?? []) {
+      db.insert(EngineArtifactTable)
+        .values({
+          id: artifact.id,
+          task_id: input.taskID,
+          run_id: artifact.runID ?? input.runID ?? null,
+          goal_run_id: artifact.goalRunID ?? id,
+          delivery_id: artifact.deliveryID ?? null,
+          kind: artifact.kind,
+          label: artifact.label,
+          payload: artifact.payload,
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+    }
   })
   syncGoalStatus(input.goalID, `beginBuildAttempt`)
   // Emit goal_run.updated so the overlay's board-invalidating subscription

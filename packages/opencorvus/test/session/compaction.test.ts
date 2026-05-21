@@ -18,6 +18,7 @@ function handoffFixture(): CompactionHandoff.Info {
     objective: "Harden compaction handoff so session continuation keeps requirements intact",
     acceptanceCriteria: ["The handoff must preserve exact acceptance criteria and command evidence"],
     durableInstructionSources: [{ path: "/repo/AGENTS.md", role: "project rules" }],
+    activeBuildContracts: [],
     currentState: {
       phase: "implementing structured handoff validation",
       activeTask: "replace generic Markdown summary with host-rendered handoff",

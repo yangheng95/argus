@@ -1,7 +1,6 @@
 ---
 name: image-generate
 description: Produce a mirror-grounded PRD/SPEC from screenshot-only visual references. Design-analysis owns the image mirror evidence tools, then writes visual specs plus frontend/backend implementation contracts. Build implements from the persisted SPEC; integrity performs the final session-bound visual acceptance review.
-stage: design_analyst
 auto_detect:
   task_signals:
     has_attachment_image: true

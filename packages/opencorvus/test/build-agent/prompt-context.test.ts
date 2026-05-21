@@ -315,6 +315,18 @@ describe("build agent prompt context", () => {
     expect(prompt).toContain("must restore them 1:1")
   })
 
+  test("request-path build requires source/target investigation for rewrite work", () => {
+    const prompt = buildUserPrompt({
+      kind: "request",
+      text: "Rewrite the C# KeyStatistics component as a TS/React component.",
+    })
+
+    expect(prompt).toContain("If the request is a port, migration, rewrite, clone, parity restoration")
+    expect(prompt).toContain("complete investigation of the named source surface")
+    expect(prompt).toContain("existing target conventions")
+    expect(prompt).toContain("Build is the wrong stage")
+  })
+
   test("request-path build receives design-analysis PRD/SPEC source manifest", () => {
     const prompt = buildUserPrompt(
       {

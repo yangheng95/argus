@@ -82,3 +82,14 @@ export async function persistExecutorSessionRef(input: {
     },
   })
 }
+
+export function resolveNativeResumeRef(provider: string, ref: PersistedExecutorSessionRef | undefined): string {
+  if (!ref) {
+    throw new Error(`resolveNativeResumeRef: ${provider} has no persisted executor session ref`)
+  }
+  if (ref.provider && ref.provider !== provider) {
+    throw new Error(`resolveNativeResumeRef: persisted provider ${ref.provider} does not match ${provider}`)
+  }
+  if (ref.nativeSessionID) return ref.nativeSessionID
+  throw new Error(`resolveNativeResumeRef: ${provider} persisted ref has no provider-native session id`)
+}

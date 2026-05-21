@@ -141,7 +141,6 @@ export namespace ArchitectAgent {
         const inlineParts = await AttachmentStore.inlineFileParts(input.attachments)
         return [{ type: "text" as const, text: enrichedText }, ...inlineParts]
       },
-      skillsStage: "architect",
       terminalTool: {
         toolName: "submit_architect",
         isSatisfied: (collector) => collector.finalized,

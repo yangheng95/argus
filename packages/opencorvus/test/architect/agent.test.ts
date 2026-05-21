@@ -125,7 +125,6 @@ test("ArchitectAgent registers submit_architect as the terminal collector contra
           structured: undefined,
           streamErrors: [],
           model: { providerID: "test", modelID: "mock", id: "test/mock" },
-          requiredTools: [],
         }
       }
 

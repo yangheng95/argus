@@ -80,11 +80,23 @@ export namespace CompactionHandoff {
     })
     .strict()
 
+  export const ActiveBuildContract = z
+    .object({
+      sessionID: NonEmpty,
+      goalID: NonEmpty,
+      goalRunID: NonEmpty,
+      artifactID: NonEmpty,
+      sourceArtifactIDs: z.array(NonEmpty),
+      digest: NonEmpty,
+    })
+    .strict()
+
   export const Schema = z
     .object({
       objective: SpecificText,
       acceptanceCriteria: z.array(SpecificText),
       durableInstructionSources: z.array(InstructionSource),
+      activeBuildContracts: z.array(ActiveBuildContract),
       currentState: CurrentState,
       decisions: z.array(Decision),
       evidence: z.array(Evidence),
@@ -121,12 +133,14 @@ export namespace CompactionHandoff {
     "Use empty arrays only when no evidence exists for that field.",
     "Generic placeholders such as \"continue implementation\" are invalid.",
     "Do not treat assistant reasoning, tool-choice indecision, or checkpoint prompts as user requirements.",
+    "When active build-session contract facts are supplied, copy their ids into activeBuildContracts instead of paraphrasing them.",
   ].join("\n")
 
   export const JSON_SCHEMA_DESCRIPTION = `{
   "objective": "specific active user objective",
   "acceptanceCriteria": ["durable requirements and explicit acceptance checks"],
   "durableInstructionSources": [{"path": "absolute or configured instruction path", "role": "why this source is authoritative"}],
+  "activeBuildContracts": [{"sessionID": "build session id", "goalID": "goal id", "goalRunID": "active logical attempt id", "artifactID": "build_session_contract artifact id", "sourceArtifactIDs": ["source artifact ids"], "digest": "contract snapshot digest"}],
   "currentState": {
     "phase": "specific current phase",
     "activeTask": "specific active task",
@@ -242,6 +256,10 @@ export namespace CompactionHandoff {
       "",
       "2. Key Technical Concepts:",
       ...normalized.durableInstructionSources.map((item) => `   - ${item.path}: ${item.role}`),
+      ...normalized.activeBuildContracts.map(
+        (item) =>
+          `   - Active build contract: session=${item.sessionID} goal=${item.goalID} goal_run=${item.goalRunID} artifact=${item.artifactID} digest=${item.digest}`,
+      ),
       `   - Source agent/model: ${source.agent} using ${source.model.providerID}/${source.model.modelID}`,
       `   - Source format/system mode: ${source.formatType}; ${source.systemMode ?? "(none)"}`,
       `   - Source tools: ${source.toolNames.join(", ") || "(none)"}`,

@@ -19,6 +19,13 @@ You receive ONE of two input kinds via the user message:
 
 ## Goal execution discipline
 
+Before planning implementation, inspect available skills with the `skill` tool
+when the task shape may match a specialized workflow (for example migrations,
+language/framework rewrites, visual/page replicas, reports, or benchmark/debug
+loops). If a skill matches, load it by exact name and follow its workflow. This
+must be a visible tool call in the build session; do not assume upstream agents
+loaded the skill on your behalf.
+
 For goal input, stay inside this goal's contract and drive it to completion
 depth-first. Your first priority is to make this exact goal's `objective`,
 `acceptance_specs`, owned responsibility paths, and consumed/provided graph
@@ -37,6 +44,23 @@ remain. With `assistant.auto_iteration=true`, iterate on failures until every
 acceptance spec for this goal is satisfied or a real blocker remains. Expand
 outside `owned_paths` only when this goal's real code path requires it, and
 explain that necessity in `files_changed[]`.
+
+## Implementation-bound source fidelity
+
+If the request is a port, migration, rewrite, clone, parity restoration, or
+component translation, investigation of the named source surface and the
+existing target conventions is part of implementation, not a separate read-only
+phase. Before writing, inspect the complete relevant source files/classes,
+public properties, events, data/API hooks, styling, context-menu/right-click
+behaviour, tests/examples, and the existing target components/utilities needed
+to preserve behaviour. "Depth-first" means stay scoped to this component or
+goal; it does not mean sampling one file and guessing the rest.
+
+If the named source surface is absent, incomplete, generated-only, or depends
+on external assemblies/docs that are not available in the worktree, fail
+through `report_build_result` with the concrete missing evidence. Do not invent
+behaviour, silently replace missing source behaviour with guesses, or claim
+parity you did not verify.
 
 ## Reference fidelity
 

@@ -13,9 +13,9 @@
  * visual differences before the next edit pass.
  *
  * Output: `mirror/vision-judge.json` — structured verdict (pass/fail
- * + ranked differences). The build-stage required-tools enforcement gates
- * `goal_report` on this file's `accepted` field. Tool failure produces no
- * verdict file; callers must retry or fix the root cause.
+ * + ranked differences). Consumers should treat this file's `accepted` field
+ * as structured visual review evidence. Tool failure produces no verdict file;
+ * callers must retry or fix the root cause.
  *
  * Pure tool: no network beyond the LLM call, deterministic per (model,
  * reference, rendered) triple.
@@ -108,7 +108,7 @@ const VerdictSchema = z.object({
 export const WebpageVisionJudgeTool = Tool.define("webpage_vision_judge", {
   description: `Vision-only side-by-side comparison of a reference screenshot and a rendered screenshot. Calls a vision-capable LLM with NO system prompt, NO tool list, NO scores — just the two images and a request to enumerate visible differences.
 
-Use this AFTER \`webpage_render\` and \`webpage_evaluate\` produce fresh artifacts. The verdict goes to \`mirror/vision-judge.json\` and is the qualitative acceptance signal the build-stage gate looks at; \`webpage_evaluate\` owns the 85/100 numeric visual threshold.
+Use this AFTER \`webpage_render\` and \`webpage_evaluate\` produce fresh artifacts. The verdict goes to \`mirror/vision-judge.json\` and is qualitative visual review evidence; \`webpage_evaluate\` owns the 85/100 numeric visual threshold.
 
 Loop semantics: when \`accepted=false\`, work through the \`differences\` list (severity-ordered), re-render, and re-run this tool. When \`accepted=true\`, the visual acceptance gate is satisfied.
 

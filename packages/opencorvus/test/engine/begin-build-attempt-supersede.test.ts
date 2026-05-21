@@ -167,6 +167,7 @@ describe("beginBuildAttempt — supersede_of population", () => {
       taskID,
       goalID,
       runID,
+      sessionID: "ses_bba_retry",
     })
 
     const newRow = findGoalRun(newRunID)
@@ -198,6 +199,7 @@ describe("beginBuildAttempt — supersede_of population", () => {
       taskID,
       goalID,
       runID,
+      sessionID: "ses_bba_rework",
     })
 
     const newRow = findGoalRun(newRunID)
@@ -215,6 +217,7 @@ describe("beginBuildAttempt — supersede_of population", () => {
       taskID,
       goalID,
       runID,
+      sessionID: "ses_bba_first",
     })
 
     const newRow = findGoalRun(newRunID)
@@ -233,6 +236,7 @@ describe("beginBuildAttempt — supersede_of population", () => {
         taskID,
         goalID,
         runID,
+        sessionID: "ses_bba_live_refuse",
       }),
     ).toThrow(/already has live goal_run/)
 

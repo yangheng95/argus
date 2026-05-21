@@ -1,7 +1,6 @@
 ---
 name: webpage-generate
 description: Produce a mirror-grounded PRD/SPEC for a live webpage reference. Design-analysis owns the webpage mirror evidence tools, then writes visual specs plus frontend/backend implementation contracts for downstream build agents. This skill no longer belongs to build; build implements from the persisted SPEC and integrity performs the final session-bound visual acceptance review.
-stage: design_analyst
 auto_detect:
   task_signals:
     request_contains_url: true

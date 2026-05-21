@@ -111,6 +111,8 @@ export type EngineArtifactKind =
   | "prosecutor_attempt"
   | "run"
   | "architect_contract_graph"
+  | "build_session_contract"
+  | "orchestrator_tool_ownership"
   | "exploration"
   | "orchestrator-stream-error"
 export type EngineDeliveryStatus = "candidate" | "publishing" | "delivered" | "failed"

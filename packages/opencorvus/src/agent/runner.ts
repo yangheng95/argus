@@ -16,9 +16,8 @@
  *     the agent has a terminal structured payload.
  *
  * Everything else — model resolution, child session creation, resumable
- * session-runtime wiring, SessionPrompt invocation, abort propagation, stream-error capture,
- * `loadStageSkills` skill injection, `config.agent.<kind>.prompt_append`
- * user-append
+ * session-runtime wiring, SessionPrompt invocation, abort propagation,
+ * stream-error capture, `config.agent.<kind>.prompt_append` user-append
  * — is centralised here.
  *
  * Per CLAUDE.md rule 24, this is the deliberate abstraction of a repeating
@@ -72,7 +71,6 @@ import { Provider } from "@/provider/provider"
 import { Config } from "@/config/config"
 import { EngineConfig } from "@/engine"
 import { appendInformationMissingFallback } from "@/prompt/information-missing"
-import { resolveStageSkills, type TaskSignals } from "@/engine/skill-inject"
 import { Instance } from "@/project/instance"
 import { Session } from "@/session"
 import { SessionPrompt } from "@/session/prompt"
@@ -104,23 +102,6 @@ export interface AgentToolKit<C> {
   getCollector: () => C
   buildReport: (context?: AgentReportContext) => AgentReport
 }
-
-/**
- * EngineConfig stage keys whose `.skills` field drives skill injection.
- * Agents not in this set (orchestrator, integrity, prosecutor) get no
- * automatic skill injection — they are special-cased by intent. Skill
- * injection is opt-in: pass `skillsStage` to enable it. The runner
- * appends matched skill bodies to the SYSTEM prompt. The `skill` tool remains
- * available for explicit search/loading, but prompt injection is the primary
- * contract for auto-detected stage skills.
- */
-export type SkillStage =
-  | "requirements"
-  | "architect"
-  | "acceptance"
-  | "design_analyst"
-  | "intent_analysis"
-  | "build"
 
 /**
  * Optional structured-output (JSON schema) for agents whose final tool
@@ -156,6 +137,11 @@ export interface RunAgentSessionInput<C> {
    *  (currently just the build agent) so the session + its tools root
    *  at the worktree path, not the primary. */
   sessionDirectory?: string
+  /** Existing session to continue. Used by build retries, which must append
+   *  one incremental user message to the original build conversation instead
+   *  of creating a replacement child session. When set, the runner validates
+   *  the row's kind/goal/directory against this invocation before prompting. */
+  existingSessionID?: string
   /** Parent session id (orchestrator wake child / pipeline parent). */
   parentSessionID?: string
   /** Goal this session belongs to (per-goal build / planner / evaluator).
@@ -183,6 +169,14 @@ export interface RunAgentSessionInput<C> {
    *  stream-chunk forwarders. The runner owns the session; the hook is
    *  strictly observer-scope, not control-scope. */
   onSessionCreated?: (session: Awaited<ReturnType<typeof Session.createNext>>) => Promise<{ dispose: () => void }> | { dispose: () => void } | void
+  /** Attempt identity installed on SessionRuntimeContract and mirrored into
+   *  the user message envelope so SessionLoop can reject stale retry
+   *  collectors before model contact. */
+  runtimeContract?: {
+    goalRunID?: string
+    attemptID?: string
+    contractKind?: "stage-attempt" | "orchestrator-wake"
+  }
   /** Stage-specific extra tool surface + collector. */
   toolKit: AgentToolKit<C>
   /** Stage-specific user-message text. */
@@ -212,20 +206,8 @@ export interface RunAgentSessionInput<C> {
     isSatisfied: (collector: C) => boolean
     shouldExposeOnlyTerminalTool: (collector: C) => boolean
   }
-  /** Pass-through skill stage. When omitted, no skill injection runs.
-   *  See `SkillStage` JSDoc. */
-  skillsStage?: SkillStage
-  /** Optional task signals forwarded to `resolveStageSkills`. Drives the
-   *  auto-detect side of skill matching (attachments mime, request URL
-   *  presence, request text). Ignored when `skillsStage` is omitted. */
-  skillTaskSignals?: TaskSignals
   /** When true, treat `core` as the already-composed system prompt and
-   *  skip the runner's config-append + skill-injection pass. The caller
-   *  owns `resolveStageSkills` (and, when it cares, the returned
-   *  `requiredTools` list). Used by callers that must bind output-tool
-   *  validators before the session starts: the caller resolves skills once,
-   *  binds the output tools, then hands the composed prompt through here so
-   *  the runner does not re-resolve the same skill set. */
+   *  skip the runner's config-append pass. */
   rawSystemPrompt?: boolean
   /** Legacy passthrough; not wired after the SessionPrompt migration. */
   stream?: TextHooks
@@ -245,10 +227,6 @@ export interface RunAgentSessionOutput<C> {
   streamErrors: Array<{ reason: string; name?: string }>
   /** Resolved model the run used. */
   model: { providerID: string; modelID: string; id: string }
-  /** Union of `required_tools` declared by every matched skill, when
-   *  `skillsStage` was set. Empty array otherwise. Consumed by agents
-   *  that wire skill-declared tool requirements into output-tool validation. */
-  requiredTools: string[]
 }
 
 function recordAgentTraceReportForSession(
@@ -286,7 +264,7 @@ function finalTextFromMessage(message: Message.WithParts | undefined): string | 
   return text || undefined
 }
 
-const BUILD_SKILL_GATED_TOOLS = [
+const BUILD_DEFAULT_DISABLED_TOOLS = [
   "task",
   "webfetch",
   "websearch",
@@ -298,17 +276,16 @@ const BUILD_SKILL_GATED_TOOLS = [
 
 export function promptToolSwitchesForAgentRun(input: {
   extraToolNames: string[]
-  skillsStage?: SkillStage
-  requiredTools: string[]
+  kind?: SessionKind
 }): Record<string, boolean> {
   const switches: Record<string, boolean> = Object.fromEntries(
     input.extraToolNames.map((name) => [name, true]),
   )
-  if (input.skillsStage !== "build") return switches
+  if (input.kind !== "build") return switches
 
-  const required = new Set(input.requiredTools)
-  for (const toolName of BUILD_SKILL_GATED_TOOLS) {
-    switches[toolName] = required.has(toolName)
+  switches.skill = true
+  for (const toolName of BUILD_DEFAULT_DISABLED_TOOLS) {
+    switches[toolName] = false
   }
   return switches
 }
@@ -578,17 +555,15 @@ export async function runAgentSession<C>(
   }
 
   // ── 2. Compose the system prompt ─────────────────────────────────────
-  // Static parts (core + user override + skill block) come from
+  // Static parts (core + user override) come from
   // `composeSystemPrompt`; the live task context block is appended last so
   // every stage agent sees the same task / goals / decision-log surface
   // without having to memory.search for it (rule 23 / rule 22).
   const composed = input.rawSystemPrompt
-    ? { prompt: input.core, requiredTools: [] as string[] }
+    ? { prompt: input.core }
       : await composeSystemPrompt(
         agentName,
         input.core,
-        input.skillsStage,
-        input.skillTaskSignals,
         input.taskID,
       )
   const liveContext = input.taskID ? TaskContext.snapshot(input.taskID) : ""
@@ -605,7 +580,6 @@ export async function runAgentSession<C>(
   const systemPrompt = debugCfg.fail_on_information_missing
     ? appendInformationMissingFallback(baseSystemPrompt)
     : baseSystemPrompt
-  const requiredTools = composed.requiredTools
 
   // ── 3. Build user prompt parts ───────────────────────────────────────
   const userText = await input.buildUserPrompt()
@@ -688,15 +662,35 @@ export async function runAgentSession<C>(
   }
   parts = parts.map((p) => ({ ...p, id: Identifier.ascending("part") }))
 
-  // ── 4. Create child session ──────────────────────────────────────────
+  // ── 4. Create or reopen child session ────────────────────────────────
   await input.onStatus?.(`${kind} starting`)
-  const session = await Session.createNext({
-    kind,
-    parentID: input.parentSessionID,
-    goalID: input.goalID,
-    title: input.sessionTitle,
-    directory: input.sessionDirectory ?? Instance.directory,
-  })
+  const session = input.existingSessionID
+    ? await Session.get(input.existingSessionID)
+    : await Session.createNext({
+      kind,
+      parentID: input.parentSessionID,
+      goalID: input.goalID,
+      title: input.sessionTitle,
+      directory: input.sessionDirectory ?? Instance.directory,
+    })
+  if (input.existingSessionID) {
+    if (session.kind !== kind) {
+      throw new AgentRunError(kind, `existing session ${session.id} has kind=${session.kind}, expected ${kind}`)
+    }
+    if ((session.goalID ?? undefined) !== (input.goalID ?? undefined)) {
+      throw new AgentRunError(
+        kind,
+        `existing session ${session.id} has goalID=${session.goalID ?? "<unset>"}, expected ${input.goalID ?? "<unset>"}`,
+      )
+    }
+    const expectedDirectory = input.sessionDirectory ?? Instance.directory
+    if (session.directory !== expectedDirectory) {
+      throw new AgentRunError(
+        kind,
+        `existing session ${session.id} has directory=${session.directory}, expected ${expectedDirectory}`,
+      )
+    }
+  }
 
   // ── 5. Stream-error capture + abort propagation ──────────────────────
   // Bus payload is the NamedError shape from Message.fromError().toObject():
@@ -728,8 +722,7 @@ export async function runAgentSession<C>(
   // ── 6. Invoke SessionPrompt with the agent's extra tools ─────────────
   const enableMap = promptToolSwitchesForAgentRun({
     extraToolNames: Object.keys(input.toolKit.tools),
-    skillsStage: input.skillsStage,
-    requiredTools,
+    kind,
   })
   if (
     input.terminalTool &&
@@ -750,7 +743,7 @@ export async function runAgentSession<C>(
     toolNames: Object.keys(input.toolKit.tools),
   })
 
-  const lifecycleDisposable = input.onSessionCreated
+  const lifecycleDisposable = !input.existingSessionID && input.onSessionCreated
     ? await input.onSessionCreated(session)
     : undefined
 
@@ -764,6 +757,15 @@ export async function runAgentSession<C>(
       }
     : undefined
   SessionPrompt.setSessionRuntimeContract(session.id, {
+    identity: {
+      sessionID: session.id,
+      agentKind: agentName,
+      goalID: input.goalID,
+      goalRunID: input.runtimeContract?.goalRunID,
+      attemptID: input.runtimeContract?.attemptID,
+      contractKind: input.runtimeContract?.contractKind ?? "stage-attempt",
+      installedAt: Date.now(),
+    },
     tools: input.toolKit.tools,
     terminalToolContract,
     structuredOutputGuard: input.format?.validate,
@@ -781,6 +783,15 @@ export async function runAgentSession<C>(
           system: systemPrompt,
           systemMode: "complete",
           tools: enableMap,
+          extra: input.runtimeContract
+            ? {
+              runtimeContract: {
+                goalRunID: input.runtimeContract.goalRunID,
+                attemptID: input.runtimeContract.attemptID,
+                contractKind: input.runtimeContract.contractKind ?? "stage-attempt",
+              },
+            }
+            : undefined,
           parts: promptParts as Parameters<typeof SessionPrompt.prompt>[0]["parts"],
         }
         if (input.format) {
@@ -939,7 +950,6 @@ export async function runAgentSession<C>(
     structured,
     streamErrors,
     model: { providerID: model.providerID, modelID: model.api.id, id: model.id },
-    requiredTools,
   }
 }
 
@@ -1270,9 +1280,6 @@ export async function runAgentSessionWithRetry<C>(
 // Order:
 //   1. core prompt (from `prompt/core/<kind>-core.txt`)
 //   2. user-config append: `config.agent.<kind>.prompt_append`, when present
-//   3. skill body injection: `loadStageSkills(EngineConfig.<stage>.skills, stage)`
-//      when `skillsStage` is set on the input. Matched auto-detected skill
-//      bodies are injected; stage labels only scope required_tools ownership.
 //
 // Per rule 22 / rule 25 this is the only path. Agents do not roll their
 // own composition.
@@ -1281,30 +1288,18 @@ export async function runAgentSessionWithRetry<C>(
 async function composeSystemPrompt(
   agentName: string,
   core: string,
-  skillsStage: SkillStage | undefined,
-  taskSignals: TaskSignals | undefined,
   taskID: string | undefined,
-): Promise<{ prompt: string; requiredTools: string[] }> {
+): Promise<{ prompt: string }> {
   const overlay = await resolveSessionOverlay(taskID ? { taskID } : undefined)
   const config = Config.mergeOverlay(await Config.get(), overlay ?? {})
   const baseAgent = await Agent.get(agentName)
   const effectiveAgent = baseAgent ? Agent.resolveSessionAgent(baseAgent, overlay) : undefined
   const userAppend = effectiveAgent?.promptAppend ?? (config.agent as Record<string, any> | undefined)?.[agentName]?.prompt_append
-  const withAppend =
+  const prompt =
     typeof userAppend === "string" && userAppend.trim().length > 0
       ? `${core}\n\n${userAppend}`
       : core
-
-  if (!skillsStage) return { prompt: withAppend, requiredTools: [] }
-
-  // Auto-detect always runs when skillsStage is set. Explicit names from
-  // EngineConfig.<stage>.skills layer on top when present; missing config
-  // is fine — auto-detect is the primary path and shouldn't be gated on it.
-  const orchCfg = await EngineConfig.get()
-  const stageCfg = (orchCfg as unknown as Record<SkillStage, { skills?: string[] } | undefined>)[skillsStage]
-  const explicitNames = stageCfg?.skills ?? []
-  const resolved = await resolveStageSkills(explicitNames, skillsStage, taskSignals)
-  return { prompt: withAppend + resolved.prompt, requiredTools: resolved.requiredTools }
+  return { prompt }
 }
 
 // ---------------------------------------------------------------------------

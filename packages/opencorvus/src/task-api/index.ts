@@ -258,6 +258,11 @@ async function appendDirectAgentSessionReply(input: {
   const text = input.message.trim()
   if (!text) throw new Error("message is required")
   const target = await resolveDirectReplyTarget(input.taskID, input.sessionID)
+  if (target.session.kind === "build" || target.prompt.agent === "build") {
+    throw new Error(
+      `replyAgentSession: build session ${target.session.id} cannot be continued through generic direct reply; dispatch build retry so a fresh stage runtime contract is installed.`,
+    )
+  }
   const messageID = Identifier.ascending("message")
   // R5.1 item 6: the agent is the session's stable conversation role from the
   // envelope, but the MODEL is resolved fresh from the single resolver keyed
@@ -266,6 +271,15 @@ async function appendDirectAgentSessionReply(input: {
   // the same single-source reason; the effective variant comes from the
   // session overlay at stream time, not from a pinned history value.
   const resolvedModel = await resolveAgentModelRef(target.prompt.agent, { taskID: input.taskID })
+  SessionPrompt.validateSessionRuntimeContractForContinuation({
+    sessionID: target.session.id,
+    sessionKind: target.session.kind,
+    expectedAgentKind: target.prompt.agent,
+    expectedGoalID: target.session.goalID,
+    requireRuntimeContract:
+      SessionPrompt.agentKindRequiresRuntimeContract(target.prompt.agent) ||
+      SessionPrompt.agentKindRequiresRuntimeContract(target.session.kind),
+  })
   const message: Message.User = {
     id: messageID,
     sessionID: target.session.id,

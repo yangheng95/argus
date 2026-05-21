@@ -20,34 +20,27 @@ Frontmatter fields (`src/skill/skill.ts:26-45`):
 | `name` | string (required) | Global unique ID |
 | `description` | string (required) | One-line description used by the agent to decide when to activate |
 | `platforms` | `("win32"\|"darwin"\|"linux")[]` | Platform filter; empty = all |
-| `stage` | string | Owning pipeline stage, for example `design_analyst` or `build` |
-| `auto_detect.files` | string[] | Load when these files exist |
-| `auto_detect.deps` | string[] | Load when `package.json` lists these deps |
-| `auto_detect.task_signals` | object | Load from task signals such as image attachment, non-Figma URL, Figma URL, package scripts, or request text |
+| `auto_detect.files` | string[] | Discovery hint when these files exist |
+| `auto_detect.deps` | string[] | Discovery hint when `package.json` lists these deps |
+| `auto_detect.task_signals` | object | Discovery hint from task signals such as image attachment, non-Figma URL, Figma URL, package scripts, or request text |
 | `priority` | number | Sort order (higher first, default 0) |
-| `required_tools` | string[] | Tool calls the owning stage must complete before reporting success |
+| `required_tools` | string[] | Tool hints the skill expects the agent may need |
 
 ## Skill ↔ agent relationship
 
-When `auto_detect` matches the project or task signals, the session prompt receives the matched `SKILL.md` instruction body. Matching skills are visible across stages, so relevant guidance is not lost because a stage label differs.
+Sessions receive a Skill Policy block that lists available skills. Agents should inspect that list, call the `skill` tool to search or load the exact skill, and then follow the loaded `SKILL.md` instructions. Loading a skill is a visible tool call in the session history.
 
-`stage` means ownership for `required_tools`, not discovery visibility:
-
-- A `stage: "build"` skill can be injected into other stages as context, but build owns its `required_tools`.
-- A `stage: "design_analyst"` skill can be injected into build as context, but design-analysis owns mirror acquisition `required_tools`.
-- A skill without `stage` is global, and its `required_tools` apply through the active agent invocation. If no active stage is provided, only global skills contribute `required_tools`.
-
-Skills cannot directly call tools. They influence the agent through injected instructions plus stage-owned required-tool contracts.
+`auto_detect` remains metadata for discovery/ranking and future UI assistance. It does not inject hidden prompt content and it does not open tools. `required_tools` is descriptive metadata surfaced by skill search; the loaded skill instructions tell the agent what evidence to gather.
 
 ## Built-in skills
 
 Shipped with the binary (`src/skill/skill.ts`), exactly three:
 
-| Name | Stage | Purpose |
-|---|---|---|
-| `webpage-generate` | design_analyst | Produce a mirror-grounded PRD/SPEC for a live webpage reference |
-| `image-generate` | design_analyst | Produce a mirror-grounded PRD/SPEC from screenshot-only visual references |
-| `research-report` | build | Produce a sourced Markdown research report using `websearch` and targeted `webfetch` |
+| Name | Purpose |
+|---|---|
+| `webpage-generate` | Produce a mirror-grounded PRD/SPEC for a live webpage reference |
+| `image-generate` | Produce a mirror-grounded PRD/SPEC from screenshot-only visual references |
+| `research-report` | Produce a sourced Markdown research report using `websearch` and targeted `webfetch` |
 
 Other skills must be loaded through configured skill paths or URLs if you need them.
 

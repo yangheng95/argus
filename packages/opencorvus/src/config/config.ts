@@ -1306,7 +1306,6 @@ export namespace Config {
           requirements: z
             .object({
               max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for requirements agent"),
-              skills: z.array(z.string()).optional().describe("Additional skill paths for requirements agent"),
             })
             .optional()
             .describe(
@@ -1315,7 +1314,6 @@ export namespace Config {
           architect: z
             .object({
               max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for architect agent"),
-              skills: z.array(z.string()).optional().describe("Additional skill paths for architect agent"),
             })
             .optional()
             .describe(
@@ -1369,7 +1367,6 @@ export namespace Config {
           design_analyst: z
             .object({
               max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for design analyst agent"),
-              skills: z.array(z.string()).optional().describe("Additional skill paths for design analyst agent"),
             })
             .optional()
             .describe(
@@ -1378,7 +1375,6 @@ export namespace Config {
           intent_analysis: z
             .object({
               max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for intent-analysis agent"),
-              skills: z.array(z.string()).optional().describe("Additional skill paths for intent-analysis agent"),
             })
             .optional()
             .describe(
@@ -1387,10 +1383,6 @@ export namespace Config {
           build: z
             .object({
               max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for build agent"),
-              skills: z
-                .array(z.string())
-                .optional()
-                .describe("Operator-forced build skills. Leave empty for auto_detect-driven skill routing."),
             })
             .optional()
             .describe(

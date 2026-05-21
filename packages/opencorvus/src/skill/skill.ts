@@ -30,13 +30,6 @@ export namespace Skill {
     builtin: z.boolean().optional().default(false),
     location: z.string(),
     content: z.string(),
-    /** Which pipeline stage this skill is for (e.g. "acceptance", "spec",
-     *  "build"). Skills are instruction manuals for ONE stage at a time:
-     *  executors read implementation skills ("build"), validators read
-     *  verification skills ("acceptance"), etc. Planning-stage agents
-     *  (requirements / architect / planner) must NOT see executor skills —
-     *  they plan goals, they don't implement. */
-    stage: z.string().optional(),
     /** Auto-detect conditions — skill is loaded when any condition matches the project
      *  OR the active task. File / deps scan the Instance directory; task_signals are
      *  derived from the current task's request, attachments, and scripts. Any single
@@ -54,10 +47,8 @@ export namespace Skill {
     }).optional(),
     /** Priority for ordering when multiple skills match (higher = first). */
     priority: z.number().optional().default(0),
-    /** Tools the stage agent MUST call before it can report success. Build
-     *  enforces this from the session's completed tool parts and any
-     *  machine-readable artifacts the skill requires. Empty or omitted =
-     *  no enforcement. */
+    /** Descriptive tool hints for agents that load this skill. Empty or
+     *  omitted = no tool hints. */
     required_tools: z.array(z.string()).optional().default([]),
   })
   export type Info = z.infer<typeof Info>
@@ -108,7 +99,7 @@ export namespace Skill {
     // Register built-in skills (lowest priority — user skills with same name override)
     for (const raw of builtins) {
       const md = matter(raw.skill)
-      const parsed = Info.pick({ name: true, description: true, platforms: true, stage: true, auto_detect: true, priority: true, required_tools: true }).safeParse(md.data)
+      const parsed = Info.pick({ name: true, description: true, platforms: true, auto_detect: true, priority: true, required_tools: true }).safeParse(md.data)
       if (!parsed.success) continue
       const location =
         Object.keys(raw.files).length === 0 ? "builtin" : await install(parsed.data.name, raw.skill, raw.files)
@@ -119,7 +110,6 @@ export namespace Skill {
         builtin: true,
         location,
         content: md.content,
-        stage: parsed.data.stage,
         auto_detect: parsed.data.auto_detect,
         priority: parsed.data.priority,
         required_tools: parsed.data.required_tools,
@@ -138,7 +128,7 @@ export namespace Skill {
 
       if (!md) return
 
-      const parsed = Info.pick({ name: true, description: true, platforms: true, stage: true, auto_detect: true, priority: true, required_tools: true }).safeParse(md.data)
+      const parsed = Info.pick({ name: true, description: true, platforms: true, auto_detect: true, priority: true, required_tools: true }).safeParse(md.data)
       if (!parsed.success) return
 
       // Warn on duplicate skill names
@@ -159,7 +149,6 @@ export namespace Skill {
         builtin: false,
         location: match,
         content: md.content,
-        stage: parsed.data.stage,
         auto_detect: parsed.data.auto_detect,
         priority: parsed.data.priority,
         required_tools: parsed.data.required_tools,
