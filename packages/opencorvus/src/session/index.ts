@@ -682,6 +682,23 @@ export namespace Session {
     return rows.map(fromRow)
   })
 
+  export const childrenInProject = fn(
+    z.object({
+      parentID: Identifier.schema("session"),
+      projectID: z.string().min(1),
+    }),
+    async ({ parentID, projectID }) => {
+      const rows = Database.use((db) =>
+        db
+          .select()
+          .from(SessionTable)
+          .where(and(eq(SessionTable.project_id, projectID), eq(SessionTable.parent_id, parentID)))
+          .all(),
+      )
+      return rows.map(fromRow)
+    },
+  )
+
   export const remove = fn(Identifier.schema("session"), async (sessionID) => {
     const session = await get(sessionID)
     for (const child of await children(sessionID)) {

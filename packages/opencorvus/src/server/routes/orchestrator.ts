@@ -36,6 +36,7 @@ import {
   UpdateGoalInput,
 } from "@/engine/model"
 import { RewindTaskInput, taskRewindCursor } from "@/engine/rewind"
+import { requireTask } from "@/engine/store"
 import { TaskQueueReorderError } from "@/engine/queue"
 import { ExecutorNotConfiguredError, EngineService, PlannerFailureError, TaskQueueStartError } from "@/task-api"
 import { ProtocolStore } from "@/protocol/store"
@@ -47,7 +48,7 @@ import { SessionPrompt } from "@/session/prompt"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
 import { Log } from "@/util/log"
-import { sessionGoalID, sessionRole, taskIDForSession, taskSession } from "@/orchestrator/task-event"
+import { sessionGoalID, sessionParentID, sessionRole, taskIDForSession, taskSession } from "@/orchestrator/task-event"
 import { ensureTaskMessageProtocolBridge, overlayMeta } from "@/orchestrator/protocol/message-bridge"
 import { DIRECT_REPLY_AGENT_KINDS } from "@/orchestrator/direct-reply"
 import { BusEvent } from "@/bus/bus-event"
@@ -1367,15 +1368,21 @@ function taskEvent(taskID: string, event: { type: string; properties: Record<str
 }
 
 async function loadTaskTranscript(taskID: string) {
-  const task = await EngineService.getTask(taskID)
-  const rootSessionID = task.sessionID
+  const task = requireTask(taskID)
+  const rootSessionID = task.session_id
   if (!rootSessionID) return []
+  const rootSession = await Session.get(rootSessionID)
+  if (rootSession.projectID !== task.project_id) {
+    throw new Error(
+      `Task ${taskID} root session ${rootSessionID} belongs to project ${rootSession.projectID}, expected ${task.project_id}`,
+    )
+  }
   const sessionIDs: string[] = []
   const queue = [rootSessionID]
   while (queue.length > 0) {
     const id = queue.shift()!
     sessionIDs.push(id)
-    const children = await Session.children(id)
+    const children = await Session.childrenInProject({ parentID: id, projectID: task.project_id })
     queue.push(...children.map((child) => child.id))
   }
   const all = await Promise.all(sessionIDs.map((id) => Session.messages({ sessionID: id })))
@@ -1387,6 +1394,8 @@ async function loadTaskTranscript(taskID: string) {
     ;(msg.info as any).channel = meta.channel
     const goalID = sessionGoalID(sid)
     if (goalID) (msg.info as any).goalID = goalID
+    const parentSessionID = sessionParentID(sid)
+    if (parentSessionID) (msg.info as any).parentSessionID = parentSessionID
   }
   return messages
 }

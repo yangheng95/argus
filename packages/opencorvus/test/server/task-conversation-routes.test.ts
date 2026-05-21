@@ -255,6 +255,84 @@ describe("task conversation routes", () => {
     })
   })
 
+  test("GET /task/:taskID/conversation hydrates transcript from the task project, not the request directory", async () => {
+    await using taskProject = await tmpdir({ git: true })
+    await using selectedProject = await tmpdir({ git: true })
+
+    const app = Server.App()
+    const ids = await Instance.provide({
+      directory: taskProject.path,
+      fn: async () => {
+        const taskID = Identifier.ascending("task")
+        const now = Date.now()
+        const root = await Session.create({
+          kind: "root",
+          title: "task root",
+        })
+        const orchestrator = await Session.create({
+          kind: "orchestrator",
+          parentID: root.id,
+          title: "orchestrator",
+        })
+
+        Database.use((db) =>
+          db.insert(EngineTaskTable).values({
+            id: taskID,
+            project_id: Instance.project.id,
+            session_id: root.id,
+            source: "panel",
+            title: "cross project hydrate",
+            request: "cross project hydrate",
+            priority: "normal",
+            time_created: now,
+            time_updated: now,
+            time_started: now,
+            time_completed: now + 10,
+          }).run(),
+        )
+
+        await Session.updateMessage({
+          id: Identifier.ascending("message"),
+          sessionID: orchestrator.id,
+          role: "user",
+          time: { created: now + 1 },
+          agent: "orchestrator",
+          model: { providerID: "test-provider", modelID: "test-model" },
+        })
+
+        return {
+          taskID,
+          rootSessionID: root.id,
+          orchestratorSessionID: orchestrator.id,
+        }
+      },
+    })
+    await Instance.disposeAll()
+
+    const response = await app.request(`/task/${ids.taskID}/conversation`, {
+      headers: {
+        "x-opencorvus-directory": selectedProject.path,
+      },
+    })
+
+    expect(response.status).toBe(200)
+    const body = await response.json() as {
+      transcript?: Array<{ info?: { sessionID?: string; channel?: string; parentSessionID?: string } }>
+      view?: { sessions?: Array<{ sessionID?: string; stage?: string; placement?: string }> }
+    }
+
+    expect(body.transcript?.map((message) => message.info?.sessionID)).toEqual([ids.orchestratorSessionID])
+    expect(body.transcript?.[0]?.info?.channel).toBe("orchestrator")
+    expect(body.transcript?.[0]?.info?.parentSessionID).toBe(ids.rootSessionID)
+    expect(body.view?.sessions).toContainEqual(
+      expect.objectContaining({
+        sessionID: ids.orchestratorSessionID,
+        stage: "orchestrator",
+        placement: "top_level",
+      }),
+    )
+  })
+
   test("POST /task/:taskID/session/:sessionID/reply appends overlay direct user input to an agent session", async () => {
     await using tmp = await tmpdir({ git: true })
 
