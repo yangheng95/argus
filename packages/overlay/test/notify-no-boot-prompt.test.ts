@@ -115,6 +115,16 @@ describe("notify: startup permission request and in-app fallback", () => {
     expect(notificationStore.items.some((item) => item.id === "event:tsk_test_001:task.completed:2")).toBe(true);
   });
 
+  test("tauri routeNotification attempts native send without a permission prompt", async () => {
+    routeNotification({ taskID: "tsk_test_tauri_001", type: "task.completed", notify: { tier: 2 } });
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(fixture.log.permissionRequests).toBe(0);
+    expect(fixture.log.permissionProbes).toBe(0);
+    expect(fixture.log.sends).toBe(1);
+  });
+
   test("routeNotification sends an OS notification when permission is granted and tier allows it", async () => {
     fixture.setPermission("granted");
     routeNotification({ taskID: "tsk_test_send_001", type: "task.completed", notify: { tier: 2 } });

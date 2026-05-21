@@ -1,11 +1,13 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import {
   clearNotifications,
+  ackTaskNotification,
   computeBadge,
   notificationStore,
   replaceBadgeAcksForTest,
   recomputeBadgeFromTasks,
   routeNotification,
+  taskHasUnreadNotification,
 } from "../src/services/notify";
 import {
   __setHostTransportForTest,
@@ -131,6 +133,7 @@ describe("routeNotification tier matrix", () => {
     await flushNotifications();
 
     expect(notificationStore.items).toHaveLength(1);
+    expect(notificationStore.items[0]?.taskID).toBe("tsk_notify");
     expect(calls.sends).toBe(0);
   });
 
@@ -237,6 +240,40 @@ describe("computeBadge projection", () => {
 
     const allAcks = new Set(["task-failed:tsk_failed:100", "evaluation-rejected:evl_rejected:200"]);
     expect(computeBadge([failed, rejected], allAcks).count).toBe(0);
+  });
+
+  test("pending interaction acks clear task unread highlight until the task version changes", () => {
+    const waiting = taskItem({ id: "tsk_waiting", pending: 2, updated: 100 });
+    expect(taskHasUnreadNotification(waiting)).toBe(true);
+    expect(computeBadge([waiting], new Set()).count).toBe(2);
+
+    const acks = new Set(["task-interactions:tsk_waiting:100"]);
+    expect(computeBadge([waiting], acks).count).toBe(0);
+
+    const updatedWaiting = taskItem({ id: "tsk_waiting", pending: 1, updated: 300 });
+    expect(computeBadge([updatedWaiting], acks).count).toBe(1);
+  });
+
+  test("ackTaskNotification clears all current notification facts for a task", () => {
+    const waitingRejectedFailure = taskItem({
+      id: "tsk_notify",
+      pending: 1,
+      status: "failed",
+      updated: 100,
+      completed: 120,
+      evaluation: {
+        id: "evl_notify",
+        verdict: "rejected",
+        time: { completed: 140, updated: 130 },
+      },
+    });
+    setBoardStore("tasks", [waitingRejectedFailure]);
+
+    expect(taskHasUnreadNotification(waitingRejectedFailure)).toBe(true);
+    const projection = ackTaskNotification("tsk_notify");
+
+    expect(projection.count).toBe(0);
+    expect(taskHasUnreadNotification(waitingRejectedFailure)).toBe(false);
   });
 
   test("recompute pushes dock badge and derives tray attention from count", async () => {
