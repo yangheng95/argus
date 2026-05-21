@@ -14,7 +14,9 @@
 //   * Tier 2 always shows an in-app toast; OS notification fires only when
 //     the overlay window is unfocused.
 //   * Tier 3 stays in the existing in-app event feed only.
-//   * Skip OS delivery when desktop notifications are disabled or unsupported.
+//   * Tauri host attempts native delivery directly after focus/settings
+//     checks; browser host still requires a granted Web Notification
+//     permission before dispatch.
 //
 // Permission is requested only from the Settings toggle, which is a real
 // user gesture in every host. Task lifecycle events keep the permission
@@ -50,10 +52,16 @@ export interface AppNotificationInput {
   tone: AppNotificationTone;
   title: string;
   message?: string;
+  taskID?: string;
   timeoutMs?: number;
 }
 
-export interface AppNotificationItem extends Required<Omit<AppNotificationInput, "timeoutMs">> {
+export interface AppNotificationItem {
+  id: string;
+  tone: AppNotificationTone;
+  title: string;
+  message: string;
+  taskID: string;
   time: number;
   timeoutMs: number;
 }
@@ -121,6 +129,7 @@ export function showNotification(input: AppNotificationInput): string {
     tone: input.tone,
     title: input.title,
     message: input.message || "",
+    taskID: input.taskID || "",
     timeoutMs: input.timeoutMs ?? defaultTimeout(input.tone),
     time: Date.now(),
   };
@@ -281,6 +290,10 @@ async function sendDesktopIfAllowed(
   body: string,
 ): Promise<void> {
   if (!shouldSendDesktop(event, taskID)) return;
+  if (getHostTransport().kind === "tauri") {
+    await sendHostNotification(title, body, `oc:${taskID || "global"}:${event.type}`);
+    return;
+  }
   const permission = await readHostPermission();
   if (permission !== "granted") return;
   await sendHostNotification(title, body, `oc:${taskID || "global"}:${event.type}`);
@@ -298,11 +311,13 @@ export function routeNotification(event: RoutedNotificationEvent): void {
     tone: toneForTier(notify),
     title,
     message: body,
+    taskID,
   });
   void sendDesktopIfAllowed(event, taskID, title, body);
 }
 
 export type BadgeAckKey =
+  | `task-interactions:${string}:${number}`
   | `task-failed:${string}:${number}`
   | `evaluation-rejected:${string}:${number}`;
 
@@ -326,6 +341,14 @@ export function taskFailedAckKey(item: any): BadgeAckKey {
   return `task-failed:${taskID}:${version}`;
 }
 
+export function taskInteractionAckKey(item: any): BadgeAckKey {
+  const task = item?.task ?? item;
+  const taskID = String(task?.id || "");
+  if (!taskID) throw new Error("computeBadge: pending-interaction task is missing task.id");
+  const version = factVersion(task?.time?.updated, `task ${taskID} pending-interaction time`);
+  return `task-interactions:${taskID}:${version}`;
+}
+
 export function evaluationRejectedAckKey(evaluation: any): BadgeAckKey {
   const evaluationID = String(evaluation?.id || "");
   if (!evaluationID) throw new Error("computeBadge: rejected evaluation is missing evaluation.id");
@@ -340,12 +363,22 @@ export function computeBadge(globalSummary: readonly any[], acks: ReadonlySet<st
   let count = 0;
   for (const item of globalSummary) {
     const pending = Number(item?.pending_interactions ?? 0);
-    if (Number.isFinite(pending) && pending > 0) count += pending;
+    if (Number.isFinite(pending) && pending > 0 && !acks.has(taskInteractionAckKey(item))) count += pending;
     if ((item?.task ?? item)?.status === "failed" && !acks.has(taskFailedAckKey(item))) count += 1;
     const evaluation = item?.evaluation;
     if (evaluation?.verdict === "rejected" && !acks.has(evaluationRejectedAckKey(evaluation))) count += 1;
   }
   return { count };
+}
+
+export function taskNotificationAckKeys(item: any): BadgeAckKey[] {
+  const keys: BadgeAckKey[] = [];
+  const pending = Number(item?.pending_interactions ?? 0);
+  if (Number.isFinite(pending) && pending > 0) keys.push(taskInteractionAckKey(item));
+  if ((item?.task ?? item)?.status === "failed") keys.push(taskFailedAckKey(item));
+  const evaluation = item?.evaluation;
+  if (evaluation?.verdict === "rejected") keys.push(evaluationRejectedAckKey(evaluation));
+  return keys;
 }
 
 let badgeAcks = new Set<string>(loadBadgeAckKeys());
@@ -378,6 +411,20 @@ export function ackBadge(key: BadgeAckKey): BadgeProjection {
   badgeAcks.add(key);
   persistBadgeAcks();
   return recomputeBadgeFromTasks();
+}
+
+export function ackTaskNotification(taskID: string): BadgeProjection {
+  const item = boardStore.tasks.find((entry: any) => entry?.task?.id === taskID);
+  if (!item) throw new Error(`ackTaskNotification: task ${taskID} is missing from task summary`);
+  for (const key of taskNotificationAckKeys(item)) {
+    badgeAcks.add(key);
+  }
+  persistBadgeAcks();
+  return recomputeBadgeFromTasks();
+}
+
+export function taskHasUnreadNotification(item: any): boolean {
+  return taskNotificationAckKeys(item).some((key) => !badgeAcks.has(key));
 }
 
 export function replaceBadgeAcksForTest(keys: Iterable<string>): void {

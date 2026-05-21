@@ -7,7 +7,7 @@ import { boardStore, visibleTasks, loadTasks, taskCreatedAt } from "../store/boa
 import { settingsStore } from "../store/settings";
 import { reorderTaskQueue, startQueuedTaskNow } from "../services/task-queue";
 import { exportTaskArchive, importTaskArchive } from "../services/task-archive";
-import { notifyError, notifyProgress, notifySuccess, notifyWarning } from "../services/notify";
+import { notifyError, notifyProgress, notifySuccess, notifyWarning, taskHasUnreadNotification } from "../services/notify";
 import { useArmedConfirm } from "../solid/armed-confirm";
 import { useAsyncAction } from "../solid/async-action";
 import { t } from "../utils/i18n";
@@ -295,6 +295,7 @@ function TaskRow(props: {
   const status = () => (pending() ? "active" : props.item?.task?.status || "idle");
   const title = () => taskListTitle(props.item) || id();
   const isActive = () => !pending() && props.isSelected(id());
+  const hasUnreadNotification = () => !pending() && taskHasUnreadNotification(props.item);
   const badgeLabel = () => taskListBadge(props.item, props.queuePos);
   const canCancel = () =>
     !pending() && !!id() && !!props.onCancelTask && INTERRUPTABLE_TASK_STATUSES.has(status());
@@ -315,6 +316,7 @@ function TaskRow(props: {
       class="task-row-mini global-task-row"
       data-active={isActive() ? "true" : undefined}
       data-status={status()}
+      data-notification-unread={hasUnreadNotification() ? "true" : undefined}
       data-draggable={canDrag() ? "true" : undefined}
       data-dragging={props.dragging ? "true" : undefined}
       data-drag-over={props.dragOver ? "true" : undefined}

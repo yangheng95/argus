@@ -29,3 +29,8 @@ test("TaskList archive flows use the in-app notification center instead of alert
   expect(TASK_LIST_SOURCE).toContain("notifyWarning({");
   expect(TASK_LIST_SOURCE).not.toContain("window.alert(");
 });
+
+test("TaskList marks tasks with unread notification facts", () => {
+  expect(TASK_LIST_SOURCE).toContain("taskHasUnreadNotification");
+  expect(TASK_LIST_SOURCE).toContain('data-notification-unread={hasUnreadNotification() ? "true" : undefined}');
+});

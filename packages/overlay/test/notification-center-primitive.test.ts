@@ -12,3 +12,12 @@ test("NotificationCenter routes dismiss control through the Button primitive", (
   expect(STYLES).toContain('.app-notification .oc-button[data-ui="app-notification-close"]');
   expect(STYLES).not.toContain(".app-notification__close");
 });
+
+test("NotificationCenter routes task notification activation through task selection and ack", () => {
+  expect(SOURCE).toContain("activateTaskNotification");
+  expect(SOURCE).toContain("await selectTask(item.taskID)");
+  expect(SOURCE).toContain("await loadTasks()");
+  expect(SOURCE).toContain("ackTaskNotification(item.taskID)");
+  expect(SOURCE).toContain("dismissNotification(item.id)");
+  expect(SOURCE).toContain('data-clickable={item.taskID ? "true" : undefined}');
+});

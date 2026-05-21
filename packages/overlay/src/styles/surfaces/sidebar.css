@@ -362,6 +362,24 @@
   background: var(--accent);
 }
 
+.task-row-mini[data-notification-unread="true"] {
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--warn) 13%, transparent), transparent 72%),
+    color-mix(in srgb, var(--surface-hover) 62%, transparent);
+  border-color: color-mix(in srgb, var(--warn) 34%, transparent);
+}
+
+.task-row-mini[data-notification-unread="true"]::before {
+  background: var(--warn);
+}
+
+.task-row-mini[data-active="true"][data-notification-unread="true"] {
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--warn) 11%, transparent), transparent 76%),
+    color-mix(in srgb, var(--accent) 10%, var(--surface-hover));
+  border-color: color-mix(in srgb, var(--warn) 36%, var(--accent));
+}
+
 .task-row-right {
   display: flex;
   flex-direction: column;
