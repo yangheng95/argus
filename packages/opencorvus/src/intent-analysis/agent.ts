@@ -93,7 +93,6 @@ export namespace IntentAnalysisAgent {
         schema: z.toJSONSchema(IntentFinalSchema) as Record<string, unknown>,
         retryCount: 2,
       },
-      skillsStage: "intent_analysis",
     })
 
     const structured = out.structured as IntentFinal | undefined

@@ -14,7 +14,6 @@ import { SessionPromptState } from "./state"
 export namespace SessionPrompt {
   export const assertNotBusy = SessionPromptState.assertNotBusy
   export const cancel = (sessionID: string) => {
-    SessionLoop.clearSessionRuntimeContract(sessionID)
     return SessionPromptState.cancel(sessionID)
   }
 
@@ -26,13 +25,10 @@ export namespace SessionPrompt {
     setSessionRuntimeContract,
     getSessionRuntimeContract,
     clearSessionRuntimeContract,
-    setExtraTools,
-    getExtraTools,
-    withExtraTools,
-    withTerminalToolContract,
+    validateSessionRuntimeContractForContinuation,
+    agentKindRequiresRuntimeContract,
     setStepHook,
     withStepHook,
-    withStructuredOutputGuard,
   } = SessionLoop
   export const { ShellInput, shell } = SessionShell
   export type ShellInput = SessionShell.ShellInput

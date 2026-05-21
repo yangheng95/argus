@@ -95,6 +95,7 @@ describe("claude agent sdk options", () => {
     const options = calls[0]?.options as Record<string, unknown> | undefined
     const systemPrompt = options?.systemPrompt as { append?: string } | undefined
     expect(systemPrompt?.append).toContain("base system")
+    expect(systemPrompt?.append).toContain("skill => mcp__opencorvus__skill")
     expect(systemPrompt?.append).toContain("memory => mcp__opencorvus__memory")
     expect(systemPrompt?.append).toContain("task_report => mcp__opencorvus__task_report")
     expect(systemPrompt?.append).not.toContain("webpage_extract => mcp__opencorvus__webpage_extract")

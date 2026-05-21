@@ -460,22 +460,30 @@ export namespace Orchestrator {
         streamErrors.push({ reason: msg, errorName: props.error?.name })
       })
 
-      // 5. Run the orchestrator session — tools via withExtraTools. Step limit
-      //    lives on agent.orchestrator.steps.
+      // 5. Run the orchestrator session — tools via SessionRuntimeContract.
+      //    Step limit lives on agent.orchestrator.steps.
       let finalMessage: Message.WithParts | undefined
       try {
-        await SessionPrompt.withExtraTools(agentSession.id, guard.tools as any, async () => {
-          finalMessage = (await SessionPrompt.prompt({
+        SessionPrompt.setSessionRuntimeContract(agentSession.id, {
+          identity: {
             sessionID: agentSession.id,
-            model: { providerID: model.providerID, modelID: model.api.id },
-            agent: "orchestrator",
-            system: Array.isArray(system) ? system.join("\n\n") : system,
-            systemMode: "complete",
-            tools: enableMap,
-            parts: partsWithIds,
-          })) as Message.WithParts
+            agentKind: "orchestrator",
+            contractKind: "orchestrator-wake",
+            installedAt: Date.now(),
+          },
+          tools: guard.tools as any,
         })
+        finalMessage = (await SessionPrompt.prompt({
+          sessionID: agentSession.id,
+          model: { providerID: model.providerID, modelID: model.api.id },
+          agent: "orchestrator",
+          system: Array.isArray(system) ? system.join("\n\n") : system,
+          systemMode: "complete",
+          tools: enableMap,
+          parts: partsWithIds,
+        })) as Message.WithParts
       } finally {
+        SessionPrompt.clearSessionRuntimeContract(agentSession.id)
         errorUnsub()
         ctrl.signal.removeEventListener("abort", abortPrompt)
       }

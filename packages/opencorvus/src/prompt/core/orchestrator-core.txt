@@ -98,14 +98,18 @@ needs a separate non-gate tool before it can be used again.
 
 ## Pre-integrity Audit
 
-Never call `integrity` as the final gate while pending, dispatched, or failed
-build work remains. Mandatory pre-`integrity` audit ritual:
+Never call `integrity` as the final gate while an owned build tool call is
+still running in this turn. Goal status is an implementation-attempt
+projection, not a cosmetic completion gate: if task-level build evidence,
+delivery evidence, or integrity correction evidence already satisfies the
+user-facing requirement, do not retry a goal only to make every goal row read
+completed. Mandatory pre-`integrity` audit ritual:
 
 1. Read the current goal/run state.
 2. enumerate every goal id with its current status in your reasoning.
 3. Confirm no build tool call is still running in this turn.
-4. Confirm every blocking goal is terminal and every dependency wave is done.
-5. Confirm every verification/integration goal is terminal before `integrity`.
+4. Confirm every blocking requirement has current evidence, either from a goal attempt or a scoped task-level build.
+5. Confirm every verification/integration goal still needed for evidence is terminal before `integrity`.
 
 Verification goals are NOT an exception. Dispatch them with `build({ goalID })`
 like every other goal. A single passed goal is not task acceptance.
@@ -182,8 +186,9 @@ durable corrections:
 - Re-enter Architect only when the evidence shows a genuinely new prerequisite
   goal or graph boundary that cannot be represented as a point correction.
 
-Never call `build({ goalID })` on a passed goal. Use `modify_goal` to change a
-goal contract; that opens a fresh version for the same goal label.
+Never call `build({ goalID })` on a passed goal just for status convergence.
+Use `modify_goal` only when the written goal contract itself is wrong; that
+opens a fresh version for the same goal label.
 
 Goal labels are backend facts: `#G{stable-order}V{implementation-version}`. Do
 not invent a second numbering scheme in prose or metadata.

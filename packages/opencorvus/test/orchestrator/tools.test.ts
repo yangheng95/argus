@@ -52,6 +52,11 @@ import { Filesystem } from "../../src/util/filesystem"
 import { EngineService } from "../../src/task-api"
 import { Question } from "../../src/question"
 import { deriveTaskStatus } from "../../src/engine/task-status"
+import {
+  createOrchestratorToolOwnershipPayload,
+  insertOrchestratorToolOwnershipArtifact,
+  listLiveOrchestratorToolOwnership,
+} from "../../src/engine/tool-ownership"
 
 let buildAgentRunImpl: ((input: any) => Promise<any>) | undefined
 let reviewIntegrityImpl: ((input: any) => Promise<any>) | undefined
@@ -61,6 +66,19 @@ let deliveryServiceVerifyImpl: ((input: any) => Promise<any>) | undefined
 let designAnalyzeImpl: ((input: any) => Promise<any>) | undefined
 let mcpServerToolsImpl: (() => Promise<any[]>) | undefined
 let mcpCallToolImpl: ((input: { key: string; args: Record<string, unknown> }) => Promise<any>) | undefined
+
+function buildToolOptions(label = "build") {
+  const stamp = `${Date.now()}_${Math.random().toString(16).slice(2)}`
+  return {
+    toolCallId: `cal_${label}_${stamp}`,
+    opencorvus: {
+      sessionID: `ses_${label}_${stamp}`,
+      messageID: `msg_${label}_${stamp}`,
+      toolCallID: `cal_${label}_${stamp}`,
+      toolPartID: `prt_${label}_${stamp}`,
+    },
+  } as any
+}
 
 function acceptedAcceptance() {
   return {
@@ -143,8 +161,15 @@ mock.module("@/plugin", () => ({
   },
 }))
 
-async function markBuildSlotAcquired(input: any) {
-  await input.onSlotAcquired?.()
+async function markBuildSlotAcquired(input: any, sessionID = `ses_build_mock_${Date.now()}_${Math.random().toString(36).slice(2)}`) {
+  await input.onSessionCreated?.(
+    sessionID,
+    {
+      worktreeDir: input.managedWorktree?.directory,
+      worktreeBranch: input.managedWorktree?.branch,
+      worktreeBaseRef: input.managedWorktree?.baseRef,
+    },
+  )
 }
 
 function deliveryDecisionFixture(verdict: any) {
@@ -432,7 +457,7 @@ describe("orchestrator tools", () => {
             question: "Locate the AuctionData source component and summarize the relevant files.",
             reason: "Need repository facts before requirements.",
           },
-          {} as any,
+          buildToolOptions(),
         )
 
         expect(result).toContain("Explore complete")
@@ -530,7 +555,7 @@ describe("orchestrator tools", () => {
             reason: "Scoped workflow task; direct build is enough.",
             directBuildIntent: "modify_files",
           },
-          {} as any,
+          buildToolOptions(),
         )
 
         expect(result).toContain("Build agent finished")
@@ -618,7 +643,7 @@ describe("orchestrator tools", () => {
               goalID,
               reason: "Per-goal build should reject persisted graph/audit mismatch before starting build.",
             },
-            {} as any,
+            buildToolOptions(),
           ),
         ).rejects.toThrow("contract_audit references unknown graph contract")
         expect(buildStarted).toBe(false)
@@ -627,7 +652,7 @@ describe("orchestrator tools", () => {
     })
   })
 
-  test("steer_subagent resolves a live goal_run id to the child build session", async () => {
+  test("steer_subagent refuses generic direct reply for a build goal_run session", async () => {
     const now = Date.now()
     const stamp = now.toString(16)
     const projectID = `project_steer_goal_run_${stamp}`
@@ -645,7 +670,7 @@ describe("orchestrator tools", () => {
       request: "Resolve goal_run ids to build sessions",
       goalTitle: "Build child session",
       goalSlug: "build-child-session",
-      objective: "Allow steering a running build via the live goal_run id from read_context",
+      objective: "Reject steering a running build via the live goal_run id from read_context",
       now,
     })
 
@@ -684,16 +709,17 @@ describe("orchestrator tools", () => {
             message: "汇报当前实现进度",
             reason: "live goal_run should resolve to the child build session",
           },
-          {} as any,
+          buildToolOptions(),
         )
 
-        expect(replySpy).toHaveBeenCalledWith(taskID, child.id, { message: "汇报当前实现进度" })
-        expect(result).toContain(`source=${goalRunID} -> session ${child.id}`)
+        expect(replySpy).not.toHaveBeenCalled()
+        expect(result).toContain("Error: steer_subagent cannot generically steer build session")
+        expect(result).toContain(child.id)
       },
     })
   })
 
-  test("steer_subagent resolves goal_id to the latest child build session", async () => {
+  test("steer_subagent refuses generic direct reply for a build goal_id target", async () => {
     const now = Date.now()
     const stamp = now.toString(16)
     const projectID = `project_steer_goal_id_${stamp}`
@@ -711,7 +737,7 @@ describe("orchestrator tools", () => {
       request: "Resolve goal ids to build sessions",
       goalTitle: "Build child session",
       goalSlug: "build-child-session",
-      objective: "Allow steering a running build via goal_id without guessing the child session",
+      objective: "Reject steering a running build via goal_id without guessing the child session",
       now,
     })
 
@@ -750,11 +776,13 @@ describe("orchestrator tools", () => {
             message: "汇报当前测试进度",
             reason: "goal_id should resolve to the latest live child session",
           },
-          {} as any,
+          buildToolOptions(),
         )
 
-        expect(replySpy).toHaveBeenCalledWith(taskID, child.id, { message: "汇报当前测试进度" })
-        expect(result).toContain(`source=${goalID} -> goal_run ${goalRunID} -> session ${child.id}`)
+        void goalRunID
+        expect(replySpy).not.toHaveBeenCalled()
+        expect(result).toContain("Error: steer_subagent cannot generically steer build session")
+        expect(result).toContain(child.id)
       },
     })
   })
@@ -835,7 +863,7 @@ describe("orchestrator tools", () => {
             session_id: child.id,
             reason: "steer gave no useful progress; abort the stale child before re-dispatch",
           },
-          {} as any,
+          buildToolOptions(),
         )
 
         expect(findGoalRun(goalRunID)?.status).toBe("aborted")
@@ -921,13 +949,102 @@ describe("orchestrator tools", () => {
             goal_id: goalID,
             reason: "resume should terminate the latest live child session for this goal before re-dispatch",
           },
-          {} as any,
+          buildToolOptions(),
         )
 
         expect(findGoalRun(goalRunID)?.status).toBe("aborted")
         expect(findExecutorSession(executorSessionID)?.status).toBe("aborted")
         expect(result).toContain(`Cancelled sub-agent session ${child.id}`)
         expect(result).toContain(`source=${goalID} -> goal_run ${goalRunID} -> session ${child.id}`)
+      },
+    })
+  })
+
+  test("live build ownership blocks cancel_subagent and modify_goal contract mutation", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_live_owner_guard_${stamp}`
+    const taskID = `tsk_live_owner_guard_${stamp}`
+    const goalID = `gol_live_owner_guard_${stamp}`
+
+    insertWorkflowTaskWithGoal({
+      projectID,
+      taskID,
+      goalID,
+      sessionID: null,
+      worktree: tmp.path,
+      projectName: "live owner guard",
+      taskTitle: "live owner guard",
+      request: "Do not mutate a goal while its build tool owns it",
+      goalTitle: "Owned build goal",
+      goalSlug: "owned-build-goal",
+      objective: "Guard live build ownership",
+      now,
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "live owner parent" })
+        const child = await Session.create({
+          kind: "build",
+          parentID: parent.id,
+          goalID,
+          title: "live owner child",
+        })
+        Database.use((db) =>
+          db.update(EngineTaskTable).set({ session_id: parent.id }).where(eq(EngineTaskTable.id, taskID)).run(),
+        )
+        const goalRunID = beginBuildAttempt({
+          taskID,
+          goalID,
+          sessionID: child.id,
+        })
+        const ownershipPayload = createOrchestratorToolOwnershipPayload({
+          taskID,
+          orchestratorSessionID: parent.id,
+          orchestratorMessageID: `msg_live_owner_${stamp}`,
+          toolCallID: `cal_live_owner_${stamp}`,
+          toolPartID: `prt_live_owner_${stamp}`,
+          childSessionID: child.id,
+          scope: "goal",
+          goalID,
+          goalRunID,
+        })
+        insertOrchestratorToolOwnershipArtifact({
+          taskID,
+          goalRunID,
+          label: "tool-ownership-start",
+          payload: ownershipPayload,
+        })
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const cancelResult = await tools.cancel_subagent.execute(
+          {
+            goal_id: goalID,
+            reason: "orchestrator should not cancel a live owned build",
+          },
+          buildToolOptions(),
+        )
+        expect(cancelResult).toContain("Error: cancel_subagent cannot cancel build session")
+        expect(findGoalRun(goalRunID)?.status).toBe("running")
+
+        const modifyResult = await tools.modify_goal.execute(
+          {
+            goalID,
+            updates: { objective: "Mutated while live" },
+            reason: "should be rejected while live owned",
+          },
+          buildToolOptions(),
+        )
+        expect(modifyResult).toContain("Error: modify_goal refused")
+        expect(findGoal(goalID)?.objective).toBe("Guard live build ownership")
+        expect(listLiveOrchestratorToolOwnership(taskID)).toHaveLength(1)
       },
     })
   })
@@ -1068,7 +1185,7 @@ describe("orchestrator tools", () => {
             request: "Write the direct output file.",
             reason: "Explicit kind=build task-level direct implementation.",
           },
-          {} as any,
+          buildToolOptions(),
         )
         expect(buildResult).toContain("Build agent finished")
 
@@ -1078,7 +1195,7 @@ describe("orchestrator tools", () => {
 
         const deliverResult = await tools.deliver.execute(
           { reason: "Direct build finished and must pass delivery." },
-          {} as any,
+          buildToolOptions(),
         )
 
         expect(deliverResult).toContain("deliver: disabled")
@@ -1211,7 +1328,7 @@ describe("orchestrator tools", () => {
             request: "Write the accepted output file.",
             reason: "Per-goal pipeline implementation before integrity.",
           },
-          {} as any,
+          buildToolOptions(),
         )
         expect(buildResult).toContain("Build agent finished")
 
@@ -1221,7 +1338,7 @@ describe("orchestrator tools", () => {
         insertArchitectContractGraphArtifact({ taskID, now: now + 1 })
         const integrityResult = await tools.integrity.execute(
           { reason: "Goal build finished and post-build integrity should complete the task." },
-          {} as any,
+          buildToolOptions(),
         )
 
         expect(integrityResult).toContain("Integrity verdict: pass")
@@ -1248,7 +1365,7 @@ describe("orchestrator tools", () => {
 
         const publishResult = await tools.publish_delivery.execute(
           { reason: "Explicit artifact export after integrity completion." },
-          {} as any,
+          buildToolOptions(),
         )
         expect(publishResult).toContain("publish_delivery: disabled")
         const taskAfterPublishAttempt = Database.use((db) =>
@@ -1385,7 +1502,7 @@ describe("orchestrator tools", () => {
             request: "Write output that will need correction.",
             reason: "Per-goal pipeline implementation before integrity.",
           },
-          {} as any,
+          buildToolOptions(),
         )
         expect(buildResult).toContain("Build agent finished")
 
@@ -1395,7 +1512,7 @@ describe("orchestrator tools", () => {
         insertArchitectContractGraphArtifact({ taskID, now: now + 1 })
         const integrityResult = await tools.integrity.execute(
           { reason: "Goal build finished and post-build integrity should block the run." },
-          {} as any,
+          buildToolOptions(),
         )
 
         expect(integrityResult).toContain("Integrity verdict: needs_correction")
@@ -1470,7 +1587,7 @@ describe("orchestrator tools", () => {
             request: "Implement the page directly.",
             reason: "Scoped workflow task; direct build is enough.",
           },
-          {} as any,
+          buildToolOptions(),
         )
 
         expect(result).toContain("rejected task-level workflow build")
@@ -1539,7 +1656,7 @@ describe("orchestrator tools", () => {
             reason: "Need repository investigation before implementation.",
             directBuildIntent: retiredIntent,
           } as any,
-          {} as any,
+          buildToolOptions(),
         )
 
         expect(result).toContain("rejected task-level build")
@@ -1606,7 +1723,7 @@ describe("orchestrator tools", () => {
             priority: "high",
             kind: "workflow",
           },
-          {} as any,
+          buildToolOptions(),
         )
 
         let pending = await Question.list()
@@ -1695,7 +1812,7 @@ describe("orchestrator tools", () => {
             priority: "normal",
             kind: "build",
           },
-          {} as any,
+          buildToolOptions(),
         )
 
         let pending = await Question.list()
@@ -1777,7 +1894,7 @@ describe("orchestrator tools", () => {
             goalID,
             reason: "Try to build visual goal",
           },
-          {} as any,
+          buildToolOptions(),
         )
         expect(buildResult).toContain("blocked")
         expect(buildResult).toContain("design_analysis")
@@ -1973,7 +2090,7 @@ describe("orchestrator tools", () => {
             reason: "Figma MCP visual reference requires PRD/SPEC",
             figma_url: figmaUrl,
           },
-          {} as any,
+          buildToolOptions(),
         )
         expect(result).toContain("SUCCESS")
         expect(calls.map((call) => call.key).sort()).toEqual(
@@ -2079,7 +2196,7 @@ describe("orchestrator tools", () => {
             goalID: childGoalID,
             reason: "stale orchestrator view",
           },
-          {} as any,
+          buildToolOptions(),
         )
 
         expect(result).toContain("blocked by unfinished dependencies")
@@ -2372,7 +2489,7 @@ describe("orchestrator tools", () => {
             goalID,
             reason: "Per-goal pipeline execution.",
           },
-          {} as any,
+          buildToolOptions(),
         )
 
         // Wave-level review (B-wave / spec architecture-rework-loosening
@@ -2652,7 +2769,7 @@ describe("orchestrator tools", () => {
             request: "Implement the goal",
             reason: "Per-goal pipeline execution.",
           },
-          {} as any,
+          buildToolOptions(),
         )
 
         expect(result).toContain("status=passed")
@@ -2764,7 +2881,7 @@ describe("orchestrator tools", () => {
             request: "Implement the goal",
             reason: "Per-goal pipeline execution.",
           },
-          {} as any,
+          buildToolOptions(),
         )
 
         // Post-fix (B-wave): build tool does NOT trigger architecture review
@@ -2868,7 +2985,7 @@ describe("orchestrator tools", () => {
             request: "Implement the goal",
             reason: "Per-goal pipeline execution.",
           },
-          {} as any,
+          buildToolOptions(),
         )
 
         // Post-fix (B-wave): build tool no longer auto-runs architecture
@@ -3039,7 +3156,7 @@ describe("orchestrator tools", () => {
             request: "Implement the bootstrap goal",
             reason: "Per-goal pipeline execution.",
           },
-          {} as any,
+          buildToolOptions(),
         )
 
         // Post-fix (B-wave): build tool no longer triggers review. The
@@ -3216,7 +3333,7 @@ describe("orchestrator tools", () => {
             request: "Implement the foundation goal",
             reason: "Per-goal pipeline execution.",
           },
-          {} as any,
+          buildToolOptions(),
         )
 
         // Post-fix (B-wave): build tool no longer triggers review at all,
@@ -3302,7 +3419,7 @@ describe("orchestrator tools", () => {
             request: "Implement the single goal",
             reason: "Per-goal pipeline execution.",
           },
-          {} as any,
+          buildToolOptions(),
         )
 
         expect(result).toContain("build_result_ignored")
@@ -3744,7 +3861,7 @@ describe("orchestrator tools", () => {
             request: "Implement the goal",
             reason: "Per-goal pipeline execution.",
           },
-          {} as any,
+          buildToolOptions(),
         )
 
         expect(result).toContain("status=passed")
@@ -3785,9 +3902,8 @@ describe("orchestrator tools", () => {
         })
         buildAgentRunImpl = async (input: any) => {
           expect(listGoalRunsByGoal(goalID)).toHaveLength(0)
-          await markBuildSlotAcquired(input)
+          await markBuildSlotAcquired(input, "ses_build_session_bind")
           expect(goalStatusByID(goalID)).toBe("running")
-          await input.onSessionCreated?.("ses_build_session_bind")
           observedSessionID = listGoalRunsByGoal(goalID)[0]?.session_id
           return {
             result: {
@@ -3822,7 +3938,7 @@ describe("orchestrator tools", () => {
             request: "Implement the goal",
             reason: "Per-goal pipeline execution.",
           },
-          {} as any,
+          buildToolOptions(),
         )
 
         expect(result).toContain("status=passed")
@@ -3917,7 +4033,7 @@ describe("orchestrator tools", () => {
             request: "Implement the goal",
             reason: "Per-goal pipeline execution.",
           },
-          {} as any,
+          buildToolOptions(),
         )
 
         expect(result).toContain("status=passed")
@@ -4071,7 +4187,7 @@ describe("orchestrator tools", () => {
             request: "Implement the goal",
             reason: "Per-goal pipeline execution.",
           },
-          {} as any,
+          buildToolOptions(),
         )
 
         expect(result).toContain("status=passed")
@@ -4148,7 +4264,7 @@ describe("orchestrator tools", () => {
             request: "Implement the goal",
             reason: "Per-goal pipeline execution.",
           },
-          {} as any,
+          buildToolOptions(),
         )
 
         expect(result).toContain("status=failed")
@@ -4224,7 +4340,7 @@ describe("orchestrator tools", () => {
             request: "Implement the goal",
             reason: "Per-goal pipeline execution.",
           },
-          {} as any,
+          buildToolOptions(),
         )
 
         expect(result).toContain("status=passed")
@@ -4348,7 +4464,7 @@ describe("orchestrator tools", () => {
             request: "Apply delivery visual feedback",
             reason: "Retry after delivery rejection.",
           },
-          {} as any,
+          buildToolOptions(),
         )
 
         expect(result).toContain("status=passed")

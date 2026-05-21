@@ -112,6 +112,7 @@ function handoffFixture(): CompactionHandoff.Info {
     objective: "Harden compaction handoff so sessions resume with requirements intact",
     acceptanceCriteria: ["Legacy prose summaries must not compact away older turns"],
     durableInstructionSources: [{ path: "/repo/AGENTS.md", role: "project rules" }],
+    activeBuildContracts: [],
     currentState: {
       phase: "validating compaction boundary behavior",
       activeTask: "update filterCompacted summary boundary validation",

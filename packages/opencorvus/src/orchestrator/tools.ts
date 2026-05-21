@@ -34,7 +34,13 @@ import { Event as EngineEvent } from "@/engine/model"
 import { EngineProtocol } from "@/engine/protocol"
 import { renderDesignAnalysisHandoffReference, designAnalysisArtifactPaths } from "@/design-analyst/handoff"
 import { materializeMcpToolResult } from "@/mcp/materialize"
-import { EngineArtifactTable, EngineExecutorSessionTable, EngineGoalTable, EngineTaskTable } from "@/engine/engine.sql"
+import {
+  EngineArtifactTable,
+  EngineExecutorSessionTable,
+  EngineGoalTable,
+  EngineTaskTable,
+  type EngineArtifactKind,
+} from "@/engine/engine.sql"
 import {
   supersedePriorActivePlansForTask,
   ensureBuildRetryFeedbackForGoal,
@@ -53,6 +59,7 @@ import {
   findGoal,
   findGoalRun,
   findLatestArchitectContractGraph,
+  findLatestArchitectContractGraphArtifact,
   findLatestDeliveryVerdictArtifact,
   findLatestDeliveryVerdictArtifactForDelivery,
   findLatestTipGoalRun,
@@ -71,6 +78,16 @@ import { isLiveGoalRunStatus } from "@/engine/catalog"
 import { GoalContractUpdateSchema } from "@/pipeline/goal-contract.schema"
 import { blockActiveRunForTask, updateRun, updateTask } from "@/engine/state"
 import { deriveTaskStatus, isTaskQueued } from "@/engine/task-status"
+import {
+  assertNoLiveBuildOwnershipForGoal,
+  completeOrchestratorToolOwnership,
+  createOrchestratorToolOwnershipPayload,
+  findLiveBuildOwnershipByGoal,
+  findLiveBuildOwnershipByGoalRun,
+  findLiveBuildOwnershipBySession,
+  insertOrchestratorToolOwnershipArtifact,
+  type OrchestratorToolOwnershipPayload,
+} from "@/engine/tool-ownership"
 
 import {
   createWorkflowState,
@@ -102,6 +119,27 @@ import type {
 import { renderIntegrityMarkdown } from "@/integrity/render-markdown"
 
 const log = Log.create({ service: "task-tools" })
+
+type OrchestratorToolExecutionContext = {
+  orchestratorSessionID: string
+  orchestratorMessageID: string
+  toolCallID: string
+  toolPartID: string
+}
+
+function requireOrchestratorToolExecutionContext(options: unknown, toolName: string): OrchestratorToolExecutionContext {
+  const meta = (options as { opencorvus?: Record<string, unknown> } | undefined)?.opencorvus
+  const orchestratorSessionID = typeof meta?.sessionID === "string" ? meta.sessionID : ""
+  const orchestratorMessageID = typeof meta?.messageID === "string" ? meta.messageID : ""
+  const toolCallID = typeof meta?.toolCallID === "string" ? meta.toolCallID : ""
+  const toolPartID = typeof meta?.toolPartID === "string" ? meta.toolPartID : ""
+  if (!orchestratorSessionID || !orchestratorMessageID || !toolCallID || !toolPartID) {
+    throw new Error(
+      `${toolName}: missing real tool execution identity; refusing to run because ownership cannot be tied to a persisted message/tool part.`,
+    )
+  }
+  return { orchestratorSessionID, orchestratorMessageID, toolCallID, toolPartID }
+}
 
 /**
  * Orchestrator-side bash is narrowly scoped to git merge-state repair only
@@ -3446,6 +3484,14 @@ export function createOrchestratorTools(input: {
         const dbGoals = listGoals(taskID)
         const goal = dbGoals.find((g) => g.id === goalID)
         if (!goal) return `Goal ${goalID} not found.`
+        const liveOwner = findLiveBuildOwnershipByGoal({ taskID, goalID })
+        if (liveOwner) {
+          return (
+            `Error: modify_goal refused because goal ${goalID} is currently owned by live build tool ` +
+            `${liveOwner.payload.tool_part_id} (session ${liveOwner.payload.child_session_id}, ownership ${liveOwner.ownershipID}). ` +
+            `Wait for that build result before changing the goal contract.`
+          )
+        }
 
         // Deep-equality no-op detection (rule 2 + rule 7) via the
         // computeContractFieldChanges helper: only fields whose submitted
@@ -3937,6 +3983,23 @@ export function createOrchestratorTools(input: {
           sessionID: session_id,
           goalID: goal_id,
         })
+        const { kind } = assertDirectReplySessionOwnership({
+          taskID,
+          sessionID: target.sessionID,
+        })
+        if (kind === "build") {
+          const liveOwner =
+            (target.goalRunID ? findLiveBuildOwnershipByGoalRun({ taskID, goalRunID: target.goalRunID }) : undefined) ??
+            findLiveBuildOwnershipBySession({ taskID, sessionID: target.sessionID })
+          const ownerLine = liveOwner
+            ? ` It is currently owned by live build tool ${liveOwner.payload.tool_part_id}; wait for that tool result.`
+            : " Use build({ goalID, request }) for a fresh stage-attempt runtime contract instead."
+          return (
+            `Error: steer_subagent cannot generically steer build session ${target.sessionID}.` +
+            ownerLine +
+            ` Reason received: ${reason}`
+          )
+        }
         const result = await EngineService.replyAgentSession(taskID, target.sessionID, { message })
         return `Steered sub-agent session ${result.session_id}. source=${target.source}. message=${result.message_id}. Reason: ${reason}`
       },
@@ -3979,6 +4042,16 @@ export function createOrchestratorTools(input: {
           taskID,
           sessionID: target.sessionID,
         })
+
+        const liveOwner =
+          (target.goalRunID ? findLiveBuildOwnershipByGoalRun({ taskID, goalRunID: target.goalRunID }) : undefined) ??
+          findLiveBuildOwnershipBySession({ taskID, sessionID: target.sessionID })
+        if (kind === "build" && liveOwner) {
+          return (
+            `Error: cancel_subagent cannot cancel build session ${target.sessionID} while it is owned by live build tool ` +
+            `${liveOwner.payload.tool_part_id} (ownership ${liveOwner.ownershipID}). Wait for the build tool result or use an explicit operator cancellation path.`
+          )
+        }
 
         SessionPrompt.cancel(target.sessionID)
 
@@ -4427,7 +4500,8 @@ export function createOrchestratorTools(input: {
             "Required for task-level direct builds on kind=workflow tasks. The only valid direct intent is modify_files: a scoped implementation/rework build. Build is not a repository investigation endpoint.",
           ),
       }),
-      execute: async ({ request = "", reason, goalID, directBuildIntent }) => {
+      execute: async ({ request = "", reason, goalID, directBuildIntent }, options) => {
+        const toolExecution = requireOrchestratorToolExecutionContext(options, "build")
         const task = requireTask(taskID)
         const requestText = request.trim()
         const declaredDirectBuildIntent = directBuildIntent as string | undefined
@@ -4451,6 +4525,13 @@ export function createOrchestratorTools(input: {
         if (resolvedGoalReference && !resolvedGoalReference.ok) return resolvedGoalReference.message
         const attachedGoalID = resolvedGoalReference?.goalID
         const isTaskLevelBuild = !attachedGoalID
+        if (attachedGoalID) {
+          assertNoLiveBuildOwnershipForGoal({
+            taskID,
+            goalID: attachedGoalID,
+            action: "build",
+          })
+        }
 
         if (isTaskLevelBuild) {
           if (requestText.length === 0) {
@@ -4533,6 +4614,19 @@ export function createOrchestratorTools(input: {
         } else {
           const ensured = await ensureTaskLevelBuildRun()
           coordinatorRunID = ensured.id
+        }
+
+        let activeOwnership: OrchestratorToolOwnershipPayload | undefined
+        let ownershipClosed = false
+        const closeBuildOwnership = (outcome: "completed" | "failed" | "cancelled", error?: string) => {
+          if (!activeOwnership || ownershipClosed) return
+          ownershipClosed = true
+          completeOrchestratorToolOwnership({
+            taskID,
+            ownershipID: activeOwnership.ownership_id,
+            outcome,
+            error,
+          })
         }
 
         try {
@@ -4803,30 +4897,156 @@ export function createOrchestratorTools(input: {
                 : undefined
           }
 
-          // Open the goal_run only after BuildAgent.run has acquired the
-          // per-task build semaphore. Opening it earlier makes queued
-          // semaphore waiters look like running goals even though no build
-          // session exists yet, breaking the collaboration closure signal.
-          // Goal-path only — direct/request builds have no goal row to attach
-          // an attempt to.
+          const priorGoalRunForRetry = attachedGoalID ? findLatestTipGoalRun(attachedGoalID) : undefined
+          const existingBuildSessionID =
+            priorGoalRunForRetry &&
+            !isLiveGoalRunStatus(priorGoalRunForRetry.status) &&
+            priorGoalRunForRetry.session_id
+              ? priorGoalRunForRetry.session_id
+              : undefined
+          if (
+            attachedGoalID &&
+            priorGoalRunForRetry &&
+            !isLiveGoalRunStatus(priorGoalRunForRetry.status) &&
+            !priorGoalRunForRetry.session_id
+          ) {
+            throw new Error(
+              `build: goal ${attachedGoalID} prior terminal goal_run ${priorGoalRunForRetry.id} has no session_id; same-session retry cannot continue`,
+            )
+          }
+
+          // Open the goal_run after BuildAgent has created or reopened the
+          // concrete build session. The first artifact must already contain
+          // session_id so retry has exactly one session identity source.
           let goalRunID: string | undefined
-          const openGoalRunAfterBuildSlot = async () => {
-            if (!attachedGoalID || goalRunID) return
+          const buildSessionContractArtifactForAttempt = (input: {
+            sessionID: string
+            goalRunID: string
+          }) => {
+            if (!attachedGoalID || target.kind !== "goal") return undefined
+            const now = Date.now()
+            const artifactID = Identifier.ascending("artifact")
+            const activePlan = findActivePlanForTask(taskID)
+            const graphArtifact = findLatestArchitectContractGraphArtifact(taskID)
+            const goalRow = findGoal(attachedGoalID)
+            const sourceArtifactIDs = [
+              activePlan?.spec_snapshot_id,
+              activePlan?.id,
+              graphArtifact?.id,
+            ].filter((item): item is string => typeof item === "string" && item.length > 0)
+            const payload = {
+              session_id: input.sessionID,
+              task_id: taskID,
+              goal_id: attachedGoalID,
+              goal_run_id: input.goalRunID,
+              spec_snapshot_id: activePlan?.spec_snapshot_id ?? null,
+              plan_version_id: activePlan?.id ?? null,
+              goal_contract_snapshot: {
+                title: target.title,
+                kind: target.kind,
+                objective: target.objective,
+                owned_paths: target.owned_paths,
+                depends_on: target.depends_on,
+                requirement_ids: Array.isArray(goalRow?.requirement_ids) ? goalRow.requirement_ids : [],
+                acceptance_specs: target.acceptance_specs,
+              },
+              collaboration_goals_snapshot: context?.collaborationGoals ?? [],
+              requirements_snapshot: context?.requirements ?? [],
+              source_artifact_ids: sourceArtifactIDs,
+              digest: createHash("sha256")
+                .update(JSON.stringify({
+                  goal: target,
+                  collaborationGoals: context?.collaborationGoals ?? [],
+                  requirements: context?.requirements ?? [],
+                  sourceArtifactIDs,
+                }))
+                .digest("hex"),
+            }
+            return {
+              id: artifactID,
+              kind: "build_session_contract" as const,
+              label: "build-session-contract",
+              runID: coordinatorRunID ?? null,
+              goalRunID: input.goalRunID,
+              payload,
+            }
+          }
+          const openGoalRunForBuildSession = async (
+            sessionID: string,
+            buildSessionContext: { worktreeDir?: string; worktreeBranch?: string; worktreeBaseRef?: string },
+          ) => {
+            if (!attachedGoalID) {
+              if (activeOwnership) return
+              const ownershipPayload = createOrchestratorToolOwnershipPayload({
+                taskID,
+                orchestratorSessionID: toolExecution.orchestratorSessionID,
+                orchestratorMessageID: toolExecution.orchestratorMessageID,
+                toolCallID: toolExecution.toolCallID,
+                toolPartID: toolExecution.toolPartID,
+                childSessionID: sessionID,
+                scope: "task",
+              })
+              insertOrchestratorToolOwnershipArtifact({
+                taskID,
+                runID: coordinatorRunID ?? null,
+                goalRunID: null,
+                label: "tool-ownership-start",
+                payload: ownershipPayload,
+              })
+              activeOwnership = ownershipPayload
+              return
+            }
+            if (goalRunID) return
             try {
               const { beginBuildAttempt } = await import("@/engine/persist")
               goalRunID = beginBuildAttempt({
                 taskID,
                 goalID: attachedGoalID,
                 runID: coordinatorRunID,
-                workspaceDir: managedWorktree?.directory,
+                sessionID,
+                workspaceDir: buildSessionContext.worktreeDir ?? managedWorktree?.directory,
                 // Phase G (2026-05-05): full workspace triple rides the
                 // attempt artifact. Pre-fix the orchestrator pre-wrote
                 // engine_goal columns then dropped to a synthetic-runID
                 // queued artifact when no tip existed; both paths are gone
                 // now — single source is the new attempt artifact.
-                workspaceBranch: managedWorktree?.branch ?? null,
-                workspaceBaseRef: managedWorktree?.baseRef ?? null,
+                workspaceBranch: buildSessionContext.worktreeBranch ?? managedWorktree?.branch ?? null,
+                workspaceBaseRef: buildSessionContext.worktreeBaseRef ?? managedWorktree?.baseRef ?? null,
+                extraArtifacts: ({ goalRunID }) => {
+                  const artifacts: Array<{
+                    id: string
+                    kind: EngineArtifactKind
+                    label: string
+                    payload: Record<string, unknown>
+                    runID?: string | null
+                    goalRunID?: string | null
+                  }> = []
+                  const contract = buildSessionContractArtifactForAttempt({ sessionID, goalRunID })
+                  if (contract) artifacts.push(contract)
+                  const ownershipPayload = createOrchestratorToolOwnershipPayload({
+                    taskID,
+                    orchestratorSessionID: toolExecution.orchestratorSessionID,
+                    orchestratorMessageID: toolExecution.orchestratorMessageID,
+                    toolCallID: toolExecution.toolCallID,
+                    toolPartID: toolExecution.toolPartID,
+                    childSessionID: sessionID,
+                    scope: "goal",
+                    goalID: attachedGoalID,
+                    goalRunID,
+                  })
+                  activeOwnership = ownershipPayload
+                  artifacts.push({
+                    id: Identifier.ascending("artifact"),
+                    kind: "orchestrator_tool_ownership",
+                    label: "tool-ownership-start",
+                    runID: coordinatorRunID ?? null,
+                    goalRunID,
+                    payload: ownershipPayload,
+                  })
+                  return artifacts
+                },
               })
+              return goalRunID
             } catch (beginErr) {
               // A failure here is structural — overlay won't get the
               // running card and finalizeBuildAttempt has nothing to
@@ -4861,14 +5081,10 @@ export function createOrchestratorTools(input: {
               task,
               context,
               parentSessionID: input.agentSessionID,
+              existingSessionID: existingBuildSessionID,
               signal: input.signal,
               managedWorktree,
-              onSlotAcquired: openGoalRunAfterBuildSlot,
-              onSessionCreated: async (sessionID) => {
-                if (!goalRunID) return
-                const { updateGoalRun } = await import("@/engine/persist")
-                updateGoalRun(goalRunID, { session_id: sessionID })
-              },
+              onSessionCreated: openGoalRunForBuildSession,
             })
             buildOutcome = { kind: "ok", result: ok }
           } catch (runErr) {
@@ -5074,7 +5290,7 @@ export function createOrchestratorTools(input: {
                   status: currentGoalRun.status,
                 })
               } else if (buildOutcome.kind === "ok") {
-                const { result, sessionID, worktreeDir, worktreeBranch, worktreeBaseRef, diffs } = buildOutcome.result
+                const { result, worktreeDir, worktreeBranch, worktreeBaseRef, diffs } = buildOutcome.result
                 finalizeBuildAttempt({
                   goalRunID,
                   taskID,
@@ -5094,14 +5310,6 @@ export function createOrchestratorTools(input: {
                   fileChanges: result.files_changed,
                   summary: result.summary,
                 })
-                // Backfill session_id on the goal_run now that BuildAgent.run
-                // has assigned one. Routing keys on goalID, but downstream
-                // tracing (orphan detection, audit) expects session_id on the
-                // tip artifact. updateGoalRun's append model handles this.
-                if (sessionID) {
-                  const { updateGoalRun } = await import("@/engine/persist")
-                  updateGoalRun(goalRunID, { session_id: sessionID })
-                }
                 if (result.status === "passed") {
                   goalWorkspaceCleanup = await cleanupCompletedGoalWorkspace(attachedGoalID, goalRunID)
                 }
@@ -5142,6 +5350,10 @@ export function createOrchestratorTools(input: {
           // the orchestrator's existing tool-error / wake-loop logic isn't
           // disturbed — only the persistent state was previously orphaned.
           if (buildOutcome.kind === "throw") {
+            closeBuildOwnership(
+              "failed",
+              buildOutcome.error instanceof Error ? buildOutcome.error.message : String(buildOutcome.error),
+            )
             throw buildOutcome.error
           }
           const { result, sessionID, worktreeDir } = buildOutcome.result
@@ -5241,6 +5453,8 @@ export function createOrchestratorTools(input: {
             (worktreeHeadLine ? `${worktreeHeadLine}\n` : "") +
             `- actual_changed_files (vs contribution base):\n${actualFilesLines}`
 
+          closeBuildOwnership(result.status === "passed" ? "completed" : "failed", result.status === "failed" ? result.error : undefined)
+
           return (
             `Build agent finished (status=${result.status}, session ${sessionID}).\n\n` +
             `### Build report\n` +
@@ -5257,6 +5471,7 @@ export function createOrchestratorTools(input: {
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err)
           log.error("build tool failed", { taskID, error: msg })
+          closeBuildOwnership("failed", msg)
           if (isTaskLevelBuild) await trackStepComplete("build", undefined, true)
           // Build itself failed (LLM error, tool guard fault, worktree
           // creation failed, etc.) — distinct from deliver-rejection.

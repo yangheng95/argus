@@ -20,34 +20,22 @@ import type { MiniWorkflow } from "./workflow"
 
 interface RequirementsConfig {
   max_steps: number
-  skills: string[]
 }
 
 interface ArchitectConfig {
   max_steps: number
-  skills: string[]
 }
 
 interface DesignAnalystConfig {
   max_steps: number
-  skills: string[]
 }
 
 interface IntentAnalysisConfig {
   max_steps: number
-  skills: string[]
 }
 
-/**
- * BuildConfig — per-goal build agent stage. `skills` is an operator override
- * for skills that must be loaded into every build session. Normal skill routing
- * is signal-driven by `skill.auto_detect`; this keeps ordinary code builds from
- * receiving unrelated clone / research SOPs while still loading the full mirror
- * protocol when a URL, image, or Figma reference is present.
- */
 interface BuildConfig {
   max_steps: number
-  skills: string[]
 }
 
 /**
@@ -158,11 +146,9 @@ const DEFAULTS: EngineConfigType = {
   // for a 30-requirement PRD with only 2 register_goal emitted.
   requirements: {
     max_steps: 1000,
-    skills: [],
   },
   architect: {
     max_steps: 1000,
-    skills: [],
   },
   delivery_visual: {
     // 经验值基线（ainvest 事故复盘 2026-04-24）。后续用 dev/ accept/reject
@@ -181,18 +167,12 @@ const DEFAULTS: EngineConfigType = {
   },
   design_analyst: {
     max_steps: 1000,
-    skills: [],
   },
   intent_analysis: {
     max_steps: 1000,
-    skills: [],
   },
   build: {
     max_steps: 1000,
-    // Default is empty by design. Built-in skills carry their own
-    // auto_detect metadata, so reference / research jobs receive the relevant
-    // SOP without context-spamming unrelated implementation goals.
-    skills: [],
   },
   debug: {
     // Default off — host detection + prompt fallback only activate when
@@ -258,11 +238,9 @@ function merge(user?: Config.Info["assistant"]): EngineConfigType {
     auto_iteration: user?.auto_iteration ?? DEFAULTS.auto_iteration,
     requirements: {
       max_steps: user?.requirements?.max_steps ?? DEFAULTS.requirements.max_steps,
-      skills: user?.requirements?.skills ?? DEFAULTS.requirements.skills,
     },
     architect: {
       max_steps: user?.architect?.max_steps ?? DEFAULTS.architect.max_steps,
-      skills: user?.architect?.skills ?? DEFAULTS.architect.skills,
     },
     delivery_visual: {
       phash_hamming_max:
@@ -293,15 +271,12 @@ function merge(user?: Config.Info["assistant"]): EngineConfigType {
     },
     design_analyst: {
       max_steps: user?.design_analyst?.max_steps ?? DEFAULTS.design_analyst.max_steps,
-      skills: user?.design_analyst?.skills ?? DEFAULTS.design_analyst.skills,
     },
     intent_analysis: {
       max_steps: user?.intent_analysis?.max_steps ?? DEFAULTS.intent_analysis.max_steps,
-      skills: user?.intent_analysis?.skills ?? DEFAULTS.intent_analysis.skills,
     },
     build: {
       max_steps: user?.build?.max_steps ?? DEFAULTS.build.max_steps,
-      skills: user?.build?.skills ?? DEFAULTS.build.skills,
     },
     activity: {
       session_llm_idle_ms:

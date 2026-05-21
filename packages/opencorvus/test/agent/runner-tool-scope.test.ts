@@ -5,8 +5,7 @@ describe("agent runner build tool scope", () => {
   test("plain build runs keep terminal tools and skill discovery but hide non-build and reference tools", () => {
     const switches = promptToolSwitchesForAgentRun({
       extraToolNames: ["merge_back", "report_build_result"],
-      skillsStage: "build",
-      requiredTools: [],
+      kind: "build",
     })
 
     expect(switches.merge_back).toBe(true)
@@ -15,18 +14,17 @@ describe("agent runner build tool scope", () => {
     expect(switches.webfetch).toBe(false)
     expect(switches.websearch).toBe(false)
     expect(switches.external_code_search).toBe(false)
-    expect(switches.skill).toBeUndefined()
+    expect(switches.skill).toBe(true)
     expect(switches.memory).toBe(false)
     expect(switches.schedule).toBeUndefined()
     expect(switches.planner).toBe(false)
     expect(switches.goal_report).toBe(false)
   })
 
-  test("build skills do not reopen mirror tools", () => {
+  test("build tool scope does not reopen mirror tools", () => {
     const switches = promptToolSwitchesForAgentRun({
       extraToolNames: ["report_build_result"],
-      skillsStage: "build",
-      requiredTools: ["webpage_extract", "webpage_render", "webpage_vision_judge"],
+      kind: "build",
     })
 
     expect(switches.report_build_result).toBe(true)
@@ -35,16 +33,16 @@ describe("agent runner build tool scope", () => {
     expect(switches.webpage_vision_judge).toBeUndefined()
   })
 
-  test("build skills expose exactly their declared research tools", () => {
+  test("build no longer opens research tools through skill required_tools", () => {
     const switches = promptToolSwitchesForAgentRun({
       extraToolNames: ["report_build_result"],
-      skillsStage: "build",
-      requiredTools: ["websearch", "webfetch"],
+      kind: "build",
     })
 
     expect(switches.report_build_result).toBe(true)
-    expect(switches.websearch).toBe(true)
-    expect(switches.webfetch).toBe(true)
+    expect(switches.skill).toBe(true)
+    expect(switches.websearch).toBe(false)
+    expect(switches.webfetch).toBe(false)
     expect(switches.external_code_search).toBe(false)
     expect(switches.task).toBe(false)
   })
@@ -52,8 +50,7 @@ describe("agent runner build tool scope", () => {
   test("non-build agents are not silently scoped by build skill policy", () => {
     const switches = promptToolSwitchesForAgentRun({
       extraToolNames: ["submit_acceptance_verdict"],
-      skillsStage: "acceptance",
-      requiredTools: [],
+      kind: "integrity",
     })
 
     expect(switches).toEqual({ submit_acceptance_verdict: true })

@@ -239,7 +239,7 @@ test("does not expose removed builtin plan, coding, or panel-control skills", as
   })
 })
 
-test("registers builtin research-report skill with websearch as required tool", async () => {
+test("registers builtin research-report skill without stage routing metadata", async () => {
   await using tmp = await tmpdir({ git: true })
 
   await Instance.provide({
@@ -248,7 +248,7 @@ test("registers builtin research-report skill with websearch as required tool", 
       const skill = await Skill.get("research-report")
       expect(skill).toBeDefined()
       expect(skill!.builtin).toBe(true)
-      expect(skill!.stage).toBe("build")
+      expect("stage" in skill!).toBe(false)
       expect(skill!.required_tools).toContain("websearch")
     },
   })

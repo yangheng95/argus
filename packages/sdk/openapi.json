@@ -6584,9 +6584,6 @@
                       "content": {
                         "type": "string"
                       },
-                      "stage": {
-                        "type": "string"
-                      },
                       "auto_detect": {
                         "type": "object",
                         "properties": {
@@ -6717,9 +6714,6 @@
                         "type": "string"
                       },
                       "content": {
-                        "type": "string"
-                      },
-                      "stage": {
                         "type": "string"
                       },
                       "auto_detect": {
@@ -34120,13 +34114,6 @@
                     "type": "integer",
                     "minimum": 1,
                     "maximum": 9007199254740991
-                  },
-                  "skills": {
-                    "description": "Additional skill paths for requirements agent",
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
                   }
                 }
               },
@@ -34139,13 +34126,6 @@
                     "type": "integer",
                     "minimum": 1,
                     "maximum": 9007199254740991
-                  },
-                  "skills": {
-                    "description": "Additional skill paths for architect agent",
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
                   }
                 }
               },
@@ -34220,13 +34200,6 @@
                     "type": "integer",
                     "minimum": 1,
                     "maximum": 9007199254740991
-                  },
-                  "skills": {
-                    "description": "Additional skill paths for design analyst agent",
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
                   }
                 }
               },
@@ -34239,13 +34212,6 @@
                     "type": "integer",
                     "minimum": 1,
                     "maximum": 9007199254740991
-                  },
-                  "skills": {
-                    "description": "Additional skill paths for intent-analysis agent",
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
                   }
                 }
               },
@@ -34258,13 +34224,6 @@
                     "type": "integer",
                     "minimum": 1,
                     "maximum": 9007199254740991
-                  },
-                  "skills": {
-                    "description": "Operator-forced build skills. Leave empty for auto_detect-driven skill routing.",
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
                   }
                 }
               },

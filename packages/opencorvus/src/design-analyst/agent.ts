@@ -24,7 +24,7 @@ import { filterAgentTools } from "@/agent/filter-tools"
 import { Log } from "@/util/log"
 import { AttachmentStore } from "@/storage/attachment-store"
 import { Instance } from "@/project/instance"
-import { deriveUrlSignals } from "@/engine/skill-inject"
+import { deriveUrlSignals } from "@/engine/task-signals"
 import { EngineConfig } from "@/engine/config"
 import type { VisualSpec } from "./types"
 import { createDesignOutputTools, type DesignOutputCollector } from "./output-tools"
@@ -120,12 +120,6 @@ export namespace DesignAnalystAgent {
         toolName: "submit_design_prd_spec",
         isSatisfied: (collector: DesignOutputCollector) => !!collector.final,
         shouldExposeOnlyTerminalTool: shouldScopeDesignSubmitTool,
-      },
-      skillsStage: "design_analyst",
-      skillTaskSignals: {
-        has_attachment_image: (input.attachments ?? []).some((item) => item.mime.startsWith("image/")),
-        ...deriveUrlSignals(input.request),
-        request_text: input.request,
       },
     })
 

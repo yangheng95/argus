@@ -70,7 +70,10 @@ export namespace SessionPromptState {
       cb.reject(error)
     }
     match.callbacks = []
-    delete s[sessionID]
+    // Keep the busy slot until the owning prompt loop observes the abort and
+    // calls finish(sessionID, sameAbortSignal). Deleting here lets a retry
+    // start in the same session while the old provider/tool stack is still
+    // unwinding, which races runtime contracts and terminal collectors.
     SessionStatus.set(sessionID, { type: "terminal", reason: "aborted" })
     return
   }

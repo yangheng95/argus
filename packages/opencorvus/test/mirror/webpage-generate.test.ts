@@ -11,7 +11,7 @@ import { MIRROR_TOOL_IDS } from "../../src/mirror/tools/ids"
 describe("webpage-generate dependency guards", () => {
   test("skill declares design-analysis PRD/SPEC mirror pipeline only", () => {
     const parsed = matter(webpageGenerateMd)
-    expect(parsed.data.stage).toBe("design_analyst")
+    expect(parsed.data.stage).toBeUndefined()
     expect(parsed.data.required_tools).toContain("webpage_extract")
     expect(parsed.data.required_tools).toContain("webpage_compile")
     expect(parsed.data.required_tools).toContain("webpage_analyze")
@@ -47,7 +47,7 @@ describe("webpage-generate dependency guards", () => {
   test("reference generation skills are design-analysis only and never claim acceptance gates", () => {
     for (const md of [webpageGenerateMd, imageGenerateMd]) {
       const parsed = matter(md)
-      expect(parsed.data.stage).toBe("design_analyst")
+      expect(parsed.data.stage).toBeUndefined()
       expect(parsed.content).toContain("PRD/SPEC")
       expect(parsed.content).toContain("prd_iteration_notes")
       expect(parsed.content).toContain("Build agents consume the persisted PRD/SPEC")

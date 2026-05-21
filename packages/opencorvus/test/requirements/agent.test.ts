@@ -156,7 +156,6 @@ describe("RequirementsAgent prompt precedence", () => {
             collector: input.toolKit.getCollector(),
             finalMessage: { info: {} },
             model: { providerID: "test", modelID: "mock", id: "test/mock" },
-            requiredTools: [],
           }
         }
 

@@ -25,6 +25,7 @@ import type { OrchestratorEvent } from "@/orchestrator/agent"
 import { Identifier } from "@/id/id"
 import { Event } from "./model"
 import { EngineProtocol } from "./protocol"
+import { listLiveOrchestratorToolOwnership } from "./tool-ownership"
 
 const log = Log.create({ service: "engine.queue" })
 
@@ -171,6 +172,12 @@ function attachLoopCompletion(taskID: string, cwd: string, loopPromise: Promise<
     // Detach via queueMicrotask so `advanceQueue` → `startLoopForTask` →
     // `.finally` re-entry doesn't stack synchronously.
     queueMicrotask(() => {
+      const queuedEvent = queuedTaskEvents.get(taskID)
+      if (queuedEvent && findTask(taskID) && listLiveOrchestratorToolOwnership(taskID).length === 0) {
+        queuedTaskEvents.delete(taskID)
+        attachLoopCompletion(taskID, cwd, launchTaskLoop(taskID, queuedEvent))
+        return
+      }
       advanceQueue(cwd).catch((err) => {
         log.error("advanceQueue failed after loop exit", { cwd, error: err instanceof Error ? err.message : String(err) })
       })
@@ -436,6 +443,17 @@ export async function dispatchTaskLoop(input: {
   if (isTaskQueued(task)) {
     if (input.event) queuedTaskEvents.set(task.id, input.event)
     await advanceQueue(cwd)
+    return
+  }
+
+  const liveOwners = listLiveOrchestratorToolOwnership(task.id)
+  if (liveOwners.length > 0 && loopInFlight.has(task.id)) {
+    if (input.event) queuedTaskEvents.set(task.id, input.event)
+    log.info("dispatchTaskLoop: queued wake behind live orchestrator tool ownership", {
+      taskID: task.id,
+      liveOwners: liveOwners.map((owner) => owner.ownershipID),
+      interrupt: input.interrupt === true,
+    })
     return
   }
 

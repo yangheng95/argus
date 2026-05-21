@@ -22,105 +22,136 @@ const dummyTool = () =>
     },
   })
 
-describe("SessionLoop.setExtraTools / getExtraTools", () => {
-  test("round-trips a registered tool map", () => {
-    const sessionID = `ses_extra_${Date.now()}_round_trip`
-    expect(Object.keys(SessionLoop.getExtraTools(sessionID))).toEqual([])
-
-    SessionLoop.setExtraTools(sessionID, { first: dummyTool(), second: dummyTool() })
-    const read = SessionLoop.getExtraTools(sessionID)
-    expect(Object.keys(read).sort()).toEqual(["first", "second"])
-
-    SessionLoop.setExtraTools(sessionID, undefined)
-    expect(Object.keys(SessionLoop.getExtraTools(sessionID))).toEqual([])
-  })
-
-  test("passing an empty map clears the entry", () => {
-    const sessionID = `ses_extra_${Date.now()}_empty_clear`
-    SessionLoop.setExtraTools(sessionID, { t: dummyTool() })
-    expect(Object.keys(SessionLoop.getExtraTools(sessionID))).toEqual(["t"])
-    SessionLoop.setExtraTools(sessionID, {})
-    expect(SessionLoop.getExtraTools(sessionID)).toEqual({})
-  })
-
-  test("entries are isolated per sessionID", () => {
-    const a = `ses_extra_${Date.now()}_a`
-    const b = `ses_extra_${Date.now()}_b`
-    SessionLoop.setExtraTools(a, { only_a: dummyTool() })
-    SessionLoop.setExtraTools(b, { only_b: dummyTool() })
-    expect(Object.keys(SessionLoop.getExtraTools(a))).toEqual(["only_a"])
-    expect(Object.keys(SessionLoop.getExtraTools(b))).toEqual(["only_b"])
-    SessionLoop.setExtraTools(a, undefined)
-    SessionLoop.setExtraTools(b, undefined)
-  })
-
-  test("a second setExtraTools replaces the map wholesale (no merge)", () => {
-    const sessionID = `ses_extra_${Date.now()}_replace`
-    SessionLoop.setExtraTools(sessionID, { first: dummyTool() })
-    SessionLoop.setExtraTools(sessionID, { second: dummyTool() })
-    // Replacement — `first` is gone, not merged with `second`.
-    expect(Object.keys(SessionLoop.getExtraTools(sessionID))).toEqual(["second"])
-    SessionLoop.setExtraTools(sessionID, undefined)
-  })
-})
+const runtimeContract = (
+  sessionID: string,
+  overrides: Partial<SessionLoop.SessionRuntimeContract> = {},
+): SessionLoop.SessionRuntimeContract => {
+  const { identity, ...rest } = overrides
+  return {
+    ...rest,
+    identity: {
+      sessionID,
+      agentKind: "build",
+      contractKind: "stage-attempt",
+      goalID: "gol_runtime_test",
+      goalRunID: "grun_runtime_test",
+      attemptID: "attempt_runtime_test",
+      installedAt: Date.now(),
+      ...identity,
+    },
+  }
+}
 
 describe("SessionLoop session runtime contract", () => {
-  test("persistent contract tools remain visible through getExtraTools", () => {
+  test("round-trips a registered stage tool map", () => {
     const sessionID = `ses_runtime_${Date.now()}_visible`
-    SessionLoop.setSessionRuntimeContract(sessionID, { tools: { persistent: dummyTool() } })
-    expect(Object.keys(SessionLoop.getExtraTools(sessionID))).toEqual(["persistent"])
+    SessionLoop.setSessionRuntimeContract(sessionID, runtimeContract(sessionID, {
+      tools: { persistent: dummyTool() },
+    }))
+    expect(Object.keys(SessionLoop.getSessionRuntimeContract(sessionID)?.tools ?? {})).toEqual(["persistent"])
     SessionLoop.clearSessionRuntimeContract(sessionID)
-    expect(SessionLoop.getExtraTools(sessionID)).toEqual({})
+    expect(SessionLoop.getSessionRuntimeContract(sessionID)).toBeUndefined()
   })
 
-  test("withExtraTools overlays persistent tools and restores the session contract afterwards", async () => {
-    const sessionID = `ses_runtime_${Date.now()}_overlay`
-    SessionLoop.setSessionRuntimeContract(sessionID, { tools: { persistent: dummyTool() } })
-    await SessionLoop.withExtraTools(sessionID, { scoped: dummyTool() }, async () => {
-      expect(Object.keys(SessionLoop.getExtraTools(sessionID)).sort()).toEqual(["persistent", "scoped"])
-    })
-    expect(Object.keys(SessionLoop.getExtraTools(sessionID))).toEqual(["persistent"])
-    SessionLoop.clearSessionRuntimeContract(sessionID)
+  test("a second runtime contract replaces the map wholesale", () => {
+    const sessionID = `ses_runtime_${Date.now()}_replace`
+    SessionLoop.setSessionRuntimeContract(sessionID, runtimeContract(sessionID, {
+      tools: { first: dummyTool() },
+    }))
+    SessionLoop.setSessionRuntimeContract(sessionID, runtimeContract(sessionID, {
+      tools: { second: dummyTool() },
+    }))
+    expect(Object.keys(SessionLoop.getSessionRuntimeContract(sessionID)?.tools ?? {})).toEqual(["second"])
   })
 
-  test("SessionPrompt.cancel clears the session runtime contract", async () => {
+  test("SessionPrompt.cancel preserves runtime contract until the owning loop settles", async () => {
     const sessionID = `ses_runtime_${Date.now()}_cancel`
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        SessionPrompt.setSessionRuntimeContract(sessionID, { tools: { persistent: dummyTool() } })
+        SessionPrompt.setSessionRuntimeContract(sessionID, runtimeContract(sessionID, {
+          tools: { persistent: dummyTool() },
+        }))
         expect(SessionPrompt.getSessionRuntimeContract(sessionID)?.tools).toBeDefined()
         SessionPrompt.cancel(sessionID)
-        expect(SessionPrompt.getSessionRuntimeContract(sessionID)).toBeUndefined()
+        expect(SessionPrompt.getSessionRuntimeContract(sessionID)?.tools).toBeDefined()
+        SessionPrompt.clearSessionRuntimeContract(sessionID)
       },
     })
   })
-})
 
-describe("SessionLoop.withExtraTools", () => {
-  test("clears the registry after the callback resolves", async () => {
-    const sessionID = `ses_extra_${Date.now()}_with_ok`
-    await SessionLoop.withExtraTools(sessionID, { scoped: dummyTool() }, async () => {
-      expect(Object.keys(SessionLoop.getExtraTools(sessionID))).toEqual(["scoped"])
-    })
-    expect(SessionLoop.getExtraTools(sessionID)).toEqual({})
+  test("rejects a contract whose identity belongs to another session", () => {
+    const sessionID = `ses_runtime_${Date.now()}_mismatch`
+    expect(() =>
+      SessionLoop.setSessionRuntimeContract(sessionID, runtimeContract("ses_other_runtime", {
+        tools: { persistent: dummyTool() },
+      })),
+    ).toThrow("identity mismatch")
+    expect(SessionLoop.getSessionRuntimeContract(sessionID)).toBeUndefined()
   })
 
-  test("clears the registry even when the callback throws", async () => {
-    const sessionID = `ses_extra_${Date.now()}_with_throw`
-    await expect(
-      SessionLoop.withExtraTools(sessionID, { scoped: dummyTool() }, async () => {
-        throw new Error("intentional")
+  test("validation rejects missing contracts for stage continuations", () => {
+    const sessionID = `ses_runtime_${Date.now()}_missing`
+    expect(() =>
+      SessionLoop.validateSessionRuntimeContractForContinuation({
+        sessionID,
+        sessionKind: "build",
+        expectedAgentKind: "build",
+        requireRuntimeContract: true,
       }),
-    ).rejects.toThrow("intentional")
-    expect(SessionLoop.getExtraTools(sessionID)).toEqual({})
+    ).toThrow("missing")
   })
 
-  test("propagates the callback's return value", async () => {
-    const sessionID = `ses_extra_${Date.now()}_with_return`
-    const result = await SessionLoop.withExtraTools(sessionID, { x: dummyTool() }, async () => 42)
-    expect(result).toBe(42)
+  test("validation rejects stale agent, goal, goal_run, attempt, and satisfied terminal collector", () => {
+    const sessionID = `ses_runtime_${Date.now()}_stale`
+    SessionLoop.setSessionRuntimeContract(sessionID, runtimeContract(sessionID, {
+      terminalToolContract: {
+        toolName: "report_build_result",
+        isSatisfied: () => true,
+        shouldExposeOnlyTerminalTool: () => false,
+      },
+    }))
+    expect(() =>
+      SessionLoop.validateSessionRuntimeContractForContinuation({
+        sessionID,
+        expectedAgentKind: "requirements",
+      }),
+    ).toThrow("agent mismatch")
+    expect(() =>
+      SessionLoop.validateSessionRuntimeContractForContinuation({
+        sessionID,
+        expectedAgentKind: "build",
+        expectedGoalID: "gol_other",
+      }),
+    ).toThrow("goal mismatch")
+    expect(() =>
+      SessionLoop.validateSessionRuntimeContractForContinuation({
+        sessionID,
+        expectedAgentKind: "build",
+        expectedGoalID: "gol_runtime_test",
+        expectedGoalRunID: "grun_other",
+      }),
+    ).toThrow("goal_run mismatch")
+    expect(() =>
+      SessionLoop.validateSessionRuntimeContractForContinuation({
+        sessionID,
+        expectedAgentKind: "build",
+        expectedGoalID: "gol_runtime_test",
+        expectedGoalRunID: "grun_runtime_test",
+        expectedAttemptID: "attempt_other",
+      }),
+    ).toThrow("attempt mismatch")
+    expect(() =>
+      SessionLoop.validateSessionRuntimeContractForContinuation({
+        sessionID,
+        expectedAgentKind: "build",
+        expectedGoalID: "gol_runtime_test",
+        expectedGoalRunID: "grun_runtime_test",
+        expectedAttemptID: "attempt_runtime_test",
+      }),
+    ).toThrow("already satisfied")
+    SessionLoop.clearSessionRuntimeContract(sessionID)
   })
 })
 
@@ -157,19 +188,21 @@ describe("extras execute-return normalisation (integration via resolveTools)", (
 
   test("plain-string returns survive resolveTools via the wrapper (smoke)", async () => {
     // Exercising resolveTools requires a live session. This unit-level smoke
-    // just confirms that setExtraTools accepts an execute returning a plain
-    // string — the wrapper behaviour is verified end-to-end by the
+    // just confirms that runtime-contract tools can carry execute functions
+    // returning plain strings — the wrapper behaviour is verified end-to-end by the
     // intent-analysis smoke test, which used to fail with a ZodError on
     // Message.ToolPart persistence before the wrapper was added.
-    const sessionID = `ses_extra_${Date.now()}_wrap_smoke`
-    SessionLoop.setExtraTools(sessionID, {
-      plain: plainStringTool(),
-      partial: partialObjectTool(),
-      full: fullObjectTool(),
-    })
-    const extras = SessionLoop.getExtraTools(sessionID)
+    const sessionID = `ses_runtime_${Date.now()}_wrap_smoke`
+    SessionLoop.setSessionRuntimeContract(sessionID, runtimeContract(sessionID, {
+      tools: {
+        plain: plainStringTool(),
+        partial: partialObjectTool(),
+        full: fullObjectTool(),
+      },
+    }))
+    const extras = SessionLoop.getSessionRuntimeContract(sessionID)?.tools ?? {}
     expect(Object.keys(extras).sort()).toEqual(["full", "partial", "plain"])
-    SessionLoop.setExtraTools(sessionID, undefined)
+    SessionLoop.clearSessionRuntimeContract(sessionID)
   })
 
   test("normalizes multimodal extra-tool results without stringifying attachments into output", () => {
@@ -312,22 +345,25 @@ describe("SessionLoop.summarizeModelMessagePayloads", () => {
   })
 })
 
-describe("SessionPrompt re-exports extraTools API", () => {
-  test("surfaces setExtraTools / getExtraTools / withExtraTools", () => {
+describe("SessionPrompt re-exports runtime contract API", () => {
+  test("surfaces the session runtime contract functions only", () => {
     expect(typeof SessionPrompt.setSessionRuntimeContract).toBe("function")
     expect(typeof SessionPrompt.getSessionRuntimeContract).toBe("function")
     expect(typeof SessionPrompt.clearSessionRuntimeContract).toBe("function")
-    expect(typeof SessionPrompt.setExtraTools).toBe("function")
-    expect(typeof SessionPrompt.getExtraTools).toBe("function")
-    expect(typeof SessionPrompt.withExtraTools).toBe("function")
-    // The re-exports must be the same function references — SessionPrompt is
+    expect(typeof SessionPrompt.validateSessionRuntimeContractForContinuation).toBe("function")
+    expect(typeof SessionPrompt.agentKindRequiresRuntimeContract).toBe("function")
+    expect((SessionPrompt as any).setExtraTools).toBeUndefined()
+    expect((SessionPrompt as any).getExtraTools).toBeUndefined()
+    expect((SessionPrompt as any).withExtraTools).toBeUndefined()
+    // The re-exports must be the same function references: SessionPrompt is
     // a thin namespace on top of SessionLoop, not an independent copy.
     expect(SessionPrompt.setSessionRuntimeContract).toBe(SessionLoop.setSessionRuntimeContract)
     expect(SessionPrompt.getSessionRuntimeContract).toBe(SessionLoop.getSessionRuntimeContract)
     expect(SessionPrompt.clearSessionRuntimeContract).toBe(SessionLoop.clearSessionRuntimeContract)
-    expect(SessionPrompt.setExtraTools).toBe(SessionLoop.setExtraTools)
-    expect(SessionPrompt.getExtraTools).toBe(SessionLoop.getExtraTools)
-    expect(SessionPrompt.withExtraTools).toBe(SessionLoop.withExtraTools)
+    expect(SessionPrompt.validateSessionRuntimeContractForContinuation).toBe(
+      SessionLoop.validateSessionRuntimeContractForContinuation,
+    )
+    expect(SessionPrompt.agentKindRequiresRuntimeContract).toBe(SessionLoop.agentKindRequiresRuntimeContract)
   })
 })
 

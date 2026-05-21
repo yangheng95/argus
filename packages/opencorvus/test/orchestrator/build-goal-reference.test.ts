@@ -43,7 +43,11 @@ describe("orchestrator build goal references", () => {
 
         let observedGoalID = ""
         buildAgentRunImpl = async (input: any) => {
-          await input.onSlotAcquired?.()
+          await input.onSessionCreated?.("ses_goal_ref_build", {
+            worktreeDir: input.managedWorktree.directory,
+            worktreeBranch: input.managedWorktree.branch,
+            worktreeBaseRef: input.managedWorktree.baseRef,
+          })
           observedGoalID = input.target.id
           return {
             result: {
@@ -140,7 +144,11 @@ describe("orchestrator build goal references", () => {
 
         const observedGoalIDs: string[] = []
         buildAgentRunImpl = async (input: any) => {
-          await input.onSlotAcquired?.()
+          await input.onSessionCreated?.(`ses_goal_ref_numeric_${observedGoalIDs.length + 1}`, {
+            worktreeDir: input.managedWorktree.directory,
+            worktreeBranch: input.managedWorktree.branch,
+            worktreeBaseRef: input.managedWorktree.baseRef,
+          })
           observedGoalIDs.push(input.target.id)
           return {
             result: {

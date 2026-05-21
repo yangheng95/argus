@@ -71,7 +71,28 @@ export namespace SessionLoop {
     return { ...(input as StrictAITool), strict: true } as AITool
   }
 
+  export type SessionRuntimeContractKind = "stage-attempt" | "orchestrator-wake"
+
+  export interface SessionRuntimeContractIdentity {
+    sessionID: string
+    agentKind: string
+    contractKind: SessionRuntimeContractKind
+    goalID?: string
+    goalRunID?: string
+    attemptID?: string
+    installedAt: number
+  }
+
+  export interface TerminalToolContract {
+    toolName: string
+    isSatisfied: () => boolean
+    shouldExposeOnlyTerminalTool: () => boolean
+  }
+
+  export type StructuredOutputGuard = (output: unknown) => string | undefined | Promise<string | undefined>
+
   export interface SessionRuntimeContract {
+    identity: SessionRuntimeContractIdentity
     tools?: Record<string, AITool>
     terminalToolContract?: TerminalToolContract
     structuredOutputGuard?: StructuredOutputGuard
@@ -79,7 +100,7 @@ export namespace SessionLoop {
   }
 
   // ---------------------------------------------------------------------------
-  // Session-scoped runtime contract + ephemeral overlays
+  // Session-scoped runtime contract
   //
   // Worker child sessions can be resumed later by appending another user
   // message to the same session. The resumed loop must see the same extra
@@ -87,17 +108,16 @@ export namespace SessionLoop {
   // otherwise the session is no longer the same agent contract and "resume"
   // degenerates into a bare chat turn that has lost its stage tools.
   //
-  // We therefore keep a persistent IN-MEMORY runtime contract per sessionID
-  // for resumable worker sessions. Ephemeral wrappers (`withExtraTools`,
-  // `withTerminalToolContract`, `withStructuredOutputGuard`) remain as a
-  // short-lived overlay layer for one-shot flows such as the orchestrator's
-  // own turn execution.
+  // We therefore keep one persistent IN-MEMORY runtime contract per sessionID
+  // for resumable worker sessions. The contract is the only source for
+  // stage-scoped tools, terminal handoff state, structured-output guards, and
+  // stream hooks. It carries identity so retries can reject stale collectors
+  // before contacting the model.
   //
   // Crash recovery is still not supported here: these contracts close over
   // live collectors and tool functions, so they cannot be serialized into DB.
   // ---------------------------------------------------------------------------
   const sessionRuntimeContracts = new Map<string, SessionRuntimeContract>()
-  const ephemeralTools = new Map<string, Record<string, AITool>>()
 
   export function setSessionRuntimeContract(
     sessionID: string,
@@ -113,6 +133,11 @@ export namespace SessionLoop {
       sessionRuntimeContracts.delete(sessionID)
       return
     }
+    if (contract.identity.sessionID !== sessionID) {
+      throw new Error(
+        `SessionRuntimeContract identity mismatch: contract session ${contract.identity.sessionID} cannot be installed on ${sessionID}`,
+      )
+    }
     sessionRuntimeContracts.set(sessionID, contract)
   }
 
@@ -124,42 +149,105 @@ export namespace SessionLoop {
     sessionRuntimeContracts.delete(sessionID)
   }
 
-  /**
-   * Register a map of agent-scoped tool objects for the given session.
-   *
-   * Passing `undefined` clears any previously registered entry.
-   * Subsequent calls replace the map wholesale; there is no partial merge
-   * so callers can reason about the exact surface the LLM will see.
-   */
-  export function setExtraTools(sessionID: string, tools: Record<string, AITool> | undefined): void {
-    if (!tools || Object.keys(tools).length === 0) {
-      ephemeralTools.delete(sessionID)
-      return
-    }
-    ephemeralTools.set(sessionID, tools)
+  function runtimeContractTools(sessionID: string): Record<string, AITool> {
+    return sessionRuntimeContracts.get(sessionID)?.tools ?? {}
   }
 
-  /** Read back the currently registered tools. Returns an empty record
-   *  when nothing is registered. Used by `resolveTools`. */
-  export function getExtraTools(sessionID: string): Record<string, AITool> {
+  const runtimeContractRequiredAgentKinds = new Set([
+    "architect",
+    "build",
+    "delivery",
+    "design-analyst",
+    "integrity",
+    "intent-analysis",
+    "orchestrator",
+    "prosecutor",
+    "requirements",
+  ])
+
+  export function agentKindRequiresRuntimeContract(agentKind: string | undefined): boolean {
+    return !!agentKind && runtimeContractRequiredAgentKinds.has(agentKind)
+  }
+
+  export function validateSessionRuntimeContractForContinuation(input: {
+    sessionID: string
+    sessionKind?: string
+    expectedAgentKind?: string
+    expectedContractKind?: SessionRuntimeContractKind
+    expectedGoalID?: string
+    expectedGoalRunID?: string
+    expectedAttemptID?: string
+    requireRuntimeContract?: boolean
+    rejectSatisfiedTerminal?: boolean
+  }): SessionRuntimeContract | undefined {
+    const contract = sessionRuntimeContracts.get(input.sessionID)
+    if (!contract) {
+      if (input.requireRuntimeContract) {
+        throw new Error(
+          `SessionRuntimeContract missing for ${input.sessionID}; ${input.expectedAgentKind ?? input.sessionKind ?? "this session"} cannot continue without a runtime tool contract`,
+        )
+      }
+      return undefined
+    }
+
+    const identity = contract.identity
+    if (identity.sessionID !== input.sessionID) {
+      throw new Error(
+        `SessionRuntimeContract stale for ${input.sessionID}: identity session is ${identity.sessionID}`,
+      )
+    }
+
+    const expectedAgentKind = input.expectedAgentKind ?? input.sessionKind
+    if (expectedAgentKind && identity.agentKind !== expectedAgentKind) {
+      throw new Error(
+        `SessionRuntimeContract agent mismatch for ${input.sessionID}: expected ${expectedAgentKind}, found ${identity.agentKind}`,
+      )
+    }
+    if (input.expectedContractKind && identity.contractKind !== input.expectedContractKind) {
+      throw new Error(
+        `SessionRuntimeContract kind mismatch for ${input.sessionID}: expected ${input.expectedContractKind}, found ${identity.contractKind}`,
+      )
+    }
+    if (input.expectedGoalID && identity.goalID !== input.expectedGoalID) {
+      throw new Error(
+        `SessionRuntimeContract goal mismatch for ${input.sessionID}: expected ${input.expectedGoalID}, found ${identity.goalID ?? "<unset>"}`,
+      )
+    }
+    if (input.expectedGoalRunID && identity.goalRunID !== input.expectedGoalRunID) {
+      throw new Error(
+        `SessionRuntimeContract goal_run mismatch for ${input.sessionID}: expected ${input.expectedGoalRunID}, found ${identity.goalRunID ?? "<unset>"}`,
+      )
+    }
+    if (input.expectedAttemptID && identity.attemptID !== input.expectedAttemptID) {
+      throw new Error(
+        `SessionRuntimeContract attempt mismatch for ${input.sessionID}: expected ${input.expectedAttemptID}, found ${identity.attemptID ?? "<unset>"}`,
+      )
+    }
+    if (input.rejectSatisfiedTerminal !== false && contract.terminalToolContract?.isSatisfied()) {
+      throw new Error(
+        `SessionRuntimeContract terminal collector is already satisfied for ${input.sessionID}; install a fresh contract before continuing`,
+      )
+    }
+    return contract
+  }
+
+  function runtimeContractExpectationFromExtra(
+    extra: Record<string, any> | undefined,
+  ): {
+    expectedContractKind?: SessionRuntimeContractKind
+    expectedGoalRunID?: string
+    expectedAttemptID?: string
+  } {
+    const runtime = extra?.runtimeContract
+    if (!runtime || typeof runtime !== "object") return {}
+    const contractKind = runtime.contractKind
     return {
-      ...(sessionRuntimeContracts.get(sessionID)?.tools ?? {}),
-      ...(ephemeralTools.get(sessionID) ?? {}),
-    }
-  }
-
-  /** Convenience wrapper: set the tools, run `fn`, always clear afterwards
-   *  regardless of whether `fn` resolved or threw. */
-  export async function withExtraTools<T>(
-    sessionID: string,
-    tools: Record<string, AITool>,
-    fn: () => Promise<T>,
-  ): Promise<T> {
-    setExtraTools(sessionID, tools)
-    try {
-      return await fn()
-    } finally {
-      setExtraTools(sessionID, undefined)
+      expectedContractKind:
+        contractKind === "stage-attempt" || contractKind === "orchestrator-wake"
+          ? contractKind
+          : undefined,
+      expectedGoalRunID: typeof runtime.goalRunID === "string" ? runtime.goalRunID : undefined,
+      expectedAttemptID: typeof runtime.attemptID === "string" ? runtime.attemptID : undefined,
     }
   }
 
@@ -174,7 +262,7 @@ export namespace SessionLoop {
   // expose it natively, so callers register a process-local callback the
   // loop fires after each `processTurn` returns.
   //
-  // Scope rules mirror setExtraTools: in-memory only, one entry per
+  // Scope rules mirror the runtime contract: in-memory only, one entry per
   // sessionID, replaced wholesale on repeat calls, cleared on sentinel/
   // callback completion, and NOT persisted across process restart.
   // ---------------------------------------------------------------------------
@@ -228,53 +316,14 @@ export namespace SessionLoop {
   }
 
   // ---------------------------------------------------------------------------
-  // Ephemeral per-session StructuredOutput guard
+  // StructuredOutput guard
   //
   // Some agents need semantic invariants that JSON Schema cannot express. The
   // build agent is the concrete case: `status="passed"` is valid only after
-  // the in-session `merge_back` tool has completed successfully. This hook
-  // rejects the terminal StructuredOutput tool call before it is captured, so
-  // the same session can continue, call the missing work tool, and then close
-  // with StructuredOutput. It is process-local for the same reason as
-  // extraTools: validators can close over live tool state and are not
-  // serializable DB state.
+  // the in-session `merge_back` tool has completed successfully. The guard is
+  // part of SessionRuntimeContract because it closes over live stage state and
+  // must be replaced together with the attempt's tool collector.
   // ---------------------------------------------------------------------------
-  export type StructuredOutputGuard = (output: unknown) => string | undefined | Promise<string | undefined>
-
-  const ephemeralStructuredOutputGuards = new Map<string, StructuredOutputGuard>()
-  export interface TerminalToolContract {
-    toolName: string
-    isSatisfied: () => boolean
-    shouldExposeOnlyTerminalTool: () => boolean
-  }
-
-  const ephemeralTerminalToolContracts = new Map<string, TerminalToolContract>()
-
-  export function setTerminalToolContract(
-    sessionID: string,
-    contract: TerminalToolContract | undefined,
-  ): void {
-    if (!contract) {
-      ephemeralTerminalToolContracts.delete(sessionID)
-      return
-    }
-    ephemeralTerminalToolContracts.set(sessionID, contract)
-  }
-
-  export async function withTerminalToolContract<T>(
-    sessionID: string,
-    contract: TerminalToolContract,
-    fn: () => Promise<T>,
-  ): Promise<T> {
-    const previous = ephemeralTerminalToolContracts.get(sessionID)
-    ephemeralTerminalToolContracts.set(sessionID, contract)
-    try {
-      return await fn()
-    } finally {
-      if (previous) ephemeralTerminalToolContracts.set(sessionID, previous)
-      else ephemeralTerminalToolContracts.delete(sessionID)
-    }
-  }
 
   const structuredOutputAjv = new Ajv2020({ allErrors: true, strict: false })
 
@@ -330,27 +379,12 @@ export namespace SessionLoop {
     return { ok: true, value: payload }
   }
 
-  export async function withStructuredOutputGuard<T>(
-    sessionID: string,
-    guard: StructuredOutputGuard,
-    fn: () => Promise<T>,
-  ): Promise<T> {
-    const previous = ephemeralStructuredOutputGuards.get(sessionID)
-    ephemeralStructuredOutputGuards.set(sessionID, guard)
-    try {
-      return await fn()
-    } finally {
-      if (previous) ephemeralStructuredOutputGuards.set(sessionID, previous)
-      else ephemeralStructuredOutputGuards.delete(sessionID)
-    }
-  }
-
   function getTerminalToolContract(sessionID: string): TerminalToolContract | undefined {
-    return ephemeralTerminalToolContracts.get(sessionID) ?? sessionRuntimeContracts.get(sessionID)?.terminalToolContract
+    return sessionRuntimeContracts.get(sessionID)?.terminalToolContract
   }
 
   function getStructuredOutputGuard(sessionID: string): StructuredOutputGuard | undefined {
-    return ephemeralStructuredOutputGuards.get(sessionID) ?? sessionRuntimeContracts.get(sessionID)?.structuredOutputGuard
+    return sessionRuntimeContracts.get(sessionID)?.structuredOutputGuard
   }
 
   /**
@@ -1129,6 +1163,17 @@ export namespace SessionLoop {
     const agent = await Agent.get(input.lastUser.agent)
     const maxSteps = agent.steps ?? Infinity
     const isLastStep = input.step >= maxSteps
+    const runtimeExpectation = runtimeContractExpectationFromExtra(input.lastUser.extra)
+    const runtimeContract = validateSessionRuntimeContractForContinuation({
+      sessionID: input.sessionID,
+      sessionKind: input.session.kind,
+      expectedAgentKind: input.lastUser.agent,
+      expectedGoalID: input.session.goalID,
+      ...runtimeExpectation,
+      requireRuntimeContract:
+        agentKindRequiresRuntimeContract(input.lastUser.agent) ||
+        agentKindRequiresRuntimeContract(input.session.kind),
+    })
     const processor = SessionProcessor.create({
       assistantMessage: (await Session.updateMessage({
         id: Identifier.ascending("message"),
@@ -1494,7 +1539,7 @@ export namespace SessionLoop {
       tools,
       model: input.model,
       toolChoice: turnToolChoice,
-      stream: getSessionRuntimeContract(input.sessionID)?.stream,
+      stream: runtimeContract?.stream,
     })
 
     if (structured !== undefined) {
@@ -1973,23 +2018,23 @@ export namespace SessionLoop {
       })
     }
 
-    // Merge per-session ephemeral tools last so agent-scoped callers can
-    // shadow a built-in name if they deliberately want to (e.g. a stage
-    // agent that replaces `read` with a sandboxed variant). Shadowing is
-    // bounded to the session's lifetime — see setExtraTools doc comment.
+    // Merge per-session runtime-contract tools last so stage agents can
+    // deliberately shadow a built-in name with the attempt-scoped executable
+    // closure (for example a sandboxed read or a report/submit tool).
     //
     // Extras must return `{ output: string, title?: string, metadata?: object }`
     // — SessionLoop's Message.ToolPart persistence layer validates that shape
     // when the tool call finalises. Plain-string returns are auto-wrapped here
     // so stage-agent callers can keep the simple `return "OK: ..."` idiom
     // without silently landing a ZodError at tool-completion time.
-    const extras = getExtraTools(input.session.id)
+    const extras = runtimeContractTools(input.session.id)
     const sessionIDForExtras = input.session.id
     const messageIDForExtras = input.processor.message.id
     for (const [name, extraTool] of Object.entries(extras)) {
       const wrapped = wrapExtraTool(extraTool, {
         sessionID: sessionIDForExtras,
         messageID: messageIDForExtras,
+        partFromToolCall: (toolCallID) => input.processor.partFromToolCall(toolCallID),
       })
       tools[name] = prepareProviderTool({
         name,
@@ -2014,7 +2059,7 @@ export namespace SessionLoop {
    */
   function wrapExtraTool(
     raw: AITool,
-    ctx: { sessionID: string; messageID: string },
+    ctx: { sessionID: string; messageID: string; partFromToolCall: (toolCallID: string) => Message.ToolPart | undefined },
   ): AITool {
     const original = raw as AITool & { execute?: (...args: any[]) => any }
     if (!original.execute) return raw
@@ -2042,7 +2087,18 @@ export namespace SessionLoop {
     return {
       ...(raw as any),
       async execute(args: unknown, options: unknown) {
-        const result = await execute(args, options)
+        const toolCallID = typeof (options as any)?.toolCallId === "string" ? (options as any).toolCallId : undefined
+        const toolPart = toolCallID ? ctx.partFromToolCall(toolCallID) : undefined
+        const enrichedOptions = {
+          ...((options && typeof options === "object") ? (options as Record<string, unknown>) : {}),
+          opencorvus: {
+            sessionID: ctx.sessionID,
+            messageID: ctx.messageID,
+            toolCallID,
+            toolPartID: toolPart?.id,
+          },
+        }
+        const result = await execute(args, enrichedOptions)
         const normalized = normalizeExtraToolResult(result)
         const materializedAttachments = await materializeToolResultAttachments(normalized.attachments)
         return {

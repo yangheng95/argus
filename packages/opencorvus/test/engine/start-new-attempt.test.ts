@@ -304,6 +304,7 @@ describe("Goal.startNewAttempt — options", () => {
       taskID,
       goalID,
       runID,
+      sessionID: "ses_start_new_retry_count",
     })
 
     expect(findGoalRun(nextRunID)?.retry_count).toBe(1)
@@ -317,6 +318,7 @@ describe("Goal.startNewAttempt — options", () => {
       taskID,
       goalID,
       runID,
+      sessionID: "ses_start_new_direct_retry",
     })
 
     expect(getGoalRetryCount(goalID)).toBe(1)
@@ -369,6 +371,7 @@ describe("Goal.startNewAttempt — options", () => {
       taskID,
       goalID,
       runID,
+      sessionID: "ses_start_new_workspace_preserve",
       workspaceDir: "C:/tmp/ws-preserve",
       workspaceBranch: "opencorvus/ws-preserve",
       workspaceBaseRef: "abc123",

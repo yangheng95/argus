@@ -20,6 +20,7 @@ import type { Message } from "@/session"
 import { Tool } from "@/tool/tool"
 import { MemoryTool } from "@/tool/memory"
 import { TaskReportTool } from "@/tool/task-report"
+import { SkillTool } from "@/tool/skill"
 import { MCP } from "@/mcp"
 import { Bus } from "@/bus"
 import path from "path"
@@ -40,6 +41,10 @@ const DEFAULT_SERVER_NAME = "opencorvus"
 // external coding executors implement the persisted SPEC rather than calling
 // webpage_* / figma_* through MCP.
 const EXECUTOR_TOOLS = {
+  skill: {
+    name: "skill",
+    annotations: {},
+  },
   memory: {
     name: "memory",
     annotations: {
@@ -54,6 +59,7 @@ const EXECUTOR_TOOLS = {
 
 type ExecutorToolID = keyof typeof EXECUTOR_TOOLS
 const EXECUTOR_TOOL_IMPLS: Record<ExecutorToolID, Tool.Info> = {
+  skill: SkillTool,
   memory: MemoryTool,
   task_report: TaskReportTool,
 }

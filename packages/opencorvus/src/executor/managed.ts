@@ -5,7 +5,12 @@ import { createEventQueue, type EventQueue } from "@/util/event-queue"
 import { EngineConfig } from "@/engine/config"
 import { PlanningCapabilities, type CodingEventInfo, type CodingProvider, type CodingProviderOptions, type ExecutorStatusInfo } from "./contract"
 import type { ExecutorAdapter } from "./contract"
-import { extractExecutorSessionRef, persistExecutorSessionRef, readExecutorSessionRef } from "./session-ref"
+import {
+  extractExecutorSessionRef,
+  persistExecutorSessionRef,
+  readExecutorSessionRef,
+  resolveNativeResumeRef,
+} from "./session-ref"
 
 const log = Log.create({ service: "managed-executor" })
 
@@ -21,6 +26,11 @@ function formatErrorChain(err: unknown, depth = 0): string {
   const head = err.message ? `${err.name}: ${err.message}` : err.name
   if (!(err.cause instanceof Error) || depth >= 5) return head
   return `${head} | caused by: ${formatErrorChain(err.cause, depth + 1)}`
+}
+
+function requireExternalSessionID(state: State, operation: string): string {
+  if (state.externalSessionID) return state.externalSessionID
+  throw new Error(`managed executor ${operation} requires a provider-native session id for ${state.sessionID}`)
 }
 
 type Status = Exclude<ExecutorStatusInfo, "blocked">
@@ -72,7 +82,7 @@ export const ManagedCodingExecutor = {
           ? provider.run(input)
           : provider.resume({
               ...input,
-              sessionID: state.externalSessionID ?? state.sessionID,
+              sessionID: state.externalSessionID!,
             })
 
       state.status = "running"
@@ -180,7 +190,7 @@ export const ManagedCodingExecutor = {
         const state = pick(tasks, latest, input)
         if (!state) return false
         state.abort.abort()
-        await provider.interrupt(state.externalSessionID ?? state.sessionID).catch(() => false)
+        await provider.interrupt(requireExternalSessionID(state, "interrupt")).catch(() => false)
         state.status = "failed"
         state.error = "task cancelled"
         push(state, {
@@ -209,12 +219,14 @@ export const ManagedCodingExecutor = {
         const id = Identifier.ascending("task")
         const prev = pick(tasks, latest, { sessionID: input.sessionID })
         const metadata = prev?.externalSessionID ? undefined : await readExecutorSessionRef(input.sessionID)
-        const persisted = metadata?.provider === provider.name ? metadata : undefined
+        const externalSessionID =
+          prev?.externalSessionID ??
+          resolveNativeResumeRef(provider.name, metadata)
         const state: State = {
           id,
           sessionID: input.sessionID,
           provider: provider.name,
-          externalSessionID: prev?.externalSessionID ?? persisted?.nativeSessionID,
+          externalSessionID,
           status: "retrying",
           error: null,
           output: "",
@@ -249,7 +261,7 @@ export const ManagedCodingExecutor = {
         const state = pick(tasks, latest, input)
         if (!state) return false
         return provider.respond({
-          sessionID: state.externalSessionID ?? state.sessionID,
+          sessionID: requireExternalSessionID(state, "respond"),
           requestID: input.requestID,
           kind: input.kind,
           response: input.response,

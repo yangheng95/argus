@@ -2570,10 +2570,6 @@ export type Config = {
        * Maximum agentic steps for requirements agent
        */
       max_steps?: number
-      /**
-       * Additional skill paths for requirements agent
-       */
-      skills?: Array<string>
     }
     /**
      * Architect agent configuration — cross-goal coordination, interface contracts. Model is configured via agent.architect.model.
@@ -2583,10 +2579,6 @@ export type Config = {
        * Maximum agentic steps for architect agent
        */
       max_steps?: number
-      /**
-       * Additional skill paths for architect agent
-       */
-      skills?: Array<string>
     }
     /**
      * P0-B visual numeric evidence thresholds.
@@ -2630,10 +2622,6 @@ export type Config = {
        * Maximum agentic steps for design analyst agent
        */
       max_steps?: number
-      /**
-       * Additional skill paths for design analyst agent
-       */
-      skills?: Array<string>
     }
     /**
      * Intent-analysis agent configuration — front-of-pipeline intent disambiguation. Model is configured via agent."intent-analysis".model.
@@ -2643,10 +2631,6 @@ export type Config = {
        * Maximum agentic steps for intent-analysis agent
        */
       max_steps?: number
-      /**
-       * Additional skill paths for intent-analysis agent
-       */
-      skills?: Array<string>
     }
     /**
      * Build agent configuration — per-goal build session. Model is configured via agent."build".model.
@@ -2656,10 +2640,6 @@ export type Config = {
        * Maximum agentic steps for build agent
        */
       max_steps?: number
-      /**
-       * Operator-forced build skills. Leave empty for auto_detect-driven skill routing.
-       */
-      skills?: Array<string>
     }
     /**
      * Chunk-driven inactivity gates. Single source of truth for streaming layers (session LLM, executor events, task queue).
@@ -6122,7 +6102,6 @@ export type AppSkillsResponses = {
     builtin?: boolean
     location: string
     content: string
-    stage?: string
     auto_detect?: {
       files?: Array<string>
       deps?: Array<string>
@@ -6176,7 +6155,6 @@ export type SkillInstalledResponses = {
     builtin?: boolean
     location: string
     content: string
-    stage?: string
     auto_detect?: {
       files?: Array<string>
       deps?: Array<string>

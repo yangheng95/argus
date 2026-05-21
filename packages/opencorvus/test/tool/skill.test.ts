@@ -63,6 +63,7 @@ description: Skill for tool tests.
           expect(result.output).toContain("<skill_search>")
           expect(result.output).toContain("<name>tool-skill</name>")
           expect(result.output).toContain("<description>Skill for tool tests.</description>")
+          expect(result.output).not.toContain("<stage>")
           expect(result.output).toContain(`<location>${pathToFileURL(skillPath).href}</location>`)
           expect(result.output).not.toContain("<skill_content")
         },

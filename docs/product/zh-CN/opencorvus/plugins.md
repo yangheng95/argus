@@ -1,6 +1,6 @@
 # Plugins（插件）
 
-Plugin 是 OpenCorvus 的深层扩展机制。与 Skill（只注入 Markdown 指令）不同，Plugin 是 TypeScript/JavaScript 代码，可在运行时 hook 进核心事件链——注册工具、修改 LLM 请求参数、拦截权限检查、订阅评估结果，甚至完整替换评估分析流程。
+Plugin 是 OpenCorvus 的深层扩展机制。与 Skill（通过 `skill` 工具显式加载 Markdown 工作流）不同，Plugin 是 TypeScript/JavaScript 代码，可在运行时 hook 进核心事件链——注册工具、修改 LLM 请求参数、拦截权限检查、订阅评估结果，甚至完整替换评估分析流程。
 
 源码：`packages/opencorvus/src/plugin/index.ts`、`packages/plugin/src/index.ts`（接口）
 
@@ -9,8 +9,8 @@ Plugin 是 OpenCorvus 的深层扩展机制。与 Skill（只注入 Markdown 指
 | 维度 | Skill | Plugin |
 |---|---|---|
 | 实现 | Markdown + YAML | TypeScript/JavaScript 模块 |
-| 加载 | session 初始化，注入 prompt | 服务启动时，全局常驻 |
-| 能力 | 给 agent 注入指南 | hook LLM 请求 / 注册工具 / 拦截事件 / 扩展评估 |
+| 加载 | agent 调用 `skill` 工具加载 | 服务启动时，全局常驻 |
+| 能力 | 给 agent 提供可加载工作流 | hook LLM 请求 / 注册工具 / 拦截事件 / 扩展评估 |
 | 门槛 | 零代码 | 实现 `Plugin` 函数接口 |
 
 ## 2. 默认插件

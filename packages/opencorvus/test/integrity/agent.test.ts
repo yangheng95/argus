@@ -110,7 +110,6 @@ test("integrity uses dimension collectors plus submit_integrity_review terminato
       collector: input.toolKit.getCollector(),
       finalMessage: { info: {} },
       model: { providerID: "test", modelID: "mock", id: "test/mock" },
-      requiredTools: [],
     }
   }
 
@@ -135,7 +134,6 @@ test("integrity accepts only complete dimension submissions plus submit_integrit
       collector: input.toolKit.getCollector(),
       finalMessage: { info: {} },
       model: { providerID: "test", modelID: "mock", id: "test/mock" },
-      requiredTools: [],
     }
   }
 
@@ -184,7 +182,6 @@ test("rejected acceptance forces aggregate needs_correction from inside integrit
       collector: input.toolKit.getCollector(),
       finalMessage: { info: {} },
       model: { providerID: "test", modelID: "mock", id: "test/mock" },
-      requiredTools: [],
     }
   }
 
@@ -237,7 +234,6 @@ test("integrity cannot finalize without an acceptance verdict", async () => {
       collector: input.toolKit.getCollector(),
       finalMessage: { info: {} },
       model: { providerID: "test", modelID: "mock", id: "test/mock" },
-      requiredTools: [],
     }
   }
 
@@ -294,7 +290,6 @@ test("rejected acceptance forces aggregate needs_correction", async () => {
       collector: input.toolKit.getCollector(),
       finalMessage: { info: {} },
       model: { providerID: "test", modelID: "mock", id: "test/mock" },
-      requiredTools: [],
     }
   }
 
@@ -339,7 +334,6 @@ test("integrity lifecycle emits shared review stream events", async () => {
       collector: input.toolKit.getCollector(),
       finalMessage: { info: {} },
       model: { providerID: "test", modelID: "mock", id: "test/mock" },
-      requiredTools: [],
     }
   }
 
@@ -405,7 +399,6 @@ test("accepted acceptance plus advisory concerns returns top-level pass and keep
       collector: input.toolKit.getCollector(),
       finalMessage: { info: {} },
       model: { providerID: "test", modelID: "mock", id: "test/mock" },
-      requiredTools: [],
     }
   }
 
@@ -490,7 +483,6 @@ test("repair-bearing concerns aggregate to needs_correction while preserving dim
       collector: input.toolKit.getCollector(),
       finalMessage: { info: {} },
       model: { providerID: "test", modelID: "mock", id: "test/mock" },
-      requiredTools: [],
     }
   }
 
@@ -564,7 +556,6 @@ test("hallucination findings can propose executable requirement-id repairs", asy
       collector: input.toolKit.getCollector(),
       finalMessage: { info: {} },
       model: { providerID: "test", modelID: "mock", id: "test/mock" },
-      requiredTools: [],
     }
   }
 
@@ -619,7 +610,6 @@ test("requirement_fidelity issue carries requirement_ids and spec_ids through to
       collector: input.toolKit.getCollector(),
       finalMessage: { info: {} },
       model: { providerID: "test", modelID: "mock", id: "test/mock" },
-      requiredTools: [],
     }
   }
 
@@ -655,7 +645,6 @@ test("buildIntegrityPrompt omits the Requirement Status Snapshot section when th
       collector: input.toolKit.getCollector(),
       finalMessage: { info: {} },
       model: { providerID: "test", modelID: "mock", id: "test/mock" },
-      requiredTools: [],
     }
   }
 
@@ -750,7 +739,6 @@ test("when every claiming goal's essential spec fails, the LLM-driven verdict ro
       collector: input.toolKit.getCollector(),
       finalMessage: { info: {} },
       model: { providerID: "test", modelID: "mock", id: "test/mock" },
-      requiredTools: [],
     }
   }
 
@@ -817,7 +805,6 @@ test("buildIntegrityPrompt renders the snapshot table and foregrounds REQ → go
       collector: input.toolKit.getCollector(),
       finalMessage: { info: {} },
       model: { providerID: "test", modelID: "mock", id: "test/mock" },
-      requiredTools: [],
     }
   }
 

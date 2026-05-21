@@ -20,12 +20,11 @@ Frontmatter 字段（`src/skill/skill.ts:23-63`）：
 | `name` | string（必需） | 全局唯一 ID，被 permission 引用 |
 | `description` | string（必需） | 一句话描述，告诉 agent 何时激活 |
 | `platforms` | `("win32" \| "darwin" \| "linux")[]` | 平台过滤，空数组 = 全平台 |
-| `stage` | string | `required_tools` 所属阶段，例如 `requirements` / `design_analyst` / `build` |
-| `auto_detect.files` | string[] | 项目中存在这些文件时自动加载 |
-| `auto_detect.deps` | string[] | `package.json` 中存在这些依赖时自动加载 |
-| `auto_detect.task_signals` | object | 任务级信号（`has_attachment_image` / `request_contains_url` / `request_contains_figma_url` / `package_has_script[]` / `request_text_any[]`） |
+| `auto_detect.files` | string[] | 项目中存在这些文件时作为发现提示 |
+| `auto_detect.deps` | string[] | `package.json` 中存在这些依赖时作为发现提示 |
+| `auto_detect.task_signals` | object | 任务级发现提示（`has_attachment_image` / `request_contains_url` / `request_contains_figma_url` / `package_has_script[]` / `request_text_any[]`） |
 | `priority` | number | 多 skill 命中时的排序（大在前，默认 0） |
-| `required_tools` | string[] | 该 skill 所属 stage 必须可用/执行的 tool 名；跨 stage 注入正文时不会强制其他 stage 调用这些工具 |
+| `required_tools` | string[] | skill 预期可能需要的工具提示 |
 
 ## 2. 内置 Skills
 
@@ -105,14 +104,9 @@ opencorvus skill install owner/repo
 
 ## 6. Skill ↔ Agent 调用关系
 
-Session 初始化时会把命中的 `SKILL.md` 正文注入 agent 的 system prompt。`auto_detect` 命中的 skill 会跨 stage 注入，避免相关经验因为 stage 标记不一致而缺失：
+Session 初始化时会提供 Skill Policy 与可用 skill 摘要。Agent 需要通过 `skill` 工具搜索或按精确名称加载 `SKILL.md`，然后执行其中的工作流。加载 skill 是会话历史中的可见工具调用。
 
-- `stage` 表示该 skill 的 `required_tools` 由哪个 stage 拥有，不控制正文可见性
-- `stage: "build"` 的 skill 若命中，可作为上下文注入其他 stage，但其 `required_tools` 只由 build 强制
-- `stage: "design_analyst"` 的 skill 若命中，可作为上下文注入 build，但 mirror 采集类 `required_tools` 仍只由 design-analysis 强制
-- 未声明 `stage` 的 skill 视为全局 skill，其 `required_tools` 会随当前 agent 调用链生效；没有 active stage 的解析路径只强制全局 skill 的 `required_tools`
-
-`auto_detect` 提供文件 / 依赖 / 任务信号的自动匹配。**Skill 本身不能直接调用工具**——它通过注入指令和 stage-owned required-tool contract 影响 agent 行为。
+`auto_detect` 仅作为发现 / 排序 / 后续 UI 辅助的元数据，不再把 skill 正文隐藏注入 system prompt，也不会自动打开工具。`required_tools` 是 skill 搜索结果中的描述性提示；真正的证据要求由加载后的 skill 文档说明。
 
 ## 7. Permission 配置
 

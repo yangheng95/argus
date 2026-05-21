@@ -65,8 +65,10 @@ test("build agent has correct default properties", async () => {
       expect(build?.prompt).toBe(BUILD_CORE)
       expect(evalPerm(build, "edit")).toBe("allow")
       expect(evalPerm(build, "bash")).toBe("allow")
+      expect(evalPerm(build, "skill")).toBe("allow")
       expect(evalPerm(build, "todoread")).toBe("allow")
       expect(evalPerm(build, "todowrite")).toBe("allow")
+      expect(build?.tools?.exclude).not.toContain("skill")
     },
   })
 })

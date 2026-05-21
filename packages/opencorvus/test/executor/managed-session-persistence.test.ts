@@ -119,7 +119,7 @@ describe("managed executor session persistence", () => {
     })
   })
 
-  test("resume does not reuse a native session id from a different provider", async () => {
+  test("resume rejects a persisted native session id from a different provider", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,
@@ -134,7 +134,7 @@ describe("managed executor session persistence", () => {
         ))
 
         let resumedWith = ""
-        await ManagedCodingExecutor.create({
+        const executor = ManagedCodingExecutor.create({
           name: "claude-code",
           capabilities: capabilities,
           async *run() {},
@@ -145,22 +145,13 @@ describe("managed executor session persistence", () => {
           async interrupt() {
             return false
           },
-        }, {}).resume({
+        }, {})
+
+        await expect(executor.resume({
           sessionID: session.id,
           message: "continue with different provider",
-        })
-
-        await waitFor(() => Promise.resolve(resumedWith.length > 0))
-        expect(resumedWith).toBe(session.id)
-
-        await waitFor(() => Session.get(session.id).then((info) =>
-          (info.metadata?.executor as { native_session_id?: string } | undefined)?.native_session_id === "claude_new"
-        ))
-        const info = await Session.get(session.id)
-        expect(info.metadata?.executor).toMatchObject({
-          provider: "claude-code",
-          native_session_id: "claude_new",
-        })
+        })).rejects.toThrow("does not match claude-code")
+        expect(resumedWith).toBe("")
       },
     })
   })

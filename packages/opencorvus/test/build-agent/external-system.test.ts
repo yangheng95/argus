@@ -7,15 +7,19 @@ describe("BuildAgent external coding system prompt", () => {
       executor: "codex",
       baseSystem: "base system",
       userAppend: "operator build append",
-      skillPrompt: "skill prompt",
     })
 
     expect(composed.mcpPromptInjected).toBe(true)
     expect(composed.system).toContain("base system")
     expect(composed.system).toContain("You are the OpenCorvus external build executor running through codex.")
     expect(composed.system).toContain("Treat the user prompt as a build contract, not as a chat request.")
+    expect(composed.system).toContain("complete source/target investigation is implementation work")
+    expect(composed.system).toContain("context-menu/right-click behavior")
+    expect(composed.system).toContain("Do not perform unrelated broad inventories")
+    expect(composed.system).toContain("If required source evidence is absent or incomplete")
     expect(composed.system).toContain("Do not call OpenCorvus-only tools such as report_build_result or merge_back")
     expect(composed.system).toContain("memory => mcp__opencorvus__memory")
+    expect(composed.system).toContain("skill => mcp__opencorvus__skill")
     expect(composed.system).toContain("task_report => mcp__opencorvus__task_report")
     expect(composed.system).not.toContain("webpage_extract => mcp__opencorvus__webpage_extract")
     expect(composed.system).not.toContain("figma_extract => mcp__opencorvus__figma_extract")
@@ -25,21 +29,20 @@ describe("BuildAgent external coding system prompt", () => {
     expect(composed.system).toContain("Write shell commands for the actual platform and shell")
     expect(composed.system).toContain("PowerShell-native commands")
     expect(composed.system).toContain("operator build append")
-    expect(composed.system).toContain("skill prompt")
+    expect(composed.system).not.toContain("skill prompt")
   })
 
   test("leaves Claude Code MCP alias injection to the Claude provider", () => {
     const composed = BuildAgent.composeExternalCodingSystem({
       executor: "claude-code",
       baseSystem: "base system",
-      skillPrompt: "skill prompt",
     })
 
     expect(composed.mcpPromptInjected).toBe(false)
     expect(composed.system).toContain("base system")
     expect(composed.system).toContain("You are the OpenCorvus external build executor running through claude-code.")
     expect(composed.system).toContain("Keep reasoning, plans, prompt/rule details, and progress narration out of assistant text.")
-    expect(composed.system).toContain("skill prompt")
+    expect(composed.system).not.toContain("skill prompt")
   })
 
   test("does not materialize external assistant narration as card text", () => {

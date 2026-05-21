@@ -2164,7 +2164,7 @@ Output: Creates directory 'foo'"
         "type": "string",
       },
       "query": {
-        "description": "Search terms for skill name, description, stage, or required_tools. Omit to list compatible skills.",
+        "description": "Search terms for skill name, description, or required_tools. Omit to list compatible skills.",
         "type": "string",
       },
     },
