@@ -44,10 +44,10 @@ describe("core prompt hygiene", () => {
       designAnalyst: 125,
       integrity: 175,
       intentAnalysis: 130,
-      // Raised from 300 → 360 on 2026-05-20 to absorb the `Git Merge Repair
-      // Bash` section that documents the orchestrator's narrow bash scope
-      // (single git invocations only, no replacement of sub-agent surfaces).
-      orchestrator: 360,
+      // Raised from 360 -> 375 on 2026-05-21 to add the orchestrator's
+      // project-root git conflict ownership and toolchain readiness duties
+      // without widening the narrow git-only bash surface.
+      orchestrator: 375,
       prosecutor: 80,
       requirements: 180,
     }
@@ -228,6 +228,31 @@ describe("core prompt hygiene", () => {
 
     // Tool Selection entry must point back to the scoped section.
     expect(flat).toContain("`bash`: git-only merge-state repair shell")
+  })
+
+  test("orchestrator prompt owns git conflict resolution and toolchain readiness", async () => {
+    // Spec — 2026-05-21 orchestrator-git-toolchain-duty.
+    // This is prompt policy, not a new host state machine: the bash schema
+    // remains git-only while the orchestrator must treat required tools as
+    // readiness blockers instead of dispatching blindly.
+    const orchestrator = await readPrompt("orchestrator")
+    const flat = orchestrator.replace(/\s+/g, " ")
+
+    expect(flat).toContain("You own project-root git conflict resolution")
+    expect(flat).toContain("in-progress merge or unresolved conflict in the primary project root")
+    expect(flat).toContain("clear it through the narrow `bash` git repair surface")
+    expect(orchestrator).toContain("## Toolchain Readiness")
+    expect(flat).toContain("bash / accepted shell")
+    expect(flat).toContain("git")
+    expect(flat).toContain("package manager")
+    expect(flat).toContain("test runner")
+    expect(flat).toContain("browser preview tool")
+    expect(flat).toContain("required agent/tool surface")
+    expect(flat).toContain("Do not ignore or route around missing tools")
+    expect(flat).toContain("dispatch `build` to repair project scripts, dependencies, or tool configuration")
+    expect(flat).toContain("use `explore` for read-only toolchain diagnosis")
+    expect(flat).toContain("This is the direct surface for your project-root git conflict responsibility")
+    expect(flat).toContain("NEVER for code edits, tests, repository investigation, dependency changes, research, toolchain diagnosis")
   })
 
   test("architect prompt documents graph contracts as the only cross-goal handoff shape", async () => {
