@@ -123,3 +123,88 @@ test("compileBoard cache and task-scope status include workflow step protocol ev
     },
   })
 })
+
+test("cancelled terminal task without a run exposes task-level retry", async () => {
+  await resetDatabase()
+  await using tmp = await tmpdir()
+  const now = Date.now()
+  const projectID = `project_board_retry_${now}`
+  const taskID = `tsk_board_retry_${now.toString(16)}`
+
+  Database.use((db) => {
+    db.insert(ProjectTable).values({
+      id: projectID,
+      worktree: tmp.path,
+      name: "Board runless retry projection",
+      sandboxes: "[]",
+      time_created: now,
+      time_updated: now,
+    }).run()
+    db.insert(EngineTaskTable).values({
+      id: taskID,
+      project_id: projectID,
+      source: "test",
+      title: "Runless cancelled task",
+      request: "retry after provider failure",
+      kind: "workflow",
+      priority: "normal",
+      time_created: now - 10_000,
+      time_updated: now,
+      time_started: now - 10_000,
+      time_completed: now,
+      error: "task cancelled",
+      metadata: { cancelled: true },
+    } as any).run()
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const board = compileBoard({ taskID }) as any
+      expect(board.task.status).toBe("cancelled")
+      expect(board.overview.nextStep.kind).toBe("retry")
+      expect(board.overview.controls.canRetry).toBe(true)
+      expect(board.overview.controls.canCancel).toBe(false)
+    },
+  })
+})
+
+test("queued task without a run exposes cancel but not retry", async () => {
+  await resetDatabase()
+  await using tmp = await tmpdir()
+  const now = Date.now()
+  const projectID = `project_board_cancel_${now}`
+  const taskID = `tsk_board_cancel_${now.toString(16)}`
+
+  Database.use((db) => {
+    db.insert(ProjectTable).values({
+      id: projectID,
+      worktree: tmp.path,
+      name: "Board runless cancel projection",
+      sandboxes: "[]",
+      time_created: now,
+      time_updated: now,
+    }).run()
+    db.insert(EngineTaskTable).values({
+      id: taskID,
+      project_id: projectID,
+      source: "test",
+      title: "Runless queued task",
+      request: "queued task",
+      kind: "workflow",
+      priority: "normal",
+      time_created: now,
+      time_updated: now,
+    } as any).run()
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const board = compileBoard({ taskID }) as any
+      expect(board.task.status).toBe("queued")
+      expect(board.overview.controls.canCancel).toBe(true)
+      expect(board.overview.controls.canRetry).toBe(false)
+    },
+  })
+})

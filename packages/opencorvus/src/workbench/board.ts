@@ -769,7 +769,9 @@ function boardOverview(input: {
 }) {
   const derivedStatus = deriveTaskStatus(input.task)
   const active = derivedStatus === "queued" || derivedStatus === "active"
-  const canResume = Boolean(input.run) && !active && input.pendingInteractions.length === 0
+  const terminal =
+    derivedStatus === "completed" || derivedStatus === "failed" || derivedStatus === "cancelled"
+  const canRetry = terminal && input.pendingInteractions.length === 0
   const headline =
     input.pendingInteractions.length > 0
       ? "Waiting on human input"
@@ -838,9 +840,9 @@ function boardOverview(input: {
     currentFailure: input.currentFailure,
     nextStep,
     controls: {
-      canRetry: canResume,
-      canReplan: canResume && Boolean(findActivePlanForTask(input.task.id) ?? input.run?.plan_version_id),
-      canCancel: Boolean(input.run) && (isTaskQueued(input.task) || isTaskActive(input.task)),
+      canRetry,
+      canReplan: canRetry && Boolean(findActivePlanForTask(input.task.id) ?? input.run?.plan_version_id),
+      canCancel: isTaskQueued(input.task) || isTaskActive(input.task),
     },
   }
 }
