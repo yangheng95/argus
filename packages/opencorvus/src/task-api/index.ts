@@ -1635,7 +1635,15 @@ export namespace EngineService {
    */
   export async function injectMessage(taskID: string, message: string) {
     await appendAndWakeTaskOperatorMessage({ taskID, text: message })
-    return { resumed: true, status: deriveTaskStatus(requireTask(taskID)) as string }
+    return {
+      appended: true,
+      orchestratorWoken: true,
+      executorResumed: false,
+      // Deprecated compatibility field: task injection wakes the orchestrator,
+      // it does not resume a child executor/session.
+      resumed: false,
+      status: deriveTaskStatus(requireTask(taskID)) as string,
+    }
   }
 
   /**

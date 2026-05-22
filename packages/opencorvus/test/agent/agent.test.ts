@@ -313,6 +313,7 @@ test("orchestrator registry exposes lifecycle tools it teaches in prompt", async
         "retry_task",
         "restart_from_stage",
         "inject_operator_message",
+        "recover_stale_build",
       ]) {
         expect(include).toContain(tool)
       }

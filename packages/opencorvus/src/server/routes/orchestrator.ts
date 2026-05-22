@@ -763,7 +763,15 @@ export const EngineRoutes = lazy(() =>
             description: "Message injected",
             content: {
               "application/json": {
-                schema: resolver(z.object({ resumed: z.boolean(), status: z.string() })),
+                schema: resolver(
+                  z.object({
+                    appended: z.boolean(),
+                    orchestratorWoken: z.boolean(),
+                    executorResumed: z.boolean(),
+                    resumed: z.boolean(),
+                    status: z.string(),
+                  }),
+                ),
               },
             },
           },

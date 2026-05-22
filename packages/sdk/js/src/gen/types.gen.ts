@@ -10067,6 +10067,9 @@ export type TaskInjectResponses = {
    * Message injected
    */
   200: {
+    appended: boolean
+    orchestratorWoken: boolean
+    executorResumed: boolean
     resumed: boolean
     status: string
   }

@@ -20667,6 +20667,15 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "appended": {
+                      "type": "boolean"
+                    },
+                    "orchestratorWoken": {
+                      "type": "boolean"
+                    },
+                    "executorResumed": {
+                      "type": "boolean"
+                    },
                     "resumed": {
                       "type": "boolean"
                     },
@@ -20675,6 +20684,9 @@
                     }
                   },
                   "required": [
+                    "appended",
+                    "orchestratorWoken",
+                    "executorResumed",
                     "resumed",
                     "status"
                   ]

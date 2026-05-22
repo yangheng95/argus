@@ -32,6 +32,8 @@ import { EngineMemoryBridge } from "@/engine/memory-bridge"
 import { SubAgentProtocol } from "@/agent/sub-agent-protocol"
 import { Event as EngineEvent } from "@/engine/model"
 import { EngineProtocol } from "@/engine/protocol"
+import { Message } from "@/session/message"
+import { PartTable } from "@/session/session.sql"
 import { renderDesignAnalysisHandoffReference, designAnalysisArtifactPaths } from "@/design-analyst/handoff"
 import { materializeMcpToolResult } from "@/mcp/materialize"
 import {
@@ -651,6 +653,56 @@ function findExecutorSessionByGoalRunID(goalRunID: string) {
       .get(),
   )
   return row ? findExecutorSession(row.id) : undefined
+}
+
+async function markOwnedBuildToolPartRecovered(input: {
+  ownership: OrchestratorToolOwnershipPayload
+  reason: string
+  now?: number
+}) {
+  const row = Database.use((db) =>
+    db
+      .select()
+      .from(PartTable)
+      .where(
+        and(
+          eq(PartTable.id, input.ownership.tool_part_id),
+          eq(PartTable.session_id, input.ownership.orchestrator_session_id),
+        ),
+      )
+      .get(),
+  )
+  const part = row
+    ? ({
+        ...row.data,
+        id: row.id,
+        sessionID: row.session_id,
+        messageID: row.message_id,
+      } as Message.Part)
+    : undefined
+  if (!part || part.type !== "tool" || part.state.status === "completed" || part.state.status === "error") return
+
+  const now = input.now ?? Date.now()
+  const start =
+    part.state.status === "running"
+      ? part.state.time.start
+      : input.ownership.time_started
+  await Session.updatePart({
+    ...part,
+    state: {
+      status: "error",
+      input: part.state.input,
+      error: input.reason,
+      metadata: {
+        ...(part.state.status === "running" ? part.state.metadata ?? {} : {}),
+        recovered_stale_build: true,
+      },
+      time: {
+        start,
+        end: now,
+      },
+    },
+  })
 }
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
@@ -3934,7 +3986,7 @@ export function createOrchestratorTools(input: {
 
     inject_operator_message: tool({
       description:
-        "Forward the latest operator message into the currently running executor session. Use only when the task should continue under the same active execution, not when strategy must change.",
+        "Record the latest operator message on the task root session and wake the orchestrator. This does not resume a child executor/build session; use build({ goalID, request }) for build retry/continuation.",
       inputSchema: z.object({
         reason: z.string().describe("Why this operator message should be injected into the current execution"),
       }),
@@ -3947,7 +3999,10 @@ export function createOrchestratorTools(input: {
           ? `${latest}\n\n${input.operatorMessage.attachmentSummary}`
           : latest
         const result = await EngineService.injectMessage(taskID, payload)
-        return `Operator message injected. Reason: ${reason}. resumed=${result.resumed} status=${result.status}`
+        return (
+          `Operator message recorded on task session. Reason: ${reason}. ` +
+          `orchestratorWoken=${result.orchestratorWoken} executorResumed=${result.executorResumed} status=${result.status}`
+        )
       },
     }),
 
@@ -4076,6 +4131,100 @@ export function createOrchestratorTools(input: {
           `Cancelled sub-agent session ${target.sessionID} (kind=${kind}). ` +
           `source=${target.source}. Reason: ${reason}.` +
           `${abortedFact} NEXT: if you still need work from it, re-dispatch the same stage/goal under the same contract explicitly.`
+        )
+      },
+    }),
+
+    recover_stale_build: tool({
+      description:
+        "Close a stale live build ownership when evidence shows the build child is no longer executing but the goal/build tool still appears running. " +
+        "Use only after read_context or session evidence shows a stale build shape such as no active child execution, a header-only unfinished build message, or terminal child status with open ownership. " +
+        "After this succeeds, call build({ goalID, request }) if the goal should continue under a fresh stage-attempt runtime contract.",
+      inputSchema: z
+        .object({
+          goal_id: z.string().min(1).optional().describe("Goal id whose latest live build ownership should be recovered."),
+          goal_run_id: z.string().min(1).optional().describe("Live goal_run id whose build ownership should be recovered."),
+          session_id: z.string().min(1).optional().describe("Build child session id whose live ownership should be recovered."),
+          reason: z.string().min(1).describe("Concrete evidence that this build ownership is stale."),
+        })
+        .refine((value) => !!value.goal_id || !!value.goal_run_id || !!value.session_id, {
+          message: "recover_stale_build requires goal_id, goal_run_id, or session_id",
+          path: ["goal_id"],
+        }),
+      execute: async ({ goal_id, goal_run_id, session_id, reason }) => {
+        const target = resolveSteerTarget({
+          taskID,
+          goalID: goal_id,
+          sessionID: goal_run_id ?? session_id,
+        })
+        const { kind } = assertDirectReplySessionOwnership({
+          taskID,
+          sessionID: target.sessionID,
+        })
+        if (kind !== "build") {
+          return `Error: recover_stale_build only handles build sessions; ${target.sessionID} has kind=${kind}.`
+        }
+
+        const owner =
+          (target.goalRunID ? findLiveBuildOwnershipByGoalRun({ taskID, goalRunID: target.goalRunID }) : undefined) ??
+          findLiveBuildOwnershipBySession({ taskID, sessionID: target.sessionID })
+        if (!owner) {
+          return `No live build ownership found for ${target.source}; nothing to recover.`
+        }
+
+        const currentStatus = SessionStatus.get(target.sessionID)
+        if (currentStatus.type === "streaming" || currentStatus.type === "retry") {
+          return (
+            `Error: recover_stale_build refused because build session ${target.sessionID} is ${currentStatus.type}. ` +
+            "Wait for it to settle or use an explicit operator cancellation path."
+          )
+        }
+
+        const now = Date.now()
+        const recoveryError = `recover_stale_build: ${reason}`
+        SessionPrompt.cancel(target.sessionID)
+        SessionStatus.set(target.sessionID, { type: "terminal", reason: "aborted", error: recoveryError })
+
+        let goalFact = ""
+        if (target.goalRunID) {
+          const goalRun = findGoalRun(target.goalRunID)
+          if (goalRun && isLiveGoalRunStatus(goalRun.status)) {
+            updateGoalRun(goalRun.id, {
+              status: "aborted",
+              error: recoveryError,
+              blocking_reason: null,
+              time_completed: now,
+            })
+            updateGoalRunExecutorSessionStatus(goalRun.id, "aborted")
+            const executorSession = findExecutorSessionByGoalRunID(goalRun.id)
+            goalFact =
+              ` goal_run ${goalRun.id} aborted` +
+              `${executorSession ? `; executor_session ${executorSession.id} aborted` : ""}.`
+          } else if (goalRun) {
+            goalFact = ` goal_run ${goalRun.id} was already terminal (${goalRun.status}); ownership closed.`
+          }
+        }
+        await markOwnedBuildToolPartRecovered({
+          ownership: owner.payload,
+          reason: recoveryError,
+          now,
+        })
+        // Close ownership last. If any prior durable write fails, the live
+        // ownership remains as the retry guard and the recovery can be retried
+        // without allowing a duplicate build dispatch.
+        completeOrchestratorToolOwnership({
+          taskID,
+          ownershipID: owner.ownershipID,
+          outcome: "cancelled",
+          error: recoveryError,
+          now,
+        })
+
+        return (
+          `Recovered stale build ownership ${owner.ownershipID} for session ${target.sessionID}. ` +
+          `source=${target.source}. Reason: ${reason}.` +
+          goalFact +
+          " NEXT: if the goal should continue, call build({ goalID, request }) so it installs a fresh stage-attempt runtime contract."
         )
       },
     }),
