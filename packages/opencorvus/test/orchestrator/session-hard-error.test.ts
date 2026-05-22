@@ -176,6 +176,27 @@ describe("orchestrator session hard-error funnel", () => {
         expect(duplicateArtifacts).toHaveLength(1)
         expect((duplicateArtifacts[0]!.payload as { errorName?: string }).errorName).toBe("StructuredOutputPayloadError")
         expect((duplicateArtifacts[0]!.payload as { reason?: string }).reason).toContain("StructuredOutput payload failed during compaction")
+
+        const provider = await createActiveTask("Provider validation error task")
+        const providerError = new Error(
+          'Type validation failed: Value: {"object":"chat.completion","status_code":66049,"status_msg":"引擎结果格式错误:{\'error\': {\'message\': "\'NoneType\' object is not iterable", \'type\': \'BadRequestError\', \'param\': None, \'code\': 400}}"}',
+        )
+        providerError.name = "AI_TypeValidationError"
+        prompt.mockImplementation((async () => {
+          throw providerError
+        }) as never)
+
+        await Orchestrator.processTask(provider.taskID)
+
+        const providerRun = findRun(provider.runID)
+        expect(providerRun?.status).toBe("blocked")
+        expect(providerRun?.blocking_reason).toBe("orchestrator_stream_error")
+        expect(providerRun?.error).toContain("AI_TypeValidationError")
+
+        const providerArtifacts = streamErrorArtifacts(provider.taskID)
+        expect(providerArtifacts).toHaveLength(1)
+        expect((providerArtifacts[0]!.payload as { errorName?: string }).errorName).toBe("AI_TypeValidationError")
+        expect((providerArtifacts[0]!.payload as { reason?: string }).reason).toContain("NoneType")
       },
     })
   })

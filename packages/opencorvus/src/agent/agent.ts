@@ -271,7 +271,7 @@ export namespace Agent {
         //   - dispatch tools (the orchestrator's actual job)
         //   - observation tools (read_context, query_failed_goals, goal_report)
         //   - user interaction (question)
-        //   - session-local bookkeeping (todoread, todowrite, skill)
+        //   - session-local bookkeeping (todoread, todowrite)
         // Excluded:
         //   - filesystem / shell (bash, read, edit, write, glob, search_code,
         //     external_code_search, lsp, codesearch, list)
@@ -312,7 +312,6 @@ export namespace Agent {
             // own bookkeeping
             "todowrite",
             "todoread",
-            "skill",
           ],
         },
         options: {},
