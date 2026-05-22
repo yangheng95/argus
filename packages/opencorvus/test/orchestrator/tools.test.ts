@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:test"
 import fs from "node:fs/promises"
 import path from "node:path"
+import z from "zod"
 import { Database, and, eq } from "../../src/storage/db"
 import { Instance } from "../../src/project/instance"
 import { ProjectTable } from "../../src/project/project.sql"
@@ -52,6 +53,7 @@ import { Filesystem } from "../../src/util/filesystem"
 import { EngineService } from "../../src/task-api"
 import { Question } from "../../src/question"
 import { deriveTaskStatus } from "../../src/engine/task-status"
+import { SessionStatus } from "../../src/session/status"
 import {
   createOrchestratorToolOwnershipPayload,
   insertOrchestratorToolOwnershipArtifact,
@@ -134,6 +136,7 @@ mock.module("@/design-analyst", () => ({
 
 mock.module("@/mcp", () => ({
   MCP: {
+    Status: z.any(),
     serverTools: () => {
       if (!mcpServerToolsImpl) throw new Error("MCP.serverTools mock not configured")
       return mcpServerToolsImpl()
@@ -1045,6 +1048,293 @@ describe("orchestrator tools", () => {
         expect(modifyResult).toContain("Error: modify_goal refused")
         expect(findGoal(goalID)?.objective).toBe("Guard live build ownership")
         expect(listLiveOrchestratorToolOwnership(taskID)).toHaveLength(1)
+      },
+    })
+  })
+
+  test("recover_stale_build closes live ownership and aborts the wedged goal attempt", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_recover_stale_build_${stamp}`
+    const taskID = `tsk_recover_stale_build_${stamp}`
+    const goalID = `gol_recover_stale_build_${stamp}`
+
+    insertWorkflowTaskWithGoal({
+      projectID,
+      taskID,
+      goalID,
+      sessionID: null,
+      worktree: tmp.path,
+      projectName: "recover stale build",
+      taskTitle: "recover stale build",
+      request: "Recover a build that no longer has active execution",
+      goalTitle: "Recover stale build goal",
+      goalSlug: "recover-stale-build-goal",
+      objective: "Close stale build ownership so the goal can retry",
+      now,
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "recover stale parent" })
+        const child = await Session.create({
+          kind: "build",
+          parentID: parent.id,
+          goalID,
+          title: "recover stale child",
+        })
+        Database.use((db) =>
+          db.update(EngineTaskTable).set({ session_id: parent.id }).where(eq(EngineTaskTable.id, taskID)).run(),
+        )
+        const runID = `run_recover_stale_build_${stamp}`
+        const goalRunID = beginBuildAttempt({
+          taskID,
+          goalID,
+          runID,
+          sessionID: child.id,
+        })
+        const executorSessionID = `exec_recover_stale_build_${stamp}`
+        Database.use((db) =>
+          db
+            .insert(EngineExecutorSessionTable)
+            .values({
+              id: executorSessionID,
+              task_id: taskID,
+              run_id: runID,
+              goal_run_id: goalRunID,
+              provider: "opencorvus",
+              protocol: "session-prompt",
+              protocol_version: "v1",
+              transport: "inproc",
+              status: "active",
+              time_created: now,
+              time_updated: now,
+            })
+            .run(),
+        )
+
+        const orchestratorMessageID = `msg_recover_stale_build_${stamp}`
+        const toolPartID = `prt_recover_stale_build_${stamp}`
+        const toolCallID = `cal_recover_stale_build_${stamp}`
+        await Session.persistMessage({
+          info: {
+            id: orchestratorMessageID,
+            sessionID: parent.id,
+            role: "assistant",
+            time: { created: now },
+            parentID: `msg_user_recover_stale_build_${stamp}`,
+            providerID: "test-provider",
+            modelID: "test-model",
+            agent: "orchestrator",
+            path: { cwd: tmp.path, root: tmp.path },
+            cost: 0,
+            tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+          },
+          parts: [
+            {
+              id: toolPartID,
+              messageID: orchestratorMessageID,
+              sessionID: parent.id,
+              type: "tool",
+              callID: toolCallID,
+              tool: "build",
+              state: {
+                status: "running",
+                input: { goalID },
+                title: "Build",
+                time: { start: now },
+              },
+            },
+          ],
+          touchSessionID: parent.id,
+        })
+        const ownershipPayload = createOrchestratorToolOwnershipPayload({
+          taskID,
+          orchestratorSessionID: parent.id,
+          orchestratorMessageID,
+          toolCallID,
+          toolPartID,
+          childSessionID: child.id,
+          scope: "goal",
+          goalID,
+          goalRunID,
+          now,
+        })
+        insertOrchestratorToolOwnershipArtifact({
+          taskID,
+          runID,
+          goalRunID,
+          label: "tool-ownership-start",
+          payload: ownershipPayload,
+          now,
+        })
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const result = await tools.recover_stale_build.execute(
+          {
+            goal_run_id: goalRunID,
+            reason: "operator note arrived after the build session stopped producing events",
+          },
+          buildToolOptions("recover_stale_build"),
+        )
+
+        expect(result).toContain(`Recovered stale build ownership ${ownershipPayload.ownership_id}`)
+        expect(result).toContain(`goal_run ${goalRunID} aborted`)
+        expect(findGoalRun(goalRunID)?.status).toBe("aborted")
+        expect(findGoalRun(goalRunID)?.error).toContain("recover_stale_build:")
+        expect(findExecutorSession(executorSessionID)?.status).toBe("aborted")
+        expect(listLiveOrchestratorToolOwnership(taskID)).toHaveLength(0)
+
+        const messages = await Session.messages({ sessionID: parent.id })
+        const toolPart = messages.flatMap((message) => message.parts).find((part) => part.id === toolPartID)
+        expect(toolPart?.type).toBe("tool")
+        expect(toolPart?.type === "tool" ? toolPart.state.status : undefined).toBe("error")
+      },
+    })
+  })
+
+  test("recover_stale_build refuses a build session that is still streaming", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_recover_streaming_build_${stamp}`
+    const taskID = `tsk_recover_streaming_build_${stamp}`
+    const goalID = `gol_recover_streaming_build_${stamp}`
+
+    insertWorkflowTaskWithGoal({
+      projectID,
+      taskID,
+      goalID,
+      sessionID: null,
+      worktree: tmp.path,
+      projectName: "recover streaming build",
+      taskTitle: "recover streaming build",
+      request: "Do not recover an actively streaming build",
+      goalTitle: "Recover streaming build goal",
+      goalSlug: "recover-streaming-build-goal",
+      objective: "Refuse recovery while the build session is active",
+      now,
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "recover streaming parent" })
+        const child = await Session.create({
+          kind: "build",
+          parentID: parent.id,
+          goalID,
+          title: "recover streaming child",
+        })
+        Database.use((db) =>
+          db.update(EngineTaskTable).set({ session_id: parent.id }).where(eq(EngineTaskTable.id, taskID)).run(),
+        )
+        const goalRunID = beginBuildAttempt({
+          taskID,
+          goalID,
+          sessionID: child.id,
+        })
+        const ownershipPayload = createOrchestratorToolOwnershipPayload({
+          taskID,
+          orchestratorSessionID: parent.id,
+          orchestratorMessageID: `msg_recover_streaming_build_${stamp}`,
+          toolCallID: `cal_recover_streaming_build_${stamp}`,
+          toolPartID: `prt_recover_streaming_build_${stamp}`,
+          childSessionID: child.id,
+          scope: "goal",
+          goalID,
+          goalRunID,
+          now,
+        })
+        insertOrchestratorToolOwnershipArtifact({
+          taskID,
+          goalRunID,
+          label: "tool-ownership-start",
+          payload: ownershipPayload,
+          now,
+        })
+        SessionStatus.set(child.id, { type: "streaming" })
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const result = await tools.recover_stale_build.execute(
+          {
+            goal_id: goalID,
+            reason: "should not abort an active stream",
+          },
+          buildToolOptions("recover_streaming_build"),
+        )
+
+        expect(result).toContain("refused because build session")
+        expect(result).toContain("streaming")
+        expect(findGoalRun(goalRunID)?.status).toBe("running")
+        expect(listLiveOrchestratorToolOwnership(taskID)).toHaveLength(1)
+        SessionStatus.set(child.id, { type: "terminal", reason: "aborted", error: "test cleanup" })
+      },
+    })
+  })
+
+  test("recover_stale_build is a no-op when the build session has no live ownership", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_recover_no_owner_${stamp}`
+    const taskID = `tsk_recover_no_owner_${stamp}`
+    const goalID = `gol_recover_no_owner_${stamp}`
+
+    insertWorkflowTaskWithGoal({
+      projectID,
+      taskID,
+      goalID,
+      sessionID: null,
+      worktree: tmp.path,
+      projectName: "recover no owner",
+      taskTitle: "recover no owner",
+      request: "No-op when there is no live build ownership",
+      goalTitle: "Recover no owner goal",
+      goalSlug: "recover-no-owner-goal",
+      objective: "Do not mutate state without live ownership",
+      now,
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "recover no owner parent" })
+        const child = await Session.create({
+          kind: "build",
+          parentID: parent.id,
+          goalID,
+          title: "recover no owner child",
+        })
+        Database.use((db) =>
+          db.update(EngineTaskTable).set({ session_id: parent.id }).where(eq(EngineTaskTable.id, taskID)).run(),
+        )
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const result = await tools.recover_stale_build.execute(
+          {
+            session_id: child.id,
+            reason: "there is no live ownership to recover",
+          },
+          buildToolOptions("recover_no_owner"),
+        )
+
+        expect(result).toContain("No live build ownership found")
+        expect(listLiveOrchestratorToolOwnership(taskID)).toHaveLength(0)
       },
     })
   })

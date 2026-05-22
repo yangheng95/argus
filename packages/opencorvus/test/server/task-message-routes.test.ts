@@ -15,13 +15,15 @@ import { tmpdir } from "../fixture/fixture"
 
 Log.init({ print: false })
 
+const routeTestConfig = { model: "test/model" } as const
+
 async function seedRootSession(sessionID: string, text = "initial request") {
   const info = {
     id: Identifier.ascending("message"),
     sessionID,
     role: "user" as const,
     time: { created: Date.now() - 1_000 },
-    agent: "build",
+    agent: "orchestrator",
     model: {
       providerID: "test-provider",
       modelID: "test-model",
@@ -49,7 +51,7 @@ describe("task message routes", () => {
   })
 
   test("POST /task/:taskID/message triggers scheduler with natural language", async () => {
-    await using tmp = await tmpdir({ git: true })
+    await using tmp = await tmpdir({ git: true, config: routeTestConfig })
 
     await Instance.provide({
       directory: tmp.path,
@@ -148,7 +150,7 @@ describe("task message routes", () => {
   })
 
   test("POST /task/:taskID/message reopens a failed task without deleting task context", async () => {
-    await using tmp = await tmpdir({ git: true })
+    await using tmp = await tmpdir({ git: true, config: routeTestConfig })
 
     await Instance.provide({
       directory: tmp.path,
@@ -211,7 +213,7 @@ describe("task message routes", () => {
   })
 
   test("POST /task/:taskID/message accepts bridge envelope fields from resume clients", async () => {
-    await using tmp = await tmpdir({ git: true })
+    await using tmp = await tmpdir({ git: true, config: routeTestConfig })
 
     await Instance.provide({
       directory: tmp.path,
@@ -270,7 +272,7 @@ describe("task message routes", () => {
   })
 
   test("POST /task/:taskID/message reopens a cancelled task without retry gate", async () => {
-    await using tmp = await tmpdir({ git: true })
+    await using tmp = await tmpdir({ git: true, config: routeTestConfig })
 
     await Instance.provide({
       directory: tmp.path,
@@ -332,7 +334,7 @@ describe("task message routes", () => {
   })
 
   test("POST /task/:taskID/message reopens a completed task without deleting task context", async () => {
-    await using tmp = await tmpdir({ git: true })
+    await using tmp = await tmpdir({ git: true, config: routeTestConfig })
 
     await Instance.provide({
       directory: tmp.path,
@@ -388,7 +390,7 @@ describe("task message routes", () => {
   })
 
   test("POST /task/:taskID/message forwards attachment summary to scheduler", async () => {
-    await using tmp = await tmpdir({ git: true })
+    await using tmp = await tmpdir({ git: true, config: routeTestConfig })
 
     await Instance.provide({
       directory: tmp.path,
@@ -459,7 +461,7 @@ describe("task message routes", () => {
   })
 
   test("POST /task/:taskID/inject appends to terminal task even without active run", async () => {
-    await using tmp = await tmpdir({ git: true })
+    await using tmp = await tmpdir({ git: true, config: routeTestConfig })
 
     await Instance.provide({
       directory: tmp.path,
@@ -501,9 +503,21 @@ describe("task message routes", () => {
         })
 
         expect(response.status).toBe(200)
-        const body = await response.json() as { resumed: boolean; status: string }
+        const body = await response.json() as {
+          appended: boolean
+          orchestratorWoken: boolean
+          executorResumed: boolean
+          resumed: boolean
+          status: string
+        }
         await new Promise((resolve) => setTimeout(resolve, 0))
-        expect(body).toEqual({ resumed: true, status: "queued" })
+        expect(body).toEqual({
+          appended: true,
+          orchestratorWoken: true,
+          executorResumed: false,
+          resumed: false,
+          status: "queued",
+        })
         expect(dispatchTaskLoop).toHaveBeenCalledTimes(1)
 
         const row = Database.use((db) =>
@@ -516,7 +530,7 @@ describe("task message routes", () => {
   })
 
   test("POST /task/:taskID/inject wakes orchestrator without resuming the root run session", async () => {
-    await using tmp = await tmpdir({ git: true })
+    await using tmp = await tmpdir({ git: true, config: routeTestConfig })
 
     await Instance.provide({
       directory: tmp.path,
@@ -602,9 +616,21 @@ describe("task message routes", () => {
         })
 
         expect(response.status).toBe(200)
-        const body = await response.json() as { resumed: boolean; status: string }
+        const body = await response.json() as {
+          appended: boolean
+          orchestratorWoken: boolean
+          executorResumed: boolean
+          resumed: boolean
+          status: string
+        }
         await new Promise((resolve) => setTimeout(resolve, 0))
-        expect(body).toEqual({ resumed: true, status: "active" })
+        expect(body).toEqual({
+          appended: true,
+          orchestratorWoken: true,
+          executorResumed: false,
+          resumed: false,
+          status: "active",
+        })
         expect(resumeCalls).toBe(0)
         expect(dispatchTaskLoop).toHaveBeenCalledTimes(1)
         const event = (dispatchTaskLoop.mock.calls[0]?.[0] as {

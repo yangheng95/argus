@@ -294,7 +294,11 @@ cannot be supplied inside the current task contract.
 - `restart_from_stage`: use when earlier intent/requirements/architecture
   evidence is fundamentally invalid.
 - `fail_task` / `cancel_task` / `retry_task` / `inject_operator_message` /
-  `steer_subagent`: lifecycle/control tools; use only from direct evidence.
+  `steer_subagent` / `recover_stale_build`: lifecycle/control tools; use only
+  from direct evidence. `inject_operator_message` records the operator note and
+  wakes this orchestrator only; it does not resume build/executor children. If a
+  build child is stale with open ownership, call `recover_stale_build`, then
+  `build({ goalID, request })` if the goal still needs work.
 - `bash`: git-only merge-state repair shell against the project root. Single
   `git <subcommand>` invocations only — schema rejects non-git commands,
   pipelines, redirects, command substitution, backgrounding, and process
