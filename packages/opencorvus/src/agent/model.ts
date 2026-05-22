@@ -72,13 +72,15 @@ export async function resolveAgentModelRef(
   const overlayAgentModel = overlay?.agent?.[name]?.model
   if (overlayAgentModel) return Provider.parseModel(overlayAgentModel)
   if (overlay?.model) return Provider.parseModel(overlay.model)
+  const cfg = await projectConfigForModelResolution(opts)
+  const agentModel = cfg.agent?.[name]?.model
+  if (agentModel) return Provider.parseModel(agentModel)
+  if (cfg.model) return Provider.parseModel(cfg.model)
   const { Agent } = await import("./agent")
   const agent = await Agent.get(name)
   if (agent?.model) {
     return { providerID: agent.model.providerID, modelID: agent.model.modelID }
   }
-  const cfg = await Config.get()
-  if (cfg.model) return Provider.parseModel(cfg.model)
   throw new MissingModelConfigError({
     agent: name,
     message:
@@ -109,13 +111,48 @@ export async function resolveAgentModel(
 export async function resolveConfiguredModelRef(opts?: { taskID?: string; sessionID?: string }): Promise<ModelRef> {
   const overlay = await resolveSessionOverlay(opts)
   if (overlay?.model) return Provider.parseModel(overlay.model)
-  const cfg = await Config.get()
+  const cfg = await projectConfigForModelResolution(opts)
   if (cfg.model) return Provider.parseModel(cfg.model)
   throw new MissingModelConfigError({
     message:
       "No `model` configured (session overlay or opencorvus.jsonc). " +
       "The project must declare a default model — fallbacks are not allowed.",
   })
+}
+
+async function projectConfigForModelResolution(opts?: { taskID?: string; sessionID?: string }): Promise<Config.Info> {
+  const directory = await projectDirectoryForModelResolution(opts)
+  if (!directory) return Config.get()
+  const { Instance } = await import("@/project/instance")
+  return Instance.provide({
+    directory,
+    fn: () => Config.get(),
+  })
+}
+
+async function projectDirectoryForModelResolution(opts?: { taskID?: string; sessionID?: string }): Promise<string | undefined> {
+  if (opts?.taskID) {
+    const taskRoot = await sessionIDForTask(opts.taskID)
+    if (!taskRoot) {
+      throw new MissingModelConfigError({
+        message:
+          `Task ${opts.taskID} has no bound root session (engine_task.session_id is null); ` +
+          `cannot resolve project config. Repair task.session_id — ` +
+          `the resolver must not silently fall back to the ambient directory.`,
+      })
+    }
+    const { Session } = await import("@/session")
+    return (await Session.get(taskRoot)).directory
+  }
+  if (opts?.sessionID) {
+    const { Session } = await import("@/session")
+    return (await Session.get(await resolveRootSessionID(opts.sessionID))).directory
+  }
+  const ambient = SessionContext.tryUse()
+  if (!ambient) return undefined
+  if (!ambient.parentID) return ambient.directory
+  const { Session } = await import("@/session")
+  return (await Session.get(await resolveRootSessionID(ambient.id))).directory
 }
 
 /**

@@ -41,6 +41,8 @@ import { applyProviderPolicy } from "./policy"
 import { CUSTOM_LOADERS, smallModelPriority, type CustomModelLoader } from "./vendor"
 import { installProvider, loadProviderModule } from "./install"
 import { discoverHexinModelsForStartup } from "./hexin-discovery"
+import { InvalidModelReferenceError as ProviderInvalidModelReferenceError, parseModelReference } from "./model-ref"
+import { BUILTIN_TEST_PROVIDERS } from "./builtin-test-providers"
 
 export namespace Provider {
   const log = Log.create({ service: "provider" })
@@ -363,7 +365,13 @@ export namespace Provider {
 
     log.info("init")
 
-    const configProviders = entries((config.provider ?? {}) as NonNullable<Config.Info["provider"]>)
+    // Built-in test providers are固化在源码 (builtin-test-providers.ts) and拼到
+    // config provider 之前，走与用户配置完全相同的解析路径。用户 opencorvus.jsonc
+    // 里的同名 provider 条目在后，会整体覆盖内置默认值。
+    const configProviders = entries({
+      ...BUILTIN_TEST_PROVIDERS,
+      ...((config.provider ?? {}) as NonNullable<Config.Info["provider"]>),
+    } as NonNullable<Config.Info["provider"]>)
 
     // Built-in: Hexin OpenAI Gateway — models discovered dynamically from /v1/models.
     // discoverHexinModelsForStartup is fault-isolated by contract: a hexin
@@ -412,7 +420,9 @@ export namespace Provider {
         name: provider.name ?? existing?.name ?? providerID,
         env: provider.env ?? existing?.env ?? [],
         options: mergeDeep(existing?.options ?? {}, provider.options ?? {}),
-        source: "config",
+        // 内置测试 provider 标记为 custom（与 hexin 内置 provider 一致）；
+        // 其余来自 opencorvus.jsonc 的标记为 config。
+        source: providerID in BUILTIN_TEST_PROVIDERS ? "custom" : "config",
         models: existing?.models ?? {},
       }
 
@@ -581,7 +591,11 @@ export namespace Provider {
 
     // load config
     for (const [providerID, provider] of configProviders) {
-      const partial: Partial<Info> = { source: "config" }
+      // 内置测试 provider 标记为 custom（与 hexin 内置 provider 一致）；
+      // 这里是最终落到 `providers` 的 source,需与上面 database 阶段保持一致。
+      const partial: Partial<Info> = {
+        source: providerID in BUILTIN_TEST_PROVIDERS ? "custom" : "config",
+      }
       if (provider.env) partial.env = provider.env
       if (provider.name) partial.name = provider.name
       if (provider.options) partial.options = provider.options
@@ -1033,12 +1047,10 @@ export namespace Provider {
   // former callers funnel through resolveConfiguredModelRef / resolveAgentModel.
 
   export function parseModel(model: string) {
-    const [providerID, ...rest] = model.split("/")
-    return {
-      providerID: providerID,
-      modelID: rest.join("/"),
-    }
+    return parseModelReference(model)
   }
+
+  export const InvalidModelReferenceError = ProviderInvalidModelReferenceError
 
   export const ModelNotFoundError = NamedError.create(
     "ProviderModelNotFoundError",

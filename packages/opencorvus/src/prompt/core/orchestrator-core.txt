@@ -332,7 +332,8 @@ contract.
   from direct evidence. `inject_operator_message` records the operator note and
   wakes this orchestrator only; it does not resume build/executor children. If a
   build child is stale with open ownership, call `recover_stale_build`, then
-  `build({ goalID, request })` if the goal still needs work.
+  `build({ goalID, request })` if the goal still needs work. If the same stale build evidence repeats after recovery, stop the recover/build loop and choose
+  `fail_task`, `question`, `modify_goal`, or `architect` from the evidence.
 - `bash`: git-only merge-state repair shell against the project root. Single
   `git <subcommand>` invocations only — schema rejects non-git commands,
   pipelines, redirects, command substitution, backgrounding, and process

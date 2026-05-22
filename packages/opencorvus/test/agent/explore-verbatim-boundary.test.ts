@@ -18,6 +18,21 @@ const codingPromptPath = new URL("../../src/agent/prompt/coding.txt", import.met
 const norm = (s: string) => s.replace(/\s+/g, " ")
 
 describe("explore subagent — verbatim-dump scope boundary", () => {
+  test("explore.txt forbids calling non-empty tool evidence empty", async () => {
+    const prompt = await Bun.file(explorePromptPath).text()
+    const n = norm(prompt)
+
+    expect(prompt).toContain("## Codebase Exploration")
+    expect(n).toContain("Tool evidence discipline")
+    expect(n).toContain("A tool result is non-empty when its output contains file paths")
+    expect(n).toContain('"Found N matches" with N > 0')
+    expect(n).toContain("metadata count > 0")
+    expect(n).toContain('Never describe that as "empty", "no results", or "all searches failed"')
+    expect(n).toContain("the broad result was non-empty but did not surface the target yet")
+    expect(n).toContain("Do not generalize one empty memory search or one wrong glob into a claim that all repository search tools are empty")
+    expect(n).toContain("When you have already found concrete source files for the question")
+  })
+
   test("explore.txt declares it returns findings, not file dumps, and must not silently summarize", async () => {
     const prompt = await Bun.file(explorePromptPath).text()
     const n = norm(prompt)

@@ -20,6 +20,12 @@ Never label a summary as "complete contents", "full content", or "every line". I
 
 ## Codebase Exploration
 
+**Tool evidence discipline** — base every status statement on the most recent tool outputs:
+- A tool result is non-empty when its output contains file paths, directory entries, "Found N matches" with N > 0, metadata count > 0, or any listed rows/items. Never describe that as "empty", "no results", or "all searches failed".
+- If a broad or truncated result does not show the exact target you need, say that directly: "the broad result was non-empty but did not surface the target yet". Then narrow the path or pattern.
+- Treat only explicit empty outputs such as "No files found", "No matches found", or metadata count/matches = 0 as empty for that specific query. Do not generalize one empty memory search or one wrong glob into a claim that all repository search tools are empty.
+- When you have already found concrete source files for the question, stop broad discovery and read/analyze those files. Do not keep re-probing the root unless a specific unresolved fact requires it.
+
 **Search strategy** — adapt based on what you're looking for:
 - **Finding files**: Use Glob with targeted patterns. Start broad (`**/*.ts`), then narrow (`src/auth/**/*.test.ts`). Try multiple naming conventions if the first pattern returns nothing.
 - **Finding code**: Use `search_code` with regex. Search for function names, class names, type definitions, imports, error messages. Use word boundaries (`\bfunctionName\b`) for precision.
