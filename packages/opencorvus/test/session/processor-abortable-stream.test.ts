@@ -76,3 +76,33 @@ test("session processor exits a stalled provider iterator when its activity sign
   expect(result).toBe("stop")
   expect(upstreamReturned).toBe(true)
 })
+
+test("session processor can materialize a tool part before stream chunks catch up", async () => {
+  spyOn(Session, "updatePart").mockImplementation(async (part) => part as never)
+
+  const processor = SessionProcessor.create({
+    assistantMessage: {
+      id: "msg_processor_tool_identity",
+      sessionID: "ses_processor_tool_identity",
+      role: "assistant",
+      agent: "orchestrator",
+      parentID: "msg_parent",
+      cost: 0,
+      tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+      time: { created: Date.now() },
+    } as Message.Assistant,
+    sessionID: "ses_processor_tool_identity",
+    model: { providerID: "test-provider", id: "test-model" } as Provider.Model,
+    abort: new AbortController().signal,
+  })
+
+  const part = await processor.ensureToolPart("call_build_1", "build", { goalID: "gol_1" })
+
+  expect(part.callID).toBe("call_build_1")
+  expect(part.tool).toBe("build")
+  expect(part.state).toMatchObject({
+    status: "running",
+    input: { goalID: "gol_1" },
+  })
+  expect(processor.partFromToolCall("call_build_1")?.id).toBe(part.id)
+})
