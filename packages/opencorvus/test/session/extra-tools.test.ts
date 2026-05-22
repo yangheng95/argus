@@ -12,6 +12,7 @@ import { BuildResultSchema } from "../../src/build/types"
 import { Instance } from "../../src/project/instance"
 import { AttachmentStore } from "../../src/storage/attachment-store"
 import { tmpdir } from "../fixture/fixture"
+import { Agent } from "../../src/agent/agent"
 
 const dummyTool = () =>
   tool({
@@ -203,6 +204,69 @@ describe("extras execute-return normalisation (integration via resolveTools)", (
     const extras = SessionLoop.getSessionRuntimeContract(sessionID)?.tools ?? {}
     expect(Object.keys(extras).sort()).toEqual(["full", "partial", "plain"])
     SessionLoop.clearSessionRuntimeContract(sessionID)
+  })
+
+  test("orchestrator runtime contract uses exact tools instead of registry inheritance", () => {
+    const contract = runtimeContract("ses_orchestrator_exact", {
+      identity: {
+        sessionID: "ses_orchestrator_exact",
+        agentKind: "orchestrator",
+        contractKind: "orchestrator-wake",
+      },
+      tools: {},
+    })
+    expect(SessionLoop.usesExactRuntimeContractTools("orchestrator", contract)).toBe(true)
+    expect(SessionLoop.usesExactRuntimeContractTools("orchestrator", undefined)).toBe(false)
+    expect(SessionLoop.usesExactRuntimeContractTools("build", contract)).toBe(false)
+  })
+
+  test("tool switches remove disabled tools and support all-tools disable", () => {
+    const namedTools = { bash: dummyTool(), skill: dummyTool(), read_file: dummyTool() }
+    SessionLoop.applyToolSwitches(namedTools, { bash: false })
+    expect(Object.keys(namedTools).sort()).toEqual(["read_file", "skill"])
+
+    const allTools = { bash: dummyTool(), skill: dummyTool() }
+    SessionLoop.applyToolSwitches(allTools, { "*": false })
+    expect(Object.keys(allTools)).toEqual([])
+  })
+
+  test("orchestrator resolveTools returns exactly runtime contract tools", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const sessionID = `ses_runtime_${Date.now()}_orchestrator_exact`
+        SessionLoop.setSessionRuntimeContract(sessionID, runtimeContract(sessionID, {
+          identity: {
+            sessionID,
+            agentKind: "orchestrator",
+            contractKind: "orchestrator-wake",
+          },
+          tools: { requirements: dummyTool() },
+        }))
+        const resolved = await SessionLoop.resolveTools({
+          agent: (await Agent.get("orchestrator"))!,
+          model: {
+            providerID: "test",
+            id: "test",
+            api: { id: "test", npm: "@ai-sdk/openai" },
+            capabilities: { input: {}, reasoning: false },
+          } as any,
+          session: { id: sessionID, kind: "orchestrator", permission: [] } as any,
+          processor: {
+            message: { id: "msg_test" },
+            partFromToolCall: () => undefined,
+            ensureToolPart: async () => undefined,
+          } as any,
+          bypassAgentCheck: false,
+          messages: [],
+        })
+
+        expect(Object.keys(resolved)).toEqual(["requirements"])
+        expect(resolved.skill).toBeUndefined()
+        SessionLoop.clearSessionRuntimeContract(sessionID)
+      },
+    })
   })
 
   test("normalizes multimodal extra-tool results without stringifying attachments into output", () => {

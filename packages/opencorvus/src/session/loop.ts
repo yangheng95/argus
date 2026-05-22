@@ -129,7 +129,8 @@ export namespace SessionLoop {
       ((!contract.tools || Object.keys(contract.tools).length === 0) &&
         !contract.terminalToolContract &&
         !contract.structuredOutputGuard &&
-        !contract.stream)
+        !contract.stream &&
+        contract.identity.contractKind !== "orchestrator-wake")
     ) {
       sessionRuntimeContracts.delete(sessionID)
       return
@@ -1261,7 +1262,7 @@ export namespace SessionLoop {
 
     await Plugin.trigger("experimental.chat.messages.transform", {}, { messages: input.msgs })
 
-    const skillsSection = await SystemPrompt.skills(agent)
+    const skillsSection = await SystemPrompt.skills(agent, { availableToolNames: Object.keys(tools) })
     const system = [
       ...(await SystemPrompt.environment(input.model)),
       ...(skillsSection ? [skillsSection] : []),
@@ -1874,65 +1875,71 @@ export namespace SessionLoop {
       },
     })
 
-    for (const item of await ToolRegistry.tools(
-      { modelID: input.model.api.id, providerID: input.model.providerID },
-      input.agent,
-    )) {
-      // Session-level deny rules take precedence (e.g. build fast-path denying "task")
-      if (input.session.permission?.length) {
-        const rule = PermissionNext.evaluate(item.id, "*", input.session.permission)
-        if (rule.action === "deny") continue
+    const runtimeContract = getSessionRuntimeContract(input.session.id)
+    const extras = runtimeContract?.tools ?? {}
+    const exactRuntimeContractTools = usesExactRuntimeContractTools(input.agent.name, runtimeContract)
+
+    if (!exactRuntimeContractTools) {
+      for (const item of await ToolRegistry.tools(
+        { modelID: input.model.api.id, providerID: input.model.providerID },
+        input.agent,
+      )) {
+        // Session-level deny rules take precedence (e.g. build fast-path denying "task")
+        if (input.session.permission?.length) {
+          const rule = PermissionNext.evaluate(item.id, "*", input.session.permission)
+          if (rule.action === "deny") continue
+        }
+        const registryTool = tool({
+          id: item.id as any,
+          description: item.description,
+          inputSchema: item.parameters as any,
+          async execute(args, options) {
+            const ctx = context(args, options)
+            await Plugin.trigger(
+              "tool.execute.before",
+              {
+                tool: item.id,
+                sessionID: ctx.sessionID,
+                callID: ctx.callID,
+              },
+              {
+                args,
+              },
+            )
+            const result = await item.execute(args, ctx)
+            const materializedAttachments = await materializeToolResultAttachments(result.attachments)
+            const output = {
+              ...result,
+              attachments: Array.isArray(materializedAttachments) ? materializedAttachments.map((attachment) => ({
+                ...attachment,
+                id: Identifier.ascending("part"),
+                sessionID: ctx.sessionID,
+                messageID: input.processor.message.id,
+              })) : undefined,
+            }
+            await Plugin.trigger(
+              "tool.execute.after",
+              {
+                tool: item.id,
+                sessionID: ctx.sessionID,
+                callID: ctx.callID,
+                args,
+              },
+              output,
+            )
+            return output
+          },
+        })
+        tools[item.id] = prepareProviderTool({
+          name: item.id,
+          source: "registry",
+          model: input.model,
+          tool: registryTool,
+        })
       }
-      const registryTool = tool({
-        id: item.id as any,
-        description: item.description,
-        inputSchema: item.parameters as any,
-        async execute(args, options) {
-          const ctx = context(args, options)
-          await Plugin.trigger(
-            "tool.execute.before",
-            {
-              tool: item.id,
-              sessionID: ctx.sessionID,
-              callID: ctx.callID,
-            },
-            {
-              args,
-            },
-          )
-          const result = await item.execute(args, ctx)
-          const materializedAttachments = await materializeToolResultAttachments(result.attachments)
-          const output = {
-            ...result,
-            attachments: Array.isArray(materializedAttachments) ? materializedAttachments.map((attachment) => ({
-              ...attachment,
-              id: Identifier.ascending("part"),
-              sessionID: ctx.sessionID,
-              messageID: input.processor.message.id,
-            })) : undefined,
-          }
-          await Plugin.trigger(
-            "tool.execute.after",
-            {
-              tool: item.id,
-              sessionID: ctx.sessionID,
-              callID: ctx.callID,
-              args,
-            },
-            output,
-          )
-          return output
-        },
-      })
-      tools[item.id] = prepareProviderTool({
-        name: item.id,
-        source: "registry",
-        model: input.model,
-        tool: registryTool,
-      })
     }
 
-    for (const [key, item] of Object.entries(await MCP.tools())) {
+    for (const [key, item] of Object.entries(exactRuntimeContractTools ? {} : await MCP.tools())) {
       const execute = item.execute
       if (!execute) continue
 
@@ -2028,7 +2035,6 @@ export namespace SessionLoop {
     // when the tool call finalises. Plain-string returns are auto-wrapped here
     // so stage-agent callers can keep the simple `return "OK: ..."` idiom
     // without silently landing a ZodError at tool-completion time.
-    const extras = runtimeContractTools(input.session.id)
     const sessionIDForExtras = input.session.id
     const messageIDForExtras = input.processor.message.id
     for (const [name, extraTool] of Object.entries(extras)) {
@@ -2047,7 +2053,24 @@ export namespace SessionLoop {
       })
     }
 
+    applyToolSwitches(tools, input.tools)
+
     return tools
+  }
+
+  export function usesExactRuntimeContractTools(agentName: string, contract: SessionRuntimeContract | undefined): boolean {
+    return agentName === "orchestrator" && contract?.identity.agentKind === "orchestrator" && contract.identity.contractKind === "orchestrator-wake"
+  }
+
+  export function applyToolSwitches(tools: Record<string, AITool>, switches: Record<string, boolean> | undefined): void {
+    if (!switches) return
+    if (switches["*"] === false) {
+      for (const name of Object.keys(tools)) delete tools[name]
+      return
+    }
+    for (const [name, enabled] of Object.entries(switches)) {
+      if (enabled === false) delete tools[name]
+    }
   }
 
   /**
