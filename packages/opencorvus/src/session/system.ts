@@ -115,7 +115,7 @@ export namespace SystemPrompt {
   }
 
   export async function skills(agent: Agent.Info): Promise<string | undefined> {
-    if (PermissionNext.disabled(["skill"], agent.permission).has("skill")) return
+    if (!agentCanUseSkillTool(agent)) return
 
     const all = await Skill.all()
     const accessible = all.filter((skill) => {
@@ -145,5 +145,12 @@ export namespace SystemPrompt {
       ...compatible.map((s) => `- ${s.name}: ${s.description}`),
       "</available_skills>",
     ].join("\n")
+  }
+
+  function agentCanUseSkillTool(agent: Agent.Info): boolean {
+    const include = agent.tools?.include
+    if (include) return include.includes("skill")
+    if (agent.tools?.exclude?.includes("skill")) return false
+    return !PermissionNext.disabled(["skill"], agent.permission).has("skill")
   }
 }

@@ -172,21 +172,34 @@ async function recordOrchestratorSessionHardError(input: {
   sessionID: string
   error: AgentRunError
 }) {
+  return recordOrchestratorSessionErrorEnvelope({
+    taskID: input.taskID,
+    sessionID: input.sessionID,
+    envelope: hardErrorEnvelope(input.error),
+    summaryPrefix: "Orchestrator session hard error",
+  })
+}
+
+async function recordOrchestratorSessionErrorEnvelope(input: {
+  taskID: string
+  sessionID: string
+  envelope: OrchestratorTaskErrorEnvelope
+  summaryPrefix: string
+}) {
   const { recordOrchestratorStreamError, maybeTripOrchestratorStreamErrorFuse } = await import("@/engine/persist")
   const now = Date.now()
-  const envelope = hardErrorEnvelope(input.error)
-  const reason = `${envelope.errorName}: ${envelope.message}`
+  const reason = `${input.envelope.errorName}: ${input.envelope.message}`
   recordOrchestratorStreamError({
     taskID: input.taskID,
     reason,
-    errorName: envelope.errorName,
+    errorName: input.envelope.errorName,
     sessionID: input.sessionID,
     now,
   })
   await blockActiveRunForTask(input.taskID, {
     blockingReason: "orchestrator_stream_error",
     error: reason,
-    summary: `Orchestrator session hard error: ${reason}`,
+    summary: `${input.summaryPrefix}: ${reason}`,
   })
   const fuse = await maybeTripOrchestratorStreamErrorFuse({
     taskID: input.taskID,
@@ -257,6 +270,7 @@ export namespace Orchestrator {
     running.set(taskID, ctrl)
 
     let agentSessionID: string | undefined
+    let promptInFlight = false
     try {
       const task = requireTask(taskID)
       if (!task.session_id) {
@@ -473,6 +487,7 @@ export namespace Orchestrator {
           },
           tools: guard.tools as any,
         })
+        promptInFlight = true
         finalMessage = (await SessionPrompt.prompt({
           sessionID: agentSession.id,
           model: { providerID: model.providerID, modelID: model.api.id },
@@ -482,6 +497,7 @@ export namespace Orchestrator {
           tools: enableMap,
           parts: partsWithIds,
         })) as Message.WithParts
+        promptInFlight = false
       } finally {
         SessionPrompt.clearSessionRuntimeContract(agentSession.id)
         errorUnsub()
@@ -630,12 +646,21 @@ export namespace Orchestrator {
           report: { summary: structured.message, detail: structured.message },
         })
       }
-      if (error instanceof AgentRunError && agentSessionID) {
-        await recordOrchestratorSessionHardError({
-          taskID,
-          sessionID: agentSessionID,
-          error,
-        })
+      if (agentSessionID) {
+        if (error instanceof AgentRunError) {
+          await recordOrchestratorSessionHardError({
+            taskID,
+            sessionID: agentSessionID,
+            error,
+          })
+        } else if (promptInFlight) {
+          await recordOrchestratorSessionErrorEnvelope({
+            taskID,
+            sessionID: agentSessionID,
+            envelope: structured.envelope,
+            summaryPrefix: "Orchestrator prompt error",
+          })
+        }
       }
       // Surface the error on the task so UI/orphan-recovery can see it.
       // Don't change task status here — runtime-visible stream faults are

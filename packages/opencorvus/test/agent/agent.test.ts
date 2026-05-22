@@ -5,6 +5,7 @@ import { Instance } from "../../src/project/instance"
 import { Agent } from "../../src/agent/agent"
 import { Config } from "../../src/config/config"
 import { PermissionNext } from "../../src/permission/next"
+import { SystemPrompt } from "../../src/session/system"
 import { ToolRegistry } from "../../src/tool/registry"
 import { MIRROR_ANALYSIS_TOOL_IDS, MIRROR_DELIVERY_TOOL_IDS, MIRROR_TOOL_IDS } from "../../src/mirror/tools/ids"
 import BUILD_CORE from "../../src/prompt/core/build-core.txt"
@@ -194,14 +195,46 @@ test("orchestrator does not receive the control-plane panel tool", async () => {
       expect(orchestrator?.tools?.include).toContain("propose_task")
       expect(orchestrator?.tools?.include).not.toContain("panel")
       expect(orchestrator?.tools?.include).not.toContain("task")
+      expect(orchestrator?.tools?.include).not.toContain("skill")
       expect(orchestrator?.tools?.include).not.toContain("task_report")
       expect(orchestrator?.tools?.include).not.toContain("memory")
 
       const tools = await ToolRegistry.tools({ providerID: "", modelID: "" }, orchestrator)
       expect(tools.map((tool) => tool.id)).not.toContain("panel")
       expect(tools.map((tool) => tool.id)).not.toContain("task")
+      expect(tools.map((tool) => tool.id)).not.toContain("skill")
       expect(tools.map((tool) => tool.id)).not.toContain("task_report")
       expect(tools.map((tool) => tool.id)).not.toContain("memory")
+    },
+  })
+})
+
+test("orchestrator does not inherit generic skill policy", async () => {
+  await using tmp = await tmpdir({
+    git: true,
+    init: async (dir) => {
+      await Bun.write(
+        path.join(dir, ".opencorvus", "skill", "tool-skill", "SKILL.md"),
+        `---
+name: tool-skill
+description: Skill for system-prompt visibility tests.
+---
+
+# Tool Skill
+`,
+      )
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const orchestrator = await Agent.get("orchestrator")
+      const requirements = await Agent.get("requirements")
+      expect(orchestrator).toBeDefined()
+      expect(requirements).toBeDefined()
+
+      expect(await SystemPrompt.skills(orchestrator!)).toBeUndefined()
+      expect(await SystemPrompt.skills(requirements!)).toContain("tool-skill")
     },
   })
 })
