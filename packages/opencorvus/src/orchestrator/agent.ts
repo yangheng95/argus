@@ -741,14 +741,14 @@ export const OrchestratorEventNote = {
       }
       lines.push(
         "",
-        "ACTION REQUIRED: resolve the blocking goals before these can proceed. If assistant.auto_iteration=false, report blockers and wait for operator follow-up. If assistant.auto_iteration=true, call query_failed_goals, then build({ goalID, request }) with root cause or fail_task.",
+        "ACTION REQUIRED: resolve the blocking goals before these can proceed. Call query_failed_goals, then route the concrete root cause through build({ goalID, request }), modify_goal, architect, or fail_task. assistant.auto_iteration=false disables host-side queued loops; it does not make this turn a passive wait when same-task repair is possible.",
       )
     } else {
       lines.push(
         "",
         "Read context (read_context) to see goal statuses and eval evidence.",
         input.failed > 0
-          ? "Failed goal worktrees are diagnostic evidence under .opencorvus/worktrees, not primary workspace pollution. Do not restart_from_stage solely because a failed diagnostic worktree contains partial files; when assistant.auto_iteration=false, report the failed goal blockers and wait; when assistant.auto_iteration=true, query_failed_goals, then retry or modify the failed goal."
+          ? "Failed goal worktrees are diagnostic evidence under .opencorvus/worktrees, not primary workspace pollution. Do not restart_from_stage solely because a failed diagnostic worktree contains partial files. Call query_failed_goals, then route stuck-state repair inside this task: retry the owner goal, modify the goal contract, repair the dependency graph, or fail only when no repository-owned repair remains."
           : "No goals failed in this batch.",
         "Decide next action based on current state — no predetermined action.",
       )
@@ -826,10 +826,11 @@ async function buildSystemParts(task: TaskRow, _event: OrchestratorEvent | undef
   ctx.push("## Auto Iteration Mode")
   if (autoIteration) {
     ctx.push("- assistant.auto_iteration=true: rejected acceptance reviews and failed terminal waves may queue same-task repair work automatically when evidence is concrete and not a repeated identical failure.")
-    ctx.push("- Keep repairs scoped to the latest integrity acceptance evidence, then run the integrity review again; stop and ask when the failure repeats or needs operator judgment.")
+    ctx.push("- Route the repair to the responsible owner inside this task: product/toolchain/git-worktree blockers go to Build, graph/dependency contract blockers go to modify_goal or architect, then rerun the relevant verification/integrity gate.")
+    ctx.push("- Do not keep retrying a verification-only goal when its evidence proves a product, dependency, git, or toolchain blocker owned elsewhere; stop and ask only when the failure repeats or needs operator judgment.")
   } else {
     ctx.push("- assistant.auto_iteration=false: rejected acceptance reviews and failed terminal waves do not open host-side rework attempts or queue a new build loop by themselves.")
-    ctx.push("- The current reasoning turn still owns the next decision: use the evidence to repair, replan, ask a concrete question, or fail the task.")
+    ctx.push("- The current reasoning turn still owns the next decision. Do not stop with a plain-text blocker when same-task repair is available; use the evidence to build, modify_goal, architect, ask a concrete external-only question, or fail the task.")
   }
   ctx.push("")
 

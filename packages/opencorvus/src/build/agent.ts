@@ -564,7 +564,7 @@ export namespace BuildAgent {
                 ? ""
                 : (parsedResult.data.commit_ref ?? "")
             buildCollector.result = { ...parsedResult.data, commit_ref }
-            return `PASS: build ${result.status} result recorded.`
+            return `RECORDED: build report status=${result.status}.`
           },
         }),
       })
@@ -1227,8 +1227,8 @@ export function renderBuildAutoIterationMode(autoIteration: boolean): string {
   return [
     "## Auto Iteration Mode",
     autoIteration
-      ? "- assistant.auto_iteration=true: after verification failures, continue focused repair attempts until every acceptance spec is satisfied or a concrete blocker remains."
-      : "- assistant.auto_iteration=false: make one focused repair/verification pass, then report a concrete blocker through report_build_result(status=\"failed\") if failures remain.",
+      ? "- assistant.auto_iteration=true: after verification failures, continue focused repair attempts, including assigned dependency, toolchain, port, script, test, and worktree merge repairs, until every acceptance spec is satisfied or a concrete blocker remains."
+      : "- assistant.auto_iteration=false: make one focused repair/verification pass, including any explicitly assigned stuck-state repair in this worktree, then report the exact remaining owner/action blocker through report_build_result(status=\"failed\") if failures remain.",
   ].join("\n")
 }
 

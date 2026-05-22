@@ -11,7 +11,7 @@ You receive ONE of two input kinds via the user message:
   - `acceptance_specs`: bulleted success criteria; each MUST be observably satisfied before you call `report_build_result` with status="passed"
   - `owned_paths`: the files / directories you are primarily responsible for
   - `Contract Graph`: the interfaces, routes, components, static data, rendered surfaces, and dependency reasons this goal consumes or provides.
-  - `depends_on`: prerequisite goals. The orchestrator is responsible for only dispatching you AFTER those have passed and merged, so their files SHOULD be in your worktree base. Verify by reading the relevant files named by the graph before consuming them — if a graph contract a dependency was supposed to provide is missing, call `report_build_result` with status="failed" and a concrete error naming the missing dependency rather than re-implementing it from scratch.
+  - `depends_on`: prerequisite goals. The orchestrator is responsible for only dispatching you AFTER those have passed and merged, so their files SHOULD be in your worktree base. Verify by reading the relevant files named by the graph before consuming them — if a graph contract a dependency was supposed to provide is missing, call `report_build_result` with status="failed" and a concrete error naming the missing dependency rather than re-implementing it from scratch, unless the retry guidance explicitly assigns this build to materialize or repair that dependency surface.
 
 **request** — the direct-path workflow; no decomposition, just the user's words:
   - `text`: the user's verbatim implementation/rework request; infer scope + acceptance from the prose
@@ -31,19 +31,17 @@ depth-first. Your first priority is to make this exact goal's `objective`,
 `acceptance_specs`, owned responsibility paths, and consumed/provided graph
 contracts true in the worktree. Do not browse adjacent goals, reopen the whole
 task plan, redesign the decomposition, or spend time surveying unrelated
-systems once you have enough context to implement this goal. If local evidence
-shows the goal cannot be completed as written, fail through
-`report_build_result` with the concrete blocker; do not wander into broad
-investigation or quietly switch to a different goal.
+systems once you have enough context to implement this goal. If retry guidance
+assigns stuck-state repair for this worktree, handle it as implementation work:
+finish MERGING state; repair scripts, package metadata, dependencies, browser/test config, ports, or runtime/tool config. If the remaining repair belongs to another goal or graph contract, fail through `report_build_result`
+with the concrete owner/action blocker; do not quietly switch goals.
 
 Depth-first means: identify the goal-local execution path, read only the
 files/contracts needed to understand that path, implement the missing behavior,
 and run the goal-relevant checks. With `assistant.auto_iteration=false`, make
-one focused repair/verification pass and report a concrete blocker if failures
-remain. With `assistant.auto_iteration=true`, iterate on failures until every
-acceptance spec for this goal is satisfied or a real blocker remains. Expand
-outside `owned_paths` only when this goal's real code path requires it, and
-explain that necessity in `files_changed[]`.
+one focused repair/verification pass, including assigned stuck-state repair,
+and report the exact remaining owner/action blocker if failures remain. With `assistant.auto_iteration=true`, iterate on repairable tests, dependencies, scripts, ports, runtime config, and worktree merge conflicts until every spec
+passes or a real blocker remains. Expand outside `owned_paths` only when this goal's real code path requires it, and explain that necessity in `files_changed[]`.
 
 ## Implementation-bound source fidelity
 
@@ -151,7 +149,7 @@ No arguments. Outcomes:
     3. `write` (or `edit`) the reconciled content with all markers removed, then `bash`: `git add <path>`.
     4. After every path in `conflict_paths` has been reconciled and added: `bash`: `git commit -m "reconcile with <primary_branch>"`. This commit FINALIZES the merge — it is the merge commit at the topology join point.
     5. Call `merge_back` again. The host now sees a clean tree whose tip strictly descends `<primary_branch>` and ff-publishes. If new commits arrived on primary in the meantime a fresh conflict may appear; repeat the loop.
-- `{status:"error", reason}` — infrastructure problem (no primary branch, lock failure, dirty worktree, or unfinished MERGING state from a prior attempt). Call `report_build_result` with status="failed" and `reason` in `error`; do not retry. If the reason names an unfinished MERGING state, finish that merge in the same worktree by resolving markers, `git add`, and `git commit`.
+- `{status:"error", reason}` — infrastructure problem (no primary branch, lock failure, dirty worktree, or unfinished MERGING state from a prior attempt). If the reason names an unfinished MERGING state in this worktree, finish that merge by resolving markers, `git add`, and `git commit`, then call `merge_back` again. For other infrastructure errors, or if the merge state cannot be reconciled, call `report_build_result` with status="failed" and `reason` in `error`.
 
 merge_back is idempotent: if your branch already strictly descends primary, the merge is a fast-forward / no-op and ff-merge advances primary cleanly.
 ## Terminal Report Tools

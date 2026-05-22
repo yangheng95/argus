@@ -574,7 +574,7 @@ export function renderCollaborationClosure(
       )
     } else {
       lines.push(
-        "assistant.auto_iteration=false: report the failed goal blockers, evidence, and next repair options to the operator, then wait for follow-up before launching another repair attempt. Do not restart upstream merely because a Build attempt failed or a failed worktree contains partial files.",
+        "assistant.auto_iteration=false: no host-side retry loop is queued automatically, but the orchestrator turn still owns same-task recovery. Read `query_failed_goals`, then route repair through `build({ goalID, request })`, `modify_goal`, or `architect`; ask the operator only for external/destructive blockers. Do not restart upstream merely because a Build attempt failed or a failed worktree contains partial files.",
       )
     }
   }
