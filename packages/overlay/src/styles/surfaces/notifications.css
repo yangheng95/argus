@@ -84,7 +84,6 @@
   border-radius: var(--oc-radius-pill);
   border: calc(2px * var(--ui-scale)) solid color-mix(in srgb, var(--accent) 24%, transparent);
   border-top-color: var(--accent);
-  animation: app-notification-spin var(--ui-duration-loop-notification-spin) linear infinite;
 }
 
 .app-notification__copy {
@@ -123,10 +122,4 @@
 .app-notification .oc-button[data-ui="app-notification-close"] > svg {
   width: calc(14px * var(--ui-scale));
   height: calc(14px * var(--ui-scale));
-}
-
-@keyframes app-notification-spin {
-  to {
-    transform: rotate(360deg);
-  }
 }

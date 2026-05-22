@@ -56,7 +56,7 @@
 }
 
 .chat-avatar[data-status="running"]::after {
-  animation: chat-bubble-running-halo var(--ui-duration-loop-pulse) var(--ui-timing-standard) infinite;
+  opacity: var(--ui-opacity-subtle);
 }
 
 .chat-avatar__icon {

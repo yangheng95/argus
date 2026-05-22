@@ -1,5 +1,9 @@
 import { expect, mock, test } from "bun:test";
-import { StreamingTextPartController } from "../src/components/text-part-model";
+import {
+  STREAMING_ACTIVE_TEXT_LIMIT,
+  StreamingTextPartController,
+  visibleStreamingText,
+} from "../src/components/text-part-model";
 
 test("streaming appends keep the active block raw and render completed blocks once", () => {
   const renderMarkdown = mock((source: string) => `<p>${source}</p>`);
@@ -64,4 +68,21 @@ test("non-prefix text changes rebuild the frozen cache for the new text", () => 
   expect(renderMarkdown.mock.calls.map((call) => call[0])).toEqual(["old frozen", "new frozen"]);
   expect(state.frozenHtml).toEqual(["<p>new frozen</p>"]);
   expect(state.activeText).toBe("new active");
+});
+
+test("streaming active block renders a bounded tail for long uninterrupted output", () => {
+  const renderMarkdown = mock((source: string) => `<p>${source}</p>`);
+  const model = new StreamingTextPartController(renderMarkdown);
+  const longText = "x".repeat(STREAMING_ACTIVE_TEXT_LIMIT + 100);
+
+  const state = model.update(longText, true);
+
+  expect(state.frozenHtml).toEqual([]);
+  expect(state.activeText).toBe(visibleStreamingText(longText));
+  expect(state.activeText.length).toBe(STREAMING_ACTIVE_TEXT_LIMIT + 4);
+  expect(renderMarkdown).toHaveBeenCalledTimes(0);
+
+  const completed = model.update(longText, false);
+  expect(completed.activeText).toBe("");
+  expect(renderMarkdown).toHaveBeenCalledTimes(1);
 });

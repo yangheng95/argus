@@ -123,15 +123,14 @@ export namespace CompactionHandoff {
   }
 
   export const MODEL_OUTPUT_INSTRUCTIONS = [
-    "Return exactly one JSON object that matches the CompactionHandoff schema.",
-    "Do not wrap the JSON in Markdown fences.",
-    "Do not output prose outside the JSON object.",
+    "Call the StructuredOutput tool exactly once with one object that matches the CompactionHandoff schema.",
+    "Do not write Markdown, prose, or a raw JSON text response; the handoff object must be the StructuredOutput tool input.",
     "Every retained claim must be grounded in the supplied conversation, runtime state, or evidence context.",
     "List all user-authored messages that appear in the compacted history in userMessages, preserving their intent and important wording.",
     "When patch evidence lists files, include every listed file path in files or file evidence.",
     "When error evidence lists an error name, include that exact error name in error evidence or errorsAndBlockers.evidence.",
     "Use empty arrays only when no evidence exists for that field.",
-    "Generic placeholders such as \"continue implementation\" are invalid.",
+    'Generic placeholders such as "continue implementation" are invalid.',
     "Do not treat assistant reasoning, tool-choice indecision, or checkpoint prompts as user requirements.",
     "When active build-session contract facts are supplied, copy their ids into activeBuildContracts instead of paraphrasing them.",
   ].join("\n")
@@ -164,20 +163,6 @@ export namespace CompactionHandoff {
   "nextActions": ["specific next action"],
   "openRisks": ["specific unresolved risk"]
 }`
-
-  export function parseModelOutput(text: string): Info {
-    const trimmed = text.trim()
-    const parsed = JSON.parse(trimmed)
-    return Schema.parse(parsed)
-  }
-
-  export function safeParseModelOutput(text: string) {
-    try {
-      return { success: true as const, data: parseModelOutput(text) }
-    } catch (error) {
-      return { success: false as const, error }
-    }
-  }
 
   export function validateMinimumEvidence(handoff: Info, requirements: EvidenceRequirements) {
     const missing: string[] = []

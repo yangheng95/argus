@@ -39,7 +39,25 @@ async function rmWithinPackage(target: string, options: { recursive?: boolean } 
   }
 }
 
-await Bun.write(
+async function writeFileWithRetry(file: string, contents: string) {
+  await fs.mkdir(path.dirname(file), { recursive: true })
+
+  for (let attempt = 1; attempt <= 20; attempt++) {
+    try {
+      await fs.writeFile(file, contents)
+      return
+    } catch (error) {
+      const code = error && typeof error === "object" && "code" in error
+        ? String((error as NodeJS.ErrnoException).code)
+        : ""
+      if (!["EBUSY", "EUNKNOWN", "EPERM"].includes(code) || attempt === 20) throw error
+      Bun.gc(true)
+      await Bun.sleep(100 * attempt)
+    }
+  }
+}
+
+await writeFileWithRetry(
   path.join(dir, "src", "defaults.ts"),
   `// Auto-generated from packages/opencorvus/server-defaults.json by script/build.ts.\n` +
     `// Do not edit — regenerate via \`bun run build\`.\n\n` +
@@ -54,26 +72,26 @@ await Bun.write(
 // stubs so the SDK module graph resolves; the real generation below replaces
 // them. Stubs are not retained — the `rm -rf src/gen` after generate removes
 // the entire dir and createClient writes fresh files.
-await Bun.write(path.join(dir, "src", "gen", "types.gen.ts"), "export {}\n")
-await Bun.write(
+await writeFileWithRetry(path.join(dir, "src", "gen", "types.gen.ts"), "export {}\n")
+await writeFileWithRetry(
   path.join(dir, "src", "gen", "sdk.gen.ts"),
   "export class OpencodeClient { constructor(_?: unknown) {} }\n",
 )
-await Bun.write(
+await writeFileWithRetry(
   path.join(dir, "src", "gen", "client", "types.gen.ts"),
   "export interface Config {}\n",
 )
-await Bun.write(
+await writeFileWithRetry(
   path.join(dir, "src", "gen", "client", "client.gen.ts"),
   "export function createClient(_?: unknown): unknown { throw new Error('SDK not yet generated') }\n",
 )
-await Bun.write(
+await writeFileWithRetry(
   path.join(dir, "src", "gen", "client", "index.ts"),
   "export {}\n",
 )
 
 await $`bun dev generate > ${openapi}`.cwd(path.resolve(dir, "../../opencorvus"))
-await Bun.write(rootOpenapi, await Bun.file(openapi).text())
+await writeFileWithRetry(rootOpenapi, await Bun.file(openapi).text())
 await rmWithinPackage("src/gen", { recursive: true })
 await rmWithinPackage("dist", { recursive: true })
 
@@ -111,6 +129,15 @@ const generate = async (output: string) =>
 
 await generate("./src/gen")
 
-await $`bun prettier --write src`
+for (let attempt = 1; attempt <= 5; attempt++) {
+  try {
+    await $`bun prettier --write src`
+    break
+  } catch (error) {
+    if (attempt === 5) throw error
+    Bun.gc(true)
+    await Bun.sleep(500 * attempt)
+  }
+}
 await $`bun tsc`
 await rmWithinPackage("openapi.json")

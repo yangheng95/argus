@@ -78,14 +78,16 @@ describe("CompactionHandoff", () => {
     expect(CompactionHandoff.Schema.safeParse(invalid).success).toBe(false)
   })
 
-  test("parses model JSON and renders deterministic Markdown", () => {
+  test("parses schema object and renders deterministic Markdown", () => {
     const handoff = handoffFixture()
-    const parsed = CompactionHandoff.parseModelOutput(JSON.stringify(handoff))
+    const parsed = CompactionHandoff.Schema.parse(handoff)
     const first = CompactionHandoff.renderMarkdown(parsed)
     const second = CompactionHandoff.renderMarkdown(parsed)
 
     expect(first).toBe(second)
-    expect(first.startsWith("This session is being continued from a previous conversation that ran out of context.")).toBe(true)
+    expect(
+      first.startsWith("This session is being continued from a previous conversation that ran out of context."),
+    ).toBe(true)
     expect(first).toContain("Summary:")
     expect(first).toContain("1. Primary Request and Intent:")
     expect(first).toContain("8. Current Work:")
@@ -218,9 +220,40 @@ describe("CompactionHandoff", () => {
     })
 
     expect(prompt).toContain("CompactionHandoff schema")
-    expect(prompt).toContain("\"durableInstructionSources\"")
-    expect(prompt).toContain("\"userMessages\"")
+    expect(prompt).toContain('"durableInstructionSources"')
+    expect(prompt).toContain('"userMessages"')
     expect(prompt).toContain("plugin context")
+  })
+
+  test("handoff output format exposes the CompactionHandoff schema for StructuredOutput", () => {
+    const format = SessionCompaction.handoffOutputFormat()
+
+    expect(format.type).toBe("json_schema")
+    expect(format.schema).toMatchObject({
+      type: "object",
+      required: expect.arrayContaining(["objective", "currentState", "nextActions"]),
+    })
+    expect(JSON.stringify(format.schema)).toContain("activeBuildContracts")
+  })
+
+  test("validates StructuredOutput payloads instead of accepting fenced JSON text", () => {
+    const handoff = handoffFixture()
+    const requirements: CompactionHandoff.EvidenceRequirements = {
+      sourceUserMessageID: "m-user",
+      instructionPaths: ["/repo/AGENTS.md"],
+      patchFiles: [],
+      errorNames: [],
+      userMessages: true,
+      fileEvidence: false,
+      errorsAndBlockers: false,
+      acceptanceCriteria: true,
+    }
+
+    expect(SessionCompaction.validateHandoffPayload(handoff, requirements).success).toBe(true)
+    const fenced = `\`\`\`json\n${JSON.stringify(handoff)}\n\`\`\``
+    const invalid = SessionCompaction.validateHandoffPayload(fenced, requirements)
+    expect(invalid.success).toBe(false)
+    if (!invalid.success) expect(invalid.error).toContain("expected object")
   })
 
   test("request budget preflight catches oversize compaction payloads", () => {

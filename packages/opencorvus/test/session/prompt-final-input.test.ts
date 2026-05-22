@@ -96,12 +96,7 @@ test("direct coding uses the coding prompt while build stage uses complete core"
 
 test("runtime prompt call sites mark complete system prompts explicitly", async () => {
   const srcRoot = path.join(import.meta.dir, "..", "..", "src")
-  const files = [
-    "agent/runner.ts",
-    "control/message.ts",
-    "orchestrator/agent.ts",
-    "orchestrator/tools.ts",
-  ]
+  const files = ["agent/runner.ts", "control/message.ts", "orchestrator/agent.ts", "orchestrator/tools.ts"]
 
   for (const file of files) {
     const src = await fs.readFile(path.join(srcRoot, file), "utf8")
@@ -110,8 +105,12 @@ test("runtime prompt call sites mark complete system prompts explicitly", async 
 
   const refineSrc = await fs.readFile(path.join(srcRoot, "orchestrator/tools.ts"), "utf8")
   expect(refineSrc).not.toContain('agent: "assistant"')
+  expect(refineSrc).toContain("RefineResultSchema")
+  expect(refineSrc).toContain('type: "json_schema"')
+  expect(refineSrc).not.toContain("JSON.parse(resultText.trim())")
 
   const controlSrc = await fs.readFile(path.join(srcRoot, "control/message.ts"), "utf8")
   expect(controlSrc).toContain('const agent = "control"')
   expect(controlSrc).not.toContain('const agent = "general"')
+  expect(controlSrc).not.toContain("parseTextAsResult")
 })
