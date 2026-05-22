@@ -39,7 +39,10 @@ describe("core prompt hygiene", () => {
 
   test("core prompt size budgets keep roles concise", async () => {
     const maxLines: Record<keyof typeof promptFiles, number> = {
-      architect: 150,
+      // Raised from 150 -> 160 on 2026-05-22 to add the faithful/complete
+      // decomposition principles — "smallest" governs graph shape not
+      // deliverable scope, and every requirement must map to a capable goal.
+      architect: 160,
       build: 175,
       designAnalyst: 125,
       integrity: 175,
@@ -47,7 +50,9 @@ describe("core prompt hygiene", () => {
       // Raised from 360 -> 375 on 2026-05-21 to add the orchestrator's
       // project-root git conflict ownership and toolchain readiness duties
       // without widening the narrow git-only bash surface.
-      orchestrator: 375,
+      // Raised 375 -> 380 on 2026-05-22 to document `recover_stale_build` as
+      // the stale-build recovery lane distinct from `inject_operator_message`.
+      orchestrator: 380,
       prosecutor: 80,
       requirements: 180,
     }
@@ -295,6 +300,32 @@ describe("core prompt hygiene", () => {
     expect(normalized).toContain("Call `submit_architect({ summary, decomposition_analysis })`")
     expect(normalized).toContain("why no goal is too large")
     expect(normalized).toContain("At least two goals exist")
+  })
+
+  test("architect prompt forbids simplifying away requirement scope", async () => {
+    const architect = await readPrompt("architect")
+    const normalized = architect.replace(/\s+/g, " ")
+
+    // Decomposition is a faithful re-expression of the task, not a re-scoping.
+    expect(normalized).toContain("Decomposition is a faithful, complete re-expression of the task")
+    expect(normalized).toContain("not authorized to narrow, defer, water down, or silently drop any requirement")
+    expect(normalized).toContain("Decompose humbly")
+
+    // "smallest" / "modest" / "do not chase perfection" must be disambiguated
+    // as graph shape and effort bounds — never licenses for a smaller deliverable.
+    expect(normalized).toContain('"Smallest" governs graph shape')
+    expect(normalized).toContain("It never licenses a smaller deliverable")
+    expect(normalized).toContain('"Modest" bounds one goal')
+    expect(normalized).toContain("full requirement coverage is never optional")
+
+    // Every requirement must land on a capable owning goal.
+    expect(normalized).toContain("Map every requirement to a goal that can deliver it")
+    expect(normalized).toContain(
+      "Every requirement (REQ-N) is claimed by at least one goal that can deliver it",
+    )
+    expect(normalized).toContain(
+      "how the goal set covers every requirement with nothing simplified, deferred, or dropped",
+    )
   })
 
   test("architect prompt and tool surface do not expose duplicate metric or challenge lanes", async () => {
