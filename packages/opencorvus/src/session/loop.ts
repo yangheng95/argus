@@ -41,6 +41,7 @@ import { SessionPromptState } from "./prompt/state"
 import { muteAISdkWarnings } from "@/runtime/shims"
 import { Config } from "@/config/config"
 import { decodeDataUrlBase64 } from "./text-mime"
+import { normalizeToolInput } from "./tool-input-norm"
 
 muteAISdkWarnings()
 
@@ -2031,10 +2032,12 @@ export namespace SessionLoop {
     const sessionIDForExtras = input.session.id
     const messageIDForExtras = input.processor.message.id
     for (const [name, extraTool] of Object.entries(extras)) {
-      const wrapped = wrapExtraTool(extraTool, {
+      const wrapped = wrapExtraTool(name, extraTool, {
         sessionID: sessionIDForExtras,
         messageID: messageIDForExtras,
         partFromToolCall: (toolCallID) => input.processor.partFromToolCall(toolCallID),
+        ensureToolPart: (toolCallID, toolName, toolInput) =>
+          input.processor.ensureToolPart(toolCallID, toolName, toolInput),
       })
       tools[name] = prepareProviderTool({
         name,
@@ -2058,8 +2061,14 @@ export namespace SessionLoop {
    * Idempotent: already-conforming results round-trip unchanged.
    */
   function wrapExtraTool(
+    name: string,
     raw: AITool,
-    ctx: { sessionID: string; messageID: string; partFromToolCall: (toolCallID: string) => Message.ToolPart | undefined },
+    ctx: {
+      sessionID: string
+      messageID: string
+      partFromToolCall: (toolCallID: string) => Message.ToolPart | undefined
+      ensureToolPart: (toolCallID: string, toolName: string, toolInput: Record<string, unknown>) => Promise<Message.ToolPart>
+    },
   ): AITool {
     const original = raw as AITool & { execute?: (...args: any[]) => any }
     if (!original.execute) return raw
@@ -2088,7 +2097,11 @@ export namespace SessionLoop {
       ...(raw as any),
       async execute(args: unknown, options: unknown) {
         const toolCallID = typeof (options as any)?.toolCallId === "string" ? (options as any).toolCallId : undefined
-        const toolPart = toolCallID ? ctx.partFromToolCall(toolCallID) : undefined
+        const normalizedInput = normalizeToolInput(args)
+        const toolInput = normalizedInput.ok ? normalizedInput.value : {}
+        const toolPart = toolCallID
+          ? (ctx.partFromToolCall(toolCallID) ?? await ctx.ensureToolPart(toolCallID, name, toolInput))
+          : undefined
         const enrichedOptions = {
           ...((options && typeof options === "object") ? (options as Record<string, unknown>) : {}),
           opencorvus: {
