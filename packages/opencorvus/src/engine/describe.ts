@@ -22,6 +22,7 @@
 
 import { renderSpecsAsText, type AcceptanceSpec } from "@/acceptance/types"
 import { createDecisionLog } from "@/decision-log"
+import { renderUserRequestSection } from "@/intent/request-prompt"
 import { readIterationHistory as readHistory } from "@/metrics/store"
 import { deriveGoalStatus } from "./goal-status"
 import { isRunOrphan } from "./orphan"
@@ -606,7 +607,7 @@ export function renderTaskDescription(desc: TaskDesc, options: { autoIteration?:
   const lines: string[] = []
   lines.push(`## Task: ${desc.title} (${desc.status})`)
   lines.push(`Kind: ${desc.kind}`)
-  lines.push(`Request: ${truncate(desc.request, 2000)}`)
+  lines.push(renderUserRequestSection({ heading: "## Request", request: desc.request }))
   if (desc.spec_summary) lines.push(`Spec: ${desc.spec_summary}`)
   if (desc.plan_summary) lines.push(`Plan: ${desc.plan_summary}`)
   if (desc.active_run_id) {

@@ -37,6 +37,7 @@ import { renderSpecsAsText } from "@/acceptance/types"
 import type { ArchitectResult, ArchitectRetryContext, ParsedRequirement, RequirementsDecision } from "./types"
 import { createArchitectOutputTools, type RegisteredGoal } from "./output-tools"
 import { AttachmentStore } from "@/storage/attachment-store"
+import { renderUserRequestSection } from "@/intent/request-prompt"
 
 import ARCHITECT_CORE from "@/prompt/core/architect-core.txt"
 
@@ -235,15 +236,14 @@ function buildUserPrompt(input: ArchitectAgent.CoordinateInput): string {
   const sections: string[] = []
 
   sections.push("# Delegation\n\nOrchestrator is asking architect to decompose this task into executable goals.")
-  sections.push(`# Task\n\nTitle: ${input.taskTitle}\n\nRequest:\n${input.taskRequest}`)
+  sections.push(renderUserRequestSection({ heading: "# Task", title: input.taskTitle, request: input.taskRequest }))
   sections.push(
     [
       "# Input Contract",
       "",
-      "The task title and request above are the authoritative user input for this stage.",
+      "The task title and bounded request excerpt above are the prompt-visible user input for this stage.",
       "If requirements, foundational decisions, retry context, or visual contract sections appear below, they are also authoritative.",
-      "Do NOT search the workspace for shadow copies of the request or `.opencorvus/intent/*`.",
-      "Architect runs before per-goal execution starts, so `.opencorvus/intent/*` is not part of this stage contract.",
+      "When the excerpt is not enough, read or grep the exact request bundle path named above instead of relying on upstream summaries.",
     ].join("\n"),
   )
 

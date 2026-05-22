@@ -22,6 +22,7 @@ import { filterAgentTools } from "@/agent/filter-tools"
 import { Log } from "@/util/log"
 import { clarificationTranscriptSection, operatorNotesSection } from "@/engine"
 import { AttachmentStore } from "@/storage/attachment-store"
+import { renderUserRequestSection } from "@/intent/request-prompt"
 import type { VisualSpec } from "@/design-analyst/types"
 import { renderVisualContractPromptSection } from "@/design-analyst/prompt-section"
 import type {
@@ -219,7 +220,7 @@ function buildUserPrompt(
   const sections: string[] = []
 
   sections.push("# Delegation\n\nOrchestrator is asking requirements to extract the task requirements and foundational decisions.")
-  sections.push(`# Task\n\nTitle: ${input.title}\n\nRequest:\n${input.request}`)
+  sections.push(renderUserRequestSection({ heading: "# Task", title: input.title, request: input.request }))
 
   if (input.taskID) {
     const clarifications = clarificationTranscriptSection(input.taskID)

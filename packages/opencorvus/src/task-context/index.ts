@@ -18,6 +18,7 @@ import { EngineTaskTable, EngineGoalTable } from "@/engine/engine.sql"
 import { goalStatusByID } from "@/engine/describe"
 import { Log } from "@/util/log"
 import { createDecisionLog } from "@/decision-log"
+import { renderUserRequestSection } from "@/intent/request-prompt"
 
 const log = Log.create({ service: "task-context" })
 
@@ -61,8 +62,7 @@ export namespace TaskContext {
     sections.push("")
     sections.push(`**Title**: ${task.title}`)
     if (task.request) {
-      const request = String(task.request).slice(0, 1000)
-      sections.push(`**Request**:\n${request}`)
+      sections.push(renderUserRequestSection({ heading: "### Request", request: String(task.request) }))
     }
 
     const designSpecs = Array.isArray(task.design_specs) ? task.design_specs : []

@@ -14,7 +14,9 @@ test("operator message wake note preserves authored text without synthetic frami
 test("orchestrator wake without caller note reuses the original task request", () => {
   const text = orchestratorUserText({ request: "build the requested feature" })
 
-  expect(text).toBe("build the requested feature")
+  expect(text).toContain("build the requested feature")
+  expect(text).toContain(".opencorvus/intent/request.md")
+  expect(text).toContain("grep/read")
   expect(text).not.toContain("Task state has advanced")
   expect(text).not.toContain("Re-read the context snapshot")
 })

@@ -26,6 +26,7 @@ import z from "zod"
 import PROSECUTOR_CORE from "@/prompt/core/prosecutor-core.txt"
 import { runAgentSession } from "@/agent/runner"
 import { AttachmentStore } from "@/storage/attachment-store"
+import { renderUserRequestSection } from "@/intent/request-prompt"
 import { toolGuard } from "@/util/tool-guard"
 import type { TextHooks } from "@/llm/api"
 import { Log } from "@/util/log"
@@ -441,8 +442,7 @@ function buildProsecutorBrief(input: {
   const lines = [
     `# Task ${input.task.id}: "${input.task.title}"`,
     ``,
-    `## User request`,
-    input.task.request,
+    renderUserRequestSection({ heading: "## User Request", request: input.task.request }),
     ``,
     `## This iteration: ${input.iteration}`,
     `- prior iterations: ${input.priorIterationCount}`,

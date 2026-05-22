@@ -73,6 +73,7 @@ import {
 } from "./types"
 import { renderContractGraphForPrompt } from "@/architect/contract-graph"
 import { AttachmentStore } from "@/storage/attachment-store"
+import { renderUserRequestSection } from "@/intent/request-prompt"
 import { withStreamActivity } from "@/util/stream-activity"
 import { PermissionNext } from "@/permission/next"
 import { Question } from "@/question"
@@ -2401,9 +2402,7 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
     "This direct request path is for implementation/rework. If the prompt is only repository investigation and does not ask you to change project behavior, fail through the terminal build report with a concrete error that says Build is the wrong stage.",
     "",
     ...contextLines,
-    "# Request",
-    "",
-    target.text,
+    renderUserRequestSection({ heading: "# Request", request: target.text }),
     "",
     "# File Change Report",
     "",
