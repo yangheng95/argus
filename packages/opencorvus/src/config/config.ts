@@ -38,9 +38,15 @@ import { Filesystem } from "@/util/filesystem"
 import { buildChannelSchema } from "@/channel/catalog"
 import { withKeyedLock } from "@/util/lock"
 import { AgentRoleContract, type AgentRoleID } from "@/agent/role-contract"
+import { isModelReference } from "@/provider/model-ref"
 
 export namespace Config {
-  const ModelId = z.string().meta({ $ref: "https://models.dev/model-schema.json#/$defs/Model" })
+  const ModelId = z
+    .string()
+    .refine(isModelReference, {
+      message: 'Model must be in the format "provider/model".',
+    })
+    .meta({ $ref: "https://models.dev/model-schema.json#/$defs/Model" })
   export const DEFAULT_MODEL = "deepseek/deepseek-v4-pro"
 
   const log = Log.create({ service: "config" })
@@ -248,6 +254,7 @@ export namespace Config {
     }
 
     result.plugin = deduplicatePlugins(result.plugin ?? [])
+    result = materializeNativeAgentModels(result)
 
     // NOTE: first-load auto-write of resolved config to the project directory
     // was removed (spec §6-2, rule 7/8). It wrote `result.model ??= DEFAULT_MODEL`
@@ -1629,7 +1636,12 @@ export namespace Config {
 
   export async function update(config: Info) {
     await fs.mkdir(projectConfigDirectory(), { recursive: true })
-    const merged = await writeConfigFile(projectConfigFile(), config)
+    const merged = await writeConfigFile(
+      projectConfigFile(),
+      materializeNativeAgentModels(config, {
+        topLevelModelWrite: typeof config.model === "string",
+      }),
+    )
     // Reset cached config state without destroying the instance.
     // Instance.dispose() would kill running sessions (executor, evaluator)
     // and cause race conditions with concurrent assistant operations.
@@ -1711,6 +1723,28 @@ export namespace Config {
       path: filepath,
       issues: parsed.error.issues,
     })
+  }
+
+  function materializeNativeAgentModels(config: Info, options: { topLevelModelWrite?: boolean } = {}): Info {
+    if (!config.model) return config
+
+    const agent = { ...(config.agent ?? {}) } as NonNullable<Info["agent"]>
+    let changed = config.agent === undefined
+
+    for (const agentID of Object.keys(AgentRoleContract.all) as AgentRoleID[]) {
+      const current = agent[agentID] ?? {}
+      const patchProvidedModel = config.agent?.[agentID]?.model !== undefined
+      if (!options.topLevelModelWrite && current.model) continue
+      if (options.topLevelModelWrite && patchProvidedModel) continue
+
+      agent[agentID] = {
+        ...current,
+        model: config.model,
+      }
+      changed = true
+    }
+
+    return changed ? { ...config, agent } : config
   }
 
   // RFC 7396-compatible deep merge: null values in the source delete the

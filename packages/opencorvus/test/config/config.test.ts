@@ -1,5 +1,6 @@
 import { test, expect, describe, mock, afterEach } from "bun:test"
 import { Config } from "../../src/config/config"
+import { AgentRoleContract } from "../../src/agent/role-contract"
 import { Instance } from "../../src/project/instance"
 import { Auth } from "../../src/auth"
 import { tmpdir } from "../fixture/fixture"
@@ -24,6 +25,8 @@ async function writeManagedSettings(settings: object, filename = "opencorvus.jso
 async function writeConfig(dir: string, config: object, name = "opencorvus.json") {
   await Filesystem.write(path.join(dir, name), JSON.stringify(config))
 }
+
+const NATIVE_AGENT_IDS = Object.keys(AgentRoleContract.all)
 
 test("no project config files: does NOT auto-write a project config and does NOT default model (spec §6-2, rule 7/8)", async () => {
   await using tmp = await tmpdir()
@@ -72,6 +75,51 @@ test("loads JSON config file", async () => {
   })
 })
 
+test("rejects bare model IDs at config load time", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await writeConfig(dir, {
+        $schema: "https://opencorvus.ai/config.json",
+        model: "glm-5.1-fp8",
+      })
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await expect(Config.get()).rejects.toThrow("provider/model")
+    },
+  })
+})
+
+test("materializes top-level model onto every native agent at load time", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await writeConfig(dir, {
+        $schema: "https://opencorvus.ai/config.json",
+        model: "top/model",
+        agent: {
+          build: { model: "custom/build", prompt_append: "keep build prompt append" },
+          coding: { temperature: 0.2 },
+        },
+      })
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const config = await Config.get()
+      expect(config.model).toBe("top/model")
+      for (const agentID of NATIVE_AGENT_IDS) {
+        const expected = agentID === "build" ? "custom/build" : "top/model"
+        expect(config.agent?.[agentID]?.model).toBe(expected)
+      }
+      expect(config.agent?.coding?.temperature).toBe(0.2)
+      expect(config.agent?.build?.prompt_append).toBe("keep build prompt append")
+    },
+  })
+})
+
 test("loads JSONC config file", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
@@ -103,14 +151,14 @@ test("merges multiple config files with correct precedence", async () => {
         dir,
         {
           $schema: "https://opencorvus.ai/config.json",
-          model: "base",
+          model: "base/model",
           username: "base",
         },
         "opencorvus.jsonc",
       )
       await writeConfig(dir, {
         $schema: "https://opencorvus.ai/config.json",
-        model: "override",
+        model: "override/model",
       })
     },
   })
@@ -118,7 +166,7 @@ test("merges multiple config files with correct precedence", async () => {
     directory: tmp.path,
     fn: async () => {
       const config = await Config.get()
-      expect(config.model).toBe("override")
+      expect(config.model).toBe("override/model")
       expect(config.username).toBe("base")
     },
   })
@@ -533,6 +581,32 @@ test("updates config and writes to file", async () => {
 
       const writtenConfig = await Filesystem.readJson(path.join(tmp.path, ".opencorvus", "opencorvus.jsonc"))
       expect(writtenConfig.model).toBe("updated/model")
+      for (const agentID of NATIVE_AGENT_IDS) {
+        expect(writtenConfig.agent?.[agentID]?.model).toBe("updated/model")
+      }
+    },
+  })
+})
+
+test("top-level model update materializes native agent models while same-patch agent model stays explicit", async () => {
+  await using tmp = await tmpdir()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await Config.update({
+        model: "updated/model",
+        agent: {
+          integrity: { model: "review/model" },
+          build: { prompt_append: "keep build append" },
+        },
+      } as any)
+
+      const writtenConfig = await Filesystem.readJson(path.join(tmp.path, ".opencorvus", "opencorvus.jsonc"))
+      for (const agentID of NATIVE_AGENT_IDS) {
+        const expected = agentID === "integrity" ? "review/model" : "updated/model"
+        expect(writtenConfig.agent?.[agentID]?.model).toBe(expected)
+      }
+      expect(writtenConfig.agent?.build?.prompt_append).toBe("keep build append")
     },
   })
 })
