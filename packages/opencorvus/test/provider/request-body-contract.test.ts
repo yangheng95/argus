@@ -278,4 +278,92 @@ describe("provider request-body contract", () => {
       stream: true,
     })
   })
+
+  test("Hexin request body coerces assistant tool-call null content for LiteLLM Azure compatibility", () => {
+    const body = ProviderTransform.requestBody("hexin", {
+      model: "gpt-5.4",
+      messages: [
+        {
+          role: "assistant",
+          content: null,
+          tool_calls: [
+            {
+              id: "call_1",
+              type: "function",
+              function: { name: "bash", arguments: "{\"command\":\"echo hi\"}" },
+            },
+          ],
+        },
+        {
+          role: "tool",
+          content: "ok",
+          tool_call_id: "call_1",
+        },
+      ],
+    }) as any
+
+    expect(body.messages[0]).toMatchObject({
+      role: "assistant",
+      content: "",
+    })
+    expect(body.messages[0].tool_calls[0].function.name).toBe("bash")
+    expect(body.messages[1].content).toBe("ok")
+  })
+
+  test("Hexin request body only coerces chat message content nulls", () => {
+    const body = ProviderTransform.requestBody("hexin", {
+      model: "gpt-5.4",
+      metadata: {
+        content: null,
+      },
+      messages: [
+        {
+          role: "assistant",
+          content: null,
+          tool_calls: [
+            {
+              id: "call_1",
+              type: "function",
+              function: { name: "bash", arguments: "{\"content\":null}" },
+            },
+          ],
+        },
+      ],
+    }) as any
+
+    expect(body.messages[0].content).toBe("")
+    expect(body.messages[0].tool_calls[0].function.arguments).toBe("{\"content\":null}")
+    expect(body.metadata.content).toBeNull()
+  })
+
+  test("non-Hexin request body keeps OpenAI-compatible assistant tool-call null content", () => {
+    const body = {
+      model: "gpt-5.4",
+      messages: [
+        {
+          role: "assistant",
+          content: null,
+          tool_calls: [
+            {
+              id: "call_1",
+              type: "function",
+              function: { name: "bash", arguments: "{}" },
+            },
+          ],
+        },
+      ],
+    }
+
+    expect(ProviderTransform.requestBody("openai-compatible", body)).toBe(body)
+    expect(body.messages[0].content).toBeNull()
+  })
+
+  test("Hexin request body normalization runs regardless of SDK package", () => {
+    expect(ProviderTransform.shouldNormalizeRequestBody("hexin", "@ai-sdk/azure")).toBe(true)
+    expect(ProviderTransform.shouldNormalizeRequestBody("hexin", "@ai-sdk/openai-compatible")).toBe(true)
+    expect(ProviderTransform.shouldNormalizeRequestBody("deepseek", "@ai-sdk/openai-compatible")).toBe(
+      true,
+    )
+    expect(ProviderTransform.shouldNormalizeRequestBody("openai", "@ai-sdk/openai")).toBe(false)
+  })
 })

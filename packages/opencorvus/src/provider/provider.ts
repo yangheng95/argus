@@ -765,7 +765,11 @@ export namespace Provider {
           }
         }
 
-        if (model.api.npm.includes("@ai-sdk/openai-compatible") && opts.body && opts.method === "POST") {
+        if (
+          ProviderTransform.shouldNormalizeRequestBody(model.providerID, model.api.npm) &&
+          opts.body &&
+          opts.method === "POST"
+        ) {
           const body = JSON.parse(opts.body as string)
           const normalized = ProviderTransform.requestBody(model.providerID, body)
           if (normalized !== body) opts.body = JSON.stringify(normalized)
