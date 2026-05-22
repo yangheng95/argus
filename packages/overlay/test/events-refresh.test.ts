@@ -536,6 +536,55 @@ test("board-owned run progress still schedules board refresh", () => {
   expect(boardStore.boardSyncPending).toBe(true);
 });
 
+test("selected-task session status updates cards without board refresh", () => {
+  resetWriter();
+  setBoardStore("selectedTaskID", "tsk_refresh");
+  setBoardStore("boardSyncPending", false);
+  setBoardStore("board", {
+    snapshotVersion: "board:refresh",
+    task: {
+      id: "tsk_refresh",
+      sessionID: "ses_refresh",
+      status: "active",
+      request: "refresh",
+      time: { created: 1_776_000_100_000 },
+      attachments: [],
+    },
+  });
+
+  const event = {
+    type: "session.status",
+    taskID: "tsk_refresh",
+    sequence: 6,
+    properties: {
+      taskID: "tsk_refresh",
+      sessionID: "ses_refresh",
+      status: { type: "streaming" },
+    },
+  };
+  const handled = routeSSEEvent(event);
+  if (!handled) handleEventStreamEvent(event);
+
+  expect(boardStore.boardSyncPending).toBe(false);
+  expect(boardStore.taskSequence).toBe(6);
+});
+
+test("task-list session status notification does not refresh selected board", () => {
+  resetWriter();
+  setBoardStore("selectedTaskID", "tsk_refresh");
+  setBoardStore("boardSyncPending", false);
+  setBoardStore("taskSequence", 5);
+
+  handleTaskListNotification({
+    type: "session.status",
+    taskID: "tsk_refresh",
+    sequence: 6,
+  });
+
+  expect(boardStore.boardSyncPending).toBe(false);
+  expect(boardStore.taskSequence).toBe(5);
+});
+
 test("consumed sequenced run progress advances selected cursor and avoids false recovery", async () => {
   resetWriter();
   const streams: Array<{ path: string; query?: Record<string, string> }> = [];

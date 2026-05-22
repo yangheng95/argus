@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test"
 import os from "os"
 import path from "path"
-import { BashTool, disposeSyntaxTree } from "../../src/tool/bash"
+import { BashTool, DEFAULT_TIMEOUT, disposeSyntaxTree } from "../../src/tool/bash"
+import { DEFAULT_BASH_TIMEOUT_MS } from "../../src/shell/timeout"
 import { Instance } from "../../src/project/instance"
 import { Filesystem } from "../../src/util/filesystem"
 import { tmpdir } from "../fixture/fixture"
@@ -21,6 +22,24 @@ const ctx = {
 }
 
 const projectRoot = path.join(__dirname, "../..")
+
+function isPidAlive(pid: number) {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function waitForPidExit(pid: number, timeoutMs: number) {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    if (!isPidAlive(pid)) return true
+    await Bun.sleep(100)
+  }
+  return !isPidAlive(pid)
+}
 
 describe("tool.bash", () => {
   test("disposes parser syntax trees after extracting permission metadata", () => {
@@ -66,6 +85,42 @@ describe("tool.bash", () => {
       },
     })
   })
+
+  test("defaults commands and background leases to two minutes", async () => {
+    await Instance.provide({
+      directory: projectRoot,
+      fn: async () => {
+        const bash = await BashTool.init()
+        expect(DEFAULT_BASH_TIMEOUT_MS).toBe(120_000)
+        expect(DEFAULT_TIMEOUT).toBe(DEFAULT_BASH_TIMEOUT_MS)
+        expect(bash.description).toContain("120000ms (2 minutes)")
+        expect(bash.description).toContain("For `background: true`, the same timeout is the process lease")
+      },
+    })
+  })
+
+  test("terminates background process tree when timeout lease expires", async () => {
+    await Instance.provide({
+      directory: projectRoot,
+      fn: async () => {
+        const bash = await BashTool.init()
+        const result = await bash.execute(
+          {
+            command: "sleep 30",
+            description: "Start sleeping background process",
+            background: true,
+            timeout: 2_000,
+          },
+          ctx,
+        )
+        const pid = result.metadata.pid
+        expect(typeof pid).toBe("number")
+        expect(result.output).toContain("background process lease timeout: 2000 ms")
+        expect(isPidAlive(pid as number)).toBe(true)
+        expect(await waitForPidExit(pid as number, 4_000)).toBe(true)
+      },
+    })
+  }, 10_000)
 })
 
 describe("tool.bash permissions", () => {

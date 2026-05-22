@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test"
 import {
   createOrchestratorTools,
+  ORCHESTRATOR_BASH_DEFAULT_TIMEOUT_MS,
+  ORCHESTRATOR_BASH_MAX_TIMEOUT_MS,
   validateOrchestratorBashCommand,
 } from "../../src/orchestrator/tools"
 
@@ -115,6 +117,11 @@ describe("validateOrchestratorBashCommand — single git invocation only", () =>
 })
 
 describe("createOrchestratorTools — bash wiring", () => {
+  test("uses a two minute default timeout with an explicit override ceiling", () => {
+    expect(ORCHESTRATOR_BASH_DEFAULT_TIMEOUT_MS).toBe(120_000)
+    expect(ORCHESTRATOR_BASH_MAX_TIMEOUT_MS).toBe(600_000)
+  })
+
   test("exposes a `bash` tool entry", () => {
     const { tools } = createOrchestratorTools({
       taskID: "tsk_orchestrator_bash_fixture",
