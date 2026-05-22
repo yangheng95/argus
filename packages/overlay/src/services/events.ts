@@ -12,7 +12,7 @@ import {
 } from "../store/board";
 import { configRefreshIncludesSettingsData, loadConfigInfo, loadSettingsInfo } from "./init";
 import { markSessionConfigStale } from "./config";
-import { applyEvent as applyTreeWriterEvent } from "./tree-writer";
+import { applyEvent as applyTreeWriterEvent, hasProjectedPart } from "./tree-writer";
 import { routeNotification } from "./notify";
 import {
   isBoardInvalidatingEventType,
@@ -193,35 +193,38 @@ function convertExecutorEventToMessages(event: any, properties: any): any[] {
       },
     },
   };
+  const ensureEvents = (partID: string, partEvent: any): any[] =>
+    hasProjectedPart(sessionID, partID) ? [] : [messageEvent, partEvent];
 
   if (kind === "tool_call") {
     const name = properties.name || properties.payload?.name || properties.tool || "tool";
     const input = parseToolInput(properties.input ?? properties.arguments ?? properties.args ?? properties.payload?.input);
     const partID = executorPartID(properties, event.event_id);
-    return [
-      messageEvent,
-      {
-        type: "message.part.updated",
-        properties: {
-          part: {
-            id: partID,
-            messageID: msgID,
-             sessionID,
-             type: "tool",
-             tool: name,
-             resolvedRole: "executor",
-             channel: "executor",
-             callID: properties.sourceID || properties.id || properties.payload?.id || partID,
-             state: {
-              status: "running",
-              input,
-              title: event.summary || name,
-              metadata: {},
-              time: { start: timestamp },
-            },
+    const partEvent = {
+      type: "message.part.updated",
+      properties: {
+        part: {
+          id: partID,
+          messageID: msgID,
+           sessionID,
+           type: "tool",
+           tool: name,
+           resolvedRole: "executor",
+           channel: "executor",
+           callID: properties.sourceID || properties.id || properties.payload?.id || partID,
+           state: {
+            status: "running",
+            input,
+            title: event.summary || name,
+            metadata: {},
+            time: { start: timestamp },
           },
         },
       },
+    };
+    return [
+      messageEvent,
+      partEvent,
     ];
   }
 
@@ -232,30 +235,30 @@ function convertExecutorEventToMessages(event: any, properties: any): any[] {
       : typeof properties.payload?.delta === "string" ? properties.payload.delta
       : "";
     if (!delta) return [];
-    return [
-      messageEvent,
-      {
-        type: "message.part.updated",
-        properties: {
-          part: {
-            id: partID,
-            messageID: msgID,
-            sessionID,
-            type: "tool",
-            tool: name,
-            resolvedRole: "executor",
-            channel: "executor",
-            callID: properties.sourceID || properties.id || properties.payload?.id || partID,
-            state: {
-              status: "running",
-              input: {},
-              title: event.summary || name,
-              metadata: {},
-              time: { start: timestamp },
-            },
+    const partEvent = {
+      type: "message.part.updated",
+      properties: {
+        part: {
+          id: partID,
+          messageID: msgID,
+          sessionID,
+          type: "tool",
+          tool: name,
+          resolvedRole: "executor",
+          channel: "executor",
+          callID: properties.sourceID || properties.id || properties.payload?.id || partID,
+          state: {
+            status: "running",
+            input: {},
+            title: event.summary || name,
+            metadata: {},
+            time: { start: timestamp },
           },
         },
       },
+    };
+    return [
+      ...ensureEvents(partID, partEvent),
       {
         type: "message.part.delta",
         properties: {
@@ -308,22 +311,22 @@ function convertExecutorEventToMessages(event: any, properties: any): any[] {
     const text = typeof properties.text === "string" ? properties.text : event.summary || "";
     if (!text) return [];
     const partID = `executor:text:${sessionID}`;
-    return [
-      messageEvent,
-      {
-        type: "message.part.updated",
-        properties: {
-          part: {
-            id: partID,
-            messageID: msgID,
-             sessionID,
-             type: "text",
-             resolvedRole: "executor",
-             channel: "executor",
-             text: "",
-          },
+    const partEvent = {
+      type: "message.part.updated",
+      properties: {
+        part: {
+          id: partID,
+          messageID: msgID,
+           sessionID,
+           type: "text",
+           resolvedRole: "executor",
+           channel: "executor",
+           text: "",
         },
       },
+    };
+    return [
+      ...ensureEvents(partID, partEvent),
       {
         type: "message.part.delta",
         properties: {
@@ -341,24 +344,24 @@ function convertExecutorEventToMessages(event: any, properties: any): any[] {
     const text = typeof properties.text === "string" ? properties.text : event.summary || "";
     if (!text) return [];
     const partID = `executor:reasoning:${sessionID}`;
+    const partEvent = {
+      type: "message.part.updated",
+      properties: {
+        part: {
+          id: partID,
+          messageID: msgID,
+           sessionID,
+           type: "reasoning",
+           resolvedRole: "executor",
+           channel: "executor",
+           text: "",
+        },
+      },
+    };
     // First event creates the part as "reasoning" type (not "text"), then delta appends.
     // message.part.updated ensures the part exists with correct type before any delta.
     return [
-      messageEvent,
-      {
-        type: "message.part.updated",
-        properties: {
-          part: {
-            id: partID,
-            messageID: msgID,
-             sessionID,
-             type: "reasoning",
-             resolvedRole: "executor",
-             channel: "executor",
-             text: "",
-          },
-        },
-      },
+      ...ensureEvents(partID, partEvent),
       {
         type: "message.part.delta",
         properties: {
@@ -691,10 +694,10 @@ function boardInvalidatingEvent(type: string): boolean {
 function shouldRefreshSelectedBoard(type: string): boolean {
   if (type.startsWith("message.")) return false;
   if (type === "run.progress" || type === "run.output") return false;
+  if (type === "session.status") return false;
   return (
     boardInvalidatingEvent(type) ||
-    type === "task.message" ||
-    type === "session.status"
+    type === "task.message"
   );
 }
 

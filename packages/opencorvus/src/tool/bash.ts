@@ -13,6 +13,7 @@ import { Filesystem } from "@/util/filesystem"
 import { fileURLToPath } from "url"
 import { Flag } from "@/flag/flag.ts"
 import { Shell } from "@/shell/shell"
+import { BASH_BACKGROUND_READINESS_MAX_MS, DEFAULT_BASH_TIMEOUT_MS } from "@/shell/timeout"
 
 import { BashArity } from "@/permission/arity"
 import { Truncate } from "./truncation"
@@ -21,7 +22,7 @@ import { PidGuard } from "@/shell/pid-guard"
 import { gitCeilingEnvForWorktree } from "@/worktree/git-ceiling"
 
 const MAX_METADATA_LENGTH = 30_000
-const DEFAULT_TIMEOUT = Flag.OPENCORVUS_EXPERIMENTAL_BASH_DEFAULT_TIMEOUT_MS || 2 * 60 * 1000
+export const DEFAULT_TIMEOUT = Flag.OPENCORVUS_EXPERIMENTAL_BASH_DEFAULT_TIMEOUT_MS || DEFAULT_BASH_TIMEOUT_MS
 
 export const log = Log.create({ service: "bash-tool" })
 const DYNAMIC_PATH_PATTERN = /[*?[\]{}$`~]/
@@ -115,7 +116,8 @@ export const BashTool = Tool.define("bash", async () => {
     description: DESCRIPTION.replaceAll("${directory}", Instance.directory)
       .replaceAll("${shell}", shell)
       .replaceAll("${maxLines}", String(Truncate.MAX_LINES))
-      .replaceAll("${maxBytes}", String(Truncate.MAX_BYTES)),
+      .replaceAll("${maxBytes}", String(Truncate.MAX_BYTES))
+      .replaceAll("${defaultTimeout}", String(DEFAULT_TIMEOUT)),
     parameters: z.object({
       command: z.string().describe("The command to execute"),
       timeout: z.number().describe("Optional timeout in milliseconds").optional(),
@@ -133,7 +135,7 @@ export const BashTool = Tool.define("bash", async () => {
       background: z
         .boolean()
         .describe(
-          "When true, the command keeps running after this tool call returns. The tool returns immediately with the spawned PID once stdout/stderr are observed (or after a short readiness window). Use ONLY for long-lived servers (dev/preview/serve) that must outlive a single tool call so delivery checks can probe them. You are responsible for stopping it later (e.g. `kill <pid>` or `lsof -ti :<port> | xargs kill`).",
+          "When true, the command keeps running after this tool call returns until explicitly stopped or until the timeout lease expires. The tool returns immediately with the spawned PID once stdout/stderr are observed (or after a short readiness window). Use ONLY for long-lived servers (dev/preview/serve) that must outlive a single tool call so delivery checks can probe them. You are responsible for stopping it later (e.g. `kill <pid>` or `lsof -ti :<port> | xargs kill`).",
         )
         .optional(),
     }),
@@ -288,14 +290,30 @@ export const BashTool = Tool.define("bash", async () => {
       }
 
       if (params.background) {
-        proc.once("exit", () => {
+        let backgroundLeaseTimer: ReturnType<typeof setTimeout> | undefined
+        const clearBackgroundLease = () => {
+          if (backgroundLeaseTimer) {
+            clearTimeout(backgroundLeaseTimer)
+            backgroundLeaseTimer = undefined
+          }
+        }
+        const markExited = () => {
           exited = true
+          clearBackgroundLease()
+        }
+        proc.once("exit", () => {
+          markExited()
         })
         proc.once("error", () => {
-          exited = true
+          markExited()
         })
+        backgroundLeaseTimer = setTimeout(() => {
+          timedOut = true
+          void kill()
+        }, timeout)
+        backgroundLeaseTimer.unref?.()
         proc.unref?.()
-        const readinessMs = Math.min(timeout, 1500)
+        const readinessMs = Math.min(timeout, BASH_BACKGROUND_READINESS_MAX_MS)
         await new Promise<void>((resolve) => {
           const timer = setTimeout(resolve, readinessMs)
           proc.once("exit", () => {
@@ -305,8 +323,11 @@ export const BashTool = Tool.define("bash", async () => {
         })
         const resultMetadata: string[] = [
           `bash tool returned while command continues running in background (pid=${proc.pid ?? "unknown"})`,
+          `background process lease timeout: ${timeout} ms`,
+          `OpenCorvus will terminate this process tree when the lease expires unless you stop it first`,
           `stop it later with: kill ${proc.pid ?? "<pid>"} (or kill by port)`,
         ]
+        if (timedOut) resultMetadata.push(`background process exceeded lease before readiness window`)
         if (exited) resultMetadata.push(`background process exited before readiness window (exit=${proc.exitCode})`)
         output += "\n\n<bash_metadata>\n" + resultMetadata.join("\n") + "\n</bash_metadata>"
         return {

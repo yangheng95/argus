@@ -17,6 +17,7 @@ import { EngineProtocol } from "@/engine/protocol"
 import { Memory } from "@/memory"
 import { Instance } from "@/project/instance"
 import { Shell } from "@/shell/shell"
+import { DEFAULT_BASH_TIMEOUT_MS } from "@/shell/timeout"
 import { Database } from "@/storage/db"
 import { Filesystem } from "@/util/filesystem"
 import { Log } from "@/util/log"
@@ -720,14 +721,14 @@ export function createDeliveryTools(input?: DeliveryToolContext) {
         "Use to build the project, start servers, run smoke tests, or verify the requested runtime/output surface. " +
         "For server startup verification, use a short timeout (e.g., 10-15 seconds) to check if " +
         "the server starts without crashing — do NOT keep servers running indefinitely.\n\n" +
-        "If you background a process (`cmd &`) and it keeps the port alive past this call's " +
-        "timeout, note the returned `pid` line — that is the PID of the SHELL that spawned " +
+        "If you background a process (`cmd &`) and it keeps the port alive past this call, " +
+        "note the returned `pid` line — that is the PID of the SHELL that spawned " +
         "your backgrounded child, and you can target its whole tree on a later turn with " +
         "`taskkill /F /T /PID <pid>` (Windows) or `kill -TERM -- -<pid>` (Unix). Prefer " +
         "that over `netstat | findstr :3000` guessing — the shell's own PID is deterministic.",
       inputSchema: z.object({
         command: z.string().describe("Shell command to run (runs in project root)"),
-        timeout_ms: z.number().default(120_000).describe("Max execution time ms"),
+        timeout_ms: z.number().default(DEFAULT_BASH_TIMEOUT_MS).describe("Max execution time ms"),
       }),
       execute: async ({ command, timeout_ms }) => {
         try {

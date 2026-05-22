@@ -185,8 +185,9 @@ interface BufferedPartDelta {
   delta: string;
 }
 
+const PART_DELTA_FLUSH_INTERVAL_MS = 50;
 var bufferedPartDeltas = new Map<string, BufferedPartDelta>();
-var bufferedPartDeltaFrame: number | null = null;
+var bufferedPartDeltaTimer: ReturnType<typeof setTimeout> | null = null;
 
 // ── Entry point ──
 
@@ -201,7 +202,7 @@ export function resetWriter(options: {
   try {
     flushBufferedPartDeltas();
   } finally {
-    cancelBufferedPartDeltaFrame();
+    cancelBufferedPartDeltaTimer();
     bufferedPartDeltas.clear();
   }
   sessions.clear();
@@ -234,10 +235,14 @@ function applyVisibleCardTreeEvent(handler: () => void): void {
   });
 }
 
-function cancelBufferedPartDeltaFrame(): void {
-  if (bufferedPartDeltaFrame === null) return;
-  cancelAnimationFrame(bufferedPartDeltaFrame);
-  bufferedPartDeltaFrame = null;
+function cancelBufferedPartDeltaTimer(): void {
+  if (bufferedPartDeltaTimer === null) return;
+  clearTimeout(bufferedPartDeltaTimer);
+  bufferedPartDeltaTimer = null;
+}
+
+export function hasProjectedPart(sessionID: string, partID: string): boolean {
+  return sessions.get(sessionID)?.partIndex.has(partID) === true;
 }
 
 function validatePartDeltaTarget(event: any): {
@@ -278,19 +283,19 @@ function queuePartDelta(event: any): void {
   } else {
     bufferedPartDeltas.set(key, { event, delta });
   }
-  if (bufferedPartDeltaFrame !== null) return;
-  bufferedPartDeltaFrame = requestAnimationFrame(() => {
-    bufferedPartDeltaFrame = null;
+  if (bufferedPartDeltaTimer !== null) return;
+  bufferedPartDeltaTimer = setTimeout(() => {
+    bufferedPartDeltaTimer = null;
     flushBufferedPartDeltas();
-  });
+  }, PART_DELTA_FLUSH_INTERVAL_MS);
 }
 
 export function flushBufferedPartDeltas(): void {
   if (bufferedPartDeltas.size === 0) {
-    cancelBufferedPartDeltaFrame();
+    cancelBufferedPartDeltaTimer();
     return;
   }
-  cancelBufferedPartDeltaFrame();
+  cancelBufferedPartDeltaTimer();
   const entries = [...bufferedPartDeltas.entries()];
   batch(() => {
     for (const [key, entry] of entries) {
@@ -308,6 +313,18 @@ export function applyEvent(event: any): void {
   const type: string = String(event?.type || "");
   if (!type) throw new Error("tree-writer: event missing type");
   if (type === "message.part.delta") return queuePartDelta(event);
+  if (
+    type === "session.idle" ||
+    type === "approval.request" ||
+    type === "input.request" ||
+    type === "permission.asked" ||
+    type === "permission.replied" ||
+    type === "diff.delta" ||
+    isTreeWriterNoopEventType(type) ||
+    isTreeWriterPassThroughEventType(type)
+  ) {
+    return;
+  }
   flushBufferedPartDeltas();
 
   // ── Message stream ──

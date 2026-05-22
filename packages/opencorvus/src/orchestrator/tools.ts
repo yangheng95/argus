@@ -27,6 +27,7 @@ import { Publisher } from "@/engine/publisher"
 import { EngineGit } from "@/engine/git"
 import { git as runGit } from "@/util/git"
 import { Shell } from "@/shell/shell"
+import { DEFAULT_BASH_TIMEOUT_MS } from "@/shell/timeout"
 import { isHostKillingCommand } from "@/tool/bash"
 import { EngineMemoryBridge } from "@/engine/memory-bridge"
 import { SubAgentProtocol } from "@/agent/sub-agent-protocol"
@@ -101,7 +102,12 @@ import {
 } from "@/engine/workflow"
 import { Question } from "@/question"
 import { renderSpecsAsText, type AcceptanceSpec, type ContractAuditScorer } from "@/acceptance/types"
-import { contractAuditRequired, runContractAudit, type ContractAuditCriteriaResult } from "@/acceptance/contract-audit"
+import {
+  contractAuditBlocksBuild,
+  contractAuditRequired,
+  runContractAudit,
+  type ContractAuditCriteriaResult,
+} from "@/acceptance/contract-audit"
 import { isLiveRunStatus, isRunReadyForGoalDispatch, restartStagePlan, type RestartStage } from "./scheduler"
 import { composeDeliveryRetryFeedback } from "./delivery-retry-feedback"
 import {
@@ -120,6 +126,9 @@ import type {
   MissingGoal,
 } from "@/integrity"
 import { renderIntegrityMarkdown } from "@/integrity/render-markdown"
+
+export const ORCHESTRATOR_BASH_DEFAULT_TIMEOUT_MS = DEFAULT_BASH_TIMEOUT_MS
+export const ORCHESTRATOR_BASH_MAX_TIMEOUT_MS = 10 * 60 * 1000
 
 const log = Log.create({ service: "task-tools" })
 
@@ -5386,7 +5395,7 @@ export function createOrchestratorTools(input: {
               if (contractAuditCriteria.length > 0) {
                 await EngineService.upsertTaskCriteria(taskID, contractAuditCriteria)
                 const failedEssential = contractAuditCriteria.filter((criteria) => {
-                  if (criteria.status === "passed") return false
+                  if (!contractAuditBlocksBuild(criteria.status)) return false
                   const goalRow = findGoal(attachedGoalID)
                   const specs = (
                     Array.isArray(goalRow?.acceptance_specs) ? goalRow.acceptance_specs : []
@@ -5671,9 +5680,11 @@ export function createOrchestratorTools(input: {
           .number()
           .int()
           .positive()
-          .max(60_000)
+          .max(ORCHESTRATOR_BASH_MAX_TIMEOUT_MS)
           .optional()
-          .describe("Timeout in ms. Default 30000. Hard ceiling 60000."),
+          .describe(
+            `Timeout in ms. Default ${ORCHESTRATOR_BASH_DEFAULT_TIMEOUT_MS}. Hard ceiling ${ORCHESTRATOR_BASH_MAX_TIMEOUT_MS}.`,
+          ),
       }),
       execute: async ({ command, description, timeout }) => {
         // Schema-level refine already rejected non-git / pipeline / kill
@@ -5685,7 +5696,7 @@ export function createOrchestratorTools(input: {
           return `bash refused: ${validation.reason}`
         }
         const cwd = Instance.directory
-        const ms = timeout ?? 30_000
+        const ms = timeout ?? ORCHESTRATOR_BASH_DEFAULT_TIMEOUT_MS
         const shell = await Shell.acceptable()
         const proc = spawn(command, {
           shell,
@@ -5701,28 +5712,27 @@ export function createOrchestratorTools(input: {
         proc.stderr?.on("data", append)
 
         let timedOut = false
+        let exited = false
+        const kill = () => Shell.killTree(proc, { exited: () => exited })
         const timer = setTimeout(() => {
           timedOut = true
-          try {
-            proc.kill("SIGTERM")
-          } catch {}
-          setTimeout(() => {
-            try {
-              proc.kill("SIGKILL")
-            } catch {}
-          }, 1500)
+          void kill()
         }, ms)
 
         const onAbort = () => {
-          try {
-            proc.kill("SIGTERM")
-          } catch {}
+          void kill()
         }
         input.signal?.addEventListener("abort", onAbort, { once: true })
 
         const exitCode: number | null = await new Promise((resolve) => {
-          proc.once("exit", (code) => resolve(code))
-          proc.once("error", () => resolve(null))
+          proc.once("exit", (code) => {
+            exited = true
+            resolve(code)
+          })
+          proc.once("error", () => {
+            exited = true
+            resolve(null)
+          })
         })
         clearTimeout(timer)
         input.signal?.removeEventListener("abort", onAbort)

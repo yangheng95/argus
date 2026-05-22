@@ -1,40 +1,17 @@
-import { afterAll, afterEach, beforeEach, expect, test } from "bun:test";
-
-const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
-const originalCancelAnimationFrame = globalThis.cancelAnimationFrame;
-
-let nextFrameID = 1;
-let frameCallbacks = new Map<number, FrameRequestCallback>();
-
-globalThis.requestAnimationFrame = ((callback: FrameRequestCallback) => {
-  const id = nextFrameID++;
-  frameCallbacks.set(id, callback);
-  return id;
-}) as any;
-globalThis.cancelAnimationFrame = ((id: number) => {
-  frameCallbacks.delete(id);
-}) as any;
+import { afterEach, beforeEach, expect, test } from "bun:test";
 
 const { setBoardStore } = await import("../src/store/board");
 const { cardTreeStore } = await import("../src/store/card-tree");
 const { applyEvent, resetWriter } = await import("../src/services/tree-writer");
+const { routeSSEEvent } = await import("../src/services/events");
 
 const TASK_ID = "tsk_delta_coalesce";
 const SESSION_ID = "ses_delta_coalesce";
 const MESSAGE_ID = "msg_delta_coalesce";
 
-function runFrame(): void {
-  const callbacks = [...frameCallbacks.values()];
-  frameCallbacks.clear();
-  for (const callback of callbacks) callback(0);
-}
-
-function pendingFrameCount(): number {
-  return frameCallbacks.size;
-}
-
 function seedBoard(): void {
   setBoardStore("selectedTaskID", TASK_ID);
+  setBoardStore("taskSequence", 0);
   setBoardStore("board", {
     task: {
       id: TASK_ID,
@@ -107,8 +84,6 @@ function partText(partID: string): string {
 }
 
 beforeEach(() => {
-  frameCallbacks.clear();
-  nextFrameID = 1;
   seedBoard();
   resetWriter();
   messageUpdated();
@@ -116,10 +91,13 @@ beforeEach(() => {
 
 afterEach(() => {
   resetWriter();
-  frameCallbacks.clear();
 });
 
-test("same session part field deltas merge into one frame-visible write", () => {
+async function waitForDeltaFlush(): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 70));
+}
+
+test("same session part field deltas merge into one timed visible write", async () => {
   partUpdated({ id: "part_text", type: "text", text: "" });
   const beforeVersion = cardTreeStore.visibleVersion;
 
@@ -127,13 +105,11 @@ test("same session part field deltas merge into one frame-visible write", () => 
 
   expect(partText("part_text")).toBe("");
   expect(cardTreeStore.visibleVersion).toBe(beforeVersion);
-  expect(pendingFrameCount()).toBe(1);
 
-  runFrame();
+  await waitForDeltaFlush();
 
   expect(partText("part_text")).toBe("Hello world");
   expect(cardTreeStore.visibleVersion).toBe(beforeVersion + 1);
-  expect(pendingFrameCount()).toBe(0);
 });
 
 test("message.part.updated synchronously flushes buffered deltas before replacing the part", () => {
@@ -143,7 +119,6 @@ test("message.part.updated synchronously flushes buffered deltas before replacin
   partUpdated({ id: "part_replace", type: "text", text: "final" });
 
   expect(partText("part_replace")).toBe("final");
-  expect(pendingFrameCount()).toBe(0);
 });
 
 test("session.status terminal sees complete text before status mutation", () => {
@@ -161,30 +136,26 @@ test("session.status terminal sees complete text before status mutation", () => 
 
   expect(partText("part_terminal")).toBe("complete");
   expect(sessionCard()?.status).toBe("completed");
-  expect(pendingFrameCount()).toBe(0);
 });
 
 test("resetWriter flushes and cancels buffered delta frames before clearing state", () => {
   partUpdated({ id: "part_reset", type: "text", text: "" });
   delta("part_reset", "text", "stale");
-  expect(pendingFrameCount()).toBe(1);
 
   resetWriter();
-  runFrame();
 
   expect(cardTreeStore.order).toEqual([]);
   expect(Object.keys(cardTreeStore.cards)).toEqual([]);
-  expect(pendingFrameCount()).toBe(0);
 });
 
-test("interleaved parts keep independent buffers and insertion order", () => {
+test("interleaved parts keep independent buffers and insertion order", async () => {
   partUpdated({ id: "part_a", type: "text", text: "" });
   partUpdated({ id: "part_b", type: "text", text: "" });
 
   delta("part_a", "text", "A");
   delta("part_b", "text", "B");
   delta("part_a", "text", "C");
-  runFrame();
+  await waitForDeltaFlush();
 
   expect(partText("part_a")).toBe("AC");
   expect(partText("part_b")).toBe("B");
@@ -192,7 +163,7 @@ test("interleaved parts keep independent buffers and insertion order", () => {
   expect(ids.slice(-2)).toEqual(["part_a", "part_b"]);
 });
 
-test("tool raw field deltas merge through the existing state.raw branch", () => {
+test("tool raw field deltas merge through the existing state.raw branch", async () => {
   partUpdated({
     id: "part_tool",
     type: "tool",
@@ -202,13 +173,40 @@ test("tool raw field deltas merge through the existing state.raw branch", () => 
 
   delta("part_tool", "raw", "line1\n");
   delta("part_tool", "raw", "line2\n");
-  runFrame();
+  await waitForDeltaFlush();
 
   const part = (sessionCard()?.parts as any[]).find((entry) => entry.id === "part_tool");
   expect(part?.state?.raw).toBe("line1\nline2\n");
 });
 
-afterAll(() => {
-  globalThis.requestAnimationFrame = originalRequestAnimationFrame;
-  globalThis.cancelAnimationFrame = originalCancelAnimationFrame;
+test("executor text deltas create message and part once, then only append text", async () => {
+  resetWriter();
+  seedBoard();
+  const beforeVersion = cardTreeStore.visibleVersion;
+
+  const base = {
+    type: "run.output",
+    task_id: TASK_ID,
+    properties: {
+      type: "text_delta",
+      text: "",
+      runID: "run_delta",
+      sessionID: SESSION_ID,
+    },
+  };
+
+  expect(routeSSEEvent({ ...base, sequence: 1, properties: { ...base.properties, text: "A" } })).toBe(true);
+  const afterCreateVersion = cardTreeStore.visibleVersion;
+  expect(afterCreateVersion).toBeGreaterThan(beforeVersion);
+
+  expect(routeSSEEvent({ ...base, sequence: 2, properties: { ...base.properties, text: "B" } })).toBe(true);
+  expect(routeSSEEvent({ ...base, sequence: 3, properties: { ...base.properties, text: "C" } })).toBe(true);
+  expect(cardTreeStore.visibleVersion).toBe(afterCreateVersion);
+
+  await waitForDeltaFlush();
+
+  const card = cardTreeStore.cards[`executor:session:${SESSION_ID}:message:executor:msg:run_delta`];
+  const part = (card?.parts as any[]).find((entry) => entry.id === `executor:text:${SESSION_ID}`);
+  expect(part?.text).toBe("ABC");
+  expect(cardTreeStore.visibleVersion).toBe(afterCreateVersion + 1);
 });

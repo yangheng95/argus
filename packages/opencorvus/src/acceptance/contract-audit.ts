@@ -53,6 +53,10 @@ export function contractAuditRequired(spec: AcceptanceSpec, scorer: ContractAudi
   return spec.severity === "essential" && resolveTrigger(spec, scorer) === "on_goal"
 }
 
+export function contractAuditBlocksBuild(status: ContractAuditStatus): boolean {
+  return status === "failed"
+}
+
 export function runContractAudit(input: {
   workDir: string
   index: Map<string, ContractIR>

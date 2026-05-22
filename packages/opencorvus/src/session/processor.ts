@@ -40,6 +40,25 @@ export namespace SessionProcessor {
     abort: AbortSignal
   }) {
     const toolcalls: Record<string, Message.ToolPart> = {}
+
+    // Resolve the part that already represents `toolCallID` on this assistant
+    // message. `toolcalls` only tracks IN-FLIGHT calls — the tool-result /
+    // tool-error cases delete the entry once a call finishes — so a
+    // re-delivered tool-call (a provider re-emit, or a retried stream
+    // replaying the same response with identical `call_*` ids) finds nothing
+    // there, and the handlers below would mint a SECOND part for the same
+    // callID. Two parts sharing one callID make `toModelMessages` emit a
+    // duplicate provider `tool_call_id`, which the provider rejects with
+    // HTTP 400 (`Duplicate value for 'tool_call_id'`). Falling back to the
+    // message's persisted parts keeps (messageID, callID) -> exactly one part
+    // however many times the call is delivered.
+    const priorToolPart = async (toolCallID: string): Promise<Message.ToolPart | undefined> => {
+      const warm = toolcalls[toolCallID]
+      if (warm) return warm
+      const parts = await Message.parts(input.assistantMessage.id)
+      return parts.find((p): p is Message.ToolPart => p.type === "tool" && p.callID === toolCallID)
+    }
+
     let snapshot: string | undefined
     let blocked = false
     let needsCompaction = false
@@ -55,7 +74,7 @@ export namespace SessionProcessor {
         return toolcalls[toolCallID]
       },
       async ensureToolPart(toolCallID: string, toolName: string, toolInput: Record<string, unknown>) {
-        const existing = toolcalls[toolCallID]
+        const existing = await priorToolPart(toolCallID)
         const start =
           existing?.type === "tool" && existing.state.status === "running"
             ? existing.state.time.start
@@ -217,7 +236,7 @@ export namespace SessionProcessor {
                         : ""
                   if (!toolCallID) break
                   const part = await Session.updatePart({
-                    id: toolcalls[toolCallID]?.id ?? Identifier.ascending("part"),
+                    id: (await priorToolPart(toolCallID))?.id ?? Identifier.ascending("part"),
                     messageID: input.assistantMessage.id,
                     sessionID: input.assistantMessage.sessionID,
                     type: "tool",
@@ -288,7 +307,7 @@ export namespace SessionProcessor {
                     break
                   }
                   const normalizedInput = norm.value
-                  const match = toolcalls[value.toolCallId]
+                  const match = await priorToolPart(value.toolCallId)
                   const part = await Session.updatePart({
                     ...(match ?? {
                       id: Identifier.ascending("part"),

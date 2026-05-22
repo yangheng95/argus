@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test"
 import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
-import { runContractAudit } from "@/acceptance/contract-audit"
+import { contractAuditBlocksBuild, runContractAudit } from "@/acceptance/contract-audit"
 import type { AcceptanceSpec, ContractAuditScorer } from "@/acceptance/types"
 import type { ContractIR } from "@/architect/contract-ir"
 import { contractGraphIRIndex, type ArchitectContractGraph } from "@/architect/contract-graph"
@@ -81,6 +81,13 @@ describe("contract_audit graph scorer", () => {
 
     expect(evidence).toHaveLength(1)
     expect(evidence[0].status).toBe("passed")
+  })
+
+  test("only concrete contract audit failures block build finalization", () => {
+    expect(contractAuditBlocksBuild("failed")).toBe(true)
+    expect(contractAuditBlocksBuild("passed")).toBe(false)
+    expect(contractAuditBlocksBuild("skipped")).toBe(false)
+    expect(contractAuditBlocksBuild("inconclusive")).toBe(false)
   })
 })
 
