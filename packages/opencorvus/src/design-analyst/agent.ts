@@ -23,6 +23,7 @@ import { createAgentContextTools } from "@/agent/context-tools"
 import { filterAgentTools } from "@/agent/filter-tools"
 import { Log } from "@/util/log"
 import { AttachmentStore } from "@/storage/attachment-store"
+import { renderUserRequestSection } from "@/intent/request-prompt"
 import { Instance } from "@/project/instance"
 import { deriveUrlSignals } from "@/engine/task-signals"
 import { EngineConfig } from "@/engine/config"
@@ -252,7 +253,7 @@ function buildUserPrompt(input: {
 }, autoIteration = false): string {
   const sections = [
     "# Delegation\n\nOrchestrator is asking design-analysis to extract the visual contract for this task.",
-    `# Task\n\nTitle: ${input.title}\n\nRequest:\n${input.request}`,
+    renderUserRequestSection({ heading: "# Task", title: input.title, request: input.request }),
   ]
   // URL presence is a *structural* detection (syntactic protocol scheme),
   // not a keyword policy: the agent decides whether to propose a

@@ -22,6 +22,7 @@
 import z from "zod"
 import { runAgentSession } from "@/agent/runner"
 import { AttachmentStore } from "@/storage/attachment-store"
+import { renderUserRequestSection } from "@/intent/request-prompt"
 import { createAgentContextTools } from "@/agent/context-tools"
 import { filterAgentTools } from "@/agent/filter-tools"
 import { Log } from "@/util/log"
@@ -145,6 +146,6 @@ function buildUserPrompt(input: IntentAnalysisAgent.AnalyzeInput): string {
   if (input.title && input.title.trim()) {
     sections.push(`# Title\n\n${input.title.trim()}`)
   }
-  sections.push(`# User Request\n\n${input.request}`)
+  sections.push(renderUserRequestSection({ heading: "# User Request", request: input.request }))
   return sections.join("\n\n")
 }

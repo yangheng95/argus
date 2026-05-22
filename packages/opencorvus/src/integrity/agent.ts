@@ -68,6 +68,7 @@ import type { DecisionLog } from "@/decision-log"
 import type { ParsedRequirement, RequirementsDecision } from "@/requirements/types"
 import type { RequirementStatusRow } from "./requirement-status"
 import { AttachmentStore } from "@/storage/attachment-store"
+import { renderUserRequestSection } from "@/intent/request-prompt"
 import { limitSummary, markdownList } from "@/agent/report"
 import { createIntegrityAcceptanceTools } from "./acceptance-tools"
 import { createIntegrityAcceptanceOutputTools, type IntegrityAcceptanceCollector } from "./acceptance-output-tools"
@@ -1029,15 +1030,17 @@ function buildIntegrityPrompt(input: {
 
   sections.push(renderDimensionCatalogue())
 
-  sections.push(
-    `# User Request (ORIGINAL — this is the ground truth)\n\nTitle: ${input.taskTitle}\n\n${input.userRequest}`,
-  )
+  sections.push(renderUserRequestSection({
+    heading: "# User Request (bounded excerpt)",
+    title: input.taskTitle,
+    request: input.userRequest,
+  }))
 
   if (input.requirements && input.requirements.length > 0) {
     const reqText = input.requirements.map((r) => `- **${r.id}** (${r.type}): ${r.description}`).join("\n")
     sections.push(
       `# Requirements (${input.requirements.length}) — generated REQ rows are coverage evidence\n\n` +
-        `Start from the original user request above, then use these REQ-N rows to judge whether ` +
+        `Start from the bounded user request excerpt above and the full request bundle when needed, then use these REQ-N rows to judge whether ` +
         `requirements extraction captured every user-visible capability at the right acceptance ` +
         `granularity. For each captured REQ-N, match it against the goals' \`requirement_ids\` and ` +
         `the acceptance_specs whose \`source_requirement_id\` equals the REQ id.\n\n${reqText}`,
@@ -1169,7 +1172,7 @@ function buildIntegrityPrompt(input: {
 
   sections.push(
     "Now review every dimension above. For `requirement_fidelity`, start from the original user " +
-      "request and judge whether requirements extraction was complete; generated REQ rows are " +
+      "request excerpt and grep/read the full request bundle when exact PRD details are needed; generated REQ rows are " +
       "evidence, not the audit universe. Then walk captured REQs (and the Requirement Status " +
       "Snapshot when present) row by row, NOT goal contracts. If an issue maps to an existing REQ, " +
       "set `requirement_ids`; if the issue is a missing extraction from the original request, leave " +

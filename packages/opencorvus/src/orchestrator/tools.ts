@@ -35,6 +35,7 @@ import { EngineProtocol } from "@/engine/protocol"
 import { Message } from "@/session/message"
 import { PartTable } from "@/session/session.sql"
 import { renderDesignAnalysisHandoffReference, designAnalysisArtifactPaths } from "@/design-analyst/handoff"
+import { renderUserRequestSection } from "@/intent/request-prompt"
 import { materializeMcpToolResult } from "@/mcp/materialize"
 import {
   EngineArtifactTable,
@@ -3433,8 +3434,7 @@ export function createOrchestratorTools(input: {
           `## Task`,
           task.title,
           "",
-          `## Original Request`,
-          task.request,
+          renderUserRequestSection({ heading: "## Original Request", request: task.request }),
           "",
         ]
         if (reason && reason.trim().length > 0) {
@@ -4357,7 +4357,7 @@ export function createOrchestratorTools(input: {
 
         const userPrompt = [
           `## Original Task`,
-          task.request.slice(0, 2000),
+          renderUserRequestSection({ heading: "## Original Task Request", request: task.request }),
           "",
           `## Completed Goals (${goals.length})`,
           ...goalSummaries,

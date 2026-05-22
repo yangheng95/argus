@@ -67,6 +67,7 @@ import { toolGuard } from "@/util/tool-guard"
 import { createOrchestratorTools } from "./tools"
 import { SubAgentProtocol } from "@/agent/sub-agent-protocol"
 import { AttachmentStore } from "@/storage/attachment-store"
+import { renderUserRequestSection } from "@/intent/request-prompt"
 import { readIterationHistory as readHistForPrompt } from "@/metrics/store"
 import {
   findActiveRunForTask,
@@ -797,7 +798,7 @@ export const OrchestratorEventNote = {
 }
 
 export function orchestratorUserText(task: Pick<TaskRow, "request">, event?: Pick<OrchestratorEvent, "note">): string {
-  return event?.note ?? task.request
+  return event?.note ?? renderUserRequestSection({ heading: "# User Request", request: task.request })
 }
 
 // ---------------------------------------------------------------------------

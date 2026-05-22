@@ -90,4 +90,14 @@ describe("design-analyst prompt assembly", () => {
   test("agent keeps evidence read tools available before PRD/SPEC submission", () => {
     expect(DesignAnalystTestHooks.shouldScopeDesignSubmitTool()).toBe(false)
   })
+
+  test("task request injection is bounded and points at the intent bundle", () => {
+    const request = Array.from({ length: 505 }, (_, index) => `prdword${index + 1}`).join(" ")
+    const prompt = DesignAnalystTestHooks.buildUserPrompt({ title: "Large PRD", request })
+
+    expect(prompt).toContain("prdword500")
+    expect(prompt).not.toContain("prdword501")
+    expect(prompt).toContain(".opencorvus/intent/request.md")
+    expect(prompt).toContain("grep/read")
+  })
 })
