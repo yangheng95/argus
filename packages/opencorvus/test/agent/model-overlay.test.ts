@@ -7,6 +7,8 @@ import { Session } from "../../src/session"
 import { Database } from "../../src/storage/db"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
+import fs from "node:fs/promises"
+import path from "node:path"
 
 // Phase 2 (spec §11.1/§13.1): single model resolver, monotone precedence
 //   explicitModel > session overlay (agent.<name>.model > model)
@@ -21,6 +23,39 @@ describe("resolveAgentModelRef — single source + session overlay", () => {
   afterEach(async () => {
     mock.restore()
     await resetDatabase()
+  })
+
+  test("child worktree session resolves project base config from the root session directory", async () => {
+    await using tmp = await tmpdir({ config: { model: "root/base", agent: { compaction: { model: "root/compact" } } } })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const root = await Session.create({ kind: "root", title: "root config base" })
+        const worktree = path.join(tmp.path, ".opencorvus", "worktrees", "goal-child")
+        await fs.mkdir(worktree, { recursive: true })
+        const child = await Session.createNext({
+          kind: "build",
+          parentID: root.id,
+          title: "child worktree",
+          directory: worktree,
+        })
+
+        const { resolveAgentModelRef, resolveConfiguredModelRef } = await import("../../src/agent/model")
+        await Instance.provide({
+          directory: worktree,
+          fn: async () => {
+            await expect(resolveAgentModelRef("compaction", { sessionID: child.id })).resolves.toEqual({
+              providerID: "root",
+              modelID: "compact",
+            })
+            await expect(resolveConfiguredModelRef({ sessionID: child.id })).resolves.toEqual({
+              providerID: "root",
+              modelID: "base",
+            })
+          },
+        })
+      },
+    })
   })
 
   test("explicitModel wins over everything (incl. session overlay)", async () => {

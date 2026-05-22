@@ -545,6 +545,11 @@ test("parseModel handles model IDs with slashes", () => {
   expect(result.modelID).toBe("anthropic/claude-3-opus")
 })
 
+test("parseModel rejects bare model IDs before provider lookup", () => {
+  expect(() => Provider.parseModel("glm-5.1-fp8")).toThrow(Provider.InvalidModelReferenceError)
+  expect(() => Provider.parseModel("iwc-aime/")).toThrow('Model must be in the format "provider/model"')
+})
+
 // providers list no longer surfaces a fallback first-entry: needs a recent.json hit
 // or explicit cfg.model. Pending product decision on what "first available" means.
 test.skip("defaultModel returns first available model when no config set", async () => {
@@ -559,7 +564,7 @@ test.skip("defaultModel returns first available model when no config set", async
   })
 })
 
-test("defaultModel respects config model setting", async () => {
+test("configured default model resolves through the single model resolver", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await Bun.write(
@@ -577,9 +582,11 @@ test("defaultModel respects config model setting", async () => {
       Env.set("ANTHROPIC_API_KEY", "test-api-key")
     },
     fn: async () => {
-      const model = await Provider.defaultModel()
-      expect(model.providerID).toBe("anthropic")
-      expect(model.modelID).toBe("claude-sonnet-4-20250514")
+      const { resolveConfiguredModelRef } = await import("../../src/agent/model")
+      await expect(resolveConfiguredModelRef()).resolves.toEqual({
+        providerID: "anthropic",
+        modelID: "claude-sonnet-4-20250514",
+      })
     },
   })
 })
@@ -2391,6 +2398,133 @@ test("Google Vertex: supports OpenAI compatible models", async () => {
 
       expect(model).toBeDefined()
       expect(model.api.npm).toBe("@ai-sdk/openai-compatible")
+    },
+  })
+})
+
+test("built-in test providers are available without any config.provider", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await Bun.write(
+        path.join(dir, "opencorvus.json"),
+        JSON.stringify({
+          $schema: "https://opencorvus.ai/config.json",
+        }),
+      )
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const providers = await Provider.list()
+
+      // All three built-in gateways resolve with no config.provider declared.
+      expect(providers["iwc-aime"]).toBeDefined()
+      expect(providers["glm51"]).toBeDefined()
+      expect(providers["kimik26"]).toBeDefined()
+
+      // Built-in test providers are sourced as "custom" (same as hexin).
+      expect(providers["iwc-aime"].source).toBe("custom")
+      expect(providers["glm51"].source).toBe("custom")
+      expect(providers["kimik26"].source).toBe("custom")
+
+      // Model wiring: id, api.url and npm package land on the resolved Model.
+      const glm = await Provider.getModel("glm51", "glm51")
+      expect(glm.api.id).toBe("glm51")
+      expect(glm.api.url).toBe("http://117.50.195.92:8080/gpt-oss-120b/glm5.1/v1")
+      expect(glm.api.npm).toBe("@ai-sdk/openai-compatible")
+      expect(glm.capabilities.reasoning).toBe(true)
+      expect(glm.limit.context).toBe(202752)
+      expect(glm.limit.output).toBe(131072)
+
+      const kimi = await Provider.getModel("kimik26", "kimik26")
+      expect(kimi.api.url).toBe("http://117.50.195.92:8080/gpt-oss-120b/kimik2/v1")
+      expect(kimi.limit.context).toBe(262144)
+
+      const iwc = await Provider.getModel("iwc-aime", "glm-5.1-fp8")
+      expect(iwc.api.url).toBe("http://ceshiai.iwencai.com/iwc-aime-model-9219/v1")
+
+      // Authorization header is pinned verbatim per gateway: iwc-aime sends a
+      // bare sk-xxx token, glm51 sends the "Bearer "-prefixed token, kimik26
+      // sends no Authorization header at all.
+      expect(providers["iwc-aime"].options.headers.Authorization).toBe(
+        "sk-c00551568fc0419e8f9ecf1ce5a971b5", // secret-scan: ignore — 内部测试网关 key
+      )
+      expect(providers["glm51"].options.headers.Authorization).toBe("Bearer sk-glm51-cz-a")
+      expect(providers["kimik26"].options.headers ?? {}).toEqual({})
+    },
+  })
+})
+
+test("config.provider overrides a built-in test provider of the same name", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await Bun.write(
+        path.join(dir, "opencorvus.json"),
+        JSON.stringify({
+          $schema: "https://opencorvus.ai/config.json",
+          provider: {
+            glm51: {
+              name: "GLM 5.1 (overridden)",
+              npm: "@ai-sdk/openai-compatible",
+              api: "https://override.example.com/v1",
+              env: [],
+              options: { headers: { Authorization: "Bearer override-token" } },
+              models: {
+                glm51: {
+                  id: "glm51",
+                  name: "GLM 5.1",
+                  release_date: "2026-05-21",
+                  attachment: false,
+                  reasoning: true,
+                  temperature: true,
+                  tool_call: true,
+                  limit: { context: 202752, output: 131072 },
+                  options: {},
+                },
+              },
+            },
+          },
+        }),
+      )
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const providers = await Provider.list()
+      // User config wins over the built-in default.
+      expect(providers["glm51"].name).toBe("GLM 5.1 (overridden)")
+      expect(providers["glm51"].options.headers.Authorization).toBe("Bearer override-token")
+      const glm = await Provider.getModel("glm51", "glm51")
+      expect(glm.api.url).toBe("https://override.example.com/v1")
+      // The other two built-ins remain untouched.
+      expect(providers["iwc-aime"]).toBeDefined()
+      expect(providers["kimik26"]).toBeDefined()
+    },
+  })
+})
+
+test("disabled_providers can disable a built-in test provider", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await Bun.write(
+        path.join(dir, "opencorvus.json"),
+        JSON.stringify({
+          $schema: "https://opencorvus.ai/config.json",
+          disabled_providers: ["kimik26"],
+        }),
+      )
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const providers = await Provider.list()
+      expect(providers["kimik26"]).toBeUndefined()
+      // Sibling built-ins are unaffected.
+      expect(providers["glm51"]).toBeDefined()
+      expect(providers["iwc-aime"]).toBeDefined()
     },
   })
 })
