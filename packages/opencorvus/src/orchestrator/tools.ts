@@ -4619,7 +4619,10 @@ export function createOrchestratorTools(input: {
         "never costs you any architect-committed contract. `build({ request, directBuildIntent })` without goalID is a task-level " +
         "direct implementation build. It is supported for explicit `kind=build` tasks, whole-task rework after " +
         "delivery rejection, and rare operator/orchestrator decisions to bypass goal decomposition for a scoped " +
-        "workflow implementation task. It is not a repository investigation tool. For " +
+        "workflow implementation task. It also owns same-task stuck-state repairs that require file edits: " +
+        "dependency materialization, package metadata/scripts, local dependency wiring, Playwright/browser " +
+        "configuration, dynamic port selection, runtime/tool configuration, product fixes proven by verification, " +
+        "and unfinished MERGING state inside a goal worktree. It is not a repository investigation tool. For " +
         "fresh `kind=workflow` tasks, requirements → architect → per-goal build remains the recommended path " +
         "when the request needs durable requirements, goal contracts, or decomposition. Fresh workflow direct " +
         "builds must declare directBuildIntent='modify_files' for scoped implementation. Repository investigation " +
@@ -4638,7 +4641,7 @@ export function createOrchestratorTools(input: {
           .string()
           .optional()
           .describe(
-            "For per-goal builds: optional retry/rework guidance for THIS attempt, rendered as a separate 'Retry Guidance From Orchestrator' section in the build prompt. Does NOT replace the goal's objective / acceptance_specs / owned_paths — populate freely whenever you have concrete advice for the next attempt (e.g. 'previous attempt did not call report_build_result before turn end; this attempt MUST call it after verification'). For task-level direct builds (no goalID): required; include the user's request plus concise rejected delivery details the build agent must address.",
+            "For per-goal builds: optional retry/rework guidance for THIS attempt, rendered as a separate 'Retry Guidance From Orchestrator' section in the build prompt. Does NOT replace the goal's objective / acceptance_specs / owned_paths — populate freely whenever you have concrete advice for the next attempt, including dependency materialization, worktree MERGING resolution, package/script/toolchain fixes, port selection, or product behavior fixes proven by verification. For task-level direct builds (no goalID): required; include the user's request plus concise rejected delivery details the build agent must address.",
           ),
         reason: z
           .string()
@@ -5623,7 +5626,7 @@ export function createOrchestratorTools(input: {
             `${factBlock}\n\n` +
             `### Next step\n` +
             `Read the build report and the worktree facts above. Cross-check the LLM's files_changed/commit_ref against the worktree facts; if they disagree, factor that into your next call. ` +
-            `When the current eligible wave reaches terminal state, choose integrity / build({goalID}) / modify_goal / architect / fail_task / restart_from_stage from the build evidence and task context. ` +
+            `When the current eligible wave reaches terminal state, choose integrity / build({goalID}) / modify_goal / architect / fail_task / restart_from_stage from the build evidence and task context; route product, dependency, git-worktree, port, and toolchain blockers to the responsible same-task owner instead of passively waiting. ` +
             `Call \`integrity\` as the final workflow gate after all blocking builds are terminal; before that, use it only when integrated evidence raises a real question about requirement mining or system integrity.`
           )
         } catch (err) {

@@ -381,7 +381,8 @@ describe("collaboration closure projection", () => {
         const md = renderTaskDescription(desc)
         expect(md).toContain("Failed goals requiring same-graph diagnosis:")
         expect(md).toContain("assistant.auto_iteration=false")
-        expect(md).toContain("report the failed goal blockers")
+        expect(md).toContain("orchestrator turn still owns same-task recovery")
+        expect(md).toContain("route repair through `build({ goalID, request })`, `modify_goal`, or `architect`")
         expect(md).not.toContain("then retry `build({ goalID })`")
         expect(md).toContain("Do not restart upstream merely because a Build attempt failed")
 

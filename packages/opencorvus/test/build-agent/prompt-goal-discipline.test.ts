@@ -21,14 +21,17 @@ describe("build agent goal execution discipline prompt", () => {
     expect(normalized).toContain("redesign the decomposition")
     expect(normalized).toContain("Depth-first means: identify the goal-local execution path")
     expect(normalized).toContain("With `assistant.auto_iteration=false`, make one focused repair/verification pass")
-    expect(normalized).toContain("With `assistant.auto_iteration=true`, iterate on failures until every acceptance spec for this goal is satisfied")
+    expect(normalized).toContain("With `assistant.auto_iteration=true`, iterate on repairable tests")
+    expect(normalized).toContain("scripts, ports, runtime config, and worktree merge conflicts")
     expect(normalized).toContain("Expand outside `owned_paths` only when this goal's real code path requires it")
   })
 
   test("renders current auto-iteration mode into build sessions", () => {
     expect(renderBuildAutoIterationMode(false)).toContain("assistant.auto_iteration=false")
     expect(renderBuildAutoIterationMode(false)).toContain("one focused repair/verification pass")
+    expect(renderBuildAutoIterationMode(false)).toContain("explicitly assigned stuck-state repair")
     expect(renderBuildAutoIterationMode(true)).toContain("assistant.auto_iteration=true")
     expect(renderBuildAutoIterationMode(true)).toContain("continue focused repair attempts")
+    expect(renderBuildAutoIterationMode(true)).toContain("dependency, toolchain, port, script, test, and worktree merge repairs")
   })
 })

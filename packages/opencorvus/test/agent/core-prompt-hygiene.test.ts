@@ -50,9 +50,10 @@ describe("core prompt hygiene", () => {
       // Raised from 360 -> 375 on 2026-05-21 to add the orchestrator's
       // project-root git conflict ownership and toolchain readiness duties
       // without widening the narrow git-only bash surface.
-      // Raised 375 -> 380 on 2026-05-22 to document `recover_stale_build` as
-      // the stale-build recovery lane distinct from `inject_operator_message`.
-      orchestrator: 380,
+      // Raised 380 -> 420 on 2026-05-22 to make same-task deadlock recovery
+      // explicit: dependency, worktree merge, port, script, and toolchain
+      // blockers must be routed to repair owners instead of passive waits.
+      orchestrator: 420,
       prosecutor: 80,
       requirements: 180,
     }
@@ -254,10 +255,23 @@ describe("core prompt hygiene", () => {
     expect(flat).toContain("browser preview tool")
     expect(flat).toContain("required agent/tool surface")
     expect(flat).toContain("Do not ignore or route around missing tools")
-    expect(flat).toContain("dispatch `build` to repair project scripts, dependencies, or tool configuration")
+    expect(flat).toContain("dispatch `build` to repair project scripts, dependencies, package installation metadata")
+    expect(flat).toContain("dynamic port selection, or tool configuration")
     expect(flat).toContain("use `explore` for read-only toolchain diagnosis")
     expect(flat).toContain("This is the direct surface for your project-root git conflict responsibility")
     expect(flat).toContain("NEVER for code edits, tests, repository investigation, dependency changes, research, toolchain diagnosis")
+  })
+
+  test("orchestrator prompt owns same-task deadlock repair routing", async () => {
+    const text = await readPrompt("orchestrator")
+    const normalized = text.replace(/\s+/g, " ")
+
+    expect(text).toContain("## Deadlock Repair Responsibility")
+    expect(normalized).toContain("occupied dev-server port")
+    expect(normalized).toContain("unfinished worktree merge")
+    expect(normalized).toContain("dynamic port selection")
+    expect(normalized).toContain("Do not keep retrying a verification-only goal")
+    expect(normalized).toContain("Route the repair to the owner inside the current task")
   })
 
   test("architect prompt documents graph contracts as the only cross-goal handoff shape", async () => {
