@@ -3,6 +3,7 @@ import path from "path"
 import { SearchCodeTool } from "../../src/tool/grep"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
+import { createCodebaseTools } from "../../src/engine/codebase-tools"
 
 const ctx = {
   sessionID: "test",
@@ -18,6 +19,22 @@ const ctx = {
 const projectRoot = path.join(__dirname, "../..")
 
 describe("tool.search_code", () => {
+  test("description names pattern as the only search string field", async () => {
+    const searchCode = await SearchCodeTool.init()
+
+    expect(searchCode.description).toContain('{"pattern": "<regex>"}')
+    expect(searchCode.description).toContain("do not use `query`")
+    expect(searchCode.parameters.shape.pattern.description).toContain('field is named "pattern"')
+    expect(searchCode.parameters.shape.pattern.description).toContain('do not use "query"')
+  })
+
+  test("workflow codebase tool description names pattern as the only search string field", () => {
+    const searchCode = createCodebaseTools(projectRoot).search_code
+
+    expect(searchCode.description).toContain('{"pattern":"<regex>"}')
+    expect(searchCode.description).toContain('do not use "query"')
+  })
+
   test("basic search", async () => {
     await Instance.provide({
       directory: projectRoot,

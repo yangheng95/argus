@@ -200,10 +200,11 @@ export function createCodebaseTools(projectDir?: string) {
     search_code: tool({
       description:
         "Search file contents using a regex pattern (powered by ripgrep). " +
+        'Required input shape: {"pattern":"<regex>"}. The search string field is named "pattern"; do not use "query". ' +
         "Returns matching lines with file paths and line numbers. " +
         "Use this to find specific code patterns, function definitions, imports, etc.",
       inputSchema: z.object({
-        pattern: z.string().describe("Regex pattern to search for"),
+        pattern: z.string().describe('Required regex pattern to search for. Field name is "pattern", not "query".'),
         path: z.string().optional().describe("Subdirectory or file to search in (default: project root)"),
         max_results: z.number().optional().describe("Maximum matching lines (default 30)"),
       }),
