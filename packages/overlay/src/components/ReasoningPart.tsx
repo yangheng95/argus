@@ -3,6 +3,7 @@ import { reasoningPartHidden, reasoningRevision } from "../store/reasoning";
 import { t } from "../utils/i18n";
 import { renderMarkdown } from "../utils/markdown";
 import { Icon } from "./Icon";
+import { visibleStreamingText } from "./text-part-model";
 
 export function isEmptyReasoning(s: string): boolean {
   // Filter out reasoning that is only brackets/whitespace (e.g. "[]", "[[]]", "[] []")
@@ -35,7 +36,7 @@ export function ReasoningPart(props: { part: any; streaming?: boolean }) {
           {label()} <Icon name={expanded() ? "caret-down" : "chevron"} />
         </button>
         <Show when={props.streaming} fallback={<div class="reasoning-text md-content" innerHTML={renderedHtml()} />}>
-          <div class="reasoning-text reasoning-text--streaming">{text()}</div>
+          <div class="reasoning-text reasoning-text--streaming">{visibleStreamingText(text())}</div>
         </Show>
       </div>
     </Show>

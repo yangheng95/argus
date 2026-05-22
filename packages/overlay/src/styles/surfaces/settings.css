@@ -1987,12 +1987,6 @@
   border: calc(2px * var(--ui-scale)) solid color-mix(in srgb, var(--accent) 30%, transparent);
   border-top-color: var(--accent);
   border-radius: 50%;
-  animation: agent-models-spin var(--ui-duration-loop-agent-spin) linear infinite;
-}
-@keyframes agent-models-spin {
-  to {
-    transform: rotate(360deg);
-  }
 }
 
 .agent-models-error {
@@ -2069,15 +2063,7 @@
   transition: transform var(--ui-duration-slow) var(--ui-timing-standard);
 }
 .provider-refresh-btn[data-spinning="true"] .provider-refresh-icon {
-  animation: provider-refresh-spin var(--ui-duration-loop-provider-refresh-spin) linear infinite;
-}
-@keyframes provider-refresh-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+  transform: rotate(90deg);
 }
 
 .provider-form-error {

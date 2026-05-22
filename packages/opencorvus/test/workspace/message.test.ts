@@ -1,7 +1,7 @@
-import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
+import { afterEach, describe, expect, mock, test } from "bun:test"
 import { ControlMessage } from "../../src/control"
+import { structuredOutputFailureMessage } from "../../src/control/message"
 import { Instance } from "../../src/project/instance"
-import { SessionPrompt } from "../../src/session/prompt"
 import { Message } from "../../src/session/message"
 import { Log } from "../../src/util/log"
 import { resetDatabase } from "../fixture/db"
@@ -19,7 +19,7 @@ describe("control.message", () => {
   // Hangs at 5s because ControlMessage.handle spins up a real LLM core agent loop.
   // Skipped until this can be replaced with a stub agent.
   test.skip("runs through the core agent, panel tool, and structured output", async () => {
-    await using tmp = await tmpdir({ git: true })
+    await using tmp = await tmpdir({ git: true, config: { model: "mock-control/control" } })
     installControlModel()
 
     await Instance.provide({
@@ -41,7 +41,7 @@ describe("control.message", () => {
 
   // Same heavyweight LLM core agent loop times out at 5s without a stub agent.
   test.skip("uses the control model to drive set_executor through the panel tool", async () => {
-    await using tmp = await tmpdir({ git: true })
+    await using tmp = await tmpdir({ git: true, config: { model: "mock-control/control" } })
     installControlModel()
 
     await Instance.provide({
@@ -68,7 +68,7 @@ describe("control.message", () => {
 
   // Real control pipeline times out at 5s without a stub agent — same root cause as siblings.
   test.skip("creates a session through the real control pipeline", async () => {
-    await using tmp = await tmpdir({ git: true })
+    await using tmp = await tmpdir({ git: true, config: { model: "mock-control/control" } })
     installControlModel()
 
     await Instance.provide({
@@ -90,10 +90,7 @@ describe("control.message", () => {
   })
 
   test("surfaces assistant provider errors when no text parts are returned", async () => {
-    await using tmp = await tmpdir({ git: true })
-    installControlModel()
-
-    spyOn(SessionPrompt, "prompt").mockResolvedValue({
+    const message = {
       info: Message.Assistant.parse({
         id: "msg_error",
         sessionID: "ses_mock",
@@ -116,8 +113,8 @@ describe("control.message", () => {
         mode: "build",
         agent: "build",
         path: {
-          cwd: tmp.path,
-          root: tmp.path,
+          cwd: "D:\\workspace",
+          root: "D:\\workspace",
         },
         cost: 0,
         tokens: {
@@ -131,20 +128,58 @@ describe("control.message", () => {
         },
       }),
       parts: [],
-    })
+    } satisfies Message.WithParts
 
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const result = await ControlMessage.handle({
-          surface: "panel",
-          text: "ping",
-        })
+    const error = structuredOutputFailureMessage(message)
 
-        expect(result.kind).toBe("panel_response")
-        expect(result.message).toContain("Provider error (alibaba-coding-plan/kimi-k2.5, status 401)")
-        expect(result.message).toContain("invalid access token or token expired")
-      },
-    })
+    expect(error).toContain("Provider error (alibaba-coding-plan/kimi-k2.5, status 401)")
+    expect(error).toContain("invalid access token or token expired")
+  })
+
+  test("does not parse text or fenced JSON when control StructuredOutput is missing", async () => {
+    const message = {
+      info: Message.Assistant.parse({
+        id: "msg_text",
+        sessionID: "ses_mock",
+        role: "assistant",
+        time: {
+          created: Date.now(),
+          completed: Date.now(),
+        },
+        parentID: "msg_parent",
+        modelID: "kimi-k2.5",
+        providerID: "alibaba-coding-plan",
+        mode: "build",
+        agent: "control",
+        path: {
+          cwd: "D:\\workspace",
+          root: "D:\\workspace",
+        },
+        cost: 0,
+        tokens: {
+          input: 0,
+          output: 0,
+          reasoning: 0,
+          cache: {
+            read: 0,
+            write: 0,
+          },
+        },
+      }),
+      parts: [
+        {
+          id: "prt_text",
+          sessionID: "ses_mock",
+          messageID: "msg_text",
+          type: "text",
+          text: '```json\n{"kind":"panel_response","message":"silently accepted"}\n```',
+        },
+      ],
+    } satisfies Message.WithParts
+
+    const error = structuredOutputFailureMessage(message)
+
+    expect(error).toBe("Control message did not produce the required structured output.")
+    expect(error).not.toContain("silently accepted")
   })
 })

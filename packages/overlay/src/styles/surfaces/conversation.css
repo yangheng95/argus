@@ -214,22 +214,9 @@
   top: 0;
   left: 0;
   height: 100%;
-  width: 30%;
-  background: linear-gradient(90deg, transparent, var(--accent), transparent);
-  transform: translateX(-100%);
-}
-
-.task-switch-progress[data-active="true"]::before {
-  animation: task-switch-progress-slide var(--ui-duration-loop-progress) ease-in-out infinite;
-}
-
-@keyframes task-switch-progress-slide {
-  0% {
-    transform: translateX(-100%);
-  }
-  100% {
-    transform: translateX(400%);
-  }
+  width: 100%;
+  background: var(--accent);
+  opacity: var(--ui-opacity-dim);
 }
 
 /* Chat header layout placements: the chat header is a 3-track grid;

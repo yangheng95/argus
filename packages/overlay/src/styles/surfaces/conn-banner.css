@@ -36,23 +36,12 @@
   height: calc(8px * var(--ui-scale));
   border-radius: 50%;
   background: var(--bad);
-  box-shadow: 0 0 0 0 color-mix(in srgb, var(--bad) 40%, transparent);
-  animation: conn-banner-pulse var(--ui-duration-loop-connection-pulse) ease-in-out infinite;
+  box-shadow: 0 0 0 calc(3px * var(--ui-scale)) color-mix(in srgb, var(--bad) 18%, transparent);
 }
 
 .conn-banner[data-status="connecting"] .conn-banner__dot {
   background: var(--warn);
-  box-shadow: 0 0 0 0 color-mix(in srgb, var(--warn) 40%, transparent);
-}
-
-@keyframes conn-banner-pulse {
-  0%,
-  100% {
-    box-shadow: 0 0 0 0 color-mix(in srgb, currentColor 40%, transparent);
-  }
-  50% {
-    box-shadow: 0 0 0 calc(6px * var(--ui-scale)) color-mix(in srgb, currentColor 0%, transparent);
-  }
+  box-shadow: 0 0 0 calc(3px * var(--ui-scale)) color-mix(in srgb, var(--warn) 18%, transparent);
 }
 
 .conn-banner__text {

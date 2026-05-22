@@ -365,17 +365,7 @@ body[data-page-mode="gateway"] > main.panel {
   height: calc(46px * var(--ui-scale, 1));
   border-radius: var(--oc-radius-soft);
   background: color-mix(in srgb, var(--text-muted) 10%, transparent);
-  animation: gateway-skeleton-pulse var(--ui-duration-loop-pulse) var(--ui-timing-standard) infinite;
-}
-
-@keyframes gateway-skeleton-pulse {
-  0%,
-  100% {
-    opacity: var(--ui-opacity-dim);
-  }
-  50% {
-    opacity: var(--ui-opacity-subtle);
-  }
+  opacity: var(--ui-opacity-dim);
 }
 
 .gateway-ledger-empty {

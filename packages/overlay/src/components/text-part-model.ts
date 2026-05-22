@@ -1,5 +1,7 @@
 import { createEffect, createSignal } from "solid-js";
 
+export const STREAMING_ACTIVE_TEXT_LIMIT = 12_000;
+
 interface BlockScanState {
   completed: string[];
   currentLines: string[];
@@ -68,6 +70,11 @@ function blocksFromScan(state: BlockScanState): string[] {
   return active ? [...state.completed, active] : state.completed;
 }
 
+export function visibleStreamingText(text: string, limit = STREAMING_ACTIVE_TEXT_LIMIT): string {
+  if (text.length <= limit) return text;
+  return `...\n${text.slice(-limit)}`;
+}
+
 export function createStreamingTextPartModel(
   props: { text: string; streaming?: boolean },
   renderMarkdownBlock: (source: string) => string,
@@ -123,7 +130,7 @@ export class StreamingTextPartController {
       this.html = [...this.html, ...additions];
     }
 
-    this.activeText = streaming && total > 0 ? blocks[total - 1] : "";
+    this.activeText = streaming && total > 0 ? visibleStreamingText(blocks[total - 1]) : "";
     return { frozenHtml: this.html, activeText: this.activeText };
   }
 }

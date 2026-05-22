@@ -141,21 +141,7 @@ async function run(input: z.infer<typeof ControlMessageInput>, onEvent?: StreamC
       } satisfies RunResult
     }
 
-    const text = textFromMessage(result)
-    const output = finalizeResult(parseTextAsResult(text, result), control)
-    if (control?.keep) {
-      await appendSummary(control.info.id, result, output.message)
-    }
-    log.info("panel request completed", {
-      input: payload,
-      panel_session_id: control.info.id,
-      result: loggedResult(output),
-      fallback_text: text,
-    })
-    return {
-      result: output,
-      timeline: shouldAppendTimeline(input, output, control),
-    } satisfies RunResult
+    throw new Error(structuredOutputFailureMessage(result))
   } catch (error) {
     const output = finalizeResult(ControlMessageResult.parse({
       kind: "panel_response",
@@ -294,13 +280,6 @@ async function panelTools() {
   return Object.fromEntries(ids.map((id) => [id, id === "panel"]))
 }
 
-function textFromMessage(message: Message.WithParts) {
-  return message.parts
-    .filter((part): part is Extract<typeof part, { type: "text" }> => part.type === "text")
-    .map((part) => part.text)
-    .join("\n")
-}
-
 function assistantErrorText(message: Message.WithParts) {
   if (message.info.role !== "assistant" || !message.info.error) return
   const source = `${message.info.providerID}/${message.info.modelID}`
@@ -312,24 +291,10 @@ function assistantErrorText(message: Message.WithParts) {
   return `Provider error (${source}): ${error.name}`
 }
 
-function parseTextAsResult(rawText: string, message?: Message.WithParts): z.infer<typeof ControlMessageResult> {
-  // Try to parse as JSON directly
-  try {
-    return ControlMessageResult.parse(JSON.parse(rawText))
-  } catch {}
-  // Try to extract JSON from markdown code blocks
-  const jsonMatch = rawText.match(/```(?:json)?\s*([\s\S]*?)```/)
-  if (jsonMatch) {
-    try {
-      return ControlMessageResult.parse(JSON.parse(jsonMatch[1].trim()))
-    } catch {}
-  }
-  const rawError = message ? assistantErrorText(message) : undefined
-  const text = rawText.trim() || rawError || "Model returned no structured output and no text parts."
-  return ControlMessageResult.parse({
-    kind: "panel_response",
-    message: text || "（模型未返回有效响应）",
-  })
+export function structuredOutputFailureMessage(message: Message.WithParts) {
+  const rawError = assistantErrorText(message)
+  if (rawError) return rawError
+  return "Control message did not produce the required structured output."
 }
 
 function defaultSource(surface: z.infer<typeof ControlMessageInput>["surface"]) {

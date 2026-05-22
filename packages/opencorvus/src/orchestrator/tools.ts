@@ -4340,28 +4340,24 @@ export function createOrchestratorTools(input: {
           title: `Refine: ${task.title}`,
           directory: Instance.directory,
         })
+        const RefineResultSchema = z.object({
+          summary: z.string(),
+          suggestions: z.array(z.object({
+            category: z.enum(["feature", "quality", "test", "performance", "refactor"]),
+            title: z.string(),
+            description: z.string(),
+            priority: z.enum(["high", "medium", "low"]),
+            effort: z.enum(["small", "medium", "large"]),
+          })),
+        })
 
         const systemPrompt = [
           "You are a project analyst reviewing a completed software project.",
           "Analyze the delivered code and suggest concrete improvements for the next iteration.",
-          "",
-          "Output a JSON object with this structure:",
-          "{",
-          '  "summary": "one paragraph assessment of current project state",',
-          '  "suggestions": [',
-          "    {",
-          '      "category": "feature|quality|test|performance|refactor",',
-          '      "title": "short title",',
-          '      "description": "what to do and why",',
-          '      "priority": "high|medium|low",',
-          '      "effort": "small|medium|large"',
-          "    }",
-          "  ]",
-          "}",
+          "Use the required StructuredOutput schema for the final assessment and suggestions.",
           "",
           `Focus: ${focus}`,
           "Respond in the same language as the original task request.",
-          "Return ONLY the JSON object, no markdown fences.",
         ].join("\n")
 
         const userPrompt = [
@@ -4386,6 +4382,11 @@ export function createOrchestratorTools(input: {
             system: systemPrompt,
             systemMode: "complete",
             parts: [{ type: "text", text: userPrompt, id: Identifier.ascending("part") }],
+            format: {
+              type: "json_schema",
+              schema: z.toJSONSchema(RefineResultSchema) as Record<string, any>,
+              retryCount: 1,
+            },
           })
         } catch (err) {
           // Refine dispatch boundary — surface terminal to overlay so the
@@ -4398,44 +4399,20 @@ export function createOrchestratorTools(input: {
           })
           throw err
         }
-        SessionStatus.set(refineSession.id, { type: "terminal", reason: "completed" })
-        const resultText = (finalMessage?.parts ?? [])
-          .filter((p) => p.type === "text" && typeof (p as any).text === "string")
-          .map((p) => (p as any).text as string)
-          .join("\n\n")
+        const parsed = finalMessage.info.role === "assistant" && finalMessage.info.structured
+          ? RefineResultSchema.safeParse(finalMessage.info.structured)
+          : { success: false as const, error: new Error("refine session ended without StructuredOutput") }
+        if (!parsed.success) {
+          const error = parsed.error instanceof z.ZodError ? z.prettifyError(parsed.error) : parsed.error.message
+          SessionStatus.set(refineSession.id, { type: "terminal", reason: "error", error })
+          throw new Error(`refine: LLM did not return schema-valid StructuredOutput. ${error}`)
+        }
 
         await trackStepComplete("refine")
+        SessionStatus.set(refineSession.id, { type: "terminal", reason: "completed" })
 
-        // Parse the structured suggestions. Refine's contract with the LLM
-        // is a JSON object {summary, suggestions[]}; anything else is an
-        // upstream model failure. Returning the raw prose here was a silent
-        // fallback that piped unbounded text into the orchestrator session —
-        // forbidden per project rules. Throwing surfaces the failure so the
-        // orchestrator can retry or fail_task based on its own policy.
-        let parsed: { summary?: unknown; suggestions?: unknown }
-        try {
-          parsed = JSON.parse(resultText.trim())
-        } catch (parseErr) {
-          const preview = resultText.slice(0, 200)
-          throw new Error(
-            `refine: LLM did not return valid JSON for {summary, suggestions}. ` +
-              `Parse error: ${parseErr instanceof Error ? parseErr.message : String(parseErr)}. ` +
-              `Output preview: ${preview}${resultText.length > 200 ? "…" : ""}`,
-          )
-        }
-        if (!Array.isArray(parsed.suggestions)) {
-          throw new Error(
-            `refine: LLM output missing or invalid "suggestions" array (got ${typeof parsed.suggestions}).`,
-          )
-        }
-        const suggestions = parsed.suggestions as Array<{
-          priority?: string
-          title?: string
-          category?: string
-          effort?: string
-          description?: string
-        }>
-        const summaryRaw = typeof parsed.summary === "string" ? parsed.summary : ""
+        const suggestions = parsed.data.suggestions
+        const summaryRaw = parsed.data.summary
         const suggestionLines = suggestions.map(
           (s) =>
             `[${s.priority ?? "?"}] ${s.title ?? "(untitled)"} (${s.category ?? "?"}, ${s.effort ?? "?"}): ${s.description ?? ""}`,

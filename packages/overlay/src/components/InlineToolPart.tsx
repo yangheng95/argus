@@ -13,6 +13,7 @@ import { selectedTaskDirectory } from "../store/board"
 import { TodoListPart, extractTodos } from "./TodoListPart"
 import { StaticTextPart } from "./TextPart"
 import { toolFileChangesFromState, type ToolFileChange } from "../utils/file-change-summary"
+import { STREAMING_ACTIVE_TEXT_LIMIT, visibleStreamingText } from "./text-part-model"
 
 // Same tool-kind sets used to drive code rendering below.
 const FILE_WRITE_TOOLS = new Set(["write", "writefile"])
@@ -167,7 +168,7 @@ export function InlineToolPart(props: { part: any; mode?: "inline" | "block" | "
     const st = state()
     const r =
       typeof st.raw === "string" ? (typeof props.part._targetRaw === "string" ? props.part._targetRaw : st.raw) : ""
-    return r
+    return status() === "completed" ? r : visibleStreamingText(r)
   }
   const output = () => stripAnsi(state().output || "")
   const error = () => stripAnsi(state().error || "") || output()
@@ -187,9 +188,10 @@ export function InlineToolPart(props: { part: any; mode?: "inline" | "block" | "
     if (FILE_READ_TOOLS.has(k) && status() !== "completed") return null
     if (status() !== "completed" && status() !== "running" && status() !== "pending") return null
     const parsedRead = readView()
-    const content = FILE_READ_TOOLS.has(k)
+    const fullContent = FILE_READ_TOOLS.has(k)
       ? (parsedRead?.body ?? extractCodeContent(k, input(), output()))
       : extractCodeContent(k, input(), output())
+    const content = status() === "completed" ? fullContent : visibleStreamingText(fullContent, STREAMING_ACTIVE_TEXT_LIMIT)
     if (!content) return null
     const lang = parsedRead?.kind === "directory" ? "plaintext" : extToLang(extractFilePath(input()))
     return renderCodeBlock(content, lang, Infinity)

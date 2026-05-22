@@ -24,6 +24,7 @@ import { Snapshot } from "@/snapshot"
 import { Database, and, desc, eq, sql } from "@/storage/db"
 import { EngineArtifactTable } from "@/engine/engine.sql"
 import type { ModelMessage } from "ai"
+import { SessionLoop } from "./loop"
 
 export namespace SessionCompaction {
   const log = Log.create({ service: "session.compaction" })
@@ -165,10 +166,12 @@ export namespace SessionCompaction {
       db
         .select()
         .from(EngineArtifactTable)
-        .where(and(
-          eq(EngineArtifactTable.kind, "build_session_contract"),
-          sql`json_extract(${EngineArtifactTable.payload}, '$.session_id') = ${sessionID}`,
-        ))
+        .where(
+          and(
+            eq(EngineArtifactTable.kind, "build_session_contract"),
+            sql`json_extract(${EngineArtifactTable.payload}, '$.session_id') = ${sessionID}`,
+          ),
+        )
         .orderBy(desc(EngineArtifactTable.time_created), desc(EngineArtifactTable.id))
         .limit(8)
         .all(),
@@ -181,7 +184,9 @@ export namespace SessionCompaction {
         goalRunID: String(payload.goal_run_id),
         artifactID: row.id,
         sourceArtifactIDs: Array.isArray(payload.source_artifact_ids)
-          ? payload.source_artifact_ids.filter((item: unknown): item is string => typeof item === "string" && item.length > 0)
+          ? payload.source_artifact_ids.filter(
+              (item: unknown): item is string => typeof item === "string" && item.length > 0,
+            )
           : [],
         digest: String(payload.digest),
       }
@@ -260,6 +265,29 @@ export namespace SessionCompaction {
       usableBudget,
       exceeds: input.model.limit.context > 0 && estimatedTokens > usableBudget,
     }
+  }
+
+  export function handoffOutputFormat() {
+    return {
+      type: "json_schema" as const,
+      schema: z.toJSONSchema(CompactionHandoff.Schema) as Record<string, any>,
+      retryCount: 0,
+    }
+  }
+
+  export function validateHandoffPayload(
+    output: unknown,
+    requirements: CompactionHandoff.EvidenceRequirements,
+  ): { success: true; data: CompactionHandoff.Info } | { success: false; error: string } {
+    const parsed = CompactionHandoff.Schema.safeParse(output)
+    if (!parsed.success) {
+      return { success: false, error: z.prettifyError(parsed.error) }
+    }
+    const evidence = CompactionHandoff.validateMinimumEvidence(parsed.data, requirements)
+    if (!evidence.success) {
+      return { success: false, error: evidence.error }
+    }
+    return { success: true, data: parsed.data }
   }
 
   function turns(messages: Message.WithParts[]) {
@@ -459,6 +487,7 @@ export namespace SessionCompaction {
         ],
       },
     ]
+    const format = handoffOutputFormat()
     const budget = requestBudget({ messages: providerMessages, config, model })
     if (budget.exceeds) {
       processor.message.error = new Message.ContextOverflowError({
@@ -468,15 +497,36 @@ export namespace SessionCompaction {
       await Session.updateMessage(processor.message)
       return "stop"
     }
+    let structured: CompactionHandoff.Info | undefined
+    const tools = {
+      StructuredOutput: SessionLoop.prepareProviderTool({
+        name: "StructuredOutput",
+        source: "structured",
+        model,
+        tool: SessionLoop.createStructuredOutputTool({
+          schema: format.schema,
+          validate(output) {
+            const parsed = validateHandoffPayload(output, runtime.evidenceRequirements)
+            return parsed.success ? undefined : parsed.error
+          },
+          onSuccess(output) {
+            const parsed = validateHandoffPayload(output, runtime.evidenceRequirements)
+            if (!parsed.success) throw new Error(parsed.error)
+            structured = parsed.data
+          },
+        }),
+      }),
+    }
     const result = await processor.process({
       user: userMessage,
       agent,
       abort: input.abort,
       sessionID: input.sessionID,
-      tools: {},
+      tools,
       system: [],
       messages: providerMessages,
       model,
+      toolChoice: SessionLoop.structuredOutputToolChoice(format, model),
     })
 
     if (result === "compact") {
@@ -490,35 +540,29 @@ export namespace SessionCompaction {
     }
 
     if (processor.message.error) return "stop"
+    if (!structured) {
+      const toolErrors = (await Message.parts(processor.message.id)).flatMap((part) =>
+        part.type === "tool" && part.state.status === "error" ? [`${part.tool}: ${part.state.error}`] : [],
+      )
+      const reason = toolErrors.length
+        ? toolErrors.join("\n")
+        : "Model ended the compaction turn without calling StructuredOutput."
+      processor.message.error = new Message.StructuredOutputPayloadError({
+        message: "Compaction handoff did not match the required structured contract.",
+        reason,
+      }).toObject()
+      processor.message.finish = "error"
+      await Session.updateMessage(processor.message)
+      return "stop"
+    }
 
+    const rendered = CompactionHandoff.renderMarkdown(structured)
+    processor.message.structured = structured
+    processor.message.finish = processor.message.finish ?? "stop"
+    await Session.updateMessage(processor.message)
     const textParts = (await Message.parts(processor.message.id)).filter(
       (part): part is Message.TextPart => part.type === "text",
     )
-    const rawText = textParts.map((part) => part.text).join("\n\n")
-    const handoff = CompactionHandoff.safeParseModelOutput(rawText)
-    if (!handoff.success) {
-      processor.message.error = new Message.StructuredOutputPayloadError({
-        message: "Compaction handoff did not match the required structured contract.",
-        reason: handoff.error instanceof Error ? handoff.error.message : String(handoff.error),
-      }).toObject()
-      processor.message.finish = "error"
-      await Session.updateMessage(processor.message)
-      return "stop"
-    }
-    const evidence = CompactionHandoff.validateMinimumEvidence(handoff.data, runtime.evidenceRequirements)
-    if (!evidence.success) {
-      processor.message.error = new Message.StructuredOutputPayloadError({
-        message: "Compaction handoff did not include the required evidence for the compacted input.",
-        reason: evidence.error,
-      }).toObject()
-      processor.message.finish = "error"
-      await Session.updateMessage(processor.message)
-      return "stop"
-    }
-
-    const rendered = CompactionHandoff.renderMarkdown(handoff.data)
-    processor.message.structured = handoff.data
-    await Session.updateMessage(processor.message)
     if (textParts[0]) {
       await Session.updatePart({ ...textParts[0], text: rendered })
       for (const extra of textParts.slice(1)) {
@@ -528,6 +572,18 @@ export namespace SessionCompaction {
           partID: extra.id,
         })
       }
+    } else {
+      await Session.updatePart({
+        id: Identifier.ascending("part"),
+        messageID: processor.message.id,
+        sessionID: input.sessionID,
+        type: "text",
+        text: rendered,
+        time: {
+          start: Date.now(),
+          end: Date.now(),
+        },
+      } satisfies Message.TextPart)
     }
 
     if (compactionPart && selected.tail_start_id && compactionPart.tail_start_id !== selected.tail_start_id) {
