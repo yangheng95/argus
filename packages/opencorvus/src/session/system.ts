@@ -114,8 +114,8 @@ export namespace SystemPrompt {
     ]
   }
 
-  export async function skills(agent: Agent.Info): Promise<string | undefined> {
-    if (!agentCanUseSkillTool(agent)) return
+  export async function skills(agent: Agent.Info, input?: { availableToolNames?: Iterable<string> }): Promise<string | undefined> {
+    if (!agentCanUseSkillTool(agent, input?.availableToolNames)) return
 
     const all = await Skill.all()
     const accessible = all.filter((skill) => {
@@ -147,7 +147,8 @@ export namespace SystemPrompt {
     ].join("\n")
   }
 
-  function agentCanUseSkillTool(agent: Agent.Info): boolean {
+  function agentCanUseSkillTool(agent: Agent.Info, availableToolNames?: Iterable<string>): boolean {
+    if (availableToolNames && !new Set(availableToolNames).has("skill")) return false
     const include = agent.tools?.include
     if (include) return include.includes("skill")
     if (agent.tools?.exclude?.includes("skill")) return false

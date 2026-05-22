@@ -239,6 +239,34 @@ description: Skill for system-prompt visibility tests.
   })
 })
 
+test("skill policy follows the current resolved tool surface", async () => {
+  await using tmp = await tmpdir({
+    git: true,
+    init: async (dir) => {
+      await Bun.write(
+        path.join(dir, ".opencorvus", "skill", "tool-skill", "SKILL.md"),
+        `---
+name: tool-skill
+description: Skill for resolved-tool visibility tests.
+---
+
+# Tool Skill
+`,
+      )
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const requirements = await Agent.get("requirements")
+      expect(requirements).toBeDefined()
+
+      expect(await SystemPrompt.skills(requirements!, { availableToolNames: ["read_file"] })).toBeUndefined()
+      expect(await SystemPrompt.skills(requirements!, { availableToolNames: ["read_file", "skill"] })).toContain("tool-skill")
+    },
+  })
+})
+
 test("orchestrator does not inherit the generic task-tool prompt policy", async () => {
   await using tmp = await tmpdir()
   await Instance.provide({

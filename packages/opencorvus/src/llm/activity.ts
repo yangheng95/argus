@@ -425,7 +425,15 @@ export async function withLLMActivity<T>(
 
   const id = Identifier.ascending("activity")
   const startedAt = Date.now()
-  const remainingTotalMs = () => Math.max(0, startedAt + policy.totalMs - Date.now())
+  let pausedStartedAt: number | undefined
+  let pausedTotalMs = 0
+  let pauseDepth = 0
+  let totalTimer: ReturnType<typeof setTimeout> | undefined
+  const activeElapsedMs = () => {
+    const livePausedMs = pausedStartedAt === undefined ? 0 : Date.now() - pausedStartedAt
+    return Math.max(0, Date.now() - startedAt - pausedTotalMs - livePausedMs)
+  }
+  const remainingTotalMs = () => Math.max(0, policy.totalMs - activeElapsedMs())
 
   let terminalEmitted = false
 
@@ -470,13 +478,55 @@ export async function withLLMActivity<T>(
   if (external.aborted) onExternal()
   else external.addEventListener("abort", onExternal)
 
-  // Total deadline — single timer across the whole activity (NOT per attempt).
+  // Total deadline — single timer across the whole activity's active LLM time.
+  // `run.pause()` marks periods where the provider stream is waiting for a
+  // tool/sub-agent and no LLM inactivity has occurred; those periods do not
+  // consume totalMs. Retry backoff is not a pause and remains counted.
   const totalCtrl = new AbortController()
-  const totalTimer = setTimeout(() => {
-    totalCtrl.abort(
-      makeAbortReason("total_timeout", `LLMActivity total deadline ${policy.totalMs}ms exceeded`),
-    )
-  }, policy.totalMs)
+  const armTotalTimer = () => {
+    if (totalTimer) clearTimeout(totalTimer)
+    totalTimer = undefined
+    if (totalCtrl.signal.aborted || pauseDepth > 0) return
+    const remain = remainingTotalMs()
+    if (remain <= 0) {
+      totalCtrl.abort(
+        makeAbortReason("total_timeout", `LLMActivity total deadline ${policy.totalMs}ms exceeded`),
+      )
+      return
+    }
+    totalTimer = setTimeout(() => {
+      totalCtrl.abort(
+        makeAbortReason("total_timeout", `LLMActivity total deadline ${policy.totalMs}ms exceeded`),
+      )
+    }, remain)
+  }
+  const beginPause = () => {
+    pauseDepth++
+    if (pauseDepth !== 1) return
+    pausedStartedAt = Date.now()
+    if (totalTimer) clearTimeout(totalTimer)
+    totalTimer = undefined
+  }
+  const endPause = () => {
+    if (pauseDepth <= 0) return
+    pauseDepth--
+    if (pauseDepth !== 0) return
+    if (pausedStartedAt !== undefined) {
+      pausedTotalMs += Date.now() - pausedStartedAt
+      pausedStartedAt = undefined
+    }
+    armTotalTimer()
+  }
+  const closePauseWindow = () => {
+    if (pauseDepth <= 0) return
+    if (pausedStartedAt !== undefined) {
+      pausedTotalMs += Date.now() - pausedStartedAt
+      pausedStartedAt = undefined
+    }
+    pauseDepth = 0
+    armTotalTimer()
+  }
+  armTotalTimer()
 
   let attempt = 0
 
@@ -493,6 +543,12 @@ export async function withLLMActivity<T>(
       if (totalCtrl.signal.aborted) {
         emitTerminal("failed", "total_timeout", totalCtrl.signal.reason)
         throw new LLMActivityError("total_timeout", attempt, totalCtrl.signal.reason)
+      }
+      if (remainingTotalMs() <= 0) {
+        const reason = makeAbortReason("total_timeout", `LLMActivity total deadline ${policy.totalMs}ms exceeded`)
+        totalCtrl.abort(reason)
+        emitTerminal("failed", "total_timeout", reason)
+        throw new LLMActivityError("total_timeout", attempt, reason)
       }
 
       // Per-attempt: first-byte gate + lazy idle gate.
@@ -549,23 +605,38 @@ export async function withLLMActivity<T>(
         },
         pause: (reason: string) => {
           if (terminalEmitted) return
+          beginPause()
           idleHolder.gate?.pause()
           sink({ type: "paused", id, ts: Date.now(), reason })
         },
         resume: (reason: string) => {
           if (terminalEmitted) return
           idleHolder.gate?.resume()
+          endPause()
           sink({ type: "resumed", id, ts: Date.now(), reason })
         },
       }
 
       try {
         const value = await attemptFn(run)
+        closePauseWindow()
         clearTimeout(firstByteTimer)
         idleHolder.gate?.dispose()
+        if (externalProxy.signal.aborted || external.aborted) {
+          emitTerminal("aborted", "external_abort", externalProxy.signal.reason)
+          throw new LLMActivityAbortedError(attempt, externalProxy.signal.reason)
+        }
+        if (totalCtrl.signal.aborted || remainingTotalMs() <= 0) {
+          const reason = totalCtrl.signal.reason ??
+            makeAbortReason("total_timeout", `LLMActivity total deadline ${policy.totalMs}ms exceeded`)
+          if (!totalCtrl.signal.aborted) totalCtrl.abort(reason)
+          emitTerminal("failed", "total_timeout", reason)
+          throw new LLMActivityError("total_timeout", attempt, reason)
+        }
         emitTerminal("done")
         return value
       } catch (err) {
+        closePauseWindow()
         clearTimeout(firstByteTimer)
         idleHolder.gate?.dispose()
 
@@ -635,7 +706,7 @@ export async function withLLMActivity<T>(
       }
     }
   } finally {
-    clearTimeout(totalTimer)
+    if (totalTimer) clearTimeout(totalTimer)
     external.removeEventListener("abort", onExternal)
     if (!terminalEmitted) {
       // Defensive guard — every path above should have emitted, but if a

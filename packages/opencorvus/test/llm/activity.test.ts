@@ -407,6 +407,105 @@ test("total_timeout terminates with cls=total_timeout when retries keep failing 
   expect(term.cls).toBe("total_timeout")
 })
 
+test("total deadline does not advance while activity is paused for a tool call", async () => {
+  const { events, sink } = record()
+  const result = await withLLMActivity(
+    CTX,
+    fastPolicy({ totalMs: 60, firstByteMs: 50, idleMs: 50, maxRetries: { default: 0 } }),
+    new AbortController().signal,
+    async (run) => {
+      run.bump("first-byte")
+      run.pause("tool-call")
+      await new Promise((r) => setTimeout(r, 120))
+      expect(run.signal.aborted).toBe(false)
+      run.resume("tool-call")
+      return "done"
+    },
+    sink,
+  )
+
+  expect(result).toBe("done")
+  const c = counts(events)
+  expect(c.paused).toBe(1)
+  expect(c.resumed).toBe(1)
+  const term = events.find((e) => e.type === "terminal") as Extract<LLMActivityEvent, { type: "terminal" }>
+  expect(term.outcome).toBe("done")
+})
+
+test("total deadline resumes after a paused tool call", async () => {
+  const { events, sink } = record()
+  await expect(
+    withLLMActivity(
+      CTX,
+      fastPolicy({ totalMs: 50, firstByteMs: 50, idleMs: 200, maxRetries: { default: 0 } }),
+      new AbortController().signal,
+      async (run) => {
+        run.bump("first-byte")
+        run.pause("tool-call")
+        await new Promise((r) => setTimeout(r, 80))
+        run.resume("tool-call")
+        await new Promise((r) => setTimeout(r, 80))
+        run.signal.throwIfAborted()
+        return "unreachable"
+      },
+      sink,
+    ),
+  ).rejects.toThrow(LLMActivityError)
+
+  const c = counts(events)
+  expect(c.paused).toBe(1)
+  expect(c.resumed).toBe(1)
+  const term = events.find((e) => e.type === "terminal") as Extract<LLMActivityEvent, { type: "terminal" }>
+  expect(term.outcome).toBe("failed")
+  expect(term.cls).toBe("total_timeout")
+})
+
+test("total deadline beats a successful return when attempt does not check signal", async () => {
+  const { events, sink } = record()
+  await expect(
+    withLLMActivity(
+      CTX,
+      fastPolicy({ totalMs: 30, firstByteMs: 50, idleMs: 200, maxRetries: { default: 0 } }),
+      new AbortController().signal,
+      async (run) => {
+        run.bump("first-byte")
+        await new Promise((r) => setTimeout(r, 80))
+        return "late-success"
+      },
+      sink,
+    ),
+  ).rejects.toThrow(LLMActivityError)
+
+  const term = events.find((e) => e.type === "terminal") as Extract<LLMActivityEvent, { type: "terminal" }>
+  expect(term.outcome).toBe("failed")
+  expect(term.cls).toBe("total_timeout")
+})
+
+test("external abort during pause beats a successful return", async () => {
+  const { events, sink } = record()
+  const ext = new AbortController()
+  const promise = withLLMActivity(
+    CTX,
+    fastPolicy({ totalMs: 100, firstByteMs: 50, idleMs: 50, maxRetries: { default: 0 } }),
+    ext.signal,
+    async (run) => {
+      run.bump("first-byte")
+      run.pause("tool-call")
+      await new Promise((r) => setTimeout(r, 30))
+      ext.abort(new Error("operator cancel"))
+      await new Promise((r) => setTimeout(r, 30))
+      run.resume("tool-call")
+      return "late-success"
+    },
+    sink,
+  )
+
+  await expect(promise).rejects.toThrow(LLMActivityAbortedError)
+  const term = events.find((e) => e.type === "terminal") as Extract<LLMActivityEvent, { type: "terminal" }>
+  expect(term.outcome).toBe("aborted")
+  expect(term.cls).toBe("external_abort")
+})
+
 test("policy accepts firstByteMs below idleMs because the gates cover different phases", async () => {
   const { events, sink } = record()
   const result = await withLLMActivity(
