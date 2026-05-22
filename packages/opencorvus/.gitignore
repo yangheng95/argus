@@ -21,8 +21,8 @@ build/
 *.db-wal
 *.tsbuildinfo
 
-# Per-run session benchmark logs (script/benchmark/runs/_session-*.out)
-script/benchmark/runs/_session-*.out
+# Benchmark run artifacts (session logs, ndjson, visual-diff output) — generated, not source
+script/benchmark/runs/
 coverage/
 .cache/
 .turbo/
