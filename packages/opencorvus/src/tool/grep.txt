@@ -1,6 +1,7 @@
 - Fast local codebase content search tool that works with any repository size
 - Searches file contents in the current repository/workspace using regular expressions
 - Tool name: `search_code`
+- Required input shape: `{"pattern": "<regex>"}`. The search string field is named `pattern`; do not use `query`, `regex`, `search`, or `text`.
 - Use this tool FIRST for repo-local questions: locating files, symbols, imports, config keys, tests, error strings, and existing behavior
 - Prefer this over external code search whenever the answer may already exist in the current project
 - Supports full regex syntax (eg. "log.*Error", "function\s+\w+", etc.)
