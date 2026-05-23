@@ -24,17 +24,18 @@ export function TaskDirContent() {
   const dirTitle = createMemo(() => dir() || t("cwd.unavailable"));
   const dirEmpty = createMemo(() => (dir() ? "false" : "true"));
 
+  // VcsBadge is mounted as a sibling at #solidTaskVcsMount by main.tsx (see
+  // the module header above) — DO NOT also render it here. Embedding it inside
+  // TaskDirContent's fragment caused the branch badge to render twice in the
+  // task header row (visible as duplicated "master" tokens on the cwd line).
   return (
-    <>
-      <span
-        class="task-dir"
-        id="taskDir"
-        title={dirTitle()}
-        data-empty={dirEmpty()}
-        innerHTML={breadcrumbHtml()}
-      />
-      <VcsBadge />
-    </>
+    <span
+      class="task-dir"
+      id="taskDir"
+      title={dirTitle()}
+      data-empty={dirEmpty()}
+      innerHTML={breadcrumbHtml()}
+    />
   );
 }
 

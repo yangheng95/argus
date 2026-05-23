@@ -43,10 +43,16 @@
   gap: var(--oc-header-gap);
 }
 
+/* The Inspector header is `[title] [actions]` only — the in-between tabs
+ * row was retired with the frontend-preview chain (commit 924ad97af), so
+ * the actions block no longer needs to fill the row or space-between two
+ * siblings. The parent `.sections-header` already uses
+ * `justify-content: space-between`, which keeps the title left-aligned and
+ * the collapse-control right-aligned with the actions group sized to its
+ * intrinsic width. */
 .sections-header-actions.oc-surface-header__actions {
-  flex: 1 1 auto;
-  justify-content: space-between;
-  width: 100%;
+  flex: 0 0 auto;
+  justify-content: flex-end;
 }
 
 .panel-header-collapse-mount {
