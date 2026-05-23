@@ -55,7 +55,7 @@ const OUT_EN = path.join(REPO_ROOT, "docs", "product", "en", "reference", "api.m
 const OUT_ZH = path.join(REPO_ROOT, "docs", "product", "zh-CN", "reference", "api.md")
 
 function loadJson<T>(p: string): T {
-  return JSON.parse(fs.readFileSync(p, "utf8")) as T
+  return JSON.parse(fs.readFileSync(p, "utf8").replace(/^\uFEFF/, "")) as T
 }
 
 function firstSegment(p: string): string {
