@@ -35,20 +35,27 @@ describe("OpenAI-compatible vision transport", () => {
                 ],
               },
             ],
-            maxOutputTokens: 64,
+            // CZ Kimi K2.6 has thinking enabled by default — most output
+            // goes to reasoning_content. 64 tokens runs out mid-reasoning so
+            // `content` is null. Give it enough budget to also emit text.
+            maxOutputTokens: 512,
             timeoutMs: false,
-            abortSignal: AbortSignal.timeout(60_000),
+            abortSignal: AbortSignal.timeout(120_000),
           })
 
-          let text = ""
+          // AI SDK v6 delta parts carry token text in `text:` (not `delta:` /
+          // `textDelta:`). Accumulate both text-delta and reasoning-delta —
+          // reasoning-content is where Kimi K2.6 (default thinking mode) puts
+          // its image observation.
+          let observed = ""
           for await (const part of result.fullStream) {
-            if (part.type === "text-delta") {
-              text += (part as { delta?: string; textDelta?: string }).delta ?? (part as { textDelta?: string }).textDelta ?? ""
+            if (part.type === "text-delta" || part.type === "reasoning-delta") {
+              observed += (part as { text?: string; delta?: string }).text ?? (part as { delta?: string }).delta ?? ""
             }
             if (part.type === "error") throw part.error
           }
 
-          expect(text.toLowerCase()).toMatch(/image|pixel|png|1x1|small|tiny|white|transparent|black/)
+          expect(observed.toLowerCase()).toMatch(/image|pixel|png|1x1|small|tiny|white|transparent|black/)
         },
       })
     },

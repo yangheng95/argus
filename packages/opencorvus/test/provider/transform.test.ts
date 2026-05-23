@@ -483,7 +483,11 @@ describe("ProviderTransform.message - local attachment transport", () => {
         {},
       ) as any[]
 
-      expect(result[0].content[0].data).toBe(`data:image/png;base64,${pngBytes.toString("base64")}`)
+      // AI SDK v6 contract: `data` carries raw base64 — the openai-compatible
+      // adapter prepends `data:<mediaType>;base64,` itself when serializing
+      // to image_url. Returning a full data URL here double-wraps and CZ
+      // Kimi rejects HTTP 500 "Non-base64 digit found".
+      expect(result[0].content[0].data).toBe(pngBytes.toString("base64"))
     })
   })
 
@@ -556,7 +560,7 @@ describe("ProviderTransform.message - local attachment transport", () => {
         {},
       ) as any[]
 
-      expect(result[0].content[0].data).toBe(`data:application/pdf;base64,${pdfBytes.toString("base64")}`)
+      expect(result[0].content[0].data).toBe(pdfBytes.toString("base64"))
     })
   })
 
@@ -579,7 +583,7 @@ describe("ProviderTransform.message - local attachment transport", () => {
       ) as any[]
 
       expect(result[0].content[0]).toEqual({ type: "text", text: "look" })
-      expect(result[0].content[1].data).toBe(`data:image/png;base64,${pngBytes.toString("base64")}`)
+      expect(result[0].content[1].data).toBe(pngBytes.toString("base64"))
       expect(result[0].content[2].data).toBe("https://example.com/keep.png")
     })
   })
