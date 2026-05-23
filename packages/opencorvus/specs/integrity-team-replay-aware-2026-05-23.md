@@ -70,25 +70,6 @@ because the supervisor prompt had no replay memory and every stream said
 - Reviewer count should be prompted from scale and phase: broad first review
   can use more reviewers; narrow re-review can use fewer targeted reviewers.
 - The UI and review stream should show the real integrity attempt number.
-- Prior reviewer focuses must be rendered as inspection history, never as a
-  coverage map; semantic surface match drives reviewer selection.
-
-## Plan Updates From Claude Review (2026-05-23)
-
-- Prior reviewer focuses are inspection history, not coverage proof. The
-  supervisor must re-walk the task surface and match reviewers by semantic
-  responsibility, including surfaces prior rounds may have missed.
-- `recordIntegrityAttempt` must materialize `payload.attempts` from the same
-  ordered artifact list used by replay rendering, avoiding a second counter
-  source for stream, UI, and completion consumers.
-- Legacy `packages/opencorvus/src/integrity/agent.ts` has zero production
-  import call sites after grep. This PR retires that team-less implementation
-  and its dimension-only support files instead of carrying a replay
-  compatibility path.
-- Code review found `recordIntegrityAttempt` currently omits
-  `payload.attempts` rather than persisting the observed bad `1`; the required
-  write-time materialized copy still lands here and still uses the ordered
-  artifact list as its single source.
 
 Non-goals:
 
@@ -158,8 +139,8 @@ rg -n "reviewIntegrity\(|runIntegrityReviewOnce|findLatestIntegrityAttemptArtifa
 
 | Location | Current behavior | Required change |
 | -------- | ---------------- | --------------- |
-| `packages/opencorvus/src/integrity/agent.ts:373` | Legacy same-name function, not exported by `integrity/index.ts`; grep found no production import callers. | Delete this old path in this PR so replay wiring has one active source. |
-| `packages/opencorvus/test/integrity/agent.test.ts:*` | Tests import `../../src/integrity/agent`, the legacy implementation. | Delete with the legacy file; active coverage belongs to `team-agent` and `team-schema` tests. |
+| `packages/opencorvus/src/integrity/agent.ts:373` | Legacy same-name function, not exported by `integrity/index.ts`. | Do not add replay compatibility to this old path. Before implementation, confirm no active source import remains; if only legacy tests use it, retire/delete in a separate cleanup rather than dual-wiring. |
+| `packages/opencorvus/test/integrity/agent.test.ts:*` | Tests import `../../src/integrity/agent`, the legacy implementation. | Not a replay-aware team-agent test. Do not update these as if they covered the active path; either leave until legacy removal or delete with the legacy file in a separate change. |
 | `packages/opencorvus/test/orchestrator/tools.test.ts:65,105,1543,...` | Mocks `@/integrity.reviewIntegrity`. | Add assertions that orchestrator passes `replayContext.attemptNumber`, prior findings, and changed files since last review. |
 | `packages/opencorvus/test/integrity/team-schema.test.ts:34` | Uses `attempts: 1` payload fixture. | Add a payload fixture for `attempts: 2`; schema itself already permits positive integers. |
 | `packages/opencorvus/test/server/task-conversation-routes.test.ts:78` | Event fixture has `attempts: 1`. | Keep if testing first attempt; add/adjust only if route behavior should display attempt #2. |
@@ -244,8 +225,16 @@ export type IntegrityReviewScaleSignals = {
   phase?: "pre_build" | "post_build"
 }
 
+export type SpecSnapshotLineage = {
+  taskID: string
+  activeSpecSnapshotID: string
+  inheritedSpecSnapshotIDs: string[]
+  reason: "active_only" | "integrity_correction_lineage"
+}
+
 export type IntegrityReplayContext = {
   attemptNumber: number
+  lineage: SpecSnapshotLineage
   priorAttempts: IntegrityPriorAttemptSummary[]
   buildEvidenceSinceLastReview: IntegrityBuildEvidenceSinceLastReview
   scaleSignals: IntegrityReviewScaleSignals
@@ -257,7 +246,7 @@ The helper should expose:
 ```ts
 export function buildIntegrityReplayContext(input: {
   taskID: string
-  specSnapshotID: string
+  lineage: SpecSnapshotLineage
   phase?: "pre_build" | "post_build"
   goals: GoalContractFields[]
   requirements?: ParsedRequirement[]
@@ -266,33 +255,37 @@ export function buildIntegrityReplayContext(input: {
 }): IntegrityReplayContext
 
 export function renderIntegrityReplayContextPrompt(context: IntegrityReplayContext): string
+
+export type IntegrityAttemptArtifactRow = {
+  artifactID: string
+  taskID: string
+  specSnapshotID: string
+  timeCreated: number
+  payload: unknown
+}
+
+export function listIntegrityAttemptArtifacts(input: {
+  taskID: string
+  lineage: SpecSnapshotLineage
+  phase?: "pre_build" | "post_build"
+}): IntegrityAttemptArtifactRow[]
 ```
 
 Attempt numbering source:
 
-- Add `listIntegrityAttemptArtifacts({ taskID, specSnapshotID })` in
-  `engine/store.ts`.
-- Count same-task, same-active-spec attempts from that list; current attempt is
-  `priorAttempts.length + 1`.
+- Add `listIntegrityAttemptArtifacts({ taskID, lineage })` in
+  `engine/store.ts`, where `lineage` is the same-task
+  `SpecSnapshotLineage` above.
+- Count same-task attempts across the active snapshot plus inherited
+  corrective snapshots from that list; current attempt is `priorAttempts.length
+  + 1`.
 - Do not use a separate counter table or host max-round setting.
 - Do not rely on `payload.attempt_number`; artifact order is the source.
 
-### Persisted attempt field must use the same counter
-
-`recordIntegrityAttempt` writes `payload.attempts` into the appended row. After
-this change, it must compute the value as
-`listIntegrityAttemptArtifacts({ taskID, specSnapshotID }).length + 1` AT WRITE
-TIME, before the new row is appended. This makes `payload.attempts` agree with
-the rendered prompt attempt number and removes the dual source (rule 8). The
-single counter source remains the ordered artifact list; the payload field is a
-materialized copy for downstream consumers that already read it (UI, completion
-event, stream events). Do not let the prompt renderer and the payload writer
-disagree.
-
 Phase handling:
 
-- Replay memory should list prior attempts for the same task and active spec
-  snapshot, with each attempt's `phase` rendered.
+- Replay memory should list prior attempts for the same task and supplied spec
+  snapshot lineage, with each attempt's `phase` rendered.
 - Workflow gates may still use `findLatestIntegrityAttemptArtifact({ phase:
   "post_build" })`. That is a different data-integrity question from prompt
   replay and should stay latest-only.
@@ -479,16 +472,6 @@ reviewer to verify it as persistent with evidence rather than renaming it as a
 new finding.
 ```
 
-```text
-Prior reviewer focuses are the list of surfaces that were inspected, not a proof
-that those surfaces are healthy or that uninspected surfaces are absent.
-Re-walk the actual task surface from the user request, REQ rows, goals,
-acceptance specs, contract graph, and changed files. If a category looks
-uninspected in prior rounds, do not assume it is irrelevant -- it may have been
-missed. Match reviewers to surface by semantic responsibility, not by
-similarity to prior reviewer ids or names.
-```
-
 Reviewer count scaling wording:
 
 ```text
@@ -641,9 +624,9 @@ First review path:
 Re-review path:
 
 - Risk: helper scopes attempts too broadly and injects stale findings from a
-  different spec snapshot.
-- Mitigation: list attempts by same task and active spec snapshot; render phase
-  explicitly.
+  different task or unrelated spec snapshot.
+- Mitigation: list attempts by same-task `SpecSnapshotLineage`; render phase
+  and active/inherited snapshot ids explicitly.
 - Rollback: revert helper wiring and prompt section in one commit; artifacts
   remain append-only and valid.
 
@@ -673,19 +656,249 @@ Reviewer count behavior:
 
 ## Implementation Checklist
 
-1. [x] Add `listIntegrityAttemptArtifacts` and tests; make latest helper
+1. [ ] Add `listIntegrityAttemptArtifacts` and tests; make latest helper
    delegate to it.
-2. [x] Add `integrity/replay-context.ts` helper and unit tests.
-3. [x] Add prompt renderer snapshot tests for first review and re-review.
-4. [x] Update `recordIntegrityAttempt` to compute `attempts` from the artifact
-   list at write time; add a regression test that two sequential records on
-   the same task/spec produce payloads with `attempts=1` then `attempts=2`.
-5. [x] Extend `team-agent.ts` input types and replace all hard-coded attempt
+2. [ ] Add `integrity/replay-context.ts` helper and unit tests.
+3. [ ] Add prompt renderer snapshot tests for first review and re-review.
+4. [ ] Extend `team-agent.ts` input types and replace all hard-coded attempt
    values.
-6. [x] Add replay sections to supervisor planning, reviewer, and consensus
+5. [ ] Add replay sections to supervisor planning, reviewer, and consensus
    prompts.
-7. [x] Wire `runIntegrityReviewOnce` in `orchestrator/tools.ts`.
-8. [x] Wire `runDeliveryIntegrityReview` in `delivery/tools.ts`.
-9. [x] Update mocks/tests for all active `reviewIntegrity` callers.
-10. [x] Add integration test for attempt #2 prompt contents.
-11. [ ] Run targeted integrity/orchestrator/delivery tests.
+6. [ ] Wire `runIntegrityReviewOnce` in `orchestrator/tools.ts`.
+7. [ ] Wire `runDeliveryIntegrityReview` in `delivery/tools.ts`.
+8. [ ] Update mocks/tests for all active `reviewIntegrity` callers.
+9. [ ] Add integration test for attempt #2 prompt contents.
+10. [ ] Run targeted integrity/orchestrator/delivery tests.
+
+## Plan Updates From Patched Review (2026-05-24): Shared Prompt Cap Owner
+
+This spec is the single owner of prompt-growth capping for integrity replay,
+integrity-derived build feedback, orchestrator integrity history rendering,
+and severity/maturity replay context. Consumer specs may pass their own
+surface name and rendered facts, but they must not define numeric caps.
+
+Shared cap constants:
+
+```ts
+export type SharedPromptBudget = {
+  totalTokenCap: 12000
+  totalCharCap: 48000
+  maxRenderedPriorAttempts: 8
+  latestAttemptFullTextCharCap: 16000
+  persistentRootsCharCap: 12000
+  changedEvidenceCharCap: 10000
+  oldAttemptSummaryCharCap: 800
+  findingDescriptionCharCap: 2400
+  findingRepairCharCap: 1600
+}
+```
+
+Rules:
+
+- `totalTokenCap=12000` is the semantic budget for all replay-derived prompt
+  additions on one prompt surface. `totalCharCap=48000` is the deterministic
+  fallback when no tokenizer is available. The renderer must cap by whichever
+  limit is reached first.
+- Render at most `maxRenderedPriorAttempts=8` prior attempts with text.
+  Attempts outside that window are represented only by artifact id, attempt
+  number, verdict, timestamp, and an `omitted_due_to_shared_prompt_cap`
+  summary of at most `oldAttemptSummaryCharCap=800` characters.
+- The latest prior attempt gets first priority and must render every latest
+  blocking finding with bounded complete text. A field may be clipped to the
+  per-field caps above, but the finding itself cannot disappear. If all latest
+  blocking findings cannot fit, the caller must materialize a runtime markdown
+  file and render its path rather than silently omit findings.
+- Persistent roots get second priority. Roots present in the latest attempt
+  and roots with repeated lineage history render before older one-off roots.
+- Changed files and build/delivery evidence since the latest attempt get
+  third priority. File paths and current changed-file evidence render before
+  old reviewer prose.
+- Older attempts get only pointer + summary after the three priority classes
+  above. Old full `team_report_markdown` text is never concatenated into the
+  prompt after the cap is reached.
+- This is a rendering cap only. It is not a host-side max-round counter and
+  must not affect whether another integrity review, build, question, or
+  failure lane is allowed.
+
+Shared API surface for build/orchestrator/severity:
+
+```ts
+export type SharedPromptSurface =
+  | "integrity_replay"
+  | "build_integrity_feedback"
+  | "orchestrator_integrity_history"
+  | "severity_context"
+
+export type SharedPromptCapInput = {
+  surface: SharedPromptSurface
+  lineage: SpecSnapshotLineage
+  latestAttempt?: IntegrityPriorAttemptSummary
+  persistentRoots?: Array<{
+    rootID: string
+    canonicalLabel: string
+    firstSeenAttempt: number
+    latestSeenAttempt: number
+    consecutiveAttempts: number[]
+    latestSeverity: "blocking" | "advisory"
+    symptomSummaryMarkdown: string
+  }>
+  changedFiles: string[]
+  changedEvidenceMarkdown?: string
+  oldAttempts: IntegrityPriorAttemptSummary[]
+  reviewerTextBlocks?: string[]
+  userRequestQuotes?: string[]
+  runtimeMarkdownDir?: string
+}
+
+export type SharedPromptCapOutput = {
+  promptMarkdown: string
+  capHit: boolean
+  omittedAttempts: Array<{
+    attemptNumber: number
+    artifactID: string
+    verdict?: string
+    summary: string
+  }>
+  runtimeMarkdownPath?: string
+  sanitizerReport: SanitizedPromptTextReport
+}
+
+export function getSharedIntegrityPromptBudget(): SharedPromptBudget
+
+export function renderSharedIntegrityPromptContext(
+  input: SharedPromptCapInput,
+): SharedPromptCapOutput
+```
+
+`buildIntegrityReplayContext` still builds the raw replay facts. The shared
+cap renderer is the only function that decides what subset is safe to place
+directly in a prompt.
+
+## Plan Updates From Patched Review (2026-05-24): SpecSnapshotLineage API
+
+`SpecSnapshotLineage` is the single replay-aware type for same-task spec
+snapshot ancestry. It is the active spec snapshot plus ordered predecessor
+snapshots that were produced by integrity correction, `modify_goal`, or
+architect refinement inside the same task. It never crosses `taskID`.
+
+```ts
+export type SpecSnapshotLineage = {
+  taskID: string
+  activeSpecSnapshotID: string
+  inheritedSpecSnapshotIDs: string[]
+  reason: "active_only" | "integrity_correction_lineage"
+}
+
+export type IntegrityAttemptArtifactRow = {
+  artifactID: string
+  taskID: string
+  specSnapshotID: string
+  timeCreated: number
+  payload: unknown
+}
+
+export type BuildIntegrityReplayContextInput = {
+  taskID: string
+  lineage: SpecSnapshotLineage
+  phase?: "pre_build" | "post_build"
+  goals: GoalContractFields[]
+  requirements?: ParsedRequirement[]
+  deliveries: DeliveryRow[]
+  goalRuns: GoalRunRow[]
+}
+
+export function buildIntegrityReplayContext(
+  input: BuildIntegrityReplayContextInput,
+): IntegrityReplayContext
+
+export function listIntegrityAttemptArtifacts(input: {
+  taskID: string
+  lineage: SpecSnapshotLineage
+  phase?: "pre_build" | "post_build"
+}): IntegrityAttemptArtifactRow[]
+```
+
+Backwards impact: the already-implemented replay-aware code path that still
+accepts `specSnapshotID: string` must be upgraded in a later implementation
+PR. This spec patch does not require code changes, but future code must not
+keep an adapter that silently falls back to active-snapshot-only history.
+Build-uptake and orchestrator-stuck specs import `SpecSnapshotLineage` from
+this replay-aware API instead of defining their own lineage type.
+
+## Plan Updates From Patched Review (2026-05-24): Shared Prompt Sanitizer Owner
+
+This spec is also the single owner of sanitization for untrusted text rendered
+into integrity-related prompt sections. The sanitizer runs before the shared
+prompt cap so removed or escaped characters cannot consume budget
+unpredictably.
+
+Accepted input:
+
+- JavaScript string / UTF-8 text containing Unicode scalar values. Human
+  language text, including Chinese and other non-ASCII scripts, is preserved.
+- Newline, carriage return, and horizontal tab are accepted as layout
+  characters. All other C0/C1 control characters are escaped or removed as
+  below.
+
+Rejected or escaped input:
+
+- Null bytes become `[NUL REMOVED]`.
+- ANSI escape sequences beginning with `ESC [` or `ESC ]` are removed and
+  counted in `removedAnsiEscapes`.
+- Bidirectional controls such as U+202A..U+202E and U+2066..U+2069 become
+  visible markers like `[BIDI U+202E REMOVED]`.
+- Other control characters in U+0000..U+001F and U+007F..U+009F, except
+  newline/carriage-return/tab, become `[CTRL U+00XX REMOVED]`.
+- Markdown control injection is neutralized for untrusted block text:
+  leading ATX headings (`#`), fenced-code delimiters, HTML block starts,
+  horizontal rules, and setext heading underlines are escaped or rendered
+  inside a quoted block so they cannot create new prompt sections.
+
+Length limits before the shared cap:
+
+- one literal user-request quote: 2000 characters;
+- one finding description: 2400 characters;
+- one required-repair text: 1600 characters;
+- one reviewer prose block: 3000 characters;
+- any other raw untrusted text segment: 12000 characters.
+
+Shared API:
+
+```ts
+export type SanitizedPromptTextReport = {
+  text: string
+  truncated: boolean
+  originalChars: number
+  renderedChars: number
+  removedAnsiEscapes: number
+  removedControls: number
+  removedBidirectionalControls: number
+  escapedMarkdownControls: number
+}
+
+export function sanitizeIntegrityPromptText(input: {
+  text: string
+  field:
+    | "user_request_quote"
+    | "finding_description"
+    | "finding_repair"
+    | "reviewer_text"
+    | "changed_evidence"
+    | "generic"
+  maxChars?: number
+  markdownContext: "inline" | "block"
+}): SanitizedPromptTextReport
+```
+
+Build feedback, orchestrator history, severity context, and scope/user-request
+quote rendering must call this sanitizer by reference. They must not define
+local ANSI, bidi, control-character, or markdown-heading rules.
+
+## Plan Updates From Patched Review (2026-05-24)
+
+- B-1/N-1: added the shared prompt cap owner and shared sanitizer owner in
+  this replay-aware spec; consumer specs must reference these sections rather
+  than declare local caps or sanitizer rules.
+- B-2/N-2: upgraded replay-aware helper APIs from `specSnapshotID` to
+  `SpecSnapshotLineage` and documented the later implementation PR needed to
+  sync already-landed code.
