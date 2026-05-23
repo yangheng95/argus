@@ -185,15 +185,25 @@ export namespace ProviderTransform {
     const mime = filePartMime(record)
     if (!mime) return part
 
-    const inline = async (value: unknown): Promise<string | undefined> => {
-      if (typeof value !== "string" || value.startsWith("data:")) return undefined
-      return await AttachmentStore.dataUrlFromReference(value, mime).catch(() => undefined)
-    }
+    // AI SDK v6 `file` part shape contract diverges by field:
+    //   - `data`: openai-compatible adapter ALWAYS prepends `data:<mediaType>;base64,`
+    //     itself when serializing to image_url. Feeding it a full data URL
+    //     here double-wraps → CZ Kimi K2.6 rejects HTTP 500 "Non-base64 digit
+    //     found". Inline must be RAW base64 payload only.
+    //   - `url`: adapter forwards verbatim. Full data URL is correct.
+    const ref = (value: unknown): string | undefined =>
+      typeof value === "string" && value.length > 0 && !value.startsWith("data:") ? value : undefined
 
-    const data = await inline(record.data)
-    if (data) return { ...record, data }
-    const url = await inline(record.url)
-    if (url) return { ...record, url }
+    const dataRef = ref(record.data)
+    if (dataRef) {
+      const dataUrl = await AttachmentStore.dataUrlFromReference(dataRef, mime).catch(() => undefined)
+      if (dataUrl) return { ...record, data: dataUrl.replace(/^data:[^;]+;base64,/, "") }
+    }
+    const urlRef = ref(record.url)
+    if (urlRef) {
+      const dataUrl = await AttachmentStore.dataUrlFromReference(urlRef, mime).catch(() => undefined)
+      if (dataUrl) return { ...record, url: dataUrl }
+    }
     return part
   }
 
