@@ -5,7 +5,11 @@ import { EngineSpecSnapshotTable, EngineTaskTable } from "../../src/engine/engin
 import { recordIntegrityAttempt } from "../../src/engine/persist"
 import { findLatestIntegrityAttemptArtifact, listIntegrityAttemptArtifacts } from "../../src/engine/store"
 import type { DeliveryRow, GoalRunRow } from "../../src/engine/store"
-import { buildIntegrityReplayContext, renderIntegrityReplayContextPrompt } from "../../src/integrity/replay-context"
+import {
+  buildIntegrityReplayContext,
+  buildSpecSnapshotLineage,
+  renderIntegrityReplayContextPrompt,
+} from "../../src/integrity/replay-context"
 import type { GoalContractFields } from "../../src/pipeline/types"
 import { resetDatabase } from "../fixture/db"
 
@@ -51,6 +55,15 @@ function seedTask(input: { projectID: string; taskID: string; specIDs: string[];
         .run()
     }
   })
+}
+
+function lineage(taskID: string, activeSpecSnapshotID: string, inheritedSpecSnapshotIDs: string[] = []) {
+  return {
+    taskID,
+    activeSpecSnapshotID,
+    inheritedSpecSnapshotIDs,
+    reason: inheritedSpecSnapshotIDs.length > 0 ? "integrity_correction_lineage" as const : "active_only" as const,
+  }
 }
 
 function goal(id: string, acceptanceSpecs = 1): GoalContractFields {
@@ -141,7 +154,7 @@ describe("integrity replay context artifact source", () => {
     const firstPost = recordIntegrityAttempt({
       taskID,
       sessionID: `ses_replay_1_${stamp}`,
-      specSnapshotID: specID,
+      lineage: lineage(taskID, specID),
       verdict: "needs_correction",
       phase: "post_build",
       now: now + 10,
@@ -149,7 +162,7 @@ describe("integrity replay context artifact source", () => {
     const latestPost = recordIntegrityAttempt({
       taskID,
       sessionID: `ses_replay_2_${stamp}`,
-      specSnapshotID: specID,
+      lineage: lineage(taskID, specID),
       verdict: "concerns",
       phase: "post_build",
       now: now + 20,
@@ -157,7 +170,7 @@ describe("integrity replay context artifact source", () => {
     const latestAnyPhase = recordIntegrityAttempt({
       taskID,
       sessionID: `ses_replay_3_${stamp}`,
-      specSnapshotID: specID,
+      lineage: lineage(taskID, specID),
       verdict: "pass",
       phase: "pre_build",
       now: now + 30,
@@ -165,17 +178,21 @@ describe("integrity replay context artifact source", () => {
     recordIntegrityAttempt({
       taskID,
       sessionID: `ses_replay_other_${stamp}`,
-      specSnapshotID: otherSpecID,
+      lineage: lineage(taskID, otherSpecID),
       verdict: "pass",
       phase: "post_build",
       now: now + 40,
     })
 
-    const allForSpec = listIntegrityAttemptArtifacts({ taskID, specSnapshotID: specID })
+    const allForSpec = listIntegrityAttemptArtifacts({ taskID, lineage: lineage(taskID, specID) })
     expect(allForSpec.map((row) => row.id)).toEqual([latestAnyPhase, latestPost, firstPost])
     expect(findLatestIntegrityAttemptArtifact({ taskID, specSnapshotID: specID })?.id).toBe(latestAnyPhase)
 
-    const postBuildOnly = listIntegrityAttemptArtifacts({ taskID, specSnapshotID: specID, phase: "post_build" })
+    const postBuildOnly = listIntegrityAttemptArtifacts({
+      taskID,
+      lineage: lineage(taskID, specID),
+      phase: "post_build",
+    })
     expect(postBuildOnly.map((row) => row.id)).toEqual([latestPost, firstPost])
     expect(findLatestIntegrityAttemptArtifact({ taskID, specSnapshotID: specID, phase: "post_build" })?.id).toBe(
       latestPost,
@@ -187,7 +204,7 @@ describe("integrity replay context artifact source", () => {
     const taskID = `tsk_replay_first_${now.toString(16)}`
     const ctx = buildIntegrityReplayContext({
       taskID,
-      specSnapshotID: `spec_replay_first_${now.toString(16)}`,
+      lineage: lineage(taskID, `spec_replay_first_${now.toString(16)}`),
       phase: "post_build",
       goals: [goal("settings", 2)],
       requirements: [
@@ -228,6 +245,75 @@ describe("integrity replay context artifact source", () => {
     })
   })
 
+  test("pulls prior attempts across one and two inherited spec snapshots", () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `proj_replay_lineage_${stamp}`
+    const taskID = `tsk_replay_lineage_${stamp}`
+    const firstSpecID = `spec_replay_lineage_1_${stamp}`
+    const secondSpecID = `spec_replay_lineage_2_${stamp}`
+    const activeSpecID = `spec_replay_lineage_3_${stamp}`
+    seedTask({ projectID, taskID, specIDs: [firstSpecID, secondSpecID, activeSpecID], now })
+
+    const firstAttemptID = recordIntegrityAttempt({
+      taskID,
+      sessionID: `ses_replay_lineage_1_${stamp}`,
+      lineage: lineage(taskID, firstSpecID),
+      verdict: "needs_correction",
+      phase: "post_build",
+      reason: "Initial snapshot missed persistence.",
+      now: now + 10,
+    })
+    const secondAttemptID = recordIntegrityAttempt({
+      taskID,
+      sessionID: `ses_replay_lineage_2_${stamp}`,
+      lineage: lineage(taskID, secondSpecID, [firstSpecID]),
+      verdict: "concerns",
+      phase: "post_build",
+      reason: "Corrective snapshot still had concerns.",
+      now: now + 20,
+    })
+
+    const oneAncestorContext = buildIntegrityReplayContext({
+      taskID,
+      lineage: lineage(taskID, secondSpecID, [firstSpecID]),
+      phase: "post_build",
+      goals: [goal("lineage", 1)],
+      requirements: [],
+      deliveries: [],
+      goalRuns: [],
+    })
+    const twoAncestorLineage = buildSpecSnapshotLineage({
+      taskID,
+      activeSpecSnapshotID: activeSpecID,
+    })
+    const twoAncestorContext = buildIntegrityReplayContext({
+      taskID,
+      lineage: twoAncestorLineage,
+      phase: "post_build",
+      goals: [goal("lineage", 1)],
+      requirements: [],
+      deliveries: [],
+      goalRuns: [],
+    })
+
+    expect(oneAncestorContext.priorAttempts.map((attempt) => attempt.artifactID)).toEqual([
+      firstAttemptID,
+      secondAttemptID,
+    ])
+    expect(oneAncestorContext.attemptNumber).toBe(3)
+    expect(twoAncestorLineage).toMatchObject({
+      activeSpecSnapshotID: activeSpecID,
+      inheritedSpecSnapshotIDs: [secondSpecID, firstSpecID],
+      reason: "integrity_correction_lineage",
+    })
+    expect(twoAncestorContext.priorAttempts.map((attempt) => attempt.artifactID)).toEqual([
+      firstAttemptID,
+      secondAttemptID,
+    ])
+    expect(twoAncestorContext.attemptNumber).toBe(3)
+  })
+
   test("summarizes prior attempts chronologically and includes only evidence newer than latest review", () => {
     const now = Date.now()
     const stamp = now.toString(16)
@@ -239,7 +325,7 @@ describe("integrity replay context artifact source", () => {
     const firstAttemptID = recordIntegrityAttempt({
       taskID,
       sessionID: `ses_replay_context_1_${stamp}`,
-      specSnapshotID: specID,
+      lineage: lineage(taskID, specID),
       verdict: "needs_correction",
       phase: "post_build",
       reviewers: [{ reviewerID: "rev_settings", scope: "Settings validation", verdict: "needs_correction" }],
@@ -271,7 +357,7 @@ describe("integrity replay context artifact source", () => {
     const secondAttemptID = recordIntegrityAttempt({
       taskID,
       sessionID: `ses_replay_context_2_${stamp}`,
-      specSnapshotID: specID,
+      lineage: lineage(taskID, specID),
       verdict: "concerns",
       phase: "post_build",
       reviewers: [{ reviewerID: "rev_storage", scope: "Storage repair verification", verdict: "concerns" }],
@@ -284,7 +370,7 @@ describe("integrity replay context artifact source", () => {
 
     const ctx = buildIntegrityReplayContext({
       taskID,
-      specSnapshotID: specID,
+      lineage: lineage(taskID, specID),
       phase: "post_build",
       goals: [goal("settings", 1), goal("storage", 1)],
       requirements: [{ id: "REQ-2", type: "explicit", description: "Reject invalid settings" }],
@@ -365,7 +451,7 @@ describe("integrity replay context artifact source", () => {
   test("renders first review replay prompt without fixed-dimension language", () => {
     const ctx = buildIntegrityReplayContext({
       taskID: "tsk_render_first",
-      specSnapshotID: "spec_render_first",
+      lineage: lineage("tsk_render_first", "spec_render_first"),
       phase: "pre_build",
       goals: [goal("first", 1)],
       requirements: [],
@@ -392,7 +478,7 @@ describe("integrity replay context artifact source", () => {
     recordIntegrityAttempt({
       taskID,
       sessionID: `ses_replay_render_${stamp}`,
-      specSnapshotID: specID,
+      lineage: lineage(taskID, specID),
       verdict: "needs_correction",
       phase: "post_build",
       reviewers: [{ reviewerID: "rev_settings", scope: "Settings validation", verdict: "needs_correction" }],
@@ -415,7 +501,7 @@ describe("integrity replay context artifact source", () => {
     })
     const ctx = buildIntegrityReplayContext({
       taskID,
-      specSnapshotID: specID,
+      lineage: lineage(taskID, specID),
       phase: "post_build",
       goals: [goal("settings", 1)],
       requirements: [{ id: "REQ-2", type: "explicit", description: "Reject invalid settings" }],
@@ -455,7 +541,7 @@ describe("integrity replay context artifact source", () => {
     const first = recordIntegrityAttempt({
       taskID,
       sessionID: `ses_attempts_1_${stamp}`,
-      specSnapshotID: specID,
+      lineage: lineage(taskID, specID),
       verdict: "needs_correction",
       phase: "post_build",
       now: now + 10,
@@ -463,13 +549,13 @@ describe("integrity replay context artifact source", () => {
     const second = recordIntegrityAttempt({
       taskID,
       sessionID: `ses_attempts_2_${stamp}`,
-      specSnapshotID: specID,
+      lineage: lineage(taskID, specID),
       verdict: "pass",
       phase: "post_build",
       now: now + 20,
     })
 
-    const attempts = listIntegrityAttemptArtifacts({ taskID, specSnapshotID: specID })
+    const attempts = listIntegrityAttemptArtifacts({ taskID, lineage: lineage(taskID, specID) })
     const firstPayload = attempts.find((row) => row.id === first)?.payload as Record<string, unknown> | undefined
     const secondPayload = attempts.find((row) => row.id === second)?.payload as Record<string, unknown> | undefined
     expect(firstPayload?.attempts).toBe(1)

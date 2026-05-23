@@ -60,7 +60,7 @@ import {
   insertOrchestratorToolOwnershipArtifact,
   listLiveOrchestratorToolOwnership,
 } from "../../src/engine/tool-ownership"
-import { buildIntegrityReplayContext } from "../../src/integrity/replay-context"
+import { buildIntegrityReplayContext, buildSpecSnapshotLineage } from "../../src/integrity/replay-context"
 
 let buildAgentRunImpl: ((input: any) => Promise<any>) | undefined
 let reviewIntegrityImpl: ((input: any) => Promise<any>) | undefined
@@ -82,6 +82,15 @@ function buildToolOptions(label = "build") {
       toolPartID: `prt_${label}_${stamp}`,
     },
   } as any
+}
+
+function activeOnlyLineage(taskID: string, specSnapshotID: string) {
+  return {
+    taskID,
+    activeSpecSnapshotID: specSnapshotID,
+    inheritedSpecSnapshotIDs: [],
+    reason: "active_only" as const,
+  }
 }
 
 function acceptedAcceptance() {
@@ -205,6 +214,7 @@ mock.module("@/integrity", () => ({
   // wiring doesn't blow up in orchestrator-focused suites.
   computeRequirementStatusSnapshot: (input: any) => computeRequirementStatusSnapshotImpl?.(input) ?? [],
   buildIntegrityReplayContext,
+  buildSpecSnapshotLineage,
   applyIntegrityCorrections: (goals: any) => goals,
 }))
 
@@ -3912,7 +3922,7 @@ describe("orchestrator tools", () => {
           recordIntegrityAttempt({
             taskID,
             sessionID: `ses_prior_integrity_${offset}`,
-            specSnapshotID: specID,
+            lineage: activeOnlyLineage(taskID, specID),
             verdict: "needs_correction",
             phase: "post_build",
             perDimension: [
@@ -4002,7 +4012,7 @@ describe("orchestrator tools", () => {
           recordIntegrityAttempt({
             taskID,
             sessionID: `ses_prior_mixed_integrity_${offset}`,
-            specSnapshotID: specID,
+            lineage: activeOnlyLineage(taskID, specID),
             verdict: "needs_correction",
             phase: "post_build",
             perDimension: [
@@ -4120,7 +4130,7 @@ describe("orchestrator tools", () => {
         recordIntegrityAttempt({
           taskID,
           sessionID: "ses_integrity_persisted_block",
-          specSnapshotID: specID,
+          lineage: activeOnlyLineage(taskID, specID),
           verdict: "needs_correction",
           phase: "post_build",
           perDimension: [
@@ -4292,7 +4302,7 @@ describe("orchestrator tools", () => {
         recordIntegrityAttempt({
           taskID,
           sessionID: "ses_integrity_concern_block",
-          specSnapshotID: specID,
+          lineage: activeOnlyLineage(taskID, specID),
           verdict: "concerns",
           phase: "post_build",
           perDimension: [

@@ -39,6 +39,7 @@ import {
   type EngineArtifactKind,
 } from "./engine.sql"
 import { persistEvidence } from "@/verification/persist"
+import type { SpecSnapshotLineage } from "@/integrity/replay-lineage"
 import { LIVE_GOAL_RUN_STATUSES } from "./catalog"
 import { EngineProtocol } from "./protocol"
 import {
@@ -2100,10 +2101,10 @@ export function recordIntegrityAttempt(input: {
   taskID: string
   /** The integrity child session id — surfaces in overlay nesting. */
   sessionID: string
-  /** Spec snapshot the goal set was reviewed against. The orchestrator may
-   *  legitimately re-run integrity after architect lands a NEW snapshot, so
-   *  read_context must scope the latest-attempt lookup by snapshot id. */
-  specSnapshotID: string
+  /** Spec snapshot lineage the goal set was reviewed against. The active
+   *  snapshot is persisted on the artifact; inherited snapshots are used only
+   *  to keep replay attempt numbering consistent across corrective snapshots. */
+  lineage: SpecSnapshotLineage
   verdict: "pass" | "concerns" | "needs_correction"
   /** Per-dimension verdicts so read_context can surface "requirement_fidelity passed
    *  but solution_quality flagged 3 weak_acceptance specs" — losing this
@@ -2157,14 +2158,19 @@ export function recordIntegrityAttempt(input: {
   acceptance?: unknown
   now?: number
 }): string {
+  if (input.taskID !== input.lineage.taskID) {
+    throw new Error(
+      `recordIntegrityAttempt taskID ${input.taskID} does not match lineage taskID ${input.lineage.taskID}.`,
+    )
+  }
   const id = Identifier.ascending("artifact")
   const now = input.now ?? Date.now()
   const attempts = listIntegrityAttemptArtifacts({
     taskID: input.taskID,
-    specSnapshotID: input.specSnapshotID,
+    lineage: input.lineage,
   }).length + 1
   const payload = {
-    spec_snapshot_id: input.specSnapshotID,
+    spec_snapshot_id: input.lineage.activeSpecSnapshotID,
     session_id: input.sessionID,
     verdict: input.verdict,
     phase: input.phase,

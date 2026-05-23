@@ -1,7 +1,10 @@
 import type { GoalContractFields } from "@/pipeline/types"
 import type { ParsedRequirement } from "@/requirements/types"
 import type { DeliveryRow, GoalRunRow } from "@/engine/store"
-import { listIntegrityAttemptArtifacts } from "@/engine/store"
+import { listIntegrityAttemptArtifacts, listSpecSnapshots } from "@/engine/store"
+import type { SpecSnapshotLineage } from "./replay-lineage"
+
+export type { SpecSnapshotLineage } from "./replay-lineage"
 
 export type IntegrityPriorAttemptSummary = {
   attemptNumber: number
@@ -52,31 +55,67 @@ export type IntegrityReviewScaleSignals = {
 
 export type IntegrityReplayContext = {
   attemptNumber: number
+  lineage: SpecSnapshotLineage
   priorAttempts: IntegrityPriorAttemptSummary[]
   buildEvidenceSinceLastReview: IntegrityBuildEvidenceSinceLastReview
   scaleSignals: IntegrityReviewScaleSignals
 }
 
-export function buildIntegrityReplayContext(input: {
+export type BuildIntegrityReplayContextInput = {
   taskID: string
-  specSnapshotID: string
+  lineage: SpecSnapshotLineage
   phase?: "pre_build" | "post_build"
   goals: GoalContractFields[]
   requirements?: ParsedRequirement[]
   deliveries: DeliveryRow[]
   goalRuns: GoalRunRow[]
-}): IntegrityReplayContext {
+}
+
+export function buildSpecSnapshotLineage(input: {
+  taskID: string
+  activeSpecSnapshotID: string
+}): SpecSnapshotLineage {
+  const snapshots = listSpecSnapshots(input.taskID)
+  const active = snapshots.find((snapshot) => snapshot.id === input.activeSpecSnapshotID)
+  if (!active) {
+    throw new Error(
+      `Cannot build SpecSnapshotLineage: snapshot ${input.activeSpecSnapshotID} does not belong to task ${input.taskID}.`,
+    )
+  }
+  const inheritedSpecSnapshotIDs = snapshots
+    .filter(
+      (snapshot) =>
+        snapshot.id !== active.id &&
+        (snapshot.version < active.version ||
+          (snapshot.version === active.version && snapshot.time_created < active.time_created)),
+    )
+    .map((snapshot) => snapshot.id)
+
+  return {
+    taskID: input.taskID,
+    activeSpecSnapshotID: active.id,
+    inheritedSpecSnapshotIDs,
+    reason: inheritedSpecSnapshotIDs.length > 0 ? "integrity_correction_lineage" : "active_only",
+  }
+}
+
+export function buildIntegrityReplayContext(input: BuildIntegrityReplayContextInput): IntegrityReplayContext {
+  if (input.taskID !== input.lineage.taskID) {
+    throw new Error(
+      `IntegrityReplayContext taskID ${input.taskID} does not match lineage taskID ${input.lineage.taskID}.`,
+    )
+  }
   const newestFirstAttempts = listIntegrityAttemptArtifacts({
     taskID: input.taskID,
-    specSnapshotID: input.specSnapshotID,
+    lineage: input.lineage,
   })
   const chronologicalAttempts = newestFirstAttempts.slice().reverse()
   const priorAttempts = chronologicalAttempts.map((row, index): IntegrityPriorAttemptSummary => {
     const payload = asRecord(row.payload)
     return {
       attemptNumber: index + 1,
-      artifactID: row.id,
-      timeCreated: row.time_created,
+      artifactID: row.artifactID,
+      timeCreated: row.timeCreated,
       phase: phaseFrom(payload.phase),
       verdict: verdictFrom(payload.verdict),
       summary: stringFrom(payload.summary) ?? stringFrom(payload.reason),
@@ -99,6 +138,7 @@ export function buildIntegrityReplayContext(input: {
 
   return {
     attemptNumber: priorAttempts.length + 1,
+    lineage: input.lineage,
     priorAttempts,
     buildEvidenceSinceLastReview: {
       sinceAttemptNumber: latestPrior?.attemptNumber,
@@ -129,13 +169,20 @@ export function buildIntegrityReplayContext(input: {
 
 export function renderIntegrityReplayContextPrompt(context: IntegrityReplayContext): string {
   const lines = ["# Integrity Replay Context", "", `Current integrity attempt: #${context.attemptNumber}.`, ""]
+  lines.push(`Spec snapshot lineage: active=${context.lineage.activeSpecSnapshotID}.`)
+  lines.push(
+    `Inherited spec snapshots: ${
+      context.lineage.inheritedSpecSnapshotIDs.length > 0 ? context.lineage.inheritedSpecSnapshotIDs.join(", ") : "(none)"
+    }.`,
+  )
+  lines.push(`Lineage reason: ${context.lineage.reason}.`, "")
   if (context.priorAttempts.length === 0) {
     lines.push(
-      "No prior integrity attempts exist for this task/spec snapshot. Treat this as a first review and choose reviewers from the actual request, goals, requirements, changed files, runtime evidence, and risk surface.",
+      "No prior integrity attempts exist for this task/spec snapshot lineage. Treat this as a first review and choose reviewers from the actual request, goals, requirements, changed files, runtime evidence, and risk surface.",
       "",
     )
   } else {
-    lines.push("Prior attempts for this task/spec:")
+    lines.push("Prior attempts for this task/spec snapshot lineage:")
     for (const attempt of context.priorAttempts) {
       lines.push(
         `- Attempt #${attempt.attemptNumber} at ${new Date(attempt.timeCreated).toISOString()}, phase=${attempt.phase ?? "unknown"}, verdict=${attempt.verdict ?? "unknown"}, reviewers=${attempt.reviewers.length}.`,

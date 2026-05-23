@@ -1679,7 +1679,8 @@ export function createOrchestratorTools(input: {
             .join("\n")
         : "No delivery artifact rows were found; review the requirement status snapshot and repository directly."
 
-    const { reviewIntegrity, computeRequirementStatusSnapshot, buildIntegrityReplayContext } = await import("@/integrity")
+    const { reviewIntegrity, computeRequirementStatusSnapshot, buildIntegrityReplayContext, buildSpecSnapshotLineage } =
+      await import("@/integrity")
     // Project REQ status from DB BEFORE the review fires. The host does not
     // pre-compute completion verdicts (rule 6.1) — it only lays out raw
     // claiming-goal × tip-run × per-spec evidence; the LLM walks it inside
@@ -1705,9 +1706,13 @@ export function createOrchestratorTools(input: {
     )
       ? "post_build"
       : "pre_build"
+    const lineage = buildSpecSnapshotLineage({
+      taskID,
+      activeSpecSnapshotID: activeSpec.id,
+    })
     const replayContext = buildIntegrityReplayContext({
       taskID,
-      specSnapshotID: activeSpec.id,
+      lineage,
       phase,
       goals: goalsForReview,
       requirements,
@@ -1751,7 +1756,7 @@ export function createOrchestratorTools(input: {
       recordIntegrityAttempt({
         taskID,
         sessionID: verdict.sessionID,
-        specSnapshotID: activeSpec.id,
+        lineage,
         verdict: verdict.verdict,
         phase,
         reviewers: verdict.reviewers,
