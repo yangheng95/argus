@@ -24,6 +24,7 @@ import { AttachmentStore } from "@/storage/attachment-store"
 import { Log } from "@/util/log"
 import type { DeliveryInfo, GoalInfo } from "@/delivery/checks"
 import { createIntegrityAcceptanceTools } from "./acceptance-tools"
+import type { IntegrityReplayContext } from "./replay-context"
 import type { RequirementStatusRow } from "./requirement-status"
 import {
   IntegrityReviewCompletedPayloadSchema,
@@ -110,6 +111,7 @@ type ReviewPromptInput = {
   requirementStatus?: RequirementStatusRow[]
   attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>
   acceptance?: IntegrityAcceptanceContext
+  replayContext: IntegrityReplayContext
   signal?: AbortSignal
   taskID?: string
 }
@@ -130,17 +132,23 @@ export async function reviewIntegrity(input: {
   requirementStatus?: RequirementStatusRow[]
   attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>
   acceptance?: IntegrityAcceptanceContext
+  replayContext?: IntegrityReplayContext
   signal?: AbortSignal
   taskID?: string
   parentSessionID?: string
   onSessionCreated?: (sessionID: string) => void
 }): Promise<IntegrityResult & { sessionID: string }> {
+  if (!input.replayContext) {
+    throw new Error("reviewIntegrity requires replayContext. Build it from integrity/replay-context before calling.")
+  }
+  const replayContext = input.replayContext
+  const attemptNumber = replayContext.attemptNumber
   if (input.taskID && !input.parentSessionID) {
     throw new Error(`reviewIntegrity requires parentSessionID for task-backed runs (taskID=${input.taskID}).`)
   }
   if (input.goals.length === 0) {
     const result = createNoGoalsResult()
-    const softSessionID = await emitSoftIntegrity(input, result)
+    const softSessionID = await emitSoftIntegrity(input, result, attemptNumber)
     if (softSessionID) input.onSessionCreated?.(softSessionID)
     return { ...result, sessionID: softSessionID ?? "" }
   }
@@ -148,7 +156,7 @@ export async function reviewIntegrity(input: {
     throw new Error(`reviewIntegrity requires architect_contract_graph when reviewing ${input.goals.length} goal(s).`)
   }
 
-  const promptInput = { ...input, contractGraph: input.contractGraph }
+  const promptInput: ReviewPromptInput = { ...input, contractGraph: input.contractGraph, replayContext }
   const startedAt = Date.now()
   let activeReviewID: string | undefined
 
@@ -171,7 +179,7 @@ export async function reviewIntegrity(input: {
       taskID: input.taskID,
       reviewID: () => activeReviewID,
       phase: "integrity",
-      attempt: () => 1,
+      attempt: () => attemptNumber,
       source: "architect.integrity.supervisor",
     }),
     onSessionCreated: (session) => {
@@ -190,7 +198,7 @@ export async function reviewIntegrity(input: {
               taskID: input.taskID,
               reviewID: activeReviewID,
               phase: "integrity",
-              attempt: 1,
+              attempt: attemptNumber,
               elapsedMs: Date.now() - startedAt,
               summary: "integrity supervisor coordinating reviewer team",
               source: "architect.integrity",
@@ -240,7 +248,7 @@ export async function reviewIntegrity(input: {
       taskID: input.taskID,
       reviewID: () => activeReviewID,
       phase: "integrity",
-      attempt: () => 1,
+      attempt: () => attemptNumber,
       source: "architect.integrity.supervisor",
     }),
   })
@@ -254,7 +262,7 @@ export async function reviewIntegrity(input: {
     findings: normalized.findings.length,
     requiredRepairs: normalized.requiredRepairs.length,
   })
-  emitIntegrityEvent(input.taskID, planOut.session.id, normalized, 1)
+  emitIntegrityEvent(input.taskID, planOut.session.id, normalized, attemptNumber)
   return { ...normalized, sessionID: planOut.session.id }
 }
 
@@ -400,7 +408,7 @@ async function runReviewerSession(input: {
       taskID: input.input.taskID,
       reviewID: input.activeReviewID,
       phase: "integrity",
-      attempt: () => 1,
+      attempt: () => input.input.replayContext.attemptNumber,
       source: `architect.integrity.reviewer.${input.scope.reviewerID}`,
     }),
   })
@@ -619,6 +627,7 @@ function createNoGoalsResult(): IntegrityResult {
 async function emitSoftIntegrity(
   input: { taskID?: string; parentSessionID?: string; taskTitle: string },
   result: IntegrityResult,
+  attempts: number,
 ): Promise<string | undefined> {
   if (!input.taskID || !input.parentSessionID) return undefined
   const { Session } = await import("@/session")
@@ -628,7 +637,7 @@ async function emitSoftIntegrity(
     title: `Integrity Supervisor: ${input.taskTitle}`,
     directory: Instance.directory,
   })
-  emitIntegrityEvent(input.taskID, session.id, result, 1)
+  emitIntegrityEvent(input.taskID, session.id, result, attempts)
   return session.id
 }
 
