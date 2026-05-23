@@ -47,6 +47,7 @@ import {
   findGoalRun,
   findLatestTipGoalRun,
   findPlan,
+  listIntegrityAttemptArtifacts,
   listGoalRunsByGoal,
   listGoals,
   listGoalsForPlan,
@@ -2158,11 +2159,16 @@ export function recordIntegrityAttempt(input: {
 }): string {
   const id = Identifier.ascending("artifact")
   const now = input.now ?? Date.now()
+  const attempts = listIntegrityAttemptArtifacts({
+    taskID: input.taskID,
+    specSnapshotID: input.specSnapshotID,
+  }).length + 1
   const payload = {
     spec_snapshot_id: input.specSnapshotID,
     session_id: input.sessionID,
     verdict: input.verdict,
     phase: input.phase,
+    attempts,
     reviewers: input.reviewers ?? [],
     findings_count: input.findingsCount ?? input.issuesCount ?? 0,
     required_repairs_count: input.requiredRepairsCount ?? input.correctionsCount ?? 0,
