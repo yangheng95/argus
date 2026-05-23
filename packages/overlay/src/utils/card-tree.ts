@@ -11,11 +11,30 @@
 //  2. `defaultExpandedForNode` / `collectCardText` — render-side helpers
 //     used by Card / CardHeader.
 import { cardTreeStore } from "../store/card-tree";
-import type { CardNode, CardKind, CardStatus, BoundaryPart, StepPayload } from "../store/card-tree";
+import type {
+  CardNode,
+  CardKind,
+  CardStatus,
+  BoundaryPart,
+  StepPayload,
+  ActivityCounts as StoreActivityCounts,
+} from "../store/card-tree";
 import { toolNameKey, displayToolIcon, displayToolDetail } from "./tool";
 import { extractTodos } from "./todos";
 
 export type { CardNode, CardKind, CardStatus, StepPayload, BoundaryPart } from "../store/card-tree";
+
+// Transient cards (built inline by the renderer with `children: CardNode[]`)
+// never flow through tree-writer's mutation pipeline, so their cached subtree
+// fields are never populated. Store-backed cards always carry the cache after
+// the first `flushCardStats` call. Detecting "transient" precisely is hard, so
+// we use a conservative rule: a node with inline children OR without cached
+// counts falls back to the recursive walk below.
+function shouldUseCachedStats(node: CardNode): boolean {
+  if (!node) return false;
+  if (Array.isArray(node.children) && node.children.length > 0) return false;
+  return node.subtreeCounts !== undefined;
+}
 
 // ── Status normalisation ──
 
@@ -342,6 +361,14 @@ function gatherLatest(node: CardNode, hits: LatestHit[], suppressTools: boolean)
 
 export function collectLatestActivityText(node: CardNode): string {
   if (!node) return "";
+  if (shouldUseCachedStats(node)) {
+    const cached = node.subtreeLatestHit;
+    if (cached?.text) return cached.text;
+    if (node.kind === "step" && node.goalDescription) {
+      return String(node.goalDescription).trim();
+    }
+    return "";
+  }
   const suppressTools = node.kind === "step";
   const hits: LatestHit[] = [];
   gatherLatest(node, hits, suppressTools);
@@ -478,6 +505,17 @@ function gatherCounts(node: CardNode, counts: ActivityCounts): void {
 }
 
 export function collectActivityCounts(node: CardNode): ActivityCounts {
+  if (shouldUseCachedStats(node)) {
+    const cached = node.subtreeCounts as StoreActivityCounts | undefined;
+    if (cached) {
+      return {
+        messages: cached.messages,
+        tools: cached.tools,
+        agents: cached.agents,
+        skills: cached.skills,
+      };
+    }
+  }
   const counts: ActivityCounts = { messages: 0, tools: 0, agents: 0, skills: 0 };
   gatherCounts(node, counts);
   return counts;
@@ -539,14 +577,21 @@ function gatherTodos(node: CardNode, hits: TodoHit[]): void {
 
 export function collectTodoSummary(node: CardNode): TodoSummary | null {
   if (!node) return null;
-  const hits: TodoHit[] = [];
-  gatherTodos(node, hits);
-  if (hits.length === 0) return null;
-  let best = hits[0];
-  for (let i = 1; i < hits.length; i++) {
-    const h = hits[i];
-    if (h.time > best.time || (h.time === best.time && h.index > best.index)) {
-      best = h;
+  let best: TodoHit | undefined;
+  if (shouldUseCachedStats(node)) {
+    const cached = node.subtreeTodoHit;
+    if (!cached || !Array.isArray(cached.todos) || cached.todos.length === 0) return null;
+    best = { time: cached.time, index: cached.index, todos: cached.todos };
+  } else {
+    const hits: TodoHit[] = [];
+    gatherTodos(node, hits);
+    if (hits.length === 0) return null;
+    best = hits[0];
+    for (let i = 1; i < hits.length; i++) {
+      const h = hits[i];
+      if (h.time > best.time || (h.time === best.time && h.index > best.index)) {
+        best = h;
+      }
     }
   }
   let completed = 0;
