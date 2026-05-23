@@ -16,12 +16,18 @@
 // to be the single writer. This component is purely a derived view of
 // boardStore + cardTreeStore (for scroll target lookup).
 
-import { For, Show, createMemo } from "solid-js";
+import { For, Show, createMemo, createSignal, onCleanup, onMount } from "solid-js";
 import { boardStore } from "../store/board";
 import { cardTreeStore } from "../store/card-tree";
 import { t } from "../utils/i18n";
 import { goalRevisionLabelFromIndexes } from "../utils/goal-label";
 import { goalState, type GoalState } from "../utils/goal-state";
+
+/** Visible pill rows before the strip collapses behind a "+N more" toggle.
+ *  Operators scanning a long task want the goal list visible at a glance, not
+ *  pushing the conversation down by 8+ rows. Three rows fits ~6–12 pills in a
+ *  typical conversation column and keeps the sticky header light. */
+const MAX_VISIBLE_PILL_ROWS = 3;
 
 interface GoalPill {
   goalID: string;
@@ -81,6 +87,90 @@ export function TaskProgressBar() {
 
   const hasGoals = () => goals().length > 0;
 
+  // ── Auto-collapse beyond MAX_VISIBLE_PILL_ROWS ──
+  // A ResizeObserver on the pills container measures the offsetTop of each
+  // pill to count visual rows (pill heights are not deterministic — they
+  // depend on UI scale, font, and pill-title length when wrapped). When the
+  // natural layout would exceed 3 rows we expose a `+N more` toggle; under
+  // the limit the toggle stays hidden and the strip is unconstrained.
+  let pillsEl: HTMLDivElement | undefined;
+  const [expanded, setExpanded] = createSignal(false);
+  const [hiddenCount, setHiddenCount] = createSignal(0);
+  const [collapsedMaxHeight, setCollapsedMaxHeight] = createSignal<number | null>(null);
+
+  const remeasure = () => {
+    const el = pillsEl;
+    if (!el) return;
+    const pills = el.querySelectorAll<HTMLElement>(".task-progress__pill");
+    if (pills.length === 0) {
+      setHiddenCount(0);
+      setCollapsedMaxHeight(null);
+      return;
+    }
+    // Group pills by their offsetTop (rounded to the nearest pixel to absorb
+    // sub-pixel layout drift). Even when the container is collapsed, each
+    // pill's offsetTop still reports its natural position relative to the
+    // flex container — only paint is clipped — so this measurement works in
+    // both expanded and collapsed states.
+    const rowTops: number[] = [];
+    let lastTop = Number.NEGATIVE_INFINITY;
+    for (let i = 0; i < pills.length; i++) {
+      const top = Math.round(pills[i].offsetTop);
+      if (top > lastTop + 1) {
+        rowTops.push(top);
+        lastTop = top;
+      }
+    }
+    if (rowTops.length <= MAX_VISIBLE_PILL_ROWS) {
+      setHiddenCount(0);
+      setCollapsedMaxHeight(null);
+      return;
+    }
+    const firstHiddenTop = rowTops[MAX_VISIBLE_PILL_ROWS];
+    let firstHiddenIndex = pills.length;
+    for (let i = 0; i < pills.length; i++) {
+      if (Math.round(pills[i].offsetTop) >= firstHiddenTop) {
+        firstHiddenIndex = i;
+        break;
+      }
+    }
+    setHiddenCount(pills.length - firstHiddenIndex);
+    // Clip the container exactly at the first-hidden-row top so the last
+    // visible row never gets truncated mid-pill.
+    setCollapsedMaxHeight(firstHiddenTop);
+  };
+
+  onMount(() => {
+    if (!pillsEl) return;
+    // Initial measure (microtask so the first paint has flushed).
+    queueMicrotask(remeasure);
+    const ro = new ResizeObserver(remeasure);
+    ro.observe(pillsEl);
+    // Pill children may resize independently of the container (i18n switch
+    // changes label length; UI scale changes pill padding). Observe each pill
+    // to catch those cases too.
+    const observed = new WeakSet<Element>();
+    const observePills = () => {
+      if (!pillsEl) return;
+      for (const pill of pillsEl.querySelectorAll<HTMLElement>(".task-progress__pill")) {
+        if (!observed.has(pill)) {
+          ro.observe(pill);
+          observed.add(pill);
+        }
+      }
+    };
+    observePills();
+    const mo = new MutationObserver(() => {
+      observePills();
+      remeasure();
+    });
+    mo.observe(pillsEl, { childList: true, subtree: false });
+    onCleanup(() => {
+      ro.disconnect();
+      mo.disconnect();
+    });
+  });
+
   const onPillClick = (goalID: string) => {
     const cardID = findGoalCardID(goalID);
     if (!cardID) return;
@@ -131,7 +221,16 @@ export function TaskProgressBar() {
             />
           </Show>
         </div>
-        <div class="task-progress__pills">
+        <div
+          ref={pillsEl}
+          class="task-progress__pills"
+          data-collapsed={hiddenCount() > 0 && !expanded() ? "true" : "false"}
+          style={
+            hiddenCount() > 0 && !expanded() && collapsedMaxHeight() !== null
+              ? { "max-height": `${collapsedMaxHeight()}px` }
+              : undefined
+          }
+        >
           <For each={goals()}>
             {(g) => (
               <button
@@ -150,6 +249,18 @@ export function TaskProgressBar() {
             )}
           </For>
         </div>
+        <Show when={hiddenCount() > 0}>
+          <button
+            type="button"
+            class="task-progress__toggle"
+            aria-expanded={expanded() ? "true" : "false"}
+            onClick={() => setExpanded((v) => !v)}
+          >
+            {expanded()
+              ? t("progress.collapse")
+              : t("progress.expand_more", { count: String(hiddenCount()) })}
+          </button>
+        </Show>
       </div>
     </Show>
   );

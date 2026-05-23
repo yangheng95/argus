@@ -816,6 +816,8 @@
   "progress.goal.failed": "{{title}} — failed",
   "progress.goal.blocked": "{{title}} — blocked",
   "progress.summary": "{{passed}}/{{total}} passed · {{failed}} failed · {{running}} running",
+  "progress.expand_more": "+{{count}} more",
+  "progress.collapse": "Collapse",
   "gateway.open": "Gateway",
   "gateway.open_title": "Switch to the Gateway control room",
   "gateway.title": "Gateway",

@@ -1427,6 +1427,40 @@ body {
   display: flex;
   flex-wrap: wrap;
   gap: calc(4px * var(--ui-scale));
+  /* When the strip naturally exceeds MAX_VISIBLE_PILL_ROWS, the component
+   * sets `data-collapsed="true"` and a precise inline `max-height` (the
+   * offsetTop of the first row that would otherwise overflow) so the last
+   * visible row never gets truncated mid-pill. Without the inline value
+   * `overflow: hidden` does nothing — but with `data-collapsed="false"`
+   * (default), it is a no-op since `max-height` is unset. */
+  overflow: hidden;
+  transition: max-height var(--ui-duration-base) var(--ui-timing-standard);
+}
+.task-progress__pills[data-collapsed="false"] {
+  max-height: none !important;
+}
+
+.task-progress__toggle {
+  align-self: flex-start;
+  appearance: none;
+  background: transparent;
+  border: 0;
+  padding: calc(2px * var(--ui-scale)) calc(6px * var(--ui-scale));
+  color: var(--text-soft);
+  font-size: calc(var(--card-meta-size) - calc(1px * var(--ui-scale)));
+  font-weight: var(--ui-font-weight-strong);
+  letter-spacing: var(--ui-letter-spacing-loose);
+  cursor: pointer;
+  border-radius: var(--oc-radius-pill);
+  transition: background-color var(--ui-duration-base) var(--ui-timing-standard), color var(--ui-duration-base) var(--ui-timing-standard);
+}
+.task-progress__toggle:hover {
+  background: var(--card-bg-hover);
+  color: var(--text-strong);
+}
+.task-progress__toggle:focus-visible {
+  outline: var(--oc-border-width) solid color-mix(in srgb, var(--accent) 40%, transparent);
+  outline-offset: calc(2px * var(--ui-scale));
 }
 
 .task-progress__pill {
