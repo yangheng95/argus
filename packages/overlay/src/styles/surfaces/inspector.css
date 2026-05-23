@@ -1600,6 +1600,18 @@
   line-height: 1.5;
 }
 
+.integrity__report {
+  margin: 0;
+  max-height: 22rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  border: 1px solid var(--border-muted);
+  border-radius: var(--radius-sm);
+  padding: var(--ui-gap-sm);
+  background: var(--surface-muted);
+  color: var(--text);
+}
+
 .integrity__section {
   display: flex;
   flex-direction: column;

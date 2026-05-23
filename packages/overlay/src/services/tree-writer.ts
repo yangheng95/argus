@@ -138,28 +138,11 @@ interface PendingIntegrityPayload {
   emittedAt: number;
   verdict: "pass" | "concerns" | "needs_correction";
   summary: string;
-  acceptance?: NonNullable<CardNode["integrity"]>["acceptance"];
-  dimensions: Array<{
-    id: "requirement_fidelity" | "technical_feasibility" | "hallucination" | "solution_quality";
-    verdict: "pass" | "concerns" | "needs_correction";
-    issueCount: number;
-    correctionCount: number;
-    missingGoalCount: number;
-  }>;
-  issues: Array<{
-    type: string;
-    description: string;
-    requirement_ids?: string[];
-    spec_ids?: string[];
-  }>;
-  corrections: Array<{
-    action: "modify" | "split" | "remove";
-    goalID: string;
-    reason: string;
-    updatesTitle?: string;
-    updatesObjective?: string;
-  }>;
-  missingGoals: Array<{ title: string; objective: string; reason?: string }>;
+  teamReportMarkdown: string;
+  reviewers: NonNullable<CardNode["integrity"]>["reviewers"];
+  findings: NonNullable<CardNode["integrity"]>["findings"];
+  requiredRepairs: NonNullable<CardNode["integrity"]>["requiredRepairs"];
+  unresolvedDisagreements: NonNullable<CardNode["integrity"]>["unresolvedDisagreements"];
   attempts: number;
 }
 const pendingIntegrity = new Map<string, PendingIntegrityPayload>();
@@ -1016,6 +999,9 @@ interface RunningReviewPayload {
   attempt: number
   elapsedMs: number
   currentStep?: ReviewStreamStep
+  activity?: string
+  reviewerID?: string
+  roundID?: string
   summary?: string
 }
 const runningReviews = new Map<string, RunningReviewPayload>()
@@ -1025,7 +1011,8 @@ function normalizeReviewPhase(raw: string): ReviewStreamPhase {
   throw new Error(`review.stream phase unsupported: ${raw}`);
 }
 
-function normalizeReviewStep(raw: string): ReviewStreamStep {
+function normalizeReviewStep(raw: string): ReviewStreamStep | undefined {
+  if (!raw) return undefined;
   if (
     raw === "manifest" ||
     raw === "runtime" ||
@@ -1087,6 +1074,9 @@ function handleReviewStreamProgress(event: any): void {
     attempt,
     elapsedMs,
     currentStep: normalizeReviewStep(String(props.currentStep || props.current_step || "")),
+    activity: typeof props.activity === "string" ? props.activity : undefined,
+    reviewerID: typeof props.reviewerID === "string" ? props.reviewerID : undefined,
+    roundID: typeof props.roundID === "string" ? props.roundID : undefined,
     summary: typeof props.summary === "string" ? props.summary : undefined,
   };
   runningReviews.set(reviewID, payload);
@@ -1181,6 +1171,9 @@ function materializeRunningReview(p: RunningReviewPayload): void {
     elapsedMs: p.elapsedMs,
     phase: p.phase,
     currentStep: p.currentStep,
+    activity: p.activity,
+    reviewerID: p.reviewerID,
+    roundID: p.roundID,
     summary: p.summary,
   });
 }
@@ -1214,6 +1207,9 @@ function materializeRunningIntegrity(p: RunningReviewPayload & { sessionID: stri
       reviewStream: {
         phase: "integrity",
         currentStep: p.currentStep,
+        activity: p.activity,
+        reviewerID: p.reviewerID,
+        roundID: p.roundID,
         elapsedMs: p.elapsedMs,
         summary: p.summary,
       },
@@ -1242,13 +1238,9 @@ function handleIntegrityCompleted(event: any): void {
   if (!(emittedAt > 0)) {
     throw new Error(`integrity.review.completed missing emittedAt (taskID=${taskID}); server emitter is the single source of truth`);
   }
-  const issues = Array.isArray(props.issues) ? props.issues : [];
-  const corrections = Array.isArray(props.corrections) ? props.corrections : [];
-  const missingGoals = Array.isArray(props.missingGoals) ? props.missingGoals : [];
-  const dimensionsRaw = Array.isArray(props.dimensions) ? props.dimensions : [];
   const attempts = Number(props.attempts || 0);
   const summary = typeof props.summary === "string" ? props.summary : "";
-  if (!props.acceptance || typeof props.acceptance !== "object") {
+  if (false) {
     // acceptance is a required field on integrity.review.completed — the
     // opencorvus integrity agent cannot finalize without an acceptance
     // verdict (agent.ts submit guards), so a missing one is a backend
@@ -1313,54 +1305,55 @@ function handleIntegrityCompleted(event: any): void {
     props.verdict === "pass" ? "pass"
       : props.verdict === "concerns" ? "concerns"
       : "needs_correction";
-
-  const dimensionIDs = ["requirement_fidelity", "technical_feasibility", "hallucination", "solution_quality"] as const;
-  type DimensionID = typeof dimensionIDs[number];
-  const isDimensionID = (s: string): s is DimensionID =>
-    (dimensionIDs as readonly string[]).includes(s);
+  const reviewers = Array.isArray(props.reviewers) ? props.reviewers : [];
+  const findings = Array.isArray(props.findings) ? props.findings : [];
+  const requiredRepairs = Array.isArray(props.requiredRepairs) ? props.requiredRepairs : [];
+  const unresolvedDisagreements = Array.isArray(props.unresolvedDisagreements) ? props.unresolvedDisagreements : [];
+  const stringArray = (value: unknown): string[] =>
+    Array.isArray(value) ? value.filter((item: unknown): item is string => typeof item === "string") : [];
 
   const payload: PendingIntegrityPayload = {
     taskID,
     emittedAt,
     verdict,
     summary,
-    acceptance,
-    dimensions: dimensionsRaw
-      .filter((d: any) => isDimensionID(String(d?.id || "")))
-      .map((d: any) => {
-        const dverdict: "pass" | "concerns" | "needs_correction" =
-          d?.verdict === "pass" ? "pass"
-            : d?.verdict === "concerns" ? "concerns"
-            : "needs_correction";
-        return {
-          id: String(d.id) as DimensionID,
-          verdict: dverdict,
-          issueCount: Number(d?.issueCount || 0),
-          correctionCount: Number(d?.correctionCount || 0),
-          missingGoalCount: Number(d?.missingGoalCount || 0),
-        };
-      }),
-    issues: issues.map((i: any) => ({
-      type: String(i?.type || "uncovered"),
-      description: String(i?.description || ""),
-      requirement_ids: Array.isArray(i?.requirement_ids)
-        ? i.requirement_ids.filter((x: unknown): x is string => typeof x === "string")
-        : undefined,
-      spec_ids: Array.isArray(i?.spec_ids)
-        ? i.spec_ids.filter((x: unknown): x is string => typeof x === "string")
-        : undefined,
+    teamReportMarkdown: typeof props.teamReportMarkdown === "string" ? props.teamReportMarkdown : "",
+    reviewers: reviewers.map((item: any) => ({
+      reviewerID: String(item?.reviewerID || ""),
+      scope: String(item?.scope || ""),
+      verdict: item?.verdict === "pass" ? "pass" : item?.verdict === "concerns" ? "concerns" : "needs_correction",
+      summary: String(item?.summary || ""),
+      evidence: stringArray(item?.evidence),
+      findings: Array.isArray(item?.findings) ? item.findings : [],
+      openQuestions: stringArray(item?.openQuestions),
     })),
-    corrections: corrections.map((c: any) => ({
-      action: (c?.action === "split" || c?.action === "remove") ? c.action : "modify",
-      goalID: String(c?.goalID || ""),
-      reason: String(c?.reason || ""),
-      updatesTitle: typeof c?.updatesTitle === "string" ? c.updatesTitle : undefined,
-      updatesObjective: typeof c?.updatesObjective === "string" ? c.updatesObjective : undefined,
+    findings: findings.map((item: any) => ({
+      id: String(item?.id || ""),
+      severity: item?.severity === "advisory" ? "advisory" : "blocking",
+      verdictImpact: item?.verdictImpact === "pass" ? "pass" : item?.verdictImpact === "concerns" ? "concerns" : "needs_correction",
+      title: String(item?.title || ""),
+      description: String(item?.description || ""),
+      evidence: stringArray(item?.evidence),
+      targetIDs: stringArray(item?.targetIDs),
+      requirementIDs: stringArray(item?.requirementIDs),
+      specIDs: stringArray(item?.specIDs),
+      filePaths: stringArray(item?.filePaths),
+      repair: String(item?.repair || ""),
+      reviewers: stringArray(item?.reviewers),
+      consensus: item?.consensus === "disputed" ? "disputed" : item?.consensus === "unresolved" ? "unresolved" : "agreed",
     })),
-    missingGoals: missingGoals.map((g: any) => ({
-      title: String(g?.title || ""),
-      objective: String(g?.objective || ""),
-      reason: typeof g?.reason === "string" ? g.reason : undefined,
+    requiredRepairs: requiredRepairs.map((item: any) => ({
+      id: String(item?.id || ""),
+      description: String(item?.description || ""),
+      evidence: stringArray(item?.evidence),
+      targetIDs: stringArray(item?.targetIDs),
+      filePaths: stringArray(item?.filePaths),
+    })),
+    unresolvedDisagreements: unresolvedDisagreements.map((item: any) => ({
+      id: String(item?.id || ""),
+      description: String(item?.description || ""),
+      reviewerIDs: stringArray(item?.reviewerIDs),
+      consequence: String(item?.consequence || ""),
     })),
     attempts,
   };
@@ -1400,11 +1393,11 @@ function materializeIntegrity(session: SessionInfo, p: PendingIntegrityPayload):
     integrity: {
       verdict: p.verdict,
       summary: p.summary,
-      acceptance: p.acceptance,
-      dimensions: p.dimensions,
-      issues: p.issues,
-      corrections: p.corrections,
-      missingGoals: p.missingGoals,
+      teamReportMarkdown: p.teamReportMarkdown,
+      reviewers: p.reviewers,
+      findings: p.findings,
+      requiredRepairs: p.requiredRepairs,
+      unresolvedDisagreements: p.unresolvedDisagreements,
       attempts: p.attempts,
     },
   });

@@ -361,6 +361,7 @@ function taskStepStatusByTool(
       const latest = findLatestIntegrityAttemptArtifact({
         taskID,
         specSnapshotID: activeSpec.id,
+        phase: "post_build",
       })
       const verdict = integrityAttemptVerdict(latest)
       if (!verdict) return "pending"

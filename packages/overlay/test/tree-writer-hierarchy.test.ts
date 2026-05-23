@@ -602,14 +602,16 @@ test("integrity completed event materializes an integrity session card with stru
       taskID: TASK_ID,
       sessionID: INTEGRITY_SID,
       verdict: "needs_correction",
-      summary: "1 dimension flagged",
-      dimensions: [
-        { id: "requirement_fidelity", verdict: "needs_correction", issueCount: 1, correctionCount: 0, missingGoalCount: 1 },
+      summary: "team found a blocking gap",
+      teamReportMarkdown: "Blocking: missing goal X",
+      reviewers: [
+        { reviewerID: "completion", scope: "completion", verdict: "needs_correction", summary: "missing goal X", evidence: ["request asks X"], findings: [], openQuestions: [] },
+        { reviewerID: "runtime", scope: "runtime", verdict: "pass", summary: "no runtime issue", evidence: [], findings: [], openQuestions: [] },
       ],
-      issues: [{ type: "uncovered", description: "missing goal X" }],
-      corrections: [],
-      missingGoals: [{ title: "Add X", objective: "support X" }],
-      acceptance: { verdict: "rejected", summary: "missing goal X" },
+      findings: [{ id: "missing-x", severity: "blocking", verdictImpact: "needs_correction", title: "Missing X", description: "missing goal X", evidence: ["request asks X"], targetIDs: [], requirementIDs: [], specIDs: [], filePaths: [], repair: "Add X", reviewers: ["completion"], consensus: "agreed" }],
+      rounds: [],
+      requiredRepairs: [{ id: "repair-x", description: "Add X", evidence: ["request asks X"], targetIDs: [], filePaths: [] }],
+      unresolvedDisagreements: [],
       attempts: 1,
     },
   });
@@ -619,8 +621,8 @@ test("integrity completed event materializes an integrity session card with stru
   expect(cardTreeStore.cards[integrityCardID]?.kind).toBe("agent");
   expect(cardTreeStore.cards[integrityCardID]?.stage).toBe("integrity");
   expect(cardTreeStore.cards[integrityCardID]?.integrity?.verdict).toBe("needs_correction");
-  expect(cardTreeStore.cards[integrityCardID]?.integrity?.dimensions?.[0]?.id).toBe("requirement_fidelity");
-  expect(cardTreeStore.cards[integrityCardID]?.integrity?.missingGoals?.[0]?.title).toBe("Add X");
+  expect(cardTreeStore.cards[integrityCardID]?.integrity?.findings?.[0]?.id).toBe("missing-x");
+  expect(cardTreeStore.cards[integrityCardID]?.integrity?.requiredRepairs?.[0]?.id).toBe("repair-x");
   expect(cardTreeStore.order).toContain(integrityCardID);
 });
 
@@ -650,11 +652,15 @@ test("integrity completed event can materialize before any message stream arrive
       sessionID: INTEGRITY_SID,
       verdict: "pass",
       summary: "all clean",
-      dimensions: [],
-      issues: [],
-      corrections: [],
-      missingGoals: [],
-      acceptance: { verdict: "accepted", summary: "all clean" },
+      teamReportMarkdown: "No findings.",
+      reviewers: [
+        { reviewerID: "completion", scope: "completion", verdict: "pass", summary: "complete", evidence: [], findings: [], openQuestions: [] },
+        { reviewerID: "runtime", scope: "runtime", verdict: "pass", summary: "runtime ok", evidence: [], findings: [], openQuestions: [] },
+      ],
+      findings: [],
+      rounds: [],
+      requiredRepairs: [],
+      unresolvedDisagreements: [],
       attempts: 1,
     },
   });
@@ -690,10 +696,12 @@ test("integrity event missing sessionID throws (schema became required)", () => 
         taskID: TASK_ID,
         verdict: "pass",
         summary: "",
-        dimensions: [],
-        issues: [],
-        corrections: [],
-        missingGoals: [],
+        teamReportMarkdown: "",
+        reviewers: [],
+        findings: [],
+        rounds: [],
+        requiredRepairs: [],
+        unresolvedDisagreements: [],
         attempts: 0,
       },
     }),
@@ -855,11 +863,15 @@ test("resetWriter clears integrity session cards materialized from protocol even
       sessionID: INTEGRITY_SID,
       verdict: "pass",
       summary: "",
-      dimensions: [],
-      issues: [],
-      corrections: [],
-      missingGoals: [],
-      acceptance: { verdict: "accepted", summary: "" },
+      teamReportMarkdown: "No findings.",
+      reviewers: [
+        { reviewerID: "completion", scope: "completion", verdict: "pass", summary: "complete", evidence: [], findings: [], openQuestions: [] },
+        { reviewerID: "runtime", scope: "runtime", verdict: "pass", summary: "runtime ok", evidence: [], findings: [], openQuestions: [] },
+      ],
+      findings: [],
+      rounds: [],
+      requiredRepairs: [],
+      unresolvedDisagreements: [],
       attempts: 1,
     },
   });

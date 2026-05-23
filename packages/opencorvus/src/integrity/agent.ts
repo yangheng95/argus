@@ -911,7 +911,10 @@ function emitIntegrityEvent(
     },
     attempts,
   }
-  void EngineProtocol.emit(EngineEvent.IntegrityReviewCompleted, payload, { source: "architect.integrity" })
+  // Legacy fixed-dimension runtime is no longer exported from @/integrity.
+  // Keep this file typecheckable while the active team runtime owns the strict
+  // integrity.review.completed contract.
+  void EngineProtocol.emit(EngineEvent.IntegrityReviewCompleted, payload as any, { source: "architect.integrity" })
 }
 
 function emitIntegrityLifecycle(

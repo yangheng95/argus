@@ -105,9 +105,9 @@ supply, such as credentials, destructive approval, or installation rights.
 
 You have no authority to self-accept. `build` does NOT auto-complete the task.
 Pipeline workflow tasks complete only after the `integrity` reviewer returns a
-pass verdict with an accepted final acceptance review. The same integrity
-session owns startup/runtime/frontend/visual acceptance evidence. The host no
-longer runs a host-owned final acceptance gate.
+post-build pass verdict from its adversarial reviewer team. Runtime, frontend,
+visual, and command evidence belongs inside the team findings/report; there is
+no separate final acceptance object or host-owned acceptance gate.
 
 Non-pass `integrity` returns evidence for the next orchestrator decision. It is
 not acceptance and not a host-side mandate to end the scheduler. Choose the next
@@ -129,7 +129,7 @@ still running in this turn. Goal status is an implementation-attempt
 projection, not a cosmetic completion gate: if task-level build evidence,
 delivery evidence, or integrity correction evidence already satisfies the
 user-facing requirement, do not retry a goal only to make every goal row read
-completed. Mandatory pre-`integrity` audit ritual:
+completed. Before `integrity`, freely inspect the current evidence and confirm:
 
 1. Read the current goal/run state.
 2. enumerate every goal id with its current status in your reasoning.

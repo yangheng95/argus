@@ -60,6 +60,7 @@ export type DeliveryToolContext = {
   delivery?: DeliveryInfo
   attachments?: DeliveryToolAttachment[]
   signal?: AbortSignal
+  readOnlyCommandGuard?: boolean
 }
 
 export function normalizeDeliveryScreenshotViewport(input: { width: number; height: number }): {
@@ -176,28 +177,24 @@ async function runDeliveryIntegrityReview(input: {
     specSnapshotID: activeSpec.id,
     verdict: verdict.verdict,
     phase,
-    perDimension: verdict.dimensions.map((dimension) => ({ id: dimension.id, verdict: dimension.verdict })),
-    issuesCount: verdict.issues.length,
-    correctionsCount: verdict.corrections.length + verdict.graphCorrections.length,
-    missingCount: verdict.missingGoals.length,
+    reviewers: verdict.reviewers,
+    findingsCount: verdict.findings.length,
+    requiredRepairsCount: verdict.requiredRepairs.length,
+    unresolvedDisagreementsCount: verdict.unresolvedDisagreements.length,
     reason: verdict.summary,
-    reviewMarkdown: markdown,
-    corrections: verdict.corrections.map((correction) => ({
-      action: correction.action,
-      goalID: correction.goalID,
-      reason: correction.reason,
-      updates: correction.updates as Record<string, unknown> | undefined,
-    })),
-    graphCorrections: verdict.graphCorrections,
-    missingGoals: verdict.missingGoals,
+    teamReportMarkdown: markdown,
+    findings: verdict.findings,
+    rounds: verdict.rounds,
+    requiredRepairs: verdict.requiredRepairs,
+    unresolvedDisagreements: verdict.unresolvedDisagreements,
   })
 
   decisionLog.append({
     phase: "review",
     key: `delivery_integrity_${verdict.verdict}_${verdict.sessionID}`,
     value:
-      `verdict=${verdict.verdict} | issues=${verdict.issues.length} | corrections=${verdict.corrections.length}` +
-      ` | graph_corrections=${verdict.graphCorrections.length} | missing_goals=${verdict.missingGoals.length}` +
+      `verdict=${verdict.verdict} | reviewers=${verdict.reviewers.length} | findings=${verdict.findings.length}` +
+      ` | required_repairs=${verdict.requiredRepairs.length} | unresolved=${verdict.unresolvedDisagreements.length}` +
       (verdict.summary ? ` | summary=${verdict.summary}` : ""),
     reason: "delivery-triggered integrity review",
   })
@@ -208,19 +205,11 @@ async function runDeliveryIntegrityReview(input: {
     sessionID: verdict.sessionID,
     specSnapshotID: activeSpec.id,
     phase,
-    dimensions: verdict.dimensions.map((dimension) => ({
-      id: dimension.id,
-      verdict: dimension.verdict,
-      issues: dimension.issues.length,
-      corrections: dimension.corrections.length,
-      graphCorrections: dimension.graphCorrections.length,
-      missingGoals: dimension.missingGoals.length,
-    })),
-    issuesCount: verdict.issues.length,
-    correctionsCount: verdict.corrections.length,
-    graphCorrectionsCount: verdict.graphCorrections.length,
-    missingGoalsCount: verdict.missingGoals.length,
-    reviewMarkdown: markdown,
+    reviewersCount: verdict.reviewers.length,
+    findingsCount: verdict.findings.length,
+    requiredRepairsCount: verdict.requiredRepairs.length,
+    unresolvedDisagreementsCount: verdict.unresolvedDisagreements.length,
+    teamReportMarkdown: markdown,
   }
 }
 
@@ -604,16 +593,46 @@ export function createDeliveryTools(input?: DeliveryToolContext) {
       }),
       execute: async ({ command, timeout_ms }) => {
         try {
+          const beforeStatus = input?.readOnlyCommandGuard
+            ? await Shell.run("git status --short --untracked-files=all", {
+                cwd: projectDir,
+                env: process.env,
+                timeoutMs: 10_000,
+              })
+            : undefined
           const result = await Shell.run(command, {
             cwd: projectDir,
             env: process.env,
             timeoutMs: timeout_ms,
           })
+          const afterStatus = input?.readOnlyCommandGuard
+            ? await Shell.run("git status --short --untracked-files=all", {
+                cwd: projectDir,
+                env: process.env,
+                timeoutMs: 10_000,
+              })
+            : undefined
           const parts = [`exit_code: ${result.exitCode}`]
           if (typeof result.pid === "number") parts.push(`pid: ${result.pid}`)
           if (result.timedOut) parts.push(`timeout_ms: ${timeout_ms}`)
           if (result.stdout.trim()) parts.push(`stdout:\n${result.stdout.slice(0, 8000)}`)
           if (result.stderr.trim()) parts.push(`stderr:\n${result.stderr.slice(0, 5000)}`)
+          if (
+            input?.readOnlyCommandGuard &&
+            beforeStatus &&
+            afterStatus &&
+            beforeStatus.stdout.trim() !== afterStatus.stdout.trim()
+          ) {
+            parts.push(
+              [
+                "readonly_guard: worktree changed during reviewer command; treat this as unsafe verification, not an implementation fix.",
+                "before_status:",
+                beforeStatus.stdout.trim() || "(clean)",
+                "after_status:",
+                afterStatus.stdout.trim() || "(clean)",
+              ].join("\n"),
+            )
+          }
           return parts.join("\n") || `exit_code: ${result.exitCode} (no output)`
         } catch (e) {
           log.warn("run_command failed in legacy delivery evidence tool", { command, err: e })

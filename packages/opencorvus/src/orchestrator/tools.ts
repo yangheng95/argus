@@ -120,11 +120,10 @@ import {
 } from "@/architect/fidelity"
 import { contractGraphIRIndex, validateArchitectContractGraph } from "@/architect/contract-graph"
 import type {
-  GoalCorrection,
-  IntegrityDimensionResult,
-  IntegrityGraphCorrection,
+  IntegrityFinding,
+  IntegrityRequiredRepair,
   IntegrityResult,
-  MissingGoal,
+  IntegrityUnresolvedDisagreement,
 } from "@/integrity"
 import { renderIntegrityMarkdown } from "@/integrity/render-markdown"
 
@@ -291,9 +290,10 @@ type IntegrityReviewOutcome =
       sessionID: string
       goalCount: number
       perDimension: Array<string>
-      correctionsCount: number
-      graphCorrectionsCount: number
-      missingCount: number
+      reviewerCount: number
+      findingsCount: number
+      requiredRepairsCount: number
+      unresolvedDisagreementsCount: number
       /** Full per-dimension breakdown including issues / corrections /
        *  missing_goals — kept on the outcome so every consumer (build tool
        *  return, renderIntegrityOutcome, recordIntegrityAttempt persistence,
@@ -302,10 +302,9 @@ type IntegrityReviewOutcome =
        *  markdown and decides modify_goal / build / architect / fail_task
        *  itself; nothing in code routes/supersedes from the outcome. */
       markdown: string
-      dimensions: IntegrityDimensionResult[]
-      corrections: GoalCorrection[]
-      graphCorrections: IntegrityGraphCorrection[]
-      missingGoals: MissingGoal[]
+      findings: IntegrityFinding[]
+      requiredRepairs: IntegrityRequiredRepair[]
+      unresolvedDisagreements: IntegrityUnresolvedDisagreement[]
     }
 
 // renderIntegrityMarkdown lives in @/integrity/render-markdown so it can be
@@ -1543,14 +1542,14 @@ export function createOrchestratorTools(input: {
           ["goal_count", String(outcome.goalCount)],
           ["spec_snapshot_id", outcome.specSnapshotID],
           ["phase", outcome.phase],
-          ["per_dimension", outcome.perDimension],
-          ["corrections_count", String(outcome.correctionsCount)],
-          ["graph_corrections_count", String(outcome.graphCorrectionsCount)],
-          ["missing_count", String(outcome.missingCount)],
+          ["reviewer_count", String(outcome.reviewerCount)],
+          ["findings_count", String(outcome.findingsCount)],
+          ["required_repairs_count", String(outcome.requiredRepairsCount)],
+          ["unresolved_disagreements_count", String(outcome.unresolvedDisagreementsCount)],
           ["summary", outcome.summary],
           // Full review text — every issue, every correction proposal,
           // every missing-goal proposal, with goal_ids preserved.
-          ["review_markdown", outcome.markdown],
+          ["team_report_markdown", outcome.markdown],
         ],
         pointer: `integrity session ${outcome.sessionID}`,
       })
@@ -1729,8 +1728,6 @@ export function createOrchestratorTools(input: {
       parentSessionID: input.agentSessionID,
     })
 
-    const perDimensionRollup = verdict.dimensions.map((d) => ({ id: d.id, verdict: d.verdict }))
-    const perDimensionLabels = verdict.dimensions.map((d) => `${d.id}=${d.verdict}`)
     const { recordIntegrityAttempt } = await import("@/engine/persist")
 
     const markdown = renderIntegrityMarkdown({ verdict, sessionID: verdict.sessionID })
@@ -1741,21 +1738,16 @@ export function createOrchestratorTools(input: {
         specSnapshotID: activeSpec.id,
         verdict: verdict.verdict,
         phase,
-        perDimension: perDimensionRollup,
-        issuesCount: verdict.issues.length,
-        correctionsCount: verdict.corrections.length + verdict.graphCorrections.length,
-        missingCount: verdict.missingGoals.length,
+        reviewers: verdict.reviewers,
+        findingsCount: verdict.findings.length,
+        requiredRepairsCount: verdict.requiredRepairs.length,
+        unresolvedDisagreementsCount: verdict.unresolvedDisagreements.length,
         reason: verdict.summary,
-        reviewMarkdown: markdown,
-        corrections: verdict.corrections.map((c) => ({
-          action: c.action,
-          goalID: c.goalID,
-          reason: c.reason,
-          updates: c.updates as Record<string, unknown> | undefined,
-        })),
-        graphCorrections: verdict.graphCorrections,
-        missingGoals: verdict.missingGoals,
-        acceptance: verdict.acceptance,
+        teamReportMarkdown: markdown,
+        findings: verdict.findings,
+        rounds: verdict.rounds,
+        requiredRepairs: verdict.requiredRepairs,
+        unresolvedDisagreements: verdict.unresolvedDisagreements,
       })
     } catch (err) {
       log.error("integrity: recordIntegrityAttempt failed", {
@@ -1772,19 +1764,13 @@ export function createOrchestratorTools(input: {
     // current goal graph cannot absorb them and architect re-run / fail_task
     // becomes the cheaper repair (per orchestrator-core.txt's repair ladder).
     try {
-      const dimSummary = verdict.dimensions
-        .map(
-          (d) =>
-            `${d.id}:${d.verdict}(${d.issues.length}i/${d.corrections.length}c/${d.graphCorrections.length}gc/${d.missingGoals.length}m)`,
-        )
-        .join(", ")
-      const topIssues = verdict.issues
+      const topIssues = verdict.findings
         .slice(0, 5)
-        .map((i) => `[${i.type}] ${i.description}`)
+        .map((i) => `[${i.severity}] ${i.title}: ${i.description}`)
         .join("; ")
-      const issueTail = verdict.issues.length > 5 ? ` (+${verdict.issues.length - 5} more in engine_artifact)` : ""
+      const issueTail = verdict.findings.length > 5 ? ` (+${verdict.findings.length - 5} more in engine_artifact)` : ""
       const value =
-        `verdict=${verdict.verdict} | dims=${dimSummary} | counts=${verdict.issues.length}i/${verdict.corrections.length}c/${verdict.graphCorrections.length}gc/${verdict.missingGoals.length}m` +
+        `verdict=${verdict.verdict} | reviewers=${verdict.reviewers.length} | findings=${verdict.findings.length} | required_repairs=${verdict.requiredRepairs.length} | unresolved=${verdict.unresolvedDisagreements.length}` +
         (verdict.summary ? ` | summary=${verdict.summary}` : "") +
         (topIssues ? ` | top: ${topIssues}${issueTail}` : "")
       decisionLog.append({
@@ -1807,17 +1793,15 @@ export function createOrchestratorTools(input: {
       summary: verdict.summary,
       sessionID: verdict.sessionID,
       goalCount: goalsForReview.length,
-      correctionsCount: verdict.corrections.length,
-      graphCorrectionsCount: verdict.graphCorrections.length,
-      missingCount: verdict.missingGoals.length,
-      perDimension: perDimensionLabels.map(
-        (label, index) => `${label}(${verdict.dimensions[index]?.issues.length ?? 0}issues)`,
-      ),
+      perDimension: [`reviewers=${verdict.reviewers.length}`, `findings=${verdict.findings.length}`],
+      reviewerCount: verdict.reviewers.length,
+      findingsCount: verdict.findings.length,
+      requiredRepairsCount: verdict.requiredRepairs.length,
+      unresolvedDisagreementsCount: verdict.unresolvedDisagreements.length,
       markdown,
-      dimensions: verdict.dimensions,
-      corrections: verdict.corrections,
-      graphCorrections: verdict.graphCorrections,
-      missingGoals: verdict.missingGoals,
+      findings: verdict.findings,
+      requiredRepairs: verdict.requiredRepairs,
+      unresolvedDisagreements: verdict.unresolvedDisagreements,
     }
   }
 
@@ -3068,17 +3052,11 @@ export function createOrchestratorTools(input: {
 
     integrity: tool({
       description:
-        "FINAL workflow gate. Multi-dimension review of the active " +
-        "architect graph along four " +
-        "axes: requirement_fidelity (REQ-N keyed coverage + system completion when " +
-        "post-build evidence is available), technical_feasibility (contract graph / " +
-        "owned_paths / dep graph viability + user-deliverable tier walk), " +
-        "hallucination (ungrounded REQs / specs / contracts), solution_quality " +
-        "(granularity, acceptance-spec strength, ownership, ordering). Returns a " +
-        "per-dimension verdict (pass / concerns / needs_correction) plus an aggregate " +
-        "verdict from accepted final acceptance, advisory-only concerns, and any repair-bearing blockers, " +
-        "plus the full per-dimension issue / correction / missing-goal text " +
-        "as a markdown block. A pass verdict completes the task. Non-pass findings " +
+        "FINAL workflow gate. Independent adversarial integrity supervisor review of the active " +
+        "architect graph and delivered system. The supervisor creates task-specific reviewer " +
+        "sessions, reviewers freely inspect/test within read-only evidence tools, and the final " +
+        "output is a consensus team report with findings, evidence, required repairs, and unresolved " +
+        "disagreements. A post-build pass verdict completes the task. Non-pass findings " +
         "are persisted as evidence only: this review never rewrites requirements, " +
         "never upserts goals, and the host never auto-supersedes attempts or " +
         "auto-routes findings — you read the markdown and choose modify_goal / " +
@@ -3873,12 +3851,11 @@ export function createOrchestratorTools(input: {
             if (integrityRow) {
               const p = (integrityRow.payload ?? {}) as Record<string, unknown>
               const matchesSnapshot = p.spec_snapshot_id === activeSpec.id
-              const perDim = Array.isArray(p.per_dimension)
-                ? (p.per_dimension as Array<{ id: string; verdict: string }>)
-                    .map((d) => `${d.id}=${d.verdict}`)
-                    .join(", ")
-                : ""
-              const reviewMarkdown = typeof p.review_markdown === "string" ? p.review_markdown : ""
+              const teamReportMarkdown = typeof p.team_report_markdown === "string" ? p.team_report_markdown : ""
+              const perDim = ""
+              p.issues_count = p.findings_count ?? 0
+              p.corrections_count = p.required_repairs_count ?? 0
+              p.missing_count = p.unresolved_disagreements_count ?? 0
               sections.push(
                 `\n## Integrity (latest)`,
                 `- verdict: ${String(p.verdict ?? "unknown")}` +
@@ -3894,7 +3871,7 @@ export function createOrchestratorTools(input: {
               // Architecture review is advisory: the orchestrator decides
               // modify_goal / build / architect / integrity / fail_task
               // explicitly based on this text.
-              if (reviewMarkdown) sections.push("", reviewMarkdown)
+              if (teamReportMarkdown) sections.push("", teamReportMarkdown)
             }
           }
           const lastDeliveryRow = Database.use((db) =>

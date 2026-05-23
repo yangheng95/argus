@@ -7,10 +7,11 @@ import { createDeliveryTools, type DeliveryToolContext } from "@/delivery/tools"
  * final repair agent and not a recursive gate.
  */
 export function createIntegrityAcceptanceTools(input?: DeliveryToolContext) {
-  const tools = createDeliveryTools(input)
+  const tools = createDeliveryTools({ ...input, readOnlyCommandGuard: true })
   const {
     edit_file: _editFile,
     write_file: _writeFile,
+    memory_write: _memoryWrite,
     run_integrity_review: _runIntegrityReview,
     ...reviewTools
   } = tools

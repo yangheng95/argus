@@ -446,6 +446,11 @@
   "integrity.verdict.concerns": "存在隐患",
   "integrity.verdict.needs_correction": "需修正",
   "integrity.verdict.pass": "通过",
+  "integrity.disagreements_heading": "未解决分歧（{{n}} 项）",
+  "integrity.findings_heading": "审查发现（{{n}} 项）",
+  "integrity.repairs_heading": "必需修复（{{n}} 项）",
+  "integrity.reviewers_heading": "审查团队",
+  "integrity.team_report_heading": "团队报告",
   "file.download": "下载",
   "file.load_failed": "{{name}} 加载失败",
   "files.changed": {

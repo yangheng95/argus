@@ -2,72 +2,76 @@ import { expect, test } from "bun:test"
 import { renderIntegrityMarkdown } from "../../src/integrity/render-markdown"
 import type { IntegrityResult } from "../../src/integrity"
 
-function acceptedAcceptance(): IntegrityResult["acceptance"] {
-  return {
-    verdict: "accepted",
-    summary: "Acceptance passed",
-    deferred_checks: [],
-    tool_call_evidence: [{ tool: "unit_test", passed: true, detail: "unit test passed" }],
-  }
-}
-
-test("renderIntegrityMarkdown emits requirement_ids and spec_ids on issue lines", () => {
+test("renderIntegrityMarkdown emits team findings, repairs, and disagreements", () => {
   const result: IntegrityResult = {
     verdict: "needs_correction",
-    summary: "REQ-1 incomplete",
-    acceptance: acceptedAcceptance(),
-    dimensions: [
+    summary: "API contract and component reuse need repair",
+    teamReportMarkdown: "Supervisor consensus: blocking API availability issue.",
+    reviewers: [
       {
-        id: "requirement_fidelity",
+        reviewerID: "api-reviewer",
+        scope: "API availability",
         verdict: "needs_correction",
-        issues: [{
-          type: "partial",
-          description: "REQ-1 frontend partially done",
-          requirementIDs: ["REQ-1"],
-          specIDs: ["acc-fe-1", "acc-fe-2"],
-          goalIDs: ["goal_fe"],
-          evidence: "acc-fe-1=passed, acc-fe-2=FAILED",
-        }],
-        corrections: [],
-        missingGoals: [],
+        summary: "New API is not callable.",
+        evidence: ["curl /api/new returned 404"],
+        findings: [],
+        openQuestions: [],
       },
-    ],
-    issues: [],
-    corrections: [],
-    missingGoals: [],
-  }
-
-  const md = renderIntegrityMarkdown({ verdict: result, sessionID: "ses_test" })
-  expect(md).toContain("requirement_ids=[REQ-1]")
-  expect(md).toContain("spec_ids=[acc-fe-1, acc-fe-2]")
-  expect(md).toContain("goal_ids=[goal_fe]")
-  expect(md).toContain("[partial]")
-})
-
-test("renderIntegrityMarkdown omits requirement_ids / spec_ids segments when those fields are empty", () => {
-  const result: IntegrityResult = {
-    verdict: "concerns",
-    summary: "Minor concern",
-    acceptance: acceptedAcceptance(),
-    dimensions: [
       {
-        id: "solution_quality",
+        reviewerID: "reuse-reviewer",
+        scope: "Component reuse",
         verdict: "concerns",
-        issues: [{
-          type: "weak_acceptance",
-          description: "spec passes by construction",
-        }],
-        corrections: [],
-        missingGoals: [],
+        summary: "A duplicate widget bypasses the shared component.",
+        evidence: ["src/new-widget.tsx duplicates SharedWidget"],
+        findings: [],
+        openQuestions: [],
+      },
+    ],
+    findings: [
+      {
+        id: "api-unavailable",
+        severity: "blocking",
+        verdictImpact: "needs_correction",
+        title: "New API is unavailable",
+        description: "The requested API route is not registered.",
+        evidence: ["curl /api/new returned 404"],
+        targetIDs: ["goal_api"],
+        requirementIDs: ["REQ-1"],
+        specIDs: ["acc-api"],
+        filePaths: ["src/routes.ts"],
+        repair: "Register the API route and prove it with a runtime request.",
+        reviewers: ["api-reviewer"],
+        consensus: "agreed",
+      },
+    ],
+    rounds: [],
+    requiredRepairs: [
+      {
+        id: "repair-api-route",
+        description: "Make /api/new callable.",
+        evidence: ["curl /api/new returned 404"],
+        targetIDs: ["goal_api"],
+        filePaths: ["src/routes.ts"],
+      },
+    ],
+    unresolvedDisagreements: [
+      {
+        id: "style-risk",
+        description: "Reviewers disagreed whether style drift blocks completion.",
+        reviewerIDs: ["api-reviewer", "reuse-reviewer"],
+        consequence: "Supervisor kept it visible for orchestrator follow-up.",
       },
     ],
     issues: [],
     corrections: [],
+    graphCorrections: [],
     missingGoals: [],
   }
 
-  const md = renderIntegrityMarkdown({ verdict: result, sessionID: "ses_test" })
-  expect(md).not.toContain("requirement_ids=")
-  expect(md).not.toContain("spec_ids=")
-  expect(md).toContain("[weak_acceptance]")
+  const md = renderIntegrityMarkdown({ verdict: result, sessionID: "ses_team" })
+  expect(md).toContain("Integrity team review")
+  expect(md).toContain("api-reviewer")
+  expect(md).toContain("api-unavailable")
+  expect(md).toContain("repair-api-route")
+  expect(md).toContain("style-risk")
 })

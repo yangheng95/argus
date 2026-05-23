@@ -40,7 +40,10 @@ export function emitReviewStreamProgress(input: {
   taskID?: string
   reviewID?: string
   phase: ReviewStreamPhase
-  currentStep: ReviewStreamStep
+  currentStep?: ReviewStreamStep
+  activity?: string
+  reviewerID?: string
+  roundID?: string
   attempt: number
   elapsedMs: number
   summary?: string
@@ -54,6 +57,9 @@ export function emitReviewStreamProgress(input: {
       reviewID: input.reviewID,
       phase: input.phase,
       currentStep: input.currentStep,
+      activity: input.activity,
+      reviewerID: input.reviewerID,
+      roundID: input.roundID,
       attempt: input.attempt,
       elapsedMs: input.elapsedMs,
       summary: input.summary,
