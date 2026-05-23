@@ -680,7 +680,7 @@ Reviewer count behavior:
 4. [x] Update `recordIntegrityAttempt` to compute `attempts` from the artifact
    list at write time; add a regression test that two sequential records on
    the same task/spec produce payloads with `attempts=1` then `attempts=2`.
-5. [ ] Extend `team-agent.ts` input types and replace all hard-coded attempt
+5. [x] Extend `team-agent.ts` input types and replace all hard-coded attempt
    values.
 6. [ ] Add replay sections to supervisor planning, reviewer, and consensus
    prompts.
