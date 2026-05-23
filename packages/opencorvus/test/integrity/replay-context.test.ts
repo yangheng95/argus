@@ -5,7 +5,7 @@ import { EngineSpecSnapshotTable, EngineTaskTable } from "../../src/engine/engin
 import { recordIntegrityAttempt } from "../../src/engine/persist"
 import { findLatestIntegrityAttemptArtifact, listIntegrityAttemptArtifacts } from "../../src/engine/store"
 import type { DeliveryRow, GoalRunRow } from "../../src/engine/store"
-import { buildIntegrityReplayContext } from "../../src/integrity/replay-context"
+import { buildIntegrityReplayContext, renderIntegrityReplayContextPrompt } from "../../src/integrity/replay-context"
 import type { GoalContractFields } from "../../src/pipeline/types"
 import { resetDatabase } from "../fixture/db"
 
@@ -360,5 +360,87 @@ describe("integrity replay context artifact source", () => {
       priorAttempts: 2,
       priorBlockingFindings: 1,
     })
+  })
+
+  test("renders first review replay prompt without fixed-dimension language", () => {
+    const ctx = buildIntegrityReplayContext({
+      taskID: "tsk_render_first",
+      specSnapshotID: "spec_render_first",
+      phase: "pre_build",
+      goals: [goal("first", 1)],
+      requirements: [],
+      deliveries: [],
+      goalRuns: [],
+    })
+
+    const prompt = renderIntegrityReplayContextPrompt(ctx)
+    expect(prompt).toContain("Current integrity attempt: #1")
+    expect(prompt).toContain("No prior integrity attempts exist for this task/spec snapshot")
+    expect(prompt).toContain("Scale signals:")
+    expect(prompt).toContain("- goals=1")
+    expect(prompt.toLowerCase()).not.toContain("fixed dimension")
+    expect(prompt.toLowerCase()).not.toContain("checklist")
+  })
+
+  test("renders re-review prompt with prior blockers, repairs, reviewer focuses, changed files, and scale signals", () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `proj_replay_render_${stamp}`
+    const taskID = `tsk_replay_render_${stamp}`
+    const specID = `spec_replay_render_${stamp}`
+    seedTask({ projectID, taskID, specIDs: [specID], now })
+    recordIntegrityAttempt({
+      taskID,
+      sessionID: `ses_replay_render_${stamp}`,
+      specSnapshotID: specID,
+      verdict: "needs_correction",
+      phase: "post_build",
+      reviewers: [{ reviewerID: "rev_settings", scope: "Settings validation", verdict: "needs_correction" }],
+      findings: [
+        {
+          id: "BF-1",
+          severity: "blocking",
+          title: "Settings validation blind spot",
+          description: "Invalid settings are accepted.",
+          repair: "Reject invalid settings before persisting.",
+          filePaths: ["src/settings.ts"],
+          requirementIDs: ["REQ-2"],
+          specIDs: ["settings_validation"],
+        },
+      ],
+      requiredRepairs: [
+        { id: "repair-settings", description: "Add settings validation", filePaths: ["src/settings.ts"] },
+      ],
+      now: now + 10,
+    })
+    const ctx = buildIntegrityReplayContext({
+      taskID,
+      specSnapshotID: specID,
+      phase: "post_build",
+      goals: [goal("settings", 1)],
+      requirements: [{ id: "REQ-2", type: "explicit", description: "Reject invalid settings" }],
+      deliveries: [
+        delivery({
+          id: "delivery_render_new",
+          taskID,
+          now: now + 20,
+          summary: "Settings validation repair delivery",
+          result: { changed_files: ["src/settings.ts"], diffs: [{ file: "src/storage.ts", status: "modified" }] },
+        }),
+      ],
+      goalRuns: [],
+    })
+
+    const prompt = renderIntegrityReplayContextPrompt(ctx)
+    expect(prompt).toContain("Current integrity attempt: #2")
+    expect(prompt).toContain("verdict=needs_correction")
+    expect(prompt).toContain("rev_settings: Settings validation")
+    expect(prompt).toContain("BF-1: Settings validation blind spot")
+    expect(prompt).toContain("repair: Reject invalid settings before persisting.")
+    expect(prompt).toContain("repair-settings: Add settings validation")
+    expect(prompt).toContain("src/settings.ts")
+    expect(prompt).toContain("src/storage.ts")
+    expect(prompt).toContain("- prior_attempts=1")
+    expect(prompt).toContain("- prior_blocking_findings=1")
   })
 })

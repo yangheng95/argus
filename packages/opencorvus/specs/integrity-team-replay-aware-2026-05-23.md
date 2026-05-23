@@ -672,7 +672,7 @@ Reviewer count behavior:
 1. [x] Add `listIntegrityAttemptArtifacts` and tests; make latest helper
    delegate to it.
 2. [x] Add `integrity/replay-context.ts` helper and unit tests.
-3. [ ] Add prompt renderer snapshot tests for first review and re-review.
+3. [x] Add prompt renderer snapshot tests for first review and re-review.
 4. [ ] Update `recordIntegrityAttempt` to compute `attempts` from the artifact
    list at write time; add a regression test that two sequential records on
    the same task/spec produce payloads with `attempts=1` then `attempts=2`.
