@@ -443,4 +443,36 @@ describe("integrity replay context artifact source", () => {
     expect(prompt).toContain("- prior_attempts=1")
     expect(prompt).toContain("- prior_blocking_findings=1")
   })
+
+  test("recordIntegrityAttempt materializes attempts from the artifact list counter", () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `proj_attempts_${stamp}`
+    const taskID = `tsk_attempts_${stamp}`
+    const specID = `spec_attempts_${stamp}`
+    seedTask({ projectID, taskID, specIDs: [specID], now })
+
+    const first = recordIntegrityAttempt({
+      taskID,
+      sessionID: `ses_attempts_1_${stamp}`,
+      specSnapshotID: specID,
+      verdict: "needs_correction",
+      phase: "post_build",
+      now: now + 10,
+    })
+    const second = recordIntegrityAttempt({
+      taskID,
+      sessionID: `ses_attempts_2_${stamp}`,
+      specSnapshotID: specID,
+      verdict: "pass",
+      phase: "post_build",
+      now: now + 20,
+    })
+
+    const attempts = listIntegrityAttemptArtifacts({ taskID, specSnapshotID: specID })
+    const firstPayload = attempts.find((row) => row.id === first)?.payload as Record<string, unknown> | undefined
+    const secondPayload = attempts.find((row) => row.id === second)?.payload as Record<string, unknown> | undefined
+    expect(firstPayload?.attempts).toBe(1)
+    expect(secondPayload?.attempts).toBe(2)
+  })
 })

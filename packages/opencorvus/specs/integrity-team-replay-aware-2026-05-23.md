@@ -85,6 +85,10 @@ because the supervisor prompt had no replay memory and every stream said
   import call sites after grep. This PR retires that team-less implementation
   and its dimension-only support files instead of carrying a replay
   compatibility path.
+- Code review found `recordIntegrityAttempt` currently omits
+  `payload.attempts` rather than persisting the observed bad `1`; the required
+  write-time materialized copy still lands here and still uses the ordered
+  artifact list as its single source.
 
 Non-goals:
 
@@ -673,7 +677,7 @@ Reviewer count behavior:
    delegate to it.
 2. [x] Add `integrity/replay-context.ts` helper and unit tests.
 3. [x] Add prompt renderer snapshot tests for first review and re-review.
-4. [ ] Update `recordIntegrityAttempt` to compute `attempts` from the artifact
+4. [x] Update `recordIntegrityAttempt` to compute `attempts` from the artifact
    list at write time; add a regression test that two sequential records on
    the same task/spec produce payloads with `attempts=1` then `attempts=2`.
 5. [ ] Extend `team-agent.ts` input types and replace all hard-coded attempt
