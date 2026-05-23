@@ -684,7 +684,7 @@ Reviewer count behavior:
    values.
 6. [x] Add replay sections to supervisor planning, reviewer, and consensus
    prompts.
-7. [ ] Wire `runIntegrityReviewOnce` in `orchestrator/tools.ts`.
+7. [x] Wire `runIntegrityReviewOnce` in `orchestrator/tools.ts`.
 8. [ ] Wire `runDeliveryIntegrityReview` in `delivery/tools.ts`.
 9. [ ] Update mocks/tests for all active `reviewIntegrity` callers.
 10. [ ] Add integration test for attempt #2 prompt contents.
