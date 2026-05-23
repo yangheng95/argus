@@ -26,7 +26,7 @@
  *
  *   id          — snake_case id, used as the suffix on the per-dimension
  *                 `submit_<id>_verdict` tool name and as a stable key for
- *                 downstream consumers (overlay rendering, prosecutor
+ *                 downstream consumers (overlay rendering, integrity
  *                 categorisation).
  *   title       — human-readable title (en).
  *   summary     — single-sentence description that appears in the agent's

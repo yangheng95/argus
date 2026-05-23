@@ -362,7 +362,7 @@ export function applyEvent(event: any): void {
   // only signal that flips a session card out of `running`. Carries
   // `{sessionID, status:{type:"streaming"|"idle"|"retry"|"terminal", ...}}`.
   // Applies to every session — orchestrator root, requirements / architect /
-  // design-analyst / integrity / build / deliver / refine / prosecute /
+  // design-analyst / integrity / build / deliver / refine /
   // analyze_intent / modify_goal / publish_delivery, future phases. See
   // specs/new-arch/07-panel-reactivity.md §session 终态信号源.
   if (type === "session.status") {

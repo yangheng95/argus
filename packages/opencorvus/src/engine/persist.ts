@@ -2195,61 +2195,6 @@ export function recordIntegrityAttempt(input: {
 }
 
 /**
- * Record a prosecutor-pass attempt as an append-only artifact. Counterexample
- * rows (engine_counterexample) and challenge metric specs are already
- * persisted by the prosecutor itself; this artifact records the FACT that the
- * adversarial pass ran for a given (delivery, iteration) tuple so the
- * orchestrator's read_context can show "prosecutor: ran for iteration N"
- * versus the prior implicit gap where zero counterexamples filed was
- * indistinguishable from "never called".
- */
-export function recordProsecutorAttempt(input: {
-  taskID: string
-  /** Delivery row this adversarial pass targeted. Same id read by `prosecute`
-   *  to fetch the defender verdict (orchestrator/tools.ts). */
-  deliveryID: string
-  /** Prosecutor child session id — surfaces in overlay nesting. */
-  sessionID: string
-  /** Iteration index inside the delivery trajectory; matches readIterationHistory. */
-  iteration: number
-  counterexamplesFiled: number
-  challengesProposed: number
-  counterexamplesResolved: number
-  rationale?: string
-  now?: number
-}): string {
-  const id = Identifier.ascending("artifact")
-  const now = input.now ?? Date.now()
-  const payload = {
-    session_id: input.sessionID,
-    iteration: input.iteration,
-    counterexamples_filed: input.counterexamplesFiled,
-    challenges_proposed: input.challengesProposed,
-    counterexamples_resolved: input.counterexamplesResolved,
-    rationale: input.rationale ?? null,
-    time_completed: now,
-  }
-  Database.use((db) =>
-    db
-      .insert(EngineArtifactTable)
-      .values({
-        id,
-        task_id: input.taskID,
-        delivery_id: input.deliveryID,
-        run_id: null,
-        goal_run_id: null,
-        kind: "prosecutor_attempt",
-        label: `iter-${input.iteration}`,
-        payload,
-        time_created: now,
-        time_updated: now,
-      })
-      .run(),
-  )
-  return id
-}
-
-/**
  * Record an orchestrator stream-error fact as an append-only artifact.
  *
  * Used when the orchestrator's own LLM stream aborts mid-decision (provider

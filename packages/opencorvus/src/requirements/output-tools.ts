@@ -5,8 +5,7 @@
  * and records foundational technical decisions (runtime / framework / test
  * strategy). Goals, acceptance specs, traceability, source/reference
  * coverage, and cross-goal contracts are produced by the Architect — not
- * here. Challenge metrics are produced by prosecutor/metrics after delivery
- * evidence exists.
+ * here.
  *
  * Each tool call is small (~500 bytes). Zod schema validation at the wire
  * enforces required fields, enums, and min lengths.

@@ -107,7 +107,6 @@ export type EngineArtifactKind =
   | "delivery"
   | "goal_run_attempt"
   | "integrity_attempt"
-  | "prosecutor_attempt"
   | "run"
   | "architect_contract_graph"
   | "build_session_contract"

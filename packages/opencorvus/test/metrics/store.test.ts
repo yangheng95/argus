@@ -8,14 +8,10 @@ import {
   EngineMetricSpecTable,
 } from "../../src/metrics/metrics.sql"
 import {
-  MAX_CHALLENGE_PER_ITER,
-  MAX_CHALLENGE_PER_TASK,
   MetricWriteError,
-  addChallengeMetric,
   readResultsForIteration,
   readSpecsForTask,
   registerBaselineSpec,
-  upsertCounterexample,
   writeIterationSnapshot,
   writeMetricResult,
 } from "../../src/metrics/store"
@@ -77,29 +73,6 @@ function baselineInput(over: Partial<Parameters<typeof registerBaselineSpec>[0]>
     evaluator_kind: "judge" as const,
     evaluator_config: { criteria: "match request intent" },
     source_requirement_ids: ["REQ-1"],
-    ...over,
-  }
-}
-
-function challengeInput(
-  iteration: number,
-  over: Partial<Parameters<typeof addChallengeMetric>[0]> = {},
-) {
-  return {
-    task_id: taskID,
-    scope: "global" as const,
-    goal_id: null,
-    name: `challenge_${iteration}_${Math.random().toString(36).slice(2, 6)}`,
-    description: "probe",
-    unit: "ratio",
-    direction: "higher_better" as const,
-    target: 0.8,
-    floor: 0.5,
-    weight: 0.5,
-    evaluator_kind: "judge" as const,
-    evaluator_config: {},
-    source_requirement_ids: [],
-    iteration,
     ...over,
   }
 }
@@ -176,110 +149,6 @@ describe("baseline frozen-ruler — DB-level trigger", () => {
           .run(),
       ),
     ).toThrow(/baseline row is frozen/)
-  })
-
-  test("UPDATE on a challenge row is allowed", () => {
-    const challenge = addChallengeMetric(challengeInput(0))
-    Database.use((db) =>
-      db
-        .update(EngineMetricSpecTable)
-        .set({ weight: 0.25 })
-        .where(eq(EngineMetricSpecTable.id, challenge.id))
-        .run(),
-    )
-    const refreshed = Database.use((db) =>
-      db
-        .select()
-        .from(EngineMetricSpecTable)
-        .where(eq(EngineMetricSpecTable.id, challenge.id))
-        .get(),
-    )
-    expect(refreshed?.weight).toBe(0.25)
-  })
-})
-
-describe("addChallengeMetric — budgets and gate-class lock", () => {
-  test("gate_class is always diagnostic regardless of caller", () => {
-    const row = addChallengeMetric(challengeInput(0))
-    expect(row.gate_class).toBe("diagnostic")
-    expect(row.source).toBe("challenge")
-    expect(row.created_by).toBe("prosecutor")
-  })
-
-  test("K=1 per iteration: second challenge in same iter rejected", () => {
-    addChallengeMetric(challengeInput(0, { name: "c0a" }))
-    try {
-      addChallengeMetric(challengeInput(0, { name: "c0b" }))
-      throw new Error("should not reach")
-    } catch (err) {
-      expect(err).toBeInstanceOf(MetricWriteError)
-      if (err instanceof MetricWriteError) {
-        expect(err.data.code).toBe("challenge_budget_iteration")
-      }
-    }
-  })
-
-  test("≤3 per task total across iterations", () => {
-    addChallengeMetric(challengeInput(0))
-    addChallengeMetric(challengeInput(1))
-    addChallengeMetric(challengeInput(2))
-    try {
-      addChallengeMetric(challengeInput(3))
-      throw new Error("should not reach")
-    } catch (err) {
-      expect(err).toBeInstanceOf(MetricWriteError)
-      if (err instanceof MetricWriteError) {
-        expect(err.data.code).toBe("challenge_budget_task")
-      }
-    }
-  })
-
-  test("constants are the documented values", () => {
-    expect(MAX_CHALLENGE_PER_ITER).toBe(1)
-    expect(MAX_CHALLENGE_PER_TASK).toBe(3)
-  })
-
-  test("MetricWriteError carries the violation code", () => {
-    addChallengeMetric(challengeInput(0))
-    try {
-      addChallengeMetric(challengeInput(0))
-      throw new Error("should not reach")
-    } catch (err) {
-      expect(err).toBeInstanceOf(MetricWriteError)
-      if (err instanceof MetricWriteError) {
-        expect(err.data.code).toBe("challenge_budget_iteration")
-      }
-    }
-  })
-})
-
-describe("upsertCounterexample — novelty dedup", () => {
-  test("same novelty_hash on same task returns the existing row without new insert", () => {
-    const a = upsertCounterexample({
-      task_id: taskID,
-      iteration_found: 0,
-      novelty_hash: "dup-hash",
-      target_scope: "global",
-      target_ref: "intent",
-      claim: "first",
-      reproducer: "curl /foo",
-      severity: "blocking",
-      linked_metric_spec_id: null,
-    })
-    const b = upsertCounterexample({
-      task_id: taskID,
-      iteration_found: 5,
-      novelty_hash: "dup-hash",
-      target_scope: "global",
-      target_ref: "intent",
-      claim: "second",
-      reproducer: "curl /bar",
-      severity: "diagnostic",
-      linked_metric_spec_id: null,
-    })
-    expect(b.id).toBe(a.id)
-    expect(b.iteration_found).toBe(0)
-    expect(b.claim).toBe("first")
   })
 })
 

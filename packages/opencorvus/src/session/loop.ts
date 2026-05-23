@@ -163,7 +163,6 @@ export namespace SessionLoop {
     "integrity",
     "intent-analysis",
     "orchestrator",
-    "prosecutor",
     "requirements",
   ])
 

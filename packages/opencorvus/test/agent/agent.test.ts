@@ -94,7 +94,7 @@ test("coding agent owns direct assistant prompt", async () => {
 // the current build: there is no "plan" entry in agent.ts's BUILT_IN
 // dict (only build / general / explore / compaction / title /
 // summary / orchestrator / requirements / architect /
-// integrity / prosecutor — see agent.ts). The
+// integrity — see agent.ts). The
 // plan-mode feature was either renamed or removed; the
 // `plan_enter`/`plan_exit` permission keys are no longer in the
 // Permission schema either (see config.ts:625-647 — they fall
@@ -349,12 +349,11 @@ test("native stage agent registry tool surfaces match role boundaries", async ()
       expect(design?.tools?.include).not.toContain("webpage_render")
       expect(design?.tools?.include).not.toContain("task")
 
-      for (const name of ["integrity", "prosecutor"] as const) {
-        const agent = await Agent.get(name)
-        expect(agent).toBeDefined()
-        expect(agent?.tools?.include).toEqual([])
-      }
+      const integrity = await Agent.get("integrity")
+      expect(integrity).toBeDefined()
+      expect(integrity?.tools?.include).toEqual([])
       expect(await Agent.get("delivery")).toBeUndefined()
+      expect(await Agent.get("prosecutor")).toBeUndefined()
     },
   })
 })
@@ -440,23 +439,6 @@ test("integrity agent does not expose registry tools", async () => {
   })
 })
 
-test("prosecutor agent does not expose registry tools", async () => {
-  await using tmp = await tmpdir()
-  await Instance.provide({
-    directory: tmp.path,
-    fn: async () => {
-      const prosecutor = await Agent.get("prosecutor")
-      expect(prosecutor).toBeDefined()
-      expect(prosecutor?.hidden).toBe(true)
-      // Registry tools (read/edit/bash/mirror/...) must stay out — the
-      // prosecutor's verdict + counterexample tools are injected per run via
-      // toolKit. A missing include here would re-expand the registry and
-      // bloat the system prompt with ~30 unused tool schemas.
-      expect(prosecutor?.tools).toEqual({ include: [] })
-    },
-  })
-})
-
 test("orchestrator include list excludes the dead query_metric_trajectory reference", async () => {
   await using tmp = await tmpdir()
   await Instance.provide({
@@ -464,10 +446,10 @@ test("orchestrator include list excludes the dead query_metric_trajectory refere
     fn: async () => {
       const orchestrator = await Agent.get("orchestrator")
       expect(orchestrator).toBeDefined()
-      // query_metric_trajectory is defined inside delivery/prosecutor toolkits
-      // and never injected into the orchestrator. Naming it in the include
-      // list mislead readers (and prior prompt drafts) into thinking the
-      // orchestrator could call it. Keep the list aligned with reality.
+      // query_metric_trajectory was defined inside delivery toolkits and never
+      // injected into the orchestrator. Naming it in the include list misled
+      // readers (and prior prompt drafts) into thinking the orchestrator
+      // could call it. Keep the list aligned with reality.
       expect(orchestrator?.tools?.include).not.toContain("query_metric_trajectory")
     },
   })
@@ -835,7 +817,7 @@ test("only design-analyst receives mirror analysis tools from the registry", asy
         expect(designToolIds.has(id)).toBe(false)
       }
 
-      for (const name of ["coding", "build", "general", "explore", "requirements", "architect", "integrity", "prosecutor"]) {
+      for (const name of ["coding", "build", "general", "explore", "requirements", "architect", "integrity"]) {
         const agent = await Agent.get(name)
         expect(agent).toBeDefined()
         const tools = await ToolRegistry.tools({ providerID: "", modelID: "" }, agent)

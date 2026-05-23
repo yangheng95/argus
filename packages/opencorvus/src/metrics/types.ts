@@ -1,11 +1,8 @@
 /**
- * Dynamic Adversarial Metrics — typed surface.
+ * Architect-authored metrics — typed surface.
  *
  * The modeling layer (Architect / RequirementsAgent) produces MetricSpec rows
- * exactly once at task start; the ruler is frozen after that and the
- * Prosecutor may only insert diagnostic challenge rows on top.
- *
- * See docs/spec-dynamic-adversarial-metrics.md for rationale.
+ * exactly once at task start; the ruler is frozen after that.
  */
 import z from "zod"
 
@@ -35,7 +32,7 @@ export type MetricEvaluatorKind = z.infer<typeof MetricEvaluatorKind>
 export const MetricSource = z.enum(["baseline", "challenge"])
 export type MetricSource = z.infer<typeof MetricSource>
 
-export const MetricCreatedBy = z.enum(["architect", "prosecutor"])
+export const MetricCreatedBy = z.enum(["architect"])
 export type MetricCreatedBy = z.infer<typeof MetricCreatedBy>
 
 /**
