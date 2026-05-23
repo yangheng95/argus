@@ -12,7 +12,7 @@
  * The orchestrator is the only task-level decision maker. It reads the
  * describe/artifact snapshot on every wake and chooses which specialist tool
  * to invoke next: intent analysis, design analysis, requirements, architect,
- * build, integrity, prosecutor, delivery, or lifecycle controls. MiniWorkflow
+ * build, integrity, delivery, or lifecycle controls. MiniWorkflow
  * renders an advisory path; it is not a fixed pipeline or hidden state
  * machine. Specialist agents own their structured artifacts, but task
  * lifecycle stays here.
@@ -21,7 +21,7 @@
  *
  * The orchestrator is the HOST of the worker-session pattern that
  * `src/agent/runner.ts` abstracts — not a user of that pattern. Worker
- * agents (build, delivery, integrity, prosecutor, requirements, architect,
+ * agents (build, delivery, integrity, requirements, architect,
  * design-analyst, intent-analysis) collapse into the runner's shape because
  * they all share: single composed system prompt, terminal collector contract,
  * thrown AgentRunError on stream / abort failure, no step-level coordination.
@@ -865,8 +865,8 @@ async function buildSystemParts(task: TaskRow, _event: OrchestratorEvent | undef
   // (verdict summary + issues) so the assistant sees both the aggregated
   // signal AND the concrete delivery-agent feedback for the most recent round.
   // The orchestrator decides next steps from this rendered snapshot directly;
-  // per-metric details + open counterexamples live on the prosecutor and
-  // delivery sub-agent sessions, not in an orchestrator tool surface.
+  // per-metric details live on the delivery sub-agent session, not in an
+  // orchestrator tool surface.
   const iterationHistory = readHistForPrompt(task.id)
   if (iterationHistory.length > 0) {
     const RENDER_RECENT = 3

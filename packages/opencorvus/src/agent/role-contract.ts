@@ -13,7 +13,6 @@ export type AgentRoleID =
   | "design-analyst"
   | "intent-analysis"
   | "integrity"
-  | "prosecutor"
 
 export interface AgentRoleContract {
   id: AgentRoleID
@@ -119,13 +118,6 @@ export namespace AgentRoleContract {
     integrity: {
       id: "integrity",
       description: "Integrity reviewer. Audits requirement and goal integrity and owns final session-bound acceptance review, including runtime, frontend, visual, and rejection-detail evidence.",
-      promptEditable: true,
-      defaultPromptRequired: true,
-      promptConfigMode: "append",
-    },
-    prosecutor: {
-      id: "prosecutor",
-      description: "Prosecutor agent. Files adversarial counterexamples and diagnostic challenge metrics over delivery evidence; it cannot accept or reject delivery.",
       promptEditable: true,
       defaultPromptRequired: true,
       promptConfigMode: "append",

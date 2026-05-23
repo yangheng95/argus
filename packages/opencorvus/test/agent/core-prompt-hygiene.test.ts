@@ -12,7 +12,6 @@ const promptFiles = {
   integrity: "integrity-core.txt",
   intentAnalysis: "intent-analysis-core.txt",
   orchestrator: "orchestrator-core.txt",
-  prosecutor: "prosecutor-core.txt",
   requirements: "requirements-core.txt",
 }
 
@@ -54,7 +53,6 @@ describe("core prompt hygiene", () => {
       // explicit: dependency, worktree merge, port, script, and toolchain
       // blockers must be routed to repair owners instead of passive waits.
       orchestrator: 420,
-      prosecutor: 80,
       requirements: 180,
     }
 
@@ -90,7 +88,7 @@ describe("core prompt hygiene", () => {
     // owns final acceptance. No active agent core prompt may name Delivery as
     // the acceptance/verdict authority. Lowercase generic "deliver" verbs are
     // fine — these patterns target the retired role-as-authority constructs
-    // that prosecutor-core / requirements-core used to carry.
+    // that requirements-core used to carry.
     const forbidden = [
       /Delivery owns/,
       /Delivery reviewer/,
@@ -175,7 +173,6 @@ describe("core prompt hygiene", () => {
     expect(orchestratorTools).toContain("build reports as review input")
 
     expect(requirementsTools).not.toContain("metric specs, challenge seeds")
-    expect(requirementsTools).toContain("Challenge metrics are produced by prosecutor/metrics")
 
     expect(workflow).not.toContain("停止默认调度")
     expect(workflow).not.toContain("goals / 度量 / 挑战种子 / 契约")
@@ -709,15 +706,4 @@ describe("core prompt hygiene", () => {
     expect(normalized).toContain("build must restore them 1:1 as closely as the stack allows")
   })
 
-  test("prosecutor prompt references the current integrity acceptance rejection surface", async () => {
-    const text = await readPrompt("prosecutor")
-    expect(text).not.toContain("Defender's own issues_found")
-    expect(text).toContain("Defender's own rejection_details")
-    expect(text).toContain("Use `query_diff` only when it returns a real diff snapshot")
-    expect(text).toContain("do not invent diff-grounded claims")
-    // delivery is retired — the prosecutor challenges the integrity
-    // acceptance verdict, not a delivery verdict (rule 8 single-source).
-    expect(text).not.toContain("real delivery snapshot")
-    expect(text).toContain("acceptance-surface evidence")
-  })
 })

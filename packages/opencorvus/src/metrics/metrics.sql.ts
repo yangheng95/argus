@@ -15,8 +15,7 @@ import type {
 
 /**
  * Frozen metric definitions — produced once at task start by the Architect
- * (source='baseline') and by the Prosecutor as diagnostic challenges
- * (source='challenge'). Baseline rows are immutable (see store.ts).
+ * (source='baseline'). Baseline rows are immutable (see store.ts).
  */
 export const EngineMetricSpecTable = sqliteTable(
   "engine_metric_spec",
@@ -86,9 +85,10 @@ export const EngineMetricResultTable = sqliteTable(
 )
 
 /**
- * Prosecutor-authored counterexamples. iteration_resolved NULL ⇔ still open.
- * novelty_hash dedups re-surfacing of the same reproducer — the dedup logic
- * is what lets 'stalled' terminate on novelty_score=0.
+ * Counterexample evidence (read-only post-Prosecutor retirement; the table is
+ * preserved for legacy delivery reads, but no production writer exists today).
+ * iteration_resolved NULL ⇔ still open. novelty_hash dedups re-surfacing of the
+ * same reproducer.
  */
 export const EngineCounterexampleTable = sqliteTable(
   "engine_counterexample",

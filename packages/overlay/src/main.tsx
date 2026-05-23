@@ -206,7 +206,7 @@ function buildTaskDebugBlob(board: any): string {
     ``,
     `Notes:`,
     `  - engine_goal stores the goal contract only. workspace_dir / workspace_branch / workspace_base_ref / retry_count / status / cascade_state were retired (2026-05-05); workspace + retry live on the latest engine_artifact[kind='goal_run_attempt'].payload row, goal status is derived live via engine/describe.ts::goalStatusByID from the goal_run chain.`,
-    `  - engine_artifact is the append-only single source: run / goal_run_attempt / delivery / verification-evidence / architect_contract_graph / integrity_attempt / prosecutor_attempt / orchestrator-stream-error all live here. Latest-per-id wins by time_created desc.`,
+    `  - engine_artifact is the append-only single source: run / goal_run_attempt / delivery / verification-evidence / architect_contract_graph / integrity_attempt / orchestrator-stream-error all live here. Latest-per-id wins by time_created desc.`,
     `  - Right-side Files panel reads board.goalWorkflows[].steps[].payload.changedFiles / changedFileDiffs, which are projected from per-goal engine_artifact[kind='delivery']. If SQL shows delivery rows but the panel omits a goal, debug overlay refresh/resource keys before suspecting DB writes.`,
     `  - Project-scoped HTTP routes require task.directory as ?directory= or x-opencorvus-directory. /global/health is control-plane only; it confirms server health and global paths, not whether this task exists in the selected project instance.`,
     `  - Empty engine_executor_session does NOT mean nothing is running — that table is only populated when the executor protocol formally registers a lease; in-process executors emit only via session.bridge.`,

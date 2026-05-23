@@ -3116,126 +3116,6 @@ export function createOrchestratorTools(input: {
     }),
 
     // -----------------------------------------------------------------------
-    // Prosecute — orchestrator-driven adversarial probe.
-    //
-    // Legacy adversarial probe over persisted delivery evidence. It is not
-    // part of the default workflow now that delivery host-gate verification is
-    // retired; integrity is the workflow completion gate.
-    // -----------------------------------------------------------------------
-
-    prosecute: tool({
-      description:
-        "Legacy adversarial probe over the most recent persisted delivery evidence. " +
-        "Use only for historical delivery evidence when explicitly requested; it is not " +
-        "part of the workflow gate and cannot accept or reject the task. " +
-        "New workflow completion is owned by integrity.",
-      inputSchema: z.object({
-        reason: z.string().optional().describe("Why you decided to run the prosecutor now"),
-      }),
-      execute: async () => {
-        const task = requireTask(taskID)
-        const designGate = requireDesignAnalysisBefore("prosecute", task)
-        if (designGate) return designGate
-        // Stateless / unconditional — physical preconditions only (a delivery
-        // row to prosecute against). The "No active run" message was a
-        // state-machine cache gate; same lazy-bootstrap as deliver/publish.
-        let run = findActiveRunForTask(taskID)
-        if (!run && listGoals(taskID).length > 0) {
-          const ensured = await ensureDispatchableRunForSingleGoal()
-          if (!("error" in ensured)) run = ensured.run
-        }
-        const delivery = run ? findDeliveryByRun(run.id) : undefined
-        if (!delivery) {
-          return SubAgentProtocol.yieldResult({
-            headline:
-              "prosecute: no legacy delivery row to prosecute against. Delivery is retired; use integrity for workflow review.",
-            pointer: run ? `run ${run.id}` : `task ${taskID}`,
-          })
-        }
-        const { EngineArtifactTable } = await import("@/engine/engine.sql")
-        const { desc } = await import("@/storage/db")
-        const verdictArtifact = Database.use((db) =>
-          db
-            .select()
-            .from(EngineArtifactTable)
-            .where(and(eq(EngineArtifactTable.delivery_id, delivery.id), eq(EngineArtifactTable.kind, "verdict")))
-            .orderBy(desc(EngineArtifactTable.time_created))
-            .limit(1)
-            .get(),
-        )
-        if (!verdictArtifact) {
-          return SubAgentProtocol.yieldResult({
-            headline:
-              "prosecute: no legacy delivery verdict artifact. Delivery is retired; use integrity for workflow review.",
-            pointer: `delivery ${delivery.id}`,
-          })
-        }
-        const verdict = verdictArtifact.payload as unknown as import("@/delivery/verdict").DeliveryVerdictType
-
-        const { readIterationHistory } = await import("@/metrics/store")
-        const priorIterations = readIterationHistory(taskID)
-        // The deliver tool advances the iteration counter when it writes the
-        // snapshot. Prosecute targets the most recently written snapshot —
-        // i.e. the LAST entry in the trajectory.
-        const iteration = Math.max(0, priorIterations.length - 1)
-
-        const { runProsecutor } = await import("@/prosecutor")
-        const pRes = await runProsecutor({
-          task: {
-            id: task.id,
-            title: task.title,
-            request: task.request,
-            sessionID: input.agentSessionID,
-          },
-          iteration,
-          defenderVerdict: verdict,
-          architectSeeds: [],
-          signal: input.signal,
-        })
-
-        log.info("prosecute: done", {
-          taskID,
-          iteration,
-          filed: pRes.counterexamples_filed,
-          proposed: pRes.challenges_proposed,
-          resolved: pRes.counterexamples_resolved,
-        })
-
-        try {
-          const { recordProsecutorAttempt } = await import("@/engine/persist")
-          recordProsecutorAttempt({
-            taskID,
-            deliveryID: delivery.id,
-            sessionID: input.agentSessionID,
-            iteration,
-            counterexamplesFiled: pRes.counterexamples_filed,
-            challengesProposed: pRes.challenges_proposed,
-            counterexamplesResolved: pRes.counterexamples_resolved,
-            rationale: pRes.rationale,
-          })
-        } catch (err) {
-          log.error("prosecute: recordProsecutorAttempt failed", {
-            taskID,
-            error: err instanceof Error ? err.message : String(err),
-          })
-        }
-
-        return SubAgentProtocol.yieldResult({
-          headline:
-            `Prosecutor iter ${iteration}: filed ${pRes.counterexamples_filed} counterexample(s), ` +
-            `proposed ${pRes.challenges_proposed} challenge(s), resolved ${pRes.counterexamples_resolved}. ` +
-            `NEXT: review the prosecutor evidence and choose build / integrity / fail_task / propose_task explicitly.`,
-          summary: pRes.rationale,
-          fields: [
-            ["iteration", String(iteration)],
-            ["delivery_verdict", verdict.verdict],
-          ],
-          pointer: `delivery ${delivery.id}`,
-        })
-      },
-    }),
-
-    // -----------------------------------------------------------------------
     // Analyze intent — post-design disambiguation for visual/reference tasks.
     //
     // Lifted out of an unused free-floating IntentAnalysisAgent.analyze
@@ -3699,7 +3579,7 @@ export function createOrchestratorTools(input: {
 
     read_context: tool({
       description:
-        "Read current task context: goal states, delivery verdicts, Decision Log, delivery summaries, integrity/prosecutor attempts. Use this to gather information before making decisions. Returns only the latest state per goal / per spec snapshot / per delivery — historical entries older than the latest are omitted to keep prompts bounded.",
+        "Read current task context: goal states, delivery verdicts, Decision Log, delivery summaries, integrity attempts. Use this to gather information before making decisions. Returns only the latest state per goal / per spec snapshot / per delivery — historical entries older than the latest are omitted to keep prompts bounded.",
       inputSchema: z.object({
         scope: z
           .enum(["goals", "evaluations", "decisions", "deliveries", "all"])
@@ -3838,7 +3718,7 @@ export function createOrchestratorTools(input: {
         }
 
         if (scope === "all") {
-          // Integrity / prosecutor attempts: surface the FACT that these stages
+          // Integrity attempts: surface the FACT that the integrity stage
           // ran for the current spec snapshot / delivery. Without this the
           // orchestrator-LLM cannot tell "integrity returned pass (no goal
           // change)" from "integrity never called" — same death-loop shape that
@@ -3880,48 +3760,6 @@ export function createOrchestratorTools(input: {
               // modify_goal / build / architect / integrity / fail_task
               // explicitly based on this text.
               if (teamReportMarkdown) sections.push("", teamReportMarkdown)
-            }
-          }
-          const lastDeliveryRow = Database.use((db) =>
-            db
-              .select()
-              .from(EngineArtifactTable)
-              .where(and(eq(EngineArtifactTable.task_id, taskID), eq(EngineArtifactTable.kind, "delivery")))
-              .orderBy(desc(EngineArtifactTable.time_created))
-              .limit(1)
-              .get(),
-          )
-          const lastDeliveryID: string | null = lastDeliveryRow?.delivery_id ?? null
-          if (lastDeliveryID) {
-            const prosecutorRow = Database.use((db) =>
-              db
-                .select()
-                .from(EngineArtifactTable)
-                .where(
-                  and(
-                    eq(EngineArtifactTable.task_id, taskID),
-                    eq(EngineArtifactTable.kind, "prosecutor_attempt"),
-                    eq(EngineArtifactTable.delivery_id, lastDeliveryID),
-                  ),
-                )
-                .orderBy(desc(EngineArtifactTable.time_created))
-                .limit(1)
-                .get(),
-            )
-            if (prosecutorRow) {
-              const p = (prosecutorRow.payload ?? {}) as Record<string, unknown>
-              sections.push(
-                `\n## Prosecutor (latest, delivery ${lastDeliveryID})`,
-                `- iteration=${Number(p.iteration ?? 0)}` +
-                  ` filed=${Number(p.counterexamples_filed ?? 0)}` +
-                  ` proposed=${Number(p.challenges_proposed ?? 0)}` +
-                  ` resolved=${Number(p.counterexamples_resolved ?? 0)}`,
-              )
-            } else {
-              sections.push(
-                `\n## Prosecutor (latest, delivery ${lastDeliveryID})`,
-                `- not run for this delivery — default scheduling stops at \`deliver\`; call \`prosecute\` only if the user asks for post-deliver hardening.`,
-              )
             }
           }
         }

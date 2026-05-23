@@ -551,7 +551,7 @@ export function renderCollaborationClosure(
       "The active goal graph has entered execution. Treat it as the shared collaboration contract, not a scratchpad to re-plan for ordinary shared-file edits.",
     )
     lines.push(
-      "Ordinary collaboration drift belongs in Build `files_changed[]` reports and, when the written contract needs a point correction, `modify_goal`. Architect re-entry is structural re-planning and needs delivery/prosecutor/reference-coverage evidence or an explicit upstream restart.",
+      "Ordinary collaboration drift belongs in Build `files_changed[]` reports and, when the written contract needs a point correction, `modify_goal`. Architect re-entry is structural re-planning and needs delivery/reference-coverage evidence or an explicit upstream restart.",
     )
   } else {
     lines.push("Execution has not started yet; this is still the planning window.")

@@ -707,7 +707,7 @@ CREATE TABLE IF NOT EXISTS engine_metric_spec (
   source_requirement_ids text NOT NULL DEFAULT '[]',
   source                 text NOT NULL,                 -- 'baseline' | 'challenge'
   frozen_at              integer NOT NULL,
-  created_by             text NOT NULL,                 -- 'architect' | 'prosecutor'
+  created_by             text NOT NULL,                 -- 'architect'
   time_created           integer NOT NULL,
   time_updated           integer NOT NULL,
   FOREIGN KEY (task_id) REFERENCES engine_task(id) ON DELETE CASCADE,
@@ -778,9 +778,8 @@ CREATE TABLE IF NOT EXISTS engine_iteration (
   FOREIGN KEY (task_id) REFERENCES engine_task(id) ON DELETE CASCADE
 );
 
--- Frozen-ruler enforcement. Baseline metric specs are immutable once written;
--- the Prosecutor may only INSERT new challenge rows. Raising at the SQL layer
--- catches bugs that bypass src/metrics/store.ts.
+-- Frozen-ruler enforcement. Baseline metric specs are immutable once written.
+-- Raising at the SQL layer catches bugs that bypass src/metrics/store.ts.
 CREATE TRIGGER IF NOT EXISTS engine_metric_spec_baseline_no_update
 BEFORE UPDATE ON engine_metric_spec
 FOR EACH ROW

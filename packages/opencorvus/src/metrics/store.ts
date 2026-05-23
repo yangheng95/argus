@@ -36,12 +36,6 @@ export const MetricWriteError = NamedError.create(
   z.object({ message: z.string(), code: z.string() }),
 )
 
-// audit-2026-04-29 W2-V39 — both constants re-promoted to `export`;
-// same demotion regression as registerBaselineSpec (commit f5d98cbee).
-// The tests import them to verify the budget cap contract.
-export const MAX_CHALLENGE_PER_ITER = 1
-export const MAX_CHALLENGE_PER_TASK = 3
-
 // ---------------------------------------------------------------------------
 // Baseline specs
 // ---------------------------------------------------------------------------
@@ -119,100 +113,6 @@ export function registerBaselineSpec(input: BaselineSpecInput): MetricSpec {
 }
 
 // ---------------------------------------------------------------------------
-// Challenge specs (Prosecutor only)
-// ---------------------------------------------------------------------------
-
-interface ChallengeSpecInput {
-  task_id: string
-  scope: "goal" | "global"
-  goal_id: string | null
-  name: string
-  description: string
-  unit: string
-  direction: "higher_better" | "lower_better"
-  target: number
-  floor: number
-  weight: number
-  evaluator_kind: "shell" | "judge" | "query" | "aggregator"
-  evaluator_config: Record<string, unknown>
-  source_requirement_ids: string[]
-  /** Iteration in which this challenge was proposed. */
-  iteration: number
-}
-
-/**
- * Insert a Prosecutor challenge metric. gate_class is fixed to 'diagnostic';
- * challenges cannot veto accept. Budget: ≤1/iteration, ≤3/task.
- */
-export function addChallengeMetric(input: ChallengeSpecInput): MetricSpec {
-  validateScopeInvariant(input.scope, input.goal_id)
-  return Database.transaction((tx) => {
-    const totalRow = tx
-      .select({ c: count() })
-      .from(EngineMetricSpecTable)
-      .where(
-        and(
-          eq(EngineMetricSpecTable.task_id, input.task_id),
-          eq(EngineMetricSpecTable.source, "challenge"),
-        ),
-      )
-      .get()
-    const total = totalRow?.c ?? 0
-    if (total >= MAX_CHALLENGE_PER_TASK) {
-      throw new MetricWriteError({
-        message: `challenge budget exhausted: task ${input.task_id} already has ${total}/${MAX_CHALLENGE_PER_TASK} challenge metrics`,
-        code: "challenge_budget_task",
-      })
-    }
-    const iterRow = tx
-      .select({ c: count() })
-      .from(EngineMetricSpecTable)
-      .where(
-        and(
-          eq(EngineMetricSpecTable.task_id, input.task_id),
-          eq(EngineMetricSpecTable.source, "challenge"),
-          sql`json_extract(${EngineMetricSpecTable.evaluator_config}, '$._iteration') = ${input.iteration}`,
-        ),
-      )
-      .get()
-    const perIter = iterRow?.c ?? 0
-    if (perIter >= MAX_CHALLENGE_PER_ITER) {
-      throw new MetricWriteError({
-        message: `challenge budget exhausted: iteration ${input.iteration} already has ${perIter}/${MAX_CHALLENGE_PER_ITER} challenges`,
-        code: "challenge_budget_iteration",
-      })
-    }
-    const now = Date.now()
-    const id = Identifier.ascending("metric_spec")
-    // Stamp iteration into evaluator_config so future writes can budget-check
-    // without a separate column.
-    const evaluator_config = { ...input.evaluator_config, _iteration: input.iteration }
-    const row = {
-      id,
-      task_id: input.task_id,
-      scope: input.scope,
-      goal_id: input.goal_id,
-      name: input.name,
-      description: input.description,
-      unit: input.unit,
-      direction: input.direction,
-      target: input.target,
-      floor: input.floor,
-      weight: input.weight,
-      gate_class: "diagnostic" as const,
-      evaluator_kind: input.evaluator_kind,
-      evaluator_config,
-      source_requirement_ids: input.source_requirement_ids,
-      source: "challenge" as const,
-      frozen_at: now,
-      created_by: "prosecutor" as const,
-    }
-    tx.insert(EngineMetricSpecTable).values(row).run()
-    return row
-  })
-}
-
-// ---------------------------------------------------------------------------
 // Metric results
 // ---------------------------------------------------------------------------
 
@@ -248,68 +148,6 @@ export function writeMetricResult(input: MetricResultInput): MetricResult {
   }
   Database.use((db) => db.insert(EngineMetricResultTable).values(row).run())
   return row
-}
-
-// ---------------------------------------------------------------------------
-// Counterexamples
-// ---------------------------------------------------------------------------
-
-interface CounterexampleInput {
-  task_id: string
-  iteration_found: number
-  novelty_hash: string
-  target_scope: "goal" | "global"
-  target_ref: string
-  claim: string
-  reproducer: string
-  severity: "blocking" | "diagnostic"
-  linked_metric_spec_id: string | null
-}
-
-/**
- * Insert or return existing counterexample by (task_id, novelty_hash). If the
- * hash is already present, returns the existing row without incrementing any
- * novelty counter — that's the dedup rule that feeds `stalled`.
- */
-export function upsertCounterexample(input: CounterexampleInput): Counterexample {
-  return Database.transaction((tx) => {
-    const existing = tx
-      .select()
-      .from(EngineCounterexampleTable)
-      .where(
-        and(
-          eq(EngineCounterexampleTable.task_id, input.task_id),
-          eq(EngineCounterexampleTable.novelty_hash, input.novelty_hash),
-        ),
-      )
-      .get()
-    if (existing) return existing as Counterexample
-    const row = {
-      id: Identifier.ascending("counterexample"),
-      task_id: input.task_id,
-      iteration_found: input.iteration_found,
-      iteration_resolved: null,
-      novelty_hash: input.novelty_hash,
-      target_scope: input.target_scope,
-      target_ref: input.target_ref,
-      claim: input.claim,
-      reproducer: input.reproducer,
-      severity: input.severity,
-      linked_metric_spec_id: input.linked_metric_spec_id,
-    }
-    tx.insert(EngineCounterexampleTable).values(row).run()
-    return row
-  })
-}
-
-export function resolveCounterexample(id: string, iteration: number): void {
-  Database.use((db) =>
-    db
-      .update(EngineCounterexampleTable)
-      .set({ iteration_resolved: iteration })
-      .where(eq(EngineCounterexampleTable.id, id))
-      .run(),
-  )
 }
 
 // ---------------------------------------------------------------------------

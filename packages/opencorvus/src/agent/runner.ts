@@ -2,9 +2,9 @@
  * runAgentSession — the single entry point every OpenCorvus WORKER agent runs through.
  *
  * Position in the architecture: agents have one shape. Each agent module
- * (architect / requirements / build / integrity / prosecutor /
- * intent-analysis / design-analyst / orchestrator-children…) contributes only
- * what is genuinely agent-specific:
+ * (architect / requirements / build / integrity / intent-analysis /
+ * design-analyst / orchestrator-children…) contributes only what is
+ * genuinely agent-specific:
  *
  *   - `kind`: session.kind for routing/persistence/overlay attribution.
  *   - `core`: the agent's `prompt/core/<kind>-core.txt` contents (loaded by
@@ -41,7 +41,7 @@
  *
  *   2. Orchestrator tools return evidence to the same reasoning turn. Worker
  *      agents terminate on the collector's contract being met (build)
- *      or stepCountIs (integrity / prosecutor), while the orchestrator owns the
+ *      or stepCountIs (integrity), while the orchestrator owns the
  *      next decision itself instead of relying on a worker-style collector.
  *
  *   3. Stream errors are persisted as `engine_artifact kind="orchestrator-
@@ -122,11 +122,7 @@ export interface RunAgentSessionInput<C> {
   kind: SessionKind
   /** Agent name for model resolution / system-prompt composition /
    *  SessionPrompt.agent dispatch. Defaults to `kind`. Supply a separate
-   *  value when session.kind and agent name diverge — currently only
-   *  prosecutor (session.kind="evaluator", agentName="prosecutor") to
-   *  keep overlay renderers keyed on the historical kind while the
-   *  runner looks up `config.agent.prosecutor.*` and
-   *  `resolveAgentModel("prosecutor", ...)`. */
+   *  value when session.kind and agent name diverge. */
   agentName?: string
   /** Loaded core prompt text from `prompt/core/<kind>-core.txt`. */
   core: string
@@ -595,8 +591,8 @@ export async function runAgentSession<C>(
   // Capability gate — drop multimodal file parts the resolved model cannot
   // accept on input. Without this, every agent that calls
   // AttachmentStore.inlineFileParts (build / delivery / architect /
-  // intent-analysis / integrity / requirements / prosecutor /
-  // design-analyst) would forward image / pdf / audio / video bytes to a
+  // intent-analysis / integrity / requirements / design-analyst) would
+  // forward image / pdf / audio / video bytes to a
   // text-only coding endpoint (e.g. dashscope coding) where the provider
   // wrapper either silently strips them OR replaces them with an inline
   // "ERROR: Cannot read …" text part (see provider/transform.ts
@@ -965,7 +961,7 @@ export async function runAgentSession<C>(
 // blocker preventing other stage agents from gaining bounded retry without
 // duplicating that loop verbatim.
 //
-// Single-shot agents (architect, requirements, integrity, prosecutor,
+// Single-shot agents (architect, requirements, integrity,
 // design-analyst, intent-analysis, build) keep calling `runAgentSession`
 // directly — no retry is needed for any of them at this time, and forcing
 // them through this wrapper would just add a useless `maxRetries: 1`

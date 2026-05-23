@@ -16,7 +16,6 @@ import DESIGN_ANALYST_CORE from "@/prompt/core/design-analyst-core.txt"
 import INTEGRITY_CORE from "@/prompt/core/integrity-core.txt"
 import ACCEPTANCE_REVIEW_CORE from "@/prompt/core/acceptance-review-core.txt"
 import INTENT_ANALYSIS_CORE from "@/prompt/core/intent-analysis-core.txt"
-import PROSECUTOR_CORE from "@/prompt/core/prosecutor-core.txt"
 import PROMPT_CODING from "./prompt/coding.txt"
 import PROMPT_COMPACTION from "./prompt/compaction.txt"
 import PROMPT_EXPLORE from "./prompt/explore.txt"
@@ -289,7 +288,6 @@ export namespace Agent {
             "design_analysis",
             "architect",
             "integrity",
-            "prosecute",
             "propose_task",
             "analyze_intent",
             "explore",
@@ -433,23 +431,6 @@ export namespace Agent {
         native: true,
         hidden: true,
       },
-      prosecutor: {
-        name: "prosecutor",
-        description: AgentRoleContract.description("prosecutor"),
-        steps: 1000,
-        // Prosecutor's tool surface (query_metric_trajectory, query_diff,
-        // mark_counterexample, propose_challenge_metric,
-        // resolve_counterexample) is injected per run via toolKit in
-        // prosecutor/agent.ts. Registry tools (read/edit/bash/mirror/...)
-        // have no role here; without this empty include the prosecutor would
-        // pull in the full registry and bloat its system prompt with ~30
-        // unused tool schemas. Mirrors integrity's scoped-tool contract.
-        tools: { include: [] as string[] },
-        options: {},
-        mode: "primary",
-        native: true,
-        hidden: true,
-      },
     }
 
     for (const [key, value] of entries((cfg.agent ?? {}) as NonNullable<Config.Info["agent"]>)) {
@@ -515,7 +496,6 @@ export namespace Agent {
     "design-analyst": DESIGN_ANALYST_CORE,
     "intent-analysis": INTENT_ANALYSIS_CORE,
     integrity: INTEGRITY_RUNTIME_PROMPT,
-    prosecutor: PROSECUTOR_CORE,
   }
 
   /** Returns the built-in default prompt for a native agent (before config overrides). */

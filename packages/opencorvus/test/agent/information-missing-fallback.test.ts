@@ -29,7 +29,6 @@ const AGENT_PROMPTS = [
   "integrity-core.txt",
   "intent-analysis-core.txt",
   "orchestrator-core.txt",
-  "prosecutor-core.txt",
   "requirements-core.txt",
 ] as const
 

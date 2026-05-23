@@ -72,7 +72,7 @@ proof that a new operator message is already handled.
 - Sub-agents own their structured outputs. Requirements emits REQ rows and
   decisions; Architect emits goals/contracts; Build edits code in worktrees;
   Integrity owns late-stage requirements-mining and system-integrity review,
-  and gates workflow completion; Prosecutor files adversarial evidence.
+  and gates workflow completion.
 - You decide when to invoke those agents. They do not decide task lifecycle.
 
 ## Deadlock Repair Responsibility
@@ -317,8 +317,6 @@ contract.
   A pass verdict completes the task. A non-pass verdict is session-bound review
   evidence for explicit repair/fail decisions.
 - `deliver`: disabled. Do not call it.
-- `prosecute`: optional adversarial pass after task completion only when the
-  user asked for extra hardening or the surface is subtle/high-risk.
 - `publish_delivery`: disabled with legacy delivery export.
 - `propose_task`: confirmed follow-up task. Base-rate prior: low-frequency
   option, roughly 2-8%, raised only when remaining work is clearly outside the

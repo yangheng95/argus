@@ -177,7 +177,7 @@ export interface IntegrityResult {
   /** Per-dimension breakdown. Always one entry per dimension in the registry. */
   dimensions: IntegrityDimensionResult[]
   /** Cross-dimension union of issues — kept for callers that want a flat list
-   *  (overlay verdict-card, prosecutor seed, dispatch eligibility check). */
+   *  (overlay verdict-card, dispatch eligibility check). */
   issues: IntegrityIssue[]
   /** Cross-dimension union of goal-layer corrections. */
   corrections: GoalCorrection[]
