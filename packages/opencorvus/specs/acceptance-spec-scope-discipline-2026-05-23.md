@@ -145,14 +145,35 @@ become bounded REQ-N or be surfaced as a clarification":
   1. Decompose it into one or more bounded, verifiable REQ-N items
      ("errors render in Chinese for 401 / 429 / network-off; no white screen
      on uncaught exception" — not "production-grade error handling"); OR
-  2. If the bounded version is non-obvious, register a clarification via
-     `register_decision({ key: "maturity_scope_pending", ... })` describing
-     exactly what the agent assumed the word means, and stop short of
-     `submit_requirements`.
-  Never leave a maturity word implicit. An implicit maturity word becomes a
-  free-form license for integrity to invent new blockers across every later
-  round.
+   2. If the bounded version is non-obvious, register a clarification via
+      `register_decision({ key: "maturity_scope_pending", ... })` describing
+      exactly what the agent assumed the word means. That decision MUST be
+      durable before the requirements run returns: either
+      `register_decision` immediately sinks it to `engine_decision_log`
+      independent of a finalized requirements result, or the RequirementsAgent
+      returns `maturity_scope_pending` as the finalized requirements result
+      instead of throwing. Only then stop short of `submit_requirements`.
+   Never leave a maturity word implicit. An implicit maturity word becomes a
+   free-form license for integrity to invent new blockers across every later
+   round.
 ```
+
+Persistence contract for the clarification path:
+
+- `maturity_scope_pending` cannot live only in an in-memory requirements
+  collector that is flushed after `submit_requirements` succeeds. The
+  clarification must survive an unfinalized requirements run.
+- If the implementation chooses immediate persistence, the
+  `register_decision` tool path writes the decision to `engine_decision_log`
+  at call time. This is data durability, not a lane-selection host gate.
+- If the implementation chooses finalized-result semantics, the
+  RequirementsAgent must not throw for this path. It returns a
+  `maturity_scope_pending` result that the orchestrator can read as a normal
+  requirements outcome.
+- The orchestrator must treat durable `maturity_scope_pending` as a
+  `question` lane signal asking the user to clarify the maturity boundary. It
+  must not mark the requirements run as a failure and retry requirements in a
+  loop.
 
 Also require every REQ-N to populate `acceptance` and `non_goals` with at
 least one sentence:
@@ -206,6 +227,14 @@ This is prompt-level scope teaching, not host enforcement: the LLM still
 decides whether a quote / REQ / spec actually covers the concern. The host
 does **not** verify the `userRequestQuotes` substring is present — that
 would be a route-bypass invariant of the kind rule 6.1 forbids.
+
+Literal user-request quotes, maturity-word excerpts, reviewer text, and
+requirements-extraction concern text rendered by this flow must use the
+replay-aware
+[`Shared Prompt Sanitizer Owner`](integrity-team-replay-aware-2026-05-23.md#plan-updates-from-patched-review-2026-05-24-shared-prompt-sanitizer-owner).
+Scope discipline does not own ANSI escape, bidirectional control,
+control-character, markdown heading injection, or quote-length rules; it
+only decides what scoped evidence should be rendered.
 
 Also tighten the supervisor consensus wording in `team-agent.ts`
 `buildSupervisorConsensusPrompt`:
@@ -341,7 +370,7 @@ Files that touch this surface and must be considered in the patch:
 Targeted command after implementation:
 
 ```powershell
-bun test packages/opencorvus/test/requirements/maturity-word-discipline.test.ts packages/opencorvus/test/architect/grep-only-as-rejection.test.ts packages/opencorvus/test/integrity/finding-traceability.test.ts packages/opencorvus/test/integrity/replay-scope-discipline.test.ts
+bun test packages/opencorvus/test/requirements/maturity-word-discipline.test.ts packages/opencorvus/test/architect/grep-only-as-rejection.test.ts packages/opencorvus/test/integrity/finding-traceability.test.ts
 ```
 
 ## Rule 6.1 Self-Check
@@ -357,46 +386,52 @@ bun test packages/opencorvus/test/requirements/maturity-word-discipline.test.ts 
 - State machine switching reviewer behavior across rounds: no — replay
   awareness handles that, this spec is round-invariant.
 
-## Plan Updates From Codex Implementation (2026-05-23)
-
-- Read-only DB verification against
-  `C:\Users\hengu\.local\share\opencorvus\opencorvus.db` confirmed the core
-  diagnosis: 18 `engine_requirement` rows collapse to 9 unique title/description
-  pairs, 5 goals contain 25 acceptance specs, 21 of those specs use `grep -r`
-  existence checks, the first integrity attempt has 11 findings and all 11 have
-  `requirementIDs=[]`, and the literal user phrase `成熟` appears in
-  `engine_task.request` but not in any REQ, goal, or acceptance spec.
-- Literal storage detail correction: the requirements boundary fields are
-  logically empty, but not both stored as empty strings. Every
-  `engine_requirement.acceptance` value for
-  `tsk_e54c2d091001t145QP2P6xwoqi` is the string `"[]"`, and every
-  `engine_requirement.non_goals` value is `NULL`. The implementation still
-  treats this as the same data-integrity failure described in the plan:
-  requirements are missing observable acceptance text and non-goal boundaries.
-- Verification commands used PowerShell plus `bun:sqlite` readonly:
-  `new Database("C:/Users/hengu/.local/share/opencorvus/opencorvus.db", { readonly: true })`;
-  SQL included `SELECT id,title,description,acceptance,non_goals,metadata FROM engine_requirement WHERE task_id=$task`,
-  `SELECT id,title,objective,acceptance_specs FROM engine_goal WHERE task_id=$task`,
-  and `SELECT id,kind,label,payload,time_created FROM engine_artifact WHERE task_id=$task AND kind='integrity_attempt' ORDER BY time_created ASC`.
-- Code/spec compatibility delta: `IntegrityFindingSchema` is strict and did
-  not accept `userRequestQuotes`, even though the traceability rule requires a
-  finding to be anchored by REQ id, AS id, or literal user-request substring.
-  Implementation will add `userRequestQuotes?: string[]` as a data-shape field
-  only. It will not verify substring membership, reject unquoted findings, or
-  drop findings in host code; those remain prompt-level scope instructions.
-
 ## Implementation Checklist
 
-1. [x] Patch `requirements-core.txt`: add maturity-word landing rule +
+1. [ ] Patch `requirements-core.txt`: add maturity-word landing rule +
    mandatory `acceptance` / `non_goals`.
-2. [x] Patch the requirements collector zod schema to require non-empty
+2. [ ] Patch the requirements collector zod schema to require non-empty
    `acceptance` and `non_goals` (grep all call sites first; rule 35).
-3. [x] Patch `architect-core.txt`: ban existence-grep AS under behavior
+3. [ ] Make `maturity_scope_pending` durable either by immediate
+   `engine_decision_log` persistence in `register_decision` or by returning it
+   as a finalized RequirementsAgent outcome instead of throwing.
+4. [ ] Patch orchestrator handling so durable `maturity_scope_pending` routes
+   to the normal `question` lane prompt path, not to requirements failure
+   retry.
+5. [ ] Patch `architect-core.txt`: ban existence-grep AS under behavior
    REQs; require AS anchored to REQ.acceptance text.
-4. [x] Patch `integrity-team-core.txt`: traceability-or-drop rule.
-5. [x] Patch `team-agent.ts` `buildReviewerPrompt` /
+6. [ ] Patch `integrity-team-core.txt`: traceability-or-drop rule.
+7. [ ] Patch `team-agent.ts` `buildReviewerPrompt` /
    `buildSupervisorConsensusPrompt` to echo the traceability rule at role
    level.
-6. [x] Add the three unit tests above + one replay snapshot test.
-7. [x] Run targeted tests; no broad `bun test`.
-8. [x] Commit + push (rule 33).
+8. [ ] Add the three unit tests above + one replay snapshot test, including a
+   requirements clarification-path regression that asserts the decision is
+   durable without `submit_requirements`.
+9. [ ] Run targeted tests; no broad `bun test`.
+10. [ ] Commit + push (rule 33).
+
+## Plan Updates From Patched Review (2026-05-24)
+
+- N-1: user-request quote and maturity-word rendering now references the
+  replay-aware shared sanitizer owner. Scope remains the maturity/scope owner
+  but does not define sanitizer rules.
+- B-1/B-2/N-2: no local prompt cap or snapshot-lineage API is introduced in
+  this scope spec; those remain replay-aware-owned surfaces for consumers
+  that render replay/history text.
+
+## Plan Updates From Patched Review Round 3 (2026-05-24)
+
+- B-1: `maturity_scope_pending` is now specified as a durable clarification
+  outcome. A later scope-worktree PR must either persist the
+  `register_decision` call directly to `engine_decision_log`, or change
+  RequirementsAgent to return `maturity_scope_pending` as the finalized
+  requirements outcome instead of throwing.
+- B-1: orchestrator handling must read the durable clarification as a
+  `question` lane signal for the user to bound maturity words. It must not
+  classify the unfinalized requirements run as a failure and retry
+  requirements.
+- Implementation impact for the later PR: `requirements-core.txt`,
+  requirements collector / `register_decision` plumbing,
+  `packages/opencorvus/src/requirements/agent.ts`, and the orchestrator
+  requirements-result handler need the matching code and tests in the scope
+  worktree commit.
