@@ -460,7 +460,15 @@ function buildIntegrityEvidencePrompt(input: ReviewPromptInput): string {
   )
   if (input.requirements?.length) {
     sections.push(
-      ["# Requirements", ...input.requirements.map((r) => `- ${r.id} (${r.type}): ${r.description}`)].join("\n"),
+      [
+        "# Requirements",
+        ...input.requirements.map((r) => {
+          const lines = [`- ${r.id} (${r.type}): ${r.description}`]
+          if (r.acceptance.trim().length > 0) lines.push(`  Acceptance: ${r.acceptance}`)
+          if (r.non_goals.trim().length > 0) lines.push(`  Non-goals: ${r.non_goals}`)
+          return lines.join("\n")
+        }),
+      ].join("\n"),
     )
   }
   if (input.requirementStatus?.length) {

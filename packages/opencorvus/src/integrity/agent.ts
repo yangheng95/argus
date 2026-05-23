@@ -1042,7 +1042,12 @@ function buildIntegrityPrompt(input: {
   }))
 
   if (input.requirements && input.requirements.length > 0) {
-    const reqText = input.requirements.map((r) => `- **${r.id}** (${r.type}): ${r.description}`).join("\n")
+    const reqText = input.requirements.map((r) => {
+      const lines = [`- **${r.id}** (${r.type}): ${r.description}`]
+      if (r.acceptance.trim().length > 0) lines.push(`  Acceptance: ${r.acceptance}`)
+      if (r.non_goals.trim().length > 0) lines.push(`  Non-goals: ${r.non_goals}`)
+      return lines.join("\n")
+    }).join("\n")
     sections.push(
       `# Requirements (${input.requirements.length}) — generated REQ rows are coverage evidence\n\n` +
         `Start from the bounded user request excerpt above and the full request bundle when needed, then use these REQ-N rows to judge whether ` +

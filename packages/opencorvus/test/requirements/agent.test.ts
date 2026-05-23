@@ -115,6 +115,8 @@ describe("RequirementsAgent prompt precedence", () => {
             id: "REQ-1",
             type: "explicit",
             description: "使用原生 HTML、CSS 和 JavaScript 复刻百度首页。",
+            acceptance: "浏览器打开页面后展示与百度首页一致的搜索入口和基础交互。",
+            non_goals: "不包含真实百度后端搜索服务或账号体系。",
           }, {} as any)
           await input.toolKit.tools.register_decision.execute({
             key: "runtime",
@@ -194,6 +196,8 @@ test("submit_requirements requires the minimum downstream decision contract", as
     id: "REQ-1",
     type: "explicit",
     description: "Implement the requested user-visible behavior.",
+    acceptance: "The requested user-visible behavior is observable in the running app.",
+    non_goals: "This requirement does not cover unrelated polish or infrastructure work.",
   }, {} as any)
 
   const missing = await kit.tools.submit_requirements.execute({ final: true }, {} as any)

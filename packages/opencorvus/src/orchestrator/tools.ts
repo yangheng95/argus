@@ -111,6 +111,7 @@ import {
 } from "@/acceptance/contract-audit"
 import { isLiveRunStatus, isRunReadyForGoalDispatch, restartStagePlan, type RestartStage } from "./scheduler"
 import { composeDeliveryRetryFeedback } from "./delivery-retry-feedback"
+import { parsedRequirementFromRow } from "@/requirements/row"
 import {
   architectFidelityIssues,
   AssemblyOwnerEntrySchema,
@@ -1606,15 +1607,7 @@ export function createOrchestratorTools(input: {
 
     const { findDeliveriesForTask, findRequirements } = await import("@/engine/store")
     const reqRows = findRequirements(activeSpec.id)
-    const requirements = reqRows.map((r) => {
-      const meta = (r.metadata ?? {}) as Record<string, unknown>
-      const sourceID = typeof meta.source_requirement_id === "string" ? meta.source_requirement_id : r.id
-      return {
-        id: sourceID,
-        type: (r.priority === "advisory" ? "implicit" : "explicit") as "explicit" | "implicit",
-        description: r.description,
-      }
-    })
+    const requirements = reqRows.map(parsedRequirementFromRow)
     const decisionLog = createDecisionLog(taskID)
     const requirementDecisions = decisionLog.readByPhase("requirements").map((d) => ({
       key: d.key,
@@ -2017,7 +2010,9 @@ export function createOrchestratorTools(input: {
             result.summary,
             "",
             "## Requirements",
-            ...result.requirements.map((r) => `- **${r.id}** [${r.type}]: ${r.description}`),
+            ...result.requirements.map((r) =>
+              `- **${r.id}** [${r.type}]: ${r.description} Acceptance: ${r.acceptance} Non-goals: ${r.non_goals}`,
+            ),
             "",
             "## Decisions",
             ...result.decisions.map((d) => `- **${d.key}** = ${d.value} — ${d.reason}`),
@@ -2061,8 +2056,9 @@ export function createOrchestratorTools(input: {
                     id: r.id,
                     title: r.description,
                     description: r.description,
-                    acceptance: [] as string[],
+                    acceptance: [r.acceptance],
                     evidence_refs: [] as string[],
+                    non_goals: [r.non_goals],
                     priority: r.type === "explicit" ? ("blocking" as const) : ("advisory" as const),
                   })),
                   now,
@@ -2736,15 +2732,7 @@ export function createOrchestratorTools(input: {
           // agent already seeded.
           const { findRequirements } = await import("@/engine/store")
           const reqRows = findRequirements(activeSpec.id)
-          const requirements = reqRows.map((r) => {
-            const meta = (r.metadata ?? {}) as Record<string, unknown>
-            const sourceID = typeof meta.source_requirement_id === "string" ? meta.source_requirement_id : r.id
-            return {
-              id: sourceID,
-              type: (r.priority === "advisory" ? "implicit" : "explicit") as "explicit" | "implicit",
-              description: r.description,
-            }
-          })
+          const requirements = reqRows.map(parsedRequirementFromRow)
           const requirementDecisions = decisionLog.readByPhase("requirements").map((d) => ({
             key: d.key,
             value: d.value,
@@ -2800,7 +2788,9 @@ export function createOrchestratorTools(input: {
           // build prompt, not a second writer that mutates this graph.
           const newSpecSnapshotID = Identifier.ascending("spec")
           const priorSpecSnapshotID = findActiveSpecForTask(task.id)?.id
-          const reqLines = requirements.map((r) => `- **${r.id}** [${r.type}]: ${r.description}`)
+          const reqLines = requirements.map(
+            (r) => `- **${r.id}** [${r.type}]: ${r.description} Acceptance: ${r.acceptance} Non-goals: ${r.non_goals}`,
+          )
           const decisionLines = requirementDecisions.map((d) => `- **${d.key}** = ${d.value} — ${d.reason}`)
           const goalLines = result.goals.map((g) => `- **${g.id}** (${g.kind}, ${g.priority}): ${g.title}`)
           const traceLines = result.traceability.map((t) => `- ${t.requirementID} → ${t.goalIDs.join(", ")}`)
@@ -4903,15 +4893,7 @@ export function createOrchestratorTools(input: {
             //    only emits the populated ones. ──────────────────────────
             const activeSpecForContext = findActiveSpecForTask(task.id)
             const reqRows = activeSpecForContext ? findRequirements(activeSpecForContext.id) : []
-            const requirements = reqRows.map((r) => {
-              const meta = (r.metadata ?? {}) as Record<string, unknown>
-              const sourceID = typeof meta.source_requirement_id === "string" ? meta.source_requirement_id : r.id
-              return {
-                id: sourceID,
-                type: (r.priority === "advisory" ? "implicit" : "explicit") as "explicit" | "implicit",
-                description: r.description,
-              }
-            })
+            const requirements = reqRows.map(parsedRequirementFromRow)
 
             const { createDecisionLog } = await import("@/decision-log")
             const decisionLog = createDecisionLog(taskID)

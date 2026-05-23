@@ -185,6 +185,8 @@ function collectorToOutput(
       id: r.id,
       type: r.type,
       description: r.description,
+      acceptance: r.acceptance,
+      non_goals: r.non_goals,
     })),
     decisions: collector.decisions.map((d) => ({
       key: d.key,
