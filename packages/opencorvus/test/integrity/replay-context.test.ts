@@ -4,6 +4,9 @@ import { Database } from "../../src/storage/db"
 import { EngineSpecSnapshotTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import { recordIntegrityAttempt } from "../../src/engine/persist"
 import { findLatestIntegrityAttemptArtifact, listIntegrityAttemptArtifacts } from "../../src/engine/store"
+import type { DeliveryRow, GoalRunRow } from "../../src/engine/store"
+import { buildIntegrityReplayContext } from "../../src/integrity/replay-context"
+import type { GoalContractFields } from "../../src/pipeline/types"
 import { resetDatabase } from "../fixture/db"
 
 function seedTask(input: { projectID: string; taskID: string; specIDs: string[]; now: number }) {
@@ -48,6 +51,73 @@ function seedTask(input: { projectID: string; taskID: string; specIDs: string[];
         .run()
     }
   })
+}
+
+function goal(id: string, acceptanceSpecs = 1): GoalContractFields {
+  return {
+    id,
+    title: `Goal ${id}`,
+    objective: `Objective ${id}`,
+    acceptance_specs: Array.from({ length: acceptanceSpecs }, (_value, index) => ({
+      id: `${id}_spec_${index}`,
+      description: `Spec ${index}`,
+      severity: "must",
+      checks: [],
+    })),
+    owned_paths: [`src/${id}.ts`],
+    depends_on: [],
+    priority: "blocking",
+    kind: "feature",
+    requirement_ids: ["REQ-1"],
+  }
+}
+
+function delivery(input: {
+  id: string
+  taskID: string
+  now: number
+  result: Record<string, unknown>
+  summary?: string
+}): DeliveryRow {
+  return {
+    id: input.id,
+    task_id: input.taskID,
+    run_id: `${input.id}_run`,
+    goal_run_id: `${input.id}_goal_run`,
+    status: "candidate",
+    summary: input.summary ?? `Delivery ${input.id}`,
+    result: input.result,
+    time_created: input.now,
+    time_updated: input.now,
+  }
+}
+
+function goalRun(input: { id: string; taskID: string; goalID: string; now: number; completed?: number }): GoalRunRow {
+  return {
+    id: input.id,
+    task_id: input.taskID,
+    goal_id: input.goalID,
+    plan_node_id: null,
+    coordinator_run_id: `${input.id}_coordinator`,
+    session_id: `${input.id}_session`,
+    status: "completed",
+    retry_count: 0,
+    blocking_reason: null,
+    error: null,
+    workspace_dir: null,
+    workspace_branch: null,
+    workspace_base_ref: null,
+    base_ref: null,
+    merge_ref: null,
+    supersede_of: null,
+    superseded_reason: null,
+    superseded_at: null,
+    metadata: null,
+    time_started: input.now - 5,
+    time_completed: input.completed ?? input.now,
+    time_created: input.now,
+    time_updated: input.completed ?? input.now,
+  }
 }
 
 describe("integrity replay context artifact source", () => {
@@ -110,5 +180,185 @@ describe("integrity replay context artifact source", () => {
     expect(findLatestIntegrityAttemptArtifact({ taskID, specSnapshotID: specID, phase: "post_build" })?.id).toBe(
       latestPost,
     )
+  })
+
+  test("builds first-attempt replay context with scale counts and all delivery evidence", () => {
+    const now = Date.now()
+    const taskID = `tsk_replay_first_${now.toString(16)}`
+    const ctx = buildIntegrityReplayContext({
+      taskID,
+      specSnapshotID: `spec_replay_first_${now.toString(16)}`,
+      phase: "post_build",
+      goals: [goal("settings", 2)],
+      requirements: [
+        { id: "REQ-1", type: "explicit", description: "Settings persist" },
+        { id: "REQ-2", type: "implicit", description: "Validation handles bad input" },
+      ],
+      deliveries: [
+        delivery({
+          id: "delivery_first",
+          taskID,
+          now,
+          result: {
+            changed_files: ["src/settings.ts"],
+            changedFiles: ["src/storage.ts"],
+            diffs: [{ file: "src/settings.ts" }, { file: "src/validation.ts", additions: 3, deletions: 1 }],
+          },
+        }),
+      ],
+      goalRuns: [goalRun({ id: "goal_run_first", taskID, goalID: "settings", now })],
+    })
+
+    expect(ctx.attemptNumber).toBe(1)
+    expect(ctx.priorAttempts).toEqual([])
+    expect(ctx.buildEvidenceSinceLastReview.changedFiles).toEqual([
+      "src/settings.ts",
+      "src/storage.ts",
+      "src/validation.ts",
+    ])
+    expect(ctx.scaleSignals).toMatchObject({
+      goals: 1,
+      requirements: 2,
+      acceptanceSpecs: 2,
+      changedFilesTotal: 3,
+      changedFilesSinceLastReview: 3,
+      priorAttempts: 0,
+      priorBlockingFindings: 0,
+      phase: "post_build",
+    })
+  })
+
+  test("summarizes prior attempts chronologically and includes only evidence newer than latest review", () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `proj_replay_context_${stamp}`
+    const taskID = `tsk_replay_context_${stamp}`
+    const specID = `spec_replay_context_${stamp}`
+    seedTask({ projectID, taskID, specIDs: [specID], now })
+
+    const firstAttemptID = recordIntegrityAttempt({
+      taskID,
+      sessionID: `ses_replay_context_1_${stamp}`,
+      specSnapshotID: specID,
+      verdict: "needs_correction",
+      phase: "post_build",
+      reviewers: [{ reviewerID: "rev_settings", scope: "Settings validation", verdict: "needs_correction" }],
+      findings: [
+        {
+          id: "BF-1",
+          severity: "blocking",
+          title: "Settings validation blind spot",
+          description: "Invalid settings are accepted.",
+          repair: "Reject invalid settings before persisting.",
+          filePaths: ["src/settings.ts"],
+          requirementIDs: ["REQ-2"],
+          specIDs: ["settings_validation"],
+        },
+        {
+          id: "ADV-1",
+          severity: "advisory",
+          title: "Copy can improve",
+          description: "Advisory only.",
+        },
+      ],
+      requiredRepairs: [
+        { id: "repair-settings", description: "Add settings validation", filePaths: ["src/settings.ts"] },
+      ],
+      unresolvedDisagreements: [{ id: "dispute-1", description: "Reviewer disagreement" }],
+      reason: "Settings validation needs correction.",
+      now: now + 10,
+    })
+    const secondAttemptID = recordIntegrityAttempt({
+      taskID,
+      sessionID: `ses_replay_context_2_${stamp}`,
+      specSnapshotID: specID,
+      verdict: "concerns",
+      phase: "post_build",
+      reviewers: [{ reviewerID: "rev_storage", scope: "Storage repair verification", verdict: "concerns" }],
+      findings: [],
+      requiredRepairs: [],
+      unresolvedDisagreements: [],
+      reason: "Only concerns remain.",
+      now: now + 20,
+    })
+
+    const ctx = buildIntegrityReplayContext({
+      taskID,
+      specSnapshotID: specID,
+      phase: "post_build",
+      goals: [goal("settings", 1), goal("storage", 1)],
+      requirements: [{ id: "REQ-2", type: "explicit", description: "Reject invalid settings" }],
+      deliveries: [
+        delivery({
+          id: "delivery_old",
+          taskID,
+          now: now + 15,
+          summary: "Old delivery before latest review",
+          result: { changed_files: ["src/old.ts"] },
+        }),
+        delivery({
+          id: "delivery_new",
+          taskID,
+          now: now + 25,
+          summary: "New delivery after latest review",
+          result: {
+            changed_files: ["src/settings.ts"],
+            changedFiles: ["src/storage.ts"],
+            diffs: [{ file: "src/settings.ts", status: "modified", additions: 4, deletions: 2 }],
+          },
+        }),
+      ],
+      goalRuns: [
+        goalRun({ id: "goal_run_old", taskID, goalID: "settings", now: now + 12 }),
+        goalRun({ id: "goal_run_new", taskID, goalID: "storage", now: now + 22, completed: now + 26 }),
+      ],
+    })
+
+    expect(ctx.attemptNumber).toBe(3)
+    expect(ctx.priorAttempts.map((attempt) => attempt.artifactID)).toEqual([firstAttemptID, secondAttemptID])
+    expect(ctx.priorAttempts[0]).toMatchObject({
+      attemptNumber: 1,
+      phase: "post_build",
+      verdict: "needs_correction",
+      summary: "Settings validation needs correction.",
+      reviewers: [{ reviewerID: "rev_settings", scope: "Settings validation", verdict: "needs_correction" }],
+      blockingFindings: [
+        {
+          id: "BF-1",
+          title: "Settings validation blind spot",
+          filePaths: ["src/settings.ts"],
+          requirementIDs: ["REQ-2"],
+          specIDs: ["settings_validation"],
+        },
+      ],
+      requiredRepairs: [{ id: "repair-settings", description: "Add settings validation", filePaths: ["src/settings.ts"] }],
+      unresolvedDisagreements: [{ id: "dispute-1", description: "Reviewer disagreement" }],
+    })
+    expect(ctx.priorAttempts[1]).toMatchObject({ attemptNumber: 2, artifactID: secondAttemptID })
+    expect(ctx.buildEvidenceSinceLastReview).toMatchObject({
+      sinceAttemptNumber: 2,
+      sinceTimeCreated: now + 20,
+      changedFiles: ["src/settings.ts", "src/storage.ts"],
+      diffs: [{ file: "src/settings.ts", status: "modified", additions: 4, deletions: 2 }],
+      deliverySummaries: ["New delivery after latest review"],
+      goalRuns: [
+        {
+          goalID: "storage",
+          goalRunID: "goal_run_new",
+          status: "completed",
+          timeCreated: now + 22,
+          timeCompleted: now + 26,
+        },
+      ],
+    })
+    expect(ctx.scaleSignals).toMatchObject({
+      goals: 2,
+      requirements: 1,
+      acceptanceSpecs: 2,
+      changedFilesTotal: 3,
+      changedFilesSinceLastReview: 2,
+      priorAttempts: 2,
+      priorBlockingFindings: 1,
+    })
   })
 })
