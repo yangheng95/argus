@@ -385,7 +385,7 @@ bun test packages/opencorvus/test/requirements/maturity-word-discipline.test.ts 
    mandatory `acceptance` / `non_goals`.
 2. [x] Patch the requirements collector zod schema to require non-empty
    `acceptance` and `non_goals` (grep all call sites first; rule 35).
-3. [ ] Patch `architect-core.txt`: ban existence-grep AS under behavior
+3. [x] Patch `architect-core.txt`: ban existence-grep AS under behavior
    REQs; require AS anchored to REQ.acceptance text.
 4. [ ] Patch `integrity-team-core.txt`: traceability-or-drop rule.
 5. [ ] Patch `team-agent.ts` `buildReviewerPrompt` /
