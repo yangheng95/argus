@@ -49,3 +49,12 @@ export {
   type IntegrityReviewScaleSignals,
   type SpecSnapshotLineage,
 } from "./replay-context"
+export {
+  getSharedIntegrityPromptBudget,
+  renderSharedIntegrityPromptContext,
+  type SanitizedPromptTextReport,
+  type SharedPromptBudget,
+  type SharedPromptCapInput,
+  type SharedPromptCapOutput,
+  type SharedPromptSurface,
+} from "./shared-prompt"

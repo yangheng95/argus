@@ -120,6 +120,12 @@ mock.module("@/session", () => ({
 function replayContext(attemptNumber: number): IntegrityReplayContext {
   return {
     attemptNumber,
+    lineage: {
+      taskID: "tsk_team_replay",
+      activeSpecSnapshotID: "spec_team_replay",
+      inheritedSpecSnapshotIDs: [],
+      reason: "active_only",
+    },
     priorAttempts: [],
     buildEvidenceSinceLastReview: {
       changedFiles: [],
@@ -144,6 +150,12 @@ function reReviewReplayContext(): IntegrityReplayContext {
   const priorTime = Date.UTC(2026, 4, 23, 12, 44, 15, 975)
   return {
     attemptNumber: 2,
+    lineage: {
+      taskID: "tsk_team_attempt",
+      activeSpecSnapshotID: "spec_team_attempt",
+      inheritedSpecSnapshotIDs: [],
+      reason: "active_only",
+    },
     priorAttempts: [
       {
         attemptNumber: 1,
