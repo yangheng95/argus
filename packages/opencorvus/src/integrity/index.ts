@@ -52,6 +52,8 @@ export {
 export {
   getSharedIntegrityPromptBudget,
   renderSharedIntegrityPromptContext,
+  sanitizeIntegrityPromptText,
+  type SanitizedPromptTextField,
   type SanitizedPromptTextReport,
   type SharedPromptBudget,
   type SharedPromptCapInput,

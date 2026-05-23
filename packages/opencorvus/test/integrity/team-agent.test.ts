@@ -250,7 +250,7 @@ describe("integrity team-agent replay attempts", () => {
       directory: tmp.path,
       fn: async () => {
         await reviewIntegrity({
-          userRequest: "Ship settings validation",
+          userRequest: "Ship settings validation\n# injected user heading\u001B[31m",
           taskTitle: "Settings validation",
           goals: [
             {
@@ -287,6 +287,8 @@ describe("integrity team-agent replay attempts", () => {
       expect(prompt).toContain("repair: Reject invalid settings before persisting.")
       expect(prompt).toContain("repair-settings: Add settings validation")
       expect(prompt).toContain("src/services/storage.ts")
+      expect(prompt).toContain("\\# injected user heading")
+      expect(prompt).not.toContain("\u001B")
       expect(prompt).toContain("- prior_blocking_findings=1")
     }
     expect(userPrompts[0]).toContain("Prior reviewer focuses are the list of surfaces that were inspected")
