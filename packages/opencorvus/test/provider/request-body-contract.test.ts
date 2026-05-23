@@ -36,7 +36,7 @@ function model(overrides: Partial<Provider.Model>): Provider.Model {
 }
 
 describe("provider request-body contract", () => {
-  test("DeepSeek OpenAI-compatible body keeps empty reasoning_content before stream consumption", () => {
+  test("DeepSeek OpenAI-compatible body keeps empty reasoning_content before stream consumption", async () => {
     const deepseek = model({
       id: "deepseek/deepseek-reasoner",
       providerID: "deepseek",
@@ -50,7 +50,7 @@ describe("provider request-body contract", () => {
         interleaved: { field: "reasoning_content" },
       },
     })
-    const messages = ProviderTransform.message(
+    const messages = await ProviderTransform.message(
       [
         {
           role: "assistant",
@@ -77,7 +77,7 @@ describe("provider request-body contract", () => {
     expect(bodyMessages[0].tool_calls?.[0]?.function.name).toBe("bash")
   })
 
-  test("OpenRouter DeepSeek body leaves reasoning_details on the reasoning part", () => {
+  test("OpenRouter DeepSeek body leaves reasoning_details on the reasoning part", async () => {
     const reasoningDetails = [{ type: "reasoning.text", text: "thinking", format: "unknown", index: 0 }]
     const openrouter = model({
       id: "openrouter/deepseek-r1",
@@ -93,7 +93,7 @@ describe("provider request-body contract", () => {
       },
     })
 
-    const messages = ProviderTransform.message(
+    const messages = await ProviderTransform.message(
       [
         {
           role: "assistant",
@@ -137,7 +137,7 @@ describe("provider request-body contract", () => {
     expect(providerOptions.azure).toEqual(providerOptions.openai)
   })
 
-  test("Bedrock Anthropic-style request body includes cachePoint metadata", () => {
+  test("Bedrock Anthropic-style request body includes cachePoint metadata", async () => {
     const bedrock = model({
       id: "amazon-bedrock/claude-sonnet-4",
       providerID: "amazon-bedrock",
@@ -148,7 +148,7 @@ describe("provider request-body contract", () => {
       },
     })
 
-    const messages = ProviderTransform.message([{ role: "user", content: "hello" }] as any[], bedrock, {}) as any[]
+    const messages = await ProviderTransform.message([{ role: "user", content: "hello" }] as any[], bedrock, {}) as any[]
 
     expect(messages[0].providerOptions?.bedrock).toEqual({
       cachePoint: { type: "default" },
@@ -177,7 +177,7 @@ describe("provider request-body contract", () => {
     expect(SessionLoop.structuredOutputToolChoice(format, { capabilities: { reasoning: true } })).toBe("auto")
   })
 
-  test("Hexin Kimi K2.6 and GLM-5.1 use soft tool choice and preserve reasoning content", () => {
+  test("Hexin Kimi K2.6 and GLM-5.1 use soft tool choice and preserve reasoning content", async () => {
     const targets = [
       model({
         id: "hexin/kimi-k2.6",
@@ -221,7 +221,7 @@ describe("provider request-body contract", () => {
       expect(SessionLoop.structuredOutputToolChoice(format, target)).toBe("auto")
       expect(SessionLoop.terminalToolChoice(terminalContract as any, tools as any, target)).toBeUndefined()
 
-      const messages = ProviderTransform.message(
+      const messages = await ProviderTransform.message(
         [
           {
             role: "assistant",

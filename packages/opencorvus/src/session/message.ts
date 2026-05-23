@@ -715,10 +715,7 @@ export namespace Message {
     }
 
     const userFileUrl = async (part: Message.FilePart): Promise<string> => {
-      const located = AttachmentStore.nameFromUrl(part.url)
-      if (!located) return part.url
-      const bytes = await AttachmentStore.read(located.projectID, located.name)
-      return `data:${part.mime};base64,${bytes.toString("base64")}`
+      return (await AttachmentStore.dataUrlFromReference(part.url, part.mime)) ?? part.url
     }
 
     // AI SDK v6 invokes tool.toModelOutput with an args object

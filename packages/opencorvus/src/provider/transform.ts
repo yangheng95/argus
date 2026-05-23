@@ -6,6 +6,7 @@ import type { Provider } from "./provider"
 import type { ModelsDev } from "./models"
 import { iife } from "@/util/iife"
 import { Flag } from "@/flag/flag"
+import { AttachmentStore } from "@/storage/attachment-store"
 import { normalizeVendorMessages } from "./vendor-messages"
 import { GLM_EVALUATION_TEMPERATURE, THINKING_MODEL_TOP_P } from "./sampling"
 
@@ -150,7 +151,11 @@ export namespace ProviderTransform {
           }
         }
 
-        const mime = part.type === "image" ? part.image.toString().split(";")[0].replace("data:", "") : part.mediaType
+        const mime =
+          part.type === "image"
+            ? ((part as { mediaType?: string }).mediaType ?? part.image.toString().split(";")[0].replace("data:", ""))
+            : (part.mediaType ?? (part as { mime?: string }).mime)
+        if (!mime) return part
         const filename = part.type === "file" ? part.filename : undefined
         const modality = mimeToModality(mime)
         if (!modality) return part
@@ -167,8 +172,53 @@ export namespace ProviderTransform {
     })
   }
 
-  export function message(msgs: ModelMessage[], model: Provider.Model, _options: Record<string, unknown>) {
+  function filePartMime(part: { mediaType?: unknown; mime?: unknown }): string | undefined {
+    if (typeof part.mediaType === "string" && part.mediaType.length > 0) return part.mediaType
+    if (typeof part.mime === "string" && part.mime.length > 0) return part.mime
+    return undefined
+  }
+
+  async function inlineLocalFilePart(part: unknown): Promise<unknown> {
+    if (!part || typeof part !== "object" || Array.isArray(part)) return part
+    const record = part as Record<string, unknown>
+    if (record.type !== "file") return part
+    const mime = filePartMime(record)
+    if (!mime) return part
+
+    const inline = async (value: unknown): Promise<string | undefined> => {
+      if (typeof value !== "string" || value.startsWith("data:")) return undefined
+      return await AttachmentStore.dataUrlFromReference(value, mime).catch(() => undefined)
+    }
+
+    const data = await inline(record.data)
+    if (data) return { ...record, data }
+    const url = await inline(record.url)
+    if (url) return { ...record, url }
+    return part
+  }
+
+  async function inlineLocalAttachments(msgs: ModelMessage[]): Promise<ModelMessage[]> {
+    const out: ModelMessage[] = []
+    for (const msg of msgs) {
+      if (!Array.isArray(msg.content)) {
+        out.push(msg)
+        continue
+      }
+      const content: unknown[] = []
+      let changed = false
+      for (const part of msg.content) {
+        const next = await inlineLocalFilePart(part)
+        changed ||= next !== part
+        content.push(next)
+      }
+      out.push(changed ? ({ ...msg, content } as ModelMessage) : msg)
+    }
+    return out
+  }
+
+  export async function message(msgs: ModelMessage[], model: Provider.Model, _options: Record<string, unknown>) {
     msgs = unsupportedParts(msgs, model)
+    msgs = await inlineLocalAttachments(msgs)
     msgs = normalizeMessages(msgs, model)
     if (
       (model.providerID === "anthropic" ||

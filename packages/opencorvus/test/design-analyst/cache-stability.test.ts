@@ -127,9 +127,9 @@ describe("H1: register_* tool results — counter determinism", () => {
 // ────────── H2: openai-compatible path skips local message markers ──────────
 
 describe("H2: ProviderTransform.message() local cache marker coverage by provider", () => {
-  function runPipeline(model: any, msgs: ModelMessage[]) {
+  async function runPipeline(model: any, msgs: ModelMessage[]) {
     // Provide a deep clone so the mutation inside message() doesn't leak.
-    return ProviderTransform.message(stableClone(msgs), model, {})
+    return await ProviderTransform.message(stableClone(msgs), model, {})
   }
 
   function collectCacheMarkers(msgs: ModelMessage[]): Array<{ idx: number; role: string; where: string }> {
@@ -158,16 +158,16 @@ describe("H2: ProviderTransform.message() local cache marker coverage by provide
     { role: "user", content: [{ type: "text", text: "(tool-result: HTML blob)" }] },
   ]
 
-  test("Anthropic model: cache_control markers ARE placed", () => {
-    const out = runPipeline(anthropicModel, base)
+  test("Anthropic model: cache_control markers ARE placed", async () => {
+    const out = await runPipeline(anthropicModel, base)
     const markers = collectCacheMarkers(out)
     // Expected: system[0] + system[last] + messages[-2] + messages[-1].
     // With 1 system message, system collapses to 1. Tail has 2. So ≥3 markers.
     expect(markers.length).toBeGreaterThanOrEqual(3)
   })
 
-  test("OpenAI-compatible model: local cache_control markers are NOT placed", () => {
-    const out = runPipeline(dashscopeModel, base)
+  test("OpenAI-compatible model: local cache_control markers are NOT placed", async () => {
+    const out = await runPipeline(dashscopeModel, base)
     const markers = collectCacheMarkers(out)
     // The outer gate in transform.ts restricts applyCaching to the
     // Anthropic-family path, so generic OpenAI-compatible models do not get
@@ -225,9 +225,9 @@ describe("H3: Anthropic tail-only breakpoints under a growing tool loop", () => 
     return idxs
   }
 
-  test("first turn covers user; later turns cover only tail pair", () => {
-    const t1 = ProviderTransform.message(buildTurn(0), anthropicModel, {})
-    const t5 = ProviderTransform.message(buildTurn(5), anthropicModel, {})
+  test("first turn covers user; later turns cover only tail pair", async () => {
+    const t1 = await ProviderTransform.message(buildTurn(0), anthropicModel, {})
+    const t5 = await ProviderTransform.message(buildTurn(5), anthropicModel, {})
     const idx1 = taggedIndexes(t1)
     const idx5 = taggedIndexes(t5)
 
@@ -293,7 +293,7 @@ describe("H5: prefix stability across tool-loop turns", () => {
     return JSON.stringify(msgs)
   }
 
-  test("turn N+1 extends turn N without mutating the earlier prefix", () => {
+  test("turn N+1 extends turn N without mutating the earlier prefix", async () => {
     const turnN: ModelMessage[] = [
       { role: "system", content: "sys" },
       { role: "user", content: [{ type: "text", text: "u" }] },
@@ -306,8 +306,8 @@ describe("H5: prefix stability across tool-loop turns", () => {
       { role: "user", content: [{ type: "text", text: "tr2" }] },
     ]
 
-    const outN = ProviderTransform.message(stableClone(turnN), anthropicModel, {})
-    const outNPlus1 = ProviderTransform.message(stableClone(turnNPlus1), anthropicModel, {})
+    const outN = await ProviderTransform.message(stableClone(turnN), anthropicModel, {})
+    const outNPlus1 = await ProviderTransform.message(stableClone(turnNPlus1), anthropicModel, {})
 
     // The first 4 messages of turn N+1 must NOT equal turn N's serialization
     // byte-by-byte, because the tail cache_control on turn N's last two messages
