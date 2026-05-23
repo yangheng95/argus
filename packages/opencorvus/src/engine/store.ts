@@ -694,14 +694,16 @@ export function findLatestDeliveryVerdictArtifact(taskID: string) {
   )
 }
 
-export function findLatestIntegrityAttemptArtifact(input: {
+export type IntegrityAttemptArtifactQuery = {
   taskID: string
   specSnapshotID?: string | null
   /** Filter by recorded `phase` ("pre_build" | "post_build"). Omit to match
    *  any phase. The delivery freshness gate uses `phase: "post_build"` so a
    *  pre-build review cannot satisfy the post-build completion requirement. */
   phase?: "pre_build" | "post_build"
-}) {
+}
+
+export function listIntegrityAttemptArtifacts(input: IntegrityAttemptArtifactQuery): ArtifactRow[] {
   return Database.use((db) =>
     db
       .select()
@@ -716,9 +718,13 @@ export function findLatestIntegrityAttemptArtifact(input: {
           input.phase ? sql`json_extract(${EngineArtifactTable.payload}, '$.phase') = ${input.phase}` : sql`1 = 1`,
         ),
       )
-      .orderBy(desc(EngineArtifactTable.time_created))
-      .get(),
+      .orderBy(desc(EngineArtifactTable.time_created), desc(EngineArtifactTable.id))
+      .all(),
   )
+}
+
+export function findLatestIntegrityAttemptArtifact(input: IntegrityAttemptArtifactQuery) {
+  return listIntegrityAttemptArtifacts(input)[0]
 }
 
 export function integrityAttemptVerdict(row: ArtifactRow | undefined | null) {
