@@ -119,6 +119,12 @@ export function setupAutoScroll(
     syncFollowLockAttribute();
   }
 
+  function pinToBottom() {
+    el.scrollTop = el.scrollHeight;
+    programScrollTarget = el.scrollTop;
+    expectedTop = el.scrollTop;
+  }
+
   function scheduleFollowScroll() {
     syncFollowLockAttribute();
     if (!opts.isTracking() || rafPending) return;
@@ -128,9 +134,26 @@ export function setupAutoScroll(
       if (disposed) return;
       syncFollowLockAttribute();
       if (!opts.isTracking()) return;
-      el.scrollTop = el.scrollHeight;
-      programScrollTarget = el.scrollTop;
-      expectedTop = el.scrollTop;
+      pinToBottom();
+      // Post-pin correction frame. Late-painting content — images and
+      // <video> without explicit dimensions, syntax-highlighted code
+      // blocks whose tokenisation runs after first paint, web-font
+      // FOUT swaps, and short `transition: max-height` animations on
+      // descendants — grows `scrollHeight` AFTER the rAF above set
+      // `scrollTop = scrollHeight`. With `data-follow-lock="true"` we
+      // explicitly disable the browser's `overflow-anchor` (so the
+      // controller owns all anchoring), so without this follow-up
+      // frame the user sees the conversation drift upward by exactly
+      // the height the late layout gained. The spec forbids
+      // MutationObserver / ResizeObserver inside setupAutoScroll
+      // (specs/new-arch/2026-05-15-overlay-scroll-single-source-plan.md)
+      // — a single extra rAF re-pin is the bounded, observer-free way
+      // to catch the drift. Gated on `isTracking()` so a user who has
+      // scrolled away never gets yanked back.
+      requestAnimationFrame(() => {
+        if (disposed || !opts.isTracking()) return;
+        if (distanceFromBottom() > BOTTOM_TOLERANCE) pinToBottom();
+      });
     });
   }
 
