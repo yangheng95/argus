@@ -1,6 +1,7 @@
 import {
   getSharedIntegrityPromptBudget,
   renderSharedIntegrityPromptContext,
+  sanitizeIntegrityPromptText,
 } from "../../src/integrity/shared-prompt"
 import type { IntegrityPriorAttemptSummary, SpecSnapshotLineage } from "../../src/integrity/replay-context"
 
@@ -88,5 +89,80 @@ describe("shared integrity prompt cap", () => {
     expect(output.promptMarkdown.indexOf("PERSISTENT_ROOT_LABEL")).toBeLessThan(
       output.promptMarkdown.indexOf("src/current.ts"),
     )
+  })
+
+  test("sanitizes ANSI, bidi controls, control bytes, markdown injection, and field lengths", () => {
+    const report = sanitizeIntegrityPromptText({
+      text: "\u001B[31m# injected heading\u001B[0m\n\u202Ertl\x00\x01\n```\n<script>alert(1)</script>\n---",
+      field: "reviewer_text",
+      markdownContext: "block",
+    })
+
+    expect(report.text).not.toContain("\u001B")
+    expect(report.text).toContain("\\# injected heading")
+    expect(report.text).toContain("[BIDI U+202E REMOVED]")
+    expect(report.text).toContain("[NUL REMOVED]")
+    expect(report.text).toContain("[CTRL U+0001 REMOVED]")
+    expect(report.text).toContain("\\```")
+    expect(report.text).toContain("\\<script>alert(1)</script>")
+    expect(report.text).toContain("\\---")
+    expect(report.removedAnsiEscapes).toBe(2)
+    expect(report.removedControls).toBe(2)
+    expect(report.removedBidirectionalControls).toBe(1)
+    expect(report.escapedMarkdownControls).toBe(4)
+
+    const truncated = sanitizeIntegrityPromptText({
+      text: "a".repeat(20),
+      field: "generic",
+      maxChars: 10,
+      markdownContext: "inline",
+    })
+    expect(truncated.truncated).toBe(true)
+    expect(truncated.text).toHaveLength(10)
+  })
+
+  test("applies sanitizer to user quotes, prior attempt summaries, and finding evidence before capping", () => {
+    const output = renderSharedIntegrityPromptContext({
+      surface: "integrity_replay",
+      lineage,
+      latestAttempt: attempt({
+        attemptNumber: 3,
+        summary: "# prior summary\n\u202E",
+        blockingFindings: [
+          {
+            id: "F-1",
+            title: "Malicious evidence",
+            description: "\u001B[31m# finding evidence\u001B[0m",
+            repair: "<script>repair()</script>",
+            filePaths: [],
+            requirementIDs: [],
+            specIDs: [],
+          },
+        ],
+      }),
+      changedFiles: ["src/current.ts"],
+      changedEvidenceMarkdown: "```changed evidence",
+      oldAttempts: [
+        attempt({
+          attemptNumber: 2,
+          summary: "# older summary",
+        }),
+      ],
+      userRequestQuotes: ["# user request quote"],
+      reviewerTextBlocks: ["---"],
+    })
+
+    expect(output.promptMarkdown).not.toContain("\u001B")
+    expect(output.promptMarkdown).toContain("\\# prior summary")
+    expect(output.promptMarkdown).toContain("[BIDI U+202E REMOVED]")
+    expect(output.promptMarkdown).toContain("\\# finding evidence")
+    expect(output.promptMarkdown).toContain("\\<script>repair()</script>")
+    expect(output.promptMarkdown).toContain("\\```changed evidence")
+    expect(output.promptMarkdown).toContain("\\# older summary")
+    expect(output.promptMarkdown).toContain("\\# user request quote")
+    expect(output.promptMarkdown).toContain("\\---")
+    expect(output.sanitizerReport.removedAnsiEscapes).toBe(2)
+    expect(output.sanitizerReport.removedBidirectionalControls).toBe(1)
+    expect(output.sanitizerReport.escapedMarkdownControls).toBeGreaterThanOrEqual(6)
   })
 })

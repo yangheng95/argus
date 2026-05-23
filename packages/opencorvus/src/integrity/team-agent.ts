@@ -25,6 +25,7 @@ import { Log } from "@/util/log"
 import type { DeliveryInfo, GoalInfo } from "@/delivery/checks"
 import { createIntegrityAcceptanceTools } from "./acceptance-tools"
 import { renderIntegrityReplayContextPrompt, type IntegrityReplayContext } from "./replay-context"
+import { sanitizeIntegrityPromptText } from "./shared-prompt"
 import type { RequirementStatusRow } from "./requirement-status"
 import {
   IntegrityReviewCompletedPayloadSchema,
@@ -476,7 +477,11 @@ function buildIntegrityEvidencePrompt(input: ReviewPromptInput): string {
     renderUserRequestSection({
       heading: "# User Request",
       title: input.taskTitle,
-      request: input.userRequest,
+      request: sanitizeIntegrityPromptText({
+        text: input.userRequest,
+        field: "user_request_quote",
+        markdownContext: "block",
+      }).text,
       taskID: input.taskID,
     }),
   )

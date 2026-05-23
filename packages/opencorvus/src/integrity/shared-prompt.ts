@@ -51,6 +51,14 @@ export type SanitizedPromptTextReport = {
   escapedMarkdownControls: number
 }
 
+export type SanitizedPromptTextField =
+  | "user_request_quote"
+  | "finding_description"
+  | "finding_repair"
+  | "reviewer_text"
+  | "changed_evidence"
+  | "generic"
+
 export type SharedPromptCapOutput = {
   promptMarkdown: string
   capHit: boolean
@@ -83,9 +91,15 @@ export function getSharedIntegrityPromptBudget(): SharedPromptBudget {
 export function renderSharedIntegrityPromptContext(input: SharedPromptCapInput): SharedPromptCapOutput {
   const budget = getSharedIntegrityPromptBudget()
   const omittedAttempts: SharedPromptCapOutput["omittedAttempts"] = []
+  const sanitizerReports: SanitizedPromptTextReport[] = []
   const chunks: string[] = []
   let renderedChars = 0
   let capHit = false
+  const sanitize: PromptSanitizer = (text, field, markdownContext, maxChars) => {
+    const report = sanitizeIntegrityPromptText({ text, field, markdownContext, maxChars })
+    sanitizerReports.push(report)
+    return report.text
+  }
 
   const append = (markdown: string) => {
     if (!markdown) return
@@ -107,7 +121,7 @@ export function renderSharedIntegrityPromptContext(input: SharedPromptCapInput):
 
   append(renderSharedPromptHeader(input))
   if (input.latestAttempt) {
-    append(clipText(renderFullAttemptMarkdown(input.latestAttempt, budget), budget.latestAttemptFullTextCharCap))
+    append(clipText(renderFullAttemptMarkdown(input.latestAttempt, budget, sanitize), budget.latestAttemptFullTextCharCap))
   } else {
     append(
       "No prior integrity attempts exist for this task/spec snapshot lineage. Treat this as a first review and choose reviewers from the actual request, goals, requirements, changed files, runtime evidence, and risk surface.",
@@ -115,16 +129,16 @@ export function renderSharedIntegrityPromptContext(input: SharedPromptCapInput):
   }
 
   if (input.persistentRoots?.length) {
-    append(clipText(renderPersistentRootsMarkdown(input.persistentRoots), budget.persistentRootsCharCap))
+    append(clipText(renderPersistentRootsMarkdown(input.persistentRoots, sanitize), budget.persistentRootsCharCap))
   }
 
-  append(renderChangedEvidenceMarkdown(input, budget))
+  append(renderChangedEvidenceMarkdown(input, budget, sanitize))
 
   for (const quote of input.userRequestQuotes ?? []) {
-    append(`## User Request Quote\n\n${quote}`)
+    append(`## User Request Quote\n\n${sanitize(quote, "user_request_quote", "block")}`)
   }
   for (const block of input.reviewerTextBlocks ?? []) {
-    append(`## Reviewer Text\n\n${block}`)
+    append(`## Reviewer Text\n\n${sanitize(block, "reviewer_text", "block")}`)
   }
 
   const maxOldAttemptSummaries = Math.max(0, budget.maxRenderedPriorAttempts - (input.latestAttempt ? 1 : 0))
@@ -141,7 +155,10 @@ export function renderSharedIntegrityPromptContext(input: SharedPromptCapInput):
       return
     }
 
-    const summary = clipText(attempt.summary ?? attempt.teamReportMarkdown ?? "(no summary)", budget.oldAttemptSummaryCharCap)
+    const summary = clipText(
+      sanitize(attempt.summary ?? attempt.teamReportMarkdown ?? "(no summary)", "generic", "block"),
+      budget.oldAttemptSummaryCharCap,
+    )
     const before = renderedChars
     append(renderOldAttemptPointer(attempt, summary))
     if (renderedChars === before || renderedChars >= budget.totalCharCap) {
@@ -159,7 +176,84 @@ export function renderSharedIntegrityPromptContext(input: SharedPromptCapInput):
     promptMarkdown,
     capHit,
     omittedAttempts,
-    sanitizerReport: passthroughSanitizerReport(promptMarkdown),
+    sanitizerReport: aggregateSanitizerReports(promptMarkdown, sanitizerReports, capHit),
+  }
+}
+
+export function sanitizeIntegrityPromptText(input: {
+  text: string
+  field: SanitizedPromptTextField
+  maxChars?: number
+  markdownContext: "inline" | "block"
+}): SanitizedPromptTextReport {
+  const originalChars = input.text.length
+  let removedAnsiEscapes = 0
+  let removedControls = 0
+  let removedBidirectionalControls = 0
+  let escapedMarkdownControls = 0
+
+  let text = input.text
+  text = text.replace(/\x1B\[[0-?]*[ -/]*[@-~]/g, () => {
+    removedAnsiEscapes += 1
+    return ""
+  })
+  text = text.replace(/\x1B\][^\x07\x1B]*(?:\x07|\x1B\\)?/g, () => {
+    removedAnsiEscapes += 1
+    return ""
+  })
+
+  const chars: string[] = []
+  for (const char of text) {
+    const code = char.codePointAt(0) ?? 0
+    if (code === 0) {
+      removedControls += 1
+      chars.push("[NUL REMOVED]")
+      continue
+    }
+    if (isBidirectionalControl(code)) {
+      removedBidirectionalControls += 1
+      chars.push(`[BIDI U+${hexCode(code)} REMOVED]`)
+      continue
+    }
+    if (isDisallowedControl(code)) {
+      removedControls += 1
+      chars.push(`[CTRL U+${hexCode(code)} REMOVED]`)
+      continue
+    }
+    chars.push(char)
+  }
+  text = chars.join("")
+
+  if (input.markdownContext === "block") {
+    text = text
+      .split("\n")
+      .map((line) =>
+        escapesMarkdownControl(line)
+          ? escapeMarkdownControlLine(line, () => {
+              escapedMarkdownControls += 1
+            })
+          : line,
+      )
+      .join("\n")
+  }
+
+  const maxChars = input.maxChars ?? defaultSanitizedPromptTextMaxChars(input.field)
+  let truncated = false
+  if (text.length > maxChars) {
+    truncated = true
+    const marker = "\n[truncated_by_integrity_prompt_sanitizer]"
+    text = maxChars > marker.length ? `${text.slice(0, maxChars - marker.length)}${marker}` : text.slice(0, maxChars)
+  }
+
+  return {
+    text,
+    truncated,
+    originalChars,
+    renderedChars: text.length,
+    removedAnsiEscapes,
+    removedControls,
+    removedBidirectionalControls,
+    escapedMarkdownControls,
   }
 }
 
@@ -175,7 +269,18 @@ function renderSharedPromptHeader(input: SharedPromptCapInput): string {
   ].join("\n")
 }
 
-function renderFullAttemptMarkdown(attempt: IntegrityPriorAttemptSummary, budget: SharedPromptBudget): string {
+type PromptSanitizer = (
+  text: string,
+  field: SanitizedPromptTextField,
+  markdownContext: "inline" | "block",
+  maxChars?: number,
+) => string
+
+function renderFullAttemptMarkdown(
+  attempt: IntegrityPriorAttemptSummary,
+  budget: SharedPromptBudget,
+  sanitize: PromptSanitizer,
+): string {
   const lines = [
     "## Latest Prior Integrity Attempt",
     "",
@@ -185,8 +290,8 @@ function renderFullAttemptMarkdown(attempt: IntegrityPriorAttemptSummary, budget
     `- phase=${attempt.phase ?? "unknown"}`,
     `- verdict=${attempt.verdict ?? "unknown"}`,
   ]
-  if (attempt.summary) lines.push("", "Summary:", attempt.summary)
-  if (attempt.teamReportMarkdown) lines.push("", "Team report:", attempt.teamReportMarkdown)
+  if (attempt.summary) lines.push("", "Summary:", sanitize(attempt.summary, "generic", "block"))
+  if (attempt.teamReportMarkdown) lines.push("", "Team report:", sanitize(attempt.teamReportMarkdown, "reviewer_text", "block"))
   if (attempt.reviewers.length > 0) {
     lines.push("", "Reviewer focuses:")
     for (const reviewer of attempt.reviewers) {
@@ -198,9 +303,16 @@ function renderFullAttemptMarkdown(attempt: IntegrityPriorAttemptSummary, budget
     for (const finding of attempt.blockingFindings) {
       lines.push(`- ${finding.id}: ${finding.title}`)
       if (finding.description) {
-        lines.push(`  description: ${clipText(finding.description, budget.findingDescriptionCharCap)}`)
+        lines.push(
+          `  description: ${clipText(
+            sanitize(finding.description, "finding_description", "block"),
+            budget.findingDescriptionCharCap,
+          )}`,
+        )
       }
-      if (finding.repair) lines.push(`  repair: ${clipText(finding.repair, budget.findingRepairCharCap)}`)
+      if (finding.repair) {
+        lines.push(`  repair: ${clipText(sanitize(finding.repair, "finding_repair", "block"), budget.findingRepairCharCap)}`)
+      }
       if (finding.filePaths.length > 0) lines.push(`  files: ${finding.filePaths.join(", ")}`)
       if (finding.requirementIDs.length > 0) lines.push(`  requirements: ${finding.requirementIDs.join(", ")}`)
       if (finding.specIDs.length > 0) lines.push(`  specs: ${finding.specIDs.join(", ")}`)
@@ -209,20 +321,23 @@ function renderFullAttemptMarkdown(attempt: IntegrityPriorAttemptSummary, budget
   if (attempt.requiredRepairs.length > 0) {
     lines.push("", "Required repairs:")
     for (const repair of attempt.requiredRepairs) {
-      lines.push(`- ${repair.id}: ${clipText(repair.description, budget.findingRepairCharCap)}`)
+      lines.push(`- ${repair.id}: ${clipText(sanitize(repair.description, "finding_repair", "block"), budget.findingRepairCharCap)}`)
       if (repair.filePaths.length > 0) lines.push(`  files: ${repair.filePaths.join(", ")}`)
     }
   }
   if (attempt.unresolvedDisagreements.length > 0) {
     lines.push("", "Unresolved disagreements:")
     for (const disagreement of attempt.unresolvedDisagreements) {
-      lines.push(`- ${disagreement.id}: ${clipText(disagreement.description, budget.findingDescriptionCharCap)}`)
+      lines.push(`- ${disagreement.id}: ${clipText(sanitize(disagreement.description, "generic", "block"), budget.findingDescriptionCharCap)}`)
     }
   }
   return lines.join("\n")
 }
 
-function renderPersistentRootsMarkdown(roots: NonNullable<SharedPromptCapInput["persistentRoots"]>): string {
+function renderPersistentRootsMarkdown(
+  roots: NonNullable<SharedPromptCapInput["persistentRoots"]>,
+  sanitize: PromptSanitizer,
+): string {
   const sorted = roots
     .slice()
     .sort(
@@ -237,17 +352,21 @@ function renderPersistentRootsMarkdown(roots: NonNullable<SharedPromptCapInput["
       [
         `- ${root.rootID}: ${root.canonicalLabel}`,
         `  latest_severity=${root.latestSeverity}; first_seen=${root.firstSeenAttempt}; latest_seen=${root.latestSeenAttempt}; consecutive_attempts=${root.consecutiveAttempts.join(",")}`,
-        `  symptom=${root.symptomSummaryMarkdown}`,
+        `  symptom=${sanitize(root.symptomSummaryMarkdown, "generic", "block")}`,
       ].join("\n"),
     ),
   ].join("\n")
 }
 
-function renderChangedEvidenceMarkdown(input: SharedPromptCapInput, budget: SharedPromptBudget): string {
+function renderChangedEvidenceMarkdown(
+  input: SharedPromptCapInput,
+  budget: SharedPromptBudget,
+  sanitize: PromptSanitizer,
+): string {
   const lines = ["## Changed Files And Evidence", "", `- changed_files=${input.changedFiles.length}`]
   for (const file of input.changedFiles) lines.push(`- ${file}`)
   if (input.changedEvidenceMarkdown) {
-    lines.push("", clipText(input.changedEvidenceMarkdown, budget.changedEvidenceCharCap))
+    lines.push("", clipText(sanitize(input.changedEvidenceMarkdown, "changed_evidence", "block"), budget.changedEvidenceCharCap))
   }
   return lines.join("\n")
 }
@@ -270,15 +389,64 @@ function clipText(text: string, maxChars: number): string {
   return `${text.slice(0, Math.max(0, maxChars - 39))}\n[truncated_by_shared_prompt_cap]`
 }
 
-function passthroughSanitizerReport(text: string): SanitizedPromptTextReport {
+function aggregateSanitizerReports(
+  text: string,
+  reports: SanitizedPromptTextReport[],
+  capHit: boolean,
+): SanitizedPromptTextReport {
   return {
     text,
-    truncated: false,
-    originalChars: text.length,
+    truncated: capHit || reports.some((report) => report.truncated),
+    originalChars: reports.reduce((sum, report) => sum + report.originalChars, 0),
     renderedChars: text.length,
-    removedAnsiEscapes: 0,
-    removedControls: 0,
-    removedBidirectionalControls: 0,
-    escapedMarkdownControls: 0,
+    removedAnsiEscapes: reports.reduce((sum, report) => sum + report.removedAnsiEscapes, 0),
+    removedControls: reports.reduce((sum, report) => sum + report.removedControls, 0),
+    removedBidirectionalControls: reports.reduce((sum, report) => sum + report.removedBidirectionalControls, 0),
+    escapedMarkdownControls: reports.reduce((sum, report) => sum + report.escapedMarkdownControls, 0),
   }
+}
+
+function defaultSanitizedPromptTextMaxChars(field: SanitizedPromptTextField): number {
+  switch (field) {
+    case "user_request_quote":
+      return 2000
+    case "finding_description":
+      return 2400
+    case "finding_repair":
+      return 1600
+    case "reviewer_text":
+      return 3000
+    case "changed_evidence":
+    case "generic":
+      return 12000
+  }
+}
+
+function isBidirectionalControl(code: number): boolean {
+  return (code >= 0x202a && code <= 0x202e) || (code >= 0x2066 && code <= 0x2069)
+}
+
+function isDisallowedControl(code: number): boolean {
+  if (code === 0x09 || code === 0x0a || code === 0x0d) return false
+  return (code >= 0x0000 && code <= 0x001f) || (code >= 0x007f && code <= 0x009f)
+}
+
+function hexCode(code: number): string {
+  return code.toString(16).toUpperCase().padStart(4, "0")
+}
+
+function escapesMarkdownControl(line: string): boolean {
+  return (
+    /^\s{0,3}#{1,6}(\s|$)/.test(line) ||
+    /^\s{0,3}(```|~~~)/.test(line) ||
+    /^\s{0,3}<\/?[A-Za-z][^>]*>/.test(line) ||
+    /^\s{0,3}([-*_]\s*){3,}$/.test(line) ||
+    /^\s{0,3}(=+|-+)\s*$/.test(line)
+  )
+}
+
+function escapeMarkdownControlLine(line: string, onEscape: () => void): string {
+  onEscape()
+  const indent = line.match(/^\s*/)?.[0] ?? ""
+  return `${indent}\\${line.slice(indent.length)}`
 }
