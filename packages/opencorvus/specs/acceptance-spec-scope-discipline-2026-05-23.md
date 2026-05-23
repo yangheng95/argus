@@ -341,7 +341,7 @@ Files that touch this surface and must be considered in the patch:
 Targeted command after implementation:
 
 ```powershell
-bun test packages/opencorvus/test/requirements/maturity-word-discipline.test.ts packages/opencorvus/test/architect/grep-only-as-rejection.test.ts packages/opencorvus/test/integrity/finding-traceability.test.ts
+bun test packages/opencorvus/test/requirements/maturity-word-discipline.test.ts packages/opencorvus/test/architect/grep-only-as-rejection.test.ts packages/opencorvus/test/integrity/finding-traceability.test.ts packages/opencorvus/test/integrity/replay-scope-discipline.test.ts
 ```
 
 ## Rule 6.1 Self-Check
@@ -397,6 +397,6 @@ bun test packages/opencorvus/test/requirements/maturity-word-discipline.test.ts 
 5. [x] Patch `team-agent.ts` `buildReviewerPrompt` /
    `buildSupervisorConsensusPrompt` to echo the traceability rule at role
    level.
-6. [ ] Add the three unit tests above + one replay snapshot test.
+6. [x] Add the three unit tests above + one replay snapshot test.
 7. [ ] Run targeted tests; no broad `bun test`.
 8. [ ] Commit + push (rule 33).
