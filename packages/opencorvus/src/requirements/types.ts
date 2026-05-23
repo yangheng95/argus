@@ -10,6 +10,8 @@ export interface ParsedRequirement {
   id: string
   type: "explicit" | "implicit"
   description: string
+  acceptance: string
+  non_goals: string
 }
 
 export interface RequirementsDecision {

@@ -653,7 +653,13 @@ test("buildIntegrityPrompt omits the Requirement Status Snapshot section when th
     taskTitle: "pre-build prompt elision",
     goals: [baseGoal],
     contractGraph: baseGraph,
-    requirements: [{ id: "REQ-1", type: "explicit", description: "Build it" }],
+    requirements: [{
+      id: "REQ-1",
+      type: "explicit",
+      description: "Build it",
+      acceptance: "The requested behavior is observable after build.",
+      non_goals: "This requirement does not cover unrelated hardening.",
+    }],
     requirementStatus: [],
   })
 
@@ -758,7 +764,13 @@ test("when every claiming goal's essential spec fails, the LLM-driven verdict ro
       }],
     }],
     contractGraph: baseGraph,
-    requirements: [{ id: "REQ-1", type: "explicit", description: "Show dashboard" }],
+    requirements: [{
+      id: "REQ-1",
+      type: "explicit",
+      description: "Show dashboard",
+      acceptance: "The dashboard renders its primary data view.",
+      non_goals: "This requirement does not cover unrelated admin tools.",
+    }],
     requirementStatus: [{
       reqID: "REQ-1",
       reqDescription: "Show dashboard",
@@ -823,7 +835,13 @@ test("buildIntegrityPrompt renders the snapshot table and foregrounds REQ → go
       }],
     }],
     contractGraph: baseGraph,
-    requirements: [{ id: "REQ-1", type: "explicit", description: "Show dashboard" }],
+    requirements: [{
+      id: "REQ-1",
+      type: "explicit",
+      description: "Show dashboard",
+      acceptance: "The dashboard renders its primary data view.",
+      non_goals: "This requirement does not cover unrelated admin tools.",
+    }],
     requirementStatus: [{
       reqID: "REQ-1",
       reqDescription: "Show dashboard",

@@ -39,6 +39,7 @@ import type { AcceptanceSpec } from "@/acceptance/types"
 import { createDecisionLog } from "@/decision-log"
 import { renderIntegrityMarkdown } from "@/integrity/render-markdown"
 import type { VisualSpec } from "@/design-analyst/types"
+import { parsedRequirementFromRow } from "@/requirements/row"
 
 const log = Log.create({ service: "delivery-tools" })
 
@@ -111,15 +112,7 @@ async function runDeliveryIntegrityReview(input: {
     task.attachments && task.attachments.length > 0 ? task.attachments : undefined
 
   const reqRows = findRequirements(activeSpec.id)
-  const requirements = reqRows.map((row) => {
-    const meta = (row.metadata ?? {}) as Record<string, unknown>
-    const sourceID = typeof meta.source_requirement_id === "string" ? meta.source_requirement_id : row.id
-    return {
-      id: sourceID,
-      type: (row.priority === "advisory" ? "implicit" : "explicit") as "explicit" | "implicit",
-      description: row.description,
-    }
-  })
+  const requirements = reqRows.map(parsedRequirementFromRow)
   const decisionLog = createDecisionLog(task.id)
   const requirementDecisions = decisionLog.readByPhase("requirements").map((entry) => ({
     key: entry.key,

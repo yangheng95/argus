@@ -2608,6 +2608,7 @@ describe("orchestrator tools", () => {
             description: "The app shell renders and typechecks.",
             acceptance: ["typecheck passes"],
             evidence_refs: ["user request"],
+            non_goals: ["This requirement does not cover unrelated runtime features."],
             priority: "blocking",
           },
         ],
@@ -2616,6 +2617,8 @@ describe("orchestrator tools", () => {
 
     architectCoordinateImpl = async (input: any) => {
       expect(input.requirements.map((r: any) => r.id)).toEqual(["REQ-1"])
+      expect(input.requirements[0].acceptance).toBe("typecheck passes")
+      expect(input.requirements[0].non_goals).toBe("This requirement does not cover unrelated runtime features.")
       return {
         summary: "One goal architecture.",
         goals: [
