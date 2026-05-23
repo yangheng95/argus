@@ -669,7 +669,7 @@ Reviewer count behavior:
 
 ## Implementation Checklist
 
-1. [ ] Add `listIntegrityAttemptArtifacts` and tests; make latest helper
+1. [x] Add `listIntegrityAttemptArtifacts` and tests; make latest helper
    delegate to it.
 2. [ ] Add `integrity/replay-context.ts` helper and unit tests.
 3. [ ] Add prompt renderer snapshot tests for first review and re-review.
