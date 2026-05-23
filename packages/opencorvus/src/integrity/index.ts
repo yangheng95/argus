@@ -38,3 +38,11 @@ export {
   type RequirementStatusDeps,
 } from "./requirement-status"
 export { renderIntegrityMarkdown } from "./render-markdown"
+export {
+  buildIntegrityReplayContext,
+  renderIntegrityReplayContextPrompt,
+  type IntegrityBuildEvidenceSinceLastReview,
+  type IntegrityPriorAttemptSummary,
+  type IntegrityReplayContext,
+  type IntegrityReviewScaleSignals,
+} from "./replay-context"

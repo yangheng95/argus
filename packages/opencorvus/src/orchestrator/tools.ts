@@ -1604,7 +1604,7 @@ export function createOrchestratorTools(input: {
   }): Promise<IntegrityReviewOutcome> {
     const { task, activeSpec, dbGoals } = ctx
 
-    const { findDeliveriesForTask, findRequirements } = await import("@/engine/store")
+    const { findDeliveriesForTask, findRequirements, listGoalRunsForTask } = await import("@/engine/store")
     const reqRows = findRequirements(activeSpec.id)
     const requirements = reqRows.map((r) => {
       const meta = (r.metadata ?? {}) as Record<string, unknown>
@@ -1679,7 +1679,7 @@ export function createOrchestratorTools(input: {
             .join("\n")
         : "No delivery artifact rows were found; review the requirement status snapshot and repository directly."
 
-    const { reviewIntegrity, computeRequirementStatusSnapshot } = await import("@/integrity")
+    const { reviewIntegrity, computeRequirementStatusSnapshot, buildIntegrityReplayContext } = await import("@/integrity")
     // Project REQ status from DB BEFORE the review fires. The host does not
     // pre-compute completion verdicts (rule 6.1) — it only lays out raw
     // claiming-goal × tip-run × per-spec evidence; the LLM walks it inside
@@ -1705,6 +1705,15 @@ export function createOrchestratorTools(input: {
     )
       ? "post_build"
       : "pre_build"
+    const replayContext = buildIntegrityReplayContext({
+      taskID,
+      specSnapshotID: activeSpec.id,
+      phase,
+      goals: goalsForReview,
+      requirements,
+      deliveries: deliveriesForAcceptance,
+      goalRuns: listGoalRunsForTask(taskID),
+    })
     const contractGraph = findLatestArchitectContractGraph(taskID)
     if (!contractGraph) {
       throw new Error(
@@ -1729,6 +1738,7 @@ export function createOrchestratorTools(input: {
         changedFiles: acceptanceChangedFiles,
         diffs: acceptanceDiffs,
       },
+      replayContext,
       signal: input.signal,
       taskID,
       parentSessionID: input.agentSessionID,

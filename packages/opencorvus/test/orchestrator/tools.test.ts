@@ -60,6 +60,7 @@ import {
   insertOrchestratorToolOwnershipArtifact,
   listLiveOrchestratorToolOwnership,
 } from "../../src/engine/tool-ownership"
+import { buildIntegrityReplayContext } from "../../src/integrity/replay-context"
 
 let buildAgentRunImpl: ((input: any) => Promise<any>) | undefined
 let reviewIntegrityImpl: ((input: any) => Promise<any>) | undefined
@@ -114,6 +115,7 @@ mock.module("@/integrity", () => ({
   // this mock is just a non-throwing stub so the orchestrator's pre-review
   // wiring doesn't blow up in orchestrator-focused suites.
   computeRequirementStatusSnapshot: (input: any) => computeRequirementStatusSnapshotImpl?.(input) ?? [],
+  buildIntegrityReplayContext,
   applyIntegrityCorrections: (goals: any) => goals,
 }))
 
@@ -1540,50 +1542,80 @@ describe("orchestrator tools", () => {
         claimingGoals: [{ goalID: "direct-task", runStatus: "completed" }],
       },
     ]
-    reviewIntegrityImpl = async () => ({
-      verdict: "pass",
-      summary: "Integrity pass with advisory concern",
-      dimensions: [
-        {
-          id: "requirement_fidelity",
-          verdict: "pass",
-          issues: [],
-          corrections: [],
-          graphCorrections: [],
-          missingGoals: [],
-        },
-        {
-          id: "technical_feasibility",
-          verdict: "pass",
-          issues: [],
-          corrections: [],
-          graphCorrections: [],
-          missingGoals: [],
-        },
-        { id: "hallucination", verdict: "pass", issues: [], corrections: [], graphCorrections: [], missingGoals: [] },
-        {
-          id: "solution_quality",
-          verdict: "concerns",
-          issues: [{
-            type: "weak_acceptance",
+    let capturedIntegrityInput: any
+    reviewIntegrityImpl = async (input) => {
+      capturedIntegrityInput = input
+      return {
+        verdict: "pass",
+        summary: "Integrity pass with advisory concern",
+        teamReportMarkdown:
+          "**solution_quality = concerns**\n\nREQ-1 evidence is acceptable but should be strengthened next time.",
+        reviewers: [
+          {
+            reviewerID: "requirement_fidelity",
+            scope: "Requirement fidelity",
+            verdict: "pass",
+            summary: "REQ-1 is satisfied by the completed build evidence.",
+            evidence: ["REQ-1 status snapshot is satisfied."],
+            findings: [],
+            openQuestions: [],
+          },
+          {
+            reviewerID: "solution_quality",
+            scope: "Solution quality",
+            verdict: "concerns",
+            summary: "Evidence is acceptable but should be stronger next time.",
+            evidence: ["accepted-output.txt was produced."],
+            findings: [
+              {
+                id: "F-1",
+                severity: "advisory",
+                verdictImpact: "concerns",
+                title: "Weak acceptance evidence",
+                description: "REQ-1 evidence is acceptable but should be strengthened next time.",
+                evidence: ["accepted-output.txt was produced."],
+                targetIDs: [goalID],
+                requirementIDs: ["REQ-1"],
+                specIDs: [],
+                filePaths: ["accepted-output.txt"],
+                repair: "Strengthen acceptance evidence on the next build.",
+                reviewers: ["solution_quality"],
+                consensus: "agreed",
+              },
+            ],
+            openQuestions: [],
+          },
+        ],
+        findings: [
+          {
+            id: "F-1",
+            severity: "advisory",
+            verdictImpact: "concerns",
+            title: "Weak acceptance evidence",
             description: "REQ-1 evidence is acceptable but should be strengthened next time.",
-            goalIDs: [goalID],
-          }],
-          corrections: [],
-          graphCorrections: [],
-          missingGoals: [],
-        },
-      ],
-      issues: [{
-        type: "weak_acceptance",
-        description: "REQ-1 evidence is acceptable but should be strengthened next time.",
-        goalIDs: [goalID],
-      }],
-      corrections: [],
-      graphCorrections: [],
-      missingGoals: [],
-      sessionID: "ses_integrity_advisory_complete",
-    })
+            evidence: ["accepted-output.txt was produced."],
+            targetIDs: [goalID],
+            requirementIDs: ["REQ-1"],
+            specIDs: [],
+            filePaths: ["accepted-output.txt"],
+            repair: "Strengthen acceptance evidence on the next build.",
+            reviewers: ["solution_quality"],
+            consensus: "agreed",
+          },
+        ],
+        rounds: [
+          {
+            roundID: "round-1",
+            prompt: "Confirm post-build evidence quality.",
+            reviewerIDs: ["requirement_fidelity", "solution_quality"],
+            outcome: "Advisory concern retained; pass verdict remains valid.",
+          },
+        ],
+        requiredRepairs: [],
+        unresolvedDisagreements: [],
+        sessionID: "ses_integrity_advisory_complete",
+      }
+    }
 
     await Instance.provide({
       directory: tmp.path,
@@ -1631,7 +1663,19 @@ describe("orchestrator tools", () => {
         )
 
         expect(integrityResult).toContain("Integrity verdict: pass")
-        expect(integrityResult).toContain("solution_quality=concerns(1issues)")
+        expect(capturedIntegrityInput.replayContext).toMatchObject({
+          attemptNumber: 1,
+          buildEvidenceSinceLastReview: {
+            changedFiles: [],
+            goalRuns: [expect.objectContaining({ goalID, status: "completed" })],
+          },
+          scaleSignals: {
+            phase: "post_build",
+            priorAttempts: 0,
+            changedFilesSinceLastReview: 0,
+          },
+        })
+        expect(integrityResult).toContain("findings=1")
         expect(integrityResult).toContain("REQ-1 evidence is acceptable but should be strengthened next time.")
         expect(integrityResult).toContain("task completed")
         const taskRow = Database.use((db) =>
@@ -1646,11 +1690,13 @@ describe("orchestrator tools", () => {
         const artifact = findLatestIntegrityAttemptArtifact({ taskID, specSnapshotID: `spec_${goalID}` })
         const payload = artifact?.payload as Record<string, any> | undefined
         expect(artifact?.label).toBe("verdict-pass")
-        expect(payload?.issues_count).toBe(1)
-        expect(payload?.corrections_count).toBe(0)
-        expect(payload?.per_dimension).toContainEqual({ id: "solution_quality", verdict: "concerns" })
-        expect(payload?.review_markdown).toContain("**solution_quality = concerns**")
-        expect(payload?.review_markdown).toContain("REQ-1 evidence is acceptable but should be strengthened next time.")
+        expect(payload?.attempts).toBe(1)
+        expect(payload?.findings_count).toBe(1)
+        expect(payload?.required_repairs_count).toBe(0)
+        expect(payload?.team_report_markdown).toContain("**solution_quality = concerns**")
+        expect(payload?.team_report_markdown).toContain(
+          "REQ-1 evidence is acceptable but should be strengthened next time.",
+        )
 
         const publishResult = await tools.publish_delivery.execute(
           { reason: "Explicit artifact export after integrity completion." },
