@@ -120,6 +120,8 @@ async function runDeliveryIntegrityReview(input: {
       id: sourceID,
       type: (row.priority === "advisory" ? "implicit" : "explicit") as "explicit" | "implicit",
       description: row.description,
+      acceptance: row.acceptance,
+      nonGoals: row.non_goals ?? [],
     }
   })
   const decisionLog = createDecisionLog(task.id)

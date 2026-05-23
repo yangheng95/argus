@@ -1613,6 +1613,8 @@ export function createOrchestratorTools(input: {
         id: sourceID,
         type: (r.priority === "advisory" ? "implicit" : "explicit") as "explicit" | "implicit",
         description: r.description,
+        acceptance: r.acceptance,
+        nonGoals: r.non_goals ?? [],
       }
     })
     const decisionLog = createDecisionLog(taskID)
@@ -2758,6 +2760,8 @@ export function createOrchestratorTools(input: {
               id: sourceID,
               type: (r.priority === "advisory" ? "implicit" : "explicit") as "explicit" | "implicit",
               description: r.description,
+              acceptance: r.acceptance,
+              nonGoals: r.non_goals ?? [],
             }
           })
           const requirementDecisions = decisionLog.readByPhase("requirements").map((d) => ({
@@ -4925,6 +4929,8 @@ export function createOrchestratorTools(input: {
                 id: sourceID,
                 type: (r.priority === "advisory" ? "implicit" : "explicit") as "explicit" | "implicit",
                 description: r.description,
+                acceptance: r.acceptance,
+                nonGoals: r.non_goals ?? [],
               }
             })
 
