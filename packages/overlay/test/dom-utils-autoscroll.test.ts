@@ -192,3 +192,98 @@ test("auto-scroll source does not reference DOM observer constructors", () => {
   expect(source).not.toContain("new ResizeObserver");
   expect(source).not.toContain("new MutationObserver");
 });
+
+test("late-paint layout shift between rAFs re-pins to the new bottom", () => {
+  // Regression for the user-reported "messages escape the bottom-scroll lock"
+  // drift. Images / video without explicit dimensions, async syntax
+  // highlighting, web-font swaps, and short CSS transitions on descendants
+  // all grow scrollHeight AFTER the scheduleFollowScroll rAF lands its
+  // `scrollTop = scrollHeight` write. With `data-follow-lock="true"` we
+  // explicitly disable the browser's `overflow-anchor`, so without a
+  // correction frame the user sees the conversation drift upward by exactly
+  // the height the late layout gained. setupAutoScroll schedules a
+  // follow-up rAF that re-measures and re-pins iff distance-from-bottom
+  // exceeded BOTTOM_TOLERANCE.
+  const el = createScrollElement();
+  const frameQueue: FrameRequestCallback[] = [];
+  globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) => {
+    frameQueue.push(cb);
+    return frameQueue.length;
+  }) as any;
+
+  const ctrl = setupAutoScroll(el as any, {
+    isTracking: () => true,
+    onUserScrollUp: () => {},
+  });
+
+  // Drain the initial mount rAF: pin to bottom of the seeded 300 height.
+  frameQueue.shift()!(0);
+  expect(el.scrollTop).toBe(200);
+
+  // Streamed content grew the scrollable area to 420.
+  el.scrollHeight = 420;
+  ctrl.contentChanged();
+
+  // Frame 1 of scheduleFollowScroll — `scrollTop = scrollHeight` lands the
+  // viewport on the current bottom (420 - 100 = 320).
+  frameQueue.shift()!(0);
+  expect(el.scrollTop).toBe(320);
+
+  // Simulate late paint between the two rAFs (e.g., an <img> finished
+  // loading and grew its bubble by 180px, or syntax highlighting expanded a
+  // code block). scrollTop did NOT change, so the viewport now sits well
+  // above the true bottom.
+  el.scrollHeight = 600;
+  expect(el.scrollHeight - el.clientHeight - el.scrollTop).toBe(180);
+
+  // Frame 2 of scheduleFollowScroll — the post-pin correction frame must
+  // detect the drift and re-pin (600 - 100 = 500).
+  frameQueue.shift()!(0);
+  expect(el.scrollTop).toBe(500);
+
+  ctrl.cleanup();
+});
+
+test("late-paint correction respects a user who scrolled away between frames", () => {
+  // The post-pin correction frame must NOT yank the user back if they
+  // disabled tracking between the first and second rAF — e.g. the late
+  // paint happened concurrently with a wheel scroll-up that already fired
+  // `onUserScrollUp`. Otherwise the controller would fight the user.
+  const el = createScrollElement();
+  let tracking = true;
+  const frameQueue: FrameRequestCallback[] = [];
+  globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) => {
+    frameQueue.push(cb);
+    return frameQueue.length;
+  }) as any;
+
+  const ctrl = setupAutoScroll(el as any, {
+    isTracking: () => tracking,
+    onUserScrollUp: () => {
+      tracking = false;
+    },
+  });
+
+  // Mount frame snaps to bottom.
+  frameQueue.shift()!(0);
+  expect(el.scrollTop).toBe(200);
+
+  el.scrollHeight = 420;
+  ctrl.contentChanged();
+  // Frame 1 pins.
+  frameQueue.shift()!(0);
+  expect(el.scrollTop).toBe(320);
+
+  // User scrolls upward between the two frames.
+  el.scrollTop = 140;
+  el.dispatchEvent(new Event("scroll"));
+  expect(tracking).toBe(false);
+
+  // Late paint grows scrollHeight. Correction frame must respect the
+  // freshly-disabled tracking and leave the user where they parked.
+  el.scrollHeight = 600;
+  frameQueue.shift()!(0);
+  expect(el.scrollTop).toBe(140);
+
+  ctrl.cleanup();
+});
