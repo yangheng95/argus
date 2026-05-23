@@ -18,10 +18,11 @@ import { Database, eq, and, inArray, sql } from "@/storage/db"
 import { Identifier } from "@/id/id"
 import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
+import { Filesystem } from "@/util/filesystem"
 import { createDecisionLog } from "@/decision-log"
 import { EngineService } from "@/task-api"
 import { EngineConfig } from "@/engine/config"
-import { DIRECT_REPLY_AGENT_KINDS } from "./direct-reply"
+import { canReceiveDirectAgentSessionControl } from "./direct-reply"
 import { sessionGoalID, sessionRole, taskIDForSession } from "./task-event"
 import { Publisher } from "@/engine/publisher"
 import { EngineGit } from "@/engine/git"
@@ -384,9 +385,10 @@ function renderEvidenceSourceManifest(input: {
   materializedFiles?: readonly string[]
 }): string {
   const lines: string[] = []
+  const paths = designAnalysisArtifactPaths(Instance.directory, input.task.id)
   lines.push("## PRD/SPEC Source Manifest")
-  lines.push("Canonical PRD/SPEC file: .opencorvus/design-analysis/prd-spec.md")
-  lines.push("Canonical source manifest file: .opencorvus/design-analysis/evidence-source-manifest.md")
+  lines.push(`Canonical PRD/SPEC file: ${paths.prdRelative}`)
+  lines.push(`Canonical source manifest file: ${paths.manifestRelative}`)
   lines.push(
     "Canonical decision-log entries: phase=design_analysis keys product_spec, frontend_spec, visual_consistency_spec, backend_spec, prd_iteration_notes, completeness_review.",
   )
@@ -529,19 +531,18 @@ function renderDesignAnalysisPrdSpecDocument(input: {
 
 async function writeDesignAnalysisArtifacts(input: {
   projectDir: string
+  taskID: string
   analysis: Parameters<typeof renderDesignAnalysisPrdSpecDocument>[0]["analysis"]
   evidenceSourceManifest: string
 }): Promise<{ prdRelative: string; manifestRelative: string }> {
-  const paths = designAnalysisArtifactPaths(input.projectDir)
-  await fs.mkdir(path.dirname(paths.prdAbsolute), { recursive: true })
-  await fs.writeFile(paths.manifestAbsolute, input.evidenceSourceManifest.trimEnd() + "\n", "utf8")
-  await fs.writeFile(
+  const paths = designAnalysisArtifactPaths(input.projectDir, input.taskID)
+  await Filesystem.writeAtomic(paths.manifestAbsolute, input.evidenceSourceManifest.trimEnd() + "\n")
+  await Filesystem.writeAtomic(
     paths.prdAbsolute,
     renderDesignAnalysisPrdSpecDocument({
       analysis: input.analysis,
       evidenceSourceManifest: input.evidenceSourceManifest,
     }),
-    "utf8",
   )
   return {
     prdRelative: paths.prdRelative,
@@ -647,7 +648,7 @@ function assertDirectReplySessionOwnership(input: { taskID: string; sessionID: s
   if (!kind) {
     throw new Error(`Session ${input.sessionID} has no task agent kind`)
   }
-  if (!DIRECT_REPLY_AGENT_KINDS.has(kind)) {
+  if (!canReceiveDirectAgentSessionControl(kind)) {
     throw new Error(`Session ${input.sessionID} has kind "${kind}" and cannot receive direct agent control`)
   }
   return { kind }
@@ -2531,7 +2532,7 @@ export function createOrchestratorTools(input: {
             return acc
           }, {})
           const taskAfterDesignSpecs = requireTask(taskID)
-          const materializedDesignFiles = designAnalysisArtifactPaths(Instance.directory)
+          const materializedDesignFiles = designAnalysisArtifactPaths(Instance.directory, taskID)
           const evidenceSourceManifest = renderEvidenceSourceManifest({
             task: taskAfterDesignSpecs,
             liveUrls,
@@ -2542,6 +2543,7 @@ export function createOrchestratorTools(input: {
           })
           const writtenDesignArtifacts = await writeDesignAnalysisArtifacts({
             projectDir: Instance.directory,
+            taskID,
             analysis: {
               designSystem: analysis.designSystem,
               techStack: analysis.techStack,
@@ -3443,7 +3445,7 @@ export function createOrchestratorTools(input: {
           `## Task`,
           task.title,
           "",
-          renderUserRequestSection({ heading: "## Original Request", request: task.request }),
+          renderUserRequestSection({ heading: "## Original Request", request: task.request, taskID }),
           "",
         ]
         if (reason && reason.trim().length > 0) {
@@ -3698,7 +3700,7 @@ export function createOrchestratorTools(input: {
               ) {
                 sections.push(
                   `- terminal report hint: retry this goal with explicit report_build_result(files_changed[]) instructions. ` +
-                    `Any retained files under .opencorvus/worktrees are diagnostic worktree evidence, not primary workspace pollution; ` +
+                    `Any retained files under .opencorvus/runtime are diagnostic worktree evidence, not primary workspace pollution; ` +
                     `do not restart_from_stage solely because those diagnostic files exist.`,
                 )
               }
@@ -4362,7 +4364,7 @@ export function createOrchestratorTools(input: {
 
         const userPrompt = [
           `## Original Task`,
-          renderUserRequestSection({ heading: "## Original Task Request", request: task.request }),
+          renderUserRequestSection({ heading: "## Original Task Request", request: task.request, taskID }),
           "",
           `## Completed Goals (${goals.length})`,
           ...goalSummaries,
@@ -4876,6 +4878,9 @@ export function createOrchestratorTools(input: {
             } else {
               const info = await Worktree.create({
                 name: `goal-${goal.id.slice(-8)}`,
+                taskID,
+                goalID: goal.id,
+                runID: coordinatorRunID ?? taskID,
               })
               managedWorktree = {
                 directory: info.directory,

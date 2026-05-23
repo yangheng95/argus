@@ -10,6 +10,7 @@ import { Database } from "../../src/storage/db"
 import { Instance } from "../../src/project/instance"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
+import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 
 // codex Q-TERM: the complete decision-log projection must be (re)materialized
 // at the single terminal seam (engine/state.ts finalizeLiveRunForTerminalTask)
@@ -55,7 +56,7 @@ function seedRunningTaskRun(input?: { taskCompleted?: number }) {
 }
 
 describe("terminal seam materializes the complete decision-log bundle", () => {
-  test("completed task writes <Instance.directory>/.opencorvus/decision-log.md", async () => {
+  test("completed task writes task-scoped runtime decision-log.md", async () => {
     const { taskID, runID, now } = seedRunningTaskRun()
     await using tmp = await tmpdir()
     await Instance.provide({
@@ -69,7 +70,7 @@ describe("terminal seam materializes the complete decision-log bundle", () => {
     })
     // Run still finalized (terminal write did not disturb core state).
     expect(findRun(runID)?.status).toBe("completed")
-    const doc = await fs.readFile(path.join(tmp.path, ".opencorvus", "decision-log.md"), "utf8")
+    const doc = await fs.readFile(ProjectRuntimePaths.decisionLogPaths(tmp.path, taskID).absolute, "utf8")
     expect(doc).toContain("### runtime")
     expect(doc).toContain("_Why: PRD pins Bun_")
   })
@@ -92,7 +93,7 @@ describe("terminal seam materializes the complete decision-log bundle", () => {
         await updateTask(findTask(taskID)!, { status: "completed", time_completed: completed }, "done again")
       },
     })
-    const doc = await fs.readFile(path.join(tmp.path, ".opencorvus", "decision-log.md"), "utf8")
+    const doc = await fs.readFile(ProjectRuntimePaths.decisionLogPaths(tmp.path, taskID).absolute, "utf8")
     expect(doc).toContain("### first")
     expect(doc).toContain("### late") // proves the replay re-materialized
   })

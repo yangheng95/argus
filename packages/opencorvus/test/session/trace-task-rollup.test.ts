@@ -3,6 +3,7 @@ import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
 import type { Session } from "../../src/session"
+import { Instance } from "../../src/project/instance"
 
 const previousTraceDir = process.env.OPENCORVUS_AGENT_TRACE_DIR
 let tempDir = ""
@@ -22,25 +23,30 @@ test("task trace rollup includes llm_request task and parent metadata", async ()
   const taskID = `task_trace_${Date.now()}`
   const parentSessionID = `ses_parent_${Date.now()}`
 
-  AgentTrace.recordLLMRequest({
-    sessionID,
-    parentSessionID,
-    taskID,
-    agentName: "build",
-    agentMode: "subagent",
-    model: { providerID: "test", modelID: "model" },
-    system: ["system"],
-    messages: [{ role: "user", content: "hi" }],
-    tools: [],
-  })
+  await Instance.provide({
+    directory: tempDir,
+    fn: async () => {
+      AgentTrace.recordLLMRequest({
+        sessionID,
+        parentSessionID,
+        taskID,
+        agentName: "build",
+        agentMode: "subagent",
+        model: { providerID: "test", modelID: "model" },
+        system: ["system"],
+        messages: [{ role: "user", content: "hi" }],
+        tools: [],
+      })
 
-  const events = AgentTrace.readTaskEvents(taskID)
-  expect(events).toHaveLength(1)
-  expect(events[0]?.kind).toBe("llm_request")
-  expect(events[0]?.sessionID).toBe(sessionID)
-  expect(events[0]?.taskID).toBe(taskID)
-  expect(events[0]?.parentSessionID).toBe(parentSessionID)
-  expect(events[0]?.domain).toBe("session")
+      const events = AgentTrace.readTaskEvents(taskID)
+      expect(events).toHaveLength(1)
+      expect(events[0]?.kind).toBe("llm_request")
+      expect(events[0]?.sessionID).toBe(sessionID)
+      expect(events[0]?.taskID).toBe(taskID)
+      expect(events[0]?.parentSessionID).toBe(parentSessionID)
+      expect(events[0]?.domain).toBe("session")
+    },
+  })
 })
 
 test("helper trace writes explicit non-session domain instead of fake session bucket", async () => {
@@ -48,32 +54,40 @@ test("helper trace writes explicit non-session domain instead of fake session bu
   process.env.OPENCORVUS_AGENT_TRACE_DIR = tempDir
   const { AgentTrace } = await import("../../src/trace")
   const agentName = `helper_${Date.now()}`
+  const taskID = `task_trace_${Date.now()}`
 
-  const bucket = AgentTrace.recordHelperLLMCall({
-    agentName,
-    model: { providerID: "test", modelID: "model" },
-    messages: [{ role: "user", content: "generate" }],
-    output: { ok: true },
+  await Instance.provide({
+    directory: tempDir,
+    fn: async () => {
+      const bucket = AgentTrace.recordHelperLLMCall({
+        taskID,
+        agentName,
+        model: { providerID: "test", modelID: "model" },
+        messages: [{ role: "user", content: "generate" }],
+        output: { ok: true },
+      })
+
+      expect(bucket).toBe(AgentTrace.NON_SESSION_DOMAIN)
+      expect(fs.readdirSync(tempDir).some((name) => name.startsWith("helper-"))).toBe(false)
+
+      const events = AgentTrace.readDomainEvents(AgentTrace.NON_SESSION_DOMAIN, taskID)
+      expect(events).toHaveLength(1)
+      expect(events[0]?.kind).toBe("helper_llm_call")
+      expect(events[0]?.domain).toBe(AgentTrace.NON_SESSION_DOMAIN)
+      expect(events[0]?.sessionID).toBeUndefined()
+
+      const indexPath = path.join(tempDir, "tasks", taskID, "trace", "_index.jsonl")
+      const index = fs.readFileSync(indexPath, "utf8").trim().split("\n").map((line) => JSON.parse(line))
+      expect(index).toContainEqual(
+        expect.objectContaining({
+          kind: "domain_open",
+          domain: AgentTrace.NON_SESSION_DOMAIN,
+          agentName,
+          firstEvent: "helper_llm_call",
+        }),
+      )
+    },
   })
-
-  expect(bucket).toBe(AgentTrace.NON_SESSION_DOMAIN)
-  expect(fs.readdirSync(tempDir).some((name) => name.startsWith("helper-"))).toBe(false)
-
-  const events = AgentTrace.readDomainEvents(AgentTrace.NON_SESSION_DOMAIN)
-  expect(events).toHaveLength(1)
-  expect(events[0]?.kind).toBe("helper_llm_call")
-  expect(events[0]?.domain).toBe(AgentTrace.NON_SESSION_DOMAIN)
-  expect(events[0]?.sessionID).toBeUndefined()
-
-  const index = fs.readFileSync(path.join(tempDir, "_index.jsonl"), "utf8").trim().split("\n").map((line) => JSON.parse(line))
-  expect(index).toContainEqual(
-    expect.objectContaining({
-      kind: "domain_open",
-      domain: AgentTrace.NON_SESSION_DOMAIN,
-      agentName,
-      firstEvent: "helper_llm_call",
-    }),
-  )
 })
 
 test("trace validates ambient SessionContext session bucket", async () => {
@@ -92,34 +106,42 @@ test("trace validates ambient SessionContext session bucket", async () => {
     kind: "assistant",
     time: { created: 1, updated: 1 },
   } satisfies Session.Info
+  const taskID = `task_trace_${Date.now()}`
 
-  SessionContext.provide(session, () => {
-    AgentTrace.recordLLMRequest({
-      sessionID,
-      agentName: "assistant",
-      model: { providerID: "test", modelID: "model" },
-      system: ["system"],
-      messages: [{ role: "user", content: "hi" }],
-      tools: [],
-    })
-  })
-
-  expect(AgentTrace.readSessionEvents(sessionID)[0]).toMatchObject({
-    domain: "session",
-    sessionID,
-    kind: "llm_request",
-  })
-
-  expect(() =>
-    SessionContext.provide(session, () => {
-      AgentTrace.recordLLMRequest({
-        sessionID: `ses_other_${Date.now()}`,
-        agentName: "assistant",
-        model: { providerID: "test", modelID: "model" },
-        system: ["system"],
-        messages: [{ role: "user", content: "hi" }],
-        tools: [],
+  await Instance.provide({
+    directory: tempDir,
+    fn: async () => {
+      SessionContext.provide(session, () => {
+        AgentTrace.recordLLMRequest({
+          sessionID,
+          taskID,
+          agentName: "assistant",
+          model: { providerID: "test", modelID: "model" },
+          system: ["system"],
+          messages: [{ role: "user", content: "hi" }],
+          tools: [],
+        })
       })
-    }),
-  ).toThrow("Trace session mismatch")
+
+      expect(AgentTrace.readSessionEvents(sessionID)[0]).toMatchObject({
+        domain: "session",
+        sessionID,
+        kind: "llm_request",
+      })
+
+      expect(() =>
+        SessionContext.provide(session, () => {
+          AgentTrace.recordLLMRequest({
+            sessionID: `ses_other_${Date.now()}`,
+            taskID,
+            agentName: "assistant",
+            model: { providerID: "test", modelID: "model" },
+            system: ["system"],
+            messages: [{ role: "user", content: "hi" }],
+            tools: [],
+          })
+        }),
+      ).toThrow("Trace session mismatch")
+    },
+  })
 })

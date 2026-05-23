@@ -16,6 +16,7 @@ import { Event as EngineEvent } from "@/engine/model"
 import { EngineProtocol } from "@/engine/protocol"
 import { Memory } from "@/memory"
 import { Instance } from "@/project/instance"
+import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { Shell } from "@/shell/shell"
 import { DEFAULT_BASH_TIMEOUT_MS } from "@/shell/timeout"
 import { Database } from "@/storage/db"
@@ -753,7 +754,7 @@ export function createDeliveryTools(input?: DeliveryToolContext) {
     screenshot: tool({
       description:
         "Capture a PNG screenshot of an already running app URL via the delivery runtime capture engine and write it to the " +
-        "project's .opencorvus/delivery-screenshots/ directory. Use this to produce visual evidence " +
+        "task's .opencorvus/runtime delivery screenshot directory. Use this to produce visual evidence " +
         "that the running application actually renders, or to capture before/after images around a " +
         "fix. The screenshot is saved to disk; reference the returned absolute path and sha when " +
         "citing this call in acceptance tool_call_evidence. The tool returns the shot's size " +
@@ -779,7 +780,8 @@ export function createDeliveryTools(input?: DeliveryToolContext) {
       }),
       execute: async ({ url, viewport_width, viewport_height, label }) => {
         const safeLabel = (label ?? "shot").replace(/[^a-zA-Z0-9-_]/g, "-").slice(0, 40) || "shot"
-        const outDir = path.join(projectDir, ".opencorvus", "delivery-screenshots")
+        if (!taskID) return "screenshot: no task context available"
+        const outDir = ProjectRuntimePaths.deliveryPaths(projectDir, taskID).screenshots
         await fs.mkdir(outDir, { recursive: true })
         const stamp = new Date().toISOString().replace(/[:.]/g, "-")
         const captureDir = path.join(outDir, `${stamp}-${safeLabel}`)

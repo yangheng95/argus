@@ -1,13 +1,13 @@
-import * as path from "node:path"
 import { createDecisionLog, type DecisionEntry } from "@/decision-log"
+import { ProjectRuntimePaths } from "@/project/runtime-paths"
 
 // Single source of truth for the design-analysis materialized-artifact paths.
 // The `design_analysis` decision-log phase is the canonical source; these
 // files are a regenerated, read-only PROJECTION of it (rule 8 — one source;
 // previously `orchestrator/tools.ts` recomputed these strings independently).
-export const DESIGN_ANALYSIS_RELATIVE_DIR = ".opencorvus/design-analysis"
-export const DESIGN_ANALYSIS_PRD_SPEC_PATH = `${DESIGN_ANALYSIS_RELATIVE_DIR}/prd-spec.md`
-export const DESIGN_ANALYSIS_SOURCE_MANIFEST_PATH = `${DESIGN_ANALYSIS_RELATIVE_DIR}/evidence-source-manifest.md`
+export const DESIGN_ANALYSIS_RELATIVE_DIR_TEMPLATE = ".opencorvus/runtime/tasks/<taskID>/design-analysis"
+export const DESIGN_ANALYSIS_PRD_SPEC_PATH_TEMPLATE = `${DESIGN_ANALYSIS_RELATIVE_DIR_TEMPLATE}/prd-spec.md`
+export const DESIGN_ANALYSIS_SOURCE_MANIFEST_PATH_TEMPLATE = `${DESIGN_ANALYSIS_RELATIVE_DIR_TEMPLATE}/evidence-source-manifest.md`
 
 /**
  * Resolve design-analysis artifact paths for a project directory.
@@ -19,14 +19,8 @@ export const DESIGN_ANALYSIS_SOURCE_MANIFEST_PATH = `${DESIGN_ANALYSIS_RELATIVE_
  * a relative `.opencorvus/...` would not resolve there. Both forms are
  * derived from the single relative-path source above.
  */
-export function designAnalysisArtifactPaths(projectDir: string) {
-  return {
-    relativeDir: DESIGN_ANALYSIS_RELATIVE_DIR,
-    prdRelative: DESIGN_ANALYSIS_PRD_SPEC_PATH,
-    manifestRelative: DESIGN_ANALYSIS_SOURCE_MANIFEST_PATH,
-    prdAbsolute: path.join(projectDir, ".opencorvus", "design-analysis", "prd-spec.md"),
-    manifestAbsolute: path.join(projectDir, ".opencorvus", "design-analysis", "evidence-source-manifest.md"),
-  }
+export function designAnalysisArtifactPaths(projectDir: string, taskID: string) {
+  return ProjectRuntimePaths.designAnalysisPaths(projectDir, taskID)
 }
 
 const HANDOFF_KEYS = [
@@ -72,8 +66,9 @@ export function renderDesignAnalysisHandoffReference(taskID: string, options?: {
   const includeExcerpts = options?.includeExcerpts ?? true
   const mode = options?.pathMode ?? "relative"
 
-  let prdPath = DESIGN_ANALYSIS_PRD_SPEC_PATH
-  let manifestPath = DESIGN_ANALYSIS_SOURCE_MANIFEST_PATH
+  const relative = ProjectRuntimePaths.designAnalysisPaths("", taskID)
+  let prdPath = relative.prdRelative
+  let manifestPath = relative.manifestRelative
   if (mode === "absolute") {
     if (!options?.projectDir) {
       // Hard fail (rule 7) — an external executor given a relative path it
@@ -83,7 +78,7 @@ export function renderDesignAnalysisHandoffReference(taskID: string, options?: {
         "renderDesignAnalysisHandoffReference: pathMode 'absolute' requires projectDir",
       )
     }
-    const resolved = designAnalysisArtifactPaths(options.projectDir)
+    const resolved = designAnalysisArtifactPaths(options.projectDir, taskID)
     prdPath = resolved.prdAbsolute
     manifestPath = resolved.manifestAbsolute
   }

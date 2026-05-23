@@ -1994,7 +1994,7 @@ export namespace SessionLoop {
             result,
           })
 
-          const truncated = await Truncate.output(materialized.text, {}, input.agent)
+          const truncated = await Truncate.output(materialized.text, { sessionID: ctx.sessionID }, input.agent)
           const metadata = {
             ...materialized.metadata,
             truncated: truncated.truncated,

@@ -146,6 +146,6 @@ function buildUserPrompt(input: IntentAnalysisAgent.AnalyzeInput): string {
   if (input.title && input.title.trim()) {
     sections.push(`# Title\n\n${input.title.trim()}`)
   }
-  sections.push(renderUserRequestSection({ heading: "# User Request", request: input.request }))
+  sections.push(renderUserRequestSection({ heading: "# User Request", request: input.request, taskID: input.taskID }))
   return sections.join("\n\n")
 }

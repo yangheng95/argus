@@ -13,7 +13,6 @@ import { Database, NotFoundError, eq, and, gte, isNull, desc, like, inArray, lt 
 import type { SQL } from "../storage/db"
 import { SessionTable, MessageTable, PartTable, SESSION_KINDS, type SessionKind } from "./session.sql"
 import { ProjectTable } from "../project/project.sql"
-import { Storage } from "@/storage/storage"
 import { Log } from "../util/log"
 import { Message } from "./message"
 import { SessionEvents } from "./events"
@@ -22,6 +21,8 @@ import path from "path"
 import { fn } from "@/util/fn"
 import { Command } from "../command"
 import { Snapshot } from "@/snapshot"
+import { Filesystem } from "@/util/filesystem"
+import { ProjectRuntimePaths } from "@/project/runtime-paths"
 
 import type { Provider } from "@/provider/provider"
 import { PermissionNext } from "@/permission/next"
@@ -540,7 +541,9 @@ export namespace Session {
 
   export const diff = fn(Identifier.schema("session"), async (sessionID) => {
     try {
-      return await Storage.read<Snapshot.FileDiff[]>(["session_diff", sessionID])
+      return await Filesystem.readJson<Snapshot.FileDiff[]>(
+        ProjectRuntimePaths.sessionDiffPath(Instance.directory, Instance.project.id, sessionID),
+      )
     } catch {
       return []
     }

@@ -11,7 +11,7 @@ describe("orchestrator event notes", () => {
     })
 
     expect(note).toContain("Failed goal worktrees are diagnostic evidence")
-    expect(note).toContain(".opencorvus/worktrees")
+    expect(note).toContain(".opencorvus/runtime")
     expect(note).toContain("not primary workspace pollution")
     expect(note).toContain("Do not restart_from_stage solely because")
     expect(note).toContain("query_failed_goals")

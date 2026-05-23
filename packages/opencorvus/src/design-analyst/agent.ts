@@ -250,10 +250,11 @@ function buildUserPrompt(input: {
   title: string
   request: string
   attachments?: Array<{ filename?: string; mime: string; intent?: string; source?: string }>
+  taskID?: string
 }, autoIteration = false): string {
   const sections = [
     "# Delegation\n\nOrchestrator is asking design-analysis to extract the visual contract for this task.",
-    renderUserRequestSection({ heading: "# Task", title: input.title, request: input.request }),
+    renderUserRequestSection({ heading: "# Task", title: input.title, request: input.request, taskID: input.taskID }),
   ]
   // URL presence is a *structural* detection (syntactic protocol scheme),
   // not a keyword policy: the agent decides whether to propose a

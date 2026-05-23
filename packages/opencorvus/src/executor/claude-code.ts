@@ -1,4 +1,4 @@
-import { CodingCapabilities, CodingRunInput, CodingResumeInput, type CodingEventInfo, type CodingProvider } from "./contract"
+import { CodingCapabilities, CodingRunInput, CodingResumeInput, codingRuntimeEnv, type CodingEventInfo, type CodingProvider } from "./contract"
 import { decode, record, text } from "./contract"
 import { assertExecutorModel } from "./runtime-env"
 
@@ -37,6 +37,7 @@ export namespace ClaudeCodeExecutor {
         cwd: input.cwd,
         maxTurns: input.maxTurns,
         includePartialMessages: true,
+        env: codingRuntimeEnv(input),
         systemPrompt: input.system
           ? {
               type: "preset",

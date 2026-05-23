@@ -16,13 +16,6 @@ export function autoSpecCheck(task?: EvaluationTask): Record<string, unknown> {
   if (task?.activeSpecVersionID) {
     return { spec_check: { enabled: true, mode: "strict" } }
   }
-  const fsSync = require("fs") as typeof import("fs")
-  const specsDir = path.join(Instance.worktree, ".opencorvus", "specs")
-  if (!fsSync.existsSync(specsDir)) return {}
-  const specFiles = fsSync.readdirSync(specsDir) as string[]
-  if (specFiles.some((f: string) => f.endsWith(".md"))) {
-    return { spec_check: { enabled: true, mode: "strict" } }
-  }
   return {}
 }
 

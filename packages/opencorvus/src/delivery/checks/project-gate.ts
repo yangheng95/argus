@@ -3,6 +3,7 @@ import path from "node:path"
 import { randomUUID } from "node:crypto"
 import { spawn } from "node:child_process"
 import { Instance } from "@/project/instance"
+import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { collectMainWorktreeDiff, readBaselineCommitFromMetadata } from "@/engine/workspace-export"
 import { clip } from "./types"
 import { computeRuntimeEvidence } from "./runtime-evidence"
@@ -110,7 +111,7 @@ export async function buildDeliveryEvidenceManifest(input: {
   })
   const checkResults =
     preRuntimeAssessment.status === "complete"
-      ? await runRequiredChecks(requiredChecks)
+      ? await runRequiredChecks(input.taskID, requiredChecks)
       : requiredChecks.map((check) =>
           skipRequiredCheck(
             check,
@@ -209,10 +210,10 @@ export async function buildDeliveryEvidenceManifest(input: {
   return manifest
 }
 
-async function runRequiredChecks(requiredChecks: DeliveryRequiredCheck[]) {
+async function runRequiredChecks(taskID: string | undefined, requiredChecks: DeliveryRequiredCheck[]) {
   const checkResults: DeliveryCheckResult[] = []
   for (const check of requiredChecks) {
-    checkResults.push(await runRequiredCheck(check))
+    checkResults.push(await runRequiredCheck(taskID, check))
   }
   return checkResults
 }
@@ -404,13 +405,9 @@ async function runRuntimeFlows(input: {
     const report = await computeRuntimeEvidence({
       projectDir: root,
       previewUrl: preview.url,
-      outDir: path.join(
-        root,
-        ".opencorvus",
-        "delivery-runtime-flow",
-        input.taskID ?? "no-task",
-        String(input.iteration),
-      ),
+      outDir: input.taskID
+        ? path.join(ProjectRuntimePaths.deliveryPaths(root, input.taskID).root, "runtime-flow", String(input.iteration))
+        : path.join(ProjectRuntimePaths.tasklessDeliveryPaths(root).runtimeFlow, String(input.iteration)),
       viewport: { width: 1440, height: 900 },
       scenarios,
       progress: input.progress,
@@ -573,7 +570,7 @@ async function requiredChecksFromGroups(groups: ReturnType<typeof commandGroups>
   return checks
 }
 
-async function runRequiredCheck(check: DeliveryRequiredCheck): Promise<DeliveryCheckResult> {
+async function runRequiredCheck(taskID: string | undefined, check: DeliveryRequiredCheck): Promise<DeliveryCheckResult> {
   const startedAt = Date.now()
   const script = await scriptBodyForCommand(check.cwd ?? Instance.directory, check.command)
   const forbidden = forbiddenShellSuccess(check.command, script)
@@ -595,7 +592,7 @@ async function runRequiredCheck(check: DeliveryRequiredCheck): Promise<DeliveryC
   }
 
   let executionCwd: string | undefined
-  const result = await withIsolatedCheckWorkspace(check.cwd ?? Instance.directory, async (workspace) => {
+  const result = await withIsolatedCheckWorkspace(taskID, check.cwd ?? Instance.directory, async (workspace) => {
     executionCwd = workspace
     return runShellCommand({
       command: check.command,
@@ -636,8 +633,10 @@ function skipRequiredCheck(check: DeliveryRequiredCheck, reason: string): Delive
   }
 }
 
-async function withIsolatedCheckWorkspace<T>(sourceCwd: string, fn: (workspace: string) => Promise<T>): Promise<T> {
-  const scratchParent = path.join(sourceCwd, ".opencorvus", "delivery-check-workspaces")
+async function withIsolatedCheckWorkspace<T>(taskID: string | undefined, sourceCwd: string, fn: (workspace: string) => Promise<T>): Promise<T> {
+  const scratchParent = taskID
+    ? ProjectRuntimePaths.deliveryPaths(Instance.directory, taskID).checkWorkspaces
+    : ProjectRuntimePaths.tasklessDeliveryPaths(sourceCwd).checkWorkspaces
   await fs.mkdir(scratchParent, { recursive: true })
   const scratchRoot = await fs.mkdtemp(path.join(scratchParent, `${randomUUID()}-`))
   const workspace = path.join(scratchRoot, "workspace")

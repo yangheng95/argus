@@ -1,5 +1,6 @@
 import { Snapshot } from "@/snapshot"
 import { Instance } from "@/project/instance"
+import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { Vcs } from "@/project/vcs"
 import { Database, eq } from "@/storage/db"
 import { git } from "@/util/git"
@@ -187,7 +188,16 @@ coverage/
 .turbo/
 .DS_Store
 Thumbs.db
-.opencorvus/
+.opencorvus/runtime/
+.opencorvus/intent/
+.opencorvus/design-analysis/
+.opencorvus/decision-log.md
+.opencorvus/worktrees/
+.opencorvus/ownership/
+.opencorvus/trace/
+.opencorvus/attachments/
+.opencorvus/logs/
+.opencorvus/specs/
 .opencorvus-worktrees/
 .opencorvus-meta.json
 # Windows reserved device names — cross-platform LLMs sometimes write
@@ -227,13 +237,19 @@ lpt9
 `
 
 // Paths the orchestrator writes into each worktree for its own bookkeeping
-// (goal meta, intent bundle, merge-conflict notes, task trace dir). Once these
-// sneak into git via `git add -A` they propagate via ff-only merges into main
-// and poison every future goal worktree that checks out from it — so the
-// exclusion must be both declarative (.gitignore) and curative (untrack any
-// instance already in the index).
+// (goal meta, intent bundle, merge-conflict notes, task trace dir). Static
+// project config may also live under `.opencorvus/`, so scratch protection must
+// stay scoped to runtime and legacy runtime subpaths. Once runtime files sneak
+// into git via `git add -A` they propagate via ff-only merges into main and
+// poison every future goal worktree that checks out from it — so the exclusion
+// must be both declarative (.gitignore) and curative (untrack any instance
+// already in the index).
 const OPENCORVUS_SCRATCH_PATHS = [
-  ".opencorvus",
+  ProjectRuntimePaths.relativeRuntimeRoot(),
+  ...ProjectRuntimePaths.legacyRuntimeRelativePaths,
+  ".opencorvus/attachments",
+  ".opencorvus/logs",
+  ".opencorvus/specs",
   ".opencorvus-worktrees",
   ".opencorvus-meta.json",
 ]
@@ -283,11 +299,11 @@ export async function ensureGitignore() {
   const isRepo = await git(["rev-parse", "--git-dir"], { cwd: dir })
   if (isRepo.exitCode !== 0) return
   // `--force` is mandatory for goal worktrees: their cwd lives at
-  // `<project>/.opencorvus/worktrees/goal-<id>/` and the project root
+  // `<project>/.opencorvus/runtime/.../worktree` and the project root
   // `.gitignore` (which the worktree shares via the parent repo) lists
-  // `.opencorvus`. Without `-f`, `git add .gitignore` from inside the
+  // `.opencorvus/runtime/`. Without `-f`, `git add .gitignore` from inside the
   // worktree fails with "The following paths are ignored by one of your
-  // .gitignore files: .opencorvus" and publish_delivery aborts at goal
+  // .gitignore files: .opencorvus/runtime" and publish_delivery aborts at goal
   // workspace terminal cleanup (r11 bench evidence
   // `_session-r11-glm5cn.out` line 91025, 2026-04-30T19:34:37). The
   // semantic match: we explicitly want to seed/refresh `.gitignore`
@@ -333,7 +349,7 @@ export async function ensureGitignore() {
  * though .gitignore rules were in effect, because git's safety check
  * compares HEAD state, not ignore state. Concrete incident:
  * `glr_dba0f6877001...` aborted with stderr listing `.opencorvus-meta.json`
- * and `.opencorvus/intent/README.md` as the blockers.
+ * and legacy `.opencorvus/intent/README.md` as the blockers.
  *
  * Curative helper, not a gatekeeper — individual path failures are swallowed
  * (path not tracked, repo without history, etc.). A commit is only created
@@ -363,7 +379,7 @@ async function untrackOpencorvusScratch(dir: string) {
       "-c", "user.name=opencorvus",
       "-c", "user.email=noreply@opencorvus.ai",
       "commit", "--no-gpg-sign", "--no-verify",
-      "-m", "chore: untrack orchestrator scratch paths (.opencorvus/**, .opencorvus-meta.json)",
+      "-m", "chore: untrack orchestrator runtime paths",
     ],
     { cwd: dir },
   )

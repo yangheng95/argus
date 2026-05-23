@@ -24,7 +24,8 @@ describe("ensureGitignore", () => {
       fn: async () => {
         await ensureGitignore()
         const body = await fs.readFile(path.join(tmp.path, ".gitignore"), "utf8")
-        expect(body).toContain(".opencorvus/")
+        expect(body).toContain(".opencorvus/runtime/")
+        expect(body).not.toMatch(/(^|\n)\.opencorvus\/(\r?\n|$)/)
         expect(body).toContain(".opencorvus-meta.json")
         expect(body).toContain(".opencorvus-worktrees/")
       },
@@ -40,7 +41,8 @@ describe("ensureGitignore", () => {
         await ensureGitignore()
         const body = await fs.readFile(path.join(tmp.path, ".gitignore"), "utf8")
         expect(body).toContain("node_modules/")
-        expect(body).toContain(".opencorvus/")
+        expect(body).toContain(".opencorvus/runtime/")
+        expect(body).not.toMatch(/(^|\n)\.opencorvus\/(\r?\n|$)/)
         expect(body).toContain(".opencorvus-meta.json")
       },
     })
@@ -75,12 +77,17 @@ describe("ensureGitignore", () => {
   test("untracks .opencorvus-meta.json that was committed before the ignore existed", async () => {
     await using tmp = await tmpdir({ git: true })
     await Bun.write(path.join(tmp.path, ".opencorvus-meta.json"), `{"goalID":"stale"}`)
-    await fs.mkdir(path.join(tmp.path, ".opencorvus", "intent"), { recursive: true })
-    await Bun.write(path.join(tmp.path, ".opencorvus", "intent", "request.md"), "leak\n")
-    await commit(tmp.path, [".opencorvus-meta.json", ".opencorvus/intent/request.md"], "leak scratch")
+    const runtimeIntent = ".opencorvus/runtime/tasks/tsk_git_ignore/intent/request.md"
+    const staticConfig = ".opencorvus/agents/demo.md"
+    await fs.mkdir(path.dirname(path.join(tmp.path, runtimeIntent)), { recursive: true })
+    await fs.mkdir(path.dirname(path.join(tmp.path, staticConfig)), { recursive: true })
+    await Bun.write(path.join(tmp.path, runtimeIntent), "leak\n")
+    await Bun.write(path.join(tmp.path, staticConfig), "static config\n")
+    await commit(tmp.path, [".opencorvus-meta.json", runtimeIntent, staticConfig], "leak scratch")
 
     expect(await gitTracked(tmp.path, ".opencorvus-meta.json")).toBe(true)
-    expect(await gitTracked(tmp.path, ".opencorvus/intent/request.md")).toBe(true)
+    expect(await gitTracked(tmp.path, runtimeIntent)).toBe(true)
+    expect(await gitTracked(tmp.path, staticConfig)).toBe(true)
 
     await Instance.provide({
       directory: tmp.path,
@@ -90,13 +97,16 @@ describe("ensureGitignore", () => {
     })
 
     expect(await gitTracked(tmp.path, ".opencorvus-meta.json")).toBe(false)
-    expect(await gitTracked(tmp.path, ".opencorvus/intent/request.md")).toBe(false)
+    expect(await gitTracked(tmp.path, runtimeIntent)).toBe(false)
+    expect(await gitTracked(tmp.path, staticConfig)).toBe(true)
 
     // Working tree copies must remain — untracking is a metadata operation,
     // not a filesystem delete. Goal executors still need to read them.
     const meta = await fs.readFile(path.join(tmp.path, ".opencorvus-meta.json"), "utf8")
     expect(meta).toContain("stale")
-    const intent = await fs.readFile(path.join(tmp.path, ".opencorvus", "intent", "request.md"), "utf8")
+    const intent = await fs.readFile(path.join(tmp.path, runtimeIntent), "utf8")
     expect(intent).toContain("leak")
+    const config = await fs.readFile(path.join(tmp.path, staticConfig), "utf8")
+    expect(config).toContain("static config")
   })
 })

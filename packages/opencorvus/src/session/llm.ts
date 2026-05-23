@@ -209,25 +209,27 @@ export namespace LLM {
     if (AgentTrace.isEnabled()) {
       const parentSessionID = sessionParentID(input.sessionID)
       const taskID = taskIDForSession(input.sessionID)
-      AgentTrace.recordLLMRequest({
-        sessionID: input.sessionID,
-        parentSessionID,
-        taskID,
-        agentName: agent.name,
-        agentMode: agent.mode,
-        model: { providerID: input.model.providerID, modelID: input.model.id },
-        small: input.small,
-        toolChoice,
-        system,
-        messages: requestMessages,
-        tools: Object.entries(tools).map(([name, t]) => ({
-          name,
-          description:
-            typeof (t as { description?: unknown }).description === "string"
-              ? (t as { description: string }).description
-              : undefined,
-        })),
-      })
+      if (taskID) {
+        AgentTrace.recordLLMRequest({
+          sessionID: input.sessionID,
+          parentSessionID,
+          taskID,
+          agentName: agent.name,
+          agentMode: agent.mode,
+          model: { providerID: input.model.providerID, modelID: input.model.id },
+          small: input.small,
+          toolChoice,
+          system,
+          messages: requestMessages,
+          tools: Object.entries(tools).map(([name, t]) => ({
+            name,
+            description:
+              typeof (t as { description?: unknown }).description === "string"
+                ? (t as { description: string }).description
+                : undefined,
+          })),
+        })
+      }
     }
 
     const result = streamText({

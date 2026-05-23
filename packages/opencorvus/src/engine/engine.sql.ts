@@ -197,7 +197,7 @@ export const EngineTaskTable = sqliteTable(
      *  for the rationale. Mixing the two previously caused requirements to
      *  hard-fail when a system-generated screenshot went missing.
      *  Base64 bytes are never stored here; the file lives on disk under the
-     *  project's .opencorvus/attachments directory. */
+     *  project's runtime attachment blob store. */
     attachments: text({ mode: "json" }).$type<
       Array<{
         sha: string

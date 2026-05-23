@@ -113,7 +113,10 @@ test("recordAgentReport writes the typed report payload", () => {
     },
   })
 
-  const raw = readFileSync(join(traceDir, "ses_report_contract.jsonl"), "utf8").trim()
+  const raw = readFileSync(
+    join(traceDir, "tasks", "tsk_report_contract", "sessions", "ses_report_contract", "trace.jsonl"),
+    "utf8",
+  ).trim()
   const event = JSON.parse(raw)
   expect(event.payload.report).toEqual({
     summary: "Parsed explicit requirements.",

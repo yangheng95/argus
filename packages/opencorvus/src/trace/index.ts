@@ -11,7 +11,7 @@
  * per rule 25, the output directory is derived from `Instance.directory`
  * rather than hardcoded.
  *
- * Output layout under `<project>/.opencorvus/trace/`:
+ * Output layout under `<project>/.opencorvus/runtime/tasks/<taskID>/`:
  *   - `<sessionID>.jsonl` — per-session detail (every event for that session)
  *   - `_task-<taskID>.jsonl` — per-task chronological rollup. Each event that
  *     carries taskID is appended to BOTH its session file AND the task file,
@@ -54,6 +54,7 @@ import fs from "node:fs"
 import path from "node:path"
 import { Log } from "@/util/log"
 import { Instance } from "@/project/instance"
+import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { SessionObservability } from "@/util/session-observability"
 import type { AgentReport } from "@/agent/report"
 
@@ -83,11 +84,11 @@ export namespace AgentTrace {
     // Override path: benchmark runs / CI pipelines that wipe Instance.directory
     // at the end of the run (overlay-web-benchmark deletes the entire
     // temp.dir on exit) set this env to a stable location so traces survive.
-    // Default — Instance.directory/.opencorvus/trace — is the right answer
+    // Default — Instance.directory/.opencorvus/runtime — is the right answer
     // for normal interactive sessions where the project dir is permanent.
     const override = process.env.OPENCORVUS_AGENT_TRACE_DIR
     if (override && override.length > 0) return override
-    return path.join(Instance.directory, ".opencorvus", "trace")
+    return ProjectRuntimePaths.projectRuntimeRoot(Instance.directory)
   }
 
   function ensureDir() {
@@ -98,20 +99,20 @@ export namespace AgentTrace {
     }
   }
 
-  function sessionFile(sessionID: string): string {
-    return path.join(traceDir(), `${sessionID}.jsonl`)
+  function sessionFile(sessionID: string, taskID: string): string {
+    return ProjectRuntimePaths.tracePathFromRuntimeRoot(traceDir(), taskID, sessionID)
   }
 
-  function domainFile(domain: string): string {
-    return path.join(traceDir(), `_${domain}.jsonl`)
+  function domainFile(taskID: string, domain: string): string {
+    return ProjectRuntimePaths.taskAbsoluteFromRuntimeRoot(traceDir(), taskID, "trace", `_${domain}.jsonl`)
   }
 
   function taskFile(taskID: string): string {
-    return path.join(traceDir(), `_task-${taskID}.jsonl`)
+    return ProjectRuntimePaths.taskAbsoluteFromRuntimeRoot(traceDir(), taskID, "trace.jsonl")
   }
 
-  function indexFile(): string {
-    return path.join(traceDir(), "_index.jsonl")
+  function indexFile(taskID: string): string {
+    return ProjectRuntimePaths.taskAbsoluteFromRuntimeRoot(traceDir(), taskID, "trace", "_index.jsonl")
   }
 
   type TraceBucket = { sessionID: string } | { domain: string }
@@ -132,6 +133,7 @@ export namespace AgentTrace {
     agentName: string
     kind: string
   }) {
+    if (!event.taskID) return
     const key = bucketKey(bucket, event.agentName)
     if (seenBuckets.has(key)) return
     seenBuckets.add(key)
@@ -149,7 +151,9 @@ export namespace AgentTrace {
           agentName: event.agentName,
           firstEvent: event.kind,
         }) + "\n"
-      fs.appendFileSync(indexFile(), line, { encoding: "utf-8" })
+      const file = indexFile(event.taskID)
+      fs.mkdirSync(path.dirname(file), { recursive: true })
+      fs.appendFileSync(file, line, { encoding: "utf-8" })
     } catch (err) {
       log.warn("trace index append failed", {
         ...bucket,
@@ -191,15 +195,25 @@ export namespace AgentTrace {
         kind: event.kind,
       })
       const line = safeStringify(event) + "\n"
-      if ("sessionID" in bucket) fs.appendFileSync(sessionFile(bucket.sessionID), line, { encoding: "utf-8" })
-      else fs.appendFileSync(domainFile(bucket.domain), line, { encoding: "utf-8" })
+      if (typeof event.taskID !== "string" || event.taskID.length === 0) {
+        throw new Error(`trace event ${event.kind} missing taskID`)
+      }
+      if ("sessionID" in bucket) {
+        const file = sessionFile(bucket.sessionID, event.taskID)
+        fs.mkdirSync(path.dirname(file), { recursive: true })
+        fs.appendFileSync(file, line, { encoding: "utf-8" })
+      } else {
+        const file = domainFile(event.taskID, bucket.domain)
+        fs.mkdirSync(path.dirname(file), { recursive: true })
+        fs.appendFileSync(file, line, { encoding: "utf-8" })
+      }
       // Per-task chronological rollup so a single task's full timeline (every
       // wake + every sub-agent dispatch) is grep-able in one file. The same
       // line is duplicated; consumers can dedupe on (sessionID, ts) or just
       // scan the rollup directly.
-      if ("sessionID" in bucket && typeof event.taskID === "string" && event.taskID.length > 0) {
-        fs.appendFileSync(taskFile(event.taskID), line, { encoding: "utf-8" })
-      }
+      const file = taskFile(event.taskID)
+      fs.mkdirSync(path.dirname(file), { recursive: true })
+      fs.appendFileSync(file, line, { encoding: "utf-8" })
     } catch (err) {
       log.warn("trace append failed", {
         ...bucket,
@@ -214,6 +228,17 @@ export namespace AgentTrace {
       throw new Error(`Trace session mismatch: context=${ambient.id} input=${explicitSessionID}`)
     }
     return { sessionID: ambient?.id ?? explicitSessionID }
+  }
+
+  function findSessionTraceFile(sessionID: string): string | undefined {
+    const taskRoot = path.join(traceDir(), "tasks")
+    try {
+      for (const taskID of fs.readdirSync(taskRoot)) {
+        const candidate = path.join(taskRoot, taskID, "sessions", sessionID, "trace.jsonl")
+        if (fs.existsSync(candidate)) return candidate
+      }
+    } catch {}
+    return undefined
   }
 
   function redactMessages(messages: unknown[]): unknown[] {
@@ -239,7 +264,7 @@ export namespace AgentTrace {
   export function recordLLMRequest(input: {
     sessionID: string
     parentSessionID?: string
-    taskID?: string
+    taskID: string
     agentName: string
     agentMode?: string
     model: { providerID: string; modelID: string }
@@ -278,6 +303,7 @@ export namespace AgentTrace {
    *  Both the input and the structured output go in one event since these
    *  helpers are single-shot. */
   export function recordHelperLLMCall(input: {
+    taskID?: string
     agentName: string
     model: { providerID: string; modelID: string }
     messages: unknown[]
@@ -286,10 +312,12 @@ export namespace AgentTrace {
     error?: string
   }): string {
     if (!ENABLED) return ""
+    if (!input.taskID) return ""
     append({ domain: NON_SESSION_DOMAIN }, {
       ts: Date.now(),
       kind: "helper_llm_call",
       domain: NON_SESSION_DOMAIN,
+      taskID: input.taskID,
       agentName: input.agentName,
       payload: {
         model: input.model,
@@ -323,7 +351,8 @@ export namespace AgentTrace {
    *  partial-line boundary). */
   export function readSessionEvents(sessionID: string): TraceEvent[] {
     if (!sessionID) return []
-    const file = sessionFile(sessionID)
+    const file = findSessionTraceFile(sessionID)
+    if (!file) return []
     let raw: string
     try {
       raw = fs.readFileSync(file, { encoding: "utf-8" })
@@ -351,9 +380,9 @@ export namespace AgentTrace {
   }
 
   /** Read every event for a non-session domain bucket. */
-  export function readDomainEvents(domain: string): TraceEvent[] {
-    if (!domain) return []
-    const file = domainFile(domain)
+  export function readDomainEvents(domain: string, taskID?: string): TraceEvent[] {
+    if (!domain || !taskID) return []
+    const file = domainFile(taskID, domain)
     let raw: string
     try {
       raw = fs.readFileSync(file, { encoding: "utf-8" })
@@ -384,7 +413,7 @@ export namespace AgentTrace {
   export function recordAgentReport(input: {
     sessionID: string
     parentSessionID?: string
-    taskID?: string
+    taskID: string
     agentName: string
     kind:
       | "agent_report"

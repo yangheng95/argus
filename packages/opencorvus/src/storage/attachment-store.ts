@@ -2,13 +2,14 @@ import crypto from "node:crypto"
 import fs from "node:fs/promises"
 import path from "node:path"
 import { Project } from "@/project/project"
+import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { Database } from "@/storage/db"
 import { PartTable } from "@/session/session.sql"
 import { EngineTaskTable } from "@/engine/engine.sql"
 import { Log } from "@/util/log"
 
 // Map MIME types to the canonical file extension used when we lay attachments
-// down inside a project's .opencorvus/attachments directory. The list only
+// down inside a project's .opencorvus/runtime attachment blob store. The list only
 // covers MIME types that a provider might send back as multimodal content.
 // Anything not in this table falls back to the filename's own extension, and
 // only if that is also missing do we store a raw ".bin" (explicit enough that
@@ -70,7 +71,7 @@ function mimeFromPath(absPath: string): string {
 }
 
 function storageDir(projectDir: string): string {
-  return path.join(projectDir, ".opencorvus", "attachments")
+  return ProjectRuntimePaths.attachmentBlobRoot(projectDir)
 }
 
 const log = Log.create({ service: "attachment-store" })
@@ -91,7 +92,7 @@ export namespace AttachmentStore {
   }
 
   /**
-   * Persist an attachment under `<project.worktree>/.opencorvus/attachments/<sha>.<ext>`.
+   * Persist an attachment under `<project.worktree>/.opencorvus/runtime/blobs/attachments/<sha>.<ext>`.
    * Content-addressed: identical payloads deduplicate to the same file. Returns
    * a reference carrying the HTTP URL that AttachmentRoutes serves.
    *
@@ -566,7 +567,7 @@ export namespace AttachmentStore {
 
   /**
    * Enumerate every `<sha>.<ext>` currently on disk under the project's
-   * `.opencorvus/attachments/` directory. Returns `[]` when the directory
+   * `.opencorvus/runtime/blobs/attachments/` directory. Returns `[]` when the directory
    * does not exist (no attachments have ever been written for this project).
    */
   export async function listOnDisk(projectID: string): Promise<{

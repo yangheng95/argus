@@ -1,18 +1,18 @@
 import fs from "fs/promises"
 import path from "path"
-import { Global } from "../global"
 import { Identifier } from "../id/id"
 import { PermissionNext } from "../permission/next"
 import type { Agent } from "../agent/agent"
 import { Scheduler } from "../scheduler"
 import { Filesystem } from "../util/filesystem"
 import { Glob } from "../util/glob"
+import { Instance } from "@/project/instance"
+import { ProjectRuntimePaths } from "@/project/runtime-paths"
+import { taskIDForSession } from "@/orchestrator/task-event"
 
 export namespace Truncate {
   export const MAX_LINES = 2000
   export const MAX_BYTES = 50 * 1024
-  export const DIR = path.join(Global.Path.data, "tool-output")
-  export const GLOB = path.join(DIR, "*")
   const RETENTION_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
   const HOUR_MS = 60 * 60 * 1000
 
@@ -22,6 +22,8 @@ export namespace Truncate {
     maxLines?: number
     maxBytes?: number
     direction?: "head" | "tail"
+    sessionID?: string
+    taskID?: string
   }
 
   export function init() {
@@ -35,10 +37,11 @@ export namespace Truncate {
 
   export async function cleanup() {
     const cutoff = Identifier.timestamp(Identifier.create("tool", false, Date.now() - RETENTION_MS))
-    const entries = await Glob.scan("tool_*", { cwd: DIR, include: "file" }).catch(() => [] as string[])
+    const root = ProjectRuntimePaths.projectRuntimeRoot(Instance.directory)
+    const entries = await Glob.scan("tasks/*/sessions/*/tool-output/tool_*", { cwd: root, include: "file" }).catch(() => [] as string[])
     for (const entry of entries) {
-      if (Identifier.timestamp(entry) >= cutoff) continue
-      await fs.unlink(path.join(DIR, entry)).catch(() => {})
+      if (Identifier.timestamp(path.basename(entry)) >= cutoff) continue
+      await fs.unlink(path.join(root, entry)).catch(() => {})
     }
   }
 
@@ -123,7 +126,12 @@ export namespace Truncate {
     const preview = out.join("\n")
 
     const id = Identifier.ascending("tool")
-    const filepath = path.join(DIR, id)
+    const sessionID = options.sessionID
+    const taskID = options.taskID ?? (sessionID ? taskIDForSession(sessionID) : undefined)
+    if (!sessionID || !taskID) {
+      throw new Error("Truncate.output: sessionID and taskID are required for runtime-scoped tool output")
+    }
+    const filepath = path.join(ProjectRuntimePaths.toolOutputDir(Instance.directory, taskID, sessionID), id)
     await Filesystem.write(filepath, text)
 
     const hint = recovery.via === "task"

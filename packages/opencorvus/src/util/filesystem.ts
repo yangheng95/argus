@@ -1,8 +1,8 @@
-import { access, chmod, mkdir, readFile, stat as statAsync, writeFile } from "fs/promises"
+import { access, chmod, mkdir, readFile, rename, rm, stat as statAsync, writeFile } from "fs/promises"
 import { createWriteStream, existsSync, statSync } from "fs"
 import { lookup } from "mime-types"
 import { realpathSync } from "fs"
-import { dirname, isAbsolute, join, parse, relative, resolve as pathResolve, normalize } from "path"
+import { basename, dirname, isAbsolute, join, parse, relative, resolve as pathResolve, normalize } from "path"
 import { Readable } from "stream"
 import { pipeline } from "stream/promises"
 import z from "zod"
@@ -98,6 +98,19 @@ export namespace Filesystem {
         throw new Error(`Filesystem.write: target path is a directory, cannot write file: ${p}`)
       }
       throw e
+    }
+  }
+
+  export async function writeAtomic(p: string, content: string | Buffer | Uint8Array, mode?: number): Promise<void> {
+    const dir = dirname(p)
+    await mkdir(dir, { recursive: true })
+    const tmp = join(dir, `.${basename(p)}.${process.pid}.${Date.now()}.tmp`)
+    try {
+      await writeFile(tmp, content, mode ? { mode } : undefined)
+      await rename(tmp, p)
+    } catch (err) {
+      await rm(tmp, { force: true }).catch(() => {})
+      throw err
     }
   }
 

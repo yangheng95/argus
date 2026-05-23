@@ -250,7 +250,7 @@ FORBIDDEN even when phrased as a git command:
 - Destructive ref rewrite (`branch -D`, `gc --prune=now`,
   `reflog expire`) — dispatch `build` or `restart_from_stage` instead.
 - Worktree intrusion (`-C` / `--git-dir` / `--work-tree` reaching into
-  `.opencorvus/worktrees/*`) — worktrees are Build's surface.
+  task-scoped `.opencorvus/runtime/*` worktree paths) — worktrees are Build's surface.
 - General history investigation (`git log -p`, `git grep`, `git blame`
   over the codebase) — that is `explore` / `analyze_intent`'s surface.
 - Rebase (`git rebase`) — different machinery, not this tool.

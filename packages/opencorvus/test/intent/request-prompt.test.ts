@@ -18,6 +18,17 @@ describe("user request prompt injection", () => {
     expect(section).toContain("2 word(s) omitted")
   })
 
+  test("uses the concrete task-scoped intent path when taskID is known", () => {
+    const section = renderUserRequestSection({
+      heading: "# User Request",
+      request: "ship the requested feature",
+      taskID: "tsk_prompt_path",
+    })
+
+    expect(section).toContain(".opencorvus/runtime/tasks/tsk_prompt_path/intent/request.md")
+    expect(section).not.toContain("<taskID>")
+  })
+
   test("counts CJK text as bounded tokens instead of one unbounded whitespace word", () => {
     const request = "需求".repeat(400)
     const excerpt = excerptUserRequest(request)

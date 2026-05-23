@@ -62,7 +62,7 @@ export namespace TaskContext {
     sections.push("")
     sections.push(`**Title**: ${task.title}`)
     if (task.request) {
-      sections.push(renderUserRequestSection({ heading: "### Request", request: String(task.request) }))
+      sections.push(renderUserRequestSection({ heading: "### Request", request: String(task.request), taskID }))
     }
 
     const designSpecs = Array.isArray(task.design_specs) ? task.design_specs : []

@@ -8,6 +8,8 @@ import { CodexAppServerClientProcess } from "./codex-app-server-client"
 import { CodexAppServerExecutor } from "./codex-app-server"
 import { ClaudeAgentExecutor } from "./claude-agent"
 import { MCPServe } from "@/mcp/serve"
+import { codingRuntimeEnv } from "./contract"
+import type { CodingRunInfo } from "./contract"
 
 const log = Log.create({ service: "executor.bootstrap" })
 
@@ -85,8 +87,10 @@ function codexProvider(command: string[]) {
   if (process.env.OPENCORVUS_EXECUTOR_CODEX_PROTOCOL === "cli") {
     return CodexCLIExecutor.create({ command })
   }
-  return CodexAppServerExecutor.create((cwd?: string) => {
+  return CodexAppServerExecutor.create((runtime?: Pick<CodingRunInfo, "cwd" | "taskID" | "logicalSessionID" | "runtimeDir" | "worktreeDir">) => {
+    const cwd = runtime?.cwd
     const mcp = MCPServe.command(cwd ?? Instance.directory)
+    const runtimeEnv = codingRuntimeEnv(runtime ?? {})
     return CodexAppServerClientProcess.create({
       command: [
         ...command,
@@ -132,6 +136,8 @@ function codexProvider(command: string[]) {
         `mcp_servers.${MCPServe.ServerName}.command=${JSON.stringify(mcp.command)}`,
         "-c",
         `mcp_servers.${MCPServe.ServerName}.args=${JSON.stringify(mcp.args)}`,
+        "-c",
+        `mcp_servers.${MCPServe.ServerName}.env=${JSON.stringify(runtimeEnv)}`,
         // The canonical codex-blessed way to silence per-tool approval
         // prompts on a trusted MCP server. Without this, codex 0.125 emits
         // `mcp_tool_call_approval_<callID>` elicitations for every memory /
@@ -145,6 +151,10 @@ function codexProvider(command: string[]) {
         `mcp_servers.${MCPServe.ServerName}.default_tools_approval_mode="approve"`,
       ],
       cwd,
+      env: {
+        ...process.env,
+        ...runtimeEnv,
+      },
     })
   })
 }

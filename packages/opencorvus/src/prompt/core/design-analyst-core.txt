@@ -74,7 +74,7 @@ Call `submit_design_prd_spec` once at the end. It must contain:
 - `backend_spec`: implementation-grade backend/API specification, with unknowns marked. For visual clone tasks, specify only the minimal UI data contract and loading/error states unless real API evidence exists.
 - `prd_iteration_notes`: review-pass notes proving you checked and corrected PRD/SPEC completeness before handoff. One note is enough when `assistant.auto_iteration=false`; include at least two when `assistant.auto_iteration=true`.
 - `completeness_review`: final audit explaining why the PRD/SPEC is complete enough for downstream agents, and exactly what remains unknown.
-- `reference_artifacts`: artifact paths, source file names, image names, attachment names, and mirror outputs you used as evidence. The orchestrator will persist a separate `evidence_source_manifest` decision-log entry and materialize `.opencorvus/design-analysis/prd-spec.md` plus `.opencorvus/design-analysis/evidence-source-manifest.md` from these references plus task attachments/materialized artifacts so downstream agents know exactly which files/images/URLs they can read.
+- `reference_artifacts`: artifact paths, source file names, image names, attachment names, and mirror outputs you used as evidence. The orchestrator will persist a separate `evidence_source_manifest` decision-log entry and materialize task-scoped runtime PRD/SPEC and evidence-source-manifest files from these references plus task attachments/materialized artifacts so downstream agents know exactly which files/images/URLs they can read.
 - `open_questions`: only facts that are truly unobservable.
 
 ## Severity

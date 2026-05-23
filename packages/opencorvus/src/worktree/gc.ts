@@ -17,7 +17,7 @@ import { Worktree } from "./index"
  * orphaned-worktree sweep (§2.1 / §6 of that doc, and the addendum
  * `specs/new-arch/2026-05-15-orphan-worktree-gc.md`).
  *
- * A directory under `<primary>/.opencorvus/worktrees/` is removed ONLY when
+ * A directory under `<primary>/.opencorvus/runtime/worktrees/` is removed ONLY when
  * it is genuinely abandoned junk. "Older than N days" is necessary but NOT
  * sufficient: §2.3 of the lifecycle doc forbids deleting failed / aborted /
  * cancelled / restart worktrees because that in-transit state is the input

@@ -5,9 +5,9 @@ import path from "path"
 import { Snapshot } from "../../src/snapshot"
 import { Instance } from "../../src/project/instance"
 import { Filesystem } from "../../src/util/filesystem"
-import { Global } from "../../src/global"
 import { Process } from "../../src/util/process"
 import { tmpdir } from "../fixture/fixture"
+import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 
 const previousDisableDefaultPlugins = process.env.OPENCORVUS_DISABLE_DEFAULT_PLUGINS
 process.env.OPENCORVUS_DISABLE_DEFAULT_PLUGINS = "1"
@@ -84,7 +84,7 @@ test("track initializes a pre-existing non-git snapshot directory before add", a
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      const gitDir = path.join(Global.Path.data, "snapshot", Instance.project.id)
+      const gitDir = ProjectRuntimePaths.snapshotCacheRoot(Instance.project.worktree, Instance.project.id)
       await fs.rm(gitDir, { recursive: true, force: true })
       await fs.mkdir(gitDir, { recursive: true })
       await Filesystem.write(path.join(gitDir, "stale-marker.txt"), "created before git init")
@@ -107,7 +107,7 @@ test("concurrent first track calls share snapshot git initialization", async () 
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      const gitDir = path.join(Global.Path.data, "snapshot", Instance.project.id)
+      const gitDir = ProjectRuntimePaths.snapshotCacheRoot(Instance.project.worktree, Instance.project.id)
       await fs.rm(gitDir, { recursive: true, force: true })
 
       const hashes = await Promise.all(Array.from({ length: 8 }, () => Snapshot.track()))
@@ -126,7 +126,7 @@ test("patch repairs a partially initialized snapshot git directory before add", 
       const before = await Snapshot.track()
       expect(before).toBeTruthy()
 
-      const gitDir = path.join(Global.Path.data, "snapshot", Instance.project.id)
+      const gitDir = ProjectRuntimePaths.snapshotCacheRoot(Instance.project.worktree, Instance.project.id)
       await fs.rm(path.join(gitDir, "HEAD"), { force: true })
       await fs.rm(path.join(gitDir, "config"), { force: true })
       await Filesystem.write(`${tmp.path}/a.txt`, "changed after partial snapshot repo damage")

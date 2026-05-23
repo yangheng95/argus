@@ -108,8 +108,8 @@ export interface DecisionLogReader {
   /**
    * Render the COMPLETE decision log as a phase-sectioned markdown document —
    * no value cap, no entry limit, every field (key/value/reason/goal/time).
-   * This is the body `DecisionLogBundle` materializes to
-   * `.opencorvus/decision-log.md` so a shell/worktree agent can read the full
+   * This is the body `DecisionLogBundle` materializes under
+   * `.opencorvus/runtime/tasks/<taskID>/decision-log.md` so a shell/worktree agent can read the full
    * WHY behind any decision the truncated inline `toPromptSection` summary
    * elided. The SQLite `decision_log` table stays the single source of truth;
    * this is a regenerated, read-only projection. "" when the log is empty.
@@ -156,8 +156,8 @@ function capEntryValue(value: string, cap: number): string {
   const omitted = value.length - cap
   // Point the reading agent at an actionable surface. The decision_log SQLite
   // row is not reachable by an LLM/shell agent; the full untruncated body is
-  // materialized to `.opencorvus/decision-log.md` (DecisionLogBundle).
-  return `${value.slice(0, cap)}… [+${omitted} chars truncated; full body in .opencorvus/decision-log.md]`
+  // materialized to the task-scoped DecisionLogBundle projection.
+  return `${value.slice(0, cap)}… [+${omitted} chars truncated; full body in the task-scoped decision-log bundle]`
 }
 
 function renderContractIRValue(value: string): string | undefined {
@@ -283,7 +283,7 @@ export function createDecisionLog(taskID: string): DecisionLog {
       // decision of 20K chars would dominate the prompt even though entry
       // count is bounded. 600 chars ≈ one interface contract paragraph —
       // the full untruncated body is materialized to
-      // `.opencorvus/decision-log.md` (DecisionLogBundle) so a shell/worktree
+      // the task-scoped runtime decision-log projection (DecisionLogBundle) so a shell/worktree
       // agent can read it directly when it needs the complete WHY.
       const valueCap = options?.valueCap ?? DEFAULT_ENTRY_VALUE_CAP
       const lines = entries.map((e) => {

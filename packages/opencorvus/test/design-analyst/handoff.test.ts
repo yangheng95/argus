@@ -70,8 +70,8 @@ test("design-analysis handoff points to source files and keeps excerpts bounded"
 
       const handoff = renderDesignAnalysisHandoffReference(taskID, { valueCap: 120 })
 
-      expect(handoff).toContain(".opencorvus/design-analysis/prd-spec.md")
-      expect(handoff).toContain(".opencorvus/design-analysis/evidence-source-manifest.md")
+      expect(handoff).toContain(`.opencorvus/runtime/tasks/${taskID}/design-analysis/prd-spec.md`)
+      expect(handoff).toContain(`.opencorvus/runtime/tasks/${taskID}/design-analysis/evidence-source-manifest.md`)
       expect(handoff).toContain("do not run mirror tools outside design_analysis")
       expect(handoff).toContain("visual_consistency_spec")
       expect(handoff).toContain("[+")
