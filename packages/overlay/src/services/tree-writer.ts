@@ -27,6 +27,12 @@ import {
   type CardNode,
   type CardStatus,
 } from "../store/card-tree";
+import {
+  flushCardStats,
+  linkChildToParent,
+  markCardStatsDirty,
+  unlinkChildFromParent,
+} from "../store/card-tree-stats";
 import { boardStore, setBoardProjectionHandler } from "../store/board";
 import { agentStageLabel, normalizeAgentRole, roleLabel } from "../utils/message";
 import { stageAccent } from "../utils/card-color";
@@ -214,6 +220,10 @@ export function resetWriter(options: {
 function applyVisibleCardTreeEvent(handler: () => void): void {
   batch(() => {
     handler();
+    // Drain the subtree-stats dirty queue inside the same batch so the
+    // ancestor cache updates land in one render frame alongside the event's
+    // primary writes. See store/card-tree-stats.ts for the bubble-up walk.
+    flushCardStats();
     markCardTreeVisibleChanged();
   });
 }
@@ -285,6 +295,7 @@ export function flushBufferedPartDeltas(): void {
       bufferedPartDeltas.delete(key);
       handlePartDelta(mergedPartDeltaEvent(entry));
     }
+    flushCardStats();
     markCardTreeVisibleChanged();
   });
 }
@@ -697,6 +708,7 @@ function handlePartDelta(event: any): void {
       (prev: any) => String(prev ?? "") + delta,
     );
   }
+  markCardStatsDirty(target.cardID);
   syncExecutorTopLevelVisibility(session);
 }
 
@@ -704,16 +716,22 @@ function removeCardReferences(cardID: string): void {
   if (cardTreeStore.order.includes(cardID)) {
     setCardTreeStore("order", cardTreeStore.order.filter((id) => id !== cardID));
   }
+  const affectedParents: string[] = [];
   setCardTreeStore(
     "cards",
     produce((cards: Record<string, CardNode>) => {
       for (const card of Object.values(cards)) {
         if (!Array.isArray(card.childIDs) || !card.childIDs.includes(cardID)) continue;
         card.childIDs = card.childIDs.filter((id) => id !== cardID);
+        affectedParents.push(card.id);
       }
       delete cards[cardID];
     }),
   );
+  // The deleted card's contribution to ancestor aggregates has to be
+  // subtracted — mark each parent that just lost this child so the next
+  // flushCardStats bubbles the new totals upward.
+  for (const parentID of affectedParents) markCardStatsDirty(parentID);
 }
 
 function removeIndexedParts(
@@ -737,6 +755,7 @@ function removeIndexedParts(
   }
   if (removed === 0) return 0;
   setCardTreeStore("cards", cardID, "parts", nextParts);
+  markCardStatsDirty(cardID);
   for (const [partID, target] of [...session.partIndex]) {
     if (target.cardID !== cardID) continue;
     const nextIndex = indexMap.get(target.index);
@@ -1130,6 +1149,7 @@ function handleReviewStreamChunk(event: any): void {
       }
     }),
   );
+  markCardStatsDirty(cardID);
 }
 
 /** Integrity is a real session, but its reasoning/verdict reach the overlay
@@ -1827,6 +1847,7 @@ function regroupTimelineSegments(opts: { deferHierarchy?: boolean } = {}): void 
       }
     }
     setCardTreeStore("cards", segment.cardID, "parts", rebuiltParts);
+    markCardStatsDirty(segment.cardID);
   }
 
   const targetCardIDs = new Set(segments.map((segment) => segment.cardID));
@@ -1982,6 +2003,7 @@ function upsertPart(
   const normalizedPart = normalizeToolPartRecord(part, previousPart);
   if (sameCard) {
     setCardTreeStore("cards", cardID, "parts", existing!.index, normalizedPart);
+    markCardStatsDirty(cardID);
     return;
   }
   const newIdx = appendSessionPart(cardID, normalizedPart);
@@ -1995,6 +2017,7 @@ function appendSessionPart(cardID: string, part: any): number {
   }
   const next = [...current, part];
   setCardTreeStore("cards", cardID, "parts", next);
+  markCardStatsDirty(cardID);
   return next.length - 1;
 }
 
@@ -2015,6 +2038,10 @@ function rebuildBoardDerivedCards(): void {
     rebuildGoalStepCards(board);
     // Session-to-goal claiming.
     rebuildCardHierarchy();
+    // Drain the stats dirty queue inside the same batch as the structural
+    // rewrites so collapsed bubble caches reflect the new hierarchy before
+    // any subscriber observes the visible-version bump.
+    flushCardStats();
     markCardTreeVisibleChanged();
   });
 }
@@ -2061,6 +2088,7 @@ function rebuildTaskContextCard(board: any): void {
     childIDs: [],
     time: taskCreated - 2,
   });
+  markCardStatsDirty("ctx:user-request");
 }
 
 /** Look up the workflow-level step definition (the `steps[]` array on
@@ -2272,6 +2300,7 @@ function upsertInteractionCard(seed: { info: { id: string; role: string; time: {
     childIDs: [],
     time,
   });
+  markCardStatsDirty(cardID);
   return cardID;
 }
 
@@ -2494,6 +2523,25 @@ function rebuildCardHierarchyImpl(): void {
     nextChildIDs.set(cardID, nextChildIDs.get(cardID) || []);
   }
 
+  // Snapshot every affected parent's childIDs BEFORE the produce so we can
+  // diff: which children got newly attached (need parentID link + dirty
+  // parent), which got detached from a parent without landing in any other
+  // (need parentID unlink), and which parents lost or gained any child
+  // (need their cached aggregates recomputed). Without this snapshot, an
+  // old parent whose child moves to a different step's phase card keeps the
+  // stale child's contributions baked into its cached counts forever.
+  const affectedParents = new Set<string>();
+  for (const info of sessions.values()) {
+    for (const cid of sessionOwnedCardIDs(info)) affectedParents.add(cid);
+  }
+  for (const parentID of nextChildIDs.keys()) affectedParents.add(parentID);
+
+  const childIDsBefore = new Map<string, string[]>();
+  for (const parentID of affectedParents) {
+    const existing = cardTreeStore.cards[parentID]?.childIDs;
+    childIDsBefore.set(parentID, Array.isArray(existing) ? [...existing] : []);
+  }
+
   setCardTreeStore(
     "cards",
     produce((cards: Record<string, CardNode>) => {
@@ -2509,6 +2557,33 @@ function rebuildCardHierarchyImpl(): void {
       }
     }),
   );
+
+  // Build the parent-after map across every affected parent so we can tell
+  // whether a child that disappeared from one parent's childIDs landed in
+  // ANOTHER parent's (move — handled by linkChildToParent below) or in
+  // none (orphan — needs unlinkChildFromParent so the bubble-up walk does
+  // not keep climbing through a parent that no longer reaches it).
+  const parentAfterByChild = new Map<string, string>();
+  for (const parentID of affectedParents) {
+    const after = cardTreeStore.cards[parentID]?.childIDs ?? [];
+    for (const childID of after) parentAfterByChild.set(childID, parentID);
+  }
+
+  for (const parentID of affectedParents) {
+    const before = childIDsBefore.get(parentID) ?? [];
+    for (const childID of before) {
+      // Detached from this parent. If another affected parent claimed it,
+      // the link below repoints the back-pointer; otherwise it is an orphan
+      // and we explicitly clear parentID so bubble-up stops here.
+      if (!parentAfterByChild.has(childID)) unlinkChildFromParent(childID);
+    }
+    markCardStatsDirty(parentID);
+  }
+  // Link every (new) parent→child edge. Idempotent when the link already
+  // matched the prior parent; overwrites stale links from a previous attempt.
+  for (const [childID, parentID] of parentAfterByChild.entries()) {
+    linkChildToParent(parentID, childID);
+  }
 
   rebuildTopLevelOrder();
 }

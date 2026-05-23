@@ -97,6 +97,37 @@ export interface StepPayload {
   verdict?: string;
 }
 
+/** Activity counts surfaced by collapsed bubble headers. Stored as a
+ *  cached aggregate (`CardNode.subtreeCounts`) so the renderer reads
+ *  `node.subtreeCounts` in O(1) instead of walking the subtree on every
+ *  SSE event — see the stats kernel below. */
+export interface ActivityCounts {
+  messages: number;
+  tools: number;
+  agents: number;
+  skills: number;
+}
+
+/** Cached "latest activity" hit used by `collectLatestActivityText`. The
+ *  renderer wants the most recent text-or-tool moment in the subtree; we
+ *  cache the (time,index)-tuple plus the rendered text so collapsed bubble
+ *  reads are O(1). `text` is the already-formatted line (markdown for text
+ *  parts, "icon Tool: detail" for tool parts) — see toolHitText / partText
+ *  in utils/card-tree.ts. */
+export interface LatestActivityHit {
+  time: number;
+  index: number;
+  text: string;
+}
+
+/** Cached todo-list hit (most-recent TODO tool call in the subtree). The
+ *  renderer's `collectTodoSummary` derives counts from `todos`. */
+export interface TodoActivityHit {
+  time: number;
+  index: number;
+  todos: any[];
+}
+
 /** CardNode is the fundamental unit of the conversation tree. `children` is
  *  ALWAYS an array of ids (not inline objects); the renderer dereferences
  *  through `cardTreeStore.cards[id]`. This indirection is what makes targeted
@@ -105,6 +136,12 @@ export interface StepPayload {
 export interface CardNode {
   id: string;
   kind: CardKind;
+  /** Back-pointer maintained by `tree-writer.linkChildToParent` whenever a
+   *  cardID is placed into another card's `childIDs`. Read only by the
+   *  stats kernel (`bubbleStatsFromCard`) to walk ancestors in O(depth)
+   *  without rescanning the whole `cards` dict. Components never read this
+   *  field, so writing it does not trigger spurious re-renders. */
+  parentID?: string;
   /** Runtime session id that owns this card. Drives trace / reply / cancel /
    *  agent-workflow projection. Renderer and workflow utilities MUST read
    *  this explicit field — never parse the session id out of `id`. Phase
@@ -278,6 +315,20 @@ export interface CardNode {
     elapsedMs?: number;
     summary?: string;
   };
+  /** Cached activity counts for this card's subtree (own parts/toolPart +
+   *  all reachable descendants). Maintained by the stats kernel below,
+   *  invalidated by tree-writer whenever a part/toolPart/childIDs write
+   *  could change the result. Components read this field directly via
+   *  `collectActivityCounts` to render collapsed bubble headers in O(1). */
+  subtreeCounts?: ActivityCounts;
+  /** Cached "latest text-or-tool activity" hit for this card's subtree.
+   *  Source of truth for the collapsed bubble preview line — components
+   *  read this via `collectLatestActivityText`. */
+  subtreeLatestHit?: LatestActivityHit;
+  /** Cached most-recent TODO-tool hit in this card's subtree. The renderer
+   *  derives the user-facing `TodoSummary` from this via
+   *  `collectTodoSummary`. */
+  subtreeTodoHit?: TodoActivityHit;
 }
 
 export interface CardTreeStore {
