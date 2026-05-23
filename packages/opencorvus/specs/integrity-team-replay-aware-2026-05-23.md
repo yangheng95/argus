@@ -682,7 +682,7 @@ Reviewer count behavior:
    the same task/spec produce payloads with `attempts=1` then `attempts=2`.
 5. [x] Extend `team-agent.ts` input types and replace all hard-coded attempt
    values.
-6. [ ] Add replay sections to supervisor planning, reviewer, and consensus
+6. [x] Add replay sections to supervisor planning, reviewer, and consensus
    prompts.
 7. [ ] Wire `runIntegrityReviewOnce` in `orchestrator/tools.ts`.
 8. [ ] Wire `runDeliveryIntegrityReview` in `delivery/tools.ts`.

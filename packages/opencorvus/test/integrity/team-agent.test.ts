@@ -8,10 +8,12 @@ let forwarders: any[] = []
 let progressEvents: any[] = []
 let completedEvents: any[] = []
 let createdSessions: any[] = []
+let userPrompts: string[] = []
 
 mock.module("@/agent/runner", () => ({
   runAgentSession: async (input: any) => {
     runnerCalls.push(input)
+    userPrompts.push(input.buildUserPrompt())
     const session = {
       id:
         input.existingSessionID ??
@@ -154,6 +156,7 @@ describe("integrity team-agent replay attempts", () => {
     progressEvents = []
     completedEvents = []
     createdSessions = []
+    userPrompts = []
     globalThis.setInterval = originalSetInterval
     globalThis.clearInterval = originalClearInterval
     await Instance.disposeAll().catch(() => undefined)
@@ -200,6 +203,15 @@ describe("integrity team-agent replay attempts", () => {
     expect(progressEvents[0].attempt).toBe(2)
     expect(completedEvents).toHaveLength(1)
     expect(completedEvents[0].payload.attempts).toBe(2)
+    expect(userPrompts).toHaveLength(4)
+    for (const prompt of userPrompts) {
+      expect(prompt).toContain("# Integrity Replay Context")
+      expect(prompt).toContain("Current integrity attempt: #2")
+    }
+    expect(userPrompts[0]).toContain("Prior reviewer focuses are the list of surfaces that were inspected")
+    expect(userPrompts[0]).toContain("Do not default to five reviewers")
+    expect(userPrompts[1]).toContain("you are reviewing the current attempt, not starting from zero")
+    expect(userPrompts[3]).toContain("Compare the current reviewer reports against prior attempts")
   })
 
   test("uses replayContext attempt number for no-goals soft completed event", async () => {
