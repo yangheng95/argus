@@ -621,11 +621,11 @@ describe("overlay architecture guards", () => {
     expect(inspectorAt).toBeGreaterThan(-1)
   })
 
-  test("inspector preview tab + section icon button are owned by surfaces/inspector.css", () => {
+  test("inspector section icon button is owned by surfaces/inspector.css", () => {
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
 
-    // frontend-preview family must be in inspector.css, not cascade layer
+    // Deleted frontend-preview family must not reappear in either layer.
     for (const className of [
       "frontend-preview",
       "frontend-preview-toolbar",
@@ -634,13 +634,12 @@ describe("overlay architecture guards", () => {
       "frontend-preview-empty",
     ]) {
       expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
-      expect(inspectorSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+      expect(inspectorSurface).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
     }
 
     // Section icon button was renamed to .oc-section__icon-btn (Step 9.E migration)
     expect(inspectorSurface).toMatch(/\.oc-section__icon-btn\s*\{/)
     expect(inspectorSurface).toMatch(/\.oc-section__icon-btn:hover,\s*\.oc-section__icon-btn:focus-visible\s*\{/)
-    expect(inspectorSurface).toMatch(/\.frontend-preview-empty\[data-kind="error"\]\s*\{/)
     expect(withoutComments(inspectorSurface)).not.toContain("background: white")
     expect(inspectorSurface).toContain("background: var(--surface-inset)")
     expect(inspectorSurface).toContain("var(--oc-border-width)")

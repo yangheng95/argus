@@ -44,7 +44,6 @@ export type DeliveryGateVerdict = {
   failedReadinessIds?: string[]
   failedCheckIds: string[]
   failedCoverageIds: string[]
-  failedRuntimeFlowIds: string[]
   failedReviewIds: string[]
   functionalAssessment?: DeliveryManifestFunctionalAssessment
 }
@@ -72,31 +71,6 @@ export type DeliveryRequirementCoverage = {
   evidence: string[]
 }
 
-export type DeliveryRuntimeFlowResult = {
-  id: string
-  name: string
-  status: "passed" | "failed" | "skipped"
-  previewUrl?: string
-  evidence: string[]
-  screenshotPath?: string
-  dom?: {
-    textLength: number
-    nodeCount: number
-    hasBodyChildren: boolean
-    isEmptyRootShell: boolean
-  }
-  interaction?: {
-    visibleControlCount: number
-    textInputCount: number
-    fileInputCount: number
-    attemptedInteractionCount: number
-    textChanged: boolean
-    htmlChanged: boolean
-    errorCount: number
-    errors: string[]
-  }
-}
-
 export type DeliveryReviewEvidence = {
   id: string
   name: string
@@ -119,7 +93,6 @@ export type DeliveryEvidenceManifest = {
   checkResults: DeliveryCheckResult[]
   goalCoverage: DeliveryGoalCoverage[]
   requirementCoverage: DeliveryRequirementCoverage[]
-  runtimeFlows: DeliveryRuntimeFlowResult[]
   reviewEvidence: DeliveryReviewEvidence[]
   surfaceManifest?: DeliverySurfaceManifest
   specialistReviews?: DeliverySpecialistReview[]
@@ -130,7 +103,7 @@ export type DeliveryEvidenceManifest = {
 }
 
 export type DeliveryManifestFailureDetail = {
-  kind: "readiness" | "check" | "coverage" | "runtime" | "review"
+  kind: "readiness" | "check" | "coverage" | "review"
   id: string
   name: string
   status?: string
@@ -203,7 +176,6 @@ export function validateDeliveryEvidenceManifest(
     failedReadinessIds: manifest.runtimeReadiness?.failedReadinessIds ?? [],
     failedCheckIds,
     failedCoverageIds: [],
-    failedRuntimeFlowIds: [],
     failedReviewIds: [],
     summary: failedCheckIds.length === 0
       ? `Delivery evidence gate passed ${manifest.requiredChecks.length} required check(s).`
@@ -232,7 +204,6 @@ export function deliveryManifestFailureDetails(
   const failedReadinessIds = new Set(manifest.finalGate.failedReadinessIds ?? [])
   const failedCheckIds = new Set(manifest.finalGate.failedCheckIds)
   const failedCoverageIds = new Set(manifest.finalGate.failedCoverageIds)
-  const failedRuntimeFlowIds = new Set(manifest.finalGate.failedRuntimeFlowIds)
   const failedReviewIds = new Set(manifest.finalGate.failedReviewIds ?? [])
 
   const readinessDetails = (manifest.runtimeReadiness?.checks ?? [])
@@ -297,20 +268,6 @@ export function deliveryManifestFailureDetails(
       evidence: firstEvidence(item.evidence),
     }))
 
-  const runtimeDetails = manifest.runtimeFlows
-    .filter((item) => failedRuntimeFlowIds.has(item.id) || item.status === "failed")
-    .map((item) => ({
-      kind: "runtime" as const,
-      id: item.id,
-      name: item.name,
-      status: item.status,
-      evidence: firstEvidence([
-        ...item.evidence,
-        ...(item.interaction?.errors ?? []),
-        item.dom ? `dom.textLength=${item.dom.textLength} nodes=${item.dom.nodeCount}` : undefined,
-      ]),
-    }))
-
   const reviewDetails = manifest.reviewEvidence
     .filter((item) => failedReviewIds.has(item.id) || item.status === "failed")
     .map((item) => ({
@@ -327,7 +284,6 @@ export function deliveryManifestFailureDetails(
     ...missingCheckDetails,
     ...goalCoverageDetails,
     ...requirementCoverageDetails,
-    ...runtimeDetails,
     ...reviewDetails,
   ])
 }
@@ -421,7 +377,6 @@ export function persistDeliveryEvidenceManifest(input: {
       status: input.manifest.finalGate.status,
       summary: input.manifest.finalGate.summary,
       failedCheckCount: input.manifest.finalGate.failedCheckIds.length,
-      failedRuntimeFlowCount: input.manifest.finalGate.failedRuntimeFlowIds.length,
       failedReviewCount: (input.manifest.finalGate.failedReviewIds ?? []).length,
       failureDetails: deliveryManifestFailureDetails(input.manifest).slice(0, 20),
     },
@@ -498,7 +453,6 @@ export function deliveryFailureSignatureKeys(manifest: DeliveryEvidenceManifest)
         : `check:${item.id}:${item.commandDigest}:${item.failureReason ?? item.outputExcerpt}`,
     )
   const coverageKeys = manifest.finalGate.failedCoverageIds.map((item) => `coverage:${item}`)
-  const runtimeKeys = manifest.finalGate.failedRuntimeFlowIds.map((item) => `runtime:${item}`)
   const reviewKeys = (manifest.finalGate.failedReviewIds ?? []).map((item) => `review:${item}`)
   const specialistKeys = (manifest.specialistReviews ?? [])
     .flatMap((review) =>
@@ -506,7 +460,7 @@ export function deliveryFailureSignatureKeys(manifest: DeliveryEvidenceManifest)
         .filter((finding) => finding.proposedSeverity === "blocking")
         .map((finding) => `specialist:${review.reviewer}:${finding.category}:${finding.claim}`),
     )
-  return [...new Set([...readinessKeys, ...checkKeys, ...coverageKeys, ...runtimeKeys, ...reviewKeys, ...specialistKeys])].sort()
+  return [...new Set([...readinessKeys, ...checkKeys, ...coverageKeys, ...reviewKeys, ...specialistKeys])].sort()
 }
 
 export function repeatedDeliveryFailureSignatures(input: {

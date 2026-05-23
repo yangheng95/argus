@@ -80,7 +80,7 @@ verdict · patch · changed_file · diff · log · report · image · link ·
 git_ref · pr · integrity_attempt · prosecutor_attempt ·
 delivery_evidence_manifest · delivery_surface_manifest ·
 delivery_specialist_review · delivery_verification_threw ·
-delivery_preview · orchestrator-stream-error
+orchestrator-stream-error
 ```
 
 **Common `kind` meanings**:

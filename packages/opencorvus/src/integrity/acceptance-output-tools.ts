@@ -36,14 +36,7 @@ export function createIntegrityAcceptanceOutputTools(input?: {
 }) {
   const collector = input?.collector ?? {}
   const requiredEvidenceFacets = Array.from(new Set(input?.requiredEvidenceFacets ?? []))
-  const requiredTools = Array.from(
-    new Set([
-      ...(input?.requiredTools ?? []),
-      ...(requiredEvidenceFacets.some((facet) => facet === "frontend" || facet === "visual")
-        ? ["start_frontend_preview"]
-        : []),
-    ]),
-  )
+  const requiredTools = Array.from(new Set(input?.requiredTools ?? []))
   const requires = (facet: AcceptanceEvidenceFacetType) => requiredEvidenceFacets.includes(facet)
 
   return {

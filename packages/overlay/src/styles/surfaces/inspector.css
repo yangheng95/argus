@@ -29,7 +29,6 @@
 }
 
 .sections[data-collapsed="true"] .sections-title,
-.sections[data-collapsed="true"] .sections-tabs,
 .sections[data-collapsed="true"] .sections-tab-body {
   display: none;
 }
@@ -119,69 +118,6 @@
 .oc-section__icon-btn:disabled {
   opacity: var(--ui-opacity-faint);
   cursor: default;
-}
-
-/* Frontend preview tab: iframe + url toolbar + empty/error states. The
-   iframe canvas keeps a literal `white` background because the rendered
-   web content expects a white base regardless of overlay theme. The
-   two old `.frontend-preview` rules (height + display) are folded into
-   one block here. */
-.frontend-preview {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  min-height: 0;
-  background: color-mix(in srgb, var(--surface-inset) 82%, transparent);
-}
-
-.frontend-preview-toolbar {
-  display: flex;
-  align-items: center;
-  gap: calc(6px * var(--ui-scale));
-  min-height: calc(38px * var(--ui-scale));
-  padding: calc(6px * var(--ui-scale)) calc(8px * var(--ui-scale));
-  border-bottom: var(--oc-border-width) solid var(--border);
-  flex-shrink: 0;
-}
-
-.frontend-preview-url {
-  min-width: 0;
-  flex: 1 1 auto;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--text-soft);
-  font-family: var(--mono);
-  font-size: var(--ui-font-meta);
-  user-select: text;
-  -webkit-user-select: text;
-}
-
-.frontend-preview-frame {
-  flex: 1 1 0;
-  width: 100%;
-  min-height: 0;
-  border: 0;
-  /* The iframe paints whatever its `srcdoc` contains; the frame
-   * element itself only shows in the brief moment before the doc
-   * loads or around the doc's body margin. Use the active theme's
-   * canvas surface so it does not flash bright-white inside dark
-   * themes (regression: pre-fix this was hard-coded `white`). */
-  background: var(--surface-inset);
-}
-
-.frontend-preview-empty {
-  flex: 1 1 0;
-  display: grid;
-  place-items: center;
-  padding: calc(18px * var(--ui-scale));
-  color: var(--text-muted);
-  text-align: center;
-  line-height: 1.5;
-}
-
-.frontend-preview-empty[data-kind="error"] {
-  color: var(--bad);
 }
 
 /* Section content rails: icon (16x16, accent-on-open), title text

@@ -12,7 +12,6 @@ describe("legacy delivery evidence arbiter", () => {
       status: "failed",
       summary: "Runtime readiness failed.",
       failedCheckCount: 0,
-      failedRuntimeFlowCount: 0,
       failedReviewCount: 0,
       failureDetails: [
         {
@@ -68,17 +67,15 @@ describe("legacy delivery evidence arbiter", () => {
         summary: "Evidence passed 0 required check(s).",
         failedCheckIds: [],
         failedCoverageIds: [],
-        failedRuntimeFlowIds: [],
         failedReviewIds: [],
       },
       failedCoverageIds: ["goal:gol_one"],
-      failedRuntimeFlowIds: ["runtime:web:."],
-      failedReviewIds: ["specialist:visual_runtime"],
+      failedReviewIds: ["specialist:security_data"],
       functionalAssessment: {
         status: "incomplete",
         summary: "Functional completion evidence failed.",
         primaryFailureIds: ["goal:gol_one"],
-        auxiliaryFailureIds: ["runtime:web:.", "specialist:visual_runtime"],
+        auxiliaryFailureIds: ["specialist:security_data"],
       },
     })
 

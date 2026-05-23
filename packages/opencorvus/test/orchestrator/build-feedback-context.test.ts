@@ -45,24 +45,6 @@ describe("orchestrator build feedback context", () => {
           checkResults: [],
           goalCoverage: [],
           requirementCoverage: [],
-          runtimeFlows: [
-            {
-              id: "runtime:web:.",
-              name: "Web runtime render",
-              status: "failed",
-              evidence: [
-                "rendered body.innerText length=100 < threshold 120",
-                "DOM descendants count is 43, below required threshold 50",
-              ],
-              screenshotPath: "D:/tmp/rendered.png",
-              dom: {
-                textLength: 100,
-                nodeCount: 43,
-                hasBodyChildren: true,
-                isEmptyRootShell: false,
-              },
-            },
-          ],
           reviewEvidence: [
             {
               id: "review:contract_audit",
@@ -78,7 +60,6 @@ describe("orchestrator build feedback context", () => {
             summary: "Delivery evidence gate failed.",
             failedCheckIds: [],
             failedCoverageIds: [],
-            failedRuntimeFlowIds: ["runtime:web:."],
             failedReviewIds: ["review:contract_audit"],
           },
           timeCreated: now,
@@ -136,10 +117,10 @@ describe("orchestrator build feedback context", () => {
                 rejection_details: [
                   {
                     goal_id: goalID,
-                    category: "runtime",
-                    error: "dom_too_thin: textLength=100 nodeCount=43",
+                    category: "quality",
+                    error: "missing exported contract consumed by the calculator surface",
                     file: "src/index.html",
-                    suggestion: "Expose the exact DOM evidence to the executor.",
+                    suggestion: "Expose the exact contract evidence to the executor.",
                   },
                   {
                     category: "review",
@@ -157,16 +138,14 @@ describe("orchestrator build feedback context", () => {
         const taskScopeFeedback = await composeLatestDeliveryFeedbackForBuild({ taskID })
         expect(taskScopeFeedback).toContain("Acceptance review rejected the integrated deliverable")
         expect(taskScopeFeedback).toContain("Canonical delivery feedback packet")
-        expect(taskScopeFeedback).toContain("runtime:web:.")
         expect(taskScopeFeedback).toContain("review:contract_audit")
-        expect(taskScopeFeedback).toContain("dom_too_thin: textLength=100 nodeCount=43")
+        expect(taskScopeFeedback).toContain("missing exported contract consumed by the calculator surface")
         expect(taskScopeFeedback).toContain('all_rejection_detail_count": 2')
 
         const goalScopeFeedback = await composeLatestDeliveryFeedbackForBuild({ taskID, goalID })
         expect(goalScopeFeedback).toContain(`"goal_id": "${goalID}"`)
-        expect(goalScopeFeedback).toContain("dom_too_thin: textLength=100 nodeCount=43")
+        expect(goalScopeFeedback).toContain("missing exported contract consumed by the calculator surface")
         expect(goalScopeFeedback).not.toContain("contract audit found a missing exported surface")
-        expect(goalScopeFeedback).toContain("runtime:web:.")
       },
     })
   })

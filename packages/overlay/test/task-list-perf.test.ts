@@ -85,9 +85,6 @@ test(
         if (path === "/global/tasks" || path === "/tasks") return send({ tasks })
         if (path === "/executor") return send([])
         if (path === "/terminal/profiles" || path === "/coding/cli/profiles") return send({ profiles: [] })
-        if (path === "/preview/frontend") {
-          return send({ url: null, source: null, port: null, checkedPorts: [], reason: "not_detected" })
-        }
         if (path === "/path") return send({ directory: "D:/perf/workspace", exists: true, git: true })
         if (path === "/vcs") return send({ branch: "main", dirty: false })
         if (path === "/provider") return send({ all: [], connected: [], default: {} })

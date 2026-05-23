@@ -27,10 +27,11 @@ required facet listed in the prompt:
 
 - Use `query_metric_trajectory` before deciding; it is supporting evidence, not
   a verdict.
-- For frontend/runtime surfaces, call `start_frontend_preview`, then inspect the
-  returned URL with `verify_page_integrity` and/or `screenshot`.
-- For visual/reference surfaces, use runtime evidence and, when image artifacts
-  are present, `compare_visual_artifacts`.
+- For frontend/runtime surfaces, start the dev server with `run_command` (or
+  point at an already running one), then inspect the live URL with
+  `verify_page_integrity` and/or `screenshot`.
+- For visual/reference surfaces, use the live URL evidence above and, when
+  image artifacts are present, `compare_visual_artifacts`.
 - For non-frontend runtime surfaces, use `run_command` from the repository root
   to invoke the public entry point or focused verification command.
 - For file/config/library/docs work, inspect the relevant files and run the

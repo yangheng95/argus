@@ -6,7 +6,6 @@ import { Instance } from "@/project/instance"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { collectMainWorktreeDiff, readBaselineCommitFromMetadata } from "@/engine/workspace-export"
 import { clip } from "./types"
-import { computeRuntimeEvidence } from "./runtime-evidence"
 import { commandGroups, discoverPackageRoot, discoverChecks, resolveConfig, resolvedChecks } from "./discovery"
 import { detectDeliverySurfaces } from "../surface-detector"
 import type { DeliverySurfaceManifest } from "../surface-detector"
@@ -15,9 +14,7 @@ import { buildContractAuditReviewEvidence, type ContractAuditCriteriaStatus } fr
 import { runBackendApiReview, runClientContractReview } from "../specialists/backend-client"
 import { runSecurityDataReview } from "../specialists/security-data"
 import type { AcceptanceSpec } from "@/acceptance/types"
-import { ensureProjectReadyForRuntime, type ProjectRuntimeReadiness } from "./runtime-readiness"
-import { ManagedPreviewStartError, startManagedPreview } from "@/preview/managed"
-import type { ManagedPreviewSession } from "@/preview/session"
+import { ensureProjectReadyForRuntime } from "./runtime-readiness"
 import type { EvaluatorCommand } from "./types"
 import {
   createManifestId,
@@ -32,7 +29,6 @@ import {
   type DeliveryManifestFunctionalAssessment,
   type DeliveryRequiredCheck,
   type DeliveryReviewEvidence,
-  type DeliveryRuntimeFlowResult,
 } from "../manifest"
 import type { DeliverySpecialistReview } from "../specialist-review"
 import type { ReviewStreamStep } from "@/review/stream"
@@ -105,7 +101,6 @@ export async function buildDeliveryEvidenceManifest(input: {
     failedReadinessIds,
     failedCheckIds: [],
     failedCoverageIds,
-    failedRuntimeFlowIds: [],
     failedReviewIds: [],
     specialistReviews: [],
   })
@@ -118,19 +113,6 @@ export async function buildDeliveryEvidenceManifest(input: {
             "Skipped because delivery completion or runtime readiness evidence failed before auxiliary programmatic checks.",
           ),
         )
-  const runtimeFlows =
-    preRuntimeAssessment.status === "complete"
-      ? await runRuntimeFlows({
-          taskID: input.taskID,
-          iteration: input.iteration ?? 0,
-          surfaceManifest,
-          goals: input.goals,
-          metadata: input.metadata,
-          runtimeReadiness,
-          progress: input.progress,
-        })
-      : []
-  const failedRuntimeFlowIds = runtimeFlows.filter((item) => item.status === "failed").map((item) => item.id)
   input.progress?.({ currentStep: "specialist", summary: "Running delivery specialist reviews." })
   const specialistReviews = await runSpecialistReviews({
     taskID: input.taskID,
@@ -140,7 +122,6 @@ export async function buildDeliveryEvidenceManifest(input: {
     surfaceManifest,
     requiredChecks,
     checkResults,
-    runtimeFlows,
     goals: input.goals ?? [],
     progress: input.progress,
   })
@@ -171,7 +152,6 @@ export async function buildDeliveryEvidenceManifest(input: {
     checkResults,
     goalCoverage: coverage.goalCoverage,
     requirementCoverage: coverage.requirementCoverage,
-    runtimeFlows,
     reviewEvidence,
     surfaceManifest,
     specialistReviews,
@@ -182,7 +162,6 @@ export async function buildDeliveryEvidenceManifest(input: {
       failedReadinessIds: [],
       failedCheckIds: [],
       failedCoverageIds: [],
-      failedRuntimeFlowIds: [],
       failedReviewIds: [],
     },
     timeCreated: Date.now(),
@@ -194,7 +173,6 @@ export async function buildDeliveryEvidenceManifest(input: {
     failedReadinessIds,
     failedCheckIds: checks.failedCheckIds,
     failedCoverageIds,
-    failedRuntimeFlowIds,
     failedReviewIds,
     specialistReviews,
   })
@@ -203,7 +181,6 @@ export async function buildDeliveryEvidenceManifest(input: {
     checks,
     failedReadinessIds,
     failedCoverageIds,
-    failedRuntimeFlowIds,
     failedReviewIds,
     functionalAssessment,
   })
@@ -222,7 +199,6 @@ async function runRequiredChecks(taskID: string | undefined, requiredChecks: Del
  * Blocking criteria — these failures mean delivery completion is not proven:
  *   - failedReadinessIds: merged trunk cannot prove its declared runtime.
  *   - failedCoverageIds: blocking goals without acceptance specs.
- *   - failedRuntimeFlowIds: requested frontend/runtime surfaces did not render.
  *   - review:contract_audit: declared cross-goal contracts are broken.
  *
  * Advisory criteria — integrity acceptance review weighs these in context and
@@ -235,7 +211,6 @@ function assessFunctionalCompletion(input: {
   failedReadinessIds: string[]
   failedCheckIds: string[]
   failedCoverageIds: string[]
-  failedRuntimeFlowIds: string[]
   failedReviewIds: string[]
   specialistReviews: DeliverySpecialistReview[]
 }): DeliveryManifestFunctionalAssessment {
@@ -244,7 +219,6 @@ function assessFunctionalCompletion(input: {
   const primaryFailureIds = [
     ...input.failedReadinessIds,
     ...input.failedCoverageIds,
-    ...input.failedRuntimeFlowIds,
     ...blockingReviewIds,
   ]
   const auxiliaryFailureIds = [
@@ -276,7 +250,6 @@ async function runSpecialistReviews(input: {
   surfaceManifest: DeliverySurfaceManifest
   requiredChecks: DeliveryRequiredCheck[]
   checkResults: DeliveryCheckResult[]
-  runtimeFlows: DeliveryRuntimeFlowResult[]
   goals: Array<{
     id: string
     requirement_ids: string[]
@@ -291,14 +264,9 @@ async function runSpecialistReviews(input: {
   input.progress?.({ currentStep: "specialist", summary: "Reviewing client contract surface." })
   const clientReview = await runClientContractReview(input)
   if (clientReview) reviews.push(clientReview)
-  // Frontend and visual runtime are covered by the concrete runtime flow above.
-  // Keeping parallel specialist rows made delivery slower and duplicated failures.
   input.progress?.({ currentStep: "specialist", summary: "Reviewing security and data surface." })
   const securityReview = await runSecurityDataReview(input)
   if (securityReview) reviews.push(securityReview)
-  // Test command failures already appear under required checks. The deeper
-  // test_integration reviewer remains available as a direct specialist helper,
-  // but the default legacy evidence collector no longer runs it on every delivery.
   return reviews
 }
 
@@ -371,129 +339,6 @@ async function buildWorkspaceExportEvidence(input: {
           `exported_changed_files=${exportedChangedFiles.length}`,
           `baseline=${baseRef}`,
         ],
-  }
-}
-
-async function runRuntimeFlows(input: {
-  taskID?: string
-  iteration: number
-  surfaceManifest: DeliverySurfaceManifest
-  goals?: Array<{ acceptance_scenarios?: AcceptanceSpec[] }>
-  metadata?: Record<string, unknown>
-  runtimeReadiness: ProjectRuntimeReadiness
-  progress?: (event: { currentStep: ReviewStreamStep; summary?: string }) => void
-}): Promise<DeliveryRuntimeFlowResult[]> {
-  const flows: DeliveryRuntimeFlowResult[] = []
-  if (!input.surfaceManifest.surfaces.includes("frontend")) {
-    return flows
-  }
-  const root = input.surfaceManifest.projectRoot
-  const scenarios = (input.goals ?? [])
-    .flatMap((goal) => goal.acceptance_scenarios ?? [])
-    .filter((spec) => spec.scenario)
-  const id = `runtime:web:${path.relative(Instance.directory, root).replaceAll("\\", "/") || "."}`
-  let preview: Awaited<ReturnType<typeof resolveRuntimeFlowPreview>> | undefined
-  try {
-    input.progress?.({ currentStep: "runtime", summary: "Starting managed runtime preview." })
-    preview = await resolveRuntimeFlowPreview({
-      taskID: input.taskID,
-      projectDir: root,
-      metadata: input.metadata,
-      runtimeReadiness: input.runtimeReadiness,
-    })
-    input.progress?.({ currentStep: "runtime", summary: "Capturing runtime page evidence." })
-    const report = await computeRuntimeEvidence({
-      projectDir: root,
-      previewUrl: preview.url,
-      outDir: input.taskID
-        ? path.join(ProjectRuntimePaths.deliveryPaths(root, input.taskID).root, "runtime-flow", String(input.iteration))
-        : path.join(ProjectRuntimePaths.tasklessDeliveryPaths(root).runtimeFlow, String(input.iteration)),
-      viewport: { width: 1440, height: 900 },
-      scenarios,
-      progress: input.progress,
-    })
-    const baseViolations = report.violations.filter((item) => item.kind !== "walkthrough_failed")
-    flows.push({
-      id,
-      name: "Web Runtime Render",
-      status: baseViolations.length === 0 ? "passed" : "failed",
-      evidence:
-        baseViolations.length === 0
-          ? [
-              [
-                ...preview.evidence,
-                `rendered ${report.evidence.previewUrl ?? "live preview"}`,
-                `text=${report.evidence.dom?.textLength ?? "n/a"}`,
-                `nodes=${report.evidence.dom?.nodeCount ?? "n/a"}`,
-                report.evidence.interaction
-                  ? `interactions=${report.evidence.interaction.attemptedInteractionCount}/${report.evidence.interaction.visibleControlCount}`
-                  : undefined,
-              ]
-                .filter(Boolean)
-                .join(" "),
-            ]
-          : [...preview.evidence, ...baseViolations.map((item) => `${item.kind}: ${item.detail}`)],
-      screenshotPath: report.evidence.renderedPngPath,
-      previewUrl: report.evidence.previewUrl,
-      dom: report.evidence.dom,
-      interaction: report.evidence.interaction,
-    })
-    for (const walkthrough of report.evidence.walkthroughs ?? []) {
-      flows.push({
-        id: `runtime:web:scenario:${walkthrough.specId}`,
-        name: `Web Runtime Scenario: ${walkthrough.scenarioTitle}`,
-        status: walkthrough.passed ? "passed" : "failed",
-        evidence: walkthrough.evidence,
-        screenshotPath: walkthrough.screenshotPath,
-        previewUrl: report.evidence.previewUrl,
-      })
-    }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    flows.push({
-      id,
-      name: "Web Runtime Render",
-      status: "failed",
-      evidence: [`runtime_flow_error: ${message}`],
-    })
-  } finally {
-    await preview?.dispose()
-  }
-  return flows
-}
-
-async function resolveRuntimeFlowPreview(input: {
-  taskID?: string
-  projectDir: string
-  metadata?: Record<string, unknown>
-  runtimeReadiness: ProjectRuntimeReadiness
-}): Promise<{ url: string; evidence: string[]; dispose: () => Promise<void> }> {
-  let session: ManagedPreviewSession | undefined
-  try {
-    const preview = await startManagedPreview({
-      taskID: input.taskID,
-      workspaceDir: input.projectDir,
-      projectRoot: input.projectDir,
-      metadata: input.metadata,
-      readiness: input.runtimeReadiness,
-    })
-    session = preview.session
-  } catch (error) {
-    if (error instanceof ManagedPreviewStartError) {
-      throw new Error(error.evidence.join(" | "))
-    }
-    throw error
-  }
-  if (!session) {
-    throw new Error("preview_session_not_ready: managed preview session was not created")
-  }
-  if (session.status !== "ready" || !session.url) {
-    throw new Error(`preview_session_not_ready: status=${session.status} reason=${session.reason ?? "none"}`)
-  }
-  return {
-    url: session.url,
-    evidence: session.evidence,
-    dispose: async () => {},
   }
 }
 

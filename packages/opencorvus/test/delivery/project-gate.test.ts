@@ -12,8 +12,6 @@ import {
   ensureProjectReadyForRuntime,
   runtimeReadinessInstallCommand,
 } from "../../src/delivery/checks/runtime-readiness"
-import { runtimeInteractionViolations } from "../../src/delivery/checks/runtime-evidence"
-import { stopAllManagedPreviewSessions } from "../../src/preview/session"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { recordIntegrityAttempt } from "../../src/engine/persist"
 import { Database } from "../../src/storage/db"
@@ -27,7 +25,6 @@ import {
 const tempDirs: string[] = []
 
 afterEach(async () => {
-  await stopAllManagedPreviewSessions()
   await Promise.all(tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })))
 })
 
@@ -379,7 +376,6 @@ console.log("lint scope ok", cwd())
       checkResults: [],
       goalCoverage: [],
       requirementCoverage: [],
-      runtimeFlows: [],
       reviewEvidence: [],
       changedFiles: ["src/app.ts"],
       finalGate: {
@@ -387,7 +383,6 @@ console.log("lint scope ok", cwd())
         summary: "stale caller verdict",
         failedCheckIds: [],
         failedCoverageIds: [],
-        failedRuntimeFlowIds: [],
         failedReviewIds: [],
       },
       timeCreated: Date.now(),
@@ -399,7 +394,6 @@ console.log("lint scope ok", cwd())
       failedReadinessIds: [],
       failedCheckIds: ["lint#1"],
       failedCoverageIds: [],
-      failedRuntimeFlowIds: [],
       failedReviewIds: [],
     })
   })
@@ -556,112 +550,6 @@ console.log("lint scope ok", cwd())
     })
   })
 
-  test("does not create runtime flows for non-frontend package metadata", async () => {
-    const dir = await packageFixture({
-      build: "bun -e \"console.log('build ok')\"",
-    })
-
-    const manifest = await Instance.provide({
-      directory: dir,
-      fn: () =>
-        buildDeliveryEvidenceManifest({
-          taskID: "tsk_no_runtime",
-          runID: "run_no_runtime",
-          deliveryID: "dlv_no_runtime",
-          changedFiles: ["src/app.ts"],
-        }),
-    })
-
-    expect(manifest.runtimeFlows).toEqual([])
-    expect(manifest.finalGate.failedRuntimeFlowIds).toEqual([])
-  })
-
-  test("starts the frontend dev script and captures runtime flow evidence", async () => {
-    const dir = await packageFixture(
-      { dev: "bun scripts/dev-server.ts" },
-      {
-        dependencies: { react: "latest" },
-        files: {
-          "src/App.tsx": "export function App() { return <main>Calculator</main> }\n",
-          "scripts/dev-server.ts": `
-const rows = Array.from({ length: 80 }, (_, index) => "<li>Runtime calculator row " + index + ": keys, functions, history, display, and controls are visible.</li>").join("");
-const server = Bun.serve({
-  port: 0,
-  hostname: "127.0.0.1",
-  fetch() {
-    return new Response("<!doctype html><html><body><main><h1>Scientific Calculator</h1><ol>" + rows + "</ol></main></body></html>", {
-      headers: { "content-type": "text/html; charset=utf-8" },
-    });
-  },
-});
-console.log("Local: http://127.0.0.1:" + server.port + "/");
-await new Promise(() => {});
-`,
-        },
-      },
-    )
-
-    const manifest = await Instance.provide({
-      directory: dir,
-      fn: () =>
-        buildDeliveryEvidenceManifest({
-          taskID: "tsk_runtime_managed_preview",
-          runID: "run_runtime_managed_preview",
-          deliveryID: "dlv_runtime_managed_preview",
-          changedFiles: ["src/App.tsx"],
-        }),
-    })
-
-    expect(manifest.surfaceManifest?.surfaces).toContain("frontend")
-    expect(manifest.surfaceManifest?.surfaces).toContain("visual_runtime")
-    expect(manifest.runtimeFlows).toMatchObject([
-      {
-        id: "runtime:web:.",
-        name: "Web Runtime Render",
-        status: "passed",
-      },
-    ])
-    expect(manifest.runtimeFlows[0]?.evidence.join("\n")).toContain("managed_preview_command=bun run dev")
-    expect(manifest.runtimeFlows[0]?.previewUrl).toMatch(/^http:\/\/127\.0\.0\.1:\d+\//)
-    expect(manifest.finalGate.failedRuntimeFlowIds).toEqual([])
-    expect(manifest.finalGate.status).toBe("passed")
-  }, 60_000)
-
-  test("attaches surface manifest and fails frontend runtime classification when no dev script exists", async () => {
-    const dir = await packageFixture(
-      { build: 'bun -e "process.exit(1)"' },
-      {
-        dependencies: { react: "latest" },
-        files: {
-          "src/App.tsx": "export function App() { return <main /> }\n",
-        },
-      },
-    )
-
-    const manifest = await Instance.provide({
-      directory: dir,
-      fn: () =>
-        buildDeliveryEvidenceManifest({
-          taskID: "tsk_surface_runtime",
-          runID: "run_surface_runtime",
-          deliveryID: "dlv_surface_runtime",
-          changedFiles: ["src/App.tsx"],
-        }),
-    })
-
-    expect(manifest.surfaceManifest?.surfaces).toEqual(["frontend", "visual_runtime"])
-    expect(manifest.runtimeFlows).toMatchObject([
-      {
-        id: "runtime:web:.",
-        name: "Web Runtime Render",
-        status: "failed",
-      },
-    ])
-    expect(manifest.runtimeFlows[0]?.evidence[0]).toContain("no_preview_start_script")
-    expect(manifest.finalGate.failedRuntimeFlowIds).toEqual(["runtime:web:."])
-    expect(manifest.finalGate.status).toBe("failed")
-  })
-
   test("runs security data review for security-sensitive files and blocks concrete flaws", async () => {
     const dir = await packageFixture(
       {},
@@ -757,35 +645,6 @@ await new Promise(() => {});
     ).toContain("missing_declared_files=src/app.ts")
   })
 
-  test("requires observable browser interaction for structured runtime scenarios", () => {
-    expect(runtimeInteractionViolations(undefined).map((item) => item.kind)).toEqual([
-      "interaction_required_but_missing",
-    ])
-    expect(
-      runtimeInteractionViolations({
-        visibleControlCount: 2,
-        textInputCount: 1,
-        fileInputCount: 0,
-        attemptedInteractionCount: 2,
-        textChanged: false,
-        htmlChanged: false,
-        errorCount: 0,
-        errors: [],
-      }).map((item) => item.kind),
-    ).toEqual(["interaction_probe_failed"])
-    expect(
-      runtimeInteractionViolations({
-        visibleControlCount: 2,
-        textInputCount: 1,
-        fileInputCount: 0,
-        attemptedInteractionCount: 2,
-        textChanged: true,
-        htmlChanged: false,
-        errorCount: 0,
-        errors: [],
-      }),
-    ).toEqual([])
-  })
 })
 
 async function packageFixture(
@@ -884,7 +743,6 @@ function manifestWithFailures(input: {
     ],
     goalCoverage: [],
     requirementCoverage: [],
-    runtimeFlows: [],
     reviewEvidence: [],
     changedFiles: ["src/app.ts"],
     finalGate: {
@@ -892,7 +750,6 @@ function manifestWithFailures(input: {
       summary: "failed",
       failedCheckIds: ["lint#1"],
       failedCoverageIds: input.failedCoverageIds,
-      failedRuntimeFlowIds: [],
       failedReviewIds: [],
     },
     timeCreated: Date.now(),

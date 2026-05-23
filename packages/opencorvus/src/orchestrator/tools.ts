@@ -797,7 +797,6 @@ export async function composeLatestDeliveryFeedbackForBuild(input: {
   const deliveryID = verdictArtifact.delivery_id ?? undefined
   const manifest = deliveryID ? findLatestDeliveryEvidenceManifest({ deliveryID }) : undefined
   const manifestFailureDetails = manifest ? formatDeliveryManifestFailureDetails(manifest) : []
-  const failedRuntimeFlowIds = new Set(manifest?.finalGate.failedRuntimeFlowIds ?? [])
   const failedReviewIds = new Set(manifest?.finalGate.failedReviewIds ?? [])
   const packet = {
     verdict_artifact_id: verdictArtifact.id,
@@ -816,9 +815,6 @@ export async function composeLatestDeliveryFeedbackForBuild(input: {
           iteration: manifest.iteration,
           finalGate: manifest.finalGate,
           failureDetails: deliveryManifestFailureDetails(manifest),
-          runtimeFlows: manifest.runtimeFlows.filter(
-            (flow) => flow.status === "failed" || failedRuntimeFlowIds.has(flow.id),
-          ),
           reviewEvidence: manifest.reviewEvidence.filter(
             (review) => review.status === "failed" || failedReviewIds.has(review.id),
           ),
@@ -4991,8 +4987,7 @@ export function createOrchestratorTools(input: {
             // Visual feedback closure-loop: when delivery rejected on visual
             // grounds, attach the previous rendered.png so the build LLM
             // physically compares its output to the user reference instead of
-            // re-painting from text alone. The path is the same one the
-            // delivery service writes via runtime-evidence.
+            // re-painting from text alone.
             const retryAttachments = await loadLatestRenderedRetryAttachment({
               taskID,
               enabled: retryEntries.length > 0 || Boolean(deliveryFeedback),

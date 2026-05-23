@@ -147,7 +147,7 @@ Each build attempt gets its own worktree (path written to `engine_artifact[kind=
 
 ## Data flow and model
 
-Execution process data is merged into the single `engine_artifact` table (one of 13 tables), with `kind` distinguishing semantics: `run` · `goal_run_attempt` · `delivery` · `verification-evidence` · `evaluation` · `verdict` · `patch` · `changed_file` · `diff` · `log` · `report` · `image` · `link` · `git_ref` · `pr` · `integrity_attempt` · `prosecutor_attempt` · `delivery_evidence_manifest` · `delivery_surface_manifest` · `delivery_specialist_review` · `delivery_verification_threw` · `delivery_preview` · `architect_contract_graph` · `orchestrator-stream-error`.
+Execution process data is merged into the single `engine_artifact` table (one of 13 tables), with `kind` distinguishing semantics: `run` · `goal_run_attempt` · `delivery` · `verification-evidence` · `evaluation` · `verdict` · `patch` · `changed_file` · `diff` · `log` · `report` · `image` · `link` · `git_ref` · `pr` · `integrity_attempt` · `prosecutor_attempt` · `delivery_evidence_manifest` · `delivery_surface_manifest` · `delivery_specialist_review` · `delivery_verification_threw` · `architect_contract_graph` · `orchestrator-stream-error`.
 
 See [Goal / Run / Task](./goal-run-task.md).
 

@@ -115,13 +115,11 @@ export namespace ProjectRuntimePaths {
 
   export function tasklessDeliveryPaths(projectDir: string): {
     root: string
-    runtimeFlow: string
     checkWorkspaces: string
   } {
     const root = path.join(projectRuntimeRoot(projectDir), "delivery", "no-task")
     return {
       root,
-      runtimeFlow: path.join(root, "runtime-flow"),
       checkWorkspaces: path.join(root, "check-workspaces"),
     }
   }

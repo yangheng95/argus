@@ -270,13 +270,11 @@ test("panel header controls collapse side panes to message-adjacent rails", asyn
       const sidebarTitle = document.querySelector<HTMLElement>(".sidebar-title")!.getBoundingClientRect();
       const left = document.querySelector<HTMLElement>('[data-ui="sidebar-header-collapse-toggle"]')!.getBoundingClientRect();
       const sectionsHeader = document.querySelector<HTMLElement>(".sections-header")!.getBoundingClientRect();
-      const sectionsTabs = document.querySelector<HTMLElement>("#solidRightPanelTabs")!.getBoundingClientRect();
       const right = document.querySelector<HTMLElement>('[data-ui="right-panel-header-collapse-toggle"]')!.getBoundingClientRect();
       return {
         leftInsideSidebarHeader: left.left >= sidebarHeader.left && left.right <= sidebarHeader.right,
         leftBeforeTitle: left.right <= sidebarTitle.left,
         rightInsideSectionsHeader: right.left >= sectionsHeader.left && right.right <= sectionsHeader.right,
-        rightAfterTabs: right.left >= sectionsTabs.right,
         leftHeight: Math.round(left.height),
         rightHeight: Math.round(right.height),
         leftWidth: Math.round(left.width),
@@ -286,7 +284,6 @@ test("panel header controls collapse side panes to message-adjacent rails", asyn
     expect(headerPlacement.leftInsideSidebarHeader).toBe(true);
     expect(headerPlacement.leftBeforeTitle).toBe(true);
     expect(headerPlacement.rightInsideSectionsHeader).toBe(true);
-    expect(headerPlacement.rightAfterTabs).toBe(true);
     expect(headerPlacement.leftWidth).toBeLessThanOrEqual(28);
     expect(headerPlacement.rightWidth).toBeLessThanOrEqual(28);
     expect(headerPlacement.leftHeight).toBeLessThanOrEqual(28);
@@ -342,7 +339,6 @@ test("panel header controls collapse side panes to message-adjacent rails", asyn
         leftToggle: measure('[data-ui="sidebar-header-collapse-toggle"]'),
         rightToggle: measure('[data-ui="right-panel-header-collapse-toggle"]'),
         sidebarTitleVisible: getComputedStyle(document.querySelector<HTMLElement>(".sidebar-title")!).display !== "none",
-        sectionsTabsVisible: getComputedStyle(document.querySelector<HTMLElement>(".sections-tabs")!).display !== "none",
         dockLeftControlExists: exists('.workspace-command-dock [data-ui="workspace-left-panel-toggle"]'),
         dockRightControlExists: exists('.workspace-command-dock [data-ui="workspace-right-panel-toggle"]'),
       };
@@ -373,7 +369,6 @@ test("panel header controls collapse side panes to message-adjacent rails", asyn
     expect(collapsed.rightToggle.hidden).toBe(false);
     expect(collapsed.rightToggle.display).not.toBe("none");
     expect(collapsed.sidebarTitleVisible).toBe(false);
-    expect(collapsed.sectionsTabsVisible).toBe(false);
     expect(collapsed.dockLeftControlExists).toBe(false);
     expect(collapsed.dockRightControlExists).toBe(false);
 

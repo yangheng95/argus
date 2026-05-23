@@ -7,7 +7,6 @@
  * 消费者：
  *  - P0-A 自身：design-analyst 抓图后调用 captureReferenceManifest + enforceCaptureGate
  *  - P0-B (Stream C)：`chart_region_density` 硬门可消费 manifest.layout[] 的 bbox
- *  - P1-A (Stream E)：evaluator runtime-evidence 复用本模块的 puppeteer 抓图能力
  *  - P1-B (Stream F)：content-fingerprint 消费 reference_strings / palette / layout
  *
  * 契约要点：

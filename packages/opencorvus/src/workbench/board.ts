@@ -563,8 +563,6 @@ function viewBoardDelivery(
     | null
   const verdict = verdictPayload?.verdict
   const manifest = findLatestDeliveryEvidenceManifest({ deliveryID: row.id })
-  const previewSession = latestDeliveryPreviewSession(row.id)
-  const previewUrl = firstDeliveryPreviewUrl(manifest) ?? previewUrlFromSession(previewSession)
   const projectedStatus =
     verdict === "rejected"
       ? "failed"
@@ -578,8 +576,6 @@ function viewBoardDelivery(
     status: projectedStatus,
     verdict: verdict ?? undefined,
     verdictSummary: verdictPayload?.summary ? clipBoard(verdictPayload.summary) : undefined,
-    previewUrl,
-    previewSession,
     evidenceManifest: manifest
       ? {
           id: manifest.id,
@@ -595,7 +591,6 @@ function viewBoardDelivery(
           })),
           goalCoverage: manifest.goalCoverage,
           requirementCoverage: manifest.requirementCoverage,
-          runtimeFlows: manifest.runtimeFlows,
           reviewEvidence: manifest.reviewEvidence,
           checkResults: manifest.checkResults.map((item) => ({
             id: item.id,
@@ -633,47 +628,6 @@ function viewBoardDelivery(
       updated: row.time_updated,
     },
   }
-}
-
-function firstDeliveryPreviewUrl(manifest: ReturnType<typeof findLatestDeliveryEvidenceManifest>) {
-  return manifest?.runtimeFlows.find((flow) =>
-    typeof flow.previewUrl === "string" && flow.previewUrl.length > 0
-  )?.previewUrl
-}
-
-function latestDeliveryPreviewSession(deliveryID: string) {
-  const row = Database.use((db) =>
-    db.select().from(EngineArtifactTable)
-      .where(and(
-        eq(EngineArtifactTable.delivery_id, deliveryID),
-        eq(EngineArtifactTable.kind, "delivery_preview"),
-      ))
-      .orderBy(desc(EngineArtifactTable.time_created))
-      .get(),
-  )
-  const payload = row?.payload
-  if (!payload || typeof payload !== "object") return undefined
-  const item = payload as Record<string, unknown>
-  const status = typeof item.status === "string" ? item.status : undefined
-  if (!status) return undefined
-  return {
-    status,
-    url: typeof item.url === "string" ? item.url : undefined,
-    reason: typeof item.reason === "string" ? item.reason : undefined,
-    command: typeof item.command === "string" ? item.command : undefined,
-    workspaceDir: typeof item.workspace_dir === "string" ? item.workspace_dir : undefined,
-    evidence: Array.isArray(item.evidence)
-      ? item.evidence.filter((entry): entry is string => typeof entry === "string")
-      : [],
-    time: {
-      created: row.time_created,
-      updated: row.time_updated,
-    },
-  }
-}
-
-function previewUrlFromSession(session: ReturnType<typeof latestDeliveryPreviewSession>) {
-  return session?.status === "ready" && session.url ? session.url : undefined
 }
 
 function viewBoardEvaluation(

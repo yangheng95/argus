@@ -51,7 +51,6 @@ bun run build:overlay   # 生成平台安装包（.msi / .dmg / .deb）
 | **LogViewer** | 原始日志 | `src/components/LogViewer.tsx` |
 | **TaskProgressBar** / **GoalWorkflowGroup** | Goal 级并行进度（每个 goal 自带 worktree 行） | `src/components/TaskProgressBar.tsx` · `GoalWorkflowGroup.tsx` |
 | **WorkspacePanel** + **Workspace\*Launcher** | 工作区控制、外部 IDE / 终端 / coding CLI 启动 | `src/components/Workspace*.tsx` |
-| **FrontendPreviewPanel** | 前端实时预览（详见 `/preview/frontend`） | `src/components/FrontendPreviewPanel.tsx` |
 | **RequirementsPanel** / **ArchitectPanel** | requirements / architect agent 输出展示 | `src/components/*.tsx` |
 | **IntegrityCard** | Integrity reviewer 输出 | `src/components/IntegrityCard.tsx` |
 | **EvaluationCriteriaPanel** | Delivery 验收准则与证据 | `src/components/EvaluationCriteriaPanel.tsx` |

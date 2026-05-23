@@ -72,7 +72,7 @@ export function StatusBadge(props: StatusBadgeProps) {
 //
 // Visual primitive `.verdict-pill` is shared with IntegrityCard.
 
-type DeliveryEvidenceKind = "check" | "runtime" | "review";
+type DeliveryEvidenceKind = "check" | "review";
 
 interface DeliveryEvidenceRow {
   id: string;
@@ -101,11 +101,7 @@ function deliveryEvidenceGroup(
   const manifest = delivery?.evidenceManifest;
   if (!manifest) return [];
   const source: any[] | undefined =
-    kind === "check"
-      ? manifest.checkResults
-      : kind === "runtime"
-        ? manifest.runtimeFlows
-        : manifest.reviewEvidence;
+    kind === "check" ? manifest.checkResults : manifest.reviewEvidence;
   if (!Array.isArray(source)) return [];
   // No `.slice(0, N)` cap — the operator must see every failed row, not the
   // first 12. Per-group volume is naturally bounded by the manifest schema
@@ -266,7 +262,6 @@ export function DeliveryPanel(props: DeliveryPanelProps) {
     () => summaryText().split("\n").length > DEFAULT_SUMMARY_LINES,
   );
   const checks = createMemo(() => deliveryEvidenceGroup(props.delivery, "check"));
-  const runtime = createMemo(() => deliveryEvidenceGroup(props.delivery, "runtime"));
   const reviews = createMemo(() => deliveryEvidenceGroup(props.delivery, "review"));
   const filesChanged = createMemo(
     () => (props.delivery?.result?.changedFiles?.length as number | undefined) ?? 0,
@@ -325,11 +320,6 @@ export function DeliveryPanel(props: DeliveryPanelProps) {
           label={t("delivery.checks")}
           kind="check"
           rows={checks()}
-        />
-        <DeliveryEvidenceGroup
-          label={t("delivery.runtime")}
-          kind="runtime"
-          rows={runtime()}
         />
         <DeliveryEvidenceGroup
           label={t("delivery.reviews")}

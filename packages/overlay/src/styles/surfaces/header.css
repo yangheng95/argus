@@ -49,18 +49,6 @@
   width: 100%;
 }
 
-.sections-tabs {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.sections-tabs,
-.sections-tabs.oc-surface-header__actions {
-  width: 100%;
-  gap: var(--oc-header-actions-padding);
-  padding: var(--oc-header-actions-padding);
-}
-
 .panel-header-collapse-mount {
   display: inline-flex;
   align-items: center;
