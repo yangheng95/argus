@@ -81,6 +81,10 @@ because the supervisor prompt had no replay memory and every stream said
 - `recordIntegrityAttempt` must materialize `payload.attempts` from the same
   ordered artifact list used by replay rendering, avoiding a second counter
   source for stream, UI, and completion consumers.
+- Legacy `packages/opencorvus/src/integrity/agent.ts` has zero production
+  import call sites after grep. This PR retires that team-less implementation
+  and its dimension-only support files instead of carrying a replay
+  compatibility path.
 
 Non-goals:
 
@@ -150,8 +154,8 @@ rg -n "reviewIntegrity\(|runIntegrityReviewOnce|findLatestIntegrityAttemptArtifa
 
 | Location | Current behavior | Required change |
 | -------- | ---------------- | --------------- |
-| `packages/opencorvus/src/integrity/agent.ts:373` | Legacy same-name function, not exported by `integrity/index.ts`. | Do not add replay compatibility to this old path. Before implementation, confirm no active source import remains; if only legacy tests use it, retire/delete in a separate cleanup rather than dual-wiring. |
-| `packages/opencorvus/test/integrity/agent.test.ts:*` | Tests import `../../src/integrity/agent`, the legacy implementation. | Not a replay-aware team-agent test. Do not update these as if they covered the active path; either leave until legacy removal or delete with the legacy file in a separate change. |
+| `packages/opencorvus/src/integrity/agent.ts:373` | Legacy same-name function, not exported by `integrity/index.ts`; grep found no production import callers. | Delete this old path in this PR so replay wiring has one active source. |
+| `packages/opencorvus/test/integrity/agent.test.ts:*` | Tests import `../../src/integrity/agent`, the legacy implementation. | Delete with the legacy file; active coverage belongs to `team-agent` and `team-schema` tests. |
 | `packages/opencorvus/test/orchestrator/tools.test.ts:65,105,1543,...` | Mocks `@/integrity.reviewIntegrity`. | Add assertions that orchestrator passes `replayContext.attemptNumber`, prior findings, and changed files since last review. |
 | `packages/opencorvus/test/integrity/team-schema.test.ts:34` | Uses `attempts: 1` payload fixture. | Add a payload fixture for `attempts: 2`; schema itself already permits positive integers. |
 | `packages/opencorvus/test/server/task-conversation-routes.test.ts:78` | Event fixture has `attempts: 1`. | Keep if testing first attempt; add/adjust only if route behavior should display attempt #2. |

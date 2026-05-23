@@ -661,20 +661,22 @@ describe("core prompt hygiene", () => {
 
   test("integrity prompt audits original request mining, not only generated REQ rows", async () => {
     const integrity = await readPrompt("integrity")
+    const integrityTeam = await Bun.file(path.join(coreDir, "integrity-team-core.txt")).text()
     const orchestrator = await readPrompt("orchestrator")
     const architect = await readPrompt("architect")
-    const dimensions = await readSource("integrity/dimensions.ts")
-    const agent = await readSource("integrity/agent.ts")
+    const agent = await readSource("integrity/team-agent.ts")
 
-    for (const text of [integrity, dimensions, agent]) {
+    for (const text of [integrity, integrityTeam]) {
       const normalized = text.replace(/\s+/g, " ")
       const lower = normalized.toLowerCase()
       expect(lower).toContain("original user request")
       expect(lower).toContain("generated req rows")
       expect(lower).toContain("evidence")
-      expect(lower).toContain("audit universe")
-      expect(lower).toContain("requirements extraction")
     }
+    expect(agent).toContain("renderUserRequestSection")
+    expect(agent).toContain("buildIntegrityEvidencePrompt")
+    expect(integrity.toLowerCase()).toContain("audit universe")
+    expect(integrity.toLowerCase()).toContain("requirements extraction")
     expect(integrity).toContain("If the original request implies a requirement that has no corresponding REQ-N row")
     expect(integrity).toContain("leave `requirement_ids` empty")
     expect(orchestrator).toContain("late-stage requirements-mining and system-integrity review")
