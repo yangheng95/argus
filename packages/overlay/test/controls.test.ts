@@ -616,9 +616,6 @@ test(
         if (path === "/executor") return send(data.executors)
         if (path === "/terminal/profiles") return send({ profiles: [] })
         if (path === "/coding/cli/profiles") return send({ profiles: [] })
-        if (path === "/preview/frontend") {
-          return send({ url: null, source: null, port: null, checkedPorts: [], reason: "not_detected" })
-        }
         if (path === "/path") return send({ ...data.path, directory: projectDir(url) })
         if (path === "/vcs") return send(data.vcs)
         if (path === "/provider") return send(data.provider)

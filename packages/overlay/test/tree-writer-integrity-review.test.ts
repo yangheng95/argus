@@ -37,7 +37,6 @@ test("legacy delivery evidence remains pass-through and does not materialize a c
       status: "failed",
       summary: "Legacy evidence failed 1 required check.",
       failedCheckCount: 1,
-      failedRuntimeFlowCount: 0,
       failedReviewCount: 1,
       failureDetails: [
         {

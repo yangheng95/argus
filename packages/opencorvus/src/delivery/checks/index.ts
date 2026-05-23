@@ -32,13 +32,5 @@ export {
   type VisualDiffReport,
 } from "./visual"
 export {
-  computeRuntimeEvidence,
-  summarizeRuntimeViolations,
-  RUNTIME_EVIDENCE_THRESHOLDS,
-  type RuntimeEvidenceReport,
-  type RuntimeEvidenceViolation,
-  type RuntimeEvidenceViolationKind,
-} from "./runtime-evidence"
-export {
   buildDeliveryEvidenceManifest,
 } from "./project-gate"

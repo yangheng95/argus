@@ -103,7 +103,6 @@ test("panel header collapse controls shrink side panes to header rails", async (
         leftToggle: measure('[data-ui="sidebar-header-collapse-toggle"]'),
         rightToggle: measure('[data-ui="right-panel-header-collapse-toggle"]'),
         sidebarTitleVisible: getComputedStyle(document.querySelector<HTMLElement>(".sidebar-title")!).display !== "none",
-        sectionsTabsVisible: getComputedStyle(document.querySelector<HTMLElement>(".sections-tabs")!).display !== "none",
       };
     });
 
@@ -132,7 +131,6 @@ test("panel header collapse controls shrink side panes to header rails", async (
     expect(collapsed.rightToggle.hidden).toBe(false);
     expect(collapsed.rightToggle.display).not.toBe("none");
     expect(collapsed.sidebarTitleVisible).toBe(false);
-    expect(collapsed.sectionsTabsVisible).toBe(false);
 
     await page.click('[data-ui="sidebar-header-collapse-toggle"]');
     await page.click('[data-ui="right-panel-header-collapse-toggle"]');

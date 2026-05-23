@@ -134,12 +134,6 @@ describe("delivery screenshot viewport", () => {
     expect(block).not.toContain("networkidle0")
   })
 
-  test("runtime evidence reuses runtime capture instead of opening a render path", async () => {
-    const source = await fs.readFile(path.resolve(import.meta.dir, "../../src/delivery/checks/runtime-evidence.ts"), "utf8")
-
-    expect(source).toContain("captureRuntimePage")
-    expect(source).not.toContain("renderPage")
-  })
 })
 
 async function serveHtml(html: string): Promise<string> {

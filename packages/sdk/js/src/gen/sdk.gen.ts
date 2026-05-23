@@ -135,7 +135,6 @@ import type {
   PermissionReplyErrors,
   PermissionReplyResponses,
   PermissionRuleset,
-  PreviewFrontendResponses,
   ProjectCurrentInitGitErrors,
   ProjectCurrentInitGitResponses,
   ProjectCurrentResponses,
@@ -4686,40 +4685,6 @@ export class Gateway extends HeyApiClient {
   }
 }
 
-export class Preview extends HeyApiClient {
-  /**
-   * Resolve live frontend preview URL
-   *
-   * Resolve a loopback HTTP frontend page for the active project without serving static HTML.
-   */
-  public frontend<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-      ports?: string
-      allowUnowned?: "true" | "false"
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "query", key: "directory" },
-            { in: "query", key: "ports" },
-            { in: "query", key: "allowUnowned" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).get<PreviewFrontendResponses, unknown, ThrowOnError>({
-      url: "/preview/frontend",
-      ...options,
-      ...params,
-    })
-  }
-}
-
 export class Server extends HeyApiClient {
   /**
    * Shutdown the server
@@ -8099,11 +8064,6 @@ export class OpencodeClient extends HeyApiClient {
   private _gateway?: Gateway
   get gateway(): Gateway {
     return (this._gateway ??= new Gateway({ client: this.client }))
-  }
-
-  private _preview?: Preview
-  get preview(): Preview {
-    return (this._preview ??= new Preview({ client: this.client }))
   }
 
   private _server?: Server

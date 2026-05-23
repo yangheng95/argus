@@ -23,7 +23,6 @@ import {
 } from "./components/PanelHeaderCollapseControl"
 import { TitlebarMenubar } from "./components/titlebar/TitlebarMenubar"
 import { ConnectionBadge } from "./components/ConnectionBadge"
-import { FrontendPreviewPanel } from "./components/FrontendPreviewPanel"
 import { ConversationAgentRail } from "./components/ConversationAgentRail"
 import { LogViewer } from "./components/LogViewer"
 import { WorkspacePanel } from "./components/WorkspacePanel"
@@ -60,7 +59,6 @@ import { SessionDialogHost } from "./components/SessionDialogHost"
 import { GoalDialogHost } from "./components/GoalDialogHost"
 import { ConfigDialogHost } from "./components/ConfigDialogHost"
 import { WorkspaceOnboardingDialog } from "./components/WorkspaceOnboardingDialog"
-import { Tab, Tabs } from "./components/ui/Tabs"
 import { waitForLogDrain, AppLog } from "./utils/log"
 import { teardownApp } from "./services/init"
 import { stopTimers } from "./services/sync"
@@ -81,13 +79,6 @@ import {
 } from "./services/workspace"
 import { openConfigDialog, openGoalDialog, renderAboutVersion, setupDialogBackdropClose } from "./services/dialog"
 import { cardTreeStore } from "./store/card-tree"
-import {
-  nextTabForPreviewResolution,
-  previewRequestKey,
-  resolveFrontendPreviewFromBoard,
-  type FrontendPreviewResolution,
-  type RightPanelTab,
-} from "./services/frontend-preview"
 
 // ── Module teardown ──
 // Centralised cleanup for top-level document/window listeners and Solid roots.
@@ -113,60 +104,12 @@ const listenerOpts = { signal: moduleTeardown.signal } as const
 // ── Application-level signals (shared across mount points) ──
 
 const [logOpen, setLogOpen] = createSignal(false)
-const [rightPanelTab, setRightPanelTab] = createSignal<RightPanelTab>("inspector")
-const [rightPanelManualKey, setRightPanelManualKey] = createSignal("")
-const [frontendPreviewResolution, setFrontendPreviewResolution] = createSignal<FrontendPreviewResolution | null>(null)
-const [frontendPreviewLoading, setFrontendPreviewLoading] = createSignal(false)
-const [frontendPreviewError, setFrontendPreviewError] = createSignal("")
-let frontendPreviewRequest = 0
 
 // ── Workspace (secondary panel, stacked above composer) state ──
 // workspaceOpen drives layout visibility; workspaceTarget is remembered across
 // open/close cycles so reopening restores the last active diff target.
 const [workspaceOpen, setWorkspaceOpen] = createSignal(false)
 const [workspaceTarget, setWorkspaceTarget] = createSignal<DiffTarget>({ filePath: "" })
-
-function currentPreviewKey(): string {
-  const taskID = boardStore.selectedTaskID || boardStore.board?.task?.id
-  if (!taskID || !boardStore.snapshotVersion) return previewRequestKey(undefined, undefined)
-  return previewRequestKey(taskID, boardStore.snapshotVersion)
-}
-
-function selectRightPanelTab(tab: RightPanelTab): void {
-  setRightPanelManualKey(currentPreviewKey())
-  setRightPanelTab(tab)
-}
-
-function refreshFrontendPreview(options: { manual?: boolean } = {}): void {
-  const key = currentPreviewKey()
-  const board = boardStore.board
-  const request = ++frontendPreviewRequest
-  if (options.manual) setRightPanelManualKey(key)
-  setFrontendPreviewLoading(true)
-  setFrontendPreviewError("")
-  void resolveFrontendPreviewFromBoard(board)
-    .then((resolution) => {
-      if (request !== frontendPreviewRequest || key !== currentPreviewKey()) return
-      setFrontendPreviewResolution(resolution)
-      setRightPanelTab((tab) =>
-        nextTabForPreviewResolution({
-          activeTab: tab,
-          manualKey: rightPanelManualKey(),
-          requestKey: key,
-          resolution,
-        }),
-      )
-    })
-    .catch((err) => {
-      if (request !== frontendPreviewRequest || key !== currentPreviewKey()) return
-      setFrontendPreviewError(err instanceof Error ? err.message : String(err))
-      setFrontendPreviewResolution(null)
-    })
-    .finally(() => {
-      if (request !== frontendPreviewRequest || key !== currentPreviewKey()) return
-      setFrontendPreviewLoading(false)
-    })
-}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value)
@@ -875,54 +818,6 @@ if (taskStatusMountEl) {
   render(() => <TaskStatusHeader />, taskStatusMountEl)
 }
 
-// ── Mount: Right panel Inspector / Preview tabs ──
-
-const rightPanelTabsEl = document.getElementById("solidRightPanelTabs")
-if (rightPanelTabsEl) {
-  render(
-    () => (
-      <Tabs size="sm" tone="neutral" aria-label={t("right_panel.tabs")} data-ui="right-tabs">
-        <Tab
-          active={rightPanelTab() === "inspector"}
-          size="sm"
-          tone="neutral"
-          onClick={() => selectRightPanelTab("inspector")}
-          data-ui="right-tab"
-        >
-          {t("right_panel.inspector")}
-        </Tab>
-        <Tab
-          active={rightPanelTab() === "preview"}
-          size="sm"
-          tone="neutral"
-          onClick={() => selectRightPanelTab("preview")}
-          data-ui="right-tab"
-        >
-          {t("right_panel.preview")}
-        </Tab>
-      </Tabs>
-    ),
-    rightPanelTabsEl,
-  )
-}
-
-const frontendPreviewMountEl = document.getElementById("solidFrontendPreviewMount")
-if (frontendPreviewMountEl) {
-  render(
-    () => (
-      <FrontendPreviewPanel
-        resolution={frontendPreviewResolution()}
-        loading={frontendPreviewLoading()}
-        error={frontendPreviewError()}
-        onRefresh={() => refreshFrontendPreview({ manual: true })}
-      />
-    ),
-    frontendPreviewMountEl,
-  )
-}
-
-let lastFrontendPreviewKey = ""
-
 disposers.push(
   createRoot((dispose) => {
     createEffect(() => {
@@ -952,37 +847,6 @@ disposers.push(
         .catch((err) => {
           AppLog.warn("main", "followup suggestion failed", err)
         })
-    })
-
-    createEffect(() => {
-      const active = rightPanelTab()
-      const inspector = document.getElementById("rightPanelInspector")
-      const preview = document.getElementById("rightPanelPreview")
-      inspector?.setAttribute("data-active", active === "inspector" ? "true" : "false")
-      preview?.setAttribute("data-active", active === "preview" ? "true" : "false")
-    })
-
-    createEffect(() => {
-      const taskID = boardStore.selectedTaskID || boardStore.board?.task?.id || ""
-      const snapshot = boardStore.snapshotVersion || ""
-      if (!taskID) {
-        lastFrontendPreviewKey = previewRequestKey(undefined, undefined)
-        setFrontendPreviewResolution(null)
-        setFrontendPreviewError("")
-        setFrontendPreviewLoading(false)
-        return
-      }
-      if (!snapshot) {
-        lastFrontendPreviewKey = previewRequestKey(undefined, undefined)
-        setFrontendPreviewResolution(null)
-        setFrontendPreviewError("")
-        setFrontendPreviewLoading(false)
-        return
-      }
-      const key = previewRequestKey(taskID, snapshot)
-      if (key === lastFrontendPreviewKey) return
-      lastFrontendPreviewKey = key
-      refreshFrontendPreview()
     })
 
     return dispose

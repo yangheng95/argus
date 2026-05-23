@@ -1378,11 +1378,10 @@ export const Event = {
       status: z.enum(["passed", "failed"]),
       summary: z.string(),
       failedCheckCount: z.number(),
-      failedRuntimeFlowCount: z.number(),
       failedReviewCount: z.number(),
       failureDetails: z.array(
         z.object({
-          kind: z.enum(["readiness", "check", "coverage", "runtime", "review"]),
+          kind: z.enum(["readiness", "check", "coverage", "review"]),
           id: z.string(),
           name: z.string(),
           status: z.string().optional(),
@@ -1393,18 +1392,6 @@ export const Event = {
       ),
     }),
     { tier: 3 },
-  ),
-  DeliveryPreviewUpdated: BusEvent.define(
-    "delivery.preview.updated",
-    z.object({
-      taskID: Identifier.schema("task"),
-      deliveryID: Identifier.schema("delivery"),
-      status: z.string(),
-      url: z.string().optional(),
-      reason: z.string().optional(),
-      command: z.string().optional(),
-      workspaceDir: z.string().optional(),
-    }),
   ),
   IntegrityReviewCompleted: BusEvent.define(
     "integrity.review.completed",

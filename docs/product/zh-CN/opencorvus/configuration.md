@@ -158,9 +158,9 @@ follow-up。只有设为 `true` 时，OpenCorvus 才会在证据明确且非重�
 
 任务级 tool 权限默认值（与 `permission.tool` 区别：前者影响新建任务时的快照默认，后者是项目持久规则）。
 
-### `preview` / `terminal`
+### `terminal`
 
-`preview`：前端实时预览配置（端口、wait timeout 等）。`terminal`：Workspace 外部终端 profile（命令、shell flag），用于"在系统终端打开 worktree"功能，详见 [Quickstart](../start/quickstart.md#workspace-与-terminal)。
+`terminal`：Workspace 外部终端 profile（命令、shell flag），用于"在系统终端打开 worktree"功能，详见 [Quickstart](../start/quickstart.md#workspace-与-terminal)。
 
 ## 配置加载顺序
 

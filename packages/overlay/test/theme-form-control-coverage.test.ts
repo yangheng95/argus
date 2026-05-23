@@ -92,13 +92,10 @@ describe("accent-color is declared once globally", () => {
   })
 })
 
-describe("no inspector iframe frame is hard-coded white", () => {
-  test(".frontend-preview-frame routes background through a token", () => {
+describe("frontend preview iframe shell is fully removed", () => {
+  test("inspector surface no longer carries the frontend-preview rule family", () => {
     const css = stripComments(readCss(join("surfaces", "inspector.css")))
-    const block = css.match(/\.frontend-preview-frame\s*{[^}]*}/)?.[0] ?? ""
-    // The fix uses var(--surface-inset); fail closed if the literal
-    // `white` returns or any non-`var()` background sneaks back in.
-    expect(block).not.toMatch(/background\s*:\s*white\b/)
-    expect(block).toMatch(/background\s*:\s*var\(/)
+    expect(css).not.toMatch(/\.frontend-preview-frame\s*{/)
+    expect(css).not.toMatch(/\.frontend-preview\s*{/)
   })
 })

@@ -157,8 +157,7 @@ export async function renderPage(opts: {
   renderedPath: string
   viewport: { width: number; height: number }
   size: { width: number; height: number }
-  /** DOM 实证指标：P1-A runtime-evidence 用来甄别「仅文本脚手架」类交付，
-   *  与 screenshot 同一轮 render 采集，避免下游再开一次 puppeteer（rule 22）。 */
+  /** DOM 实证指标：与 screenshot 同一轮 render 采集，避免下游再开一次 puppeteer（rule 22）。 */
   dom: {
     textLength: number
     nodeCount: number
@@ -185,7 +184,7 @@ export async function renderPage(opts: {
 
   const executablePath = await findBrowserExecutable(opts.browserExecutable)
   if (!/^https?:\/\//i.test(opts.rendered)) {
-    throw new Error(`renderPage: delivery rendering is URL-only; start the app or use the frontend preview resolver, then pass its http(s) URL. Received: ${opts.rendered}`)
+    throw new Error(`renderPage: delivery rendering is URL-only; start the app yourself, then pass its http(s) URL. Received: ${opts.rendered}`)
   }
   const target = opts.rendered
 

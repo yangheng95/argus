@@ -4,6 +4,521 @@ export type ClientOptions = {
   baseUrl: `${string}://${string}` | (string & {})
 }
 
+export type EventServerConnected = {
+  type: "server.connected"
+  properties: {
+    [key: string]: unknown
+  }
+}
+
+export type EventGlobalDisposed = {
+  type: "global.disposed"
+  properties: {
+    [key: string]: unknown
+  }
+}
+
+export type EventTuiPromptAppend = {
+  type: "tui.prompt.append"
+  properties: {
+    text: string
+  }
+}
+
+export type EventTuiCommandExecute = {
+  type: "tui.command.execute"
+  properties: {
+    command:
+      | "session.list"
+      | "session.new"
+      | "session.interrupt"
+      | "session.compact"
+      | "session.page.up"
+      | "session.page.down"
+      | "session.line.up"
+      | "session.line.down"
+      | "session.half.page.up"
+      | "session.half.page.down"
+      | "session.first"
+      | "session.last"
+      | "prompt.clear"
+      | "prompt.submit"
+      | "agent.cycle"
+      | string
+  }
+}
+
+export type EventTuiToastShow = {
+  type: "tui.toast.show"
+  properties: {
+    title?: string
+    message: string
+    variant: "info" | "success" | "warning" | "error"
+    /**
+     * Duration in milliseconds
+     */
+    duration?: number
+  }
+}
+
+export type EventTuiSessionSelect = {
+  type: "tui.session.select"
+  properties: {
+    /**
+     * Session ID to navigate to
+     */
+    sessionID: string
+  }
+}
+
+export type EventTaskCreated = {
+  type: "task.created"
+  properties: {
+    taskID: string
+    status: "queued" | "active" | "completed" | "failed" | "cancelled"
+    summary: string
+  }
+}
+
+export type EventTaskUpdated = {
+  type: "task.updated"
+  properties: {
+    taskID: string
+    status: "queued" | "active" | "completed" | "failed" | "cancelled"
+    summary: string
+  }
+}
+
+export type EventTaskCompleted = {
+  type: "task.completed"
+  properties: {
+    taskID: string
+    status: "queued" | "active" | "completed" | "failed" | "cancelled"
+    summary: string
+  }
+}
+
+export type EventTaskFailed = {
+  type: "task.failed"
+  properties: {
+    taskID: string
+    status: "queued" | "active" | "completed" | "failed" | "cancelled"
+    summary: string
+    error?: string
+  }
+}
+
+export type EventTaskCancelled = {
+  type: "task.cancelled"
+  properties: {
+    taskID: string
+    status: "queued" | "active" | "completed" | "failed" | "cancelled"
+    summary: string
+  }
+}
+
+export type EventSpecCreated = {
+  type: "spec.created"
+  properties: {
+    taskID: string
+    specID: string
+    summary: string
+  }
+}
+
+export type EventSpecUpdated = {
+  type: "spec.updated"
+  properties: {
+    taskID: string
+    specID: string
+    status: string
+    summary: string
+  }
+}
+
+export type EventSpecApproved = {
+  type: "spec.approved"
+  properties: {
+    taskID: string
+    specID: string
+    summary: string
+  }
+}
+
+export type EventPlanCreated = {
+  type: "plan.created"
+  properties: {
+    taskID: string
+    planID: string
+    summary: string
+  }
+}
+
+export type EventPlanActivated = {
+  type: "plan.activated"
+  properties: {
+    taskID: string
+    planID: string
+    summary: string
+  }
+}
+
+export type EventGoalProgress = {
+  type: "goal.progress"
+  properties: {
+    taskID: string
+    goalRunID: string
+    summary: string
+  }
+}
+
+export type EventGoalRunUpdated = {
+  type: "goal_run.updated"
+  properties: {
+    taskID: string
+    goalRunID: string
+    goalID: string
+    status: string
+    previousStatus: string
+    summary: string
+  }
+}
+
+export type EventGoalPassed = {
+  type: "goal.passed"
+  properties: {
+    taskID: string
+    goalID: string
+    summary: string
+  }
+}
+
+export type EventGoalFailed = {
+  type: "goal.failed"
+  properties: {
+    taskID: string
+    goalID: string
+    summary: string
+  }
+}
+
+export type EventTaskRewound = {
+  type: "task.rewound"
+  properties: {
+    taskID: string
+    cursorTime: number
+    anchorEventID?: string
+    reason?: string
+    rewindCount: number
+    resetWorktree: boolean
+    anchorKind: "cursorTime" | "message"
+  }
+}
+
+export type EventMilestoneActivated = {
+  type: "milestone.activated"
+  properties: {
+    taskID: string
+    milestoneID: string
+    summary: string
+  }
+}
+
+export type EventMilestonePassed = {
+  type: "milestone.passed"
+  properties: {
+    taskID: string
+    milestoneID: string
+    summary: string
+  }
+}
+
+export type EventMilestoneFailed = {
+  type: "milestone.failed"
+  properties: {
+    taskID: string
+    milestoneID: string
+    summary: string
+  }
+}
+
+export type EventRunCreated = {
+  type: "run.created"
+  properties: {
+    taskID: string
+    runID: string
+    status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
+    summary: string
+  }
+}
+
+export type EventRunUpdated = {
+  type: "run.updated"
+  properties: {
+    taskID: string
+    runID: string
+    status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
+    summary: string
+  }
+}
+
+export type EventInteractionRequested = {
+  type: "interaction.requested"
+  properties: {
+    taskID: string
+    runID?: string
+    interactionID: string
+    requestType: "permission" | "question"
+    summary: string
+  }
+}
+
+export type EventInteractionResolved = {
+  type: "interaction.resolved"
+  properties: {
+    taskID: string
+    runID?: string
+    interactionID: string
+    status: "pending" | "answered" | "rejected" | "expired"
+    summary: string
+  }
+}
+
+export type EventDeliveryReady = {
+  type: "delivery.ready"
+  properties: {
+    taskID: string
+    runID: string
+    deliveryID: string
+    summary: string
+  }
+}
+
+export type EventEvaluationCompleted = {
+  type: "evaluation.completed"
+  properties: {
+    taskID: string
+    runID: string
+    evaluationID: string
+    status: "pending" | "passed" | "failed" | "inconclusive"
+    verdict: "accepted" | "rejected" | "inconclusive"
+    summary: string
+  }
+}
+
+export type EventTaskMessage = {
+  type: "task.message"
+  properties: {
+    taskID: string
+    kind: "goal" | "plan" | "note"
+    source: string
+    text: string
+    summary: string
+  }
+}
+
+export type EventRunProgress = {
+  type: "run.progress"
+  properties: {
+    taskID: string
+    runID: string
+    type: string
+    summary: string
+    payload?: {
+      [key: string]: unknown
+    }
+  }
+}
+
+export type EventRunOutput = {
+  type: "run.output"
+  properties: {
+    taskID: string
+    runID: string
+    type: string
+    text: string
+  }
+}
+
+export type EventMessageInjected = {
+  type: "message.injected"
+  properties: {
+    taskID: string
+    runID: string
+    text: string
+    summary: string
+  }
+}
+
+export type EventWorkflowSelected = {
+  type: "workflow.selected"
+  properties: {
+    taskID: string
+    workflowID: string
+    workflowName: string
+    summary: string
+  }
+}
+
+export type EventWorkflowStepUpdated = {
+  type: "workflow.step.updated"
+  properties: {
+    taskID: string
+    stepID: string
+    goalID?: string
+    status: "pending" | "running" | "completed" | "skipped" | "failed"
+    summary: string
+  }
+}
+
+export type EventGoalWorkflowProgress = {
+  type: "goal.workflow.progress"
+  properties: {
+    taskID: string
+    goalID: string
+    completedSteps: number
+    totalSteps: number
+    currentStep?: string
+    summary: string
+  }
+}
+
+export type EventReviewStreamStarted = {
+  type: "review.stream.started"
+  properties: {
+    taskID: string
+    reviewID: string
+    phase: "integrity" | "delivery"
+    sessionID?: string
+  }
+}
+
+export type EventReviewStreamProgress = {
+  type: "review.stream.progress"
+  properties: {
+    taskID: string
+    reviewID: string
+    phase: "integrity" | "delivery"
+    currentStep: "manifest" | "runtime" | "visual" | "specialist" | "agent" | "post_repair"
+    attempt: number
+    elapsedMs: number
+    summary?: string
+  }
+}
+
+export type EventReviewStreamChunk = {
+  type: "review.stream.chunk"
+  properties: {
+    taskID: string
+    reviewID: string
+    phase: "integrity" | "delivery"
+    kind: "reasoning"
+    delta: string
+    attempt: number
+  }
+}
+
+export type EventDeliveryEvidenceUpdated = {
+  type: "delivery.evidence.updated"
+  properties: {
+    taskID: string
+    runID?: string
+    deliveryID: string
+    manifestID: string
+    iteration: number
+    status: "passed" | "failed"
+    summary: string
+    failedCheckCount: number
+    failedReviewCount: number
+    failureDetails: Array<{
+      kind: "readiness" | "check" | "coverage" | "review"
+      id: string
+      name: string
+      status?: string
+      command?: string
+      exitCode?: number
+      evidence: string
+    }>
+  }
+}
+
+export type EventIntegrityReviewCompleted = {
+  type: "integrity.review.completed"
+  properties: {
+    taskID: string
+    sessionID: string
+    verdict: "pass" | "concerns" | "needs_correction"
+    summary: string
+    dimensions: Array<{
+      id: "requirement_fidelity" | "technical_feasibility" | "hallucination" | "solution_quality"
+      verdict: "pass" | "concerns" | "needs_correction"
+      issueCount: number
+      correctionCount: number
+      graphCorrectionCount?: number
+      missingGoalCount: number
+    }>
+    issues: Array<{
+      type: string
+      description: string
+      requirement_ids?: Array<string>
+      spec_ids?: Array<string>
+    }>
+    corrections: Array<{
+      action: "modify" | "split" | "remove"
+      goalID: string
+      reason: string
+      updatesTitle?: string
+      updatesObjective?: string
+    }>
+    graphCorrections?: Array<{
+      kind: string
+      action: string
+      reason: string
+    }>
+    missingGoals: Array<{
+      title: string
+      objective: string
+      reason?: string
+    }>
+    acceptance: {
+      verdict: "accepted" | "rejected"
+      summary: string
+      startup_verification?: {
+        attempted: boolean
+        command?: string
+        success: boolean
+        output?: string
+      }
+      frontend_check?: {
+        attempted: boolean
+        renders_correctly?: boolean
+        issues?: Array<string>
+      }
+      deferred_checks: Array<{
+        name: string
+        result: "passed" | "failed" | "skipped" | "advisory_failed"
+        evidence: string
+      }>
+      tool_call_evidence: Array<{
+        tool: string
+        passed: boolean
+        detail: string
+      }>
+      rejection_details: Array<{
+        goal_id?: string
+        category: "build" | "test" | "lint" | "runtime" | "quality" | "startup" | "visual"
+        check_id?: string
+        file?: string
+        error: string
+        suggestion?: string
+        visual_spec_id?: string
+      }>
+      launch_command?: string
+    }
+    attempts: number
+  }
+}
+
 export type EventInstallationUpdated = {
   type: "installation.updated"
   properties: {
@@ -50,20 +565,6 @@ export type EventServerInstanceDisposed = {
   type: "server.instance.disposed"
   properties: {
     directory: string
-  }
-}
-
-export type EventServerConnected = {
-  type: "server.connected"
-  properties: {
-    [key: string]: unknown
-  }
-}
-
-export type EventGlobalDisposed = {
-  type: "global.disposed"
-  properties: {
-    [key: string]: unknown
   }
 }
 
@@ -632,59 +1133,6 @@ export type EventSessionError = {
   }
 }
 
-export type EventTuiPromptAppend = {
-  type: "tui.prompt.append"
-  properties: {
-    text: string
-  }
-}
-
-export type EventTuiCommandExecute = {
-  type: "tui.command.execute"
-  properties: {
-    command:
-      | "session.list"
-      | "session.new"
-      | "session.interrupt"
-      | "session.compact"
-      | "session.page.up"
-      | "session.page.down"
-      | "session.line.up"
-      | "session.line.down"
-      | "session.half.page.up"
-      | "session.half.page.down"
-      | "session.first"
-      | "session.last"
-      | "prompt.clear"
-      | "prompt.submit"
-      | "agent.cycle"
-      | string
-  }
-}
-
-export type EventTuiToastShow = {
-  type: "tui.toast.show"
-  properties: {
-    title?: string
-    message: string
-    variant: "info" | "success" | "warning" | "error"
-    /**
-     * Duration in milliseconds
-     */
-    duration?: number
-  }
-}
-
-export type EventTuiSessionSelect = {
-  type: "tui.session.select"
-  properties: {
-    /**
-     * Session ID to navigate to
-     */
-    sessionID: string
-  }
-}
-
 export type EventMcpToolsChanged = {
   type: "mcp.tools.changed"
   properties: {
@@ -808,468 +1256,6 @@ export type EventSessionIdle = {
   type: "session.idle"
   properties: {
     sessionID: string
-  }
-}
-
-export type EventTaskCreated = {
-  type: "task.created"
-  properties: {
-    taskID: string
-    status: "queued" | "active" | "completed" | "failed" | "cancelled"
-    summary: string
-  }
-}
-
-export type EventTaskUpdated = {
-  type: "task.updated"
-  properties: {
-    taskID: string
-    status: "queued" | "active" | "completed" | "failed" | "cancelled"
-    summary: string
-  }
-}
-
-export type EventTaskCompleted = {
-  type: "task.completed"
-  properties: {
-    taskID: string
-    status: "queued" | "active" | "completed" | "failed" | "cancelled"
-    summary: string
-  }
-}
-
-export type EventTaskFailed = {
-  type: "task.failed"
-  properties: {
-    taskID: string
-    status: "queued" | "active" | "completed" | "failed" | "cancelled"
-    summary: string
-    error?: string
-  }
-}
-
-export type EventTaskCancelled = {
-  type: "task.cancelled"
-  properties: {
-    taskID: string
-    status: "queued" | "active" | "completed" | "failed" | "cancelled"
-    summary: string
-  }
-}
-
-export type EventSpecCreated = {
-  type: "spec.created"
-  properties: {
-    taskID: string
-    specID: string
-    summary: string
-  }
-}
-
-export type EventSpecUpdated = {
-  type: "spec.updated"
-  properties: {
-    taskID: string
-    specID: string
-    status: string
-    summary: string
-  }
-}
-
-export type EventSpecApproved = {
-  type: "spec.approved"
-  properties: {
-    taskID: string
-    specID: string
-    summary: string
-  }
-}
-
-export type EventPlanCreated = {
-  type: "plan.created"
-  properties: {
-    taskID: string
-    planID: string
-    summary: string
-  }
-}
-
-export type EventPlanActivated = {
-  type: "plan.activated"
-  properties: {
-    taskID: string
-    planID: string
-    summary: string
-  }
-}
-
-export type EventGoalProgress = {
-  type: "goal.progress"
-  properties: {
-    taskID: string
-    goalRunID: string
-    summary: string
-  }
-}
-
-export type EventGoalRunUpdated = {
-  type: "goal_run.updated"
-  properties: {
-    taskID: string
-    goalRunID: string
-    goalID: string
-    status: string
-    previousStatus: string
-    summary: string
-  }
-}
-
-export type EventGoalPassed = {
-  type: "goal.passed"
-  properties: {
-    taskID: string
-    goalID: string
-    summary: string
-  }
-}
-
-export type EventGoalFailed = {
-  type: "goal.failed"
-  properties: {
-    taskID: string
-    goalID: string
-    summary: string
-  }
-}
-
-export type EventTaskRewound = {
-  type: "task.rewound"
-  properties: {
-    taskID: string
-    cursorTime: number
-    anchorEventID?: string
-    reason?: string
-    rewindCount: number
-    resetWorktree: boolean
-    anchorKind: "cursorTime" | "message"
-  }
-}
-
-export type EventMilestoneActivated = {
-  type: "milestone.activated"
-  properties: {
-    taskID: string
-    milestoneID: string
-    summary: string
-  }
-}
-
-export type EventMilestonePassed = {
-  type: "milestone.passed"
-  properties: {
-    taskID: string
-    milestoneID: string
-    summary: string
-  }
-}
-
-export type EventMilestoneFailed = {
-  type: "milestone.failed"
-  properties: {
-    taskID: string
-    milestoneID: string
-    summary: string
-  }
-}
-
-export type EventRunCreated = {
-  type: "run.created"
-  properties: {
-    taskID: string
-    runID: string
-    status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
-    summary: string
-  }
-}
-
-export type EventRunUpdated = {
-  type: "run.updated"
-  properties: {
-    taskID: string
-    runID: string
-    status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
-    summary: string
-  }
-}
-
-export type EventInteractionRequested = {
-  type: "interaction.requested"
-  properties: {
-    taskID: string
-    runID?: string
-    interactionID: string
-    requestType: "permission" | "question"
-    summary: string
-  }
-}
-
-export type EventInteractionResolved = {
-  type: "interaction.resolved"
-  properties: {
-    taskID: string
-    runID?: string
-    interactionID: string
-    status: "pending" | "answered" | "rejected" | "expired"
-    summary: string
-  }
-}
-
-export type EventDeliveryReady = {
-  type: "delivery.ready"
-  properties: {
-    taskID: string
-    runID: string
-    deliveryID: string
-    summary: string
-  }
-}
-
-export type EventEvaluationCompleted = {
-  type: "evaluation.completed"
-  properties: {
-    taskID: string
-    runID: string
-    evaluationID: string
-    status: "pending" | "passed" | "failed" | "inconclusive"
-    verdict: "accepted" | "rejected" | "inconclusive"
-    summary: string
-  }
-}
-
-export type EventTaskMessage = {
-  type: "task.message"
-  properties: {
-    taskID: string
-    kind: "goal" | "plan" | "note"
-    source: string
-    text: string
-    summary: string
-  }
-}
-
-export type EventRunProgress = {
-  type: "run.progress"
-  properties: {
-    taskID: string
-    runID: string
-    type: string
-    summary: string
-    payload?: {
-      [key: string]: unknown
-    }
-  }
-}
-
-export type EventRunOutput = {
-  type: "run.output"
-  properties: {
-    taskID: string
-    runID: string
-    type: string
-    text: string
-  }
-}
-
-export type EventMessageInjected = {
-  type: "message.injected"
-  properties: {
-    taskID: string
-    runID: string
-    text: string
-    summary: string
-  }
-}
-
-export type EventWorkflowSelected = {
-  type: "workflow.selected"
-  properties: {
-    taskID: string
-    workflowID: string
-    workflowName: string
-    summary: string
-  }
-}
-
-export type EventWorkflowStepUpdated = {
-  type: "workflow.step.updated"
-  properties: {
-    taskID: string
-    stepID: string
-    goalID?: string
-    status: "pending" | "running" | "completed" | "skipped" | "failed"
-    summary: string
-  }
-}
-
-export type EventGoalWorkflowProgress = {
-  type: "goal.workflow.progress"
-  properties: {
-    taskID: string
-    goalID: string
-    completedSteps: number
-    totalSteps: number
-    currentStep?: string
-    summary: string
-  }
-}
-
-export type EventReviewStreamStarted = {
-  type: "review.stream.started"
-  properties: {
-    taskID: string
-    reviewID: string
-    phase: "integrity" | "delivery"
-    sessionID?: string
-  }
-}
-
-export type EventReviewStreamProgress = {
-  type: "review.stream.progress"
-  properties: {
-    taskID: string
-    reviewID: string
-    phase: "integrity" | "delivery"
-    currentStep: "manifest" | "runtime" | "visual" | "specialist" | "agent" | "post_repair"
-    attempt: number
-    elapsedMs: number
-    summary?: string
-  }
-}
-
-export type EventReviewStreamChunk = {
-  type: "review.stream.chunk"
-  properties: {
-    taskID: string
-    reviewID: string
-    phase: "integrity" | "delivery"
-    kind: "reasoning"
-    delta: string
-    attempt: number
-  }
-}
-
-export type EventDeliveryEvidenceUpdated = {
-  type: "delivery.evidence.updated"
-  properties: {
-    taskID: string
-    runID?: string
-    deliveryID: string
-    manifestID: string
-    iteration: number
-    status: "passed" | "failed"
-    summary: string
-    failedCheckCount: number
-    failedRuntimeFlowCount: number
-    failedReviewCount: number
-    failureDetails: Array<{
-      kind: "readiness" | "check" | "coverage" | "runtime" | "review"
-      id: string
-      name: string
-      status?: string
-      command?: string
-      exitCode?: number
-      evidence: string
-    }>
-  }
-}
-
-export type EventDeliveryPreviewUpdated = {
-  type: "delivery.preview.updated"
-  properties: {
-    taskID: string
-    deliveryID: string
-    status: string
-    url?: string
-    reason?: string
-    command?: string
-    workspaceDir?: string
-  }
-}
-
-export type EventIntegrityReviewCompleted = {
-  type: "integrity.review.completed"
-  properties: {
-    taskID: string
-    sessionID: string
-    verdict: "pass" | "concerns" | "needs_correction"
-    summary: string
-    dimensions: Array<{
-      id: "requirement_fidelity" | "technical_feasibility" | "hallucination" | "solution_quality"
-      verdict: "pass" | "concerns" | "needs_correction"
-      issueCount: number
-      correctionCount: number
-      graphCorrectionCount?: number
-      missingGoalCount: number
-    }>
-    issues: Array<{
-      type: string
-      description: string
-      requirement_ids?: Array<string>
-      spec_ids?: Array<string>
-    }>
-    corrections: Array<{
-      action: "modify" | "split" | "remove"
-      goalID: string
-      reason: string
-      updatesTitle?: string
-      updatesObjective?: string
-    }>
-    graphCorrections?: Array<{
-      kind: string
-      action: string
-      reason: string
-    }>
-    missingGoals: Array<{
-      title: string
-      objective: string
-      reason?: string
-    }>
-    acceptance: {
-      verdict: "accepted" | "rejected"
-      summary: string
-      startup_verification?: {
-        attempted: boolean
-        command?: string
-        success: boolean
-        output?: string
-      }
-      frontend_check?: {
-        attempted: boolean
-        renders_correctly?: boolean
-        issues?: Array<string>
-      }
-      deferred_checks: Array<{
-        name: string
-        result: "passed" | "failed" | "skipped" | "advisory_failed"
-        evidence: string
-      }>
-      tool_call_evidence: Array<{
-        tool: string
-        passed: boolean
-        detail: string
-      }>
-      rejection_details: Array<{
-        goal_id?: string
-        category: "build" | "test" | "lint" | "runtime" | "quality" | "startup" | "visual"
-        check_id?: string
-        file?: string
-        error: string
-        suggestion?: string
-        visual_spec_id?: string
-      }>
-      launch_command?: string
-    }
-    attempts: number
   }
 }
 
@@ -1586,34 +1572,12 @@ export type EventWorkspaceFailed = {
 }
 
 export type Event =
-  | EventInstallationUpdated
-  | EventInstallationUpdateAvailable
-  | EventProjectUpdated
-  | EventServerInstanceDisposed
   | EventServerConnected
   | EventGlobalDisposed
-  | EventLspClientDiagnostics
-  | EventLspUpdated
-  | EventMessageUpdated
-  | EventMessageRemoved
-  | EventMessagePartUpdated
-  | EventMessagePartDelta
-  | EventMessagePartRemoved
-  | EventSessionError
   | EventTuiPromptAppend
   | EventTuiCommandExecute
   | EventTuiToastShow
   | EventTuiSessionSelect
-  | EventMcpToolsChanged
-  | EventMcpBrowserOpenFailed
-  | EventMcpPromptsChanged
-  | EventMcpResourcesChanged
-  | EventCommandExecuted
-  | EventPermissionAsked
-  | EventPermissionReplied
-  | EventTodoUpdated
-  | EventSessionStatus
-  | EventSessionIdle
   | EventTaskCreated
   | EventTaskUpdated
   | EventTaskCompleted
@@ -1649,8 +1613,29 @@ export type Event =
   | EventReviewStreamProgress
   | EventReviewStreamChunk
   | EventDeliveryEvidenceUpdated
-  | EventDeliveryPreviewUpdated
   | EventIntegrityReviewCompleted
+  | EventInstallationUpdated
+  | EventInstallationUpdateAvailable
+  | EventProjectUpdated
+  | EventServerInstanceDisposed
+  | EventLspClientDiagnostics
+  | EventLspUpdated
+  | EventMessageUpdated
+  | EventMessageRemoved
+  | EventMessagePartUpdated
+  | EventMessagePartDelta
+  | EventMessagePartRemoved
+  | EventSessionError
+  | EventMcpToolsChanged
+  | EventMcpBrowserOpenFailed
+  | EventMcpPromptsChanged
+  | EventMcpResourcesChanged
+  | EventCommandExecuted
+  | EventPermissionAsked
+  | EventPermissionReplied
+  | EventTodoUpdated
+  | EventSessionStatus
+  | EventSessionIdle
   | EventTaskQueueCompleted
   | EventQuestionAsked
   | EventQuestionReplied
@@ -2518,15 +2503,6 @@ export type Config = {
     task?: PermissionActionConfig
     schedule?: PermissionActionConfig
   }
-  /**
-   * Frontend preview configuration.
-   */
-  preview?: {
-    /**
-     * Loopback ports to probe when resolving the embedded live frontend preview.
-     */
-    ports?: Array<number>
-  }
   terminal?: TerminalConfig
   compaction?: {
     /**
@@ -2954,6 +2930,10 @@ export type WorktreeCreateInput = {
    * When true and `name` is supplied, skip the reclaim wipe and return the existing worktree if its `.git` linkage and `git worktree list` registration both still pass `isValid()`. Used by build-agent retries that want to pick up the previous attempt's files (passed-verdict-without-merge_back case) instead of regenerating ~20 minutes of code from scratch. Invalid existing trees (zombie linkage, missing branch, etc.) are rejected by the validity gate before the standard reclaim path runs, so corrupt state never silently survives a retry.
    */
   reuseIfValid?: boolean
+  taskID?: string
+  goalID?: string
+  runID?: string
+  sessionID?: string
 }
 
 export type Workspace = {
@@ -7525,32 +7505,6 @@ export type GatewayChannelMessageResponses = {
 }
 
 export type GatewayChannelMessageResponse = GatewayChannelMessageResponses[keyof GatewayChannelMessageResponses]
-
-export type PreviewFrontendData = {
-  body?: never
-  path?: never
-  query?: {
-    directory?: string
-    ports?: string
-    allowUnowned?: "true" | "false"
-  }
-  url: "/preview/frontend"
-}
-
-export type PreviewFrontendResponses = {
-  /**
-   * Frontend preview resolution
-   */
-  200: {
-    url: string | null
-    source: "port_probe" | null
-    port: number | null
-    checkedPorts: Array<number>
-    reason?: string
-  }
-}
-
-export type PreviewFrontendResponse = PreviewFrontendResponses[keyof PreviewFrontendResponses]
 
 export type ServerShutdownData = {
   body?: never

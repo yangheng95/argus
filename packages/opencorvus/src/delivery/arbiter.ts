@@ -1,12 +1,11 @@
 import type { VisualMetricResult } from "./visual-metric"
-import type { RuntimeEvidenceReport } from "./checks/runtime-evidence"
 import type { DeliveryEvidenceManifest, DeliveryGateVerdict, DeliveryManifestFunctionalAssessment } from "./manifest"
 import type { DeliveryVerdictType, RejectedVerdictType, DeferredCheckType, ToolCallEvidenceType } from "./verdict"
 
 /**
  * Legacy delivery evidence semantics:
  *   - Blocking: runtime-readiness failures, acceptance-spec coverage gaps,
- *     failed runtime probes, and required contract-audit failures.
+ *     and required contract-audit failures.
  *   - Advisory: required checks (build/typecheck/test/lint),
  *     workspace_export reviews, and specialist reviews.
  *
@@ -20,11 +19,9 @@ export function arbitrateDeliveryGate(input: {
   checks: DeliveryGateVerdict
   failedReadinessIds?: string[]
   failedCoverageIds: string[]
-  failedRuntimeFlowIds?: string[]
   failedReviewIds?: string[]
   functionalAssessment: DeliveryManifestFunctionalAssessment
 }): DeliveryGateVerdict {
-  const failedRuntimeFlowIds = input.failedRuntimeFlowIds ?? []
   const failedReviewIds = input.failedReviewIds ?? []
   const status = input.functionalAssessment.primaryFailureIds.length === 0 ? "passed" : "failed"
   return {
@@ -32,7 +29,6 @@ export function arbitrateDeliveryGate(input: {
     failedReadinessIds: input.failedReadinessIds ?? [],
     failedCheckIds: input.checks.failedCheckIds,
     failedCoverageIds: input.failedCoverageIds,
-    failedRuntimeFlowIds,
     failedReviewIds,
     functionalAssessment: input.functionalAssessment,
     summary: deliveryGateSummary({
@@ -40,7 +36,6 @@ export function arbitrateDeliveryGate(input: {
       readiness: input.failedReadinessIds?.length ?? 0,
       checks: input.checks.failedCheckIds.length,
       coverage: input.failedCoverageIds.length,
-      runtime: failedRuntimeFlowIds.length,
       reviews: failedReviewIds.length,
       functionalAssessment: input.functionalAssessment,
     }),
@@ -52,7 +47,6 @@ function deliveryGateSummary(input: {
   readiness: number
   checks: number
   coverage: number
-  runtime: number
   reviews: number
   functionalAssessment: DeliveryManifestFunctionalAssessment
 }) {
@@ -61,7 +55,7 @@ function deliveryGateSummary(input: {
   }
   const counts =
     `${input.readiness} readiness item(s), ${input.checks} required check(s), ${input.coverage} coverage item(s), ` +
-    `${input.runtime} runtime flow(s), and ${input.reviews} review item(s)`
+    `and ${input.reviews} review item(s)`
   const primary = input.functionalAssessment.primaryFailureIds.join(", ") || "none"
   const auxiliary = input.functionalAssessment.auxiliaryFailureIds.join(", ") || "none"
   return `${input.functionalAssessment.summary} Evidence gate failed ${counts}. Primary: ${primary}. Auxiliary: ${auxiliary}.`
@@ -80,7 +74,7 @@ function deliveryGateSummary(input: {
 // ---------------------------------------------------------------------------
 
 export type HostGateFailureGroup = {
-  kind: "manifest" | "runtime" | "visual"
+  kind: "manifest" | "visual"
   id: string
   summary: string
   evidence: string[]
@@ -90,9 +84,8 @@ export type HostGateResult = {
   /** Composite legacy evidence status. */
   passed: boolean
   manifest: DeliveryEvidenceManifest
-  runtimeReport?: RuntimeEvidenceReport
   visualMetric?: VisualMetricResult | null
-  /** Pre-grouped legacy evidence failures (manifest/runtime/visual). Empty when passed. */
+  /** Pre-grouped legacy evidence failures (manifest/visual). Empty when passed. */
   failures: HostGateFailureGroup[]
 }
 
@@ -168,7 +161,7 @@ function synthesizeHostGateRejected(hostGate: HostGateResult): RejectedVerdictTy
     const detail = [group.summary, ...group.evidence].filter((s) => s.trim().length > 0).join("\n")
     return {
       // category must stay within the verdict schema enum — never "manifest".
-      category: group.kind === "visual" ? ("visual" as const) : group.kind === "runtime" ? ("runtime" as const) : ("quality" as const),
+      category: group.kind === "visual" ? ("visual" as const) : ("quality" as const),
       error: padEvidence(detail || group.summary || `${group.kind} evidence failed`),
       suggestion: "Fix the failing required delivery evidence, then rerun integrity acceptance review.",
     }
@@ -216,17 +209,6 @@ function buildHostDeferredChecks(hostGate: HostGateResult): DeferredCheckType[] 
       evidence: review.evidence.join("\n") || `${review.id} ${review.status}`,
     })
   }
-  if (hostGate.runtimeReport) {
-    const r = hostGate.runtimeReport
-    const runtimeDetail = r.evidence.previewUrl
-      ? `previewUrl=${r.evidence.previewUrl} dom.textLength=${r.evidence.dom?.textLength ?? "n/a"} nodes=${r.evidence.dom?.nodeCount ?? "n/a"}`
-      : "no live preview URL"
-    checks.push({
-      name: "runtime_evidence",
-      result: r.passed ? "passed" : "failed",
-      evidence: [runtimeDetail, ...r.violations.map((v) => `${v.kind}: ${v.detail}`)].join("\n") || runtimeDetail,
-    })
-  }
   if (hostGate.visualMetric) {
     const m = hostGate.visualMetric
     checks.push({
@@ -257,17 +239,6 @@ function buildHostToolCallEvidence(hostGate: HostGateResult): ToolCallEvidenceTy
       ),
     },
   ]
-  if (hostGate.runtimeReport) {
-    const r = hostGate.runtimeReport
-    const runtimeDetail = r.evidence.previewUrl
-      ? `previewUrl=${r.evidence.previewUrl} dom.textLength=${r.evidence.dom?.textLength ?? "n/a"} nodes=${r.evidence.dom?.nodeCount ?? "n/a"}`
-      : "no live preview URL"
-    evidence.push({
-      tool: "runtime_evidence",
-      passed: r.passed,
-      detail: padEvidence(`${r.violations.length} violation(s): ${runtimeDetail}`),
-    })
-  }
   if (hostGate.visualMetric) {
     const m = hostGate.visualMetric
     evidence.push({

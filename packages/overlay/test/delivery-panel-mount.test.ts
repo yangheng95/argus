@@ -44,7 +44,6 @@ function readAllSurfaceCss(): string {
 
 test("index.html declares one Inspector tab mount owned by Board", async () => {
   const html = await readSrc("src/index.html")
-  expect(html).toContain('id="solidRightPanelTabs"')
   expect(html).toContain('id="solidConversationAgentRailMount"')
   expect(html).not.toContain('id="rightPanelWorkflow"')
   expect(html).not.toContain('id="solidAgentWorkflowMount"')
@@ -53,8 +52,9 @@ test("index.html declares one Inspector tab mount owned by Board", async () => {
   expect(html).not.toContain('id="solidInteractionMount"')
   expect(html).not.toContain('id="solidDeliveryMount"')
   expect(html).not.toContain('id="solidFilesSectionMount"')
-  expect(html).toContain('id="rightPanelPreview"')
-  expect(html).toContain('id="solidFrontendPreviewMount"')
+  expect(html).not.toContain('id="solidRightPanelTabs"')
+  expect(html).not.toContain('id="rightPanelPreview"')
+  expect(html).not.toContain('id="solidFrontendPreviewMount"')
 })
 
 test("index.html does not declare the rejected single InspectorPanel root", async () => {
@@ -79,18 +79,18 @@ test("Inspector workflow sections render as one contiguous stack", async () => {
   expect(css).toContain('.workflow-section-stack .oc-section[data-phase-state="active"]')
 })
 
-test("main.tsx mounts the top-level right tabs and preview panel", async () => {
+test("main.tsx mounts the inspector workflow without the deleted right-panel tabs", async () => {
   const main = await readSrc("src/main.tsx")
-  expect(main).toContain('document.getElementById("solidRightPanelTabs")')
   expect(main).toContain('document.getElementById("solidConversationAgentRailMount")')
   expect(main).not.toContain('document.getElementById("solidAgentWorkflowMount")')
   expect(main).toContain('document.getElementById("solidBoardMount")')
   expect(main).not.toContain('document.getElementById("solidDeliveryMount")')
   expect(main).not.toContain('document.getElementById("solidFilesSectionMount")')
-  expect(main).toContain('document.getElementById("solidFrontendPreviewMount")')
-  expect(main).toContain("<FrontendPreviewPanel")
+  expect(main).not.toContain('document.getElementById("solidRightPanelTabs")')
+  expect(main).not.toContain('document.getElementById("solidFrontendPreviewMount")')
+  expect(main).not.toContain("<FrontendPreviewPanel")
   expect(main).toContain("<ConversationAgentRail")
-  expect(main).toContain("nextTabForPreviewResolution")
+  expect(main).not.toContain("nextTabForPreviewResolution")
   expect(main).not.toContain("AgentWorkflowPanel")
   expect(main).not.toContain('import { InspectorPanel } from "./components/InspectorPanel"')
   expect(main).not.toContain("<InspectorPanel")
@@ -213,14 +213,10 @@ test("redesign-required i18n keys exist in both locales; the legacy lifecycle ke
     "delivery.verdict.empty",
     "delivery.iteration",
     "delivery.checks",
-    "delivery.runtime",
     "delivery.reviews",
     "delivery.show_more",
     "delivery.show_less",
     "delivery.inflight.hint",
-    "right_panel.tabs",
-    "right_panel.inspector",
-    "right_panel.preview",
   ]
   // i18n keys are flat strings with literal dots, not nested paths — use
   // `key in obj` instead of toHaveProperty (which would mis-traverse).
@@ -231,11 +227,16 @@ test("redesign-required i18n keys exist in both locales; the legacy lifecycle ke
   // Legacy lifecycle-as-verdict keys + old empty hint must be deleted (rule 17).
   for (const key of [
     "delivery.empty.hint",
+    "delivery.runtime",
     "delivery.status.candidate",
     "delivery.status.delivered",
     "delivery.status.failed",
     "delivery.status.publishing",
     "empty.delivery",
+    "right_panel.tabs",
+    "right_panel.inspector",
+    "right_panel.preview",
+    "frontend_preview.title",
   ]) {
     expect(key in en).toBe(false)
     expect(key in zh).toBe(false)

@@ -1259,16 +1259,6 @@ export namespace Config {
           "Default tool permission actions for new tasks. When not set, defaults to 'allow'. " +
             "Set a tool to 'ask' for confirmation, or 'deny' to block it entirely.",
         ),
-      preview: z
-        .object({
-          ports: z
-            .array(z.number().int().min(1).max(65_535))
-            .max(64)
-            .optional()
-            .describe("Loopback ports to probe when resolving the embedded live frontend preview."),
-        })
-        .optional()
-        .describe("Frontend preview configuration."),
       terminal: Terminal.optional().describe("Server-owned Overlay terminal configuration."),
       compaction: z
         .object({

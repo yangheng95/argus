@@ -76,7 +76,6 @@ task.completed | task.failed | task.cancelled
 | `POST /task/<id>/cancel` | 取消任务 |
 | `GET /export/task/<id>/archive` | 导出任务档案（zip，含 messages + artifacts + 工作区快照） |
 | `POST /import/task/archive` | 导入任务档案 |
-| `GET /preview/frontend` | 前端实时预览（开发服务器透传） |
 
 ## 6. 本地 TUI（交互模式）
 

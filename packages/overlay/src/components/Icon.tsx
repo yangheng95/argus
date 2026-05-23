@@ -770,7 +770,7 @@ const ICON_PATHS: Record<IconName, IconRecord> = {
   },
   // Misc UI — migrated 2026-05-04 (Step 8b) from scattered inline svg
   // across TaskList / ChangesPanel / ExecutorSelector / FilesSection /
-  // FrontendPreviewPanel / TitlebarMenubar / Card.
+  // TitlebarMenubar / Card.
   "caret-up": {
     body: () => <polyline points="4,10 8,6 12,10" />,
   },

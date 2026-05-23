@@ -192,7 +192,6 @@ function deliveryDecisionFixture(verdict: any) {
         checkResults: [],
         goalCoverage: [],
         requirementCoverage: [],
-        runtimeFlows: [],
         reviewEvidence: [],
         changedFiles: [],
         finalGate: {
@@ -200,7 +199,6 @@ function deliveryDecisionFixture(verdict: any) {
           summary: "Delivery evidence gate passed 0 required check(s).",
           failedCheckIds: [],
           failedCoverageIds: [],
-          failedRuntimeFlowIds: [],
           failedReviewIds: [],
         },
         timeCreated: 1,

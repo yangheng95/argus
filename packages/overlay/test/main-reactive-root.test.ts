@@ -8,8 +8,8 @@ const SOURCE = readFileSync(
 )
 
 describe("main reactive controllers", () => {
-  test("follow-up and right-panel effects live inside a managed root", () => {
-    const managedRoot = /disposers\.push\(\s*createRoot\(\(dispose\) => \{[\s\S]*const busyNow = !!messageStore\.chatRequest \|\| isTaskInterruptable\(\)[\s\S]*const active = rightPanelTab\(\)[\s\S]*const taskID = boardStore\.selectedTaskID \|\| boardStore\.board\?\.task\?\.id \|\| \"\"[\s\S]*return dispose[\s\S]*\}\),\s*\)/m
+  test("follow-up effect lives inside a managed root", () => {
+    const managedRoot = /disposers\.push\(\s*createRoot\(\(dispose\) => \{[\s\S]*const busyNow = !!messageStore\.chatRequest \|\| isTaskInterruptable\(\)[\s\S]*return dispose[\s\S]*\}\),\s*\)/m
     expect(SOURCE).toMatch(managedRoot)
   })
 })
