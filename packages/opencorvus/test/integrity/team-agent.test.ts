@@ -140,6 +140,69 @@ function replayContext(attemptNumber: number): IntegrityReplayContext {
   }
 }
 
+function reReviewReplayContext(): IntegrityReplayContext {
+  const priorTime = Date.UTC(2026, 4, 23, 12, 44, 15, 975)
+  return {
+    attemptNumber: 2,
+    priorAttempts: [
+      {
+        attemptNumber: 1,
+        artifactID: "artifact_attempt_1",
+        timeCreated: priorTime,
+        phase: "post_build",
+        verdict: "needs_correction",
+        summary: "Prior settings validation review found a storage guard gap.",
+        reviewers: [{ reviewerID: "rev_settings", scope: "Settings validation", verdict: "needs_correction" }],
+        blockingFindings: [
+          {
+            id: "BF-1",
+            title: "Settings validation blind spot",
+            description: "Invalid settings can still be persisted.",
+            repair: "Reject invalid settings before persisting.",
+            filePaths: ["src/settings.ts"],
+            requirementIDs: ["REQ-settings"],
+            specIDs: ["AS-settings"],
+          },
+        ],
+        requiredRepairs: [
+          {
+            id: "repair-settings",
+            description: "Add settings validation",
+            filePaths: ["src/settings.ts"],
+          },
+        ],
+        unresolvedDisagreements: [],
+      },
+    ],
+    buildEvidenceSinceLastReview: {
+      sinceAttemptNumber: 1,
+      sinceTimeCreated: priorTime,
+      changedFiles: ["src/services/storage.ts"],
+      diffs: [{ file: "src/services/storage.ts", status: "modified", additions: 8, deletions: 2 }],
+      deliverySummaries: ["Delivery updated the storage guard."],
+      goalRuns: [
+        {
+          goalID: "goal_settings",
+          goalRunID: "glr_settings_retry",
+          status: "completed",
+          timeCreated: priorTime + 1000,
+          timeCompleted: priorTime + 2000,
+        },
+      ],
+    },
+    scaleSignals: {
+      goals: 2,
+      requirements: 3,
+      acceptanceSpecs: 4,
+      changedFilesTotal: 3,
+      changedFilesSinceLastReview: 1,
+      priorAttempts: 1,
+      priorBlockingFindings: 1,
+      phase: "post_build",
+    },
+  }
+}
+
 const contractGraph = {
   contracts: [],
   dependency_contracts: [],
@@ -191,7 +254,7 @@ describe("integrity team-agent replay attempts", () => {
             },
           ],
           contractGraph,
-          replayContext: replayContext(2),
+          replayContext: reReviewReplayContext(),
           taskID: "tsk_team_attempt",
           parentSessionID: "ses_parent",
         })
@@ -207,6 +270,12 @@ describe("integrity team-agent replay attempts", () => {
     for (const prompt of userPrompts) {
       expect(prompt).toContain("# Integrity Replay Context")
       expect(prompt).toContain("Current integrity attempt: #2")
+      expect(prompt).toContain("rev_settings: Settings validation")
+      expect(prompt).toContain("BF-1: Settings validation blind spot")
+      expect(prompt).toContain("repair: Reject invalid settings before persisting.")
+      expect(prompt).toContain("repair-settings: Add settings validation")
+      expect(prompt).toContain("src/services/storage.ts")
+      expect(prompt).toContain("- prior_blocking_findings=1")
     }
     expect(userPrompts[0]).toContain("Prior reviewer focuses are the list of surfaces that were inspected")
     expect(userPrompts[0]).toContain("Do not default to five reviewers")

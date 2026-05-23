@@ -687,5 +687,5 @@ Reviewer count behavior:
 7. [x] Wire `runIntegrityReviewOnce` in `orchestrator/tools.ts`.
 8. [x] Wire `runDeliveryIntegrityReview` in `delivery/tools.ts`.
 9. [x] Update mocks/tests for all active `reviewIntegrity` callers.
-10. [ ] Add integration test for attempt #2 prompt contents.
+10. [x] Add integration test for attempt #2 prompt contents.
 11. [ ] Run targeted integrity/orchestrator/delivery tests.
