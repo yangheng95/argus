@@ -30,6 +30,7 @@ export const StageRouting = z.object({
 export const GoalKind = z.enum(["bootstrap", "feature", "verification", "integration", "system"])
 
 import { AcceptanceSpecSchema } from "@/acceptance/types"
+import { IntegrityReviewCompletedPayloadSchema } from "@/integrity/team-schema"
 
 export const GoalInput = z.object({
   description: z.string(),
@@ -1334,7 +1335,10 @@ export const Event = {
       taskID: Identifier.schema("task"),
       reviewID: z.string().min(1),
       phase: ReviewStreamPhase,
-      currentStep: ReviewStreamStep,
+      currentStep: ReviewStreamStep.optional(),
+      activity: z.string().optional(),
+      reviewerID: z.string().optional(),
+      roundID: z.string().optional(),
       attempt: z.number(),
       elapsedMs: z.number(),
       summary: z.string().optional(),
@@ -1395,15 +1399,13 @@ export const Event = {
   ),
   IntegrityReviewCompleted: BusEvent.define(
     "integrity.review.completed",
-    z.object({
-      taskID: Identifier.schema("task"),
-      /** Requirements agent session that owns this integrity review. The
-       *  overlay uses this to attach the verdict card under the requirements
+    IntegrityReviewCompletedPayloadSchema,
+    /*
        *  session card — without it the card would escape to the top level,
        *  which the overlay explicitly forbids (see tree-writer card hierarchy
        *  rules). Required: every real integrity pass runs inside an agent
        *  session; emitting without sessionID is a backend bug that must be
-       *  caught at the source (see integrity/agent.ts emitIntegrityEvent assertion). */
+       *  caught at the source (see integrity/agent.ts emitIntegrityEvent assertion).
       sessionID: z.string(),
       verdict: z.enum(["pass", "concerns", "needs_correction"]),
       summary: z.string(),
@@ -1497,8 +1499,7 @@ export const Event = {
       }),
       attempts: z.number(),
     }),
-    (payload) => payload.verdict === "pass" && payload.acceptance.verdict === "accepted"
-      ? { tier: 2 }
-      : { tier: 1, badge: true },
+    */
+    (payload) => payload.verdict === "pass" ? { tier: 2 } : { tier: 1, badge: true },
   ),
 }

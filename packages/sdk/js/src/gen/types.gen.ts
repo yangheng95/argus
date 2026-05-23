@@ -449,72 +449,64 @@ export type EventIntegrityReviewCompleted = {
     sessionID: string
     verdict: "pass" | "concerns" | "needs_correction"
     summary: string
-    dimensions: Array<{
-      id: "requirement_fidelity" | "technical_feasibility" | "hallucination" | "solution_quality"
+    teamReportMarkdown: string
+    reviewers: Array<{
+      reviewerID: string
+      scope: string
       verdict: "pass" | "concerns" | "needs_correction"
-      issueCount: number
-      correctionCount: number
-      graphCorrectionCount?: number
-      missingGoalCount: number
-    }>
-    issues: Array<{
-      type: string
-      description: string
-      requirement_ids?: Array<string>
-      spec_ids?: Array<string>
-    }>
-    corrections: Array<{
-      action: "modify" | "split" | "remove"
-      goalID: string
-      reason: string
-      updatesTitle?: string
-      updatesObjective?: string
-    }>
-    graphCorrections?: Array<{
-      kind: string
-      action: string
-      reason: string
-    }>
-    missingGoals: Array<{
-      title: string
-      objective: string
-      reason?: string
-    }>
-    acceptance: {
-      verdict: "accepted" | "rejected"
       summary: string
-      startup_verification?: {
-        attempted: boolean
-        command?: string
-        success: boolean
-        output?: string
-      }
-      frontend_check?: {
-        attempted: boolean
-        renders_correctly?: boolean
-        issues?: Array<string>
-      }
-      deferred_checks: Array<{
-        name: string
-        result: "passed" | "failed" | "skipped" | "advisory_failed"
-        evidence: string
+      evidence: Array<string>
+      findings: Array<{
+        id: string
+        severity: "blocking" | "advisory"
+        verdictImpact: "pass" | "concerns" | "needs_correction"
+        title: string
+        description: string
+        evidence: Array<string>
+        targetIDs: Array<string>
+        requirementIDs: Array<string>
+        specIDs: Array<string>
+        filePaths: Array<string>
+        repair: string
+        reviewers: Array<string>
+        consensus: "agreed" | "disputed" | "unresolved"
       }>
-      tool_call_evidence: Array<{
-        tool: string
-        passed: boolean
-        detail: string
-      }>
-      rejection_details: Array<{
-        goal_id?: string
-        category: "build" | "test" | "lint" | "runtime" | "quality" | "startup" | "visual"
-        check_id?: string
-        file?: string
-        error: string
-        suggestion?: string
-        visual_spec_id?: string
-      }>
-      launch_command?: string
-    }
+      openQuestions: Array<string>
+    }>
+    findings: Array<{
+      id: string
+      severity: "blocking" | "advisory"
+      verdictImpact: "pass" | "concerns" | "needs_correction"
+      title: string
+      description: string
+      evidence: Array<string>
+      targetIDs: Array<string>
+      requirementIDs: Array<string>
+      specIDs: Array<string>
+      filePaths: Array<string>
+      repair: string
+      reviewers: Array<string>
+      consensus: "agreed" | "disputed" | "unresolved"
+    }>
+    rounds: Array<{
+      roundID: string
+      prompt: string
+      reviewerIDs: Array<string>
+      outcome: string
+    }>
+    requiredRepairs: Array<{
+      id: string
+      description: string
+      evidence: Array<string>
+      targetIDs: Array<string>
+      filePaths: Array<string>
+    }>
+    unresolvedDisagreements: Array<{
+      id: string
+      description: string
+      reviewerIDs: Array<string>
+      consequence: string
+    }>
     attempts: number
   }
 }

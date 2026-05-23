@@ -2107,7 +2107,6 @@ export function recordIntegrityAttempt(input: {
   /** Per-dimension verdicts so read_context can surface "requirement_fidelity passed
    *  but solution_quality flagged 3 weak_acceptance specs" — losing this
    *  granularity behind a single aggregate would defeat the redesign. */
-  perDimension: Array<{ id: string; verdict: "pass" | "concerns" | "needs_correction" }>
   /** Phase marker. `pre_build` attempts audit decomposition only — they cannot
    *  satisfy the post-build delivery freshness gate (a green pre-build attempt
    *  must not let an unrun graph through). `post_build` attempts have access
@@ -2115,9 +2114,13 @@ export function recordIntegrityAttempt(input: {
    *  evidence. The orchestrator decides phase from whether any claiming goal
    *  has produced run + evidence by attempt time. */
   phase: "pre_build" | "post_build"
-  issuesCount: number
-  correctionsCount: number
-  missingCount: number
+  issuesCount?: number
+  correctionsCount?: number
+  missingCount?: number
+  reviewers?: unknown[]
+  findingsCount?: number
+  requiredRepairsCount?: number
+  unresolvedDisagreementsCount?: number
   reason?: string
   /** Full pre-rendered review markdown — every issue, every correction
    *  proposal, every missing-goal proposal as text. Persisted alongside the
@@ -2125,6 +2128,11 @@ export function recordIntegrityAttempt(input: {
    *  the orchestrator LLM the same evidence the integrity LLM produced,
    *  rather than just counts. */
   reviewMarkdown?: string
+  teamReportMarkdown?: string
+  findings?: unknown[]
+  rounds?: unknown[]
+  requiredRepairs?: unknown[]
+  unresolvedDisagreements?: unknown[]
   /** Structured copies of the LLM's correction / missing-goal proposals
    *  preserved alongside the markdown so any future consumer that wants
    *  field-level access (overlay verdict card, prosecutor seed) doesn't
@@ -2155,16 +2163,16 @@ export function recordIntegrityAttempt(input: {
     session_id: input.sessionID,
     verdict: input.verdict,
     phase: input.phase,
-    per_dimension: input.perDimension,
-    issues_count: input.issuesCount,
-    corrections_count: input.correctionsCount,
-    missing_count: input.missingCount,
+    reviewers: input.reviewers ?? [],
+    findings_count: input.findingsCount ?? input.issuesCount ?? 0,
+    required_repairs_count: input.requiredRepairsCount ?? input.correctionsCount ?? 0,
+    unresolved_disagreements_count: input.unresolvedDisagreementsCount ?? 0,
     reason: input.reason ?? null,
-    review_markdown: input.reviewMarkdown ?? null,
-    corrections: input.corrections ?? null,
-    graph_corrections: input.graphCorrections ?? null,
-    missing_goals: input.missingGoals ?? null,
-    acceptance: input.acceptance ?? null,
+    team_report_markdown: input.teamReportMarkdown ?? input.reviewMarkdown ?? null,
+    findings: input.findings ?? [],
+    rounds: input.rounds ?? [],
+    required_repairs: input.requiredRepairs ?? [],
+    unresolved_disagreements: input.unresolvedDisagreements ?? [],
     time_completed: now,
   }
   Database.use((db) =>

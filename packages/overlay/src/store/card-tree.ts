@@ -229,59 +229,52 @@ export interface CardNode {
   integrity?: {
     verdict: "pass" | "concerns" | "needs_correction";
     summary: string;
-    acceptance?: {
-      verdict: "accepted" | "rejected";
-      summary: string;
-      startup_verification?: {
-        attempted: boolean;
-        command?: string;
-        success: boolean;
-        output?: string;
-      };
-      frontend_check?: {
-        attempted: boolean;
-        renders_correctly?: boolean;
-        issues?: string[];
-      };
-      deferred_checks: Array<{ name: string; result: string; evidence: string }>;
-      tool_call_evidence: Array<{ tool: string; passed: boolean; detail: string }>;
-      rejection_details: Array<{
-        goal_id?: string;
-        category: string;
-        check_id?: string;
-        file?: string;
-        error: string;
-        suggestion?: string;
-        visual_spec_id?: string;
-      }>;
-      launch_command?: string;
-    };
-    dimensions: Array<{
-      id: "requirement_fidelity" | "technical_feasibility" | "hallucination" | "solution_quality";
+    teamReportMarkdown: string;
+    reviewers: Array<{
+      reviewerID: string;
+      scope: string;
       verdict: "pass" | "concerns" | "needs_correction";
-      issueCount: number;
-      correctionCount: number;
-      missingGoalCount: number;
+      summary: string;
+      evidence: string[];
+      findings: unknown[];
+      openQuestions: string[];
     }>;
-    issues: Array<{
-      type: string;
+    findings: Array<{
+      id: string;
+      severity: "blocking" | "advisory";
+      verdictImpact: "pass" | "concerns" | "needs_correction";
+      title: string;
       description: string;
-      requirement_ids?: string[];
-      spec_ids?: string[];
+      evidence: string[];
+      targetIDs: string[];
+      requirementIDs: string[];
+      specIDs: string[];
+      filePaths: string[];
+      repair: string;
+      reviewers: string[];
+      consensus: "agreed" | "disputed" | "unresolved";
     }>;
-    corrections: Array<{
-      action: "modify" | "split" | "remove";
-      goalID: string;
-      reason: string;
-      updatesTitle?: string;
-      updatesObjective?: string;
+    requiredRepairs: Array<{
+      id: string;
+      description: string;
+      evidence: string[];
+      targetIDs: string[];
+      filePaths: string[];
     }>;
-    missingGoals: Array<{ title: string; objective: string; reason?: string }>;
+    unresolvedDisagreements: Array<{
+      id: string;
+      description: string;
+      reviewerIDs: string[];
+      consequence: string;
+    }>;
     attempts: number;
   };
   reviewStream?: {
     phase: "integrity";
     currentStep?: "manifest" | "runtime" | "visual" | "specialist" | "agent" | "post_repair";
+    activity?: string;
+    reviewerID?: string;
+    roundID?: string;
     elapsedMs?: number;
     summary?: string;
   };
