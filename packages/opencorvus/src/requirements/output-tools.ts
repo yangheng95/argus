@@ -14,6 +14,7 @@
 import { tool } from "ai"
 import z from "zod"
 import { limitSummary, markdownList } from "@/agent/report"
+import type { DecisionLog } from "@/decision-log"
 
 // ---------------------------------------------------------------------------
 // Collector — accumulates registered items across tool calls
@@ -37,6 +38,11 @@ export interface RegisteredDecision {
   key: string
   value: string
   reason: string
+}
+
+export interface RequirementsOutputToolOptions {
+  decisionLog?: DecisionLog
+  decisionPhase?: string
 }
 
 const REQUIRED_DECISION_KEYS = [
@@ -110,7 +116,7 @@ export function buildRequirementsReport(collector: RequirementsCollector) {
 // Tool factory
 // ---------------------------------------------------------------------------
 
-export function createRequirementsOutputTools() {
+export function createRequirementsOutputTools(options: RequirementsOutputToolOptions = {}) {
   let collector = emptyCollector()
 
   const tools = {
@@ -137,6 +143,12 @@ export function createRequirementsOutputTools() {
       }),
       execute: async ({ key, value, reason }) => {
         collector.decisions.push({ key, value, reason })
+        options.decisionLog?.append({
+          phase: options.decisionPhase ?? "requirements",
+          key,
+          value,
+          reason,
+        })
         return `OK: decision "${key}=${value}" registered`
       },
     }),
