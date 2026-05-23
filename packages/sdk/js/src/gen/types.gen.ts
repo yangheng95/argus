@@ -2510,7 +2510,7 @@ export type Config = {
      */
     reserved?: number
     /**
-     * Fraction of usable context (after reserved buffer) that must be consumed before auto-compaction triggers. Defaults to 0.9 — compact late enough to preserve prompt-cache stability while keeping headroom for the next reply.
+     * Fraction of usable context (after reserved buffer) that must be consumed before auto-compaction triggers. Defaults to 0.8 — compact early enough to keep ample headroom for the next reply without sacrificing prompt-cache stability for typical turns.
      */
     threshold?: number
     /**
