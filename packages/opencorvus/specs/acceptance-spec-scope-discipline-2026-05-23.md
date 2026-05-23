@@ -387,7 +387,7 @@ bun test packages/opencorvus/test/requirements/maturity-word-discipline.test.ts 
    `acceptance` and `non_goals` (grep all call sites first; rule 35).
 3. [x] Patch `architect-core.txt`: ban existence-grep AS under behavior
    REQs; require AS anchored to REQ.acceptance text.
-4. [ ] Patch `integrity-team-core.txt`: traceability-or-drop rule.
+4. [x] Patch `integrity-team-core.txt`: traceability-or-drop rule.
 5. [ ] Patch `team-agent.ts` `buildReviewerPrompt` /
    `buildSupervisorConsensusPrompt` to echo the traceability rule at role
    level.
