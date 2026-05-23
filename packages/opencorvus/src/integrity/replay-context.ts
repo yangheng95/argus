@@ -127,6 +127,98 @@ export function buildIntegrityReplayContext(input: {
   }
 }
 
+export function renderIntegrityReplayContextPrompt(context: IntegrityReplayContext): string {
+  const lines = ["# Integrity Replay Context", "", `Current integrity attempt: #${context.attemptNumber}.`, ""]
+  if (context.priorAttempts.length === 0) {
+    lines.push(
+      "No prior integrity attempts exist for this task/spec snapshot. Treat this as a first review and choose reviewers from the actual request, goals, requirements, changed files, runtime evidence, and risk surface.",
+      "",
+    )
+  } else {
+    lines.push("Prior attempts for this task/spec:")
+    for (const attempt of context.priorAttempts) {
+      lines.push(
+        `- Attempt #${attempt.attemptNumber} at ${new Date(attempt.timeCreated).toISOString()}, phase=${attempt.phase ?? "unknown"}, verdict=${attempt.verdict ?? "unknown"}, reviewers=${attempt.reviewers.length}.`,
+      )
+      if (attempt.summary) lines.push(`  Summary: ${attempt.summary}`)
+      if (attempt.reviewers.length > 0) {
+        lines.push("  Reviewer focuses:")
+        for (const reviewer of attempt.reviewers) {
+          lines.push(`  - ${reviewer.reviewerID}: ${reviewer.scope}${reviewer.verdict ? ` (${reviewer.verdict})` : ""}`)
+        }
+      }
+      if (attempt.blockingFindings.length > 0) {
+        lines.push("  Blocking findings:")
+        for (const finding of attempt.blockingFindings) {
+          lines.push(`  - ${finding.id}: ${finding.title}`)
+          if (finding.description) lines.push(`    description: ${finding.description}`)
+          if (finding.repair) lines.push(`    repair: ${finding.repair}`)
+          if (finding.filePaths.length > 0) lines.push(`    files: ${finding.filePaths.join(", ")}`)
+          if (finding.requirementIDs.length > 0) lines.push(`    requirements: ${finding.requirementIDs.join(", ")}`)
+          if (finding.specIDs.length > 0) lines.push(`    specs: ${finding.specIDs.join(", ")}`)
+        }
+      }
+      if (attempt.requiredRepairs.length > 0) {
+        lines.push("  Required repairs:")
+        for (const repair of attempt.requiredRepairs) {
+          lines.push(`  - ${repair.id}: ${repair.description}`)
+          if (repair.filePaths.length > 0) lines.push(`    files: ${repair.filePaths.join(", ")}`)
+        }
+      }
+      if (attempt.unresolvedDisagreements.length > 0) {
+        lines.push("  Unresolved disagreements:")
+        for (const disagreement of attempt.unresolvedDisagreements) {
+          lines.push(`  - ${disagreement.id}: ${disagreement.description}`)
+        }
+      }
+    }
+    lines.push("")
+  }
+
+  const evidence = context.buildEvidenceSinceLastReview
+  lines.push("Build evidence after latest integrity attempt:")
+  if (evidence.sinceAttemptNumber !== undefined) lines.push(`- Since attempt: #${evidence.sinceAttemptNumber}`)
+  if (evidence.sinceTimeCreated !== undefined) {
+    lines.push(`- Since time: ${new Date(evidence.sinceTimeCreated).toISOString()}`)
+  }
+  lines.push(`- Changed files: ${evidence.changedFiles.length > 0 ? evidence.changedFiles.join(", ") : "(none)"}`)
+  if (evidence.diffs.length > 0) {
+    lines.push("- Diffs:")
+    for (const diff of evidence.diffs) {
+      const stats = [
+        diff.status ? `status=${diff.status}` : "",
+        diff.additions !== undefined ? `+${diff.additions}` : "",
+        diff.deletions !== undefined ? `-${diff.deletions}` : "",
+      ].filter(Boolean)
+      lines.push(`  - ${diff.file}${stats.length > 0 ? ` (${stats.join(", ")})` : ""}`)
+    }
+  }
+  if (evidence.deliverySummaries.length > 0) {
+    lines.push("- Delivery summaries:")
+    for (const summary of evidence.deliverySummaries) lines.push(`  - ${summary}`)
+  }
+  if (evidence.goalRuns.length > 0) {
+    lines.push("- Goal runs after latest review:")
+    for (const run of evidence.goalRuns) {
+      lines.push(
+        `  - ${run.goalID}/${run.goalRunID}: ${run.status}, created=${new Date(run.timeCreated).toISOString()}${run.timeCompleted ? `, completed=${new Date(run.timeCompleted).toISOString()}` : ""}`,
+      )
+    }
+  }
+
+  const scale = context.scaleSignals
+  lines.push("", "Scale signals:")
+  lines.push(`- goals=${scale.goals}`)
+  lines.push(`- requirements=${scale.requirements}`)
+  lines.push(`- acceptance_specs=${scale.acceptanceSpecs}`)
+  lines.push(`- changed_files_total=${scale.changedFilesTotal}`)
+  lines.push(`- changed_files_since_last_review=${scale.changedFilesSinceLastReview}`)
+  lines.push(`- prior_attempts=${scale.priorAttempts}`)
+  lines.push(`- prior_blocking_findings=${scale.priorBlockingFindings}`)
+  if (scale.phase) lines.push(`- phase=${scale.phase}`)
+  return lines.join("\n")
+}
+
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {}
 }
