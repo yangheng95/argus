@@ -50,6 +50,14 @@ export {
   type SpecSnapshotLineage,
 } from "./replay-context"
 export {
+  buildIntegrityRootHistory,
+  type IntegrityPersistentRoot,
+  type IntegrityRootAttemptSummary,
+  type IntegrityRootHistory,
+  type IntegrityRootSymptomVariation,
+} from "./root-history"
+export { composeIntegrityFeedbackForBuild, type BuildIntegrityFeedback } from "./build-feedback"
+export {
   getSharedIntegrityPromptBudget,
   renderSharedIntegrityPromptContext,
   sanitizeIntegrityPromptText,
