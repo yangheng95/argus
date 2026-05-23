@@ -143,7 +143,8 @@ async function runDeliveryIntegrityReview(input: {
       typeof goal.requirement_ids === "string" ? JSON.parse(goal.requirement_ids) : (goal.requirement_ids ?? []),
   }))
 
-  const { reviewIntegrity, computeRequirementStatusSnapshot, buildIntegrityReplayContext } = await import("@/integrity")
+  const { reviewIntegrity, computeRequirementStatusSnapshot, buildIntegrityReplayContext, buildSpecSnapshotLineage } =
+    await import("@/integrity")
   const requirementStatus = computeRequirementStatusSnapshot({
     taskID: task.id,
     specSnapshotID: activeSpec.id,
@@ -154,9 +155,13 @@ async function runDeliveryIntegrityReview(input: {
   )
     ? "post_build"
     : "pre_build"
+  const lineage = buildSpecSnapshotLineage({
+    taskID: task.id,
+    activeSpecSnapshotID: activeSpec.id,
+  })
   const replayContext = buildIntegrityReplayContext({
     taskID: task.id,
-    specSnapshotID: activeSpec.id,
+    lineage,
     phase,
     goals: goalsForReview,
     requirements,
@@ -186,7 +191,7 @@ async function runDeliveryIntegrityReview(input: {
   recordIntegrityAttempt({
     taskID: task.id,
     sessionID: verdict.sessionID,
-    specSnapshotID: activeSpec.id,
+    lineage,
     verdict: verdict.verdict,
     phase,
     reviewers: verdict.reviewers,

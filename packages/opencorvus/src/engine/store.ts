@@ -20,6 +20,7 @@ import {
 } from "@/storage/db"
 import type { SQL } from "@/storage/db"
 import { FileDiff as SnapshotFileDiff } from "@/snapshot/types"
+import { specSnapshotIDsForLineage, type SpecSnapshotLineage } from "@/integrity/replay-lineage"
 import { EvaluationCheck } from "./model"
 import {
   EngineArtifactTable,
@@ -696,14 +697,52 @@ export function findLatestDeliveryVerdictArtifact(taskID: string) {
 
 export type IntegrityAttemptArtifactQuery = {
   taskID: string
-  specSnapshotID?: string | null
+  lineage: SpecSnapshotLineage
   /** Filter by recorded `phase` ("pre_build" | "post_build"). Omit to match
    *  any phase. The delivery freshness gate uses `phase: "post_build"` so a
    *  pre-build review cannot satisfy the post-build completion requirement. */
   phase?: "pre_build" | "post_build"
 }
 
-export function listIntegrityAttemptArtifacts(input: IntegrityAttemptArtifactQuery): ArtifactRow[] {
+export type LatestIntegrityAttemptArtifactQuery = {
+  taskID: string
+  specSnapshotID: string
+  phase?: "pre_build" | "post_build"
+}
+
+export type IntegrityAttemptArtifactRow = ArtifactRow & {
+  artifactID: string
+  taskID: string
+  specSnapshotID: string
+  timeCreated: number
+}
+
+export function listIntegrityAttemptArtifacts(input: IntegrityAttemptArtifactQuery): IntegrityAttemptArtifactRow[] {
+  if (input.taskID !== input.lineage.taskID) {
+    throw new Error(
+      `Integrity attempt query taskID ${input.taskID} does not match lineage taskID ${input.lineage.taskID}.`,
+    )
+  }
+  return selectIntegrityAttemptArtifacts({
+    taskID: input.taskID,
+    specSnapshotIDs: specSnapshotIDsForLineage(input.lineage),
+    phase: input.phase,
+  })
+}
+
+export function findLatestIntegrityAttemptArtifact(input: LatestIntegrityAttemptArtifactQuery) {
+  return selectIntegrityAttemptArtifacts({
+    taskID: input.taskID,
+    specSnapshotIDs: [input.specSnapshotID],
+    phase: input.phase,
+  })[0]
+}
+
+function selectIntegrityAttemptArtifacts(input: {
+  taskID: string
+  specSnapshotIDs: string[]
+  phase?: "pre_build" | "post_build"
+}): IntegrityAttemptArtifactRow[] {
   return Database.use((db) =>
     db
       .select()
@@ -712,25 +751,36 @@ export function listIntegrityAttemptArtifacts(input: IntegrityAttemptArtifactQue
         and(
           eq(EngineArtifactTable.task_id, input.taskID),
           eq(EngineArtifactTable.kind, "integrity_attempt"),
-          input.specSnapshotID
-            ? sql`json_extract(${EngineArtifactTable.payload}, '$.spec_snapshot_id') = ${input.specSnapshotID}`
-            : sql`1 = 1`,
+          input.specSnapshotIDs.length === 1
+            ? sql`json_extract(${EngineArtifactTable.payload}, '$.spec_snapshot_id') = ${input.specSnapshotIDs[0]}`
+            : inArray(sql`json_extract(${EngineArtifactTable.payload}, '$.spec_snapshot_id')`, input.specSnapshotIDs),
           input.phase ? sql`json_extract(${EngineArtifactTable.payload}, '$.phase') = ${input.phase}` : sql`1 = 1`,
         ),
       )
       .orderBy(desc(EngineArtifactTable.time_created), desc(EngineArtifactTable.id))
-      .all(),
+      .all()
+      .map(toIntegrityAttemptArtifactRow),
   )
-}
-
-export function findLatestIntegrityAttemptArtifact(input: IntegrityAttemptArtifactQuery) {
-  return listIntegrityAttemptArtifacts(input)[0]
 }
 
 export function integrityAttemptVerdict(row: ArtifactRow | undefined | null) {
   const payload = row?.payload as { verdict?: unknown } | null | undefined
   const verdict = payload?.verdict
   return verdict === "pass" || verdict === "concerns" || verdict === "needs_correction" ? verdict : undefined
+}
+
+function toIntegrityAttemptArtifactRow(row: ArtifactRow): IntegrityAttemptArtifactRow {
+  const payload = row.payload && typeof row.payload === "object" && !Array.isArray(row.payload)
+    ? (row.payload as Record<string, unknown>)
+    : {}
+  const specSnapshotID = typeof payload.spec_snapshot_id === "string" ? payload.spec_snapshot_id : ""
+  return {
+    ...row,
+    artifactID: row.id,
+    taskID: row.task_id,
+    specSnapshotID,
+    timeCreated: row.time_created,
+  }
 }
 
 /** Latest delivery-agent-verdict artifact bound to a specific delivery row.

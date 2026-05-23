@@ -40,9 +40,12 @@ export {
 export { renderIntegrityMarkdown } from "./render-markdown"
 export {
   buildIntegrityReplayContext,
+  buildSpecSnapshotLineage,
   renderIntegrityReplayContextPrompt,
+  type BuildIntegrityReplayContextInput,
   type IntegrityBuildEvidenceSinceLastReview,
   type IntegrityPriorAttemptSummary,
   type IntegrityReplayContext,
   type IntegrityReviewScaleSignals,
+  type SpecSnapshotLineage,
 } from "./replay-context"

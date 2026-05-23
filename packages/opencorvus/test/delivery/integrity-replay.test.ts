@@ -10,7 +10,7 @@ import {
   EngineTaskTable,
 } from "../../src/engine/engine.sql"
 import { findLatestIntegrityAttemptArtifact } from "../../src/engine/store"
-import { buildIntegrityReplayContext } from "../../src/integrity/replay-context"
+import { buildIntegrityReplayContext, buildSpecSnapshotLineage } from "../../src/integrity/replay-context"
 import { ProjectTable } from "../../src/project/project.sql"
 import { Instance } from "../../src/project/instance"
 import { Database } from "../../src/storage/db"
@@ -55,6 +55,7 @@ mock.module("@/integrity", () => ({
   },
   computeRequirementStatusSnapshot: () => requirementStatusRows,
   buildIntegrityReplayContext,
+  buildSpecSnapshotLineage,
 }))
 
 afterEach(async () => {
