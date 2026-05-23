@@ -130,6 +130,12 @@ import { renderIntegrityMarkdown } from "@/integrity/render-markdown"
 export const ORCHESTRATOR_BASH_DEFAULT_TIMEOUT_MS = DEFAULT_BASH_TIMEOUT_MS
 export const ORCHESTRATOR_BASH_MAX_TIMEOUT_MS = 10 * 60 * 1000
 
+// Wait tool bounds. Floor is one second so the LLM cannot use it as a
+// cheap busy-wait; ceiling matches bash so the longest deliberate idle
+// pause is still bounded by the same operator-visible budget.
+export const ORCHESTRATOR_WAIT_MIN_MS = 1_000
+export const ORCHESTRATOR_WAIT_MAX_MS = 10 * 60 * 1000
+
 const log = Log.create({ service: "task-tools" })
 
 type OrchestratorToolExecutionContext = {
@@ -5709,6 +5715,100 @@ export function createOrchestratorTools(input: {
           outputBytes: output.length,
         })
         return `purpose=${description}; exit=${exitCode ?? "?"}; cmd=${command}\n\n${clipped}${trailer}`
+      },
+    }),
+
+    wait: tool({
+      description:
+        "One-shot deliberate pause. Yields the current orchestrator turn for the " +
+        "stated number of milliseconds before returning, so a NAMED external event " +
+        "the repository cannot itself trigger (CI run still propagating, dev-server " +
+        "warming up, remote queue draining, operator's manual setup the user just " +
+        "described) has time to settle before your NEXT tool call. " +
+        "USE WHEN: task evidence shows there is nothing dispatchable RIGHT NOW, AND " +
+        "the unblocking event is concretely external (not 'maybe a goal will finish' " +
+        "— that wakes you naturally on completion). " +
+        "NOT a polling primitive — never chain wait calls to re-inspect state on a " +
+        "fixed cadence. The orchestrator wakes on real external triggers (operator " +
+        "message, ownership recovery, scheduler tick); a second wait in the same turn " +
+        "is the signal you should have called `question` or `fail_task` instead. " +
+        "NOT a substitute for `question` (operator input required), `fail_task` " +
+        "(no responsible same-task repair), or `read_context` (refreshing task " +
+        "evidence — that is a tool call, not a pause). " +
+        "After wait returns, re-read evidence with `read_context` before deciding " +
+        "the next dispatch.",
+      inputSchema: z.object({
+        duration_ms: z
+          .number()
+          .int()
+          .min(ORCHESTRATOR_WAIT_MIN_MS)
+          .max(ORCHESTRATOR_WAIT_MAX_MS)
+          .describe(
+            `Pause length in milliseconds. Minimum ${ORCHESTRATOR_WAIT_MIN_MS}, ` +
+              `maximum ${ORCHESTRATOR_WAIT_MAX_MS}. Pick the smallest duration that ` +
+              `gives the named external event a real chance to occur.`,
+          ),
+        reason: z
+          .string()
+          .min(1)
+          .describe(
+            "Concrete external event you are waiting for and why no in-task " +
+              "dispatch is responsible until it lands. Recorded in the decision log " +
+              "so the next wake can audit the deliberate pause.",
+          ),
+      }),
+      execute: async ({ duration_ms, reason }) => {
+        const startedAt = Date.now()
+        try {
+          createDecisionLog(taskID).append({
+            phase: "orchestrator",
+            key: `wait_${startedAt}`,
+            value: `wait ${duration_ms}ms`,
+            reason,
+          })
+        } catch (error) {
+          log.warn("wait decision log append failed", {
+            taskID,
+            error: error instanceof Error ? error.message : String(error),
+          })
+        }
+
+        let aborted = false
+        await new Promise<void>((resolve) => {
+          if (input.signal?.aborted) {
+            aborted = true
+            resolve()
+            return
+          }
+          const onAbort = () => {
+            aborted = true
+            clearTimeout(timer)
+            resolve()
+          }
+          const timer = setTimeout(() => {
+            input.signal?.removeEventListener("abort", onAbort)
+            resolve()
+          }, duration_ms)
+          input.signal?.addEventListener("abort", onAbort, { once: true })
+        })
+
+        const elapsed = Date.now() - startedAt
+        log.info("orchestrator wait completed", {
+          taskID,
+          requestedMs: duration_ms,
+          elapsedMs: elapsed,
+          aborted,
+        })
+        if (aborted) {
+          return (
+            `wait aborted after ${elapsed}ms (requested ${duration_ms}ms). Reason: ${reason}`
+          )
+        }
+        return (
+          `Waited ${elapsed}ms (requested ${duration_ms}ms). Reason: ${reason}. ` +
+          `Re-read task evidence with read_context before your next dispatch — ` +
+          `the world may have changed during the pause.`
+        )
       },
     }),
   }
