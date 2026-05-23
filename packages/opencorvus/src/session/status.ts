@@ -31,7 +31,7 @@ export namespace SessionStatus {
       }),
       z.object({
         type: z.literal("terminal"),
-        reason: z.enum(["completed", "error", "aborted"]),
+        reason: z.enum(["completed", "error", "aborted", "artifact_missing"]),
         error: z.string().optional(),
       }),
     ])
@@ -80,7 +80,9 @@ export namespace SessionStatus {
 
   export function set(sessionID: string, status: Info) {
     // Single-source terminal guard (rule 8): once a session reaches a
-    // terminal state, subsequent set() calls are silently dropped.
+    // terminal state, subsequent set() calls are silently dropped, except
+    // artifact-missing integrity sessions which may be upgraded from an
+    // already-completed tool lifecycle into a data-integrity terminal status.
     //
     // Without this guard, multiple cleanup paths each thought they were
     // authoritative and emitted their own terminal: prompt/state.ts cancel()
@@ -98,7 +100,11 @@ export namespace SessionStatus {
     // dropped — there is no "back from terminal", and any late arrival
     // is a sign of a cleanup race we do NOT want to paper over by reopening
     // the session.
-    if (state[sessionID]?.type === "terminal") return
+    const current = state[sessionID]
+    if (
+      current?.type === "terminal" &&
+      !(current.reason === "completed" && status.type === "terminal" && status.reason === "artifact_missing")
+    ) return
     // Seal the latch BEFORE publishing. Bus.publish dispatches subscribers
     // synchronously; if a subscriber re-enters set() (audit §11.3 H1 —
     // observed when message-bridge handlers chain into other session writes),
@@ -123,5 +129,13 @@ export namespace SessionStatus {
     // distinguish a closed session from one that simply has no entry yet.
     // Idle is the default fallback in get(), so we delete idle to avoid
     // unbounded accumulation; terminal is rare and bounded by session count.
+  }
+
+  export function markArtifactMissing(sessionID: string, error: string) {
+    set(sessionID, {
+      type: "terminal",
+      reason: "artifact_missing",
+      error,
+    })
   }
 }

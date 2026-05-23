@@ -769,6 +769,61 @@ export function integrityAttemptVerdict(row: ArtifactRow | undefined | null) {
   return verdict === "pass" || verdict === "concerns" || verdict === "needs_correction" ? verdict : undefined
 }
 
+export type IntegrityArtifactMissingSessionStatus = {
+  sessionID: string
+  emittedAt: number
+  error?: string
+}
+
+export function findLatestIntegrityArtifactMissingStatus(taskID: string): IntegrityArtifactMissingSessionStatus | undefined {
+  const row = Database.use((db) =>
+    db
+      .select({
+        sessionID: ProtocolEventTable.session_id,
+        emittedAt: ProtocolEventTable.emitted_at,
+        error: sql<string | null>`json_extract(${ProtocolEventTable.payload}, '$.status.error')`,
+      })
+      .from(ProtocolEventTable)
+      .innerJoin(SessionTable, eq(SessionTable.id, ProtocolEventTable.session_id))
+      .where(
+        and(
+          eq(ProtocolEventTable.task_id, taskID),
+          eq(ProtocolEventTable.type, "session.status"),
+          eq(SessionTable.kind, "integrity"),
+          sql`json_extract(${ProtocolEventTable.payload}, '$.status.reason') = 'artifact_missing'`,
+          sql`NOT EXISTS (
+            SELECT 1 FROM ${ProtocolEventTable} pe_newer
+            WHERE pe_newer.session_id = ${ProtocolEventTable.session_id}
+              AND pe_newer.type = 'session.status'
+              AND (
+                pe_newer.emitted_at > ${ProtocolEventTable.emitted_at}
+                OR (
+                  pe_newer.emitted_at = ${ProtocolEventTable.emitted_at}
+                  AND pe_newer.seq > ${ProtocolEventTable.seq}
+                )
+              )
+          )`,
+          sql`NOT EXISTS (
+            SELECT 1 FROM ${EngineArtifactTable} ea
+            WHERE ea.task_id = ${taskID}
+              AND ea.kind = 'integrity_attempt'
+              AND json_extract(ea.payload, '$.session_id') = ${ProtocolEventTable.session_id}
+              AND ea.time_created >= ${ProtocolEventTable.emitted_at}
+          )`,
+        ),
+      )
+      .orderBy(desc(ProtocolEventTable.emitted_at), desc(ProtocolEventTable.seq))
+      .get(),
+  )
+  const sessionID = row?.sessionID
+  if (!sessionID) return undefined
+  return {
+    sessionID,
+    emittedAt: row.emittedAt,
+    error: row.error ?? undefined,
+  }
+}
+
 function toIntegrityAttemptArtifactRow(row: ArtifactRow): IntegrityAttemptArtifactRow {
   const payload = row.payload && typeof row.payload === "object" && !Array.isArray(row.payload)
     ? (row.payload as Record<string, unknown>)

@@ -60,3 +60,12 @@ export {
   type SharedPromptCapOutput,
   type SharedPromptSurface,
 } from "./shared-prompt"
+export {
+  buildIntegrityRootHistory,
+  persistentRootSummary,
+  renderIntegrityRootHistoryBlock,
+  type IntegrityPersistentRoot,
+  type IntegrityRootHistory,
+  type IntegrityRootHistoryAttempt,
+  type IntegrityRootSymptomVariation,
+} from "./root-history"

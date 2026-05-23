@@ -31,6 +31,7 @@ import {
   startNewAttempt,
   updateGoalRun,
 } from "../../src/engine/persist"
+import * as EnginePersist from "../../src/engine/persist"
 import { AttachmentStore } from "../../src/storage/attachment-store"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
@@ -44,6 +45,7 @@ import {
   findGoal,
   findGoalRun,
   findGoalLatestWorkspace,
+  findLatestIntegrityArtifactMissingStatus,
   findLatestIntegrityAttemptArtifact,
   findRequirements,
   findRun,
@@ -61,6 +63,7 @@ import {
   listLiveOrchestratorToolOwnership,
 } from "../../src/engine/tool-ownership"
 import { buildIntegrityReplayContext, buildSpecSnapshotLineage } from "../../src/integrity/replay-context"
+import { buildIntegrityRootHistory, persistentRootSummary, renderIntegrityRootHistoryBlock } from "../../src/integrity/root-history"
 
 let buildAgentRunImpl: ((input: any) => Promise<any>) | undefined
 let reviewIntegrityImpl: ((input: any) => Promise<any>) | undefined
@@ -215,6 +218,9 @@ mock.module("@/integrity", () => ({
   computeRequirementStatusSnapshot: (input: any) => computeRequirementStatusSnapshotImpl?.(input) ?? [],
   buildIntegrityReplayContext,
   buildSpecSnapshotLineage,
+  buildIntegrityRootHistory,
+  persistentRootSummary,
+  renderIntegrityRootHistoryBlock,
   applyIntegrityCorrections: (goals: any) => goals,
 }))
 
@@ -3978,6 +3984,160 @@ describe("orchestrator tools", () => {
     })
   })
 
+  test("integrity artifact persistence failure marks artifact_missing without completing a pass verdict", async () => {
+    await tmp?.[Symbol.asyncDispose]?.()
+    tmp = await tmpdir({ git: true })
+
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_integrity_artifact_missing_${stamp}`
+    const taskID = `tsk_integrity_artifact_missing_${stamp}`
+    const goalID = `goal_integrity_artifact_missing_${stamp}`
+    const specID = `spec_${goalID}`
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "integrity artifact missing test" })
+        const integritySession = await Session.createNext({
+          kind: "integrity",
+          parentID: parent.id,
+          title: "Integrity Supervisor",
+          directory: tmp.path,
+        })
+        insertWorkflowTaskWithGoal({
+          projectID,
+          taskID,
+          goalID,
+          sessionID: parent.id,
+          worktree: tmp.path,
+          projectName: "Integrity artifact missing test",
+          taskTitle: "Integrity artifact missing task",
+          request: "Do not complete without persisted integrity artifact",
+          goalTitle: "Persist integrity result",
+          goalSlug: "persist-integrity-result",
+          objective: "Verify artifact persistence is required for pass completion",
+          now,
+          specID,
+        })
+        computeRequirementStatusSnapshotImpl = () => [
+          {
+            id: "REQ-artifact-missing",
+            description: "Persist integrity result",
+            priority: "blocking",
+            claimingGoals: [{ goalID, runStatus: "completed" }],
+          },
+        ]
+        reviewIntegrityImpl = async () =>
+          integrityTeamResult({
+            verdict: "pass",
+            summary: "Integrity passed but artifact persistence will fail",
+            sessionID: integritySession.id,
+          })
+        spyOn(EnginePersist, "recordIntegrityAttempt").mockImplementation(() => {
+          throw new Error("insert failed")
+        })
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+        const output = await tools.integrity.execute({}, {} as any)
+
+        expect(output).toContain("artifact_persistence_status")
+        expect(SessionStatus.get(integritySession.id)).toMatchObject({
+          type: "terminal",
+          reason: "artifact_missing",
+        })
+        expect(findLatestIntegrityArtifactMissingStatus(taskID)?.sessionID).toBe(integritySession.id)
+        const task = Database.use((db) => db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get())
+        expect(task?.time_completed).toBeNull()
+      },
+    })
+  })
+
+  test("review decision_log records persistent_roots from shared root history", async () => {
+    await tmp?.[Symbol.asyncDispose]?.()
+    tmp = await tmpdir({ git: true })
+
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_integrity_persistent_roots_${stamp}`
+    const taskID = `tsk_integrity_persistent_roots_${stamp}`
+    const goalID = `goal_integrity_persistent_roots_${stamp}`
+    const specID = `spec_${goalID}`
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "integrity persistent roots test" })
+        insertWorkflowTaskWithGoal({
+          projectID,
+          taskID,
+          goalID,
+          sessionID: parent.id,
+          worktree: tmp.path,
+          projectName: "Integrity persistent roots test",
+          taskTitle: "Integrity persistent roots task",
+          request: "Record persistent root summaries in review decision log",
+          goalTitle: "Persist root summary",
+          goalSlug: "persist-root-summary",
+          objective: "Verify repeated review findings are summarized for later context",
+          now,
+          specID,
+        })
+        for (const offset of [1, 2]) {
+          recordIntegrityAttempt({
+            taskID,
+            sessionID: `ses_prior_persistent_root_${offset}`,
+            lineage: activeOnlyLineage(taskID, specID),
+            verdict: "needs_correction",
+            phase: "post_build",
+            reviewers: [{ reviewerID: "rev_storage", scope: "Storage validation" }],
+            findings: [
+              integrityFinding({
+                id: `BF-prior-${offset}`,
+                title: `Settings validation prior ${offset}`,
+                description: "getSettings() still accepts invalid localStorage settings.",
+                filePaths: ["src/services/storage.ts"],
+                reviewers: ["rev_storage"],
+              }),
+            ],
+            now: now + offset,
+          })
+        }
+
+        reviewIntegrityImpl = async () =>
+          integrityTeamResult({
+            verdict: "needs_correction",
+            summary: "Integrity needs_correction",
+            findings: [
+              integrityFinding({
+                id: "BF-current-settings-validation",
+                title: "Storage settings validator still absent",
+                description: "getSettings() still fails to validate stored model settings.",
+                filePaths: ["src/services/storage.ts"],
+                reviewers: ["rev_storage"],
+              }),
+            ],
+            sessionID: "ses_integrity_persistent_root_current",
+          })
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        await tools.integrity.execute({}, {} as any)
+
+        const reviewRows = createDecisionLog(taskID).readByPhase("review")
+        expect(reviewRows.at(-1)?.value).toContain("persistent_roots=[")
+        expect(reviewRows.at(-1)?.value).toContain("(3)")
+      },
+    })
+  })
+
   test("mixed architecture findings are recorded without requirements or plan restart", async () => {
     await tmp?.[Symbol.asyncDispose]?.()
     tmp = await tmpdir({ git: true })
@@ -4359,6 +4519,104 @@ describe("orchestrator tools", () => {
         expect(result).toContain("status=passed")
         expect(buildCalls).toBe(1)
         expect(listGoalRunsByGoal(goalID)).toHaveLength(1)
+      },
+    })
+  })
+
+  test("persistent integrity roots are context, not a host-side build gate", async () => {
+    await tmp?.[Symbol.asyncDispose]?.()
+    tmp = await tmpdir({ git: true })
+
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_goal_integrity_persistent_context_${stamp}`
+    const taskID = `tsk_goal_integrity_persistent_context_${stamp}`
+    const goalID = `goal_integrity_persistent_context_${stamp}`
+    const specID = `spec_${goalID}`
+    let buildCalls = 0
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "persistent integrity context test" })
+        insertWorkflowTaskWithGoal({
+          projectID,
+          taskID,
+          goalID,
+          sessionID: parent.id,
+          worktree: tmp.path,
+          projectName: "Persistent integrity context test",
+          taskTitle: "Persistent integrity context task",
+          request: "Let the LLM-selected lane execute through normal tools",
+          goalTitle: "Build after persistent integrity context",
+          goalSlug: "build-after-persistent-integrity-context",
+          objective: "Verify persistent roots are prompt context, not host dispatch gates",
+          now,
+          specID,
+        })
+        for (const offset of [1, 2, 3]) {
+          recordIntegrityAttempt({
+            taskID,
+            sessionID: `ses_persistent_context_${offset}`,
+            lineage: activeOnlyLineage(taskID, specID),
+            verdict: "needs_correction",
+            phase: "post_build",
+            reviewers: [{ reviewerID: "rev_storage", scope: "Storage validation" }],
+            findings: [
+              integrityFinding({
+                id: `BF-context-${offset}`,
+                title: `Settings validation round ${offset}`,
+                description: "getSettings() still accepts invalid settings.",
+                filePaths: ["src/services/storage.ts"],
+                reviewers: ["rev_storage"],
+              }),
+            ],
+            now: now + offset,
+          })
+        }
+        buildAgentRunImpl = async (input: any) => {
+          await markBuildSlotAcquired(input)
+          buildCalls += 1
+          return {
+            result: {
+              status: "passed",
+              summary: "Build executed because the selected lane was not host-gated by root history.",
+              files_changed: [
+                {
+                  path: "src/services/storage.ts",
+                  summary: "Handled selected build lane.",
+                  reason: "Persistent roots are model-visible context only.",
+                },
+              ],
+              tests: [],
+              commit_ref: "abc1234",
+            },
+            sessionID: "ses_goal_after_persistent_context",
+            worktreeDir: input.managedWorktree.directory,
+            worktreeBranch: input.managedWorktree.branch,
+            worktreeBaseRef: input.managedWorktree.baseRef,
+          }
+        }
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+        const context = await tools.read_context.execute({ scope: "integrity_history" }, {} as any)
+        expect(context).toContain("Persistent blocking roots")
+
+        const result = await tools.build.execute(
+          {
+            goalID,
+            request: "The stub LLM selected build through the normal tool path.",
+            reason: "Active-path no-host-gate regression.",
+          },
+          buildToolOptions(),
+        )
+
+        expect(result).toContain("status=passed")
+        expect(buildCalls).toBe(1)
       },
     })
   })
