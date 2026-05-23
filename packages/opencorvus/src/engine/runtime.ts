@@ -37,6 +37,7 @@ import { Identifier } from "@/id/id"
 import { EXECUTOR_ACTIVE_RUN_STATUSES, RUNTIME_MONITORED_RUN_STATUSES, isLiveGoalRunStatus } from "./catalog"
 import { PerRunState } from "./per-run-state"
 import { isInteractionBlockingReason } from "./run-blocking"
+import { isTaskCancelled } from "./task-status"
 
 const log = Log.create({ service: "engine-runtime" })
 const DELIVERY_FETCH_TIMEOUT_MS = parseInt(process.env.OPENCORVUS_DELIVERY_FETCH_TIMEOUT_MS || "300000", 10) // 5 min for executor.delivery() (git operations can be slow on Windows with large repos)
@@ -126,6 +127,14 @@ export namespace EngineRuntime {
 
     const passed = goalRuns.filter((goalRun) => goalRun.status === "completed").length
     const failed = goalRuns.filter((goalRun) => goalRun.status === "failed" || goalRun.status === "aborted").length
+    const task = findTask(run.task_id)
+    if (task && isTaskCancelled(task)) {
+      log.info("goal batch settled after task cancellation; not waking orchestrator", {
+        taskID: run.task_id,
+        runID: run.id,
+      })
+      return
+    }
     const [{ dispatchTaskLoop }, { OrchestratorEventNote }] = await Promise.all([
       import("@/engine/queue"),
       import("@/orchestrator/agent"),
