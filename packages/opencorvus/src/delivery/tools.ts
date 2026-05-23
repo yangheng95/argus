@@ -20,9 +20,11 @@ import { Filesystem } from "@/util/filesystem"
 import { Log } from "@/util/log"
 import {
   findActiveSpecForTask,
+  findDeliveriesForTask,
   findLatestArchitectContractGraph,
   findRequirements,
   findTask,
+  listGoalRunsForTask,
   listGoals,
 } from "@/engine/store"
 import {
@@ -141,7 +143,7 @@ async function runDeliveryIntegrityReview(input: {
       typeof goal.requirement_ids === "string" ? JSON.parse(goal.requirement_ids) : (goal.requirement_ids ?? []),
   }))
 
-  const { reviewIntegrity, computeRequirementStatusSnapshot } = await import("@/integrity")
+  const { reviewIntegrity, computeRequirementStatusSnapshot, buildIntegrityReplayContext } = await import("@/integrity")
   const requirementStatus = computeRequirementStatusSnapshot({
     taskID: task.id,
     specSnapshotID: activeSpec.id,
@@ -152,6 +154,15 @@ async function runDeliveryIntegrityReview(input: {
   )
     ? "post_build"
     : "pre_build"
+  const replayContext = buildIntegrityReplayContext({
+    taskID: task.id,
+    specSnapshotID: activeSpec.id,
+    phase,
+    goals: goalsForReview,
+    requirements,
+    deliveries: findDeliveriesForTask(task.id),
+    goalRuns: listGoalRunsForTask(task.id),
+  })
 
   const verdict = await reviewIntegrity({
     userRequest: task.request,
@@ -164,6 +175,7 @@ async function runDeliveryIntegrityReview(input: {
     contractGraph,
     decisionLog,
     attachments: taskAttachments,
+    replayContext,
     signal: input.signal,
     taskID: task.id,
     parentSessionID: input.parentSessionID,
