@@ -167,6 +167,14 @@ export namespace AttachmentStore {
     return await fs.readFile(abs)
   }
 
+  /** Convert a canonical `/attachment/<projectID>/<sha>.<ext>` reference into an AI-SDK data URL. */
+  export async function dataUrlFromReference(url: string, mime: string): Promise<string | undefined> {
+    const located = nameFromUrl(url)
+    if (!located) return undefined
+    const bytes = await read(located.projectID, located.name)
+    return `data:${mime};base64,${bytes.toString("base64")}`
+  }
+
   /**
    * Whether a MIME type can be sent as an LLM multimodal file part.
    *
@@ -370,11 +378,12 @@ export namespace AttachmentStore {
     return Promise.all(accepted.map(async (a) => {
       const located = nameFromUrl(String(a.url ?? ""))
       if (!located) throw new Error(`attachment has no resolvable url: ${a.filename ?? a.sha}`)
-      const bytes = await read(located.projectID, located.name)
       const mime = String(a.mime)
+      const url = await dataUrlFromReference(String(a.url ?? ""), mime)
+      if (!url) throw new Error(`attachment has no resolvable url: ${a.filename ?? a.sha}`)
       return {
         type: "file" as const,
-        url: `data:${mime};base64,${Buffer.from(bytes).toString("base64")}`,
+        url,
         mime,
         ...(a.filename ? { filename: a.filename } : {}),
       }
