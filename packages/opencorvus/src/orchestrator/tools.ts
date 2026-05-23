@@ -1961,10 +1961,10 @@ export function createOrchestratorTools(input: {
         // give the catch block an id to emit on — replaced by `runnerSessionID`
         // captured below.
         let runnerSessionID: string | undefined
+        const decisionLog = createDecisionLog(taskID)
+        const maturityScopePendingBeforeID = decisionLog.readByKey("maturity_scope_pending")?.id
         try {
           const { RequirementsAgent } = await import("@/requirements")
-          const { createDecisionLog } = await import("@/decision-log")
-          const decisionLog = createDecisionLog(taskID)
           const designAnalysis = renderDesignAnalysisHandoffReference(taskID)
 
           // Stage-level retry was removed in step 5/7 (rule 8 — single
@@ -2103,6 +2103,45 @@ export function createOrchestratorTools(input: {
             pointer: `read_context scope=decisions (spec ${specSnapshotID})`,
           })
         } catch (err) {
+          const maturityScopeDecision = decisionLog.readByKey("maturity_scope_pending")
+          if (maturityScopeDecision && maturityScopeDecision.id !== maturityScopePendingBeforeID) {
+            const { output } = await Question.askAndFormat({
+              sessionID: input.agentSessionID,
+              questions: [
+                {
+                  header: "Maturity scope",
+                  question: [
+                    "The Requirements agent found an ambiguous maturity / quality word and stopped before finalizing requirements.",
+                    `Recorded assumption: ${maturityScopeDecision.value}`,
+                    `Reason: ${maturityScopeDecision.reason}`,
+                    "Please define the maturity boundary so the requirements can be finalized without leaving later integrity review open-ended.",
+                  ].join("\n\n"),
+                  options: [
+                    {
+                      label: "Use assumption",
+                      description: "Proceed with the recorded bounded interpretation.",
+                    },
+                    {
+                      label: "Narrow scope",
+                      description: "Limit maturity expectations to the explicitly requested behavior.",
+                    },
+                  ],
+                  multiple: false,
+                  custom: true,
+                },
+              ],
+            })
+            return SubAgentProtocol.yieldResult({
+              headline: "requirements: maturity scope clarification requested.",
+              summary: output,
+              fields: [
+                ["decision", "maturity_scope_pending"],
+                ["recorded_assumption", maturityScopeDecision.value],
+                ["reason", maturityScopeDecision.reason],
+              ],
+              pointer: "question lane; answered clarification will be included in the next requirements prompt",
+            })
+          }
           // Card terminal flows through session.status (the runner session's
           // actor close path emits {type:"terminal", reason:"error"}); the
           // error message itself surfaces via the thrown error in the

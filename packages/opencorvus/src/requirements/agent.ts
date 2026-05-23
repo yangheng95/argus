@@ -90,7 +90,7 @@ export namespace RequirementsAgent {
     // user's free-form request. `createAgentContextTools()` resolves to the
     // correct root via Instance.directory by default.
     const contextTools = await filterAgentTools(createAgentContextTools(), "requirements")
-    const outputToolKit = createRequirementsOutputTools()
+    const outputToolKit = createRequirementsOutputTools({ decisionLog: input.decisionLog })
 
     const context = prefetchContext(input.title, input.request)
 
@@ -154,18 +154,6 @@ export namespace RequirementsAgent {
       summary: parsed.summary || "Requirements parsed",
       requirements: parsed.requirements,
       decisions: parsed.decisions,
-    }
-
-    // Seed Decision Log with foundational decisions
-    if (input.decisionLog && result.decisions.length > 0) {
-      for (const decision of result.decisions) {
-        input.decisionLog.append({
-          phase: "requirements",
-          key: decision.key,
-          value: decision.value,
-          reason: decision.reason,
-        })
-      }
     }
 
     return { ...result, sessionID: out.session.id }
