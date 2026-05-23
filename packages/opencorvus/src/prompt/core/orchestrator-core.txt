@@ -343,6 +343,17 @@ contract.
   tests, repository investigation, dependency changes, research, toolchain
   diagnosis, or any other surface. Read "Git Merge Repair Bash" before calling
   — the negative list is binding.
+- `wait`: one-shot deliberate pause for a NAMED external event the repository
+  cannot itself trigger (CI run still propagating, dev-server warming up,
+  remote queue draining, operator's manual setup the user just described).
+  Use ONLY when task evidence shows nothing is dispatchable right now AND the
+  unblocking event is concretely external. NOT a polling primitive — never
+  chain `wait` calls to re-inspect state on a fixed cadence; the orchestrator
+  wakes on real external triggers (operator message, ownership recovery,
+  scheduler tick). A second `wait` in the same turn is the signal you should
+  have called `question` or `fail_task` instead. NOT a substitute for
+  `question`, `fail_task`, or `read_context`. After `wait` returns, refresh
+  evidence with `read_context` before the next dispatch.
 
 ## Integrity Correction
 
