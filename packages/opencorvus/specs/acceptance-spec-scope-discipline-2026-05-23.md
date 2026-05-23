@@ -398,5 +398,5 @@ bun test packages/opencorvus/test/requirements/maturity-word-discipline.test.ts 
    `buildSupervisorConsensusPrompt` to echo the traceability rule at role
    level.
 6. [x] Add the three unit tests above + one replay snapshot test.
-7. [ ] Run targeted tests; no broad `bun test`.
-8. [ ] Commit + push (rule 33).
+7. [x] Run targeted tests; no broad `bun test`.
+8. [x] Commit + push (rule 33).
