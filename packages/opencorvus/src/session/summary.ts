@@ -7,11 +7,23 @@ import { Message } from "./message"
 import { Identifier } from "@/id/id"
 import { Snapshot } from "@/snapshot"
 
-import { Storage } from "@/storage/storage"
 import { Bus } from "@/bus"
+import { Filesystem } from "@/util/filesystem"
+import { Instance } from "@/project/instance"
+import { ProjectRuntimePaths } from "@/project/runtime-paths"
 
 export namespace SessionSummary {
   const log = Log.create({ service: "session.summary" })
+
+  export async function readDiff(sessionID: string): Promise<Snapshot.FileDiff[]> {
+    const target = ProjectRuntimePaths.sessionDiffPath(Instance.directory, Instance.project.id, sessionID)
+    return Filesystem.readJson<Snapshot.FileDiff[]>(target)
+  }
+
+  export async function writeDiff(sessionID: string, diff: Snapshot.FileDiff[]): Promise<void> {
+    const target = ProjectRuntimePaths.sessionDiffPath(Instance.directory, Instance.project.id, sessionID)
+    await Filesystem.writeJson(target, diff)
+  }
 
   function unquoteGitPath(input: string) {
     if (!input.startsWith('"')) return input
@@ -105,7 +117,7 @@ export namespace SessionSummary {
         error: err,
       })
     })
-    await Storage.write(["session_diff", input.sessionID], diffs)
+    await writeDiff(input.sessionID, diffs)
     Bus.publish(Session.Event.Diff, {
       sessionID: input.sessionID,
       diff: diffs,
@@ -118,7 +130,7 @@ export namespace SessionSummary {
       messageID: Identifier.schema("message").optional(),
     }),
     async (input) => {
-      const diffs = await Storage.read<Snapshot.FileDiff[]>(["session_diff", input.sessionID]).catch(() => [])
+      const diffs = await readDiff(input.sessionID).catch(() => [])
       const next = diffs.map((item) => {
         const file = unquoteGitPath(item.file)
         if (file === item.file) return item
@@ -128,7 +140,7 @@ export namespace SessionSummary {
         }
       })
       const changed = next.some((item, i) => item.file !== diffs[i]?.file)
-      if (changed) Storage.write(["session_diff", input.sessionID], next).catch((err) => {
+      if (changed) writeDiff(input.sessionID, next).catch((err) => {
         log.warn("session_diff storage write failed", { sessionID: input.sessionID, error: String(err) })
       })
       return next

@@ -34,7 +34,12 @@ export namespace CodexExecutor {
       stream: true,
       input: input.prompt,
       instructions: input.system,
-      metadata: input.cwd ? { cwd: input.cwd } : undefined,
+      metadata: {
+        ...(input.cwd ? { cwd: input.cwd } : {}),
+        ...(input.taskID ? { taskID: input.taskID } : {}),
+        ...(input.logicalSessionID ? { sessionID: input.logicalSessionID } : {}),
+        ...(input.runtimeDir ? { runtimeDir: input.runtimeDir } : {}),
+      },
       max_output_tokens: undefined,
       tools: (input.tools ?? [])
         .flatMap((item) => {

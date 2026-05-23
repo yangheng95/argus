@@ -51,7 +51,7 @@ export function buildTaskUpstreamAgentContextSections(taskID: string): string[] 
     // Instance.directory — tool/read.ts), so the RELATIVE bundle path is
     // reachable. The inline Decision Log summary is truncated; this points
     // delivery at the complete on-disk projection for the full WHY.
-    DecisionLogBundle.reference({ projectDir: Instance.directory, mode: "relative" }),
+    DecisionLogBundle.reference({ projectDir: Instance.directory, taskID, mode: "relative" }),
   ].filter(hasContent)
 }
 

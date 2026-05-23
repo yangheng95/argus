@@ -56,6 +56,12 @@ type State = {
   consumers: Set<EventQueue<Notify>>
   abort: AbortController
   startHash?: string
+  runtime?: {
+    taskID?: string
+    logicalSessionID?: string
+    runtimeDir?: string
+    worktreeDir?: string
+  }
 }
 
 export const ManagedCodingExecutor = {
@@ -71,6 +77,7 @@ export const ManagedCodingExecutor = {
       const input = {
         model: value(options.model),
         prompt,
+        ...state.runtime,
         cwd: resolvedCwd,
         system: systemOverride ?? value(options.system),
         maxTurns: value(options.maxTurns),
@@ -155,6 +162,12 @@ export const ManagedCodingExecutor = {
           consumers: new Set(),
           abort: new AbortController(),
           startHash,
+          runtime: {
+            taskID: input.taskID,
+            logicalSessionID: input.logicalSessionID ?? input.sessionID,
+            runtimeDir: input.runtimeDir,
+            worktreeDir: input.worktreeDir ?? input.cwd,
+          },
         }
         tasks.set(id, state)
         latest.set(input.sessionID, id)
@@ -233,6 +246,12 @@ export const ManagedCodingExecutor = {
           events: [],
           consumers: new Set(),
           abort: new AbortController(),
+          runtime: prev?.runtime ?? {
+            taskID: input.taskID,
+            logicalSessionID: input.logicalSessionID ?? input.sessionID,
+            runtimeDir: input.runtimeDir,
+            worktreeDir: input.worktreeDir,
+          },
         }
         tasks.set(id, state)
         latest.set(input.sessionID, id)

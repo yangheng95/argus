@@ -89,13 +89,8 @@ describe("Ownership.Worktree", () => {
     })
 
     // Drop a bad marker: simulate a partially-written marker file.
-    const badMarkerPath = path.join(
-      rootDir,
-      ".opencorvus",
-      "ownership",
-      "worktrees",
-      "garbage.json",
-    )
+    const badMarkerPath = path.join(rootDir, ".opencorvus", "runtime", "ownership", "worktrees", "garbage.json")
+    await fs.mkdir(path.dirname(badMarkerPath), { recursive: true })
     await fs.writeFile(badMarkerPath, "{not-json}\n", { encoding: "utf8" })
 
     const orphans = await Ownership.Worktree.orphans({

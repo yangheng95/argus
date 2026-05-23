@@ -193,7 +193,7 @@ const TaskAttachmentInput = z.object({
 
 /**
  * Persisted attachment reference. Once the bytes live in AttachmentStore
- * (`<projectDir>/.opencorvus/attachments/<sha>.<ext>`), every downstream layer
+ * (`<projectDir>/.opencorvus/runtime/blobs/attachments/<sha>.<ext>`), every downstream layer
  * — queue table row, task loop, orchestrator, design-analyst, requirements — only
  * carries this small, URL-addressable reference. Agents that need the raw
  * bytes for multimodal LLM input read them back through AttachmentStore.

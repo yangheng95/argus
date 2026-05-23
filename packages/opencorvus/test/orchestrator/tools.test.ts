@@ -18,6 +18,7 @@ import {
 import { createDecisionLog } from "../../src/decision-log"
 import { createWorkflowState, WorkflowRegistry } from "../../src/engine/workflow"
 import { createOrchestratorTools } from "../../src/orchestrator/tools"
+import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 import { SessionPrompt } from "../../src/session/prompt"
 import { goalStatusByID } from "../../src/engine/describe"
 import { openTaskForOperatorMessage } from "../../src/engine/task-message-open"
@@ -2266,14 +2267,15 @@ describe("orchestrator tools", () => {
         expect(result).toContain("prd_spec_file")
         expect(result).toContain(".opencorvus")
 
-        const prdPath = path.join(tmp.path, ".opencorvus", "design-analysis", "prd-spec.md")
-        const manifestPath = path.join(tmp.path, ".opencorvus", "design-analysis", "evidence-source-manifest.md")
+        const paths = ProjectRuntimePaths.designAnalysisPaths(tmp.path, taskID)
+        const prdPath = paths.prdAbsolute
+        const manifestPath = paths.manifestAbsolute
         const prd = await fs.readFile(prdPath, "utf8")
         const manifest = await fs.readFile(manifestPath, "utf8")
         expect(prd).toContain("## Visual Consistency Spec")
         expect(prd).toContain("Match reference layout, typography, colors, and spacing exactly.")
-        expect(prd).toContain(".opencorvus/design-analysis/evidence-source-manifest.md")
-        expect(manifest).toContain("Canonical PRD/SPEC file: .opencorvus/design-analysis/prd-spec.md")
+        expect(prd).toContain(paths.manifestRelative)
+        expect(manifest).toContain(`Canonical PRD/SPEC file: ${paths.prdRelative}`)
         expect(manifest).toContain("design-reference.png")
         expect(manifest).toContain("mirror/reference.png")
       },

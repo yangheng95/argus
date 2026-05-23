@@ -38,7 +38,7 @@ export const GoalContractFieldsSchema = z.object({
         "(a) what this goal implements, (b) constraints specific to this goal, " +
         "(c) edge cases the executor must handle. " +
         "Do NOT restate the user's request — the executor has the full user " +
-        "intent bundle at .opencorvus/intent/ and can reference it. " +
+        "task-scoped runtime intent bundle and can reference it. " +
         "Do NOT describe interface signatures or type definitions here — put " +
         "those in the Architect Contract Graph. " +
         "Do NOT paraphrase what other goals do — dependents read graph contracts, " +

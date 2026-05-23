@@ -33,6 +33,10 @@ export const CodingRunInput = z.object({
   sessionID: z.string().optional(),
   model: z.string().optional(),
   prompt: z.string(),
+  taskID: z.string().optional(),
+  logicalSessionID: z.string().optional(),
+  runtimeDir: z.string().optional(),
+  worktreeDir: z.string().optional(),
   cwd: z.string().optional(),
   system: z.string().optional(),
   maxTurns: z.number().int().positive().optional(),
@@ -54,6 +58,20 @@ export type CodingProviderOptions = {
   system?: string | (() => string | undefined)
   maxTurns?: number | (() => number | undefined)
   tools?: CodingToolInfo[] | (() => CodingToolInfo[] | undefined)
+}
+
+export function codingRuntimeEnv(input: {
+  taskID?: string
+  logicalSessionID?: string
+  runtimeDir?: string
+  worktreeDir?: string
+}): Record<string, string> {
+  return {
+    ...(input.taskID ? { OPENCORVUS_TASK_ID: input.taskID } : {}),
+    ...(input.logicalSessionID ? { OPENCORVUS_SESSION_ID: input.logicalSessionID } : {}),
+    ...(input.runtimeDir ? { OPENCORVUS_RUNTIME_DIR: input.runtimeDir } : {}),
+    ...(input.worktreeDir ? { OPENCORVUS_WORKTREE_DIR: input.worktreeDir } : {}),
+  }
 }
 
 export const PlanningStage = z.enum(["spec", "plan"])
@@ -109,6 +127,10 @@ export type ExecutorAdapter = {
     prompt: string
     priority?: "critical" | "high" | "normal" | "low"
     source?: "evaluator" | "system"
+    taskID?: string
+    logicalSessionID?: string
+    runtimeDir?: string
+    worktreeDir?: string
     cwd?: string
     /** Per-submission system prompt override — takes precedence over options.system. */
     system?: string
@@ -129,6 +151,10 @@ export type ExecutorAdapter = {
   resume(input: {
     sessionID: string
     message: string
+    taskID?: string
+    logicalSessionID?: string
+    runtimeDir?: string
+    worktreeDir?: string
     priority?: "critical" | "high" | "normal" | "low"
   }): Promise<{
     sessionID: string

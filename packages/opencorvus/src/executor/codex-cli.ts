@@ -1,4 +1,4 @@
-import { record, text, type CodingEventInfo, type CodingProvider } from "./contract"
+import { codingRuntimeEnv, record, text, type CodingEventInfo, type CodingProvider } from "./contract"
 import { jsonLines } from "./external-process"
 import { normalizeExecutableArgv } from "@/util/command"
 import { gitCeilingEnvForWorktree } from "@/worktree/git-ceiling"
@@ -37,6 +37,7 @@ export namespace CodexCLIExecutor {
           env: {
             ...process.env,
             ...gitCeilingEnvForWorktree(info.cwd),
+            ...codingRuntimeEnv(info),
           },
           stdin: prompt,
           signal: info.signal,
@@ -65,6 +66,7 @@ export namespace CodexCLIExecutor {
           env: {
             ...process.env,
             ...gitCeilingEnvForWorktree(info.cwd),
+            ...codingRuntimeEnv(info),
           },
           stdin: prompt,
           signal: info.signal,

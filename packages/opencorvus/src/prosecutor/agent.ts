@@ -442,7 +442,7 @@ function buildProsecutorBrief(input: {
   const lines = [
     `# Task ${input.task.id}: "${input.task.title}"`,
     ``,
-    renderUserRequestSection({ heading: "## User Request", request: input.task.request }),
+    renderUserRequestSection({ heading: "## User Request", request: input.task.request, taskID: input.task.id }),
     ``,
     `## This iteration: ${input.iteration}`,
     `- prior iterations: ${input.priorIterationCount}`,

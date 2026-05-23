@@ -5,6 +5,8 @@ import { State } from "./state"
 import { iife } from "@/util/iife"
 import { GlobalBus } from "@/bus/global"
 import { Filesystem } from "@/util/filesystem"
+import path from "node:path"
+import { ProjectRuntimePaths } from "./runtime-paths"
 
 interface Context {
   directory: string
@@ -48,6 +50,24 @@ export const Instance: InstanceApi = {
       Log.Default.info("creating instance", { directory })
       existing = iife(async () => {
         const { project, sandbox } = await Project.fromDirectory(directory)
+        if (project.id !== "global") {
+          const legacy = (
+            await Promise.all(
+              ProjectRuntimePaths.legacyRuntimeRelativePaths.map(async (relative) => ({
+                relative,
+                exists: await Filesystem.exists(path.join(project.worktree, ...relative.split("/"))),
+              })),
+            )
+          )
+            .filter((entry) => entry.exists)
+            .map((entry) => entry.relative)
+          if (legacy.length > 0) {
+            throw new Error(
+              `Legacy OpenCorvus runtime paths exist under ${project.worktree}: ${legacy.join(", ")}. ` +
+                `Move or delete these runtime directories before starting; new task/session state lives under ${ProjectRuntimePaths.relativeRuntimeRoot()}.`,
+            )
+          }
+        }
         // Note (W2-V32): the previous bootstrap auto-ran `Project.initGit` for
         // any non-git directory. That violated rule 7 (silent fallback) and
         // was the root cause of the darwin 500-storm: when `process.cwd()`

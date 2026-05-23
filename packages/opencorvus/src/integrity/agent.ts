@@ -1025,6 +1025,7 @@ function buildIntegrityPrompt(input: {
   contractGraph: ArchitectContractGraph
   decisionLog?: DecisionLog
   acceptance?: IntegrityAcceptanceContext
+  taskID?: string
 }): string {
   const sections: string[] = []
 
@@ -1034,6 +1035,7 @@ function buildIntegrityPrompt(input: {
     heading: "# User Request (bounded excerpt)",
     title: input.taskTitle,
     request: input.userRequest,
+    taskID: input.taskID,
   }))
 
   if (input.requirements && input.requirements.length > 0) {

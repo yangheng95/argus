@@ -525,7 +525,7 @@ function renderGoal(g: GoalDesc): string[] {
 function buildAttemptRecoveryHint(error?: string): string | undefined {
   if (!error) return undefined
   if (!error.includes("report_build_result") && !error.includes("missing_terminal_report")) return undefined
-  return "Build ended without a structured report_build_result terminal call. The retained goal worktree is diagnostic under .opencorvus/worktrees, not primary workspace pollution. Retry this goal with explicit report_build_result(files_changed[]) instructions; do not restart_from_stage solely because diagnostic worktree files exist."
+  return "Build ended without a structured report_build_result terminal call. The retained goal worktree is diagnostic under .opencorvus/runtime, not primary workspace pollution. Retry this goal with explicit report_build_result(files_changed[]) instructions; do not restart_from_stage solely because diagnostic worktree files exist."
 }
 
 function truncate(text: string, max: number): string {
@@ -607,7 +607,7 @@ export function renderTaskDescription(desc: TaskDesc, options: { autoIteration?:
   const lines: string[] = []
   lines.push(`## Task: ${desc.title} (${desc.status})`)
   lines.push(`Kind: ${desc.kind}`)
-  lines.push(renderUserRequestSection({ heading: "## Request", request: desc.request }))
+  lines.push(renderUserRequestSection({ heading: "## Request", request: desc.request, taskID: desc.id }))
   if (desc.spec_summary) lines.push(`Spec: ${desc.spec_summary}`)
   if (desc.plan_summary) lines.push(`Plan: ${desc.plan_summary}`)
   if (desc.active_run_id) {

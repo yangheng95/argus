@@ -882,7 +882,7 @@ export async function runAgentSession<C>(
       error: err,
       streamErrors,
     })
-    if (AgentTrace.isEnabled()) {
+    if (AgentTrace.isEnabled() && input.taskID) {
       recordAgentTraceReportForSession(session, {
         sessionID: session.id,
         parentSessionID: input.parentSessionID,
@@ -928,7 +928,7 @@ export async function runAgentSession<C>(
     hasStructured: structured !== undefined,
   })
 
-  if (AgentTrace.isEnabled()) {
+  if (AgentTrace.isEnabled() && input.taskID) {
     recordAgentTraceReportForSession(session, {
       sessionID: session.id,
       parentSessionID: input.parentSessionID,
@@ -1177,7 +1177,7 @@ export async function runAgentSessionWithRetry<C>(
           "classifier returned ok without a runAgentSession output",
         )
       }
-      if (AgentTrace.isEnabled()) {
+      if (AgentTrace.isEnabled() && input.taskID) {
         recordAgentTraceReportForSession(out.session, {
           sessionID: out.session.id,
           parentSessionID: input.parentSessionID,
@@ -1246,7 +1246,7 @@ export async function runAgentSessionWithRetry<C>(
     })
   }
 
-  if (AgentTrace.isEnabled()) {
+  if (AgentTrace.isEnabled() && input.taskID) {
     AgentTrace.recordAgentReport({
       sessionID: lastOutput?.session.id ?? "no-session",
       parentSessionID: input.parentSessionID,

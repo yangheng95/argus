@@ -97,7 +97,7 @@ describe("design-analyst prompt assembly", () => {
 
     expect(prompt).toContain("prdword500")
     expect(prompt).not.toContain("prdword501")
-    expect(prompt).toContain(".opencorvus/intent/request.md")
+    expect(prompt).toContain(".opencorvus/runtime/tasks/<taskID>/intent/request.md")
     expect(prompt).toContain("grep/read")
   })
 })

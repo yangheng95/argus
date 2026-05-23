@@ -1,6 +1,6 @@
 import z from "zod"
 import { Log } from "@/util/log"
-import { CodingCapabilities, CodingRunInput, CodingResumeInput, type CodingEventInfo, type CodingProvider } from "./contract"
+import { CodingCapabilities, CodingRunInput, CodingResumeInput, codingRuntimeEnv, type CodingEventInfo, type CodingProvider } from "./contract"
 import { record, text } from "./contract"
 import { ToolAdapterRegistry } from "./protocol"
 
@@ -73,7 +73,7 @@ export namespace CodexAppServerExecutor {
     })
   }
 
-  export function create(input: CodexAppServerClient | ((cwd?: string) => CodexAppServerClient)): CodingProvider {
+  export function create(input: CodexAppServerClient | ((input: z.infer<typeof CodingRunInput>) => CodexAppServerClient)): CodingProvider {
     const factory = typeof input === "function" ? input : () => input
     const sessions = new Map<string, { client: CodexAppServerClient; threadID?: string; turnID?: string }>()
     return {
@@ -82,7 +82,7 @@ export namespace CodexAppServerExecutor {
       async *run(raw) {
         const input = CodingRunInput.parse(raw)
         const logicalID = input.sessionID ?? provisionalID()
-        const client = factory(input.cwd)
+        const client = factory(input)
         sessions.set(logicalID, { client })
         await ensure(client)
         const thread = await client.threadStart(threadStart(input))
@@ -111,7 +111,7 @@ export namespace CodexAppServerExecutor {
       async *resume(raw) {
         const input = CodingResumeInput.parse(raw)
         const ref = splitSession(input.sessionID)
-        const client = factory()
+        const client = factory(input)
         sessions.set(input.sessionID, { client, threadID: ref.threadID, turnID: ref.turnID })
         await ensure(client)
         const thread = await client.threadResume(threadResume(ref.threadID, input))
@@ -697,6 +697,7 @@ function threadStart(input: z.input<typeof CodingRunInput>) {
   const next = CodingRunInput.parse(input)
   return {
     model: next.model,
+    metadata: codingRuntimeEnv(next),
     cwd: next.cwd,
     approvalPolicy: approvalPolicy(),
     sandbox: next.sandbox ?? sandboxMode(),
@@ -711,6 +712,7 @@ function threadResume(threadID: string, input: z.input<typeof CodingResumeInput>
   return {
     threadId: threadID,
     cwd: next.cwd,
+    metadata: codingRuntimeEnv(next),
     model: next.model,
     approvalPolicy: approvalPolicy(),
     sandbox: next.sandbox ?? sandboxMode(),
@@ -730,6 +732,7 @@ function turnStart(threadID: string, input: z.input<typeof CodingRunInput>) {
         text_elements: [],
       },
     ],
+    metadata: codingRuntimeEnv(next),
     cwd: next.cwd,
     approvalPolicy: approvalPolicy(),
     sandboxPolicy: sandboxPolicy(next.cwd, next.sandbox),

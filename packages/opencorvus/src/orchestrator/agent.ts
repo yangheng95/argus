@@ -748,7 +748,7 @@ export const OrchestratorEventNote = {
         "",
         "Read context (read_context) to see goal statuses and eval evidence.",
         input.failed > 0
-          ? "Failed goal worktrees are diagnostic evidence under .opencorvus/worktrees, not primary workspace pollution. Do not restart_from_stage solely because a failed diagnostic worktree contains partial files. Call query_failed_goals, then route stuck-state repair inside this task: retry the owner goal, modify the goal contract, repair the dependency graph, or fail only when no repository-owned repair remains."
+          ? "Failed goal worktrees are diagnostic evidence under .opencorvus/runtime, not primary workspace pollution. Do not restart_from_stage solely because a failed diagnostic worktree contains partial files. Call query_failed_goals, then route stuck-state repair inside this task: retry the owner goal, modify the goal contract, repair the dependency graph, or fail only when no repository-owned repair remains."
           : "No goals failed in this batch.",
         "Decide next action based on current state — no predetermined action.",
       )
@@ -797,8 +797,11 @@ export const OrchestratorEventNote = {
   },
 }
 
-export function orchestratorUserText(task: Pick<TaskRow, "request">, event?: Pick<OrchestratorEvent, "note">): string {
-  return event?.note ?? renderUserRequestSection({ heading: "# User Request", request: task.request })
+export function orchestratorUserText(
+  task: Pick<TaskRow, "request"> & Partial<Pick<TaskRow, "id">>,
+  event?: Pick<OrchestratorEvent, "note">,
+): string {
+  return event?.note ?? renderUserRequestSection({ heading: "# User Request", request: task.request, taskID: task.id })
 }
 
 // ---------------------------------------------------------------------------

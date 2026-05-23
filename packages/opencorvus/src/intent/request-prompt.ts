@@ -1,5 +1,8 @@
+import { ProjectRuntimePaths } from "@/project/runtime-paths"
+
 export const USER_REQUEST_PROMPT_WORD_LIMIT = 500
-export const USER_REQUEST_BUNDLE_PATH = ".opencorvus/intent/request.md"
+export const USER_REQUEST_BUNDLE_PATH_TEMPLATE = ".opencorvus/runtime/tasks/<taskID>/intent/request.md"
+export const USER_REQUEST_BUNDLE_PATH = USER_REQUEST_BUNDLE_PATH_TEMPLATE
 
 const REQUEST_WORD_PATTERN =
   /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]|[\p{L}\p{N}_]+(?:[.'-][\p{L}\p{N}_]+)*|\S/gu
@@ -48,10 +51,12 @@ export function renderUserRequestSection(input: {
   heading: string
   request: string
   title?: string
+  taskID?: string
   bundlePath?: string
   wordLimit?: number
 }): string {
-  const bundlePath = input.bundlePath ?? USER_REQUEST_BUNDLE_PATH
+  const bundlePath = input.bundlePath ??
+    (input.taskID ? ProjectRuntimePaths.taskRelative(input.taskID, "intent", "request.md") : USER_REQUEST_BUNDLE_PATH)
   const wordLimit = input.wordLimit ?? USER_REQUEST_PROMPT_WORD_LIMIT
   const excerpt = excerptUserRequest(input.request, wordLimit)
   const lines: string[] = [input.heading, ""]

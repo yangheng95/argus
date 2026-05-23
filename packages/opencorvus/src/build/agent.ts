@@ -9,7 +9,7 @@
  * Lifecycle:
  *   1. BuildSemaphore.withSlot gates concurrency per-task. Orchestrator's
  *      parallel tool_calls fan out with this cap.
- *   2. Worktree.create under `<primary>/.opencorvus/worktrees/`. Ownership
+ *   2. Worktree.create under `<primary>/.opencorvus/runtime/`. Ownership
  *      marker is written via Ownership.Worktree.record so OS-level restart
  *      cleanup can reclaim it.
  *   3. SessionPrompt.prompt runs the build agent in a child session with
@@ -34,6 +34,7 @@ import { Log } from "@/util/log"
 import { AgentRunError, runAgentSession } from "@/agent/runner"
 import { Agent } from "@/agent/agent"
 import { Instance } from "@/project/instance"
+import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { Session } from "@/session"
 import { resolveSessionOverlay } from "@/agent/model"
 import { SessionStatus } from "@/session/status"
@@ -208,7 +209,7 @@ export namespace BuildAgent {
     /** Optional pre-allocated worktree dir. When provided, the build agent
      *  uses it as-is and does NOT manage its lifecycle (caller owns cleanup).
      *  When absent the agent creates a managed worktree under
-     *  `<primary>/.opencorvus/worktrees/`. */
+     *  `<primary>/.opencorvus/runtime/`. */
     workDir?: string
     /** Goal-scoped managed worktree recorded on engine_goal. Unlike workDir,
      *  this still participates in the build agent's merge_back protocol; the
@@ -328,6 +329,7 @@ export namespace BuildAgent {
       const ownsWorktree = !input.workDir
       let worktreeDir = input.managedWorktree?.directory ?? input.workDir
       let worktreeBranch: string | undefined
+      const buildSessionID = input.existingSessionID ?? Identifier.descending("session")
       // Worktree HEAD commit at creation time. Equals primary HEAD because
       // Worktree.create branches off it; we capture the SHA so post-build
       // diff extraction can compute baseRef..HEAD inside the worktree
@@ -342,7 +344,7 @@ export namespace BuildAgent {
           primaryWorktreeDir: Instance.worktree,
           worktreeDir: managedDir,
           taskID: input.task.id,
-          sessionID: input.parentSessionID ?? "",
+          sessionID: buildSessionID,
           runID: findActiveRunForTask(input.task.id)?.id,
           goalID: input.target.kind === "goal" ? input.target.id : undefined,
         })
@@ -358,14 +360,19 @@ export namespace BuildAgent {
         // the merge_back contract. Invalid trees are reclaimed by
         // Worktree.create before a fresh tree is created, so corrupt git
         // state is never reused silently.
-        const info = await Worktree.create({ name: `build-${targetLabel}`, reuseIfValid: true })
+        const info = await Worktree.create({
+          name: `build-${targetLabel}`,
+          reuseIfValid: true,
+          taskID: input.task.id,
+          sessionID: buildSessionID,
+        })
         worktreeDir = info.directory
         worktreeBranch = info.branch
         await Ownership.Worktree.record({
           primaryWorktreeDir: Instance.worktree,
           worktreeDir,
           taskID: input.task.id,
-          sessionID: input.parentSessionID ?? "",
+          sessionID: buildSessionID,
           runID: findActiveRunForTask(input.task.id)?.id,
           goalID: input.target.kind === "goal" ? input.target.id : undefined,
         })
@@ -380,6 +387,7 @@ export namespace BuildAgent {
       const buildSession = input.existingSessionID
         ? await Session.get(input.existingSessionID)
         : await Session.createNext({
+          id: buildSessionID,
           kind: "build",
           parentID: input.parentSessionID,
           goalID: input.target.kind === "goal" ? input.target.id : undefined,
@@ -449,7 +457,7 @@ export namespace BuildAgent {
       const buildPromptText = () =>
         input.existingSessionID
           ? buildRetryFeedbackPrompt(input.target, input.context)
-          : buildUserPrompt(input.target, input.context)
+          : buildUserPrompt(input.target, input.context, input.task.id)
       // Forward the same authoritative references named in the
       // design-analysis evidence manifest as multimodal user-message parts so
       // the build LLM physically sees what to clone. This includes user
@@ -1494,6 +1502,10 @@ async function runWithExternalProviderImpl(args: {
     sessionID: session.id,
     model: resolveOption(options.model),
     prompt,
+    taskID: args.taskID,
+    logicalSessionID: session.id,
+    runtimeDir: ProjectRuntimePaths.sessionRoot(Instance.directory, args.taskID, session.id),
+    worktreeDir: args.worktreeDir,
     cwd: args.worktreeDir,
     system: composedSystem.system,
     maxTurns: resolveOption(options.maxTurns),
@@ -2176,7 +2188,7 @@ export function renderVisualContractPreamble(
   return lines.join("\n")
 }
 
-export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildContext): string {
+export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildContext, taskID?: string): string {
   if (target.kind === "goal") {
     const lines: string[] = []
     const dependencyIDs = new Set(target.depends_on)
@@ -2402,7 +2414,7 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
     "This direct request path is for implementation/rework. If the prompt is only repository investigation and does not ask you to change project behavior, fail through the terminal build report with a concrete error that says Build is the wrong stage.",
     "",
     ...contextLines,
-    renderUserRequestSection({ heading: "# Request", request: target.text }),
+    renderUserRequestSection({ heading: "# Request", request: target.text, taskID }),
     "",
     "# File Change Report",
     "",

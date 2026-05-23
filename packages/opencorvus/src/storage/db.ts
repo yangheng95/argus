@@ -13,6 +13,7 @@ import { mkdirSync } from "fs"
 import { rm } from "fs/promises"
 import * as schema from "./schema"
 import { SCHEMA_DDL } from "./ddl"
+import { ProjectRuntimePaths } from "@/project/runtime-paths"
 
 export const NotFoundError = NamedError.create(
   "NotFoundError",
@@ -105,9 +106,11 @@ export namespace Database {
       { label: "db", path: dbPath },
       { label: "db-wal", path: `${dbPath}-wal` },
       { label: "db-shm", path: `${dbPath}-shm` },
-      { label: "snapshot", path: path.join(Global.Path.data, "snapshot") },
-      { label: "worktrees", path: path.join(projectDir, ".opencorvus", "worktrees") },
-      { label: "ownership", path: path.join(projectDir, ".opencorvus", "ownership") },
+      { label: "runtime", path: ProjectRuntimePaths.projectRuntimeRoot(projectDir) },
+      ...ProjectRuntimePaths.legacyRuntimeRelativePaths.map((relative) => ({
+        label: `legacy:${relative}`,
+        path: path.join(projectDir, ...relative.split("/")),
+      })),
     ]
     const results: Array<{ label: string; path: string; ok: boolean; error?: string }> = []
     for (const target of targets) {

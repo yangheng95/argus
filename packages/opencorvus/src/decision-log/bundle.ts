@@ -22,39 +22,36 @@
 // Path resolution invariant (see artifacts/2026-05-18-decision-log-
 // materialization §8): the OpenCorvus `read` tool resolves a relative path
 // against `Instance.directory` (tool/read.ts), so in-process build / delivery
-// agents reach `.opencorvus/decision-log.md` by the RELATIVE path even though
+// agents reach the task-scoped runtime decision-log projection by RELATIVE path even though
 // their session cwd is a goal worktree. External executors (codex /
 // claude-code) run with cwd = goal worktree and use their own native file
 // tools — they must be given the ABSOLUTE path. `path()` returns both;
 // callers pick the form via the consumer's resolution model.
 
-import * as fs from "node:fs/promises"
-import * as path from "node:path"
 import { createDecisionLog } from "./index"
 import { Log } from "@/util/log"
+import { ProjectRuntimePaths } from "@/project/runtime-paths"
+import { Filesystem } from "@/util/filesystem"
 
 const log = Log.create({ service: "decision-log-bundle" })
 
 export namespace DecisionLogBundle {
   /** Relative path used by agents whose file tools resolve against the
    *  project directory (in-process OpenCorvus `read` tool). */
-  export const RELATIVE_PATH = ".opencorvus/decision-log.md"
+  export const RELATIVE_PATH_TEMPLATE = ".opencorvus/runtime/tasks/<taskID>/decision-log.md"
 
   /**
    * Resolve the bundle paths for a project directory. `relative` is for
    * consumers resolving against `Instance.directory`; `absolute` is for
    * external executors whose cwd is a goal worktree.
    */
-  export function paths(projectDir: string): { relative: string; absolute: string } {
-    return {
-      relative: RELATIVE_PATH,
-      absolute: path.join(projectDir, ".opencorvus", "decision-log.md"),
-    }
+  export function paths(projectDir: string, taskID: string): { relative: string; absolute: string } {
+    return ProjectRuntimePaths.decisionLogPaths(projectDir, taskID)
   }
 
   /**
    * Render the complete decision log and write it to
-   * `<projectDir>/.opencorvus/decision-log.md`. Returns the absolute path.
+   * `<projectDir>/.opencorvus/runtime/tasks/<taskID>/decision-log.md`. Returns the absolute path.
    *
    * HARD FAIL (rule 7 — no fallback): a write failure throws. The caller must
    * not swallow it and continue on the truncated prompt — a stale or missing
@@ -63,10 +60,9 @@ export namespace DecisionLogBundle {
    * decisions yet" — not a fallback).
    */
   export async function write(projectDir: string, taskID: string): Promise<string> {
-    const { absolute } = paths(projectDir)
-    await fs.mkdir(path.dirname(absolute), { recursive: true })
+    const { absolute } = paths(projectDir, taskID)
     const body = createDecisionLog(taskID).toFullDocument()
-    await fs.writeFile(absolute, body, "utf8")
+    await Filesystem.writeAtomic(absolute, body)
     log.info("decision log bundle written", {
       taskID,
       projectDir,
@@ -85,9 +81,10 @@ export namespace DecisionLogBundle {
    */
   export function reference(input: {
     projectDir: string
+    taskID: string
     mode: "relative" | "absolute"
   }): string {
-    const p = input.mode === "absolute" ? paths(input.projectDir).absolute : paths(input.projectDir).relative
+    const p = input.mode === "absolute" ? paths(input.projectDir, input.taskID).absolute : paths(input.projectDir, input.taskID).relative
     return [
       "## Decision Log (complete, on disk)",
       "",

@@ -40,7 +40,7 @@ Use the screenshot pixels, `mirror/shared-context.md`, `mirror/page-ir.xml`, and
 - Do not create one row per repeated table row, ticker, text instance, candle, or data point.
 - Follow `assistant.auto_iteration`: one bounded PRD/SPEC review pass when disabled; at least two review passes when enabled (inventory coverage, then downstream frontend/backend implementability).
 - Finalize with StructuredOutput fields: `product_spec`, `frontend_spec`, `visual_consistency_spec`, `backend_spec`, `prd_iteration_notes`, `completeness_review`, `reference_artifacts`, and `open_questions`.
-- Put every source file/image URL and mirror artifact name you used into `reference_artifacts`; the orchestrator will publish them as `evidence_source_manifest` and materialize `.opencorvus/design-analysis/prd-spec.md` plus `.opencorvus/design-analysis/evidence-source-manifest.md` for downstream agents.
+- Put every source file/image URL and mirror artifact name you used into `reference_artifacts`; the orchestrator will publish them as `evidence_source_manifest` and materialize task-scoped runtime design-analysis PRD/SPEC plus evidence-source-manifest files for downstream agents.
 
 ## Downstream Contract
 

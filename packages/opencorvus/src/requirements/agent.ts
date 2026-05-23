@@ -220,7 +220,12 @@ function buildUserPrompt(
   const sections: string[] = []
 
   sections.push("# Delegation\n\nOrchestrator is asking requirements to extract the task requirements and foundational decisions.")
-  sections.push(renderUserRequestSection({ heading: "# Task", title: input.title, request: input.request }))
+  sections.push(renderUserRequestSection({
+    heading: "# Task",
+    title: input.title,
+    request: input.request,
+    taskID: input.taskID,
+  }))
 
   if (input.taskID) {
     const clarifications = clarificationTranscriptSection(input.taskID)

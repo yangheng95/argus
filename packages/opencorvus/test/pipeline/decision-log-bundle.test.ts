@@ -13,6 +13,7 @@ import { ProjectTable } from "../../src/project/project.sql"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
+import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 
 // Covers the ISOLATED units landed for "decision log complete on disk +
 // agent can reference it" (artifacts/2026-05-18-decision-log-disk-
@@ -138,7 +139,7 @@ describe("DecisionLogBundle", () => {
     await tmp?.[Symbol.asyncDispose]?.()
   })
 
-  test("write() materializes <projectDir>/.opencorvus/decision-log.md = toFullDocument()", async () => {
+  test("write() materializes task-scoped runtime decision-log.md = toFullDocument()", async () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
@@ -146,7 +147,7 @@ describe("DecisionLogBundle", () => {
           phase: "requirements", key: "runtime", value: "Bun", reason: "PRD",
         })
         const abs = await DecisionLogBundle.write(tmp.path, taskID)
-        expect(abs).toBe(path.join(tmp.path, ".opencorvus", "decision-log.md"))
+        expect(abs).toBe(ProjectRuntimePaths.decisionLogPaths(tmp.path, taskID).absolute)
         const onDisk = await fs.readFile(abs, "utf8")
         expect(onDisk).toBe(createDecisionLog(taskID).toFullDocument())
         expect(onDisk).toContain("### runtime")
@@ -168,10 +169,10 @@ describe("DecisionLogBundle", () => {
   })
 
   test("reference() emits relative vs absolute by mode; never 'source of truth' for the file", () => {
-    const rel = DecisionLogBundle.reference({ projectDir: "/proj", mode: "relative" })
-    const abs = DecisionLogBundle.reference({ projectDir: "/proj", mode: "absolute" })
-    expect(rel).toContain(".opencorvus/decision-log.md")
-    expect(abs).toContain(path.join("/proj", ".opencorvus", "decision-log.md"))
+    const rel = DecisionLogBundle.reference({ projectDir: "/proj", taskID, mode: "relative" })
+    const abs = DecisionLogBundle.reference({ projectDir: "/proj", taskID, mode: "absolute" })
+    expect(rel).toContain(ProjectRuntimePaths.decisionLogPaths("/proj", taskID).relative)
+    expect(abs).toContain(ProjectRuntimePaths.decisionLogPaths("/proj", taskID).absolute)
     // Projection framing (codex D1): the table is the source of truth, the
     // file is a read-only projection — must not advertise the file as canonical.
     expect(rel).toContain("projection of the decision_log table")
@@ -182,7 +183,7 @@ describe("DecisionLogBundle", () => {
 describe("renderDesignAnalysisHandoffReference pathMode (systemic absolute-path fix)", () => {
   test("default (no pathMode) keeps the relative path — in-process unchanged", () => {
     const out = renderDesignAnalysisHandoffReference("tsk_x", { includeExcerpts: false })
-    expect(out).toContain(".opencorvus/design-analysis/prd-spec.md")
+    expect(out).toContain(".opencorvus/runtime/tasks/tsk_x/design-analysis/prd-spec.md")
     expect(out).not.toContain("/abs/")
   })
 
@@ -198,15 +199,15 @@ describe("renderDesignAnalysisHandoffReference pathMode (systemic absolute-path 
       pathMode: "absolute",
       projectDir: "/abs/proj",
     })
-    const expected = designAnalysisArtifactPaths("/abs/proj").prdAbsolute
+    const expected = designAnalysisArtifactPaths("/abs/proj", "tsk_x").prdAbsolute
     expect(out).toContain(expected)
-    expect(out).toContain(path.join("/abs/proj", ".opencorvus", "design-analysis", "prd-spec.md"))
+    expect(out).toContain(path.join("/abs/proj", ".opencorvus", "runtime", "tasks", "tsk_x", "design-analysis", "prd-spec.md"))
   })
 
   test("designAnalysisArtifactPaths is single-source: relative consts feed the helper", () => {
-    const p = designAnalysisArtifactPaths("/x")
-    expect(p.prdRelative).toBe(".opencorvus/design-analysis/prd-spec.md")
-    expect(p.manifestRelative).toBe(".opencorvus/design-analysis/evidence-source-manifest.md")
-    expect(p.prdAbsolute).toBe(path.join("/x", ".opencorvus", "design-analysis", "prd-spec.md"))
+    const p = designAnalysisArtifactPaths("/x", "tsk_x")
+    expect(p.prdRelative).toBe(".opencorvus/runtime/tasks/tsk_x/design-analysis/prd-spec.md")
+    expect(p.manifestRelative).toBe(".opencorvus/runtime/tasks/tsk_x/design-analysis/evidence-source-manifest.md")
+    expect(p.prdAbsolute).toBe(path.join("/x", ".opencorvus", "runtime", "tasks", "tsk_x", "design-analysis", "prd-spec.md"))
   })
 })

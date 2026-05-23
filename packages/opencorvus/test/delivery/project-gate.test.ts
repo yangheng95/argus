@@ -5,6 +5,7 @@ import { mkdtemp } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { Instance } from "../../src/project/instance"
+import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 import { ProjectTable } from "../../src/project/project.sql"
 import { buildDeliveryEvidenceManifest } from "../../src/delivery/checks/project-gate"
 import {
@@ -314,12 +315,13 @@ describe("delivery project evidence gate", () => {
   })
 
   test("runs required checks from a source snapshot that excludes opencorvus internal worktrees", async () => {
+    const taskID = "tsk_isolated_check"
     const dir = await packageFixture({
       lint: "node scripts/check-lint-scope.mjs",
     })
-    await fs.mkdir(path.join(dir, ".opencorvus", "worktrees", "goal-demo", ".next"), { recursive: true })
+    await fs.mkdir(path.join(dir, ".opencorvus", "runtime", "worktrees", "goal-demo", ".next"), { recursive: true })
     await fs.writeFile(
-      path.join(dir, ".opencorvus", "worktrees", "goal-demo", ".next", "generated-bad.js"),
+      path.join(dir, ".opencorvus", "runtime", "worktrees", "goal-demo", ".next", "generated-bad.js"),
       "throw new Error('generated worktree output must not be linted')\n",
     )
     await fs.mkdir(path.join(dir, "scripts"), { recursive: true })
@@ -329,7 +331,7 @@ describe("delivery project evidence gate", () => {
 import { existsSync } from "node:fs"
 import { cwd } from "node:process"
 
-if (existsSync(".opencorvus/worktrees/goal-demo/.next/generated-bad.js")) {
+if (existsSync(".opencorvus/runtime/worktrees/goal-demo/.next/generated-bad.js")) {
   console.error("lint saw opencorvus internal worktree output")
   process.exit(1)
 }
@@ -341,7 +343,7 @@ console.log("lint scope ok", cwd())
       directory: dir,
       fn: () =>
         buildDeliveryEvidenceManifest({
-          taskID: "tsk_isolated_check",
+          taskID,
           runID: "run_isolated_check",
           deliveryID: "dlv_isolated_check",
           changedFiles: ["src/app.ts"],
@@ -351,7 +353,7 @@ console.log("lint scope ok", cwd())
 
     const lint = manifest.checkResults.find((item) => item.name === "lint")
     expect(lint?.status).toBe("passed")
-    expect(lint?.executionCwd).toContain(`${path.join(".opencorvus", "delivery-check-workspaces")}`)
+    expect(lint?.executionCwd).toContain(ProjectRuntimePaths.deliveryPaths(dir, taskID).checkWorkspaces)
     expect(lint?.executionCwd).not.toBe(dir)
     expect(lint?.outputExcerpt).toContain("lint scope ok")
     expect(manifest.finalGate.failedCheckIds).toEqual([])

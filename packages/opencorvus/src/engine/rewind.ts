@@ -13,7 +13,6 @@ import { Message } from "@/session/message"
 import { Session } from "@/session"
 import { MessageTable, PartTable } from "@/session/session.sql"
 import { SessionSummary } from "@/session/summary"
-import { Storage } from "@/storage/storage"
 import { Bus } from "@/bus"
 import { Database, and, asc, eq, gt, gte, inArray } from "@/storage/db"
 import { Log } from "@/util/log"
@@ -163,7 +162,7 @@ async function publishDiffsBySession(rows: PatchPartRow[]) {
     const all = await Session.messages({ sessionID })
     const messages = all.filter((msg) => messageIDs.has(msg.info.id))
     const diff = await SessionSummary.computeDiff({ messages })
-    await Storage.write(["session_diff", sessionID], diff)
+    await SessionSummary.writeDiff(sessionID, diff)
     Bus.publish(Session.Event.Diff, { sessionID, diff })
   }
 }

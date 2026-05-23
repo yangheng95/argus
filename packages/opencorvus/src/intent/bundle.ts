@@ -8,16 +8,16 @@
 //
 // Several stage prompts (architect-core.txt, session
 // system.txt) tell the LLM that the executor "has the intent bundle at
-// `.opencorvus/intent/`" and explicitly point at `.opencorvus/intent/request.md`
+// the task-scoped runtime intent bundle and explicitly point at its request.md
 // as the canonical source for the user's original request. Architect-generated
-// goal contracts then reference paths like "see .opencorvus/intent/request.md
+// goal contracts then reference paths like "see the runtime intent request
 // §3 for the full entity list" verbatim. Without this writer, those paths
 // resolved to nothing on disk — the architect was producing references to a
 // path the project never created. Either the executor would silently miss the
 // reference (and lean on the goal contract's paraphrase, leaking architect
 // intent into build), or it would search the workspace and hallucinate.
 //
-// Single source of truth: `<project.worktree>/.opencorvus/intent/request.md`.
+// Single source of truth: `<project.worktree>/.opencorvus/runtime/tasks/<taskID>/intent/request.md`.
 // Mirrors AttachmentStore's resolution path (Project.get(projectID).worktree
 // — NOT Instance.directory, which can drift) so writers and readers always
 // agree on the location.
@@ -26,11 +26,11 @@
 // time the orchestrator wakes the pipeline agents. The contents are deterministic
 // from {request, attachments}; rerunning is idempotent.
 
-import * as fs from "node:fs/promises"
-import * as path from "node:path"
 import { Project } from "@/project/project"
+import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { Log } from "@/util/log"
 import type { AttachmentStore } from "@/storage/attachment-store"
+import { Filesystem } from "@/util/filesystem"
 
 const log = Log.create({ service: "intent-bundle" })
 
@@ -47,10 +47,10 @@ export namespace IntentBundle {
 
   /** Relative path used by agents whose file tools resolve against the
    *  project directory (in-process OpenCorvus `read` tool — tool/read.ts). */
-  export const RELATIVE_PATH = ".opencorvus/intent/request.md"
+  export const RELATIVE_PATH_TEMPLATE = ".opencorvus/runtime/tasks/<taskID>/intent/request.md"
 
-  function bundleDir(projectDir: string): string {
-    return path.join(projectDir, ".opencorvus", "intent")
+  export function relativePath(taskID: string): string {
+    return ProjectRuntimePaths.intentPaths("", taskID).relative
   }
 
   /**
@@ -59,19 +59,16 @@ export namespace IntentBundle {
    * `absolute` is for EXTERNAL executors (codex / claude-code) whose cwd is a
    * goal worktree and which use native file tools — a relative
    * `.opencorvus/...` would not resolve there. `absolute` points at the real
-   * write location (`<project.worktree>/.opencorvus/intent/request.md`) so
+   * write location (`<project.worktree>/.opencorvus/runtime/tasks/<taskID>/intent/request.md`) so
    * writer and reader agree (same resolution as `write`). Throws on unknown
    * project (rule 7 — load-bearing, no silent fallback).
    */
-  export function paths(projectID: string): { relative: string; absolute: string } {
+  export function paths(projectID: string, taskID: string): { relative: string; absolute: string } {
     const project = Project.get(projectID)
     if (!project) {
       throw new Error(`IntentBundle.paths: unknown project ${projectID}`)
     }
-    return {
-      relative: RELATIVE_PATH,
-      absolute: path.join(bundleDir(project.worktree), "request.md"),
-    }
+    return ProjectRuntimePaths.intentPaths(project.worktree, taskID)
   }
 
   /**
@@ -79,8 +76,8 @@ export namespace IntentBundle {
    * the path form for the consumer's file-tool resolution model. The user
    * request (task row) is the source; this file is a deterministic projection.
    */
-  export function reference(input: { projectID: string; pathMode: "relative" | "absolute" }): string {
-    const resolved = paths(input.projectID)
+  export function reference(input: { projectID: string; taskID: string; pathMode: "relative" | "absolute" }): string {
+    const resolved = paths(input.projectID, input.taskID)
     const p = input.pathMode === "absolute" ? resolved.absolute : resolved.relative
     return [
       "## Original User Request (intent bundle)",
@@ -133,11 +130,9 @@ export namespace IntentBundle {
     if (!project) {
       throw new Error(`IntentBundle.write: unknown project ${input.projectID}`)
     }
-    const dir = bundleDir(project.worktree)
-    await fs.mkdir(dir, { recursive: true })
-    const abs = path.join(dir, "request.md")
+    const abs = paths(input.projectID, input.taskID).absolute
     const body = renderRequest(input)
-    await fs.writeFile(abs, body, "utf8")
+    await Filesystem.writeAtomic(abs, body)
     log.info("intent bundle written", {
       taskID: input.taskID,
       projectID: input.projectID,

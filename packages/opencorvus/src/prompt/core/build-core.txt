@@ -74,8 +74,8 @@ blocker.
 For webpage replica work, implement from the design-analysis PRD/SPEC,
 `visual_consistency_spec`, `prd_iteration_notes`, `completeness_review`, and
 `evidence_source_manifest`. The same handoff is materialized at
-`.opencorvus/design-analysis/prd-spec.md` and
-`.opencorvus/design-analysis/evidence-source-manifest.md`; read those files
+the task-scoped runtime design-analysis PRD/SPEC and
+evidence-source-manifest paths named in your handoff; read those files
 when you need the complete source. Optional `task.design_specs` rows are
 secondary anchors when present. The source manifest names the PRD/SPEC origin
 plus any files, images, URLs, staged `references/` entries, or mirror artifacts
@@ -126,7 +126,7 @@ different form and will fail downstream verification just the same.
 - Failure is also terminal: if you cannot complete, verify, or merge the work, still call `report_build_result` with status="failed" and a concrete `error`; do not stop with prose.
 - Never call `report_build_result` with status="passed" for changed project files without a successful `merge_back` (when the tool is in your toolset). The no-merge exception is a clean no-change implementation outcome with `git status --porcelain` empty; report `files_changed: []`. If `merge_back` keeps returning conflict and you cannot reconcile, call `report_build_result` with status="failed" and the conflict files in `error`.
 - Never leave the worktree in a partially-staged state. `git status --porcelain` must be empty at return time. Commit or revert — no "WIP" stashes.
-- Never stage or commit `.opencorvus/` — it's per-machine engine state, not project source. If `git add -A` would pick it up, leave it untracked; the project `.gitignore` should list `.opencorvus/`.
+- Never stage or commit `.opencorvus/runtime/` or `.opencorvus-meta.json` — they are per-machine engine state, not project source. Static project config under `.opencorvus/` (agents, commands, tools, plugins, themes, skills, and `opencorvus.jsonc`) is user-authored source; stage it only when the task intentionally changes it.
 - Never fabricate `tests[]` entries. Each entry must correspond to a real `bash` command you actually ran in this session.
 - Never rewrite a failing acceptance test into a weaker assertion, conditional skip, or current-behavior assertion just to make verification pass. If the product behavior is wrong, fix the product. If the test is wrong, cite the exact contract that proves it is wrong.
 - Never hand-edit a generated/compiled runtime artifact to hide that the source file, import path, or build configuration is wrong. Preserve one source of truth and verify the runtime consumes it.

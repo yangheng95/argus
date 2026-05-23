@@ -1,10 +1,10 @@
 import fs from "fs/promises"
 import path from "path"
-import { Global } from "../global"
 import { Database, inArray } from "../storage/db"
 import { ProjectTable } from "./project.sql"
 import { Log } from "../util/log"
 import { Scheduler } from "../scheduler"
+import { ProjectRuntimePaths } from "./runtime-paths"
 
 /**
  * Project-scoped garbage collection.
@@ -14,8 +14,8 @@ import { Scheduler } from "../scheduler"
  *
  *   - Projects whose `time_updated` is older than `expireAfterDays` (7 by
  *     default) → DELETE the row (CASCADE clears session/task/memory/etc.)
- *     and remove the on-disk `snapshot/<id>` and `storage/session_diff/<id>`.
- *   - Orphan directories under `snapshot/` or `storage/session_diff/` (no
+ *     and remove the on-disk runtime cache directories for snapshot/session_diff.
+ *   - Orphan directories under each project's runtime cache (no
  *     matching project row) → removed directly. They cannot correspond to
  *     anything the user can open, so keeping them is waste.
  *   - After any removal, `wal_checkpoint(TRUNCATE)` + `VACUUM` so the DB
@@ -80,8 +80,8 @@ export namespace ProjectGC {
       .map((r) => ({ id: r.id, worktree: r.worktree, lastUsed: r.timeUpdated }))
 
     const [orphanSnapshots, orphanSessionDiffs] = await Promise.all([
-      listOrphans(snapshotRoot(), activeIds),
-      listOrphans(sessionDiffRoot(), activeIds),
+      listOrphansForRows(rows, "snapshot", activeIds),
+      listOrphansForRows(rows, "session_diff", activeIds),
     ])
 
     return { expiredProjects, orphanSnapshots, orphanSessionDiffs }
@@ -104,11 +104,17 @@ export namespace ProjectGC {
     // directories. Dedup because an expired id will not appear as an orphan at
     // this moment (activeIds was computed before DELETE), but concurrent runs
     // could overlap in theory.
-    const snapshotTargets = dedup([...expiredIds, ...plan.orphanSnapshots])
-    const sessionDiffTargets = dedup([...expiredIds, ...plan.orphanSessionDiffs])
+    const snapshotTargets = dedup([
+      ...plan.expiredProjects.map((p) => ProjectRuntimePaths.snapshotCacheRoot(p.worktree, p.id)),
+      ...plan.orphanSnapshots,
+    ])
+    const sessionDiffTargets = dedup([
+      ...plan.expiredProjects.map((p) => ProjectRuntimePaths.sessionDiffRoot(p.worktree, p.id)),
+      ...plan.orphanSessionDiffs,
+    ])
 
-    const removedSnapshotDirs = await removeDirs(snapshotRoot(), snapshotTargets)
-    const removedSessionDiffDirs = await removeDirs(sessionDiffRoot(), sessionDiffTargets)
+    const removedSnapshotDirs = await removeDirs(snapshotTargets)
+    const removedSessionDiffDirs = await removeDirs(sessionDiffTargets)
 
     const totalWork = removedProjectRows + removedSnapshotDirs + removedSessionDiffDirs
     let vacuumed = false
@@ -131,12 +137,18 @@ export namespace ProjectGC {
     return { removedProjectRows, removedSnapshotDirs, removedSessionDiffDirs, vacuumed }
   }
 
-  function snapshotRoot() {
-    return path.join(Global.Path.data, "snapshot")
+  function cacheRoot(worktree: string, kind: "snapshot" | "session_diff") {
+    return path.join(ProjectRuntimePaths.projectRuntimeRoot(worktree), "cache", kind)
   }
 
-  function sessionDiffRoot() {
-    return path.join(Global.Path.data, "storage", "session_diff")
+  async function listOrphansForRows(
+    rows: Array<{ worktree: string }>,
+    kind: "snapshot" | "session_diff",
+    active: Set<string>,
+  ): Promise<string[]> {
+    const roots = dedup(rows.map((row) => cacheRoot(row.worktree, kind)))
+    const nested = await Promise.all(roots.map((root) => listOrphans(root, active)))
+    return dedup(nested.flat())
   }
 
   async function listOrphans(root: string, active: Set<string>): Promise<string[]> {
@@ -148,15 +160,14 @@ export namespace ProjectGC {
     for (const entry of entries) {
       if (!entry.isDirectory()) continue
       if (active.has(entry.name)) continue
-      out.push(entry.name)
+      out.push(path.join(root, entry.name))
     }
     return out
   }
 
-  async function removeDirs(root: string, ids: string[]): Promise<number> {
+  async function removeDirs(targets: string[]): Promise<number> {
     let removed = 0
-    for (const id of ids) {
-      const target = path.join(root, id)
+    for (const target of targets) {
       try {
         await fs.rm(target, { recursive: true, force: true })
         removed++

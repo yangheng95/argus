@@ -1,7 +1,8 @@
 import { mkdirSync, appendFileSync } from "fs"
-import { join } from "path"
+import { dirname } from "path"
 import { Bus } from "@/bus"
 import { Instance } from "@/project/instance"
+import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { Log } from "@/util/log"
 
 /**
@@ -249,12 +250,11 @@ export namespace EngineEventLog {
 
       if (!tasks.has(taskID)) {
         try {
-          const dir = join(Instance.directory, ".opencorvus", "logs")
-          mkdirSync(dir, { recursive: true })
-          const tag = new Date().toISOString().slice(0, 19).replace(/[T:]/g, "-")
+          const paths = ProjectRuntimePaths.eventLogPath(Instance.directory, taskID)
+          mkdirSync(dirname(paths.ndjson), { recursive: true })
           tasks.set(taskID, {
-            ndjson: join(dir, `${taskID}_${tag}.events.ndjson`),
-            timeline: join(dir, `${taskID}_${tag}.timeline.log`),
+            ndjson: paths.ndjson,
+            timeline: paths.timeline,
             t0: Date.now(), stage: null, turn: null, turnSeq: 0,
           })
           log.info("task log started", { taskID })

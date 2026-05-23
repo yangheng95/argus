@@ -2,11 +2,11 @@ import path from "path"
 import fs from "fs/promises"
 import { Log } from "../util/log"
 import { Flag } from "../flag/flag"
-import { Global } from "../global"
 import z from "zod"
 import { Config } from "../config/config"
 import { Instance } from "../project/instance"
 import { Project } from "../project/project"
+import { ProjectRuntimePaths } from "../project/runtime-paths"
 import { git as runGit, type GitOptions, type GitResult } from "../util/git"
 import { Process } from "../util/process"
 import {
@@ -341,7 +341,7 @@ export namespace Snapshot {
 
   function gitdir() {
     const project = Instance.project
-    return path.join(Global.Path.data, "snapshot", project.id)
+    return ProjectRuntimePaths.snapshotCacheRoot(project.worktree, project.id)
   }
 
   async function gitText(command: Promise<GitResult>, label: string) {
@@ -644,6 +644,7 @@ export namespace Snapshot {
   // precedence).
   const BASELINE_EXCLUDE = [
     "# --- opencorvus snapshot baseline (auto-managed, do not edit) ---",
+    ".opencorvus/",
     "node_modules/",
     "dist/",
     "build/",

@@ -236,7 +236,12 @@ function buildUserPrompt(input: ArchitectAgent.CoordinateInput): string {
   const sections: string[] = []
 
   sections.push("# Delegation\n\nOrchestrator is asking architect to decompose this task into executable goals.")
-  sections.push(renderUserRequestSection({ heading: "# Task", title: input.taskTitle, request: input.taskRequest }))
+  sections.push(renderUserRequestSection({
+    heading: "# Task",
+    title: input.taskTitle,
+    request: input.taskRequest,
+    taskID: input.taskID,
+  }))
   sections.push(
     [
       "# Input Contract",

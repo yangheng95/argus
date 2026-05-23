@@ -1,6 +1,7 @@
 import { $ } from "bun"
 import fs from "fs/promises"
 import path from "path"
+import os from "node:os"
 import z from "zod"
 import { NamedError } from "@opencorvus-ai/util/error"
 import { Global } from "../global"
@@ -14,13 +15,14 @@ import { Log } from "../util/log"
 import { BusEvent } from "@/bus/bus-event"
 import { GlobalBus } from "@/bus/global"
 import { Shell } from "@/shell/shell"
+import { ProjectRuntimePaths } from "@/project/runtime-paths"
 
 export namespace Worktree {
   const log = Log.create({ service: "worktree" })
   const caseInsensitiveCache = new Map<string, boolean>()
 
   // Per-project git mutex: serializes worktree add/remove/reset operations
-  // to prevent concurrent git commands from corrupting the repository.
+  // across both this process and sibling OpenCorvus processes.
   const gitLocks = new Map<string, Promise<void>>()
   export async function withGitLock<T>(fn: () => Promise<T>): Promise<T> {
     const key = Instance.project.id
@@ -30,22 +32,97 @@ export namespace Worktree {
     gitLocks.set(key, next)
     await prev
     try {
-      return await fn()
+      const lockDir = ProjectRuntimePaths.projectGitLock(Instance.worktree)
+      const stopHeartbeat = await acquireDiskLock(lockDir)
+      try {
+        return await fn()
+      } finally {
+        stopHeartbeat()
+        await fs.rm(lockDir, { recursive: true, force: true })
+      }
     } finally {
       resolve()
     }
   }
 
+  async function acquireDiskLock(lockDir: string): Promise<() => void> {
+    const deadline = Date.now() + 120_000
+    const hostname = os.hostname()
+    await fs.mkdir(path.dirname(lockDir), { recursive: true })
+    while (true) {
+      try {
+        await fs.mkdir(lockDir, { recursive: false })
+        const ownerPath = path.join(lockDir, "owner.json")
+        const createdAt = Date.now()
+        const writeOwner = () =>
+          fs.writeFile(
+            ownerPath,
+            JSON.stringify({
+              pid: process.pid,
+              hostname,
+              createdAt,
+              lastHeartbeat: Date.now(),
+              projectID: Instance.project.id,
+            }, null, 2),
+            "utf8",
+          )
+        await writeOwner()
+        const timer = setInterval(() => {
+          writeOwner().catch((error) => {
+            log.warn("project git lock heartbeat failed", { lockDir, error: String(error) })
+          })
+        }, 1_000)
+        return () => clearInterval(timer)
+      } catch (err) {
+        const code = (err as NodeJS.ErrnoException).code
+        if (code !== "EEXIST") throw err
+        const ownerPath = path.join(lockDir, "owner.json")
+        const owner = await fs.readFile(ownerPath, "utf8")
+          .then((raw) => JSON.parse(raw) as { pid?: unknown; hostname?: unknown; createdAt?: unknown; lastHeartbeat?: unknown })
+          .catch(() => undefined)
+        const pid = typeof owner?.pid === "number" ? owner.pid : undefined
+        const ownerHostname = typeof owner?.hostname === "string" ? owner.hostname : undefined
+        const lastHeartbeat = typeof owner?.lastHeartbeat === "number"
+          ? owner.lastHeartbeat
+          : typeof owner?.createdAt === "number"
+            ? owner.createdAt
+            : 0
+        const heartbeatStale = Date.now() - lastHeartbeat > 30_000
+        const sameHostPidDead = ownerHostname === hostname && (!pid || !isPidAlive(pid))
+        if (sameHostPidDead || heartbeatStale) {
+          await fs.rm(lockDir, { recursive: true, force: true })
+          continue
+        }
+        if (Date.now() >= deadline) {
+          throw new CreateFailedError({
+            message: `Timed out waiting for project git lock ${lockDir} held by pid ${pid}`,
+          })
+        }
+        await new Promise((resolve) => setTimeout(resolve, 200))
+      }
+    }
+  }
+
+  function isPidAlive(pid: number): boolean {
+    if (!Number.isFinite(pid) || pid <= 0) return false
+    try {
+      process.kill(pid, 0)
+      return true
+    } catch (err: any) {
+      return err?.code === "EPERM"
+    }
+  }
+
   /**
    * Single source for the per-project worktree root. Goal worktrees live
-   * UNDER `<primary>/.opencorvus/worktrees/` (co-located with other runtime
-   * scratch, covered by the `/.opencorvus/` .gitignore entry). `create()`
+   * UNDER `<primary>/.opencorvus/runtime/worktrees/` (co-located with other
+   * runtime scratch, covered by the `/.opencorvus/` .gitignore entry). `create()`
    * and `WorktreeGC` MUST both derive the root from here — two inline
    * `path.join(...,".opencorvus","worktrees")` would be a double source
    * (rule 8) and the GC sweep could scan the wrong directory.
    */
   export function worktreesRoot(primaryDir: string) {
-    return path.join(primaryDir, ".opencorvus", "worktrees")
+    return ProjectRuntimePaths.worktreesRoot(primaryDir)
   }
 
   export const Event = {
@@ -405,6 +482,10 @@ export namespace Worktree {
           "Used by build-agent retries that want to pick up the previous attempt's files (passed-verdict-without-merge_back case) instead of regenerating ~20 minutes of code from scratch. " +
           "Invalid existing trees (zombie linkage, missing branch, etc.) are rejected by the validity gate before the standard reclaim path runs, so corrupt state never silently survives a retry.",
         ),
+      taskID: z.string().optional(),
+      goalID: z.string().optional(),
+      runID: z.string().optional(),
+      sessionID: z.string().optional(),
     })
     .meta({
       ref: "WorktreeCreateInput",
@@ -551,6 +632,10 @@ export namespace Worktree {
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-+/, "")
       .replace(/-+$/, "")
+  }
+
+  function shortName(input: string) {
+    return slug(input).slice(-8) || "worktree"
   }
 
   function randomName() {
@@ -763,10 +848,8 @@ export namespace Worktree {
    *  continuity across retries (new path → new system-prompt bytes → new
    *  1h system cache). Surfacing a hard error here is the contract: the
    *  operator sees that reclaim failed and can intervene. */
-  async function reclaimBase(root: string, base: string): Promise<Info> {
-    const name = base
-    const branch = `opencorvus/${name}`
-    const directory = path.join(root, name)
+  async function reclaimInfo(info: Info): Promise<Info> {
+    const { name, branch, directory } = info
     const ref = `refs/heads/${branch}`
 
     const dirExists = await exists(directory)
@@ -818,6 +901,15 @@ export namespace Worktree {
     }
 
     return Info.parse({ name, branch, directory })
+  }
+
+  async function reclaimBase(root: string, base: string): Promise<Info> {
+    const name = base
+    return reclaimInfo(Info.parse({
+      name,
+      branch: `opencorvus/${name}`,
+      directory: path.join(root, name),
+    }))
   }
 
   async function candidate(root: string, base?: string) {
@@ -1081,10 +1173,10 @@ export namespace Worktree {
 
     // Resolve the PRIMARY worktree (main repo root) first so a dispatched
     // goal session (whose Instance.directory IS itself a child worktree)
-    // doesn't cause nested `.opencorvus/worktrees/.opencorvus/worktrees/...`
+    // doesn't cause nested `.opencorvus/runtime/.opencorvus/runtime/...`
     // recursion. `primaryWorktreeInfo()` always returns the primary repo root.
     //
-    // Worktrees live UNDER `<primary>/.opencorvus/worktrees/` — co-located
+    // Worktrees live UNDER `<primary>/.opencorvus/runtime/` — co-located
     // with other runtime scratch (attachments, visual-diff output). Previous
     // design placed them in the PARENT of the project root, which leaked
     // scratch dirs into the user's workspace for real projects and piled
@@ -1098,6 +1190,32 @@ export namespace Worktree {
     await fs.mkdir(root, { recursive: true })
 
     const base = input?.name ? slug(input.name) : ""
+    const scopedInfo = (() => {
+      if (input?.taskID && input.goalID && input.runID) {
+        const name = base || `goal-${shortName(input.goalID)}`
+        return Info.parse({
+          name,
+          branch: ProjectRuntimePaths.worktreeBranch({
+            taskID: input.taskID,
+            goalID: input.goalID,
+            runID: input.runID,
+          }),
+          directory: ProjectRuntimePaths.worktreeDir(primaryDir, input.taskID, input.goalID, input.runID),
+        })
+      }
+      if (input?.taskID && input.sessionID) {
+        const name = base || `session-${shortName(input.sessionID)}`
+        return Info.parse({
+          name,
+          branch: ProjectRuntimePaths.worktreeBranch({
+            taskID: input.taskID,
+            sessionID: input.sessionID,
+          }),
+          directory: ProjectRuntimePaths.directBuildWorktreeDir(primaryDir, input.taskID, input.sessionID),
+        })
+      }
+      return undefined
+    })()
 
     // Optional fast path: caller asked to reuse a previously-created worktree
     // with the same deterministic name (build-agent retry of an attempt that
@@ -1106,8 +1224,8 @@ export namespace Worktree {
     // to the regular candidate/reclaim path so the unhealthy state cannot be
     // silently propagated.
     if (base && input?.reuseIfValid) {
-      const directory = path.join(root, base)
-      const branch = `opencorvus/${base}`
+      const directory = scopedInfo?.directory ?? path.join(root, base)
+      const branch = scopedInfo?.branch ?? `opencorvus/${base}`
       const validity = await isValid(directory)
       if (validity.valid) {
         log.info("worktree reuse: existing valid worktree, skipping create", {
@@ -1125,7 +1243,7 @@ export namespace Worktree {
       })
     }
 
-    const info = await candidate(root, base || undefined)
+    const info = scopedInfo ? await reclaimInfo(scopedInfo) : await candidate(root, base || undefined)
 
     // All git operations serialized to prevent concurrent corruption
     await withGitLock(async () => {

@@ -9,6 +9,7 @@ import {
   CodingCapabilities,
   CodingRunInput,
   CodingResumeInput,
+  codingRuntimeEnv,
   type CodingEventInfo,
   type CodingProvider,
 } from "./contract"
@@ -28,6 +29,10 @@ export type ClaudeAgentHandle = {
 export type ClaudeAgentClient = {
   run(input: {
     prompt: string
+    taskID?: string
+    logicalSessionID?: string
+    runtimeDir?: string
+    worktreeDir?: string
     model?: string
     cwd?: string
     system?: string
@@ -167,8 +172,9 @@ export namespace ClaudeAgentExecutor {
             env: {
               ...claudeSdkEnv(),
               ...gitCeilingEnvForWorktree(input.cwd),
+              ...codingRuntimeEnv(input),
             },
-            mcpServers: input.toolMode === "none" ? undefined : opencorvusMcpServers(input.cwd),
+            mcpServers: input.toolMode === "none" ? undefined : opencorvusMcpServers(input),
             allowedTools: allowed,
             disallowedTools: split(process.env.OPENCORVUS_EXECUTOR_CLAUDE_DISALLOWED_TOOLS),
             abortController: abortController(input.signal),
@@ -241,13 +247,14 @@ export namespace ClaudeAgentExecutor {
   }
 }
 
-function opencorvusMcpServers(cwd?: string) {
-  const mcp = MCPServe.command(cwd ?? process.cwd())
+function opencorvusMcpServers(input: z.infer<typeof CodingRunInput> | z.infer<typeof CodingResumeInput>) {
+  const mcp = MCPServe.command(input.cwd ?? process.cwd())
   return {
     [mcp.name]: {
       type: "stdio" as const,
       command: mcp.command,
       args: mcp.args,
+      env: codingRuntimeEnv(input),
     },
   }
 }

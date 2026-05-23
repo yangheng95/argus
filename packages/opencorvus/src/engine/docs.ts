@@ -2,6 +2,7 @@ import { mkdirSync, writeFileSync } from "fs"
 import path from "path"
 import type { GoalJudgmentType } from "@/delivery/checks"
 import { Instance } from "@/project/instance"
+import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { Log } from "@/util/log"
 import { renderSpecsAsText } from "@/acceptance/types"
 import type { EvaluationRow, GoalRow, MilestoneRow, PlanRow, RunRow, TaskRow } from "./store"
@@ -108,7 +109,7 @@ function save(input: {
   content: string
 }) {
   try {
-    const dir = path.join(Instance.worktree, ".opencorvus", input.kind)
+    const dir = ProjectRuntimePaths.docsPaths(Instance.worktree, input.taskID)[input.kind]
     const file = path.join(dir, `${stamp(input.createdAt)}-${input.taskID}-${input.ref}-${slug(input.title)}.md`)
     mkdirSync(dir, { recursive: true })
     writeFileSync(file, input.content.trimEnd() + "\n", "utf-8")

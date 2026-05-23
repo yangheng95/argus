@@ -4,6 +4,7 @@ import os from "os"
 import path from "path"
 import { Global } from "../../src/global"
 import { Database } from "../../src/storage/db"
+import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 
 const originalCwd = process.cwd()
 const originalHome = process.env.OPENCORVUS_HOME
@@ -54,7 +55,7 @@ test("Database.reset removes the global DB and the specified project's scratch",
   process.env.OPENCORVUS_HOME = tempHome
 
   const dbPath = Database.Path()
-  const snapshotDir = path.join(Global.Path.data, "snapshot")
+  const runtimeDir = ProjectRuntimePaths.projectRuntimeRoot(projectDir)
   const worktreesDir = path.join(projectDir, ".opencorvus", "worktrees")
   const ownershipDir = path.join(projectDir, ".opencorvus", "ownership")
 
@@ -62,8 +63,8 @@ test("Database.reset removes the global DB and the specified project's scratch",
   fs.writeFileSync(dbPath, "db")
   fs.writeFileSync(`${dbPath}-wal`, "wal")
   fs.writeFileSync(`${dbPath}-shm`, "shm")
-  fs.mkdirSync(snapshotDir, { recursive: true })
-  fs.writeFileSync(path.join(snapshotDir, "snap.txt"), "snap")
+  fs.mkdirSync(runtimeDir, { recursive: true })
+  fs.writeFileSync(path.join(runtimeDir, "runtime.txt"), "runtime")
   fs.mkdirSync(worktreesDir, { recursive: true })
   fs.writeFileSync(path.join(worktreesDir, "worktree.txt"), "worktree")
   fs.mkdirSync(ownershipDir, { recursive: true })
@@ -75,13 +76,12 @@ test("Database.reset removes the global DB and the specified project's scratch",
     dbPath,
     `${dbPath}-wal`,
     `${dbPath}-shm`,
-    snapshotDir,
-    worktreesDir,
-    ownershipDir,
+    runtimeDir,
+    ...ProjectRuntimePaths.legacyRuntimeRelativePaths.map((relative) => path.join(projectDir, ...relative.split("/"))),
   ])
   expect(results.every((item) => item.ok)).toBe(true)
   expect(fs.existsSync(dbPath)).toBe(false)
-  expect(fs.existsSync(snapshotDir)).toBe(false)
+  expect(fs.existsSync(runtimeDir)).toBe(false)
   expect(fs.existsSync(worktreesDir)).toBe(false)
   expect(fs.existsSync(ownershipDir)).toBe(false)
 })

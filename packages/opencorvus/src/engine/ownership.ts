@@ -23,7 +23,7 @@
  *     - `Ownership.Process.record(...)` / `.clear(...)` / `.orphans()` —
  *       same shape for OS-level executor child processes.
  *
- *   Both sub-registries write to `<primary-worktree>/.opencorvus/ownership/`
+ *   Both sub-registries write to `<primary-worktree>/.opencorvus/runtime/ownership/`
  *   so recovery on next process start can find them. Marker writes and
  *   deletions are best-effort: failure to write does not abort the
  *   create path; the fallback is just "the marker is missing next time",
@@ -46,10 +46,10 @@
 import fs from "fs/promises"
 import path from "path"
 import { Log } from "@/util/log"
+import { ProjectRuntimePaths } from "@/project/runtime-paths"
 
 const log = Log.create({ service: "ownership" })
 
-const OWNERSHIP_DIRNAME = ".opencorvus/ownership"
 const WORKTREE_DIR = "worktrees"
 const PROCESS_DIR = "processes"
 const MARKER_SUFFIX = ".json"
@@ -95,14 +95,20 @@ export namespace Ownership {
   }
 
   function ownershipRoot(primaryWorktreeDir: string): string {
-    return path.join(primaryWorktreeDir, OWNERSHIP_DIRNAME)
+    return ProjectRuntimePaths.ownershipRoot(primaryWorktreeDir)
   }
 
-  function worktreeMarkerDir(primaryWorktreeDir: string): string {
+  function worktreeMarkerDir(primaryWorktreeDir: string, marker?: Pick<Marker, "taskID" | "sessionID" | "runID">): string {
+    if (marker?.taskID && marker.sessionID) {
+      return ProjectRuntimePaths.ownershipPaths(primaryWorktreeDir, marker.taskID, marker.sessionID, marker.runID).worktreeMarkerDir
+    }
     return path.join(ownershipRoot(primaryWorktreeDir), WORKTREE_DIR)
   }
 
-  function processMarkerDir(primaryWorktreeDir: string): string {
+  function processMarkerDir(primaryWorktreeDir: string, marker?: Pick<Marker, "taskID" | "sessionID" | "runID">): string {
+    if (marker?.taskID && marker.sessionID) {
+      return ProjectRuntimePaths.ownershipPaths(primaryWorktreeDir, marker.taskID, marker.sessionID, marker.runID).processMarkerDir
+    }
     return path.join(ownershipRoot(primaryWorktreeDir), PROCESS_DIR)
   }
 
@@ -180,9 +186,9 @@ export namespace Ownership {
   }
 
   async function listMarkers(dir: string): Promise<Array<{ markerPath: string; marker: Marker | undefined }>> {
-    let entries: string[] = []
+    let entries: import("fs").Dirent[] = []
     try {
-      entries = await fs.readdir(dir)
+      entries = await fs.readdir(dir, { withFileTypes: true })
     } catch (err: any) {
       if (err?.code === "ENOENT") return []
       log.warn("failed to list ownership dir", { dir, error: String(err) })
@@ -190,8 +196,12 @@ export namespace Ownership {
     }
     const out: Array<{ markerPath: string; marker: Marker | undefined }> = []
     for (const entry of entries) {
-      if (!entry.endsWith(MARKER_SUFFIX)) continue
-      const markerPath = path.join(dir, entry)
+      const markerPath = path.join(dir, entry.name)
+      if (entry.isDirectory()) {
+        out.push(...await listMarkers(markerPath))
+        continue
+      }
+      if (!entry.name.endsWith(MARKER_SUFFIX)) continue
       try {
         const raw = await fs.readFile(markerPath, { encoding: "utf8" })
         const parsed = JSON.parse(raw) as Marker
@@ -250,7 +260,7 @@ export namespace Ownership {
         kind: "worktree",
       }
       const filePath = path.join(
-        worktreeMarkerDir(input.primaryWorktreeDir),
+        worktreeMarkerDir(input.primaryWorktreeDir, marker),
         workerMarkerFilename(input.worktreeDir),
       )
       await writeMarker(filePath, marker)
@@ -261,11 +271,15 @@ export namespace Ownership {
       primaryWorktreeDir: string
       worktreeDir: string
     }): Promise<void> {
-      const filePath = path.join(
-        worktreeMarkerDir(input.primaryWorktreeDir),
-        workerMarkerFilename(input.worktreeDir),
-      )
-      await deleteMarker(filePath)
+      const filename = workerMarkerFilename(input.worktreeDir)
+      const markerPaths = (await listMarkers(worktreeMarkerDir(input.primaryWorktreeDir)))
+        .map((entry) => entry.markerPath)
+        .filter((markerPath) => path.basename(markerPath) === filename)
+      if (markerPaths.length === 0) {
+        await deleteMarker(path.join(worktreeMarkerDir(input.primaryWorktreeDir), filename))
+        return
+      }
+      for (const filePath of markerPaths) await deleteMarker(filePath)
     }
 
     export async function list(primaryWorktreeDir: string): Promise<Array<{ markerPath: string; marker: Marker }>> {
@@ -350,7 +364,7 @@ export namespace Ownership {
         kind: "process",
       }
       const filePath = path.join(
-        processMarkerDir(input.primaryWorktreeDir),
+        processMarkerDir(input.primaryWorktreeDir, marker),
         processMarkerFilename(input.pid),
       )
       await writeMarker(filePath, marker)
@@ -361,11 +375,15 @@ export namespace Ownership {
       primaryWorktreeDir: string
       pid: number
     }): Promise<void> {
-      const filePath = path.join(
-        processMarkerDir(input.primaryWorktreeDir),
-        processMarkerFilename(input.pid),
-      )
-      await deleteMarker(filePath)
+      const filename = processMarkerFilename(input.pid)
+      const markerPaths = (await listMarkers(processMarkerDir(input.primaryWorktreeDir)))
+        .map((entry) => entry.markerPath)
+        .filter((markerPath) => path.basename(markerPath) === filename)
+      if (markerPaths.length === 0) {
+        await deleteMarker(path.join(processMarkerDir(input.primaryWorktreeDir), filename))
+        return
+      }
+      for (const filePath of markerPaths) await deleteMarker(filePath)
     }
 
     export async function list(primaryWorktreeDir: string): Promise<Array<{ markerPath: string; marker: Marker }>> {
