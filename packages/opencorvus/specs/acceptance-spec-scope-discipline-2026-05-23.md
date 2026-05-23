@@ -381,7 +381,7 @@ bun test packages/opencorvus/test/requirements/maturity-word-discipline.test.ts 
 
 ## Implementation Checklist
 
-1. [ ] Patch `requirements-core.txt`: add maturity-word landing rule +
+1. [x] Patch `requirements-core.txt`: add maturity-word landing rule +
    mandatory `acceptance` / `non_goals`.
 2. [ ] Patch the requirements collector zod schema to require non-empty
    `acceptance` and `non_goals` (grep all call sites first; rule 35).
