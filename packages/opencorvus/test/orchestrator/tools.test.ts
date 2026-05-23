@@ -110,9 +110,9 @@ mock.module("@/integrity", () => ({
   // Pure projection — empty snapshot is the right answer for orchestrator
   // tests, which don't seed the goal_run / verification-evidence rows the
   // production projection would join. Tests asserting prompt rendering of
-  // the snapshot live in test/integrity/agent.test.ts and use the real
-  // function; this mock is just a non-throwing stub so the orchestrator's
-  // pre-review wiring doesn't blow up in the legacy test suites.
+  // the snapshot live in active integrity tests and use the real function;
+  // this mock is just a non-throwing stub so the orchestrator's pre-review
+  // wiring doesn't blow up in orchestrator-focused suites.
   computeRequirementStatusSnapshot: (input: any) => computeRequirementStatusSnapshotImpl?.(input) ?? [],
   applyIntegrityCorrections: (goals: any) => goals,
 }))

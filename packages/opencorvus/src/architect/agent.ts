@@ -16,7 +16,7 @@
  * ✗ Cannot execute code / commands
  * ✗ Cannot write or modify user files
  * ✗ Cannot call other agents (integrity runs as a sibling via the
- *   orchestrator `integrity` tool — see integrity/agent.ts)
+ *   orchestrator `integrity` tool — see integrity/team-agent.ts)
  * ✗ Cannot modify engine_requirement rows (those are owned by Requirements)
  *
  * Implementation: thin shell over `runAgentSession`. Agent-specific code
