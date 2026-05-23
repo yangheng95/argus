@@ -93,6 +93,95 @@ function acceptedAcceptance() {
   }
 }
 
+function integrityFinding(input: {
+  id?: string
+  severity?: "blocking" | "advisory"
+  verdictImpact?: "pass" | "concerns" | "needs_correction"
+  title?: string
+  description: string
+  targetIDs?: string[]
+  requirementIDs?: string[]
+  filePaths?: string[]
+  repair?: string
+  reviewers?: string[]
+}) {
+  return {
+    id: input.id ?? `finding-${Math.random().toString(16).slice(2)}`,
+    severity: input.severity ?? (input.verdictImpact === "needs_correction" ? "blocking" : "advisory"),
+    verdictImpact: input.verdictImpact ?? "needs_correction",
+    title: input.title ?? input.description,
+    description: input.description,
+    evidence: [`Mock evidence: ${input.description}`],
+    targetIDs: input.targetIDs ?? [],
+    requirementIDs: input.requirementIDs ?? [],
+    specIDs: [],
+    filePaths: input.filePaths ?? [],
+    repair: input.repair ?? "Review the finding and route explicit repair work.",
+    reviewers: input.reviewers ?? ["requirements_surface"],
+    consensus: "agreed",
+  }
+}
+
+function integrityRepair(input: { id?: string; description: string; targetIDs?: string[]; filePaths?: string[] }) {
+  return {
+    id: input.id ?? `repair-${Math.random().toString(16).slice(2)}`,
+    description: input.description,
+    evidence: [`Mock repair evidence: ${input.description}`],
+    targetIDs: input.targetIDs ?? [],
+    filePaths: input.filePaths ?? [],
+  }
+}
+
+function integrityTeamResult(input: {
+  verdict?: "pass" | "concerns" | "needs_correction"
+  summary?: string
+  sessionID?: string
+  findings?: Array<ReturnType<typeof integrityFinding>>
+  requiredRepairs?: Array<ReturnType<typeof integrityRepair>>
+  teamReportMarkdown?: string
+}) {
+  const verdict = input.verdict ?? "pass"
+  const summary = input.summary ?? "Integrity pass"
+  const findings = input.findings ?? []
+  const requiredRepairs = input.requiredRepairs ?? []
+  const requirementsVerdict = verdict === "needs_correction" ? "needs_correction" : "pass"
+  const deliveryVerdict = verdict === "pass" ? "pass" : "concerns"
+  return {
+    verdict,
+    summary,
+    teamReportMarkdown:
+      input.teamReportMarkdown ??
+      [summary, ...findings.map((finding) => finding.description), ...requiredRepairs.map((repair) => repair.description)]
+        .filter(Boolean)
+        .join("\n"),
+    reviewers: [
+      {
+        reviewerID: "requirements_surface",
+        scope: "Requirement fidelity",
+        verdict: requirementsVerdict,
+        summary,
+        evidence: ["Mock requirement evidence."],
+        findings: findings.filter((finding) => finding.reviewers.includes("requirements_surface")),
+        openQuestions: [],
+      },
+      {
+        reviewerID: "delivery_surface",
+        scope: "Delivery and implementation evidence",
+        verdict: deliveryVerdict,
+        summary: verdict === "pass" ? "Delivery evidence is acceptable." : summary,
+        evidence: ["Mock delivery evidence."],
+        findings: findings.filter((finding) => finding.reviewers.includes("delivery_surface")),
+        openQuestions: [],
+      },
+    ],
+    findings,
+    rounds: [],
+    requiredRepairs,
+    unresolvedDisagreements: [],
+    sessionID: input.sessionID ?? "ses_integrity_default",
+  }
+}
+
 mock.module("@/build/agent", () => ({
   BuildAgent: {
     run: (input: any) => {
@@ -344,42 +433,7 @@ describe("orchestrator tools", () => {
     architectCoordinateImpl = undefined
     mcpServerToolsImpl = undefined
     mcpCallToolImpl = undefined
-    reviewIntegrityImpl = async () => ({
-      verdict: "pass",
-      summary: "Integrity pass",
-      dimensions: [
-        {
-          id: "requirement_fidelity",
-          verdict: "pass",
-          issues: [],
-          corrections: [],
-          graphCorrections: [],
-          missingGoals: [],
-        },
-        {
-          id: "technical_feasibility",
-          verdict: "pass",
-          issues: [],
-          corrections: [],
-          graphCorrections: [],
-          missingGoals: [],
-        },
-        { id: "hallucination", verdict: "pass", issues: [], corrections: [], graphCorrections: [], missingGoals: [] },
-        {
-          id: "solution_quality",
-          verdict: "pass",
-          issues: [],
-          corrections: [],
-          graphCorrections: [],
-          missingGoals: [],
-        },
-      ],
-      issues: [],
-      corrections: [],
-      graphCorrections: [],
-      missingGoals: [],
-      sessionID: "ses_integrity_default",
-    })
+    reviewIntegrityImpl = async () => integrityTeamResult({ sessionID: "ses_integrity_default" })
   })
 
   afterEach(async () => {
@@ -1764,46 +1818,28 @@ describe("orchestrator tools", () => {
         claimingGoals: [{ goalID, runStatus: "completed" }],
       },
     ]
-    reviewIntegrityImpl = async () => ({
-      verdict: "needs_correction",
-      summary: "Integrity found a post-build requirement mismatch.",
-      dimensions: [
-        {
-          id: "requirement_fidelity",
-          verdict: "needs_correction",
-          issues: [{ description: "REQ-1 is not fully satisfied by the build output.", type: "uncovered" }],
-          corrections: [
-            { action: "modify", goalID, reason: "Cover REQ-1 completely.", updates: { objective: "cover REQ-1" } },
-          ],
-          graphCorrections: [],
-          missingGoals: [],
-        },
-        {
-          id: "technical_feasibility",
-          verdict: "pass",
-          issues: [],
-          corrections: [],
-          graphCorrections: [],
-          missingGoals: [],
-        },
-        { id: "hallucination", verdict: "pass", issues: [], corrections: [], graphCorrections: [], missingGoals: [] },
-        {
-          id: "solution_quality",
-          verdict: "pass",
-          issues: [],
-          corrections: [],
-          graphCorrections: [],
-          missingGoals: [],
-        },
-      ],
-      issues: [{ description: "REQ-1 is not fully satisfied by the build output.", type: "uncovered" }],
-      corrections: [
-        { action: "modify", goalID, reason: "Cover REQ-1 completely.", updates: { objective: "cover REQ-1" } },
-      ],
-      graphCorrections: [],
-      missingGoals: [],
-      sessionID: "ses_integrity_blocked",
-    })
+    reviewIntegrityImpl = async () =>
+      integrityTeamResult({
+        verdict: "needs_correction",
+        summary: "Integrity found a post-build requirement mismatch.",
+        findings: [
+          integrityFinding({
+            id: "F-REQ-1",
+            description: "REQ-1 is not fully satisfied by the build output.",
+            targetIDs: [goalID],
+            requirementIDs: ["REQ-1"],
+            repair: "Cover REQ-1 completely.",
+          }),
+        ],
+        requiredRepairs: [
+          integrityRepair({
+            id: "repair-REQ-1",
+            description: "Cover REQ-1 completely.",
+            targetIDs: [goalID],
+          }),
+        ],
+        sessionID: "ses_integrity_blocked",
+      })
 
     await Instance.provide({
       directory: tmp.path,
@@ -2773,21 +2809,7 @@ describe("orchestrator tools", () => {
 
         reviewIntegrityImpl = async () => {
           architectureReviewCalls += 1
-          return {
-            verdict: "pass",
-            summary: "Integrity pass",
-            dimensions: [
-              { id: "requirement_fidelity", verdict: "pass", issues: [] },
-              { id: "technical_feasibility", verdict: "pass", issues: [] },
-              { id: "hallucination", verdict: "pass", issues: [] },
-              { id: "solution_quality", verdict: "pass", issues: [] },
-            ],
-            issues: [],
-            corrections: [],
-            graphCorrections: [],
-            missingGoals: [],
-            sessionID: "ses_integrity_auto",
-          }
+          return integrityTeamResult({ sessionID: "ses_integrity_auto" })
         }
         buildAgentRunImpl = async (input: any) => {
           await markBuildSlotAcquired(input)
@@ -2886,21 +2908,7 @@ describe("orchestrator tools", () => {
         reviewIntegrityImpl = async () => {
           reviewCalls += 1
           await reviewGate
-          return {
-            verdict: "pass",
-            summary: "Integrity pass",
-            dimensions: [
-              { id: "requirement_fidelity", verdict: "pass", issues: [] },
-              { id: "technical_feasibility", verdict: "pass", issues: [] },
-              { id: "hallucination", verdict: "pass", issues: [] },
-              { id: "solution_quality", verdict: "pass", issues: [] },
-            ],
-            issues: [],
-            corrections: [],
-            graphCorrections: [],
-            missingGoals: [],
-            sessionID: "ses_integrity_singleflight",
-          }
+          return integrityTeamResult({ sessionID: "ses_integrity_singleflight" })
         }
 
         const { tools } = createOrchestratorTools({
@@ -3158,29 +3166,34 @@ describe("orchestrator tools", () => {
           now,
         })
 
-        reviewIntegrityImpl = async () => ({
-          verdict: "needs_correction",
-          summary: "Goal graph must change",
-          dimensions: [
-            {
-              id: "requirement_fidelity",
-              verdict: "needs_correction",
-              issues: [{ description: "Split the goal", type: "coverage_gap" }],
-            },
-            { id: "technical_feasibility", verdict: "pass", issues: [] },
-            { id: "hallucination", verdict: "pass", issues: [] },
-            {
-              id: "solution_quality",
-              verdict: "needs_correction",
-              issues: [{ description: "Current goal is too broad", type: "granularity" }],
-            },
-          ],
-          issues: [{ description: "Split the goal", type: "coverage_gap" }],
-          corrections: [{ type: "split_goal" }],
-          graphCorrections: [],
-          missingGoals: [],
-          sessionID: "ses_integrity_corrected",
-        })
+        reviewIntegrityImpl = async () =>
+          integrityTeamResult({
+            verdict: "needs_correction",
+            summary: "Goal graph must change",
+            findings: [
+              integrityFinding({
+                id: "F-split-goal",
+                description: "Split the goal",
+                targetIDs: [goalID],
+                repair: "Split the current goal into smaller repair work.",
+              }),
+              integrityFinding({
+                id: "F-goal-too-broad",
+                description: "Current goal is too broad",
+                targetIDs: [goalID],
+                repair: "Narrow the goal before accepting the task.",
+                reviewers: ["delivery_surface"],
+              }),
+            ],
+            requiredRepairs: [
+              integrityRepair({
+                id: "repair-split-goal",
+                description: "Split the current goal into smaller repair work.",
+                targetIDs: [goalID],
+              }),
+            ],
+            sessionID: "ses_integrity_corrected",
+          })
         buildAgentRunImpl = async (input: any) => {
           await markBuildSlotAcquired(input)
           buildCalls += 1
@@ -3267,25 +3280,22 @@ describe("orchestrator tools", () => {
           now,
         })
 
-        reviewIntegrityImpl = async () => ({
-          verdict: "concerns",
-          summary: "Shared shell contract is underspecified",
-          dimensions: [
-            {
-              id: "requirement_fidelity",
-              verdict: "concerns",
-              issues: [{ description: "Sibling handoff is ambiguous", type: "coverage_gap", goalIDs: [goalID] }],
-            },
-            { id: "technical_feasibility", verdict: "pass", issues: [] },
-            { id: "hallucination", verdict: "pass", issues: [] },
-            { id: "solution_quality", verdict: "pass", issues: [] },
-          ],
-          issues: [{ description: "Sibling handoff is ambiguous", type: "coverage_gap", goalIDs: [goalID] }],
-          corrections: [],
-          graphCorrections: [],
-          missingGoals: [],
-          sessionID: "ses_integrity_concern",
-        })
+        reviewIntegrityImpl = async () =>
+          integrityTeamResult({
+            verdict: "concerns",
+            summary: "Shared shell contract is underspecified",
+            findings: [
+              integrityFinding({
+                id: "F-sibling-handoff",
+                severity: "advisory",
+                verdictImpact: "concerns",
+                description: "Sibling handoff is ambiguous",
+                targetIDs: [goalID],
+                repair: "Clarify the sibling handoff before final acceptance.",
+              }),
+            ],
+            sessionID: "ses_integrity_concern",
+          })
         buildAgentRunImpl = async (input: any) => {
           await markBuildSlotAcquired(input)
           return {
@@ -3422,41 +3432,23 @@ describe("orchestrator tools", () => {
             .run(),
         )
 
-        reviewIntegrityImpl = async () => ({
-          verdict: "concerns",
-          summary: "Feature acceptance is underspecified",
-          dimensions: [
-            {
-              id: "requirement_fidelity",
-              verdict: "pass",
-              issues: [],
-            },
-            { id: "technical_feasibility", verdict: "pass", issues: [] },
-            { id: "hallucination", verdict: "pass", issues: [] },
-            {
-              id: "solution_quality",
-              verdict: "concerns",
-              issues: [
-                {
-                  description: "Feature goal acceptance depends on bootstrap details",
-                  type: "weak_acceptance",
-                  goalIDs: [siblingGoalID],
-                },
-              ],
-            },
-          ],
-          issues: [
-            {
-              description: "Feature goal acceptance depends on bootstrap details",
-              type: "weak_acceptance",
-              goalIDs: [siblingGoalID],
-            },
-          ],
-          corrections: [],
-          graphCorrections: [],
-          missingGoals: [],
-          sessionID: "ses_integrity_sibling",
-        })
+        reviewIntegrityImpl = async () =>
+          integrityTeamResult({
+            verdict: "concerns",
+            summary: "Feature acceptance is underspecified",
+            findings: [
+              integrityFinding({
+                id: "F-feature-acceptance",
+                severity: "advisory",
+                verdictImpact: "concerns",
+                description: "Feature goal acceptance depends on bootstrap details",
+                targetIDs: [siblingGoalID],
+                repair: "Clarify acceptance across the bootstrap and feature goals.",
+                reviewers: ["delivery_surface"],
+              }),
+            ],
+            sessionID: "ses_integrity_sibling",
+          })
         buildAgentRunImpl = async (input: any) => {
           await markBuildSlotAcquired(input)
           return {
@@ -3603,37 +3595,27 @@ describe("orchestrator tools", () => {
         })
         expect(goalStatusByID(childGoalID)).toBe("running")
 
-        reviewIntegrityImpl = async () => ({
-          verdict: "needs_correction",
-          summary: "Foundation contract changed under dependent work",
-          dimensions: [
-            {
-              id: "requirement_fidelity",
-              verdict: "needs_correction",
-              issues: [
-                {
-                  description: "Foundation acceptance omitted a shared interface",
-                  type: "coverage_gap",
-                  goalIDs: [goalID],
-                },
-              ],
-            },
-            { id: "technical_feasibility", verdict: "pass", issues: [] },
-            { id: "hallucination", verdict: "pass", issues: [] },
-            { id: "solution_quality", verdict: "pass", issues: [] },
-          ],
-          issues: [
-            {
-              description: "Foundation acceptance omitted a shared interface",
-              type: "coverage_gap",
-              goalIDs: [goalID],
-            },
-          ],
-          corrections: [],
-          graphCorrections: [],
-          missingGoals: [],
-          sessionID: "ses_integrity_cascade",
-        })
+        reviewIntegrityImpl = async () =>
+          integrityTeamResult({
+            verdict: "needs_correction",
+            summary: "Foundation contract changed under dependent work",
+            findings: [
+              integrityFinding({
+                id: "F-foundation-interface",
+                description: "Foundation acceptance omitted a shared interface",
+                targetIDs: [goalID],
+                repair: "Add the shared interface contract to the foundation goal.",
+              }),
+            ],
+            requiredRepairs: [
+              integrityRepair({
+                id: "repair-foundation-interface",
+                description: "Add the shared interface contract to the foundation goal.",
+                targetIDs: [goalID],
+              }),
+            ],
+            sessionID: "ses_integrity_cascade",
+          })
         buildAgentRunImpl = async (input: any) => {
           await markBuildSlotAcquired(input)
           return {
@@ -3801,25 +3783,21 @@ describe("orchestrator tools", () => {
           specID,
         })
 
-        reviewIntegrityImpl = async () => ({
-          verdict: "needs_correction",
-          summary: "Correction has no semantic effect",
-          dimensions: [
-            { id: "requirement_fidelity", verdict: "pass", issues: [] },
-            {
-              id: "technical_feasibility",
-              verdict: "needs_correction",
-              issues: [{ description: "Dependency prose only", type: "missing_capability" }],
-            },
-            { id: "hallucination", verdict: "pass", issues: [] },
-            { id: "solution_quality", verdict: "concerns", issues: [] },
-          ],
-          issues: [{ description: "Dependency prose only", type: "missing_capability" }],
-          corrections: [{ action: "modify", goalID, reason: "No actual updates", updates: {} }],
-          graphCorrections: [],
-          missingGoals: [],
-          sessionID: "ses_integrity_noop",
-        })
+        reviewIntegrityImpl = async () =>
+          integrityTeamResult({
+            verdict: "needs_correction",
+            summary: "Correction has no semantic effect",
+            findings: [
+              integrityFinding({
+                id: "F-dependency-prose-only",
+                description: "Dependency prose only",
+                targetIDs: [goalID],
+                repair: "Route explicit dependency repair instead of applying no-op updates.",
+                reviewers: ["delivery_surface"],
+              }),
+            ],
+            sessionID: "ses_integrity_noop",
+          })
 
         const { tools } = createOrchestratorTools({
           taskID,
@@ -3868,25 +3846,19 @@ describe("orchestrator tools", () => {
           specID,
         })
 
-        reviewIntegrityImpl = async () => ({
-          verdict: "needs_correction",
-          summary: "Integrity needs_correction",
-          dimensions: [
-            { id: "requirement_fidelity", verdict: "pass", issues: [] },
-            { id: "technical_feasibility", verdict: "pass", issues: [] },
-            {
-              id: "hallucination",
-              verdict: "needs_correction",
-              issues: [{ description: "REQ-9 is not grounded in the user request.", type: "unsupported_claim" }],
-            },
-            { id: "solution_quality", verdict: "pass", issues: [] },
-          ],
-          issues: [{ description: "REQ-9 is not grounded in the user request.", type: "unsupported_claim" }],
-          corrections: [],
-          graphCorrections: [],
-          missingGoals: [],
-          sessionID: "ses_integrity_upstream",
-        })
+        reviewIntegrityImpl = async () =>
+          integrityTeamResult({
+            verdict: "needs_correction",
+            summary: "Integrity needs_correction",
+            findings: [
+              integrityFinding({
+                id: "F-REQ-9-unsupported",
+                description: "REQ-9 is not grounded in the user request.",
+                repair: "Reconcile unsupported requirement text with the original request.",
+              }),
+            ],
+            sessionID: "ses_integrity_upstream",
+          })
         const { tools } = createOrchestratorTools({
           taskID,
           agentSessionID: parent.id,
@@ -3957,27 +3929,28 @@ describe("orchestrator tools", () => {
           })
         }
 
-        reviewIntegrityImpl = async () => ({
-          verdict: "needs_correction",
-          summary: "Integrity needs_correction",
-          dimensions: [
-            {
-              id: "requirement_fidelity",
-              verdict: "needs_correction",
-              issues: [{ description: "Goal still misses REQ-1.", type: "uncovered" }],
-            },
-            { id: "technical_feasibility", verdict: "pass", issues: [] },
-            { id: "hallucination", verdict: "pass", issues: [] },
-            { id: "solution_quality", verdict: "pass", issues: [] },
-          ],
-          issues: [{ description: "Goal still misses REQ-1.", type: "uncovered" }],
-          corrections: [
-            { action: "modify", goalID, reason: "Still missing REQ-1", updates: { objective: "cover REQ-1" } },
-          ],
-          graphCorrections: [],
-          missingGoals: [],
-          sessionID: "ses_integrity_plan_restart",
-        })
+        reviewIntegrityImpl = async () =>
+          integrityTeamResult({
+            verdict: "needs_correction",
+            summary: "Integrity needs_correction",
+            findings: [
+              integrityFinding({
+                id: "F-goal-misses-REQ-1",
+                description: "Goal still misses REQ-1.",
+                targetIDs: [goalID],
+                requirementIDs: ["REQ-1"],
+                repair: "Update the goal to cover REQ-1.",
+              }),
+            ],
+            requiredRepairs: [
+              integrityRepair({
+                id: "repair-cover-REQ-1",
+                description: "Update the goal to cover REQ-1.",
+                targetIDs: [goalID],
+              }),
+            ],
+            sessionID: "ses_integrity_plan_restart",
+          })
         const { tools } = createOrchestratorTools({
           taskID,
           agentSessionID: parent.id,
@@ -4046,44 +4019,45 @@ describe("orchestrator tools", () => {
           })
         }
 
-        reviewIntegrityImpl = async () => ({
-          verdict: "needs_correction",
-          summary: "Integrity needs_correction",
-          dimensions: [
-            {
-              id: "requirement_fidelity",
-              verdict: "needs_correction",
-              issues: [{ description: "Goal still misses REQ-1.", type: "uncovered" }],
-            },
-            {
-              id: "technical_feasibility",
-              verdict: "needs_correction",
-              issues: [{ description: "Import/export contract is still inconsistent.", type: "missing_capability" }],
-            },
-            {
-              id: "hallucination",
-              verdict: "needs_correction",
-              issues: [{ description: "A goal references an invented artifact.", type: "invented_artifact" }],
-            },
-            {
-              id: "solution_quality",
-              verdict: "needs_correction",
-              issues: [{ description: "Goal granularity remains unstable.", type: "granularity_off" }],
-            },
-          ],
-          issues: [
-            { description: "Goal still misses REQ-1.", type: "uncovered" },
-            { description: "Import/export contract is still inconsistent.", type: "missing_capability" },
-            { description: "A goal references an invented artifact.", type: "invented_artifact" },
-            { description: "Goal granularity remains unstable.", type: "granularity_off" },
-          ],
-          corrections: [
-            { action: "modify", goalID, reason: "Still missing REQ-1", updates: { objective: "cover REQ-1" } },
-          ],
-          graphCorrections: [],
-          missingGoals: [{ title: "Missing integration goal", objective: "Close the integration gap" }],
-          sessionID: "ses_integrity_mixed_restart",
-        })
+        reviewIntegrityImpl = async () =>
+          integrityTeamResult({
+            verdict: "needs_correction",
+            summary: "Integrity needs_correction",
+            findings: [
+              integrityFinding({
+                id: "F-goal-still-misses-REQ-1",
+                description: "Goal still misses REQ-1.",
+                targetIDs: [goalID],
+                requirementIDs: ["REQ-1"],
+                repair: "Update the goal to cover REQ-1.",
+              }),
+              integrityFinding({
+                id: "F-import-export-inconsistent",
+                description: "Import/export contract is still inconsistent.",
+                repair: "Repair the import/export contract.",
+                reviewers: ["delivery_surface"],
+              }),
+              integrityFinding({
+                id: "F-invented-artifact",
+                description: "A goal references an invented artifact.",
+                repair: "Remove invented artifact references.",
+              }),
+              integrityFinding({
+                id: "F-granularity-unstable",
+                description: "Goal granularity remains unstable.",
+                repair: "Stabilize goal granularity before acceptance.",
+                reviewers: ["delivery_surface"],
+              }),
+            ],
+            requiredRepairs: [
+              integrityRepair({
+                id: "repair-cover-REQ-1",
+                description: "Update the goal to cover REQ-1.",
+                targetIDs: [goalID],
+              }),
+            ],
+            sessionID: "ses_integrity_mixed_restart",
+          })
         const { tools } = createOrchestratorTools({
           taskID,
           agentSessionID: parent.id,
