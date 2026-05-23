@@ -1,5 +1,5 @@
 function hasPrefix(type: string, prefixes: readonly string[]): boolean {
-  return prefixes.some((prefix) => type.startsWith(prefix));
+  return prefixes.some((prefix) => type.startsWith(prefix))
 }
 
 const TREE_WRITER_NOOP_TYPES = new Set([
@@ -35,13 +35,9 @@ const TREE_WRITER_PASS_THROUGH_PREFIXES = [
   "workflow.",
   "task.",
   "interaction.",
-] as const;
+] as const
 
-const TREE_WRITER_PASS_THROUGH_EXACT_TYPES = new Set([
-  "delivery.ready",
-  "delivery.evidence.updated",
-  "delivery.preview.updated",
-])
+const TREE_WRITER_PASS_THROUGH_EXACT_TYPES = new Set(["delivery.ready", "delivery.evidence.updated"])
 
 const BOARD_INVALIDATING_EXACT_TYPES = new Set([
   "task.created",
@@ -50,7 +46,7 @@ const BOARD_INVALIDATING_EXACT_TYPES = new Set([
   "task.failed",
   "task.cancelled",
   "task.blocked",
-]);
+])
 
 const BOARD_INVALIDATING_PREFIXES = [
   "run.",
@@ -62,33 +58,28 @@ const BOARD_INVALIDATING_PREFIXES = [
   "evaluation.",
   "interaction.",
   "workflow.",
-] as const;
+] as const
 
-const BOARD_INVALIDATING_EXACT_DELIVERY_TYPES = new Set([
-  "delivery.ready",
-  "delivery.evidence.updated",
-  "delivery.preview.updated",
-])
+const BOARD_INVALIDATING_EXACT_DELIVERY_TYPES = new Set(["delivery.ready", "delivery.evidence.updated"])
 
-const ROUTER_CONSUMED_NOOP_TYPES = new Set([
-  "agent.updated",
-  "message.injected",
-]);
+const ROUTER_CONSUMED_NOOP_TYPES = new Set(["agent.updated", "message.injected"])
 
 export function isTreeWriterNoopEventType(type: string): boolean {
-  return TREE_WRITER_NOOP_TYPES.has(type);
+  return TREE_WRITER_NOOP_TYPES.has(type)
 }
 
 export function isTreeWriterPassThroughEventType(type: string): boolean {
-  return TREE_WRITER_PASS_THROUGH_EXACT_TYPES.has(type) || hasPrefix(type, TREE_WRITER_PASS_THROUGH_PREFIXES);
+  return TREE_WRITER_PASS_THROUGH_EXACT_TYPES.has(type) || hasPrefix(type, TREE_WRITER_PASS_THROUGH_PREFIXES)
 }
 
 export function isBoardInvalidatingEventType(type: string): boolean {
-  return BOARD_INVALIDATING_EXACT_TYPES.has(type) ||
+  return (
+    BOARD_INVALIDATING_EXACT_TYPES.has(type) ||
     BOARD_INVALIDATING_EXACT_DELIVERY_TYPES.has(type) ||
-    hasPrefix(type, BOARD_INVALIDATING_PREFIXES);
+    hasPrefix(type, BOARD_INVALIDATING_PREFIXES)
+  )
 }
 
 export function isRouterConsumedNoopEventType(type: string): boolean {
-  return ROUTER_CONSUMED_NOOP_TYPES.has(type);
+  return ROUTER_CONSUMED_NOOP_TYPES.has(type)
 }

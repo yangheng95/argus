@@ -14,11 +14,7 @@ const projectIds: string[] = []
 
 afterEach(() => {
   for (const projectId of projectIds.splice(0)) {
-    Database.use((db) =>
-      db.delete(ProjectTable)
-        .where(eq(ProjectTable.id, projectId))
-        .run(),
-    )
+    Database.use((db) => db.delete(ProjectTable).where(eq(ProjectTable.id, projectId)).run())
   }
 })
 
@@ -31,18 +27,22 @@ describe("delivery specialist review contract", () => {
       reviewer: "backend_api",
       executionStatus: "completed",
       summary: "Route checks completed.",
-      findings: [{
-        proposedSeverity: "blocking",
-        category: "contract",
-        claim: "GET /users returns the wrong shape.",
-        evidence: [{
-          kind: "api_response",
-          ref: "probe:/users",
-          excerpt: "status=200 body={items:null}",
-        }],
-        affectedRequirementIDs: ["REQ-users"],
-        suggestedOwnerGoalID: "gol_backend",
-      }],
+      findings: [
+        {
+          proposedSeverity: "blocking",
+          category: "contract",
+          claim: "GET /users returns the wrong shape.",
+          evidence: [
+            {
+              kind: "api_response",
+              ref: "probe:/users",
+              excerpt: "status=200 body={items:null}",
+            },
+          ],
+          affectedRequirementIDs: ["REQ-users"],
+          suggestedOwnerGoalID: "gol_backend",
+        },
+      ],
       evidenceRefs: ["probe:/users"],
       reviewedSurfaces: ["backend_api"],
     })
@@ -53,67 +53,72 @@ describe("delivery specialist review contract", () => {
   })
 
   test("rejects findings without evidence and payloads that try to include a verdict", () => {
-    expect(() => validateDeliverySpecialistReview({
-      id: "artifact_missing_evidence",
-      taskId: "tsk_specialist_contract",
-      runId: "run_specialist_contract",
-      deliveryId: "dlv_specialist_contract",
-      reviewer: "test_integration",
-      executionStatus: "completed",
-      summary: "Tests inspected.",
-      findings: [{
-        proposedSeverity: "blocking",
-        category: "test_quality",
-        claim: "Tests are empty.",
-        evidence: [],
-        affectedRequirementIDs: ["REQ-tests"],
-      }],
-      evidenceRefs: ["tests/app.test.ts"],
-      reviewedSurfaces: ["test_integration"],
-      timeCreated: Date.now(),
-    })).toThrow("Too small")
+    expect(() =>
+      validateDeliverySpecialistReview({
+        id: "artifact_missing_evidence",
+        taskId: "tsk_specialist_contract",
+        runId: "run_specialist_contract",
+        deliveryId: "dlv_specialist_contract",
+        reviewer: "test_integration",
+        executionStatus: "completed",
+        summary: "Tests inspected.",
+        findings: [
+          {
+            proposedSeverity: "blocking",
+            category: "test_quality",
+            claim: "Tests are empty.",
+            evidence: [],
+            affectedRequirementIDs: ["REQ-tests"],
+          },
+        ],
+        evidenceRefs: ["tests/app.test.ts"],
+        reviewedSurfaces: ["test_integration"],
+        timeCreated: Date.now(),
+      }),
+    ).toThrow("Too small")
 
-    expect(() => validateDeliverySpecialistReview({
-      id: "artifact_verdict_field",
-      taskId: "tsk_specialist_contract",
-      runId: "run_specialist_contract",
-      deliveryId: "dlv_specialist_contract",
-      reviewer: "frontend",
-      executionStatus: "completed",
-      summary: "Looks good.",
-      findings: [],
-      evidenceRefs: ["dom:home"],
-      reviewedSurfaces: ["frontend"],
-      timeCreated: Date.now(),
-      verdict: "accepted",
-    })).toThrow("Unrecognized key")
+    expect(() =>
+      validateDeliverySpecialistReview({
+        id: "artifact_verdict_field",
+        taskId: "tsk_specialist_contract",
+        runId: "run_specialist_contract",
+        deliveryId: "dlv_specialist_contract",
+        reviewer: "backend_api",
+        executionStatus: "completed",
+        summary: "Looks good.",
+        findings: [],
+        evidenceRefs: ["dom:home"],
+        reviewedSurfaces: ["backend_api"],
+        timeCreated: Date.now(),
+        verdict: "accepted",
+      }),
+    ).toThrow("Unrecognized key")
   })
 
   test("rejects cross-surface specialist output before arbitration", () => {
-    expect(() => validateDeliverySpecialistReview({
-      id: "artifact_cross_surface",
-      taskId: "tsk_specialist_contract",
-      runId: "run_specialist_contract",
-      deliveryId: "dlv_specialist_contract",
-      reviewer: "frontend",
-      executionStatus: "completed",
-      summary: "Reviewed frontend and backend together.",
-      findings: [],
-      evidenceRefs: ["src/App.tsx"],
-      reviewedSurfaces: ["frontend", "backend_api"],
-      timeCreated: Date.now(),
-    })).toThrow("may only cover its own surface")
+    expect(() =>
+      validateDeliverySpecialistReview({
+        id: "artifact_cross_surface",
+        taskId: "tsk_specialist_contract",
+        runId: "run_specialist_contract",
+        deliveryId: "dlv_specialist_contract",
+        reviewer: "backend_api",
+        executionStatus: "completed",
+        summary: "Reviewed backend and security together.",
+        findings: [],
+        evidenceRefs: ["src/api.ts"],
+        reviewedSurfaces: ["backend_api", "security_data"],
+        timeCreated: Date.now(),
+      }),
+    ).toThrow("may only cover its own surface")
   })
 
   test("derives mandatory reviewers directly from the surface manifest surfaces", () => {
-    expect(requiredReviewersForSurfaces({
-      surfaces: [
-        "visual_runtime",
-        "frontend",
-        "frontend",
-        "security_data",
-      ],
-    })).toEqual(["frontend", "security_data", "visual_runtime"])
+    expect(
+      requiredReviewersForSurfaces({
+        surfaces: ["client_contract", "backend_api", "backend_api", "security_data"],
+      }),
+    ).toEqual(["backend_api", "client_contract", "security_data"])
   })
 
   test("persists specialist reviews as evidence artifacts instead of verdict artifacts", () => {
@@ -148,30 +153,30 @@ describe("delivery specialist review contract", () => {
   })
 })
 
-function seedTask(input: {
-  projectId: string
-  taskId: string
-  now: number
-}) {
+function seedTask(input: { projectId: string; taskId: string; now: number }) {
   projectIds.push(input.projectId)
   Database.use((db) => {
-    db.insert(ProjectTable).values({
-      id: input.projectId,
-      worktree: process.cwd(),
-      name: "Delivery specialist review test",
-      sandboxes: "[]",
-      time_created: input.now,
-      time_updated: input.now,
-    }).run()
-    db.insert(EngineTaskTable).values({
-      id: input.taskId,
-      project_id: input.projectId,
-      source: "test",
-      title: "Delivery specialist review task",
-      request: "Verify specialist review artifact persistence",
-      priority: "normal",
-      time_created: input.now,
-      time_updated: input.now,
-    }).run()
+    db.insert(ProjectTable)
+      .values({
+        id: input.projectId,
+        worktree: process.cwd(),
+        name: "Delivery specialist review test",
+        sandboxes: "[]",
+        time_created: input.now,
+        time_updated: input.now,
+      })
+      .run()
+    db.insert(EngineTaskTable)
+      .values({
+        id: input.taskId,
+        project_id: input.projectId,
+        source: "test",
+        title: "Delivery specialist review task",
+        request: "Verify specialist review artifact persistence",
+        priority: "normal",
+        time_created: input.now,
+        time_updated: input.now,
+      })
+      .run()
   })
 }

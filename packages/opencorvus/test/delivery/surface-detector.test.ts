@@ -12,7 +12,7 @@ afterEach(async () => {
 })
 
 describe("delivery surface detector", () => {
-  test("detects frontend and visual runtime surfaces from structural app evidence", async () => {
+  test("detects frontend surface from structural app evidence", async () => {
     const dir = await packageFixture({
       dependencies: { react: "latest", vite: "latest" },
       files: {
@@ -27,9 +27,8 @@ describe("delivery surface detector", () => {
       changedFiles: ["src/components/App.tsx"],
     })
 
-    expect(manifest.surfaces).toEqual(["frontend", "visual_runtime"])
+    expect(manifest.surfaces).toEqual(["frontend"])
     expect(evidenceRefs(manifest, "frontend")).toContain("react")
-    expect(evidenceRefs(manifest, "visual_runtime")).toContain("frontend surface with runtime/design files")
   })
 
   test("detects backend API surfaces from route structure without frontend review", async () => {
@@ -76,32 +75,7 @@ describe("delivery surface detector", () => {
       goals: [{ acceptance_spec_count: 1, imports: ["users"], exports: ["users"] }],
     })
 
-    expect(manifest.surfaces).toEqual([
-      "backend_api",
-      "client_contract",
-      "frontend",
-      "test_integration",
-      "visual_runtime",
-    ])
-  })
-
-  test("detects visual runtime from design metadata instead of task wording", async () => {
-    const dir = await packageFixture({
-      dependencies: { react: "latest" },
-      files: {
-        "src/app/main.ts": "export const boot = true\n",
-      },
-    })
-
-    const manifest = await detectDeliverySurfaces({
-      taskID: "tsk_visual",
-      deliveryID: "dlv_visual",
-      projectRoot: dir,
-      changedFiles: ["src/app/main.ts"],
-      metadata: { design_specs: [{ name: "reference screenshot" }] },
-    })
-
-    expect(manifest.surfaces).toEqual(["frontend", "visual_runtime"])
+    expect(manifest.surfaces).toEqual(["backend_api", "client_contract", "frontend", "test_integration"])
   })
 
   test("detects security and data surfaces from concrete dependencies and files", async () => {
@@ -121,12 +95,9 @@ describe("delivery surface detector", () => {
     })
 
     expect(manifest.surfaces).toEqual(["security_data"])
-    expect(evidenceRefs(manifest, "security_data")).toEqual(expect.arrayContaining([
-      "bcrypt",
-      "prisma",
-      "prisma/schema.prisma",
-      "src/auth/session.ts",
-    ]))
+    expect(evidenceRefs(manifest, "security_data")).toEqual(
+      expect.arrayContaining(["bcrypt", "prisma", "prisma/schema.prisma", "src/auth/session.ts"]),
+    )
   })
 
   test("does not classify surfaces from task text without structural evidence", async () => {
@@ -163,7 +134,7 @@ describe("delivery surface detector", () => {
       goals: [{ imports: ["calc-state"], exports: ["calculator-ui"] }],
     })
 
-    expect(manifest.surfaces).toEqual(["frontend", "visual_runtime"])
+    expect(manifest.surfaces).toEqual(["frontend"])
     expect(evidenceRefs(manifest, "client_contract")).toEqual([])
   })
 
@@ -182,7 +153,7 @@ describe("delivery surface detector", () => {
       changedFiles: ["src/components/KeyStatistics.tsx"],
     })
 
-    expect(manifest.surfaces).toEqual(["frontend", "visual_runtime"])
+    expect(manifest.surfaces).toEqual(["frontend"])
     expect(evidenceRefs(manifest, "client_contract")).toEqual([])
   })
 })
@@ -195,12 +166,19 @@ async function packageFixture(input: {
 }) {
   const dir = await mkdtemp(path.join(os.tmpdir(), "oc-surface-detector-"))
   tempDirs.push(dir)
-  await fs.writeFile(path.join(dir, "package.json"), JSON.stringify({
-    type: "module",
-    scripts: input.scripts ?? {},
-    dependencies: input.dependencies ?? {},
-    devDependencies: input.devDependencies ?? {},
-  }, null, 2))
+  await fs.writeFile(
+    path.join(dir, "package.json"),
+    JSON.stringify(
+      {
+        type: "module",
+        scripts: input.scripts ?? {},
+        dependencies: input.dependencies ?? {},
+        devDependencies: input.devDependencies ?? {},
+      },
+      null,
+      2,
+    ),
+  )
   for (const [file, text] of Object.entries(input.files)) {
     const target = path.join(dir, file)
     await fs.mkdir(path.dirname(target), { recursive: true })
@@ -209,11 +187,6 @@ async function packageFixture(input: {
   return dir
 }
 
-function evidenceRefs(
-  manifest: Awaited<ReturnType<typeof detectDeliverySurfaces>>,
-  surface: string,
-) {
-  return manifest.evidence
-    .filter((item) => item.surface === surface)
-    .flatMap((item) => item.refs.map((ref) => ref.ref))
+function evidenceRefs(manifest: Awaited<ReturnType<typeof detectDeliverySurfaces>>, surface: string) {
+  return manifest.evidence.filter((item) => item.surface === surface).flatMap((item) => item.refs.map((ref) => ref.ref))
 }

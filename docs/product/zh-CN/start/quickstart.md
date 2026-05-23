@@ -11,12 +11,12 @@ opencorvus serve
 
 默认监听 `127.0.0.1:7878`。常用 flag：
 
-| flag | 说明 |
-|---|---|
-| `--hostname 0.0.0.0` | 对外监听（必须同时设 `OPENCORVUS_SERVER_PASSWORD`） |
-| `--port 7878` | 改端口 |
-| `--project-dir <path>` | 指定工作仓库 |
-| `--mdns` | 启用 mDNS 服务发现 |
+| flag                   | 说明                                                |
+| ---------------------- | --------------------------------------------------- |
+| `--hostname 0.0.0.0`   | 对外监听（必须同时设 `OPENCORVUS_SERVER_PASSWORD`） |
+| `--port 7878`          | 改端口                                              |
+| `--project-dir <path>` | 指定工作仓库                                        |
+| `--mdns`               | 启用 mDNS 服务发现                                  |
 
 > 如果暴露到 localhost 以外，**务必**先设置 `OPENCORVUS_SERVER_PASSWORD`。
 
@@ -65,17 +65,17 @@ task.completed | task.failed | task.cancelled
 
 ## 5. 常用任务端点
 
-| 端点 | 用途 |
-|---|---|
-| `GET /tasks` | 所有任务列表 |
-| `GET /task/<id>` | 单任务状态 |
-| `GET /task/<id>/board` | Kanban 视图 |
-| `POST /task/<id>/message` | 追加用户消息（follow-up） |
-| `POST /task/<id>/retry` | 保持 plan，重试执行 |
-| `POST /task/<id>/replan` | 丢弃当前 plan，重新规划 |
-| `POST /task/<id>/cancel` | 取消任务 |
+| 端点                            | 用途                                                      |
+| ------------------------------- | --------------------------------------------------------- |
+| `GET /tasks`                    | 所有任务列表                                              |
+| `GET /task/<id>`                | 单任务状态                                                |
+| `GET /task/<id>/board`          | Kanban 视图                                               |
+| `POST /task/<id>/message`       | 追加用户消息（follow-up）                                 |
+| `POST /task/<id>/retry`         | 保持 plan，重试执行                                       |
+| `POST /task/<id>/replan`        | 丢弃当前 plan，重新规划                                   |
+| `POST /task/<id>/cancel`        | 取消任务                                                  |
 | `GET /export/task/<id>/archive` | 导出任务档案（zip，含 messages + artifacts + 工作区快照） |
-| `POST /import/task/archive` | 导入任务档案 |
+| `POST /import/task/archive`     | 导入任务档案                                              |
 
 ## 6. 本地 TUI（交互模式）
 
@@ -89,7 +89,7 @@ opencorvus
 
 ## 7. Workspace 与 terminal
 
-Overlay 的 Workspace 面板可以在你配置的**系统终端**里打开当前 worktree（替代了旧的嵌入 PTY，commit `6edd471a3`）。在 `opencorvus.jsonc` 配置 `terminal` profile 后，点击 Workspace 卡的"打开终端"按钮即按 profile 启动 Windows Terminal / iTerm / GNOME Terminal 等。详见 [配置](../opencorvus/configuration.md#preview--terminal)。
+Overlay 的 Workspace 面板可以在你配置的**系统终端**里打开当前 worktree（替代了旧的嵌入 PTY，commit `6edd471a3`）。在 `opencorvus.jsonc` 配置 `terminal` profile 后，点击 Workspace 卡的"打开终端"按钮即按 profile 启动 Windows Terminal / iTerm / GNOME Terminal 等。详见 [配置](../opencorvus/configuration.md#terminal)。
 
 ## 8. 通过 Slack 创建任务
 

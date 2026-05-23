@@ -4,11 +4,11 @@ OpenCorvus 的配置分三层：**CLI flag > 环境变量 > `opencorvus.jsonc` �
 
 ## 配置文件位置
 
-| 位置 | 用途 |
-|---|---|
-| `~/.opencorvus/config/opencorvus.json` | 全局默认 |
-| `<repo>/.opencorvus/opencorvus.jsonc` | 项目级覆盖（支持 JSONC 注释） |
-| `OPENCORVUS_CONFIG_CONTENT` env | 运行时注入（CI / 容器推荐） |
+| 位置                                   | 用途                          |
+| -------------------------------------- | ----------------------------- |
+| `~/.opencorvus/config/opencorvus.json` | 全局默认                      |
+| `<repo>/.opencorvus/opencorvus.jsonc`  | 项目级覆盖（支持 JSONC 注释） |
+| `OPENCORVUS_CONFIG_CONTENT` env        | 运行时注入（CI / 容器推荐）   |
 
 同名字段，**后者覆盖前者**（managed → global → project → local → env）。
 
@@ -17,7 +17,7 @@ OpenCorvus 的配置分三层：**CLI flag > 环境变量 > `opencorvus.jsonc` �
 ```jsonc
 {
   "$schema": "https://opencorvus.ai/config.json",
-  "model": "alibaba-cn/qwen3.5-plus"
+  "model": "alibaba-cn/qwen3.5-plus",
 }
 ```
 
@@ -28,7 +28,7 @@ OpenCorvus 的配置分三层：**CLI flag > 环境变量 > `opencorvus.jsonc` �
   $schema · logLevel · server · share · autoupdate · snapshot · watcher
   disabled_providers · enabled_providers · tool_permissions
   provider · model · small_model · default_agent · agent · mcp · lsp
-  formatter · permission · compaction · preview · terminal
+  formatter · permission · compaction · terminal
   channel · command · skills · plugin · prompt · instructions
   username · locale
 
@@ -65,9 +65,9 @@ experimental:
   "skills": {
     "paths": [
       "D:/myhexin-local/argus-opencode/packages/opencorvus/skills-market/github.com-openai-skills",
-      "D:/myhexin-local/argus-opencode/packages/opencorvus/skills-market/github.com-anthropics-skills"
+      "D:/myhexin-local/argus-opencode/packages/opencorvus/skills-market/github.com-anthropics-skills",
     ],
-    "urls": []
+    "urls": [],
   },
 
   "plugin": [],
@@ -77,8 +77,8 @@ experimental:
       "local-note": "deny",
       "sora": "ask",
       "figma": "ask",
-      "doc-coauthoring": "ask"
-    }
+      "doc-coauthoring": "ask",
+    },
   },
 
   "assistant": {
@@ -86,12 +86,12 @@ experimental:
     "max_executor_groups": 3,
     "default_workflow": "pipeline",
     "delivery": { "max_retries": 2 },
-    "build": { "max_steps": 80 }
+    "build": { "max_steps": 80 },
   },
 
   "experimental": {
-    "auto_question": true
-  }
+    "auto_question": true,
+  },
 }
 ```
 
@@ -137,8 +137,8 @@ experimental:
     "delivery": { "max_retries": 2 },
     "max_executor_groups": 3,
     "default_workflow": "pipeline",
-    "workflows": []
-  }
+    "workflows": [],
+  },
 }
 ```
 
