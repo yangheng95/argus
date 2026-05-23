@@ -378,6 +378,12 @@ bun test packages/opencorvus/test/requirements/maturity-word-discipline.test.ts 
   SQL included `SELECT id,title,description,acceptance,non_goals,metadata FROM engine_requirement WHERE task_id=$task`,
   `SELECT id,title,objective,acceptance_specs FROM engine_goal WHERE task_id=$task`,
   and `SELECT id,kind,label,payload,time_created FROM engine_artifact WHERE task_id=$task AND kind='integrity_attempt' ORDER BY time_created ASC`.
+- Code/spec compatibility delta: `IntegrityFindingSchema` is strict and did
+  not accept `userRequestQuotes`, even though the traceability rule requires a
+  finding to be anchored by REQ id, AS id, or literal user-request substring.
+  Implementation will add `userRequestQuotes?: string[]` as a data-shape field
+  only. It will not verify substring membership, reject unquoted findings, or
+  drop findings in host code; those remain prompt-level scope instructions.
 
 ## Implementation Checklist
 
