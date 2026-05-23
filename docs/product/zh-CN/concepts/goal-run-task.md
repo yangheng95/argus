@@ -27,12 +27,12 @@ ProgressSnapshot · ExecutorSession ← 进度与 executor 句柄
 
 ### Task（`engine.sql.ts` · `EngineTaskTable`）
 
-| 字段 | 说明 |
-|---|---|
-| `kind` | `"workflow"`（默认；走完整 Task Control Loop）或 `"build"`（直接跑 build agent，跳过分解 / 计划 / 评估） |
-| `status` | `queued / active / completed / failed / cancelled` |
-| `priority` | `critical / high / normal / low` |
-| `session_id` | 指向 root session |
+| 字段         | 说明                                                                                                     |
+| ------------ | -------------------------------------------------------------------------------------------------------- |
+| `kind`       | `"workflow"`（默认；走完整 Task Control Loop）或 `"build"`（直接跑 build agent，跳过分解 / 计划 / 评估） |
+| `status`     | `queued / active / completed / failed / cancelled`                                                       |
+| `priority`   | `critical / high / normal / low`                                                                         |
+| `session_id` | 指向 root session                                                                                        |
 
 一个 Task 可能经历多个 PlanVersion（每次 replan 产生新版，旧的置 `superseded`）。
 
@@ -49,14 +49,14 @@ ProgressSnapshot · ExecutorSession ← 进度与 executor 句柄
 
 Architect 分解必须先分析需求表面、实现责任、验证责任、依赖与集成风险，再提交 goal 图。有效工作流至少包含 2 个 goal；单个 all-in-one 大型 goal 不合格，因为它无法提供可靠的独立执行与独立验收边界。
 
-| 字段 | 说明 |
-|---|---|
-| `title` / `objective` | 目标名与叙述 |
-| `done_definition` | 验收标准（可含可执行命令：`bun run typecheck` 等） |
-| `owned_paths[]` | 本 Goal 负责的代码路径 |
-| `depends_on[]` | 前置 Goal（拓扑排序依据） |
-| `priority` | `blocking` 或 `advisory` |
-| `exports[]` / `imports[]` | Goal 间数据契约 |
+| 字段                      | 说明                                               |
+| ------------------------- | -------------------------------------------------- |
+| `title` / `objective`     | 目标名与叙述                                       |
+| `done_definition`         | 验收标准（可含可执行命令：`bun run typecheck` 等） |
+| `owned_paths[]`           | 本 Goal 负责的代码路径                             |
+| `depends_on[]`            | 前置 Goal（拓扑排序依据）                          |
+| `priority`                | `blocking` 或 `advisory`                           |
+| `exports[]` / `imports[]` | Goal 间数据契约                                    |
 
 > **Goal 表已无 `status` 列**——live 状态由 `engine/describe.ts::goalStatusByID` 派生（2026-05-05 Phase E 退役）。
 >
@@ -85,16 +85,16 @@ orchestrator-stream-error
 
 **常见 kind 含义**：
 
-| kind | 含义 |
-|---|---|
-| `run` | 一次 Task 执行尝试的根节点（取代旧 `engine_run` 表） |
-| `goal_run_attempt` | 单个 Goal 的一次 worktree 尝试，`payload.workspace_*` 为单源 worktree 信息 |
-| `delivery` | 一次交付候选（取代旧 `engine_delivery` 表） |
-| `evaluation` / `verdict` | 评估判决（`accepted / rejected / inconclusive`；取代旧 `engine_evaluation` 表） |
-| `verification-evidence` | delivery 检查证据（含 scope = `goal_run` / `delivery`） |
-| `patch` / `changed_file` / `diff` | 代码变更产物 |
-| `delivery_evidence_manifest` / `surface_manifest` / `specialist_review` / `preview` | delivery 阶段产物 |
-| `integrity_attempt` / `prosecutor_attempt` | integrity / prosecutor agent 输出 |
+| kind                                                                    | 含义                                                                            |
+| ----------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `run`                                                                   | 一次 Task 执行尝试的根节点（取代旧 `engine_run` 表）                            |
+| `goal_run_attempt`                                                      | 单个 Goal 的一次 worktree 尝试，`payload.workspace_*` 为单源 worktree 信息      |
+| `delivery`                                                              | 一次交付候选（取代旧 `engine_delivery` 表）                                     |
+| `evaluation` / `verdict`                                                | 评估判决（`accepted / rejected / inconclusive`；取代旧 `engine_evaluation` 表） |
+| `verification-evidence`                                                 | delivery 检查证据（含 scope = `goal_run` / `delivery`）                         |
+| `patch` / `changed_file` / `diff`                                       | 代码变更产物                                                                    |
+| `delivery_evidence_manifest` / `surface_manifest` / `specialist_review` | delivery 阶段产物                                                               |
+| `integrity_attempt` / `prosecutor_attempt`                              | integrity / prosecutor agent 输出                                               |
 
 `inconclusive` verdict 语义为"无法判决"——不是通过也不是失败，触发 replan 而非 retry。
 
@@ -108,11 +108,11 @@ orchestrator-stream-error
 
 ### SpecSnapshot（`EngineSpecSnapshotTable`）
 
-| 字段 | 说明 |
-|---|---|
-| `summary` | 一句话规格 |
-| `content` | 完整规格（Markdown） |
-| `scope` | 涉及的文件 / 模块范围 |
+| 字段         | 说明                       |
+| ------------ | -------------------------- |
+| `summary`    | 一句话规格                 |
+| `content`    | 完整规格（Markdown）       |
+| `scope`      | 涉及的文件 / 模块范围      |
 | `evidence[]` | 产出规格所依据的代码证据链 |
 
 ## Session 域

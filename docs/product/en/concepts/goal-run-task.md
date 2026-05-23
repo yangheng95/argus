@@ -27,12 +27,12 @@ The complete list of 13 tables is in [02-data.md](../../../specs/new-arch/02-dat
 
 ### Task (`engine.sql.ts` · `EngineTaskTable`)
 
-| Field | Meaning |
-|---|---|
-| `kind` | `"workflow"` (default; runs the full Task Control Loop) or `"build"` (runs the build agent directly, skipping decomposition / planning / evaluation) |
-| `status` | `queued / active / completed / failed / cancelled` |
-| `priority` | `critical / high / normal / low` |
-| `session_id` | Points to the root session |
+| Field        | Meaning                                                                                                                                              |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `kind`       | `"workflow"` (default; runs the full Task Control Loop) or `"build"` (runs the build agent directly, skipping decomposition / planning / evaluation) |
+| `status`     | `queued / active / completed / failed / cancelled`                                                                                                   |
+| `priority`   | `critical / high / normal / low`                                                                                                                     |
+| `session_id` | Points to the root session                                                                                                                           |
 
 One Task may go through multiple PlanVersions (each replan creates a new version; the old one is set to `superseded`).
 
@@ -49,14 +49,14 @@ The smallest unit that can be executed in parallel and verified independently.
 
 Architect decomposition must analyze the requirement surface, implementation ownership, verification ownership, dependencies, and integration risk before submitting the goal graph. A valid workflow includes at least 2 goals; a single all-in-one large goal is invalid because it does not provide reliable independent-execution and independent-acceptance boundaries.
 
-| Field | Meaning |
-|---|---|
-| `title` / `objective` | Name and narrative |
-| `done_definition` | Acceptance criteria (may include executable commands: `bun run typecheck`, etc.) |
-| `owned_paths[]` | Code paths owned by this goal |
-| `depends_on[]` | Upstream goals (topological ordering basis) |
-| `priority` | `blocking` or `advisory` |
-| `exports[]` / `imports[]` | Cross-goal data contracts |
+| Field                     | Meaning                                                                          |
+| ------------------------- | -------------------------------------------------------------------------------- |
+| `title` / `objective`     | Name and narrative                                                               |
+| `done_definition`         | Acceptance criteria (may include executable commands: `bun run typecheck`, etc.) |
+| `owned_paths[]`           | Code paths owned by this goal                                                    |
+| `depends_on[]`            | Upstream goals (topological ordering basis)                                      |
+| `priority`                | `blocking` or `advisory`                                                         |
+| `exports[]` / `imports[]` | Cross-goal data contracts                                                        |
 
 > **The Goal table no longer has a `status` column** — live status is derived by `engine/describe.ts::goalStatusByID` (retired in Phase E, 2026-05-05).
 >
@@ -85,16 +85,16 @@ orchestrator-stream-error
 
 **Common `kind` meanings**:
 
-| kind | Meaning |
-|---|---|
-| `run` | Root node for one task execution attempt (replaces the old `engine_run` table) |
-| `goal_run_attempt` | One worktree attempt for a single goal; `payload.workspace_*` is the single source for worktree info |
-| `delivery` | One delivery candidate (replaces the old `engine_delivery` table) |
-| `evaluation` / `verdict` | Evaluation decision (`accepted / rejected / inconclusive`; replaces the old `engine_evaluation` table) |
-| `verification-evidence` | Delivery check evidence (with `scope = goal_run` / `delivery`) |
-| `patch` / `changed_file` / `diff` | Code change artifacts |
-| `delivery_evidence_manifest` / `surface_manifest` / `specialist_review` / `preview` | Delivery-phase artifacts |
-| `integrity_attempt` / `prosecutor_attempt` | Integrity / prosecutor agent output |
+| kind                                                                    | Meaning                                                                                                |
+| ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `run`                                                                   | Root node for one task execution attempt (replaces the old `engine_run` table)                         |
+| `goal_run_attempt`                                                      | One worktree attempt for a single goal; `payload.workspace_*` is the single source for worktree info   |
+| `delivery`                                                              | One delivery candidate (replaces the old `engine_delivery` table)                                      |
+| `evaluation` / `verdict`                                                | Evaluation decision (`accepted / rejected / inconclusive`; replaces the old `engine_evaluation` table) |
+| `verification-evidence`                                                 | Delivery check evidence (with `scope = goal_run` / `delivery`)                                         |
+| `patch` / `changed_file` / `diff`                                       | Code change artifacts                                                                                  |
+| `delivery_evidence_manifest` / `surface_manifest` / `specialist_review` | Delivery-phase artifacts                                                                               |
+| `integrity_attempt` / `prosecutor_attempt`                              | Integrity / prosecutor agent output                                                                    |
 
 `inconclusive` verdict means "unable to decide" — not a pass and not a failure; it triggers replan rather than retry.
 
@@ -108,11 +108,11 @@ External channel (platform / channel / thread) ↔ task binding; `ChannelIngress
 
 ### SpecSnapshot (`EngineSpecSnapshotTable`)
 
-| Field | Meaning |
-|---|---|
-| `summary` | One-liner spec |
-| `content` | Full spec (Markdown) |
-| `scope` | Files / modules in scope |
+| Field        | Meaning                                    |
+| ------------ | ------------------------------------------ |
+| `summary`    | One-liner spec                             |
+| `content`    | Full spec (Markdown)                       |
+| `scope`      | Files / modules in scope                   |
 | `evidence[]` | Code evidence chain that grounded the spec |
 
 ## Session domain

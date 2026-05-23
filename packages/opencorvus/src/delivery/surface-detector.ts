@@ -4,13 +4,7 @@ import { Identifier } from "@/id/id"
 import { discoverPackageRoot } from "./checks/discovery"
 import type { AcceptanceSpec } from "@/acceptance/types"
 
-export type DeliverySurface =
-  | "frontend"
-  | "backend_api"
-  | "client_contract"
-  | "test_integration"
-  | "visual_runtime"
-  | "security_data"
+export type DeliverySurface = "frontend" | "backend_api" | "client_contract" | "test_integration" | "security_data"
 
 export type DeliverySurfaceEvidence = {
   surface: DeliverySurface
@@ -147,10 +141,12 @@ export async function detectDeliverySurfaces(input: {
       /(openapi|graphql|fetch|api-client|client)\.[cm]?[jt]sx?$/.test(file),
   )
   if (clientFiles.length > 0) {
-    const clientDependencyRefs = [...deps].filter((dep) => CLIENT_DEPS.includes(dep)).map((dep) => ({
-      kind: "dependency" as const,
-      ref: dep,
-    }))
+    const clientDependencyRefs = [...deps]
+      .filter((dep) => CLIENT_DEPS.includes(dep))
+      .map((dep) => ({
+        kind: "dependency" as const,
+        ref: dep,
+      }))
     addEvidence(
       evidence,
       surfaces,
@@ -175,18 +171,6 @@ export async function detectDeliverySurfaces(input: {
       ref: scripts.test,
     })
   }
-  if (
-    surfaces.has("frontend") &&
-    ((input.goals ?? []).some((goal) => (goal.acceptance_scenarios?.length ?? 0) > 0) ||
-      hasDesignSpecs(input.metadata) ||
-      allFileRefs.some((file) => /\.(css|scss|tsx|jsx|vue|svelte|astro)$/.test(file)))
-  ) {
-    addEvidence(evidence, surfaces, "visual_runtime", "frontend runtime or design surface detected", {
-      kind: "runtime_probe",
-      ref: "frontend surface with runtime/design files",
-    })
-  }
-
   addDependencySurface({ evidence, surfaces, surface: "security_data", deps, names: SECURITY_DEPS })
   const securityFiles = allFileRefs.filter(
     (file) =>
@@ -252,11 +236,6 @@ async function listProjectFiles(root: string): Promise<string[]> {
 function isInside(root: string, candidate: string) {
   const relative = path.relative(root, candidate)
   return !relative.startsWith("..") && !path.isAbsolute(relative)
-}
-
-function hasDesignSpecs(metadata?: Record<string, unknown>) {
-  const specs = metadata?.design_specs
-  return Array.isArray(specs) && specs.length > 0
 }
 
 function addDependencySurface(input: {
