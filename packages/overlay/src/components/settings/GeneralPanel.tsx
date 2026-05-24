@@ -137,6 +137,34 @@ export default function GeneralPanel() {
               />
             </label>
 
+            <label class="config-toggle-list-item">
+              <span class="toggle-label">
+                {t("settings.compaction_threshold_label")}
+                <span class="toggle-hint">{t("settings.compaction_threshold_hint")}</span>
+              </span>
+              <span class="config-toggle-list-item__slider">
+                <input
+                  type="range"
+                  min="0.1"
+                  max="1"
+                  step="0.05"
+                  value={
+                    Number((appStore.config as any)?.compaction?.threshold ?? 0.8)
+                  }
+                  onChange={(e) => {
+                    const raw = Number((e.currentTarget as HTMLInputElement).value);
+                    if (!Number.isFinite(raw)) return;
+                    const clamped = Math.min(1, Math.max(0.1, raw));
+                    const rounded = Math.round(clamped * 100) / 100;
+                    void patchConfig({ compaction: { threshold: rounded } });
+                  }}
+                />
+                <span class="config-toggle-list-item__slider-value">
+                  {Number((appStore.config as any)?.compaction?.threshold ?? 0.8).toFixed(2)}
+                </span>
+              </span>
+            </label>
+
           </div>
         </div>
       </div>

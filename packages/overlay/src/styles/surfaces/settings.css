@@ -2352,6 +2352,24 @@
   cursor: pointer;
 }
 
+.config-toggle-list-item__slider {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(8px * var(--ui-scale));
+  flex-shrink: 0;
+}
+.config-toggle-list-item__slider input[type="range"] {
+  width: calc(160px * var(--ui-scale));
+  cursor: pointer;
+}
+.config-toggle-list-item__slider-value {
+  min-width: calc(36px * var(--ui-scale));
+  font-family: var(--ui-font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-size: var(--ui-font-meta);
+  color: var(--text-strong);
+  text-align: right;
+}
+
 /* ─────────────────────────────────────────────────────────────
    Extracted from styles.css 2026-05-04 (continuation slice).
    Settings / channel-config / delivery / detail / opacity / llm
