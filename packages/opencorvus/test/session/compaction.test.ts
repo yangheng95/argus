@@ -222,6 +222,7 @@ describe("CompactionHandoff", () => {
     expect(prompt).toContain("CompactionHandoff schema")
     expect(prompt).toContain('"durableInstructionSources"')
     expect(prompt).toContain('"userMessages"')
+    expect(prompt).toContain("If the StructuredOutput tool returns an error")
     expect(prompt).toContain("plugin context")
   })
 
@@ -233,6 +234,7 @@ describe("CompactionHandoff", () => {
       type: "object",
       required: expect.arrayContaining(["objective", "currentState", "nextActions"]),
     })
+    expect(format.retryCount).toBe(2)
     expect(JSON.stringify(format.schema)).toContain("activeBuildContracts")
   })
 
