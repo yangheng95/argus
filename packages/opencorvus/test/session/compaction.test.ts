@@ -367,13 +367,16 @@ describe("session.compaction.isOverflow", () => {
     })
   })
 
-  test("default auto-compaction threshold is ninety percent of usable input budget", async () => {
+  test("default auto-compaction threshold is eighty percent of usable input budget", async () => {
     await using tmp = await tmpdir()
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         const model = createModel({ context: 100_000, output: 20_000 })
-        const tokens = { input: 64_000, output: 1_000, reasoning: 0, cache: { read: 0, write: 0 } }
+        // usable = 100_000 - reserved(20_000) = 80_000; threshold 0.8 → limit 64_000.
+        // usageCount = input + output + cache, so 62_000 + 1_000 = 63_000 stays
+        // under 64_000 and must not trigger isOverflow.
+        const tokens = { input: 62_000, output: 1_000, reasoning: 0, cache: { read: 0, write: 0 } }
         expect(await SessionCompaction.isOverflow({ tokens, model })).toBe(false)
       },
     })
