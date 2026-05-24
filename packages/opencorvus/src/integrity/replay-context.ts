@@ -16,6 +16,17 @@ export type IntegrityPriorAttemptSummary = {
   summary?: string
   teamReportMarkdown?: string
   reviewers: Array<{ reviewerID: string; scope: string; verdict?: string }>
+  findings?: Array<{
+    id: string
+    severity: "blocking" | "advisory"
+    verdictImpact?: "pass" | "concerns" | "needs_correction"
+    title: string
+    description: string
+    repair: string
+    filePaths: string[]
+    requirementIDs: string[]
+    specIDs: string[]
+  }>
   blockingFindings: Array<{
     id: string
     title: string
@@ -73,10 +84,7 @@ export type BuildIntegrityReplayContextInput = {
   goalRuns: GoalRunRow[]
 }
 
-export function buildSpecSnapshotLineage(input: {
-  taskID: string
-  activeSpecSnapshotID: string
-}): SpecSnapshotLineage {
+export function buildSpecSnapshotLineage(input: { taskID: string; activeSpecSnapshotID: string }): SpecSnapshotLineage {
   const snapshots = listSpecSnapshots(input.taskID)
   const active = snapshots.find((snapshot) => snapshot.id === input.activeSpecSnapshotID)
   if (!active) {
@@ -123,6 +131,7 @@ export function buildIntegrityReplayContext(input: BuildIntegrityReplayContextIn
       summary: stringFrom(payload.summary) ?? stringFrom(payload.reason),
       teamReportMarkdown: stringFrom(payload.team_report_markdown),
       reviewers: reviewerSummaries(payload.reviewers),
+      findings: findingSummaries(payload.findings),
       blockingFindings: blockingFindingSummaries(payload.findings),
       requiredRepairs: requiredRepairSummaries(payload.required_repairs),
       unresolvedDisagreements: disagreementSummaries(payload.unresolved_disagreements),
@@ -130,12 +139,14 @@ export function buildIntegrityReplayContext(input: BuildIntegrityReplayContextIn
   })
   const latestPrior = priorAttempts.at(-1)
   const sinceTimeCreated = latestPrior?.timeCreated
-  const deliveriesSince = sinceTimeCreated === undefined
-    ? input.deliveries
-    : input.deliveries.filter((delivery) => delivery.time_created > sinceTimeCreated)
-  const goalRunsSince = sinceTimeCreated === undefined
-    ? input.goalRuns
-    : input.goalRuns.filter((run) => (run.time_completed ?? run.time_created) > sinceTimeCreated)
+  const deliveriesSince =
+    sinceTimeCreated === undefined
+      ? input.deliveries
+      : input.deliveries.filter((delivery) => delivery.time_created > sinceTimeCreated)
+  const goalRunsSince =
+    sinceTimeCreated === undefined
+      ? input.goalRuns
+      : input.goalRuns.filter((run) => (run.time_completed ?? run.time_created) > sinceTimeCreated)
   const changedFilesTotal = changedFilesFromDeliveries(input.deliveries)
   const changedFilesSinceLastReview = changedFilesFromDeliveries(deliveriesSince)
 
@@ -178,7 +189,9 @@ export function renderIntegrityReplayContextPrompt(context: IntegrityReplayConte
   if (evidence.sinceTimeCreated !== undefined) {
     evidenceLines.push(`- Since time: ${new Date(evidence.sinceTimeCreated).toISOString()}`)
   }
-  evidenceLines.push(`- Changed files: ${evidence.changedFiles.length > 0 ? evidence.changedFiles.join(", ") : "(none)"}`)
+  evidenceLines.push(
+    `- Changed files: ${evidence.changedFiles.length > 0 ? evidence.changedFiles.join(", ") : "(none)"}`,
+  )
   if (evidence.diffs.length > 0) {
     evidenceLines.push("- Diffs:")
     for (const diff of evidence.diffs) {
@@ -260,15 +273,33 @@ function reviewerSummaries(value: unknown): Array<{ reviewerID: string; scope: s
 }
 
 function blockingFindingSummaries(value: unknown): IntegrityPriorAttemptSummary["blockingFindings"] {
+  return findingSummaries(value).flatMap((finding) => {
+    if (finding.severity !== "blocking" && finding.verdictImpact !== "needs_correction") return []
+    return [
+      {
+        id: finding.id,
+        title: finding.title,
+        description: finding.description,
+        repair: finding.repair,
+        filePaths: finding.filePaths,
+        requirementIDs: finding.requirementIDs,
+        specIDs: finding.specIDs,
+      },
+    ]
+  })
+}
+
+function findingSummaries(value: unknown): NonNullable<IntegrityPriorAttemptSummary["findings"]> {
   if (!Array.isArray(value)) return []
   return value.flatMap((item) => {
     const finding = asRecord(item)
     const severity = stringFrom(finding.severity)
-    const verdictImpact = stringFrom(finding.verdictImpact)
-    if (severity !== "blocking" && verdictImpact !== "needs_correction") return []
+    if (severity !== "blocking" && severity !== "advisory") return []
     return [
       {
         id: stringFrom(finding.id) ?? "unknown-finding",
+        severity,
+        verdictImpact: verdictFrom(finding.verdictImpact),
         title: stringFrom(finding.title) ?? "Untitled finding",
         description: stringFrom(finding.description) ?? "",
         repair: stringFrom(finding.repair) ?? "",

@@ -41,6 +41,62 @@ Evidence requirements:
 - If a potentially blocking disagreement remains unresolved, the final verdict
   cannot be pass.
 
+## Severity Discipline
+
+There are exactly two severities. They are not a sliding scale; they encode
+whether the orchestrator must rebuild before delivery.
+
+`blocking` means the deliverable cannot be accepted in its current state. The
+finding satisfies at least one of:
+
+  (a) a user-visible flow fails or produces obviously wrong output for an
+      input shape the user is expected to encounter under normal use of the
+      stated request;
+  (b) the implementation contradicts an explicit user-request phrase or an
+      explicit REQ row;
+  (c) the build, install, type-check, or test suite is broken (cannot ship);
+  (d) data the user can produce in normal flow is silently destroyed,
+      corrupted, or made unrecoverable, with no in-app recovery path;
+  (e) a security or credential disclosure that exists in the actual data flow
+      on a path a benign user will hit, not a hypothetical attacker pivot.
+
+`advisory` means the deliverable can ship; the finding is improvement
+information the orchestrator may queue but is NOT required to address in the
+current task. This includes:
+
+  - hardening against inputs the user did not ask for when normal flow works;
+  - polish, performance, or bundle-size concerns within reasonable defaults;
+  - missing tests for behavior that is itself correct;
+  - dead code, unused parameters, redundant wrappers;
+  - "mature apps usually do X" suggestions without a concrete user-request
+    phrase or REQ row demanding X.
+
+Severity is decided per finding against the bar above, not by feel of "how
+mature should this be". Two reviewers must reach the same severity for the same
+underlying defect; if your finding overlaps another reviewer's, fold them under
+the same severity in consensus. Disagreement is a `disputed`/`unresolved`
+consensus marker, not a quietly different severity.
+
+Anti-patterns:
+
+  - Promoting a prior `advisory` to `blocking` in a later round without new
+    evidence. `new evidence` means at least one of:
+      1. code lines on the same defect surface changed after the prior attempt;
+      2. a new explicit REQ row was added after the prior attempt;
+      3. a newly executed runtime observation, command output, screenshot, or
+         trace was produced after the prior attempt.
+    A deeper reading of the same unchanged code, artifact, request text, or
+    prior runtime output is NOT new evidence. More precise prose over the same
+    evidence is NOT new evidence. Persistence alone is NOT promotion.
+  - Filing the same defect at both severities through different reviewer ids
+    inside one consensus.
+  - Quoting "the app should be mature" as the entire justification for
+    `blocking`. Cite the bar clause (a)-(e) you are invoking.
+
+If you are unsure whether a finding crosses the bar, file `advisory` and state
+the conditions under which it would become `blocking`. Conservative escalation
+is a regression machine.
+
 Mutation boundary:
 
 - Integrity reviewers may read, search, inspect delivery context, run commands,
