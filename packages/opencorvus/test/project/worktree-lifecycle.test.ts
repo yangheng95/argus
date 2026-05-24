@@ -4,6 +4,9 @@ import fs from "fs/promises"
 import path from "path"
 import { Instance } from "../../src/project/instance"
 import { Project } from "../../src/project/project"
+import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
+import { EngineTaskTable } from "../../src/engine/engine.sql"
+import { Database } from "../../src/storage/db"
 import { Worktree } from "../../src/worktree"
 import { Filesystem } from "../../src/util/filesystem"
 import { tmpdir } from "../fixture/fixture"
@@ -13,6 +16,24 @@ async function projectIDFor(directory: string) {
     directory,
     fn: () => Instance.project.id,
   })
+}
+
+function seedTask(projectID: string, taskID: string) {
+  const now = Date.now()
+  Database.use((db) =>
+    db.insert(EngineTaskTable).values({
+      id: taskID,
+      project_id: projectID,
+      source: "test",
+      title: "worktree runtime materialization",
+      request: "materialize mirror artifacts",
+      priority: "normal",
+      budget: { max_executor_groups: 1 },
+      time_created: now,
+      time_updated: now,
+      time_started: now,
+    }).run(),
+  )
 }
 
 describe("Worktree lifecycle", () => {
@@ -81,6 +102,136 @@ describe("Worktree lifecycle", () => {
 
     expect(await Filesystem.exists(path.join(info.directory, "node_modules"))).toBe(false)
   })
+
+  test("create materializes task design-analysis mirror into scoped worktree", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const projectID = await projectIDFor(tmp.path)
+    const taskID = `tsk_wt_mirror_${Date.now().toString(36)}`
+    seedTask(projectID, taskID)
+
+    const paths = ProjectRuntimePaths.designAnalysisPaths(tmp.path, taskID)
+    await fs.mkdir(paths.mirrorAbsolute, { recursive: true })
+    await fs.writeFile(path.join(paths.mirrorAbsolute, "reference.txt"), "reference", "utf8")
+
+    const info = await Instance.provide({
+      directory: tmp.path,
+      fn: () =>
+        Worktree.create({
+          name: `mirror-${Date.now().toString(36)}`,
+          taskID,
+          goalID: "gol_mirror",
+          runID: "run_mirror",
+        }),
+    })
+
+    expect(await Filesystem.readText(path.join(info.directory, "mirror", "reference.txt"))).toBe("reference")
+    expect(await Filesystem.readText(path.join(info.directory, paths.mirrorRelative, "reference.txt"))).toBe("reference")
+    const status = await $`git status --porcelain=v1`.cwd(info.directory).quiet()
+    expect(status.stdout.toString().trim()).toBe("")
+  })
+
+  test("reuseIfValid rematerializes missing task mirror view", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const projectID = await projectIDFor(tmp.path)
+    const taskID = `tsk_wt_mirror_reuse_${Date.now().toString(36)}`
+    seedTask(projectID, taskID)
+
+    const paths = ProjectRuntimePaths.designAnalysisPaths(tmp.path, taskID)
+    await fs.mkdir(paths.mirrorAbsolute, { recursive: true })
+    await fs.writeFile(path.join(paths.mirrorAbsolute, "reference.txt"), "reference", "utf8")
+
+    const name = `mirror-reuse-${Date.now().toString(36)}`
+    const createInput = {
+      name,
+      taskID,
+      goalID: "gol_mirror_reuse",
+      runID: "run_mirror_reuse",
+    }
+    const info = await Instance.provide({
+      directory: tmp.path,
+      fn: () => Worktree.create(createInput),
+    })
+
+    await fs.rm(path.join(info.directory, "mirror"), { recursive: true, force: true })
+    expect(await Filesystem.exists(path.join(info.directory, "mirror", "reference.txt"))).toBe(false)
+
+    const reused = await Instance.provide({
+      directory: tmp.path,
+      fn: () => Worktree.create({ ...createInput, reuseIfValid: true }),
+    })
+
+    expect(reused.directory).toBe(info.directory)
+    expect(await Filesystem.readText(path.join(reused.directory, "mirror", "reference.txt"))).toBe("reference")
+    const status = await $`git status --porcelain=v1`.cwd(reused.directory).quiet()
+    expect(status.stdout.toString().trim()).toBe("")
+  })
+
+  test("recoverRecorded rematerializes valid task mirror view", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const projectID = await projectIDFor(tmp.path)
+    const taskID = `tsk_wt_mirror_recover_${Date.now().toString(36)}`
+    const sessionID = `ses_wt_mirror_recover_${Date.now().toString(36)}`
+    seedTask(projectID, taskID)
+
+    const paths = ProjectRuntimePaths.designAnalysisPaths(tmp.path, taskID)
+    await fs.mkdir(paths.mirrorAbsolute, { recursive: true })
+    await fs.writeFile(path.join(paths.mirrorAbsolute, "reference.txt"), "reference", "utf8")
+
+    const info = await Instance.provide({
+      directory: tmp.path,
+      fn: () =>
+        Worktree.create({
+          name: `mirror-recover-${Date.now().toString(36)}`,
+          taskID,
+          sessionID,
+        }),
+    })
+
+    await fs.rm(path.join(info.directory, "mirror"), { recursive: true, force: true })
+
+    const recovered = await Instance.provide({
+      directory: tmp.path,
+      fn: () => Worktree.recoverRecorded({ directory: info.directory, branch: info.branch }),
+    })
+
+    expect(recovered).toMatchObject({ status: "recovered", directory: info.directory, branch: info.branch })
+    expect(await Filesystem.readText(path.join(info.directory, "mirror", "reference.txt"))).toBe("reference")
+    const status = await $`git status --porcelain=v1`.cwd(info.directory).quiet()
+    expect(status.stdout.toString().trim()).toBe("")
+  })
+
+  test("reset rematerializes task mirror view after git clean", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const projectID = await projectIDFor(tmp.path)
+    const taskID = `tsk_wt_mirror_reset_${Date.now().toString(36)}`
+    seedTask(projectID, taskID)
+
+    const paths = ProjectRuntimePaths.designAnalysisPaths(tmp.path, taskID)
+    await fs.mkdir(paths.mirrorAbsolute, { recursive: true })
+    await fs.writeFile(path.join(paths.mirrorAbsolute, "reference.txt"), "reference", "utf8")
+
+    const info = await Instance.provide({
+      directory: tmp.path,
+      fn: () =>
+        Worktree.create({
+          name: `mirror-reset-${Date.now().toString(36)}`,
+          taskID,
+          goalID: "gol_mirror_reset",
+          runID: "run_mirror_reset",
+        }),
+    })
+
+    await fs.writeFile(path.join(info.directory, "scratch.txt"), "scratch", "utf8")
+    await Instance.provide({
+      directory: tmp.path,
+      fn: () => Worktree.reset({ directory: info.directory }),
+    })
+
+    expect(await Filesystem.exists(path.join(info.directory, "scratch.txt"))).toBe(false)
+    expect(await Filesystem.readText(path.join(info.directory, "mirror", "reference.txt"))).toBe("reference")
+    const status = await $`git status --porcelain=v1`.cwd(info.directory).quiet()
+    expect(status.stdout.toString().trim()).toBe("")
+  }, 30_000)
 
   test("reset fails when startup scripts fail", async () => {
     // Bun's default 5s timeout is tight for this test on Windows: reset spawns

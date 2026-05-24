@@ -15818,6 +15818,16 @@
                       "minimum": 0,
                       "maximum": 9007199254740991
                     },
+                    "live_sequence": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "live_epoch": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
                     "summary": {
                       "type": "string"
                     },
@@ -17703,6 +17713,16 @@
                             "minimum": 0,
                             "maximum": 9007199254740991
                           },
+                          "live_sequence": {
+                            "type": "integer",
+                            "exclusiveMinimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "live_epoch": {
+                            "type": "integer",
+                            "exclusiveMinimum": 0,
+                            "maximum": 9007199254740991
+                          },
                           "summary": {
                             "type": "string"
                           },
@@ -17983,6 +18003,16 @@
                           "sequence": {
                             "type": "integer",
                             "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "live_sequence": {
+                            "type": "integer",
+                            "exclusiveMinimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "live_epoch": {
+                            "type": "integer",
+                            "exclusiveMinimum": 0,
                             "maximum": 9007199254740991
                           },
                           "summary": {

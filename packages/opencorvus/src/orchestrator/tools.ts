@@ -2685,7 +2685,7 @@ export function createOrchestratorTools(input: {
             return acc
           }, {})
           const taskAfterDesignSpecs = requireTask(taskID)
-          const materializedDesignFiles = designAnalysisArtifactPaths(Instance.directory, taskID)
+          const materializedDesignFiles = designAnalysisArtifactPaths(Instance.project.worktree, taskID)
           const evidenceSourceManifest = renderEvidenceSourceManifest({
             task: taskAfterDesignSpecs,
             liveUrls,
@@ -2695,7 +2695,7 @@ export function createOrchestratorTools(input: {
             materializedFiles: [materializedDesignFiles.prdRelative, materializedDesignFiles.manifestRelative],
           })
           const writtenDesignArtifacts = await writeDesignAnalysisArtifacts({
-            projectDir: Instance.directory,
+            projectDir: Instance.project.worktree,
             taskID,
             analysis: {
               designSystem: analysis.designSystem,

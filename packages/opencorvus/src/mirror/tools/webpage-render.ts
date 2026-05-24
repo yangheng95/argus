@@ -28,7 +28,7 @@ Returns the screenshot path + render time. Use as step 5 of the webpage-generate
     outputDir: z
       .string()
       .describe(
-        `Directory to write the screenshot into. Defaults to \`${DEFAULT_MIRROR_SUBDIR}\` under the current worktree so artifacts stay out of the project source tree. Override with an absolute path or a worktree-relative path.`,
+        `Directory to write the screenshot into. Defaults to task-scoped \`${DEFAULT_MIRROR_SUBDIR}\`. Do not set this during task sessions; overrides are for benchmarks/tests and task-session overrides must stay under \`${DEFAULT_MIRROR_SUBDIR}\`.`,
       )
       .optional(),
     viewport_width: z.number().int().positive().describe("Viewport width. Default 1440.").optional(),
@@ -46,7 +46,7 @@ Returns the screenshot path + render time. Use as step 5 of the webpage-generate
       .optional(),
   }),
   async execute(params, ctx) {
-    const outputDir = await resolveMirrorOutputDir(params.outputDir)
+    const outputDir = await resolveMirrorOutputDir({ override: params.outputDir, sessionID: ctx.sessionID })
 
     await ctx.ask({
       permission: "webpage_render",

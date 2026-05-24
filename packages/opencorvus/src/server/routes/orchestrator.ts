@@ -427,6 +427,15 @@ export const EngineRoutes = lazy(() =>
       async (c) => {
         const taskID = c.req.valid("param").taskID
         const after = Math.max(0, parseInt(c.req.query("after") ?? "0", 10) || 0)
+        const afterLiveRaw = c.req.query("after_live")
+        const shouldReplayLive = afterLiveRaw !== undefined
+        const afterLive = shouldReplayLive
+          ? Math.max(0, parseInt(afterLiveRaw ?? "0", 10) || 0)
+          : 0
+        const afterLiveEpochRaw = c.req.query("after_live_epoch")
+        const afterLiveEpoch = afterLiveEpochRaw === undefined
+          ? undefined
+          : Math.max(0, parseInt(afterLiveEpochRaw, 10) || 0)
         c.header("X-Accel-Buffering", "no")
         c.header("X-Content-Type-Options", "nosniff")
         return streamSSE(c, async (stream) => {
@@ -436,8 +445,9 @@ export const EngineRoutes = lazy(() =>
           // parent chain in the DB, so reconnecting picks up running goals
           // without any in-process state restoration.
           let cursor = after
+          let liveCursor = afterLive
           let ready = false
-          const buffered: Array<{ sequence: number; data: string }> = []
+          const buffered: Array<{ sequence: number; liveSequence: number; data: string }> = []
           let writes = Promise.resolve()
           const writeData = (data: string) => {
             writes = writes.then(() => stream.writeSSE({ data }))
@@ -449,17 +459,14 @@ export const EngineRoutes = lazy(() =>
             // Ephemeral events (sequence=0) always pass through — they're not sequenced
             // and not replayed on reconnect. Sequenced events are deduplicated by cursor.
             if (!isEphemeral && event.sequence <= cursor) return
+            if (isEphemeral && (event.liveSequence ?? 0) <= liveCursor) return
             const data = JSON.stringify(protocolTaskEvent(event))
             if (!ready) {
-              if (isEphemeral) {
-                // Ephemeral events during replay phase: write immediately (they can't be buffered by sequence)
-                void writeData(data)
-              } else {
-                buffered.push({ sequence: event.sequence, data })
-              }
+              buffered.push({ sequence: event.sequence, liveSequence: event.liveSequence ?? 0, data })
               return
             }
             if (!isEphemeral) cursor = Math.max(cursor, event.sequence)
+            else liveCursor = Math.max(liveCursor, event.liveSequence ?? 0)
             void writeData(data)
           }
           const stop = ProtocolStore.subscribeEvents(enqueueProtocolEvent, {
@@ -472,14 +479,31 @@ export const EngineRoutes = lazy(() =>
             cursor = Math.max(cursor, event.sequence)
             await writeData(data)
           }
-          ready = true
-          buffered
-            .sort((a, b) => a.sequence - b.sequence)
-            .filter((item) => item.sequence > cursor)
-            .forEach((item) => {
-              cursor = Math.max(cursor, item.sequence)
-              void writeData(item.data)
+          if (shouldReplayLive) {
+            const liveReplay = ProtocolStore.listTaskLiveEventsAfter(taskID, afterLive, {
+              liveEpoch: afterLiveEpoch,
             })
+            if (liveReplay.expired) {
+              await writeData(JSON.stringify(protocolTaskEvent(liveReplay.event)))
+              stop()
+              return
+            }
+            for (const event of liveReplay.events) {
+              liveCursor = Math.max(liveCursor, event.liveSequence ?? 0)
+              await writeData(JSON.stringify(protocolTaskEvent(event)))
+            }
+          }
+          ready = true
+          buffered.forEach((item) => {
+            if (item.sequence > 0) {
+              if (item.sequence <= cursor) return
+              cursor = Math.max(cursor, item.sequence)
+            } else {
+              if (item.liveSequence <= liveCursor) return
+              liveCursor = Math.max(liveCursor, item.liveSequence)
+            }
+            void writeData(item.data)
+          })
 
           const connData = JSON.stringify(taskEvent(taskID, {
             type: "task.connected",
@@ -1465,6 +1489,8 @@ export function protocolTaskEvent(event: ReturnType<typeof ProtocolStore.listTas
     emittedAt: timestamp,
     timestamp,
     sequence: event.sequence,
+    ...(event.liveSequence !== undefined ? { live_sequence: event.liveSequence } : {}),
+    ...(event.liveEpoch !== undefined ? { live_epoch: event.liveEpoch } : {}),
     summary: event.summary,
     payload: event.payload || {},
     ...(notify ? { notify } : {}),

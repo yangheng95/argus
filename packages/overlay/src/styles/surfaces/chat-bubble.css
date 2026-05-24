@@ -4,6 +4,9 @@
   width: 100%;
   justify-content: flex-start;
   box-sizing: border-box;
+  content-visibility: auto;
+  contain-intrinsic-size: auto calc(120px * var(--ui-scale));
+  overflow-clip-margin: 28px;
 }
 
 .chat-bubble-row[data-align="right"] {

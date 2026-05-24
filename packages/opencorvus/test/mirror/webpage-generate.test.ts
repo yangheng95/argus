@@ -1,9 +1,11 @@
 import { describe, expect, test } from "bun:test"
 import matter from "gray-matter"
+import path from "path"
 import { tmpdir } from "../fixture/fixture"
 import { Instance } from "../../src/project/instance"
 import { WebpageCompileTool } from "../../src/mirror/tools/webpage-compile"
 import { WebpageAnalyzeTool } from "../../src/mirror/tools/webpage-analyze"
+import { writeGeneratedSourceFiles } from "../../src/mirror/tools/generated-source"
 import webpageGenerateMd from "../../src/skill/builtin/webpage-generate.md" with { type: "text" }
 import imageGenerateMd from "../../src/skill/builtin/image-generate.md" with { type: "text" }
 import { MIRROR_TOOL_IDS } from "../../src/mirror/tools/ids"
@@ -165,6 +167,33 @@ describe("webpage-generate dependency guards", () => {
         await expect(analyze.execute({ outputDir: tmp.path }, {} as any)).rejects.toThrow(
           "Create the URL evidence package first and retry only after `extracted-page.json` exists.",
         )
+      },
+    })
+  })
+
+  test("generated source artifacts stay inside mirror output directory", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const outputDir = path.join(tmp.path, "mirror")
+        const written = await writeGeneratedSourceFiles(outputDir, [
+          {
+            file_path: "src/components/TradingViewScreener.tsx",
+            code: "export function TradingViewScreener() { return null }\n",
+          } as any,
+        ])
+
+        const artifactPath = path.join(
+          outputDir,
+          "generated-source",
+          "src",
+          "components",
+          "TradingViewScreener.tsx",
+        )
+        expect(written).toEqual([artifactPath])
+        expect(await Bun.file(artifactPath).exists()).toBe(true)
+        expect(await Bun.file(path.join(tmp.path, "src", "components", "TradingViewScreener.tsx")).exists()).toBe(false)
       },
     })
   })

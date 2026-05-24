@@ -18,6 +18,8 @@ import {
   isBoardInvalidatingEventType,
   isRouterConsumedNoopEventType,
 } from "./event-policy";
+import { markSelectedLiveEventConsumed } from "./selected-stream-cursor";
+import { recordConversationRecoveryFailed } from "./refresh-diagnostics";
 
 // Forward SSE events to the tree-writer. The conversation view reads
 // `cardTreeStore`; message events are no longer mirrored into the legacy
@@ -90,6 +92,12 @@ function advanceHandledSelectedTaskSequence(event: any): void {
   if (current > 0 && sequence > current + 1) return;
   if (sequence <= current) return;
   setTaskSequence(sequence);
+}
+
+function markHandledSelectedLiveEvent(event: any): void {
+  const taskID = eventTaskID(event);
+  if (taskID && taskID !== boardStore.selectedTaskID) return;
+  markSelectedLiveEventConsumed(event);
 }
 
 function isMessageWriterPrerequisiteError(error: unknown): boolean {
@@ -517,8 +525,8 @@ export function routeSSEEvent(event: any): boolean {
       return true;
     }
     // Write only after the prerequisite check. If the message graph cannot
-    // attach this event, the selected-task recovery path hydrates the full
-    // visible tree before SSE resumes.
+    // attach this event, selected-task recovery reopens the live stream with
+    // the current persisted/live cursors; it must not clear cardTreeStore.
     try {
       writeToTree(event);
     } catch (error) {
@@ -527,6 +535,7 @@ export function routeSSEEvent(event: any): boolean {
       return true;
     }
     advanceHandledSelectedTaskSequence(event);
+    markHandledSelectedLiveEvent(event);
     return true;
   }
 
@@ -539,6 +548,23 @@ export function routeSSEEvent(event: any): boolean {
     const sessionID = String(properties?.info?.id || properties?.sessionID || properties?.session_id || "");
     if (sessionID) markSessionConfigStale(sessionID);
     advanceHandledSelectedTaskSequence(event);
+    markHandledSelectedLiveEvent(event);
+    return true;
+  }
+
+  if (type === "task.live_replay_expired") {
+    const taskID = eventTaskID(event) || boardStore.selectedTaskID || "";
+    if (taskID) {
+      recordConversationRecoveryFailed({
+        channel: "selected-task-recovery",
+        reason: "task.live_replay_expired",
+        taskID,
+        source: "selected-task-stream",
+        durationMs: 0,
+        error: String(event?.payload?.reason || event?.summary || "selected task live replay expired"),
+      });
+    }
+    markHandledSelectedLiveEvent(event);
     return true;
   }
 
@@ -546,10 +572,12 @@ export function routeSSEEvent(event: any): boolean {
   // routing so a writer crash surfaces with the original event context intact.
   writeToTree(event);
 
-  // ── Replay buffer expired → full transcript reload ──
+  // Replay buffer expiry is loud. Do not full-refresh the loaded transcript:
+  // that clears cardTreeStore and causes the observed scroll jump.
   if (type === "task.replay_expired") {
     const taskID: string = boardStore.selectedTaskID || "";
-    if (taskID) scheduleSelectedTaskRecovery("task replay expired", taskID);
+    if (taskID) scheduleSelectedTaskRecovery("task.replay_expired", taskID);
+    markHandledSelectedLiveEvent(event);
     return true;
   }
 
@@ -583,6 +611,7 @@ export function routeSSEEvent(event: any): boolean {
       scheduleSelectedTaskRecovery("task rewind cleared", evtTaskID);
     }
     advanceHandledSelectedTaskSequence(event);
+    markHandledSelectedLiveEvent(event);
     return true;
   }
 
@@ -597,6 +626,7 @@ export function routeSSEEvent(event: any): boolean {
     if (!shouldConvertRunProgress(properties)) {
       scheduleBoard(BOARD_EVENT_DEBOUNCE);
       advanceHandledSelectedTaskSequence(event);
+      markHandledSelectedLiveEvent(event);
       return true;
     }
 
@@ -606,6 +636,7 @@ export function routeSSEEvent(event: any): boolean {
       writeToTree(msg);
     }
     advanceHandledSelectedTaskSequence(event);
+    markHandledSelectedLiveEvent(event);
     return true;
   }
 
@@ -620,6 +651,7 @@ export function routeSSEEvent(event: any): boolean {
       writeToTree(msg);
     }
     advanceHandledSelectedTaskSequence(event);
+    markHandledSelectedLiveEvent(event);
     return true;
   }
 
@@ -628,6 +660,7 @@ export function routeSSEEvent(event: any): boolean {
     markSessionConfigStale();
     scheduleConfigReload();
     advanceHandledSelectedTaskSequence(event);
+    markHandledSelectedLiveEvent(event);
     return true;
   }
 
@@ -636,6 +669,7 @@ export function routeSSEEvent(event: any): boolean {
   // they remain auditable and don't surface as unknown-event crashes.
   if (isRouterConsumedNoopEventType(type)) {
     advanceHandledSelectedTaskSequence(event);
+    markHandledSelectedLiveEvent(event);
     return true;
   }
 
@@ -724,10 +758,8 @@ export function handleEventStreamEvent(event: any): void {
   }
   if (type === "task.replay_expired") {
     if (boardStore.selectedTaskID) {
-      scheduleSelectedTaskRecovery("task replay expired", boardStore.selectedTaskID);
+      scheduleSelectedTaskRecovery("task.replay_expired", boardStore.selectedTaskID);
     }
-    scheduleTasksCompat(0);
-    scheduleBoard(0);
     return;
   }
   const taskID = eventTaskID(event);
@@ -751,6 +783,7 @@ export function handleEventStreamEvent(event: any): void {
   if (taskID && taskID === boardStore.selectedTaskID && shouldRefreshSelectedBoard(type)) {
     scheduleBoard(BOARD_EVENT_DEBOUNCE);
   }
+  markHandledSelectedLiveEvent(event);
 }
 
 /**
@@ -784,10 +817,8 @@ export function handleTaskListNotification(event: any): void {
   routeNotification({ ...event, type });
   if (type === "task.replay_expired") {
     if (boardStore.selectedTaskID) {
-      scheduleSelectedTaskRecovery("task-list replay expired", boardStore.selectedTaskID);
+      scheduleSelectedTaskRecovery("task.replay_expired", boardStore.selectedTaskID);
     }
-    scheduleTasksCompat(0);
-    scheduleBoard(0);
     return;
   }
   const taskID = eventTaskID(event);

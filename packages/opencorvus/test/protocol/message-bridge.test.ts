@@ -46,4 +46,8 @@ describe("message-bridge persistence guard", () => {
   test("dispatchEphemeral docstring records the 双源 (rule 23) rationale", () => {
     expect(protocolStoreSource).toMatch(/双源|rule 23/)
   })
+  test("cross-instance message relay is serialized instead of fire-and-forget", () => {
+    expect(bridgeSource).toContain("enqueueCrossInstanceBridge")
+    expect(bridgeSource).not.toContain("void Instance.provide")
+  })
 })

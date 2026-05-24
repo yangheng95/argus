@@ -128,12 +128,12 @@ Pure transformation, no network besides the LLM call. Deterministic per (model, 
       .string()
       .describe(
         `Directory used to resolve relative paths and to write \`vision-judge.json\`. ` +
-          `Defaults to \`${DEFAULT_MIRROR_SUBDIR}\` under the current worktree.`,
+          `Defaults to task-scoped \`${DEFAULT_MIRROR_SUBDIR}\`. Do not set this during task sessions; overrides are for benchmarks/tests and task-session overrides must stay under \`${DEFAULT_MIRROR_SUBDIR}\`.`,
       )
       .optional(),
   }),
-  async execute(params) {
-    const outputDir = await resolveMirrorOutputDir(params.outputDir)
+  async execute(params, ctx) {
+    const outputDir = await resolveMirrorOutputDir({ override: params.outputDir, sessionID: ctx.sessionID })
     const resolve = (p: string) => (path.isAbsolute(p) ? p : path.resolve(outputDir, p))
     const referencePath = resolve(params.reference ?? "reference.png")
     const renderedPath = resolve(params.rendered ?? "rendered.png")

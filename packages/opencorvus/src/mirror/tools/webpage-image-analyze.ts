@@ -29,7 +29,7 @@ export const WebpageImageAnalyzeTool = Tool.define("webpage_image_analyze", {
 Reads \`<outputDir>/image-analysis.json\` (from webpage_image_extract). Writes the same mirror facts and scaffold artifacts the URL analyze step writes:
   - scaffold.json           full ProjectScaffold
   - shared-context.md       compact token + section summary for prompts
-  - sourcePaths             scaffold-generated source files for analysis only
+  - generated-source/*      scaffold-generated source artifacts for analysis only
 
 Returns a summary: section list and token counts. Once these artifacts exist, use \`shared-context.md\` and \`page-ir.xml\` for PRD/SPEC synthesis; bounded targeted \`scaffold.json\` reads are only for specific gaps.
 
@@ -40,12 +40,12 @@ Use this only when scaffold artifacts are missing. Do not rerun it once \`shared
     outputDir: z
       .string()
       .describe(
-        `Directory containing image-analysis.json. Writes scaffold.json and shared-context.md here, plus scaffold-generated source files for analysis only. Defaults to \`${DEFAULT_MIRROR_SUBDIR}\` under the current worktree (matching webpage_image_extract's default).`,
+        `Directory containing image-analysis.json. Writes scaffold.json and shared-context.md here, plus scaffold-generated source artifacts under generated-source/. Defaults to task-scoped \`${DEFAULT_MIRROR_SUBDIR}\` (matching webpage_image_extract's default). Do not set this during task sessions; overrides are for benchmarks/tests and task-session overrides must stay under \`${DEFAULT_MIRROR_SUBDIR}\`.`,
       )
       .optional(),
   }),
-  async execute(params) {
-    const outputDir = await resolveMirrorOutputDir(params.outputDir)
+  async execute(params, ctx) {
+    const outputDir = await resolveMirrorOutputDir({ override: params.outputDir, sessionID: ctx.sessionID })
     const analysisPath = path.join(outputDir, "image-analysis.json")
 
     let analysisText: string
@@ -72,7 +72,7 @@ Use this only when scaffold artifacts are missing. Do not rerun it once \`shared
 
     const scaffoldPath = path.join(outputDir, "scaffold.json")
     const contextPath = path.join(outputDir, "shared-context.md")
-    const sourcePaths = await writeGeneratedSourceFiles(sourceFiles)
+    const sourcePaths = await writeGeneratedSourceFiles(outputDir, sourceFiles)
 
     await Promise.all([
       fs.writeFile(scaffoldPath, JSON.stringify(scaffold, null, 2), "utf8"),
@@ -99,9 +99,9 @@ Use this only when scaffold artifacts are missing. Do not rerun it once \`shared
         `**Artifacts written:**`,
         `- \`${scaffoldPath}\` — full ProjectScaffold`,
         `- \`${contextPath}\` — compact prompt-ready summary`,
-        `- React source files: ${sourcePaths.length}`,
+        `- Generated source artifacts: ${sourcePaths.length}`,
         "",
-        "Image scaffold artifacts written. Do not rerun analysis for this evidence package unless the source extraction changed. Use compact artifacts for PRD/SPEC synthesis; generated source is not the deliverable.",
+        "Image scaffold artifacts written. Do not rerun analysis for this evidence package unless the source extraction changed. Use compact artifacts for PRD/SPEC synthesis; generated source artifacts are not the deliverable.",
       ].join("\n"),
       metadata: {
         scaffoldPath,

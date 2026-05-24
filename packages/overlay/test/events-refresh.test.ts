@@ -10,6 +10,7 @@ const { resetWriter } = await import("../src/services/tree-writer");
 const { cardTreeStore } = await import("../src/store/card-tree");
 const { sessionConfigRefreshToken } = await import("../src/services/config");
 const { __setHostTransportForTest } = await import("../src/services/host-transport");
+const { resetSelectedLiveCursor } = await import("../src/services/selected-stream-cursor");
 
 if (typeof globalThis.requestAnimationFrame === "undefined") {
   (globalThis as any).requestAnimationFrame = (() => 1) as any;
@@ -49,41 +50,13 @@ function fakeConfigTransport(paths: string[]): HostTransport {
 
 function fakeRecoveryTransport(
   streams: Array<{ path: string; query?: Record<string, string> }>,
-  sequence = 6,
+  _sequence = 6,
 ): HostTransport {
   return {
     kind: "tauri",
     async request<T>(req: TransportRequest): Promise<TransportResponse<T>> {
       if (req.path === "global/tasks") {
         return { status: 200, ok: true, headers: {}, body: { tasks: [] } as T };
-      }
-      if (req.path === "task/tsk_refresh/conversation") {
-        return {
-          status: 200,
-          ok: true,
-          headers: {},
-          body: {
-            board: {
-              snapshotVersion: "board:refresh",
-              task: {
-                id: "tsk_refresh",
-                sessionID: "ses_refresh",
-                status: "active",
-                request: "refresh",
-                time: { created: 1_776_000_100_000 },
-                attachments: [],
-              },
-              goalWorkflows: [],
-              interactions: [],
-            },
-            transcript: [],
-            timeline: [],
-            events: [],
-            view: { sessions: [] },
-            eventReplay: { cursor: sequence, latestSequence: sequence, complete: true, limit: 10 },
-            lastSequence: sequence,
-          } as T,
-        };
       }
       throw new Error(`unexpected route ${req.path}`);
     },
@@ -102,6 +75,7 @@ function fakeRecoveryTransport(
 
 afterEach(() => {
   __setHostTransportForTest(undefined);
+  resetSelectedLiveCursor();
   setBoardStore("selectedTaskID", "");
   setBoardStore("board", null);
   setBoardStore("boardSyncPending", false);
@@ -169,7 +143,6 @@ test("selected-task message events advance the visible cursor without recovery",
       attachments: [],
     },
   });
-
   expect(routeSSEEvent({
     type: "message.updated",
     taskID: "tsk_refresh",
@@ -228,7 +201,6 @@ test("selected-task protocol task_id envelope advances the visible cursor", asyn
       attachments: [],
     },
   });
-
   expect(routeSSEEvent({
     type: "message.updated",
     task_id: "tsk_refresh",
@@ -285,7 +257,6 @@ test("selected-task part removal updates the card tree in real time", () => {
       attachments: [],
     },
   });
-
   expect(routeSSEEvent({
     type: "message.updated",
     task_id: "tsk_refresh",
@@ -505,6 +476,7 @@ test("message delta with missing tree prerequisites triggers selected-task recov
       attachments: [],
     },
   });
+  const treeEpoch = cardTreeStore.treeEpoch;
 
   expect(routeSSEEvent({
     type: "message.part.delta",
@@ -519,8 +491,9 @@ test("message delta with missing tree prerequisites triggers selected-task recov
 
   await new Promise((resolve) => setTimeout(resolve, 0));
   await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(cardTreeStore.treeEpoch).toBe(treeEpoch);
   expect(streams).toEqual([
-    { path: "task/tsk_refresh/events", query: { after: "6" } },
+    { path: "task/tsk_refresh/events", query: { after_live: "0" } },
   ]);
 });
 
@@ -707,9 +680,9 @@ test("selected task sequence gap triggers recovery without advancing cursor", as
   await new Promise((resolve) => setTimeout(resolve, 0));
   await new Promise((resolve) => setTimeout(resolve, 0));
   expect(streams).toEqual([
-    { path: "task/tsk_refresh/events", query: { after: "9" } },
+    { path: "task/tsk_refresh/events", query: { after: "5", after_live: "0" } },
   ]);
-  expect(boardStore.taskSequence).toBe(9);
+  expect(boardStore.taskSequence).toBe(5);
 });
 
 test("production dispatch gates sequence gap before tree writer prerequisites can throw", async () => {
@@ -739,9 +712,9 @@ test("production dispatch gates sequence gap before tree writer prerequisites ca
   await new Promise((resolve) => setTimeout(resolve, 0));
   await new Promise((resolve) => setTimeout(resolve, 0));
   expect(streams).toEqual([
-    { path: "task/tsk_refresh/events", query: { after: "12" } },
+    { path: "task/tsk_refresh/events", query: { after: "5", after_live: "0" } },
   ]);
-  expect(boardStore.taskSequence).toBe(12);
+  expect(boardStore.taskSequence).toBe(5);
 });
 
 test("task-list notification does not advance visible cursor before per-task payload", async () => {
@@ -778,9 +751,9 @@ test("task-list notification does not advance visible cursor before per-task pay
   await new Promise((resolve) => setTimeout(resolve, 0));
   await new Promise((resolve) => setTimeout(resolve, 0));
   expect(streams).toEqual([
-    { path: "task/tsk_refresh/events", query: { after: "13" } },
+    { path: "task/tsk_refresh/events", query: { after: "5", after_live: "0" } },
   ]);
-  expect(boardStore.taskSequence).toBe(13);
+  expect(boardStore.taskSequence).toBe(5);
 });
 
 test("task-list selected sequence gap triggers selected-task recovery", async () => {
@@ -800,9 +773,9 @@ test("task-list selected sequence gap triggers selected-task recovery", async ()
   await new Promise((resolve) => setTimeout(resolve, 0));
   await new Promise((resolve) => setTimeout(resolve, 0));
   expect(streams).toEqual([
-    { path: "task/tsk_refresh/events", query: { after: "10" } },
+    { path: "task/tsk_refresh/events", query: { after: "5", after_live: "0" } },
   ]);
-  expect(boardStore.taskSequence).toBe(10);
+  expect(boardStore.taskSequence).toBe(5);
 });
 
 test("task-list notifications reload tasks for message deltas", async () => {

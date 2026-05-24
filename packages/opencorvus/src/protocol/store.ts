@@ -10,6 +10,9 @@ const eventLocks = new Map<string, Promise<void>>()
 const log = Log.create({ service: "protocol.store" })
 
 type Payload = Record<string, unknown>
+export type TaskLiveReplayResult =
+  | { expired: false; events: EventView[] }
+  | { expired: true; event: EventView }
 
 type EventInput = {
   kind: ProtocolKind
@@ -60,6 +63,12 @@ type EventSubscription = {
 //    isolation is redundant and causes real-time events to be silently dropped
 //    when the writer and reader are in different Instance contexts.
 const globalSubscriptions = new Set<EventSubscription>()
+const TASK_LIVE_REPLAY_MAX_EVENTS = 4096
+const TASK_LIVE_REPLAY_MAX_AGE_MS = 30_000
+const TASK_LIVE_EPOCH = Date.now()
+const taskLiveSequences = new Map<string, number>()
+const taskLiveReplayEvents = new Map<string, EventView[]>()
+const taskLiveRetentionFloors = new Map<string, number>()
 
 function eventKey(input: { aggregate: ProtocolAggregate; aggregate_id: string }) {
   return `${input.aggregate}:${input.aggregate_id}`
@@ -108,6 +117,8 @@ function eventView(row: EventRow) {
     correlationID: row.correlation_id ?? undefined,
     replyTo: row.reply_to ?? undefined,
     sequence: row.seq,
+    liveSequence: undefined as number | undefined,
+    liveEpoch: undefined as number | undefined,
     deadlineMs: row.deadline_ms ?? undefined,
     summary: payloadText(row.payload, "summary") ?? row.type,
     payload: row.payload ?? undefined,
@@ -116,6 +127,144 @@ function eventView(row: EventRow) {
       created: row.time_created,
       updated: row.time_updated,
     },
+  }
+}
+
+function eventLiveReplayKey(event: EventView): string {
+  const payload = event.payload ?? {}
+  if (event.type === "message.part.delta") {
+    const partID = typeof payload.partID === "string" ? payload.partID : ""
+    const messageID = typeof payload.messageID === "string" ? payload.messageID : ""
+    const sessionID = typeof payload.sessionID === "string" ? payload.sessionID : event.sessionID ?? ""
+    const field = typeof payload.field === "string" ? payload.field : ""
+    return `${event.taskID ?? ""}|${sessionID}|${messageID}|${partID}|${field}`
+  }
+  const part = payload.part && typeof payload.part === "object"
+    ? payload.part as Record<string, unknown>
+    : undefined
+  const partID = typeof part?.id === "string"
+    ? part.id
+    : typeof payload.partID === "string"
+      ? payload.partID
+      : ""
+  const messageID = typeof part?.messageID === "string"
+    ? part.messageID
+    : typeof payload.messageID === "string"
+      ? payload.messageID
+      : ""
+  const sessionID = typeof part?.sessionID === "string"
+    ? part.sessionID
+    : typeof payload.sessionID === "string"
+      ? payload.sessionID
+      : event.sessionID ?? ""
+  return `${event.taskID ?? ""}|${sessionID}|${messageID}|${partID}|`
+}
+
+function markLiveReplayFloor(taskID: string, sequence: number) {
+  if (sequence <= 0) return
+  taskLiveRetentionFloors.set(taskID, Math.max(taskLiveRetentionFloors.get(taskID) ?? 0, sequence))
+}
+
+function trimTaskLiveReplay(taskID: string, now: number) {
+  const events = taskLiveReplayEvents.get(taskID)
+  if (!events?.length) return
+  const minTime = now - TASK_LIVE_REPLAY_MAX_AGE_MS
+  while (events.length > 0 && (events.length > TASK_LIVE_REPLAY_MAX_EVENTS || events[0]!.time.emitted < minTime)) {
+    markLiveReplayFloor(taskID, events.shift()!.liveSequence ?? 0)
+  }
+  if (events.length === 0) taskLiveReplayEvents.delete(taskID)
+}
+
+function partUpdatedClosed(payload: Payload | undefined): boolean {
+  const part = payload?.part && typeof payload.part === "object"
+    ? payload.part as Record<string, any>
+    : undefined
+  if (!part) return false
+  if ((part.type === "text" || part.type === "reasoning") && typeof part.time?.end === "number") return true
+  if (part.type === "tool" && part.state?.status && part.state.status !== "pending") return true
+  return false
+}
+
+function pruneLiveReplayEvents(taskID: string, predicate: (event: EventView) => boolean) {
+  const events = taskLiveReplayEvents.get(taskID)
+  if (!events?.length) return
+  const next = events.filter((event) => !predicate(event))
+  if (next.length === 0) taskLiveReplayEvents.delete(taskID)
+  else if (next.length !== events.length) taskLiveReplayEvents.set(taskID, next)
+}
+
+function pruneClosedLiveDeltas(taskID: string, event: EventView) {
+  if (event.type === "message.part.updated" && partUpdatedClosed(event.payload)) {
+    const closedKey = eventLiveReplayKey(event)
+    pruneLiveReplayEvents(taskID, (candidate) =>
+      candidate.type === "message.part.delta" && eventLiveReplayKey(candidate).startsWith(closedKey),
+    )
+    return
+  }
+  if (event.type === "message.part.removed") {
+    const removedKey = eventLiveReplayKey(event)
+    pruneLiveReplayEvents(taskID, (candidate) => eventLiveReplayKey(candidate).startsWith(removedKey))
+    return
+  }
+  if (event.type === "message.removed") {
+    const payload = event.payload ?? {}
+    const messageID = typeof payload.messageID === "string"
+      ? payload.messageID
+      : typeof payload.info === "object" && payload.info && typeof (payload.info as Record<string, unknown>).id === "string"
+        ? String((payload.info as Record<string, unknown>).id)
+        : ""
+    const sessionID = typeof payload.sessionID === "string" ? payload.sessionID : event.sessionID ?? ""
+    pruneLiveReplayEvents(taskID, (candidate) => {
+      const candidatePayload = candidate.payload ?? {}
+      const candidatePart = candidatePayload.part && typeof candidatePayload.part === "object"
+        ? candidatePayload.part as Record<string, unknown>
+        : undefined
+      const candidateMessageID = typeof candidatePart?.messageID === "string"
+        ? candidatePart.messageID
+        : typeof candidatePayload.messageID === "string"
+          ? candidatePayload.messageID
+          : ""
+      const candidateSessionID = typeof candidatePart?.sessionID === "string"
+        ? candidatePart.sessionID
+        : typeof candidatePayload.sessionID === "string"
+          ? candidatePayload.sessionID
+          : candidate.sessionID ?? ""
+      return candidateSessionID === sessionID && candidateMessageID === messageID
+    })
+  }
+}
+
+function taskLiveReplayExpiredEvent(taskID: string, reason: string): EventView {
+  const now = Date.now()
+  return {
+    id: `live-replay-expired-${now}-${Math.random().toString(36).slice(2, 8)}`,
+    kind: "event",
+    type: "task.live_replay_expired",
+    aggregate: "task",
+    aggregateID: taskID,
+    taskID,
+    runID: undefined,
+    goalRunID: undefined,
+    sessionID: undefined,
+    interactionID: undefined,
+    executorSessionID: undefined,
+    streamID: undefined,
+    source: "protocol.live-replay",
+    target: undefined,
+    causationID: undefined,
+    correlationID: undefined,
+    replyTo: undefined,
+    sequence: 0,
+    liveSequence: undefined,
+    liveEpoch: undefined,
+    deadlineMs: undefined,
+    summary: reason,
+    payload: {
+      taskID,
+      reason,
+      liveEpoch: TASK_LIVE_EPOCH,
+    },
+    time: { emitted: now, created: now, updated: now },
   }
 }
 
@@ -224,6 +373,36 @@ export namespace ProtocolStore {
     return row?.seq ?? 0
   }
 
+  export function currentTaskLiveEpoch() {
+    return TASK_LIVE_EPOCH
+  }
+
+  export function listTaskLiveEventsAfter(
+    taskID: string,
+    liveSequence: number,
+    opts?: { liveEpoch?: number },
+  ): TaskLiveReplayResult {
+    const after = Math.max(0, Math.floor(Number(liveSequence) || 0))
+    if (typeof opts?.liveEpoch === "number" && opts.liveEpoch !== TASK_LIVE_EPOCH) {
+      return {
+        expired: true,
+        event: taskLiveReplayExpiredEvent(taskID, "selected task live replay epoch changed"),
+      }
+    }
+    const floor = taskLiveRetentionFloors.get(taskID) ?? 0
+    if (floor > 0 && after < floor) {
+      return {
+        expired: true,
+        event: taskLiveReplayExpiredEvent(taskID, "selected task live replay retention expired"),
+      }
+    }
+    const events = taskLiveReplayEvents.get(taskID) ?? []
+    return {
+      expired: false,
+      events: events.filter((event) => (event.liveSequence ?? 0) > after),
+    }
+  }
+
   export function subscribeEvents(callback: (event: EventView) => void | Promise<void>, filter?: EventFilter) {
     const events = new Channel<EventView>()
     const controller = new AbortController()
@@ -275,13 +454,16 @@ export namespace ProtocolStore {
     payload?: Payload | null
   }) {
     const now = Date.now()
-    dispatchEvent({
+    const taskID = input.aggregate === "task" ? input.taskID : undefined
+    const liveSequence = taskID ? (taskLiveSequences.get(taskID) ?? 0) + 1 : undefined
+    if (taskID && liveSequence !== undefined) taskLiveSequences.set(taskID, liveSequence)
+    const event: EventView = {
       id: `ephemeral-${now}-${Math.random().toString(36).slice(2, 8)}`,
       kind: "event",
       type: input.type,
       aggregate: input.aggregate,
-      aggregateID: input.taskID ?? "",
-      taskID: input.taskID,
+      aggregateID: taskID ?? "",
+      taskID,
       runID: input.runID,
       goalRunID: undefined,
       sessionID: input.sessionID,
@@ -294,11 +476,21 @@ export namespace ProtocolStore {
       correlationID: undefined,
       replyTo: undefined,
       sequence: 0,
+      liveSequence,
+      liveEpoch: taskID ? TASK_LIVE_EPOCH : undefined,
       deadlineMs: undefined,
       summary: payloadText(input.payload ?? null, "summary") ?? input.type,
       payload: input.payload ?? undefined,
       time: { emitted: now, created: now, updated: now },
-    })
+    }
+    if (taskID) {
+      pruneClosedLiveDeltas(taskID, event)
+      const events = taskLiveReplayEvents.get(taskID) ?? []
+      events.push(event)
+      taskLiveReplayEvents.set(taskID, events)
+      trimTaskLiveReplay(taskID, now)
+    }
+    dispatchEvent(event)
   }
 
 }

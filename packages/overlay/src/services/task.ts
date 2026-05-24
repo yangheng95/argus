@@ -41,6 +41,7 @@ import { taskScopedPath } from "./task-path";
 import { applyDirectory } from "./workspace";
 import { resetWriter } from "./tree-writer";
 import { cancelConversationReplay, hydrateTaskConversation } from "./conversation";
+import { resetSelectedLiveCursor } from "./selected-stream-cursor";
 
 // ── Types ──
 
@@ -228,6 +229,7 @@ export async function selectTask(
   cancelConversationReplay();
   setChatAttachments([]);
   stopSSE();
+  resetSelectedLiveCursor();
   clearBoard();
   clearMessages();
   // Drop cardTreeStore + the writer's internal session/message/integrity
@@ -235,7 +237,7 @@ export async function selectTask(
   // next task. resetWriter() was documented for task-switch use but had no
   // production call site — the old pipeline's derivation from messageStore
   // masked the leak until the new writer became source-of-truth.
-  resetWriter();
+  resetWriter({ scrollIntent: "bottom", cause: "task-switch" });
   setSelectedTaskID(nextTaskID);
   setBoardStore("selectedTaskID", nextTaskID);
 
@@ -270,7 +272,10 @@ export async function selectTask(
       if (stale()) return;
     }
 
-    const lastSequence = await hydrateTaskConversation(nextTaskID);
+    const lastSequence = await hydrateTaskConversation(nextTaskID, {
+      scrollIntent: "bottom",
+      resetCause: "task-switch-hydrate",
+    });
     if (stale()) return;
 
     startSSE(nextTaskID, lastSequence);

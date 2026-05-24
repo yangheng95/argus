@@ -1,6 +1,12 @@
 import { boardStore } from "../store/board";
-import { cancelConversationReplay, hydrateTaskConversation } from "./conversation";
-import { startSSE, stopSSE } from "./sse";
+import { cancelConversationReplay } from "./conversation";
+import {
+  recordConversationRecoveryAborted,
+  recordConversationRecoveryFailed,
+  recordConversationRecoveryStarted,
+  recordConversationRecoverySucceeded,
+} from "./refresh-diagnostics";
+import { startSSE } from "./sse";
 
 let recoveryGeneration = 0;
 let recoveryAbort: AbortController | null = null;
@@ -13,6 +19,28 @@ function assertCurrentRecovery(taskID: string, generation: number, signal: Abort
   if (signal.aborted) throw signal.reason ?? abortError("Selected task recovery aborted");
   if (generation !== recoveryGeneration) throw abortError("Selected task recovery superseded");
   if (boardStore.selectedTaskID !== taskID) throw abortError("Selected task recovery task changed");
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error || "");
+}
+
+function isAbortLike(error: unknown): boolean {
+  return error instanceof DOMException && error.name === "AbortError";
+}
+
+function resumeSequence(): number {
+  return Math.max(0, Math.floor(Number(boardStore.taskSequence) || 0));
+}
+
+function cannotReplayWithoutFullRefresh(reason: string): boolean {
+  const normalized = reason.trim().toLowerCase();
+  return (
+    normalized === "task.replay_expired" ||
+    normalized === "task.live_replay_expired" ||
+    normalized.includes("replay expired") ||
+    normalized.includes("live replay expired")
+  );
 }
 
 export async function recoverSelectedTaskConversation(
@@ -29,16 +57,49 @@ export async function recoverSelectedTaskConversation(
   const controller = new AbortController();
   recoveryAbort = controller;
   const generation = ++recoveryGeneration;
+  const startedAt = Date.now();
 
-  stopSSE();
-  cancelConversationReplay();
+  recordConversationRecoveryStarted({
+    channel: "selected-task-recovery",
+    reason,
+    taskID,
+    source: "selected-task-recovery",
+  });
 
   try {
     assertCurrentRecovery(taskID, generation, controller.signal);
-    const sequence = await hydrateTaskConversation(taskID, { signal: controller.signal });
-    assertCurrentRecovery(taskID, generation, controller.signal);
+    const sequence = resumeSequence();
+    if (cannotReplayWithoutFullRefresh(reason)) {
+      throw new Error(
+        `Selected task recovery refused full conversation refresh after load: ${reason}`,
+      );
+    }
+    cancelConversationReplay();
     startSSE(taskID, sequence);
+    recordConversationRecoverySucceeded({
+      channel: "selected-task-recovery",
+      reason,
+      taskID,
+      source: "selected-task-recovery",
+      durationMs: Date.now() - startedAt,
+      resumeSequence: sequence,
+    });
     return sequence;
+  } catch (error) {
+    const input = {
+      channel: "selected-task-recovery",
+      reason,
+      taskID,
+      source: "selected-task-recovery",
+      durationMs: Date.now() - startedAt,
+      error: errorMessage(error),
+    };
+    if (isAbortLike(error)) {
+      recordConversationRecoveryAborted(input);
+    } else {
+      recordConversationRecoveryFailed(input);
+    }
+    throw error;
   } finally {
     if (recoveryAbort === controller) recoveryAbort = null;
   }
