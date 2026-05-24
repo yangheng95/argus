@@ -17,6 +17,8 @@
  *
  * Adding a 5th dimension is a one-liner in `dimensions.ts`; this file is
  * fully data-driven from the registry.
+ * Requirement fidelity treats the original user request as the audit universe;
+ * generated REQ rows are evidence for requirements extraction, not the source.
  *
  * The reviewer is a multi-call tool-use loop:
  *   • The LLM sees the original request + REQ-N + decisions + design specs

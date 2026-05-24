@@ -60,6 +60,7 @@ import {
   insertOrchestratorToolOwnershipArtifact,
   listLiveOrchestratorToolOwnership,
 } from "../../src/engine/tool-ownership"
+import { Ownership } from "../../src/engine/ownership"
 
 let buildAgentRunImpl: ((input: any) => Promise<any>) | undefined
 let reviewIntegrityImpl: ((input: any) => Promise<any>) | undefined
@@ -331,6 +332,32 @@ function insertArchitectContractGraphArtifact(input: {
       })
       .run()
   })
+}
+
+function seedTerminalFailedBuildRun(input: {
+  taskID: string
+  goalID: string
+  sessionID: string
+  workspaceDir: string
+  workspaceBranch?: string
+  workspaceBaseRef?: string | null
+  now: number
+}) {
+  const goalRunID = beginBuildAttempt({
+    taskID: input.taskID,
+    goalID: input.goalID,
+    sessionID: input.sessionID,
+    workspaceDir: input.workspaceDir,
+    workspaceBranch: input.workspaceBranch ?? "opencorvus/prior-build",
+    workspaceBaseRef: input.workspaceBaseRef ?? null,
+    now: input.now,
+  })
+  updateGoalRun(goalRunID, {
+    status: "failed",
+    error: "prior build failed",
+    time_completed: input.now + 1,
+  })
+  return goalRunID
 }
 
 describe("orchestrator tools", () => {
@@ -4157,6 +4184,356 @@ describe("orchestrator tools", () => {
         expect(result).toContain("status=passed")
         expect(buildCalls).toBe(1)
         expect(listGoalRunsByGoal(goalID)).toHaveLength(1)
+      },
+    })
+  })
+
+  test("goal build retry reuses the prior build session by default", async () => {
+    await tmp?.[Symbol.asyncDispose]?.()
+    tmp = await tmpdir({ git: true })
+
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_retry_default_${stamp}`
+    const taskID = `tsk_retry_default_${stamp}`
+    const goalID = `goal_retry_default_${stamp}`
+    const priorSessionID = `ses_prior_retry_default_${stamp}`
+    let observedExistingSessionID: unknown
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "default retry session reuse test" })
+        insertWorkflowTaskWithGoal({
+          projectID,
+          taskID,
+          goalID,
+          sessionID: parent.id,
+          worktree: tmp.path,
+          projectName: "Default retry session reuse test",
+          taskTitle: "Default retry session reuse task",
+          request: "Retry a failed goal in the same build session by default",
+          goalTitle: "Reuse prior build session",
+          goalSlug: "reuse-prior-build-session",
+          objective: "Verify build retries keep the prior session unless freshContext is requested",
+          now,
+        })
+        seedTerminalFailedBuildRun({
+          taskID,
+          goalID,
+          sessionID: priorSessionID,
+          workspaceDir: tmp.path,
+          now: now + 10,
+        })
+
+        const createNextSpy = spyOn(Session, "createNext")
+        buildAgentRunImpl = async (input: any) => {
+          observedExistingSessionID = input.existingSessionID
+          await markBuildSlotAcquired(input, priorSessionID)
+          return {
+            result: {
+              status: "failed",
+              summary: "Retry stayed in the prior build session.",
+              files_changed: [],
+              tests: [],
+              error: "same-session retry failed again",
+            },
+            sessionID: priorSessionID,
+            worktreeDir: input.managedWorktree.directory,
+            worktreeBranch: input.managedWorktree.branch,
+            worktreeBaseRef: input.managedWorktree.baseRef,
+          }
+        }
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const result = await tools.build.execute(
+          {
+            goalID,
+            request: "Retry the failed goal with the same context.",
+            reason: "Per-goal retry without freshContext should reuse the session.",
+          },
+          buildToolOptions(),
+        )
+
+        expect(result).toContain("status=failed")
+        expect(observedExistingSessionID).toBe(priorSessionID)
+        expect(createNextSpy).not.toHaveBeenCalled()
+      },
+    })
+  })
+
+  test("goal build freshContext starts a distinct build session", async () => {
+    await tmp?.[Symbol.asyncDispose]?.()
+    tmp = await tmpdir({ git: true })
+
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_retry_fresh_${stamp}`
+    const taskID = `tsk_retry_fresh_${stamp}`
+    const goalID = `goal_retry_fresh_${stamp}`
+    const priorSessionID = `ses_prior_retry_fresh_${stamp}`
+    let freshSessionID: string | undefined
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "fresh retry session test" })
+        insertWorkflowTaskWithGoal({
+          projectID,
+          taskID,
+          goalID,
+          sessionID: parent.id,
+          worktree: tmp.path,
+          projectName: "Fresh retry session test",
+          taskTitle: "Fresh retry session task",
+          request: "Retry a context-wedged failed goal in a new build session",
+          goalTitle: "Fresh build session",
+          goalSlug: "fresh-build-session",
+          objective: "Verify freshContext skips prior session reuse",
+          now,
+        })
+        seedTerminalFailedBuildRun({
+          taskID,
+          goalID,
+          sessionID: priorSessionID,
+          workspaceDir: tmp.path,
+          now: now + 10,
+        })
+
+        const createNextSpy = spyOn(Session, "createNext")
+        buildAgentRunImpl = async (input: any) => {
+          expect(input.existingSessionID).toBeUndefined()
+          const buildSession = await Session.createNext({
+            kind: "build",
+            parentID: input.parentSessionID,
+            goalID,
+            title: "Fresh context retry build",
+            directory: input.managedWorktree.directory,
+          })
+          freshSessionID = buildSession.id
+          await input.onSessionCreated?.(buildSession.id, {
+            worktreeDir: input.managedWorktree.directory,
+            worktreeBranch: input.managedWorktree.branch,
+            worktreeBaseRef: input.managedWorktree.baseRef,
+          })
+          return {
+            result: {
+              status: "failed",
+              summary: "Retry ran in a fresh build session.",
+              files_changed: [],
+              tests: [],
+              error: "fresh-session retry still failed",
+            },
+            sessionID: buildSession.id,
+            worktreeDir: input.managedWorktree.directory,
+            worktreeBranch: input.managedWorktree.branch,
+            worktreeBaseRef: input.managedWorktree.baseRef,
+          }
+        }
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const result = await tools.build.execute(
+          {
+            goalID,
+            request: "Context is wedged; retry from a fresh build session and preserve lessons here.",
+            reason: "Prior same-context attempts hit context overflow.",
+            freshContext: true,
+          },
+          buildToolOptions(),
+        )
+
+        expect(result).toContain("status=failed")
+        expect(typeof freshSessionID).toBe("string")
+        expect(freshSessionID).not.toBe(priorSessionID)
+        expect(createNextSpy).toHaveBeenCalledTimes(1)
+        expect(listGoalRunsByGoal(goalID)[0]?.session_id).toBe(freshSessionID)
+      },
+    })
+  })
+
+  test("goal build freshContext clears the prior worktree ownership marker before dispatch", async () => {
+    await tmp?.[Symbol.asyncDispose]?.()
+    tmp = await tmpdir({ git: true })
+
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_retry_fresh_marker_${stamp}`
+    const taskID = `tsk_retry_fresh_marker_${stamp}`
+    const goalID = `goal_retry_fresh_marker_${stamp}`
+    const priorSessionID = `ses_prior_retry_marker_${stamp}`
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "fresh retry marker cleanup test" })
+        insertWorkflowTaskWithGoal({
+          projectID,
+          taskID,
+          goalID,
+          sessionID: parent.id,
+          worktree: tmp.path,
+          projectName: "Fresh retry marker cleanup test",
+          taskTitle: "Fresh retry marker cleanup task",
+          request: "Clear the abandoned ownership marker before a fresh-context retry",
+          goalTitle: "Fresh marker cleanup",
+          goalSlug: "fresh-marker-cleanup",
+          objective: "Verify abandoned prior session ownership is cleared before dispatch",
+          now,
+        })
+        seedTerminalFailedBuildRun({
+          taskID,
+          goalID,
+          sessionID: priorSessionID,
+          workspaceDir: tmp.path,
+          now: now + 10,
+        })
+        await Ownership.Worktree.record({
+          primaryWorktreeDir: Instance.worktree,
+          worktreeDir: tmp.path,
+          taskID,
+          sessionID: priorSessionID,
+          goalID,
+        })
+        expect(
+          (await Ownership.Worktree.list(Instance.worktree)).some(({ marker }) => marker.sessionID === priorSessionID),
+        ).toBe(true)
+
+        const clearSpy = spyOn(Ownership.Worktree, "clear")
+        buildAgentRunImpl = async (input: any) => {
+          expect(input.existingSessionID).toBeUndefined()
+          const markers = await Ownership.Worktree.list(Instance.worktree)
+          expect(markers.some(({ marker }) => marker.sessionID === priorSessionID)).toBe(false)
+          await markBuildSlotAcquired(input, `ses_fresh_marker_${stamp}`)
+          return {
+            result: {
+              status: "failed",
+              summary: "Fresh retry observed cleared prior ownership.",
+              files_changed: [],
+              tests: [],
+              error: "fresh retry failed after marker cleanup",
+            },
+            sessionID: `ses_fresh_marker_${stamp}`,
+            worktreeDir: input.managedWorktree.directory,
+            worktreeBranch: input.managedWorktree.branch,
+            worktreeBaseRef: input.managedWorktree.baseRef,
+          }
+        }
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const result = await tools.build.execute(
+          {
+            goalID,
+            request: "Prior context is wedged; retry fresh and restate every lesson here.",
+            reason: "Fresh-context retry after context overflow.",
+            freshContext: true,
+          },
+          buildToolOptions(),
+        )
+
+        expect(result).toContain("status=failed")
+        expect(clearSpy).toHaveBeenCalledTimes(1)
+        expect(clearSpy).toHaveBeenCalledWith({
+          primaryWorktreeDir: Instance.worktree,
+          worktreeDir: tmp.path,
+        })
+      },
+    })
+  })
+
+  test("task-level build ignores freshContext and still opens a normal direct build", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_task_fresh_noop_${stamp}`
+    const taskID = `tsk_task_fresh_noop_${stamp}`
+    const pipeline = WorkflowRegistry.resolveSync("pipeline")!
+    const workflowState = createWorkflowState(pipeline)
+    let observedExistingSessionID: unknown = "unset"
+    let observedTarget: any
+
+    Database.use((db) => {
+      db.insert(ProjectTable)
+        .values({
+          id: projectID,
+          worktree: tmp.path,
+          name: "Task freshContext no-op project",
+          sandboxes: "[]",
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+      db.insert(EngineTaskTable)
+        .values({
+          id: taskID,
+          project_id: projectID,
+          source: "test",
+          title: "Task freshContext no-op task",
+          request: "Run a task-level direct build while freshContext is set",
+          kind: "workflow",
+          priority: "normal",
+          time_created: now,
+          time_updated: now,
+          time_started: now,
+        })
+        .run()
+    })
+
+    buildAgentRunImpl = async (input: any) => {
+      observedExistingSessionID = input.existingSessionID
+      observedTarget = input.target
+      return {
+        result: {
+          status: "passed",
+          summary: "Task-level direct build ignored freshContext.",
+          files_changed: [],
+          tests: [],
+        },
+        sessionID: `ses_task_fresh_noop_${stamp}`,
+        worktreeDir: tmp.path,
+        diffs: [],
+      }
+    }
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "task freshContext no-op test" })
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+          workflow: pipeline,
+          workflowState,
+        })
+
+        const result = await tools.build.execute(
+          {
+            request: "Apply the scoped direct fix.",
+            reason: "Task-level direct build; freshContext has no goal to affect.",
+            directBuildIntent: "modify_files",
+            freshContext: true,
+          },
+          buildToolOptions(),
+        )
+
+        expect(result).toContain("status=passed")
+        expect(observedTarget).toEqual({ kind: "request", text: "Apply the scoped direct fix." })
+        expect(observedExistingSessionID).toBeUndefined()
       },
     })
   })

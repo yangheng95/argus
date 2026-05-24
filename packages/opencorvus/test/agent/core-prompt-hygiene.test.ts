@@ -18,6 +18,7 @@ const promptFiles = {
 const sharedPromptFiles = {
   acceptanceReview: "acceptance-review-core.txt",
   engineeringCraft: "engineering-craft.txt",
+  integrityTeam: "integrity-team-core.txt",
 }
 
 async function readPrompt(name: keyof typeof promptFiles) {
@@ -654,6 +655,16 @@ describe("core prompt hygiene", () => {
     expect(normalized).not.toContain("verification` goals are integration checks; they stay pending until **deliver**")
     expect(normalized).toContain("Dispatch them with `build({ goalID })` like every other goal")
     expect(normalized).toContain("every verification/integration goal still needed for evidence is terminal before `integrity`")
+  })
+
+  test("orchestrator prompt documents freshContext per-goal retry triggers and cost", async () => {
+    const text = await readPrompt("orchestrator")
+    const normalized = text.replace(/\s+/g, " ")
+    expect(normalized).toContain("`build({ goalID, freshContext: true, request })`")
+    expect(normalized).toContain("compaction `nothing-to-compress` / `post-compaction-still-over`")
+    expect(normalized).toContain("prior reasoning/tool history is gone")
+    expect(normalized).toContain("`request` MUST restate concrete lessons")
+    expect(normalized).toContain("No effect on task-level direct `build({ request })`")
   })
 
   test("integrity prompt audits original request mining, not only generated REQ rows", async () => {
