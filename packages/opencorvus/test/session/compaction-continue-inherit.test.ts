@@ -64,4 +64,39 @@ describe("SessionCompaction continuation", () => {
       },
     })
   })
+
+  test("persists an explicit compaction model override on the compaction message", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ kind: "assistant", title: "compaction model override" })
+        const source = await Session.updateMessage({
+          id: Identifier.ascending("message"),
+          sessionID: session.id,
+          role: "user",
+          time: { created: Date.now() },
+          agent: "build",
+          model: { providerID: "provider-a", modelID: "model-a" },
+        })
+        expect(source.role).toBe("user")
+        if (source.role !== "user") return
+
+        await SessionCompaction.create({
+          sessionID: session.id,
+          source,
+          model: { providerID: "provider-b", modelID: "model-b" },
+          auto: false,
+          overflow: false,
+        })
+
+        const messages = await Session.messages({ sessionID: session.id })
+        const compaction = messages.find((msg) => msg.parts.some((part) => part.type === "compaction"))
+        expect(compaction?.info.role).toBe("user")
+        if (compaction?.info.role !== "user") return
+
+        expect(compaction.info.model).toEqual({ providerID: "provider-b", modelID: "model-b" })
+      },
+    })
+  })
 })
