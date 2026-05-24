@@ -16,8 +16,15 @@ export namespace SessionSummary {
   const log = Log.create({ service: "session.summary" })
 
   export async function readDiff(sessionID: string): Promise<Snapshot.FileDiff[]> {
-    const target = ProjectRuntimePaths.sessionDiffPath(Instance.directory, Instance.project.id, sessionID)
-    return Filesystem.readJson<Snapshot.FileDiff[]>(target)
+    let lastError: unknown
+    for (const target of ProjectRuntimePaths.sessionDiffPathReadCandidates(Instance.directory, Instance.project.id, sessionID)) {
+      try {
+        return await Filesystem.readJson<Snapshot.FileDiff[]>(target)
+      } catch (error) {
+        lastError = error
+      }
+    }
+    throw lastError ?? new Error(`Session diff not found: ${sessionID}`)
   }
 
   export async function writeDiff(sessionID: string, diff: Snapshot.FileDiff[]): Promise<void> {

@@ -1,4 +1,5 @@
 import path from "node:path"
+import { Identifier } from "@/id/id"
 
 type BranchInput =
   | { taskID: string; goalID: string; runID: string }
@@ -13,8 +14,20 @@ function safeSegment(input: string): string {
   return value
 }
 
-function short(input: string): string {
-  return safeSegment(input).slice(0, 16)
+function idSegment(input: string): string {
+  return safeSegment(Identifier.shortPath(input))
+}
+
+function legacyIDSegment(input: string): string {
+  return safeSegment(input)
+}
+
+function unique(items: string[]): string[] {
+  return [...new Set(items)]
+}
+
+function idSegmentCandidates(input: string): string[] {
+  return unique([idSegment(input), legacyIDSegment(input)])
 }
 
 export namespace ProjectRuntimePaths {
@@ -31,15 +44,19 @@ export namespace ProjectRuntimePaths {
   }
 
   export function taskRoot(projectDir: string, taskID: string): string {
-    return path.join(projectRuntimeRoot(projectDir), "tasks", safeSegment(taskID))
+    return path.join(projectRuntimeRoot(projectDir), "tasks", idSegment(taskID))
   }
 
   export function taskRootFromRuntimeRoot(runtimeRoot: string, taskID: string): string {
-    return path.join(runtimeRoot, "tasks", safeSegment(taskID))
+    return path.join(runtimeRoot, "tasks", idSegment(taskID))
+  }
+
+  export function taskRootReadCandidatesFromRuntimeRoot(runtimeRoot: string, taskID: string): string[] {
+    return idSegmentCandidates(taskID).map((segment) => path.join(runtimeRoot, "tasks", segment))
   }
 
   export function taskRelative(taskID: string, ...parts: string[]): string {
-    return path.posix.join(relativeRuntimeRoot(), "tasks", safeSegment(taskID), ...parts)
+    return path.posix.join(relativeRuntimeRoot(), "tasks", idSegment(taskID), ...parts)
   }
 
   export function taskAbsolute(projectDir: string, taskID: string, ...parts: string[]): string {
@@ -50,12 +67,22 @@ export namespace ProjectRuntimePaths {
     return path.join(taskRootFromRuntimeRoot(runtimeRoot, taskID), ...parts)
   }
 
+  export function taskAbsoluteReadCandidatesFromRuntimeRoot(runtimeRoot: string, taskID: string, ...parts: string[]): string[] {
+    return taskRootReadCandidatesFromRuntimeRoot(runtimeRoot, taskID).map((root) => path.join(root, ...parts))
+  }
+
   export function sessionRoot(projectDir: string, taskID: string, sessionID: string): string {
-    return taskAbsolute(projectDir, taskID, "sessions", safeSegment(sessionID))
+    return taskAbsolute(projectDir, taskID, "sessions", idSegment(sessionID))
   }
 
   export function sessionRootFromRuntimeRoot(runtimeRoot: string, taskID: string, sessionID: string): string {
-    return taskAbsoluteFromRuntimeRoot(runtimeRoot, taskID, "sessions", safeSegment(sessionID))
+    return taskAbsoluteFromRuntimeRoot(runtimeRoot, taskID, "sessions", idSegment(sessionID))
+  }
+
+  export function sessionRootReadCandidatesFromRuntimeRoot(runtimeRoot: string, taskID: string, sessionID: string): string[] {
+    return taskRootReadCandidatesFromRuntimeRoot(runtimeRoot, taskID).flatMap((taskRoot) =>
+      idSegmentCandidates(sessionID).map((sessionSegment) => path.join(taskRoot, "sessions", sessionSegment)),
+    )
   }
 
   export function tracePath(projectDir: string, taskID: string, sessionID: string): string {
@@ -64,6 +91,12 @@ export namespace ProjectRuntimePaths {
 
   export function tracePathFromRuntimeRoot(runtimeRoot: string, taskID: string, sessionID: string): string {
     return path.join(sessionRootFromRuntimeRoot(runtimeRoot, taskID, sessionID), "trace.jsonl")
+  }
+
+  export function tracePathReadCandidatesFromRuntimeRoot(runtimeRoot: string, taskID: string, sessionID: string): string[] {
+    return sessionRootReadCandidatesFromRuntimeRoot(runtimeRoot, taskID, sessionID).map((root) =>
+      path.join(root, "trace.jsonl"),
+    )
   }
 
   export function toolOutputDir(projectDir: string, taskID: string, sessionID: string): string {
@@ -159,7 +192,11 @@ export namespace ProjectRuntimePaths {
   }
 
   export function sessionDiffPath(projectDir: string, projectID: string, sessionID: string): string {
-    return path.join(sessionDiffRoot(projectDir, projectID), `${safeSegment(sessionID)}.json`)
+    return path.join(sessionDiffRoot(projectDir, projectID), `${idSegment(sessionID)}.json`)
+  }
+
+  export function sessionDiffPathReadCandidates(projectDir: string, projectID: string, sessionID: string): string[] {
+    return idSegmentCandidates(sessionID).map((segment) => path.join(sessionDiffRoot(projectDir, projectID), `${segment}.json`))
   }
 
   export function worktreesRoot(projectDir: string): string {
@@ -167,18 +204,18 @@ export namespace ProjectRuntimePaths {
   }
 
   export function worktreeDir(projectDir: string, taskID: string, goalID: string, runID: string): string {
-    return taskAbsolute(projectDir, taskID, "goals", safeSegment(goalID), "runs", safeSegment(runID), "worktree")
+    return taskAbsolute(projectDir, taskID, "goals", idSegment(goalID), "runs", idSegment(runID), "worktree")
   }
 
   export function directBuildWorktreeDir(projectDir: string, taskID: string, sessionID: string): string {
-    return taskAbsolute(projectDir, taskID, "sessions", safeSegment(sessionID), "worktree")
+    return taskAbsolute(projectDir, taskID, "sessions", idSegment(sessionID), "worktree")
   }
 
   export function worktreeBranch(input: BranchInput): string {
     if ("goalID" in input) {
-      return `opencorvus/task/${short(input.taskID)}/goal/${short(input.goalID)}/run/${short(input.runID)}`
+      return `opencorvus/task/${idSegment(input.taskID)}/goal/${idSegment(input.goalID)}/run/${idSegment(input.runID)}`
     }
-    return `opencorvus/task/${short(input.taskID)}/session/${short(input.sessionID)}`
+    return `opencorvus/task/${idSegment(input.taskID)}/session/${idSegment(input.sessionID)}`
   }
 
   export function ownershipRoot(projectDir: string): string {
@@ -191,9 +228,9 @@ export namespace ProjectRuntimePaths {
     worktreeMarkerName: string
     processMarkerPrefix: string
   } {
-    const task = safeSegment(taskID)
-    const session = safeSegment(sessionID)
-    const goal = goalRunID ? `-${safeSegment(goalRunID)}` : ""
+    const task = idSegment(taskID)
+    const session = idSegment(sessionID)
+    const goal = goalRunID ? `-${idSegment(goalRunID)}` : ""
     return {
       worktreeMarkerDir: path.join(ownershipRoot(projectDir), "worktrees", task),
       processMarkerDir: path.join(ownershipRoot(projectDir), "processes", task),
