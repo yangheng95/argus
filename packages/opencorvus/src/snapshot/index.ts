@@ -115,9 +115,13 @@ export namespace Snapshot {
   // `Snapshot.Patch` namespace form keep working unchanged.
   export const Patch = _Patch
   export type Patch = _PatchType
-  export const patchEvidenceSummary = _patchEvidenceSummary
+  export function patchEvidenceSummary(patch: Pick<Patch, "hash" | "files">) {
+    return _patchEvidenceSummary(normalizePatchEvidence(patch))
+  }
   export type PatchEvidenceSummary = _PatchEvidenceSummaryType
-  export const formatPatchEvidence = _formatPatchEvidence
+  export function formatPatchEvidence(patch: Pick<Patch, "hash" | "files">) {
+    return _formatPatchEvidence(normalizePatchEvidence(patch))
+  }
 
   export function assertPatchEvidenceIntegrity(patch: Patch) {
     if (patch.hash !== EMPTY_TREE_HASH) return
@@ -164,7 +168,7 @@ export namespace Snapshot {
           .split("\n")
           .map((x) => x.trim())
           .filter(Boolean)
-          .map((x) => path.join(Instance.worktree, x).replaceAll("\\", "/")),
+          .map(toWorktreeRelative),
       }
     } finally {
       await cleanupIndexFile(indexFile)
@@ -459,6 +463,13 @@ export namespace Snapshot {
       "snapshot list trackable content",
     )
     return text.split("\0").some((entry) => entry.trim().length > 0)
+  }
+
+  function normalizePatchEvidence<P extends Pick<Patch, "hash" | "files">>(patch: P): P {
+    return {
+      ...patch,
+      files: patch.files.map(toWorktreeRelative),
+    }
   }
 
   function toWorktreeRelative(file: string) {

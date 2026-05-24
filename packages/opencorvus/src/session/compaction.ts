@@ -204,6 +204,12 @@ export namespace SessionCompaction {
     const scratchpad = Scratchpad.get(input.sessionID)
     const patches = patchEvidence(input.selectedHead)
     const activeBuildContracts = activeBuildContractsForSession(input.sessionID)
+    const evidenceRequirements = selectedHeadEvidenceRequirements({
+      messages: input.selectedHead,
+      instructionPaths,
+      sourceUserMessageID: input.userMessage.id,
+    })
+    const requiredEvidence = CompactionHandoff.renderRequiredEvidence(evidenceRequirements)
     const text = [
       "<handoff-runtime-state>",
       "Authoritative instruction files. Do not copy their full contents into the handoff; list these paths in durableInstructionSources.",
@@ -222,6 +228,7 @@ export namespace SessionCompaction {
             `Scratchpad is present with ${scratchpad.length} characters. Record scratchpad-present evidence; do not copy the scratchpad content.`,
           ].join("\n")
         : "",
+      ["", requiredEvidence].join("\n"),
       patches ? ["", patches].join("\n") : "",
       "</handoff-runtime-state>",
     ]
@@ -229,11 +236,7 @@ export namespace SessionCompaction {
       .join("\n")
     return {
       text,
-      evidenceRequirements: selectedHeadEvidenceRequirements({
-        messages: input.selectedHead,
-        instructionPaths,
-        sourceUserMessageID: input.userMessage.id,
-      }),
+      evidenceRequirements,
     }
   }
 

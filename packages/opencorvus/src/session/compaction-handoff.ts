@@ -127,13 +127,25 @@ export namespace CompactionHandoff {
     "Do not write Markdown, prose, or a raw JSON text response; the handoff object must be the StructuredOutput tool input.",
     "Every retained claim must be grounded in the supplied conversation, runtime state, or evidence context.",
     "List all user-authored messages that appear in the compacted history in userMessages, preserving their intent and important wording.",
-    "When patch evidence lists files, include every listed file path in files or file evidence.",
-    "When error evidence lists an error name, include that exact error name in error evidence or errorsAndBlockers.evidence.",
+    "Every non-empty line inside <required-file-evidence> MUST appear verbatim in files[].path or evidence[].value with kind=\"file\".",
+    "Every non-empty line inside <required-error-evidence> MUST appear verbatim in errorsAndBlockers[].issue, errorsAndBlockers[].evidence, or evidence[].value with kind=\"error\".",
     "Use empty arrays only when no evidence exists for that field.",
     'Generic placeholders such as "continue implementation" are invalid.',
     "Do not treat assistant reasoning, tool-choice indecision, or checkpoint prompts as user requirements.",
     "When active build-session contract facts are supplied, copy their ids into activeBuildContracts instead of paraphrasing them.",
   ].join("\n")
+
+  export function renderRequiredEvidence(requirements: Pick<EvidenceRequirements, "patchFiles" | "errorNames">) {
+    return [
+      "<required-file-evidence>",
+      ...requirements.patchFiles,
+      "</required-file-evidence>",
+      "",
+      "<required-error-evidence>",
+      ...requirements.errorNames,
+      "</required-error-evidence>",
+    ].join("\n")
+  }
 
   export const JSON_SCHEMA_DESCRIPTION = `{
   "objective": "specific active user objective",
