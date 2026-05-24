@@ -124,15 +124,19 @@ describe("RuntimePathIDLookup", () => {
 
     expect(RuntimePathIDLookup.task(taskID)).toBe(taskID)
     expect(RuntimePathIDLookup.task(Identifier.shortPath(taskID))).toBe(taskID)
+    expect(RuntimePathIDLookup.task(Identifier.legacyShortPath(taskID))).toBe(taskID)
     expect(RuntimePathIDLookup.goal(goalID)).toBe(goalID)
     expect(RuntimePathIDLookup.goal(Identifier.shortPath(goalID))).toBe(goalID)
+    expect(RuntimePathIDLookup.goal(Identifier.legacyShortPath(goalID))).toBe(goalID)
     expect(RuntimePathIDLookup.run(runID)).toBe(runID)
     expect(RuntimePathIDLookup.run(Identifier.shortPath(runID))).toBe(runID)
+    expect(RuntimePathIDLookup.run(Identifier.legacyShortPath(runID))).toBe(runID)
     expect(RuntimePathIDLookup.session(sessionID)).toBe(sessionID)
     expect(RuntimePathIDLookup.session(Identifier.shortPath(sessionID))).toBe(sessionID)
+    expect(RuntimePathIDLookup.session(Identifier.legacyShortPath(sessionID))).toBe(sessionID)
   })
 
-  test("rejects ambiguous short segments instead of picking a row", () => {
+  test("new short segments resolve same-millisecond IDs and legacy short segments reject ambiguity", () => {
     const projectID = Identifier.create("workspace", false, now)
     const firstTaskID = Identifier.create("task", false, now + 10)
     const secondTaskID = Identifier.create("task", false, now + 10)
@@ -142,6 +146,8 @@ describe("RuntimePathIDLookup", () => {
     seedTask(projectID, secondTaskID)
 
     expect(RuntimePathIDLookup.task(firstTaskID)).toBe(firstTaskID)
-    expect(() => RuntimePathIDLookup.task(Identifier.shortPath(firstTaskID))).toThrow("matched")
+    expect(RuntimePathIDLookup.task(Identifier.shortPath(firstTaskID))).toBe(firstTaskID)
+    expect(RuntimePathIDLookup.task(Identifier.shortPath(secondTaskID))).toBe(secondTaskID)
+    expect(() => RuntimePathIDLookup.task(Identifier.legacyShortPath(firstTaskID))).toThrow("matched")
   })
 })

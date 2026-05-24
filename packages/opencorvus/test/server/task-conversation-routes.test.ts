@@ -4,8 +4,10 @@ import { Event } from "../../src/engine/model"
 import { EngineProtocol } from "../../src/engine/protocol"
 import { Identifier } from "../../src/id/id"
 import { Instance } from "../../src/project/instance"
+import { __taskMessageWatermarkForTest } from "../../src/server/routes/orchestrator"
 import { Server } from "../../src/server/server"
 import { Session } from "../../src/session"
+import { MessageTable, PartTable } from "../../src/session/session.sql"
 import { SessionStatus } from "../../src/session/status"
 import { Message } from "../../src/session/message"
 import { Database, eq } from "../../src/storage/db"
@@ -14,6 +16,38 @@ import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
 Log.init({ print: false })
+
+function sseReader(response: Response): () => Promise<any> {
+  const reader = response.body?.getReader()
+  if (!reader) throw new Error("SSE response body missing")
+  const decoder = new TextDecoder()
+  let buffer = ""
+  return async () => {
+    while (true) {
+      let boundary = buffer.indexOf("\n\n")
+      let delimiterLength = 2
+      const crlfBoundary = buffer.indexOf("\r\n\r\n")
+      if (boundary < 0 || (crlfBoundary >= 0 && crlfBoundary < boundary)) {
+        boundary = crlfBoundary
+        delimiterLength = 4
+      }
+      if (boundary >= 0) {
+        const frame = buffer.slice(0, boundary)
+        buffer = buffer.slice(boundary + delimiterLength)
+        const data = frame
+          .split(/\r?\n/)
+          .filter((line) => line.startsWith("data:"))
+          .map((line) => line.slice("data:".length).trimStart())
+          .join("\n")
+        if (data) return JSON.parse(data)
+        continue
+      }
+      const next = await reader.read()
+      if (next.done) throw new Error("SSE stream ended before the expected event")
+      buffer += decoder.decode(next.value, { stream: true })
+    }
+  }
+}
 
 describe("task conversation routes", () => {
   afterEach(async () => {
@@ -99,6 +133,245 @@ describe("task conversation routes", () => {
         expect(event?.payload?.sessionID).toBe(session.id)
         expect(event?.emittedAt).toBeGreaterThan(0)
         expect(event?.emittedAt).toBe(event?.timestamp)
+      },
+    })
+  })
+
+  test("task message watermark follows nested build session message and part writes", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const taskID = Identifier.ascending("task")
+        const root = await Session.create({
+          kind: "root",
+          title: "watermark root",
+        })
+        const build = await Session.create({
+          kind: "build",
+          parentID: root.id,
+          title: "watermark build",
+        })
+        const now = Date.now()
+
+        Database.use((db) =>
+          db.insert(EngineTaskTable).values({
+            id: taskID,
+            project_id: Instance.project.id,
+            session_id: root.id,
+            source: "panel",
+            title: "watermark task",
+            request: "watermark task",
+            priority: "normal",
+            time_created: now,
+            time_updated: now,
+            time_started: now,
+          }).run(),
+        )
+
+        expect(__taskMessageWatermarkForTest(taskID)).toBe(0)
+
+        Database.use((db) => {
+          db.insert(MessageTable).values({
+            id: "msg_watermark",
+            session_id: build.id,
+            time_created: now + 1,
+            time_updated: now + 2,
+            data: {
+              role: "assistant",
+              agent: "build",
+              time: { created: now + 1 },
+            } as any,
+          }).run()
+          db.insert(PartTable).values({
+            id: "prt_watermark",
+            message_id: "msg_watermark",
+            session_id: build.id,
+            time_created: now + 3,
+            time_updated: now + 4,
+            data: {
+              type: "text",
+              text: "tail changed",
+            } as any,
+          }).run()
+        })
+
+        expect(__taskMessageWatermarkForTest(taskID)).toBe(now + 4)
+      },
+    })
+  })
+
+  test("GET /task/:taskID/events emits task.messages.changed for nested DB message writes", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const taskID = Identifier.ascending("task")
+        const root = await Session.create({
+          kind: "root",
+          title: "message change SSE root",
+        })
+        const build = await Session.create({
+          kind: "build",
+          parentID: root.id,
+          title: "message change SSE build",
+        })
+        const now = Date.now()
+
+        Database.use((db) =>
+          db.insert(EngineTaskTable).values({
+            id: taskID,
+            project_id: Instance.project.id,
+            session_id: root.id,
+            source: "panel",
+            title: "message change SSE task",
+            request: "message change SSE task",
+            priority: "normal",
+            time_created: now,
+            time_updated: now,
+            time_started: now,
+          }).run(),
+        )
+
+        const abort = new AbortController()
+        const timeout = setTimeout(() => abort.abort("timed out waiting for task.messages.changed"), 6_000)
+        try {
+          const response = await app.request(`/task/${taskID}/events`, {
+            headers: {
+              "x-opencorvus-directory": tmp.path,
+            },
+            signal: abort.signal,
+          })
+          expect(response.status).toBe(200)
+          const readEvent = sseReader(response)
+          const connected = await readEvent()
+          expect(connected.type).toBe("task.connected")
+
+          Database.use((db) => {
+            db.insert(MessageTable).values({
+              id: "msg_sse_watermark",
+              session_id: build.id,
+              time_created: now + 1,
+              time_updated: now + 2,
+              data: {
+                role: "assistant",
+                agent: "build",
+                time: { created: now + 1 },
+              } as any,
+            }).run()
+            db.insert(PartTable).values({
+              id: "prt_sse_watermark",
+              message_id: "msg_sse_watermark",
+              session_id: build.id,
+              time_created: now + 3,
+              time_updated: now + 4,
+              data: {
+                type: "text",
+                text: "SSE tail changed",
+              } as any,
+            }).run()
+          })
+
+          let changed: any
+          while (!changed) {
+            const event = await readEvent()
+            if (event.type === "task.messages.changed") changed = event
+          }
+          expect(changed.task_id).toBe(taskID)
+          expect(changed.payload?.taskID).toBe(taskID)
+          expect(changed.payload?.watermark).toBe(now + 4)
+        } finally {
+          clearTimeout(timeout)
+          abort.abort("test complete")
+        }
+      },
+    })
+  })
+
+  test("GET /task/:taskID/events reports DB message writes after the client's hydrate watermark", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const taskID = Identifier.ascending("task")
+        const root = await Session.create({
+          kind: "root",
+          title: "message watermark resume root",
+        })
+        const build = await Session.create({
+          kind: "build",
+          parentID: root.id,
+          title: "message watermark resume build",
+        })
+        const now = Date.now()
+
+        Database.use((db) =>
+          db.insert(EngineTaskTable).values({
+            id: taskID,
+            project_id: Instance.project.id,
+            session_id: root.id,
+            source: "panel",
+            title: "message watermark resume task",
+            request: "message watermark resume task",
+            priority: "normal",
+            time_created: now,
+            time_updated: now,
+            time_started: now,
+          }).run(),
+        )
+
+        Database.use((db) => {
+          db.insert(MessageTable).values({
+            id: "msg_resume_watermark",
+            session_id: build.id,
+            time_created: now + 1,
+            time_updated: now + 2,
+            data: {
+              role: "assistant",
+              agent: "build",
+              time: { created: now + 1 },
+            } as any,
+          }).run()
+          db.insert(PartTable).values({
+            id: "prt_resume_watermark",
+            message_id: "msg_resume_watermark",
+            session_id: build.id,
+            time_created: now + 3,
+            time_updated: now + 4,
+            data: {
+              type: "text",
+              text: "SSE resume tail changed",
+            } as any,
+          }).run()
+        })
+
+        const abort = new AbortController()
+        const timeout = setTimeout(() => abort.abort("timed out waiting for immediate task.messages.changed"), 6_000)
+        try {
+          const response = await app.request(
+            `/task/${taskID}/events?after_message_watermark=${encodeURIComponent(String(now))}`,
+            {
+              headers: {
+                "x-opencorvus-directory": tmp.path,
+              },
+              signal: abort.signal,
+            },
+          )
+          expect(response.status).toBe(200)
+          const readEvent = sseReader(response)
+          expect((await readEvent()).type).toBe("task.connected")
+          const changed = await readEvent()
+          expect(changed.type).toBe("task.messages.changed")
+          expect(changed.payload?.watermark).toBe(now + 4)
+        } finally {
+          clearTimeout(timeout)
+          abort.abort("test complete")
+        }
       },
     })
   })
@@ -232,6 +505,7 @@ describe("task conversation routes", () => {
           latestSequence: 3,
           complete: false,
           limit: 2,
+          sinceTimestamp: null,
         })
 
         const second = await app.request(`/task/${taskID}/conversation/events?after=2&until=3&limit=2`, {
@@ -250,6 +524,7 @@ describe("task conversation routes", () => {
           latestSequence: 3,
           complete: true,
           limit: 2,
+          sinceTimestamp: null,
         })
       },
     })

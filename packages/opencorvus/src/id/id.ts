@@ -111,10 +111,14 @@ export namespace Identifier {
     return prefixes[prefix] + "_" + timeBytes.toString("hex") + randomBase62(LENGTH - 12)
   }
 
+  export const SHORT_PATH_BODY_LENGTH = 12
+  export const LEGACY_SHORT_PATH_BODY_LENGTH = 8
+
   /**
-   * Returns prefix + '_' + the first 8 chars of the ID body for filesystem
-   * path segments. This is always derived from the full ID; database rows
-   * and API payloads keep the full identifier as the source of truth.
+   * Returns prefix + '_' + the full timestamp/counter body for filesystem
+   * path segments. The earlier 8-char form only kept the high timestamp
+   * bytes, so goals created in one planning burst could map to the same
+   * runtime directory and branch.
    */
   export function shortPath(fullID: string): string {
     const separator = fullID.lastIndexOf("_")
@@ -122,7 +126,16 @@ export namespace Identifier {
     const prefix = fullID.slice(0, separator)
     const body = fullID.slice(separator + 1)
     if (!body) throw new Error(`Invalid ID body for path segment: ${fullID}`)
-    return `${prefix}_${body.slice(0, 8)}`
+    return `${prefix}_${body.slice(0, SHORT_PATH_BODY_LENGTH)}`
+  }
+
+  export function legacyShortPath(fullID: string): string {
+    const separator = fullID.lastIndexOf("_")
+    if (separator <= 0) throw new Error(`Invalid ID for path segment: ${fullID}`)
+    const prefix = fullID.slice(0, separator)
+    const body = fullID.slice(separator + 1)
+    if (!body) throw new Error(`Invalid ID body for path segment: ${fullID}`)
+    return `${prefix}_${body.slice(0, LEGACY_SHORT_PATH_BODY_LENGTH)}`
   }
 
   /** Extract timestamp from an ascending ID. Does not work with descending IDs. */

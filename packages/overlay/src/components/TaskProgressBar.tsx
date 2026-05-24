@@ -9,8 +9,8 @@
 // The component intentionally renders no per-goal action buttons: it is
 // a status overview, not a control surface. Per-goal actions remain on
 // the right-pane GoalWorkflowList, and per-card rewind/copy stays on
-// each card. Bottom-line "click goal pill → scroll to its card" is the
-// only interaction; everything else is read-only.
+// each card. Bottom-line "click goal pill -> scroll to its card" is the
+// only per-goal interaction; the header exposes only a whole-strip fold.
 //
 // We do NOT mutate cardTreeStore here — spec 07 requires tree-writer
 // to be the single writer. This component is purely a derived view of
@@ -22,6 +22,7 @@ import { cardTreeStore } from "../store/card-tree";
 import { t } from "../utils/i18n";
 import { goalRevisionLabelFromIndexes } from "../utils/goal-label";
 import { goalState, type GoalState } from "../utils/goal-state";
+import { Icon } from "./Icon";
 
 /** Visible pill rows before the strip collapses behind a "+N more" toggle.
  *  Operators scanning a long task want the goal list visible at a glance, not
@@ -94,6 +95,7 @@ export function TaskProgressBar() {
   // natural layout would exceed 3 rows we expose a `+N more` toggle; under
   // the limit the toggle stays hidden and the strip is unconstrained.
   let pillsEl: HTMLDivElement | undefined;
+  const [folded, setFolded] = createSignal(false);
   const [expanded, setExpanded] = createSignal(false);
   const [hiddenCount, setHiddenCount] = createSignal(0);
   const [collapsedMaxHeight, setCollapsedMaxHeight] = createSignal<number | null>(null);
@@ -192,6 +194,7 @@ export function TaskProgressBar() {
         class="task-progress"
         role="region"
         aria-label={t("progress.heading")}
+        data-folded={folded() ? "true" : "false"}
         data-running={counts().running > 0 ? "true" : undefined}
       >
         <div class="task-progress__header">
@@ -204,6 +207,17 @@ export function TaskProgressBar() {
           })}>
             {counts().passed}/{counts().total}
           </span>
+          <button
+            type="button"
+            class="task-progress__fold"
+            aria-expanded={folded() ? "false" : "true"}
+            aria-controls="taskProgressPills"
+            title={folded() ? t("progress.expand_card") : t("progress.collapse_card")}
+            aria-label={folded() ? t("progress.expand_card") : t("progress.collapse_card")}
+            onClick={() => setFolded((value) => !value)}
+          >
+            <Icon name={folded() ? "chevron-down" : "chevron-up"} size={12} />
+          </button>
         </div>
         <div class="task-progress__bar" aria-hidden="true">
           <div
@@ -222,6 +236,7 @@ export function TaskProgressBar() {
           </Show>
         </div>
         <div
+          id="taskProgressPills"
           ref={pillsEl}
           class="task-progress__pills"
           data-collapsed={hiddenCount() > 0 && !expanded() ? "true" : "false"}

@@ -952,21 +952,39 @@ export const TaskConversationEventReplay = z.object({
   latestSequence: z.number().int().nonnegative(),
   complete: z.boolean(),
   limit: z.number().int().positive(),
+  sinceTimestamp: z.number().nullable().optional(),
+})
+
+export const TaskConversationHistoryState = z.object({
+  oldestTimestamp: z.number().nullable(),
+  oldestMessageID: z.string().nullable().optional(),
+  hasMore: z.boolean(),
+  limit: z.number().int().positive(),
 })
 
 export const TaskConversationHydration = z.object({
   lastSequence: z.number().int().nonnegative(),
+  messageWatermark: z.number().nonnegative(),
   board: TaskBoard,
   transcript: z.array(z.any()),
   timeline: z.array(z.any()),
   events: TaskEvent.array(),
   eventReplay: TaskConversationEventReplay,
+  history: TaskConversationHistoryState.optional(),
+  agentView: TaskConversationView.optional(),
   view: TaskConversationView,
 })
 
 export const TaskConversationEventPage = z.object({
   events: TaskEvent.array(),
   eventReplay: TaskConversationEventReplay,
+})
+
+export const TaskConversationHistoryPage = z.object({
+  transcript: z.array(z.any()),
+  timeline: z.array(z.any()),
+  view: TaskConversationView,
+  history: TaskConversationHistoryState,
 })
 
 export const AgentSessionAttachmentInput = z.object({

@@ -1,5 +1,6 @@
 import { boardStore } from "../store/board";
-import { cancelConversationReplay } from "./conversation";
+import { cancelConversationReplay, mergeLatestConversationTail } from "./conversation";
+import { resetSelectedLiveCursor } from "./selected-stream-cursor";
 import {
   recordConversationRecoveryAborted,
   recordConversationRecoveryFailed,
@@ -37,8 +38,14 @@ function cannotReplayWithoutFullRefresh(reason: string): boolean {
   const normalized = reason.trim().toLowerCase();
   return (
     normalized === "task.replay_expired" ||
+    (normalized.includes("replay expired") && !isLiveReplayExpiredReason(reason))
+  );
+}
+
+function isLiveReplayExpiredReason(reason: string): boolean {
+  const normalized = reason.trim().toLowerCase();
+  return (
     normalized === "task.live_replay_expired" ||
-    normalized.includes("replay expired") ||
     normalized.includes("live replay expired")
   );
 }
@@ -74,8 +81,16 @@ export async function recoverSelectedTaskConversation(
         `Selected task recovery refused full conversation refresh after load: ${reason}`,
       );
     }
-    cancelConversationReplay();
-    startSSE(taskID, sequence);
+    const replayLive = !isLiveReplayExpiredReason(reason);
+    if (!replayLive) resetSelectedLiveCursor();
+    if (replayLive) cancelConversationReplay();
+    startSSE(taskID, sequence, { replayLive });
+    if (!replayLive) {
+      void mergeLatestConversationTail(taskID).catch((error) => {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        console.error("[selected-task-recovery] live replay gap tail merge failed", error);
+      });
+    }
     recordConversationRecoverySucceeded({
       channel: "selected-task-recovery",
       reason,

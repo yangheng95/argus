@@ -39,6 +39,9 @@ const META_EVENT_NAMES = new Set<string>([
   // Selected-task live replay retention/epoch failure. Server-side control
   // frame from GET /task/:taskID/events, not a BusEvent.
   "task.live_replay_expired",
+  // DB-backed selected-task message watermark. Server-side control frame
+  // from GET /task/:taskID/events for message writes that bypass the in-memory bridge.
+  "task.messages.changed",
   // App-level SSE connect / heartbeat
   "server.connected",
   "server.heartbeat",
@@ -95,6 +98,7 @@ test("every event the overlay's OS-notification path listens to is a known wire 
     "task.cancelled",
     "task.replay_expired",
     "task.live_replay_expired",
+    "task.messages.changed",
     "review.stream.started",
     "review.stream.progress",
     "review.stream.chunk",

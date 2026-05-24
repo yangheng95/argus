@@ -1,7 +1,12 @@
 import { afterAll, afterEach, expect, test } from "bun:test";
 import { setBoardStore } from "../src/store/board";
 import { cardTreeStore } from "../src/store/card-tree";
-import { cancelConversationReplay, hydrateTaskConversation } from "../src/services/conversation";
+import { conversationAgentStore } from "../src/store/conversation-agents";
+import {
+  cancelConversationReplay,
+  hydrateTaskConversation,
+  loadOlderConversationHistory,
+} from "../src/services/conversation";
 import { replayTaskEventToTree } from "../src/services/events";
 import {
   __setHostTransportForTest,
@@ -183,4 +188,154 @@ test("hydrateTaskConversation waits for persisted event replay before returning 
 
   await expect(hydration).resolves.toBe(2);
   expect(cardTreeStore.cards["executor:session:ses_executor_replay:message:executor:msg:run_replay"]).toBeDefined();
+});
+
+test("hydrateTaskConversation renders the live tail first and prepends older history on demand", async () => {
+  resetWriter();
+  setBoardStore("selectedTaskID", "tsk_lazy");
+  const requests: TransportRequest[] = [];
+
+  const board = {
+    snapshotVersion: "board:lazy",
+    task: {
+      id: "tsk_lazy",
+      status: "active",
+      request: "restore conversation lazily",
+      sessionID: "ses_root",
+      time: { created: 1_776_000_000_000 },
+      attachments: [],
+    },
+    goalWorkflows: [],
+    interactions: [],
+  };
+  const oldMessage = {
+    info: {
+      id: "msg_old",
+      sessionID: "ses_old",
+      role: "assistant",
+      resolvedRole: "assistant",
+      channel: "assistant",
+      time: { created: 1_776_000_000_100 },
+    },
+    parts: [
+      { id: "part_old", sessionID: "ses_old", messageID: "msg_old", type: "text", text: "Older history." },
+    ],
+  };
+  const latestMessage = {
+    info: {
+      id: "msg_latest",
+      sessionID: "ses_root",
+      role: "assistant",
+      resolvedRole: "assistant",
+      channel: "assistant",
+      time: { created: 1_776_000_000_900 },
+    },
+    parts: [
+      { id: "part_latest", sessionID: "ses_root", messageID: "msg_latest", type: "text", text: "Latest tail." },
+    ],
+  };
+
+  __setHostTransportForTest(
+    fakeTransport((req) => {
+      requests.push(req);
+      if (req.path === "task/tsk_lazy/conversation") {
+        expect(req.query?.tail_limit).toBe("1");
+        return {
+          status: 200,
+          ok: true,
+          headers: {},
+          body: {
+            board,
+            transcript: [latestMessage],
+            timeline: [],
+            events: [],
+            view: {
+              sessions: [
+                {
+                  sessionID: "ses_root",
+                  stage: "assistant",
+                  messageIDs: ["msg_latest"],
+                  firstMessageTime: 1_776_000_000_900,
+                  lastMessageTime: 1_776_000_000_900,
+                  placement: "top_level",
+                },
+              ],
+              topLevelSessionIDs: ["ses_root"],
+            },
+            agentView: {
+              sessions: [
+                {
+                  sessionID: "ses_old",
+                  stage: "integrity",
+                  messageIDs: ["msg_old"],
+                  firstMessageTime: 1_776_000_000_100,
+                  lastMessageTime: 1_776_000_000_100,
+                  placement: "top_level",
+                },
+                {
+                  sessionID: "ses_root",
+                  stage: "assistant",
+                  messageIDs: ["msg_latest"],
+                  firstMessageTime: 1_776_000_000_900,
+                  lastMessageTime: 1_776_000_000_900,
+                  placement: "top_level",
+                },
+              ],
+              topLevelSessionIDs: ["ses_old", "ses_root"],
+            },
+            eventReplay: { cursor: 5, latestSequence: 5, complete: true, limit: 500 },
+            history: { oldestTimestamp: 1_776_000_000_900, oldestMessageID: "msg_latest", hasMore: true, limit: 1 },
+            lastSequence: 5,
+          },
+        };
+      }
+      if (req.path === "task/tsk_lazy/conversation/history") {
+        expect(req.query?.before).toBe("1776000000900");
+        expect(req.query?.before_id).toBe("msg_latest");
+        return {
+          status: 200,
+          ok: true,
+          headers: {},
+          body: {
+            transcript: [oldMessage],
+            timeline: [],
+            view: {
+              sessions: [
+                {
+                  sessionID: "ses_old",
+                  stage: "assistant",
+                  messageIDs: ["msg_old"],
+                  firstMessageTime: 1_776_000_000_100,
+                  lastMessageTime: 1_776_000_000_100,
+                  placement: "top_level",
+                },
+              ],
+              topLevelSessionIDs: ["ses_old"],
+            },
+            history: { oldestTimestamp: 1_776_000_000_100, oldestMessageID: "msg_old", hasMore: false, limit: 160 },
+          },
+        };
+      }
+      throw new Error(`unexpected request path: ${req.path}`);
+    }),
+  );
+
+  await expect(hydrateTaskConversation("tsk_lazy", { tailLimit: 1 })).resolves.toBe(5);
+  expect(cardTreeStore.order.filter((id) => id !== "ctx:user-request")).toEqual([
+    "assistant:session:ses_root:message:msg_latest",
+  ]);
+  expect(conversationAgentStore.records.map((record) => record.sessionID)).toEqual([
+    "ses_old",
+    "ses_root",
+  ]);
+
+  await expect(loadOlderConversationHistory("tsk_lazy")).resolves.toBe(true);
+  expect(cardTreeStore.order.filter((id) => id !== "ctx:user-request")).toEqual([
+    "assistant:session:ses_old:message:msg_old",
+    "assistant:session:ses_root:message:msg_latest",
+  ]);
+  expect(requests.map((req) => req.path)).toEqual([
+    "task/tsk_lazy/conversation",
+    "task/tsk_lazy/conversation/history",
+  ]);
 });

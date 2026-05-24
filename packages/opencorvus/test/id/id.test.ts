@@ -173,24 +173,35 @@ describe("Identifier.timestamp", () => {
 })
 
 describe("Identifier.shortPath", () => {
-  test("preserves prefix and returns prefix plus 8 body chars", () => {
+  test("preserves prefix and returns prefix plus 12 body chars", () => {
     const id = "tsk_e54c2d091001t145QP2P6xwoqi"
-    expect(Identifier.shortPath(id)).toBe("tsk_e54c2d09")
+    expect(Identifier.shortPath(id)).toBe("tsk_e54c2d091001")
   })
 
-  test("length is prefix length plus underscore plus 8 body chars", () => {
+  test("length is prefix length plus underscore plus 12 body chars", () => {
     const id = Identifier.create("tool", false, 1700000000000)
-    expect(Identifier.shortPath(id).length).toBe("tool".length + 9)
+    expect(Identifier.shortPath(id).length).toBe("tool".length + 13)
   })
 
   test("supports prefixes that contain underscores", () => {
     const id = Identifier.create("plan_node", false, 1700000000000)
     expect(Identifier.shortPath(id)).toStartWith("pln_node_")
-    expect(Identifier.shortPath(id).length).toBe("pln_node".length + 9)
+    expect(Identifier.shortPath(id).length).toBe("pln_node".length + 13)
   })
 
   test("is stable across repeated calls for the same ID", () => {
     const id = Identifier.create("session", false, 1700000000000)
     expect(Identifier.shortPath(id)).toBe(Identifier.shortPath(id))
+  })
+
+  test("distinguishes IDs created in the same millisecond", () => {
+    const timestamp = 1779604252000
+    const ids = Array.from({ length: 32 }, () => Identifier.create("goal", false, timestamp))
+    expect(new Set(ids.map(Identifier.shortPath)).size).toBe(ids.length)
+  })
+
+  test("retains the legacy 8-body form for runtime readers only", () => {
+    const id = "tsk_e54c2d091001t145QP2P6xwoqi"
+    expect(Identifier.legacyShortPath(id)).toBe("tsk_e54c2d09")
   })
 })

@@ -60,13 +60,8 @@
 .conversation-agent-rail {
   flex: 0 0 auto;
   width: 100%;
-  /* Allow the rail to grow from one row up to MAX_AGENT_RAIL_ROWS (3) before
-   * scrolling. min-height pins the single-row baseline so a 0–1 agent task
-   * doesn't shrink the chrome; max-height caps the take-over. Beyond the cap
-   * `__lanes` provides a vertical scrollbar (only triggers in extreme cases
-   * — typical tasks have 1–2 rows). */
+  height: calc(42px * var(--ui-scale));
   min-height: calc(42px * var(--ui-scale));
-  max-height: calc(122px * var(--ui-scale));
   display: flex;
   flex-direction: row;
   align-items: stretch;
@@ -104,30 +99,23 @@
 .conversation-agent-rail__lanes {
   flex: 1 1 auto;
   min-width: 0;
-  /* Wrap to the next visual row when the row fills horizontally instead of
-   * pushing the overflow into a single horizontal scrollbar. The parent
-   * `.conversation-agent-rail` caps the take-over via max-height; this
-   * container handles the rare scroll-fallback when even 3 rows aren't
-   * enough. */
-  overflow-x: hidden;
-  overflow-y: auto;
+  overflow-x: auto;
+  overflow-y: hidden;
   display: flex;
   flex-direction: row;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  align-content: flex-start;
-  row-gap: calc(4px * var(--ui-scale));
+  flex-wrap: nowrap;
+  align-items: center;
   column-gap: calc(6px * var(--ui-scale));
   padding: 0 calc(1px * var(--ui-scale));
   scrollbar-width: thin;
 }
 
 .conversation-agent-rail__lane {
+  flex: 0 0 auto;
   display: flex;
   flex-direction: row;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
-  row-gap: calc(4px * var(--ui-scale));
   column-gap: calc(6px * var(--ui-scale));
   min-width: 0;
 }
@@ -143,6 +131,7 @@
 
 .conversation-agent-rail__row {
   position: relative;
+  flex: 0 0 calc(38px * var(--ui-scale));
   display: grid;
   grid-template-columns: calc(34px * var(--ui-scale));
   align-items: center;
@@ -178,8 +167,6 @@
   width: var(--conversation-card-inline-size);
   max-width: 100%;
   align-self: stretch;
-  content-visibility: auto;
-  contain-intrinsic-size: auto calc(120px * var(--ui-scale));
 }
 
 .chat-scroll > .card[data-kind="message"][data-role="user"] {

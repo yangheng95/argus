@@ -1,5 +1,6 @@
 import { and, Database, eq, like } from "@/storage/db"
 import { EngineArtifactTable, EngineGoalTable, EngineTaskTable } from "@/engine/engine.sql"
+import { Identifier } from "@/id/id"
 import { SessionTable } from "@/session/session.sql"
 
 export type RuntimePathIDKind = "task" | "goal" | "run" | "session"
@@ -9,7 +10,7 @@ function isFullIDSegment(segment: string): boolean {
   if (separator <= 0 || separator === segment.length - 1) {
     throw new Error(`Invalid runtime ID path segment: ${segment}`)
   }
-  return segment.length - separator - 1 > 8
+  return segment.length - separator - 1 > Identifier.SHORT_PATH_BODY_LENGTH
 }
 
 function assertOne(kind: RuntimePathIDKind, segment: string, rows: Array<{ id: string }>): string {

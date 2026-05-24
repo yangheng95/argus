@@ -53,6 +53,7 @@ import { escapeHtml } from "./markdown";
  */
 const BOTTOM_TOLERANCE = 8;
 const PROGRAM_TOLERANCE = 2;
+const USER_SCROLL_INTENT_MS = 600;
 
 export interface AutoScrollOptions {
   isTracking: () => boolean;
@@ -75,6 +76,11 @@ export function setupAutoScroll(
   let disposed = false;
   let expectedTop = el.scrollTop;
   let programScrollTarget: number | null = null;
+  let userScrollIntentUntil = 0;
+
+  function markUserScrollIntent() {
+    userScrollIntentUntil = Date.now() + USER_SCROLL_INTENT_MS;
+  }
 
   function syncFollowLockAttribute() {
     el.dataset.followLock = opts.isTracking() ? "true" : "false";
@@ -105,11 +111,13 @@ export function setupAutoScroll(
       return;
     }
     const movedUp = delta < -PROGRAM_TOLERANCE;
+    const hasUserScrollIntent = Date.now() <= userScrollIntentUntil;
     expectedTop = nextTop;
     if (
       opts.isTracking() &&
       movedUp &&
-      bottomDistance > BOTTOM_TOLERANCE
+      bottomDistance > BOTTOM_TOLERANCE &&
+      hasUserScrollIntent
     ) {
       opts.onUserScrollUp();
       syncFollowLockAttribute();
@@ -157,7 +165,32 @@ export function setupAutoScroll(
     });
   }
 
+  function onWheel() {
+    markUserScrollIntent();
+  }
+
+  function onPointerDown() {
+    markUserScrollIntent();
+  }
+
+  function onKeyDown(event: KeyboardEvent) {
+    if (
+      event.key === "ArrowUp" ||
+      event.key === "ArrowDown" ||
+      event.key === "PageUp" ||
+      event.key === "PageDown" ||
+      event.key === "Home" ||
+      event.key === "End" ||
+      event.key === " "
+    ) {
+      markUserScrollIntent();
+    }
+  }
+
   el.addEventListener("scroll", onScroll, { passive: true });
+  el.addEventListener("wheel", onWheel, { passive: true });
+  el.addEventListener("pointerdown", onPointerDown, { passive: true });
+  el.addEventListener("keydown", onKeyDown);
 
   requestAnimationFrame(() => {
     if (disposed) return;
@@ -171,6 +204,9 @@ export function setupAutoScroll(
     cleanup: () => {
       disposed = true;
       el.removeEventListener("scroll", onScroll);
+      el.removeEventListener("wheel", onWheel);
+      el.removeEventListener("pointerdown", onPointerDown);
+      el.removeEventListener("keydown", onKeyDown);
       delete el.dataset.followLock;
     },
     contentChanged: scheduleFollowScroll,

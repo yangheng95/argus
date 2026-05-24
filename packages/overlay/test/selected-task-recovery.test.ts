@@ -16,7 +16,7 @@ const { routeSSEEvent, handleEventStreamEvent } = await import("../src/services/
 const { startSSE, stopSSE } = await import("../src/services/sse");
 const { __setHostTransportForTest } = await import("../src/services/host-transport");
 const { resetWriter } = await import("../src/services/tree-writer");
-const { resetSelectedLiveCursor } = await import("../src/services/selected-stream-cursor");
+const { markSelectedMessageWatermark, resetSelectedLiveCursor } = await import("../src/services/selected-stream-cursor");
 const {
   __resetConversationRecoveryDiagnosticsSinkForTest,
   __setConversationRecoveryDiagnosticsSinkForTest,
@@ -25,6 +25,7 @@ const {
 function fakeTransport(opts: {
   request: (req: TransportRequest) => Promise<TransportResponse<unknown>> | TransportResponse<unknown>;
   streams?: StreamOpenRequest[];
+  handlers?: { current?: StreamHandlers };
   closeCalls?: { count: number };
 }): HostTransport {
   return {
@@ -34,6 +35,7 @@ function fakeTransport(opts: {
     },
     openStream(input: StreamOpenRequest, handlers: StreamHandlers) {
       opts.streams?.push(input);
+      if (opts.handlers) opts.handlers.current = handlers;
       return {
         close() {
           if (opts.closeCalls) opts.closeCalls.count += 1;
@@ -48,6 +50,32 @@ function fakeTransport(opts: {
       return { unsubscribe() {} };
     },
   } satisfies HostTransport;
+}
+
+function conversationPayload(taskID: string, transcript: any[] = [], view = { sessions: [] as any[] }) {
+  return {
+    lastSequence: 5,
+    board: {
+      snapshotVersion: `board:${taskID}`,
+      task: {
+        id: taskID,
+        sessionID: `ses_${taskID}`,
+        status: "active",
+        request: "tail repair",
+        time: { created: 1_776_000_400_000 },
+        attachments: [],
+      },
+      goalWorkflows: [],
+      interactions: [],
+    },
+    transcript,
+    timeline: [],
+    events: [],
+    eventReplay: { cursor: 5, latestSequence: 5, complete: true, limit: 500, sinceTimestamp: null },
+    history: { oldestTimestamp: null, oldestMessageID: null, hasMore: false, limit: 160 },
+    view,
+    agentView: view,
+  };
 }
 
 afterEach(() => {
@@ -277,6 +305,152 @@ test("selected-task recovery refuses replay-expired full refresh and leaves the 
       source: "selected-task-recovery",
     }),
   ]);
+});
+
+test("selected-task recovery treats live replay expiry as persistent-sequence reconnect", async () => {
+  const streams: StreamOpenRequest[] = [];
+  const requests: string[] = [];
+  const closeCalls = { count: 0 };
+  __setHostTransportForTest(
+    fakeTransport({
+      streams,
+      closeCalls,
+      request(req) {
+        requests.push(req.path);
+        return { status: 200, ok: true, headers: {}, body: conversationPayload("tsk_live_expired") };
+      },
+    }),
+  );
+  setBoardStore("selectedTaskID", "tsk_live_expired");
+  setBoardStore("taskSequence", 5);
+  const treeEpoch = cardTreeStore.treeEpoch;
+
+  expect(routeSSEEvent({
+    type: "session.updated",
+    task_id: "tsk_live_expired",
+    sequence: 0,
+    live_sequence: 17,
+    live_epoch: 1776,
+    properties: { sessionID: "ses_live_expired" },
+  })).toBe(true);
+
+  await expect(recoverSelectedTaskConversation("task.live_replay_expired", "tsk_live_expired"))
+    .resolves.toBe(5);
+  await Promise.resolve();
+
+  expect(closeCalls.count).toBe(0);
+  expect(cardTreeStore.treeEpoch).toBe(treeEpoch);
+  expect(streams).toEqual([
+    { path: "task/tsk_live_expired/events", query: { after: "5" } },
+  ]);
+  expect(requests).toEqual(["task/tsk_live_expired/conversation"]);
+});
+
+test("task.messages.changed triggers non-reset tail merge for DB-backed message writes", async () => {
+  const requests: string[] = [];
+  __setHostTransportForTest(
+    fakeTransport({
+      request(req) {
+        requests.push(req.path);
+        return { status: 200, ok: true, headers: {}, body: conversationPayload("tsk_db_tail") };
+      },
+    }),
+  );
+  setBoardStore("selectedTaskID", "tsk_db_tail");
+  const treeEpoch = cardTreeStore.treeEpoch;
+
+  expect(routeSSEEvent({
+    type: "task.messages.changed",
+    task_id: "tsk_db_tail",
+    sequence: 0,
+    payload: { taskID: "tsk_db_tail", watermark: 1_779_000_000_000 },
+  })).toBe(true);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  expect(cardTreeStore.treeEpoch).toBe(treeEpoch);
+  expect(requests).toEqual(["task/tsk_db_tail/conversation"]);
+});
+
+test("selected task stream renders DB-backed task.messages.changed tail without resetting tree", async () => {
+  const streams: StreamOpenRequest[] = [];
+  const handlers: { current?: StreamHandlers } = {};
+  const requests: string[] = [];
+  const transcript = [
+    {
+      info: {
+        id: "msg_db_tail",
+        sessionID: "ses_db_tail",
+        role: "assistant",
+        resolvedRole: "assistant",
+        channel: "assistant",
+        agent: "assistant",
+        time: { created: 1_779_000_000_001 },
+      },
+      parts: [
+        {
+          id: "part_db_tail",
+          sessionID: "ses_db_tail",
+          messageID: "msg_db_tail",
+          type: "text",
+          text: "DB tail arrived without switching tasks.",
+        },
+      ],
+    },
+  ];
+  const view = {
+    sessions: [
+      {
+        sessionID: "ses_db_tail",
+        stage: "assistant",
+        messageIDs: ["msg_db_tail"],
+        firstMessageTime: 1_779_000_000_001,
+        lastMessageTime: 1_779_000_000_001,
+        placement: "top_level",
+      },
+    ],
+  };
+  __setHostTransportForTest(
+    fakeTransport({
+      streams,
+      handlers,
+      request(req) {
+        requests.push(req.path);
+        return { status: 200, ok: true, headers: {}, body: conversationPayload("tsk_db_tail_stream", transcript, view) };
+      },
+    }),
+  );
+  setBoardStore("selectedTaskID", "tsk_db_tail_stream");
+  setBoardStore("taskSequence", 12);
+  markSelectedMessageWatermark(1_779_000_000_000);
+  const treeEpoch = cardTreeStore.treeEpoch;
+
+  startSSE("tsk_db_tail_stream", 12);
+  expect(streams).toEqual([
+    {
+      path: "task/tsk_db_tail_stream/events",
+      query: {
+        after: "12",
+        after_live: "0",
+        after_message_watermark: "1779000000000",
+      },
+    },
+  ]);
+
+  handlers.current?.onEvent(JSON.stringify({
+    type: "task.messages.changed",
+    task_id: "tsk_db_tail_stream",
+    sequence: 0,
+    payload: { taskID: "tsk_db_tail_stream", watermark: 1_779_000_000_002 },
+  }));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  const card = cardTreeStore.cards["assistant:session:ses_db_tail:message:msg_db_tail"];
+  expect(cardTreeStore.treeEpoch).toBe(treeEpoch);
+  expect(requests).toEqual(["task/tsk_db_tail_stream/conversation"]);
+  expect(card).toBeDefined();
+  expect(card?.parts.some((part: any) =>
+    part.id === "part_db_tail" && String(part.text || "").includes("DB tail arrived without switching tasks."),
+  )).toBe(true);
 });
 
 test("stale scheduled recovery does not stop the newly selected task stream", async () => {

@@ -200,6 +200,7 @@ Thumbs.db
 .opencorvus/specs/
 .opencorvus-worktrees/
 .opencorvus-meta.json
+/artifacts/
 # Windows reserved device names — cross-platform LLMs sometimes write
 # 'taskkill ... 2>nul' or '... > nul' from inside a bash shell, which
 # (unlike cmd.exe) happily creates a real file literally named 'nul'.
@@ -236,15 +237,13 @@ lpt8
 lpt9
 `
 
-// Paths the orchestrator writes into each worktree for its own bookkeeping
-// (goal meta, intent bundle, merge-conflict notes, task trace dir). Static
-// project config may also live under `.opencorvus/`, so scratch protection must
-// stay scoped to runtime and legacy runtime subpaths. Once runtime files sneak
-// into git via `git add -A` they propagate via ff-only merges into main and
-// poison every future goal worktree that checks out from it — so the exclusion
-// must be both declarative (.gitignore) and curative (untrack any instance
-// already in the index).
-const OPENCORVUS_SCRATCH_PATHS = [
+// Paths OpenCorvus must keep out of ordinary source-control checkpoints.
+// Runtime scratch is host-owned bookkeeping. Root /artifacts/ is visual
+// evidence captured before a task starts; if hundreds of PNG/WEBM files enter
+// HEAD, every goal worktree checks out that payload and history becomes
+// dominated by non-source evidence. The ignore entry prevents new files from
+// being staged; the cleanup list removes matching paths already in the index.
+const OPENCORVUS_GIT_EXCLUDED_PATHS = [
   ProjectRuntimePaths.relativeRuntimeRoot(),
   ...ProjectRuntimePaths.legacyRuntimeRelativePaths,
   ".opencorvus/attachments",
@@ -252,6 +251,7 @@ const OPENCORVUS_SCRATCH_PATHS = [
   ".opencorvus/specs",
   ".opencorvus-worktrees",
   ".opencorvus-meta.json",
+  "artifacts",
 ]
 
 /** Ensure .gitignore exists so heavy directories (node_modules, dist) are
@@ -284,7 +284,7 @@ export async function ensureGitignore() {
     await Bun.write(`${dir}/.gitignore`, GITIGNORE_ESSENTIALS)
   }
 
-  await untrackOpencorvusScratch(dir)
+  await untrackOpencorvusGitExcludedPaths(dir)
 
   // Commit the .gitignore unconditionally — git's own staging diff is the
   // only source of truth for "is there actually something to commit". This
@@ -355,7 +355,7 @@ export async function ensureGitignore() {
  * (path not tracked, repo without history, etc.). A commit is only created
  * when at least one path was actually staged for removal.
  */
-async function untrackOpencorvusScratch(dir: string) {
+async function untrackOpencorvusGitExcludedPaths(dir: string) {
   // Each subprocess routes through the shared `git()` helper so the
   // 90s AbortController deadline applies. The earlier Bun `$` template
   // path had no timeout: a hanging `git commit` on Windows (NTFS file
@@ -364,7 +364,7 @@ async function untrackOpencorvusScratch(dir: string) {
   // 15+ minute freeze of every scheduler.poll, since `ensureGitignore`
   // is awaited inline before `commitDeliveryRound`'s main commit.
   let anyStaged = false
-  for (const target of OPENCORVUS_SCRATCH_PATHS) {
+  for (const target of OPENCORVUS_GIT_EXCLUDED_PATHS) {
     // `git ls-files --error-unmatch` only exits 0 when at least one tracked
     // entry matches, so we can skip the (noisier) `git rm` for paths that
     // were never committed in the first place.
@@ -379,7 +379,7 @@ async function untrackOpencorvusScratch(dir: string) {
       "-c", "user.name=opencorvus",
       "-c", "user.email=noreply@opencorvus.ai",
       "commit", "--no-gpg-sign", "--no-verify",
-      "-m", "chore: untrack orchestrator runtime paths",
+      "-m", "chore: untrack opencorvus ignored paths",
     ],
     { cwd: dir },
   )

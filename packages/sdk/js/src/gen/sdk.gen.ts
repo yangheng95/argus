@@ -239,6 +239,8 @@ import type {
   TaskConversationErrors,
   TaskConversationEventsErrors,
   TaskConversationEventsResponses,
+  TaskConversationHistoryErrors,
+  TaskConversationHistoryResponses,
   TaskConversationResponses,
   TaskCreateErrors,
   TaskCreateResponses,
@@ -4859,6 +4861,46 @@ export class List extends HeyApiClient {
 
 export class Conversation extends HeyApiClient {
   /**
+   * Page older task conversation transcript
+   *
+   * Return a bounded transcript/timeline slice older than a timestamp so the overlay can prepend history without blocking the live tail.
+   */
+  public history<ThrowOnError extends boolean = false>(
+    parameters: {
+      taskID: string
+      directory?: string
+      before: number
+      before_id?: string
+      limit?: number
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "taskID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "before" },
+            { in: "query", key: "before_id" },
+            { in: "query", key: "limit" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      TaskConversationHistoryResponses,
+      TaskConversationHistoryErrors,
+      ThrowOnError
+    >({
+      url: "/task/{taskID}/conversation/history",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
    * Page task conversation replay events
    *
    * Return a bounded protocol_event slice for rebuilding task conversation history after the initial hydrate.
@@ -4870,6 +4912,7 @@ export class Conversation extends HeyApiClient {
       after?: number
       until?: number
       limit?: number
+      since?: number
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -4883,6 +4926,7 @@ export class Conversation extends HeyApiClient {
             { in: "query", key: "after" },
             { in: "query", key: "until" },
             { in: "query", key: "limit" },
+            { in: "query", key: "since" },
           ],
         },
       ],
@@ -5644,6 +5688,7 @@ export class Task2 extends HeyApiClient {
     parameters: {
       taskID: string
       directory?: string
+      tail_limit?: number
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -5654,6 +5699,7 @@ export class Task2 extends HeyApiClient {
           args: [
             { in: "path", key: "taskID" },
             { in: "query", key: "directory" },
+            { in: "query", key: "tail_limit" },
           ],
         },
       ],

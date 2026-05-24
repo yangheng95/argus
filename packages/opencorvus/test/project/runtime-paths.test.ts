@@ -46,13 +46,18 @@ describe("ProjectRuntimePaths short ID segments", () => {
 
     expect(ProjectRuntimePaths.tracePathReadCandidatesFromRuntimeRoot(runtimeRoot, taskID, sessionID)).toEqual([
       path.join(runtimeRoot, "tasks", Identifier.shortPath(taskID), "sessions", Identifier.shortPath(sessionID), "trace.jsonl"),
+      path.join(runtimeRoot, "tasks", Identifier.shortPath(taskID), "sessions", Identifier.legacyShortPath(sessionID), "trace.jsonl"),
       path.join(runtimeRoot, "tasks", Identifier.shortPath(taskID), "sessions", sessionID, "trace.jsonl"),
+      path.join(runtimeRoot, "tasks", Identifier.legacyShortPath(taskID), "sessions", Identifier.shortPath(sessionID), "trace.jsonl"),
+      path.join(runtimeRoot, "tasks", Identifier.legacyShortPath(taskID), "sessions", Identifier.legacyShortPath(sessionID), "trace.jsonl"),
+      path.join(runtimeRoot, "tasks", Identifier.legacyShortPath(taskID), "sessions", sessionID, "trace.jsonl"),
       path.join(runtimeRoot, "tasks", taskID, "sessions", Identifier.shortPath(sessionID), "trace.jsonl"),
+      path.join(runtimeRoot, "tasks", taskID, "sessions", Identifier.legacyShortPath(sessionID), "trace.jsonl"),
       path.join(runtimeRoot, "tasks", taskID, "sessions", sessionID, "trace.jsonl"),
     ])
   })
 
-  test("goal worktree directory plus branch naming saves at least 60 chars", () => {
+  test("goal worktree directory plus branch naming still materially shortens paths", () => {
     const root = "C:\\repo"
     const taskID = Identifier.create("task", false, 1700000000000)
     const goalID = Identifier.create("goal", false, 1700000000001)
@@ -63,6 +68,19 @@ describe("ProjectRuntimePaths short ID segments", () => {
     const newDirectory = ProjectRuntimePaths.worktreeDir(root, taskID, goalID, runID)
     const newBranch = ProjectRuntimePaths.worktreeBranch({ taskID, goalID, runID })
 
-    expect((oldDirectory.length + oldBranch.length) - (newDirectory.length + newBranch.length)).toBeGreaterThanOrEqual(60)
+    expect((oldDirectory.length + oldBranch.length) - (newDirectory.length + newBranch.length)).toBeGreaterThanOrEqual(40)
+  })
+
+  test("goal worktree paths do not collide for same-millisecond goal IDs", () => {
+    const root = "C:\\repo"
+    const taskID = Identifier.create("task", false, 1779604252000)
+    const runID = Identifier.create("run", false, 1779604253000)
+    const goals = Array.from({ length: 32 }, () => Identifier.create("goal", false, 1779604254000))
+
+    const directories = goals.map((goalID) => ProjectRuntimePaths.worktreeDir(root, taskID, goalID, runID))
+    const branches = goals.map((goalID) => ProjectRuntimePaths.worktreeBranch({ taskID, goalID, runID }))
+
+    expect(new Set(directories).size).toBe(goals.length)
+    expect(new Set(branches).size).toBe(goals.length)
   })
 })

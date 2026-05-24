@@ -26,6 +26,7 @@ import {
   TaskBoard,
   TaskBrief,
   TaskConversationEventPage,
+  TaskConversationHistoryPage,
   TaskConversationHydration,
   TaskMessageInput,
   TaskMessageResult,
@@ -48,12 +49,13 @@ import { SessionPrompt } from "@/session/prompt"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
 import { Log } from "@/util/log"
-import { sessionGoalID, sessionParentID, sessionRole, taskIDForSession, taskSession } from "@/orchestrator/task-event"
+import { sessionGoalID, sessionParentID, sessionRole, taskIDForSession, taskMessageWatermark, taskSession } from "@/orchestrator/task-event"
 import { ensureTaskMessageProtocolBridge, overlayMeta } from "@/orchestrator/protocol/message-bridge"
 import { DIRECT_REPLY_AGENT_KINDS } from "@/orchestrator/direct-reply"
 import { BusEvent } from "@/bus/bus-event"
 const log = Log.create({ service: "server.routes.orchestrator" })
 const CONVERSATION_EVENT_PAGE_LIMIT = 500
+const TASK_MESSAGE_CHANGE_POLL_MS = 2_000
 
 export const TaskListEvent = z.object({
   type: z.string(),
@@ -66,6 +68,20 @@ const ConversationEventPageQuery = z.object({
   after: z.coerce.number().int().nonnegative().default(0),
   until: z.coerce.number().int().nonnegative().optional(),
   limit: z.coerce.number().int().min(1).max(2000).default(CONVERSATION_EVENT_PAGE_LIMIT),
+  since: z.coerce.number().positive().optional(),
+})
+
+const CONVERSATION_TAIL_MESSAGE_LIMIT = 240
+const CONVERSATION_HISTORY_PAGE_LIMIT = 160
+
+const ConversationHydrationQuery = z.object({
+  tail_limit: z.coerce.number().int().min(1).max(2000).optional(),
+})
+
+const ConversationHistoryQuery = z.object({
+  before: z.coerce.number().positive(),
+  before_id: z.string().optional(),
+  limit: z.coerce.number().int().min(1).max(1000).default(CONVERSATION_HISTORY_PAGE_LIMIT),
 })
 
 const ReorderTaskQueueInput = z.object({
@@ -436,6 +452,7 @@ export const EngineRoutes = lazy(() =>
         const afterLiveEpoch = afterLiveEpochRaw === undefined
           ? undefined
           : Math.max(0, parseInt(afterLiveEpochRaw, 10) || 0)
+        const afterMessageWatermark = Math.max(0, parseInt(c.req.query("after_message_watermark") ?? "0", 10) || 0)
         c.header("X-Accel-Buffering", "no")
         c.header("X-Content-Type-Options", "nosniff")
         return streamSSE(c, async (stream) => {
@@ -446,12 +463,29 @@ export const EngineRoutes = lazy(() =>
           // without any in-process state restoration.
           let cursor = after
           let liveCursor = afterLive
+          let messageWatermark = afterMessageWatermark
           let ready = false
           const buffered: Array<{ sequence: number; liveSequence: number; data: string }> = []
           let writes = Promise.resolve()
           const writeData = (data: string) => {
             writes = writes.then(() => stream.writeSSE({ data }))
             return writes
+          }
+          const emitMessageChange = async (watermark: number) => {
+            messageWatermark = watermark
+            const data = JSON.stringify(taskEvent(taskID, {
+              type: "task.messages.changed",
+              properties: {
+                taskID,
+                watermark,
+                summary: "Task message append/update tables changed",
+              },
+            }))
+            await writeData(data)
+          }
+          const markLiveMessageSeen = (event: ReturnType<typeof ProtocolStore.listTaskEventsAfter>[number]) => {
+            if (!isMessageTaskEvent(event.type)) return
+            messageWatermark = Math.max(messageWatermark, taskMessageWatermark(taskID))
           }
           const enqueueProtocolEvent = (event: ReturnType<typeof ProtocolStore.listTaskEventsAfter>[number]) => {
             if (!event.taskID || event.taskID !== taskID) return
@@ -461,6 +495,7 @@ export const EngineRoutes = lazy(() =>
             if (!isEphemeral && event.sequence <= cursor) return
             if (isEphemeral && (event.liveSequence ?? 0) <= liveCursor) return
             const data = JSON.stringify(protocolTaskEvent(event))
+            markLiveMessageSeen(event)
             if (!ready) {
               buffered.push({ sequence: event.sequence, liveSequence: event.liveSequence ?? 0, data })
               return
@@ -490,6 +525,7 @@ export const EngineRoutes = lazy(() =>
             }
             for (const event of liveReplay.events) {
               liveCursor = Math.max(liveCursor, event.liveSequence ?? 0)
+              markLiveMessageSeen(event)
               await writeData(JSON.stringify(protocolTaskEvent(event)))
             }
           }
@@ -513,6 +549,10 @@ export const EngineRoutes = lazy(() =>
             },
           }))
           await writeData(connData)
+          const initialMessageWatermark = taskMessageWatermark(taskID)
+          if (initialMessageWatermark > messageWatermark) {
+            await emitMessageChange(initialMessageWatermark)
+          }
           const heartbeat = setInterval(() => {
             const data = JSON.stringify(taskEvent(taskID, {
               type: "task.heartbeat",
@@ -523,9 +563,15 @@ export const EngineRoutes = lazy(() =>
             }))
             void writeData(data)
           }, 10_000)
+          const messageChangePoll = setInterval(() => {
+            const nextWatermark = taskMessageWatermark(taskID)
+            if (nextWatermark <= messageWatermark) return
+            void emitMessageChange(nextWatermark)
+          }, TASK_MESSAGE_CHANGE_POLL_MS)
           await new Promise<void>((resolve) => {
             stream.onAbort(() => {
               clearInterval(heartbeat)
+              clearInterval(messageChangePoll)
               stop()
               resolve()
             })
@@ -555,8 +601,10 @@ export const EngineRoutes = lazy(() =>
         },
       }),
       validator("param", z.object({ taskID: Task.shape.id })),
+      validator("query", ConversationHydrationQuery),
       async (c) => {
         const taskID = c.req.valid("param").taskID
+        const query = c.req.valid("query")
         const rewindCursor = taskRewindCursor(taskID)
         const [board, transcript, timeline] = await Promise.all([
           EngineService.getBoard(taskID, { sync: true }),
@@ -577,6 +625,11 @@ export const EngineRoutes = lazy(() =>
         }
         const filteredTranscript = filterByCursor(transcript)
         const filteredTimeline = filterByCursor(timeline)
+        const tailLimit = query.tail_limit ?? CONVERSATION_TAIL_MESSAGE_LIMIT
+        const messageWatermark = taskMessageWatermark(taskID)
+        const historyWindow = __conversationHistoryWindowForTest(filteredTranscript, filteredTimeline, {
+          tailLimit,
+        })
         const latestSequence = Number(board.lastSequence)
         if (!Number.isInteger(latestSequence) || latestSequence < 0) {
           throw new Error(`conversation hydrate board.lastSequence invalid: ${JSON.stringify(board.lastSequence)}`)
@@ -586,16 +639,80 @@ export const EngineRoutes = lazy(() =>
           until: latestSequence,
           limit: CONVERSATION_EVENT_PAGE_LIMIT,
           rewindCursor,
+          sinceTimestamp: historyWindow.history.hasMore
+            ? historyWindow.history.oldestTimestamp
+            : null,
         })
-        const view = projectConversationView(board, filteredTranscript)
+        const view = projectConversationView(board, historyWindow.transcript)
+        const agentView = historyWindow.history.hasMore
+          ? projectConversationView(board, filteredTranscript)
+          : view
         return c.json({
           lastSequence: latestSequence,
+          messageWatermark,
           board,
-          transcript: filteredTranscript,
-          timeline: filteredTimeline,
+          transcript: historyWindow.transcript,
+          timeline: historyWindow.timeline,
           events: eventPage.events,
           eventReplay: eventPage.eventReplay,
+          history: historyWindow.history,
+          agentView,
           view,
+        })
+      },
+    )
+    .get(
+      "/task/:taskID/conversation/history",
+      describeRoute({
+        summary: "Page older task conversation transcript",
+        description:
+          "Return a bounded transcript/timeline slice older than a timestamp so the overlay can prepend history without blocking the live tail.",
+        operationId: "task.conversation.history",
+        responses: {
+          200: {
+            description: "Task conversation history page",
+            content: {
+              "application/json": {
+                schema: resolver(TaskConversationHistoryPage),
+              },
+            },
+          },
+          ...errors(404),
+        },
+      }),
+      validator("param", z.object({ taskID: Task.shape.id })),
+      validator("query", ConversationHistoryQuery),
+      async (c) => {
+        const taskID = c.req.valid("param").taskID
+        const query = c.req.valid("query")
+        const rewindCursor = taskRewindCursor(taskID)
+        const [board, transcript, timeline] = await Promise.all([
+          EngineService.getBoard(taskID, { sync: false }),
+          loadTaskTranscript(taskID),
+          Promise.resolve(ControlTimeline.list({ taskID })),
+        ])
+        const filterByCursor = <T extends { info?: { time?: { created?: number } }; timestamp?: number }>(items: T[]) => {
+          if (rewindCursor == null) return items
+          return items.filter((item) => {
+            const created =
+              typeof item?.timestamp === "number"
+                ? item.timestamp
+                : typeof item?.info?.time?.created === "number"
+                  ? item.info.time.created
+                  : undefined
+            return created == null || created <= rewindCursor
+          })
+        }
+        const page = __conversationHistoryBeforeForTest(
+          filterByCursor(transcript),
+          filterByCursor(timeline),
+          { before: query.before, beforeID: query.before_id, limit: query.limit },
+        )
+        return c.json({
+          transcript: page.transcript,
+          timeline: page.timeline,
+          view: projectConversationView(board, page.transcript),
+          history: page.history,
         })
       },
     )
@@ -629,6 +746,7 @@ export const EngineRoutes = lazy(() =>
           until: query.until,
           limit: query.limit,
           rewindCursor: taskRewindCursor(taskID),
+          sinceTimestamp: query.since ?? null,
         }))
       },
     )
@@ -1399,6 +1517,134 @@ function taskEvent(taskID: string, event: { type: string; properties: Record<str
   }
 }
 
+function isMessageTaskEvent(type: string): boolean {
+  return (
+    type === "message.updated" ||
+    type === "message.part.updated" ||
+    type === "message.part.delta" ||
+    type === "message.removed" ||
+    type === "message.part.removed"
+  )
+}
+
+function conversationItemTimestamp(item: any): number {
+  const value =
+    typeof item?.timestamp === "number"
+      ? item.timestamp
+      : typeof item?.info?.time?.created === "number"
+        ? item.info.time.created
+        : 0
+  return Number.isFinite(value) ? value : 0
+}
+
+export const __taskMessageWatermarkForTest = taskMessageWatermark
+
+function conversationItemSessionID(item: any): string {
+  return String(item?.info?.sessionID || "")
+}
+
+function conversationItemID(item: any): string {
+  return String(item?.info?.id || item?.id || "")
+}
+
+function compareConversationItems(left: any, right: any): number {
+  const timeDiff = conversationItemTimestamp(left) - conversationItemTimestamp(right)
+  if (timeDiff !== 0) return timeDiff
+  return conversationItemID(left).localeCompare(conversationItemID(right))
+}
+
+function isBeforeConversationCursor(item: any, cursor: { before: number; beforeID?: string }): boolean {
+  const timestamp = conversationItemTimestamp(item)
+  if (timestamp < cursor.before) return true
+  if (timestamp > cursor.before) return false
+  if (!cursor.beforeID) return false
+  const id = conversationItemID(item)
+  return !!id && id < cursor.beforeID
+}
+
+function expandWindowStartToSessionBoundary(items: any[], start: number): number {
+  if (start <= 0 || start >= items.length) return Math.max(0, start)
+  const sessionID = conversationItemSessionID(items[start])
+  if (!sessionID) return start
+  for (let index = 0; index < start; index += 1) {
+    if (conversationItemSessionID(items[index]) === sessionID) return index
+  }
+  return start
+}
+
+function conversationHistoryState(
+  allTranscript: any[],
+  visibleTranscript: any[],
+  limit: number,
+) {
+  const oldestItem = visibleTranscript[0] ?? null
+  const oldest = oldestItem ? conversationItemTimestamp(oldestItem) : null
+  const oldestMessageID = oldestItem ? conversationItemID(oldestItem) || null : null
+  return {
+    oldestTimestamp: oldest,
+    oldestMessageID,
+    hasMore: oldestItem != null && allTranscript.some((item) =>
+      compareConversationItems(item, oldestItem) < 0
+    ),
+    limit,
+  }
+}
+
+export function __conversationHistoryWindowForTest(
+  transcript: any[],
+  timeline: any[],
+  input: { tailLimit: number },
+) {
+  const orderedTranscript = [...transcript].sort(
+    compareConversationItems,
+  )
+  const start = expandWindowStartToSessionBoundary(
+    orderedTranscript,
+    Math.max(0, orderedTranscript.length - input.tailLimit),
+  )
+  const visibleTranscript = orderedTranscript.slice(start)
+  const oldestTimestamp = visibleTranscript.length > 0
+    ? conversationItemTimestamp(visibleTranscript[0])
+    : null
+  const visibleTimeline = oldestTimestamp == null
+    ? [...timeline]
+    : timeline.filter((item) => conversationItemTimestamp(item) >= oldestTimestamp)
+  return {
+    transcript: visibleTranscript,
+    timeline: visibleTimeline,
+    history: conversationHistoryState(orderedTranscript, visibleTranscript, input.tailLimit),
+  }
+}
+
+export function __conversationHistoryBeforeForTest(
+  transcript: any[],
+  timeline: any[],
+  input: { before: number; beforeID?: string; limit: number },
+) {
+  const olderTranscript = [...transcript]
+    .filter((item) => isBeforeConversationCursor(item, { before: input.before, beforeID: input.beforeID }))
+    .sort(compareConversationItems)
+  const start = expandWindowStartToSessionBoundary(
+    olderTranscript,
+    Math.max(0, olderTranscript.length - input.limit),
+  )
+  const visibleTranscript = olderTranscript.slice(start)
+  const oldestTimestamp = visibleTranscript.length > 0
+    ? conversationItemTimestamp(visibleTranscript[0])
+    : null
+  const visibleTimeline = oldestTimestamp == null
+    ? []
+    : timeline.filter((item) => {
+        const created = conversationItemTimestamp(item)
+        return created >= oldestTimestamp && created < input.before
+      })
+  return {
+    transcript: visibleTranscript,
+    timeline: visibleTimeline,
+    history: conversationHistoryState(olderTranscript, visibleTranscript, input.limit),
+  }
+}
+
 async function loadTaskTranscript(taskID: string) {
   const task = requireTask(taskID)
   const rootSessionID = task.session_id
@@ -1434,7 +1680,13 @@ async function loadTaskTranscript(taskID: string) {
 
 function conversationEventPage(
   taskID: string,
-  input: { after: number; until?: number; limit: number; rewindCursor: number | null },
+  input: {
+    after: number;
+    until?: number;
+    limit: number;
+    rewindCursor: number | null;
+    sinceTimestamp?: number | null;
+  },
 ) {
   const latestSequence = typeof input.until === "number"
     ? input.until
@@ -1446,7 +1698,10 @@ function conversationEventPage(
   const cursor = rows.reduce((max, event) => Math.max(max, event.sequence), input.after)
   const events = rows
     .map(protocolTaskEvent)
-    .filter((event) => input.rewindCursor == null || event.timestamp <= input.rewindCursor)
+    .filter((event) =>
+      (input.rewindCursor == null || event.timestamp <= input.rewindCursor)
+      && (input.sinceTimestamp == null || event.timestamp >= input.sinceTimestamp)
+    )
   return {
     events,
     eventReplay: {
@@ -1454,6 +1709,7 @@ function conversationEventPage(
       latestSequence,
       complete: cursor >= latestSequence || rows.length === 0,
       limit: input.limit,
+      sinceTimestamp: input.sinceTimestamp ?? null,
     },
   }
 }
