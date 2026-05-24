@@ -2,16 +2,16 @@ import { expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 
-test("ConversationAgentRail reads workflow through the projection and lane helper", () => {
+test("ConversationAgentRail reads workflow through the projection and renders a chronological strip", () => {
   const source = readFileSync(join(import.meta.dir, "../src/components/ConversationAgentRail.tsx"), "utf8")
   expect(source).toContain("buildAgentWorkflow(")
-  expect(source).toContain("buildAgentWorkflowLanes")
+  expect(source).toContain("mergeAgentRecords")
   expect(source).toContain("Index")
   expect(source).not.toContain("compactAgentWorkflowLanesForNarrowRail")
   expect(source).not.toContain("LaneAvatarStack")
   expect(source).not.toContain("conversation-agent-rail__stack")
-  expect(source).not.toContain("<For each={lanes()}>")
-  expect(source).not.toContain("<For each={lane.records}>")
+  expect(source).not.toContain("buildAgentWorkflowLanes")
+  expect(source).not.toContain("<For each={records()}>")
   expect(source).not.toContain("payload.report")
   expect(source).not.toContain("event.kind")
 })
@@ -45,6 +45,10 @@ test("ConversationAgentRail stays a fixed narrow bottom strip", () => {
   expect(css).not.toContain("data-wide")
   expect(css).toContain("flex-direction: row")
   expect(css).toContain("overflow-x: auto")
+  expect(css).toContain("padding: calc(4px * var(--ui-scale)) calc(10px * var(--ui-scale))")
+  expect(css).toContain("scrollbar-width: none")
+  expect(css).toContain(".conversation-agent-rail__lanes::-webkit-scrollbar")
+  expect(css).not.toContain("scrollbar-width: thin")
   expect(css).toMatch(/\.conversation-agent-rail__lanes\s*\{[^}]*flex-wrap:\s*nowrap/)
   expect(css).toMatch(/\.conversation-agent-rail__lane\s*\{[^}]*flex-wrap:\s*nowrap/)
   expect(css).toContain(".conversation-agent-rail .chat-avatar")
@@ -55,8 +59,7 @@ test("ConversationAgentRail stays a fixed narrow bottom strip", () => {
 test("ConversationAgentRail keeps avatar DOM stable across workflow refreshes", () => {
   const source = readFileSync(join(import.meta.dir, "../src/components/ConversationAgentRail.tsx"), "utf8")
   const css = readFileSync(join(import.meta.dir, "../src/styles/surfaces/conversation.css"), "utf8")
-  expect(source).toContain("<Index each={lanes()}>")
-  expect(source).toContain("<Index each={lane().records}>")
+  expect(source).toContain("<Index each={records()}>")
   expect(source).toContain("record: Accessor<AgentWorkflowRecord>")
   expect(css).toContain(".conversation-agent-rail .chat-avatar")
   expect(css).toContain("animation: none;")
@@ -78,8 +81,8 @@ test("ConversationAgentRail has no expanded detail surface", () => {
 test("ConversationAgentRail hides the bottom strip when there are no workflow lanes", () => {
   const source = readFileSync(join(import.meta.dir, "../src/components/ConversationAgentRail.tsx"), "utf8")
   const css = readFileSync(join(import.meta.dir, "../src/styles/surfaces/conversation.css"), "utf8")
-  expect(source).toContain("const hasLanes = createMemo(() => lanes().length > 0)")
-  expect(source).toContain("<Show when={hasLanes()}>")
+  expect(source).toContain("const hasRecords = createMemo(() => records().length > 0)")
+  expect(source).toContain("<Show when={hasRecords()}>")
   expect(source).not.toContain("conversation-agent-rail__empty")
   expect(css).toContain(".conversation-agent-rail-host:empty")
   expect(css).toContain("display: none;")

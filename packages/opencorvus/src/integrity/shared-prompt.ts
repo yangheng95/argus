@@ -309,6 +309,8 @@ function renderFullAttemptMarkdown(
     lines.push("", "Blocking findings:")
     for (const finding of attempt.blockingFindings) {
       lines.push(`- ${finding.id}: ${finding.title}`)
+      if (finding.fingerprint) lines.push(`  fingerprint: ${finding.fingerprint}`)
+      if (finding.canonicalSymptom) lines.push(`  canonical symptom: ${finding.canonicalSymptom}`)
       if (finding.description) {
         lines.push(
           `  description: ${clipText(
@@ -322,6 +324,7 @@ function renderFullAttemptMarkdown(
           `  repair: ${clipText(sanitize(finding.repair, "finding_repair", "block"), budget.findingRepairCharCap)}`,
         )
       }
+      if (finding.verify?.length > 0) lines.push(`  verify: ${finding.verify.join(" | ")}`)
       if (finding.filePaths.length > 0) lines.push(`  files: ${finding.filePaths.join(", ")}`)
       if (finding.requirementIDs.length > 0) lines.push(`  requirements: ${finding.requirementIDs.join(", ")}`)
       if (finding.specIDs.length > 0) lines.push(`  specs: ${finding.specIDs.join(", ")}`)
@@ -331,6 +334,8 @@ function renderFullAttemptMarkdown(
     lines.push("", "All prior findings for severity stability:")
     for (const finding of attempt.findings) {
       lines.push(`- [${finding.severity}] ${finding.id}: ${finding.title}`)
+      if (finding.fingerprint) lines.push(`  fingerprint: ${finding.fingerprint}`)
+      if (finding.canonicalSymptom) lines.push(`  canonical symptom: ${finding.canonicalSymptom}`)
       if (finding.description) {
         lines.push(
           `  description: ${clipText(
@@ -344,6 +349,7 @@ function renderFullAttemptMarkdown(
           `  repair: ${clipText(sanitize(finding.repair, "finding_repair", "block"), budget.findingRepairCharCap)}`,
         )
       }
+      if (finding.verify?.length > 0) lines.push(`  verify: ${finding.verify.join(" | ")}`)
       if (finding.filePaths.length > 0) lines.push(`  files: ${finding.filePaths.join(", ")}`)
       if (finding.requirementIDs.length > 0) lines.push(`  requirements: ${finding.requirementIDs.join(", ")}`)
       if (finding.specIDs.length > 0) lines.push(`  specs: ${finding.specIDs.join(", ")}`)
@@ -355,6 +361,9 @@ function renderFullAttemptMarkdown(
       lines.push(
         `- ${repair.id}: ${clipText(sanitize(repair.description, "finding_repair", "block"), budget.findingRepairCharCap)}`,
       )
+      if (repair.fingerprint) lines.push(`  fingerprint: ${repair.fingerprint}`)
+      if (repair.canonicalSymptom) lines.push(`  canonical symptom: ${repair.canonicalSymptom}`)
+      if (repair.verify?.length > 0) lines.push(`  verify: ${repair.verify.join(" | ")}`)
       if (repair.filePaths.length > 0) lines.push(`  files: ${repair.filePaths.join(", ")}`)
     }
   }

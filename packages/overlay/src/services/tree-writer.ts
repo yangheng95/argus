@@ -1351,6 +1351,8 @@ function handleIntegrityCompleted(event: any): void {
       id: String(item?.id || ""),
       severity: item?.severity === "advisory" ? "advisory" : "blocking",
       verdictImpact: item?.verdictImpact === "pass" ? "pass" : item?.verdictImpact === "concerns" ? "concerns" : "needs_correction",
+      fingerprint: typeof item?.fingerprint === "string" ? item.fingerprint : undefined,
+      canonicalSymptom: typeof item?.canonicalSymptom === "string" ? item.canonicalSymptom : undefined,
       title: String(item?.title || ""),
       description: String(item?.description || ""),
       evidence: stringArray(item?.evidence),
@@ -1358,16 +1360,31 @@ function handleIntegrityCompleted(event: any): void {
       requirementIDs: stringArray(item?.requirementIDs),
       specIDs: stringArray(item?.specIDs),
       filePaths: stringArray(item?.filePaths),
+      affectedSymbols: stringArray(item?.affectedSymbols),
       repair: String(item?.repair || ""),
+      verify: stringArray(item?.verify),
+      sourceFindingIDs: stringArray(item?.sourceFindingIDs),
+      priorAttemptRefs: stringArray(item?.priorAttemptRefs),
       reviewers: stringArray(item?.reviewers),
       consensus: item?.consensus === "disputed" ? "disputed" : item?.consensus === "unresolved" ? "unresolved" : "agreed",
     })),
     requiredRepairs: requiredRepairs.map((item: any) => ({
       id: String(item?.id || ""),
+      fingerprint: typeof item?.fingerprint === "string" ? item.fingerprint : undefined,
+      severity: item?.severity === "advisory" ? "advisory" : item?.severity === "blocking" ? "blocking" : undefined,
+      title: typeof item?.title === "string" ? item.title : undefined,
+      canonicalSymptom: typeof item?.canonicalSymptom === "string" ? item.canonicalSymptom : undefined,
       description: String(item?.description || ""),
       evidence: stringArray(item?.evidence),
       targetIDs: stringArray(item?.targetIDs),
+      requirementIDs: stringArray(item?.requirementIDs),
+      specIDs: stringArray(item?.specIDs),
       filePaths: stringArray(item?.filePaths),
+      affectedSymbols: stringArray(item?.affectedSymbols),
+      repair: typeof item?.repair === "string" ? item.repair : undefined,
+      verify: stringArray(item?.verify),
+      sourceFindingIDs: stringArray(item?.sourceFindingIDs),
+      priorAttemptRefs: stringArray(item?.priorAttemptRefs),
     })),
     unresolvedDisagreements: unresolvedDisagreements.map((item: any) => ({
       id: String(item?.id || ""),
@@ -1961,6 +1978,8 @@ export function hydrateConversationView(view: any, transcript: any[]): void {
     drainPendingIntegrity(sessionID);
     drainPendingSessionStatus(sessionID);
   }
+  flushCardStats();
+  markCardTreeVisibleChanged();
 }
 
 /** Per-message boundary part — only used by phase-absorbed cards, which

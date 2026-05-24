@@ -41,6 +41,7 @@ export function composeIntegrityFeedbackForBuild(input: {
     }; reason=${input.specSnapshotLineage.reason}.`,
     `The latest post-build verdict is \`${latestAttempt.verdict ?? "unknown"}\` (R${latestAttempt.attemptNumber} at ${new Date(latestAttempt.timeCreated).toISOString()}).`,
     "The workflow gate is not accepted until every blocking finding below is repaired and a later post-build integrity pass verdict is recorded.",
+    "Your terminal `report_build_result` must include `repair_report`: every blocking fingerprint must appear exactly once in either `repaired_findings[]` or `unrepaired_findings[]` with changed files and verification evidence.",
   ].join("\n")
   const rootSection = renderPersistentRootsSection(history.persistentBlockingRoots, input.promptBudget)
   const blockingSection = renderFindingSection({
@@ -58,7 +59,8 @@ export function composeIntegrityFeedbackForBuild(input: {
     includeMustFixLanguage: false,
   })
   const sourceSection = renderSourceSection(latestAttempt.artifactID)
-  const directPrompt = [introSection, rootSection, blockingSection, advisorySection, sourceSection]
+  const reportContractSection = renderBuildRepairReportContract(history.latestBlockingFindings)
+  const directPrompt = [introSection, rootSection, blockingSection, advisorySection, reportContractSection, sourceSection]
     .filter((section) => section.trim().length > 0)
     .join("\n\n")
 
@@ -86,6 +88,7 @@ export function composeIntegrityFeedbackForBuild(input: {
     `- runtime markdown: ${runtimeMarkdownPath}`,
     "",
     "Build must read that file before editing. Artifact ids are audit metadata only and are not a retrieval path for build.",
+    reportContractSection,
     sourceSection,
   ]
     .filter((section) => section.trim().length > 0)
@@ -136,6 +139,8 @@ function renderFindingSection(input: {
   }
   for (const finding of input.findings) {
     lines.push(`- **${sanitizeInline(finding.findingID)}** (root: ${sanitizeInline(finding.rootID)}, R${finding.attemptNumber})`)
+    lines.push(`  fingerprint: ${sanitizeInline(finding.fingerprint)}`)
+    lines.push(`  canonical symptom: ${sanitizeBlock(finding.canonicalSymptom, "generic", input.promptBudget.findingDescriptionCharCap)}`)
     lines.push(`  title: ${sanitizeBlock(finding.title, "generic")}`)
     if (finding.description) {
       lines.push(
@@ -151,12 +156,36 @@ function renderFindingSection(input: {
     if (finding.repair) {
       lines.push(`  required repair: ${sanitizeBlock(finding.repair, "finding_repair", input.promptBudget.findingRepairCharCap)}`)
     }
+    if (finding.verify.length > 0) {
+      lines.push("  verify:")
+      for (const verify of finding.verify) {
+        lines.push(`  - ${sanitizeBlock(verify, "generic", input.promptBudget.findingDescriptionCharCap)}`)
+      }
+    }
     if (finding.filePaths.length > 0) lines.push(`  file paths: ${finding.filePaths.map(sanitizeInline).join(", ")}`)
     if (finding.requirementIDs.length > 0) {
       lines.push(`  requirement ids: ${finding.requirementIDs.map(sanitizeInline).join(", ")}`)
     }
     if (finding.specIDs.length > 0) lines.push(`  spec ids: ${finding.specIDs.map(sanitizeInline).join(", ")}`)
     if (finding.reviewerIDs.length > 0) lines.push(`  reviewer ids: ${finding.reviewerIDs.map(sanitizeInline).join(", ")}`)
+  }
+  return lines.join("\n")
+}
+
+function renderBuildRepairReportContract(findings: IntegrityRootSymptomVariation[]): string {
+  if (findings.length === 0) return ""
+  const lines = [
+    "### Build repair report contract",
+    "",
+    "When you finish, `report_build_result` must include:",
+    "- `repair_report.repaired_findings[]` for each fingerprint you fixed, with `finding_id`, `fingerprint`, `changed_files[]`, and `verification_commands[]`.",
+    "- `repair_report.unrepaired_findings[]` for each fingerprint still not fixed, with a concrete `reason`.",
+    "- `status=\"passed\"` is only valid when every blocking fingerprint below is in `repaired_findings[]` and verification passed.",
+    "",
+    "Blocking fingerprints:",
+  ]
+  for (const finding of findings) {
+    lines.push(`- ${sanitizeInline(finding.fingerprint)} (${sanitizeInline(finding.findingID)}): ${sanitizeInline(finding.canonicalLabel)}`)
   }
   return lines.join("\n")
 }

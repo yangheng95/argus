@@ -560,10 +560,10 @@ export function routeSSEEvent(event: any): boolean {
     const taskID = eventTaskID(event) || boardStore.selectedTaskID || "";
     if (taskID && taskID === boardStore.selectedTaskID) {
       void import("./conversation")
-        .then(({ mergeLatestConversationTail }) => mergeLatestConversationTail(taskID))
+        .then(({ scheduleLatestConversationTailMerge }) => scheduleLatestConversationTailMerge(taskID))
         .catch((error) => {
           if (error instanceof DOMException && error.name === "AbortError") return;
-          console.error("[sse] task.messages.changed tail merge failed", error);
+          console.error("[sse] task.messages.changed scheduling failed", error);
         });
     }
     markHandledSelectedLiveEvent(event);

@@ -24,6 +24,13 @@ import { AttachmentStore } from "@/storage/attachment-store"
 import { Log } from "@/util/log"
 import type { DeliveryInfo, GoalInfo } from "@/delivery/checks"
 import { createIntegrityAcceptanceTools } from "./acceptance-tools"
+import {
+  buildPriorManifestIndex,
+  canonicalIntegritySymptom,
+  defaultIntegrityVerify,
+  integrityFindingFingerprint,
+  stableList,
+} from "./finding-manifest"
 import { renderIntegrityReplayContextPrompt, type IntegrityReplayContext } from "./replay-context"
 import { renderSharedIntegrityPromptContext, sanitizeIntegrityPromptText } from "./shared-prompt"
 import type { RequirementStatusRow } from "./requirement-status"
@@ -33,6 +40,7 @@ import {
   IntegrityReviewerReportSchema,
   IntegrityTeamReportSchema,
   type IntegrityFinding,
+  type IntegrityRequiredRepair,
   type IntegrityReviewCompletedPayload,
   type IntegrityReviewerPlan,
   type IntegrityReviewerReport,
@@ -57,6 +65,14 @@ const CONSENSUS_TRACEABILITY_PROMPT = [
   "A finding that does not cite a REQ-N, AS id, or literal user-request substring is out of scope and must be removed from the final report.",
   "If multiple reviewers all reported the same untraced concern, that is signal that the requirements/architect stage missed a REQ; emit one requirements-extraction concern, not a blocker for each sub-aspect.",
 ].join("\n\n")
+
+const FINDING_MANIFEST_PROMPT = [
+  "Finding manifest discipline:",
+  "For every finding, include `canonicalSymptom` as a stable plain-language defect description, `verify[]` as concrete checks the build/re-review can use, and `affectedSymbols[]` when a function/component/API is known.",
+  "When a finding repeats a prior blocker, keep the same defect surface: set `sourceFindingIDs[]` and `priorAttemptRefs[]` when known, and do not rename it to escape repair accountability.",
+  "For every blocking finding, the final consensus must have a matching required repair. The host will also enforce this, but the report should make the repair contract explicit.",
+  "Do not invent fingerprints. The host computes deterministic fingerprints after schema validation.",
+].join("\n")
 
 export interface IntegrityIssue {
   type: string
@@ -270,7 +286,7 @@ export async function reviewIntegrity(input: {
 
   const result = consensusOut.collector.report
   if (!result) throw new Error("integrity supervisor did not submit consensus report.")
-  const normalized = normalizeTeamReport(result)
+  const normalized = normalizeTeamReport(result, input.replayContext)
   log.info("integrity team review completed", {
     verdict: normalized.verdict,
     reviewers: normalized.reviewers.length,
@@ -458,6 +474,7 @@ export function buildReviewerPrompt(input: ReviewPromptInput, scope: IntegrityRe
     markdownList(scope.adversarialQuestions),
     renderIntegrityReplayContextPrompt(input.replayContext),
     FINDING_TRACEABILITY_PROMPT,
+    FINDING_MANIFEST_PROMPT,
     renderSeverityNewEvidenceSection(input),
     [
       "Explore independently, gather evidence, and call submit_reviewer_report once.",
@@ -481,6 +498,7 @@ export function buildSupervisorConsensusPrompt(
     "Compare reviewer reports adversarially. If a blocking finding or unresolved blocking disagreement remains, do not pass.",
     "Compare the current reviewer reports against prior attempts. A repeated blocking finding should be represented as persistent or regressed when the evidence supports that conclusion. Do not pass while a prior blocking repair has no convincing current evidence. Do not suppress a prior blocker merely because current reviewers used a different id.",
     CONSENSUS_TRACEABILITY_PROMPT,
+    FINDING_MANIFEST_PROMPT,
     "Reviewer plan:",
     renderReviewerPlanMarkdown(plan),
     "Reviewer reports:",
@@ -722,11 +740,39 @@ function sanitizePromptLine(text: string, field: "user_request_quote" | "generic
     .trim()
 }
 
-function normalizeTeamReport(report: IntegrityTeamReport): IntegrityResult {
+function normalizeTeamReport(report: IntegrityTeamReport, replayContext?: IntegrityReplayContext): IntegrityResult {
+  const priorFindingByFingerprint = buildPriorManifestIndex(
+    (replayContext?.priorAttempts ?? []).map((attempt) => ({
+      attemptNumber: attempt.attemptNumber,
+      findings: attempt.findings ?? [],
+      requiredRepairs: [],
+    })),
+  )
+  const priorRepairByFingerprint = buildPriorManifestIndex(
+    (replayContext?.priorAttempts ?? []).map((attempt) => ({
+      attemptNumber: attempt.attemptNumber,
+      findings: [],
+      requiredRepairs: attempt.requiredRepairs,
+    })),
+  )
+  const findings = report.findings.map((finding) => normalizeManifestFinding(finding, priorFindingByFingerprint))
+  const repairsByFingerprint = new Map<string, IntegrityRequiredRepair>()
+  for (const repair of report.requiredRepairs) {
+    const normalized = normalizeManifestRepair(repair, priorRepairByFingerprint, findings)
+    repairsByFingerprint.set(normalized.fingerprint!, normalized)
+  }
+  for (const finding of findings) {
+    if (finding.severity !== "blocking" && finding.verdictImpact !== "needs_correction") continue
+    if (repairsByFingerprint.has(finding.fingerprint!)) continue
+    repairsByFingerprint.set(finding.fingerprint!, repairFromFinding(finding))
+  }
+  const requiredRepairs = [...repairsByFingerprint.values()]
   return {
     ...report,
+    findings,
+    requiredRepairs,
     summary: limitSummary(report.summary),
-    issues: report.findings.map((finding) => ({
+    issues: findings.map((finding) => ({
       type: finding.severity,
       description: `${finding.title}: ${finding.description}`,
       goalIDs: finding.targetIDs,
@@ -738,6 +784,101 @@ function normalizeTeamReport(report: IntegrityTeamReport): IntegrityResult {
     corrections: [],
     graphCorrections: [],
     missingGoals: [],
+  }
+}
+
+function normalizeManifestFinding(
+  finding: IntegrityFinding,
+  priorByFingerprint: Map<string, { id: string; fingerprint: string; attemptNumber?: number }>,
+): IntegrityFinding {
+  const canonicalSymptom = canonicalIntegritySymptom(finding)
+  const fingerprint = integrityFindingFingerprint({ ...finding, canonicalSymptom })
+  const prior = priorByFingerprint.get(fingerprint)
+  const priorAttemptRefs = stableList([
+    ...finding.priorAttemptRefs,
+    ...(prior?.attemptNumber ? [`R${prior.attemptNumber}:${prior.id}`] : []),
+  ])
+  return {
+    ...finding,
+    id: prior?.id ?? finding.id,
+    fingerprint,
+    canonicalSymptom,
+    affectedSymbols: stableList(finding.affectedSymbols),
+    verify: defaultIntegrityVerify(finding),
+    sourceFindingIDs: stableList([...finding.sourceFindingIDs, finding.id, ...(prior ? [prior.id] : [])]),
+    priorAttemptRefs,
+  }
+}
+
+function normalizeManifestRepair(
+  repair: IntegrityRequiredRepair,
+  priorByFingerprint: Map<string, { id: string; fingerprint: string; attemptNumber?: number }>,
+  findings: IntegrityFinding[],
+): IntegrityRequiredRepair {
+  const linkedFinding = findings.find(
+    (finding) =>
+      repair.sourceFindingIDs.includes(finding.id) ||
+      repair.sourceFindingIDs.some((id) => finding.sourceFindingIDs.includes(id)) ||
+      finding.sourceFindingIDs.includes(repair.id) ||
+      repair.id === finding.id ||
+      repair.id === `repair-${finding.id}` ||
+      integrityFindingFingerprint(repair) === finding.fingerprint,
+  )
+  const source = linkedFinding ?? repair
+  const canonicalSymptom = canonicalIntegritySymptom({
+    ...source,
+    canonicalSymptom: repair.canonicalSymptom ?? source.canonicalSymptom,
+    description: repair.description || source.description,
+  })
+  const fingerprint = linkedFinding?.fingerprint ?? integrityFindingFingerprint({ ...repair, canonicalSymptom })
+  const prior = priorByFingerprint.get(fingerprint)
+  return {
+    ...repair,
+    id: prior?.id ?? repair.id,
+    fingerprint,
+    severity: repair.severity ?? linkedFinding?.severity ?? "blocking",
+    title: repair.title ?? linkedFinding?.title,
+    canonicalSymptom,
+    evidence: repair.evidence.length > 0 ? repair.evidence : linkedFinding?.evidence ?? [],
+    targetIDs: stableList([...repair.targetIDs, ...(linkedFinding?.targetIDs ?? [])]),
+    requirementIDs: stableList([...repair.requirementIDs, ...(linkedFinding?.requirementIDs ?? [])]),
+    specIDs: stableList([...repair.specIDs, ...(linkedFinding?.specIDs ?? [])]),
+    filePaths: stableList([...repair.filePaths, ...(linkedFinding?.filePaths ?? [])]),
+    affectedSymbols: stableList([...repair.affectedSymbols, ...(linkedFinding?.affectedSymbols ?? [])]),
+    repair: repair.repair ?? linkedFinding?.repair ?? repair.description,
+    verify: defaultIntegrityVerify({
+      ...repair,
+      repair: repair.repair ?? linkedFinding?.repair ?? repair.description,
+      evidence: repair.evidence.length > 0 ? repair.evidence : linkedFinding?.evidence,
+      filePaths: repair.filePaths.length > 0 ? repair.filePaths : linkedFinding?.filePaths,
+      verify: repair.verify.length > 0 ? repair.verify : linkedFinding?.verify,
+    }),
+    sourceFindingIDs: stableList([...repair.sourceFindingIDs, ...(linkedFinding ? [linkedFinding.id] : [])]),
+    priorAttemptRefs: stableList([
+      ...repair.priorAttemptRefs,
+      ...(prior?.attemptNumber ? [`R${prior.attemptNumber}:${prior.id}`] : []),
+    ]),
+  }
+}
+
+function repairFromFinding(finding: IntegrityFinding): IntegrityRequiredRepair {
+  return {
+    id: `repair-${finding.id}`,
+    fingerprint: finding.fingerprint,
+    severity: finding.severity,
+    title: finding.title,
+    canonicalSymptom: finding.canonicalSymptom,
+    description: finding.repair,
+    evidence: finding.evidence,
+    targetIDs: finding.targetIDs,
+    requirementIDs: finding.requirementIDs,
+    specIDs: finding.specIDs,
+    filePaths: finding.filePaths,
+    affectedSymbols: finding.affectedSymbols,
+    repair: finding.repair,
+    verify: finding.verify,
+    sourceFindingIDs: [finding.id],
+    priorAttemptRefs: finding.priorAttemptRefs,
   }
 }
 
@@ -753,7 +894,11 @@ function createNoGoalsResult(): IntegrityResult {
     requirementIDs: [],
     specIDs: [],
     filePaths: [],
+    affectedSymbols: [],
     repair: "Run architect again and produce goal contracts before integrity review.",
+    verify: ["Confirm the active spec snapshot contains at least one goal contract before review."],
+    sourceFindingIDs: [],
+    priorAttemptRefs: [],
     reviewers: ["contract-reviewer", "completion-reviewer"],
     consensus: "agreed",
   }
@@ -795,10 +940,19 @@ function createNoGoalsResult(): IntegrityResult {
     requiredRepairs: [
       {
         id: "repair-no-goals",
+        severity: "blocking",
+        title: "No goals produced",
         description: "Create goal contracts for the active spec snapshot.",
         evidence: ["Goal contract list is empty."],
         targetIDs: [],
+        requirementIDs: [],
+        specIDs: [],
         filePaths: [],
+        affectedSymbols: [],
+        repair: "Run architect again and produce goal contracts before integrity review.",
+        verify: ["Confirm the active spec snapshot contains at least one goal contract before review."],
+        sourceFindingIDs: ["no-goals-produced"],
+        priorAttemptRefs: [],
       },
     ],
     unresolvedDisagreements: [],

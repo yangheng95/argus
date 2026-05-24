@@ -5613,6 +5613,7 @@ export function createOrchestratorTools(input: {
               tests: result.tests,
               error: result.status === "failed" ? result.error : undefined,
               commit_ref: result.commit_ref,
+              repair_report: result.repair_report,
             }
             try {
               const decisionLog = createDecisionLog(taskID)
@@ -5652,6 +5653,29 @@ export function createOrchestratorTools(input: {
             result.files_changed.length > 0
               ? result.files_changed.map((f) => `  - ${f.path}: ${f.summary} — ${f.reason}`).join("\n")
               : "  (none reported)"
+          const repairReportLines = result.repair_report
+            ? [
+                `  repaired_findings=${result.repair_report.repaired_findings.length}`,
+                ...result.repair_report.repaired_findings.map(
+                  (item) =>
+                    `  - repaired ${item.finding_id} ${item.fingerprint}: files=${item.changed_files.join(", ")}; verification=${item.verification_commands
+                      .map(
+                        (command) =>
+                          `${command.passed ? "passed" : "failed"} ${command.command}${command.detail ? ` (${command.detail})` : ""}`,
+                      )
+                      .join(" | ")}`,
+                ),
+                `  unrepaired_findings=${result.repair_report.unrepaired_findings.length}`,
+                ...result.repair_report.unrepaired_findings.map(
+                  (item) => `  - unrepaired ${item.finding_id} ${item.fingerprint}: ${item.reason}`,
+                ),
+                result.repair_report.unrelated_changes.length > 0
+                  ? `  unrelated_changes=${result.repair_report.unrelated_changes.join(", ")}`
+                  : "",
+              ]
+                .filter(Boolean)
+                .join("\n")
+            : "  (none reported)"
           const commitLine = result.commit_ref ? `- commit_ref: ${result.commit_ref}` : "- commit_ref: (none)"
           const errorLine = result.status === "failed" ? `\n- error: ${result.error}` : ""
           const worktreeLine = worktreeDir ? `\n- worktreeDir: ${worktreeDir}` : ""
@@ -5688,6 +5712,7 @@ export function createOrchestratorTools(input: {
             `- summary: ${result.summary}\n` +
             `- files_changed:\n${fileLines}\n` +
             `${commitLine}${errorLine}${worktreeLine}${cleanupLine}${goalRunInvalidatedLine}\n` +
+            `- repair_report:\n${repairReportLines}\n` +
             `- tests:\n${testLines}` +
             `${factBlock}\n\n` +
             `### Next step\n` +

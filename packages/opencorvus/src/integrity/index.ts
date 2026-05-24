@@ -39,6 +39,15 @@ export {
 } from "./requirement-status"
 export { renderIntegrityMarkdown } from "./render-markdown"
 export {
+  buildPriorManifestIndex,
+  canonicalIntegritySymptom,
+  defaultIntegrityVerify,
+  integrityFindingFingerprint,
+  stableList,
+  type IntegrityManifestSource,
+  type IntegrityPriorManifestRef,
+} from "./finding-manifest"
+export {
   buildIntegrityReplayContext,
   buildSpecSnapshotLineage,
   renderIntegrityReplayContextPrompt,

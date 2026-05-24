@@ -30,6 +30,8 @@ export const IntegrityFindingSchema = z
     id: z.string().min(1),
     severity: z.enum(["blocking", "advisory"]),
     verdictImpact: IntegrityVerdictSchema,
+    fingerprint: z.string().min(1).optional(),
+    canonicalSymptom: z.string().min(1).optional(),
     title: z.string().min(1),
     description: z.string().min(1),
     evidence: z.array(z.string().min(1)).min(1),
@@ -38,7 +40,11 @@ export const IntegrityFindingSchema = z
     specIDs: z.array(z.string().min(1)).default([]),
     userRequestQuotes: z.array(z.string().min(1)).optional(),
     filePaths: z.array(z.string().min(1)).default([]),
+    affectedSymbols: z.array(z.string().min(1)).default([]),
     repair: z.string().min(1),
+    verify: z.array(z.string().min(1)).default([]),
+    sourceFindingIDs: z.array(z.string().min(1)).default([]),
+    priorAttemptRefs: z.array(z.string().min(1)).default([]),
     reviewers: z.array(z.string().min(1)).default([]),
     consensus: z.enum(["agreed", "disputed", "unresolved"]).default("agreed"),
   })
@@ -74,10 +80,21 @@ export type IntegrityReviewRound = z.infer<typeof IntegrityReviewRoundSchema>
 export const IntegrityRequiredRepairSchema = z
   .object({
     id: z.string().min(1),
+    fingerprint: z.string().min(1).optional(),
+    severity: z.enum(["blocking", "advisory"]).default("blocking"),
+    title: z.string().min(1).optional(),
+    canonicalSymptom: z.string().min(1).optional(),
     description: z.string().min(1),
     evidence: z.array(z.string().min(1)).min(1),
     targetIDs: z.array(z.string().min(1)).default([]),
+    requirementIDs: z.array(z.string().min(1)).default([]),
+    specIDs: z.array(z.string().min(1)).default([]),
     filePaths: z.array(z.string().min(1)).default([]),
+    affectedSymbols: z.array(z.string().min(1)).default([]),
+    repair: z.string().min(1).optional(),
+    verify: z.array(z.string().min(1)).default([]),
+    sourceFindingIDs: z.array(z.string().min(1)).default([]),
+    priorAttemptRefs: z.array(z.string().min(1)).default([]),
   })
   .strict()
 

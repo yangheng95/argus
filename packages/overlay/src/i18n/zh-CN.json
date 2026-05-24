@@ -435,7 +435,12 @@
   "integrity.findings_heading": "审查发现（{{n}} 项）",
   "integrity.repairs_heading": "必需修复（{{n}} 项）",
   "integrity.reviewers_heading": "审查团队",
+  "integrity.reviewer_evidence": "{{n}} 条证据",
+  "integrity.reviewer_findings": "{{n}} 个发现",
+  "integrity.reviewer_questions": "{{n}} 个问题",
+  "integrity.team_report_detail": "展开完整报告",
   "integrity.team_report_heading": "团队报告",
+  "integrity.verify_count": "{{n}} 个验证项",
   "file.download": "下载",
   "file.load_failed": "{{name}} 加载失败",
   "files.changed": {

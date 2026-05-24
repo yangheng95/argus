@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test"
-import { BuildResultSchema, BuildTarget, formatBuildResultSchemaError } from "../../src/build/types"
+import {
+  BuildResultSchema,
+  BuildTarget,
+  formatBuildResultSchemaError,
+  validateBuildIntegrityRepairReport,
+} from "../../src/build/types"
 
 describe("BuildResultSchema", () => {
   test("accepts a passed result with commit ref and test evidence", () => {
@@ -138,6 +143,141 @@ describe("BuildResultSchema", () => {
       tests: [],
     })
     expect(parsed.success).toBe(true)
+  })
+
+  test("accepts integrity repair report with repaired and unrepaired findings", () => {
+    const parsed = BuildResultSchema.safeParse({
+      status: "failed",
+      summary: "Fixed one integrity blocker; another still needs a design decision.",
+      files_changed: [
+        {
+          path: "src/settings.ts",
+          summary: "Validated persisted settings on load.",
+          reason: "Repairs integrity finding F-settings.",
+        },
+      ],
+      tests: [{ name: "bun test src/settings.test.ts", passed: true }],
+      repair_report: {
+        repaired_findings: [
+          {
+            finding_id: "F-settings",
+            fingerprint: "if_1234567890abcdef",
+            changed_files: ["src/settings.ts"],
+            verification_commands: [
+              { command: "bun test src/settings.test.ts", passed: true, detail: "3 pass" },
+            ],
+          },
+        ],
+        unrepaired_findings: [
+          {
+            finding_id: "F-theme",
+            fingerprint: "if_fedcba0987654321",
+            reason: "Theme token decision is missing from requirements.",
+          },
+        ],
+        unrelated_changes: [],
+      },
+      error: "F-theme remains unrepaired.",
+    })
+    expect(parsed.success).toBe(true)
+  })
+
+  test("rejects repaired findings without changed files or verification", () => {
+    const parsed = BuildResultSchema.safeParse({
+      status: "passed",
+      summary: "claimed repair",
+      files_changed: [],
+      repair_report: {
+        repaired_findings: [
+          {
+            finding_id: "F-settings",
+            fingerprint: "if_1234567890abcdef",
+            changed_files: [],
+            verification_commands: [],
+          },
+        ],
+      },
+    })
+    expect(parsed.success).toBe(false)
+  })
+
+  test("rejects passed repair report with unrepaired findings or failed verification", () => {
+    const unrepaired = BuildResultSchema.safeParse({
+      status: "passed",
+      summary: "claimed repair",
+      files_changed: [],
+      repair_report: {
+        repaired_findings: [],
+        unrepaired_findings: [{ finding_id: "F-settings", fingerprint: "if_1234567890abcdef", reason: "not fixed" }],
+      },
+    })
+    expect(unrepaired.success).toBe(false)
+
+    const failedVerification = BuildResultSchema.safeParse({
+      status: "passed",
+      summary: "claimed repair",
+      files_changed: [
+        { path: "src/settings.ts", summary: "Changed settings", reason: "Repair F-settings" },
+      ],
+      repair_report: {
+        repaired_findings: [
+          {
+            finding_id: "F-settings",
+            fingerprint: "if_1234567890abcdef",
+            changed_files: ["src/settings.ts"],
+            verification_commands: [{ command: "bun test src/settings.test.ts", passed: false }],
+          },
+        ],
+      },
+    })
+    expect(failedVerification.success).toBe(false)
+  })
+
+  test("rejects duplicate repair report fingerprints across repaired and unrepaired arrays", () => {
+    const parsed = BuildResultSchema.safeParse({
+      status: "failed",
+      summary: "conflicting repair report",
+      files_changed: [],
+      error: "conflicting repair report",
+      repair_report: {
+        repaired_findings: [
+          {
+            finding_id: "F-settings",
+            fingerprint: "if_1234567890abcdef",
+            changed_files: ["src/settings.ts"],
+            verification_commands: [{ command: "bun test src/settings.test.ts", passed: true }],
+          },
+        ],
+        unrepaired_findings: [
+          { finding_id: "F-settings", fingerprint: "if_1234567890abcdef", reason: "also claimed unrepaired" },
+        ],
+      },
+    })
+    expect(parsed.success).toBe(false)
+  })
+
+  test("validates required integrity fingerprints against build repair report", () => {
+    const passed = BuildResultSchema.parse({
+      status: "passed",
+      summary: "fixed",
+      files_changed: [
+        { path: "src/settings.ts", summary: "Changed settings", reason: "Repair F-settings" },
+      ],
+      repair_report: {
+        repaired_findings: [
+          {
+            finding_id: "F-settings",
+            fingerprint: "if_1234567890abcdef",
+            changed_files: ["src/settings.ts"],
+            verification_commands: [{ command: "bun test src/settings.test.ts", passed: true }],
+          },
+        ],
+      },
+    })
+    expect(validateBuildIntegrityRepairReport(passed, ["if_1234567890abcdef"])).toBeUndefined()
+    expect(validateBuildIntegrityRepairReport(passed, ["if_1234567890abcdef", "if_fedcba0987654321"])).toContain(
+      "missing required fingerprints",
+    )
   })
 })
 

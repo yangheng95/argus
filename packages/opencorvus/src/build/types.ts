@@ -66,6 +66,62 @@ export const BuildFileChange = z.object({
 })
 export type BuildFileChange = z.infer<typeof BuildFileChange>
 
+export const BuildRepairVerificationCommand = z.object({
+  command: z.string().min(1).describe("Command or manual check performed for this repair."),
+  passed: z.boolean(),
+  detail: z.string().optional().describe("One-line evidence: exit code, assertion, visual observation, etc."),
+})
+export type BuildRepairVerificationCommand = z.infer<typeof BuildRepairVerificationCommand>
+
+export const BuildRepairedFinding = z.object({
+  finding_id: z.string().min(1),
+  fingerprint: z.string().min(1),
+  changed_files: z.array(z.string().min(1)).min(1),
+  verification_commands: z.array(BuildRepairVerificationCommand).min(1),
+})
+export type BuildRepairedFinding = z.infer<typeof BuildRepairedFinding>
+
+export const BuildUnrepairedFinding = z.object({
+  finding_id: z.string().min(1),
+  fingerprint: z.string().min(1),
+  reason: z.string().min(1),
+})
+export type BuildUnrepairedFinding = z.infer<typeof BuildUnrepairedFinding>
+
+export const BuildRepairReport = z
+  .object({
+    repaired_findings: z.array(BuildRepairedFinding).default([]),
+    unrepaired_findings: z.array(BuildUnrepairedFinding).default([]),
+    unrelated_changes: z.array(z.string().min(1)).default([]),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    const seen = new Map<string, string>()
+    for (const item of value.repaired_findings) {
+      const prior = seen.get(item.fingerprint)
+      if (prior) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["repaired_findings"],
+          message: `fingerprint ${item.fingerprint} appears in both ${prior} and repaired_findings`,
+        })
+      }
+      seen.set(item.fingerprint, "repaired_findings")
+    }
+    for (const item of value.unrepaired_findings) {
+      const prior = seen.get(item.fingerprint)
+      if (prior) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["unrepaired_findings"],
+          message: `fingerprint ${item.fingerprint} appears in both ${prior} and unrepaired_findings`,
+        })
+      }
+      seen.set(item.fingerprint, "unrepaired_findings")
+    }
+  })
+export type BuildRepairReport = z.infer<typeof BuildRepairReport>
+
 /**
  * Terminal payload the build agent records through report_build_result.
  * Orchestrator reads this typed result and decides
@@ -103,6 +159,9 @@ const BuildResultBase = {
     .array(BuildTestResult)
     .default([])
     .describe("Evidence the build actually ran verification; empty when no tests were required."),
+  repair_report: BuildRepairReport.optional().describe(
+    "Integrity repair ledger for builds dispatched from integrity feedback. Every blocking integrity fingerprint must be listed exactly once as repaired or unrepaired.",
+  ),
 }
 
 export const BuildPassedResultSchema = z
@@ -118,6 +177,26 @@ export const BuildPassedResultSchema = z
     files_changed: z.array(BuildFileChange),
   })
   .strict()
+  .superRefine((value, ctx) => {
+    if (!value.repair_report) return
+    if (value.repair_report.unrepaired_findings.length > 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["repair_report", "unrepaired_findings"],
+        message: "passed build result cannot contain unrepaired integrity findings",
+      })
+    }
+    for (const [findingIndex, finding] of value.repair_report.repaired_findings.entries()) {
+      for (const [commandIndex, command] of finding.verification_commands.entries()) {
+        if (command.passed) continue
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["repair_report", "repaired_findings", findingIndex, "verification_commands", commandIndex, "passed"],
+          message: "passed build result cannot contain failed repair verification commands",
+        })
+      }
+    }
+  })
 
 export const BuildFailedResultSchema = z
   .object({
@@ -130,6 +209,33 @@ export const BuildFailedResultSchema = z
 
 export const BuildResultSchema = z.discriminatedUnion("status", [BuildPassedResultSchema, BuildFailedResultSchema])
 export type BuildResult = z.infer<typeof BuildResultSchema>
+
+export function validateBuildIntegrityRepairReport(
+  result: BuildResult,
+  requiredFingerprints: string[],
+): string | undefined {
+  const required = [...new Set(requiredFingerprints)].sort()
+  if (required.length === 0) return undefined
+  if (!result.repair_report) {
+    return `missing repair_report for required integrity fingerprints: ${required.join(", ")}`
+  }
+  const occurrences = new Map<string, Array<"repaired" | "unrepaired">>()
+  for (const item of result.repair_report.repaired_findings) {
+    occurrences.set(item.fingerprint, [...(occurrences.get(item.fingerprint) ?? []), "repaired"])
+  }
+  for (const item of result.repair_report.unrepaired_findings) {
+    occurrences.set(item.fingerprint, [...(occurrences.get(item.fingerprint) ?? []), "unrepaired"])
+  }
+  const missing = required.filter((fingerprint) => !occurrences.has(fingerprint))
+  if (missing.length > 0) return `missing required fingerprints: ${missing.join(", ")}`
+  const duplicated = required.filter((fingerprint) => (occurrences.get(fingerprint)?.length ?? 0) !== 1)
+  if (duplicated.length > 0) return `required fingerprints must appear exactly once: ${duplicated.join(", ")}`
+  if (result.status === "passed") {
+    const unrepaired = required.filter((fingerprint) => occurrences.get(fingerprint)?.[0] === "unrepaired")
+    if (unrepaired.length > 0) return `passed result still reports unrepaired fingerprints: ${unrepaired.join(", ")}`
+  }
+  return undefined
+}
 
 export function formatBuildResultSchemaError(error: z.ZodError): string {
   const issues = error.issues.map((issue) => {
