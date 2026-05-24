@@ -268,6 +268,7 @@ export namespace Message {
     auto: z.boolean(),
     overflow: z.boolean().optional(),
     tail_start_id: z.string().optional(),
+    anchor_id: z.string().optional(),
     focus: z.string().optional(),
   }).meta({
     ref: "CompactionPart",
@@ -1104,33 +1105,78 @@ export namespace Message {
   export async function filterCompacted(stream: AsyncIterable<Message.WithParts>) {
     const result = [] as Message.WithParts[]
     const completed = new Set<string>()
-    let retain: { id: string; afterCompactionIndex: number } | undefined
+    let retain:
+      | {
+          tailID?: string
+          anchorID?: string
+          afterCompactionIndex: number
+          tailSatisfied: boolean
+        }
+      | undefined
     for await (const msg of stream) {
-      result.push(msg)
       if (retain) {
-        if (msg.info.id === retain.id) {
-          if (msg.info.role !== "user") result.splice(retain.afterCompactionIndex)
+        if (!retain.tailSatisfied) {
+          result.push(msg)
+          if (msg.info.id === retain.tailID) {
+            if (msg.info.role !== "user") {
+              result.splice(retain.afterCompactionIndex)
+              retain = undefined
+              break
+            }
+            retain.tailSatisfied = true
+            if (!retain.anchorID || msg.info.id === retain.anchorID) {
+              retain = undefined
+              break
+            }
+          }
+          continue
+        }
+        if (retain.anchorID && msg.info.id === retain.anchorID) {
+          result.push(msg)
           retain = undefined
           break
         }
         continue
       }
+      result.push(msg)
       if (msg.info.role === "user" && completed.has(msg.info.id)) {
         const part = msg.parts.find((item): item is Message.CompactionPart => item.type === "compaction")
         if (!part) continue
-        if (!part.tail_start_id) break
+        if (!part.tail_start_id && !part.anchor_id) break
         retain = {
-          id: part.tail_start_id,
+          tailID: part.tail_start_id,
+          anchorID: part.anchor_id,
           afterCompactionIndex: result.length,
+          tailSatisfied: !part.tail_start_id,
         }
-        if (msg.info.id === retain.id) break
+        if (!part.tail_start_id && !part.anchor_id) break
         continue
       }
       if (msg.info.role === "assistant" && CompactionHandoff.isValidSummaryMessage(msg.info))
         completed.add(msg.info.parentID)
     }
-    if (retain) result.splice(retain.afterCompactionIndex)
+    if (retain && !retain.tailSatisfied) result.splice(retain.afterCompactionIndex)
     result.reverse()
+    const markerIndex = result.findIndex((msg) =>
+      msg.parts.some((part): part is Message.CompactionPart => part.type === "compaction" && !!part.anchor_id),
+    )
+    if (markerIndex >= 0) {
+      const marker = result[markerIndex]
+      const part = marker.parts.find((item): item is Message.CompactionPart => item.type === "compaction")
+      const anchorIndex = part?.anchor_id ? result.findIndex((msg) => msg.info.id === part.anchor_id) : -1
+      if (anchorIndex >= 0 && markerIndex > anchorIndex + 1) {
+        let markerBlockEnd = markerIndex + 1
+        while (markerBlockEnd < result.length) {
+          const candidate = result[markerBlockEnd]
+          if (candidate.info.role !== "assistant") break
+          if (candidate.info.parentID !== marker.info.id) break
+          if (!CompactionHandoff.isValidSummaryMessage(candidate.info)) break
+          markerBlockEnd++
+        }
+        const markerBlock = result.splice(markerIndex, markerBlockEnd - markerIndex)
+        result.splice(anchorIndex + 1, 0, ...markerBlock)
+      }
+    }
     return result
   }
 

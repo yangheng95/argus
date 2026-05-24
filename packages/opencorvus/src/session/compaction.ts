@@ -56,6 +56,12 @@ export namespace SessionCompaction {
     id: string
   }
 
+  type SelectedCompactionInput = {
+    anchor_id?: string
+    head: Message.WithParts[]
+    tail_start_id?: string
+  }
+
   type CompletedCompaction = {
     userIndex: number
     assistantIndex: number
@@ -80,6 +86,13 @@ export namespace SessionCompaction {
       .join("\n\n")
       .trim()
     return text || undefined
+  }
+
+  function userText(message: Message.WithParts) {
+    return message.parts
+      .filter((part): part is Message.TextPart => part.type === "text")
+      .map((part) => part.text)
+      .join("\n\n")
   }
 
   function completedCompactions(messages: Message.WithParts[]) {
@@ -240,7 +253,22 @@ export namespace SessionCompaction {
     }
   }
 
-  export function buildPrompt(input: { previousSummary?: string; context: string[]; runtime: string }) {
+  export function buildPrompt(input: {
+    previousSummary?: string
+    context: string[]
+    runtime: string
+    dispatchAnchor?: string
+  }) {
+    const dispatchAnchor = input.dispatchAnchor
+    const dispatchAnchorBlock =
+      dispatchAnchor && dispatchAnchor.length > 0
+        ? [
+            "The <dispatch-anchor> block below is preserved verbatim after compaction. Do not re-summarize it into userMessages[]; userMessages[] covers only post-anchor user turns from the compacted history.",
+            "<dispatch-anchor>",
+            dispatchAnchor,
+            "</dispatch-anchor>",
+          ].join("\n")
+        : undefined
     const anchor = input.previousSummary
       ? [
           "Update the anchored summary below using the conversation history above.",
@@ -251,13 +279,16 @@ export namespace SessionCompaction {
         ].join("\n")
       : "Create a new anchored summary from the conversation history above."
     return [
+      dispatchAnchorBlock,
       anchor,
       CompactionHandoff.MODEL_OUTPUT_INSTRUCTIONS,
       "CompactionHandoff schema:",
       CompactionHandoff.JSON_SCHEMA_DESCRIPTION,
       input.runtime,
       ...input.context,
-    ].join("\n\n")
+    ]
+      .filter((item): item is string => typeof item === "string" && item.length > 0)
+      .join("\n\n")
   }
 
   export function requestBudget(input: { messages: ModelMessage[]; config: Config.Info; model: Provider.Model }) {
@@ -320,12 +351,20 @@ export namespace SessionCompaction {
     messages: Message.WithParts[]
     config: Config.Info
     model: Provider.Model
-  }) {
+  }): Promise<SelectedCompactionInput> {
     const limit = input.config.compaction?.tail_turns ?? ContextBudget.DEFAULT_TAIL_TURNS
-    if (limit <= 0) return { head: input.messages, tail_start_id: undefined as string | undefined }
+    const firstUserIdx = input.messages.findIndex(
+      (msg) => msg.info.role === "user" && !msg.parts.some((part) => part.type === "compaction"),
+    )
+    if (firstUserIdx < 0) return { head: [] }
+    const anchor_id = input.messages[firstUserIdx].info.id
+    if (limit <= 0) {
+      const head = input.messages.slice(firstUserIdx + 1)
+      return head.length ? { anchor_id, head } : { head: [] }
+    }
     const budget = ContextBudget.preserveRecent({ config: input.config, model: input.model })
     const all = turns(input.messages)
-    if (!all.length) return { head: input.messages, tail_start_id: undefined as string | undefined }
+    if (!all.length) return { head: [] }
     const recent = all.slice(-limit)
     const sizes = [] as number[]
     for (const turn of recent) {
@@ -351,9 +390,14 @@ export namespace SessionCompaction {
       break
     }
 
-    if (!keep || keep.start === 0) return { head: input.messages, tail_start_id: undefined as string | undefined }
+    if (!keep) {
+      const head = input.messages.slice(firstUserIdx + 1)
+      return head.length ? { anchor_id, head } : { head: [] }
+    }
+    if (keep.start <= firstUserIdx + 1) return { head: [] }
     return {
-      head: input.messages.slice(0, keep.start),
+      anchor_id,
+      head: input.messages.slice(firstUserIdx + 1, keep.start),
       tail_start_id: keep.id,
     }
   }
@@ -429,6 +473,21 @@ export namespace SessionCompaction {
       config,
       model,
     })
+    if (selected.head.length === 0) {
+      log.info("skipping compaction because no post-anchor head is compactable", {
+        sessionID: input.sessionID,
+        parentID: input.parentID,
+      })
+      await Session.removeMessage({
+        sessionID: input.sessionID,
+        messageID: input.parentID,
+      })
+      return "stop"
+    }
+    const dispatchAnchorMessage = selected.anchor_id
+      ? history.find((msg) => msg.info.id === selected.anchor_id)
+      : undefined
+    const dispatchAnchor = dispatchAnchorMessage ? userText(dispatchAnchorMessage) : undefined
 
     const msg = (await Session.updateMessage({
       id: Identifier.ascending("message"),
@@ -477,6 +536,7 @@ export namespace SessionCompaction {
       previousSummary: prior.at(-1)?.summary,
       context: compacting.context,
       runtime: runtime.text,
+      dispatchAnchor,
     })
     const providerMessages: ModelMessage[] = [
       ...(await Message.toModelMessages(selected.head, model, COMPACTION_PROJECTION)),
@@ -589,10 +649,14 @@ export namespace SessionCompaction {
       } satisfies Message.TextPart)
     }
 
-    if (compactionPart && selected.tail_start_id && compactionPart.tail_start_id !== selected.tail_start_id) {
+    if (
+      compactionPart &&
+      (compactionPart.tail_start_id !== selected.tail_start_id || compactionPart.anchor_id !== selected.anchor_id)
+    ) {
       await Session.updatePart({
         ...compactionPart,
         tail_start_id: selected.tail_start_id,
+        anchor_id: selected.anchor_id,
       })
     }
 
@@ -653,4 +717,8 @@ export namespace SessionCompaction {
       })
     },
   )
+
+  export const TestHooks = {
+    selectCompactionInput,
+  }
 }
