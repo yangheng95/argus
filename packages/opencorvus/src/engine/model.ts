@@ -1405,7 +1405,7 @@ export const Event = {
        *  which the overlay explicitly forbids (see tree-writer card hierarchy
        *  rules). Required: every real integrity pass runs inside an agent
        *  session; emitting without sessionID is a backend bug that must be
-       *  caught at the source (see integrity/agent.ts emitIntegrityEvent assertion).
+       *  caught at the source (see integrity/team-agent.ts emitIntegrityEvent assertion).
       sessionID: z.string(),
       verdict: z.enum(["pass", "concerns", "needs_correction"]),
       summary: z.string(),

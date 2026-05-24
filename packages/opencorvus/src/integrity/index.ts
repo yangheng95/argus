@@ -38,3 +38,25 @@ export {
   type RequirementStatusDeps,
 } from "./requirement-status"
 export { renderIntegrityMarkdown } from "./render-markdown"
+export {
+  buildIntegrityReplayContext,
+  buildSpecSnapshotLineage,
+  renderIntegrityReplayContextPrompt,
+  type BuildIntegrityReplayContextInput,
+  type IntegrityBuildEvidenceSinceLastReview,
+  type IntegrityPriorAttemptSummary,
+  type IntegrityReplayContext,
+  type IntegrityReviewScaleSignals,
+  type SpecSnapshotLineage,
+} from "./replay-context"
+export {
+  getSharedIntegrityPromptBudget,
+  renderSharedIntegrityPromptContext,
+  sanitizeIntegrityPromptText,
+  type SanitizedPromptTextField,
+  type SanitizedPromptTextReport,
+  type SharedPromptBudget,
+  type SharedPromptCapInput,
+  type SharedPromptCapOutput,
+  type SharedPromptSurface,
+} from "./shared-prompt"

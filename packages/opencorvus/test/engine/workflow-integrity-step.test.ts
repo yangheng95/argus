@@ -155,7 +155,12 @@ describe("pipeline workflow architecture review step", () => {
     recordIntegrityAttempt({
       taskID,
       sessionID: "ses_integrity_projection",
-      specSnapshotID: specID,
+      lineage: {
+        taskID,
+        activeSpecSnapshotID: specID,
+        inheritedSpecSnapshotIDs: [],
+        reason: "active_only",
+      },
       verdict: "pass",
       phase: "post_build",
       perDimension: [
@@ -221,7 +226,12 @@ describe("pipeline workflow architecture review step", () => {
     recordIntegrityAttempt({
       taskID,
       sessionID: "ses_integrity_projection_failed",
-      specSnapshotID: specID,
+      lineage: {
+        taskID,
+        activeSpecSnapshotID: specID,
+        inheritedSpecSnapshotIDs: [],
+        reason: "active_only",
+      },
       verdict: "needs_correction",
       phase: "post_build",
       perDimension: [
@@ -289,7 +299,12 @@ describe("pipeline workflow architecture review step", () => {
     recordIntegrityAttempt({
       taskID,
       sessionID: "ses_integrity_projection_concern_failed",
-      specSnapshotID: specID,
+      lineage: {
+        taskID,
+        activeSpecSnapshotID: specID,
+        inheritedSpecSnapshotIDs: [],
+        reason: "active_only",
+      },
       verdict: "concerns",
       phase: "post_build",
       perDimension: [
