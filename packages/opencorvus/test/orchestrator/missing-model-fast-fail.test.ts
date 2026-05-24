@@ -4,6 +4,7 @@ import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { findTask } from "../../src/engine/store"
 import { deriveTaskStatus } from "../../src/engine/task-status"
 import { Identifier } from "../../src/id/id"
+import { Orchestrator } from "../../src/orchestrator/agent"
 import { Instance } from "../../src/project/instance"
 import { ProtocolStore } from "../../src/protocol/store"
 import { Session } from "../../src/session"
@@ -19,17 +20,6 @@ describe("Orchestrator missing-model fast-fail", () => {
   })
 
   test("marks task failed and emits task.updated in the first wake", async () => {
-    mock.module("@/agent/model", () => ({
-      resolveAgentModel: async () => {
-        const error = new Error(
-          'No model configured for agent "orchestrator". Set `agent.orchestrator.model` or top-level `model` in opencorvus.jsonc.',
-        )
-        error.name = "MissingModelConfigError"
-        throw error
-      },
-    }))
-
-    const { Orchestrator } = await import("../../src/orchestrator/agent")
     await using tmp = await tmpdir({ config: { agent: {} } })
     const prevHome = process.env.OPENCORVUS_HOME
     const prevGlobalConfigDir = process.env.OPENCORVUS_GLOBAL_CONFIG_DIR

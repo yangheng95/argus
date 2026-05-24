@@ -36,6 +36,7 @@ export const IntegrityFindingSchema = z
     targetIDs: z.array(z.string().min(1)).default([]),
     requirementIDs: z.array(z.string().min(1)).default([]),
     specIDs: z.array(z.string().min(1)).default([]),
+    userRequestQuotes: z.array(z.string().min(1)).optional(),
     filePaths: z.array(z.string().min(1)).default([]),
     repair: z.string().min(1),
     reviewers: z.array(z.string().min(1)).default([]),

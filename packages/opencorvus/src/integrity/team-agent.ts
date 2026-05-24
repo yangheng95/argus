@@ -45,12 +45,26 @@ const log = Log.create({ service: "integrity-review" })
 
 export type { IntegrityFinding, IntegrityReviewerReport, IntegrityReviewerScope, IntegrityTeamReport, IntegrityVerdict }
 
+const FINDING_TRACEABILITY_PROMPT = [
+  "Finding traceability:",
+  "Every finding you submit must cite a REQ-N via `requirementIDs`, an AcceptanceSpec id via `specIDs`, or a literal original user-request substring via `userRequestQuotes`.",
+  "Do not attach a REQ-N or AS id unless that requirement/spec already names the audited behavior.",
+  "If the concern has no REQ, AS, or literal user-request quote anchor, it is out of scope; leave it out and, when useful, mention the dropped untraced concern in the report narrative.",
+].join("\n")
+
+const CONSENSUS_TRACEABILITY_PROMPT = [
+  FINDING_TRACEABILITY_PROMPT,
+  "A finding that does not cite a REQ-N, AS id, or literal user-request substring is out of scope and must be removed from the final report.",
+  "If multiple reviewers all reported the same untraced concern, that is signal that the requirements/architect stage missed a REQ; emit one requirements-extraction concern, not a blocker for each sub-aspect.",
+].join("\n\n")
+
 export interface IntegrityIssue {
   type: string
   description: string
   goalIDs?: string[]
   requirementIDs?: string[]
   specIDs?: string[]
+  userRequestQuotes?: string[]
   evidence?: string
 }
 
@@ -100,7 +114,7 @@ export interface IntegrityResult extends IntegrityTeamReport {
 
 export interface IntegrityAcceptanceContext extends DeliveryInfo {}
 
-type ReviewPromptInput = {
+export type ReviewPromptInput = {
   userRequest: string
   taskTitle: string
   goals: GoalContractFields[]
@@ -433,7 +447,7 @@ function buildSupervisorPlanPrompt(input: ReviewPromptInput): string {
   ].join("\n\n")
 }
 
-function buildReviewerPrompt(input: ReviewPromptInput, scope: IntegrityReviewerScope): string {
+export function buildReviewerPrompt(input: ReviewPromptInput, scope: IntegrityReviewerScope): string {
   return [
     "# Independent Integrity Reviewer",
     `Reviewer ID: ${scope.reviewerID}`,
@@ -442,6 +456,7 @@ function buildReviewerPrompt(input: ReviewPromptInput, scope: IntegrityReviewerS
     "Adversarial questions:",
     markdownList(scope.adversarialQuestions),
     renderIntegrityReplayContextPrompt(input.replayContext),
+    FINDING_TRACEABILITY_PROMPT,
     [
       "Explore independently, gather evidence, and call submit_reviewer_report once.",
       "When no prior integrity attempt exists for this task/spec, review your assigned surface independently using evidence from files, diffs, commands, runtime checks, requirements, goals, and the original request.",
@@ -451,7 +466,7 @@ function buildReviewerPrompt(input: ReviewPromptInput, scope: IntegrityReviewerS
   ].join("\n\n")
 }
 
-function buildSupervisorConsensusPrompt(
+export function buildSupervisorConsensusPrompt(
   input: ReviewPromptInput,
   plan: IntegrityReviewerPlan,
   reports: IntegrityReviewerReport[],
@@ -461,6 +476,7 @@ function buildSupervisorConsensusPrompt(
     renderIntegrityReplayContextPrompt(input.replayContext),
     "Compare reviewer reports adversarially. If a blocking finding or unresolved blocking disagreement remains, do not pass.",
     "Compare the current reviewer reports against prior attempts. A repeated blocking finding should be represented as persistent or regressed when the evidence supports that conclusion. Do not pass while a prior blocking repair has no convincing current evidence. Do not suppress a prior blocker merely because current reviewers used a different id.",
+    CONSENSUS_TRACEABILITY_PROMPT,
     "Reviewer plan:",
     renderReviewerPlanMarkdown(plan),
     "Reviewer reports:",
@@ -487,7 +503,15 @@ function buildIntegrityEvidencePrompt(input: ReviewPromptInput): string {
   )
   if (input.requirements?.length) {
     sections.push(
-      ["# Requirements", ...input.requirements.map((r) => `- ${r.id} (${r.type}): ${r.description}`)].join("\n"),
+      [
+        "# Requirements",
+        ...input.requirements.map((r) => {
+          const lines = [`- ${r.id} (${r.type}): ${r.description}`]
+          if (r.acceptance.trim().length > 0) lines.push(`  Acceptance: ${r.acceptance}`)
+          if (r.non_goals.trim().length > 0) lines.push(`  Non-goals: ${r.non_goals}`)
+          return lines.join("\n")
+        }),
+      ].join("\n"),
     )
   }
   if (input.requirementStatus?.length) {
@@ -571,6 +595,7 @@ function normalizeTeamReport(report: IntegrityTeamReport): IntegrityResult {
       goalIDs: finding.targetIDs,
       requirementIDs: finding.requirementIDs,
       specIDs: finding.specIDs,
+      userRequestQuotes: finding.userRequestQuotes ?? [],
       evidence: finding.evidence.join(" | "),
     })),
     corrections: [],
@@ -711,10 +736,15 @@ function renderReviewerReportMarkdown(report: IntegrityReviewerReport): string {
   if (report.evidence.length) lines.push("Evidence:", markdownList(report.evidence))
   if (report.findings.length) {
     lines.push("Findings:")
-    for (const finding of report.findings)
+    for (const finding of report.findings) {
+      const quotes =
+        finding.userRequestQuotes && finding.userRequestQuotes.length > 0
+          ? `\n  user request quotes: ${finding.userRequestQuotes.join(" | ")}`
+          : ""
       lines.push(
-        `- [${finding.severity}] ${finding.id}: ${finding.title} - ${finding.description}\n  repair: ${finding.repair}\n  evidence: ${finding.evidence.join(" | ")}`,
+        `- [${finding.severity}] ${finding.id}: ${finding.title} - ${finding.description}\n  repair: ${finding.repair}${quotes}\n  evidence: ${finding.evidence.join(" | ")}`,
       )
+    }
   }
   if (report.openQuestions.length) lines.push("Open questions:", markdownList(report.openQuestions))
   return lines.join("\n")

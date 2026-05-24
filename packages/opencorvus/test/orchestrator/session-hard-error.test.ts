@@ -117,6 +117,10 @@ describe("orchestrator session hard-error funnel", () => {
           const taskID = Identifier.ascending("task")
           const runID = Identifier.ascending("run")
           const root = await Session.create({ kind: "root", title })
+          await Session.mergeConfigOverlay({
+            sessionID: root.id,
+            patch: { model: "mock-control/control" },
+          })
           insertActiveRun({ taskID, runID, rootSessionID: root.id, now })
           return { now, taskID, runID }
         }

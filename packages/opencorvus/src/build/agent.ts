@@ -102,7 +102,13 @@ export namespace BuildAgent {
   export interface BuildContext {
     /** REQ-N list produced by Requirements. Drives "what does the user
      *  actually want" beyond the goal's compressed acceptance_specs. */
-    requirements?: Array<{ id: string; type: "explicit" | "implicit"; description: string }>
+    requirements?: Array<{
+      id: string
+      type: "explicit" | "implicit"
+      description: string
+      acceptance: string
+      non_goals: string
+    }>
     /** Optional visual anchors from design_analysis. The PRD/SPEC is the
      *  authoritative contract; these rows only provide compact ids when present. */
     designSpecs?: VisualSpec[]
@@ -2213,6 +2219,8 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
       lines.push("")
       for (const r of reqs) {
         lines.push(`- **${r.id}** [${r.type}]: ${r.description}`)
+        if (r.acceptance.trim().length > 0) lines.push(`  Acceptance: ${r.acceptance}`)
+        if (r.non_goals.trim().length > 0) lines.push(`  Non-goals: ${r.non_goals}`)
       }
       lines.push("")
     }

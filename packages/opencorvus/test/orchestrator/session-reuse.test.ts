@@ -57,6 +57,10 @@ describe("orchestrator session reuse", () => {
         const now = Date.now()
         const taskID = `tsk_orch_reuse_${now.toString(16)}`
         const root = await Session.create({ kind: "root", title: "Session reuse task" })
+        await Session.mergeConfigOverlay({
+          sessionID: root.id,
+          patch: { model: "mock-control/control" },
+        })
         const promptInputs: Array<Parameters<typeof SessionPrompt.prompt>[0]> = []
         spyOn(SessionPrompt, "prompt").mockImplementation((async (input) => {
           promptInputs.push(input)

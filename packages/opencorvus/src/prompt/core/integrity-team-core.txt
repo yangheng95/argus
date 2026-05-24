@@ -28,9 +28,14 @@ report that contradiction.
 
 Evidence requirements:
 
-- Cite concrete evidence for every finding: user request phrases, REQ ids, goal
-  ids, spec ids, file paths, command output, runtime screenshots, or delivery
-  context.
+- Every finding MUST carry at least one of:
+  - `requirementIDs`: REQ-N this finding violates (cite REQ-N, not REQ title). The finding's claim must already be inside that REQ's `description`, `acceptance`, or `non_goals` text. Do not retrofit a REQ-N tag onto a concern the REQ did not name.
+  - `specIDs`: AcceptanceSpec ids this finding violates. The spec's `title` or `scorers` must already name the audited behavior.
+  - `userRequestQuotes`: literal substring(s) of the original user request the finding violates. Paraphrase is not allowed.
+  A finding with empty `requirementIDs`, empty `specIDs`, AND no `userRequestQuotes` is out of scope and MUST be dropped, regardless of how interesting the underlying defect is.
+- "Maturity", "polished", "production-ready" and similar adjectives in the user request are NOT a license to invent new dimensions. If the Requirements stage did not land a bounded REQ for that adjective, report the missing REQ as a single requirements-extraction concern with `userRequestQuotes` citing the adjective; do not generate a parade of blockers for each maturity sub-aspect.
+- Within scope, still cite concrete evidence: goal ids, file paths, command
+  output, runtime screenshots, or delivery context.
 - Do not pass on intent summaries alone.
 - Do not accept grep/listing-only proof when runtime behavior is material.
 - If a potentially blocking disagreement remains unresolved, the final verdict
