@@ -42,6 +42,11 @@ function handoffFixture(): CompactionHandoff.Info {
         evidence: "StructuredOutput tool error",
         nextAction: "teach the model the exact required error tokens in the prompt",
       },
+      {
+        issue: "Structured output validation failed during compaction",
+        evidence: "The StructuredOutput tool returned a validation error",
+        nextAction: "retry compaction after correcting the handoff evidence fields",
+      },
     ],
     userMessages: ["Fix compaction evidence validation."],
     nextActions: ["run targeted compaction evidence tests"],
@@ -50,7 +55,7 @@ function handoffFixture(): CompactionHandoff.Info {
 }
 
 describe("compaction evidence contract", () => {
-  test("accepts worktree-relative required patch files and exact error tokens", () => {
+  test("accepts worktree-relative required patch files and semantic error acknowledgments", () => {
     const result = CompactionHandoff.validateMinimumEvidence(handoffFixture(), {
       sourceUserMessageID: "msg-source",
       instructionPaths: ["/repo/AGENTS.md"],
@@ -63,6 +68,98 @@ describe("compaction evidence contract", () => {
     })
 
     expect(result.success).toBe(true)
+  })
+
+  test("rejects a handoff with no error blocker entries when runtime errors exist", () => {
+    const result = CompactionHandoff.validateMinimumEvidence(
+      {
+        ...handoffFixture(),
+        errorsAndBlockers: [],
+      },
+      {
+        sourceUserMessageID: "msg-source",
+        instructionPaths: ["/repo/AGENTS.md"],
+        patchFiles: ["server/db/schema.ts"],
+        errorNames: ["StructuredOutputPayloadError"],
+        userMessages: true,
+        fileEvidence: true,
+        errorsAndBlockers: true,
+        acceptanceCriteria: true,
+      },
+    )
+
+    expect(result.success).toBe(false)
+    if (!result.success) expect(result.error).toContain("errorsAndBlockers (no entries)")
+  })
+
+  test("accepts three documented blockers for five runtime error tokens", () => {
+    const handoff = {
+      ...handoffFixture(),
+      errorsAndBlockers: [
+        {
+          issue: "Compaction could not parse structured output",
+          evidence: "StructuredOutput validation returned a schema error",
+          nextAction: "repair the handoff object shape and rerun compaction",
+        },
+        {
+          issue: "A tool call failed while gathering runtime evidence",
+          evidence: "The tool result status was error in the compacted session",
+          nextAction: "inspect the failed tool output before continuing implementation",
+        },
+        {
+          issue: "Assistant message recorded an error during the source run",
+          evidence: "The source assistant message contains an error object",
+          nextAction: "resolve the recorded source error before reporting completion",
+        },
+      ],
+    } satisfies CompactionHandoff.Info
+
+    const result = CompactionHandoff.validateMinimumEvidence(handoff, {
+      sourceUserMessageID: "msg-source",
+      instructionPaths: ["/repo/AGENTS.md"],
+      patchFiles: ["server/db/schema.ts"],
+      errorNames: [
+        "read tool error",
+        "bash tool error",
+        "StructuredOutput tool error",
+        "APIError",
+        "ToolSchemaBudgetError",
+      ],
+      userMessages: true,
+      fileEvidence: true,
+      errorsAndBlockers: true,
+      acceptanceCriteria: true,
+    })
+
+    expect(result.success).toBe(true)
+  })
+
+  test("rejects error blocker entries with empty evidence fields", () => {
+    const result = CompactionHandoff.validateMinimumEvidence(
+      {
+        ...handoffFixture(),
+        errorsAndBlockers: [
+          {
+            issue: "Compaction hit a runtime error",
+            evidence: "",
+            nextAction: "inspect the runtime error context and rerun compaction",
+          },
+        ],
+      } as CompactionHandoff.Info,
+      {
+        sourceUserMessageID: "msg-source",
+        instructionPaths: ["/repo/AGENTS.md"],
+        patchFiles: ["server/db/schema.ts"],
+        errorNames: ["StructuredOutputPayloadError"],
+        userMessages: true,
+        fileEvidence: true,
+        errorsAndBlockers: true,
+        acceptanceCriteria: true,
+      },
+    )
+
+    expect(result.success).toBe(false)
+    if (!result.success) expect(result.error).toContain("empty fields")
   })
 
   test("rejects a handoff that genuinely omits a required patch file", () => {
@@ -81,7 +178,7 @@ describe("compaction evidence contract", () => {
     if (!result.success) expect(result.error).toContain("files")
   })
 
-  test("renders required evidence blocks with every validator token", () => {
+  test("renders required file evidence and runtime error context blocks", () => {
     const requirements: CompactionHandoff.EvidenceRequirements = {
       sourceUserMessageID: "msg-source",
       instructionPaths: ["/repo/AGENTS.md"],
@@ -100,12 +197,15 @@ describe("compaction evidence contract", () => {
       context: [],
     })
 
-    expect(prompt).toContain("<required-file-evidence>\nserver/db/schema.ts\nserver/db/connection.ts\n</required-file-evidence>")
     expect(prompt).toContain(
-      "<required-error-evidence>\nStructuredOutputPayloadError\nStructuredOutput tool error\n</required-error-evidence>",
+      "<required-file-evidence>\nserver/db/schema.ts\nserver/db/connection.ts\n</required-file-evidence>",
+    )
+    expect(prompt).toContain(
+      "<runtime-error-context>\nStructuredOutputPayloadError\nStructuredOutput tool error\n</runtime-error-context>",
     )
     expect(prompt).toContain("Every non-empty line inside <required-file-evidence> MUST appear verbatim")
-    expect(prompt).toContain("Every non-empty line inside <required-error-evidence> MUST appear verbatim")
+    expect(prompt).toContain("Verbatim echo of the internal tokens is not required")
+    expect(prompt).not.toContain("<required-error-evidence>")
   })
 
   test("normalizes absolute patch evidence to worktree-relative paths before prompt and validation use it", async () => {

@@ -127,8 +127,8 @@ export namespace CompactionHandoff {
     "Do not write Markdown, prose, or a raw JSON text response; the handoff object must be the StructuredOutput tool input.",
     "Every retained claim must be grounded in the supplied conversation, runtime state, or evidence context.",
     "List all user-authored messages that appear in the compacted history in userMessages, preserving their intent and important wording.",
-    "Every non-empty line inside <required-file-evidence> MUST appear verbatim in files[].path or evidence[].value with kind=\"file\".",
-    "Every non-empty line inside <required-error-evidence> MUST appear verbatim in errorsAndBlockers[].issue, errorsAndBlockers[].evidence, or evidence[].value with kind=\"error\".",
+    'Every non-empty line inside <required-file-evidence> MUST appear verbatim in files[].path or evidence[].value with kind="file".',
+    "The <runtime-error-context> block lists internal error tokens collected during this session. For each distinct root cause, write at least one errorsAndBlockers entry in your own words with concrete issue, evidence, and nextAction. Verbatim echo of the internal tokens is not required.",
     "Use empty arrays only when no evidence exists for that field.",
     'Generic placeholders such as "continue implementation" are invalid.',
     "Do not treat assistant reasoning, tool-choice indecision, or checkpoint prompts as user requirements.",
@@ -141,9 +141,9 @@ export namespace CompactionHandoff {
       ...requirements.patchFiles,
       "</required-file-evidence>",
       "",
-      "<required-error-evidence>",
+      "<runtime-error-context>",
       ...requirements.errorNames,
-      "</required-error-evidence>",
+      "</runtime-error-context>",
     ].join("\n")
   }
 
@@ -195,13 +195,24 @@ export namespace CompactionHandoff {
     if (requirements.fileEvidence && omittedPatchFiles.length > 0) {
       missing.push("files")
     }
-    const reportedErrorNames = new Set([
-      ...handoff.errorsAndBlockers.flatMap((item) => [item.issue, item.evidence]),
-      ...handoff.evidence.filter((item) => item.kind === "error").map((item) => item.value),
-    ])
-    const omittedErrorNames = requirements.errorNames.filter((item) => !reportedErrorNames.has(item))
-    if (requirements.errorsAndBlockers && omittedErrorNames.length > 0) {
-      missing.push("errorsAndBlockers")
+    if (requirements.errorsAndBlockers) {
+      const emptyErrorFields = handoff.errorsAndBlockers.flatMap((item, index) =>
+        (["issue", "evidence", "nextAction"] as const).flatMap((field) =>
+          item[field].trim().length === 0 ? [`errorsAndBlockers[${index}].${field}`] : [],
+        ),
+      )
+      const requiredErrorEvidenceCount = Math.min(Math.ceil(requirements.errorNames.length / 3), 3)
+      const documentedErrorEvidenceCount =
+        handoff.errorsAndBlockers.length + handoff.evidence.filter((item) => item.kind === "error").length
+      if (handoff.errorsAndBlockers.length === 0) {
+        missing.push("errorsAndBlockers (no entries)")
+      } else if (emptyErrorFields.length > 0) {
+        missing.push(`errorsAndBlockers (empty fields: ${emptyErrorFields.join(", ")})`)
+      } else if (documentedErrorEvidenceCount < requiredErrorEvidenceCount) {
+        missing.push(
+          `errorsAndBlockers (too few entries: ${documentedErrorEvidenceCount}/${requiredErrorEvidenceCount} documented)`,
+        )
+      }
     }
     if (requirements.acceptanceCriteria && handoff.acceptanceCriteria.length === 0) {
       missing.push("acceptanceCriteria")
@@ -267,12 +278,16 @@ export namespace CompactionHandoff {
       section(normalized.files, (item) => `   - [${item.status}] ${item.path}: ${item.detail}`),
       "",
       "4. Errors and fixes:",
-      section(normalized.errorsAndBlockers, (item) => `   - ${item.issue} Evidence: ${item.evidence} Next: ${item.nextAction}`),
+      section(
+        normalized.errorsAndBlockers,
+        (item) => `   - ${item.issue} Evidence: ${item.evidence} Next: ${item.nextAction}`,
+      ),
       "",
       "5. Problem Solving:",
       section(
         normalized.decisions,
-        (item) => `   - ${item.decision} Rationale: ${item.rationale}${item.evidence ? ` Evidence: ${item.evidence}` : ""}`,
+        (item) =>
+          `   - ${item.decision} Rationale: ${item.rationale}${item.evidence ? ` Evidence: ${item.evidence}` : ""}`,
       ),
       ...normalized.evidence.map((item) => `   - [${item.kind}] ${item.value}: ${item.detail}`),
       "",

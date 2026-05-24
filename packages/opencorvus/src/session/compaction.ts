@@ -144,10 +144,12 @@ export namespace SessionCompaction {
     messages: Message.WithParts[]
     instructionPaths: string[]
     sourceUserMessageID: string
+    summarizePatchEvidence?: typeof Snapshot.patchEvidenceSummary
   }): CompactionHandoff.EvidenceRequirements {
     let userMessages = false
     const patchFiles = new Set<string>()
     const errorNames = new Set<string>()
+    const summarizePatchEvidence = input.summarizePatchEvidence ?? Snapshot.patchEvidenceSummary
     for (const msg of input.messages) {
       if (msg.info.role === "user") {
         userMessages ||= msg.parts.some((part) => part.type === "text" && part.text.trim().length > 0)
@@ -155,7 +157,7 @@ export namespace SessionCompaction {
       if (msg.info.role === "assistant" && msg.info.error) errorNames.add(msg.info.error.name)
       for (const part of msg.parts) {
         if (part.type === "patch") {
-          const summary = Snapshot.patchEvidenceSummary(part)
+          const summary = summarizePatchEvidence(part)
           for (const file of summary.filesPreviewHead) patchFiles.add(file)
           for (const file of summary.filesPreviewTail) patchFiles.add(file)
         }
@@ -720,5 +722,6 @@ export namespace SessionCompaction {
 
   export const TestHooks = {
     selectCompactionInput,
+    selectedHeadEvidenceRequirements,
   }
 }
