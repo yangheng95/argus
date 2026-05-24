@@ -28,7 +28,9 @@ describe("integrity review scope boundaries", () => {
 
     expect(tools).not.toContain("call `integrity` ONCE")
     expect(tools).not.toContain("wave-level architecture review")
-    expect(tools).toContain("Call standalone `integrity` only when the integrated evidence raises a real question")
-    expect(tools).toContain("it is not a routine wave-level step")
+    expect(tools).toContain("standalone integrity is")
+    expect(tools).toContain("not routine wave-level review")
+    expect(tools).toContain("Call `integrity` as the final workflow gate after all blocking builds are terminal")
+    expect(tools).toContain("before that, use it only when integrated evidence raises a real question")
   })
 })
