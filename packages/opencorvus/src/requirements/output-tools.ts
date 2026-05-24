@@ -13,6 +13,7 @@
 import { tool } from "ai"
 import z from "zod"
 import { limitSummary, markdownList } from "@/agent/report"
+import type { DecisionLog } from "@/decision-log"
 
 // ---------------------------------------------------------------------------
 // Collector — accumulates registered items across tool calls
@@ -28,12 +29,19 @@ export interface RegisteredRequirement {
   id: string
   type: "explicit" | "implicit"
   description: string
+  acceptance: string
+  non_goals: string
 }
 
 export interface RegisteredDecision {
   key: string
   value: string
   reason: string
+}
+
+export interface RequirementsOutputToolOptions {
+  decisionLog?: DecisionLog
+  decisionPhase?: string
 }
 
 const REQUIRED_DECISION_KEYS = [
@@ -64,6 +72,14 @@ export const RequirementsSubmitSchema = z.object({
   final: z.literal(true).describe("Explicit confirmation that requirement and decision registration is complete."),
 })
 
+export const RequirementRegistrationSchema = z.object({
+  id: z.string().describe("Requirement ID in REQ-N format, e.g. REQ-1"),
+  type: z.enum(["explicit", "implicit"]).describe("explicit = directly stated, implicit = logically required"),
+  description: z.string().trim().min(5).describe("What the requirement asks for"),
+  acceptance: z.string().trim().min(1).describe("One observable success condition for this REQ-N"),
+  non_goals: z.string().trim().min(1).describe("One nearby behavior this REQ-N does not cover"),
+})
+
 function emptyCollector(): RequirementsCollector {
   return {
     requirements: [],
@@ -80,7 +96,7 @@ export function summarizeRequirements(collector: RequirementsCollector): string 
 
 export function buildRequirementsReport(collector: RequirementsCollector) {
   const requirementLines = collector.requirements.map(
-    (r) => `${r.id} [${r.type}]: ${r.description}`,
+    (r) => `${r.id} [${r.type}]: ${r.description} Acceptance: ${r.acceptance} Non-goals: ${r.non_goals}`,
   )
   const decisionLines = collector.decisions.map(
     (d) => `${d.key}=${d.value} - ${d.reason}`,
@@ -99,21 +115,17 @@ export function buildRequirementsReport(collector: RequirementsCollector) {
 // Tool factory
 // ---------------------------------------------------------------------------
 
-export function createRequirementsOutputTools() {
+export function createRequirementsOutputTools(options: RequirementsOutputToolOptions = {}) {
   let collector = emptyCollector()
 
   const tools = {
     register_requirement: tool({
       description: "Register a parsed requirement from user input. Call once per requirement.",
-      inputSchema: z.object({
-        id: z.string().describe("Requirement ID in REQ-N format, e.g. REQ-1"),
-        type: z.enum(["explicit", "implicit"]).describe("explicit = directly stated, implicit = logically required"),
-        description: z.string().min(5).describe("What the requirement asks for"),
-      }),
-      execute: async ({ id, type, description }) => {
+      inputSchema: RequirementRegistrationSchema,
+      execute: async ({ id, type, description, acceptance, non_goals }) => {
         if (!/^REQ-\d+$/.test(id)) return `Error: id must be REQ-N format (got "${id}")`
         if (collector.requirements.some((r) => r.id === id)) return `Error: ${id} already registered`
-        collector.requirements.push({ id, type, description })
+        collector.requirements.push({ id, type, description, acceptance, non_goals })
         return `OK: ${id} registered (${collector.requirements.length} total)`
       },
     }),
@@ -130,6 +142,12 @@ export function createRequirementsOutputTools() {
       }),
       execute: async ({ key, value, reason }) => {
         collector.decisions.push({ key, value, reason })
+        options.decisionLog?.append({
+          phase: options.decisionPhase ?? "requirements",
+          key,
+          value,
+          reason,
+        })
         return `OK: decision "${key}=${value}" registered`
       },
     }),

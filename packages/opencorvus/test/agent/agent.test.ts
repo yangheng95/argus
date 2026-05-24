@@ -353,7 +353,6 @@ test("native stage agent registry tool surfaces match role boundaries", async ()
       expect(integrity).toBeDefined()
       expect(integrity?.tools?.include).toEqual([])
       expect(await Agent.get("delivery")).toBeUndefined()
-      expect(await Agent.get("prosecutor")).toBeUndefined()
     },
   })
 })

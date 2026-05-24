@@ -31,6 +31,7 @@ import {
   startNewAttempt,
   updateGoalRun,
 } from "../../src/engine/persist"
+import * as EnginePersist from "../../src/engine/persist"
 import { AttachmentStore } from "../../src/storage/attachment-store"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
@@ -44,6 +45,7 @@ import {
   findGoal,
   findGoalRun,
   findGoalLatestWorkspace,
+  findLatestIntegrityArtifactMissingStatus,
   findLatestIntegrityAttemptArtifact,
   findRequirements,
   findRun,
@@ -61,6 +63,8 @@ import {
   listLiveOrchestratorToolOwnership,
 } from "../../src/engine/tool-ownership"
 import { Ownership } from "../../src/engine/ownership"
+import { buildIntegrityReplayContext, buildSpecSnapshotLineage } from "../../src/integrity/replay-context"
+import { buildIntegrityRootHistory, persistentRootSummary, renderIntegrityRootHistoryBlock } from "../../src/integrity/root-history"
 
 let buildAgentRunImpl: ((input: any) => Promise<any>) | undefined
 let reviewIntegrityImpl: ((input: any) => Promise<any>) | undefined
@@ -84,12 +88,110 @@ function buildToolOptions(label = "build") {
   } as any
 }
 
+function activeOnlyLineage(taskID: string, specSnapshotID: string) {
+  return {
+    taskID,
+    activeSpecSnapshotID: specSnapshotID,
+    inheritedSpecSnapshotIDs: [],
+    reason: "active_only" as const,
+  }
+}
+
 function acceptedAcceptance() {
   return {
     verdict: "accepted",
     summary: "Acceptance passed",
     deferred_checks: [],
     tool_call_evidence: [{ tool: "unit_test", passed: true, detail: "unit test passed" }],
+  }
+}
+
+function integrityFinding(input: {
+  id?: string
+  severity?: "blocking" | "advisory"
+  verdictImpact?: "pass" | "concerns" | "needs_correction"
+  title?: string
+  description: string
+  targetIDs?: string[]
+  requirementIDs?: string[]
+  filePaths?: string[]
+  repair?: string
+  reviewers?: string[]
+}) {
+  return {
+    id: input.id ?? `finding-${Math.random().toString(16).slice(2)}`,
+    severity: input.severity ?? (input.verdictImpact === "needs_correction" ? "blocking" : "advisory"),
+    verdictImpact: input.verdictImpact ?? "needs_correction",
+    title: input.title ?? input.description,
+    description: input.description,
+    evidence: [`Mock evidence: ${input.description}`],
+    targetIDs: input.targetIDs ?? [],
+    requirementIDs: input.requirementIDs ?? [],
+    specIDs: [],
+    filePaths: input.filePaths ?? [],
+    repair: input.repair ?? "Review the finding and route explicit repair work.",
+    reviewers: input.reviewers ?? ["requirements_surface"],
+    consensus: "agreed",
+  }
+}
+
+function integrityRepair(input: { id?: string; description: string; targetIDs?: string[]; filePaths?: string[] }) {
+  return {
+    id: input.id ?? `repair-${Math.random().toString(16).slice(2)}`,
+    description: input.description,
+    evidence: [`Mock repair evidence: ${input.description}`],
+    targetIDs: input.targetIDs ?? [],
+    filePaths: input.filePaths ?? [],
+  }
+}
+
+function integrityTeamResult(input: {
+  verdict?: "pass" | "concerns" | "needs_correction"
+  summary?: string
+  sessionID?: string
+  findings?: Array<ReturnType<typeof integrityFinding>>
+  requiredRepairs?: Array<ReturnType<typeof integrityRepair>>
+  teamReportMarkdown?: string
+}) {
+  const verdict = input.verdict ?? "pass"
+  const summary = input.summary ?? "Integrity pass"
+  const findings = input.findings ?? []
+  const requiredRepairs = input.requiredRepairs ?? []
+  const requirementsVerdict = verdict === "needs_correction" ? "needs_correction" : "pass"
+  const deliveryVerdict = verdict === "pass" ? "pass" : "concerns"
+  return {
+    verdict,
+    summary,
+    teamReportMarkdown:
+      input.teamReportMarkdown ??
+      [summary, ...findings.map((finding) => finding.description), ...requiredRepairs.map((repair) => repair.description)]
+        .filter(Boolean)
+        .join("\n"),
+    reviewers: [
+      {
+        reviewerID: "requirements_surface",
+        scope: "Requirement fidelity",
+        verdict: requirementsVerdict,
+        summary,
+        evidence: ["Mock requirement evidence."],
+        findings: findings.filter((finding) => finding.reviewers.includes("requirements_surface")),
+        openQuestions: [],
+      },
+      {
+        reviewerID: "delivery_surface",
+        scope: "Delivery and implementation evidence",
+        verdict: deliveryVerdict,
+        summary: verdict === "pass" ? "Delivery evidence is acceptable." : summary,
+        evidence: ["Mock delivery evidence."],
+        findings: findings.filter((finding) => finding.reviewers.includes("delivery_surface")),
+        openQuestions: [],
+      },
+    ],
+    findings,
+    rounds: [],
+    requiredRepairs,
+    unresolvedDisagreements: [],
+    sessionID: input.sessionID ?? "ses_integrity_default",
   }
 }
 
@@ -111,10 +213,15 @@ mock.module("@/integrity", () => ({
   // Pure projection — empty snapshot is the right answer for orchestrator
   // tests, which don't seed the goal_run / verification-evidence rows the
   // production projection would join. Tests asserting prompt rendering of
-  // the snapshot live in test/integrity/agent.test.ts and use the real
-  // function; this mock is just a non-throwing stub so the orchestrator's
-  // pre-review wiring doesn't blow up in the legacy test suites.
+  // the snapshot live in active integrity tests and use the real function;
+  // this mock is just a non-throwing stub so the orchestrator's pre-review
+  // wiring doesn't blow up in orchestrator-focused suites.
   computeRequirementStatusSnapshot: (input: any) => computeRequirementStatusSnapshotImpl?.(input) ?? [],
+  buildIntegrityReplayContext,
+  buildSpecSnapshotLineage,
+  buildIntegrityRootHistory,
+  persistentRootSummary,
+  renderIntegrityRootHistoryBlock,
   applyIntegrityCorrections: (goals: any) => goals,
 }))
 
@@ -162,6 +269,7 @@ mock.module("@/delivery/service", () => ({
 
 mock.module("@/plugin", () => ({
   Plugin: {
+    list: async () => [],
     trigger: async () => {},
   },
 }))
@@ -360,6 +468,65 @@ function seedTerminalFailedBuildRun(input: {
   return goalRunID
 }
 
+function seedBuildUptakeIntegrityHistory(input: {
+  taskID: string
+  specID: string
+  now: number
+  rootID?: string
+}) {
+  const rootID = input.rootID ?? "storage-validation"
+  recordIntegrityAttempt({
+    taskID: input.taskID,
+    sessionID: `ses_build_uptake_r1_${input.now}`,
+    lineage: activeOnlyLineage(input.taskID, input.specID),
+    verdict: "needs_correction",
+    phase: "post_build",
+    reviewers: [{ reviewerID: "rev_storage", scope: "Storage validation", verdict: "needs_correction" }],
+    findings: [
+      integrityFinding({
+        id: "BF-R1-storage-validation",
+        description: "getSettings trusts localStorage values.",
+        repair: "Validate persisted settings on load.",
+        filePaths: ["src/services/storage.ts"],
+        requirementIDs: ["REQ-settings"],
+        reviewers: ["rev_storage"],
+      }),
+    ].map((finding) => ({
+      ...finding,
+      rootID,
+      canonicalLabel: "Validate persisted settings",
+      title: "Persisted settings are trusted",
+      evidence: ["src/services/storage.ts getSettings"],
+    })),
+    now: input.now + 1,
+  })
+  recordIntegrityAttempt({
+    taskID: input.taskID,
+    sessionID: `ses_build_uptake_r2_${input.now}`,
+    lineage: activeOnlyLineage(input.taskID, input.specID),
+    verdict: "needs_correction",
+    phase: "post_build",
+    reviewers: [{ reviewerID: "rev_settings", scope: "Settings repair verification", verdict: "needs_correction" }],
+    findings: [
+      integrityFinding({
+        id: "BF-R2-settings-validation",
+        description: "Invalid model/temperature/maxTokens values from localStorage reach API settings.",
+        repair: "Validate model against ALLOWED_MODELS, clamp temperature to [0,2], clamp maxTokens to [1,8192].",
+        filePaths: ["src/services/storage.ts"],
+        requirementIDs: ["REQ-settings"],
+        reviewers: ["rev_settings", "rev_storage"],
+      }),
+    ].map((finding) => ({
+      ...finding,
+      rootID,
+      canonicalLabel: "Validate persisted settings",
+      title: "getSettings does not validate model, temperature, or maxTokens",
+      evidence: ["src/services/storage.ts getSettings still returns unchecked values"],
+    })),
+    now: input.now + 2,
+  })
+}
+
 describe("orchestrator tools", () => {
   let tmp: Awaited<ReturnType<typeof tmpdir>>
 
@@ -369,42 +536,7 @@ describe("orchestrator tools", () => {
     architectCoordinateImpl = undefined
     mcpServerToolsImpl = undefined
     mcpCallToolImpl = undefined
-    reviewIntegrityImpl = async () => ({
-      verdict: "pass",
-      summary: "Integrity pass",
-      dimensions: [
-        {
-          id: "requirement_fidelity",
-          verdict: "pass",
-          issues: [],
-          corrections: [],
-          graphCorrections: [],
-          missingGoals: [],
-        },
-        {
-          id: "technical_feasibility",
-          verdict: "pass",
-          issues: [],
-          corrections: [],
-          graphCorrections: [],
-          missingGoals: [],
-        },
-        { id: "hallucination", verdict: "pass", issues: [], corrections: [], graphCorrections: [], missingGoals: [] },
-        {
-          id: "solution_quality",
-          verdict: "pass",
-          issues: [],
-          corrections: [],
-          graphCorrections: [],
-          missingGoals: [],
-        },
-      ],
-      issues: [],
-      corrections: [],
-      graphCorrections: [],
-      missingGoals: [],
-      sessionID: "ses_integrity_default",
-    })
+    reviewIntegrityImpl = async () => integrityTeamResult({ sessionID: "ses_integrity_default" })
   })
 
   afterEach(async () => {
@@ -597,6 +729,170 @@ describe("orchestrator tools", () => {
       },
     })
   })
+
+  test("task-level direct build receives persistent integrity findings in build context", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_build_uptake_direct_${stamp}`
+    const taskID = `tsk_build_uptake_direct_${stamp}`
+    const goalID = `goal_build_uptake_direct_${stamp}`
+    const specID = `spec_build_uptake_direct_${stamp}`
+    const pipeline = WorkflowRegistry.resolveSync("pipeline")!
+    const workflowState = createWorkflowState(pipeline)
+    let capturedIntegrityFeedback = ""
+
+    insertWorkflowTaskWithGoal({
+      projectID,
+      taskID,
+      goalID,
+      sessionID: null,
+      worktree: tmp.path,
+      projectName: "Build uptake direct test",
+      taskTitle: "Build uptake direct task",
+      request: "Repair persistent integrity blockers through a direct build.",
+      goalTitle: "Existing goal for active spec",
+      goalSlug: "existing-goal-for-active-spec",
+      objective: "Keep an active spec snapshot for direct build feedback.",
+      now,
+      specID,
+      requirementIDs: ["REQ-settings"],
+    })
+    seedBuildUptakeIntegrityHistory({ taskID, specID, now })
+
+    buildAgentRunImpl = async (input: any) => {
+      expect(input.target).toEqual({
+        kind: "request",
+        text: "Repair persistent settings validation.",
+      })
+      capturedIntegrityFeedback = input.context?.integrityFeedback ?? ""
+      return {
+        result: {
+          status: "passed",
+          summary: "Direct build consumed integrity feedback.",
+          files_changed: [],
+          tests: [],
+        },
+        sessionID: "ses_build_uptake_direct",
+        worktreeDir: tmp.path,
+        diffs: [],
+      }
+    }
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "build uptake direct test" })
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+          workflow: pipeline,
+          workflowState,
+        })
+
+        const result = await tools.build.execute(
+          {
+            request: "Repair persistent settings validation.",
+            reason: "Direct correction after integrity review.",
+            directBuildIntent: "modify_files",
+          },
+          buildToolOptions(),
+        )
+
+        expect(result).toContain("Build agent finished")
+      },
+    })
+
+    expect(capturedIntegrityFeedback).toContain("## Persistent Integrity Findings")
+    expect(capturedIntegrityFeedback).toMatch(/root: root_[a-f0-9]{12}/)
+    expect(capturedIntegrityFeedback).toContain("BF-R2-settings-validation")
+    expect(capturedIntegrityFeedback).toContain("getSettings does not validate model, temperature, or maxTokens")
+    expect(capturedIntegrityFeedback).toContain("Validate model against ALLOWED_MODELS")
+    expect(capturedIntegrityFeedback).toContain("reviewer ids: rev_settings, rev_storage")
+  })
+
+  test("goal build receives persistent integrity findings alongside retry guidance", async () => {
+    await tmp?.[Symbol.asyncDispose]?.()
+    tmp = await tmpdir({ git: true })
+
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_build_uptake_goal_${stamp}`
+    const taskID = `tsk_build_uptake_goal_${stamp}`
+    const goalID = `goal_build_uptake_goal_${stamp}`
+    const specID = `spec_build_uptake_goal_${stamp}`
+    let capturedContext: any
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "build uptake goal test" })
+        insertWorkflowTaskWithGoal({
+          projectID,
+          taskID,
+          goalID,
+          sessionID: parent.id,
+          worktree: tmp.path,
+          projectName: "Build uptake goal test",
+          taskTitle: "Build uptake goal task",
+          request: "Repair persistent integrity blockers through a goal build.",
+          goalTitle: "Settings validation goal",
+          goalSlug: "settings-validation-goal",
+          objective: "Validate persisted settings on load.",
+          now,
+          specID,
+          requirementIDs: ["REQ-settings"],
+        })
+        seedBuildUptakeIntegrityHistory({ taskID, specID, now })
+
+        buildAgentRunImpl = async (input: any) => {
+          await markBuildSlotAcquired(input, "ses_build_uptake_goal")
+          capturedContext = input.context
+          return {
+            result: {
+              status: "passed",
+              summary: "Goal build consumed integrity feedback.",
+              files_changed: [
+                {
+                  path: "src/services/storage.ts",
+                  summary: "Validated persisted settings.",
+                  reason: "Persistent integrity finding required the storage load path to validate settings.",
+                },
+              ],
+              tests: [],
+              commit_ref: "abc1234",
+            },
+            sessionID: "ses_build_uptake_goal",
+            worktreeDir: input.managedWorktree.directory,
+            worktreeBranch: input.managedWorktree.branch,
+            worktreeBaseRef: input.managedWorktree.baseRef,
+          }
+        }
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const result = await tools.build.execute(
+          {
+            goalID,
+            request: "Retry by fixing the storage load validator.",
+            reason: "Per-goal integrity correction.",
+          },
+          buildToolOptions(),
+        )
+
+        expect(result).toContain("status=passed")
+      },
+    })
+
+    expect(capturedContext?.integrityFeedback).toContain("## Persistent Integrity Findings")
+    expect(capturedContext?.integrityFeedback).toMatch(/root: root_[a-f0-9]{12}/)
+    expect(capturedContext?.integrityFeedback).toContain("BF-R2-settings-validation")
+    expect(capturedContext?.retryGuidance).toBe("Retry by fixing the storage load validator.")
+  }, 15000)
 
   test("goal build rejects persisted contract_audit graph id mismatch before build starts", async () => {
     const now = Date.now()
@@ -1567,50 +1863,80 @@ describe("orchestrator tools", () => {
         claimingGoals: [{ goalID: "direct-task", runStatus: "completed" }],
       },
     ]
-    reviewIntegrityImpl = async () => ({
-      verdict: "pass",
-      summary: "Integrity pass with advisory concern",
-      dimensions: [
-        {
-          id: "requirement_fidelity",
-          verdict: "pass",
-          issues: [],
-          corrections: [],
-          graphCorrections: [],
-          missingGoals: [],
-        },
-        {
-          id: "technical_feasibility",
-          verdict: "pass",
-          issues: [],
-          corrections: [],
-          graphCorrections: [],
-          missingGoals: [],
-        },
-        { id: "hallucination", verdict: "pass", issues: [], corrections: [], graphCorrections: [], missingGoals: [] },
-        {
-          id: "solution_quality",
-          verdict: "concerns",
-          issues: [{
-            type: "weak_acceptance",
+    let capturedIntegrityInput: any
+    reviewIntegrityImpl = async (input) => {
+      capturedIntegrityInput = input
+      return {
+        verdict: "pass",
+        summary: "Integrity pass with advisory concern",
+        teamReportMarkdown:
+          "**solution_quality = concerns**\n\nREQ-1 evidence is acceptable but should be strengthened next time.",
+        reviewers: [
+          {
+            reviewerID: "requirement_fidelity",
+            scope: "Requirement fidelity",
+            verdict: "pass",
+            summary: "REQ-1 is satisfied by the completed build evidence.",
+            evidence: ["REQ-1 status snapshot is satisfied."],
+            findings: [],
+            openQuestions: [],
+          },
+          {
+            reviewerID: "solution_quality",
+            scope: "Solution quality",
+            verdict: "concerns",
+            summary: "Evidence is acceptable but should be stronger next time.",
+            evidence: ["accepted-output.txt was produced."],
+            findings: [
+              {
+                id: "F-1",
+                severity: "advisory",
+                verdictImpact: "concerns",
+                title: "Weak acceptance evidence",
+                description: "REQ-1 evidence is acceptable but should be strengthened next time.",
+                evidence: ["accepted-output.txt was produced."],
+                targetIDs: [goalID],
+                requirementIDs: ["REQ-1"],
+                specIDs: [],
+                filePaths: ["accepted-output.txt"],
+                repair: "Strengthen acceptance evidence on the next build.",
+                reviewers: ["solution_quality"],
+                consensus: "agreed",
+              },
+            ],
+            openQuestions: [],
+          },
+        ],
+        findings: [
+          {
+            id: "F-1",
+            severity: "advisory",
+            verdictImpact: "concerns",
+            title: "Weak acceptance evidence",
             description: "REQ-1 evidence is acceptable but should be strengthened next time.",
-            goalIDs: [goalID],
-          }],
-          corrections: [],
-          graphCorrections: [],
-          missingGoals: [],
-        },
-      ],
-      issues: [{
-        type: "weak_acceptance",
-        description: "REQ-1 evidence is acceptable but should be strengthened next time.",
-        goalIDs: [goalID],
-      }],
-      corrections: [],
-      graphCorrections: [],
-      missingGoals: [],
-      sessionID: "ses_integrity_advisory_complete",
-    })
+            evidence: ["accepted-output.txt was produced."],
+            targetIDs: [goalID],
+            requirementIDs: ["REQ-1"],
+            specIDs: [],
+            filePaths: ["accepted-output.txt"],
+            repair: "Strengthen acceptance evidence on the next build.",
+            reviewers: ["solution_quality"],
+            consensus: "agreed",
+          },
+        ],
+        rounds: [
+          {
+            roundID: "round-1",
+            prompt: "Confirm post-build evidence quality.",
+            reviewerIDs: ["requirement_fidelity", "solution_quality"],
+            outcome: "Advisory concern retained; pass verdict remains valid.",
+          },
+        ],
+        requiredRepairs: [],
+        unresolvedDisagreements: [],
+        sessionID: "ses_integrity_advisory_complete",
+      }
+    }
 
     await Instance.provide({
       directory: tmp.path,
@@ -1658,7 +1984,19 @@ describe("orchestrator tools", () => {
         )
 
         expect(integrityResult).toContain("Integrity verdict: pass")
-        expect(integrityResult).toContain("solution_quality=concerns(1issues)")
+        expect(capturedIntegrityInput.replayContext).toMatchObject({
+          attemptNumber: 1,
+          buildEvidenceSinceLastReview: {
+            changedFiles: [],
+            goalRuns: [expect.objectContaining({ goalID, status: "completed" })],
+          },
+          scaleSignals: {
+            phase: "post_build",
+            priorAttempts: 0,
+            changedFilesSinceLastReview: 0,
+          },
+        })
+        expect(integrityResult).toContain("findings=1")
         expect(integrityResult).toContain("REQ-1 evidence is acceptable but should be strengthened next time.")
         expect(integrityResult).toContain("task completed")
         const taskRow = Database.use((db) =>
@@ -1673,11 +2011,13 @@ describe("orchestrator tools", () => {
         const artifact = findLatestIntegrityAttemptArtifact({ taskID, specSnapshotID: `spec_${goalID}` })
         const payload = artifact?.payload as Record<string, any> | undefined
         expect(artifact?.label).toBe("verdict-pass")
-        expect(payload?.issues_count).toBe(1)
-        expect(payload?.corrections_count).toBe(0)
-        expect(payload?.per_dimension).toContainEqual({ id: "solution_quality", verdict: "concerns" })
-        expect(payload?.review_markdown).toContain("**solution_quality = concerns**")
-        expect(payload?.review_markdown).toContain("REQ-1 evidence is acceptable but should be strengthened next time.")
+        expect(payload?.attempts).toBe(1)
+        expect(payload?.findings_count).toBe(1)
+        expect(payload?.required_repairs_count).toBe(0)
+        expect(payload?.team_report_markdown).toContain("**solution_quality = concerns**")
+        expect(payload?.team_report_markdown).toContain(
+          "REQ-1 evidence is acceptable but should be strengthened next time.",
+        )
 
         const publishResult = await tools.publish_delivery.execute(
           { reason: "Explicit artifact export after integrity completion." },
@@ -1745,46 +2085,28 @@ describe("orchestrator tools", () => {
         claimingGoals: [{ goalID, runStatus: "completed" }],
       },
     ]
-    reviewIntegrityImpl = async () => ({
-      verdict: "needs_correction",
-      summary: "Integrity found a post-build requirement mismatch.",
-      dimensions: [
-        {
-          id: "requirement_fidelity",
-          verdict: "needs_correction",
-          issues: [{ description: "REQ-1 is not fully satisfied by the build output.", type: "uncovered" }],
-          corrections: [
-            { action: "modify", goalID, reason: "Cover REQ-1 completely.", updates: { objective: "cover REQ-1" } },
-          ],
-          graphCorrections: [],
-          missingGoals: [],
-        },
-        {
-          id: "technical_feasibility",
-          verdict: "pass",
-          issues: [],
-          corrections: [],
-          graphCorrections: [],
-          missingGoals: [],
-        },
-        { id: "hallucination", verdict: "pass", issues: [], corrections: [], graphCorrections: [], missingGoals: [] },
-        {
-          id: "solution_quality",
-          verdict: "pass",
-          issues: [],
-          corrections: [],
-          graphCorrections: [],
-          missingGoals: [],
-        },
-      ],
-      issues: [{ description: "REQ-1 is not fully satisfied by the build output.", type: "uncovered" }],
-      corrections: [
-        { action: "modify", goalID, reason: "Cover REQ-1 completely.", updates: { objective: "cover REQ-1" } },
-      ],
-      graphCorrections: [],
-      missingGoals: [],
-      sessionID: "ses_integrity_blocked",
-    })
+    reviewIntegrityImpl = async () =>
+      integrityTeamResult({
+        verdict: "needs_correction",
+        summary: "Integrity found a post-build requirement mismatch.",
+        findings: [
+          integrityFinding({
+            id: "F-REQ-1",
+            description: "REQ-1 is not fully satisfied by the build output.",
+            targetIDs: [goalID],
+            requirementIDs: ["REQ-1"],
+            repair: "Cover REQ-1 completely.",
+          }),
+        ],
+        requiredRepairs: [
+          integrityRepair({
+            id: "repair-REQ-1",
+            description: "Cover REQ-1 completely.",
+            targetIDs: [goalID],
+          }),
+        ],
+        sessionID: "ses_integrity_blocked",
+      })
 
     await Instance.provide({
       directory: tmp.path,
@@ -2635,6 +2957,7 @@ describe("orchestrator tools", () => {
             description: "The app shell renders and typechecks.",
             acceptance: ["typecheck passes"],
             evidence_refs: ["user request"],
+            non_goals: ["This requirement does not cover unrelated runtime features."],
             priority: "blocking",
           },
         ],
@@ -2643,6 +2966,8 @@ describe("orchestrator tools", () => {
 
     architectCoordinateImpl = async (input: any) => {
       expect(input.requirements.map((r: any) => r.id)).toEqual(["REQ-1"])
+      expect(input.requirements[0].acceptance).toBe("typecheck passes")
+      expect(input.requirements[0].non_goals).toBe("This requirement does not cover unrelated runtime features.")
       return {
         summary: "One goal architecture.",
         goals: [
@@ -2754,21 +3079,7 @@ describe("orchestrator tools", () => {
 
         reviewIntegrityImpl = async () => {
           architectureReviewCalls += 1
-          return {
-            verdict: "pass",
-            summary: "Integrity pass",
-            dimensions: [
-              { id: "requirement_fidelity", verdict: "pass", issues: [] },
-              { id: "technical_feasibility", verdict: "pass", issues: [] },
-              { id: "hallucination", verdict: "pass", issues: [] },
-              { id: "solution_quality", verdict: "pass", issues: [] },
-            ],
-            issues: [],
-            corrections: [],
-            graphCorrections: [],
-            missingGoals: [],
-            sessionID: "ses_integrity_auto",
-          }
+          return integrityTeamResult({ sessionID: "ses_integrity_auto" })
         }
         buildAgentRunImpl = async (input: any) => {
           await markBuildSlotAcquired(input)
@@ -2867,21 +3178,7 @@ describe("orchestrator tools", () => {
         reviewIntegrityImpl = async () => {
           reviewCalls += 1
           await reviewGate
-          return {
-            verdict: "pass",
-            summary: "Integrity pass",
-            dimensions: [
-              { id: "requirement_fidelity", verdict: "pass", issues: [] },
-              { id: "technical_feasibility", verdict: "pass", issues: [] },
-              { id: "hallucination", verdict: "pass", issues: [] },
-              { id: "solution_quality", verdict: "pass", issues: [] },
-            ],
-            issues: [],
-            corrections: [],
-            graphCorrections: [],
-            missingGoals: [],
-            sessionID: "ses_integrity_singleflight",
-          }
+          return integrityTeamResult({ sessionID: "ses_integrity_singleflight" })
         }
 
         const { tools } = createOrchestratorTools({
@@ -3139,29 +3436,34 @@ describe("orchestrator tools", () => {
           now,
         })
 
-        reviewIntegrityImpl = async () => ({
-          verdict: "needs_correction",
-          summary: "Goal graph must change",
-          dimensions: [
-            {
-              id: "requirement_fidelity",
-              verdict: "needs_correction",
-              issues: [{ description: "Split the goal", type: "coverage_gap" }],
-            },
-            { id: "technical_feasibility", verdict: "pass", issues: [] },
-            { id: "hallucination", verdict: "pass", issues: [] },
-            {
-              id: "solution_quality",
-              verdict: "needs_correction",
-              issues: [{ description: "Current goal is too broad", type: "granularity" }],
-            },
-          ],
-          issues: [{ description: "Split the goal", type: "coverage_gap" }],
-          corrections: [{ type: "split_goal" }],
-          graphCorrections: [],
-          missingGoals: [],
-          sessionID: "ses_integrity_corrected",
-        })
+        reviewIntegrityImpl = async () =>
+          integrityTeamResult({
+            verdict: "needs_correction",
+            summary: "Goal graph must change",
+            findings: [
+              integrityFinding({
+                id: "F-split-goal",
+                description: "Split the goal",
+                targetIDs: [goalID],
+                repair: "Split the current goal into smaller repair work.",
+              }),
+              integrityFinding({
+                id: "F-goal-too-broad",
+                description: "Current goal is too broad",
+                targetIDs: [goalID],
+                repair: "Narrow the goal before accepting the task.",
+                reviewers: ["delivery_surface"],
+              }),
+            ],
+            requiredRepairs: [
+              integrityRepair({
+                id: "repair-split-goal",
+                description: "Split the current goal into smaller repair work.",
+                targetIDs: [goalID],
+              }),
+            ],
+            sessionID: "ses_integrity_corrected",
+          })
         buildAgentRunImpl = async (input: any) => {
           await markBuildSlotAcquired(input)
           buildCalls += 1
@@ -3248,25 +3550,22 @@ describe("orchestrator tools", () => {
           now,
         })
 
-        reviewIntegrityImpl = async () => ({
-          verdict: "concerns",
-          summary: "Shared shell contract is underspecified",
-          dimensions: [
-            {
-              id: "requirement_fidelity",
-              verdict: "concerns",
-              issues: [{ description: "Sibling handoff is ambiguous", type: "coverage_gap", goalIDs: [goalID] }],
-            },
-            { id: "technical_feasibility", verdict: "pass", issues: [] },
-            { id: "hallucination", verdict: "pass", issues: [] },
-            { id: "solution_quality", verdict: "pass", issues: [] },
-          ],
-          issues: [{ description: "Sibling handoff is ambiguous", type: "coverage_gap", goalIDs: [goalID] }],
-          corrections: [],
-          graphCorrections: [],
-          missingGoals: [],
-          sessionID: "ses_integrity_concern",
-        })
+        reviewIntegrityImpl = async () =>
+          integrityTeamResult({
+            verdict: "concerns",
+            summary: "Shared shell contract is underspecified",
+            findings: [
+              integrityFinding({
+                id: "F-sibling-handoff",
+                severity: "advisory",
+                verdictImpact: "concerns",
+                description: "Sibling handoff is ambiguous",
+                targetIDs: [goalID],
+                repair: "Clarify the sibling handoff before final acceptance.",
+              }),
+            ],
+            sessionID: "ses_integrity_concern",
+          })
         buildAgentRunImpl = async (input: any) => {
           await markBuildSlotAcquired(input)
           return {
@@ -3403,41 +3702,23 @@ describe("orchestrator tools", () => {
             .run(),
         )
 
-        reviewIntegrityImpl = async () => ({
-          verdict: "concerns",
-          summary: "Feature acceptance is underspecified",
-          dimensions: [
-            {
-              id: "requirement_fidelity",
-              verdict: "pass",
-              issues: [],
-            },
-            { id: "technical_feasibility", verdict: "pass", issues: [] },
-            { id: "hallucination", verdict: "pass", issues: [] },
-            {
-              id: "solution_quality",
-              verdict: "concerns",
-              issues: [
-                {
-                  description: "Feature goal acceptance depends on bootstrap details",
-                  type: "weak_acceptance",
-                  goalIDs: [siblingGoalID],
-                },
-              ],
-            },
-          ],
-          issues: [
-            {
-              description: "Feature goal acceptance depends on bootstrap details",
-              type: "weak_acceptance",
-              goalIDs: [siblingGoalID],
-            },
-          ],
-          corrections: [],
-          graphCorrections: [],
-          missingGoals: [],
-          sessionID: "ses_integrity_sibling",
-        })
+        reviewIntegrityImpl = async () =>
+          integrityTeamResult({
+            verdict: "concerns",
+            summary: "Feature acceptance is underspecified",
+            findings: [
+              integrityFinding({
+                id: "F-feature-acceptance",
+                severity: "advisory",
+                verdictImpact: "concerns",
+                description: "Feature goal acceptance depends on bootstrap details",
+                targetIDs: [siblingGoalID],
+                repair: "Clarify acceptance across the bootstrap and feature goals.",
+                reviewers: ["delivery_surface"],
+              }),
+            ],
+            sessionID: "ses_integrity_sibling",
+          })
         buildAgentRunImpl = async (input: any) => {
           await markBuildSlotAcquired(input)
           return {
@@ -3584,37 +3865,27 @@ describe("orchestrator tools", () => {
         })
         expect(goalStatusByID(childGoalID)).toBe("running")
 
-        reviewIntegrityImpl = async () => ({
-          verdict: "needs_correction",
-          summary: "Foundation contract changed under dependent work",
-          dimensions: [
-            {
-              id: "requirement_fidelity",
-              verdict: "needs_correction",
-              issues: [
-                {
-                  description: "Foundation acceptance omitted a shared interface",
-                  type: "coverage_gap",
-                  goalIDs: [goalID],
-                },
-              ],
-            },
-            { id: "technical_feasibility", verdict: "pass", issues: [] },
-            { id: "hallucination", verdict: "pass", issues: [] },
-            { id: "solution_quality", verdict: "pass", issues: [] },
-          ],
-          issues: [
-            {
-              description: "Foundation acceptance omitted a shared interface",
-              type: "coverage_gap",
-              goalIDs: [goalID],
-            },
-          ],
-          corrections: [],
-          graphCorrections: [],
-          missingGoals: [],
-          sessionID: "ses_integrity_cascade",
-        })
+        reviewIntegrityImpl = async () =>
+          integrityTeamResult({
+            verdict: "needs_correction",
+            summary: "Foundation contract changed under dependent work",
+            findings: [
+              integrityFinding({
+                id: "F-foundation-interface",
+                description: "Foundation acceptance omitted a shared interface",
+                targetIDs: [goalID],
+                repair: "Add the shared interface contract to the foundation goal.",
+              }),
+            ],
+            requiredRepairs: [
+              integrityRepair({
+                id: "repair-foundation-interface",
+                description: "Add the shared interface contract to the foundation goal.",
+                targetIDs: [goalID],
+              }),
+            ],
+            sessionID: "ses_integrity_cascade",
+          })
         buildAgentRunImpl = async (input: any) => {
           await markBuildSlotAcquired(input)
           return {
@@ -3782,25 +4053,21 @@ describe("orchestrator tools", () => {
           specID,
         })
 
-        reviewIntegrityImpl = async () => ({
-          verdict: "needs_correction",
-          summary: "Correction has no semantic effect",
-          dimensions: [
-            { id: "requirement_fidelity", verdict: "pass", issues: [] },
-            {
-              id: "technical_feasibility",
-              verdict: "needs_correction",
-              issues: [{ description: "Dependency prose only", type: "missing_capability" }],
-            },
-            { id: "hallucination", verdict: "pass", issues: [] },
-            { id: "solution_quality", verdict: "concerns", issues: [] },
-          ],
-          issues: [{ description: "Dependency prose only", type: "missing_capability" }],
-          corrections: [{ action: "modify", goalID, reason: "No actual updates", updates: {} }],
-          graphCorrections: [],
-          missingGoals: [],
-          sessionID: "ses_integrity_noop",
-        })
+        reviewIntegrityImpl = async () =>
+          integrityTeamResult({
+            verdict: "needs_correction",
+            summary: "Correction has no semantic effect",
+            findings: [
+              integrityFinding({
+                id: "F-dependency-prose-only",
+                description: "Dependency prose only",
+                targetIDs: [goalID],
+                repair: "Route explicit dependency repair instead of applying no-op updates.",
+                reviewers: ["delivery_surface"],
+              }),
+            ],
+            sessionID: "ses_integrity_noop",
+          })
 
         const { tools } = createOrchestratorTools({
           taskID,
@@ -3849,25 +4116,19 @@ describe("orchestrator tools", () => {
           specID,
         })
 
-        reviewIntegrityImpl = async () => ({
-          verdict: "needs_correction",
-          summary: "Integrity needs_correction",
-          dimensions: [
-            { id: "requirement_fidelity", verdict: "pass", issues: [] },
-            { id: "technical_feasibility", verdict: "pass", issues: [] },
-            {
-              id: "hallucination",
-              verdict: "needs_correction",
-              issues: [{ description: "REQ-9 is not grounded in the user request.", type: "unsupported_claim" }],
-            },
-            { id: "solution_quality", verdict: "pass", issues: [] },
-          ],
-          issues: [{ description: "REQ-9 is not grounded in the user request.", type: "unsupported_claim" }],
-          corrections: [],
-          graphCorrections: [],
-          missingGoals: [],
-          sessionID: "ses_integrity_upstream",
-        })
+        reviewIntegrityImpl = async () =>
+          integrityTeamResult({
+            verdict: "needs_correction",
+            summary: "Integrity needs_correction",
+            findings: [
+              integrityFinding({
+                id: "F-REQ-9-unsupported",
+                description: "REQ-9 is not grounded in the user request.",
+                repair: "Reconcile unsupported requirement text with the original request.",
+              }),
+            ],
+            sessionID: "ses_integrity_upstream",
+          })
         const { tools } = createOrchestratorTools({
           taskID,
           agentSessionID: parent.id,
@@ -3921,7 +4182,7 @@ describe("orchestrator tools", () => {
           recordIntegrityAttempt({
             taskID,
             sessionID: `ses_prior_integrity_${offset}`,
-            specSnapshotID: specID,
+            lineage: activeOnlyLineage(taskID, specID),
             verdict: "needs_correction",
             phase: "post_build",
             perDimension: [
@@ -3938,27 +4199,28 @@ describe("orchestrator tools", () => {
           })
         }
 
-        reviewIntegrityImpl = async () => ({
-          verdict: "needs_correction",
-          summary: "Integrity needs_correction",
-          dimensions: [
-            {
-              id: "requirement_fidelity",
-              verdict: "needs_correction",
-              issues: [{ description: "Goal still misses REQ-1.", type: "uncovered" }],
-            },
-            { id: "technical_feasibility", verdict: "pass", issues: [] },
-            { id: "hallucination", verdict: "pass", issues: [] },
-            { id: "solution_quality", verdict: "pass", issues: [] },
-          ],
-          issues: [{ description: "Goal still misses REQ-1.", type: "uncovered" }],
-          corrections: [
-            { action: "modify", goalID, reason: "Still missing REQ-1", updates: { objective: "cover REQ-1" } },
-          ],
-          graphCorrections: [],
-          missingGoals: [],
-          sessionID: "ses_integrity_plan_restart",
-        })
+        reviewIntegrityImpl = async () =>
+          integrityTeamResult({
+            verdict: "needs_correction",
+            summary: "Integrity needs_correction",
+            findings: [
+              integrityFinding({
+                id: "F-goal-misses-REQ-1",
+                description: "Goal still misses REQ-1.",
+                targetIDs: [goalID],
+                requirementIDs: ["REQ-1"],
+                repair: "Update the goal to cover REQ-1.",
+              }),
+            ],
+            requiredRepairs: [
+              integrityRepair({
+                id: "repair-cover-REQ-1",
+                description: "Update the goal to cover REQ-1.",
+                targetIDs: [goalID],
+              }),
+            ],
+            sessionID: "ses_integrity_plan_restart",
+          })
         const { tools } = createOrchestratorTools({
           taskID,
           agentSessionID: parent.id,
@@ -3972,6 +4234,160 @@ describe("orchestrator tools", () => {
         expect(findGoal(goalID)).toBeTruthy()
         const artifact = findLatestIntegrityAttemptArtifact({ taskID, specSnapshotID: specID })
         expect(artifact?.label).toBe("verdict-needs_correction")
+      },
+    })
+  })
+
+  test("integrity artifact persistence failure marks artifact_missing without completing a pass verdict", async () => {
+    await tmp?.[Symbol.asyncDispose]?.()
+    tmp = await tmpdir({ git: true })
+
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_integrity_artifact_missing_${stamp}`
+    const taskID = `tsk_integrity_artifact_missing_${stamp}`
+    const goalID = `goal_integrity_artifact_missing_${stamp}`
+    const specID = `spec_${goalID}`
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "integrity artifact missing test" })
+        const integritySession = await Session.createNext({
+          kind: "integrity",
+          parentID: parent.id,
+          title: "Integrity Supervisor",
+          directory: tmp.path,
+        })
+        insertWorkflowTaskWithGoal({
+          projectID,
+          taskID,
+          goalID,
+          sessionID: parent.id,
+          worktree: tmp.path,
+          projectName: "Integrity artifact missing test",
+          taskTitle: "Integrity artifact missing task",
+          request: "Do not complete without persisted integrity artifact",
+          goalTitle: "Persist integrity result",
+          goalSlug: "persist-integrity-result",
+          objective: "Verify artifact persistence is required for pass completion",
+          now,
+          specID,
+        })
+        computeRequirementStatusSnapshotImpl = () => [
+          {
+            id: "REQ-artifact-missing",
+            description: "Persist integrity result",
+            priority: "blocking",
+            claimingGoals: [{ goalID, runStatus: "completed" }],
+          },
+        ]
+        reviewIntegrityImpl = async () =>
+          integrityTeamResult({
+            verdict: "pass",
+            summary: "Integrity passed but artifact persistence will fail",
+            sessionID: integritySession.id,
+          })
+        spyOn(EnginePersist, "recordIntegrityAttempt").mockImplementation(() => {
+          throw new Error("insert failed")
+        })
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+        const output = await tools.integrity.execute({}, {} as any)
+
+        expect(output).toContain("artifact_persistence_status")
+        expect(SessionStatus.get(integritySession.id)).toMatchObject({
+          type: "terminal",
+          reason: "artifact_missing",
+        })
+        expect(findLatestIntegrityArtifactMissingStatus(taskID)?.sessionID).toBe(integritySession.id)
+        const task = Database.use((db) => db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get())
+        expect(task?.time_completed).toBeNull()
+      },
+    })
+  })
+
+  test("review decision_log records persistent_roots from shared root history", async () => {
+    await tmp?.[Symbol.asyncDispose]?.()
+    tmp = await tmpdir({ git: true })
+
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_integrity_persistent_roots_${stamp}`
+    const taskID = `tsk_integrity_persistent_roots_${stamp}`
+    const goalID = `goal_integrity_persistent_roots_${stamp}`
+    const specID = `spec_${goalID}`
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "integrity persistent roots test" })
+        insertWorkflowTaskWithGoal({
+          projectID,
+          taskID,
+          goalID,
+          sessionID: parent.id,
+          worktree: tmp.path,
+          projectName: "Integrity persistent roots test",
+          taskTitle: "Integrity persistent roots task",
+          request: "Record persistent root summaries in review decision log",
+          goalTitle: "Persist root summary",
+          goalSlug: "persist-root-summary",
+          objective: "Verify repeated review findings are summarized for later context",
+          now,
+          specID,
+        })
+        for (const offset of [1, 2]) {
+          recordIntegrityAttempt({
+            taskID,
+            sessionID: `ses_prior_persistent_root_${offset}`,
+            lineage: activeOnlyLineage(taskID, specID),
+            verdict: "needs_correction",
+            phase: "post_build",
+            reviewers: [{ reviewerID: "rev_storage", scope: "Storage validation" }],
+            findings: [
+              integrityFinding({
+                id: `BF-prior-${offset}`,
+                title: `Settings validation prior ${offset}`,
+                description: "getSettings() still accepts invalid localStorage settings.",
+                filePaths: ["src/services/storage.ts"],
+                reviewers: ["rev_storage"],
+              }),
+            ],
+            now: now + offset,
+          })
+        }
+
+        reviewIntegrityImpl = async () =>
+          integrityTeamResult({
+            verdict: "needs_correction",
+            summary: "Integrity needs_correction",
+            findings: [
+              integrityFinding({
+                id: "BF-current-settings-validation",
+                title: "Storage settings validator still absent",
+                description: "getSettings() still fails to validate stored model settings.",
+                filePaths: ["src/services/storage.ts"],
+                reviewers: ["rev_storage"],
+              }),
+            ],
+            sessionID: "ses_integrity_persistent_root_current",
+          })
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        await tools.integrity.execute({}, {} as any)
+
+        const reviewRows = createDecisionLog(taskID).readByPhase("review")
+        expect(reviewRows.at(-1)?.value).toContain("persistent_roots=[")
+        expect(reviewRows.at(-1)?.value).toContain("(3)")
       },
     })
   })
@@ -4010,7 +4426,7 @@ describe("orchestrator tools", () => {
           recordIntegrityAttempt({
             taskID,
             sessionID: `ses_prior_mixed_integrity_${offset}`,
-            specSnapshotID: specID,
+            lineage: activeOnlyLineage(taskID, specID),
             verdict: "needs_correction",
             phase: "post_build",
             perDimension: [
@@ -4027,44 +4443,45 @@ describe("orchestrator tools", () => {
           })
         }
 
-        reviewIntegrityImpl = async () => ({
-          verdict: "needs_correction",
-          summary: "Integrity needs_correction",
-          dimensions: [
-            {
-              id: "requirement_fidelity",
-              verdict: "needs_correction",
-              issues: [{ description: "Goal still misses REQ-1.", type: "uncovered" }],
-            },
-            {
-              id: "technical_feasibility",
-              verdict: "needs_correction",
-              issues: [{ description: "Import/export contract is still inconsistent.", type: "missing_capability" }],
-            },
-            {
-              id: "hallucination",
-              verdict: "needs_correction",
-              issues: [{ description: "A goal references an invented artifact.", type: "invented_artifact" }],
-            },
-            {
-              id: "solution_quality",
-              verdict: "needs_correction",
-              issues: [{ description: "Goal granularity remains unstable.", type: "granularity_off" }],
-            },
-          ],
-          issues: [
-            { description: "Goal still misses REQ-1.", type: "uncovered" },
-            { description: "Import/export contract is still inconsistent.", type: "missing_capability" },
-            { description: "A goal references an invented artifact.", type: "invented_artifact" },
-            { description: "Goal granularity remains unstable.", type: "granularity_off" },
-          ],
-          corrections: [
-            { action: "modify", goalID, reason: "Still missing REQ-1", updates: { objective: "cover REQ-1" } },
-          ],
-          graphCorrections: [],
-          missingGoals: [{ title: "Missing integration goal", objective: "Close the integration gap" }],
-          sessionID: "ses_integrity_mixed_restart",
-        })
+        reviewIntegrityImpl = async () =>
+          integrityTeamResult({
+            verdict: "needs_correction",
+            summary: "Integrity needs_correction",
+            findings: [
+              integrityFinding({
+                id: "F-goal-still-misses-REQ-1",
+                description: "Goal still misses REQ-1.",
+                targetIDs: [goalID],
+                requirementIDs: ["REQ-1"],
+                repair: "Update the goal to cover REQ-1.",
+              }),
+              integrityFinding({
+                id: "F-import-export-inconsistent",
+                description: "Import/export contract is still inconsistent.",
+                repair: "Repair the import/export contract.",
+                reviewers: ["delivery_surface"],
+              }),
+              integrityFinding({
+                id: "F-invented-artifact",
+                description: "A goal references an invented artifact.",
+                repair: "Remove invented artifact references.",
+              }),
+              integrityFinding({
+                id: "F-granularity-unstable",
+                description: "Goal granularity remains unstable.",
+                repair: "Stabilize goal granularity before acceptance.",
+                reviewers: ["delivery_surface"],
+              }),
+            ],
+            requiredRepairs: [
+              integrityRepair({
+                id: "repair-cover-REQ-1",
+                description: "Update the goal to cover REQ-1.",
+                targetIDs: [goalID],
+              }),
+            ],
+            sessionID: "ses_integrity_mixed_restart",
+          })
         const { tools } = createOrchestratorTools({
           taskID,
           agentSessionID: parent.id,
@@ -4127,7 +4544,7 @@ describe("orchestrator tools", () => {
         recordIntegrityAttempt({
           taskID,
           sessionID: "ses_integrity_persisted_block",
-          specSnapshotID: specID,
+          lineage: activeOnlyLineage(taskID, specID),
           verdict: "needs_correction",
           phase: "post_build",
           perDimension: [
@@ -4649,7 +5066,7 @@ describe("orchestrator tools", () => {
         recordIntegrityAttempt({
           taskID,
           sessionID: "ses_integrity_concern_block",
-          specSnapshotID: specID,
+          lineage: activeOnlyLineage(taskID, specID),
           verdict: "concerns",
           phase: "post_build",
           perDimension: [
@@ -4706,6 +5123,104 @@ describe("orchestrator tools", () => {
         expect(result).toContain("status=passed")
         expect(buildCalls).toBe(1)
         expect(listGoalRunsByGoal(goalID)).toHaveLength(1)
+      },
+    })
+  })
+
+  test("persistent integrity roots are context, not a host-side build gate", async () => {
+    await tmp?.[Symbol.asyncDispose]?.()
+    tmp = await tmpdir({ git: true })
+
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_goal_integrity_persistent_context_${stamp}`
+    const taskID = `tsk_goal_integrity_persistent_context_${stamp}`
+    const goalID = `goal_integrity_persistent_context_${stamp}`
+    const specID = `spec_${goalID}`
+    let buildCalls = 0
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "persistent integrity context test" })
+        insertWorkflowTaskWithGoal({
+          projectID,
+          taskID,
+          goalID,
+          sessionID: parent.id,
+          worktree: tmp.path,
+          projectName: "Persistent integrity context test",
+          taskTitle: "Persistent integrity context task",
+          request: "Let the LLM-selected lane execute through normal tools",
+          goalTitle: "Build after persistent integrity context",
+          goalSlug: "build-after-persistent-integrity-context",
+          objective: "Verify persistent roots are prompt context, not host dispatch gates",
+          now,
+          specID,
+        })
+        for (const offset of [1, 2, 3]) {
+          recordIntegrityAttempt({
+            taskID,
+            sessionID: `ses_persistent_context_${offset}`,
+            lineage: activeOnlyLineage(taskID, specID),
+            verdict: "needs_correction",
+            phase: "post_build",
+            reviewers: [{ reviewerID: "rev_storage", scope: "Storage validation" }],
+            findings: [
+              integrityFinding({
+                id: `BF-context-${offset}`,
+                title: `Settings validation round ${offset}`,
+                description: "getSettings() still accepts invalid settings.",
+                filePaths: ["src/services/storage.ts"],
+                reviewers: ["rev_storage"],
+              }),
+            ],
+            now: now + offset,
+          })
+        }
+        buildAgentRunImpl = async (input: any) => {
+          await markBuildSlotAcquired(input)
+          buildCalls += 1
+          return {
+            result: {
+              status: "passed",
+              summary: "Build executed because the selected lane was not host-gated by root history.",
+              files_changed: [
+                {
+                  path: "src/services/storage.ts",
+                  summary: "Handled selected build lane.",
+                  reason: "Persistent roots are model-visible context only.",
+                },
+              ],
+              tests: [],
+              commit_ref: "abc1234",
+            },
+            sessionID: "ses_goal_after_persistent_context",
+            worktreeDir: input.managedWorktree.directory,
+            worktreeBranch: input.managedWorktree.branch,
+            worktreeBaseRef: input.managedWorktree.baseRef,
+          }
+        }
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+        const context = await tools.read_context.execute({ scope: "integrity_history" }, {} as any)
+        expect(context).toContain("Persistent blocking roots")
+
+        const result = await tools.build.execute(
+          {
+            goalID,
+            request: "The stub LLM selected build through the normal tool path.",
+            reason: "Active-path no-host-gate regression.",
+          },
+          buildToolOptions(),
+        )
+
+        expect(result).toContain("status=passed")
+        expect(buildCalls).toBe(1)
       },
     })
   })
@@ -5151,8 +5666,8 @@ describe("orchestrator tools", () => {
   // version, so a violation surfaces as goals + goal_run cards disappearing
   // from the overlay even though the data is intact in the DB. The
   // `restart_from_stage(plan)` test in this block covers that invariant;
-  // earlier prosecute-driven regressions were removed when the `prosecute`
-  // tool was retired alongside the delivery agent.
+  // earlier post-delivery hardening regressions were removed alongside the
+  // retired delivery agent.
 
   test("restart_from_stage(plan) supersedes every active plan, not just one", async () => {
     const now = Date.now()

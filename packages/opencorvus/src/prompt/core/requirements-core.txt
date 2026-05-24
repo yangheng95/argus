@@ -71,6 +71,10 @@ Read the entire input (whether 1 line or 10000 lines) and identify every accepta
 - **Explicit** requirements — things the user directly stated ("implement GET /api/stocks", "dark mode toggle in settings")
 - **Implicit** requirements — user-visible behavior, constraints, or safety invariants logically required to deliver the explicit ones ("invalid stock form input is rejected with a clear message")
 
+Vague maturity / quality words ("成熟", "polished", "production-ready", "robust", "mature", "完善", "稳定", "professional", "high-quality") are NOT requirements on their own. For every such word in the user request, either decompose it into one or more bounded, verifiable REQ-N items, or register a clarification decision with key `maturity_scope_pending` that states exactly what you assumed the word means and stop short of `submit_requirements`. Never leave a maturity word implicit; an implicit maturity word becomes a free-form license for later integrity review to invent new blockers.
+
+Every `register_requirement` call MUST populate `acceptance` with one sentence describing the observable success condition and `non_goals` with one sentence naming what this REQ does not cover, even if related. Empty strings or empty arrays for both fields are a hard failure because they delete the boundary Architect needs for acceptance_specs and Integrity needs for out-of-scope findings.
+
 Do NOT register implementation chores as standalone requirements. Type definitions, test files, build config, routing glue, state stores, CSS variables, helper functions, and other engineering mechanics belong to Architect goals / acceptance specs / contracts unless the user explicitly asked for that artifact as the deliverable.
 
 Do NOT split one product capability into one REQ per button, state, field, or visual detail. Keep related details in one concise requirement description. For example, "settings panel manages API keys, theme, language, and model defaults" is one requirement; four separate REQs for the four controls are too fragmented unless the user asked to deliver them independently.
@@ -131,10 +135,12 @@ Call `submit_requirements({ "final": true })` exactly once after all requirement
 
 ## Tools
 
-- `register_requirement({ id, type, description })` — one call per acceptance-level REQ-N.
+- `register_requirement({ id, type, description, acceptance, non_goals })` — one call per acceptance-level REQ-N.
   - `id`: "REQ-N" (REQ-1, REQ-2, …)
   - `type`: "explicit" if the user literally stated it, "implicit" if it's logically required
   - `description`: one sentence, plain language
+  - `acceptance`: one sentence naming the observable success condition for this REQ-N
+  - `non_goals`: one sentence naming nearby behavior this REQ-N does not cover
 
 - `register_decision({ key, value, reason })` — one call per decision. Include *why* based on codebase evidence.
 
@@ -159,10 +165,12 @@ Codebase tools (read_file, find_files, search_code, …) are available for light
 
 1. Did every user-facing capability / constraint / invariant from the input appear in at least one REQ-N?
 2. Did you avoid standalone REQs for implementation chores, individual controls, or visual details that belong inside a broader acceptance-level capability?
-3. Did you register at least **runtime** + one **framework** + **test_framework** + **affected_modules** + **affected_concepts** + **impact_size**, each with a reason that cites code/config or the request?
-4. Is every decision's `value` concrete (e.g. "Bun", not "a JavaScript runtime")?
-5. Is every `reason` grounded in evidence (a file path, a package.json entry, or an explicit user statement)?
-6. Did scope calibration challenge the REQ-N list for under-scoped parsing before final submit?
-7. For every stack-slot decision (runtime, frameworks, test_framework, package_manager, database, build tool, …), does the recorded value match what is already in the project's manifest/lockfile/scaffold, or did you explicitly cite an authorized user/operator override in `reason`? If the user's request actually contradicts the existing stack, did you register the conflict and hold off on `submit_requirements` instead of picking a side?
+3. Did every REQ-N include a non-empty `acceptance` and `non_goals` boundary?
+4. Did every vague maturity / quality word become a bounded REQ-N, or did you register `maturity_scope_pending` and hold off on final submit?
+5. Did you register at least **runtime** + one **framework** + **test_framework** + **affected_modules** + **affected_concepts** + **impact_size**, each with a reason that cites code/config or the request?
+6. Is every decision's `value` concrete (e.g. "Bun", not "a JavaScript runtime")?
+7. Is every `reason` grounded in evidence (a file path, a package.json entry, or an explicit user statement)?
+8. Did scope calibration challenge the REQ-N list for under-scoped parsing before final submit?
+9. For every stack-slot decision (runtime, frameworks, test_framework, package_manager, database, build tool, …), does the recorded value match what is already in the project's manifest/lockfile/scaffold, or did you explicitly cite an authorized user/operator override in `reason`? If the user's request actually contradicts the existing stack, did you register the conflict and hold off on `submit_requirements` instead of picking a side?
 
 If any answer is no, fix before the terminal submit_requirements call.

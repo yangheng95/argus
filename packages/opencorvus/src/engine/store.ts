@@ -20,6 +20,7 @@ import {
 } from "@/storage/db"
 import type { SQL } from "@/storage/db"
 import { FileDiff as SnapshotFileDiff } from "@/snapshot/types"
+import { specSnapshotIDsForLineage, type SpecSnapshotLineage } from "@/integrity/replay-lineage"
 import { EvaluationCheck } from "./model"
 import {
   EngineArtifactTable,
@@ -694,14 +695,54 @@ export function findLatestDeliveryVerdictArtifact(taskID: string) {
   )
 }
 
-export function findLatestIntegrityAttemptArtifact(input: {
+export type IntegrityAttemptArtifactQuery = {
   taskID: string
-  specSnapshotID?: string | null
+  lineage: SpecSnapshotLineage
   /** Filter by recorded `phase` ("pre_build" | "post_build"). Omit to match
    *  any phase. The delivery freshness gate uses `phase: "post_build"` so a
    *  pre-build review cannot satisfy the post-build completion requirement. */
   phase?: "pre_build" | "post_build"
-}) {
+}
+
+export type LatestIntegrityAttemptArtifactQuery = {
+  taskID: string
+  specSnapshotID: string
+  phase?: "pre_build" | "post_build"
+}
+
+export type IntegrityAttemptArtifactRow = ArtifactRow & {
+  artifactID: string
+  taskID: string
+  specSnapshotID: string
+  timeCreated: number
+}
+
+export function listIntegrityAttemptArtifacts(input: IntegrityAttemptArtifactQuery): IntegrityAttemptArtifactRow[] {
+  if (input.taskID !== input.lineage.taskID) {
+    throw new Error(
+      `Integrity attempt query taskID ${input.taskID} does not match lineage taskID ${input.lineage.taskID}.`,
+    )
+  }
+  return selectIntegrityAttemptArtifacts({
+    taskID: input.taskID,
+    specSnapshotIDs: specSnapshotIDsForLineage(input.lineage),
+    phase: input.phase,
+  })
+}
+
+export function findLatestIntegrityAttemptArtifact(input: LatestIntegrityAttemptArtifactQuery) {
+  return selectIntegrityAttemptArtifacts({
+    taskID: input.taskID,
+    specSnapshotIDs: [input.specSnapshotID],
+    phase: input.phase,
+  })[0]
+}
+
+function selectIntegrityAttemptArtifacts(input: {
+  taskID: string
+  specSnapshotIDs: string[]
+  phase?: "pre_build" | "post_build"
+}): IntegrityAttemptArtifactRow[] {
   return Database.use((db) =>
     db
       .select()
@@ -710,14 +751,15 @@ export function findLatestIntegrityAttemptArtifact(input: {
         and(
           eq(EngineArtifactTable.task_id, input.taskID),
           eq(EngineArtifactTable.kind, "integrity_attempt"),
-          input.specSnapshotID
-            ? sql`json_extract(${EngineArtifactTable.payload}, '$.spec_snapshot_id') = ${input.specSnapshotID}`
-            : sql`1 = 1`,
+          input.specSnapshotIDs.length === 1
+            ? sql`json_extract(${EngineArtifactTable.payload}, '$.spec_snapshot_id') = ${input.specSnapshotIDs[0]}`
+            : inArray(sql`json_extract(${EngineArtifactTable.payload}, '$.spec_snapshot_id')`, input.specSnapshotIDs),
           input.phase ? sql`json_extract(${EngineArtifactTable.payload}, '$.phase') = ${input.phase}` : sql`1 = 1`,
         ),
       )
-      .orderBy(desc(EngineArtifactTable.time_created))
-      .get(),
+      .orderBy(desc(EngineArtifactTable.time_created), desc(EngineArtifactTable.id))
+      .all()
+      .map(toIntegrityAttemptArtifactRow),
   )
 }
 
@@ -725,6 +767,75 @@ export function integrityAttemptVerdict(row: ArtifactRow | undefined | null) {
   const payload = row?.payload as { verdict?: unknown } | null | undefined
   const verdict = payload?.verdict
   return verdict === "pass" || verdict === "concerns" || verdict === "needs_correction" ? verdict : undefined
+}
+
+export type IntegrityArtifactMissingSessionStatus = {
+  sessionID: string
+  emittedAt: number
+  error?: string
+}
+
+export function findLatestIntegrityArtifactMissingStatus(taskID: string): IntegrityArtifactMissingSessionStatus | undefined {
+  const row = Database.use((db) =>
+    db
+      .select({
+        sessionID: ProtocolEventTable.session_id,
+        emittedAt: ProtocolEventTable.emitted_at,
+        error: sql<string | null>`json_extract(${ProtocolEventTable.payload}, '$.status.error')`,
+      })
+      .from(ProtocolEventTable)
+      .innerJoin(SessionTable, eq(SessionTable.id, ProtocolEventTable.session_id))
+      .where(
+        and(
+          eq(ProtocolEventTable.task_id, taskID),
+          eq(ProtocolEventTable.type, "session.status"),
+          eq(SessionTable.kind, "integrity"),
+          sql`json_extract(${ProtocolEventTable.payload}, '$.status.reason') = 'artifact_missing'`,
+          sql`NOT EXISTS (
+            SELECT 1 FROM ${ProtocolEventTable} pe_newer
+            WHERE pe_newer.session_id = ${ProtocolEventTable.session_id}
+              AND pe_newer.type = 'session.status'
+              AND (
+                pe_newer.emitted_at > ${ProtocolEventTable.emitted_at}
+                OR (
+                  pe_newer.emitted_at = ${ProtocolEventTable.emitted_at}
+                  AND pe_newer.seq > ${ProtocolEventTable.seq}
+                )
+              )
+          )`,
+          sql`NOT EXISTS (
+            SELECT 1 FROM ${EngineArtifactTable} ea
+            WHERE ea.task_id = ${taskID}
+              AND ea.kind = 'integrity_attempt'
+              AND json_extract(ea.payload, '$.session_id') = ${ProtocolEventTable.session_id}
+              AND ea.time_created >= ${ProtocolEventTable.emitted_at}
+          )`,
+        ),
+      )
+      .orderBy(desc(ProtocolEventTable.emitted_at), desc(ProtocolEventTable.seq))
+      .get(),
+  )
+  const sessionID = row?.sessionID
+  if (!sessionID) return undefined
+  return {
+    sessionID,
+    emittedAt: row.emittedAt,
+    error: row.error ?? undefined,
+  }
+}
+
+function toIntegrityAttemptArtifactRow(row: ArtifactRow): IntegrityAttemptArtifactRow {
+  const payload = row.payload && typeof row.payload === "object" && !Array.isArray(row.payload)
+    ? (row.payload as Record<string, unknown>)
+    : {}
+  const specSnapshotID = typeof payload.spec_snapshot_id === "string" ? payload.spec_snapshot_id : ""
+  return {
+    ...row,
+    artifactID: row.id,
+    taskID: row.task_id,
+    specSnapshotID,
+    timeCreated: row.time_created,
+  }
 }
 
 /** Latest delivery-agent-verdict artifact bound to a specific delivery row.

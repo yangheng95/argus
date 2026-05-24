@@ -133,7 +133,13 @@ test("ArchitectAgent registers submit_architect as the terminal collector contra
         goals: [],
         taskRequest: "Change the app",
         taskTitle: "Change app",
-        requirements: [{ id: "REQ-1", type: "explicit", description: "Change the app" }],
+        requirements: [{
+          id: "REQ-1",
+          type: "explicit",
+          description: "Change the app",
+          acceptance: "The changed app behavior is visible in the running UI.",
+          non_goals: "This requirement does not cover unrelated app rewrites.",
+        }],
         requirementDecisions: [],
         decisionLog: {
           append() {},

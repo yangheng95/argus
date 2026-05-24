@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { buildUserPrompt } from "../../src/build/agent"
+import { buildRetryFeedbackPrompt, buildUserPrompt } from "../../src/build/agent"
 
 describe("build agent prompt context", () => {
   test("request-path build receives canonical delivery feedback", () => {
@@ -86,6 +86,35 @@ describe("build agent prompt context", () => {
     expect(prompt).toContain("**Objective**: Build the chat UI components per Gemini design.")
   })
 
+  test("goal-path renders persistent integrity findings before retry guidance", () => {
+    const prompt = buildUserPrompt(
+      {
+        kind: "goal",
+        id: "gol_settings",
+        title: "Settings repair",
+        objective: "Repair settings validation.",
+        acceptance_specs: ["settings are validated"],
+        owned_paths: ["src/services/storage.ts"],
+        depends_on: [],
+      },
+      {
+        integrityFeedback:
+          "## Persistent Integrity Findings (Treat Blocking Items As Must-Fix)\n\n" +
+          "- **BF-settings**: getSettings does not validate persisted settings.",
+        retryGuidance: "Focus on the storage service.",
+      },
+    )
+
+    expect(prompt).toContain("## Persistent Integrity Findings")
+    expect(prompt).toContain("BF-settings")
+    expect(prompt.indexOf("## Persistent Integrity Findings")).toBeLessThan(
+      prompt.indexOf("## Retry Guidance From Orchestrator"),
+    )
+    expect(prompt.indexOf("## Retry Guidance From Orchestrator")).toBeLessThan(
+      prompt.indexOf("# Goal: Settings repair"),
+    )
+  })
+
   test("request-path renders retryGuidance under its own heading", () => {
     const prompt = buildUserPrompt(
       {
@@ -104,6 +133,53 @@ describe("build agent prompt context", () => {
       prompt.indexOf("## Canonical Delivery Rejection Feedback"),
     )
     expect(prompt.indexOf("## Canonical Delivery Rejection Feedback")).toBeLessThan(prompt.indexOf("# Request"))
+  })
+
+  test("request-path renders persistent integrity findings before request delegation", () => {
+    const prompt = buildUserPrompt(
+      {
+        kind: "request",
+        text: "Repair the direct build after integrity review.",
+      },
+      {
+        integrityFeedback:
+          "## Persistent Integrity Findings (Treat Blocking Items As Must-Fix)\n\n" +
+          "- **BF-direct**: direct build missed required validation.",
+        retryFeedback: "Previous build failed.",
+      },
+    )
+
+    expect(prompt).toContain("## Persistent Integrity Findings")
+    expect(prompt).toContain("BF-direct")
+    expect(prompt.indexOf("## Persistent Integrity Findings")).toBeLessThan(
+      prompt.indexOf("## Prior Attempt Failed"),
+    )
+    expect(prompt.indexOf("## Persistent Integrity Findings")).toBeLessThan(prompt.indexOf("# Request"))
+  })
+
+  test("same-session retry prompt renders persistent integrity findings before retry facts", () => {
+    const prompt = buildRetryFeedbackPrompt(
+      {
+        kind: "request",
+        text: "Repair the direct build after integrity review.",
+      },
+      {
+        integrityFeedback:
+          "## Persistent Integrity Findings (Treat Blocking Items As Must-Fix)\n\n" +
+          "- **BF-retry**: retry still lacks storage validation.",
+        retryFeedback: "Prior attempt failed.",
+        deliveryFeedback: "Delivery rejected.",
+      },
+    )
+
+    expect(prompt).toContain("## Persistent Integrity Findings")
+    expect(prompt).toContain("BF-retry")
+    expect(prompt.indexOf("## Persistent Integrity Findings")).toBeLessThan(
+      prompt.indexOf("## Prior Attempt Failure Facts"),
+    )
+    expect(prompt.indexOf("## Prior Attempt Failure Facts")).toBeLessThan(
+      prompt.indexOf("## Delivery Rejection Feedback"),
+    )
   })
 
   test("request-path rejects repository-investigation-only work instead of exposing success instructions", () => {
@@ -137,6 +213,9 @@ describe("build agent prompt context", () => {
     expect(buildUserPrompt(baseTarget, { retryGuidance: "" })).not.toContain("## Retry Guidance From Orchestrator")
     expect(buildUserPrompt(baseTarget, { retryGuidance: "   \n\n\t  " })).not.toContain(
       "## Retry Guidance From Orchestrator",
+    )
+    expect(buildUserPrompt(baseTarget, { integrityFeedback: "   \n\n\t  " })).not.toContain(
+      "## Persistent Integrity Findings",
     )
   })
 

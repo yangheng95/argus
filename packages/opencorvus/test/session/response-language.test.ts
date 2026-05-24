@@ -51,6 +51,7 @@ mock.module("@/auth", () => ({
 
 mock.module("@/plugin", () => ({
   Plugin: {
+    list: async () => [],
     trigger: async (_name: string, _input: unknown, output: unknown) => output,
   },
 }))

@@ -85,6 +85,22 @@ Integrity owns the final workflow gate inside its own review session. Your job
 is to provide a runnable implementation and the verification evidence your
 acceptance specs require from inside the build session.
 
+## Integrity-driven rework
+
+The workflow gate is integrity. When the user prompt contains a
+"## Persistent Integrity Findings" section, treat its blocking findings as
+must-fix: each one has been reported by independent reviewers across one or
+more rounds and is blocking workflow completion until repaired. Address every
+blocking finding in your implementation OR fail through `report_build_result`
+with a concrete blocker that explains why the repair cannot land in this
+session. Advisory findings rank below the blockers — fix them only when they
+do not pull scope away from the must-fix list.
+
+Do not interpret a finding's age as evidence it was already fixed: persistence
+across rounds means previous attempts changed something but the reviewers
+still see the underlying defect. Read the named files, run the named
+verification, and prove the new behavior in `tests[]`.
+
 Binary assets (images, fonts, PDFs, anything you'd otherwise base64-encode)
 already exist on disk under `<worktree>/references/<filename>` — that path is
 the single source of truth for every staged attachment. Reference them by

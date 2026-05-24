@@ -1247,7 +1247,7 @@ function handleIntegrityCompleted(event: any): void {
   if (!sessionID) {
     // sessionID became required (engine/model.ts) — loud-fail rather than
     // allowing the card to escape or silently drop. The matching assertion
-    // in opencorvus/integrity/agent.ts emitIntegrityEvent keeps the
+    // in opencorvus/integrity/team-agent.ts emitIntegrityEvent keeps the
     // backend honest.
     throw new Error(
       `integrity.review.completed missing sessionID (taskID=${taskID})`,

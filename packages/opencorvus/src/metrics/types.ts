@@ -102,9 +102,9 @@ export const Counterexample = z.object({
   /** NULL while still open. */
   iteration_resolved: z.number().int().min(0).nullable(),
   /**
-   * Deterministic fingerprint of the reproducer + target. Used to dedup so a
-   * Prosecutor that keeps surfacing the same reproducer contributes 0 to
-   * novelty_score that iteration — which is what feeds `stalled`.
+   * Deterministic fingerprint of the reproducer + target. Used to dedup so
+   * repeated surfacing of the same reproducer contributes 0 to novelty_score
+   * that iteration, which is what feeds `stalled`.
    */
   novelty_hash: z.string().min(1),
   target_scope: CounterexampleTargetScope,

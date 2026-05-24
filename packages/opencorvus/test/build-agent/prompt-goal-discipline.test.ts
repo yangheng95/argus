@@ -34,4 +34,17 @@ describe("build agent goal execution discipline prompt", () => {
     expect(renderBuildAutoIterationMode(true)).toContain("continue focused repair attempts")
     expect(renderBuildAutoIterationMode(true)).toContain("dependency, toolchain, port, script, test, and worktree merge repairs")
   })
+
+  test("teaches integrity-driven rework without a host-side route gate", async () => {
+    const prompt = await readBuildPrompt()
+    const normalized = prompt.replace(/\s+/g, " ")
+
+    expect(prompt).toContain("## Integrity-driven rework")
+    expect(normalized).toContain('When the user prompt contains a "## Persistent Integrity Findings" section')
+    expect(normalized).toContain("treat its blocking findings as must-fix")
+    expect(normalized).toContain("Address every blocking finding in your implementation OR fail through `report_build_result`")
+    expect(normalized).toContain("Advisory findings rank below the blockers")
+    expect(normalized).toContain("Do not interpret a finding's age as evidence it was already fixed")
+    expect(normalized).toContain("persistence across rounds means previous attempts changed something")
+  })
 })

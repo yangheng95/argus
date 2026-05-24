@@ -20,9 +20,11 @@ import { Filesystem } from "@/util/filesystem"
 import { Log } from "@/util/log"
 import {
   findActiveSpecForTask,
+  findDeliveriesForTask,
   findLatestArchitectContractGraph,
   findRequirements,
   findTask,
+  listGoalRunsForTask,
   listGoals,
 } from "@/engine/store"
 import {
@@ -39,6 +41,7 @@ import type { AcceptanceSpec } from "@/acceptance/types"
 import { createDecisionLog } from "@/decision-log"
 import { renderIntegrityMarkdown } from "@/integrity/render-markdown"
 import type { VisualSpec } from "@/design-analyst/types"
+import { parsedRequirementFromRow } from "@/requirements/row"
 
 const log = Log.create({ service: "delivery-tools" })
 
@@ -111,15 +114,7 @@ async function runDeliveryIntegrityReview(input: {
     task.attachments && task.attachments.length > 0 ? task.attachments : undefined
 
   const reqRows = findRequirements(activeSpec.id)
-  const requirements = reqRows.map((row) => {
-    const meta = (row.metadata ?? {}) as Record<string, unknown>
-    const sourceID = typeof meta.source_requirement_id === "string" ? meta.source_requirement_id : row.id
-    return {
-      id: sourceID,
-      type: (row.priority === "advisory" ? "implicit" : "explicit") as "explicit" | "implicit",
-      description: row.description,
-    }
-  })
+  const requirements = reqRows.map(parsedRequirementFromRow)
   const decisionLog = createDecisionLog(task.id)
   const requirementDecisions = decisionLog.readByPhase("requirements").map((entry) => ({
     key: entry.key,
@@ -141,7 +136,8 @@ async function runDeliveryIntegrityReview(input: {
       typeof goal.requirement_ids === "string" ? JSON.parse(goal.requirement_ids) : (goal.requirement_ids ?? []),
   }))
 
-  const { reviewIntegrity, computeRequirementStatusSnapshot } = await import("@/integrity")
+  const { reviewIntegrity, computeRequirementStatusSnapshot, buildIntegrityReplayContext, buildSpecSnapshotLineage } =
+    await import("@/integrity")
   const requirementStatus = computeRequirementStatusSnapshot({
     taskID: task.id,
     specSnapshotID: activeSpec.id,
@@ -152,6 +148,19 @@ async function runDeliveryIntegrityReview(input: {
   )
     ? "post_build"
     : "pre_build"
+  const lineage = buildSpecSnapshotLineage({
+    taskID: task.id,
+    activeSpecSnapshotID: activeSpec.id,
+  })
+  const replayContext = buildIntegrityReplayContext({
+    taskID: task.id,
+    lineage,
+    phase,
+    goals: goalsForReview,
+    requirements,
+    deliveries: findDeliveriesForTask(task.id),
+    goalRuns: listGoalRunsForTask(task.id),
+  })
 
   const verdict = await reviewIntegrity({
     userRequest: task.request,
@@ -164,6 +173,7 @@ async function runDeliveryIntegrityReview(input: {
     contractGraph,
     decisionLog,
     attachments: taskAttachments,
+    replayContext,
     signal: input.signal,
     taskID: task.id,
     parentSessionID: input.parentSessionID,
@@ -174,7 +184,7 @@ async function runDeliveryIntegrityReview(input: {
   recordIntegrityAttempt({
     taskID: task.id,
     sessionID: verdict.sessionID,
-    specSnapshotID: activeSpec.id,
+    lineage,
     verdict: verdict.verdict,
     phase,
     reviewers: verdict.reviewers,
