@@ -169,8 +169,13 @@ export function setupAutoScroll(
     markUserScrollIntent();
   }
 
-  function onPointerDown() {
-    markUserScrollIntent();
+  function onPointerDown(event: PointerEvent) {
+    const rect = el.getBoundingClientRect();
+    const scrollbarWidth = Math.max(0, el.offsetWidth - el.clientWidth);
+    const gutterStart = rect.right - Math.max(12, scrollbarWidth);
+    if (event.clientX >= gutterStart && el.scrollHeight > el.clientHeight) {
+      markUserScrollIntent();
+    }
   }
 
   function onKeyDown(event: KeyboardEvent) {

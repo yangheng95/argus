@@ -2449,6 +2449,7 @@ describe("overlay architecture guards", () => {
       "min-height: calc(42px * var(--ui-scale))",
       "display: flex",
       "flex-direction: row",
+      "padding: calc(4px * var(--ui-scale)) calc(10px * var(--ui-scale))",
       "overflow: hidden",
     ]) {
       expect(railBody).toContain(declaration)
@@ -2460,6 +2461,9 @@ describe("overlay architecture guards", () => {
     expect(laneBody).toContain("overflow-y: hidden")
     expect(laneBody).toContain("display: flex")
     expect(laneBody).toContain("flex-wrap: nowrap")
+    expect(laneBody).toContain("scrollbar-width: none")
+    expect(surface).toContain(".conversation-agent-rail__lanes::-webkit-scrollbar")
+    expect(surface).not.toContain("scrollbar-width: thin")
 
     const rowBody = soloRuleBody(surface, ".conversation-agent-rail__row")
     expect(rowBody).toContain("display: grid")

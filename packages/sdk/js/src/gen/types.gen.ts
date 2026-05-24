@@ -461,6 +461,8 @@ export type EventIntegrityReviewCompleted = {
         id: string
         severity: "blocking" | "advisory"
         verdictImpact: "pass" | "concerns" | "needs_correction"
+        fingerprint?: string
+        canonicalSymptom?: string
         title: string
         description: string
         evidence: Array<string>
@@ -469,7 +471,11 @@ export type EventIntegrityReviewCompleted = {
         specIDs?: Array<string>
         userRequestQuotes?: Array<string>
         filePaths?: Array<string>
+        affectedSymbols?: Array<string>
         repair: string
+        verify?: Array<string>
+        sourceFindingIDs?: Array<string>
+        priorAttemptRefs?: Array<string>
         reviewers?: Array<string>
         consensus?: "agreed" | "disputed" | "unresolved"
       }>
@@ -479,6 +485,8 @@ export type EventIntegrityReviewCompleted = {
       id: string
       severity: "blocking" | "advisory"
       verdictImpact: "pass" | "concerns" | "needs_correction"
+      fingerprint?: string
+      canonicalSymptom?: string
       title: string
       description: string
       evidence: Array<string>
@@ -487,7 +495,11 @@ export type EventIntegrityReviewCompleted = {
       specIDs?: Array<string>
       userRequestQuotes?: Array<string>
       filePaths?: Array<string>
+      affectedSymbols?: Array<string>
       repair: string
+      verify?: Array<string>
+      sourceFindingIDs?: Array<string>
+      priorAttemptRefs?: Array<string>
       reviewers?: Array<string>
       consensus?: "agreed" | "disputed" | "unresolved"
     }>
@@ -499,10 +511,21 @@ export type EventIntegrityReviewCompleted = {
     }>
     requiredRepairs?: Array<{
       id: string
+      fingerprint?: string
+      severity?: "blocking" | "advisory"
+      title?: string
+      canonicalSymptom?: string
       description: string
       evidence: Array<string>
       targetIDs?: Array<string>
+      requirementIDs?: Array<string>
+      specIDs?: Array<string>
       filePaths?: Array<string>
+      affectedSymbols?: Array<string>
+      repair?: string
+      verify?: Array<string>
+      sourceFindingIDs?: Array<string>
+      priorAttemptRefs?: Array<string>
     }>
     unresolvedDisagreements?: Array<{
       id: string

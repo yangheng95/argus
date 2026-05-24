@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto"
 import { listIntegrityAttemptArtifacts } from "@/engine/store"
+import { canonicalIntegritySymptom, defaultIntegrityVerify, integrityFindingFingerprint } from "./finding-manifest"
 import type { IntegrityPriorAttemptSummary, SpecSnapshotLineage } from "./replay-context"
 import { getSharedIntegrityPromptBudget, sanitizeIntegrityPromptText } from "./shared-prompt"
 
@@ -7,12 +8,15 @@ export type IntegrityRootSymptomVariation = {
   attemptNumber: number
   artifactID: string
   findingID: string
+  fingerprint: string
   rootID: string
   canonicalLabel: string
+  canonicalSymptom: string
   severity: "blocking" | "advisory"
   title: string
   description: string
   repair: string
+  verify: string[]
   evidence: string[]
   reviewerIDs: string[]
   filePaths: string[]
@@ -56,8 +60,11 @@ type RootDraft = {
 
 type FindingSummary = IntegrityPriorAttemptSummary["blockingFindings"][number] & {
   severity: "blocking" | "advisory"
+  fingerprint: string
+  canonicalSymptom: string
   evidence: string[]
   reviewerIDs: string[]
+  verify: string[]
 }
 
 export function buildIntegrityRootHistory(input: {
@@ -202,12 +209,15 @@ function symptomVariation(input: {
     attemptNumber: input.attemptNumber,
     artifactID: input.artifactID,
     findingID: input.finding.id,
+    fingerprint: input.finding.fingerprint,
     rootID: `root_${hashRootKey(input.rootKey)}`,
     canonicalLabel: input.canonicalLabel,
+    canonicalSymptom: input.finding.canonicalSymptom,
     severity: input.finding.severity,
     title: input.finding.title,
     description: input.finding.description,
     repair: input.finding.repair,
+    verify: input.finding.verify,
     evidence: input.finding.evidence,
     reviewerIDs,
     filePaths: input.finding.filePaths,
@@ -295,15 +305,15 @@ export function persistentRootSummary(history: IntegrityRootHistory): string {
 
 function rootGroupingKey(finding: FindingSummary): string {
   const files = finding.filePaths.map(normalizePathForKey).filter(Boolean).sort()
-  const symbol = symbolToken(`${finding.title}\n${finding.description}\n${finding.repair}`)
+  const symbol = symbolToken(`${finding.canonicalSymptom}\n${finding.title}\n${finding.description}\n${finding.repair}`)
   if (files.length > 0 && symbol) return `file-symbol:${files.join("|")}:${symbol}`
-  const tokens = semanticTokens(`${finding.title}\n${finding.description}\n${finding.repair}`)
+  const tokens = semanticTokens(`${finding.canonicalSymptom}\n${finding.title}\n${finding.description}\n${finding.repair}`)
   if (files.length > 0) return `file-text:${files.join("|")}:${tokens.slice(0, 8).join("-")}`
   return `text:${tokens.slice(0, 10).join("-")}`
 }
 
 function canonicalRootLabel(finding: FindingSummary): string {
-  const source = `${finding.title} ${finding.description} ${finding.repair}`
+  const source = `${finding.canonicalSymptom} ${finding.title} ${finding.description} ${finding.repair}`
   const tokens = semanticTokens(source)
   const fileStem = finding.filePaths.map(fileStemToken).find(Boolean)
   const symbol = symbolToken(source)
@@ -464,18 +474,26 @@ function findingSummaries(value: unknown): FindingSummary[] {
     const verdictImpact = stringFrom(finding.verdictImpact)
     const severity = severityRaw === "blocking" || verdictImpact === "needs_correction" ? "blocking" : "advisory"
     if (severity !== "blocking" && severityRaw !== "advisory") return []
+    const normalizedSeverity: "blocking" | "advisory" = severity
+    const draft = {
+      id: stringFrom(finding.id) ?? "unknown-finding",
+      title: stringFrom(finding.title) ?? "Untitled finding",
+      description: stringFrom(finding.description) ?? "",
+      repair: stringFrom(finding.repair) ?? "",
+      evidence: stringArray(finding.evidence),
+      filePaths: stringArray(finding.filePaths),
+      requirementIDs: stringArray(finding.requirementIDs),
+      specIDs: stringArray(finding.specIDs),
+      severity: normalizedSeverity,
+      reviewerIDs: stringArray(finding.reviewers),
+    }
+    const canonicalSymptom = stringFrom(finding.canonicalSymptom) ?? canonicalIntegritySymptom(draft)
+    const withSymptom = { ...draft, canonicalSymptom }
     return [
       {
-        id: stringFrom(finding.id) ?? "unknown-finding",
-        title: stringFrom(finding.title) ?? "Untitled finding",
-        description: stringFrom(finding.description) ?? "",
-        repair: stringFrom(finding.repair) ?? "",
-        evidence: stringArray(finding.evidence),
-        filePaths: stringArray(finding.filePaths),
-        requirementIDs: stringArray(finding.requirementIDs),
-        specIDs: stringArray(finding.specIDs),
-        severity,
-        reviewerIDs: stringArray(finding.reviewers),
+        ...withSymptom,
+        fingerprint: stringFrom(finding.fingerprint) ?? integrityFindingFingerprint(withSymptom),
+        verify: stringArray(finding.verify).length > 0 ? stringArray(finding.verify) : defaultIntegrityVerify(withSymptom),
       },
     ]
   })
@@ -484,9 +502,12 @@ function findingSummaries(value: unknown): FindingSummary[] {
 function stripSeverity(finding: FindingSummary): IntegrityPriorAttemptSummary["blockingFindings"][number] {
   return {
     id: finding.id,
+    fingerprint: finding.fingerprint,
+    canonicalSymptom: finding.canonicalSymptom,
     title: finding.title,
     description: finding.description,
     repair: finding.repair,
+    verify: finding.verify,
     filePaths: finding.filePaths,
     requirementIDs: finding.requirementIDs,
     specIDs: finding.specIDs,
@@ -500,7 +521,26 @@ function requiredRepairSummaries(value: unknown): IntegrityPriorAttemptSummary["
     const id = stringFrom(repair.id)
     const description = stringFrom(repair.description)
     if (!id || !description) return []
-    return [{ id, description, filePaths: stringArray(repair.filePaths) }]
+    const draft = {
+      id,
+      title: stringFrom(repair.title),
+      description,
+      repair: stringFrom(repair.repair) ?? description,
+      filePaths: stringArray(repair.filePaths),
+      requirementIDs: stringArray(repair.requirementIDs),
+      specIDs: stringArray(repair.specIDs),
+      sourceFindingIDs: stringArray(repair.sourceFindingIDs),
+      priorAttemptRefs: stringArray(repair.priorAttemptRefs),
+    }
+    const canonicalSymptom = stringFrom(repair.canonicalSymptom) ?? canonicalIntegritySymptom(draft)
+    const withSymptom = { ...draft, canonicalSymptom }
+    return [
+      {
+        ...withSymptom,
+        fingerprint: stringFrom(repair.fingerprint) ?? integrityFindingFingerprint(withSymptom),
+        verify: stringArray(repair.verify).length > 0 ? stringArray(repair.verify) : defaultIntegrityVerify(withSymptom),
+      },
+    ]
   })
 }
 

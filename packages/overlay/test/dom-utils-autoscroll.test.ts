@@ -6,6 +6,8 @@ import { setupAutoScroll } from "../src/utils/dom-utils";
 class FakeScrollElement extends EventTarget {
   scrollHeight = 0;
   clientHeight = 0;
+  clientWidth = 180;
+  offsetWidth = 200;
   dataset: Record<string, string> = {};
   private _scrollTop = 0;
 
@@ -19,6 +21,19 @@ class FakeScrollElement extends EventTarget {
     this._scrollTop = Math.max(0, Math.min(next, maxTop));
   }
 
+  getBoundingClientRect() {
+    return {
+      left: 0,
+      right: this.offsetWidth,
+      top: 0,
+      bottom: this.clientHeight,
+      width: this.offsetWidth,
+      height: this.clientHeight,
+      x: 0,
+      y: 0,
+      toJSON() { return {}; },
+    };
+  }
 }
 
 const originalResizeObserver = globalThis.ResizeObserver;
@@ -59,6 +74,12 @@ function createScrollElement() {
 function wheel(deltaY: number): Event {
   const event = new Event("wheel") as Event & { deltaY: number };
   event.deltaY = deltaY;
+  return event;
+}
+
+function pointerDown(clientX: number): Event {
+  const event = new Event("pointerdown") as Event & { clientX: number };
+  event.clientX = clientX;
   return event;
 }
 
@@ -123,6 +144,50 @@ test("layout-driven upward scroll does not disable follow lock", () => {
 
   expect(disabled).toBe(0);
   expect(tracking).toBe(true);
+  ctrl.cleanup();
+});
+
+test("content pointerdown does not arm follow-lock release", () => {
+  const el = createScrollElement();
+  let tracking = true;
+  let disabled = 0;
+
+  const ctrl = setupAutoScroll(el as any, {
+    isTracking: () => tracking,
+    onUserScrollUp: () => {
+      tracking = false;
+      disabled += 1;
+    },
+  });
+
+  el.dispatchEvent(pointerDown(80));
+  el.scrollTop = 140;
+  el.dispatchEvent(new Event("scroll"));
+
+  expect(disabled).toBe(0);
+  expect(tracking).toBe(true);
+  ctrl.cleanup();
+});
+
+test("scrollbar gutter pointerdown can release follow lock", () => {
+  const el = createScrollElement();
+  let tracking = true;
+  let disabled = 0;
+
+  const ctrl = setupAutoScroll(el as any, {
+    isTracking: () => tracking,
+    onUserScrollUp: () => {
+      tracking = false;
+      disabled += 1;
+    },
+  });
+
+  el.dispatchEvent(pointerDown(196));
+  el.scrollTop = 140;
+  el.dispatchEvent(new Event("scroll"));
+
+  expect(disabled).toBe(1);
+  expect(tracking).toBe(false);
   ctrl.cleanup();
 });
 

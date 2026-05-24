@@ -69,6 +69,7 @@ import {
   BuildAgentContractError,
   BuildResultSchema,
   formatBuildResultSchemaError,
+  validateBuildIntegrityRepairReport,
   type BuildContractGraphContext,
   type BuildResult,
   type BuildTarget,
@@ -485,6 +486,7 @@ export namespace BuildAgent {
         input.existingSessionID
           ? buildRetryFeedbackPrompt(input.target, input.context)
           : buildUserPrompt(input.target, input.context, input.task.id)
+      const requiredIntegrityFingerprints = integrityBlockingFingerprintsFromFeedback(input.context?.integrityFeedback)
       // Forward the same authoritative references named in the
       // design-analysis evidence manifest as multimodal user-message parts so
       // the build LLM physically sees what to clone. This includes user
@@ -573,6 +575,7 @@ export namespace BuildAgent {
             "Both facts are returned to the orchestrator alongside your report (merge_back_status, actual_changed_files), " +
             "so the orchestrator LLM cross-checks honesty itself. " +
             "Be honest: if you changed project files but didn't merge, report status='failed' with a concrete error. " +
+            "If integrity feedback gave you blocking fingerprints, include repair_report and list every fingerprint exactly once as repaired or unrepaired. " +
             "If you legitimately reused a prior attempt's worktree without further edits, or the scoped implementation was already satisfied with a clean worktree, status='passed' with files_changed=[] is fine.",
           inputSchema: BuildResultSchema,
           execute: async (result) => {
@@ -859,6 +862,13 @@ export namespace BuildAgent {
           }`,
         )
       }
+      const integrityRepairContractError = validateBuildIntegrityRepairReport(
+        parsed.data,
+        requiredIntegrityFingerprints,
+      )
+      if (integrityRepairContractError) {
+        throw new Error(`build agent: integrity repair_report contract failed: ${integrityRepairContractError}`)
+      }
 
       // commit_ref policy: in managed worktree mode, only the merged primary
       // HEAD is a valid published commit. If the LLM reported passed without
@@ -944,6 +954,13 @@ export namespace BuildAgent {
       }
     })
   }
+}
+
+function integrityBlockingFingerprintsFromFeedback(feedback: string | undefined): string[] {
+  if (!feedback || feedback.trim().length === 0) return []
+  const sectionStart = feedback.indexOf("Blocking fingerprints:")
+  const source = sectionStart >= 0 ? feedback.slice(sectionStart) : feedback
+  return [...new Set(source.match(/\bif_[a-f0-9]{16}\b/g) ?? [])].sort()
 }
 
 function externalBuildSystemContract(executor: Exclude<TaskRow["executor"], "opencorvus">): string {

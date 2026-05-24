@@ -2,6 +2,7 @@ import type { GoalContractFields } from "@/pipeline/types"
 import type { ParsedRequirement } from "@/requirements/types"
 import type { DeliveryRow, GoalRunRow } from "@/engine/store"
 import { listIntegrityAttemptArtifacts, listSpecSnapshots } from "@/engine/store"
+import { canonicalIntegritySymptom, defaultIntegrityVerify, integrityFindingFingerprint } from "./finding-manifest"
 import { renderSharedIntegrityPromptContext } from "./shared-prompt"
 import type { SpecSnapshotLineage } from "./replay-lineage"
 
@@ -20,23 +21,44 @@ export type IntegrityPriorAttemptSummary = {
     id: string
     severity: "blocking" | "advisory"
     verdictImpact?: "pass" | "concerns" | "needs_correction"
+    fingerprint: string
+    canonicalSymptom: string
     title: string
     description: string
     repair: string
+    verify: string[]
+    affectedSymbols: string[]
+    sourceFindingIDs: string[]
+    priorAttemptRefs: string[]
     filePaths: string[]
     requirementIDs: string[]
     specIDs: string[]
   }>
   blockingFindings: Array<{
     id: string
+    fingerprint: string
+    canonicalSymptom: string
     title: string
     description: string
     repair: string
+    verify: string[]
     filePaths: string[]
     requirementIDs: string[]
     specIDs: string[]
   }>
-  requiredRepairs: Array<{ id: string; description: string; filePaths: string[] }>
+  requiredRepairs: Array<{
+    id: string
+    fingerprint: string
+    canonicalSymptom: string
+    description: string
+    repair: string
+    verify: string[]
+    filePaths: string[]
+    requirementIDs: string[]
+    specIDs: string[]
+    sourceFindingIDs: string[]
+    priorAttemptRefs: string[]
+  }>
   unresolvedDisagreements: Array<{ id: string; description: string }>
 }
 
@@ -278,9 +300,12 @@ function blockingFindingSummaries(value: unknown): IntegrityPriorAttemptSummary[
     return [
       {
         id: finding.id,
+        fingerprint: finding.fingerprint,
+        canonicalSymptom: finding.canonicalSymptom,
         title: finding.title,
         description: finding.description,
         repair: finding.repair,
+        verify: finding.verify,
         filePaths: finding.filePaths,
         requirementIDs: finding.requirementIDs,
         specIDs: finding.specIDs,
@@ -295,17 +320,28 @@ function findingSummaries(value: unknown): NonNullable<IntegrityPriorAttemptSumm
     const finding = asRecord(item)
     const severity = stringFrom(finding.severity)
     if (severity !== "blocking" && severity !== "advisory") return []
+    const normalizedSeverity: "blocking" | "advisory" = severity
+    const draft = {
+      id: stringFrom(finding.id) ?? "unknown-finding",
+      severity: normalizedSeverity,
+      verdictImpact: verdictFrom(finding.verdictImpact),
+      title: stringFrom(finding.title) ?? "Untitled finding",
+      description: stringFrom(finding.description) ?? "",
+      repair: stringFrom(finding.repair) ?? "",
+      filePaths: stringArray(finding.filePaths),
+      requirementIDs: stringArray(finding.requirementIDs),
+      specIDs: stringArray(finding.specIDs),
+      affectedSymbols: stringArray(finding.affectedSymbols),
+      sourceFindingIDs: stringArray(finding.sourceFindingIDs),
+      priorAttemptRefs: stringArray(finding.priorAttemptRefs),
+    }
+    const canonicalSymptom = stringFrom(finding.canonicalSymptom) ?? canonicalIntegritySymptom(draft)
+    const withSymptom = { ...draft, canonicalSymptom }
     return [
       {
-        id: stringFrom(finding.id) ?? "unknown-finding",
-        severity,
-        verdictImpact: verdictFrom(finding.verdictImpact),
-        title: stringFrom(finding.title) ?? "Untitled finding",
-        description: stringFrom(finding.description) ?? "",
-        repair: stringFrom(finding.repair) ?? "",
-        filePaths: stringArray(finding.filePaths),
-        requirementIDs: stringArray(finding.requirementIDs),
-        specIDs: stringArray(finding.specIDs),
+        ...withSymptom,
+        fingerprint: stringFrom(finding.fingerprint) ?? integrityFindingFingerprint(withSymptom),
+        verify: stringArray(finding.verify).length > 0 ? stringArray(finding.verify) : defaultIntegrityVerify(withSymptom),
       },
     ]
   })
@@ -318,7 +354,27 @@ function requiredRepairSummaries(value: unknown): IntegrityPriorAttemptSummary["
     const id = stringFrom(repair.id)
     const description = stringFrom(repair.description)
     if (!id || !description) return []
-    return [{ id, description, filePaths: stringArray(repair.filePaths) }]
+    const draft = {
+      id,
+      title: stringFrom(repair.title),
+      description,
+      repair: stringFrom(repair.repair) ?? description,
+      filePaths: stringArray(repair.filePaths),
+      requirementIDs: stringArray(repair.requirementIDs),
+      specIDs: stringArray(repair.specIDs),
+      affectedSymbols: stringArray(repair.affectedSymbols),
+      sourceFindingIDs: stringArray(repair.sourceFindingIDs),
+      priorAttemptRefs: stringArray(repair.priorAttemptRefs),
+    }
+    const canonicalSymptom = stringFrom(repair.canonicalSymptom) ?? canonicalIntegritySymptom(draft)
+    const withSymptom = { ...draft, canonicalSymptom }
+    return [
+      {
+        ...withSymptom,
+        fingerprint: stringFrom(repair.fingerprint) ?? integrityFindingFingerprint(withSymptom),
+        verify: stringArray(repair.verify).length > 0 ? stringArray(repair.verify) : defaultIntegrityVerify(withSymptom),
+      },
+    ]
   })
 }
 

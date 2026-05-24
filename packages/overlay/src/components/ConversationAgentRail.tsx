@@ -4,7 +4,7 @@ import { conversationAgentStore } from "../store/conversation-agents"
 import { setCardExpanded } from "../store/conversation-ui"
 import { notifyWarning } from "../services/notify"
 import { buildAgentWorkflow, type AgentWorkflowRecord } from "../utils/agent-workflow"
-import { buildAgentWorkflowLanes } from "../utils/agent-workflow-lanes"
+import { mergeAgentRecords } from "../utils/agent-workflow-records"
 import { orderedReachableCardIDs } from "../utils/card-tree"
 import { stageAccent } from "../utils/card-color"
 import { Avatar, avatarRole } from "./Avatar"
@@ -13,21 +13,6 @@ function compactLabel(record: AgentWorkflowRecord): string {
   const parts = [record.agentName, record.status]
   if (record.attempt) parts.push(`V${record.attempt}`)
   return parts.filter(Boolean).join(" · ")
-}
-
-function mergeAgentRecords(
-  baseRecords: AgentWorkflowRecord[],
-  liveRecords: AgentWorkflowRecord[],
-): AgentWorkflowRecord[] {
-  const merged = new Map<string, AgentWorkflowRecord>()
-  for (const record of baseRecords) {
-    merged.set(record.sessionID, { ...record })
-  }
-  for (const record of liveRecords) {
-    const base = merged.get(record.sessionID)
-    merged.set(record.sessionID, base ? { ...base, ...record } : { ...record })
-  }
-  return [...merged.values()].sort((left, right) => left.startedAt - right.startedAt)
 }
 
 function parentIDsForCard(cardID: string): string[] {
@@ -142,30 +127,26 @@ export function ConversationAgentRail() {
       records: mergeAgentRecords(conversationAgentStore.records, liveProjection.records),
     }
   })
-  const lanes = createMemo(() => buildAgentWorkflowLanes(projection().records))
-  const hasLanes = createMemo(() => lanes().length > 0)
+  const records = createMemo(() => projection().records)
+  const hasRecords = createMemo(() => records().length > 0)
 
   return (
-    <Show when={hasLanes()}>
+    <Show when={hasRecords()}>
     <aside
       class="conversation-agent-rail"
       aria-label="Agent workflow"
     >
       <div class="conversation-agent-rail__lanes" role="list">
-        <Index each={lanes()}>
-          {(lane) => (
-            <div class="conversation-agent-rail__lane" data-kind={lane().kind} role="listitem">
-              <Index each={lane().records}>
-                {(record) => (
-                  <AgentRailRow
-                    record={record}
-                    onLocate={locateRecord}
-                  />
-                )}
-              </Index>
-            </div>
-          )}
-        </Index>
+        <div class="conversation-agent-rail__lane" data-kind="timeline" role="listitem">
+          <Index each={records()}>
+            {(record) => (
+              <AgentRailRow
+                record={record}
+                onLocate={locateRecord}
+              />
+            )}
+          </Index>
+        </div>
       </div>
     </aside>
     </Show>

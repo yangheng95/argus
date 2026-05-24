@@ -280,6 +280,8 @@ export interface CardNode {
       id: string;
       severity: "blocking" | "advisory";
       verdictImpact: "pass" | "concerns" | "needs_correction";
+      fingerprint?: string;
+      canonicalSymptom?: string;
       title: string;
       description: string;
       evidence: string[];
@@ -287,16 +289,31 @@ export interface CardNode {
       requirementIDs: string[];
       specIDs: string[];
       filePaths: string[];
+      affectedSymbols: string[];
       repair: string;
+      verify: string[];
+      sourceFindingIDs: string[];
+      priorAttemptRefs: string[];
       reviewers: string[];
       consensus: "agreed" | "disputed" | "unresolved";
     }>;
     requiredRepairs: Array<{
       id: string;
+      fingerprint?: string;
+      severity?: "blocking" | "advisory";
+      title?: string;
+      canonicalSymptom?: string;
       description: string;
       evidence: string[];
       targetIDs: string[];
+      requirementIDs: string[];
+      specIDs: string[];
       filePaths: string[];
+      affectedSymbols: string[];
+      repair?: string;
+      verify: string[];
+      sourceFindingIDs: string[];
+      priorAttemptRefs: string[];
     }>;
     unresolvedDisagreements: Array<{
       id: string;

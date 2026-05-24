@@ -352,6 +352,7 @@ test("task.messages.changed triggers non-reset tail merge for DB-backed message 
     fakeTransport({
       request(req) {
         requests.push(req.path);
+        expect(req.query?.tail_limit).toBe("32");
         return { status: 200, ok: true, headers: {}, body: conversationPayload("tsk_db_tail") };
       },
     }),
@@ -415,6 +416,7 @@ test("selected task stream renders DB-backed task.messages.changed tail without 
       handlers,
       request(req) {
         requests.push(req.path);
+        expect(req.query?.tail_limit).toBe("32");
         return { status: 200, ok: true, headers: {}, body: conversationPayload("tsk_db_tail_stream", transcript, view) };
       },
     }),
@@ -423,6 +425,7 @@ test("selected task stream renders DB-backed task.messages.changed tail without 
   setBoardStore("taskSequence", 12);
   markSelectedMessageWatermark(1_779_000_000_000);
   const treeEpoch = cardTreeStore.treeEpoch;
+  const visibleVersion = cardTreeStore.visibleVersion;
 
   startSSE("tsk_db_tail_stream", 12);
   expect(streams).toEqual([
@@ -446,6 +449,7 @@ test("selected task stream renders DB-backed task.messages.changed tail without 
 
   const card = cardTreeStore.cards["assistant:session:ses_db_tail:message:msg_db_tail"];
   expect(cardTreeStore.treeEpoch).toBe(treeEpoch);
+  expect(cardTreeStore.visibleVersion).toBeGreaterThan(visibleVersion);
   expect(requests).toEqual(["task/tsk_db_tail_stream/conversation"]);
   expect(card).toBeDefined();
   expect(card?.parts.some((part: any) =>

@@ -32,6 +32,7 @@ type HistoryState = {
 };
 
 const INITIAL_CONVERSATION_TAIL_LIMIT = 240;
+const LIVE_MESSAGE_CHANGE_TAIL_LIMIT = 32;
 const CONVERSATION_HISTORY_PAGE_LIMIT = 160;
 
 let replayEpoch = 0;
@@ -41,6 +42,9 @@ let historyAbort: AbortController | null = null;
 let tailMergeEpoch = 0;
 let tailMergeAbort: AbortController | null = null;
 let historyTaskID = "";
+let scheduledTailMergeTaskID = "";
+let scheduledTailMergeRunning = false;
+let scheduledTailMergeAgain = false;
 let historyState: HistoryState = {
   oldestTimestamp: null,
   oldestMessageID: null,
@@ -59,6 +63,9 @@ export function cancelConversationReplay(): void {
   replayAbort = null;
   historyAbort = null;
   tailMergeAbort = null;
+  scheduledTailMergeTaskID = "";
+  scheduledTailMergeRunning = false;
+  scheduledTailMergeAgain = false;
   historyLoading = false;
   historyTaskID = "";
   historyState = {
@@ -346,6 +353,36 @@ export async function mergeLatestConversationTail(
   } finally {
     if (tailMergeAbort === controller) tailMergeAbort = null;
   }
+}
+
+export function scheduleLatestConversationTailMerge(taskID: string): void {
+  const selectedTaskID = String(taskID || "");
+  if (!selectedTaskID) return;
+  scheduledTailMergeTaskID = selectedTaskID;
+  if (scheduledTailMergeRunning) {
+    scheduledTailMergeAgain = true;
+    return;
+  }
+  scheduledTailMergeRunning = true;
+  const run = async (): Promise<void> => {
+    while (scheduledTailMergeTaskID) {
+      const nextTaskID = scheduledTailMergeTaskID;
+      scheduledTailMergeTaskID = "";
+      scheduledTailMergeAgain = false;
+      try {
+        await mergeLatestConversationTail(nextTaskID, {
+          tailLimit: LIVE_MESSAGE_CHANGE_TAIL_LIMIT,
+        });
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") continue;
+        console.error("[conversation] scheduled tail merge failed", error);
+      }
+      if (!scheduledTailMergeAgain) break;
+    }
+    scheduledTailMergeRunning = false;
+    if (scheduledTailMergeTaskID) scheduleLatestConversationTailMerge(scheduledTailMergeTaskID);
+  };
+  void run();
 }
 
 export function canLoadOlderConversationHistory(taskID = boardStore.selectedTaskID): boolean {
