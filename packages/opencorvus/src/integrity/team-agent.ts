@@ -25,7 +25,7 @@ import { Log } from "@/util/log"
 import type { DeliveryInfo, GoalInfo } from "@/delivery/checks"
 import { createIntegrityAcceptanceTools } from "./acceptance-tools"
 import { renderIntegrityReplayContextPrompt, type IntegrityReplayContext } from "./replay-context"
-import { sanitizeIntegrityPromptText } from "./shared-prompt"
+import { renderSharedIntegrityPromptContext, sanitizeIntegrityPromptText } from "./shared-prompt"
 import type { RequirementStatusRow } from "./requirement-status"
 import {
   IntegrityReviewCompletedPayloadSchema,
@@ -431,10 +431,11 @@ async function runReviewerSession(input: {
   return out.collector.report
 }
 
-function buildSupervisorPlanPrompt(input: ReviewPromptInput): string {
+export function buildSupervisorPlanPrompt(input: ReviewPromptInput): string {
   return [
     "# Integrity Supervisor Planning",
     renderIntegrityReplayContextPrompt(input.replayContext),
+    renderSeverityNewEvidenceSection(input),
     [
       "Choose 2-6 independent reviewers for the actual task risk surface. Use the scale signals: larger goal/REQ/changed-file surfaces should push the plan toward more reviewers; narrow surfaces can use fewer. Do not default to five reviewers. Do not use fixed dimensions or a stock checklist.",
       "When no prior integrity attempt exists for this task/spec snapshot, build the reviewer team from the task's actual risk surface.",
@@ -457,6 +458,7 @@ export function buildReviewerPrompt(input: ReviewPromptInput, scope: IntegrityRe
     markdownList(scope.adversarialQuestions),
     renderIntegrityReplayContextPrompt(input.replayContext),
     FINDING_TRACEABILITY_PROMPT,
+    renderSeverityNewEvidenceSection(input),
     [
       "Explore independently, gather evidence, and call submit_reviewer_report once.",
       "When no prior integrity attempt exists for this task/spec, review your assigned surface independently using evidence from files, diffs, commands, runtime checks, requirements, goals, and the original request.",
@@ -474,6 +476,8 @@ export function buildSupervisorConsensusPrompt(
   return [
     "# Integrity Supervisor Consensus",
     renderIntegrityReplayContextPrompt(input.replayContext),
+    renderSeverityNewEvidenceSection(input),
+    renderSeverityReconciliationPass(),
     "Compare reviewer reports adversarially. If a blocking finding or unresolved blocking disagreement remains, do not pass.",
     "Compare the current reviewer reports against prior attempts. A repeated blocking finding should be represented as persistent or regressed when the evidence supports that conclusion. Do not pass while a prior blocking repair has no convincing current evidence. Do not suppress a prior blocker merely because current reviewers used a different id.",
     CONSENSUS_TRACEABILITY_PROMPT,
@@ -487,7 +491,7 @@ export function buildSupervisorConsensusPrompt(
   ].join("\n\n")
 }
 
-function buildIntegrityEvidencePrompt(input: ReviewPromptInput): string {
+export function buildIntegrityEvidencePrompt(input: ReviewPromptInput): string {
   const sections: string[] = []
   sections.push(
     renderUserRequestSection({
@@ -533,6 +537,7 @@ function buildIntegrityEvidencePrompt(input: ReviewPromptInput): string {
     }
     sections.push(lines.join("\n"))
   }
+  sections.push(renderScopeBoundedMaturityEvidenceSection(input))
   if (input.acceptance) {
     const changed = input.acceptance.changedFiles.slice(0, 80)
     const diffLines = (input.acceptance.diffs ?? []).slice(0, 12).map((diff) => `- ${diff.file}`)
@@ -583,6 +588,138 @@ function buildIntegrityEvidencePrompt(input: ReviewPromptInput): string {
   const dlSection = input.decisionLog?.toPromptSection()
   if (dlSection) sections.push(dlSection)
   return sections.join("\n\n")
+}
+
+export function renderSeverityNewEvidenceSection(input: ReviewPromptInput): string {
+  const latestAttempt = input.replayContext.priorAttempts.at(-1)
+  const oldAttempts = latestAttempt ? input.replayContext.priorAttempts.slice(0, -1).reverse() : []
+  const evidence = input.replayContext.buildEvidenceSinceLastReview
+  const changedEvidenceLines = [
+    "Build evidence available for deciding whether later severity changes have new evidence:",
+  ]
+  if (evidence.sinceAttemptNumber !== undefined)
+    changedEvidenceLines.push(`- Since attempt: #${evidence.sinceAttemptNumber}`)
+  if (evidence.sinceTimeCreated !== undefined) {
+    changedEvidenceLines.push(`- Since time: ${new Date(evidence.sinceTimeCreated).toISOString()}`)
+  }
+  changedEvidenceLines.push(
+    `- Changed files: ${evidence.changedFiles.length > 0 ? evidence.changedFiles.join(", ") : "(none)"}`,
+  )
+  if (evidence.deliverySummaries.length > 0) {
+    changedEvidenceLines.push("- Delivery summaries:")
+    for (const summary of evidence.deliverySummaries) changedEvidenceLines.push(`  - ${summary}`)
+  }
+  const rendered = renderSharedIntegrityPromptContext({
+    surface: "severity_context",
+    lineage: input.replayContext.lineage,
+    latestAttempt,
+    changedFiles: evidence.changedFiles,
+    changedEvidenceMarkdown: changedEvidenceLines.join("\n"),
+    oldAttempts,
+    reviewerTextBlocks: renderPriorFindingsForSeverity(input.replayContext),
+  }).promptMarkdown
+
+  return [
+    "# Severity New Evidence Context",
+    "Use this replay-aware SpecSnapshotLineage context when applying Severity Discipline. Prior findings must be read from this lineage context, not from an active-spec-snapshot-only artifact lookup.",
+    "When considering any severity change, apply the `new evidence` definition from Severity Discipline above. A deeper reading of unchanged code or unchanged prior runtime output is not new evidence; persistence alone is not promotion.",
+    rendered,
+  ].join("\n\n")
+}
+
+function renderPriorFindingsForSeverity(context: IntegrityReplayContext): string[] {
+  const lines: string[] = []
+  for (const attempt of context.priorAttempts) {
+    if (!attempt.findings?.length) continue
+    lines.push(`Attempt #${attempt.attemptNumber} prior findings:`)
+    for (const finding of attempt.findings) {
+      lines.push(`- [${finding.severity}] ${finding.id}: ${finding.title}`)
+      if (finding.description) lines.push(`  description: ${finding.description}`)
+      if (finding.repair) lines.push(`  repair: ${finding.repair}`)
+      if (finding.filePaths.length > 0) lines.push(`  files: ${finding.filePaths.join(", ")}`)
+      if (finding.requirementIDs.length > 0) lines.push(`  requirements: ${finding.requirementIDs.join(", ")}`)
+      if (finding.specIDs.length > 0) lines.push(`  specs: ${finding.specIDs.join(", ")}`)
+    }
+  }
+  return lines.length > 0 ? [lines.join("\n")] : []
+}
+
+function renderSeverityReconciliationPass(): string {
+  return [
+    "# Severity Reconciliation Pass",
+    "Before emitting the team report:",
+    "",
+    "1. Identify every group of reviewer findings that target the same defect surface (same file/function/symptom). Treat ids as labels, not as identity; use the description and evidence to detect overlap.",
+    "",
+    '2. For each group, decide a single team severity using the bar in "Severity Discipline". Do NOT carry both severities forward. If reviewers disagree, fold the group into one finding with `consensus=\"disputed\"` when the disagreement is real, and pick the severity that the bar clauses (a)-(e) support. If neither bar clause is met, the team severity is advisory.',
+    "",
+    "3. If a finding repeats a defect that was advisory in any prior attempt's report from replay context, and there is no Severity Discipline new evidence raising it to a bar clause (a)-(e), keep it advisory. Persistence alone is not a promotion trigger. A deeper reading of unchanged code or unchanged prior runtime output is not new evidence.",
+    "",
+    '4. If a finding repeats a defect that was blocking in a prior attempt and the build evidence since that attempt does NOT show a repair on that surface, keep it blocking and mark `consensus=\"agreed\"` with a persistent note.',
+  ].join("\n")
+}
+
+function renderScopeBoundedMaturityEvidenceSection(input: ReviewPromptInput): string {
+  const lines = [
+    "# Scope-Bounded Maturity Evidence",
+    "",
+    "Severity reads maturity meaning only from the scope discipline path: bounded REQ rows or a durable `maturity_scope_pending` decision. This section is a read-through; severity does not classify the task into a local maturity tier.",
+    "",
+    "Visible bounded REQs from requirements/scope:",
+  ]
+  if (input.requirements?.length) {
+    for (const req of input.requirements) {
+      lines.push(`- ${req.id}: ${sanitizePromptLine(req.description, "generic")}`)
+      const acceptance = requirementAcceptanceLines(req.acceptance)
+      if (acceptance.length > 0)
+        lines.push(`  acceptance: ${acceptance.map((item) => sanitizePromptLine(item, "generic")).join("; ")}`)
+      if (req.non_goals.trim().length > 0) {
+        lines.push(`  non_goals: ${sanitizePromptLine(req.non_goals, "generic")}`)
+      }
+    }
+  } else {
+    lines.push("- (none rendered)")
+  }
+
+  lines.push("", "Maturity terms from original request not landed as bounded REQs:")
+  const pending = input.requirementDecisions?.filter((decision) => decision.key === "maturity_scope_pending") ?? []
+  if (pending.length > 0) {
+    for (const decision of pending) {
+      lines.push(
+        `- maturity_scope_pending: ${sanitizePromptLine(decision.value, "generic")}; reason: ${sanitizePromptLine(decision.reason, "generic")}. Valid integrity action: at most one requirements-extraction concern; do not derive severity thresholds from this word.`,
+      )
+    }
+  } else {
+    lines.push(
+      "- No `maturity_scope_pending` decision is present in rendered requirements/scope decisions. Do not infer one here; use only bounded REQs above and explicit request phrases already rendered.",
+    )
+  }
+  return lines.join("\n")
+}
+
+function requirementAcceptanceLines(value: ParsedRequirement["acceptance"]): string[] {
+  if (Array.isArray(value)) return value.filter((item) => item.trim().length > 0)
+  if (typeof value !== "string") return []
+  const trimmed = value.trim()
+  if (!trimmed) return []
+  try {
+    const parsed: unknown = JSON.parse(trimmed)
+    if (Array.isArray(parsed))
+      return parsed.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+  } catch {
+    // Plain-text acceptance is already a valid requirements row rendering.
+  }
+  return [trimmed]
+}
+
+function sanitizePromptLine(text: string, field: "user_request_quote" | "generic"): string {
+  return sanitizeIntegrityPromptText({
+    text,
+    field,
+    markdownContext: "inline",
+  })
+    .text.replace(/\s+/g, " ")
+    .trim()
 }
 
 function normalizeTeamReport(report: IntegrityTeamReport): IntegrityResult {

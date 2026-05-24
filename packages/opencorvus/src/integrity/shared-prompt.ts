@@ -121,7 +121,12 @@ export function renderSharedIntegrityPromptContext(input: SharedPromptCapInput):
 
   append(renderSharedPromptHeader(input))
   if (input.latestAttempt) {
-    append(clipText(renderFullAttemptMarkdown(input.latestAttempt, budget, sanitize), budget.latestAttemptFullTextCharCap))
+    append(
+      clipText(
+        renderFullAttemptMarkdown(input.latestAttempt, budget, input.surface, sanitize),
+        budget.latestAttemptFullTextCharCap,
+      ),
+    )
   } else {
     append(
       "No prior integrity attempts exist for this task/spec snapshot lineage. Treat this as a first review and choose reviewers from the actual request, goals, requirements, changed files, runtime evidence, and risk surface.",
@@ -279,6 +284,7 @@ type PromptSanitizer = (
 function renderFullAttemptMarkdown(
   attempt: IntegrityPriorAttemptSummary,
   budget: SharedPromptBudget,
+  surface: SharedPromptSurface,
   sanitize: PromptSanitizer,
 ): string {
   const lines = [
@@ -291,7 +297,8 @@ function renderFullAttemptMarkdown(
     `- verdict=${attempt.verdict ?? "unknown"}`,
   ]
   if (attempt.summary) lines.push("", "Summary:", sanitize(attempt.summary, "generic", "block"))
-  if (attempt.teamReportMarkdown) lines.push("", "Team report:", sanitize(attempt.teamReportMarkdown, "reviewer_text", "block"))
+  if (attempt.teamReportMarkdown)
+    lines.push("", "Team report:", sanitize(attempt.teamReportMarkdown, "reviewer_text", "block"))
   if (attempt.reviewers.length > 0) {
     lines.push("", "Reviewer focuses:")
     for (const reviewer of attempt.reviewers) {
@@ -311,7 +318,31 @@ function renderFullAttemptMarkdown(
         )
       }
       if (finding.repair) {
-        lines.push(`  repair: ${clipText(sanitize(finding.repair, "finding_repair", "block"), budget.findingRepairCharCap)}`)
+        lines.push(
+          `  repair: ${clipText(sanitize(finding.repair, "finding_repair", "block"), budget.findingRepairCharCap)}`,
+        )
+      }
+      if (finding.filePaths.length > 0) lines.push(`  files: ${finding.filePaths.join(", ")}`)
+      if (finding.requirementIDs.length > 0) lines.push(`  requirements: ${finding.requirementIDs.join(", ")}`)
+      if (finding.specIDs.length > 0) lines.push(`  specs: ${finding.specIDs.join(", ")}`)
+    }
+  }
+  if (surface === "severity_context" && attempt.findings?.length) {
+    lines.push("", "All prior findings for severity stability:")
+    for (const finding of attempt.findings) {
+      lines.push(`- [${finding.severity}] ${finding.id}: ${finding.title}`)
+      if (finding.description) {
+        lines.push(
+          `  description: ${clipText(
+            sanitize(finding.description, "finding_description", "block"),
+            budget.findingDescriptionCharCap,
+          )}`,
+        )
+      }
+      if (finding.repair) {
+        lines.push(
+          `  repair: ${clipText(sanitize(finding.repair, "finding_repair", "block"), budget.findingRepairCharCap)}`,
+        )
       }
       if (finding.filePaths.length > 0) lines.push(`  files: ${finding.filePaths.join(", ")}`)
       if (finding.requirementIDs.length > 0) lines.push(`  requirements: ${finding.requirementIDs.join(", ")}`)
@@ -321,14 +352,18 @@ function renderFullAttemptMarkdown(
   if (attempt.requiredRepairs.length > 0) {
     lines.push("", "Required repairs:")
     for (const repair of attempt.requiredRepairs) {
-      lines.push(`- ${repair.id}: ${clipText(sanitize(repair.description, "finding_repair", "block"), budget.findingRepairCharCap)}`)
+      lines.push(
+        `- ${repair.id}: ${clipText(sanitize(repair.description, "finding_repair", "block"), budget.findingRepairCharCap)}`,
+      )
       if (repair.filePaths.length > 0) lines.push(`  files: ${repair.filePaths.join(", ")}`)
     }
   }
   if (attempt.unresolvedDisagreements.length > 0) {
     lines.push("", "Unresolved disagreements:")
     for (const disagreement of attempt.unresolvedDisagreements) {
-      lines.push(`- ${disagreement.id}: ${clipText(sanitize(disagreement.description, "generic", "block"), budget.findingDescriptionCharCap)}`)
+      lines.push(
+        `- ${disagreement.id}: ${clipText(sanitize(disagreement.description, "generic", "block"), budget.findingDescriptionCharCap)}`,
+      )
     }
   }
   return lines.join("\n")
@@ -366,7 +401,10 @@ function renderChangedEvidenceMarkdown(
   const lines = ["## Changed Files And Evidence", "", `- changed_files=${input.changedFiles.length}`]
   for (const file of input.changedFiles) lines.push(`- ${file}`)
   if (input.changedEvidenceMarkdown) {
-    lines.push("", clipText(sanitize(input.changedEvidenceMarkdown, "changed_evidence", "block"), budget.changedEvidenceCharCap))
+    lines.push(
+      "",
+      clipText(sanitize(input.changedEvidenceMarkdown, "changed_evidence", "block"), budget.changedEvidenceCharCap),
+    )
   }
   return lines.join("\n")
 }
