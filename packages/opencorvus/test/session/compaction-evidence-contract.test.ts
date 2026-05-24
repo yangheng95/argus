@@ -92,6 +92,37 @@ describe("compaction evidence contract", () => {
     if (!result.success) expect(result.error).toContain("errorsAndBlockers (no entries)")
   })
 
+  test("validateHandoffPayload completes host-derived runtime evidence before minimum validation", () => {
+    const result = SessionCompaction.validateHandoffPayload(
+      {
+        ...handoffFixture(),
+        files: [],
+        evidence: [],
+        errorsAndBlockers: [],
+      },
+      {
+        sourceUserMessageID: "msg-source",
+        instructionPaths: ["/repo/AGENTS.md"],
+        patchFiles: ["server/db/schema.ts", "server/db/connection.ts"],
+        errorNames: ["StructuredOutputPayloadError", "StructuredOutput tool error"],
+        userMessages: true,
+        fileEvidence: true,
+        errorsAndBlockers: true,
+        acceptanceCriteria: true,
+      },
+    )
+
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.files.map((item) => item.path)).toEqual(
+        expect.arrayContaining(["server/db/schema.ts", "server/db/connection.ts"]),
+      )
+      expect(result.data.errorsAndBlockers.map((item) => item.evidence)).toEqual(
+        expect.arrayContaining(["StructuredOutputPayloadError", "StructuredOutput tool error"]),
+      )
+    }
+  })
+
   test("accepts three documented blockers for five runtime error tokens", () => {
     const handoff = {
       ...handoffFixture(),

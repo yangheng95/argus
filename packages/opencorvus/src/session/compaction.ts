@@ -319,11 +319,12 @@ export namespace SessionCompaction {
     if (!parsed.success) {
       return { success: false, error: z.prettifyError(parsed.error) }
     }
-    const evidence = CompactionHandoff.validateMinimumEvidence(parsed.data, requirements)
+    const completed = CompactionHandoff.completeRuntimeEvidence(parsed.data, requirements)
+    const evidence = CompactionHandoff.validateMinimumEvidence(completed, requirements)
     if (!evidence.success) {
       return { success: false, error: evidence.error }
     }
-    return { success: true, data: parsed.data }
+    return { success: true, data: completed }
   }
 
   function turns(messages: Message.WithParts[]) {
