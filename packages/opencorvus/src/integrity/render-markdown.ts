@@ -20,7 +20,11 @@ export function renderIntegrityMarkdown(input: {
     for (const finding of verdict.findings) {
       const targets = finding.targetIDs.length > 0 ? ` targets=[${finding.targetIDs.join(", ")}]` : ""
       const files = finding.filePaths.length > 0 ? ` files=[${finding.filePaths.join(", ")}]` : ""
-      lines.push(`- [${finding.severity}/${finding.consensus}] ${finding.id}: ${finding.title}${targets}${files}`)
+      const quotes =
+        finding.userRequestQuotes && finding.userRequestQuotes.length > 0
+          ? ` quotes=[${finding.userRequestQuotes.join(" | ")}]`
+          : ""
+      lines.push(`- [${finding.severity}/${finding.consensus}] ${finding.id}: ${finding.title}${targets}${files}${quotes}`)
       lines.push(`  ${finding.description}`)
       lines.push(`  repair: ${finding.repair}`)
       for (const evidence of finding.evidence) lines.push(`  evidence: ${evidence}`)

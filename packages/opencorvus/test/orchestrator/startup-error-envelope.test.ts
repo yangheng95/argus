@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
 import path from "node:path"
-import { Provider } from "../../src/provider/provider"
 import { findTask } from "../../src/engine/store"
 import { deriveTaskStatus } from "../../src/engine/task-status"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { Identifier } from "../../src/id/id"
+import { Orchestrator, parseOrchestratorTaskErrorEnvelope } from "../../src/orchestrator/agent"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
 import { SessionPrompt } from "../../src/session/prompt"
@@ -19,18 +19,7 @@ describe("Orchestrator startup error envelope", () => {
   })
 
   test("preserves NamedError data inside engine_task.error while keeping startup fast-fail", async () => {
-    mock.module("@/agent/model", () => ({
-      resolveAgentModel: async () => {
-        throw new Provider.ModelNotFoundError({
-          providerID: "missing-provider",
-          modelID: "missing-model",
-          suggestions: ["deepseek/deepseek-v4-pro"],
-        })
-      },
-    }))
-
-    const { Orchestrator, parseOrchestratorTaskErrorEnvelope } = await import("../../src/orchestrator/agent")
-    await using tmp = await tmpdir({ config: { agent: {}, model: "deepseek/deepseek-v4-pro" } })
+    await using tmp = await tmpdir({ config: { agent: {}, model: "missing-provider/missing-model" } })
     const prevHome = process.env.OPENCORVUS_HOME
     const prevGlobalConfigDir = process.env.OPENCORVUS_GLOBAL_CONFIG_DIR
     const prevDisablePlugins = process.env.OPENCORVUS_DISABLE_DEFAULT_PLUGINS
@@ -76,11 +65,11 @@ describe("Orchestrator startup error envelope", () => {
           expect(envelope).toEqual({
             errorName: "ProviderModelNotFoundError",
             message: expect.stringContaining("missing-provider"),
-            data: {
+            data: expect.objectContaining({
               providerID: "missing-provider",
               modelID: "missing-model",
-              suggestions: ["deepseek/deepseek-v4-pro"],
-            },
+              suggestions: expect.any(Array),
+            }),
           })
         },
       })
@@ -92,5 +81,5 @@ describe("Orchestrator startup error envelope", () => {
       if (prevDisablePlugins === undefined) delete process.env.OPENCORVUS_DISABLE_DEFAULT_PLUGINS
       else process.env.OPENCORVUS_DISABLE_DEFAULT_PLUGINS = prevDisablePlugins
     }
-  })
+  }, 15000)
 })

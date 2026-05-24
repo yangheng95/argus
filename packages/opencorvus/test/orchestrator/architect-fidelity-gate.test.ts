@@ -9,7 +9,7 @@ const essentialDeliveryVisualSpec: AcceptanceSpec = {
   goal_id: "goal_verify",
   title: "Final rendered page matches the authoritative visual references",
   severity: "essential",
-  trigger: "on_delivery",
+  trigger: "on_integrity",
   scorers: [{
     type: "llm_judge",
     name: "rendered-reference-fidelity",
@@ -206,7 +206,7 @@ describe("orchestrator architect fidelity diagnostics", () => {
     expect(
       findings.some((finding) =>
         finding.severity === "concern" && finding.message.includes(
-          "Missing essential delivery visual acceptance: reference-driven tasks must include a blocking verification/integration goal with an essential on_delivery llm_judge acceptance spec for final rendered-vs-reference fidelity.",
+          "Missing essential integrity visual acceptance: reference-driven tasks must include a blocking verification/integration goal with an essential on_integrity llm_judge acceptance spec for final rendered-vs-reference fidelity.",
         ),
       ),
     ).toBe(true)
