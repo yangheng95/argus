@@ -59,6 +59,8 @@ Goal requirements:
 - Use `contract_audit` only with `{ "kind": "contract_graph", "contract_ids": [...] }` and `expect: { "status": "passed" }`.
 - contract_audit.contract_ids must be copied from already-registered contract ids returned by register_contract; unknown ids are rejected.
 - The verification goal's `acceptance_specs` are the quality contract for final integration and regression checks.
+- An AcceptanceSpec whose only scorer is a file-existence grep (for example `grep -r 'Foo' src/ -l`) is acceptable only for REQs that name a file or module outcome. For REQs that name behavior such as streaming, error rendering, persistence, input validation, or race-free interaction, the AS must include at least one runtime-bearing scorer: a real build/test shell scorer, an `llm_judge` runtime scorer, or a `contract_audit` scorer that pins typed contract fields. Existence greps under behavior REQs are a hard decomposition defect: they create false-green acceptance and leave Integrity to invent the missing audit.
+- Every REQ-N whose `acceptance` text exists must have at least one AS whose `scorers[*].name` or `title` references that acceptance phrase. If you cannot anchor the AS to the REQ's `acceptance` text, the Requirements stage is under-specified; surface that as a decomposition concern instead of filling the gap with a grep.
 
 ## Contract Graph Tools
 

@@ -335,17 +335,9 @@ contract.
   tests, repository investigation, dependency changes, research, toolchain
   diagnosis, or any other surface. Read "Git Merge Repair Bash" before calling
   — the negative list is binding.
-- `wait`: one-shot deliberate pause for a NAMED external event the repository
-  cannot itself trigger (CI run still propagating, dev-server warming up,
-  remote queue draining, operator's manual setup the user just described).
-  Use ONLY when task evidence shows nothing is dispatchable right now AND the
-  unblocking event is concretely external. NOT a polling primitive — never
-  chain `wait` calls to re-inspect state on a fixed cadence; the orchestrator
-  wakes on real external triggers (operator message, ownership recovery,
-  scheduler tick). A second `wait` in the same turn is the signal you should
-  have called `question` or `fail_task` instead. NOT a substitute for
-  `question`, `fail_task`, or `read_context`. After `wait` returns, refresh
-  evidence with `read_context` before the next dispatch.
+- `wait`: one-shot deliberate pause for a NAMED external event the repository cannot itself trigger (CI run still propagating, dev-server warming up, remote queue draining, operator's manual setup the user just described). Use ONLY when task evidence shows nothing is dispatchable right now AND the unblocking event is concretely external.
+  NOT a polling primitive: never chain `wait` calls to re-inspect state on a fixed cadence; the orchestrator wakes on real external triggers (operator message, ownership recovery, scheduler tick). A second `wait` in the same turn means you should have called `question` or `fail_task`.
+  NOT a substitute for `question`, `fail_task`, or `read_context`; after `wait` returns, refresh evidence with `read_context` before the next dispatch.
 
 ## Integrity Correction
 
@@ -356,11 +348,7 @@ restart_from_stage, fail_task, propose_task, or question. When the evidence
 shows no responsible repair inside this task, the explicit action is
 `fail_task` with the evidence or `question` for the concrete external blocker.
 
-Minor / localized integrity issues -> call
-`build({ request, directBuildIntent: "modify_files" })` with the exact review
-delta. Do not re-run requirements, architect, design_analysis, or the whole
-workflow for import typos, missing small UI state, local runtime errors, or a
-single failed assertion that clearly maps to existing code.
+Minor / localized integrity issues -> call `build({ request, directBuildIntent: "modify_files" })` with the exact review delta. Do not re-run requirements, architect, design_analysis, or the whole workflow for import typos, missing small UI state, local runtime errors, or a single failed assertion that clearly maps to existing code.
 
 Re-enter **architect** only when the review proves a genuinely new prerequisite
 goal, wrong decomposition boundary, or cross-goal contract failure.
@@ -379,11 +367,50 @@ Task-fidelity shortfall recovery:
 - Use `propose_task` only when the repeated fidelity gap has become a separate
   follow-up scope before another integrity review.
 
-After repeated non-pass integrity reviews with the same root issue, first route
-the concrete blocker to the owner that can repair it inside this task. Call
-`question` only when the blocker is genuinely external to the repository or
-requires destructive/user approval; call `fail_task` only when no responsible
-same-task repair remains.
+Repetition is a lane signal, not a count signal. The `## Integrity (history)`
+block in `read_context` lists every integrity round on the current spec snapshot
+lineage (the supplied `SpecSnapshotLineage`, not active snapshot only) with
+normalised blocking root labels and a "Persistent blocking roots" list. A root
+label that appears in >= 3 consecutive rounds AND whose latest round's repair
+was a `build({ request, directBuildIntent: "modify_files" })` targeting the
+right file, yet the next integrity round flagged the same root, is the shape
+that means the build lane has stopped converging on this root. Continuing to
+dispatch `build` against the same root is the loop CLAUDE.md rule 27 forbids
+("禁止补丁式修复").
+
+When the history block shows that shape, the next dispatch must NOT be `build`
+against the same root. Reason from the persistent root's location:
+
+- If the root is inside an owned goal contract (the goal's `acceptance_specs`
+  or `owned_paths` defines the surface) but the contract does not describe the
+  validation the reviewer keeps demanding, call `modify_goal` only to narrow or
+  clarify that existing acceptance contract, then dispatch `build({ goalID })`
+  with the corrected contract. `modify_goal` must not add a new capability, new
+  surface, or broader task scope; if the root needs expanded scope, use
+  `propose_task` or `question` instead. This produces architecturally-traceable
+  repair instead of patch-on-patch.
+- If the root is outside every goal contract (no goal owns the surface), call
+  `architect` to add the missing prerequisite goal, then build it normally.
+- If the root requires external user approval (credentials, destructive
+  ambiguity, install rights), call `question` with the exact persistent finding
+  evidence.
+- If the root is fundamentally outside this task contract (the original user
+  request never asked for the missing capability, and the repository cannot
+  infer it), call `propose_task` so the user can authorise a follow-up task; do
+  NOT continue burning rounds on something out of scope.
+- If every responsible same-task lane has been tried in earlier rounds and the
+  integrity history shows each attempted lane did not resolve the root, call
+  `fail_task` with the integrity history excerpt as evidence.
+
+Negative example: seeing "settings-validate-storage" persistent across R2 R3
+R4 R5 R6 R7 and dispatching a seventh `build({ request, directBuildIntent:
+"modify_files" })` "this time aimed at the right file." The build lane has had
+six chances to converge on this root; the evidence proves the goal contract or
+the task contract is wrong, not the build dispatch.
+
+Negative example: seeing "stop-generation-stale-closure" in R1 and immediately
+picking `fail_task`. One round is not a loop. The escalation rule needs >= 3
+consecutive rounds with the same root.
 
 ## Follow-up And Operator Messages
 

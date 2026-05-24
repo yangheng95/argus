@@ -8,7 +8,7 @@ const workerAgentFiles = [
   "packages/opencorvus/src/requirements/agent.ts",
   "packages/opencorvus/src/design-analyst/agent.ts",
   "packages/opencorvus/src/build/agent.ts",
-  "packages/opencorvus/src/integrity/agent.ts",
+  "packages/opencorvus/src/integrity/team-agent.ts",
 ]
 
 const forbiddenVisibleBriefSnippets = [

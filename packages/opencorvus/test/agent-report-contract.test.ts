@@ -47,7 +47,13 @@ test("agent output toolkits build explicit non-empty reports", async () => {
   expectReport(architect.buildReport())
 
   const requirements = createRequirementsOutputTools()
-  await requirements.tools.register_requirement.execute({ id: "REQ-1", type: "explicit", description: "Show readable agent summaries." }, {} as any)
+  await requirements.tools.register_requirement.execute({
+    id: "REQ-1",
+    type: "explicit",
+    description: "Show readable agent summaries.",
+    acceptance: "Agent summaries are readable in the generated report.",
+    non_goals: "This requirement does not cover visual styling of the report shell.",
+  }, {} as any)
   await requirements.tools.register_decision.execute({ key: "ui_surface", value: "overlay", reason: "The user reads reports there." }, {} as any)
   await requirements.tools.submit_requirements.execute({ final: true }, {} as any)
   expectReport(requirements.buildReport())

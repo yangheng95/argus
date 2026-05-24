@@ -6,10 +6,13 @@ import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 import { Instance } from "../../src/project/instance"
 import { createRequirementsOutputTools, RequirementsSubmitSchema } from "../../src/requirements/output-tools"
+import { createDecisionLog } from "../../src/decision-log"
 
 let runnerImpl: ((input: any) => Promise<any>) | undefined
 
 mock.module("@/agent/runner", () => ({
+  AgentRunError: class AgentRunError extends Error {},
+  buildHardErrorFromFinalMessage: () => null,
   messageHasInformationMissing: () => false,
   extractInformationMissingBlock: () => null,
   runAgentSession: (input: any) => {
@@ -91,6 +94,7 @@ describe("RequirementsAgent prompt precedence", () => {
         })
 
         let runnerCalls = 0
+        const decisionLog = createDecisionLog(taskID)
         runnerImpl = async (input: any) => {
           runnerCalls += 1
           expect(input.format).toBeUndefined()
@@ -115,6 +119,8 @@ describe("RequirementsAgent prompt precedence", () => {
             id: "REQ-1",
             type: "explicit",
             description: "使用原生 HTML、CSS 和 JavaScript 复刻百度首页。",
+            acceptance: "浏览器打开页面后展示与百度首页一致的搜索入口和基础交互。",
+            non_goals: "不包含真实百度后端搜索服务或账号体系。",
           }, {} as any)
           await input.toolKit.tools.register_decision.execute({
             key: "runtime",
@@ -165,6 +171,7 @@ describe("RequirementsAgent prompt precedence", () => {
           title: "复刻百度主页",
           request: "复刻百度主页",
           taskID,
+          decisionLog,
           designSpecs: [{
             id: "vis-layout-page",
             category: "layout",
@@ -178,6 +185,89 @@ describe("RequirementsAgent prompt precedence", () => {
         expect(runnerCalls).toBe(1)
         expect(result.decisions.find((decision) => decision.key === "frontend_framework")?.value)
           .toBe("none (vanilla HTML/CSS/JavaScript)")
+        expect(decisionLog.readByPhase("requirements").map((decision) => decision.key)).toEqual([
+          "runtime",
+          "frontend_framework",
+          "test_framework",
+          "affected_modules",
+          "affected_concepts",
+          "impact_size",
+        ])
+      },
+    })
+  }, 10_000)
+
+  test("persists maturity_scope_pending when register_decision runs before finalized requirements", async () => {
+    const now = Date.now()
+    const projectID = `project_maturity_pending_${now}`
+    const taskID = `tsk_maturity_pending_${now}`
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        Database.use((db) => {
+          db.insert(ProjectTable).values({
+            id: projectID,
+            worktree: tmp.path,
+            name: "Maturity pending project",
+            sandboxes: "[]",
+            time_created: now,
+            time_updated: now,
+          }).run()
+
+          db.insert(EngineTaskTable).values({
+            id: taskID,
+            project_id: projectID,
+            source: "test",
+            title: "Mature DeepSeek chat",
+            request: "写一个成熟的输入 deepseek key 即可聊天的 ai chat 页面",
+            priority: "normal",
+            time_created: now,
+            time_updated: now,
+            time_started: now,
+          }).run()
+        })
+
+        const decisionLog = createDecisionLog(taskID)
+
+        runnerImpl = async (input: any) => {
+          const parts = await input.buildUserParts()
+          const promptText = parts
+            .map((part: any) => (part?.type === "text" ? (part.text ?? "") : ""))
+            .join("\n")
+          expect(promptText).toContain("成熟")
+
+          await input.toolKit.tools.register_decision.execute({
+            key: "maturity_scope_pending",
+            value: "Treat mature as bounded error handling and persistence expectations.",
+            reason: "The word 成熟 is ambiguous unless the user bounds it.",
+          }, {} as any)
+
+          expect(decisionLog.readByKey("maturity_scope_pending")?.value)
+            .toBe("Treat mature as bounded error handling and persistence expectations.")
+
+          return {
+            session: { id: "ses_requirements_maturity" },
+            streamErrors: [],
+            structured: undefined,
+            collector: input.toolKit.getCollector(),
+            finalMessage: { info: {} },
+            model: { providerID: "test", modelID: "mock", id: "test/mock" },
+          }
+        }
+
+        const { RequirementsAgent } = await import("../../src/requirements")
+
+        await expect(RequirementsAgent.run({
+          title: "Mature DeepSeek chat",
+          request: "写一个成熟的输入 deepseek key 即可聊天的 ai chat 页面",
+          taskID,
+          decisionLog,
+        })).rejects.toThrow("requirements agent produced no requirements")
+
+        const persisted = decisionLog.readByKey("maturity_scope_pending")
+        expect(persisted?.phase).toBe("requirements")
+        expect(persisted?.reason).toContain("ambiguous")
       },
     })
   }, 10_000)
@@ -194,6 +284,8 @@ test("submit_requirements requires the minimum downstream decision contract", as
     id: "REQ-1",
     type: "explicit",
     description: "Implement the requested user-visible behavior.",
+    acceptance: "The requested user-visible behavior is observable in the running app.",
+    non_goals: "This requirement does not cover unrelated polish or infrastructure work.",
   }, {} as any)
 
   const missing = await kit.tools.submit_requirements.execute({ final: true }, {} as any)

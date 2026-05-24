@@ -853,7 +853,12 @@ function recordIntegrity(
   recordIntegrityAttempt({
     taskID,
     sessionID: `ses_${specSnapshotID}`,
-    specSnapshotID,
+    lineage: {
+      taskID,
+      activeSpecSnapshotID: specSnapshotID,
+      inheritedSpecSnapshotIDs: [],
+      reason: "active_only",
+    },
     verdict: input.verdict,
     phase: input.phase ?? "post_build",
     perDimension: [

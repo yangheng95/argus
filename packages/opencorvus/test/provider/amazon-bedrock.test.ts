@@ -10,6 +10,8 @@ import { Global } from "../../src/global"
 import { Filesystem } from "../../src/util/filesystem"
 import { Auth } from "../../src/auth"
 
+const PROVIDER_COLD_START_TIMEOUT_MS = 15_000
+
 test("Bedrock: config region takes precedence over AWS_REGION env var", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
@@ -40,7 +42,7 @@ test("Bedrock: config region takes precedence over AWS_REGION env var", async ()
       expect(providers["amazon-bedrock"].options?.region).toBe("eu-west-1")
     },
   })
-})
+}, PROVIDER_COLD_START_TIMEOUT_MS)
 
 test("Bedrock: falls back to AWS_REGION env var when no config region", async () => {
   await using tmp = await tmpdir({

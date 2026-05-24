@@ -17,6 +17,7 @@ import { SessionStatus } from "@/session/status"
 import { Database, eq, and, inArray, sql } from "@/storage/db"
 import { Identifier } from "@/id/id"
 import { Instance } from "@/project/instance"
+import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { Log } from "@/util/log"
 import { Filesystem } from "@/util/filesystem"
 import { createDecisionLog } from "@/decision-log"
@@ -67,6 +68,7 @@ import {
   findLatestArchitectContractGraphArtifact,
   findLatestDeliveryVerdictArtifact,
   findLatestDeliveryVerdictArtifactForDelivery,
+  findLatestIntegrityArtifactMissingStatus,
   findLatestTipGoalRun,
   findPlan,
   findRun,
@@ -112,6 +114,7 @@ import {
 } from "@/acceptance/contract-audit"
 import { isLiveRunStatus, isRunReadyForGoalDispatch, restartStagePlan, type RestartStage } from "./scheduler"
 import { composeDeliveryRetryFeedback } from "./delivery-retry-feedback"
+import { parsedRequirementFromRow } from "@/requirements/row"
 import {
   architectFidelityIssues,
   AssemblyOwnerEntrySchema,
@@ -312,6 +315,10 @@ type IntegrityReviewOutcome =
       findings: IntegrityFinding[]
       requiredRepairs: IntegrityRequiredRepair[]
       unresolvedDisagreements: IntegrityUnresolvedDisagreement[]
+      artifactMissing?: {
+        sessionID: string
+        error: string
+      }
     }
 
 // renderIntegrityMarkdown lives in @/integrity/render-markdown so it can be
@@ -845,6 +852,26 @@ export async function composeLatestDeliveryFeedbackForBuild(input: {
     scope: input.goalID ? "goal" : "integrated_tree",
     rawFeedbackPacket: packet,
   })
+}
+
+async function composeIntegrityFeedbackMarkdownForBuild(input: {
+  taskID: string
+  activeSpecSnapshotID?: string
+}): Promise<string | undefined> {
+  if (!input.activeSpecSnapshotID) return undefined
+  const { buildSpecSnapshotLineage } = await import("@/integrity/replay-context")
+  const { composeIntegrityFeedbackForBuild } = await import("@/integrity/build-feedback")
+  const { getSharedIntegrityPromptBudget } = await import("@/integrity/shared-prompt")
+  const lineage = buildSpecSnapshotLineage({
+    taskID: input.taskID,
+    activeSpecSnapshotID: input.activeSpecSnapshotID,
+  })
+  return composeIntegrityFeedbackForBuild({
+    taskID: input.taskID,
+    specSnapshotLineage: lineage,
+    promptBudget: getSharedIntegrityPromptBudget(),
+    runtimeMarkdownDir: ProjectRuntimePaths.taskAbsolute(Instance.project.worktree, input.taskID, "integrity-feedback"),
+  })?.promptMarkdown
 }
 
 async function loadLatestRenderedRetryAttachment(input: {
@@ -1534,15 +1561,18 @@ export function createOrchestratorTools(input: {
     }
     if (outcome.status === "reviewed") {
       const headline =
-        outcome.verdict === "pass" && outcome.phase === "post_build"
-          ? `Integrity verdict: pass — ${outcome.perDimension.join(", ")}. ` +
-            `Integrity is the workflow gate; task completed.`
-          : outcome.verdict === "pass"
+        outcome.artifactMissing
+          ? `Integrity session completed but status=artifact_missing — durable integrity_attempt persistence failed. ` +
+            `Do not treat an older artifact as the current verdict until recovery or explicit user confirmation.`
+          : outcome.verdict === "pass" && outcome.phase === "post_build"
             ? `Integrity verdict: pass — ${outcome.perDimension.join(", ")}. ` +
-              `Pre-build integrity passed, but task is not complete until post-build integrity passes after terminal build evidence exists.`
-            : `Integrity verdict: ${outcome.verdict} — ${outcome.perDimension.join(", ")}. ` +
-              `Task is not accepted. Nothing in code supersedes goals, opens new attempts, or mutates the graph based on this verdict. ` +
-              `Read the full markdown below and choose modify_goal / build({goalID}) / architect / fail_task explicitly.`
+              `Integrity is the workflow gate; task completed.`
+            : outcome.verdict === "pass"
+              ? `Integrity verdict: pass — ${outcome.perDimension.join(", ")}. ` +
+                `Pre-build integrity passed, but task is not complete until post-build integrity passes after terminal build evidence exists.`
+              : `Integrity verdict: ${outcome.verdict} — ${outcome.perDimension.join(", ")}. ` +
+                `Task is not accepted. Nothing in code supersedes goals, opens new attempts, or mutates the graph based on this verdict. ` +
+                `Read the full markdown below and choose modify_goal / build({goalID}) / architect / fail_task explicitly.`
       return SubAgentProtocol.yieldResult({
         headline,
         fields: [
@@ -1553,6 +1583,11 @@ export function createOrchestratorTools(input: {
           ["findings_count", String(outcome.findingsCount)],
           ["required_repairs_count", String(outcome.requiredRepairsCount)],
           ["unresolved_disagreements_count", String(outcome.unresolvedDisagreementsCount)],
+          ...(outcome.artifactMissing
+            ? ([["artifact_persistence_status", `artifact_missing: ${outcome.artifactMissing.error}`]] as Array<
+                [string, string]
+              >)
+            : []),
           ["summary", outcome.summary],
           // Full review text — every issue, every correction proposal,
           // every missing-goal proposal, with goal_ids preserved.
@@ -1605,17 +1640,9 @@ export function createOrchestratorTools(input: {
   }): Promise<IntegrityReviewOutcome> {
     const { task, activeSpec, dbGoals } = ctx
 
-    const { findDeliveriesForTask, findRequirements } = await import("@/engine/store")
+    const { findDeliveriesForTask, findRequirements, listGoalRunsForTask } = await import("@/engine/store")
     const reqRows = findRequirements(activeSpec.id)
-    const requirements = reqRows.map((r) => {
-      const meta = (r.metadata ?? {}) as Record<string, unknown>
-      const sourceID = typeof meta.source_requirement_id === "string" ? meta.source_requirement_id : r.id
-      return {
-        id: sourceID,
-        type: (r.priority === "advisory" ? "implicit" : "explicit") as "explicit" | "implicit",
-        description: r.description,
-      }
-    })
+    const requirements = reqRows.map(parsedRequirementFromRow)
     const decisionLog = createDecisionLog(taskID)
     const requirementDecisions = decisionLog.readByPhase("requirements").map((d) => ({
       key: d.key,
@@ -1680,7 +1707,14 @@ export function createOrchestratorTools(input: {
             .join("\n")
         : "No delivery artifact rows were found; review the requirement status snapshot and repository directly."
 
-    const { reviewIntegrity, computeRequirementStatusSnapshot } = await import("@/integrity")
+    const {
+      reviewIntegrity,
+      computeRequirementStatusSnapshot,
+      buildIntegrityReplayContext,
+      buildSpecSnapshotLineage,
+      buildIntegrityRootHistory,
+      persistentRootSummary,
+    } = await import("@/integrity")
     // Project REQ status from DB BEFORE the review fires. The host does not
     // pre-compute completion verdicts (rule 6.1) — it only lays out raw
     // claiming-goal × tip-run × per-spec evidence; the LLM walks it inside
@@ -1706,6 +1740,19 @@ export function createOrchestratorTools(input: {
     )
       ? "post_build"
       : "pre_build"
+    const lineage = buildSpecSnapshotLineage({
+      taskID,
+      activeSpecSnapshotID: activeSpec.id,
+    })
+    const replayContext = buildIntegrityReplayContext({
+      taskID,
+      lineage,
+      phase,
+      goals: goalsForReview,
+      requirements,
+      deliveries: deliveriesForAcceptance,
+      goalRuns: listGoalRunsForTask(taskID),
+    })
     const contractGraph = findLatestArchitectContractGraph(taskID)
     if (!contractGraph) {
       throw new Error(
@@ -1730,6 +1777,7 @@ export function createOrchestratorTools(input: {
         changedFiles: acceptanceChangedFiles,
         diffs: acceptanceDiffs,
       },
+      replayContext,
       signal: input.signal,
       taskID,
       parentSessionID: input.agentSessionID,
@@ -1738,11 +1786,14 @@ export function createOrchestratorTools(input: {
     const { recordIntegrityAttempt } = await import("@/engine/persist")
 
     const markdown = renderIntegrityMarkdown({ verdict, sessionID: verdict.sessionID })
+    let artifactMissing: { sessionID: string; error: string } | undefined
+    let persistentRootsValue = "persistent_roots=[]"
+    let artifactPersisted = false
     try {
       recordIntegrityAttempt({
         taskID,
         sessionID: verdict.sessionID,
-        specSnapshotID: activeSpec.id,
+        lineage,
         verdict: verdict.verdict,
         phase,
         reviewers: verdict.reviewers,
@@ -1756,11 +1807,34 @@ export function createOrchestratorTools(input: {
         requiredRepairs: verdict.requiredRepairs,
         unresolvedDisagreements: verdict.unresolvedDisagreements,
       })
+      artifactPersisted = true
     } catch (err) {
+      const error = err instanceof Error ? err.message : String(err)
+      artifactMissing = {
+        sessionID: verdict.sessionID,
+        error,
+      }
+      SessionStatus.markArtifactMissing(verdict.sessionID, error)
+      await persistIntegrityArtifactMissingStatus({
+        taskID,
+        sessionID: verdict.sessionID,
+        parentSessionID: input.agentSessionID,
+        error,
+      })
       log.error("integrity: recordIntegrityAttempt failed", {
         taskID,
-        error: err instanceof Error ? err.message : String(err),
+        error,
       })
+    }
+    if (artifactPersisted) {
+      try {
+        persistentRootsValue = persistentRootSummary(buildIntegrityRootHistory({ taskID, specSnapshotLineage: lineage }))
+      } catch (err) {
+        log.warn("integrity: persistent root summary failed (non-fatal)", {
+          taskID,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
     }
     // Append a compact decision_log row so the orchestrator's read_context
     // automatically surfaces the accumulated review history (latest 20
@@ -1770,27 +1844,30 @@ export function createOrchestratorTools(input: {
     // multiple post-build reviews — same issues reappearing means the
     // current goal graph cannot absorb them and architect re-run / fail_task
     // becomes the cheaper repair (per orchestrator-core.txt's repair ladder).
-    try {
-      const topIssues = verdict.findings
-        .slice(0, 5)
-        .map((i) => `[${i.severity}] ${i.title}: ${i.description}`)
-        .join("; ")
-      const issueTail = verdict.findings.length > 5 ? ` (+${verdict.findings.length - 5} more in engine_artifact)` : ""
-      const value =
-        `verdict=${verdict.verdict} | reviewers=${verdict.reviewers.length} | findings=${verdict.findings.length} | required_repairs=${verdict.requiredRepairs.length} | unresolved=${verdict.unresolvedDisagreements.length}` +
-        (verdict.summary ? ` | summary=${verdict.summary}` : "") +
-        (topIssues ? ` | top: ${topIssues}${issueTail}` : "")
-      decisionLog.append({
-        phase: "review",
-        key: `review_${verdict.verdict}_${verdict.sessionID}`,
-        value,
-        reason: "post-build architecture_review",
-      })
-    } catch (err) {
-      log.warn("integrity: decision_log review append failed (non-fatal)", {
-        taskID,
-        error: err instanceof Error ? err.message : String(err),
-      })
+    if (!artifactMissing) {
+      try {
+        const topIssues = verdict.findings
+          .slice(0, 5)
+          .map((i) => `[${i.severity}] ${i.title}: ${i.description}`)
+          .join("; ")
+        const issueTail = verdict.findings.length > 5 ? ` (+${verdict.findings.length - 5} more in engine_artifact)` : ""
+        const value =
+          `verdict=${verdict.verdict} | reviewers=${verdict.reviewers.length} | findings=${verdict.findings.length} | required_repairs=${verdict.requiredRepairs.length} | unresolved=${verdict.unresolvedDisagreements.length}` +
+          ` | ${persistentRootsValue}` +
+          (verdict.summary ? ` | summary=${verdict.summary}` : "") +
+          (topIssues ? ` | top: ${topIssues}${issueTail}` : "")
+        decisionLog.append({
+          phase: "review",
+          key: `review_${verdict.verdict}_${verdict.sessionID}`,
+          value,
+          reason: "post-build architecture_review",
+        })
+      } catch (err) {
+        log.warn("integrity: decision_log review append failed (non-fatal)", {
+          taskID,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
     }
     return {
       status: "reviewed",
@@ -1809,6 +1886,53 @@ export function createOrchestratorTools(input: {
       findings: verdict.findings,
       requiredRepairs: verdict.requiredRepairs,
       unresolvedDisagreements: verdict.unresolvedDisagreements,
+      artifactMissing,
+    }
+  }
+
+  async function persistIntegrityArtifactMissingStatus(input: {
+    taskID: string
+    sessionID: string
+    parentSessionID: string
+    error: string
+  }) {
+    try {
+      const { ProtocolStore } = await import("@/protocol/store")
+      await ProtocolStore.appendEvent({
+        kind: "event",
+        type: "session.status",
+        aggregate: "task",
+        aggregate_id: input.taskID,
+        task_id: input.taskID,
+        run_id: null,
+        goal_run_id: null,
+        session_id: input.sessionID,
+        interaction_id: null,
+        stream_id: null,
+        source: "integrity.artifact_missing",
+        target: null,
+        correlation_id: null,
+        causation_id: null,
+        reply_to: null,
+        emitted_at: Date.now(),
+        payload: {
+          sessionID: input.sessionID,
+          status: {
+            type: "terminal",
+            reason: "artifact_missing",
+            error: input.error,
+          },
+          channel: "integrity",
+          resolvedRole: "integrity",
+          parentSessionID: input.parentSessionID,
+        },
+      })
+    } catch (err) {
+      log.warn("integrity: artifact_missing status persist failed", {
+        taskID: input.taskID,
+        sessionID: input.sessionID,
+        error: err instanceof Error ? err.message : String(err),
+      })
     }
   }
 
@@ -1969,10 +2093,10 @@ export function createOrchestratorTools(input: {
         // give the catch block an id to emit on — replaced by `runnerSessionID`
         // captured below.
         let runnerSessionID: string | undefined
+        const decisionLog = createDecisionLog(taskID)
+        const maturityScopePendingBeforeID = decisionLog.readByKey("maturity_scope_pending")?.id
         try {
           const { RequirementsAgent } = await import("@/requirements")
-          const { createDecisionLog } = await import("@/decision-log")
-          const decisionLog = createDecisionLog(taskID)
           const designAnalysis = renderDesignAnalysisHandoffReference(taskID)
 
           // Stage-level retry was removed in step 5/7 (rule 8 — single
@@ -2018,7 +2142,9 @@ export function createOrchestratorTools(input: {
             result.summary,
             "",
             "## Requirements",
-            ...result.requirements.map((r) => `- **${r.id}** [${r.type}]: ${r.description}`),
+            ...result.requirements.map((r) =>
+              `- **${r.id}** [${r.type}]: ${r.description} Acceptance: ${r.acceptance} Non-goals: ${r.non_goals}`,
+            ),
             "",
             "## Decisions",
             ...result.decisions.map((d) => `- **${d.key}** = ${d.value} — ${d.reason}`),
@@ -2062,8 +2188,9 @@ export function createOrchestratorTools(input: {
                     id: r.id,
                     title: r.description,
                     description: r.description,
-                    acceptance: [] as string[],
+                    acceptance: [r.acceptance],
                     evidence_refs: [] as string[],
+                    non_goals: [r.non_goals],
                     priority: r.type === "explicit" ? ("blocking" as const) : ("advisory" as const),
                   })),
                   now,
@@ -2108,6 +2235,45 @@ export function createOrchestratorTools(input: {
             pointer: `read_context scope=decisions (spec ${specSnapshotID})`,
           })
         } catch (err) {
+          const maturityScopeDecision = decisionLog.readByKey("maturity_scope_pending")
+          if (maturityScopeDecision && maturityScopeDecision.id !== maturityScopePendingBeforeID) {
+            const { output } = await Question.askAndFormat({
+              sessionID: input.agentSessionID,
+              questions: [
+                {
+                  header: "Maturity scope",
+                  question: [
+                    "The Requirements agent found an ambiguous maturity / quality word and stopped before finalizing requirements.",
+                    `Recorded assumption: ${maturityScopeDecision.value}`,
+                    `Reason: ${maturityScopeDecision.reason}`,
+                    "Please define the maturity boundary so the requirements can be finalized without leaving later integrity review open-ended.",
+                  ].join("\n\n"),
+                  options: [
+                    {
+                      label: "Use assumption",
+                      description: "Proceed with the recorded bounded interpretation.",
+                    },
+                    {
+                      label: "Narrow scope",
+                      description: "Limit maturity expectations to the explicitly requested behavior.",
+                    },
+                  ],
+                  multiple: false,
+                  custom: true,
+                },
+              ],
+            })
+            return SubAgentProtocol.yieldResult({
+              headline: "requirements: maturity scope clarification requested.",
+              summary: output,
+              fields: [
+                ["decision", "maturity_scope_pending"],
+                ["recorded_assumption", maturityScopeDecision.value],
+                ["reason", maturityScopeDecision.reason],
+              ],
+              pointer: "question lane; answered clarification will be included in the next requirements prompt",
+            })
+          }
           // Card terminal flows through session.status (the runner session's
           // actor close path emits {type:"terminal", reason:"error"}); the
           // error message itself surfaces via the thrown error in the
@@ -2737,15 +2903,7 @@ export function createOrchestratorTools(input: {
           // agent already seeded.
           const { findRequirements } = await import("@/engine/store")
           const reqRows = findRequirements(activeSpec.id)
-          const requirements = reqRows.map((r) => {
-            const meta = (r.metadata ?? {}) as Record<string, unknown>
-            const sourceID = typeof meta.source_requirement_id === "string" ? meta.source_requirement_id : r.id
-            return {
-              id: sourceID,
-              type: (r.priority === "advisory" ? "implicit" : "explicit") as "explicit" | "implicit",
-              description: r.description,
-            }
-          })
+          const requirements = reqRows.map(parsedRequirementFromRow)
           const requirementDecisions = decisionLog.readByPhase("requirements").map((d) => ({
             key: d.key,
             value: d.value,
@@ -2801,7 +2959,9 @@ export function createOrchestratorTools(input: {
           // build prompt, not a second writer that mutates this graph.
           const newSpecSnapshotID = Identifier.ascending("spec")
           const priorSpecSnapshotID = findActiveSpecForTask(task.id)?.id
-          const reqLines = requirements.map((r) => `- **${r.id}** [${r.type}]: ${r.description}`)
+          const reqLines = requirements.map(
+            (r) => `- **${r.id}** [${r.type}]: ${r.description} Acceptance: ${r.acceptance} Non-goals: ${r.non_goals}`,
+          )
           const decisionLines = requirementDecisions.map((d) => `- **${d.key}** = ${d.value} — ${d.reason}`)
           const goalLines = result.goals.map((g) => `- **${g.id}** (${g.kind}, ${g.priority}): ${g.title}`)
           const traceLines = result.traceability.map((t) => `- ${t.requirementID} → ${t.goalIDs.join(", ")}`)
@@ -3084,7 +3244,13 @@ export function createOrchestratorTools(input: {
         const designGate = requireDesignAnalysisBefore("integrity", requireTask(taskID))
         if (designGate) return designGate
         const outcome = await runIntegrityReview()
-        if (outcome.status === "reviewed" && outcome.verdict === "pass" && outcome.phase === "post_build") {
+        if (outcome.status === "reviewed" && outcome.artifactMissing && outcome.phase === "post_build") {
+          await blockActiveRunForTask(taskID, {
+            blockingReason: "integrity artifact_missing",
+            error: outcome.artifactMissing.error,
+            summary: "Run blocked by missing integrity attempt artifact",
+          })
+        } else if (outcome.status === "reviewed" && outcome.verdict === "pass" && outcome.phase === "post_build") {
           const task = requireTask(taskID)
           const completed = Date.now()
           const activeRun = findActiveRunForTask(taskID)
@@ -3396,9 +3562,10 @@ export function createOrchestratorTools(input: {
 
     modify_goal: tool({
       description:
-        "Modify an existing goal's contract. Use when eval feedback suggests " +
-        "acceptance_specs need refinement, or owned_paths need adjustment. " +
-        "The submitted shape is schema-validated before execution.",
+        "Modify an existing goal's contract only to clarify or tighten acceptance for a surface already owned " +
+        "by that goal. Use when eval or integrity history shows acceptance_specs need refinement, or owned_paths " +
+        "need adjustment, without adding a new capability, new surface, or broader task scope. Scope expansion " +
+        "must route through propose_task or question instead. The submitted shape is schema-validated before execution.",
       inputSchema: ModifyGoalInputSchema,
       execute: async (input) => {
         if (!isObjectRecord(input) || typeof input.goalID !== "string" || input.goalID.trim().length === 0) {
@@ -3580,10 +3747,10 @@ export function createOrchestratorTools(input: {
 
     read_context: tool({
       description:
-        "Read current task context: goal states, delivery verdicts, Decision Log, delivery summaries, integrity attempts. Use this to gather information before making decisions. Returns only the latest state per goal / per spec snapshot / per delivery — historical entries older than the latest are omitted to keep prompts bounded.",
+        "Read current task context: goal states, delivery verdicts, Decision Log, delivery summaries, integrity attempts, and integrity root history. Use this to gather information before making decisions. Goal/eval/delivery sections return latest state; integrity_history renders fact-only cross-round integrity attempt history for the spec snapshot lineage.",
       inputSchema: z.object({
         scope: z
-          .enum(["goals", "evaluations", "decisions", "deliveries", "all"])
+          .enum(["goals", "evaluations", "decisions", "deliveries", "integrity_history", "all"])
           .default("all")
           .describe("What to read"),
       }),
@@ -3668,6 +3835,49 @@ export function createOrchestratorTools(input: {
           }
         }
 
+        if (scope === "evaluations" || scope === "integrity_history" || scope === "all") {
+          const activeSpec = findActiveSpecForTask(taskID)
+          const {
+            buildSpecSnapshotLineage,
+            buildIntegrityRootHistory,
+            renderIntegrityRootHistoryBlock,
+          } = await import("@/integrity")
+          const { findLatestIntegrityArtifactMissingStatus } = await import("@/engine/store")
+          const missingStatus = findLatestIntegrityArtifactMissingStatus(taskID)
+          if (missingStatus) {
+            sections.push(
+              `\n## Integrity artifact status`,
+              `- session: ${missingStatus.sessionID}`,
+              `- status: artifact_missing`,
+              `- recorded_at: ${new Date(missingStatus.emittedAt).toISOString()}`,
+              `- detail: the completed integrity session has no durable integrity_attempt artifact yet; the prior artifact is not the current result.`,
+              missingStatus.error ? `- error: ${missingStatus.error}` : "",
+            )
+          }
+          if (activeSpec) {
+            const lineage = buildSpecSnapshotLineage({
+              taskID,
+              activeSpecSnapshotID: activeSpec.id,
+            })
+            const history = buildIntegrityRootHistory({
+              taskID,
+              specSnapshotLineage: lineage,
+            })
+            if (history.totalAttempts > 0) {
+              const latest = history.attempts.at(-1)
+              if (scope === "all" && latest) {
+                const teamReportMarkdown = latest.teamReportMarkdown ?? ""
+                sections.push(
+                  `\n## Integrity (latest)`,
+                  `- verdict: ${latest.verdict ?? "unknown"} — issues=${latest.blockingFindings.length} corrections=${latest.requiredRepairs.length} missing=${latest.unresolvedDisagreements.length} (spec snapshot lineage)`,
+                )
+                if (teamReportMarkdown) sections.push("", teamReportMarkdown)
+              }
+              sections.push(`\n${renderIntegrityRootHistoryBlock(history)}`)
+            }
+          }
+        }
+
         if (scope === "decisions" || scope === "all") {
           const { createDecisionLog, DECISION_LOG_PROMPT_LIMIT } = await import("@/decision-log")
           const log = createDecisionLog(taskID)
@@ -3718,53 +3928,6 @@ export function createOrchestratorTools(input: {
           }
         }
 
-        if (scope === "all") {
-          // Integrity attempts: surface the FACT that the integrity stage
-          // ran for the current spec snapshot / delivery. Without this the
-          // orchestrator-LLM cannot tell "integrity returned pass (no goal
-          // change)" from "integrity never called" — same death-loop shape that
-          // commit 7acb5f17f addressed for build via begin/finalizeBuildAttempt.
-          const { EngineArtifactTable } = await import("@/engine/engine.sql")
-          const { desc } = await import("@/storage/db")
-          const activeSpec = findActiveSpecForTask(taskID)
-          if (activeSpec) {
-            const integrityRow = Database.use((db) =>
-              db
-                .select()
-                .from(EngineArtifactTable)
-                .where(and(eq(EngineArtifactTable.task_id, taskID), eq(EngineArtifactTable.kind, "integrity_attempt")))
-                .orderBy(desc(EngineArtifactTable.time_created))
-                .limit(1)
-                .get(),
-            )
-            if (integrityRow) {
-              const p = (integrityRow.payload ?? {}) as Record<string, unknown>
-              const matchesSnapshot = p.spec_snapshot_id === activeSpec.id
-              const teamReportMarkdown = typeof p.team_report_markdown === "string" ? p.team_report_markdown : ""
-              const perDim = ""
-              p.issues_count = p.findings_count ?? 0
-              p.corrections_count = p.required_repairs_count ?? 0
-              p.missing_count = p.unresolved_disagreements_count ?? 0
-              sections.push(
-                `\n## Integrity (latest)`,
-                `- verdict: ${String(p.verdict ?? "unknown")}` +
-                  (perDim ? ` — per-dimension: ${perDim}` : "") +
-                  ` — issues=${Number(p.issues_count ?? 0)} corrections=${Number(p.corrections_count ?? 0)} missing=${Number(p.missing_count ?? 0)}` +
-                  (matchesSnapshot
-                    ? " (current spec snapshot)"
-                    : " (STALE — newer spec snapshot exists; re-run integrity)"),
-              )
-              // Surface the full review markdown (issues + corrections +
-              // missing-goal proposals) so the orchestrator LLM can act on
-              // the same evidence it had at review time, not a count.
-              // Architecture review is advisory: the orchestrator decides
-              // modify_goal / build / architect / integrity / fail_task
-              // explicitly based on this text.
-              if (teamReportMarkdown) sections.push("", teamReportMarkdown)
-            }
-          }
-        }
-
         const result = sections.length > 0 ? sections.join("\n") : "No context available yet."
         // Telemetry: read_context is structurally bounded by the per-section
         // caps above, but if a future change blows through the budget the
@@ -3775,7 +3938,12 @@ export function createOrchestratorTools(input: {
     }),
 
     fail_task: tool({
-      description: "Mark the task as failed. Use when the task cannot be completed.",
+      description:
+        "Terminal task lifecycle decision: mark the task as failed when no responsible same-task repair remains for evidence the orchestrator can see. " +
+        "Typical triggers: (a) integrity history shows >= 3 consecutive rounds with the same persistent blocking root AND modify_goal / architect / question have already been tried inside this task for the same root; " +
+        "(b) a hard external blocker the repository cannot supply, such as missing credentials the user already declined to provide or unavailable hardware. " +
+        "Not for: a single non-pass integrity round, a transient build error, or a guess that the task is hopeless without integrity evidence. " +
+        "Pair with a concrete history excerpt in the error field, including the persistent-root label from read_context Integrity history.",
       inputSchema: z.object({
         error: z.string().describe("Why the task failed"),
       }),
@@ -4307,7 +4475,8 @@ export function createOrchestratorTools(input: {
         "Offer the user one polished follow-up task candidate that improves or completes the current/previous request. " +
         "This is the orchestrator's ONLY new-engine-task creation path: it first asks the user to confirm, then creates " +
         "a new task only if the user selects `创建任务`. Do not use this for normal workflow progress, do not use it " +
-        "instead of build/integrity on the current task, and do not call generic `task` or control-plane `panel`.",
+        "instead of build/integrity on the current task, and do not call generic `task` or control-plane `panel`. " +
+        "Use propose_task when integrity history shows the persistent root is outside the current task contract: reviewers keep demanding a capability the original user request never authorised, and adding it inside the current task would expand scope beyond what the user agreed to.",
       inputSchema: z.object({
         title: z.string().min(1).describe("Concise title for the proposed new task."),
         request: z
@@ -4432,7 +4601,8 @@ export function createOrchestratorTools(input: {
         "After build returns, read the build report and current goal/run state. Build does NOT auto-complete " +
         "workflow tasks. The final workflow gate is `integrity`, and it is valid only after all blocking builds " +
         "are terminal. Non-pass integrity returns session-bound review evidence to this same reasoning turn; " +
-        "choose the next action from that evidence. " +
+        "choose the next action from that evidence. If read_context surfaces integrity status=artifact_missing, " +
+        "recover that artifact or get explicit user confirmation before continuing from stale integrity data. " +
         "DO NOT USE FOR: multi-file features, UI replication from designs, anything with explicit acceptance " +
         "criteria, cross-module refactors, new subsystems — those go through requirements → architect → " +
         "per-goal build → integrity (the pipeline workflow). For visual/reference tasks, design_analysis must " +
@@ -4477,8 +4647,17 @@ export function createOrchestratorTools(input: {
               "`request`, because the new session will not see them. Has no effect on task-level direct builds " +
               "(no goalID); the host ignores it in that path.",
           ),
+        userConfirmedStaleIntegrityData: z
+          .boolean()
+          .optional()
+          .describe(
+            "Set true only after the user explicitly confirmed continuing while the latest completed integrity session is status=artifact_missing and its durable integrity_attempt artifact could not be recovered.",
+          ),
       }),
-      execute: async ({ request = "", reason, goalID, directBuildIntent, freshContext = false }, options) => {
+      execute: async (
+        { request = "", reason, goalID, directBuildIntent, freshContext = false, userConfirmedStaleIntegrityData },
+        options,
+      ) => {
         const toolExecution = requireOrchestratorToolExecutionContext(options, "build")
         const task = requireTask(taskID)
         const requestText = request.trim()
@@ -4491,6 +4670,15 @@ export function createOrchestratorTools(input: {
           directBuildIntent: declaredDirectBuildIntent ?? "",
           freshContext,
         })
+
+        const missingIntegrityArtifact = findLatestIntegrityArtifactMissingStatus(taskID)
+        if (missingIntegrityArtifact && userConfirmedStaleIntegrityData !== true) {
+          return (
+            `build: blocked by integrity artifact_missing for session ${missingIntegrityArtifact.sessionID}. ` +
+            `A completed integrity session has no durable integrity_attempt artifact yet, so the previous artifact is not current data. ` +
+            `Recover the artifact or ask the user whether to continue from stale integrity data; then set userConfirmedStaleIntegrityData=true only after that explicit confirmation.`
+          )
+        }
 
         const designGate = requireDesignAnalysisBefore("build", task)
         if (designGate) return designGate
@@ -4768,15 +4956,7 @@ export function createOrchestratorTools(input: {
             //    only emits the populated ones. ──────────────────────────
             const activeSpecForContext = findActiveSpecForTask(task.id)
             const reqRows = activeSpecForContext ? findRequirements(activeSpecForContext.id) : []
-            const requirements = reqRows.map((r) => {
-              const meta = (r.metadata ?? {}) as Record<string, unknown>
-              const sourceID = typeof meta.source_requirement_id === "string" ? meta.source_requirement_id : r.id
-              return {
-                id: sourceID,
-                type: (r.priority === "advisory" ? "implicit" : "explicit") as "explicit" | "implicit",
-                description: r.description,
-              }
-            })
+            const requirements = reqRows.map(parsedRequirementFromRow)
 
             const { createDecisionLog } = await import("@/decision-log")
             const decisionLog = createDecisionLog(taskID)
@@ -4833,6 +5013,10 @@ export function createOrchestratorTools(input: {
               taskID,
               goalID: goal.id,
             })
+            const integrityFeedback = await composeIntegrityFeedbackMarkdownForBuild({
+              taskID,
+              activeSpecSnapshotID: activeSpecForContext?.id,
+            })
 
             // Visual feedback closure-loop: when delivery rejected on visual
             // grounds, attach the previous rendered.png so the build LLM
@@ -4857,6 +5041,7 @@ export function createOrchestratorTools(input: {
               designAnalysis: designAnalysis.trim().length > 0 ? designAnalysis : undefined,
               fidelity: taskFidelity,
               retryGuidance: requestText.length > 0 ? requestText : undefined,
+              integrityFeedback,
               retryFeedback,
               deliveryFeedback,
               retryAttachments,
@@ -4868,6 +5053,11 @@ export function createOrchestratorTools(input: {
             // request to "supplement".
             target = { kind: "request", text: requestText }
             const deliveryFeedback = await composeLatestDeliveryFeedbackForBuild({ taskID })
+            const activeSpecForContext = findActiveSpecForTask(taskID)
+            const integrityFeedback = await composeIntegrityFeedbackMarkdownForBuild({
+              taskID,
+              activeSpecSnapshotID: activeSpecForContext?.id,
+            })
             const retryAttachments = await loadLatestRenderedRetryAttachment({
               taskID,
               enabled: Boolean(deliveryFeedback),
@@ -4875,10 +5065,11 @@ export function createOrchestratorTools(input: {
             const designSpecs = Array.isArray(task.design_specs) ? (task.design_specs as any) : undefined
             const designAnalysis = renderDesignAnalysisHandoffReference(taskID)
             context =
-              deliveryFeedback || retryAttachments || designSpecs || designAnalysis.trim().length > 0
+              integrityFeedback || deliveryFeedback || retryAttachments || designSpecs || designAnalysis.trim().length > 0
                 ? {
                     designSpecs,
                     designAnalysis: designAnalysis.trim().length > 0 ? designAnalysis : undefined,
+                    integrityFeedback,
                     deliveryFeedback,
                     retryAttachments,
                   }

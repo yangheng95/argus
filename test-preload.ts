@@ -13,6 +13,16 @@ process.env["XDG_CONFIG_HOME"] = path.join(opencorvusTestRoot, "config");
 process.env["XDG_STATE_HOME"] = path.join(opencorvusTestRoot, "state");
 process.env["OPENCORVUS_TEST_HOME"] = path.join(opencorvusTestRoot, "home");
 process.env["OPENCORVUS_TEST_MANAGED_CONFIG_DIR"] = path.join(opencorvusTestRoot, "managed");
+process.env["OPENCORVUS_MODELS_PATH"] = path.join(
+  import.meta.dir,
+  "packages",
+  "opencorvus",
+  "test",
+  "tool",
+  "fixtures",
+  "models-api.json",
+);
+process.env["OPENCORVUS_DISABLE_DEFAULT_PLUGINS"] = "1";
 
 afterAll(async () => {
   await fs.rm(opencorvusTestRoot, { recursive: true, force: true }).catch(() => undefined);

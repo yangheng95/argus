@@ -146,9 +146,14 @@ function difference(left: Set<string>, right: Set<string>) {
   return [...left].filter((entry) => !right.has(entry)).sort()
 }
 
+function readJsonFile(pathname: string) {
+  const text = fs.readFileSync(pathname, "utf8").replace(/^\uFEFF/, "")
+  return JSON.parse(text) as unknown
+}
+
 async function scanInventory(): Promise<InventoryViolation[]> {
   const generated = await Server.openapi()
-  const tracked = JSON.parse(fs.readFileSync(SDK_OPENAPI, "utf8")) as {
+  const tracked = readJsonFile(SDK_OPENAPI) as {
     paths?: Record<string, Record<string, unknown>>
   }
   const runtime = runtimeRoutes()

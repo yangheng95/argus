@@ -74,17 +74,17 @@ describe("engineering-craft shared fragment", () => {
     expect(buildAgentSrc).toMatch(/core:\s*composeBuildCore\(autoIteration\)/)
   })
 
-  test("read-only Integrity reviewer never carries the craft fragment", () => {
+  test("read-only Integrity team reviewer never carries the craft fragment", () => {
     // Integrity records feedback only and does not mutate code. Assert the
     // real composition point (agent core: line), not just the .txt — a future
     // change that pollutes integrity would edit agent.ts, not the core file.
     expect(INTEGRITY_CORE).not.toContain(HEADING)
     const integritySrc = fs.readFileSync(
-      path.join(import.meta.dir, "../../src/integrity/agent.ts"),
+      path.join(import.meta.dir, "../../src/integrity/team-agent.ts"),
       "utf8",
     )
     expect(integritySrc).not.toContain("engineering-craft")
-    expect(integritySrc).toContain('core: [INTEGRITY_CORE, ACCEPTANCE_REVIEW_CORE].join("\\n\\n")')
+    expect(integritySrc).toContain("core: TEAM_CORE")
   })
 
   test("interactive coding agent keeps its own clauses, is not re-injected", () => {

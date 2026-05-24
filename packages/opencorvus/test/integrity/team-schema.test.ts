@@ -36,6 +36,7 @@ const basePayload = {
 
 test("integrity completed payload rejects old fixed-dimension and acceptance fields", () => {
   expect(IntegrityReviewCompletedPayloadSchema.safeParse(basePayload).success).toBe(true)
+  expect(IntegrityReviewCompletedPayloadSchema.safeParse({ ...basePayload, attempts: 2 }).success).toBe(true)
 
   for (const key of ["dimensions", "per_dimension", "perDimension", "acceptance"]) {
     const payload = { ...basePayload, [key]: [] }

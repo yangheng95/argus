@@ -10,6 +10,7 @@ const promptFiles = {
   build: "build-core.txt",
   designAnalyst: "design-analyst-core.txt",
   integrity: "integrity-core.txt",
+  integrityTeam: "integrity-team-core.txt",
   intentAnalysis: "intent-analysis-core.txt",
   orchestrator: "orchestrator-core.txt",
   requirements: "requirements-core.txt",
@@ -46,6 +47,7 @@ describe("core prompt hygiene", () => {
       build: 175,
       designAnalyst: 125,
       integrity: 175,
+      integrityTeam: 85,
       intentAnalysis: 130,
       // Raised from 360 -> 375 on 2026-05-21 to add the orchestrator's
       // project-root git conflict ownership and toolchain readiness duties
@@ -583,7 +585,7 @@ describe("core prompt hygiene", () => {
     const normalized = text.replace(/\s+/g, " ")
     const sourceNormalized = source.replace(/\s+/g, " ")
     expect(normalized).toContain("Integrity is the workflow acceptance gate")
-    expect(normalized).toContain("The host no longer runs a host-owned final acceptance gate")
+    expect(normalized).toContain("no separate final acceptance object or host-owned acceptance gate")
     expect(normalized).toContain("Non-pass `integrity` returns evidence for the next orchestrator decision")
     expect(normalized).toContain("After post-build non-pass integrity, do not end the wake with plain text")
     expect(normalized).toContain("do not passively report and leave the task active")
@@ -634,7 +636,7 @@ describe("core prompt hygiene", () => {
   test("orchestrator prompt makes post-build integrity pass the terminal lifecycle path", async () => {
     const text = await readPrompt("orchestrator")
     const normalized = text.replace(/\s+/g, " ")
-    expect(normalized).toContain("Pipeline workflow tasks complete only after the `integrity` reviewer returns a pass verdict")
+    expect(normalized).toContain("Pipeline workflow tasks complete only after the `integrity` reviewer returns a post-build pass verdict")
     expect(normalized).toContain("The `deliver` endpoint is disabled and must not be used")
     expect(normalized).toContain("`publish_delivery` is also disabled because it depends on retired delivery verdicts")
     expect(normalized).toContain("A pass verdict completes the task")
@@ -669,25 +671,27 @@ describe("core prompt hygiene", () => {
 
   test("integrity prompt audits original request mining, not only generated REQ rows", async () => {
     const integrity = await readPrompt("integrity")
+    const integrityTeam = await Bun.file(path.join(coreDir, "integrity-team-core.txt")).text()
     const orchestrator = await readPrompt("orchestrator")
     const architect = await readPrompt("architect")
-    const dimensions = await readSource("integrity/dimensions.ts")
-    const agent = await readSource("integrity/agent.ts")
+    const agent = await readSource("integrity/team-agent.ts")
 
-    for (const text of [integrity, dimensions, agent]) {
+    for (const text of [integrity, integrityTeam]) {
       const normalized = text.replace(/\s+/g, " ")
       const lower = normalized.toLowerCase()
       expect(lower).toContain("original user request")
       expect(lower).toContain("generated req rows")
       expect(lower).toContain("evidence")
-      expect(lower).toContain("audit universe")
-      expect(lower).toContain("requirements extraction")
     }
+    expect(agent).toContain("renderUserRequestSection")
+    expect(agent).toContain("buildIntegrityEvidencePrompt")
+    expect(integrity.toLowerCase()).toContain("audit universe")
+    expect(integrity.toLowerCase()).toContain("requirements extraction")
     expect(integrity).toContain("If the original request implies a requirement that has no corresponding REQ-N row")
     expect(integrity).toContain("leave `requirement_ids` empty")
     expect(orchestrator).toContain("late-stage requirements-mining and system-integrity review")
     expect(orchestrator.replace(/\s+/g, " ")).toContain("final workflow gate")
-    expect(orchestrator.replace(/\s+/g, " ")).toContain("Pipeline workflow tasks complete only after the `integrity` reviewer returns a pass verdict")
+    expect(orchestrator.replace(/\s+/g, " ")).toContain("Pipeline workflow tasks complete only after the `integrity` reviewer returns a post-build pass verdict")
     expect(architect).toContain("final workflow gate to audit the original user request, requirements extraction, and built system")
     expect(architect).not.toContain("integrity reviewer before build")
   })
@@ -696,7 +700,7 @@ describe("core prompt hygiene", () => {
     const text = await readPrompt("orchestrator")
     // The pre-integrity audit ritual must enumerate every goal explicitly and
     // the verification-goal blanket exception must stay gone.
-    expect(text).toContain("Mandatory pre-`integrity` audit ritual")
+    expect(text).toContain("## Pre-integrity Audit")
     expect(text).toContain("enumerate every goal id with its current status")
     // The buggy old "verification-only as terminal for this gate" exception
     // must be removed — it was the documentation mistake that authorised

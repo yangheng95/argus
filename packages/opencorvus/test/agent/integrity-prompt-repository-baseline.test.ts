@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test"
 import path from "node:path"
-import { renderDimensionCatalogue } from "../../src/integrity/dimensions"
 
 const repoRoot = path.resolve(import.meta.dir, "../../../..")
 const integrityPromptPath = path.join(
@@ -29,17 +28,9 @@ describe("integrity review scope boundaries", () => {
 
     expect(tools).not.toContain("call `integrity` ONCE")
     expect(tools).not.toContain("wave-level architecture review")
-    expect(tools).toContain("Call standalone `integrity` only when the integrated evidence raises a real question")
-    expect(tools).toContain("it is not a routine wave-level step")
-  })
-
-  test("keeps solution_quality scoped to semantic integrity", () => {
-    const dimensions = renderDimensionCatalogue()
-    const normalized = dimensions.replace(/\s+/g, " ")
-
-    expect(normalized).toContain("not a second full Architect review")
-    expect(normalized).toContain("Only flag decomposition or acceptance-quality defects")
-    expect(normalized).toContain("threaten the task's semantic integrity")
-    expect(normalized).toContain("Do not flag harmless preference-level graph shape")
+    expect(tools).toContain("standalone integrity is")
+    expect(tools).toContain("not routine wave-level review")
+    expect(tools).toContain("Call `integrity` as the final workflow gate after all blocking builds are terminal")
+    expect(tools).toContain("before that, use it only when integrated evidence raises a real question")
   })
 })

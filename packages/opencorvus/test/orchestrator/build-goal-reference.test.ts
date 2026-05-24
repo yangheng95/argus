@@ -11,6 +11,19 @@ import { tmpdir } from "../fixture/fixture"
 
 let buildAgentRunImpl: ((input: any) => Promise<any>) | undefined
 
+function buildToolOptions(label = "goal_reference") {
+  const stamp = `${Date.now()}_${Math.random().toString(16).slice(2)}`
+  return {
+    toolCallId: `cal_${label}_${stamp}`,
+    opencorvus: {
+      sessionID: `ses_${label}_${stamp}`,
+      messageID: `msg_${label}_${stamp}`,
+      toolCallID: `cal_${label}_${stamp}`,
+      toolPartID: `prt_${label}_${stamp}`,
+    },
+  } as any
+}
+
 mock.module("@/build/agent", () => ({
   BuildAgent: {
     run: (input: any) => {
@@ -78,7 +91,7 @@ describe("orchestrator build goal references", () => {
           goalID: "G12",
           request: "Implement goal twelve.",
           reason: "Per-goal pipeline execution using a displayed goal label.",
-        }, {} as any)
+        }, buildToolOptions("goal_ref_g12"))
 
         expect(result).toContain("status=passed")
         expect(observedGoalID).toBe(ids.goalIDs[11])
@@ -117,7 +130,7 @@ describe("orchestrator build goal references", () => {
           goalID: "G99",
           request: "Implement missing display goal.",
           reason: "Regression coverage for invalid displayed goal labels.",
-        }, {} as any)
+        }, buildToolOptions("goal_ref_g99"))
 
         expect(buildCalls).toBe(0)
         expect(result).toContain("outside the active plan range")
@@ -179,12 +192,12 @@ describe("orchestrator build goal references", () => {
           goalID: "#1",
           request: "Implement first goal.",
           reason: "Per-goal pipeline execution using a hash display label.",
-        }, {} as any)
+        }, buildToolOptions("goal_ref_hash"))
         await tools.build.execute({
           goalID: "2",
           request: "Implement second goal.",
           reason: "Per-goal pipeline execution using a bare numeric display label.",
-        }, {} as any)
+        }, buildToolOptions("goal_ref_numeric"))
 
         expect(observedGoalIDs).toEqual([ids.goalIDs[0], ids.goalIDs[1]])
       },

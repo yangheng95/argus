@@ -16,7 +16,7 @@
  * ✗ Cannot execute code / commands
  * ✗ Cannot write or modify user files
  * ✗ Cannot call other agents (integrity runs as a sibling via the
- *   orchestrator `integrity` tool — see integrity/agent.ts)
+ *   orchestrator `integrity` tool — see integrity/team-agent.ts)
  * ✗ Cannot modify engine_requirement rows (those are owned by Requirements)
  *
  * Implementation: thin shell over `runAgentSession`. Agent-specific code
@@ -269,7 +269,12 @@ function buildUserPrompt(input: ArchitectAgent.CoordinateInput): string {
   }
 
   if (input.requirements && input.requirements.length > 0) {
-    const reqText = input.requirements.map((r) => `- **${r.id}** (${r.type}): ${r.description}`).join("\n")
+    const reqText = input.requirements.map((r) => {
+      const lines = [`- **${r.id}** (${r.type}): ${r.description}`]
+      if (r.acceptance.trim().length > 0) lines.push(`  Acceptance: ${r.acceptance}`)
+      if (r.non_goals.trim().length > 0) lines.push(`  Non-goals: ${r.non_goals}`)
+      return lines.join("\n")
+    }).join("\n")
     sections.push(`# Requirements (${input.requirements.length})\n\n${reqText}`)
   }
 

@@ -102,7 +102,13 @@ export namespace BuildAgent {
   export interface BuildContext {
     /** REQ-N list produced by Requirements. Drives "what does the user
      *  actually want" beyond the goal's compressed acceptance_specs. */
-    requirements?: Array<{ id: string; type: "explicit" | "implicit"; description: string }>
+    requirements?: Array<{
+      id: string
+      type: "explicit" | "implicit"
+      description: string
+      acceptance: string
+      non_goals: string
+    }>
     /** Optional visual anchors from design_analysis. The PRD/SPEC is the
      *  authoritative contract; these rows only provide compact ids when present. */
     designSpecs?: VisualSpec[]
@@ -126,6 +132,12 @@ export namespace BuildAgent {
       objective: string
       commit_ref?: string
     }>
+    /** Pre-rendered "Persistent Integrity Findings" section composed by
+     *  orchestrator from integrity_attempt artifacts, spec snapshot lineage,
+     *  shared prompt capping/sanitization, and the shared root-history helper.
+     *  Build renders it before retry guidance because workflow-gate findings
+     *  outrank the orchestrator's hand-written summary. */
+    integrityFeedback?: string
     /** First-class retry guidance from the orchestrator LLM for this
      *  specific attempt (passed via the `request` field on the `build`
      *  tool, which used to overwrite `target.objective` until the spec
@@ -2207,6 +2219,8 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
       lines.push("")
       for (const r of reqs) {
         lines.push(`- **${r.id}** [${r.type}]: ${r.description}`)
+        if (r.acceptance.trim().length > 0) lines.push(`  Acceptance: ${r.acceptance}`)
+        if (r.non_goals.trim().length > 0) lines.push(`  Non-goals: ${r.non_goals}`)
       }
       lines.push("")
     }
@@ -2320,6 +2334,10 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
       lines.push("")
     }
 
+    if (context?.integrityFeedback && context.integrityFeedback.trim().length > 0) {
+      lines.push(context.integrityFeedback.trim())
+      lines.push("")
+    }
     if (context?.retryGuidance && context.retryGuidance.trim().length > 0) {
       lines.push("## Retry Guidance From Orchestrator")
       lines.push("")
@@ -2371,6 +2389,10 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
     return lines.join("\n")
   }
   const contextLines: string[] = []
+  if (context?.integrityFeedback && context.integrityFeedback.trim().length > 0) {
+    contextLines.push(context.integrityFeedback.trim())
+    contextLines.push("")
+  }
   if (context?.retryGuidance && context.retryGuidance.trim().length > 0) {
     contextLines.push("## Retry Guidance From Orchestrator")
     contextLines.push("")
@@ -2435,6 +2457,10 @@ export function buildRetryFeedbackPrompt(target: BuildTarget, context?: BuildAge
     lines.push("Target: direct build request")
   }
   lines.push("")
+  if (context?.integrityFeedback && context.integrityFeedback.trim().length > 0) {
+    lines.push(context.integrityFeedback.trim())
+    lines.push("")
+  }
   if (context?.retryGuidance && context.retryGuidance.trim().length > 0) {
     lines.push("## Current Orchestrator Feedback")
     lines.push("")
@@ -2454,6 +2480,7 @@ export function buildRetryFeedbackPrompt(target: BuildTarget, context?: BuildAge
     lines.push("")
   }
   if (
+    (!context?.integrityFeedback || context.integrityFeedback.trim().length === 0) &&
     (!context?.retryGuidance || context.retryGuidance.trim().length === 0) &&
     (!context?.retryFeedback || context.retryFeedback.trim().length === 0) &&
     (!context?.deliveryFeedback || context.deliveryFeedback.trim().length === 0)
