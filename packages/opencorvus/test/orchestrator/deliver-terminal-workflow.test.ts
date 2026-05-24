@@ -8,7 +8,7 @@ test("orchestrator workflow retires deliver and uses integrity as the final gate
   const normalizedPrompt = prompt.replace(/\s+/g, " ")
 
   expect(normalizedPrompt).toContain("Integrity is the workflow acceptance gate")
-  expect(normalizedPrompt).toContain("The host no longer runs a host-owned final acceptance gate")
+  expect(normalizedPrompt).toContain("no separate final acceptance object or host-owned acceptance gate")
   expect(normalizedPrompt).toContain("The `deliver` endpoint is disabled and must not be used")
   expect(normalizedPrompt).toContain("A pass verdict completes the task")
   expect(normalizedPrompt).toContain("Valid next actions include task-level build")

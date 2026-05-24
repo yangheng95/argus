@@ -24,6 +24,8 @@ import { AttachmentStore } from "@/storage/attachment-store"
 import { Log } from "@/util/log"
 import type { DeliveryInfo, GoalInfo } from "@/delivery/checks"
 import { createIntegrityAcceptanceTools } from "./acceptance-tools"
+import { renderIntegrityReplayContextPrompt, type IntegrityReplayContext } from "./replay-context"
+import { sanitizeIntegrityPromptText } from "./shared-prompt"
 import type { RequirementStatusRow } from "./requirement-status"
 import {
   IntegrityReviewCompletedPayloadSchema,
@@ -110,6 +112,7 @@ type ReviewPromptInput = {
   requirementStatus?: RequirementStatusRow[]
   attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>
   acceptance?: IntegrityAcceptanceContext
+  replayContext: IntegrityReplayContext
   signal?: AbortSignal
   taskID?: string
 }
@@ -130,17 +133,23 @@ export async function reviewIntegrity(input: {
   requirementStatus?: RequirementStatusRow[]
   attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>
   acceptance?: IntegrityAcceptanceContext
+  replayContext?: IntegrityReplayContext
   signal?: AbortSignal
   taskID?: string
   parentSessionID?: string
   onSessionCreated?: (sessionID: string) => void
 }): Promise<IntegrityResult & { sessionID: string }> {
+  if (!input.replayContext) {
+    throw new Error("reviewIntegrity requires replayContext. Build it from integrity/replay-context before calling.")
+  }
+  const replayContext = input.replayContext
+  const attemptNumber = replayContext.attemptNumber
   if (input.taskID && !input.parentSessionID) {
     throw new Error(`reviewIntegrity requires parentSessionID for task-backed runs (taskID=${input.taskID}).`)
   }
   if (input.goals.length === 0) {
     const result = createNoGoalsResult()
-    const softSessionID = await emitSoftIntegrity(input, result)
+    const softSessionID = await emitSoftIntegrity(input, result, attemptNumber)
     if (softSessionID) input.onSessionCreated?.(softSessionID)
     return { ...result, sessionID: softSessionID ?? "" }
   }
@@ -148,7 +157,7 @@ export async function reviewIntegrity(input: {
     throw new Error(`reviewIntegrity requires architect_contract_graph when reviewing ${input.goals.length} goal(s).`)
   }
 
-  const promptInput = { ...input, contractGraph: input.contractGraph }
+  const promptInput: ReviewPromptInput = { ...input, contractGraph: input.contractGraph, replayContext }
   const startedAt = Date.now()
   let activeReviewID: string | undefined
 
@@ -171,7 +180,7 @@ export async function reviewIntegrity(input: {
       taskID: input.taskID,
       reviewID: () => activeReviewID,
       phase: "integrity",
-      attempt: () => 1,
+      attempt: () => attemptNumber,
       source: "architect.integrity.supervisor",
     }),
     onSessionCreated: (session) => {
@@ -190,7 +199,7 @@ export async function reviewIntegrity(input: {
               taskID: input.taskID,
               reviewID: activeReviewID,
               phase: "integrity",
-              attempt: 1,
+              attempt: attemptNumber,
               elapsedMs: Date.now() - startedAt,
               summary: "integrity supervisor coordinating reviewer team",
               source: "architect.integrity",
@@ -240,7 +249,7 @@ export async function reviewIntegrity(input: {
       taskID: input.taskID,
       reviewID: () => activeReviewID,
       phase: "integrity",
-      attempt: () => 1,
+      attempt: () => attemptNumber,
       source: "architect.integrity.supervisor",
     }),
   })
@@ -254,7 +263,7 @@ export async function reviewIntegrity(input: {
     findings: normalized.findings.length,
     requiredRepairs: normalized.requiredRepairs.length,
   })
-  emitIntegrityEvent(input.taskID, planOut.session.id, normalized, 1)
+  emitIntegrityEvent(input.taskID, planOut.session.id, normalized, attemptNumber)
   return { ...normalized, sessionID: planOut.session.id }
 }
 
@@ -263,7 +272,7 @@ function createPlanToolKit(collector: PlanCollector) {
     tools: {
       submit_integrity_review_plan: tool({
         description:
-          "Submit a dynamic adversarial reviewer plan with 2-6 independent reviewers. Do not use a fixed checklist.",
+          "Submit a dynamic adversarial reviewer plan with 2-6 independent reviewers. Use the task scale and replay context: broad first reviews may need more reviewers, narrow re-reviews may need fewer targeted reviewers. Do not default to five reviewers and do not use fixed dimensions.",
         inputSchema: IntegrityReviewerPlanSchema,
         execute: async (raw) => {
           const parsed = IntegrityReviewerPlanSchema.safeParse(raw)
@@ -400,7 +409,7 @@ async function runReviewerSession(input: {
       taskID: input.input.taskID,
       reviewID: input.activeReviewID,
       phase: "integrity",
-      attempt: () => 1,
+      attempt: () => input.input.replayContext.attemptNumber,
       source: `architect.integrity.reviewer.${input.scope.reviewerID}`,
     }),
   })
@@ -411,7 +420,14 @@ async function runReviewerSession(input: {
 function buildSupervisorPlanPrompt(input: ReviewPromptInput): string {
   return [
     "# Integrity Supervisor Planning",
-    "Choose 2-6 independent reviewers for the actual task risk surface. Do not use fixed dimensions.",
+    renderIntegrityReplayContextPrompt(input.replayContext),
+    [
+      "Choose 2-6 independent reviewers for the actual task risk surface. Use the scale signals: larger goal/REQ/changed-file surfaces should push the plan toward more reviewers; narrow surfaces can use fewer. Do not default to five reviewers. Do not use fixed dimensions or a stock checklist.",
+      "When no prior integrity attempt exists for this task/spec snapshot, build the reviewer team from the task's actual risk surface.",
+      "When prior attempts exist, start from prior blocking findings, required repairs, and prior reviewer focuses. Verify whether prior blockers were actually repaired using build evidence since the latest review, then cover new or changed risk surfaces. Do not spend a fresh full team rediscovering the same unchanged blocker. If a prior blocker still appears unresolved, assign a reviewer to verify it as persistent with evidence rather than renaming it as a new finding.",
+      "Prior reviewer focuses are the list of surfaces that were inspected, not a proof that those surfaces are healthy or that uninspected surfaces are absent. Re-walk the actual task surface from the user request, REQ rows, goals, acceptance specs, contract graph, and changed files. If a category looks uninspected in prior rounds, do not assume it is irrelevant -- it may have been missed. Match reviewers to surface by semantic responsibility, not by similarity to prior reviewer ids or names.",
+      "Use 2-3 reviewers when the replay context shows a narrow re-review with a small changed-file set and a small number of prior blockers. Use 4-6 reviewers when the task spans many goals/requirements/acceptance specs, when changed files cross several runtime surfaces, or when the replay context has no prior attempts. Avoid substantial overlap with prior reviewer focuses unless the rationale ties it to persistent blockers or changed repair evidence.",
+    ].join("\n\n"),
     buildIntegrityEvidencePrompt(input),
     "Call submit_integrity_review_plan exactly once.",
   ].join("\n\n")
@@ -425,7 +441,12 @@ function buildReviewerPrompt(input: ReviewPromptInput, scope: IntegrityReviewerS
     `Focus: ${scope.focus}`,
     "Adversarial questions:",
     markdownList(scope.adversarialQuestions),
-    "Explore independently, gather evidence, and call submit_reviewer_report once.",
+    renderIntegrityReplayContextPrompt(input.replayContext),
+    [
+      "Explore independently, gather evidence, and call submit_reviewer_report once.",
+      "When no prior integrity attempt exists for this task/spec, review your assigned surface independently using evidence from files, diffs, commands, runtime checks, requirements, goals, and the original request.",
+      "When prior attempts exist, you are reviewing the current attempt, not starting from zero. Prior findings and required repairs are evidence. First check whether prior blockers relevant to your scope were repaired in the files/evidence changed since the latest review. If the same blocker remains, report it as persistent and cite both the prior finding id and current evidence. Then inspect new risk introduced by the repair. Do not relabel an unchanged prior blocker as a brand-new discovery.",
+    ].join("\n\n"),
     buildIntegrityEvidencePrompt(input),
   ].join("\n\n")
 }
@@ -437,7 +458,9 @@ function buildSupervisorConsensusPrompt(
 ): string {
   return [
     "# Integrity Supervisor Consensus",
+    renderIntegrityReplayContextPrompt(input.replayContext),
     "Compare reviewer reports adversarially. If a blocking finding or unresolved blocking disagreement remains, do not pass.",
+    "Compare the current reviewer reports against prior attempts. A repeated blocking finding should be represented as persistent or regressed when the evidence supports that conclusion. Do not pass while a prior blocking repair has no convincing current evidence. Do not suppress a prior blocker merely because current reviewers used a different id.",
     "Reviewer plan:",
     renderReviewerPlanMarkdown(plan),
     "Reviewer reports:",
@@ -454,7 +477,11 @@ function buildIntegrityEvidencePrompt(input: ReviewPromptInput): string {
     renderUserRequestSection({
       heading: "# User Request",
       title: input.taskTitle,
-      request: input.userRequest,
+      request: sanitizeIntegrityPromptText({
+        text: input.userRequest,
+        field: "user_request_quote",
+        markdownContext: "block",
+      }).text,
       taskID: input.taskID,
     }),
   )
@@ -619,6 +646,7 @@ function createNoGoalsResult(): IntegrityResult {
 async function emitSoftIntegrity(
   input: { taskID?: string; parentSessionID?: string; taskTitle: string },
   result: IntegrityResult,
+  attempts: number,
 ): Promise<string | undefined> {
   if (!input.taskID || !input.parentSessionID) return undefined
   const { Session } = await import("@/session")
@@ -628,7 +656,7 @@ async function emitSoftIntegrity(
     title: `Integrity Supervisor: ${input.taskTitle}`,
     directory: Instance.directory,
   })
-  emitIntegrityEvent(input.taskID, session.id, result, 1)
+  emitIntegrityEvent(input.taskID, session.id, result, attempts)
   return session.id
 }
 
