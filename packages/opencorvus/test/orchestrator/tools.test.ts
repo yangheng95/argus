@@ -268,6 +268,7 @@ mock.module("@/delivery/service", () => ({
 
 mock.module("@/plugin", () => ({
   Plugin: {
+    list: async () => [],
     trigger: async () => {},
   },
 }))
