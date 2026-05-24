@@ -281,9 +281,10 @@ Add explicit stage recovery APIs:
 Rules:
 
 - `steer_subagent` must not call `replyAgentSession` for build/stage sessions.
-- For a live build attempt, `steer_subagent` returns a structural error:
-  "stage session is owned by live build tool; wait for tool result or cancel
-  by explicit operator action".
+- For a live build attempt, `steer_subagent` returns a read-only activity
+  snapshot with session status, last activity timestamp, activity age, and live
+  ownership ids. The orchestrator uses this evidence to keep waiting or, when
+  stale evidence is concrete, call `recover_stale_build`.
 - For a terminal build attempt, `steer_subagent` returns a structural error:
   "stage session cannot be steered generically; use build retry".
 - Build retry must not call `EngineService.replyAgentSession` or
@@ -292,6 +293,11 @@ Rules:
   retry must call `provider.resume` with a provider-native resume reference.
   Missing native resume reference is a structural error; it must not call
   `provider.run`, open a new session, or replay the full prompt.
+
+Why amended: `2026-05-24-steer-subagent-probe-snapshot.md` preserves the
+no-`replyAgentSession` invariant but replaces the live-owned build error shape
+with a read-only snapshot so the orchestrator can distinguish active from stale
+live ownership before deciding whether recovery is justified.
 
 ### 4. Make Cancellation Settled, Not Immediate
 
