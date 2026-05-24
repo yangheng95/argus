@@ -141,7 +141,11 @@ async function continueConversationReplay(
 
 export async function hydrateTaskConversation(
   taskID: string,
-  options: { signal?: AbortSignal } = {},
+  options: {
+    signal?: AbortSignal;
+    scrollIntent?: "preserve" | "bottom";
+    resetCause?: string;
+  } = {},
 ): Promise<number> {
   cancelConversationReplay();
   const controller = linkedReplayController(options.signal);
@@ -160,7 +164,10 @@ export async function hydrateTaskConversation(
     const mergedMessages = mergeLoadedConversationMessages(timeline, transcript);
     const lastSequence = requireNonnegativeInteger(data?.lastSequence, "lastSequence");
 
-    resetWriter();
+    resetWriter({
+      scrollIntent: options.scrollIntent ?? "preserve",
+      cause: options.resetCause ?? "conversation-hydrate",
+    });
     setBoardData(board);
     setTaskSequence(Number.isFinite(lastSequence) && lastSequence > 0 ? lastSequence : 0);
     setBoardUpdatedAt(Date.now());

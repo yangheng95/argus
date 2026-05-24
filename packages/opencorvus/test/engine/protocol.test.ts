@@ -135,6 +135,138 @@ describe("orchestrator protocol", () => {
     } as any).notify).toEqual({ tier: 2 })
   })
 
+  test("ephemeral task events carry live cursors and replay without task-list cursor leakage", async () => {
+    const seen: any[] = []
+    const stop = ProtocolStore.subscribeEvents((event) => {
+      seen.push(event)
+    }, { aggregate: "task", taskID })
+
+    ProtocolStore.dispatchEphemeral({
+      type: "message.updated",
+      aggregate: "task",
+      taskID,
+      sessionID: "ses_live",
+      source: "test.protocol",
+      payload: {
+        info: {
+          id: "msg_live",
+          sessionID: "ses_live",
+          role: "assistant",
+          time: { created: Date.now() },
+        },
+      },
+    })
+    ProtocolStore.dispatchEphemeral({
+      type: "message.part.updated",
+      aggregate: "task",
+      taskID,
+      sessionID: "ses_live",
+      source: "test.protocol",
+      payload: {
+        part: {
+          id: "part_live",
+          messageID: "msg_live",
+          sessionID: "ses_live",
+          type: "text",
+          text: "",
+        },
+      },
+    })
+    ProtocolStore.dispatchEphemeral({
+      type: "message.part.delta",
+      aggregate: "task",
+      taskID,
+      sessionID: "ses_live",
+      source: "test.protocol",
+      payload: {
+        sessionID: "ses_live",
+        messageID: "msg_live",
+        partID: "part_live",
+        field: "text",
+        delta: "hello",
+      },
+    })
+    for (const _ of Array.from({ length: 10 })) {
+      if (seen.length >= 3) break
+      await Bun.sleep(5)
+    }
+    stop()
+    expect(seen.map((event) => event.liveSequence)).toEqual([1, 2, 3])
+    expect(seen.every((event) => event.liveEpoch === ProtocolStore.currentTaskLiveEpoch())).toBe(true)
+
+    const replay = ProtocolStore.listTaskLiveEventsAfter(taskID, 0)
+    expect(replay.expired).toBe(false)
+    if (replay.expired) throw new Error("unexpected expired replay")
+    expect(replay.events.map((event) => event.type)).toEqual([
+      "message.updated",
+      "message.part.updated",
+      "message.part.delta",
+    ])
+    const perTask = protocolTaskEvent(replay.events[2] as any)
+    expect(perTask.live_sequence).toBe(3)
+    expect(perTask.live_epoch).toBe(ProtocolStore.currentTaskLiveEpoch())
+    expect(TaskEvent.parse(perTask).live_sequence).toBe(3)
+    expect(taskListProtocolEvent(replay.events[2] as any)).not.toHaveProperty("live_sequence")
+  })
+
+  test("live replay prunes deltas once a text part reaches a durable boundary", () => {
+    ProtocolStore.dispatchEphemeral({
+      type: "message.part.delta",
+      aggregate: "task",
+      taskID,
+      sessionID: "ses_prune",
+      source: "test.protocol",
+      payload: {
+        sessionID: "ses_prune",
+        messageID: "msg_prune",
+        partID: "part_prune",
+        field: "text",
+        delta: "hel",
+      },
+    })
+    ProtocolStore.dispatchEphemeral({
+      type: "message.part.updated",
+      aggregate: "task",
+      taskID,
+      sessionID: "ses_prune",
+      source: "test.protocol",
+      payload: {
+        part: {
+          id: "part_prune",
+          messageID: "msg_prune",
+          sessionID: "ses_prune",
+          type: "text",
+          text: "hello",
+          time: { end: Date.now() },
+        },
+      },
+    })
+
+    const replay = ProtocolStore.listTaskLiveEventsAfter(taskID, 0)
+    expect(replay.expired).toBe(false)
+    if (replay.expired) throw new Error("unexpected expired replay")
+    expect(replay.events.map((event) => event.type)).toEqual(["message.part.updated"])
+    expect(replay.events[0]?.payload).toMatchObject({
+      part: { id: "part_prune", text: "hello" },
+    })
+  })
+
+  test("live replay epoch mismatch fails loudly", () => {
+    const replay = ProtocolStore.listTaskLiveEventsAfter(taskID, 0, {
+      liveEpoch: ProtocolStore.currentTaskLiveEpoch() + 1,
+    })
+    expect(replay.expired).toBe(true)
+    if (!replay.expired) throw new Error("expected expired replay")
+    expect(protocolTaskEvent(replay.event as any)).toMatchObject({
+      type: "task.live_replay_expired",
+      sequence: 0,
+      payload: {
+        taskID,
+        reason: "selected task live replay epoch changed",
+      },
+    })
+  })
+
   test("persists emitted control-plane events in task order", async () => {
     await Instance.provide({
       directory: tmp.path,

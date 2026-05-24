@@ -9,13 +9,12 @@
 // window and the VS Code webview. The transport owns transient
 // reconnect behaviour (browser-native EventSource auto-reconnect under
 // Tauri; the postMessage bridge under VS Code in M4); this module owns
-// the *business* reconnect policy — re-hydrate conversation, then
-// resume from the last persisted sequence (plan §5.5).
+// the business reconnect policy: reopen from the last consumed persisted
+// sequence without full-hydrating the already mounted conversation.
 
 import { clearEventQueue, setSseConnected } from "../store/messages"
 import { boardStore, loadTasks } from "../store/board"
 import { routeSSEEvent, handleEventStreamEvent, handleTaskListNotification } from "./events"
-import { hydrateTaskConversation } from "./conversation"
 import { recomputeBadgeFromTasks } from "./notify"
 import { getHostTransport, type StreamHandle } from "./host-transport"
 import {
@@ -26,20 +25,20 @@ import {
 } from "./refresh-diagnostics"
 import { settingsStore } from "../store/settings"
 import { createVisibilityInterval, type VisibilityInterval } from "../utils/visibility-interval"
+import { selectedLiveReplayQuery } from "./selected-stream-cursor"
 
 let sseHandle: StreamHandle | null = null
 let sseRetryTimer: any = null
 
 // audit-2026-04-29 W2-V10 — reconnect tick extracted so the regression
-// test can exercise the (a) hydrate-throw path and (b) post-await
-// task-switch race directly, without standing up the real
-// HostTransport + 3 s timers. Production path: onClose sets a
-// 3 s timer that calls this with the live deps below.
+// test can exercise restart failures and task-switch races directly, without
+// standing up the real HostTransport + 3 s timers. Production path: onClose
+// sets a 3 s timer that calls this with the live deps below.
 export interface SseReconnectDeps {
   taskID: string
   after: number
   currentTaskID: () => string
-  hydrate: (taskID: string) => Promise<number>
+  resumeAfter: () => number
   restart: (taskID: string, after: number) => void
   scheduleRetry: (fn: () => void, ms: number) => void
   retryDelayMs: number
@@ -54,30 +53,7 @@ export async function performSseReconnect(deps: SseReconnectDeps): Promise<void>
     taskID: deps.taskID,
     source: "sse-reconnect",
   })
-  let nextSequence: number
-  try {
-    nextSequence = await deps.hydrate(deps.taskID)
-  } catch (err) {
-    recordConversationRecoveryFailed({
-      channel: "sse-reconnect",
-      reason: "sse stream reconnect",
-      taskID: deps.taskID,
-      source: "sse-reconnect",
-      durationMs: Date.now() - startedAt,
-      error: err instanceof Error ? err.message : String(err || ""),
-    })
-    console.error("[sse] reconnect hydrate failed for task", deps.taskID, err)
-    if (deps.currentTaskID() !== deps.taskID) return
-    deps.scheduleRetry(() => {
-      if (deps.currentTaskID() !== deps.taskID) return
-      void performSseReconnect(deps)
-    }, deps.retryDelayMs)
-    return
-  }
-  // Post-await re-check: user may have task-switched while hydrate
-  // was in flight. Restarting the OLD task's SSE would stomp the
-  // NEW task's handle (startSSE calls stopSSE first), silently
-  // killing the user-visible stream.
+  const nextSequence = Math.max(0, Math.floor(Number(deps.resumeAfter()) || 0))
   if (deps.currentTaskID() !== deps.taskID) {
     recordConversationRecoveryAborted({
       channel: "sse-reconnect",
@@ -89,6 +65,25 @@ export async function performSseReconnect(deps: SseReconnectDeps): Promise<void>
     })
     return
   }
+  try {
+    deps.restart(deps.taskID, nextSequence)
+  } catch (err) {
+    recordConversationRecoveryFailed({
+      channel: "sse-reconnect",
+      reason: "sse stream reconnect",
+      taskID: deps.taskID,
+      source: "sse-reconnect",
+      durationMs: Date.now() - startedAt,
+      error: err instanceof Error ? err.message : String(err || ""),
+    })
+    console.error("[sse] reconnect restart failed for task", deps.taskID, err)
+    if (deps.currentTaskID() !== deps.taskID) return
+    deps.scheduleRetry(() => {
+      if (deps.currentTaskID() !== deps.taskID) return
+      void performSseReconnect(deps)
+    }, deps.retryDelayMs)
+    return
+  }
   recordConversationRecoverySucceeded({
     channel: "sse-reconnect",
     reason: "sse stream reconnect",
@@ -97,7 +92,6 @@ export async function performSseReconnect(deps: SseReconnectDeps): Promise<void>
     durationMs: Date.now() - startedAt,
     resumeSequence: nextSequence,
   })
-  deps.restart(deps.taskID, nextSequence)
 }
 
 const RECONNECT_DELAY_MS = 3000
@@ -111,10 +105,14 @@ export function startSSE(taskID: string, after = 0) {
   // can safely resume from the last persisted protocol_event sequence instead
   // of replaying from zero on every reconnect.
   const transport = getHostTransport()
+  let fatalClose = false
   const handle = transport.openStream(
     {
       path: `task/${encodeURIComponent(taskID)}/events`,
-      query: after > 0 ? { after: String(after) } : undefined,
+      query: {
+        ...(after > 0 ? { after: String(after) } : {}),
+        ...selectedLiveReplayQuery(),
+      },
     },
     {
       onOpen: () => setSseConnected(true),
@@ -131,6 +129,7 @@ export function startSSE(taskID: string, after = 0) {
           return
         }
         if (event.type === "task.heartbeat" || event.type === "task.connected") return
+        if (event.type === "task.live_replay_expired") fatalClose = true
         try {
           const handled = routeSSEEvent(event)
           if (!handled) {
@@ -143,22 +142,21 @@ export function startSSE(taskID: string, after = 0) {
       onError: () => {
         // SSE (Server-Sent Events) errors can happen after the browser
         // transport has already dropped live-only message deltas. Close the
-        // handle so onClose runs the business reconnect policy: hydrate the
-        // conversation snapshot, then resume from the latest persisted
-        // sequence. Relying on native EventSource auto-reconnect skips that
-        // recovery step and leaves the visible conversation stale.
+        // handle so onClose runs the business reconnect policy: reopen from
+        // the current persisted sequence without clearing the mounted
+        // conversation.
         if (handle !== sseHandle) return
         setSseConnected(false)
         handle.close()
       },
       onClose: (_reason) => {
-        // Permanent close: re-hydrate then re-open from the hydrated
-        // sequence so we avoid a full replay after crashes. See
-        // performSseReconnect (audit W2-V10) for the full retry +
-        // task-switch race contract.
+        // Permanent close: re-open from the current selected task sequence.
+        // Same-task full hydrate is intentionally forbidden here because it
+        // clears cardTreeStore and produces the visible scroll jump.
         if (handle !== sseHandle) return
         setSseConnected(false)
         sseHandle = null
+        if (fatalClose) return
         if (sseRetryTimer) clearTimeout(sseRetryTimer)
         sseRetryTimer = setTimeout(() => {
           sseRetryTimer = null
@@ -166,11 +164,7 @@ export function startSSE(taskID: string, after = 0) {
             taskID,
             after,
             currentTaskID: () => boardStore.selectedTaskID,
-            hydrate: async (id) => {
-              const sequence = await hydrateTaskConversation(id)
-              recomputeBadgeFromTasks()
-              return sequence
-            },
+            resumeAfter: () => boardStore.taskSequence,
             restart: startSSE,
             scheduleRetry: (fn, ms) => {
               sseRetryTimer = setTimeout(() => {

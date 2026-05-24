@@ -36,11 +36,11 @@ Returns score, SSIM, pixelDiff%, and whether the numeric visual threshold passed
       .describe("Path to the rendered PNG (e.g. rendered.png from webpage_render)."),
     outputDir: z
       .string()
-      .describe(`Directory used to resolve relative paths and to write \`eval-result.json\`. Defaults to \`${DEFAULT_MIRROR_SUBDIR}\` under the current worktree (matching webpage_extract's default).`)
+      .describe(`Directory used to resolve relative paths and to write \`eval-result.json\`. Defaults to task-scoped \`${DEFAULT_MIRROR_SUBDIR}\` (matching webpage_extract's default). Do not set this during task sessions; overrides are for benchmarks/tests and task-session overrides must stay under \`${DEFAULT_MIRROR_SUBDIR}\`.`)
       .optional(),
   }),
-  async execute(params) {
-    const outputDir = await resolveMirrorOutputDir(params.outputDir)
+  async execute(params, ctx) {
+    const outputDir = await resolveMirrorOutputDir({ override: params.outputDir, sessionID: ctx.sessionID })
 
     const resolve = (p: string) => (path.isAbsolute(p) ? p : path.resolve(outputDir, p))
     const referencePath = resolve(params.reference)

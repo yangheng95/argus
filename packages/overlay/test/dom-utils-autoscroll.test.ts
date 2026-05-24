@@ -187,6 +187,24 @@ test("chat scroll keeps browser overflow anchoring enabled", () => {
   expect(followLockRule).toContain("overflow-anchor: none");
 });
 
+test("conversation rows opt into offscreen layout skipping without affecting nested cards", () => {
+  const conversationCss = readFileSync(join(import.meta.dir, "../src/styles/surfaces/conversation.css"), "utf8");
+  const bubbleCss = readFileSync(join(import.meta.dir, "../src/styles/surfaces/chat-bubble.css"), "utf8");
+  const cardCss = readFileSync(join(import.meta.dir, "../src/styles/surfaces/card.css"), "utf8");
+  const structuredCardRule =
+    conversationCss.match(/\.chat-scroll > \.card,\s*\.chat-scroll > \.interaction-card\s*\{[^}]*\}/)?.[0] ?? "";
+  const bubbleRowRule = bubbleCss.match(/\.chat-bubble-row\s*\{[^}]*\}/)?.[0] ?? "";
+  const cardRule = cardCss.match(/\.card\s*\{[^}]*\}/)?.[0] ?? "";
+
+  expect(structuredCardRule).toContain("content-visibility: auto");
+  expect(structuredCardRule).toContain("contain-intrinsic-size");
+  expect(bubbleRowRule).toContain("content-visibility: auto");
+  expect(bubbleRowRule).toContain("contain-intrinsic-size");
+  expect(bubbleRowRule).toContain("overflow-clip-margin");
+  expect(cardRule).not.toContain("content-visibility");
+  expect(cardRule).not.toContain("contain-intrinsic-size");
+});
+
 test("auto-scroll source does not reference DOM observer constructors", () => {
   const source = readFileSync(join(import.meta.dir, "../src/utils/dom-utils.ts"), "utf8");
   expect(source).not.toContain("new ResizeObserver");

@@ -28,7 +28,7 @@ Use this only when the compact page IR is missing. Do not rerun it once \`page-i
     outputDir: z
       .string()
       .describe(
-        `Directory containing extracted-page.json. Writes page-ir.xml here. Defaults to \`${DEFAULT_MIRROR_SUBDIR}\` under the current worktree (matching webpage_extract's default).`,
+        `Directory containing extracted-page.json. Writes page-ir.xml here. Defaults to task-scoped \`${DEFAULT_MIRROR_SUBDIR}\` (matching webpage_extract's default). Do not set this during task sessions; overrides are for benchmarks/tests and task-session overrides must stay under \`${DEFAULT_MIRROR_SUBDIR}\`.`,
       )
       .optional(),
     max_depth: z
@@ -38,8 +38,8 @@ Use this only when the compact page IR is missing. Do not rerun it once \`page-i
       .describe("Max compile depth — deeper subtrees get summarised as comments. Default 4.")
       .optional(),
   }),
-  async execute(params) {
-    const outputDir = await resolveMirrorOutputDir(params.outputDir)
+  async execute(params, ctx) {
+    const outputDir = await resolveMirrorOutputDir({ override: params.outputDir, sessionID: ctx.sessionID })
     const extractedPath = path.join(outputDir, "extracted-page.json")
 
     let extractedText: string

@@ -16,6 +16,7 @@ import { BusEvent } from "@/bus/bus-event"
 import { GlobalBus } from "@/bus/global"
 import { Shell } from "@/shell/shell"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
+import { TaskRuntimeMaterializer } from "@/project/task-runtime-materializer"
 
 export namespace Worktree {
   const log = Log.create({ service: "worktree" })
@@ -123,6 +124,20 @@ export namespace Worktree {
    */
   export function worktreesRoot(primaryDir: string) {
     return ProjectRuntimePaths.worktreesRoot(primaryDir)
+  }
+
+  function taskIDFromRuntimeWorktree(primaryDir: string, worktreeDir: string): string | undefined {
+    const tasksRoot = path.join(ProjectRuntimePaths.projectRuntimeRoot(primaryDir), "tasks")
+    const relative = path.relative(tasksRoot, worktreeDir)
+    if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) return undefined
+    const parts = relative.split(path.sep).filter(Boolean)
+    if (parts.length === 6 && parts[1] === "goals" && parts[3] === "runs" && parts[5] === "worktree") {
+      return parts[0]
+    }
+    if (parts.length === 4 && parts[1] === "sessions" && parts[3] === "worktree") {
+      return parts[0]
+    }
+    return undefined
   }
 
   export const Event = {
@@ -1217,6 +1232,25 @@ export namespace Worktree {
       return undefined
     })()
 
+    const materializeScopedRuntime = async (directory: string) => {
+      if (!input?.taskID) return
+      try {
+        await TaskRuntimeMaterializer.materializeDesignAnalysis({
+          projectDir: primaryDir,
+          taskID: input.taskID,
+          worktreeDir: directory,
+        })
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        log.error("worktree task runtime materialization failed", {
+          directory,
+          taskID: input.taskID,
+          message,
+        })
+        throw new CreateFailedError({ message })
+      }
+    }
+
     // Optional fast path: caller asked to reuse a previously-created worktree
     // with the same deterministic name (build-agent retry of an attempt that
     // produced files but skipped merge_back). Only honoured when the existing
@@ -1233,6 +1267,7 @@ export namespace Worktree {
           directory,
           branch,
         })
+        await materializeScopedRuntime(directory)
         await Project.addSandbox(Instance.project.id, directory).catch(() => undefined)
         return Info.parse({ name: base, branch, directory })
       }
@@ -1299,6 +1334,20 @@ export namespace Worktree {
       }
 
       await initializeSubmodules({ sourceRoot: primaryDir, targetRoot: info.directory }).catch((error) => {
+        const message = error instanceof Error ? error.message : String(error)
+        GlobalBus.emit("event", {
+          directory: info.directory,
+          payload: {
+            type: Event.Failed.type,
+            properties: {
+              message,
+            },
+          },
+        })
+        throw error
+      })
+
+      await materializeScopedRuntime(info.directory).catch((error) => {
         const message = error instanceof Error ? error.message : String(error)
         GlobalBus.emit("event", {
           directory: info.directory,
@@ -1398,12 +1447,39 @@ export namespace Worktree {
     return { valid: false, reason: `directory not registered in 'git worktree list'` }
   }
 
+  async function materializeRecordedTaskRuntime(directory: string): Promise<string | undefined> {
+    let primary: Awaited<ReturnType<typeof primaryWorktreeInfo>>
+    try {
+      primary = await primaryWorktreeInfo()
+    } catch (error) {
+      return error instanceof Error ? error.message : String(error)
+    }
+
+    const taskID = taskIDFromRuntimeWorktree(primary.directory, directory)
+    if (!taskID) return undefined
+
+    try {
+      await TaskRuntimeMaterializer.materializeDesignAnalysis({
+        projectDir: primary.directory,
+        taskID,
+        worktreeDir: directory,
+      })
+    } catch (error) {
+      return error instanceof Error ? error.message : String(error)
+    }
+    return undefined
+  }
+
   export async function recoverRecorded(input: {
     directory: string
     branch: string
   }): Promise<{ status: "recovered"; directory: string; branch: string } | { status: "unrecoverable"; reason: string }> {
     const validity = await isValid(input.directory)
-    if (validity.valid) return { status: "recovered", directory: input.directory, branch: input.branch }
+    if (validity.valid) {
+      const runtimeError = await materializeRecordedTaskRuntime(input.directory)
+      if (runtimeError) return { status: "unrecoverable", reason: runtimeError }
+      return { status: "recovered", directory: input.directory, branch: input.branch }
+    }
 
     const branchCheck = await runGit(["show-ref", "--verify", "--quiet", `refs/heads/${input.branch}`], {
       cwd: Instance.worktree, timeoutProfile: "fast",
@@ -1443,6 +1519,8 @@ export namespace Worktree {
     if (!nextValidity.valid) {
       return { status: "unrecoverable", reason: nextValidity.reason ?? "reattached worktree is still invalid" }
     }
+    const runtimeError = await materializeRecordedTaskRuntime(input.directory)
+    if (runtimeError) return { status: "unrecoverable", reason: runtimeError }
     return { status: "recovered", directory: input.directory, branch: input.branch }
   }
 
@@ -1627,6 +1705,17 @@ export namespace Worktree {
       await resetMaterializedGitlinks(worktreePath).catch((error) => {
         throw new ResetFailedError({ message: error instanceof Error ? error.message : String(error) })
       })
+
+      const taskID = taskIDFromRuntimeWorktree(primaryInfo.directory, worktreePath)
+      if (taskID) {
+        await TaskRuntimeMaterializer.materializeDesignAnalysis({
+          projectDir: primaryInfo.directory,
+          taskID,
+          worktreeDir: worktreePath,
+        }).catch((error) => {
+          throw new ResetFailedError({ message: error instanceof Error ? error.message : String(error) })
+        })
+      }
 
       const status = await runGit(["status", "--porcelain=v1"], {
         cwd: worktreePath, timeoutProfile: "default",

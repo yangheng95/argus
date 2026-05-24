@@ -178,6 +178,8 @@
   width: var(--conversation-card-inline-size);
   max-width: 100%;
   align-self: stretch;
+  content-visibility: auto;
+  contain-intrinsic-size: auto calc(120px * var(--ui-scale));
 }
 
 .chat-scroll > .card[data-kind="message"][data-role="user"] {

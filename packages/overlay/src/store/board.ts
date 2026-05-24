@@ -325,9 +325,6 @@ export async function loadBoard(options: LoadBoardOptions = {}): Promise<void> {
         setSnapshotVersion(snapshotVersion);
       });
       if (boardChanged) notifyBoardProjection();
-      if (Number.isFinite(lastSequence) && lastSequence > 0) {
-        setTaskSequence(lastSequence);
-      }
       clearBoardRetry();
       setBoardUpdatedAt(Date.now());
       // Agent cards are derived reactively from boardStore — no manual rebuild needed.

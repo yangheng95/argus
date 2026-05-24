@@ -45,7 +45,7 @@ Use this only when image-reference evidence is missing for the requested output 
     outputDir: z
       .string()
       .describe(
-        `Directory to write artifacts. Defaults to \`${DEFAULT_MIRROR_SUBDIR}\` under the current worktree (matching webpage_extract).`,
+        `Directory to write artifacts. Defaults to task-scoped \`${DEFAULT_MIRROR_SUBDIR}\` (matching webpage_extract). Do not set this during task sessions; overrides are for benchmarks/tests and task-session overrides must stay under \`${DEFAULT_MIRROR_SUBDIR}\`.`,
       )
       .optional(),
     page_hint: z
@@ -60,7 +60,7 @@ Use this only when image-reference evidence is missing for the requested output 
       .optional(),
   }),
   async execute(params, ctx) {
-    const outputDir = await resolveMirrorOutputDir(params.outputDir)
+    const outputDir = await resolveMirrorOutputDir({ override: params.outputDir, sessionID: ctx.sessionID })
 
     // Single configured-model resolver (spec §13.2): session overlay > base.
     const parsed = await resolveConfiguredModelRef()

@@ -35,7 +35,7 @@ Reads extracted-page.json (from webpage_extract) and the explicit current render
     referenceDir: z
       .string()
       .describe(
-        `Directory containing \`extracted-page.json\` (webpage_extract's output). Defaults to \`${DEFAULT_MIRROR_SUBDIR}\` under the current worktree.`,
+        `Directory containing \`extracted-page.json\` (webpage_extract's output). Defaults to task-scoped \`${DEFAULT_MIRROR_SUBDIR}\`. Do not set this during task sessions; overrides are for benchmarks/tests and task-session overrides must stay under \`${DEFAULT_MIRROR_SUBDIR}\`.`,
       )
       .optional(),
     limit: z
@@ -45,8 +45,8 @@ Reads extracted-page.json (from webpage_extract) and the explicit current render
       .describe("Max number of missing tokens to return. Default 30.")
       .optional(),
   }),
-  async execute(params) {
-    const referenceDir = await resolveMirrorOutputDir(params.referenceDir)
+  async execute(params, ctx) {
+    const referenceDir = await resolveMirrorOutputDir({ override: params.referenceDir, sessionID: ctx.sessionID })
     const extractedPath = path.join(referenceDir, "extracted-page.json")
 
     const raw = JSON.parse(await fs.readFile(extractedPath, "utf8"))

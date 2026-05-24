@@ -918,6 +918,8 @@ export const TaskEvent = z.object({
   emittedAt: z.number().int().positive(),
   timestamp: z.number(),
   sequence: z.number().int().nonnegative().optional(),
+  live_sequence: z.number().int().positive().optional(),
+  live_epoch: z.number().int().positive().optional(),
   summary: z.string(),
   payload: z.record(z.string(), z.any()),
   notify: BusEvent.NotifyDescriptorSchema.optional(),

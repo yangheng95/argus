@@ -11,7 +11,9 @@ import { MessageTable, type SessionKind } from "@/session/session.sql"
 import { taskIDForSession, taskSession, sessionRole, sessionGoalID, sessionParentID } from "../task-event"
 
 const log = Log.create({ service: "task-message-protocol-bridge" })
-let initialized = false
+let globalRelayInitialized = false
+const initializedLocalDirectories = new Set<string>()
+let crossInstanceBridgeQueue = Promise.resolve()
 
 // ── Overlay rendering metadata ──
 //
@@ -419,6 +421,33 @@ function bridgeEvent(type: string, properties: Record<string, unknown>) {
   }
 }
 
+function enqueueCrossInstanceBridge(
+  type: string,
+  props: Record<string, unknown>,
+  hostDirectory: string,
+  sourceDirectory: string | undefined,
+  handler: (props: Record<string, unknown>) => void,
+) {
+  crossInstanceBridgeQueue = crossInstanceBridgeQueue
+    .catch(() => undefined)
+    .then(() =>
+      Instance.provide({
+        directory: hostDirectory,
+        fn: () => {
+          handler(props)
+        },
+      }),
+    )
+    .catch((err) => {
+      log.error("bridge: cross-instance relay failed", {
+        type,
+        sourceDirectory,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    })
+    .then(() => undefined)
+}
+
 // Cross-Instance event types and their handlers. Additions don't require
 // touching dispatch logic — register the type → handler here.
 const CROSS_INSTANCE_HANDLERS: Record<string, (props: Record<string, unknown>) => void> = {
@@ -452,35 +481,42 @@ const CROSS_INSTANCE_HANDLERS: Record<string, (props: Record<string, unknown>) =
 const MESSAGE_TYPES = new Set(Object.keys(CROSS_INSTANCE_HANDLERS))
 
 export function ensureTaskMessageProtocolBridge() {
-  if (initialized) return
-  initialized = true
-  const hostDirectory = Instance.directory
+  const localDirectory = Instance.directory
+  if (!initializedLocalDirectories.has(localDirectory)) {
+    initializedLocalDirectories.add(localDirectory)
 
-  Bus.subscribe(Message.Event.Updated, (event) => {
-    cacheMessageInfo(event.properties)
-    bridgeEvent(Message.Event.Updated.type, event.properties)
-  })
-  Bus.subscribe(Message.Event.PartUpdated, (event) => {
-    bridgeEvent(Message.Event.PartUpdated.type, event.properties)
-  })
-  Bus.subscribe(Message.Event.Removed, (event) => {
-    bridgeEvent(Message.Event.Removed.type, event.properties)
-  })
-  Bus.subscribe(Message.Event.PartRemoved, (event) => {
-    bridgeEvent(Message.Event.PartRemoved.type, event.properties)
-  })
-  Bus.subscribe(Message.Event.PartDelta, (event) => {
-    bridgeEvent(Message.Event.PartDelta.type, event.properties)
-  })
-  Bus.subscribe(SessionStatus.Event.Status, (event) => {
-    bridgeSessionLifecycle(SessionStatus.Event.Status.type, event.properties)
-  })
-  Bus.subscribe(SessionStatus.Event.Idle, (event) => {
-    bridgeSessionLifecycle(SessionStatus.Event.Idle.type, event.properties)
-  })
-  Bus.subscribe(SessionEvents.Error, (event) => {
-    bridgeSessionError(SessionEvents.Error.type, event.properties)
-  })
+    Bus.subscribe(Message.Event.Updated, (event) => {
+      cacheMessageInfo(event.properties)
+      bridgeEvent(Message.Event.Updated.type, event.properties)
+    })
+    Bus.subscribe(Message.Event.PartUpdated, (event) => {
+      bridgeEvent(Message.Event.PartUpdated.type, event.properties)
+    })
+    Bus.subscribe(Message.Event.Removed, (event) => {
+      bridgeEvent(Message.Event.Removed.type, event.properties)
+    })
+    Bus.subscribe(Message.Event.PartRemoved, (event) => {
+      bridgeEvent(Message.Event.PartRemoved.type, event.properties)
+    })
+    Bus.subscribe(Message.Event.PartDelta, (event) => {
+      bridgeEvent(Message.Event.PartDelta.type, event.properties)
+    })
+    Bus.subscribe(SessionStatus.Event.Status, (event) => {
+      bridgeSessionLifecycle(SessionStatus.Event.Status.type, event.properties)
+    })
+    Bus.subscribe(SessionStatus.Event.Idle, (event) => {
+      bridgeSessionLifecycle(SessionStatus.Event.Idle.type, event.properties)
+    })
+    Bus.subscribe(SessionEvents.Error, (event) => {
+      bridgeSessionError(SessionEvents.Error.type, event.properties)
+    })
+    Bus.subscribe(Bus.InstanceDisposed, (event) => {
+      initializedLocalDirectories.delete(event.properties.directory)
+    })
+  }
+
+  if (globalRelayInitialized) return
+  globalRelayInitialized = true
 
   // Cross-Instance bridge: executor sessions run in worktree Instances whose
   // Bus.publish() never reaches the main Instance's subscribers. GlobalBus
@@ -488,22 +524,12 @@ export function ensureTaskMessageProtocolBridge() {
   // Database lookups (sessionRole etc.) use the main DB, not the worktree's.
   GlobalBus.on("event", (envelope) => {
     if (!envelope.payload || !MESSAGE_TYPES.has(envelope.payload.type)) return
+    const hostDirectory = Instance.directory
     if (envelope.directory === hostDirectory) return
     const props = envelope.payload.properties
     if (!props) return
     const handler = CROSS_INSTANCE_HANDLERS[envelope.payload.type]
     if (!handler) return
-    void Instance.provide({
-      directory: hostDirectory,
-      fn: () => {
-        handler(props)
-      },
-    }).catch((err) => {
-      log.error("bridge: cross-instance relay failed", {
-        type: envelope.payload?.type,
-        sourceDirectory: envelope.directory,
-        error: err instanceof Error ? err.message : String(err),
-      })
-    })
+    enqueueCrossInstanceBridge(envelope.payload.type, props, hostDirectory, envelope.directory, handler)
   })
 }

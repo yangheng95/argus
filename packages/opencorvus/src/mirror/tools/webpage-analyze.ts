@@ -6,7 +6,7 @@
  * writes mirror facts plus deterministic scaffold artifacts that design-analysis consumes:
  *   - `<outputDir>/scaffold.json`         full ProjectScaffold
  *   - `<outputDir>/shared-context.md`     compact token + pattern summary
- *   - source paths declared by the materialized scaffold for analysis only
+ *   - `<outputDir>/generated-source/*`    scaffold source artifacts for analysis only
  *
  * Returns only the summary so the tool output stays small.
  */
@@ -109,7 +109,7 @@ Reads \`<outputDir>/extracted-page.json\` (from webpage_extract). Writes mirror 
   - scaffold.json           full ProjectScaffold
   - shared-context.md       compact token + pattern summary for prompts
   - prd-evidence-summary.md direct PRD/SPEC drafting surface
-  - sourcePaths             scaffold-generated source files for analysis only
+  - generated-source/*      scaffold-generated source artifacts for analysis only
 
 Returns a summary: section list, pattern list, token counts, and the PRD/SPEC evidence summary path. Once these artifacts exist, use them for PRD/SPEC synthesis; bounded targeted \`scaffold.json\` reads are only for specific gaps.
 
@@ -120,12 +120,12 @@ Use this only when scaffold and PRD evidence artifacts are missing. Do not rerun
     outputDir: z
       .string()
       .describe(
-        `Directory containing extracted-page.json. Writes scaffold.json and shared-context.md here, plus scaffold-generated source files for analysis only. Defaults to \`${DEFAULT_MIRROR_SUBDIR}\` under the current worktree (matching webpage_extract's default).`,
+        `Directory containing extracted-page.json. Writes scaffold.json and shared-context.md here, plus scaffold-generated source artifacts under generated-source/. Defaults to task-scoped \`${DEFAULT_MIRROR_SUBDIR}\` (matching webpage_extract's default). Do not set this during task sessions; overrides are for benchmarks/tests and task-session overrides must stay under \`${DEFAULT_MIRROR_SUBDIR}\`.`,
       )
       .optional(),
   }),
-  async execute(params) {
-    const outputDir = await resolveMirrorOutputDir(params.outputDir)
+  async execute(params, ctx) {
+    const outputDir = await resolveMirrorOutputDir({ override: params.outputDir, sessionID: ctx.sessionID })
     const extractedPath = path.join(outputDir, "extracted-page.json")
 
     let extractedText: string
@@ -157,7 +157,7 @@ Use this only when scaffold and PRD evidence artifacts are missing. Do not rerun
     const prdEvidencePath = path.join(outputDir, "prd-evidence-summary.md")
     const irPath = path.join(outputDir, "page-ir.xml")
     const referencePath = path.join(outputDir, "reference.png")
-    const sourcePaths = await writeGeneratedSourceFiles(sourceFiles)
+    const sourcePaths = await writeGeneratedSourceFiles(outputDir, sourceFiles)
     const prdEvidenceSummary = renderPrdEvidenceSummary({
       page,
       scaffold,
@@ -211,9 +211,9 @@ Use this only when scaffold and PRD evidence artifacts are missing. Do not rerun
         `- \`${scaffoldPath}\` — full ProjectScaffold`,
         `- \`${contextPath}\` — compact prompt-ready summary`,
         `- \`${prdEvidencePath}\` — direct PRD/SPEC evidence summary`,
-        `- React source files: ${sourcePaths.length}`,
+        `- Generated source artifacts: ${sourcePaths.length}`,
         "",
-        "PRD/SPEC evidence artifacts written. Do not rerun analysis for this evidence package unless the source extraction changed. Use `prd-evidence-summary.md`, `shared-context.md`, and `page-ir.xml` as the working surface; generated source is not the deliverable.",
+        "PRD/SPEC evidence artifacts written. Do not rerun analysis for this evidence package unless the source extraction changed. Use `prd-evidence-summary.md`, `shared-context.md`, and `page-ir.xml` as the working surface; generated source artifacts are not the deliverable.",
       ].join("\n"),
       metadata: {
         scaffoldPath,

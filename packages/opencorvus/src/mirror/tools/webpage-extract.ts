@@ -41,7 +41,7 @@ Use this only when URL evidence is missing for the requested output directory. D
     outputDir: z
       .string()
       .describe(
-        `Directory to write artifacts. Defaults to \`${DEFAULT_MIRROR_SUBDIR}\` under the current worktree so mirror artifacts (reference.png, extracted-page.json, images/) stay out of the project source tree. Override with an absolute or worktree-relative path when a different layout is needed.`,
+        `Directory to write artifacts. Defaults to task-scoped \`${DEFAULT_MIRROR_SUBDIR}\`. Do not set this during task sessions; overrides are for benchmarks/tests and task-session overrides must stay under \`${DEFAULT_MIRROR_SUBDIR}\`.`,
       )
       .optional(),
     viewport_width: z.number().int().positive().describe("Viewport width in logical pixels. Default 1440.").optional(),
@@ -67,7 +67,7 @@ Use this only when URL evidence is missing for the requested output directory. D
       metadata: { url: params.url },
     })
 
-    const outputDir = await resolveMirrorOutputDir(params.outputDir)
+    const outputDir = await resolveMirrorOutputDir({ override: params.outputDir, sessionID: ctx.sessionID })
 
     const viewport = {
       width: params.viewport_width ?? 1440,

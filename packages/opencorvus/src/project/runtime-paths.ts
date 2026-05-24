@@ -86,15 +86,19 @@ export namespace ProjectRuntimePaths {
 
   export function designAnalysisPaths(projectDir: string, taskID: string): {
     relativeDir: string
+    mirrorRelative: string
     prdRelative: string
     manifestRelative: string
+    mirrorAbsolute: string
     prdAbsolute: string
     manifestAbsolute: string
   } {
     return {
       relativeDir: taskRelative(taskID, "design-analysis"),
+      mirrorRelative: taskRelative(taskID, "design-analysis", "mirror"),
       prdRelative: taskRelative(taskID, "design-analysis", "prd-spec.md"),
       manifestRelative: taskRelative(taskID, "design-analysis", "evidence-source-manifest.md"),
+      mirrorAbsolute: taskAbsolute(projectDir, taskID, "design-analysis", "mirror"),
       prdAbsolute: taskAbsolute(projectDir, taskID, "design-analysis", "prd-spec.md"),
       manifestAbsolute: taskAbsolute(projectDir, taskID, "design-analysis", "evidence-source-manifest.md"),
     }

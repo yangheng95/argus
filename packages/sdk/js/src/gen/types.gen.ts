@@ -399,7 +399,10 @@ export type EventReviewStreamProgress = {
     taskID: string
     reviewID: string
     phase: "integrity" | "delivery"
-    currentStep: "manifest" | "runtime" | "visual" | "specialist" | "agent" | "post_repair"
+    currentStep?: "manifest" | "runtime" | "visual" | "specialist" | "agent" | "post_repair"
+    activity?: string
+    reviewerID?: string
+    roundID?: string
     attempt: number
     elapsedMs: number
     summary?: string
@@ -445,8 +448,6 @@ export type EventDeliveryEvidenceUpdated = {
 export type EventIntegrityReviewCompleted = {
   type: "integrity.review.completed"
   properties: {
-    taskID: string
-    sessionID: string
     verdict: "pass" | "concerns" | "needs_correction"
     summary: string
     teamReportMarkdown: string
@@ -455,58 +456,60 @@ export type EventIntegrityReviewCompleted = {
       scope: string
       verdict: "pass" | "concerns" | "needs_correction"
       summary: string
-      evidence: Array<string>
-      findings: Array<{
+      evidence?: Array<string>
+      findings?: Array<{
         id: string
         severity: "blocking" | "advisory"
         verdictImpact: "pass" | "concerns" | "needs_correction"
         title: string
         description: string
         evidence: Array<string>
-        targetIDs: Array<string>
-        requirementIDs: Array<string>
-        specIDs: Array<string>
-        filePaths: Array<string>
+        targetIDs?: Array<string>
+        requirementIDs?: Array<string>
+        specIDs?: Array<string>
+        filePaths?: Array<string>
         repair: string
-        reviewers: Array<string>
-        consensus: "agreed" | "disputed" | "unresolved"
+        reviewers?: Array<string>
+        consensus?: "agreed" | "disputed" | "unresolved"
       }>
-      openQuestions: Array<string>
+      openQuestions?: Array<string>
     }>
-    findings: Array<{
+    findings?: Array<{
       id: string
       severity: "blocking" | "advisory"
       verdictImpact: "pass" | "concerns" | "needs_correction"
       title: string
       description: string
       evidence: Array<string>
-      targetIDs: Array<string>
-      requirementIDs: Array<string>
-      specIDs: Array<string>
-      filePaths: Array<string>
+      targetIDs?: Array<string>
+      requirementIDs?: Array<string>
+      specIDs?: Array<string>
+      filePaths?: Array<string>
       repair: string
-      reviewers: Array<string>
-      consensus: "agreed" | "disputed" | "unresolved"
+      reviewers?: Array<string>
+      consensus?: "agreed" | "disputed" | "unresolved"
     }>
-    rounds: Array<{
+    rounds?: Array<{
       roundID: string
       prompt: string
       reviewerIDs: Array<string>
       outcome: string
     }>
-    requiredRepairs: Array<{
+    requiredRepairs?: Array<{
       id: string
       description: string
       evidence: Array<string>
-      targetIDs: Array<string>
-      filePaths: Array<string>
+      targetIDs?: Array<string>
+      filePaths?: Array<string>
     }>
-    unresolvedDisagreements: Array<{
+    unresolvedDisagreements?: Array<{
       id: string
       description: string
       reviewerIDs: Array<string>
       consequence: string
     }>
+    taskID: string
+    sessionID: string
     attempts: number
   }
 }
@@ -8814,6 +8817,8 @@ export type TaskEventsResponses = {
     emittedAt: number
     timestamp: number
     sequence?: number
+    live_sequence?: number
+    live_epoch?: number
     summary: string
     payload: {
       [key: string]: unknown
@@ -9249,6 +9254,8 @@ export type TaskConversationResponses = {
       emittedAt: number
       timestamp: number
       sequence?: number
+      live_sequence?: number
+      live_epoch?: number
       summary: string
       payload: {
         [key: string]: unknown
@@ -9322,6 +9329,8 @@ export type TaskConversationEventsResponses = {
       emittedAt: number
       timestamp: number
       sequence?: number
+      live_sequence?: number
+      live_epoch?: number
       summary: string
       payload: {
         [key: string]: unknown

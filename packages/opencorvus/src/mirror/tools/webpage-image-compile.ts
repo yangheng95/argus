@@ -30,12 +30,12 @@ Use this only when the compact image-derived page IR is missing. Do not rerun it
     outputDir: z
       .string()
       .describe(
-        `Directory containing image-analysis.json. Writes page-ir.xml here. Defaults to \`${DEFAULT_MIRROR_SUBDIR}\` under the current worktree (matching webpage_image_extract's default).`,
+        `Directory containing image-analysis.json. Writes page-ir.xml here. Defaults to task-scoped \`${DEFAULT_MIRROR_SUBDIR}\` (matching webpage_image_extract's default). Do not set this during task sessions; overrides are for benchmarks/tests and task-session overrides must stay under \`${DEFAULT_MIRROR_SUBDIR}\`.`,
       )
       .optional(),
   }),
-  async execute(params) {
-    const outputDir = await resolveMirrorOutputDir(params.outputDir)
+  async execute(params, ctx) {
+    const outputDir = await resolveMirrorOutputDir({ override: params.outputDir, sessionID: ctx.sessionID })
     const analysisPath = path.join(outputDir, "image-analysis.json")
 
     let analysisText: string

@@ -35,6 +35,7 @@ import { AgentRunError, runAgentSession } from "@/agent/runner"
 import { Agent } from "@/agent/agent"
 import { Instance } from "@/project/instance"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
+import { TaskRuntimeMaterializer } from "@/project/task-runtime-materializer"
 import { Session } from "@/session"
 import { resolveSessionOverlay } from "@/agent/model"
 import { SessionStatus } from "@/session/status"
@@ -394,6 +395,20 @@ export namespace BuildAgent {
 
       if (!worktreeDir) {
         throw new Error("BuildAgent.run: worktree directory was not resolved")
+      }
+
+      if (ownsWorktree) {
+        await TaskRuntimeMaterializer.materializeDesignAnalysis({
+          projectDir: Instance.project.worktree,
+          taskID: input.task.id,
+          worktreeDir,
+        }).catch((error) => {
+          throw new Error(
+            `BuildAgent.run: failed to materialize task runtime artifacts in ${worktreeDir}: ` +
+            `${error instanceof Error ? error.message : String(error)}`,
+            { cause: error instanceof Error ? error : undefined },
+          )
+        })
       }
 
       const buildSession = input.existingSessionID

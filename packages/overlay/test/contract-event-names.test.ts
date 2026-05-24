@@ -36,6 +36,9 @@ const META_EVENT_NAMES = new Set<string>([
   // Replay window expired hint (consumer reloads). Server-side notification,
   // not a BusEvent.
   "task.replay_expired",
+  // Selected-task live replay retention/epoch failure. Server-side control
+  // frame from GET /task/:taskID/events, not a BusEvent.
+  "task.live_replay_expired",
   // App-level SSE connect / heartbeat
   "server.connected",
   "server.heartbeat",
@@ -91,6 +94,7 @@ test("every event the overlay's OS-notification path listens to is a known wire 
     "task.failed",
     "task.cancelled",
     "task.replay_expired",
+    "task.live_replay_expired",
     "review.stream.started",
     "review.stream.progress",
     "review.stream.chunk",
