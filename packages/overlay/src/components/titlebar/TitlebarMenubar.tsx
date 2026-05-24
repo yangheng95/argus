@@ -223,6 +223,12 @@ export function TitlebarMenubar(props: TitlebarMenubarProps) {
     await patchConfig({ assistant: { max_executor_groups: value } });
   }
 
+  async function handlePatchCompactionThreshold(percent: number) {
+    const clamped = Math.min(100, Math.max(10, Math.round(percent)));
+    const ratio = Math.round(clamped) / 100;
+    await patchConfig({ compaction: { threshold: ratio } });
+  }
+
   function setTheme(value: string) {
     setSettingsStore("theme", value);
     applyTheme(value);
@@ -336,6 +342,11 @@ export function TitlebarMenubar(props: TitlebarMenubarProps) {
   }
 
   const maxGroups = createMemo(() => clampInt(configNumber("max_executor_groups"), 1, 10));
+  const compactionThresholdPercent = createMemo(() => {
+    const raw = Number((appStore.config as any)?.compaction?.threshold);
+    const ratio = Number.isFinite(raw) && raw > 0 ? raw : 0.8;
+    return Math.round(ratio * 100);
+  });
   const opacityPercent = createMemo(() => Math.round(settingsStore.opacity * 100));
   const zoomPercent = createMemo(() => Math.round(settingsStore.zoom * 100));
   const themeOptions = themeOptionsForCurrentHost();
@@ -436,6 +447,16 @@ export function TitlebarMenubar(props: TitlebarMenubarProps) {
                       step={1}
                       disabled={maxGroups() === null}
                       onChange={(value) => handlePatchGoalParallelism(value)}
+                    />
+                    <MenuRange
+                      label={t("titlebar.compaction_threshold")}
+                      value={compactionThresholdPercent()}
+                      min={10}
+                      max={100}
+                      step={5}
+                      unit="%"
+                      testid="titlebar-compaction-threshold-range"
+                      onChange={(value) => handlePatchCompactionThreshold(value)}
                     />
                   </MenuGroup>
                 </Show>
