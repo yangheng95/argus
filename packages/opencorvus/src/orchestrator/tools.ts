@@ -17,6 +17,7 @@ import { SessionStatus } from "@/session/status"
 import { Database, eq, and, inArray, sql } from "@/storage/db"
 import { Identifier } from "@/id/id"
 import { Instance } from "@/project/instance"
+import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { Log } from "@/util/log"
 import { Filesystem } from "@/util/filesystem"
 import { createDecisionLog } from "@/decision-log"
@@ -849,6 +850,26 @@ export async function composeLatestDeliveryFeedbackForBuild(input: {
     scope: input.goalID ? "goal" : "integrated_tree",
     rawFeedbackPacket: packet,
   })
+}
+
+async function composeIntegrityFeedbackMarkdownForBuild(input: {
+  taskID: string
+  activeSpecSnapshotID?: string
+}): Promise<string | undefined> {
+  if (!input.activeSpecSnapshotID) return undefined
+  const { buildSpecSnapshotLineage } = await import("@/integrity/replay-context")
+  const { composeIntegrityFeedbackForBuild } = await import("@/integrity/build-feedback")
+  const { getSharedIntegrityPromptBudget } = await import("@/integrity/shared-prompt")
+  const lineage = buildSpecSnapshotLineage({
+    taskID: input.taskID,
+    activeSpecSnapshotID: input.activeSpecSnapshotID,
+  })
+  return composeIntegrityFeedbackForBuild({
+    taskID: input.taskID,
+    specSnapshotLineage: lineage,
+    promptBudget: getSharedIntegrityPromptBudget(),
+    runtimeMarkdownDir: ProjectRuntimePaths.taskAbsolute(Instance.project.worktree, input.taskID, "integrity-feedback"),
+  })?.promptMarkdown
 }
 
 async function loadLatestRenderedRetryAttachment(input: {
@@ -5113,6 +5134,10 @@ export function createOrchestratorTools(input: {
               taskID,
               goalID: goal.id,
             })
+            const integrityFeedback = await composeIntegrityFeedbackMarkdownForBuild({
+              taskID,
+              activeSpecSnapshotID: activeSpecForContext?.id,
+            })
 
             // Visual feedback closure-loop: when delivery rejected on visual
             // grounds, attach the previous rendered.png so the build LLM
@@ -5137,6 +5162,7 @@ export function createOrchestratorTools(input: {
               designAnalysis: designAnalysis.trim().length > 0 ? designAnalysis : undefined,
               fidelity: taskFidelity,
               retryGuidance: requestText.length > 0 ? requestText : undefined,
+              integrityFeedback,
               retryFeedback,
               deliveryFeedback,
               retryAttachments,
@@ -5148,6 +5174,11 @@ export function createOrchestratorTools(input: {
             // request to "supplement".
             target = { kind: "request", text: requestText }
             const deliveryFeedback = await composeLatestDeliveryFeedbackForBuild({ taskID })
+            const activeSpecForContext = findActiveSpecForTask(taskID)
+            const integrityFeedback = await composeIntegrityFeedbackMarkdownForBuild({
+              taskID,
+              activeSpecSnapshotID: activeSpecForContext?.id,
+            })
             const retryAttachments = await loadLatestRenderedRetryAttachment({
               taskID,
               enabled: Boolean(deliveryFeedback),
@@ -5155,10 +5186,11 @@ export function createOrchestratorTools(input: {
             const designSpecs = Array.isArray(task.design_specs) ? (task.design_specs as any) : undefined
             const designAnalysis = renderDesignAnalysisHandoffReference(taskID)
             context =
-              deliveryFeedback || retryAttachments || designSpecs || designAnalysis.trim().length > 0
+              integrityFeedback || deliveryFeedback || retryAttachments || designSpecs || designAnalysis.trim().length > 0
                 ? {
                     designSpecs,
                     designAnalysis: designAnalysis.trim().length > 0 ? designAnalysis : undefined,
+                    integrityFeedback,
                     deliveryFeedback,
                     retryAttachments,
                   }

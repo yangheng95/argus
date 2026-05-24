@@ -440,6 +440,65 @@ function insertArchitectContractGraphArtifact(input: {
   })
 }
 
+function seedBuildUptakeIntegrityHistory(input: {
+  taskID: string
+  specID: string
+  now: number
+  rootID?: string
+}) {
+  const rootID = input.rootID ?? "storage-validation"
+  recordIntegrityAttempt({
+    taskID: input.taskID,
+    sessionID: `ses_build_uptake_r1_${input.now}`,
+    lineage: activeOnlyLineage(input.taskID, input.specID),
+    verdict: "needs_correction",
+    phase: "post_build",
+    reviewers: [{ reviewerID: "rev_storage", scope: "Storage validation", verdict: "needs_correction" }],
+    findings: [
+      integrityFinding({
+        id: "BF-R1-storage-validation",
+        description: "getSettings trusts localStorage values.",
+        repair: "Validate persisted settings on load.",
+        filePaths: ["src/services/storage.ts"],
+        requirementIDs: ["REQ-settings"],
+        reviewers: ["rev_storage"],
+      }),
+    ].map((finding) => ({
+      ...finding,
+      rootID,
+      canonicalLabel: "Validate persisted settings",
+      title: "Persisted settings are trusted",
+      evidence: ["src/services/storage.ts getSettings"],
+    })),
+    now: input.now + 1,
+  })
+  recordIntegrityAttempt({
+    taskID: input.taskID,
+    sessionID: `ses_build_uptake_r2_${input.now}`,
+    lineage: activeOnlyLineage(input.taskID, input.specID),
+    verdict: "needs_correction",
+    phase: "post_build",
+    reviewers: [{ reviewerID: "rev_settings", scope: "Settings repair verification", verdict: "needs_correction" }],
+    findings: [
+      integrityFinding({
+        id: "BF-R2-settings-validation",
+        description: "Invalid model/temperature/maxTokens values from localStorage reach API settings.",
+        repair: "Validate model against ALLOWED_MODELS, clamp temperature to [0,2], clamp maxTokens to [1,8192].",
+        filePaths: ["src/services/storage.ts"],
+        requirementIDs: ["REQ-settings"],
+        reviewers: ["rev_settings", "rev_storage"],
+      }),
+    ].map((finding) => ({
+      ...finding,
+      rootID,
+      canonicalLabel: "Validate persisted settings",
+      title: "getSettings does not validate model, temperature, or maxTokens",
+      evidence: ["src/services/storage.ts getSettings still returns unchecked values"],
+    })),
+    now: input.now + 2,
+  })
+}
+
 describe("orchestrator tools", () => {
   let tmp: Awaited<ReturnType<typeof tmpdir>>
 
@@ -642,6 +701,170 @@ describe("orchestrator tools", () => {
       },
     })
   })
+
+  test("task-level direct build receives persistent integrity findings in build context", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_build_uptake_direct_${stamp}`
+    const taskID = `tsk_build_uptake_direct_${stamp}`
+    const goalID = `goal_build_uptake_direct_${stamp}`
+    const specID = `spec_build_uptake_direct_${stamp}`
+    const pipeline = WorkflowRegistry.resolveSync("pipeline")!
+    const workflowState = createWorkflowState(pipeline)
+    let capturedIntegrityFeedback = ""
+
+    insertWorkflowTaskWithGoal({
+      projectID,
+      taskID,
+      goalID,
+      sessionID: null,
+      worktree: tmp.path,
+      projectName: "Build uptake direct test",
+      taskTitle: "Build uptake direct task",
+      request: "Repair persistent integrity blockers through a direct build.",
+      goalTitle: "Existing goal for active spec",
+      goalSlug: "existing-goal-for-active-spec",
+      objective: "Keep an active spec snapshot for direct build feedback.",
+      now,
+      specID,
+      requirementIDs: ["REQ-settings"],
+    })
+    seedBuildUptakeIntegrityHistory({ taskID, specID, now })
+
+    buildAgentRunImpl = async (input: any) => {
+      expect(input.target).toEqual({
+        kind: "request",
+        text: "Repair persistent settings validation.",
+      })
+      capturedIntegrityFeedback = input.context?.integrityFeedback ?? ""
+      return {
+        result: {
+          status: "passed",
+          summary: "Direct build consumed integrity feedback.",
+          files_changed: [],
+          tests: [],
+        },
+        sessionID: "ses_build_uptake_direct",
+        worktreeDir: tmp.path,
+        diffs: [],
+      }
+    }
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "build uptake direct test" })
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+          workflow: pipeline,
+          workflowState,
+        })
+
+        const result = await tools.build.execute(
+          {
+            request: "Repair persistent settings validation.",
+            reason: "Direct correction after integrity review.",
+            directBuildIntent: "modify_files",
+          },
+          buildToolOptions(),
+        )
+
+        expect(result).toContain("Build agent finished")
+      },
+    })
+
+    expect(capturedIntegrityFeedback).toContain("## Persistent Integrity Findings")
+    expect(capturedIntegrityFeedback).toMatch(/root: root_[a-f0-9]{12}/)
+    expect(capturedIntegrityFeedback).toContain("BF-R2-settings-validation")
+    expect(capturedIntegrityFeedback).toContain("getSettings does not validate model, temperature, or maxTokens")
+    expect(capturedIntegrityFeedback).toContain("Validate model against ALLOWED_MODELS")
+    expect(capturedIntegrityFeedback).toContain("reviewer ids: rev_settings, rev_storage")
+  })
+
+  test("goal build receives persistent integrity findings alongside retry guidance", async () => {
+    await tmp?.[Symbol.asyncDispose]?.()
+    tmp = await tmpdir({ git: true })
+
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_build_uptake_goal_${stamp}`
+    const taskID = `tsk_build_uptake_goal_${stamp}`
+    const goalID = `goal_build_uptake_goal_${stamp}`
+    const specID = `spec_build_uptake_goal_${stamp}`
+    let capturedContext: any
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "build uptake goal test" })
+        insertWorkflowTaskWithGoal({
+          projectID,
+          taskID,
+          goalID,
+          sessionID: parent.id,
+          worktree: tmp.path,
+          projectName: "Build uptake goal test",
+          taskTitle: "Build uptake goal task",
+          request: "Repair persistent integrity blockers through a goal build.",
+          goalTitle: "Settings validation goal",
+          goalSlug: "settings-validation-goal",
+          objective: "Validate persisted settings on load.",
+          now,
+          specID,
+          requirementIDs: ["REQ-settings"],
+        })
+        seedBuildUptakeIntegrityHistory({ taskID, specID, now })
+
+        buildAgentRunImpl = async (input: any) => {
+          await markBuildSlotAcquired(input, "ses_build_uptake_goal")
+          capturedContext = input.context
+          return {
+            result: {
+              status: "passed",
+              summary: "Goal build consumed integrity feedback.",
+              files_changed: [
+                {
+                  path: "src/services/storage.ts",
+                  summary: "Validated persisted settings.",
+                  reason: "Persistent integrity finding required the storage load path to validate settings.",
+                },
+              ],
+              tests: [],
+              commit_ref: "abc1234",
+            },
+            sessionID: "ses_build_uptake_goal",
+            worktreeDir: input.managedWorktree.directory,
+            worktreeBranch: input.managedWorktree.branch,
+            worktreeBaseRef: input.managedWorktree.baseRef,
+          }
+        }
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const result = await tools.build.execute(
+          {
+            goalID,
+            request: "Retry by fixing the storage load validator.",
+            reason: "Per-goal integrity correction.",
+          },
+          buildToolOptions(),
+        )
+
+        expect(result).toContain("status=passed")
+      },
+    })
+
+    expect(capturedContext?.integrityFeedback).toContain("## Persistent Integrity Findings")
+    expect(capturedContext?.integrityFeedback).toMatch(/root: root_[a-f0-9]{12}/)
+    expect(capturedContext?.integrityFeedback).toContain("BF-R2-settings-validation")
+    expect(capturedContext?.retryGuidance).toBe("Retry by fixing the storage load validator.")
+  }, 15000)
 
   test("goal build rejects persisted contract_audit graph id mismatch before build starts", async () => {
     const now = Date.now()
