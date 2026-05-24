@@ -1,22 +1,13 @@
-import { afterEach, describe, expect, mock, test } from "bun:test"
+import path from "path"
+import { describe, expect, test } from "bun:test"
 import { Config } from "../../src/config/config"
 import { Instance } from "../../src/project/instance"
 import { Provider } from "../../src/provider/provider"
 import { tmpdir } from "../fixture/fixture"
 
 describe("resolveConfiguredModelRef - strict configured model only", () => {
-  afterEach(() => {
-    mock.restore()
-  })
-
   test("throws when cfg.model is absent", async () => {
     await using tmp = await tmpdir()
-    mock.module("../../src/config/config", () => ({
-      Config: {
-        ...Config,
-        get: async () => ({}) as any,
-      },
-    }))
 
     await Instance.provide({
       directory: tmp.path,
@@ -28,13 +19,17 @@ describe("resolveConfiguredModelRef - strict configured model only", () => {
   })
 
   test("returns the parsed cfg.model when present", async () => {
-    await using tmp = await tmpdir()
-    mock.module("../../src/config/config", () => ({
-      Config: {
-        ...Config,
-        get: async () => ({ model: Config.DEFAULT_MODEL }) as any,
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await Bun.write(
+          path.join(dir, "opencorvus.json"),
+          JSON.stringify({
+            $schema: "https://opencorvus.ai/config.json",
+            model: Config.DEFAULT_MODEL,
+          }),
+        )
       },
-    }))
+    })
 
     await Instance.provide({
       directory: tmp.path,
