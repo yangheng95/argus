@@ -2685,7 +2685,7 @@ export function createOrchestratorTools(input: {
             return acc
           }, {})
           const taskAfterDesignSpecs = requireTask(taskID)
-          const materializedDesignFiles = designAnalysisArtifactPaths(Instance.project.worktree, taskID)
+          const materializedDesignFiles = designAnalysisArtifactPaths(Instance.directory, taskID)
           const evidenceSourceManifest = renderEvidenceSourceManifest({
             task: taskAfterDesignSpecs,
             liveUrls,
@@ -2695,7 +2695,7 @@ export function createOrchestratorTools(input: {
             materializedFiles: [materializedDesignFiles.prdRelative, materializedDesignFiles.manifestRelative],
           })
           const writtenDesignArtifacts = await writeDesignAnalysisArtifacts({
-            projectDir: Instance.project.worktree,
+            projectDir: Instance.directory,
             taskID,
             analysis: {
               designSystem: analysis.designSystem,
@@ -4007,8 +4007,8 @@ export function createOrchestratorTools(input: {
 
     steer_subagent: tool({
       description:
-        "Send a scoped steering message to a child agent session and wake that session. " +
-        "Use this before retrying a sub-agent that appears idle/timed out: ask for current status, partial findings, and whether it can continue. " +
+        "Send a scoped steering message to a child agent session and wake that session, OR — for a live-owned build child — return a read-only activity snapshot (status, last_activity_at, age_ms, ownership). " +
+        "Build sessions cannot accept injected steering; the snapshot lets you decide between waiting and recover_stale_build. " +
         "You may pass session_id directly, goal_id for the latest live attempt, or a live goal_run_id via session_id for backward compatibility.",
       inputSchema: z
         .object({
@@ -4045,12 +4045,27 @@ export function createOrchestratorTools(input: {
           const liveOwner =
             (target.goalRunID ? findLiveBuildOwnershipByGoalRun({ taskID, goalRunID: target.goalRunID }) : undefined) ??
             findLiveBuildOwnershipBySession({ taskID, sessionID: target.sessionID })
-          const ownerLine = liveOwner
-            ? ` It is currently owned by live build tool ${liveOwner.payload.tool_part_id}; wait for that tool result.`
-            : " Use build({ goalID, request }) for a fresh stage-attempt runtime contract instead."
+          if (liveOwner) {
+            const status = SessionStatus.get(target.sessionID)
+            const activity = SessionStatus.getActivity(target.sessionID)
+            const lastActivityAt = activity?.last_activity_at
+            const ageMs = typeof lastActivityAt === "number" ? Math.max(0, Date.now() - lastActivityAt) : "n/a"
+            return [
+              `Activity snapshot for live-owned build child session ${target.sessionID}:`,
+              `  child_session_id=${target.sessionID}`,
+              `  status=${status.type}`,
+              `  last_activity_at=${lastActivityAt ?? "n/a"}`,
+              `  age_ms=${ageMs}`,
+              `  owner_tool_part=${liveOwner.payload.tool_part_id}`,
+              `  owner_ownership=${liveOwner.ownershipID}`,
+              `  goal_run=${target.goalRunID ?? liveOwner.payload.goal_run_id ?? "n/a"}`,
+              `Reason recorded: ${reason}`,
+              "Note: build sessions cannot accept injected steering messages. To act on this snapshot, either keep waiting, or — if age_ms is large AND status indicates no progress — call recover_stale_build.",
+            ].join("\n")
+          }
           return (
             `Error: steer_subagent cannot generically steer build session ${target.sessionID}.` +
-            ownerLine +
+            " Use build({ goalID, request }) for a fresh stage-attempt runtime contract instead." +
             ` Reason received: ${reason}`
           )
         }
