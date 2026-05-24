@@ -4,16 +4,16 @@ import { gitCeilingEnvForWorktree } from "../../src/worktree/git-ceiling"
 
 describe("worktree git ceiling env", () => {
   test("prevents nested worktree sessions from falling through to the primary .git", () => {
-    const cwd = path.join("D:", "project", ".opencorvus", "worktrees", "goal-demo")
+    const cwd = path.join("D:", "project", ".opencorvus", "runtime", "worktrees", "goal-demo")
     const env = gitCeilingEnvForWorktree(cwd)
-    expect(env.GIT_CEILING_DIRECTORIES).toBe(path.join("D:", "project", ".opencorvus", "worktrees"))
+    expect(env.GIT_CEILING_DIRECTORIES).toBe(path.join("D:", "project", ".opencorvus", "runtime"))
   })
 
   test("preserves an existing git ceiling entry", () => {
-    const cwd = path.join("D:", "project", ".opencorvus", "worktrees", "goal-demo")
+    const cwd = path.join("D:", "project", ".opencorvus", "runtime", "worktrees", "goal-demo")
     const env = gitCeilingEnvForWorktree(cwd, { GIT_CEILING_DIRECTORIES: path.join("D:", "other") })
     expect(env.GIT_CEILING_DIRECTORIES).toBe(
-      `${path.join("D:", "project", ".opencorvus", "worktrees")}${path.delimiter}${path.join("D:", "other")}`,
+      `${path.join("D:", "project", ".opencorvus", "runtime")}${path.delimiter}${path.join("D:", "other")}`,
     )
   })
 

@@ -111,6 +111,20 @@ export namespace Identifier {
     return prefixes[prefix] + "_" + timeBytes.toString("hex") + randomBase62(LENGTH - 12)
   }
 
+  /**
+   * Returns prefix + '_' + the first 8 chars of the ID body for filesystem
+   * path segments. This is always derived from the full ID; database rows
+   * and API payloads keep the full identifier as the source of truth.
+   */
+  export function shortPath(fullID: string): string {
+    const separator = fullID.lastIndexOf("_")
+    if (separator <= 0) throw new Error(`Invalid ID for path segment: ${fullID}`)
+    const prefix = fullID.slice(0, separator)
+    const body = fullID.slice(separator + 1)
+    if (!body) throw new Error(`Invalid ID body for path segment: ${fullID}`)
+    return `${prefix}_${body.slice(0, 8)}`
+  }
+
   /** Extract timestamp from an ascending ID. Does not work with descending IDs. */
   export function timestamp(id: string): number {
     const prefix = id.split("_")[0]

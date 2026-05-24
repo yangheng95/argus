@@ -2491,7 +2491,7 @@ export function createOrchestratorTools(input: {
             const outDir = pathMod.join(
               osMod.tmpdir(),
               "opencorvus-capture",
-              `${taskID}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+              `${Identifier.shortPath(taskID)}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
             )
             const capture = await captureReferenceManifest({ url: liveUrl, outDir })
             const gate = enforceCaptureGate(capture.manifest)

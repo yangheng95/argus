@@ -112,7 +112,7 @@ describe("Project.fromDirectory", () => {
     })
   })
 
-  test("initializes a local git repo instead of inheriting an unrelated parent git", async () => {
+  test("does not inherit an unrelated parent git for non-git subdirectories", async () => {
     const p = await loadProject()
     await using tmp = await tmpdir({ git: true })
     const child = path.join(tmp.path, "generated-project")
@@ -121,10 +121,9 @@ describe("Project.fromDirectory", () => {
     const parent = await p.fromDirectory(tmp.path)
     const nested = await p.fromDirectory(child)
 
-    expect(await Filesystem.exists(path.join(child, ".git"))).toBe(true)
-    expect(Project.isGitRepo(nested.project.worktree)).toBe(true)
-    expect(nested.project.worktree).toBe(child)
-    expect(nested.sandbox).toBe(child)
+    expect(await Filesystem.exists(path.join(child, ".git"))).toBe(false)
+    expect(Project.isGitRepo(nested.project.worktree)).toBe(false)
+    expect(nested.project.id).toBe("global")
     expect(nested.project.id).not.toBe(parent.project.id)
   })
 

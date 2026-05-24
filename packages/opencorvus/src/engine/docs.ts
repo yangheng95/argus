@@ -4,6 +4,7 @@ import type { GoalJudgmentType } from "@/delivery/checks"
 import { Instance } from "@/project/instance"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { Log } from "@/util/log"
+import { Identifier } from "@/id/id"
 import { renderSpecsAsText } from "@/acceptance/types"
 import type { EvaluationRow, GoalRow, MilestoneRow, PlanRow, RunRow, TaskRow } from "./store"
 import type { EvaluationCheck } from "./model"
@@ -110,7 +111,7 @@ function save(input: {
 }) {
   try {
     const dir = ProjectRuntimePaths.docsPaths(Instance.worktree, input.taskID)[input.kind]
-    const file = path.join(dir, `${stamp(input.createdAt)}-${input.taskID}-${input.ref}-${slug(input.title)}.md`)
+    const file = path.join(dir, `${stamp(input.createdAt)}-${Identifier.shortPath(input.taskID)}-${input.ref}-${slug(input.title)}.md`)
     mkdirSync(dir, { recursive: true })
     writeFileSync(file, input.content.trimEnd() + "\n", "utf-8")
     return {
