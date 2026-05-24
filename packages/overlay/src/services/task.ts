@@ -10,7 +10,7 @@
 
 import { apiJson, ApiError } from "./api";
 import { getHostTransport } from "./host-transport";
-import { startSSE, stopSSE } from "./sse";
+import { isSelectedTaskSSEConnected, startSSE, stopSSE } from "./sse";
 import { showAppDialog } from "./app-dialog";
 import { initGitCurrent } from "../utils/git";
 import { t } from "../utils/i18n";
@@ -216,6 +216,9 @@ export async function selectTask(
     nextTaskID === boardStore.selectedTaskID &&
     (boardStore.board || boardStore.taskSwitching)
   ) {
+    if (nextTaskID && boardStore.board && !boardStore.taskSwitching && !isSelectedTaskSSEConnected(nextTaskID)) {
+      startSSE(nextTaskID, boardStore.taskSequence);
+    }
     return;
   }
 

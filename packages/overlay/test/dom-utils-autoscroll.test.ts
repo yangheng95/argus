@@ -56,6 +56,12 @@ function createScrollElement() {
   return el;
 }
 
+function wheel(deltaY: number): Event {
+  const event = new Event("wheel") as Event & { deltaY: number };
+  event.deltaY = deltaY;
+  return event;
+}
+
 test("controller upward scroll does not disable follow lock", () => {
   const el = createScrollElement();
   let tracking = true;
@@ -77,7 +83,29 @@ test("controller upward scroll does not disable follow lock", () => {
   ctrl.cleanup();
 });
 
-test("upward scroll away from bottom disables follow lock without intent heuristics", () => {
+test("wheel upward scroll away from bottom disables follow lock", () => {
+  const el = createScrollElement();
+  let tracking = true;
+  let disabled = 0;
+
+  const ctrl = setupAutoScroll(el as any, {
+    isTracking: () => tracking,
+    onUserScrollUp: () => {
+      tracking = false;
+      disabled += 1;
+    },
+  });
+
+  el.dispatchEvent(wheel(-120));
+  el.scrollTop = 140;
+  el.dispatchEvent(new Event("scroll"));
+
+  expect(disabled).toBe(1);
+  expect(tracking).toBe(false);
+  ctrl.cleanup();
+});
+
+test("layout-driven upward scroll does not disable follow lock", () => {
   const el = createScrollElement();
   let tracking = true;
   let disabled = 0;
@@ -93,8 +121,8 @@ test("upward scroll away from bottom disables follow lock without intent heurist
   el.scrollTop = 140;
   el.dispatchEvent(new Event("scroll"));
 
-  expect(disabled).toBe(1);
-  expect(tracking).toBe(false);
+  expect(disabled).toBe(0);
+  expect(tracking).toBe(true);
   ctrl.cleanup();
 });
 
@@ -135,6 +163,7 @@ test("data-driven content changes preserve manual scroll position when tracking 
     },
   });
 
+  el.dispatchEvent(wheel(-120));
   el.scrollTop = 140;
   el.dispatchEvent(new Event("scroll"));
   el.scrollHeight = 420;
@@ -156,6 +185,7 @@ test("transcript replacement can re-arm bottom follow after manual scroll lock",
     },
   });
 
+  el.dispatchEvent(wheel(-120));
   el.scrollTop = 140;
   el.dispatchEvent(new Event("scroll"));
   expect(tracking).toBe(false);
@@ -187,7 +217,7 @@ test("chat scroll keeps browser overflow anchoring enabled", () => {
   expect(followLockRule).toContain("overflow-anchor: none");
 });
 
-test("conversation rows opt into offscreen layout skipping without affecting nested cards", () => {
+test("conversation rows do not use content visibility because it destabilizes scrollbar height", () => {
   const conversationCss = readFileSync(join(import.meta.dir, "../src/styles/surfaces/conversation.css"), "utf8");
   const bubbleCss = readFileSync(join(import.meta.dir, "../src/styles/surfaces/chat-bubble.css"), "utf8");
   const cardCss = readFileSync(join(import.meta.dir, "../src/styles/surfaces/card.css"), "utf8");
@@ -196,11 +226,11 @@ test("conversation rows opt into offscreen layout skipping without affecting nes
   const bubbleRowRule = bubbleCss.match(/\.chat-bubble-row\s*\{[^}]*\}/)?.[0] ?? "";
   const cardRule = cardCss.match(/\.card\s*\{[^}]*\}/)?.[0] ?? "";
 
-  expect(structuredCardRule).toContain("content-visibility: auto");
-  expect(structuredCardRule).toContain("contain-intrinsic-size");
-  expect(bubbleRowRule).toContain("content-visibility: auto");
-  expect(bubbleRowRule).toContain("contain-intrinsic-size");
-  expect(bubbleRowRule).toContain("overflow-clip-margin");
+  expect(structuredCardRule).not.toContain("content-visibility");
+  expect(structuredCardRule).not.toContain("contain-intrinsic-size");
+  expect(bubbleRowRule).not.toContain("content-visibility");
+  expect(bubbleRowRule).not.toContain("contain-intrinsic-size");
+  expect(bubbleRowRule).not.toContain("overflow-clip-margin");
   expect(cardRule).not.toContain("content-visibility");
   expect(cardRule).not.toContain("contain-intrinsic-size");
 });
@@ -293,6 +323,7 @@ test("late-paint correction respects a user who scrolled away between frames", (
   expect(el.scrollTop).toBe(320);
 
   // User scrolls upward between the two frames.
+  el.dispatchEvent(wheel(-120));
   el.scrollTop = 140;
   el.dispatchEvent(new Event("scroll"));
   expect(tracking).toBe(false);

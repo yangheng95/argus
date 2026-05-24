@@ -8,6 +8,8 @@ import { t } from "../utils/i18n";
 import { renderAsBubble } from "../utils/chat-bubble";
 import { setupAutoScroll, type AutoScrollController } from "../utils/dom-utils";
 import { StoreCardNode } from "./StoreCardNode";
+import { canLoadOlderConversationHistory, loadOlderConversationHistory } from "../services/conversation";
+import { conversationAgentStore } from "../store/conversation-agents";
 
 function clipText(value: string, limit = 96): string {
   const text = String(value || "").replace(/\s+/g, " ").trim();
@@ -31,6 +33,26 @@ function taskStatusLabel(status: string): string {
   return translated === key ? normalized : translated;
 }
 
+function firstVisibleConversationAnchor(container: HTMLElement): { id: string; top: number } | null {
+  const containerTop = container.getBoundingClientRect().top;
+  const nodes = Array.from(container.querySelectorAll<HTMLElement>(":scope > [data-card-id]"));
+  for (const node of nodes) {
+    const rect = node.getBoundingClientRect();
+    if (rect.bottom <= containerTop) continue;
+    const id = node.dataset.cardId || "";
+    if (!id) continue;
+    return { id, top: rect.top };
+  }
+  return null;
+}
+
+function restoreConversationAnchor(container: HTMLElement, anchor: { id: string; top: number } | null): void {
+  if (!anchor) return;
+  const node = container.querySelector<HTMLElement>(`:scope > [data-card-id="${CSS.escape(anchor.id)}"]`);
+  if (!node) return;
+  container.scrollTop += node.getBoundingClientRect().top - anchor.top;
+}
+
 // ── Conversation Component ──
 //
 // Reads directly from `cardTreeStore`, the single reactive source of truth
@@ -43,6 +65,9 @@ function taskStatusLabel(status: string): string {
 export function Conversation(props: { container: HTMLElement }) {
   const el = props.container;
   let scrollController: AutoScrollController | undefined;
+  let historyLoadInFlight = false;
+  let historyIntentUntil = 0;
+  let touchStartY: number | null = null;
 
   const hasItems = () => cardTreeStore.order.length > 0;
 
@@ -100,7 +125,66 @@ export function Conversation(props: { container: HTMLElement }) {
     // host (see main.tsx and TaskDetailOverlay). Keeping the passive
     // listener on that host preserves `.chat-scroll > .card` layout and
     // browser scroll performance without introducing a wrapper element.
+    const markHistoryIntent = () => {
+      historyIntentUntil = Date.now() + 700;
+    };
+    const hasHistoryIntent = () => Date.now() <= historyIntentUntil;
+    const onHistoryWheel = (event: WheelEvent) => {
+      if (event.deltaY < 0) markHistoryIntent();
+    };
+    const onHistoryKeyDown = (event: KeyboardEvent) => {
+      if (
+        event.key === "ArrowUp" ||
+        event.key === "PageUp" ||
+        event.key === "Home"
+      ) {
+        markHistoryIntent();
+      }
+    };
+    const onHistoryTouchStart = (event: TouchEvent) => {
+      touchStartY = event.touches[0]?.clientY ?? null;
+    };
+    const onHistoryTouchMove = (event: TouchEvent) => {
+      const y = event.touches[0]?.clientY ?? null;
+      if (touchStartY !== null && y !== null && y > touchStartY + 8) {
+        markHistoryIntent();
+      }
+    };
+    const onHistoryScroll = () => {
+      if (historyLoadInFlight || el.scrollTop > 96 || !hasHistoryIntent()) return;
+      const taskID = currentTaskID();
+      if (!canLoadOlderConversationHistory(taskID)) return;
+      historyIntentUntil = 0;
+      historyLoadInFlight = true;
+      const anchor = firstVisibleConversationAnchor(el);
+      void loadOlderConversationHistory(taskID)
+        .then((loaded) => {
+          return new Promise<void>((resolve) => {
+            requestAnimationFrame(() => {
+              if (loaded) restoreConversationAnchor(el, anchor);
+              resolve();
+            });
+          });
+        })
+        .catch((error) => {
+          if (error instanceof DOMException && error.name === "AbortError") return;
+          console.error("[conversation] older history load failed", error);
+        })
+        .finally(() => {
+          historyLoadInFlight = false;
+        });
+    };
+    el.addEventListener("wheel", onHistoryWheel, { passive: true });
+    el.addEventListener("keydown", onHistoryKeyDown);
+    el.addEventListener("touchstart", onHistoryTouchStart, { passive: true });
+    el.addEventListener("touchmove", onHistoryTouchMove, { passive: true });
+    el.addEventListener("scroll", onHistoryScroll, { passive: true });
     onCleanup(() => {
+      el.removeEventListener("wheel", onHistoryWheel);
+      el.removeEventListener("keydown", onHistoryKeyDown);
+      el.removeEventListener("touchstart", onHistoryTouchStart);
+      el.removeEventListener("touchmove", onHistoryTouchMove);
+      el.removeEventListener("scroll", onHistoryScroll);
       c.cleanup();
       scrollController = undefined;
     });
@@ -121,6 +205,14 @@ export function Conversation(props: { container: HTMLElement }) {
 
   createEffect(on(
     () => cardTreeStore.visibleVersion,
+    () => {
+      scrollController?.contentChanged();
+    },
+    { defer: true },
+  ));
+
+  createEffect(on(
+    () => conversationAgentStore.records.length,
     () => {
       scrollController?.contentChanged();
     },

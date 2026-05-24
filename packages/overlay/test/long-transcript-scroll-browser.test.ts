@@ -9,7 +9,7 @@ function cssRule(css: string, pattern: RegExp, label: string): string {
   return match;
 }
 
-test("browser keeps a long transcript pinned while offscreen rows use content visibility", async () => {
+test("browser keeps a long transcript pinned without dynamic scrollbar resizing", async () => {
   const conversationCss = readFileSync(join(import.meta.dir, "../src/styles/surfaces/conversation.css"), "utf8");
   const bubbleCss = readFileSync(join(import.meta.dir, "../src/styles/surfaces/chat-bubble.css"), "utf8");
   const cardCss = readFileSync(join(import.meta.dir, "../src/styles/surfaces/card.css"), "utf8");
@@ -122,9 +122,15 @@ test("browser keeps a long transcript pinned while offscreen rows use content vi
       const nestedCard = scroll.querySelector(".nested-card") as HTMLElement;
       const bubbleRows = Array.from(scroll.querySelectorAll(".chat-bubble-row")) as HTMLElement[];
       const bubbleRow = bubbleRows[bubbleRows.length - 1]!;
-      const bubble = scroll.querySelector(".chat-bubble") as HTMLElement;
-      const bubbleRect = bubble.getBoundingClientRect();
-      const rowRect = bubbleRow.getBoundingClientRect();
+      const stableScrollHeight = scroll.scrollHeight;
+      const sampledHeights: number[] = [];
+      for (const ratio of [0, 0.2, 0.5, 0.8, 1]) {
+        scroll.scrollTop = (scroll.scrollHeight - scroll.clientHeight) * ratio;
+        await frame();
+        sampledHeights.push(scroll.scrollHeight);
+      }
+      scroll.scrollTop = scroll.scrollHeight;
+      await frame();
 
       return {
         finalDistance: scroll.scrollHeight - scroll.clientHeight - scroll.scrollTop,
@@ -132,19 +138,24 @@ test("browser keeps a long transcript pinned while offscreen rows use content vi
         initialTop,
         minTop,
         maxDistance,
+        sampledHeights,
+        stableScrollHeight,
         topCardContentVisibility: getComputedStyle(topCard).contentVisibility,
         nestedCardContentVisibility: getComputedStyle(nestedCard).contentVisibility,
         bubbleRowContentVisibility: getComputedStyle(bubbleRow).contentVisibility,
-        bubbleRowOverflowClipMargin: getComputedStyle(bubbleRow).overflowClipMargin,
-        bubbleFitsWithinClipMargin: bubbleRect.left >= rowRect.left - 28 && bubbleRect.right <= rowRect.right + 28,
       };
     });
 
-    expect(metrics.topCardContentVisibility).toBe("auto");
-    expect(metrics.bubbleRowContentVisibility).toBe("auto");
+    expect(metrics.topCardContentVisibility).toBe("visible");
+    expect(metrics.bubbleRowContentVisibility).toBe("visible");
     expect(metrics.nestedCardContentVisibility).toBe("visible");
-    expect(metrics.bubbleRowOverflowClipMargin).not.toBe("0px");
-    expect(metrics.bubbleFitsWithinClipMargin).toBe(true);
+    expect(metrics.sampledHeights).toEqual([
+      metrics.stableScrollHeight,
+      metrics.stableScrollHeight,
+      metrics.stableScrollHeight,
+      metrics.stableScrollHeight,
+      metrics.stableScrollHeight,
+    ]);
     expect(metrics.minTop).toBeGreaterThanOrEqual(metrics.initialTop);
     expect(metrics.maxDistance).toBeLessThanOrEqual(2);
     expect(metrics.finalDistance).toBeLessThanOrEqual(2);
@@ -154,4 +165,110 @@ test("browser keeps a long transcript pinned while offscreen rows use content vi
   } finally {
     await browser.close().catch(() => undefined);
   }
-});
+}, { timeout: 15_000 });
+
+test("browser preserves the visible anchor while older history prepends", async () => {
+  const browser = await launchBrowser(["--disable-dev-shm-usage"]);
+  try {
+    const page = await browser.newPage();
+    await page.setViewport({ width: 900, height: 700 });
+    await page.setContent(`
+      <!doctype html>
+      <style>
+        body { margin: 0; background: #f6f8fa; }
+        .chat-scroll {
+          box-sizing: border-box;
+          display: flex;
+          flex-direction: column;
+          height: 420px;
+          overflow-y: auto;
+          overflow-anchor: none;
+          padding: 16px;
+          gap: 8px;
+        }
+        .row {
+          flex: 0 0 auto;
+          min-height: 72px;
+          padding: 12px;
+          border: 1px solid #d0d7de;
+          background: #fff;
+          box-sizing: border-box;
+        }
+      </style>
+      <main id="scroll" class="chat-scroll"></main>
+    `);
+
+    const metrics = await page.evaluate(async () => {
+      const scroll = document.getElementById("scroll") as HTMLElement;
+      const frame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      const makeRow = (id: string) => {
+        const row = document.createElement("section");
+        row.className = "row";
+        row.dataset.cardId = id;
+        row.textContent = `${id} ${"content ".repeat(20)}`;
+        return row;
+      };
+      const firstVisibleAnchor = () => {
+        const containerTop = scroll.getBoundingClientRect().top;
+        const nodes = Array.from(scroll.querySelectorAll<HTMLElement>(":scope > [data-card-id]"));
+        for (const node of nodes) {
+          const rect = node.getBoundingClientRect();
+          if (rect.bottom <= containerTop) continue;
+          const id = node.dataset.cardId || "";
+          if (!id) continue;
+          return { id, top: rect.top };
+        }
+        return null;
+      };
+      const restoreAnchor = (anchor: { id: string; top: number } | null) => {
+        if (!anchor) return;
+        const node = scroll.querySelector<HTMLElement>(`:scope > [data-card-id="${CSS.escape(anchor.id)}"]`);
+        if (!node) return;
+        scroll.scrollTop += node.getBoundingClientRect().top - anchor.top;
+      };
+
+      for (let i = 0; i < 80; i += 1) {
+        scroll.appendChild(makeRow(`msg-${i}`));
+      }
+      const target = scroll.querySelector<HTMLElement>('[data-card-id="msg-30"]')!;
+      scroll.scrollTop = target.offsetTop - scroll.offsetTop - 16;
+      await frame();
+
+      const anchor = firstVisibleAnchor();
+      const beforeTop = anchor
+        ? scroll.querySelector<HTMLElement>(`:scope > [data-card-id="${CSS.escape(anchor.id)}"]`)!.getBoundingClientRect().top
+        : 0;
+
+      for (let i = 12; i >= 0; i -= 1) {
+        scroll.insertBefore(makeRow(`older-${i}`), scroll.firstChild);
+      }
+      scroll.appendChild(makeRow("live-new"));
+      await frame();
+
+      const shiftedTop = anchor
+        ? scroll.querySelector<HTMLElement>(`:scope > [data-card-id="${CSS.escape(anchor.id)}"]`)!.getBoundingClientRect().top
+        : 0;
+      restoreAnchor(anchor);
+      await frame();
+
+      const afterTop = anchor
+        ? scroll.querySelector<HTMLElement>(`:scope > [data-card-id="${CSS.escape(anchor.id)}"]`)!.getBoundingClientRect().top
+        : 0;
+
+      return {
+        anchorID: anchor?.id || "",
+        beforeTop,
+        shiftedTop,
+        afterTop,
+      };
+    });
+
+    expect(metrics.anchorID).toMatch(/^msg-\d+$/);
+    expect(metrics.shiftedTop).toBeGreaterThan(metrics.beforeTop + 100);
+    expect(Math.abs(metrics.afterTop - metrics.beforeTop)).toBeLessThanOrEqual(1);
+
+    await page.close();
+  } finally {
+    await browser.close().catch(() => undefined);
+  }
+}, { timeout: 15_000 });

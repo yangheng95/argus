@@ -15907,6 +15907,15 @@
               "pattern": "^tsk.*"
             },
             "required": true
+          },
+          {
+            "in": "query",
+            "name": "tail_limit",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 2000
+            }
           }
         ],
         "summary": "Hydrate task conversation state",
@@ -15923,6 +15932,10 @@
                       "type": "integer",
                       "minimum": 0,
                       "maximum": 9007199254740991
+                    },
+                    "messageWatermark": {
+                      "type": "number",
+                      "minimum": 0
                     },
                     "board": {
                       "type": "object",
@@ -17792,6 +17805,16 @@
                           "type": "integer",
                           "exclusiveMinimum": 0,
                           "maximum": 9007199254740991
+                        },
+                        "sinceTimestamp": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
                         }
                       },
                       "required": [
@@ -17799,6 +17822,123 @@
                         "latestSequence",
                         "complete",
                         "limit"
+                      ]
+                    },
+                    "history": {
+                      "type": "object",
+                      "properties": {
+                        "oldestTimestamp": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "oldestMessageID": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "hasMore": {
+                          "type": "boolean"
+                        },
+                        "limit": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "oldestTimestamp",
+                        "hasMore",
+                        "limit"
+                      ]
+                    },
+                    "agentView": {
+                      "type": "object",
+                      "properties": {
+                        "topLevelSessionIDs": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "sessions": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "sessionID": {
+                                "type": "string"
+                              },
+                              "stage": {
+                                "type": "string"
+                              },
+                              "parentSessionID": {
+                                "type": "string"
+                              },
+                              "goalID": {
+                                "type": "string"
+                              },
+                              "messageIDs": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "firstMessageTime": {
+                                "type": "number"
+                              },
+                              "lastMessageTime": {
+                                "type": "number"
+                              },
+                              "placement": {
+                                "type": "string",
+                                "enum": [
+                                  "top_level",
+                                  "goal_phase",
+                                  "hidden",
+                                  "filtered"
+                                ]
+                              },
+                              "phase": {
+                                "type": "object",
+                                "properties": {
+                                  "stepID": {
+                                    "type": "string"
+                                  },
+                                  "phaseID": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "stepID",
+                                  "phaseID"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "sessionID",
+                              "stage",
+                              "messageIDs",
+                              "firstMessageTime",
+                              "lastMessageTime",
+                              "placement"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "topLevelSessionIDs",
+                        "sessions"
                       ]
                     },
                     "view": {
@@ -17883,6 +18023,7 @@
                   },
                   "required": [
                     "lastSequence",
+                    "messageWatermark",
                     "board",
                     "transcript",
                     "timeline",
@@ -17909,6 +18050,218 @@
           {
             "lang": "js",
             "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.task.conversation({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/task/{taskID}/conversation/history": {
+      "get": {
+        "operationId": "task.conversation.history",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "taskID",
+            "schema": {
+              "type": "string",
+              "pattern": "^tsk.*"
+            },
+            "required": true
+          },
+          {
+            "in": "query",
+            "name": "before",
+            "schema": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "required": true
+          },
+          {
+            "in": "query",
+            "name": "before_id",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "default": 160,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000
+            }
+          }
+        ],
+        "summary": "Page older task conversation transcript",
+        "description": "Return a bounded transcript/timeline slice older than a timestamp so the overlay can prepend history without blocking the live tail.",
+        "responses": {
+          "200": {
+            "description": "Task conversation history page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "transcript": {
+                      "type": "array",
+                      "items": {}
+                    },
+                    "timeline": {
+                      "type": "array",
+                      "items": {}
+                    },
+                    "view": {
+                      "type": "object",
+                      "properties": {
+                        "topLevelSessionIDs": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "sessions": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "sessionID": {
+                                "type": "string"
+                              },
+                              "stage": {
+                                "type": "string"
+                              },
+                              "parentSessionID": {
+                                "type": "string"
+                              },
+                              "goalID": {
+                                "type": "string"
+                              },
+                              "messageIDs": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "firstMessageTime": {
+                                "type": "number"
+                              },
+                              "lastMessageTime": {
+                                "type": "number"
+                              },
+                              "placement": {
+                                "type": "string",
+                                "enum": [
+                                  "top_level",
+                                  "goal_phase",
+                                  "hidden",
+                                  "filtered"
+                                ]
+                              },
+                              "phase": {
+                                "type": "object",
+                                "properties": {
+                                  "stepID": {
+                                    "type": "string"
+                                  },
+                                  "phaseID": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "stepID",
+                                  "phaseID"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "sessionID",
+                              "stage",
+                              "messageIDs",
+                              "firstMessageTime",
+                              "lastMessageTime",
+                              "placement"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "topLevelSessionIDs",
+                        "sessions"
+                      ]
+                    },
+                    "history": {
+                      "type": "object",
+                      "properties": {
+                        "oldestTimestamp": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "oldestMessageID": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "hasMore": {
+                          "type": "boolean"
+                        },
+                        "limit": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "oldestTimestamp",
+                        "hasMore",
+                        "limit"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "transcript",
+                    "timeline",
+                    "view",
+                    "history"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.task.conversation.history({\n  ...\n})"
           }
         ]
       }
@@ -17960,6 +18313,14 @@
               "type": "integer",
               "minimum": 1,
               "maximum": 2000
+            }
+          },
+          {
+            "in": "query",
+            "name": "since",
+            "schema": {
+              "type": "number",
+              "exclusiveMinimum": 0
             }
           }
         ],
@@ -18084,6 +18445,16 @@
                           "type": "integer",
                           "exclusiveMinimum": 0,
                           "maximum": 9007199254740991
+                        },
+                        "sinceTimestamp": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
                         }
                       },
                       "required": [
@@ -28455,6 +28826,13 @@
                               "minLength": 1
                             }
                           },
+                          "userRequestQuotes": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "minLength": 1
+                            }
+                          },
                           "filePaths": {
                             "default": [],
                             "type": "array",
@@ -28574,6 +28952,13 @@
                     },
                     "specIDs": {
                       "default": [],
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "userRequestQuotes": {
                       "type": "array",
                       "items": {
                         "type": "string",
@@ -30671,6 +31056,9 @@
           "tail_start_id": {
             "type": "string"
           },
+          "anchor_id": {
+            "type": "string"
+          },
           "focus": {
             "type": "string"
           }
@@ -31245,7 +31633,8 @@
                 "enum": [
                   "completed",
                   "error",
-                  "aborted"
+                  "aborted",
+                  "artifact_missing"
                 ]
               },
               "error": {

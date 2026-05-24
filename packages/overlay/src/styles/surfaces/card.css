@@ -1381,7 +1381,7 @@ body {
 
 .task-progress__header {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: calc(8px * var(--ui-scale));
 }
 .task-progress__heading {
@@ -1396,6 +1396,32 @@ body {
   font-variant-numeric: tabular-nums;
   color: var(--text-strong);
   font-weight: var(--ui-font-weight-strong);
+}
+
+.task-progress__fold {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(22px * var(--ui-scale));
+  height: calc(22px * var(--ui-scale));
+  padding: 0;
+  border: 0;
+  border-radius: var(--oc-radius-pill);
+  background: transparent;
+  color: var(--text-soft);
+  cursor: pointer;
+  transition: background-color var(--ui-duration-base) var(--ui-timing-standard), color var(--ui-duration-base) var(--ui-timing-standard);
+}
+
+.task-progress__fold:hover {
+  background: var(--card-bg-hover);
+  color: var(--text-strong);
+}
+
+.task-progress__fold:focus-visible {
+  outline: var(--oc-border-width) solid color-mix(in srgb, var(--accent) 40%, transparent);
+  outline-offset: calc(2px * var(--ui-scale));
 }
 
 .task-progress__bar {
@@ -1438,6 +1464,11 @@ body {
 }
 .task-progress__pills[data-collapsed="false"] {
   max-height: none !important;
+}
+
+.task-progress[data-folded="true"] .task-progress__pills,
+.task-progress[data-folded="true"] .task-progress__toggle {
+  display: none;
 }
 
 .task-progress__toggle {

@@ -12,6 +12,7 @@ const TREE_WRITER_NOOP_TYPES = new Set([
   "config.changed",
   "task.replay_expired",
   "task.live_replay_expired",
+  "task.messages.changed",
   "agent.updated",
   "message.injected",
   "spec.created",

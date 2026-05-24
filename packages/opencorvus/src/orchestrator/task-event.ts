@@ -1,6 +1,6 @@
 import { EngineTaskTable } from "@/engine/engine.sql"
 import { SessionTable, type SessionKind } from "@/session/session.sql"
-import { Database, eq } from "@/storage/db"
+import { Database, eq, sql } from "@/storage/db"
 
 /**
  * Session metadata lookups for the SSE bridge.
@@ -164,6 +164,46 @@ export function matchesTaskEvent(
   if (!evtSession) return false
   if (evtSession === sessionID) return true
   return taskIDForSession(evtSession) === taskID
+}
+
+/**
+ * Latest `time_updated` watermark across every message and part in any
+ * session belonging to `taskID`'s session tree. Used by the
+ * conversation-history SSE bridge to detect new writes since a polling
+ * cursor; lives here (not in `routes/orchestrator`) so route handlers
+ * keep their SQL discipline (no direct `Database.use` / `sql\`...\``
+ * inside `routes/`).
+ *
+ * Returns 0 when the task has no messages/parts yet, so callers can
+ * safely use it as a monotonic comparator without a special-case for
+ * empty tasks.
+ */
+export function taskMessageWatermark(taskID: string): number {
+  const row = Database.use((db) =>
+    db.get<{ watermark: number | null }>(sql`
+      WITH RECURSIVE session_tree(id) AS (
+        SELECT session_id FROM engine_task WHERE id = ${taskID}
+        UNION ALL
+        SELECT s.id FROM session s JOIN session_tree st ON s.parent_id = st.id
+      ),
+      message_watermark(value) AS (
+        SELECT max(m.time_updated)
+        FROM message m
+        JOIN session_tree st ON st.id = m.session_id
+      ),
+      part_watermark(value) AS (
+        SELECT max(p.time_updated)
+        FROM part p
+        JOIN session_tree st ON st.id = p.session_id
+      )
+      SELECT max(value) AS watermark FROM (
+        SELECT value FROM message_watermark
+        UNION ALL
+        SELECT value FROM part_watermark
+      )
+    `),
+  )
+  return Math.max(0, Number(row?.watermark ?? 0) || 0)
 }
 
 function eventSession(properties: Record<string, unknown>) {

@@ -19,7 +19,6 @@ import {
   isRouterConsumedNoopEventType,
 } from "./event-policy";
 import { markSelectedLiveEventConsumed } from "./selected-stream-cursor";
-import { recordConversationRecoveryFailed } from "./refresh-diagnostics";
 
 // Forward SSE events to the tree-writer. The conversation view reads
 // `cardTreeStore`; message events are no longer mirrored into the legacy
@@ -553,16 +552,19 @@ export function routeSSEEvent(event: any): boolean {
   }
 
   if (type === "task.live_replay_expired") {
+    markHandledSelectedLiveEvent(event);
+    return true;
+  }
+
+  if (type === "task.messages.changed") {
     const taskID = eventTaskID(event) || boardStore.selectedTaskID || "";
-    if (taskID) {
-      recordConversationRecoveryFailed({
-        channel: "selected-task-recovery",
-        reason: "task.live_replay_expired",
-        taskID,
-        source: "selected-task-stream",
-        durationMs: 0,
-        error: String(event?.payload?.reason || event?.summary || "selected task live replay expired"),
-      });
+    if (taskID && taskID === boardStore.selectedTaskID) {
+      void import("./conversation")
+        .then(({ mergeLatestConversationTail }) => mergeLatestConversationTail(taskID))
+        .catch((error) => {
+          if (error instanceof DOMException && error.name === "AbortError") return;
+          console.error("[sse] task.messages.changed tail merge failed", error);
+        });
     }
     markHandledSelectedLiveEvent(event);
     return true;

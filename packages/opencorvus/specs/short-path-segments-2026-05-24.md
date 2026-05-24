@@ -6,9 +6,15 @@ Date: 2026-05-24
 
 OpenCorvus runtime filesystem paths derive task, goal, run, and session path
 segments from the full identifier with `Identifier.shortPath(id)`, producing
-`prefix_` plus the first 8 body characters. The database (DB) remains the
+`prefix_` plus the first 12 body characters. The database (DB) remains the
 source of truth and continues storing complete IDs in every schema column and
 event payload.
+
+Revision, 2026-05-24: the original 8-body segment kept only the high timestamp
+bytes. Multiple goals created in one planning burst shared the same 8-body
+prefix, so distinct goal IDs collapsed onto one runtime path and branch. The
+12-body form keeps the full hex timestamp/counter prefix and is unique for the
+ID generator's same-millisecond counter range.
 
 Writers must only create the short runtime path layout:
 
@@ -37,11 +43,11 @@ patch filename under `engine/publisher.ts` that already uses
 
 ## Legacy Reader
 
-Existing tasks may already have 30-character runtime directories. New writers
-must not write those long segments, but readers may recognize them as
-grandfathered legacy data. This is a temporary dual-reader only, not a dual
-source of truth: the full ID remains in DB rows, and short path segments are
-derived from that ID.
+Existing tasks may already have full-ID runtime directories or the legacy
+8-body short directories. New writers must not write those legacy segments, but
+readers may recognize them as grandfathered legacy data. This is a temporary
+multi-reader only, not a multi-source of truth: the full ID remains in DB rows,
+and short path segments are derived from that ID.
 
 Exit strategy: after all grandfathered tasks have completed, been cancelled,
 or the local DB has been reset by the operator, remove the legacy long-segment

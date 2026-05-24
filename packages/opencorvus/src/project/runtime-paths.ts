@@ -27,7 +27,7 @@ function unique(items: string[]): string[] {
 }
 
 function idSegmentCandidates(input: string): string[] {
-  return unique([idSegment(input), legacyIDSegment(input)])
+  return unique([idSegment(input), safeSegment(Identifier.legacyShortPath(input)), legacyIDSegment(input)])
 }
 
 export namespace ProjectRuntimePaths {

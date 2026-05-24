@@ -73,6 +73,16 @@ function fakeRecoveryTransport(
   };
 }
 
+async function waitForStreamCount(
+  streams: Array<{ path: string; query?: Record<string, string> }>,
+  count: number,
+): Promise<void> {
+  for (let i = 0; i < 20; i += 1) {
+    if (streams.length >= count) return;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+}
+
 afterEach(() => {
   __setHostTransportForTest(undefined);
   resetSelectedLiveCursor();
@@ -489,8 +499,7 @@ test("message delta with missing tree prerequisites triggers selected-task recov
     },
   })).toBe(true);
 
-  await new Promise((resolve) => setTimeout(resolve, 0));
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  await waitForStreamCount(streams, 1);
   expect(cardTreeStore.treeEpoch).toBe(treeEpoch);
   expect(streams).toEqual([
     { path: "task/tsk_refresh/events", query: { after_live: "0" } },
@@ -677,8 +686,7 @@ test("selected task sequence gap triggers recovery without advancing cursor", as
   });
 
   expect(boardStore.taskSequence).toBe(5);
-  await new Promise((resolve) => setTimeout(resolve, 0));
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  await waitForStreamCount(streams, 1);
   expect(streams).toEqual([
     { path: "task/tsk_refresh/events", query: { after: "5", after_live: "0" } },
   ]);
@@ -709,8 +717,7 @@ test("production dispatch gates sequence gap before tree writer prerequisites ca
   if (!handled) handleEventStreamEvent(event);
 
   expect(boardStore.taskSequence).toBe(5);
-  await new Promise((resolve) => setTimeout(resolve, 0));
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  await waitForStreamCount(streams, 1);
   expect(streams).toEqual([
     { path: "task/tsk_refresh/events", query: { after: "5", after_live: "0" } },
   ]);
@@ -748,8 +755,7 @@ test("task-list notification does not advance visible cursor before per-task pay
   if (!handled) handleEventStreamEvent(event);
 
   expect(boardStore.taskSequence).toBe(5);
-  await new Promise((resolve) => setTimeout(resolve, 0));
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  await waitForStreamCount(streams, 1);
   expect(streams).toEqual([
     { path: "task/tsk_refresh/events", query: { after: "5", after_live: "0" } },
   ]);
@@ -770,8 +776,7 @@ test("task-list selected sequence gap triggers selected-task recovery", async ()
   });
 
   expect(boardStore.taskSequence).toBe(5);
-  await new Promise((resolve) => setTimeout(resolve, 0));
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  await waitForStreamCount(streams, 1);
   expect(streams).toEqual([
     { path: "task/tsk_refresh/events", query: { after: "5", after_live: "0" } },
   ]);

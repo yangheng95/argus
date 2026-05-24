@@ -2459,6 +2459,7 @@ describe("overlay architecture guards", () => {
     expect(laneBody).toContain("overflow-x: auto")
     expect(laneBody).toContain("overflow-y: hidden")
     expect(laneBody).toContain("display: flex")
+    expect(laneBody).toContain("flex-wrap: nowrap")
 
     const rowBody = soloRuleBody(surface, ".conversation-agent-rail__row")
     expect(rowBody).toContain("display: grid")

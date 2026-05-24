@@ -467,6 +467,7 @@ export type EventIntegrityReviewCompleted = {
         targetIDs?: Array<string>
         requirementIDs?: Array<string>
         specIDs?: Array<string>
+        userRequestQuotes?: Array<string>
         filePaths?: Array<string>
         repair: string
         reviewers?: Array<string>
@@ -484,6 +485,7 @@ export type EventIntegrityReviewCompleted = {
       targetIDs?: Array<string>
       requirementIDs?: Array<string>
       specIDs?: Array<string>
+      userRequestQuotes?: Array<string>
       filePaths?: Array<string>
       repair: string
       reviewers?: Array<string>
@@ -1063,6 +1065,7 @@ export type CompactionPart = {
   auto: boolean
   overflow?: boolean
   tail_start_id?: string
+  anchor_id?: string
   focus?: string
 }
 
@@ -1235,7 +1238,7 @@ export type SessionStatus =
     }
   | {
       type: "terminal"
-      reason: "completed" | "error" | "aborted"
+      reason: "completed" | "error" | "aborted" | "artifact_missing"
       error?: string
     }
 
@@ -8839,6 +8842,7 @@ export type TaskConversationData = {
   }
   query?: {
     directory?: string
+    tail_limit?: number
   }
   url: "/task/{taskID}/conversation"
 }
@@ -8858,6 +8862,7 @@ export type TaskConversationResponses = {
    */
   200: {
     lastSequence: number
+    messageWatermark: number
     board: {
       lastSequence?: number
       snapshotVersion: string
@@ -9270,6 +9275,30 @@ export type TaskConversationResponses = {
       latestSequence: number
       complete: boolean
       limit: number
+      sinceTimestamp?: number | null
+    }
+    history?: {
+      oldestTimestamp: number | null
+      oldestMessageID?: string | null
+      hasMore: boolean
+      limit: number
+    }
+    agentView?: {
+      topLevelSessionIDs: Array<string>
+      sessions: Array<{
+        sessionID: string
+        stage: string
+        parentSessionID?: string
+        goalID?: string
+        messageIDs: Array<string>
+        firstMessageTime: number
+        lastMessageTime: number
+        placement: "top_level" | "goal_phase" | "hidden" | "filtered"
+        phase?: {
+          stepID: string
+          phaseID: string
+        }
+      }>
     }
     view: {
       topLevelSessionIDs: Array<string>
@@ -9293,6 +9322,64 @@ export type TaskConversationResponses = {
 
 export type TaskConversationResponse = TaskConversationResponses[keyof TaskConversationResponses]
 
+export type TaskConversationHistoryData = {
+  body?: never
+  path: {
+    taskID: string
+  }
+  query: {
+    directory?: string
+    before: number
+    before_id?: string
+    limit?: number
+  }
+  url: "/task/{taskID}/conversation/history"
+}
+
+export type TaskConversationHistoryErrors = {
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type TaskConversationHistoryError = TaskConversationHistoryErrors[keyof TaskConversationHistoryErrors]
+
+export type TaskConversationHistoryResponses = {
+  /**
+   * Task conversation history page
+   */
+  200: {
+    transcript: Array<unknown>
+    timeline: Array<unknown>
+    view: {
+      topLevelSessionIDs: Array<string>
+      sessions: Array<{
+        sessionID: string
+        stage: string
+        parentSessionID?: string
+        goalID?: string
+        messageIDs: Array<string>
+        firstMessageTime: number
+        lastMessageTime: number
+        placement: "top_level" | "goal_phase" | "hidden" | "filtered"
+        phase?: {
+          stepID: string
+          phaseID: string
+        }
+      }>
+    }
+    history: {
+      oldestTimestamp: number | null
+      oldestMessageID?: string | null
+      hasMore: boolean
+      limit: number
+    }
+  }
+}
+
+export type TaskConversationHistoryResponse = TaskConversationHistoryResponses[keyof TaskConversationHistoryResponses]
+
 export type TaskConversationEventsData = {
   body?: never
   path: {
@@ -9303,6 +9390,7 @@ export type TaskConversationEventsData = {
     after?: number
     until?: number
     limit?: number
+    since?: number
   }
   url: "/task/{taskID}/conversation/events"
 }
@@ -9345,6 +9433,7 @@ export type TaskConversationEventsResponses = {
       latestSequence: number
       complete: boolean
       limit: number
+      sinceTimestamp?: number | null
     }
   }
 }
