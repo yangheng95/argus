@@ -183,6 +183,12 @@ describe("Identifier.shortPath", () => {
     expect(Identifier.shortPath(id).length).toBe("tool".length + 9)
   })
 
+  test("supports prefixes that contain underscores", () => {
+    const id = Identifier.create("plan_node", false, 1700000000000)
+    expect(Identifier.shortPath(id)).toStartWith("pln_node_")
+    expect(Identifier.shortPath(id).length).toBe("pln_node".length + 9)
+  })
+
   test("is stable across repeated calls for the same ID", () => {
     const id = Identifier.create("session", false, 1700000000000)
     expect(Identifier.shortPath(id)).toBe(Identifier.shortPath(id))

@@ -117,11 +117,11 @@ export namespace Identifier {
    * and API payloads keep the full identifier as the source of truth.
    */
   export function shortPath(fullID: string): string {
-    const separator = fullID.indexOf("_")
+    const separator = fullID.lastIndexOf("_")
     if (separator <= 0) throw new Error(`Invalid ID for path segment: ${fullID}`)
     const prefix = fullID.slice(0, separator)
     const body = fullID.slice(separator + 1)
-    if (body.length < 8) throw new Error(`Invalid ID body for path segment: ${fullID}`)
+    if (!body) throw new Error(`Invalid ID body for path segment: ${fullID}`)
     return `${prefix}_${body.slice(0, 8)}`
   }
 
