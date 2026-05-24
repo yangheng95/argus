@@ -1,5 +1,6 @@
 import { Index, Show, createMemo, type Accessor } from "solid-js"
 import { cardTreeStore } from "../store/card-tree"
+import { conversationAgentStore } from "../store/conversation-agents"
 import { setCardExpanded } from "../store/conversation-ui"
 import { notifyWarning } from "../services/notify"
 import { buildAgentWorkflow, type AgentWorkflowRecord } from "../utils/agent-workflow"
@@ -12,6 +13,21 @@ function compactLabel(record: AgentWorkflowRecord): string {
   const parts = [record.agentName, record.status]
   if (record.attempt) parts.push(`V${record.attempt}`)
   return parts.filter(Boolean).join(" · ")
+}
+
+function mergeAgentRecords(
+  baseRecords: AgentWorkflowRecord[],
+  liveRecords: AgentWorkflowRecord[],
+): AgentWorkflowRecord[] {
+  const merged = new Map<string, AgentWorkflowRecord>()
+  for (const record of baseRecords) {
+    merged.set(record.sessionID, { ...record })
+  }
+  for (const record of liveRecords) {
+    const base = merged.get(record.sessionID)
+    merged.set(record.sessionID, base ? { ...base, ...record } : { ...record })
+  }
+  return [...merged.values()].sort((left, right) => left.startedAt - right.startedAt)
 }
 
 function parentIDsForCard(cardID: string): string[] {
@@ -39,11 +55,23 @@ function renderedCardHead(target: HTMLElement): HTMLElement | null {
   )
 }
 
+function describeRecord(record: AgentWorkflowRecord): string {
+  const lines = [
+    `agent: ${record.agentName}`,
+    `sessionID: ${record.sessionID}`,
+    `status: ${record.status}`,
+  ]
+  if (record.attempt) lines.push(`attempt: V${record.attempt}`)
+  if (record.renderedCardID) lines.push(`renderedCardID: ${record.renderedCardID}`)
+  return lines.join("\n")
+}
+
 function locateRecord(record: AgentWorkflowRecord): void {
   if (!record.renderedCardID) {
     notifyWarning({
       title: "Agent card unavailable",
       message: `${record.agentName} has no rendered conversation card target.`,
+      details: describeRecord(record),
     })
     return
   }
@@ -59,6 +87,7 @@ function locateRecord(record: AgentWorkflowRecord): void {
         notifyWarning({
           title: "Agent card unavailable",
           message: `Rendered card ${record.renderedCardID} is not mounted in the conversation.`,
+          details: `${describeRecord(record)}\n\nselector: ${selector}`,
         })
         return
       }
@@ -67,6 +96,7 @@ function locateRecord(record: AgentWorkflowRecord): void {
         notifyWarning({
           title: "Agent card unavailable",
           message: `Rendered card ${record.renderedCardID} has no mounted header target.`,
+          details: `${describeRecord(record)}\n\nmatched element outerHTML head missing:\n${target.outerHTML.slice(0, 400)}`,
         })
         return
       }
@@ -101,13 +131,17 @@ function AgentRailRow(props: {
 }
 
 export function ConversationAgentRail() {
-  const projection = createMemo(() =>
-    buildAgentWorkflow({
+  const projection = createMemo(() => {
+    const liveProjection = buildAgentWorkflow({
       cards: cardTreeStore.cards,
       order: orderedReachableCardIDs(),
       traceEvents: [],
-    }),
-  )
+    })
+    return {
+      ...liveProjection,
+      records: mergeAgentRecords(conversationAgentStore.records, liveProjection.records),
+    }
+  })
   const lanes = createMemo(() => buildAgentWorkflowLanes(projection().records))
   const hasLanes = createMemo(() => lanes().length > 0)
 

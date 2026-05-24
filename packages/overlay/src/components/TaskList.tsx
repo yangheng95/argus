@@ -7,7 +7,7 @@ import { boardStore, visibleTasks, loadTasks, taskCreatedAt } from "../store/boa
 import { settingsStore } from "../store/settings";
 import { reorderTaskQueue, startQueuedTaskNow } from "../services/task-queue";
 import { exportTaskArchive, importTaskArchive } from "../services/task-archive";
-import { notifyError, notifyProgress, notifySuccess, notifyWarning, taskHasUnreadNotification } from "../services/notify";
+import { notifyError, notifyProgress, notifySuccess, notifyWarning, taskHasUnreadNotification, formatErrorDetails } from "../services/notify";
 import { useArmedConfirm } from "../solid/armed-confirm";
 import { useAsyncAction } from "../solid/async-action";
 import { t } from "../utils/i18n";
@@ -197,6 +197,7 @@ function ExportButton(props: { id: string; directory?: string }) {
             id: noticeID(),
             title: t("task.export_failed_title"),
             message: t("task.export_failed", { error: err instanceof Error ? err.message : String(err) }),
+            details: formatErrorDetails(err),
           });
         }
       }}
@@ -638,6 +639,7 @@ export function TaskList(props: TaskListProps) {
         id: noticeID,
         title: t("task.start_now_failed_title"),
         message: t("task.start_now_failed", { error: err instanceof Error ? err.message : String(err) }),
+        details: formatErrorDetails(err),
       });
       await loadTasks().catch(() => undefined);
     } finally {
@@ -681,6 +683,7 @@ export function TaskList(props: TaskListProps) {
         id: "task-archive:import",
         title: t("task.import_failed_title"),
         message: t("task.import_failed", { error: err instanceof Error ? err.message : String(err) }),
+        details: formatErrorDetails(err),
       });
     } finally {
       setImporting(false);
