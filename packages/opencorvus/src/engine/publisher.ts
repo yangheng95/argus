@@ -4,6 +4,7 @@ import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { Vcs } from "@/project/vcs"
 import { Filesystem } from "@/util/filesystem"
 import { Log } from "@/util/log"
+import { Identifier } from "@/id/id"
 import { collectMainWorktreeDiff, readBaselineCommitFromMetadata } from "./workspace-export"
 import type { TaskRow, RunRow, DeliveryRow } from "./store"
 
@@ -96,7 +97,7 @@ const workspaceExportAdapter: DeliveryAdapter = {
     const baseRef = readBaselineCommit(ctx.task)
     const cwd = Instance.directory
     const { changedFiles, patch } = await collectMainWorktreeDiff(cwd, baseRef)
-    const out = path.join(ProjectRuntimePaths.deliveryPaths(Instance.directory, ctx.task.id).root, `${ctx.delivery.id}.patch`)
+    const out = path.join(ProjectRuntimePaths.deliveryPaths(Instance.directory, ctx.task.id).root, `${Identifier.shortPath(ctx.delivery.id)}.patch`)
     await Filesystem.write(out, patch || "")
     const summary =
       changedFiles.length > 0

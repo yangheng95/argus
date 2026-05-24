@@ -540,13 +540,12 @@ export namespace Session {
   )
 
   export const diff = fn(Identifier.schema("session"), async (sessionID) => {
-    try {
-      return await Filesystem.readJson<Snapshot.FileDiff[]>(
-        ProjectRuntimePaths.sessionDiffPath(Instance.directory, Instance.project.id, sessionID),
-      )
-    } catch {
-      return []
+    for (const target of ProjectRuntimePaths.sessionDiffPathReadCandidates(Instance.directory, Instance.project.id, sessionID)) {
+      try {
+        return await Filesystem.readJson<Snapshot.FileDiff[]>(target)
+      } catch {}
     }
+    return []
   })
 
   export const messages = fn(

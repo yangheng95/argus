@@ -4,6 +4,8 @@ import os from "node:os"
 import path from "node:path"
 import type { Session } from "../../src/session"
 import { Instance } from "../../src/project/instance"
+import { Identifier } from "../../src/id/id"
+import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 
 const previousTraceDir = process.env.OPENCORVUS_AGENT_TRACE_DIR
 let tempDir = ""
@@ -19,9 +21,9 @@ test("task trace rollup includes llm_request task and parent metadata", async ()
   tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "oc-trace-rollup-"))
   process.env.OPENCORVUS_AGENT_TRACE_DIR = tempDir
   const { AgentTrace } = await import("../../src/trace")
-  const sessionID = `ses_trace_${Date.now()}`
-  const taskID = `task_trace_${Date.now()}`
-  const parentSessionID = `ses_parent_${Date.now()}`
+  const sessionID = Identifier.create("session", false)
+  const taskID = Identifier.create("task", false)
+  const parentSessionID = Identifier.create("session", false)
 
   await Instance.provide({
     directory: tempDir,
@@ -54,7 +56,7 @@ test("helper trace writes explicit non-session domain instead of fake session bu
   process.env.OPENCORVUS_AGENT_TRACE_DIR = tempDir
   const { AgentTrace } = await import("../../src/trace")
   const agentName = `helper_${Date.now()}`
-  const taskID = `task_trace_${Date.now()}`
+  const taskID = Identifier.create("task", false)
 
   await Instance.provide({
     directory: tempDir,
@@ -76,7 +78,7 @@ test("helper trace writes explicit non-session domain instead of fake session bu
       expect(events[0]?.domain).toBe(AgentTrace.NON_SESSION_DOMAIN)
       expect(events[0]?.sessionID).toBeUndefined()
 
-      const indexPath = path.join(tempDir, "tasks", taskID, "trace", "_index.jsonl")
+      const indexPath = ProjectRuntimePaths.taskAbsoluteFromRuntimeRoot(tempDir, taskID, "trace", "_index.jsonl")
       const index = fs.readFileSync(indexPath, "utf8").trim().split("\n").map((line) => JSON.parse(line))
       expect(index).toContainEqual(
         expect.objectContaining({
@@ -95,7 +97,7 @@ test("trace validates ambient SessionContext session bucket", async () => {
   process.env.OPENCORVUS_AGENT_TRACE_DIR = tempDir
   const { AgentTrace } = await import("../../src/trace")
   const { SessionContext } = await import("../../src/session/context")
-  const sessionID = `ses_context_${Date.now()}`
+  const sessionID = Identifier.create("session", false)
   const session = {
     id: sessionID,
     slug: "context",
@@ -106,7 +108,7 @@ test("trace validates ambient SessionContext session bucket", async () => {
     kind: "assistant",
     time: { created: 1, updated: 1 },
   } satisfies Session.Info
-  const taskID = `task_trace_${Date.now()}`
+  const taskID = Identifier.create("task", false)
 
   await Instance.provide({
     directory: tempDir,
@@ -132,7 +134,7 @@ test("trace validates ambient SessionContext session bucket", async () => {
       expect(() =>
         SessionContext.provide(session, () => {
           AgentTrace.recordLLMRequest({
-            sessionID: `ses_other_${Date.now()}`,
+            sessionID: Identifier.create("session", false),
             taskID,
             agentName: "assistant",
             model: { providerID: "test", modelID: "model" },

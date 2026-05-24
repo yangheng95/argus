@@ -56,6 +56,7 @@ import { Log } from "@/util/log"
 import { Instance } from "@/project/instance"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { SessionObservability } from "@/util/session-observability"
+import { Identifier } from "@/id/id"
 import type { AgentReport } from "@/agent/report"
 
 const log = Log.create({ service: "agent-trace" })
@@ -233,11 +234,24 @@ export namespace AgentTrace {
   function findSessionTraceFile(sessionID: string): string | undefined {
     const taskRoot = path.join(traceDir(), "tasks")
     try {
-      for (const taskID of fs.readdirSync(taskRoot)) {
-        const candidate = path.join(taskRoot, taskID, "sessions", sessionID, "trace.jsonl")
-        if (fs.existsSync(candidate)) return candidate
+      for (const taskSegment of fs.readdirSync(taskRoot)) {
+        const sessionSegments = [
+          Identifier.shortPath(sessionID),
+          sessionID,
+        ]
+        for (const sessionSegment of [...new Set(sessionSegments)]) {
+          const candidate = path.join(taskRoot, taskSegment, "sessions", sessionSegment, "trace.jsonl")
+          if (fs.existsSync(candidate)) return candidate
+        }
       }
     } catch {}
+    return undefined
+  }
+
+  function firstExisting(candidates: string[]): string | undefined {
+    for (const candidate of candidates) {
+      if (fs.existsSync(candidate)) return candidate
+    }
     return undefined
   }
 
@@ -367,7 +381,8 @@ export namespace AgentTrace {
    *  there at write time, including llm_request and terminal reports. */
   export function readTaskEvents(taskID: string): TraceEvent[] {
     if (!taskID) return []
-    const file = taskFile(taskID)
+    const file = firstExisting(ProjectRuntimePaths.taskAbsoluteReadCandidatesFromRuntimeRoot(traceDir(), taskID, "trace.jsonl"))
+      ?? taskFile(taskID)
     let raw: string
     try {
       raw = fs.readFileSync(file, { encoding: "utf-8" })
@@ -382,7 +397,8 @@ export namespace AgentTrace {
   /** Read every event for a non-session domain bucket. */
   export function readDomainEvents(domain: string, taskID?: string): TraceEvent[] {
     if (!domain || !taskID) return []
-    const file = domainFile(taskID, domain)
+    const file = firstExisting(ProjectRuntimePaths.taskAbsoluteReadCandidatesFromRuntimeRoot(traceDir(), taskID, "trace", `_${domain}.jsonl`))
+      ?? domainFile(taskID, domain)
     let raw: string
     try {
       raw = fs.readFileSync(file, { encoding: "utf-8" })
