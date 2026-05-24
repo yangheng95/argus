@@ -123,3 +123,31 @@
   width: calc(14px * var(--ui-scale));
   height: calc(14px * var(--ui-scale));
 }
+
+.app-notification__details {
+  display: grid;
+  gap: calc(4px * var(--ui-scale));
+  margin-top: calc(4px * var(--ui-scale));
+}
+
+.app-notification__details-actions {
+  display: flex;
+  gap: calc(6px * var(--ui-scale));
+  align-items: center;
+}
+
+.app-notification__details-body {
+  max-height: calc(220px * var(--ui-scale));
+  overflow: auto;
+  margin: 0;
+  padding: calc(8px * var(--ui-scale));
+  background: var(--subtle-2);
+  border: var(--oc-border-width) solid var(--border);
+  border-radius: var(--oc-radius-soft);
+  font-family: var(--ui-font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-size: var(--ui-font-meta);
+  line-height: 1.4;
+  color: var(--text-strong);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

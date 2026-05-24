@@ -12,10 +12,10 @@
 // the business reconnect policy: reopen from the last consumed persisted
 // sequence without full-hydrating the already mounted conversation.
 
-import { clearEventQueue, setSseConnected } from "../store/messages"
+import { clearEventQueue, messageStore, setSseConnected } from "../store/messages"
 import { boardStore, loadTasks } from "../store/board"
 import { routeSSEEvent, handleEventStreamEvent, handleTaskListNotification } from "./events"
-import { recomputeBadgeFromTasks } from "./notify"
+import { recomputeBadgeFromTasks, notifyError, formatErrorDetails } from "./notify"
 import { getHostTransport, type StreamHandle } from "./host-transport"
 import {
   recordConversationRecoveryAborted,
@@ -25,10 +25,13 @@ import {
 } from "./refresh-diagnostics"
 import { settingsStore } from "../store/settings"
 import { createVisibilityInterval, type VisibilityInterval } from "../utils/visibility-interval"
-import { selectedLiveReplayQuery } from "./selected-stream-cursor"
+import { mergeLatestConversationTail } from "./conversation"
+import { resetSelectedLiveCursor, selectedLiveReplayQuery } from "./selected-stream-cursor"
 
 let sseHandle: StreamHandle | null = null
 let sseRetryTimer: any = null
+let sseWatchdogTimer: ReturnType<typeof setTimeout> | null = null
+let sseTaskID = ""
 
 // audit-2026-04-29 W2-V10 — reconnect tick extracted so the regression
 // test can exercise restart failures and task-switch races directly, without
@@ -39,9 +42,15 @@ export interface SseReconnectDeps {
   after: number
   currentTaskID: () => string
   resumeAfter: () => number
-  restart: (taskID: string, after: number) => void
+  restart: (taskID: string, after: number, options?: SseStartOptions) => void
   scheduleRetry: (fn: () => void, ms: number) => void
   retryDelayMs: number
+  replayLive?: boolean
+  afterRestart?: (taskID: string, sequence: number) => void
+}
+
+export interface SseStartOptions {
+  replayLive?: boolean
 }
 
 export async function performSseReconnect(deps: SseReconnectDeps): Promise<void> {
@@ -66,7 +75,12 @@ export async function performSseReconnect(deps: SseReconnectDeps): Promise<void>
     return
   }
   try {
-    deps.restart(deps.taskID, nextSequence)
+    deps.restart(
+      deps.taskID,
+      nextSequence,
+      deps.replayLive === false ? { replayLive: false } : undefined,
+    )
+    deps.afterRestart?.(deps.taskID, nextSequence)
   } catch (err) {
     recordConversationRecoveryFailed({
       channel: "sse-reconnect",
@@ -77,6 +91,16 @@ export async function performSseReconnect(deps: SseReconnectDeps): Promise<void>
       error: err instanceof Error ? err.message : String(err || ""),
     })
     console.error("[sse] reconnect restart failed for task", deps.taskID, err)
+    // Persistent toast (id'd per task) keeps the operator aware that the
+    // live stream is currently broken even after we schedule a retry.
+    // Re-firing with the same id collapses repeated retries into one row.
+    notifyError({
+      id: `sse:reconnect-failed:${deps.taskID}`,
+      title: "Live stream disconnected",
+      message: `Failed to reopen the SSE stream for task ${deps.taskID}. Retrying in ${Math.round(deps.retryDelayMs / 1000)}s.`,
+      details: formatErrorDetails(err),
+      taskID: deps.taskID,
+    })
     if (deps.currentTaskID() !== deps.taskID) return
     deps.scheduleRetry(() => {
       if (deps.currentTaskID() !== deps.taskID) return
@@ -95,28 +119,95 @@ export async function performSseReconnect(deps: SseReconnectDeps): Promise<void>
 }
 
 const RECONNECT_DELAY_MS = 3000
+export const SELECTED_TASK_STREAM_STALL_MS = 35_000
 
-export function startSSE(taskID: string, after = 0) {
+function clearSelectedStreamWatchdog(): void {
+  if (!sseWatchdogTimer) return
+  clearTimeout(sseWatchdogTimer)
+  sseWatchdogTimer = null
+}
+
+export function isSelectedTaskSSEConnected(taskID: string): boolean {
+  return !!taskID && sseTaskID === taskID && sseHandle !== null && messageStore.sseConnected
+}
+
+export function startSSE(taskID: string, after = 0, options: SseStartOptions = {}) {
   stopSSE()
   setSseConnected(false)
+  sseTaskID = taskID
+  const replayLive = options.replayLive !== false
 
   // Initial task restore now hydrates board + messages + persisted task events
   // through /task/:id/conversation before opening SSE. That means this stream
   // can safely resume from the last persisted protocol_event sequence instead
   // of replaying from zero on every reconnect.
   const transport = getHostTransport()
-  let fatalClose = false
+  let liveReplayExpiredClose = false
+  const armWatchdog = (handle: StreamHandle) => {
+    clearSelectedStreamWatchdog()
+    sseWatchdogTimer = setTimeout(() => {
+      if (handle !== sseHandle) return
+      console.warn("[sse] selected task stream stalled; reconnecting", { taskID })
+      setSseConnected(false)
+      handle.close()
+      if (handle === sseHandle) handleClosed("watchdog-stalled")
+    }, SELECTED_TASK_STREAM_STALL_MS)
+    if (typeof (sseWatchdogTimer as { unref?: () => void }).unref === "function") {
+      ;(sseWatchdogTimer as { unref?: () => void }).unref!()
+    }
+  }
+  const handleClosed = (_reason: string) => {
+    // Permanent close: re-open from the current selected task sequence.
+    // Same-task full hydrate is intentionally forbidden here because it
+    // clears cardTreeStore and produces the visible scroll jump.
+    if (handle !== sseHandle) return
+    clearSelectedStreamWatchdog()
+    setSseConnected(false)
+    sseHandle = null
+    sseTaskID = ""
+    if (sseRetryTimer) clearTimeout(sseRetryTimer)
+    sseRetryTimer = setTimeout(() => {
+      sseRetryTimer = null
+      void performSseReconnect({
+        taskID,
+        after,
+        currentTaskID: () => boardStore.selectedTaskID,
+        resumeAfter: () => boardStore.taskSequence,
+        restart: startSSE,
+        replayLive: liveReplayExpiredClose ? false : replayLive,
+        afterRestart: liveReplayExpiredClose
+          ? (restartedTaskID) => {
+            void mergeLatestConversationTail(restartedTaskID).catch((error) => {
+              if (error instanceof DOMException && error.name === "AbortError") return
+              console.error("[sse] live replay gap tail merge failed", error)
+            })
+          }
+          : undefined,
+        scheduleRetry: (fn, ms) => {
+          sseRetryTimer = setTimeout(() => {
+            sseRetryTimer = null
+            fn()
+          }, ms)
+        },
+        retryDelayMs: RECONNECT_DELAY_MS,
+      })
+    }, RECONNECT_DELAY_MS)
+  }
   const handle = transport.openStream(
     {
       path: `task/${encodeURIComponent(taskID)}/events`,
       query: {
         ...(after > 0 ? { after: String(after) } : {}),
-        ...selectedLiveReplayQuery(),
+        ...selectedLiveReplayQuery({ include: replayLive }),
       },
     },
     {
-      onOpen: () => setSseConnected(true),
+      onOpen: () => {
+        setSseConnected(true)
+        armWatchdog(handle)
+      },
       onEvent: (data) => {
+        armWatchdog(handle)
         // Per 07-panel-reactivity.md constraint 1 and root CLAUDE.md rule 1:
         // tree-writer's `let it crash` is meaningless if onEvent silently
         // swallows the throw. Split: JSON.parse error → benign skip;
@@ -129,7 +220,10 @@ export function startSSE(taskID: string, after = 0) {
           return
         }
         if (event.type === "task.heartbeat" || event.type === "task.connected") return
-        if (event.type === "task.live_replay_expired") fatalClose = true
+        if (event.type === "task.live_replay_expired") {
+          liveReplayExpiredClose = true
+          resetSelectedLiveCursor()
+        }
         try {
           const handled = routeSSEEvent(event)
           if (!handled) {
@@ -137,6 +231,15 @@ export function startSSE(taskID: string, after = 0) {
           }
         } catch (err) {
           console.error("[sse] dispatch error for event", event?.type, err, event)
+          notifyError({
+            id: `sse:dispatch-error:${taskID}`,
+            title: "Conversation event failed to render",
+            message: `Event type ${event?.type || "<unknown>"} threw while updating the conversation panel.`,
+            details: `${formatErrorDetails(err)}\n\nevent payload:\n${(() => {
+              try { return JSON.stringify(event, null, 2) } catch { return String(event) }
+            })()}`,
+            taskID,
+          })
         }
       },
       onError: () => {
@@ -150,35 +253,12 @@ export function startSSE(taskID: string, after = 0) {
         handle.close()
       },
       onClose: (_reason) => {
-        // Permanent close: re-open from the current selected task sequence.
-        // Same-task full hydrate is intentionally forbidden here because it
-        // clears cardTreeStore and produces the visible scroll jump.
-        if (handle !== sseHandle) return
-        setSseConnected(false)
-        sseHandle = null
-        if (fatalClose) return
-        if (sseRetryTimer) clearTimeout(sseRetryTimer)
-        sseRetryTimer = setTimeout(() => {
-          sseRetryTimer = null
-          void performSseReconnect({
-            taskID,
-            after,
-            currentTaskID: () => boardStore.selectedTaskID,
-            resumeAfter: () => boardStore.taskSequence,
-            restart: startSSE,
-            scheduleRetry: (fn, ms) => {
-              sseRetryTimer = setTimeout(() => {
-                sseRetryTimer = null
-                fn()
-              }, ms)
-            },
-            retryDelayMs: RECONNECT_DELAY_MS,
-          })
-        }, RECONNECT_DELAY_MS)
+        handleClosed(_reason)
       },
     },
   )
   sseHandle = handle
+  armWatchdog(handle)
 }
 
 export function stopSSE() {
@@ -186,8 +266,10 @@ export function stopSSE() {
     clearTimeout(sseRetryTimer)
     sseRetryTimer = null
   }
+  clearSelectedStreamWatchdog()
   const handle = sseHandle
   sseHandle = null
+  sseTaskID = ""
   if (handle) handle.close()
   setSseConnected(false)
   clearEventQueue()
@@ -252,6 +334,14 @@ export function startTaskListSSE() {
           handleTaskListNotification(event)
         } catch (err) {
           console.error("[task-list-sse] dispatch error for event", event?.type, err, event)
+          notifyError({
+            id: "task-list-sse:dispatch-error",
+            title: "Task list event failed to render",
+            message: `Event type ${event?.type || "<unknown>"} threw while updating the task list.`,
+            details: `${formatErrorDetails(err)}\n\nevent payload:\n${(() => {
+              try { return JSON.stringify(event, null, 2) } catch { return String(event) }
+            })()}`,
+          })
         }
       },
       onClose: (_reason) => {

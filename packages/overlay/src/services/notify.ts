@@ -52,6 +52,10 @@ export interface AppNotificationInput {
   tone: AppNotificationTone;
   title: string;
   message?: string;
+  // Full diagnostic payload (stack, HTTP body, JSON dump). Rendered in a
+  // collapsible <pre> below the message so the visible toast stays compact
+  // while the operator can still copy the underlying failure verbatim.
+  details?: string;
   taskID?: string;
   timeoutMs?: number;
 }
@@ -61,6 +65,7 @@ export interface AppNotificationItem {
   tone: AppNotificationTone;
   title: string;
   message: string;
+  details: string;
   taskID: string;
   time: number;
   timeoutMs: number;
@@ -108,9 +113,44 @@ function nextNotificationID(): string {
 }
 
 function defaultTimeout(tone: AppNotificationTone): number {
-  if (tone === "progress") return 0;
-  if (tone === "error" || tone === "warning") return 8000;
+  // error/warning toasts now persist until the operator dismisses them.
+  // Auto-dismiss after a few seconds hid actionable diagnostics (e.g. an
+  // import that failed while the user was looking elsewhere).
+  if (tone === "progress" || tone === "error" || tone === "warning") return 0;
   return 5000;
+}
+
+/**
+ * Render a thrown value into a multi-line detail string suitable for the
+ * notification's collapsible details block. Pulls stack, and — when the
+ * error is an ApiError — the HTTP status / path / response body.
+ */
+export function formatErrorDetails(err: unknown): string {
+  if (err == null) return "";
+  if (err instanceof Error) {
+    const parts: string[] = [];
+    const meta = err as Error & { status?: unknown; path?: unknown; body?: unknown };
+    if (typeof meta.status === "number" && typeof meta.path === "string") {
+      parts.push(`HTTP ${meta.status} ${meta.path}`);
+    }
+    parts.push(err.stack || `${err.name}: ${err.message}`);
+    if (meta.body !== undefined) {
+      let rendered: string;
+      try {
+        rendered = typeof meta.body === "string" ? meta.body : JSON.stringify(meta.body, null, 2);
+      } catch {
+        rendered = String(meta.body);
+      }
+      if (rendered) parts.push(`response body:\n${rendered}`);
+    }
+    return parts.join("\n\n");
+  }
+  if (typeof err === "string") return err;
+  try {
+    return JSON.stringify(err, null, 2);
+  } catch {
+    return String(err);
+  }
 }
 
 function armDismissTimer(id: string, timeoutMs: number): void {
@@ -129,6 +169,7 @@ export function showNotification(input: AppNotificationInput): string {
     tone: input.tone,
     title: input.title,
     message: input.message || "",
+    details: input.details || "",
     taskID: input.taskID || "",
     timeoutMs: input.timeoutMs ?? defaultTimeout(input.tone),
     time: Date.now(),

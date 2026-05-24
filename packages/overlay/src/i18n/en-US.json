@@ -804,6 +804,8 @@
   "progress.summary": "{{passed}}/{{total}} passed · {{failed}} failed · {{running}} running",
   "progress.expand_more": "+{{count}} more",
   "progress.collapse": "Collapse",
+  "progress.expand_card": "Expand goals",
+  "progress.collapse_card": "Collapse goals",
   "gateway.open": "Gateway",
   "gateway.open_title": "Switch to the Gateway control room",
   "gateway.title": "Gateway",

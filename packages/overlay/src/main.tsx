@@ -65,7 +65,7 @@ import { stopTimers } from "./services/sync"
 import { nativeOpen, nativePrompt } from "./utils/native"
 import { eventClosest } from "./utils/dom-utils"
 import { shortPath } from "./utils/tool"
-import { notifyError, notifyWarning } from "./services/notify"
+import { notifyError, notifyWarning, formatErrorDetails } from "./services/notify"
 import {
   applyDirectory,
   browseDirectory,
@@ -622,6 +622,13 @@ if (sidebarTitleEl) {
           id: "system:reset-db",
           title: t("sidebar.reset_db_failed_title"),
           message: t("sidebar.reset_db_failed", { error: text }),
+          details: `POST global/db/reset → HTTP ${res.status}\n\n${
+            typeof res.body === "string"
+              ? res.body
+              : (() => {
+                  try { return JSON.stringify(res.body, null, 2) } catch { return String(res.body) }
+                })()
+          }`,
         })
         return
       }
@@ -631,6 +638,7 @@ if (sidebarTitleEl) {
         id: "system:reset-db",
         title: t("sidebar.reset_db_failed_title"),
         message: t("sidebar.reset_db_failed", { error: err instanceof Error ? err.message : String(err) }),
+        details: formatErrorDetails(err),
       })
     }
   })
