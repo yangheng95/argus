@@ -49,6 +49,7 @@ export {
   type IntegrityReviewScaleSignals,
   type SpecSnapshotLineage,
 } from "./replay-context"
+export { composeIntegrityFeedbackForBuild, type BuildIntegrityFeedback } from "./build-feedback"
 export {
   getSharedIntegrityPromptBudget,
   renderSharedIntegrityPromptContext,

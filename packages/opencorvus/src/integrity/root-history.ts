@@ -7,8 +7,14 @@ export type IntegrityRootSymptomVariation = {
   attemptNumber: number
   artifactID: string
   findingID: string
+  rootID: string
+  canonicalLabel: string
+  severity: "blocking" | "advisory"
   title: string
   description: string
+  repair: string
+  evidence: string[]
+  reviewerIDs: string[]
   filePaths: string[]
   requirementIDs: string[]
   specIDs: string[]
@@ -36,6 +42,7 @@ export type IntegrityRootHistory = {
   attempts: IntegrityRootHistoryAttempt[]
   persistentBlockingRoots: IntegrityPersistentRoot[]
   latestBlockingFindings: IntegrityRootSymptomVariation[]
+  latestAdvisoryFindings: IntegrityRootSymptomVariation[]
 }
 
 type RootDraft = {
@@ -49,6 +56,7 @@ type RootDraft = {
 
 type FindingSummary = IntegrityPriorAttemptSummary["blockingFindings"][number] & {
   severity: "blocking" | "advisory"
+  evidence: string[]
   reviewerIDs: string[]
 }
 
@@ -71,6 +79,7 @@ export function buildIntegrityRootHistory(input: {
   const chronologicalRows = rows.slice().reverse()
   const rootDrafts = new Map<string, RootDraft>()
   const attempts: IntegrityRootHistoryAttempt[] = []
+  let latestAdvisoryFindings: IntegrityRootSymptomVariation[] = []
 
   chronologicalRows.forEach((row, index) => {
     const payload = asRecord(row.payload)
@@ -78,21 +87,20 @@ export function buildIntegrityRootHistory(input: {
     const reviewers = reviewerSummaries(payload.reviewers)
     const findings = findingSummaries(payload.findings)
     const blockingFindings = findings.filter((finding) => finding.severity === "blocking")
+    const advisoryFindings = findings.filter((finding) => finding.severity === "advisory")
     const blockingRootLabels: string[] = []
 
     for (const finding of blockingFindings) {
       const rootKey = rootGroupingKey(finding)
       const canonicalLabel = canonicalRootLabel(finding)
-      const variation: IntegrityRootSymptomVariation = {
+      const variation = symptomVariation({
+        finding,
+        rootKey,
+        canonicalLabel,
         attemptNumber,
         artifactID: row.artifactID,
-        findingID: finding.id,
-        title: finding.title,
-        description: finding.description,
-        filePaths: finding.filePaths,
-        requirementIDs: finding.requirementIDs,
-        specIDs: finding.specIDs,
-      }
+        reviewers,
+      })
       const draft = rootDrafts.get(rootKey) ?? {
         key: rootKey,
         canonicalLabel,
@@ -109,6 +117,16 @@ export function buildIntegrityRootHistory(input: {
       rootDrafts.set(rootKey, draft)
       if (!blockingRootLabels.includes(draft.canonicalLabel)) blockingRootLabels.push(draft.canonicalLabel)
     }
+    latestAdvisoryFindings = advisoryFindings.map((finding) =>
+      symptomVariation({
+        finding,
+        rootKey: rootGroupingKey(finding),
+        canonicalLabel: canonicalRootLabel(finding),
+        attemptNumber,
+        artifactID: row.artifactID,
+        reviewers,
+      }),
+    )
 
     attempts.push({
       attemptNumber,
@@ -162,6 +180,39 @@ export function buildIntegrityRootHistory(input: {
     attempts,
     persistentBlockingRoots,
     latestBlockingFindings,
+    latestAdvisoryFindings,
+  }
+}
+
+function symptomVariation(input: {
+  finding: FindingSummary
+  rootKey: string
+  canonicalLabel: string
+  attemptNumber: number
+  artifactID: string
+  reviewers: Array<{ reviewerID: string; scope: string; verdict?: string }>
+}): IntegrityRootSymptomVariation {
+  const reviewerIDs = [
+    ...new Set([
+      ...input.finding.reviewerIDs,
+      ...input.reviewers.map((reviewer) => reviewer.reviewerID).filter((reviewerID) => reviewerID.length > 0),
+    ]),
+  ].sort()
+  return {
+    attemptNumber: input.attemptNumber,
+    artifactID: input.artifactID,
+    findingID: input.finding.id,
+    rootID: `root_${hashRootKey(input.rootKey)}`,
+    canonicalLabel: input.canonicalLabel,
+    severity: input.finding.severity,
+    title: input.finding.title,
+    description: input.finding.description,
+    repair: input.finding.repair,
+    evidence: input.finding.evidence,
+    reviewerIDs,
+    filePaths: input.finding.filePaths,
+    requirementIDs: input.finding.requirementIDs,
+    specIDs: input.finding.specIDs,
   }
 }
 
@@ -419,6 +470,7 @@ function findingSummaries(value: unknown): FindingSummary[] {
         title: stringFrom(finding.title) ?? "Untitled finding",
         description: stringFrom(finding.description) ?? "",
         repair: stringFrom(finding.repair) ?? "",
+        evidence: stringArray(finding.evidence),
         filePaths: stringArray(finding.filePaths),
         requirementIDs: stringArray(finding.requirementIDs),
         specIDs: stringArray(finding.specIDs),
