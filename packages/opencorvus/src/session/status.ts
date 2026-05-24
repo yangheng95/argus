@@ -1,6 +1,7 @@
 import { BusEvent } from "@/bus/bus-event"
 import { Bus } from "@/bus"
 import z from "zod"
+import type { StreamActivityGate } from "@/util/stream-activity"
 
 export namespace SessionStatus {
   /**
@@ -65,6 +66,7 @@ export namespace SessionStatus {
   // duplicate-terminal shape audit §11.3 documented at bench lines
   // 19182-19183. One process = one map = one latch (rule 8 single source).
   const state: Record<string, Info> = {}
+  const activityGates: Record<string, StreamActivityGate> = {}
 
   export function get(sessionID: string) {
     return (
@@ -76,6 +78,23 @@ export namespace SessionStatus {
 
   export function list() {
     return state
+  }
+
+  export function registerActivityGate(sessionID: string, gate: StreamActivityGate): () => void {
+    activityGates[sessionID] = gate
+    return () => {
+      if (activityGates[sessionID] === gate) {
+        delete activityGates[sessionID]
+      }
+    }
+  }
+
+  export function getActivity(sessionID: string) {
+    const gate = activityGates[sessionID]
+    if (!gate) return undefined
+    return {
+      last_activity_at: gate.lastActivityAt(),
+    }
   }
 
   export function set(sessionID: string, status: Info) {
@@ -113,6 +132,7 @@ export namespace SessionStatus {
     // terminal calls could both pass the line-97 check before either wrote.
     if (status.type === "idle") {
       delete state[sessionID]
+      delete activityGates[sessionID]
     } else {
       state[sessionID] = status
     }

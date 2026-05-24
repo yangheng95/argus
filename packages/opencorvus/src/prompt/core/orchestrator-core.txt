@@ -322,9 +322,14 @@ contract.
 - `fail_task` / `cancel_task` / `retry_task` / `inject_operator_message` /
   `steer_subagent` / `recover_stale_build`: lifecycle/control tools; use only
   from direct evidence. `inject_operator_message` records the operator note and
-  wakes this orchestrator only; it does not resume build/executor children. If a
-  build child is stale with open ownership, call `recover_stale_build`, then
-  `build({ goalID, request })` if the goal still needs work. If the same stale build evidence repeats after recovery, stop the recover/build loop and choose
+  wakes this orchestrator only; it does not resume build/executor children.
+  `steer_subagent` injects a steering message for non-build children; for a
+  live-owned build child it returns an activity snapshot. Use high `age_ms` plus
+  non-progressing status to decide between waiting and `recover_stale_build`.
+  The snapshot never replaces `recover_stale_build` for cancelling stale
+  ownership. If a build child is stale with open ownership, call
+  `recover_stale_build`, then `build({ goalID, request })` if the goal still
+  needs work. If the same stale build evidence repeats after recovery, stop the recover/build loop and choose
   `fail_task`, `question`, `modify_goal`, or `architect` from the evidence.
 - `bash`: git-only merge-state repair shell against the project root. Single
   `git <subcommand>` invocations only — schema rejects non-git commands,

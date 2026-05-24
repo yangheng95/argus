@@ -1525,6 +1525,7 @@ async function runWithExternalProviderImpl(args: {
     signal: args.signal,
     label: `build-agent-external:${args.executor}:${session.id}`,
   })
+  const unregisterActivityGate = SessionStatus.registerActivityGate(session.id, gate)
   const runInput = {
     sessionID: session.id,
     model: resolveOption(options.model),
@@ -1743,6 +1744,7 @@ async function runWithExternalProviderImpl(args: {
   } catch (err) {
     errored = err instanceof Error ? err.message : String(err)
   } finally {
+    unregisterActivityGate()
     gate.dispose()
   }
 

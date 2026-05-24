@@ -27,6 +27,7 @@
  */
 
 import { Identifier } from "@/id/id"
+import { SessionStatus } from "@/session/status"
 import { withStreamActivity, type StreamActivityGate } from "@/util/stream-activity"
 import { APICallError } from "ai"
 import { ProviderError } from "@/provider/error"
@@ -566,6 +567,7 @@ export async function withLLMActivity<T>(
       // the compiler narrows `idleGate` to `never` when it sees `idleGate?.x`
       // because no in-scope assignment widens it back.
       const idleHolder: { gate: StreamActivityGate | null } = { gate: null }
+      let unregisterActivityGate: (() => void) | undefined
       const idleCtrl = new AbortController()
 
       const composed = AbortSignal.any([
@@ -579,11 +581,18 @@ export async function withLLMActivity<T>(
         if (idleHolder.gate) return
         const gate = withStreamActivity({ idleMs: policy.idleMs, label: `act:${id}` })
         idleHolder.gate = gate
+        unregisterActivityGate = SessionStatus.registerActivityGate(ctx.sessionID, gate)
         gate.signal.addEventListener("abort", () => {
           if (gate.timedOut() && !idleCtrl.signal.aborted) {
             idleCtrl.abort(makeAbortReason("idle", `LLMActivity idle > ${policy.idleMs}ms`))
           }
         })
+      }
+      const disposeIdleGate = () => {
+        unregisterActivityGate?.()
+        unregisterActivityGate = undefined
+        idleHolder.gate?.dispose()
+        idleHolder.gate = null
       }
 
       const run: LLMActivityRun = {
@@ -621,7 +630,7 @@ export async function withLLMActivity<T>(
         const value = await attemptFn(run)
         closePauseWindow()
         clearTimeout(firstByteTimer)
-        idleHolder.gate?.dispose()
+        disposeIdleGate()
         if (externalProxy.signal.aborted || external.aborted) {
           emitTerminal("aborted", "external_abort", externalProxy.signal.reason)
           throw new LLMActivityAbortedError(attempt, externalProxy.signal.reason)
@@ -638,7 +647,7 @@ export async function withLLMActivity<T>(
       } catch (err) {
         closePauseWindow()
         clearTimeout(firstByteTimer)
-        idleHolder.gate?.dispose()
+        disposeIdleGate()
 
         // External takes priority over everything else — even if the throw
         // looks like a different class, an external abort means the caller

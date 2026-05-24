@@ -57,6 +57,7 @@ import { EngineService } from "../../src/task-api"
 import { Question } from "../../src/question"
 import { deriveTaskStatus } from "../../src/engine/task-status"
 import { SessionStatus } from "../../src/session/status"
+import { withStreamActivity } from "../../src/util/stream-activity"
 import {
   createOrchestratorToolOwnershipPayload,
   insertOrchestratorToolOwnershipArtifact,
@@ -977,7 +978,7 @@ describe("orchestrator tools", () => {
     })
   })
 
-  test("steer_subagent refuses generic direct reply for a build goal_run session", async () => {
+  test("steer_subagent returns an activity snapshot for a live-owned build goal_run session", async () => {
     const now = Date.now()
     const stamp = now.toString(16)
     const projectID = `project_steer_goal_run_${stamp}`
@@ -1017,6 +1018,26 @@ describe("orchestrator tools", () => {
           goalID,
           sessionID: child.id,
         })
+        const ownershipPayload = createOrchestratorToolOwnershipPayload({
+          taskID,
+          orchestratorSessionID: parent.id,
+          orchestratorMessageID: `msg_steer_goal_run_${stamp}`,
+          toolCallID: `cal_steer_goal_run_${stamp}`,
+          toolPartID: `prt_steer_goal_run_${stamp}`,
+          childSessionID: child.id,
+          scope: "goal",
+          goalID,
+          goalRunID,
+        })
+        insertOrchestratorToolOwnershipArtifact({
+          taskID,
+          goalRunID,
+          label: "tool-ownership-start",
+          payload: ownershipPayload,
+        })
+        SessionStatus.set(child.id, { type: "streaming" })
+        const gate = withStreamActivity({ idleMs: 60_000, label: "test-steer-goal-run" })
+        const unregisterActivityGate = SessionStatus.registerActivityGate(child.id, gate)
         const replySpy = spyOn(EngineService, "replyAgentSession").mockResolvedValue({
           task_id: taskID,
           session_id: child.id,
@@ -1028,23 +1049,34 @@ describe("orchestrator tools", () => {
           signal: new AbortController().signal,
         })
 
-        const result = await tools.steer_subagent.execute(
-          {
-            session_id: goalRunID,
-            message: "汇报当前实现进度",
-            reason: "live goal_run should resolve to the child build session",
-          },
-          buildToolOptions(),
-        )
+        try {
+          const result = await tools.steer_subagent.execute(
+            {
+              session_id: goalRunID,
+              message: "汇报当前实现进度",
+              reason: "live goal_run should resolve to the child build session",
+            },
+            buildToolOptions(),
+          )
 
-        expect(replySpy).not.toHaveBeenCalled()
-        expect(result).toContain("Error: steer_subagent cannot generically steer build session")
-        expect(result).toContain(child.id)
+          expect(replySpy).not.toHaveBeenCalled()
+          expect(result).toContain("Activity snapshot for live-owned build child session")
+          expect(result).toContain(`child_session_id=${child.id}`)
+          expect(result).toContain("status=streaming")
+          expect(result).toMatch(/last_activity_at=\d+/)
+          expect(result).toMatch(/age_ms=\d+/)
+          expect(result).toContain(`owner_tool_part=${ownershipPayload.tool_part_id}`)
+          expect(result).toContain(`owner_ownership=${ownershipPayload.ownership_id}`)
+          expect(result).toContain(`goal_run=${goalRunID}`)
+        } finally {
+          unregisterActivityGate()
+          gate.dispose()
+        }
       },
     })
   })
 
-  test("steer_subagent refuses generic direct reply for a build goal_id target", async () => {
+  test("steer_subagent returns an activity snapshot for a live-owned build goal_id target", async () => {
     const now = Date.now()
     const stamp = now.toString(16)
     const projectID = `project_steer_goal_id_${stamp}`
@@ -1084,6 +1116,26 @@ describe("orchestrator tools", () => {
           goalID,
           sessionID: child.id,
         })
+        const ownershipPayload = createOrchestratorToolOwnershipPayload({
+          taskID,
+          orchestratorSessionID: parent.id,
+          orchestratorMessageID: `msg_steer_goal_id_${stamp}`,
+          toolCallID: `cal_steer_goal_id_${stamp}`,
+          toolPartID: `prt_steer_goal_id_${stamp}`,
+          childSessionID: child.id,
+          scope: "goal",
+          goalID,
+          goalRunID,
+        })
+        insertOrchestratorToolOwnershipArtifact({
+          taskID,
+          goalRunID,
+          label: "tool-ownership-start",
+          payload: ownershipPayload,
+        })
+        SessionStatus.set(child.id, { type: "streaming" })
+        const gate = withStreamActivity({ idleMs: 60_000, label: "test-steer-goal-id" })
+        const unregisterActivityGate = SessionStatus.registerActivityGate(child.id, gate)
         const replySpy = spyOn(EngineService, "replyAgentSession").mockResolvedValue({
           task_id: taskID,
           session_id: child.id,
@@ -1095,19 +1147,152 @@ describe("orchestrator tools", () => {
           signal: new AbortController().signal,
         })
 
+        try {
+          const result = await tools.steer_subagent.execute(
+            {
+              goal_id: goalID,
+              message: "汇报当前测试进度",
+              reason: "goal_id should resolve to the latest live child session",
+            },
+            buildToolOptions(),
+          )
+
+          expect(replySpy).not.toHaveBeenCalled()
+          expect(result).toContain("Activity snapshot for live-owned build child session")
+          expect(result).toContain(`child_session_id=${child.id}`)
+          expect(result).toContain("status=streaming")
+          expect(result).toMatch(/last_activity_at=\d+/)
+          expect(result).toMatch(/age_ms=\d+/)
+          expect(result).toContain(`owner_tool_part=${ownershipPayload.tool_part_id}`)
+          expect(result).toContain(`owner_ownership=${ownershipPayload.ownership_id}`)
+          expect(result).toContain(`goal_run=${goalRunID}`)
+        } finally {
+          unregisterActivityGate()
+          gate.dispose()
+        }
+      },
+    })
+  })
+
+  test("steer_subagent still injects steering for a non-build child session", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_steer_non_build_${stamp}`
+    const taskID = `tsk_steer_non_build_${stamp}`
+    const goalID = `gol_steer_non_build_${stamp}`
+
+    insertWorkflowTaskWithGoal({
+      projectID,
+      taskID,
+      goalID,
+      sessionID: null,
+      worktree: tmp.path,
+      projectName: "steer non build",
+      taskTitle: "steer non build",
+      request: "Steer a normal child session",
+      goalTitle: "Non-build child",
+      goalSlug: "non-build-child",
+      objective: "Confirm non-build steer_subagent still replies",
+      now,
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "steer non-build parent" })
+        const child = await Session.create({
+          kind: "integrity",
+          parentID: parent.id,
+          title: "steer non-build child",
+        })
+        Database.use((db) =>
+          db.update(EngineTaskTable).set({ session_id: parent.id }).where(eq(EngineTaskTable.id, taskID)).run(),
+        )
+        const replySpy = spyOn(EngineService, "replyAgentSession").mockResolvedValue({
+          task_id: taskID,
+          session_id: child.id,
+          message_id: "msg_reply_non_build",
+        } as Awaited<ReturnType<typeof EngineService.replyAgentSession>>)
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
         const result = await tools.steer_subagent.execute(
           {
-            goal_id: goalID,
-            message: "汇报当前测试进度",
-            reason: "goal_id should resolve to the latest live child session",
+            session_id: child.id,
+            message: "report current status",
+            reason: "confirm non-build steering remains an injected reply",
           },
           buildToolOptions(),
         )
 
-        void goalRunID
+        expect(replySpy).toHaveBeenCalledWith(taskID, child.id, { message: "report current status" })
+        expect(result).toContain(`Steered sub-agent session ${child.id}`)
+        expect(result).toContain("message=msg_reply_non_build")
+      },
+    })
+  })
+
+  test("steer_subagent keeps the fresh-build guidance for a build session with no live owner", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_steer_build_no_owner_${stamp}`
+    const taskID = `tsk_steer_build_no_owner_${stamp}`
+    const goalID = `gol_steer_build_no_owner_${stamp}`
+
+    insertWorkflowTaskWithGoal({
+      projectID,
+      taskID,
+      goalID,
+      sessionID: null,
+      worktree: tmp.path,
+      projectName: "steer build no owner",
+      taskTitle: "steer build no owner",
+      request: "Keep no-owner build steering structural",
+      goalTitle: "No-owner build child",
+      goalSlug: "no-owner-build-child",
+      objective: "Confirm no-owner build steer_subagent remains a fresh build instruction",
+      now,
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "steer no-owner parent" })
+        const child = await Session.create({
+          kind: "build",
+          parentID: parent.id,
+          goalID,
+          title: "steer no-owner child",
+        })
+        Database.use((db) =>
+          db.update(EngineTaskTable).set({ session_id: parent.id }).where(eq(EngineTaskTable.id, taskID)).run(),
+        )
+        const replySpy = spyOn(EngineService, "replyAgentSession").mockResolvedValue({
+          task_id: taskID,
+          session_id: child.id,
+          message_id: "msg_reply_no_owner",
+        } as Awaited<ReturnType<typeof EngineService.replyAgentSession>>)
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const result = await tools.steer_subagent.execute(
+          {
+            session_id: child.id,
+            message: "report current status",
+            reason: "no live owner means this should remain a build retry instruction",
+          },
+          buildToolOptions(),
+        )
+
         expect(replySpy).not.toHaveBeenCalled()
-        expect(result).toContain("Error: steer_subagent cannot generically steer build session")
-        expect(result).toContain(child.id)
+        expect(result).toContain(`Error: steer_subagent cannot generically steer build session ${child.id}.`)
+        expect(result).toContain("Use build({ goalID, request }) for a fresh stage-attempt runtime contract instead.")
       },
     })
   })
