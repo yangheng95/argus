@@ -129,6 +129,7 @@ export namespace CompactionHandoff {
     "List all user-authored messages that appear in the compacted history in userMessages, preserving their intent and important wording.",
     'Every non-empty line inside <required-file-evidence> MUST appear verbatim in files[].path or evidence[].value with kind="file".',
     "The <runtime-error-context> block lists internal error tokens collected during this session. For each distinct root cause, write at least one errorsAndBlockers entry in your own words with concrete issue, evidence, and nextAction. Verbatim echo of the internal tokens is not required.",
+    "If the StructuredOutput tool returns an error, read the error text, fix the handoff object, and call StructuredOutput again.",
     "Use empty arrays only when no evidence exists for that field.",
     'Generic placeholders such as "continue implementation" are invalid.',
     "Do not treat assistant reasoning, tool-choice indecision, or checkpoint prompts as user requirements.",

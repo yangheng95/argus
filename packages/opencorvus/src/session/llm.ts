@@ -2,7 +2,7 @@ import { Provider } from "@/provider/provider"
 import { ProviderLLM } from "@/provider/llm"
 import { Log } from "@/util/log"
 import { Bus } from "@/bus"
-import type { ModelMessage, Tool, ToolSet } from "ai"
+import type { ModelMessage, StopCondition, Tool, ToolSet } from "ai"
 // Use the wrapped streamText from @/llm/api — its Proxy returns
 // `abortableIterable(fullStream, composed)`, which is the only thing that
 // rescues a Bun-fetch-backed reader.read() from parking forever when the
@@ -43,6 +43,7 @@ export namespace LLM {
     small?: boolean
     tools: Record<string, Tool>
     retries?: number
+    stopWhen?: StopCondition<ToolSet> | Array<StopCondition<ToolSet>>
     /**
      * Tool-call enforcement passed straight through to streamText. The
      * three string forms ('auto' / 'required' / 'none') are the soft
@@ -265,6 +266,7 @@ export namespace LLM {
       timeoutMs: false,
       headers: requestHeaders,
       maxRetries: input.retries ?? 0,
+      stopWhen: input.stopWhen,
       messages: requestMessages,
       model: ProviderLLM.wrapModel(language, input.model, options),
       experimental_telemetry: {

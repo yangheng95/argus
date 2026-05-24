@@ -24,6 +24,7 @@ import { Snapshot } from "@/snapshot"
 import { Database, and, desc, eq, sql } from "@/storage/db"
 import { EngineArtifactTable } from "@/engine/engine.sql"
 import type { ModelMessage } from "ai"
+import { stepCountIs } from "ai"
 import { SessionLoop } from "./loop"
 
 export namespace SessionCompaction {
@@ -307,7 +308,7 @@ export namespace SessionCompaction {
     return {
       type: "json_schema" as const,
       schema: z.toJSONSchema(CompactionHandoff.Schema) as Record<string, any>,
-      retryCount: 0,
+      retryCount: 2,
     }
   }
 
@@ -592,6 +593,7 @@ export namespace SessionCompaction {
       messages: providerMessages,
       model,
       toolChoice: SessionLoop.structuredOutputToolChoice(format, model),
+      stopWhen: stepCountIs(format.retryCount + 1),
     })
 
     if (result === "compact") {
