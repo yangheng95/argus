@@ -224,6 +224,49 @@ export namespace CompactionHandoff {
     }
   }
 
+  export function completeRuntimeEvidence(
+    handoff: Info,
+    requirements: Pick<EvidenceRequirements, "patchFiles" | "errorNames">,
+  ): Info {
+    const reportedFileEvidence = new Set([
+      ...handoff.files.map((item) => item.path),
+      ...handoff.evidence.filter((item) => item.kind === "file").map((item) => item.value),
+    ])
+    const missingFiles = requirements.patchFiles.filter((item) => !reportedFileEvidence.has(item))
+
+    const reportedErrorEvidence = new Set([
+      ...handoff.evidence.filter((item) => item.kind === "error").map((item) => item.value),
+      ...handoff.errorsAndBlockers.flatMap((item) => [item.issue, item.evidence]),
+    ])
+    const missingErrors = requirements.errorNames.filter((item) => !reportedErrorEvidence.has(item))
+
+    if (missingFiles.length === 0 && missingErrors.length === 0) return handoff
+
+    return {
+      ...handoff,
+      files: [
+        ...handoff.files,
+        ...missingFiles.map(
+          (path): z.infer<typeof File> => ({
+            path,
+            status: "referenced",
+            detail: "Host-derived required file evidence from compacted runtime context",
+          }),
+        ),
+      ],
+      errorsAndBlockers: [
+        ...handoff.errorsAndBlockers,
+        ...missingErrors.map(
+          (name): z.infer<typeof ErrorOrBlocker> => ({
+            issue: `Runtime error evidence during compacted session: ${name}`,
+            evidence: name,
+            nextAction: "Inspect this runtime error evidence before claiming the task is complete",
+          }),
+        ),
+      ],
+    }
+  }
+
   export function isValidStructured(value: unknown): value is Info {
     return Schema.safeParse(value).success
   }
