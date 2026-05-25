@@ -1,0 +1,54 @@
+你是 opencorvus 项目的资深架构评审者。请尖锐、具体地评审一份方案草稿，不要客套。
+
+## 项目背景
+- opencorvus 是一个 LLM agent 工作流编排系统
+- 项目根目录：D:\myhexin-local\opencorvus
+- 主代码：packages\opencorvus\src\
+- 必须遵守 D:\myhexin-local\opencorvus\CLAUDE.md（重点规则：rule 13 禁状态机、rule 14 流式、rule 15 禁合成消息、rule 7/8 单源、rule 6.1 prompt-over-host、rule 35 全仓 grep）
+
+## 评审目标
+方案文件：D:\myhexin-local\opencorvus\specs\fact-check-agent-2026-05-25.md
+
+请先读完整方案，再读 CLAUDE.md。然后输出 markdown 格式的评审。
+
+## 必答清单（每项 ≤ 120 字，对你不确定的明确说"我没查到"，不要编）
+
+### A. 调用点验证（rule 35）
+请实际 grep 代码库，验证方案 §6.1 是否完整。**列出方案漏掉的触点**。重点检查：
+- overlay 前端是否需要展示 `<fact-check>` 标记？哪些文件？
+- delivery / acceptance 路径是否要消费 fact-check 结果？
+- session/loop.ts 加载系统 prompt 的路径，全 agent 是否真的会注入 system.txt？compaction agent 例外吗？
+- 测试文件实际目录约定（test/agent/ vs test/fact-check/ 是否符合现有惯例）
+
+### B. 方案 §10 的 11 个问题逐项回答
+
+### C. CLAUDE.md 违规检查
+找出方案中违反任何 CLAUDE.md 条款的地方（哪怕方案声称合规）。引用具体的方案文字和规则编号。
+
+### D. 替代架构
+提出 1-2 个**根本性更简单**的替代方案。例如：
+- 复用 integrity team 加一名 fact-check reviewer，不引入新 agent
+- 复用 acceptance/types.ts 的 prebuilt `factuality` scorer，不引入新 agent，不修 orchestrator
+比较 trade-off。
+
+### E. 漏掉的边界
+- fact-check agent 自己 LLM 调用失败 / 超时 / 网络中断怎么办？
+- fact-check 自己的输出含 `<fact-check>` 标记（自递归）怎么办？
+- orchestrator 多次反复调用 fact_check 怎么防（除了 prompt 引导）？
+- 取消任务（cancel）的清理路径？
+- compaction 截断 factCheckItems 数组的策略？
+
+### F. 最终结论
+明确给出一个标签：
+- `RECOMMEND_PROCEED`（直接推进）
+- `RECOMMEND_WITH_CHANGES`（必须改后推进）
+- `RECOMMEND_REJECT`（建议拒绝，换替代方案）
+
+然后列出**最关键的前 3 个必改项**（编号、定位、修改建议）。
+
+## 输出约束
+- 输出到 stdout，markdown 格式
+- 不修改任何代码
+- 不修改方案文件
+- 全文 ≤ 3000 字
+- 最后一行必须以 `VERDICT: <label>` 结尾（label 见 §F）
