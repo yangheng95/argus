@@ -42,6 +42,7 @@ import { muteAISdkWarnings } from "@/runtime/shims"
 import { Config } from "@/config/config"
 import { decodeDataUrlBase64 } from "./text-mime"
 import { normalizeToolInput } from "./tool-input-norm"
+import { toolFailureCauseFromUnknown } from "./tool-failure-cause"
 
 muteAISdkWarnings()
 
@@ -1113,11 +1114,23 @@ export namespace SessionLoop {
       } satisfies Message.ToolPart)
     }
     if (!result) {
+      if (!fail) {
+        throw new Error("Task tool returned no result without throwing")
+      }
       await Session.updatePart({
         ...part,
         state: {
           status: "error",
-          error: fail ? `Tool execution failed: ${fail.message}` : "Tool execution failed",
+          failure: toolFailureCauseFromUnknown({
+            error: fail,
+            originSite: "session.loop.task-tool",
+            classification: "tool-execution",
+            kind: "tool-execute-error",
+            data: {
+              toolName: "task",
+              callID: part.callID,
+            },
+          }),
           time: {
             start: part.state.status === "running" ? part.state.time.start : Date.now(),
             end: Date.now(),

@@ -123,7 +123,10 @@ export async function extractGoalReport(sessionID: string): Promise<GoalReport.R
       if (part.type !== "tool") continue
       if (part.tool !== "goal_report") continue
       if (part.state.status !== "completed") continue
-      calls.push(part.state.input)
+      if (!part.state.input || typeof part.state.input !== "object" || Array.isArray(part.state.input)) {
+        throw new Error(`extractGoalReport: goal_report input for ${part.callID} was not an object`)
+      }
+      calls.push(part.state.input as Record<string, unknown>)
     }
   }
   if (calls.length === 0) {

@@ -39,6 +39,7 @@ import {
   type EngineArtifactKind,
 } from "./engine.sql"
 import { persistEvidence } from "@/verification/persist"
+import type { ToolFailureCause } from "@/session/tool-failure-cause"
 import type { SpecSnapshotLineage } from "@/integrity/replay-lineage"
 import { LIVE_GOAL_RUN_STATUSES } from "./catalog"
 import { EngineProtocol } from "./protocol"
@@ -2236,6 +2237,45 @@ export function recordOrchestratorStreamError(input: {
           reason: input.reason,
           errorName: input.errorName,
           sessionID: input.sessionID,
+        },
+        time_created: input.now,
+        time_updated: input.now,
+      })
+      .run(),
+  )
+}
+
+export function recordToolExecuteError(input: {
+  taskID: string
+  runID?: string | null
+  goalRunID?: string | null
+  sessionID: string
+  messageID: string
+  partID: string
+  toolName: string
+  callID: string
+  input: unknown
+  failure: ToolFailureCause
+  now: number
+}) {
+  return Database.use((db) =>
+    db
+      .insert(EngineArtifactTable)
+      .values({
+        id: Identifier.ascending("artifact"),
+        task_id: input.taskID,
+        run_id: input.runID ?? null,
+        goal_run_id: input.goalRunID ?? null,
+        kind: "tool-execute-error",
+        label: "tool-execute-error",
+        payload: {
+          sessionID: input.sessionID,
+          messageID: input.messageID,
+          partID: input.partID,
+          toolName: input.toolName,
+          callID: input.callID,
+          input: input.input,
+          failure: input.failure,
         },
         time_created: input.now,
         time_updated: input.now,

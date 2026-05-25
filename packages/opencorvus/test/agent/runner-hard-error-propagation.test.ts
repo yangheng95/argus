@@ -202,4 +202,40 @@ describe("buildHardErrorFromFinalMessage", () => {
     })
     expect(result!.message).toContain("requirements-strict")
   })
+
+  test("part-level ToolFailureCause becomes AgentRunError", () => {
+    const result = buildHardErrorFromFinalMessage({
+      kind: KIND,
+      agentName: "intent-analysis",
+      finalMessage: {
+        info: { role: "assistant" },
+        parts: [
+          {
+            id: "part_tool_error",
+            sessionID: "ses_tool_error",
+            messageID: "msg_tool_error",
+            type: "tool",
+            callID: "call_tool_error",
+            tool: "submit_intent",
+            state: {
+              status: "error",
+              input: [],
+              failure: {
+                kind: "tool-input-invalid",
+                name: "InvalidToolInputError",
+                message: "Expected object, received array",
+                originSite: "session.processor.tool-error",
+                classification: "tool-input-invalid",
+              },
+              time: { start: 1, end: 2 },
+            },
+          },
+        ],
+      },
+    })
+    expect(result).toBeInstanceOf(AgentRunError)
+    expect(result!.nonRetryable).toBe(true)
+    expect(result!.message).toContain("Tool error during intent-analysis")
+    expect(result!.message).toContain("Expected object, received array")
+  })
 })

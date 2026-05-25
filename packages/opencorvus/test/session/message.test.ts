@@ -242,7 +242,7 @@ describe("session.message.toModelMessage", () => {
   test("projects patch evidence with bounded text while preserving stored file list", async () => {
     const userID = "m-user"
     const assistantID = "m-assistant"
-    const files = Array.from({ length: 4_000 }, (_, i) => `/repo/file-${i.toString().padStart(4, "0")}.ts`)
+    const files = Array.from({ length: 4_000 }, (_, i) => `file-${i.toString().padStart(4, "0")}.ts`)
 
     const patchPart: Message.PatchPart = {
       ...basePart(assistantID, "patch-1"),
@@ -267,14 +267,20 @@ describe("session.message.toModelMessage", () => {
       },
     ]
 
-    const output = await Message.toModelMessages(input, model)
-    const assistant = output.at(-1)
-    expect(patchPart.files.length).toBe(4_000)
-    expect(JSON.stringify(assistant)).toContain("Patch evidence truncated: 4000 files total, 3960 omitted")
-    expect(JSON.stringify(assistant)).toContain("/repo/file-0000.ts")
-    expect(JSON.stringify(assistant)).toContain("/repo/file-3999.ts")
-    expect(JSON.stringify(assistant)).not.toContain("/repo/file-1000.ts")
-    expect(JSON.stringify(assistant).length).toBeLessThan(3_000)
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const output = await Message.toModelMessages(input, model)
+        const assistant = output.at(-1)
+        expect(patchPart.files.length).toBe(4_000)
+        expect(JSON.stringify(assistant)).toContain("Patch evidence truncated: 4000 files total, 3960 omitted")
+        expect(JSON.stringify(assistant)).toContain("file-0000.ts")
+        expect(JSON.stringify(assistant)).toContain("file-3999.ts")
+        expect(JSON.stringify(assistant)).not.toContain("file-1000.ts")
+        expect(JSON.stringify(assistant).length).toBeLessThan(3_000)
+      },
+    })
   })
 
   test("converts user text/file parts and injects compaction/subtask prompts", async () => {
@@ -794,7 +800,13 @@ describe("session.message.toModelMessage", () => {
             state: {
               status: "error",
               input: { cmd: "ls" },
-              error: "nope",
+              failure: {
+                kind: "tool-execute-error",
+                name: "Error",
+                message: "nope",
+                originSite: "test",
+                classification: "tool-execution",
+              },
               time: { start: 0, end: 1 },
               metadata: {},
             },
@@ -829,7 +841,7 @@ describe("session.message.toModelMessage", () => {
             type: "tool-result",
             toolCallId: "call-1",
             toolName: "bash",
-            output: { type: "error-text", value: "nope" },
+            output: { type: "error-text", value: "tool-execute-error/Error at test: nope" },
             providerOptions: { openai: { tool: "meta" } },
           },
         ],
@@ -986,7 +998,7 @@ describe("session.message.toModelMessage", () => {
     expect(await Message.toModelMessages(input, model)).toStrictEqual([])
   })
 
-  test("converts pending/running tool calls to error results to prevent dangling tool_use", async () => {
+  test("converts tool failures with structured cause text and original input", async () => {
     const userID = "m-user"
     const assistantID = "m-assistant"
 
@@ -1005,25 +1017,21 @@ describe("session.message.toModelMessage", () => {
         info: assistantInfo(assistantID, userID),
         parts: [
           {
-            ...basePart(assistantID, "a1"),
-            type: "tool",
-            callID: "call-pending",
-            tool: "bash",
-            state: {
-              status: "pending",
-              input: { cmd: "ls" },
-              raw: "",
-            },
-          },
-          {
             ...basePart(assistantID, "a2"),
             type: "tool",
             callID: "call-running",
             tool: "read",
             state: {
-              status: "running",
-              input: { path: "/tmp" },
-              time: { start: 0 },
+              status: "error",
+              input: [],
+              failure: {
+                kind: "tool-input-invalid",
+                name: "InvalidToolInputError",
+                message: "Expected object, received array",
+                originSite: "session.processor.tool-error",
+                classification: "tool-input-invalid",
+              },
+              time: { start: 0, end: 1 },
             },
           },
         ] as Message.Part[],
@@ -1042,16 +1050,9 @@ describe("session.message.toModelMessage", () => {
         content: [
           {
             type: "tool-call",
-            toolCallId: "call-pending",
-            toolName: "bash",
-            input: { cmd: "ls" },
-            providerExecuted: undefined,
-          },
-          {
-            type: "tool-call",
             toolCallId: "call-running",
             toolName: "read",
-            input: { path: "/tmp" },
+            input: [],
             providerExecuted: undefined,
           },
         ],
@@ -1061,15 +1062,12 @@ describe("session.message.toModelMessage", () => {
         content: [
           {
             type: "tool-result",
-            toolCallId: "call-pending",
-            toolName: "bash",
-            output: { type: "error-text", value: "[Tool execution was interrupted]" },
-          },
-          {
-            type: "tool-result",
             toolCallId: "call-running",
             toolName: "read",
-            output: { type: "error-text", value: "[Tool execution was interrupted]" },
+            output: {
+              type: "error-text",
+              value: "tool-input-invalid/InvalidToolInputError at session.processor.tool-error: Expected object, received array",
+            },
           },
         ],
       },

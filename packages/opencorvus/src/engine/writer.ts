@@ -27,6 +27,7 @@ import { EngineProtocol } from "./protocol"
 import { Message } from "@/session/message"
 import { Session } from "@/session"
 import { SessionPrompt } from "@/session/prompt"
+import { toolFailureCauseFromUnknown } from "@/session/tool-failure-cause"
 import {
   updateExecutorSessionStatus,
   updateExecutorSessionStatusByID,
@@ -288,9 +289,19 @@ async function abortOpenToolParts(sessionID: string, reason: string): Promise<nu
       await Session.updatePart({
         ...part,
         state: {
-          ...part.state,
           status: "error",
-          error: reason,
+          input: part.state.input,
+          failure: toolFailureCauseFromUnknown({
+            error: reason,
+            originSite: "engine.writer.abort-open-tool-parts",
+            classification: "tool-execution",
+            kind: "tool-execute-error",
+            data: {
+              sessionID,
+              toolName: part.tool,
+              callID: part.callID,
+            },
+          }),
           time: {
             start,
             end: now,

@@ -55,6 +55,7 @@ import {
   buildHardErrorFromFinalMessage,
   messageHasInformationMissing,
   extractInformationMissingBlock,
+  toolErrorPartsFromFinalMessage,
 } from "@/agent/runner"
 import { Session } from "@/session"
 import { SessionPrompt } from "@/session/prompt"
@@ -63,6 +64,7 @@ import { Bus } from "@/bus"
 import { Instance } from "@/project/instance"
 import { Identifier } from "@/id/id"
 import { Log } from "@/util/log"
+import { recordToolExecuteError } from "@/engine/persist"
 import { toolGuard } from "@/util/tool-guard"
 import { createOrchestratorTools } from "./tools"
 import { SubAgentProtocol } from "@/agent/sub-agent-protocol"
@@ -546,7 +548,23 @@ export namespace Orchestrator {
           agentName: "orchestrator",
           finalMessage,
         })
-        if (hardError) throw hardError
+        if (hardError) {
+          const now = Date.now()
+          for (const part of toolErrorPartsFromFinalMessage(finalMessage)) {
+            recordToolExecuteError({
+              taskID,
+              sessionID: part.sessionID,
+              messageID: part.messageID,
+              partID: part.id,
+              toolName: part.tool,
+              callID: part.callID,
+              input: part.state.input,
+              failure: (part.state as Message.ToolStateError).failure,
+              now,
+            })
+          }
+          throw hardError
+        }
       }
 
       if (AgentTrace.isEnabled()) {

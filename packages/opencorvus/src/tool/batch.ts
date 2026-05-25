@@ -32,6 +32,7 @@ export const BatchTool = Tool.define("batch", async () => {
     async execute(params, ctx) {
       const { Session } = await import("../session")
       const { Identifier } = await import("../id/id")
+      const { toolFailureCauseFromUnknown } = await import("../session/tool-failure-cause")
 
       const toolCalls = params.tool_calls.slice(0, 25)
       const discardedCalls = params.tool_calls.slice(25)
@@ -117,7 +118,13 @@ export const BatchTool = Tool.define("batch", async () => {
             state: {
               status: "error",
               input: call.parameters,
-              error: error instanceof Error ? error.message : String(error),
+              failure: toolFailureCauseFromUnknown({
+                error,
+                originSite: "tool.batch.execute",
+                classification: "tool-execution",
+                kind: "tool-execute-error",
+                data: { toolName: call.tool, callID: partID },
+              }),
               time: {
                 start: callStartTime,
                 end: Date.now(),
@@ -145,7 +152,13 @@ export const BatchTool = Tool.define("batch", async () => {
           state: {
             status: "error",
             input: call.parameters,
-            error: "Maximum of 25 tools allowed in batch",
+            failure: toolFailureCauseFromUnknown({
+              error: "Maximum of 25 tools allowed in batch",
+              originSite: "tool.batch.discarded-call",
+              classification: "tool-execution",
+              kind: "tool-execute-error",
+              data: { toolName: call.tool, callID: partID },
+            }),
             time: { start: now, end: now },
           },
         })

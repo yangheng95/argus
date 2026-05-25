@@ -1,4 +1,4 @@
-import { Message } from "./message"
+﻿import { Message } from "./message"
 import { Log } from "@/util/log"
 import { Identifier } from "@/id/id"
 import { Session } from "."
@@ -24,11 +24,18 @@ import {
   type LLMActivityEvent,
   type LLMActivityPolicy,
 } from "@/llm/activity"
-import { normalizeToolInput } from "./tool-input-norm"
+import { toolFailureCauseFromUnknown, type ToolFailureCause } from "./tool-failure-cause"
 
 export namespace SessionProcessor {
   const DOOM_LOOP_THRESHOLD = 3
   const log = Log.create({ service: "session.processor" })
+
+  export class ProcessorLostPartsError extends Error {
+    constructor(public readonly partIDs: string[]) {
+      super(`SessionProcessor lost open tool parts: ${partIDs.join(", ")}`)
+      this.name = "ProcessorLostPartsError"
+    }
+  }
 
   export type Info = Awaited<ReturnType<typeof create>>
   export type Result = Awaited<ReturnType<Info["process"]>>
@@ -42,8 +49,8 @@ export namespace SessionProcessor {
     const toolcalls: Record<string, Message.ToolPart> = {}
 
     // Resolve the part that already represents `toolCallID` on this assistant
-    // message. `toolcalls` only tracks IN-FLIGHT calls — the tool-result /
-    // tool-error cases delete the entry once a call finishes — so a
+    // message. `toolcalls` only tracks IN-FLIGHT calls â€” the tool-result /
+    // tool-error cases delete the entry once a call finishes â€” so a
     // re-delivered tool-call (a provider re-emit, or a retried stream
     // replaying the same response with identical `call_*` ids) finds nothing
     // there, and the handlers below would mint a SECOND part for the same
@@ -57,6 +64,37 @@ export namespace SessionProcessor {
       if (warm) return warm
       const parts = await Message.parts(input.assistantMessage.id)
       return parts.find((p): p is Message.ToolPart => p.type === "tool" && p.callID === toolCallID)
+    }
+
+    const openToolParts = async (): Promise<Message.ToolPart[]> => {
+      const parts = await Message.parts(input.assistantMessage.id)
+      return parts.filter(
+        (part): part is Message.ToolPart =>
+          part.type === "tool" && (part.state.status === "pending" || part.state.status === "running"),
+      )
+    }
+
+    const failToolPart = async (part: Message.ToolPart, failure: ToolFailureCause): Promise<void> => {
+      const start = part.state.status === "running" ? part.state.time.start : Date.now()
+      await Session.updatePart({
+        ...part,
+        state: {
+          status: "error",
+          input: part.state.input,
+          failure,
+          time: {
+            start,
+            end: Date.now(),
+          },
+        },
+      })
+      delete toolcalls[part.callID]
+    }
+
+    const failOpenToolParts = async (failure: ToolFailureCause): Promise<void> => {
+      for (const part of await openToolParts()) {
+        await failToolPart(part, failure)
+      }
     }
 
     let snapshot: string | undefined
@@ -104,11 +142,11 @@ export namespace SessionProcessor {
         needsCompaction = false
         const shouldBreak = (await Config.get()).experimental?.continue_loop_on_deny !== true
         const idleMs = (await EngineConfig.get()).activity.session_llm_idle_ms
-        // Activity owns retries (rule 8 — single source). The runner's
+        // Activity owns retries (rule 8 â€” single source). The runner's
         // classifier + per-class maxRetries + totalMs deadline replace the
         // session/retry.ts SessionRetry namespace and the outer while-true
         // loop that used to wrap this block. Retries are now invisible to
-        // the processor — withLLMActivity rethrows LLMActivityError only
+        // the processor â€” withLLMActivity rethrows LLMActivityError only
         // after exhausting its retry budget OR hitting a non-retryable class
         // (client_4xx, request_timeout, payload_too_large, context_overflow).
         // Aborts from the external signal raise LLMActivityAbortedError,
@@ -292,21 +330,6 @@ export namespace SessionProcessor {
                   // pause is scoped to known stream-pause semantics (tool-call
                   // boundary), not a generic disable switch.
                   run.pause("tool-call")
-                  // AI SDK contract: tool-call.input is `unknown` — providers
-                  // may stream JSON-stringified args. Normalize at this single
-                  // boundary so the schema record invariant holds. Symmetric
-                  // with the outbound site (message.ts safeToolInput) — see
-                  // tool-input-norm.ts header for the original incident.
-                  const norm = normalizeToolInput(value.input)
-                  if (!norm.ok) {
-                    log.warn("malformed tool-call input — skipping part write", {
-                      tool: value.toolName,
-                      callID: value.toolCallId,
-                      reason: norm.reason,
-                    })
-                    break
-                  }
-                  const normalizedInput = norm.value
                   const match = await priorToolPart(value.toolCallId)
                   const part = await Session.updatePart({
                     ...(match ?? {
@@ -320,7 +343,7 @@ export namespace SessionProcessor {
                     tool: value.toolName,
                     state: {
                       status: "running",
-                      input: normalizedInput,
+                      input: value.input,
                       time: {
                         start:
                           match?.state.status === "running"
@@ -342,7 +365,7 @@ export namespace SessionProcessor {
                         p.type === "tool" &&
                         p.tool === value.toolName &&
                         p.state.status !== "pending" &&
-                        JSON.stringify(p.state.input) === JSON.stringify(normalizedInput),
+                        JSON.stringify(p.state.input) === JSON.stringify(value.input),
                     )
 
                   if (exactMatch) {
@@ -353,7 +376,7 @@ export namespace SessionProcessor {
                       sessionID: input.assistantMessage.sessionID,
                       metadata: {
                         tool: value.toolName,
-                        input: normalizedInput,
+                        input: value.input,
                       },
                       always: [value.toolName],
                       ruleset: agent.permission ?? [],
@@ -368,13 +391,8 @@ export namespace SessionProcessor {
                   // run unconditionally before the match check.
                   run.resume("tool-call")
                   const match = toolcalls[value.toolCallId]
-                  if (match && match.state.status === "running") {
-                    // tool-result echoes the original input; normalize against
-                    // the same provider quirk as tool-call. On normalize fail,
-                    // the authoritative input lives on the matched ToolPart
-                    // (already validated when written at tool-call time).
-                    const echo = normalizeToolInput(value.input)
-                    const resolvedInput = echo.ok ? echo.value : match.state.input
+                  if (match && (match.state.status === "running" || match.state.status === "pending")) {
+                    const resolvedInput = value.input === undefined ? match.state.input : value.input
                     await Session.updatePart({
                       ...match,
                       state: {
@@ -384,7 +402,7 @@ export namespace SessionProcessor {
                         metadata: value.output.metadata,
                         title: value.output.title,
                         time: {
-                          start: match.state.time.start,
+                          start: match.state.status === "running" ? match.state.time.start : Date.now(),
                           end: Date.now(),
                         },
                         attachments: value.output.attachments,
@@ -400,17 +418,29 @@ export namespace SessionProcessor {
                   // tool-call window just like results).
                   run.resume("tool-call")
                   const match = toolcalls[value.toolCallId]
-                  if (match && match.state.status === "running") {
-                    const echo = normalizeToolInput(value.input)
-                    const resolvedInput = echo.ok ? echo.value : match.state.input
+                  if (match && (match.state.status === "running" || match.state.status === "pending")) {
+                    const resolvedInput = value.input === undefined ? match.state.input : value.input
+                    const classification = (value as { dynamic?: boolean }).dynamic === true
+                      ? "tool-input-invalid"
+                      : "tool-execution"
+                    const failure = toolFailureCauseFromUnknown({
+                      error: value.error,
+                      originSite: "session.processor.tool-error",
+                      classification,
+                      kind: classification,
+                      data: {
+                        toolCallId: value.toolCallId,
+                        toolName: value.toolName,
+                      },
+                    })
                     await Session.updatePart({
                       ...match,
                       state: {
                         status: "error",
                         input: resolvedInput,
-                        error: (value.error as any).toString(),
+                        failure,
                         time: {
-                          start: match.state.time.start,
+                          start: match.state.status === "running" ? match.state.time.start : Date.now(),
                           end: Date.now(),
                         },
                       },
@@ -589,6 +619,15 @@ export namespace SessionProcessor {
               stack: JSON.stringify((original as { stack?: unknown })?.stack),
             })
             const error = Message.fromError(original, { providerID: input.model.providerID })
+            await failOpenToolParts(toolFailureCauseFromUnknown({
+              error: original,
+              originSite: "session.processor.catch",
+              classification: "llm-activity",
+              kind: "llm-activity-error",
+              data: {
+                sessionID: input.sessionID,
+              },
+            }))
             if (Message.ContextOverflowError.isInstance(error)) {
               needsCompaction = true
             } else {
@@ -623,22 +662,9 @@ export namespace SessionProcessor {
             }
             snapshot = undefined
           }
-          const p = await Message.parts(input.assistantMessage.id)
-          for (const part of p) {
-            if (part.type === "tool" && part.state.status !== "completed" && part.state.status !== "error") {
-              await Session.updatePart({
-                ...part,
-                state: {
-                  ...part.state,
-                  status: "error",
-                  error: "Tool execution aborted",
-                  time: {
-                    start: Date.now(),
-                    end: Date.now(),
-                  },
-                },
-              })
-            }
+          const lostParts = await openToolParts()
+          if (lostParts.length > 0) {
+            throw new ProcessorLostPartsError(lostParts.map((part) => part.id))
           }
           input.assistantMessage.time.completed = Date.now()
           await Session.updateMessage(input.assistantMessage)

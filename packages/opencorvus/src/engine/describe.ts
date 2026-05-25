@@ -27,6 +27,7 @@ import { readIterationHistory as readHistory } from "@/metrics/store"
 import { deriveGoalStatus } from "./goal-status"
 import { isRunOrphan } from "./orphan"
 import { deriveTaskStatus } from "./task-status"
+import { ToolFailureCause, renderToolFailureCause } from "@/session/tool-failure-cause"
 
 /** Derived goal status enum — returned by goalStatusByID / statusOf.
  *  The column it used to shadow (engine_goal.status) is gone; this is
@@ -43,6 +44,7 @@ import {
   listGoalRunsByGoal,
   listGoals,
   listOrchestratorStreamErrorArtifacts,
+  listToolExecuteErrorArtifacts,
   type GoalRow,
   type GoalRunRow,
   type TaskRow,
@@ -53,6 +55,7 @@ import {
  *  entries add no decision value once the LLM has seen the trend. */
 const STREAM_FAILURE_PROMPT_CAP = 5
 const AGENT_FAILURE_PROMPT_CAP = 5
+const TOOL_EXECUTE_FAILURE_PROMPT_CAP = 5
 
 const LIVE_STATES = new Set(["queued", "accepted", "planning", "running", "evaluating", "blocked"])
 const TERMINAL_OK_STATES = new Set(["completed"])
@@ -127,6 +130,17 @@ export interface StreamFailureDesc {
   session_id?: string
 }
 
+export interface ToolExecuteFailureDesc {
+  artifact_id: string
+  time_created: number
+  session_id?: string
+  message_id?: string
+  part_id?: string
+  tool_name: string
+  call_id: string
+  reason: string
+}
+
 export interface AgentFailureDesc {
   decision_id: string
   time_created: number
@@ -188,6 +202,7 @@ export interface TaskDesc {
    *  (rule 13). Empty / undefined when the task has had no stream failures
    *  since `task.time_started`. */
   recent_stream_failures?: StreamFailureDesc[]
+  recent_tool_execute_failures?: ToolExecuteFailureDesc[]
   /** Recent sub-agent session failures recorded in decision_log phase
    *  "agent_error". These are the model-visible counterpart to overlay red
    *  session cards: provider quota, network, schema, and terminal session
@@ -429,6 +444,29 @@ async function describeTaskFromRow(task: TaskRow): Promise<TaskDesc> {
     }
   })
 
+  const toolExecuteRows = listToolExecuteErrorArtifacts(task.id, streamErrorFloor, TOOL_EXECUTE_FAILURE_PROMPT_CAP)
+  const recentToolExecuteFailures: ToolExecuteFailureDesc[] = toolExecuteRows.map((row) => {
+    const payload = (row.payload ?? {}) as {
+      sessionID?: string
+      messageID?: string
+      partID?: string
+      toolName?: string
+      callID?: string
+      failure?: unknown
+    }
+    const parsedFailure = ToolFailureCause.safeParse(payload.failure)
+    return {
+      artifact_id: row.id,
+      time_created: row.time_created,
+      session_id: typeof payload.sessionID === "string" ? payload.sessionID : undefined,
+      message_id: typeof payload.messageID === "string" ? payload.messageID : undefined,
+      part_id: typeof payload.partID === "string" ? payload.partID : undefined,
+      tool_name: typeof payload.toolName === "string" ? payload.toolName : "",
+      call_id: typeof payload.callID === "string" ? payload.callID : "",
+      reason: parsedFailure.success ? renderToolFailureCause(parsedFailure.data) : "",
+    }
+  })
+
   const agentFailureFloor = task.time_started ?? task.time_created
   const recentAgentFailures: AgentFailureDesc[] = createDecisionLog(task.id)
     .readByPhase("agent_error")
@@ -472,6 +510,7 @@ async function describeTaskFromRow(task: TaskRow): Promise<TaskDesc> {
     },
     recent_verdict: verdict,
     recent_stream_failures: recentStreamFailures.length > 0 ? recentStreamFailures : undefined,
+    recent_tool_execute_failures: recentToolExecuteFailures.length > 0 ? recentToolExecuteFailures : undefined,
     recent_agent_failures: recentAgentFailures.length > 0 ? recentAgentFailures : undefined,
     iterations_count: history.length,
   }
@@ -705,6 +744,20 @@ export function renderTaskDescription(desc: TaskDesc, options: { autoIteration?:
         `Treat quota/network/provider failures as failed attempts of the current task or goal; ` +
         `retry the same work, change provider, or fail_task from this evidence. ` +
         `Do not infer a fresh task start merely because the latest user wake repeats the original request.`,
+    )
+  }
+
+  if (desc.recent_tool_execute_failures && desc.recent_tool_execute_failures.length > 0) {
+    lines.push("")
+    lines.push(`## Recent tool execution failures (${desc.recent_tool_execute_failures.length})`)
+    for (const f of desc.recent_tool_execute_failures) {
+      const ts = new Date(f.time_created).toISOString()
+      const session = f.session_id ? ` session=${f.session_id}` : ""
+      lines.push(`- ${ts} ${f.tool_name} call=${f.call_id}${session}: ${truncate(f.reason, 360)}`)
+    }
+    lines.push(
+      `These entries are persisted tool-call failures with the original ToolFailureCause. ` +
+        `Use them as audit evidence for retry_task, restart_from_stage, or fail_task decisions.`,
     )
   }
 

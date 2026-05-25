@@ -887,6 +887,24 @@ export function listOrchestratorStreamErrorArtifacts(taskID: string, sinceMs: nu
   )
 }
 
+export function listToolExecuteErrorArtifacts(taskID: string, sinceMs: number, limit: number) {
+  return Database.use((db) =>
+    db
+      .select()
+      .from(EngineArtifactTable)
+      .where(
+        and(
+          eq(EngineArtifactTable.task_id, taskID),
+          eq(EngineArtifactTable.kind, "tool-execute-error"),
+          sql`${EngineArtifactTable.time_created} >= ${sinceMs}`,
+        ),
+      )
+      .orderBy(desc(EngineArtifactTable.time_created))
+      .limit(limit)
+      .all(),
+  )
+}
+
 export function goalRunQueueTaskID(goalRun?: GoalRunRow) {
   if (!goalRun) return undefined
   const ref = goalRun.metadata as Record<string, unknown> | null

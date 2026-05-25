@@ -860,9 +860,13 @@ export const GithubRunCommand = cmd({
 
           if (part.type === "tool" && part.state.status === "completed") {
             const [tool, color] = TOOL[part.tool] ?? [part.tool, UI.Style.TEXT_INFO_BOLD]
+            const input =
+              part.state.input && typeof part.state.input === "object" && !Array.isArray(part.state.input)
+                ? part.state.input
+                : {}
             const title =
-              part.state.title || Object.keys(part.state.input).length > 0
-                ? JSON.stringify(part.state.input)
+              part.state.title || Object.keys(input).length > 0
+                ? JSON.stringify(input)
                 : "Unknown"
             console.log()
             printEvent(color, tool, title)

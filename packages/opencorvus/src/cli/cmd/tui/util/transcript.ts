@@ -1,5 +1,6 @@
 import type { AssistantMessage, Part, UserMessage } from "@opencorvus-ai/sdk"
 import { Locale } from "@/util/locale"
+import { renderToolFailureCause } from "@/session/tool-failure-cause"
 
 export type TranscriptOptions = {
   thinking: boolean
@@ -87,8 +88,8 @@ export function formatPart(part: Part, options: TranscriptOptions): string {
     if (options.toolDetails && part.state.status === "completed" && part.state.output) {
       result += `\n**Output:**\n\`\`\`\n${part.state.output}\n\`\`\`\n`
     }
-    if (options.toolDetails && part.state.status === "error" && part.state.error) {
-      result += `\n**Error:**\n\`\`\`\n${part.state.error}\n\`\`\`\n`
+    if (options.toolDetails && part.state.status === "error") {
+      result += `\n**Error:**\n\`\`\`\n${renderToolFailureCause((part.state as any).failure)}\n\`\`\`\n`
     }
     result += `\n`
     return result
