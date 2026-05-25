@@ -50,6 +50,7 @@ mock.module("@/integrity", () => ({
       rounds: [],
       requiredRepairs: [],
       unresolvedDisagreements: [],
+        fact_check_items: [],
       sessionID: "ses_delivery_integrity_replay",
     }
   },

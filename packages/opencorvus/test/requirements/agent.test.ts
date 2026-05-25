@@ -153,7 +153,7 @@ describe("RequirementsAgent prompt precedence", () => {
             reason: "A page replica touches multiple frontend surfaces.",
           }, {} as any)
           expect(input.terminalTool.shouldExposeOnlyTerminalTool(input.toolKit.getCollector())).toBe(false)
-          await input.toolKit.tools.submit_requirements.execute({ final: true }, {} as any)
+          await input.toolKit.tools.submit_requirements.execute({ final: true, fact_check_items: [] }, {} as any)
 
           return {
             session: { id: "ses_requirements" },
@@ -275,7 +275,10 @@ describe("RequirementsAgent prompt precedence", () => {
 
 test("submit_requirements schema requires explicit final confirmation", () => {
   expect(RequirementsSubmitSchema.safeParse({}).success).toBe(false)
-  expect(RequirementsSubmitSchema.safeParse({ final: true }).success).toBe(true)
+  // fact_check_items is now a required field on the submit contract
+  // (specs/fact-check-agent-2026-05-25.md §3.1).
+  expect(RequirementsSubmitSchema.safeParse({ final: true }).success).toBe(false)
+  expect(RequirementsSubmitSchema.safeParse({ final: true, fact_check_items: [] }).success).toBe(true)
 })
 
 test("submit_requirements requires the minimum downstream decision contract", async () => {
@@ -288,7 +291,7 @@ test("submit_requirements requires the minimum downstream decision contract", as
     non_goals: "This requirement does not cover unrelated polish or infrastructure work.",
   }, {} as any)
 
-  const missing = await kit.tools.submit_requirements.execute({ final: true }, {} as any)
+  const missing = await kit.tools.submit_requirements.execute({ final: true, fact_check_items: [] }, {} as any)
   expect(missing).toContain("missing required foundational decision")
   expect(missing).toContain("runtime")
   expect(missing).toContain("one_framework")
@@ -310,7 +313,7 @@ test("submit_requirements requires the minimum downstream decision contract", as
     }, {} as any)
   }
 
-  const passed = await kit.tools.submit_requirements.execute({ final: true }, {} as any)
+  const passed = await kit.tools.submit_requirements.execute({ final: true, fact_check_items: [] }, {} as any)
   expect(passed).toContain("PASS: Requirements finalized")
   expect(kit.getCollector().finalized).toBe(true)
 })

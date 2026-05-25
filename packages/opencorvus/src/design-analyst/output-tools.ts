@@ -12,6 +12,7 @@ import { tool } from "ai"
 import z from "zod"
 import type { VisualSpec, VisualSpecCategory } from "./types"
 import { limitSummary, markdownList, requireReportString } from "@/agent/report"
+import { FactCheckItemListSchema } from "@/fact-check/schema"
 
 // ---------------------------------------------------------------------------
 // Collector — private. Callers read through getSpecs() / getStats().
@@ -131,6 +132,10 @@ export const DesignFinalSchema = z.object({
     .array(z.string().min(1))
     .default([])
     .describe("Only truly unobservable product/API facts that downstream agents must not hallucinate."),
+  // Required per specs/fact-check-agent-2026-05-25.md §3.1.
+  fact_check_items: FactCheckItemListSchema.describe(
+    "Every factual claim (third-party design system name, API behaviour, library version) you have NOT verified via tool calls in this session. Empty when only design observations or in-session-verified statements.",
+  ),
 })
 export type DesignFinal = z.infer<typeof DesignFinalSchema>
 

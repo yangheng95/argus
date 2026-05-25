@@ -6,6 +6,12 @@ import {
   validateBuildIntegrityRepairReport,
 } from "../../src/build/types"
 
+// All BuildResult fixtures registered fact_check_items: []
+// (specs/fact-check-agent-2026-05-25.md §3.1: required field on every
+// terminal report). Empty array is the honest default for tests where
+// no factual claims are being asserted.
+const FCI: { fact_check_items: [] } = { fact_check_items: [] }
+
 describe("BuildResultSchema", () => {
   test("accepts a passed result with commit ref and test evidence", () => {
     const payload = {
@@ -27,6 +33,7 @@ describe("BuildResultSchema", () => {
       tests: [
         { name: "bun test src/note-store.test.ts", passed: true, detail: "5 pass" },
       ],
+      ...FCI,
     }
     const parsed = BuildResultSchema.safeParse(payload)
     expect(parsed.success).toBe(true)
@@ -47,6 +54,7 @@ describe("BuildResultSchema", () => {
       tests: [
         { name: "bun test src/note-store.test.ts", passed: false, detail: "1 fail, 4 pass" },
       ],
+      ...FCI,
     }
     const parsed = BuildResultSchema.safeParse(payload)
     expect(parsed.success).toBe(true)
@@ -75,6 +83,7 @@ describe("BuildResultSchema", () => {
       status: "passed",
       summary: "no-op run",
       files_changed: [{ path: "src/a.ts", summary: "Changed a", reason: "Required for test" }],
+      ...FCI,
     })
     expect(parsed.success).toBe(true)
     if (parsed.success) expect(parsed.data.tests).toEqual([])
@@ -131,6 +140,7 @@ describe("BuildResultSchema", () => {
       status: "passed",
       summary: "Reused prior attempt's worktree without further edits",
       files_changed: [],
+      ...FCI,
     })
     expect(parsed.success).toBe(true)
   })
@@ -141,6 +151,7 @@ describe("BuildResultSchema", () => {
       summary: "Verified the requested behavior was already implemented; no project files changed",
       files_changed: [],
       tests: [],
+      ...FCI,
     })
     expect(parsed.success).toBe(true)
   })
@@ -157,6 +168,7 @@ describe("BuildResultSchema", () => {
         },
       ],
       tests: [{ name: "bun test src/settings.test.ts", passed: true }],
+      ...FCI,
       repair_report: {
         repaired_findings: [
           {
@@ -273,6 +285,7 @@ describe("BuildResultSchema", () => {
           },
         ],
       },
+      ...FCI,
     })
     expect(validateBuildIntegrityRepairReport(passed, ["if_1234567890abcdef"])).toBeUndefined()
     expect(validateBuildIntegrityRepairReport(passed, ["if_1234567890abcdef", "if_fedcba0987654321"])).toContain(

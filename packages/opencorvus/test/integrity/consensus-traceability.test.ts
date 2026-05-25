@@ -111,6 +111,7 @@ mock.module("@/agent/runner", () => ({
         }],
         requiredRepairs: [],
         unresolvedDisagreements: [],
+        fact_check_items: [],
       })
     } else {
       throw new Error(`unexpected terminal tool ${input.terminalTool.toolName}`)

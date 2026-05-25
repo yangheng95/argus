@@ -41,6 +41,7 @@ import {
   type ArchitectContractGraph,
   type ArchitectValidationFinding,
 } from "./contract-graph"
+import { FactCheckItemListSchema, type FactCheckItem } from "@/fact-check/schema"
 
 // ---------------------------------------------------------------------------
 // Collector — single buffer for the full Architect output
@@ -70,6 +71,7 @@ export interface ArchitectCollector {
   removed_goal_ids: string[]
   summary: string
   decomposition_analysis: string
+  fact_check_items: FactCheckItem[]
   finalized: boolean
 }
 
@@ -103,6 +105,7 @@ function emptyCollector(): ArchitectCollector {
     removed_goal_ids: [],
     summary: "",
     decomposition_analysis: "",
+    fact_check_items: [],
     finalized: false,
   }
 }
@@ -901,11 +904,16 @@ export function createArchitectOutputTools(input: {
           .describe(
             "Required analysis explaining goal boundaries, why no goal is too large, final verification ownership, and dependency necessity.",
           ),
+        // Required per specs/fact-check-agent-2026-05-25.md §3.1.
+        fact_check_items: FactCheckItemListSchema.describe(
+          "Every factual claim (API behaviour, library version, third-party protocol, number, path, history) you have NOT verified via tool calls in this session. Empty when only opinions, design choices, or in-session-verified statements.",
+        ),
       }),
-      execute: async ({ summary, decomposition_analysis }) => {
+      execute: async ({ summary, decomposition_analysis, fact_check_items }) => {
         collector.summary = summary
         collector.decomposition_analysis =
           typeof decomposition_analysis === "string" ? decomposition_analysis.trim() : ""
+        collector.fact_check_items = fact_check_items
         const findings = architectValidationFindings(collector, {
           workDir: dir,
           designSpecs: input.designSpecs,

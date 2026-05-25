@@ -19,6 +19,7 @@
  * model / session / prompt-composition / abort / stream-error handling.
  */
 import { runAgentSession } from "@/agent/runner"
+import { withFactCheckRegistration } from "@/prompt/fragments/fact-check-registration"
 import { createAgentContextTools } from "@/agent/context-tools"
 import { filterAgentTools } from "@/agent/filter-tools"
 import { Log } from "@/util/log"
@@ -95,7 +96,7 @@ export namespace DesignAnalystAgent {
 
     const out = await runAgentSession({
       kind: "design-analyst",
-      core: [DESIGN_ANALYST_CORE, renderAutoIterationMode(autoIteration)].join("\n\n"),
+      core: withFactCheckRegistration([DESIGN_ANALYST_CORE, renderAutoIterationMode(autoIteration)].join("\n\n")),
       sessionTitle: `Design: ${input.title}`,
       parentSessionID: input.parentSessionID,
       taskID: input.taskID,

@@ -72,10 +72,13 @@ import {
   formatBuildResultSchemaError,
   validateBuildIntegrityRepairReport,
   type BuildContractGraphContext,
+  type BuildFileChange,
   type BuildResult,
   type BuildTarget,
+  type BuildTestResult,
 } from "./types"
 import { renderContractGraphForPrompt } from "@/architect/contract-graph"
+import { withFactCheckRegistration } from "@/prompt/fragments/fact-check-registration"
 import { AttachmentStore } from "@/storage/attachment-store"
 import { renderUserRequestSection } from "@/intent/request-prompt"
 import { withStreamActivity } from "@/util/stream-activity"
@@ -88,6 +91,25 @@ import BUILD_CORE from "@/prompt/core/build-core.txt"
 import ENGINEERING_CRAFT from "@/prompt/core/engineering-craft.txt"
 
 const log = Log.create({ service: "build-agent" })
+
+export function createMergeBackSingleFlight<T extends { status: string }>(
+  execute: () => Promise<T>,
+): () => Promise<T> {
+  let inFlight: Promise<T> | undefined
+  let merged: T | undefined
+  return async () => {
+    if (merged) return merged
+    if (inFlight) return await inFlight
+    inFlight = execute()
+    try {
+      const result = await inFlight
+      if (result.status === "merged") merged = result
+      return result
+    } finally {
+      if (!merged) inFlight = undefined
+    }
+  }
+}
 
 export namespace BuildAgent {
   /**
@@ -562,6 +584,59 @@ export namespace BuildAgent {
       // infrastructure error, etc. — instead of the generic "merge_back was
       // not called" placeholder.
       let lastMergeBackOutcome: string | undefined
+      const executeMergeBack = createMergeBackSingleFlight(async () => {
+        const outcome = await Worktree.mergeSafely({
+          branch: worktreeBranch!,
+          worktreeDir: worktreeDir!,
+        })
+        if (outcome.status === "merged") {
+          mergedHead = outcome.primaryHead
+          return {
+            status: "merged" as const,
+            primary_head: outcome.primaryHead,
+            primary_branch: outcome.primaryBranch,
+            ...(outcome.primaryRecoveryCommit
+              ? { primary_recovery_commit: outcome.primaryRecoveryCommit }
+              : {}),
+          }
+        }
+        if (outcome.status === "conflict") {
+          lastMergeBackOutcome =
+            `conflict on ${outcome.primaryBranch} (tip ${outcome.primaryTip.slice(0, 12)}); ` +
+            `paths: ${outcome.conflictPaths.join(", ")}`
+          return {
+            status: "conflict" as const,
+            primary_branch: outcome.primaryBranch,
+            primary_tip: outcome.primaryTip,
+            conflict_paths: outcome.conflictPaths,
+            hint:
+              "Worktree is in MERGING state with conflict markers in " +
+              "the listed paths. Edit each path to resolve the markers, " +
+              "git add <path>, then `git commit` to finalize the merge. " +
+              "Then call merge_back again to ff-publish into " +
+              outcome.primaryBranch +
+              ".",
+          }
+        }
+        if (outcome.status === "blocked") {
+          lastMergeBackOutcome = `blocked on ${outcome.branch}: ${outcome.reason}`
+          return {
+            status: "blocked" as const,
+            reason: outcome.reason,
+            branch: outcome.branch,
+            worktree_dir: outcome.worktreeDir,
+            ...(outcome.dirtyPaths ? { dirty_paths: outcome.dirtyPaths } : {}),
+            ...(outcome.mergeHead ? { merge_head: true } : {}),
+          }
+        }
+        lastMergeBackOutcome = `infra_error on ${outcome.branch}: ${outcome.reason}`
+        return {
+          status: "infra_error" as const,
+          reason: outcome.reason,
+          branch: outcome.branch,
+          ...(outcome.stderr ? { stderr: outcome.stderr } : {}),
+        }
+      })
 
       type BuildCollector = {
         result?: BuildResult
@@ -643,59 +718,7 @@ export namespace BuildAgent {
                     "  • {status:'infra_error', reason} — infrastructure problem; report it " +
                     "    via report_build_result with status='failed'.",
                   inputSchema: z.object({}),
-                  execute: async () => {
-                    const outcome = await Worktree.mergeSafely({
-                      branch: worktreeBranch!,
-                      worktreeDir: worktreeDir!,
-                    })
-                    if (outcome.status === "merged") {
-                      mergedHead = outcome.primaryHead
-                      return {
-                        status: "merged" as const,
-                        primary_head: outcome.primaryHead,
-                        primary_branch: outcome.primaryBranch,
-                        ...(outcome.primaryRecoveryCommit
-                          ? { primary_recovery_commit: outcome.primaryRecoveryCommit }
-                          : {}),
-                      }
-                    }
-                    if (outcome.status === "conflict") {
-                      lastMergeBackOutcome =
-                        `conflict on ${outcome.primaryBranch} (tip ${outcome.primaryTip.slice(0, 12)}); ` +
-                        `paths: ${outcome.conflictPaths.join(", ")}`
-                      return {
-                        status: "conflict" as const,
-                        primary_branch: outcome.primaryBranch,
-                        primary_tip: outcome.primaryTip,
-                        conflict_paths: outcome.conflictPaths,
-                        hint:
-                          "Worktree is in MERGING state with conflict markers in " +
-                          "the listed paths. Edit each path to resolve the markers, " +
-                          "git add <path>, then `git commit` to finalize the merge. " +
-                          "Then call merge_back again to ff-publish into " +
-                          outcome.primaryBranch +
-                          ".",
-                      }
-                    }
-                    if (outcome.status === "blocked") {
-                      lastMergeBackOutcome = `blocked on ${outcome.branch}: ${outcome.reason}`
-                      return {
-                        status: "blocked" as const,
-                        reason: outcome.reason,
-                        branch: outcome.branch,
-                        worktree_dir: outcome.worktreeDir,
-                        ...(outcome.dirtyPaths ? { dirty_paths: outcome.dirtyPaths } : {}),
-                        ...(outcome.mergeHead ? { merge_head: true } : {}),
-                      }
-                    }
-                    lastMergeBackOutcome = `infra_error on ${outcome.branch}: ${outcome.reason}`
-                    return {
-                      status: "infra_error" as const,
-                      reason: outcome.reason,
-                      branch: outcome.branch,
-                      ...(outcome.stderr ? { stderr: outcome.stderr } : {}),
-                    }
-                  },
+                  execute: executeMergeBack,
                 }),
                 ...createBuildReportTools(),
               },
@@ -724,7 +747,7 @@ export namespace BuildAgent {
         if (executor === "opencorvus") {
           out = await runAgentSession({
             kind: "build",
-            core: composeBuildCore(autoIteration),
+            core: withFactCheckRegistration(composeBuildCore(autoIteration)),
             sessionTitle: buildSessionTitle(input.target),
             sessionDirectory: worktreeDir!,
             existingSessionID: buildSession.id,
@@ -1345,6 +1368,54 @@ export function externalEventPartText(event: CodingEventInfo, executor: string):
  * post-run path is identical for OpenCorvus and external executors (rule 22:
  * single contract, multiple implementations).
  */
+/**
+ * External BuildResult factory — single source for the
+ * `runWithExternalProviderImpl` return literals.
+ *
+ * Per specs/fact-check-agent-2026-05-25.md §6.1.3 (codex round 3/4):
+ * external executors (codex / claude-code) do not participate in the
+ * fact-check registration protocol — their structured output never carries
+ * `fact_check_items`. We always emit `[]` here so the BuildResult contract
+ * passes schema validation. This is NOT a runtime fallback ("if missing
+ * inject default") which would be a rule 7 violation — it is a single
+ * construction site that **always** sets the field at build time, just
+ * like every other BuildResult field.
+ *
+ * Use these factories at every external-executor return point; do NOT
+ * inline `fact_check_items: []` at individual `structured:` literals
+ * (rule 8 single source).
+ */
+function makeExternalPassedBuildResult(input: {
+  commit_ref: string
+  summary: string
+  files_changed: BuildFileChange[]
+  tests: BuildTestResult[]
+}) {
+  return {
+    status: "passed" as const,
+    ...input,
+    fact_check_items: [],
+  }
+}
+
+function makeExternalFailedBuildResult(input: {
+  commit_ref: string
+  summary: string
+  tests: BuildTestResult[]
+  error: string
+  files_changed?: BuildFileChange[]
+}) {
+  return {
+    status: "failed" as const,
+    commit_ref: input.commit_ref,
+    summary: input.summary,
+    tests: input.tests,
+    error: input.error,
+    files_changed: input.files_changed ?? [],
+    fact_check_items: [],
+  }
+}
+
 async function runWithExternalProvider(args: {
   executor: Exclude<TaskRow["executor"], "opencorvus">
   target: BuildTarget
@@ -1823,13 +1894,12 @@ async function runWithExternalProviderImpl(args: {
     })
     return {
       sessionID: session.id,
-      structured: {
-        status: "failed" as const,
+      structured: makeExternalFailedBuildResult({
         commit_ref: "",
         summary: `external executor ${args.executor} stopped before host merge_back: ${singleLineText(errored)}`,
         tests: [],
         error: errored,
-      },
+      }),
     }
   }
 
@@ -1842,15 +1912,14 @@ async function runWithExternalProviderImpl(args: {
     // Spec architecture-rework-loosening-plan-2026-05-06.md (B18).
     return {
       sessionID: session.id,
-      structured: {
-        status: "passed" as const,
+      structured: makeExternalPassedBuildResult({
         commit_ref: "",
         summary:
           doneOutput?.trim() ||
           `external executor ${args.executor} completed (${events.length} events, ${toolUseCount} tool-uses, ${textCharCount} chars)`,
         files_changed: [],
         tests: [],
-      },
+      }),
     }
   }
 
@@ -1931,8 +2000,7 @@ async function runWithExternalProviderImpl(args: {
     await completeMergePart(output, `conflict ${args.worktreeBranch} -> ${outcome.primaryBranch}`)
     return {
       sessionID: session.id,
-      structured: {
-        status: "failed" as const,
+      structured: makeExternalFailedBuildResult({
         commit_ref: "",
         summary:
           `merge_back hit conflicts on ${args.worktreeBranch} → ${outcome.primaryBranch} ` +
@@ -1942,7 +2010,7 @@ async function runWithExternalProviderImpl(args: {
           `Merge left ${args.worktreeDir} in MERGING state against ${outcome.primaryBranch} ` +
           `(tip ${outcome.primaryTip.slice(0, 12)}); conflict paths: ${pathList}. ` +
           `Resolve markers in this same worktree, git add, and git commit before retrying.`,
-      },
+      }),
     }
   } else if (outcome.status === "blocked") {
     const output = {
@@ -1956,15 +2024,14 @@ async function runWithExternalProviderImpl(args: {
     await completeMergePart(output, `blocked ${args.worktreeBranch}`)
     return {
       sessionID: session.id,
-      structured: {
-        status: "failed" as const,
+      structured: makeExternalFailedBuildResult({
         commit_ref: "",
         summary: `merge_back blocked for ${args.worktreeBranch}: ${outcome.reason}`,
         tests: [],
         error:
           `${outcome.reason}. Worktree preserved at ${outcome.worktreeDir}; ` +
           `the next attempt must resolve that repository state before retrying merge_back.`,
-      },
+      }),
     }
   } else {
     const output = {
@@ -1976,13 +2043,12 @@ async function runWithExternalProviderImpl(args: {
     await completeMergePart(output, `infra_error ${args.worktreeBranch}`)
     return {
       sessionID: session.id,
-      structured: {
-        status: "failed" as const,
+      structured: makeExternalFailedBuildResult({
         commit_ref: "",
         summary: `merge_back returned status=infra_error for ${args.worktreeBranch}: ${outcome.reason}`,
         tests: [],
         error: outcome.reason,
-      },
+      }),
     }
   }
 
@@ -1994,15 +2060,14 @@ async function runWithExternalProviderImpl(args: {
   // the synthesized placeholder. Spec ...md (B18).
   return {
     sessionID: session.id,
-    structured: {
-      status: "passed" as const,
+    structured: makeExternalPassedBuildResult({
       commit_ref: mergedHead.slice(0, 12),
       summary:
         doneOutput?.trim() ||
         `external executor ${args.executor} completed (${events.length} events, ${toolUseCount} tool-uses, ${textCharCount} chars)`,
       files_changed: [],
       tests: [],
-    },
+    }),
     mergedHead,
   }
 }

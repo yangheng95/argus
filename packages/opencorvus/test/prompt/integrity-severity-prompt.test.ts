@@ -81,6 +81,7 @@ function promptInput(): ReviewPromptInput {
           blockingFindings: [],
           requiredRepairs: [],
           unresolvedDisagreements: [],
+        fact_check_items: [],
         },
       ],
       buildEvidenceSinceLastReview: {

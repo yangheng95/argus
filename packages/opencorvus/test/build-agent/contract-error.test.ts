@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { BuildAgentContractError, BuildResultSchema } from "../../src/build/types"
-import { convertMissingTerminalToolError } from "../../src/build/agent"
+import { convertMissingTerminalToolError, createMergeBackSingleFlight } from "../../src/build/agent"
 import { AgentRunError } from "../../src/agent/runner"
 import { Message } from "../../src/session/message"
 
@@ -80,6 +80,10 @@ describe("BuildAgentContractError", () => {
       files_changed: [],
       tests: [],
       error: err.message,
+      // Host-synthesised BuildResult: LLM never reached terminal tool,
+      // so fact_check_items defaults to empty array
+      // (specs/fact-check-agent-2026-05-25.md §6.1.3 — host construction site).
+      fact_check_items: [],
     }
     const parsed = BuildResultSchema.safeParse(synthFailed)
     expect(parsed.success).toBe(true)
@@ -204,5 +208,53 @@ describe("convertMissingTerminalToolError", () => {
       lastMergeBackOutcome: "conflict on src/components/MessageList.tsx",
     })
     expect(converted!.diagnostics.lastMergeBackOutcome).toBe("conflict on src/components/MessageList.tsx")
+  })
+})
+
+describe("createMergeBackSingleFlight", () => {
+  test("coalesces concurrent merge_back calls into one real merge", async () => {
+    let calls = 0
+    let release!: (value: { status: "merged"; primary_head: string }) => void
+    const unblock = new Promise<{ status: "merged"; primary_head: string }>((resolve) => {
+      release = resolve
+    })
+    const mergeBack = createMergeBackSingleFlight(async () => {
+      calls += 1
+      return await unblock
+    })
+
+    const first = mergeBack()
+    const second = mergeBack()
+    release({ status: "merged", primary_head: "abc123" })
+
+    await expect(first).resolves.toEqual({ status: "merged", primary_head: "abc123" })
+    await expect(second).resolves.toEqual({ status: "merged", primary_head: "abc123" })
+    expect(calls).toBe(1)
+  })
+
+  test("returns cached merged result instead of running a second real merge", async () => {
+    let calls = 0
+    const mergeBack = createMergeBackSingleFlight(async () => {
+      calls += 1
+      return { status: "merged" as const, primary_head: `head-${calls}` }
+    })
+
+    await expect(mergeBack()).resolves.toEqual({ status: "merged", primary_head: "head-1" })
+    await expect(mergeBack()).resolves.toEqual({ status: "merged", primary_head: "head-1" })
+    expect(calls).toBe(1)
+  })
+
+  test("allows a later retry after a non-merged outcome", async () => {
+    let calls = 0
+    const mergeBack = createMergeBackSingleFlight(async () => {
+      calls += 1
+      return calls === 1
+        ? { status: "blocked" as const, reason: "dirty" }
+        : { status: "merged" as const, primary_head: "fixed" }
+    })
+
+    await expect(mergeBack()).resolves.toEqual({ status: "blocked", reason: "dirty" })
+    await expect(mergeBack()).resolves.toEqual({ status: "merged", primary_head: "fixed" })
+    expect(calls).toBe(2)
   })
 })
