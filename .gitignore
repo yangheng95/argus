@@ -120,3 +120,6 @@ lpt9
 .opencorvus/logs/
 .opencorvus/specs/
 _codex_*.log
+
+# Auto-added by OpenCorvus
+/artifacts/
