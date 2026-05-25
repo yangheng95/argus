@@ -68,6 +68,7 @@ function r7ToR8PromptInput(): ReviewPromptInput {
           blockingFindings: [],
           requiredRepairs: [],
           unresolvedDisagreements: [],
+        fact_check_items: [],
         },
       ],
       buildEvidenceSinceLastReview: {

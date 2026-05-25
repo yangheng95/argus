@@ -1,6 +1,7 @@
 import { tool } from "ai"
 import TEAM_CORE from "@/prompt/core/integrity-team-core.txt"
 import { runAgentSession } from "@/agent/runner"
+import { withFactCheckRegistration } from "@/prompt/fragments/fact-check-registration"
 import { limitSummary, markdownList } from "@/agent/report"
 import type { AcceptanceSpec } from "@/acceptance/types"
 import { renderSpecsAsText } from "@/acceptance/types"
@@ -262,7 +263,10 @@ export async function reviewIntegrity(input: {
   const consensusCollector: ConsensusCollector = {}
   const consensusOut = await runAgentSession<ConsensusCollector>({
     kind: "integrity",
-    core: TEAM_CORE,
+    // Consensus phase ONLY (specs/fact-check-agent-2026-05-25.md §5.2):
+    // plan (:197) and reviewer (:404) phases use different terminal
+    // schemas and intentionally do not register fact_check_items.
+    core: withFactCheckRegistration(TEAM_CORE),
     sessionTitle: `Integrity Supervisor: ${input.taskTitle}`,
     existingSessionID: planOut.session.id,
     parentSessionID: input.parentSessionID,
@@ -956,6 +960,11 @@ function createNoGoalsResult(): IntegrityResult {
       },
     ],
     unresolvedDisagreements: [],
+    // Host-synthesised team report (no-goals path): the supervisor LLM
+    // never ran, so it has no chance to register fact_check_items.
+    // Empty array at the single construction site (rule 8 single source,
+    // specs/fact-check-agent-2026-05-25.md §6.1.3).
+    fact_check_items: [],
   })
 }
 
@@ -995,6 +1004,10 @@ function emitIntegrityEvent(
     rounds: result.rounds,
     requiredRepairs: result.requiredRepairs,
     unresolvedDisagreements: result.unresolvedDisagreements,
+    // Pass through the consensus-stage registration list. `result` is
+    // normalizeTeamReport's IntegrityResult, which spreads the validated
+    // IntegrityTeamReport — so fact_check_items is required and present.
+    fact_check_items: result.fact_check_items ?? [],
     attempts,
   }
   void EngineProtocol.emit(EngineEvent.IntegrityReviewCompleted, IntegrityReviewCompletedPayloadSchema.parse(payload), {

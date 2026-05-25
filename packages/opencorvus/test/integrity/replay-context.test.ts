@@ -364,6 +364,7 @@ describe("integrity replay context artifact source", () => {
       findings: [],
       requiredRepairs: [],
       unresolvedDisagreements: [],
+        fact_check_items: [],
       reason: "Only concerns remain.",
       now: now + 20,
     })

@@ -17,6 +17,7 @@
  * tool kit.
  */
 import { runAgentSession } from "@/agent/runner"
+import { withFactCheckRegistration } from "@/prompt/fragments/fact-check-registration"
 import { createAgentContextTools, prefetchContext } from "@/agent/context-tools"
 import { filterAgentTools } from "@/agent/filter-tools"
 import { Log } from "@/util/log"
@@ -96,7 +97,7 @@ export namespace RequirementsAgent {
 
     const out = await runAgentSession({
       kind: "requirements",
-      core: REQUIREMENTS_CORE,
+      core: withFactCheckRegistration(REQUIREMENTS_CORE),
       sessionTitle: `Requirements: ${input.title}`,
       parentSessionID: input.parentSessionID,
       taskID: input.taskID,

@@ -25,6 +25,7 @@ import type {
   IntentComplexity,
   IntentSlot,
 } from "./types"
+import { FactCheckItemListSchema } from "@/fact-check/schema"
 
 export const INTENT_CLASSES = [
   "question",
@@ -73,6 +74,10 @@ export const IntentFinalSchema = z.object({
     .string()
     .min(1)
     .describe("One-line statement of what the user wants."),
+  // Required per specs/fact-check-agent-2026-05-25.md §3.1.
+  fact_check_items: FactCheckItemListSchema.describe(
+    "Every factual claim (API behaviour, library version, file path you did not read this session) you have NOT verified via tool calls. Empty when only intent inference or in-session-verified statements.",
+  ),
 })
 export type IntentFinal = z.infer<typeof IntentFinalSchema>
 

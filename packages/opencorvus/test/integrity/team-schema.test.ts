@@ -31,6 +31,7 @@ const basePayload = {
   rounds: [],
   requiredRepairs: [],
   unresolvedDisagreements: [],
+        fact_check_items: [],
   attempts: 1,
 }
 

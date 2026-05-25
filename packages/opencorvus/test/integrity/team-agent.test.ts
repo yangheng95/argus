@@ -81,6 +81,7 @@ mock.module("@/agent/runner", () => ({
         rounds: [],
         requiredRepairs: [],
         unresolvedDisagreements: [],
+        fact_check_items: [],
       }
     }
     lifecycle?.dispose?.()

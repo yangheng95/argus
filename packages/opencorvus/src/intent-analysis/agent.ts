@@ -21,6 +21,7 @@
  */
 import z from "zod"
 import { runAgentSession } from "@/agent/runner"
+import { withFactCheckRegistration } from "@/prompt/fragments/fact-check-registration"
 import { AttachmentStore } from "@/storage/attachment-store"
 import { renderUserRequestSection } from "@/intent/request-prompt"
 import { createAgentContextTools } from "@/agent/context-tools"
@@ -71,7 +72,7 @@ export namespace IntentAnalysisAgent {
     const toolKit = await buildToolKit()
     const out = await runAgentSession({
       kind: "intent-analysis",
-      core: INTENT_CORE,
+      core: withFactCheckRegistration(INTENT_CORE),
       sessionTitle: input.title ? `Intent: ${input.title}` : "Intent analysis",
       parentSessionID: input.parentSessionID,
       taskID: input.taskID,

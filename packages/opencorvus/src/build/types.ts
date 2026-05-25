@@ -17,6 +17,7 @@
 
 import z from "zod"
 import { ArchitectContractGraphSchema } from "@/architect/contract-graph"
+import { FactCheckItemListSchema } from "@/fact-check/schema"
 
 /** Free-form request passed through the `direct` workflow — no goal
  *  decomposition, no per-goal acceptance. The build agent does the work
@@ -161,6 +162,14 @@ const BuildResultBase = {
     .describe("Evidence the build actually ran verification; empty when no tests were required."),
   repair_report: BuildRepairReport.optional().describe(
     "Integrity repair ledger for builds dispatched from integrity feedback. Every blocking integrity fingerprint must be listed exactly once as repaired or unrepaired.",
+  ),
+  // Fact-check item registration (spec/fact-check-agent-2026-05-25.md §3.1).
+  // Required, no .default([]) — workers MUST populate this field explicitly,
+  // even with an empty array when they made no unverified claims. The
+  // downstream fact_check orchestrator tool reads this list to decide
+  // whether to dispatch verification.
+  fact_check_items: FactCheckItemListSchema.describe(
+    "Every factual claim (API behaviour, library version, third-party protocol, number, path, history) you have NOT verified via tool calls in this session. Empty array when you have only opinions, plans, or in-session-verified statements.",
   ),
 }
 

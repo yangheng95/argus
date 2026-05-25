@@ -26,6 +26,7 @@
  * stream-error capture, and abort signal propagation.
  */
 import { runAgentSession } from "@/agent/runner"
+import { withFactCheckRegistration } from "@/prompt/fragments/fact-check-registration"
 import { createAgentContextTools } from "@/agent/context-tools"
 import { filterAgentTools } from "@/agent/filter-tools"
 import { Log } from "@/util/log"
@@ -118,7 +119,7 @@ export namespace ArchitectAgent {
 
     const out = await runAgentSession({
       kind: "architect",
-      core: ARCHITECT_CORE,
+      core: withFactCheckRegistration(ARCHITECT_CORE),
       sessionTitle: `Architect: ${input.taskTitle}`,
       parentSessionID: input.parentSessionID,
       taskID: input.taskID,

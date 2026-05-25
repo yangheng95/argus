@@ -8,7 +8,6 @@ import { tool } from "ai"
 import z from "zod"
 import path from "node:path"
 import fs from "node:fs/promises"
-import { spawn } from "node:child_process"
 import { createHash } from "node:crypto"
 import { Session } from "@/session"
 import { resolveAgentModel, resolveAgentModelRef } from "@/agent/model"
@@ -17,6 +16,7 @@ import { SessionStatus } from "@/session/status"
 import { Database, eq, and, inArray, sql } from "@/storage/db"
 import { Identifier } from "@/id/id"
 import { Instance } from "@/project/instance"
+import { Config } from "@/config/config"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { Log } from "@/util/log"
 import { Filesystem } from "@/util/filesystem"
@@ -30,6 +30,7 @@ import { EngineGit } from "@/engine/git"
 import { git as runGit } from "@/util/git"
 import { Shell } from "@/shell/shell"
 import { DEFAULT_BASH_TIMEOUT_MS } from "@/shell/timeout"
+import { ProcessSupervisor } from "@/shell/process-supervisor"
 import { isHostKillingCommand } from "@/tool/bash"
 import { EngineMemoryBridge } from "@/engine/memory-bridge"
 import { SubAgentProtocol } from "@/agent/sub-agent-protocol"
@@ -680,9 +681,11 @@ function findExecutorSessionByGoalRunID(goalRunID: string) {
   return row ? findExecutorSession(row.id) : undefined
 }
 
-async function markOwnedBuildToolPartRecovered(input: {
+async function markOwnedBuildToolPartErrored(input: {
   ownership: OrchestratorToolOwnershipPayload
   reason: string
+  originSite: string
+  metadata?: Record<string, unknown>
   now?: number
 }) {
   const row = Database.use((db) =>
@@ -719,7 +722,7 @@ async function markOwnedBuildToolPartRecovered(input: {
       input: part.state.input,
       failure: toolFailureCauseFromUnknown({
         error: input.reason,
-        originSite: "orchestrator.tools.recover-stale-build",
+        originSite: input.originSite,
         classification: "tool-execution",
         kind: "tool-execute-error",
         data: {
@@ -729,7 +732,7 @@ async function markOwnedBuildToolPartRecovered(input: {
       }),
       metadata: {
         ...(part.state.status === "running" ? part.state.metadata ?? {} : {}),
-        recovered_stale_build: true,
+        ...(input.metadata ?? {}),
       },
       time: {
         start,
@@ -741,6 +744,59 @@ async function markOwnedBuildToolPartRecovered(input: {
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
+}
+
+async function cancelLiveOwnedBuild(input: {
+  taskID: string
+  sessionID: string
+  goalRunID?: string
+  owner: { ownershipID: string; payload: OrchestratorToolOwnershipPayload }
+  reason: string
+  reasonPrefix?: string
+  originSite?: string
+  metadata?: Record<string, unknown>
+}) {
+  const now = Date.now()
+  const cancelReason = `${input.reasonPrefix ?? "cancel_subagent"}: ${input.reason}`
+  SessionPrompt.cancel(input.sessionID)
+  SessionStatus.set(input.sessionID, { type: "terminal", reason: "aborted", error: cancelReason })
+
+  const goalRunID = input.goalRunID ?? input.owner.payload.goal_run_id
+  let goalFact = ""
+  if (goalRunID) {
+    const goalRun = findGoalRun(goalRunID)
+    if (goalRun && isLiveGoalRunStatus(goalRun.status)) {
+      updateGoalRun(goalRun.id, {
+        status: "aborted",
+        error: cancelReason,
+        blocking_reason: null,
+        time_completed: now,
+      })
+      updateGoalRunExecutorSessionStatus(goalRun.id, "aborted")
+      const executorSession = findExecutorSessionByGoalRunID(goalRun.id)
+      goalFact =
+        ` goal_run ${goalRun.id} aborted` +
+        `${executorSession ? `; executor_session ${executorSession.id} aborted` : ""}.`
+    } else if (goalRun) {
+      goalFact = ` goal_run ${goalRun.id} was already terminal (${goalRun.status}); ownership closed.`
+    }
+  }
+
+  await markOwnedBuildToolPartErrored({
+    ownership: input.owner.payload,
+    reason: cancelReason,
+    originSite: input.originSite ?? "orchestrator.tools.cancel-subagent-live-build",
+    metadata: input.metadata ?? { cancelled_live_build: true },
+    now,
+  })
+  completeOrchestratorToolOwnership({
+    taskID: input.taskID,
+    ownershipID: input.owner.ownershipID,
+    outcome: "cancelled",
+    error: cancelReason,
+    now,
+  })
+  return goalFact
 }
 
 /**
@@ -4018,7 +4074,7 @@ export function createOrchestratorTools(input: {
     steer_subagent: tool({
       description:
         "Send a scoped steering message to a child agent session and wake that session, OR — for a live-owned build child — return a read-only activity snapshot (status, last_activity_at, age_ms, ownership). " +
-        "Build sessions cannot accept injected steering; the snapshot lets you decide between waiting and recover_stale_build. " +
+        "Build sessions cannot accept injected steering; the snapshot lets you decide between waiting and cancel_subagent mode='recover_stale'. " +
         "You may pass session_id directly, goal_id for the latest live attempt, or a live goal_run_id via session_id for backward compatibility.",
       inputSchema: z
         .object({
@@ -4070,7 +4126,7 @@ export function createOrchestratorTools(input: {
               `  owner_ownership=${liveOwner.ownershipID}`,
               `  goal_run=${target.goalRunID ?? liveOwner.payload.goal_run_id ?? "n/a"}`,
               `Reason recorded: ${reason}`,
-              "Note: build sessions cannot accept injected steering messages. To act on this snapshot, either keep waiting, or — if age_ms is large AND status indicates no progress — call recover_stale_build.",
+              'Note: build sessions cannot accept injected steering messages. To act on this snapshot, either keep waiting, or if age_ms is large AND status indicates no progress, call cancel_subagent with mode="recover_stale".',
             ].join("\n")
           }
           return (
@@ -4086,9 +4142,9 @@ export function createOrchestratorTools(input: {
 
     cancel_subagent: tool({
       description:
-        "Abort a specific child agent session when steering has already failed or the session clearly cannot continue. " +
-        "This is the session-level resume rung: cancel the stale child, then explicitly re-dispatch the SAME goal or stage under the SAME contract before escalating to modify_goal or restart_from_stage. " +
-        "You may pass session_id directly, goal_id for the latest live attempt, or a live goal_run_id via session_id for backward compatibility.",
+        "Abort a specific child agent session, or recover a stale live-owned build via mode='recover_stale'. " +
+        "This is the session-level resume rung: cancel the child, then explicitly re-dispatch the SAME goal or stage under the SAME contract before escalating to modify_goal or restart_from_stage. " +
+        "You may pass session_id directly, goal_id for the latest live attempt, goal_run_id, or a live goal_run_id via session_id for backward compatibility.",
       inputSchema: z
         .object({
           session_id: z
@@ -4103,18 +4159,29 @@ export function createOrchestratorTools(input: {
             .min(1)
             .optional()
             .describe("Goal id whose latest live child session should be cancelled."),
+          goal_run_id: z
+            .string()
+            .min(1)
+            .optional()
+            .describe("Live goal_run id whose child session should be cancelled."),
+          mode: z
+            .enum(["cancel", "recover_stale"])
+            .optional()
+            .describe(
+              "Use 'cancel' for explicit cancellation. Use 'recover_stale' only when evidence shows a live-owned build is no longer executing; this refuses streaming/retry sessions.",
+            ),
           reason: z
             .string()
             .describe("Why this child session must be cancelled before re-dispatching the same stage/goal"),
         })
-        .refine((value) => !!value.session_id || !!value.goal_id, {
-          message: "cancel_subagent requires either session_id or goal_id",
+        .refine((value) => !!value.session_id || !!value.goal_id || !!value.goal_run_id, {
+          message: "cancel_subagent requires session_id, goal_id, or goal_run_id",
           path: ["session_id"],
         }),
-      execute: async ({ session_id, goal_id, reason }) => {
+      execute: async ({ session_id, goal_id, goal_run_id, mode, reason }) => {
         const target = resolveSteerTarget({
           taskID,
-          sessionID: session_id,
+          sessionID: goal_run_id ?? session_id,
           goalID: goal_id,
         })
         const { kind } = assertDirectReplySessionOwnership({
@@ -4125,10 +4192,39 @@ export function createOrchestratorTools(input: {
         const liveOwner =
           (target.goalRunID ? findLiveBuildOwnershipByGoalRun({ taskID, goalRunID: target.goalRunID }) : undefined) ??
           findLiveBuildOwnershipBySession({ taskID, sessionID: target.sessionID })
+        const staleRecovery = mode === "recover_stale"
+        if (staleRecovery && kind !== "build") {
+          return `Error: cancel_subagent mode='recover_stale' only handles build sessions; ${target.sessionID} has kind=${kind}.`
+        }
+        if (staleRecovery && kind === "build" && !liveOwner) {
+          return `No live build ownership found for ${target.source}; nothing to recover.`
+        }
         if (kind === "build" && liveOwner) {
+          if (staleRecovery) {
+            const currentStatus = SessionStatus.get(target.sessionID)
+            if (currentStatus.type === "streaming" || currentStatus.type === "retry") {
+              return (
+                `Error: cancel_subagent refused stale recovery because build session ${target.sessionID} is ${currentStatus.type}. ` +
+                "Wait for it to settle or use mode='cancel' for explicit operator cancellation."
+              )
+            }
+          }
+          const goalFact = await cancelLiveOwnedBuild({
+            taskID,
+            sessionID: target.sessionID,
+            goalRunID: target.goalRunID,
+            owner: liveOwner,
+            reason,
+            originSite: staleRecovery
+              ? "orchestrator.tools.cancel-subagent-stale-recovery"
+              : "orchestrator.tools.cancel-subagent-live-build",
+            metadata: staleRecovery ? { stale_recovery: true } : { cancelled_live_build: true },
+          })
           return (
-            `Error: cancel_subagent cannot cancel build session ${target.sessionID} while it is owned by live build tool ` +
-            `${liveOwner.payload.tool_part_id} (ownership ${liveOwner.ownershipID}). Wait for the build tool result or use an explicit operator cancellation path.`
+            `${staleRecovery ? "Recovered stale live-owned build" : "Cancelled live-owned build session"} ${target.sessionID} (kind=${kind}). ` +
+            `source=${target.source}. ownership=${liveOwner.ownershipID}. Reason: ${reason}.` +
+            goalFact +
+            " NEXT: if you still need work from it, re-dispatch the same stage/goal under the same contract explicitly."
           )
         }
 
@@ -4155,100 +4251,6 @@ export function createOrchestratorTools(input: {
           `Cancelled sub-agent session ${target.sessionID} (kind=${kind}). ` +
           `source=${target.source}. Reason: ${reason}.` +
           `${abortedFact} NEXT: if you still need work from it, re-dispatch the same stage/goal under the same contract explicitly.`
-        )
-      },
-    }),
-
-    recover_stale_build: tool({
-      description:
-        "Close a stale live build ownership when evidence shows the build child is no longer executing but the goal/build tool still appears running. " +
-        "Use only after read_context or session evidence shows a stale build shape such as no active child execution, a header-only unfinished build message, or terminal child status with open ownership. " +
-        "After this succeeds, call build({ goalID, request }) if the goal should continue under a fresh stage-attempt runtime contract.",
-      inputSchema: z
-        .object({
-          goal_id: z.string().min(1).optional().describe("Goal id whose latest live build ownership should be recovered."),
-          goal_run_id: z.string().min(1).optional().describe("Live goal_run id whose build ownership should be recovered."),
-          session_id: z.string().min(1).optional().describe("Build child session id whose live ownership should be recovered."),
-          reason: z.string().min(1).describe("Concrete evidence that this build ownership is stale."),
-        })
-        .refine((value) => !!value.goal_id || !!value.goal_run_id || !!value.session_id, {
-          message: "recover_stale_build requires goal_id, goal_run_id, or session_id",
-          path: ["goal_id"],
-        }),
-      execute: async ({ goal_id, goal_run_id, session_id, reason }) => {
-        const target = resolveSteerTarget({
-          taskID,
-          goalID: goal_id,
-          sessionID: goal_run_id ?? session_id,
-        })
-        const { kind } = assertDirectReplySessionOwnership({
-          taskID,
-          sessionID: target.sessionID,
-        })
-        if (kind !== "build") {
-          return `Error: recover_stale_build only handles build sessions; ${target.sessionID} has kind=${kind}.`
-        }
-
-        const owner =
-          (target.goalRunID ? findLiveBuildOwnershipByGoalRun({ taskID, goalRunID: target.goalRunID }) : undefined) ??
-          findLiveBuildOwnershipBySession({ taskID, sessionID: target.sessionID })
-        if (!owner) {
-          return `No live build ownership found for ${target.source}; nothing to recover.`
-        }
-
-        const currentStatus = SessionStatus.get(target.sessionID)
-        if (currentStatus.type === "streaming" || currentStatus.type === "retry") {
-          return (
-            `Error: recover_stale_build refused because build session ${target.sessionID} is ${currentStatus.type}. ` +
-            "Wait for it to settle or use an explicit operator cancellation path."
-          )
-        }
-
-        const now = Date.now()
-        const recoveryError = `recover_stale_build: ${reason}`
-        SessionPrompt.cancel(target.sessionID)
-        SessionStatus.set(target.sessionID, { type: "terminal", reason: "aborted", error: recoveryError })
-
-        let goalFact = ""
-        if (target.goalRunID) {
-          const goalRun = findGoalRun(target.goalRunID)
-          if (goalRun && isLiveGoalRunStatus(goalRun.status)) {
-            updateGoalRun(goalRun.id, {
-              status: "aborted",
-              error: recoveryError,
-              blocking_reason: null,
-              time_completed: now,
-            })
-            updateGoalRunExecutorSessionStatus(goalRun.id, "aborted")
-            const executorSession = findExecutorSessionByGoalRunID(goalRun.id)
-            goalFact =
-              ` goal_run ${goalRun.id} aborted` +
-              `${executorSession ? `; executor_session ${executorSession.id} aborted` : ""}.`
-          } else if (goalRun) {
-            goalFact = ` goal_run ${goalRun.id} was already terminal (${goalRun.status}); ownership closed.`
-          }
-        }
-        await markOwnedBuildToolPartRecovered({
-          ownership: owner.payload,
-          reason: recoveryError,
-          now,
-        })
-        // Close ownership last. If any prior durable write fails, the live
-        // ownership remains as the retry guard and the recovery can be retried
-        // without allowing a duplicate build dispatch.
-        completeOrchestratorToolOwnership({
-          taskID,
-          ownershipID: owner.ownershipID,
-          outcome: "cancelled",
-          error: recoveryError,
-          now,
-        })
-
-        return (
-          `Recovered stale build ownership ${owner.ownershipID} for session ${target.sessionID}. ` +
-          `source=${target.source}. Reason: ${reason}.` +
-          goalFact +
-          " NEXT: if the goal should continue, call build({ goalID, request }) so it installs a fresh stage-attempt runtime contract."
         )
       },
     }),
@@ -4497,11 +4499,12 @@ export function createOrchestratorTools(input: {
 
     propose_task: tool({
       description:
-        "Offer the user one polished follow-up task candidate that improves or completes the current/previous request. " +
-        "This is the orchestrator's ONLY new-engine-task creation path: it first asks the user to confirm, then creates " +
-        "a new task only if the user selects `创建任务`. Do not use this for normal workflow progress, do not use it " +
+        "Create one polished inheriting follow-up task candidate that improves or completes the current/previous request. " +
+        "This is the orchestrator's ONLY new-engine-task creation path: it follows `experimental.confirm_proposed_tasks`, " +
+        "creating directly by default and asking the user first only when that policy is enabled. Do not use this for normal workflow progress, do not use it " +
         "instead of build/integrity on the current task, and do not call generic `task` or control-plane `panel`. " +
-        "Use propose_task when integrity history shows the persistent root is outside the current task contract: reviewers keep demanding a capability the original user request never authorised, and adding it inside the current task would expand scope beyond what the user agreed to.",
+        "Use propose_task when execution evidence, artifact state, integrity history, or the obvious product path shows separate inheriting work: supplemental features, deeper implementation detail, quality hardening, tests, docs, operations, performance, or project-improvement suggestions. " +
+        "It is also the right path when reviewers keep demanding a capability the original user request never authorised, and adding it inside the current task would expand scope beyond what the user agreed to.",
       inputSchema: z.object({
         title: z.string().min(1).describe("Concise title for the proposed new task."),
         request: z
@@ -4513,19 +4516,24 @@ export function createOrchestratorTools(input: {
         reason: z
           .string()
           .min(1)
-          .describe("Why this should be offered as a separate follow-up task instead of changing the current task."),
+          .describe(
+            "Evidence-backed reason this should inherit from the current task as separate follow-up work instead of changing the current task.",
+          ),
         priority: z.enum(["critical", "high", "normal", "low"]).default("normal"),
         queue: z
           .boolean()
           .default(false)
           .describe(
-            "Set true when this confirmed follow-up task should wait in the directory queue; set false when it should start immediately and bypass the directory queue.",
+            "Set true when this follow-up task should wait in the directory queue; set false when it should start immediately and bypass the directory queue.",
           ),
         kind: z.enum(["workflow", "build"]).default("workflow"),
       }),
       execute: async ({ title, request, reason, priority, queue, kind }) => {
         const task = requireTask(taskID)
-        log.info("propose_task confirmation requested", { taskID, title, priority, kind })
+        const cfg = await Config.get()
+        const requireConfirmation = cfg.experimental?.confirm_proposed_tasks === true
+        log.info("propose_task requested", { taskID, title, priority, kind, requireConfirmation })
+        if (requireConfirmation) {
         const { output, answers } = await Question.askAndFormat({
           sessionID: input.agentSessionID,
           questions: [
@@ -4560,6 +4568,7 @@ export function createOrchestratorTools(input: {
             pointer: `current task ${taskID}; no new task was created`,
           })
         }
+        }
         const requestID =
           "orchestrator-proposed-task:" +
           taskID +
@@ -4577,6 +4586,7 @@ export function createOrchestratorTools(input: {
           metadata: {
             origin: "orchestrator_proposed_task",
             parent_task_id: taskID,
+            inheritance: "orchestrator_follow_up",
             proposal_reason: reason,
           },
         })
@@ -4587,7 +4597,9 @@ export function createOrchestratorTools(input: {
           reason: "propose_task_confirmed",
         })
         return SubAgentProtocol.yieldResult({
-          headline: "Follow-up task created after user confirmation.",
+          headline: requireConfirmation
+            ? "Follow-up task created after user confirmation."
+            : "Follow-up task created without user confirmation.",
           fields: [
             ["new_task_id", newTaskID],
             ["title", title],
@@ -5392,6 +5404,12 @@ export function createOrchestratorTools(input: {
                 tests: [],
                 files_changed: [],
                 error: runErr.message,
+                // Host-synthesised BuildResult on contract violation: the LLM
+                // never reached its terminal tool, so it has no chance to
+                // populate fact_check_items. Empty array is the honest
+                // construction-site default (specs/fact-check-agent-...md
+                // §6.1.3 — same rationale as external executor factory).
+                fact_check_items: [],
               }
               buildOutcome = {
                 kind: "ok",
@@ -5802,44 +5820,41 @@ export function createOrchestratorTools(input: {
         const cwd = Instance.directory
         const ms = timeout ?? ORCHESTRATOR_BASH_DEFAULT_TIMEOUT_MS
         const shell = await Shell.acceptable()
-        const proc = spawn(command, {
+        const supervisor = await ProcessSupervisor.spawnShell({
+          command,
           shell,
           cwd,
           env: { ...process.env },
-          stdio: ["ignore", "pipe", "pipe"],
         })
         let output = ""
         const append = (chunk: Buffer | string) => {
           output += typeof chunk === "string" ? chunk : chunk.toString()
         }
-        proc.stdout?.on("data", append)
-        proc.stderr?.on("data", append)
+        supervisor.stdout?.on("data", append)
+        supervisor.stderr?.on("data", append)
 
         let timedOut = false
-        let exited = false
-        const kill = () => Shell.killTree(proc, { exited: () => exited })
+        const terminate = () => supervisor.terminate()
         const timer = setTimeout(() => {
           timedOut = true
-          void kill()
+          void terminate()
         }, ms)
 
         const onAbort = () => {
-          void kill()
+          void terminate()
         }
         input.signal?.addEventListener("abort", onAbort, { once: true })
 
-        const exitCode: number | null = await new Promise((resolve) => {
-          proc.once("exit", (code) => {
-            exited = true
-            resolve(code)
-          })
-          proc.once("error", () => {
-            exited = true
-            resolve(null)
-          })
-        })
-        clearTimeout(timer)
-        input.signal?.removeEventListener("abort", onAbort)
+        let exitCode: number | null = null
+        try {
+          exitCode = await supervisor.exited
+        } catch {
+          exitCode = null
+        } finally {
+          clearTimeout(timer)
+          input.signal?.removeEventListener("abort", onAbort)
+          await supervisor.dispose()
+        }
 
         const MAX_OUTPUT = 30_000
         const clipped =

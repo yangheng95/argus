@@ -59,13 +59,16 @@ import { deriveTaskStatus } from "../../src/engine/task-status"
 import { SessionStatus } from "../../src/session/status"
 import { withStreamActivity } from "../../src/util/stream-activity"
 import {
+  completeOrchestratorToolOwnership,
   createOrchestratorToolOwnershipPayload,
+  findLatestOwnershipByID,
   insertOrchestratorToolOwnershipArtifact,
   listLiveOrchestratorToolOwnership,
 } from "../../src/engine/tool-ownership"
 import { Ownership } from "../../src/engine/ownership"
 import { buildIntegrityReplayContext, buildSpecSnapshotLineage } from "../../src/integrity/replay-context"
 import { buildIntegrityRootHistory, persistentRootSummary, renderIntegrityRootHistoryBlock } from "../../src/integrity/root-history"
+import { Config } from "../../src/config/config"
 
 let buildAgentRunImpl: ((input: any) => Promise<any>) | undefined
 let reviewIntegrityImpl: ((input: any) => Promise<any>) | undefined
@@ -192,6 +195,7 @@ function integrityTeamResult(input: {
     rounds: [],
     requiredRepairs,
     unresolvedDisagreements: [],
+        fact_check_items: [],
     sessionID: input.sessionID ?? "ses_integrity_default",
   }
 }
@@ -1470,7 +1474,7 @@ describe("orchestrator tools", () => {
     })
   })
 
-  test("live build ownership blocks cancel_subagent and modify_goal contract mutation", async () => {
+  test("live build ownership blocks contract mutation but cancel_subagent can stop the running build", async () => {
     const now = Date.now()
     const stamp = now.toString(16)
     const projectID = `project_live_owner_guard_${stamp}`
@@ -1534,16 +1538,6 @@ describe("orchestrator tools", () => {
           signal: new AbortController().signal,
         })
 
-        const cancelResult = await tools.cancel_subagent.execute(
-          {
-            goal_id: goalID,
-            reason: "orchestrator should not cancel a live owned build",
-          },
-          buildToolOptions(),
-        )
-        expect(cancelResult).toContain("Error: cancel_subagent cannot cancel build session")
-        expect(findGoalRun(goalRunID)?.status).toBe("running")
-
         const modifyResult = await tools.modify_goal.execute(
           {
             goalID,
@@ -1555,16 +1549,36 @@ describe("orchestrator tools", () => {
         expect(modifyResult).toContain("Error: modify_goal refused")
         expect(findGoal(goalID)?.objective).toBe("Guard live build ownership")
         expect(listLiveOrchestratorToolOwnership(taskID)).toHaveLength(1)
+
+        const cancelResult = await tools.cancel_subagent.execute(
+          {
+            goal_id: goalID,
+            reason: "operator changed direction while this build was still running",
+          },
+          buildToolOptions(),
+        )
+        expect(cancelResult).toContain("Cancelled live-owned build session")
+        expect(cancelResult).toContain(`goal_run ${goalRunID} aborted`)
+        expect(findGoalRun(goalRunID)?.status).toBe("aborted")
+        expect(listLiveOrchestratorToolOwnership(taskID)).toHaveLength(0)
+
+        completeOrchestratorToolOwnership({
+          taskID,
+          ownershipID: ownershipPayload.ownership_id,
+          outcome: "completed",
+          now: now + 1,
+        })
+        expect(findLatestOwnershipByID(taskID, ownershipPayload.ownership_id)?.payload.outcome).toBe("cancelled")
       },
     })
   })
 
-  test("recover_stale_build closes live ownership and aborts the wedged goal attempt", async () => {
+  test("cancel_subagent recover_stale mode closes live ownership and aborts the wedged goal attempt", async () => {
     const now = Date.now()
     const stamp = now.toString(16)
-    const projectID = `project_recover_stale_build_${stamp}`
-    const taskID = `tsk_recover_stale_build_${stamp}`
-    const goalID = `gol_recover_stale_build_${stamp}`
+    const projectID = `project_cancel_subagent_recover_stale_${stamp}`
+    const taskID = `tsk_cancel_subagent_recover_stale_${stamp}`
+    const goalID = `gol_cancel_subagent_recover_stale_${stamp}`
 
     insertWorkflowTaskWithGoal({
       projectID,
@@ -1576,7 +1590,7 @@ describe("orchestrator tools", () => {
       taskTitle: "recover stale build",
       request: "Recover a build that no longer has active execution",
       goalTitle: "Recover stale build goal",
-      goalSlug: "recover-stale-build-goal",
+      goalSlug: "cancel-subagent-recover-stale-goal",
       objective: "Close stale build ownership so the goal can retry",
       now,
     })
@@ -1594,14 +1608,14 @@ describe("orchestrator tools", () => {
         Database.use((db) =>
           db.update(EngineTaskTable).set({ session_id: parent.id }).where(eq(EngineTaskTable.id, taskID)).run(),
         )
-        const runID = `run_recover_stale_build_${stamp}`
+        const runID = `run_cancel_subagent_recover_stale_${stamp}`
         const goalRunID = beginBuildAttempt({
           taskID,
           goalID,
           runID,
           sessionID: child.id,
         })
-        const executorSessionID = `exec_recover_stale_build_${stamp}`
+        const executorSessionID = `exec_cancel_subagent_recover_stale_${stamp}`
         Database.use((db) =>
           db
             .insert(EngineExecutorSessionTable)
@@ -1621,16 +1635,16 @@ describe("orchestrator tools", () => {
             .run(),
         )
 
-        const orchestratorMessageID = `msg_recover_stale_build_${stamp}`
-        const toolPartID = `prt_recover_stale_build_${stamp}`
-        const toolCallID = `cal_recover_stale_build_${stamp}`
+        const orchestratorMessageID = `msg_cancel_subagent_recover_stale_${stamp}`
+        const toolPartID = `prt_cancel_subagent_recover_stale_${stamp}`
+        const toolCallID = `cal_cancel_subagent_recover_stale_${stamp}`
         await Session.persistMessage({
           info: {
             id: orchestratorMessageID,
             sessionID: parent.id,
             role: "assistant",
             time: { created: now },
-            parentID: `msg_user_recover_stale_build_${stamp}`,
+            parentID: `msg_user_cancel_subagent_recover_stale_${stamp}`,
             providerID: "test-provider",
             modelID: "test-model",
             agent: "orchestrator",
@@ -1683,18 +1697,20 @@ describe("orchestrator tools", () => {
           signal: new AbortController().signal,
         })
 
-        const result = await tools.recover_stale_build.execute(
+        const result = await tools.cancel_subagent.execute(
           {
             goal_run_id: goalRunID,
+            mode: "recover_stale",
             reason: "operator note arrived after the build session stopped producing events",
           },
-          buildToolOptions("recover_stale_build"),
+          buildToolOptions("cancel_subagent"),
         )
 
-        expect(result).toContain(`Recovered stale build ownership ${ownershipPayload.ownership_id}`)
+        expect(result).toContain(`Recovered stale live-owned build ${child.id}`)
+        expect(result).toContain(`ownership=${ownershipPayload.ownership_id}`)
         expect(result).toContain(`goal_run ${goalRunID} aborted`)
         expect(findGoalRun(goalRunID)?.status).toBe("aborted")
-        expect(findGoalRun(goalRunID)?.error).toContain("recover_stale_build:")
+        expect(findGoalRun(goalRunID)?.error).toContain("cancel_subagent:")
         expect(findExecutorSession(executorSessionID)?.status).toBe("aborted")
         expect(listLiveOrchestratorToolOwnership(taskID)).toHaveLength(0)
 
@@ -1706,7 +1722,7 @@ describe("orchestrator tools", () => {
     })
   })
 
-  test("recover_stale_build refuses a build session that is still streaming", async () => {
+  test("cancel_subagent recover_stale mode refuses a build session that is still streaming", async () => {
     const now = Date.now()
     const stamp = now.toString(16)
     const projectID = `project_recover_streaming_build_${stamp}`
@@ -1773,15 +1789,16 @@ describe("orchestrator tools", () => {
           signal: new AbortController().signal,
         })
 
-        const result = await tools.recover_stale_build.execute(
+        const result = await tools.cancel_subagent.execute(
           {
             goal_id: goalID,
+            mode: "recover_stale",
             reason: "should not abort an active stream",
           },
           buildToolOptions("recover_streaming_build"),
         )
 
-        expect(result).toContain("refused because build session")
+        expect(result).toContain("refused stale recovery because build session")
         expect(result).toContain("streaming")
         expect(findGoalRun(goalRunID)?.status).toBe("running")
         expect(listLiveOrchestratorToolOwnership(taskID)).toHaveLength(1)
@@ -1790,7 +1807,7 @@ describe("orchestrator tools", () => {
     })
   })
 
-  test("recover_stale_build is a no-op when the build session has no live ownership", async () => {
+  test("cancel_subagent recover_stale mode is a no-op when the build session has no live ownership", async () => {
     const now = Date.now()
     const stamp = now.toString(16)
     const projectID = `project_recover_no_owner_${stamp}`
@@ -1832,9 +1849,10 @@ describe("orchestrator tools", () => {
           signal: new AbortController().signal,
         })
 
-        const result = await tools.recover_stale_build.execute(
+        const result = await tools.cancel_subagent.execute(
           {
             session_id: child.id,
+            mode: "recover_stale",
             reason: "there is no live ownership to recover",
           },
           buildToolOptions("recover_no_owner"),
@@ -2119,6 +2137,7 @@ describe("orchestrator tools", () => {
         ],
         requiredRepairs: [],
         unresolvedDisagreements: [],
+        fact_check_items: [],
         sessionID: "ses_integrity_advisory_complete",
       }
     }
@@ -2530,6 +2549,7 @@ describe("orchestrator tools", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
+        spyOn(Config, "get").mockResolvedValue({ experimental: { confirm_proposed_tasks: true } } as any)
         const pipeline = WorkflowRegistry.resolveSync("pipeline")!
         const { tools } = createOrchestratorTools({
           taskID,
@@ -2573,7 +2593,94 @@ describe("orchestrator tools", () => {
             metadata: {
               origin: "orchestrator_proposed_task",
               parent_task_id: taskID,
+              inheritance: "orchestrator_follow_up",
               proposal_reason: "This is a separate quality-hardening follow-up after the current request.",
+            },
+          }),
+        )
+      },
+    })
+  })
+
+  test("propose_task can create a follow-up from a completed parent task", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_completed_propose_${stamp}`
+    const taskID = `tsk_completed_propose_${stamp}`
+    const createSpy = spyOn(EngineService, "createTask").mockResolvedValue("tsk_completed_followup")
+
+    Database.use((db) => {
+      db.insert(ProjectTable)
+        .values({
+          id: projectID,
+          worktree: tmp.path,
+          name: "completed propose task project",
+          sandboxes: "[]",
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+      db.insert(EngineTaskTable)
+        .values({
+          id: taskID,
+          project_id: projectID,
+          session_id: null,
+          source: "test",
+          title: "Completed parent task",
+          request: "Build the initial feature and run the first test pass.",
+          kind: "workflow",
+          priority: "normal",
+          time_created: now,
+          time_updated: now,
+          time_started: now - 1_000,
+          time_completed: now,
+        })
+        .run()
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const pipeline = WorkflowRegistry.resolveSync("pipeline")!
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: "ses_orchestrator_completed_propose",
+          workflow: pipeline,
+          workflowState: createWorkflowState(pipeline),
+        })
+
+        const proposal = tools.propose_task.execute(
+          {
+            title: "Run second verification pass",
+            request: "Run a second verification pass for the completed parent task and fix any regressions found.",
+            reason: "The first task is complete; this is a separate follow-up verification scope.",
+            priority: "high",
+            queue: true,
+            kind: "workflow",
+          },
+          buildToolOptions(),
+        )
+
+        const result = await proposal
+        const pending = await Question.list()
+
+        expect(result).toContain("Follow-up task created without user confirmation")
+        expect(result).toContain("tsk_completed_followup")
+        expect(pending).toHaveLength(0)
+        expect(createSpy).toHaveBeenCalledTimes(1)
+        expect(createSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            title: "Run second verification pass",
+            request: "Run a second verification pass for the completed parent task and fix any regressions found.",
+            priority: "high",
+            queue: true,
+            kind: "workflow",
+            source: "orchestrator:propose_task",
+            metadata: {
+              origin: "orchestrator_proposed_task",
+              parent_task_id: taskID,
+              inheritance: "orchestrator_follow_up",
+              proposal_reason: "The first task is complete; this is a separate follow-up verification scope.",
             },
           }),
         )
@@ -2619,6 +2726,7 @@ describe("orchestrator tools", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
+        spyOn(Config, "get").mockResolvedValue({ experimental: { confirm_proposed_tasks: true } } as any)
         const pipeline = WorkflowRegistry.resolveSync("pipeline")!
         const { tools } = createOrchestratorTools({
           taskID,

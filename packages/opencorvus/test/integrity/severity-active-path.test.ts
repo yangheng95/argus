@@ -117,6 +117,7 @@ mock.module("@/agent/runner", () => ({
           },
         ],
         unresolvedDisagreements: [],
+        fact_check_items: [],
       }
     }
     return { collector, session }
@@ -214,6 +215,7 @@ test("reviewIntegrity active path delivers severity discipline, lineage replay, 
           blockingFindings: [],
           requiredRepairs: [],
           unresolvedDisagreements: [],
+        fact_check_items: [],
         },
       ],
       buildEvidenceSinceLastReview: {

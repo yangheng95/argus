@@ -68,6 +68,7 @@ const input: ReviewPromptInput = {
         blockingFindings: [],
         requiredRepairs: [],
         unresolvedDisagreements: [],
+        fact_check_items: [],
       },
     ],
     buildEvidenceSinceLastReview: {

@@ -14,6 +14,7 @@ import { tool } from "ai"
 import z from "zod"
 import { limitSummary, markdownList } from "@/agent/report"
 import type { DecisionLog } from "@/decision-log"
+import { FactCheckItemListSchema, type FactCheckItem } from "@/fact-check/schema"
 
 // ---------------------------------------------------------------------------
 // Collector — accumulates registered items across tool calls
@@ -22,6 +23,7 @@ import type { DecisionLog } from "@/decision-log"
 export interface RequirementsCollector {
   requirements: RegisteredRequirement[]
   decisions: RegisteredDecision[]
+  fact_check_items: FactCheckItem[]
   finalized: boolean
 }
 
@@ -70,6 +72,12 @@ function missingRequiredDecisions(collector: RequirementsCollector): string[] {
 
 export const RequirementsSubmitSchema = z.object({
   final: z.literal(true).describe("Explicit confirmation that requirement and decision registration is complete."),
+  // Required per specs/fact-check-agent-2026-05-25.md §3.1.  Empty array
+  // is fine when you have no unverified factual claims; missing field is
+  // a contract violation (rule 7/8: no fallback / no default).
+  fact_check_items: FactCheckItemListSchema.describe(
+    "Every factual claim (API behaviour, library version, third-party protocol, number, path, history) you have NOT verified via tool calls in this session. Empty when only opinions or in-session-verified statements.",
+  ),
 })
 
 export const RequirementRegistrationSchema = z.object({
@@ -84,6 +92,7 @@ function emptyCollector(): RequirementsCollector {
   return {
     requirements: [],
     decisions: [],
+    fact_check_items: [],
     finalized: false,
   }
 }
@@ -155,9 +164,9 @@ export function createRequirementsOutputTools(options: RequirementsOutputToolOpt
     submit_requirements: tool({
       description:
         "Finalize requirements after all register_requirement and register_decision calls are complete. " +
-        "Call this with final=true.",
+        "Call with final=true and the full fact_check_items list (empty array if no unverified claims).",
       inputSchema: RequirementsSubmitSchema,
-      execute: async () => {
+      execute: async ({ fact_check_items }) => {
         if (collector.requirements.length === 0) {
           return "Error: no requirements registered. Call register_requirement at least once before submit_requirements."
         }
@@ -166,8 +175,9 @@ export function createRequirementsOutputTools(options: RequirementsOutputToolOpt
           return `Error: missing required foundational decision(s): ${missing.join(", ")}. ` +
             "Register runtime, one framework, test_framework, affected_modules, affected_concepts, and impact_size before submit_requirements."
         }
+        collector.fact_check_items = fact_check_items
         collector.finalized = true
-        return `PASS: Requirements finalized (${collector.requirements.length} requirement(s), ${collector.decisions.length} decision(s)).`
+        return `PASS: Requirements finalized (${collector.requirements.length} requirement(s), ${collector.decisions.length} decision(s), ${fact_check_items.length} fact-check item(s) registered).`
       },
     }),
 
