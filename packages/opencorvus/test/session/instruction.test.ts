@@ -25,6 +25,40 @@ describe("InstructionPrompt.resolve", () => {
     })
   })
 
+  test("loads lowercase agent.md and claude.md as authoritative system paths", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await Bun.write(path.join(dir, "agent.md"), "# Lower Agent Instructions")
+        await Bun.write(path.join(dir, "claude.md"), "# Lower Claude Instructions")
+      },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const paths = Array.from(await InstructionPrompt.systemPaths())
+        expect(paths).toContain(path.join(tmp.path, "agent.md"))
+        expect(paths).toContain(path.join(tmp.path, "claude.md"))
+      },
+    })
+  })
+
+  test("expands @ file references inside instruction files", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await Bun.write(path.join(dir, "AGENTS.md"), "# Root Instructions\n@rules.MD")
+        await Bun.write(path.join(dir, "rUlEs.md"), "# Included Rules\nFollow the included rule.")
+      },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const system = await InstructionPrompt.system()
+        expect(system.join("\n\n")).toContain("Instructions from: " + path.join(tmp.path, "rUlEs.md"))
+        expect(system.join("\n\n")).toContain("Follow the included rule.")
+      },
+    })
+  })
+
   test("returns empty when AGENTS.md is at project root (already in systemPaths)", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
@@ -64,6 +98,29 @@ describe("InstructionPrompt.resolve", () => {
         )
         expect(results.length).toBe(1)
         expect(results[0].filepath).toBe(path.join(tmp.path, "subdir", "AGENTS.md"))
+      },
+    })
+  })
+
+  test("expands @ file references from subdirectory instructions loaded by read", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await Bun.write(path.join(dir, "subdir", "agent.md"), "# Subdir Instructions\n@extra-rules.md")
+        await Bun.write(path.join(dir, "subdir", "extra-rules.md"), "# Extra Rules\nUse the extra rule.")
+        await Bun.write(path.join(dir, "subdir", "nested", "file.ts"), "const x = 1")
+      },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const results = await InstructionPrompt.resolve(
+          [],
+          path.join(tmp.path, "subdir", "nested", "file.ts"),
+          "test-message-subdir-at",
+        )
+        expect(results.length).toBe(1)
+        expect(results[0].content).toContain("Instructions from: " + path.join(tmp.path, "subdir", "extra-rules.md"))
+        expect(results[0].content).toContain("Use the extra rule.")
       },
     })
   })

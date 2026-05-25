@@ -105,7 +105,8 @@ export namespace Tool {
           if (result.metadata.truncated !== undefined) {
             return result
           }
-          const truncated = await Truncate.output(result.output, { sessionID: ctx.sessionID }, initCtx?.agent)
+          const taskID = typeof ctx.extra?.taskID === "string" ? ctx.extra.taskID : undefined
+          const truncated = await Truncate.output(result.output, { sessionID: ctx.sessionID, taskID }, initCtx?.agent)
           return {
             ...result,
             output: truncated.content,

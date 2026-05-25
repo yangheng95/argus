@@ -76,9 +76,9 @@ export namespace Shell {
     return [...fromGit, ...fromCommonInstalls, ...genericBash]
   }
 
-  export async function killTree(proc: ChildProcess, opts?: { exited?: () => boolean }): Promise<void> {
+  export async function killTree(proc: ChildProcess, opts?: { exited?: () => boolean; allowExitedRoot?: boolean }): Promise<void> {
     const pid = proc.pid
-    if (!pid || opts?.exited?.()) return
+    if (!pid || (!opts?.allowExitedRoot && opts?.exited?.())) return
 
     if (process.platform === "win32") {
       const killed = await new Promise<boolean>((resolve) => {

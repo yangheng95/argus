@@ -244,7 +244,7 @@ export function sanitizeIntegrityPromptText(input: {
 
   const maxChars = input.maxChars ?? defaultSanitizedPromptTextMaxChars(input.field)
   let truncated = false
-  if (text.length > maxChars) {
+  if (Number.isFinite(maxChars) && text.length > maxChars) {
     truncated = true
     const marker = "\n[truncated_by_integrity_prompt_sanitizer]"
     text = maxChars > marker.length ? `${text.slice(0, maxChars - marker.length)}${marker}` : text.slice(0, maxChars)
@@ -456,7 +456,7 @@ function aggregateSanitizerReports(
 function defaultSanitizedPromptTextMaxChars(field: SanitizedPromptTextField): number {
   switch (field) {
     case "user_request_quote":
-      return 2000
+      return Number.POSITIVE_INFINITY
     case "finding_description":
       return 2400
     case "finding_repair":

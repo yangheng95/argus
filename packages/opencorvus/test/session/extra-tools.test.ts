@@ -360,6 +360,49 @@ describe("extra tool provider schema preparation", () => {
     expect(schema.properties.status.enum).toEqual(["passed", "failed"])
   })
 
+  test("adds v6-aware model output conversion for project tool-result objects", () => {
+    const prepared = SessionLoop.prepareProviderTool({
+      name: "submit_requirements",
+      source: "extra",
+      model: dashScopeModel,
+      tool: tool({
+        description: "submit",
+        inputSchema: z.object({ final: z.literal(true) }),
+        async execute() {
+          return { output: "accepted", title: "Submit", metadata: { ok: true } }
+        },
+      }),
+    }) as any
+
+    expect(prepared.toModelOutput({
+      toolCallId: "call_submit",
+      input: { final: true },
+      output: { output: "accepted", title: "Submit", metadata: { ok: true } },
+    })).toEqual({ type: "text", value: "accepted" })
+  })
+
+  test("preserves explicit tool model output conversion", () => {
+    const customToModelOutput = () => ({ type: "text", value: "custom" })
+    const prepared = SessionLoop.prepareProviderTool({
+      name: "submit_requirements",
+      source: "extra",
+      model: dashScopeModel,
+      tool: {
+        ...tool({
+          description: "submit",
+          inputSchema: z.object({ final: z.literal(true) }),
+          async execute() {
+            return { output: "accepted", title: "Submit", metadata: { ok: true } }
+          },
+        }),
+        toModelOutput: customToModelOutput,
+      } as any,
+    }) as any
+
+    expect(prepared.toModelOutput).toBe(customToModelOutput)
+    expect(prepared.toModelOutput({ output: { output: "accepted" } })).toEqual({ type: "text", value: "custom" })
+  })
+
   test("rejects provider-bound tools without an input schema", () => {
     expect(() =>
       SessionLoop.prepareProviderTool({
