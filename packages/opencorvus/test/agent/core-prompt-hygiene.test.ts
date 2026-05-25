@@ -20,7 +20,6 @@ const promptFiles = {
 const sharedPromptFiles = {
   acceptanceReview: "acceptance-review-core.txt",
   engineeringCraft: "engineering-craft.txt",
-  integrityTeam: "integrity-team-core.txt",
 }
 
 async function readPrompt(name: keyof typeof promptFiles) {
@@ -57,7 +56,10 @@ describe("core prompt hygiene", () => {
       // Raised 380 -> 420 on 2026-05-22 to make same-task deadlock recovery
       // explicit: dependency, worktree merge, port, script, and toolchain
       // blockers must be routed to repair owners instead of passive waits.
-      orchestrator: 420,
+      // Raised 420 -> 495 on 2026-05-26 to add the §Fact-Check Dispatch
+      // section (orchestrator instructions for the new fact_check tool;
+      // specs/fact-check-agent-2026-05-25.md §4.4).
+      orchestrator: 495,
       requirements: 180,
     }
 

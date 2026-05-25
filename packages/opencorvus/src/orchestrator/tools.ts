@@ -10,6 +10,7 @@ import path from "node:path"
 import fs from "node:fs/promises"
 import { createHash } from "node:crypto"
 import { Session } from "@/session"
+import { FactCheckItemListSchema, type FactCheckReport } from "@/fact-check/schema"
 import { resolveAgentModel, resolveAgentModelRef } from "@/agent/model"
 import { SessionPrompt } from "@/session/prompt"
 import { SessionStatus } from "@/session/status"
@@ -1182,6 +1183,58 @@ export { STATEFUL_SNAPSHOT_TOOL_NAMES, type StatefulSnapshotToolName } from "./s
 // ---------------------------------------------------------------------------
 // Tool factory
 // ---------------------------------------------------------------------------
+
+/**
+ * Render a FactCheckReport as orchestrator-facing markdown.  Single-file
+ * inline because the orchestrator yield is a string; the agent's own
+ * markdown renderer at fact-check/tools.ts uses a different shape.
+ */
+function renderFactCheckReport(report: FactCheckReport): string {
+  const sections: string[] = []
+  sections.push(
+    `**scope**: target_session=\`${report.scope.target_session_id}\` agent=\`${report.scope.target_agent}\` ` +
+      `items=${report.scope.items_inspected}/${report.scope.items_total}`,
+  )
+  if (report.verified.length > 0) {
+    sections.push(
+      `### Verified (${report.verified.length})\n` +
+        report.verified
+          .map(
+            (v, i) =>
+              `${i + 1}. ${v.claim}\n` +
+              v.evidence
+                .map((e) => `   - [${e.kind}] ${e.pointer}: ${e.excerpt.slice(0, 240)}`)
+                .join("\n"),
+          )
+          .join("\n\n"),
+    )
+  }
+  if (report.corrected.length > 0) {
+    sections.push(
+      `### Corrected (${report.corrected.length})\n` +
+        report.corrected
+          .map(
+            (c, i) =>
+              `${i + 1}. [${c.severity}] ${c.claim}\n` +
+              `   → **${c.correction}**\n` +
+              `   recommended_action: \`${c.recommended_action}\`\n` +
+              c.evidence
+                .map((e) => `   - [${e.kind}] ${e.pointer}: ${e.excerpt.slice(0, 240)}`)
+                .join("\n"),
+          )
+          .join("\n\n"),
+    )
+  }
+  if (report.unresolved.length > 0) {
+    sections.push(
+      `### Unresolved (${report.unresolved.length})\n` +
+        report.unresolved
+          .map((u, i) => `${i + 1}. [${u.severity}, ${u.why_unresolved}] ${u.claim}`)
+          .join("\n"),
+    )
+  }
+  return sections.join("\n\n")
+}
 
 export function createOrchestratorTools(input: {
   taskID: string
@@ -3345,6 +3398,136 @@ export function createOrchestratorTools(input: {
           })
         }
         return renderIntegrityOutcome(outcome)
+      },
+    }),
+
+    // -----------------------------------------------------------------------
+    // Fact-check — verifies factual claims registered by a worker agent's
+    // terminal report.  Specs: specs/fact-check-agent-2026-05-25.md §4.3.
+    //
+    // Trigger rule (rule 13 — you, the orchestrator LLM, decide):
+    //   You MAY call fact_check after integrity verdict = pass when
+    //   the upstream worker's terminal report has fact_check_items.length > 0
+    //   OR the worker's narrative makes load-bearing factual claims about
+    //   external systems.  The tool dedupes automatically across repeats;
+    //   if the target session is still streaming, the tool will reject —
+    //   retry after it finishes.
+    // -----------------------------------------------------------------------
+
+    fact_check: tool({
+      description:
+        "Verify factual claims a worker agent registered in its terminal report. " +
+        "Use when (1) integrity verdict=pass AND (2) the worker's terminal report has " +
+        "non-empty fact_check_items OR makes load-bearing factual claims about external " +
+        "systems (APIs, library versions, third-party protocols, numbers, paths). " +
+        "The tool dedupes automatically across repeated calls — you do NOT need to " +
+        "track 'already checked'.  If the target session is still streaming, the tool " +
+        "will reject; retry after it finishes.\n" +
+        "DO NOT call for trivial / opinion / preference outputs, or when integrity " +
+        "verdict ≠ pass.\n" +
+        "After fact_check returns:\n" +
+        "- verdict=clean → proceed.\n" +
+        "- verdict=minor_corrections → quote corrections in your next user-facing " +
+        "message, proceed.\n" +
+        "- verdict=needs_orchestrator_action → invoke modify_goal / restart_from_stage / " +
+        "fail_task per the corrected[i].recommended_action.\n" +
+        "- verdict=inconclusive → retry fact_check or proceed with a caveat note.",
+      inputSchema: z.object({
+        target_session_id: z
+          .string()
+          .describe("Session id of the worker whose terminal report you want fact-checked."),
+        target_agent: z
+          .string()
+          .describe(
+            "Worker agent name: build / requirements / architect / design-analyst / intent-analysis / integrity.",
+          ),
+        fact_check_items: FactCheckItemListSchema.describe(
+          "Copy of the fact_check_items[] array from the worker's terminal report. " +
+            "Empty array is allowed only when you also explain `reason` why fact-check is " +
+            "still useful (e.g., load-bearing prose claims the worker didn't register).",
+        ),
+        reason: z
+          .string()
+          .min(10)
+          .describe("Why you decided to dispatch fact-check on this worker output."),
+      }),
+      execute: async (args) => {
+        const task = requireTask(taskID)
+        await trackStepStart("fact_check")
+        const { FactCheckAgent } = await import("@/fact-check")
+        const { findFactCheckAttempt, recordFactCheckAttempt } = await import("@/fact-check/persist")
+        const { Session } = await import("@/session")
+
+        // Step 1: snapshot — also acts as the terminal-state precondition.
+        const snap = await Session.snapshotLatestAssistant(args.target_session_id)
+        if (!snap.finished) {
+          return (
+            `fact_check rejected: target session is not in a terminal state ` +
+            `(reason=${snap.reason ?? "unknown"}). Retry after the worker finishes streaming.`
+          )
+        }
+        if (!snap.messageID || !snap.contentHash) {
+          return (
+            "fact_check rejected: target session has no terminal assistant message. " +
+            "Confirm you passed the correct target_session_id."
+          )
+        }
+
+        // Step 2: idempotency cache.
+        const cached = findFactCheckAttempt({
+          invokedByOrchestratorSessionID: input.agentSessionID,
+          targetSessionID: args.target_session_id,
+          targetMessageID: snap.messageID,
+          targetMessageContentHash: snap.contentHash,
+        })
+        if (cached) {
+          return (
+            `fact_check (cached, no LLM work) — verdict=\`${cached.payload.report.overall_verdict}\`\n\n` +
+            renderFactCheckReport(cached.payload.report)
+          )
+        }
+
+        // Step 3: run agent.
+        const timeStarted = Date.now()
+        let outcome: "completed" | "aborted" | "tool_error" = "tool_error"
+        try {
+          const result = await FactCheckAgent.run({
+            targetSessionID: args.target_session_id,
+            targetAgent: args.target_agent,
+            targetMessageID: snap.messageID,
+            targetMessageContentHash: snap.contentHash,
+            factCheckItems: args.fact_check_items,
+            reason: args.reason,
+            orchestratorSessionID: input.agentSessionID,
+            taskID: task.id,
+            signal: input.signal,
+            // No onSessionCreated hook needed at this layer — the runner
+            // creates the child session under parentSessionID for overlay
+            // nesting automatically.
+          })
+          outcome = result.outcome
+          recordFactCheckAttempt({
+            taskID: task.id,
+            factCheckSessionID: result.sessionID,
+            targetSessionID: args.target_session_id,
+            targetAgent: args.target_agent,
+            targetMessageID: snap.messageID,
+            targetMessageContentHash: snap.contentHash,
+            invokedByOrchestratorSessionID: input.agentSessionID,
+            report: result.report,
+            timeStarted,
+            outcome,
+          })
+          return (
+            `fact_check completed — verdict=\`${result.report.overall_verdict}\`\n\n` +
+            renderFactCheckReport(result.report)
+          )
+        } catch (err) {
+          outcome = input.signal?.aborted ? "aborted" : "tool_error"
+          return (
+            `fact_check ${outcome}: ${err instanceof Error ? err.message : String(err)}`
+          )
+        }
       },
     }),
 
