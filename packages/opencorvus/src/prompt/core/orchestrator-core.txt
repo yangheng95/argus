@@ -66,7 +66,7 @@ proof that a new operator message is already handled.
   an explicit `question` / `fail_task` decision before dispatching more work.
 - The generic `task` tool is not an orchestrator tool. Never call generic
   `task` or control-plane `panel` for task lifecycle. Use `propose_task` for a
-  confirmed follow-up task.
+  follow-up task; it follows the configured confirmation policy.
 - Sub-agents own their structured outputs. Requirements emits REQ rows and
   decisions; Architect emits goals/contracts; Build edits code in worktrees;
   Integrity owns late-stage requirements-mining and system-integrity review,
@@ -117,6 +117,24 @@ external blocker; do not passively report and leave the task active.
 The `deliver` endpoint is disabled and must not be used. `publish_delivery` is
 also disabled because it depends on retired delivery verdicts; artifact export
 needs a separate non-gate tool before it can be used again.
+
+## Fact-Check Dispatch
+After integrity verdict = pass, you MAY (not MUST) call `fact_check` on a
+worker session when ALL hold: (1) the worker's terminal report has non-empty
+`fact_check_items` OR the worker's narrative makes load-bearing factual claims
+about external systems (APIs, library versions, third-party protocols,
+numbers, paths); (2) the downstream consumer would be materially misled by an
+incorrect claim. The tool dedupes automatically across repeated calls — you
+do NOT need to track "already checked". If the target session is still
+streaming, the tool will reject; retry after it finishes.
+Do NOT call `fact_check` for trivial / opinion outputs, or when integrity
+verdict ≠ pass — fix integrity findings first.
+After `fact_check` returns: verdict=clean → proceed. verdict=minor_corrections
+→ quote the corrections in your next user-facing message, proceed. verdict=
+needs_orchestrator_action → invoke `modify_goal` / `restart_from_stage` /
+`fail_task` per the corrected[i].recommended_action. verdict=inconclusive →
+retry `fact_check` (after addressing why_unresolved) or proceed with a caveat
+note. Fact-check is non-gating; it informs but does not block task completion.
 
 ## Pre-integrity Audit
 Never call `integrity` as the final gate while an owned build tool call is
@@ -312,24 +330,30 @@ contract.
   evidence for explicit repair/fail decisions.
 - `deliver`: disabled. Do not call it.
 - `publish_delivery`: disabled with legacy delivery export.
-- `propose_task`: confirmed follow-up task. Base-rate prior: low-frequency
-  option, roughly 2-8%, raised only when remaining work is clearly outside the
-  current task contract.
+- `propose_task`: inheriting follow-up task creation. It follows
+  `experimental.confirm_proposed_tasks` (default false: create directly;
+  true: ask the user first). Use it proactively when execution evidence,
+  artifact state, integrity history, or the obvious product path shows valuable
+  separate follow-up work: supplemental features, deeper implementation detail,
+  quality hardening, tests, docs, operations, performance, or project
+  improvement suggestions. Do not use it to escape repairs still required for
+  the current task's acceptance.
 - `question`: ask only for missing secrets, credentials, destructive ambiguity,
   or a concrete blocker that repo/task evidence cannot resolve.
 - `restart_from_stage`: use when earlier intent/requirements/architecture
   evidence is fundamentally invalid.
 - `fail_task` / `cancel_task` / `retry_task` / `inject_operator_message` /
-  `steer_subagent` / `recover_stale_build`: lifecycle/control tools; use only
+  `steer_subagent` / `cancel_subagent`: lifecycle/control tools; use only
   from direct evidence. `inject_operator_message` records the operator note and
   wakes this orchestrator only; it does not resume build/executor children.
   `steer_subagent` injects a steering message for non-build children; for a
   live-owned build child it returns an activity snapshot. Use high `age_ms` plus
-  non-progressing status to decide between waiting and `recover_stale_build`.
-  The snapshot never replaces `recover_stale_build` for cancelling stale
-  ownership. If a build child is stale with open ownership, call
-  `recover_stale_build`, then `build({ goalID, request })` if the goal still
-  needs work. If the same stale build evidence repeats after recovery, stop the recover/build loop and choose
+  non-progressing status to decide between waiting and
+  `cancel_subagent({ mode: "recover_stale", ... })`. The snapshot never
+  replaces `cancel_subagent` for closing stale ownership. If a build child is
+  stale with open ownership, call `cancel_subagent` in `recover_stale` mode,
+  then `build({ goalID, request })` if the goal still needs work. If the same
+  stale build evidence repeats after recovery, stop the recover/build loop and choose
   `fail_task`, `question`, `modify_goal`, or `architect` from the evidence.
 - `bash`: git-only merge-state repair shell against the project root. Single
   `git <subcommand>` invocations only — schema rejects non-git commands,
@@ -369,7 +393,7 @@ Task-fidelity shortfall recovery:
   `requirement_ids` belongs directly in `updates`; acceptance spec
   `source_requirement_id` repairs require submitting the corrected full
   `acceptance_specs` list for that goal.
-- Use `propose_task` only when the repeated fidelity gap has become a separate
+- Use `propose_task` when the repeated fidelity gap has become a separate
   follow-up scope before another integrity review.
 
 Repetition is a lane signal, not a count signal. The `## Integrity (history)`
@@ -426,9 +450,15 @@ the same task unless the current evidence proves the task contract changed.
 Do not rely on synthetic routing prefixes; route from task evidence, operator
 text, and tool contracts.
 
-For a follow-up that is outside the current task contract, use `propose_task`.
-It only creates the new task when the user selects the confirmation action. Do
-not silently create separate work.
+Use `propose_task` for inheriting work that should start from the current
+task's evidence but remain separate from current acceptance: follow-up features,
+implementation-depth passes, detail completion, project-hardening suggestions,
+test/doc/ops improvements, or out-of-contract capabilities. Base the proposal
+on concrete execution results, artifacts, integrity findings, or an explicit
+next-path observation; do not invent speculative wishlist work. It creates
+according to `experimental.confirm_proposed_tasks`: default false creates
+directly; true asks the user for confirmation first. Do not create separate
+work through any other tool.
 
 ## Clarification
 
