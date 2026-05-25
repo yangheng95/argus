@@ -3518,6 +3518,26 @@ export function createOrchestratorTools(input: {
             timeStarted,
             outcome,
           })
+          // Surface a one-line summary in decision_log so integrity replay
+          // and read_context can mention "fact-check verdict was X" without
+          // having to parse the full artifact (spec §6.1.2 step 7).
+          try {
+            const { createDecisionLog } = await import("@/decision-log")
+            createDecisionLog(task.id).append({
+              phase: "fact_check",
+              key: `fact_check:${args.target_session_id}:${snap.messageID}`,
+              value: `verdict=${result.report.overall_verdict} ` +
+                `verified=${result.report.verified.length} ` +
+                `corrected=${result.report.corrected.length} ` +
+                `unresolved=${result.report.unresolved.length}`,
+              reason: `fact-check on ${args.target_agent} (${args.reason.slice(0, 200)})`,
+            })
+          } catch (logErr) {
+            log.warn("fact_check: decision_log write failed (non-fatal)", {
+              taskID: task.id,
+              error: logErr instanceof Error ? logErr.message : String(logErr),
+            })
+          }
           return (
             `fact_check completed — verdict=\`${result.report.overall_verdict}\`\n\n` +
             renderFactCheckReport(result.report)
@@ -4145,6 +4165,36 @@ export function createOrchestratorTools(input: {
             excludePhases: ["review"],
           })
           if (section) sections.push(`\n${section}`)
+        }
+
+        if (scope === "all") {
+          // Fact-check attempts (one-line per row) — specs/fact-check-agent-2026-05-25.md
+          // §6.1.2 step 7. Integrity replay reads this same artifact stream
+          // via listFactCheckAttempts; surfacing summaries in read_context
+          // gives the orchestrator LLM a quick "what was already verified"
+          // view without re-dispatching fact_check.  Bounded: latest 5 per
+          // task to mirror the review-history cap.
+          const { listFactCheckAttempts } = await import("@/fact-check/persist")
+          const fcRows = listFactCheckAttempts(taskID)
+          if (fcRows.length > 0) {
+            const latest = fcRows.slice(0, 5)
+            const omitted = fcRows.length - latest.length
+            const header =
+              omitted > 0
+                ? `\n## Fact-check attempts (latest ${latest.length} of ${fcRows.length}; ${omitted} older omitted)`
+                : `\n## Fact-check attempts (${latest.length})`
+            sections.push(header)
+            for (const row of latest) {
+              const r = row.payload.report
+              sections.push(
+                `- [${r.overall_verdict}] target=\`${row.payload.target_agent}\` ` +
+                  `session=\`${row.payload.target_session_id.slice(0, 16)}…\` ` +
+                  `verified=${r.verified.length} corrected=${r.corrected.length} ` +
+                  `unresolved=${r.unresolved.length} ` +
+                  `(${row.payload.outcome})`,
+              )
+            }
+          }
         }
 
         if (scope === "deliveries" || scope === "all") {
