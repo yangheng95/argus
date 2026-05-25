@@ -199,6 +199,12 @@ function buildFactCheckUserPrompt(input: FactCheckAgent.RunInput, targetMessageT
  * latest assistant message so the fact-check agent can inspect the actual
  * claims (codex impl review §2).
  *
+ * @internal — exported for the direct regression test at
+ * test/fact-check/load-target-message-text.test.ts (codex impl review
+ * round 4). Not part of the fact-check public API; callers outside this
+ * module should go through `FactCheckAgent.run` which invokes this
+ * function as part of prompt construction.
+ *
  * Failure semantics (codex impl review round 2 §B-2 — rule 7 no silent
  * fallback):
  *   - Message.stream errors (DB error, session not found) → THROW.  The
