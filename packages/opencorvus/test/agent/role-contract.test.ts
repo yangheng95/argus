@@ -15,16 +15,22 @@ afterEach(async () => {
   await Instance.disposeAll()
 })
 
-test("native agent descriptions come from the code-owned role contract", async () => {
+test("every role contract id has a matching registered agent (no silent missing registrations)", async () => {
+  // Codex impl review round 3 §D — the original "if (!agent) continue"
+  // pattern silently passed when an entry in AgentRoleContract.all was
+  // not registered in Agent.list(). Strengthen the assertion so missing
+  // a role registration (e.g. forgetting to add fact-check to
+  // agent.ts state()) loudly fails this test.
   await using tmp = await tmpdir({ git: true })
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
       const agents = await Agent.list()
+      const byID = new Map(agents.map((a) => [a.name, a]))
       for (const [id, contract] of Object.entries(AgentRoleContract.all)) {
-        const agent = agents.find((item) => item.name === id)
-        if (!agent) continue
-        expect(agent.description).toBe(contract.description)
+        const agent = byID.get(id)
+        expect(agent, `AgentRoleContract.all["${id}"] has no matching Agent.list() entry — likely missing from agent.ts state() / NATIVE_DEFAULTS`).toBeDefined()
+        expect(agent!.description).toBe(contract.description)
       }
     },
   })
