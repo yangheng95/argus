@@ -13,6 +13,7 @@ export type AgentRoleID =
   | "design-analyst"
   | "intent-analysis"
   | "integrity"
+  | "fact-check"
 
 export interface AgentRoleContract {
   id: AgentRoleID
@@ -118,6 +119,13 @@ export namespace AgentRoleContract {
     integrity: {
       id: "integrity",
       description: "Integrity reviewer. Audits requirement and goal integrity and owns final session-bound acceptance review, including runtime, frontend, visual, and rejection-detail evidence.",
+      promptEditable: true,
+      defaultPromptRequired: true,
+      promptConfigMode: "append",
+    },
+    "fact-check": {
+      id: "fact-check",
+      description: "Fact-check agent. Verifies factual claims (APIs, library versions, numbers, paths, historical decisions) emitted by worker agents in their terminal report `fact_check_items[]`. Dispatched by the orchestrator after integrity pass; outputs structured verified/corrected/unresolved findings with evidence pointers.",
       promptEditable: true,
       defaultPromptRequired: true,
       promptConfigMode: "append",

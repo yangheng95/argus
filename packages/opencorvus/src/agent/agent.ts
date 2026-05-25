@@ -16,6 +16,7 @@ import DESIGN_ANALYST_CORE from "@/prompt/core/design-analyst-core.txt"
 import INTEGRITY_CORE from "@/prompt/core/integrity-core.txt"
 import ACCEPTANCE_REVIEW_CORE from "@/prompt/core/acceptance-review-core.txt"
 import INTENT_ANALYSIS_CORE from "@/prompt/core/intent-analysis-core.txt"
+import FACT_CHECK_CORE from "@/prompt/core/fact-check-core.txt"
 import PROMPT_CODING from "./prompt/coding.txt"
 import PROMPT_COMPACTION from "./prompt/compaction.txt"
 import PROMPT_EXPLORE from "./prompt/explore.txt"
@@ -288,6 +289,7 @@ export namespace Agent {
             "design_analysis",
             "architect",
             "integrity",
+            "fact_check",
             "propose_task",
             "analyze_intent",
             "explore",
@@ -299,7 +301,6 @@ export namespace Agent {
             "retry_task",
             "inject_operator_message",
             "cancel_subagent",
-            "recover_stale_build",
             // observation (read-only views of task state)
             "query_failed_goals",
             "read_context",
@@ -431,6 +432,33 @@ export namespace Agent {
         native: true,
         hidden: true,
       },
+      "fact-check": {
+        name: "fact-check",
+        description: AgentRoleContract.description("fact-check"),
+        prompt: FACT_CHECK_CORE,
+        // Read-only retrieval surface. No edit/write/bash/git/merge_back —
+        // fact-check verifies claims; it cannot mutate code or messages
+        // (rule 15 single-channel). memory is search/get only (rule 5/6).
+        tools: {
+          include: [
+            "read_file",
+            "find_files",
+            "search_code",
+            "list_directory",
+            "websearch",
+            "webfetch",
+            "external_code_search",
+            "memory_search",
+            "memory_get",
+            "todoread",
+            "todowrite",
+          ],
+        },
+        options: {},
+        mode: "primary",
+        native: true,
+        hidden: true,
+      },
     }
 
     for (const [key, value] of entries((cfg.agent ?? {}) as NonNullable<Config.Info["agent"]>)) {
@@ -496,6 +524,7 @@ export namespace Agent {
     "design-analyst": DESIGN_ANALYST_CORE,
     "intent-analysis": INTENT_ANALYSIS_CORE,
     integrity: INTEGRITY_RUNTIME_PROMPT,
+    "fact-check": FACT_CHECK_CORE,
   }
 
   /** Returns the built-in default prompt for a native agent (before config overrides). */

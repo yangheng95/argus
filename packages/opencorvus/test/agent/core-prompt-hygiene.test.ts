@@ -9,6 +9,7 @@ const promptFiles = {
   architect: "architect-core.txt",
   build: "build-core.txt",
   designAnalyst: "design-analyst-core.txt",
+  factCheck: "fact-check-core.txt",
   integrity: "integrity-core.txt",
   integrityTeam: "integrity-team-core.txt",
   intentAnalysis: "intent-analysis-core.txt",
@@ -46,6 +47,7 @@ describe("core prompt hygiene", () => {
       architect: 160,
       build: 175,
       designAnalyst: 125,
+      factCheck: 80,
       integrity: 175,
       integrityTeam: 85,
       intentAnalysis: 130,
@@ -606,7 +608,7 @@ describe("core prompt hygiene", () => {
     expect(normalized).toContain('`build({ request, directBuildIntent: "modify_files" })` with the exact fidelity delta as the request')
     expect(normalized).toContain("If the same fidelity shortfall repeats after that build retry")
     expect(normalized).toContain("use `modify_goal` or `architect` when the current task needs a corrected/new goal")
-    expect(normalized).toContain("Use `propose_task` only when the repeated fidelity gap has become a separate follow-up scope")
+    expect(normalized).toContain("Use `propose_task` when the repeated fidelity gap has become a separate follow-up scope")
   })
 
   test("integrity aggregate docs do not describe the retired worst-of gate", async () => {
@@ -622,14 +624,17 @@ describe("core prompt hygiene", () => {
     expect(text).toContain("repair-bearing concerns")
   })
 
-  test("orchestrator prompt routes follow-up task creation through confirmed proposals", async () => {
+  test("orchestrator prompt routes follow-up task creation through proposed tasks", async () => {
     const text = await readPrompt("orchestrator")
     const normalized = text.replace(/\s+/g, " ")
     expect(text).toContain("propose_task")
     expect(normalized).toContain("You are the only agent-side owner of engine task lifecycle decisions")
-    expect(normalized).toContain("only creates the new task when the user selects the confirmation action")
-    expect(normalized).toContain("Base-rate prior: low-frequency option, roughly 2-8%")
-    expect(normalized).toContain("remaining work is clearly outside the current task contract")
+    expect(normalized).toContain("It creates according to `experimental.confirm_proposed_tasks`")
+    expect(normalized).toContain("default false creates directly")
+    expect(normalized).toContain("inheriting follow-up task creation")
+    expect(normalized).toContain("execution evidence, artifact state, integrity history, or the obvious product path")
+    expect(normalized).toContain("supplemental features, deeper implementation detail")
+    expect(normalized).toContain("project improvement suggestions")
     expect(normalized).toContain("Never call generic `task` or control-plane `panel`")
   })
 
