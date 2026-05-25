@@ -79,12 +79,14 @@ import { Bus } from "@/bus"
 import { Identifier } from "@/id/id"
 import { Log } from "@/util/log"
 import { Message } from "@/session/message"
+import { renderToolFailureCause, type ToolFailureCause } from "@/session/tool-failure-cause"
 import type { SessionKind } from "@/session/session.sql"
 import type { ToolSet } from "ai"
 import { AgentTrace } from "@/trace"
 import { TaskContext } from "@/task-context"
 import type { AgentReport, AgentReportContext } from "@/agent/report"
 import { SessionContext } from "@/session/context"
+import { recordToolExecuteError } from "@/engine/persist"
 
 const log = Log.create({ service: "agent-runner" })
 
@@ -346,12 +348,20 @@ export class AgentRunError extends Error {
 export function buildHardErrorFromFinalMessage(input: {
   kind: SessionKind
   agentName: string
-  finalMessage: { info: { role: string; error?: unknown } }
+  finalMessage: {
+    info: { role: string; error?: unknown }
+    parts?: ReadonlyArray<Message.Part>
+  }
 }): AgentRunError | null {
   const { kind, agentName, finalMessage } = input
   if (finalMessage.info.role !== "assistant") return null
   const err = finalMessage.info.error
-  if (!err) return null
+  if (!err) {
+    const partFailure = (toolErrorPartsFromFinalMessage(finalMessage)[0]?.state as Message.ToolStateError | undefined)
+      ?.failure
+    if (!partFailure) return null
+    return agentRunErrorFromToolFailure({ kind, agentName, failure: partFailure })
+  }
   if (Message.AbortedError.isInstance(err as Error)) return null
   const errName = (err as { name?: string }).name ?? "UnknownError"
   const errMessage =
@@ -382,6 +392,58 @@ export function buildHardErrorFromFinalMessage(input: {
       cause: err as Error,
     },
   )
+}
+
+function agentRunErrorFromToolFailure(input: {
+  kind: SessionKind
+  agentName: string
+  failure: ToolFailureCause
+}): AgentRunError {
+  return new AgentRunError(
+    input.kind,
+    `Tool error during ${input.agentName}: ${renderToolFailureCause(input.failure)}`,
+    {
+      nonRetryable:
+        input.failure.classification === "tool-input-invalid" ||
+        input.failure.classification === "processor-contract",
+      cause: new Error(renderToolFailureCause(input.failure)),
+    },
+  )
+}
+
+export function toolErrorPartsFromFinalMessage(finalMessage: {
+  info: { role: string }
+  parts?: ReadonlyArray<Message.Part>
+}): Message.ToolPart[] {
+  if (finalMessage.info.role !== "assistant") return []
+  return (finalMessage.parts ?? []).filter(
+    (part): part is Message.ToolPart => part.type === "tool" && part.state.status === "error",
+  )
+}
+
+async function recordToolExecuteErrorsForFinalMessage(input: {
+  taskID?: string
+  runID?: string | null
+  goalRunID?: string | null
+  finalMessage: Message.WithParts
+}) {
+  if (!input.taskID) return
+  const now = Date.now()
+  for (const part of toolErrorPartsFromFinalMessage(input.finalMessage)) {
+    await recordToolExecuteError({
+      taskID: input.taskID,
+      runID: input.runID,
+      goalRunID: input.goalRunID,
+      sessionID: part.sessionID,
+      messageID: part.messageID,
+      partID: part.id,
+      toolName: part.tool,
+      callID: part.callID,
+      input: part.state.input,
+      failure: (part.state as Message.ToolStateError).failure,
+      now,
+    })
+  }
 }
 
 /**
@@ -866,7 +928,14 @@ export async function runAgentSession<C>(
       agentName,
       finalMessage,
     })
-    if (hardError) throw hardError
+    if (hardError) {
+      await recordToolExecuteErrorsForFinalMessage({
+        taskID: input.taskID,
+        goalRunID: input.runtimeContract?.goalRunID,
+        finalMessage,
+      })
+      throw hardError
+    }
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err)
     await recordAgentErrorForOrchestrator({

@@ -113,6 +113,7 @@ export type EngineArtifactKind =
   | "orchestrator_tool_ownership"
   | "exploration"
   | "orchestrator-stream-error"
+  | "tool-execute-error"
 export type EngineDeliveryStatus = "candidate" | "publishing" | "delivered" | "failed"
 export type EngineEvaluationStatus = "pending" | "passed" | "failed" | "inconclusive"
 export type EngineEvaluationVerdict = "accepted" | "rejected" | "inconclusive"

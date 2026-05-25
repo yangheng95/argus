@@ -27,6 +27,7 @@ import { BashTool } from "../../tool/bash"
 import { TodoWriteTool } from "../../tool/todo"
 import { Locale } from "../../util/locale"
 import { IN_PROCESS_BASE_URL, createInProcessFetch } from "@/server/in-process-client"
+import { renderToolFailureCause } from "@/session/tool-failure-cause"
 
 type ToolProps<T extends Tool.Info> = {
   input: Tool.InferParameters<T>
@@ -463,7 +464,7 @@ export const RunCommand = cmd({
                 icon: "✗",
                 title: `${part.tool} failed`,
               })
-              UI.error(part.state.error)
+              UI.error(renderToolFailureCause((part.state as any).failure))
             }
 
             if (

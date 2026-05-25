@@ -36,6 +36,7 @@ import { SubAgentProtocol } from "@/agent/sub-agent-protocol"
 import { Event as EngineEvent } from "@/engine/model"
 import { EngineProtocol } from "@/engine/protocol"
 import { Message } from "@/session/message"
+import { toolFailureCauseFromUnknown } from "@/session/tool-failure-cause"
 import { PartTable } from "@/session/session.sql"
 import { renderDesignAnalysisHandoffReference, designAnalysisArtifactPaths } from "@/design-analyst/handoff"
 import { renderUserRequestSection } from "@/intent/request-prompt"
@@ -716,7 +717,16 @@ async function markOwnedBuildToolPartRecovered(input: {
     state: {
       status: "error",
       input: part.state.input,
-      error: input.reason,
+      failure: toolFailureCauseFromUnknown({
+        error: input.reason,
+        originSite: "orchestrator.tools.recover-stale-build",
+        classification: "tool-execution",
+        kind: "tool-execute-error",
+        data: {
+          toolName: part.tool,
+          callID: part.callID,
+        },
+      }),
       metadata: {
         ...(part.state.status === "running" ? part.state.metadata ?? {} : {}),
         recovered_stale_build: true,

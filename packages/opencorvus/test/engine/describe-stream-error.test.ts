@@ -6,6 +6,7 @@ import {
   EngineTaskTable,
 } from "../../src/engine/engine.sql"
 import { describeTask, renderTaskDescription } from "../../src/engine/describe"
+import { recordToolExecuteError } from "../../src/engine/persist"
 import { createDecisionLog } from "../../src/decision-log"
 import { Instance } from "../../src/project/instance"
 import { resetDatabase } from "../fixture/db"
@@ -275,6 +276,46 @@ describe("describeTask.recent_agent_failures", () => {
         expect(md).toContain("HTTP 429")
         expect(md).toContain("retry the same work")
         expect(md).toContain("Do not infer a fresh task start")
+      },
+    })
+  })
+})
+
+describe("describeTask.recent_tool_execute_failures", () => {
+  test("recordToolExecuteError writes an artifact projected by describe", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const taskStart = Date.now()
+        seedTask(taskStart)
+        recordToolExecuteError({
+          taskID,
+          sessionID: "ses_tool_error",
+          messageID: "msg_tool_error",
+          partID: "part_tool_error",
+          toolName: "register_goal",
+          callID: "call_tool_error",
+          input: [],
+          failure: {
+            kind: "tool-input-invalid",
+            name: "InvalidToolInputError",
+            message: "Expected object, received array",
+            originSite: "session.processor.tool-error",
+            classification: "tool-input-invalid",
+          },
+          now: taskStart + 100,
+        })
+
+        const desc = await describeTask(taskID)
+        expect(desc.recent_tool_execute_failures).toHaveLength(1)
+        expect(desc.recent_tool_execute_failures![0]!.tool_name).toBe("register_goal")
+        expect(desc.recent_tool_execute_failures![0]!.reason).toContain("Expected object, received array")
+
+        const md = renderTaskDescription(desc)
+        expect(md).toContain("Recent tool execution failures")
+        expect(md).toContain("register_goal")
+        expect(md).toContain("Expected object, received array")
       },
     })
   })

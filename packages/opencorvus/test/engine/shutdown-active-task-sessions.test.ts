@@ -118,7 +118,7 @@ describe("shutdown aborts active task-owned sessions", () => {
         expect(part?.type).toBe("tool")
         if (part?.type !== "tool") throw new Error("expected tool part")
         expect(part.state.status).toBe("error")
-        expect(part.state.error).toBe(reason)
+        expect(part.state.failure.message).toBe(reason)
       },
     })
   })

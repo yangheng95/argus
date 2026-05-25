@@ -17,6 +17,7 @@ import { MemoryFlush } from "@/memory/flush"
 import { resolveAgentModel } from "@/agent/model"
 import { ContextBudget } from "./context-budget"
 import { CompactionHandoff } from "./compaction-handoff"
+import { renderToolFailureCause } from "./tool-failure-cause"
 import { InstructionPrompt } from "./instruction"
 import { TaskPlan } from "@/memory/task-plan"
 import { Scratchpad } from "@/memory/scratchpad"
@@ -609,7 +610,7 @@ export namespace SessionCompaction {
     if (processor.message.error) return "stop"
     if (!structured) {
       const toolErrors = (await Message.parts(processor.message.id)).flatMap((part) =>
-        part.type === "tool" && part.state.status === "error" ? [`${part.tool}: ${part.state.error}`] : [],
+        part.type === "tool" && part.state.status === "error" ? [`${part.tool}: ${renderToolFailureCause(part.state.failure)}`] : [],
       )
       const reason = toolErrors.length
         ? toolErrors.join("\n")

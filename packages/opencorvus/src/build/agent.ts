@@ -39,6 +39,7 @@ import { TaskRuntimeMaterializer } from "@/project/task-runtime-materializer"
 import { Session } from "@/session"
 import { resolveSessionOverlay } from "@/agent/model"
 import { SessionStatus } from "@/session/status"
+import { toolFailureCauseFromUnknown } from "@/session/tool-failure-cause"
 import { Worktree } from "@/worktree"
 import { BuildSemaphore } from "@/engine/build-semaphore"
 import { Ownership } from "@/engine/ownership"
@@ -1698,7 +1699,13 @@ async function runWithExternalProviderImpl(args: {
               state: {
                 status: "error",
                 input,
-                error: `${protocolError} Output preview: ${singleLineText(event.output)}`,
+                failure: toolFailureCauseFromUnknown({
+                  error: `${protocolError} Output preview: ${singleLineText(event.output)}`,
+                  originSite: "build.agent.executor-unmatched-result",
+                  classification: "processor-contract",
+                  kind: "processor-lost-parts",
+                  data: { callID: event.id, toolName: name },
+                }),
                 metadata: {
                   ...metadata,
                   protocol_error: "unmatched_tool_result",
@@ -1785,7 +1792,13 @@ async function runWithExternalProviderImpl(args: {
       state: {
         status: "error",
         input: Object.keys(t.input).length > 0 ? t.input : externalToolInput(t.raw),
-        error: protocolError,
+        failure: toolFailureCauseFromUnknown({
+          error: protocolError,
+          originSite: "build.agent.executor-unmatched-call",
+          classification: "processor-contract",
+          kind: "processor-lost-parts",
+          data: { callID, toolName: t.name },
+        }),
         metadata: t.metadata,
         time: { start: t.start, end },
       },

@@ -42,6 +42,7 @@ import { z } from "zod"
 import { LoadAPIKeyError } from "ai"
 import type { AssistantMessage, Event, OpencodeClient, SessionMessageResponse, ToolPart } from "@opencorvus-ai/sdk"
 import { applyPatch } from "diff"
+import { renderToolFailureCause } from "@/session/tool-failure-cause"
 
 type ModeOption = { id: string; name: string; description?: string }
 type ModelOption = { modelId: string; name: string }
@@ -429,12 +430,12 @@ export namespace ACP {
                           type: "content",
                           content: {
                             type: "text",
-                            text: part.state.error,
+                            text: renderToolFailureCause((part.state as any).failure),
                           },
                         },
                       ],
                       rawOutput: {
-                        error: part.state.error,
+                        error: renderToolFailureCause((part.state as any).failure),
                         metadata: part.state.metadata,
                       },
                     },
@@ -952,12 +953,12 @@ export namespace ACP {
                         type: "content",
                         content: {
                           type: "text",
-                          text: toolPart.state.error,
+                          text: renderToolFailureCause((toolPart.state as any).failure),
                         },
                       },
                     ],
                     rawOutput: {
-                      error: toolPart.state.error,
+                      error: renderToolFailureCause((toolPart.state as any).failure),
                       metadata: toolPart.state.metadata,
                     },
                   },

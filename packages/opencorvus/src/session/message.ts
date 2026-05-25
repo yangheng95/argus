@@ -1,4 +1,4 @@
-import { BusEvent } from "@/bus/bus-event"
+﻿import { BusEvent } from "@/bus/bus-event"
 import z from "zod"
 import { NamedError } from "@opencorvus-ai/util/error"
 import { APICallError, convertToModelMessages, LoadAPIKeyError, type ModelMessage, type UIMessage } from "ai"
@@ -13,21 +13,9 @@ import { type SystemError } from "bun"
 import type { Provider } from "@/provider/provider"
 import { isDecodableText } from "./text-mime"
 import { STATEFUL_SNAPSHOT_TOOL_NAMES } from "@/orchestrator/stateful-tool-names"
-import { normalizeToolInput } from "./tool-input-norm"
 import { AttachmentStore } from "@/storage/attachment-store"
 import { CompactionHandoff } from "./compaction-handoff"
-
-/** Coerce a persisted tool_use.input into a dict for outbound AI-SDK messages.
- *  Downstream gateways (notably hexin → litellm → Bedrock) reject tool_use
- *  whose input is not a JSON object with HTTP 400 — so any legacy row that
- *  somehow stored a string / null / partial payload must be flattened to `{}`
- *  before it re-enters the LLM conversation. `normalizeToolInput` is the same
- *  boundary used on the ingress side (session-hooks), so the invariant is
- *  enforced symmetrically. */
-function safeToolInput(raw: unknown): Record<string, unknown> {
-  const norm = normalizeToolInput(raw)
-  return norm.ok ? norm.value : {}
-}
+import { ToolFailureCause, renderToolFailureCause } from "./tool-failure-cause"
 
 export namespace Message {
   export const OutputLengthError = NamedError.create("MessageOutputLengthError", z.object({}))
@@ -78,14 +66,14 @@ export namespace Message {
     z.object({ message: z.string(), responseBody: z.string().optional() }),
   )
   /**
-   * Predictive-compaction fired but compaction cannot rescue this turn —
+   * Predictive-compaction fired but compaction cannot rescue this turn â€”
    * either there is no message history to summarise (`assistantMsgCount=0`
    * and the user message itself fits) or the non-compressible prompt
    * (system prompt + tool schemas) is already at/over budget. Carries the
    * full breakdown so the operator can identify whether to drop tools, raise
    * the budget, or change the agent design (rule 26: surface the actual
    * cause, do not loop a useless action).
-   * See specs/new-arch/2026-04-28-structured-output-systemic-fix.md §C.
+   * See specs/new-arch/2026-04-28-structured-output-systemic-fix.md Â§C.
    */
   export const PromptBudgetOverflowError = NamedError.create(
     "PromptBudgetOverflowError",
@@ -335,7 +323,7 @@ export namespace Message {
   export const ToolStatePending = z
     .object({
       status: z.literal("pending"),
-      input: z.record(z.string(), z.any()),
+      input: z.unknown(),
       raw: z.string(),
     })
     .meta({
@@ -347,7 +335,7 @@ export namespace Message {
   export const ToolStateRunning = z
     .object({
       status: z.literal("running"),
-      input: z.record(z.string(), z.any()),
+      input: z.unknown(),
       title: z.string().optional(),
       metadata: z.record(z.string(), z.any()).optional(),
       time: z.object({
@@ -362,7 +350,7 @@ export namespace Message {
   export const ToolStateCompleted = z
     .object({
       status: z.literal("completed"),
-      input: z.record(z.string(), z.any()),
+      input: z.unknown(),
       output: z.string(),
       title: z.string(),
       metadata: z.record(z.string(), z.any()),
@@ -381,8 +369,8 @@ export namespace Message {
   export const ToolStateError = z
     .object({
       status: z.literal("error"),
-      input: z.record(z.string(), z.any()),
-      error: z.string(),
+      input: z.unknown(),
+      failure: ToolFailureCause,
       metadata: z.record(z.string(), z.any()).optional(),
       time: z.object({
         start: z.number(),
@@ -574,7 +562,7 @@ export namespace Message {
    * Tools whose output is a snapshot of current task state (no side effects,
    * no delta value once superseded). Older calls' outputs are projected to a
    * short "superseded" note when a later call to the same tool exists in the
-   * same session — this prevents tool results from piling up in the prompt
+   * same session â€” this prevents tool results from piling up in the prompt
    * as the orchestrator reads state every turn. DB rows are NOT modified;
    * projection runs only at prompt-assembly time so UI / audit keeps full
    * fidelity.
@@ -635,7 +623,7 @@ export namespace Message {
     // to a short "[superseded by later call]" note below, keeping only the
     // live snapshot's full text in the prompt. Walking in reverse lets us
     // short-circuit once we have the latest for every tool we've seen.
-    // Both completed and error states are treated as "a call happened" —
+    // Both completed and error states are treated as "a call happened" â€”
     // an older error result is just as obsolete as an older success once a
     // newer call exists, and leaving it in the prompt encourages the model
     // to reason about stale failures.
@@ -685,21 +673,21 @@ export namespace Message {
     // undefined" at value[0].text), surfacing as
     // `Invalid prompt: The messages do not match the ModelMessage[] schema`
     // and a hard orchestrator retry loop.
-    // Attachment URL → base64 string for AI-SDK `image-data` content.
+    // Attachment URL â†’ base64 string for AI-SDK `image-data` content.
     //
     // Two URL shapes are accepted:
-    //  1. `/attachment/<projectID>/<sha>.<ext>` ref — the canonical form
+    //  1. `/attachment/<projectID>/<sha>.<ext>` ref â€” the canonical form
     //     post-2026-05-11 (specs/delivery-attachment-store-single-source-2026-05-11.md).
     //     Bytes are read from `AttachmentStore` on demand and base64-encoded
     //     here, so `part.data` stores small refs instead of MB of inline
     //     base64. This is the OOM fix; the disk read is amortized across all
     //     subsequent turns that consume the same tool result.
-    //  2. `data:<mime>;base64,<payload>` — legacy form for tool results
+    //  2. `data:<mime>;base64,<payload>` â€” legacy form for tool results
     //     produced before the migration. Pre-existing rows resolve through
     //     this branch until the migration script rewrites them; the
     //     Session.updatePart guard prevents new rows from taking this shape.
     //
-    // Returns undefined when the URL is neither — the caller skips that
+    // Returns undefined when the URL is neither â€” the caller skips that
     // attachment rather than crashing the tool result.
     const attachmentToBase64 = async (
       attachment: { mime: string; url: string },
@@ -754,7 +742,7 @@ export namespace Message {
           }))
 
         // ToolModelOutput.content also rejects a `text` part with undefined or
-        // empty text (screenshot-only outputs) — drop the text part when the
+        // empty text (screenshot-only outputs) â€” drop the text part when the
         // tool produced no caption. Use `image-data` (v6 preferred) over the
         // deprecated `media` discriminator for base64 image attachments.
         const textPart =
@@ -787,7 +775,7 @@ export namespace Message {
             })
           // Text files are decoded into text parts upstream; skip them here.
           // Binary file parts are only forwarded when the target model declares
-          // the capability to handle them — otherwise the AI SDK / provider
+          // the capability to handle them â€” otherwise the AI SDK / provider
           // conversion layer throws UnsupportedFunctionalityError at runtime.
           if (part.type === "file" && !isDecodableText(part.mime, part.filename) && part.mime !== "application/x-directory") {
             if (options.stripMedia) {
@@ -904,7 +892,7 @@ export namespace Message {
                 type: ("tool-" + part.tool) as `tool-${string}`,
                 state: "output-available",
                 toolCallId: part.callID,
-                input: safeToolInput(part.state.input),
+                input: part.state.input as any,
                 output,
                 ...(differentModel ? {} : { callProviderMetadata: part.metadata }),
               })
@@ -914,27 +902,16 @@ export namespace Message {
                 STATEFUL_SNAPSHOT_TOOLS.has(part.tool) && !latestStatefulCallIDs.has(part.callID)
               const errorText = isSupersededStatefulError
                 ? `[${part.tool} error superseded by a later call in this session]`
-                : part.state.error
+                : renderToolFailureCause(part.state.failure)
               assistantMessage.parts.push({
                 type: ("tool-" + part.tool) as `tool-${string}`,
                 state: "output-error",
                 toolCallId: part.callID,
-                input: safeToolInput(part.state.input),
+                input: part.state.input as any,
                 errorText,
                 ...(differentModel ? {} : { callProviderMetadata: part.metadata }),
               })
             }
-            // Handle pending/running tool calls to prevent dangling tool_use blocks
-            // Anthropic/Claude APIs require every tool_use to have a corresponding tool_result
-            if (part.state.status === "pending" || part.state.status === "running")
-              assistantMessage.parts.push({
-                type: ("tool-" + part.tool) as `tool-${string}`,
-                state: "output-error",
-                toolCallId: part.callID,
-                input: safeToolInput(part.state.input),
-                errorText: "[Tool execution was interrupted]",
-                ...(differentModel ? {} : { callProviderMetadata: part.metadata }),
-              })
           }
           if (part.type === "reasoning" && !options.omitAssistantReasoning) {
             assistantMessage.parts.push({
@@ -953,8 +930,8 @@ export namespace Message {
         // Structural validity gate for provider replay. The chat-completion
         // contract (OpenAI / DeepSeek / vLLM / etc.) requires every assistant
         // message to carry `content` or `tool_calls`. When a stream early-dies
-        // — provider truncates the response after opening a reasoning block,
-        // socket dies, model returns nothing — the persisted assistant turn
+        // â€” provider truncates the response after opening a reasoning block,
+        // socket dies, model returns nothing â€” the persisted assistant turn
         // ends up with only [step-start, reasoning("")] and `finish=null,
         // error=null`. Replaying it serialises to {role:"assistant",
         // content:"", tool_calls:undefined}; the provider rejects with HTTP
@@ -999,14 +976,14 @@ export namespace Message {
 
     // Reasoning blocks intentionally pass through unchanged. An earlier
     // attempt stripped reasoning from every assistant message except the
-    // last to "save context" — that miscarried (rule 14: 怀疑自己，没
-    // 数据支撑就是胡说):
+    // last to "save context" â€” that miscarried (rule 14: æ€€ç–‘è‡ªå·±ï¼Œæ²¡
+    // æ•°æ®æ”¯æ’‘å°±æ˜¯èƒ¡è¯´):
     //   1. Stripping reasoning from messages BEFORE the cache breakpoint
     //      (provider/transform.ts:applyCaching marks system[0], system[-1],
     //      messages[-2], messages[-1]) changes the cache-prefix bytes
-    //      every turn — every request would cache-miss and pay full input
+    //      every turn â€” every request would cache-miss and pay full input
     //      price for the entire history. Anthropic 5-min cache hit is
-    //      0.1× input price; cache write is 1.25× — even a 50%-reasoning
+    //      0.1Ã— input price; cache write is 1.25Ã— â€” even a 50%-reasoning
     //      history costs ~80% MORE under the strip strategy than under
     //      pass-through with cache hits.
     //   2. Anthropic's thinking + tool_use protocol requires the
