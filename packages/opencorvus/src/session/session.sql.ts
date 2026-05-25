@@ -65,6 +65,7 @@ export const SESSION_KINDS = [
   "goal",
   "architect",
   "integrity",
+  "fact-check",
   "delivery",
   "executor",
   "build",
