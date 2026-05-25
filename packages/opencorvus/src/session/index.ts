@@ -564,6 +564,63 @@ export namespace Session {
     },
   )
 
+  /**
+   * Snapshot the latest assistant message in a session for fact-check
+   * idempotency keying. Per specs/fact-check-agent-2026-05-25.md §3.3.
+   *
+   * Returns `finished=false` when SessionStatus is currently streaming or
+   * retrying — fact-check tooling treats that as a reject signal (do not
+   * verify a moving target). When `finished=true`, callers use the
+   * returned `messageID` + `contentHash` as part of the idempotency key.
+   *
+   * `contentHash` is sha-256 over the concatenated text/reasoning parts of
+   * the latest assistant message. Non-text parts (tool calls, files,
+   * snapshots) are intentionally excluded — fact-check verifies factual
+   * claims in natural-language output, not tool plumbing.
+   */
+  export const snapshotLatestAssistant = fn(
+    Identifier.schema("session"),
+    async (sessionID): Promise<{
+      finished: boolean
+      messageID?: string
+      contentHash?: string
+      reason?: "streaming" | "retry" | "no_assistant_message"
+    }> => {
+      // Avoid a circular import — read SessionStatus lazily.
+      const { SessionStatus } = await import("./status")
+      const status = SessionStatus.get(sessionID)
+      if (status.type === "streaming") return { finished: false, reason: "streaming" }
+      if (status.type === "retry") return { finished: false, reason: "retry" }
+
+      let latest: Message.WithParts | undefined
+      for await (const msg of Message.stream(sessionID)) {
+        if (msg.info.role === "assistant") {
+          // Message.stream yields newest-first per existing convention used
+          // by `messages()` above (which reverses afterwards). Capture the
+          // first assistant we see and break.
+          latest = msg
+          break
+        }
+      }
+      if (!latest) return { finished: false, reason: "no_assistant_message" }
+
+      // Hash concatenated text/reasoning content. Use Bun's crypto in tests
+      // and node:crypto in production builds — both expose createHash.
+      const { createHash } = await import("node:crypto")
+      const hasher = createHash("sha256")
+      for (const part of latest.parts) {
+        if (part.type === "text" || part.type === "reasoning") {
+          hasher.update(part.text)
+        }
+      }
+      return {
+        finished: true,
+        messageID: latest.info.id,
+        contentHash: hasher.digest("hex"),
+      }
+    },
+  )
+
   export function* list(input?: {
     directory?: string
     roots?: boolean
