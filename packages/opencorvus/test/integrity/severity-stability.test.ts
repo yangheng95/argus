@@ -43,6 +43,7 @@ function r7ToR8PromptInput(): ReviewPromptInput {
         inheritedSpecSnapshotIDs: ["spec_r7"],
         reason: "integrity_correction_lineage",
       },
+      priorFactCheckAttempts: [],
       priorAttempts: [
         {
           attemptNumber: 7,

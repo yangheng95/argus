@@ -28,6 +28,7 @@ function replayContext(): IntegrityReplayContext {
       inheritedSpecSnapshotIDs: [],
       reason: "active_only",
     },
+    priorFactCheckAttempts: [],
     priorAttempts: [],
     buildEvidenceSinceLastReview: {
       changedFiles: [],

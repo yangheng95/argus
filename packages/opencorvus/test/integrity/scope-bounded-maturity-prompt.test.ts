@@ -34,6 +34,7 @@ function baseInput(overrides: Partial<ReviewPromptInput> = {}): ReviewPromptInpu
         inheritedSpecSnapshotIDs: [],
         reason: "active_only",
       },
+      priorFactCheckAttempts: [],
       priorAttempts: [],
       buildEvidenceSinceLastReview: {
         changedFiles: [],

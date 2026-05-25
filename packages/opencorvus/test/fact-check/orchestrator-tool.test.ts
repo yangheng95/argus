@@ -346,6 +346,95 @@ describe("fact_check orchestrator tool (e2e A–G)", () => {
     })
   })
 
+  // e2e E: cancel — agent throws AbortError, tool persists outcome=aborted artifact
+  test("[E] cancel-mid-run persists fact_check_attempt with outcome=aborted (codex review §1)", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        seedTask("proj_fc_E", "tsk_fc_E", Date.now())
+        const { sessionID: targetSession } = await createTerminalSessionWithAssistant("Cancelled mid-run.")
+
+        const ac = new AbortController()
+        factCheckAgentImpl = async () => {
+          ac.abort() // simulate caller cancelling during agent execution
+          throw new Error("AbortError: signal aborted before terminal tool")
+        }
+
+        const tools = createOrchestratorTools({
+          taskID: "tsk_fc_E",
+          agentSessionID: "ses_orch_E",
+          signal: ac.signal,
+        }).tools
+
+        const result = await tools.fact_check.execute(
+          {
+            target_session_id: targetSession,
+            target_agent: "build",
+            fact_check_items: [SAMPLE_ITEM],
+            reason: "Simulating cancel mid-run for outcome-aborted artifact path.",
+          },
+          {} as any,
+        )
+        expect(String(result)).toContain("aborted")
+
+        const rows = listFactCheckAttempts("tsk_fc_E")
+        expect(rows.length).toBe(1)
+        expect(rows[0].payload.outcome).toBe("aborted")
+        expect(rows[0].payload.report.overall_verdict).toBe("inconclusive")
+        expect(rows[0].payload.report.unresolved[0].why_unresolved).toBe("tool_failed")
+      },
+    })
+  })
+
+  // e2e H (extra codex impl review §3): scope mismatch — LLM-returned scope doesn't match snapshot
+  test("[H] scope-mismatch returns tool_error + persists synthetic inconclusive artifact (codex review §3)", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        seedTask("proj_fc_H", "tsk_fc_H", Date.now())
+        const { sessionID: targetSession } = await createTerminalSessionWithAssistant("Truthful claim.")
+
+        factCheckAgentImpl = async (i) => ({
+          sessionID: "ses_fc_run_H",
+          report: {
+            ...baseReport,
+            scope: {
+              // Deliberately wrong target_message_id — host should reject.
+              target_session_id: i.targetSessionID,
+              target_agent: i.targetAgent,
+              target_message_id: "msg_wrong_value_inserted_by_llm",
+              target_message_content_hash: i.targetMessageContentHash,
+              items_total: 1,
+              items_inspected: 1,
+            },
+            overall_verdict: "clean",
+          },
+          outcome: "completed",
+        })
+
+        const tools = createOrchestratorTools({ taskID: "tsk_fc_H", agentSessionID: "ses_orch_H" }).tools
+        const result = await tools.fact_check.execute(
+          {
+            target_session_id: targetSession,
+            target_agent: "build",
+            fact_check_items: [SAMPLE_ITEM],
+            reason: "Verify host catches a scope mismatch from the agent.",
+          },
+          {} as any,
+        )
+        expect(String(result)).toContain("tool_error")
+        expect(String(result)).toContain("inconsistent with the host snapshot")
+
+        const rows = listFactCheckAttempts("tsk_fc_H")
+        expect(rows.length).toBe(1)
+        expect(rows[0].payload.outcome).toBe("tool_error")
+        expect(rows[0].payload.report.overall_verdict).toBe("inconclusive")
+      },
+    })
+  })
+
   // e2e G: external-executor path — fact_check_items: [] always passes schema
   test("[G] external-executor surrogate: empty fact_check_items array still produces a valid report scope", async () => {
     await using tmp = await tmpdir({ git: true })

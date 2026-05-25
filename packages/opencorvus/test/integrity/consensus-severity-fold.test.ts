@@ -43,6 +43,7 @@ const input: ReviewPromptInput = {
       inheritedSpecSnapshotIDs: [],
       reason: "active_only",
     },
+    priorFactCheckAttempts: [],
     priorAttempts: [
       {
         attemptNumber: 1,

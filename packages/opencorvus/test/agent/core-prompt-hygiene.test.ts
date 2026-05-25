@@ -90,6 +90,46 @@ describe("core prompt hygiene", () => {
     }
   })
 
+  test("fact-check core anti-recursion: no <fact-check> tag literal; fact_check_items only in NOT/forbid context", async () => {
+    // Anti-recursion enforcement per specs/fact-check-agent-2026-05-25.md
+    // §7.1 / codex impl review §6.  The fact-check agent must never be
+    // told to produce fact_check_items (its report schema has no such
+    // field) or to use inline <fact-check> tags (the registration channel
+    // is the upstream worker's terminal schema, not chat-text markup).
+    const text = await readPrompt("factCheck")
+
+    // (a) No <fact-check> tag literal except inside an explicit "MUST NOT"
+    // / "do not use" clause.  Search for the literal and walk back to the
+    // start of the sentence to inspect the modal verb.
+    const tagPattern = /<fact-check[^>]*>/gi
+    for (const match of text.matchAll(tagPattern)) {
+      const idx = match.index ?? 0
+      // Look back ~120 chars from the match position to find the modal.
+      const window = text.slice(Math.max(0, idx - 120), idx)
+      const isForbid = /(must not|MUST NOT|do not|DO NOT|never)/.test(window)
+      expect(
+        isForbid,
+        `fact-check core has a <fact-check> tag at offset ${idx} outside a MUST NOT/DO NOT clause: …${window.slice(-80)}«${match[0]}»…`,
+      ).toBe(true)
+    }
+
+    // (b) Every occurrence of fact_check_items must sit inside a NOT/forbid
+    // window or after the explicit "Anti-Recursion" heading.  This is a
+    // semantic check: the agent must never be told to produce / populate /
+    // emit fact_check_items.
+    const itemsPattern = /fact_check_items/g
+    for (const match of text.matchAll(itemsPattern)) {
+      const idx = match.index ?? 0
+      const window = text.slice(Math.max(0, idx - 200), idx)
+      const isForbid =
+        /(must not|MUST NOT|do not|DO NOT|never|Anti-Recursion|no such field|enforced at schema level)/.test(window)
+      expect(
+        isForbid,
+        `fact-check core mentions fact_check_items at offset ${idx} in a non-forbid context: …${window.slice(-120)}«${match[0]}»`,
+      ).toBe(true)
+    }
+  })
+
   test("no core prompt routes final acceptance authority to the retired Delivery role", async () => {
     // Regression guard (rule 8 single-source): delivery is retired; integrity
     // owns final acceptance. No active agent core prompt may name Delivery as

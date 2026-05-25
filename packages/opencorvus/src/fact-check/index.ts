@@ -148,7 +148,7 @@ function renderFactCheckItems(items: FactCheckItem[]): string {
     .join("\n\n")
 }
 
-function buildFactCheckUserPrompt(input: FactCheckAgent.RunInput): string {
+function buildFactCheckUserPrompt(input: FactCheckAgent.RunInput, targetMessageText: string): string {
   const sections: string[] = []
   sections.push("# Delegation")
   sections.push(
@@ -166,6 +166,17 @@ function buildFactCheckUserPrompt(input: FactCheckAgent.RunInput): string {
       "calling you. You can rely on the message content being stable for the duration of this " +
       "fact-check session.",
   )
+  if (targetMessageText.trim().length > 0) {
+    const truncated = targetMessageText.length > TARGET_MESSAGE_TEXT_CAP
+    const body = truncated
+      ? targetMessageText.slice(0, TARGET_MESSAGE_TEXT_CAP) + `\n\n…(truncated; ${targetMessageText.length - TARGET_MESSAGE_TEXT_CAP} more chars)`
+      : targetMessageText
+    sections.push(`# Target message content\n\n\`\`\`\n${body}\n\`\`\``)
+  } else {
+    sections.push(
+      "# Target message content\n\n_(The target assistant message had no text parts. Inspect the registered fact_check_items below and use your retrieval tools to verify the claims directly.)_",
+    )
+  }
   sections.push(
     `# Registered fact-check items (${input.factCheckItems.length})\n\n` +
       renderFactCheckItems(input.factCheckItems),
@@ -173,11 +184,40 @@ function buildFactCheckUserPrompt(input: FactCheckAgent.RunInput): string {
   sections.push(
     "# Output contract\n\n" +
       "Inspect every registered item using your tools, then call `report_fact_check_result` " +
-      "exactly once with the full structured report. Follow the verdict decision tree from " +
-      "fact-check-core.txt and the evidence discipline (every verified / corrected item must " +
-      "cite ≥1 evidence pointer).",
+      "exactly once with the full structured report. The `report.scope` MUST echo the " +
+      `snapshot above verbatim: target_session_id=\`${input.targetSessionID}\`, ` +
+      `target_agent=\`${input.targetAgent}\`, target_message_id=\`${input.targetMessageID}\`, ` +
+      `target_message_content_hash=\`${input.targetMessageContentHash}\`. ` +
+      "Follow the verdict decision tree from fact-check-core.txt and the evidence discipline " +
+      "(every verified / corrected item must cite ≥1 evidence pointer).",
   )
   return sections.join("\n\n")
+}
+
+/** Extract the concatenated text/reasoning content of the target session's
+ *  latest assistant message so the fact-check agent can inspect the actual
+ *  claims (codex impl review §2). Returns empty string if absent. */
+async function loadTargetMessageText(sessionID: string, messageID: string): Promise<string> {
+  try {
+    const { Message } = await import("@/session/message")
+    for await (const msg of Message.stream(sessionID)) {
+      if (msg.info.id !== messageID) continue
+      const parts: string[] = []
+      for (const part of msg.parts) {
+        if (part.type === "text" || part.type === "reasoning") {
+          parts.push(part.text)
+        }
+      }
+      return parts.join("\n\n").trim()
+    }
+  } catch (err) {
+    log.warn("fact-check: failed to load target message text (non-fatal)", {
+      sessionID,
+      messageID,
+      error: err instanceof Error ? err.message : String(err),
+    })
+  }
+  return ""
 }
 
 export namespace FactCheckAgent {
@@ -206,6 +246,13 @@ export namespace FactCheckAgent {
     onSessionCreated?: (sessionID: string) => void
   }
 
+  /** Maximum number of characters of target-message text injected into the
+   *  fact-check user prompt.  Bounded because the message can be large
+   *  (e.g. an architect goal graph dump) and an unbounded copy would blow
+   *  the prompt budget. The fact-check agent has `read_file` etc. if it
+   *  needs to inspect more. */
+  const TARGET_MESSAGE_TEXT_CAP = 8000
+
   export interface RunOutput {
     /** Child fact-check session id (surfaced to overlay for UI nesting). */
     sessionID: string
@@ -225,6 +272,8 @@ export namespace FactCheckAgent {
     const contextTools = await filterAgentTools(createAgentContextTools(), "fact-check")
     const retrievalTools = buildFactCheckRetrievalTools()
     const outputToolKit = createFactCheckOutputTools()
+    // Load target message text up-front so the prompt builder has it.
+    const targetMessageText = await loadTargetMessageText(input.targetSessionID, input.targetMessageID)
 
     let runErrored = false
     try {
@@ -246,7 +295,7 @@ export namespace FactCheckAgent {
           getCollector: outputToolKit.getCollector,
           buildReport: outputToolKit.buildReport,
         },
-        buildUserPrompt: () => buildFactCheckUserPrompt(input),
+        buildUserPrompt: () => buildFactCheckUserPrompt(input, targetMessageText),
         terminalTool: {
           toolName: "report_fact_check_result",
           isSatisfied: (collector) => Boolean(collector.report),

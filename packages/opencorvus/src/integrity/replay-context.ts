@@ -2,6 +2,7 @@ import type { GoalContractFields } from "@/pipeline/types"
 import type { ParsedRequirement } from "@/requirements/types"
 import type { DeliveryRow, GoalRunRow } from "@/engine/store"
 import { listIntegrityAttemptArtifacts, listSpecSnapshots } from "@/engine/store"
+import { listFactCheckAttempts } from "@/fact-check/persist"
 import { canonicalIntegritySymptom, defaultIntegrityVerify, integrityFindingFingerprint } from "./finding-manifest"
 import { renderSharedIntegrityPromptContext } from "./shared-prompt"
 import type { SpecSnapshotLineage } from "./replay-lineage"
@@ -88,10 +89,36 @@ export type IntegrityReviewScaleSignals = {
   phase?: "pre_build" | "post_build"
 }
 
+export type IntegrityPriorFactCheckAttempt = {
+  /** engine_artifact row id. */
+  artifactID: string
+  /** fact-check session id (or "(no-session:...)" sentinel for error
+   *  outcomes that threw before a session was created). */
+  factCheckSessionID: string
+  timeCreated: number
+  targetSessionID: string
+  targetAgent: string
+  targetMessageID: string
+  verdict: "clean" | "minor_corrections" | "needs_orchestrator_action" | "inconclusive"
+  outcome: "completed" | "aborted" | "tool_error"
+  itemsTotal: number
+  itemsInspected: number
+  verifiedCount: number
+  correctedCount: number
+  unresolvedCount: number
+}
+
 export type IntegrityReplayContext = {
   attemptNumber: number
   lineage: SpecSnapshotLineage
   priorAttempts: IntegrityPriorAttemptSummary[]
+  /** Fact-check evidence accumulated on this task before the current
+   *  integrity review.  Per specs/fact-check-agent-2026-05-25.md §6.1.2
+   *  step 7: integrity reviewers should be able to see "claim X was
+   *  already corrected by fact-check, don't re-flag it" without re-
+   *  dispatching fact_check.  Newest first; an empty array is the
+   *  honest default when no fact-check has run yet. */
+  priorFactCheckAttempts: IntegrityPriorFactCheckAttempt[]
   buildEvidenceSinceLastReview: IntegrityBuildEvidenceSinceLastReview
   scaleSignals: IntegrityReviewScaleSignals
 }
@@ -172,10 +199,28 @@ export function buildIntegrityReplayContext(input: BuildIntegrityReplayContextIn
   const changedFilesTotal = changedFilesFromDeliveries(input.deliveries)
   const changedFilesSinceLastReview = changedFilesFromDeliveries(deliveriesSince)
 
+  const factCheckRows = listFactCheckAttempts(input.taskID)
+  const priorFactCheckAttempts: IntegrityPriorFactCheckAttempt[] = factCheckRows.map((row) => ({
+    artifactID: row.artifactID,
+    factCheckSessionID: row.payload.fact_check_session_id,
+    timeCreated: row.timeCreated,
+    targetSessionID: row.payload.target_session_id,
+    targetAgent: row.payload.target_agent,
+    targetMessageID: row.payload.target_message_id,
+    verdict: row.payload.report.overall_verdict,
+    outcome: row.payload.outcome,
+    itemsTotal: row.payload.report.scope.items_total,
+    itemsInspected: row.payload.report.scope.items_inspected,
+    verifiedCount: row.payload.report.verified.length,
+    correctedCount: row.payload.report.corrected.length,
+    unresolvedCount: row.payload.report.unresolved.length,
+  }))
+
   return {
     attemptNumber: priorAttempts.length + 1,
     lineage: input.lineage,
     priorAttempts,
+    priorFactCheckAttempts,
     buildEvidenceSinceLastReview: {
       sinceAttemptNumber: latestPrior?.attemptNumber,
       sinceTimeCreated,
@@ -260,6 +305,30 @@ export function renderIntegrityReplayContextPrompt(context: IntegrityReplayConte
   lines.push(`- prior_attempts=${scale.priorAttempts}`)
   lines.push(`- prior_blocking_findings=${scale.priorBlockingFindings}`)
   if (scale.phase) lines.push(`- phase=${scale.phase}`)
+
+  // Surface prior fact-check attempts so reviewers see what's already been
+  // verified / corrected and don't redundantly flag the same claim.  Spec
+  // §6.1.2 step 7 / codex impl review §4.  Bounded to 10 newest rows; the
+  // full stream lives in the artifact table for read_context drill-down.
+  if (context.priorFactCheckAttempts.length > 0) {
+    const cap = 10
+    const newest = context.priorFactCheckAttempts.slice(0, cap)
+    const omitted = context.priorFactCheckAttempts.length - newest.length
+    lines.push(
+      "",
+      omitted > 0
+        ? `Prior fact-check attempts on this task (latest ${newest.length} of ${context.priorFactCheckAttempts.length}; ${omitted} older omitted):`
+        : `Prior fact-check attempts on this task (${newest.length}):`,
+    )
+    for (const fc of newest) {
+      lines.push(
+        `- [${fc.verdict}/${fc.outcome}] target=${fc.targetAgent}/${fc.targetSessionID.slice(0, 16)}… ` +
+          `items=${fc.itemsInspected}/${fc.itemsTotal} ` +
+          `verified=${fc.verifiedCount} corrected=${fc.correctedCount} unresolved=${fc.unresolvedCount} ` +
+          `(${new Date(fc.timeCreated).toISOString()})`,
+      )
+    }
+  }
   return lines.join("\n")
 }
 
