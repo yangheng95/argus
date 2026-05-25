@@ -709,7 +709,7 @@ export namespace SessionLoop {
     model: Provider.Model
     tool: AITool
   }): AITool {
-    const raw = input.tool as AITool & { inputSchema?: unknown }
+    const raw = input.tool as AITool & { inputSchema?: unknown; toModelOutput?: unknown }
     const prepared = {
       ...(input.tool as any),
       inputSchema: providerBoundInputSchema({
@@ -718,6 +718,7 @@ export namespace SessionLoop {
         model: input.model,
         inputSchema: raw.inputSchema,
       }),
+      ...(typeof raw.toModelOutput === "function" ? {} : { toModelOutput: providerToolResultToModelOutput }),
     } as AITool
     const schemaPayload = asSchema((prepared as { inputSchema?: unknown }).inputSchema as never).jsonSchema
     const rootType = schemaPayload && typeof schemaPayload === "object" && "type" in schemaPayload
@@ -730,6 +731,24 @@ export namespace SessionLoop {
       schemaChars: JSON.stringify(schemaPayload ?? {}).length,
     })
     return prepared
+  }
+
+  export function providerToolResultToModelOutput(args: unknown) {
+    const output = unwrapAIToolModelOutputArgs(args)
+    if (typeof output === "string") return { type: "text", value: output }
+    if (isProjectToolResult(output)) return { type: "text", value: output.output }
+    return { type: "json", value: output as never }
+  }
+
+  function unwrapAIToolModelOutputArgs(args: unknown): unknown {
+    if (!args || typeof args !== "object") return args
+    const record = args as Record<string, unknown>
+    if ("toolCallId" in record && "output" in record) return record.output
+    return args
+  }
+
+  function isProjectToolResult(output: unknown): output is { output: string } {
+    return !!output && typeof output === "object" && typeof (output as Record<string, unknown>).output === "string"
   }
 
   export function summarizeModelMessagePayloads(messages: ModelMessage[], limit = 8) {
@@ -2192,7 +2211,7 @@ export namespace SessionLoop {
       toModelOutput(result) {
         return {
           type: "text",
-          value: result.output,
+          value: providerToolResultToModelOutput(result).value,
         }
       },
     }))

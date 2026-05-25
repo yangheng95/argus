@@ -1,21 +1,20 @@
 import { describe, expect, test } from "bun:test"
 import {
-  excerptUserRequest,
   renderUserRequestSection,
   USER_REQUEST_BUNDLE_PATH,
-  USER_REQUEST_PROMPT_WORD_LIMIT,
 } from "../../src/intent/request-prompt"
 
 describe("user request prompt injection", () => {
-  test("truncates prompt-visible request to 500 words and points at request.md", () => {
-    const request = Array.from({ length: USER_REQUEST_PROMPT_WORD_LIMIT + 2 }, (_, index) => `word${index + 1}`).join(" ")
+  test("injects the full user request and points at request.md audit copy", () => {
+    const request = `${Array.from({ length: 700 }, (_, index) => `word${index + 1}`).join(" ")}\nTAIL   `
     const section = renderUserRequestSection({ heading: "# User Request", request })
 
-    expect(section).toContain("word500")
-    expect(section).not.toContain("word501")
+    expect(section).toContain("Full user request:")
+    expect(section).toContain("word700")
+    expect(section).toContain("TAIL   \n\nAudit copy:")
     expect(section).toContain(USER_REQUEST_BUNDLE_PATH)
-    expect(section).toContain("grep/read")
-    expect(section).toContain("2 word(s) omitted")
+    expect(section).not.toContain("omitted from prompt injection")
+    expect(section).not.toContain("Request excerpt")
   })
 
   test("uses the concrete task-scoped intent path when taskID is known", () => {
@@ -29,11 +28,11 @@ describe("user request prompt injection", () => {
     expect(section).not.toContain("<taskID>")
   })
 
-  test("counts CJK text as bounded tokens instead of one unbounded whitespace word", () => {
-    const request = "需求".repeat(400)
-    const excerpt = excerptUserRequest(request)
+  test("does not truncate CJK text before forwarding to agents", () => {
+    const request = "\u9700\u6c42".repeat(400)
+    const section = renderUserRequestSection({ heading: "# User Request", request })
 
-    expect(excerpt.truncated).toBe(true)
-    expect(excerpt.text.length).toBeLessThan(request.length)
+    expect(section).toContain(request)
+    expect(section).not.toContain("omitted")
   })
 })

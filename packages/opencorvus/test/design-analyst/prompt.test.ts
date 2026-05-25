@@ -91,13 +91,14 @@ describe("design-analyst prompt assembly", () => {
     expect(DesignAnalystTestHooks.shouldScopeDesignSubmitTool()).toBe(false)
   })
 
-  test("task request injection is bounded and points at the intent bundle", () => {
+  test("task request injection forwards the full request and points at the intent bundle", () => {
     const request = Array.from({ length: 505 }, (_, index) => `prdword${index + 1}`).join(" ")
     const prompt = DesignAnalystTestHooks.buildUserPrompt({ title: "Large PRD", request })
 
     expect(prompt).toContain("prdword500")
-    expect(prompt).not.toContain("prdword501")
+    expect(prompt).toContain("prdword505")
     expect(prompt).toContain(".opencorvus/runtime/tasks/<taskID>/intent/request.md")
-    expect(prompt).toContain("grep/read")
+    expect(prompt).toContain("Audit copy:")
+    expect(prompt).not.toContain("Request excerpt")
   })
 })

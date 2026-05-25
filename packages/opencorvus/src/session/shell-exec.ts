@@ -242,6 +242,8 @@ export namespace SessionShell {
       })
     })
 
+    await Shell.killTree(proc, { exited: () => exited, allowExitedRoot: true })
+
     if (aborted) {
       output += "\n\n" + ["<metadata>", "User aborted the command", "</metadata>"].join("\n")
     }

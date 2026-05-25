@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
 import os from "os"
 import path from "path"
 import { BashTool, DEFAULT_TIMEOUT, disposeSyntaxTree } from "../../src/tool/bash"
@@ -9,19 +9,27 @@ import { tmpdir } from "../fixture/fixture"
 import type { PermissionNext } from "../../src/permission/next"
 import { Truncate } from "../../src/tool/truncation"
 import { Agent } from "../../src/agent/agent"
+import { Shell } from "../../src/shell/shell"
 
 const ctx = {
-  sessionID: "test",
+  sessionID: "ses_test",
   messageID: "",
   callID: "",
   agent: "build",
   abort: AbortSignal.any([]),
+  extra: {
+    taskID: "task_test",
+  },
   messages: [],
   metadata: () => {},
   ask: async () => {},
 }
 
 const projectRoot = path.join(__dirname, "../..")
+
+afterEach(() => {
+  mock.restore()
+})
 
 function isPidAlive(pid: number) {
   try {
@@ -121,6 +129,51 @@ describe("tool.bash", () => {
       },
     })
   }, 10_000)
+
+  test("cleans residual process tree after foreground command completes", async () => {
+    await Instance.provide({
+      directory: projectRoot,
+      fn: async () => {
+        const cleanupCalls: any[] = []
+        spyOn(Shell, "killTree").mockImplementation(async (_proc, opts) => {
+          cleanupCalls.push(opts)
+        })
+        const bash = await BashTool.init()
+        await bash.execute(
+          {
+            command: "echo shell-cleanup",
+            description: "Echo cleanup marker",
+          },
+          ctx,
+        )
+        expect(cleanupCalls.some((opts) => opts?.allowExitedRoot === true)).toBe(true)
+      },
+    })
+  })
+
+  test("background lease survives early shell exit for cleanup", async () => {
+    await Instance.provide({
+      directory: projectRoot,
+      fn: async () => {
+        const cleanupCalls: any[] = []
+        spyOn(Shell, "killTree").mockImplementation(async (_proc, opts) => {
+          cleanupCalls.push(opts)
+        })
+        const bash = await BashTool.init()
+        await bash.execute(
+          {
+            command: "echo background-cleanup",
+            description: "Exit quickly in background",
+            background: true,
+            timeout: 50,
+          },
+          ctx,
+        )
+        await Bun.sleep(150)
+        expect(cleanupCalls.some((opts) => opts?.allowExitedRoot === true)).toBe(true)
+      },
+    })
+  })
 })
 
 describe("tool.bash permissions", () => {

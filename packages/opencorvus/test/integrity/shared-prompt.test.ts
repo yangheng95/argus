@@ -121,6 +121,23 @@ describe("shared integrity prompt cap", () => {
     expect(truncated.text).toHaveLength(10)
   })
 
+  test("does not truncate user request quotes by default", () => {
+    const longRequest = ["# full user request", ...Array.from({ length: 2600 }, (_value, index) => `word${index}`)].join(
+      " ",
+    )
+
+    const report = sanitizeIntegrityPromptText({
+      text: longRequest,
+      field: "user_request_quote",
+      markdownContext: "block",
+    })
+
+    expect(report.truncated).toBe(false)
+    expect(report.text).toContain("word2599")
+    expect(report.text).not.toContain("truncated_by_integrity_prompt_sanitizer")
+    expect(report.text).toContain("\\# full user request")
+  })
+
   test("applies sanitizer to user quotes, prior attempt summaries, and finding evidence before capping", () => {
     const output = renderSharedIntegrityPromptContext({
       surface: "integrity_replay",

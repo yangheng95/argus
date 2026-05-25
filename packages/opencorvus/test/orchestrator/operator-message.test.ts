@@ -16,7 +16,8 @@ test("orchestrator wake without caller note reuses the original task request", (
 
   expect(text).toContain("build the requested feature")
   expect(text).toContain(".opencorvus/runtime/tasks/tsk_operator_msg/intent/request.md")
-  expect(text).toContain("grep/read")
+  expect(text).toContain("Full user request:")
+  expect(text).toContain("Audit copy:")
   expect(text).not.toContain("Task state has advanced")
   expect(text).not.toContain("Re-read the context snapshot")
 })

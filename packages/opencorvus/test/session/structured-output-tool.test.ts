@@ -21,7 +21,7 @@ import { SessionLoop } from "../../src/session/loop"
 type AIToolLike = {
   inputSchema: Record<string, unknown>
   execute: (args: unknown, opts: { toolCallId?: string; messages?: unknown[]; abortSignal?: AbortSignal }) => Promise<{ output: string; title: string; metadata: Record<string, unknown> }>
-  toModelOutput?: (result: { output: string }) => { type: string; value: string }
+  toModelOutput?: (result: unknown) => { type: string; value: string }
   description?: string
   strict?: boolean
 }
@@ -179,6 +179,22 @@ describe("SessionLoop.createStructuredOutputTool", () => {
 
     const result = await t.execute({ answer: "a" }, { toolCallId: "call_a" })
     const forModel = t.toModelOutput?.(result)
+    expect(forModel).toEqual({ type: "text", value: result.output })
+  })
+
+  test("toModelOutput unwraps AI SDK v6 tool output args", async () => {
+    const schemaShape = jsonSchema(z.object({ answer: z.string() }))
+    const t = SessionLoop.createStructuredOutputTool({
+      schema: schemaShape,
+      onSuccess: () => undefined,
+    }) as unknown as AIToolLike
+
+    const result = await t.execute({ answer: "a" }, { toolCallId: "call_a" })
+    const forModel = t.toModelOutput?.({
+      toolCallId: "call_a",
+      input: { answer: "a" },
+      output: result,
+    })
     expect(forModel).toEqual({ type: "text", value: result.output })
   })
 

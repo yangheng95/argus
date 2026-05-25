@@ -291,15 +291,8 @@ export const BashTool = Tool.define("bash", async () => {
 
       if (params.background) {
         let backgroundLeaseTimer: ReturnType<typeof setTimeout> | undefined
-        const clearBackgroundLease = () => {
-          if (backgroundLeaseTimer) {
-            clearTimeout(backgroundLeaseTimer)
-            backgroundLeaseTimer = undefined
-          }
-        }
         const markExited = () => {
           exited = true
-          clearBackgroundLease()
         }
         proc.once("exit", () => {
           markExited()
@@ -309,7 +302,7 @@ export const BashTool = Tool.define("bash", async () => {
         })
         backgroundLeaseTimer = setTimeout(() => {
           timedOut = true
-          void kill()
+          void Shell.killTree(proc, { exited: () => exited, allowExitedRoot: true })
         }, timeout)
         backgroundLeaseTimer.unref?.()
         proc.unref?.()
@@ -375,6 +368,8 @@ export const BashTool = Tool.define("bash", async () => {
           reject(error)
         })
       })
+
+      await Shell.killTree(proc, { exited: () => exited, allowExitedRoot: true })
 
       const resultMetadata: string[] = []
 

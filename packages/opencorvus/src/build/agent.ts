@@ -82,6 +82,7 @@ import { withStreamActivity } from "@/util/stream-activity"
 import { PermissionNext } from "@/permission/next"
 import { Question } from "@/question"
 import { buildBuildAgentReport } from "./report"
+import { InstructionPrompt } from "@/session/instruction"
 
 import BUILD_CORE from "@/prompt/core/build-core.txt"
 import ENGINEERING_CRAFT from "@/prompt/core/engineering-craft.txt"
@@ -1515,7 +1516,12 @@ async function runWithExternalProviderImpl(args: {
     ? Agent.resolveSessionAgent(buildAgent, await resolveSessionOverlay()).promptAppend
     : undefined
   const baseSystem = resolveOption<string>(options.system)
-  const systemWithAutoIteration = [baseSystem, renderBuildAutoIterationMode(orchCfg.auto_iteration === true)]
+  const projectInstructions = await InstructionPrompt.system()
+  const systemWithAutoIteration = [
+    baseSystem,
+    renderBuildAutoIterationMode(orchCfg.auto_iteration === true),
+    ...projectInstructions,
+  ]
     .filter((part): part is string => typeof part === "string" && part.trim().length > 0)
     .join("\n\n")
   const composedSystem = BuildAgent.composeExternalCodingSystem({

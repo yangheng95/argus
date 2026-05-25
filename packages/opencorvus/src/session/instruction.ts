@@ -1,5 +1,6 @@
 import path from "path"
 import os from "os"
+import { readdir } from "fs/promises"
 import { Global } from "../global"
 import { Filesystem } from "../util/filesystem"
 import { Config } from "../config/config"
@@ -8,21 +9,55 @@ import { Flag } from "@/flag/flag"
 import { Log } from "../util/log"
 import { Glob } from "../util/glob"
 import type { Message } from "./message"
+import { ConfigMarkdown } from "@/config/markdown"
 
 const log = Log.create({ service: "instruction" })
 
-const FILES = ["AGENTS.md", "CLAUDE.md"]
+const FILES = ["AGENTS.md", "AGENT.md", "CLAUDE.md"]
 
-function globalFiles() {
-  const files: string[] = []
-  if (Flag.OPENCORVUS_CONFIG_DIR) {
-    files.push(path.join(Flag.OPENCORVUS_CONFIG_DIR, "AGENTS.md"))
+async function findNamedFiles(dir: string, filename: string): Promise<string[]> {
+  const exact = path.join(dir, filename)
+  if (await Filesystem.exists(exact)) return [Filesystem.normalizePath(exact)]
+  const lower = filename.toLowerCase()
+  const entries = await readdir(dir, { withFileTypes: true }).catch(() => [])
+  return entries
+    .filter((entry) => entry.isFile() && entry.name.toLowerCase() === lower)
+    .map((entry) => Filesystem.normalizePath(path.join(dir, entry.name)))
+    .sort((a, b) => a.localeCompare(b))
+}
+
+async function findInstructionFilesInDir(dir: string, files = FILES): Promise<string[]> {
+  const result: string[] = []
+  for (const file of files) {
+    result.push(...(await findNamedFiles(dir, file)))
   }
-  files.push(path.join(Global.Path.config, "AGENTS.md"))
+  return result
+}
+
+async function findUpInstructionFiles(target: string, start: string, stop?: string) {
+  let current = start
+  const result: string[] = []
+  while (true) {
+    result.push(...(await findNamedFiles(current, target)))
+    if (stop === current) break
+    const parent = path.dirname(current)
+    if (parent === current) break
+    current = parent
+  }
+  return result
+}
+
+async function firstGlobalInstructionFile(): Promise<string | undefined> {
+  const roots: Array<{ dir: string; files?: string[] }> = []
+  if (Flag.OPENCORVUS_CONFIG_DIR) roots.push({ dir: Flag.OPENCORVUS_CONFIG_DIR })
+  roots.push({ dir: Global.Path.config })
   if (!Flag.OPENCORVUS_DISABLE_CLAUDE_CODE_PROMPT) {
-    files.push(path.join(os.homedir(), ".claude", "CLAUDE.md"))
+    roots.push({ dir: path.join(os.homedir(), ".claude"), files: ["CLAUDE.md"] })
   }
-  return files
+  for (const root of roots) {
+    const matches = await findInstructionFilesInDir(root.dir, root.files)
+    if (matches.length > 0) return matches[0]
+  }
 }
 
 async function resolveRelative(instruction: string): Promise<string[]> {
@@ -69,16 +104,12 @@ export namespace InstructionPrompt {
     const config = await Config.get()
     const paths = new Set<string>()
 
-    for (const file of globalFiles()) {
-      if (await Filesystem.exists(file)) {
-        paths.add(path.resolve(file))
-        break
-      }
-    }
+    const globalFile = await firstGlobalInstructionFile()
+    if (globalFile) paths.add(path.resolve(globalFile))
 
     if (!Flag.OPENCORVUS_DISABLE_PROJECT_CONFIG) {
       for (const file of FILES) {
-        const matches = await Filesystem.findUp(file, Instance.directory, Instance.worktree)
+        const matches = await findUpInstructionFiles(file, Instance.directory, Instance.worktree)
         matches.forEach((p) => {
           paths.add(path.resolve(p))
         })
@@ -107,14 +138,57 @@ export namespace InstructionPrompt {
     return paths
   }
 
+  async function resolveReference(filepath: string, reference: string): Promise<string | undefined> {
+    const target = reference.startsWith("~/")
+      ? path.join(os.homedir(), reference.slice(2))
+      : path.isAbsolute(reference)
+        ? reference
+        : path.resolve(path.dirname(filepath), reference)
+    if (await Filesystem.exists(target)) return path.resolve(Filesystem.normalizePath(target))
+    const matches = await findNamedFiles(path.dirname(target), path.basename(target))
+    return matches[0] ? path.resolve(matches[0]) : undefined
+  }
+
+  function visitedKey(filepath: string) {
+    const resolved = path.resolve(filepath)
+    return process.platform === "win32" ? resolved.toLowerCase() : resolved
+  }
+
+  async function renderInstructionFile(filepath: string, visited = new Set<string>()): Promise<string> {
+    const key = visitedKey(filepath)
+    if (visited.has(key)) return ""
+    visited.add(key)
+
+    const content = await Filesystem.readText(filepath).catch(() => "")
+    if (!content) return ""
+
+    const includes: string[] = []
+    const seenRefs = new Set<string>()
+    for (const match of ConfigMarkdown.files(content)) {
+      const ref = match[1]
+      if (ref.startsWith("https://") || ref.startsWith("http://")) continue
+      const resolved = await resolveReference(filepath, ref)
+      if (!resolved) continue
+      const refKey = visitedKey(resolved)
+      if (seenRefs.has(refKey)) continue
+      seenRefs.add(refKey)
+      const rendered = await renderInstructionFile(resolved, visited)
+      if (rendered) includes.push(rendered)
+    }
+
+    return ["Instructions from: " + filepath, content, ...includes].filter(Boolean).join("\n")
+  }
+
   export async function system() {
     const config = await Config.get()
     const paths = await systemPaths()
 
-    const files = Array.from(paths).map(async (p) => {
-      const content = await Filesystem.readText(p).catch(() => "")
-      return content ? "Instructions from: " + p + "\n" + content : ""
-    })
+    const visited = new Set<string>()
+    const files: string[] = []
+    for (const p of paths) {
+      const rendered = await renderInstructionFile(p, visited)
+      if (rendered) files.push(rendered)
+    }
 
     const urls: string[] = []
     if (config.instructions) {
@@ -153,8 +227,8 @@ export namespace InstructionPrompt {
 
   export async function find(dir: string) {
     for (const file of FILES) {
-      const filepath = path.resolve(path.join(dir, file))
-      if (await Filesystem.exists(filepath)) return filepath
+      const matches = await findNamedFiles(dir, file)
+      if (matches[0]) return path.resolve(matches[0])
     }
   }
 
@@ -172,9 +246,9 @@ export namespace InstructionPrompt {
 
       if (found && found !== target && !system.has(found) && !already.has(found) && !isClaimed(messageID, found)) {
         claim(messageID, found)
-        const content = await Filesystem.readText(found).catch(() => undefined)
+        const content = await renderInstructionFile(found)
         if (content) {
-          results.push({ filepath: found, content: "Instructions from: " + found + "\n" + content })
+          results.push({ filepath: found, content })
         }
       }
       current = path.dirname(current)
