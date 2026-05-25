@@ -3633,6 +3633,14 @@ export function createOrchestratorTools(input: {
           // too. Without this the `outcome` enum would be half-dead and
           // the orchestrator couldn't see that fact-check tried and
           // failed (vs never ran).
+          //
+          // codex impl review round 4 §findings-1: do NOT swallow persist
+          // errors here. The happy/scope-mismatch paths let
+          // recordFactCheckAttempt throw; the error-outcome path must
+          // behave identically. A persist failure with a swallowed log
+          // would return a "fact_check tool_error: …" string claiming
+          // the artifact exists when it does not, poisoning read_context
+          // / integrity replay (rule 7: no silent fallback).
           const outcome: "aborted" | "tool_error" = input.signal?.aborted ? "aborted" : "tool_error"
           const errMessage = err instanceof Error ? err.message : String(err)
           const synthetic = synthesizeToolErrorReport({
@@ -3640,28 +3648,21 @@ export function createOrchestratorTools(input: {
             args,
             reason: `fact-check ${outcome}: ${errMessage}`,
           })
-          try {
-            recordFactCheckAttempt({
-              taskID: task.id,
-              // No child session id available — the run threw before
-              // returning a session reference.  Mark explicitly so
-              // listFactCheckAttempts consumers can distinguish.
-              factCheckSessionID: `(no-session:${outcome})`,
-              targetSessionID: args.target_session_id,
-              targetAgent: args.target_agent,
-              targetMessageID: snap.messageID,
-              targetMessageContentHash: snap.contentHash,
-              invokedByOrchestratorSessionID: input.agentSessionID,
-              report: synthetic,
-              timeStarted,
-              outcome,
-            })
-          } catch (persistErr) {
-            log.warn("fact_check: persist of error-outcome artifact failed (non-fatal)", {
-              taskID: task.id,
-              error: persistErr instanceof Error ? persistErr.message : String(persistErr),
-            })
-          }
+          recordFactCheckAttempt({
+            taskID: task.id,
+            // No child session id available — the run threw before
+            // returning a session reference.  Mark explicitly so
+            // listFactCheckAttempts consumers can distinguish.
+            factCheckSessionID: `(no-session:${outcome})`,
+            targetSessionID: args.target_session_id,
+            targetAgent: args.target_agent,
+            targetMessageID: snap.messageID,
+            targetMessageContentHash: snap.contentHash,
+            invokedByOrchestratorSessionID: input.agentSessionID,
+            report: synthetic,
+            timeStarted,
+            outcome,
+          })
           return `fact_check ${outcome}: ${errMessage}`
         }
       },

@@ -210,7 +210,7 @@ function buildFactCheckUserPrompt(input: FactCheckAgent.RunInput, targetMessageT
  *   - Message id not in stream (worker truncated the session or a stale
  *     id was passed) → THROW with a clear error message.
  */
-async function loadTargetMessageText(sessionID: string, messageID: string): Promise<string> {
+export async function loadTargetMessageText(sessionID: string, messageID: string): Promise<string> {
   const { Message } = await import("@/session/message")
   for await (const msg of Message.stream(sessionID)) {
     if (msg.info.id !== messageID) continue
