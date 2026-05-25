@@ -169,7 +169,12 @@ function websearch(info: ToolProps<typeof WebSearchTool>) {
 }
 
 function task(info: ToolProps<typeof TaskTool>) {
-  const input = info.part.state.input
+  // P0 (commit f4b08c75b) relaxed ToolStatePending/Running/Error.input from
+  // `record<string, any>` to `z.unknown()`. Narrow to an object surface
+  // before per-field `typeof X === "string"` guards run.
+  const rawInput = info.part.state.input
+  const input: Record<string, unknown> =
+    rawInput && typeof rawInput === "object" && !Array.isArray(rawInput) ? (rawInput as Record<string, unknown>) : {}
   const status = info.part.state.status
   const subagent =
     typeof input.subagent_type === "string" && input.subagent_type.trim().length > 0 ? input.subagent_type : "unknown"

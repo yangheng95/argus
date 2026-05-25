@@ -346,7 +346,13 @@ export namespace ACP {
                 ]
 
                 if (kind === "edit") {
-                  const input = part.state.input
+                  // P0 (commit f4b08c75b) relaxed ToolStatePending/Running/
+                  // Error.input to `z.unknown()`. Narrow before keyed access.
+                  const rawInput = part.state.input
+                  const input: Record<string, unknown> =
+                    rawInput && typeof rawInput === "object" && !Array.isArray(rawInput)
+                      ? (rawInput as Record<string, unknown>)
+                      : {}
                   const filePath = typeof input["filePath"] === "string" ? input["filePath"] : ""
                   const oldText = typeof input["oldString"] === "string" ? input["oldString"] : ""
                   const newText =
@@ -870,7 +876,13 @@ export namespace ACP {
               ]
 
               if (kind === "edit") {
-                const input = toolPart.state.input
+                // P0 (commit f4b08c75b) relaxed ToolStatePending/Running/
+                // Error.input to `z.unknown()`. Narrow before field access.
+                const rawInput = toolPart.state.input
+                const input: Record<string, unknown> =
+                  rawInput && typeof rawInput === "object" && !Array.isArray(rawInput)
+                    ? (rawInput as Record<string, unknown>)
+                    : {}
                 const filePath = typeof input["filePath"] === "string" ? input["filePath"] : ""
                 const oldText = typeof input["oldString"] === "string" ? input["oldString"] : ""
                 const newText =
@@ -1509,20 +1521,29 @@ export namespace ACP {
     }
   }
 
-  function toLocations(toolName: string, input: Record<string, any>): { path: string }[] {
+  function toLocations(toolName: string, rawInput: unknown): { path: string }[] {
+    // P0 (commit f4b08c75b) relaxed ToolStatePending/Running/Error.input to
+    // `z.unknown()` — narrow to an object surface before keyed access; treat
+    // any non-string field as absent.
+    const input: Record<string, unknown> =
+      rawInput && typeof rawInput === "object" && !Array.isArray(rawInput)
+        ? (rawInput as Record<string, unknown>)
+        : {}
     const tool = toolName.toLocaleLowerCase()
+    const filePath = typeof input["filePath"] === "string" ? input["filePath"] : ""
+    const dirPath = typeof input["path"] === "string" ? input["path"] : ""
     switch (tool) {
       case "read":
       case "edit":
       case "write":
-        return input["filePath"] ? [{ path: input["filePath"] }] : []
+        return filePath ? [{ path: filePath }] : []
       case "glob":
       case "search_code":
-        return input["path"] ? [{ path: input["path"] }] : []
+        return dirPath ? [{ path: dirPath }] : []
       case "bash":
         return []
       case "list":
-        return input["path"] ? [{ path: input["path"] }] : []
+        return dirPath ? [{ path: dirPath }] : []
       default:
         return []
     }
