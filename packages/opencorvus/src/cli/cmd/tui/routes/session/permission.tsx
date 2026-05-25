@@ -135,13 +135,23 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
 
   const session = createMemo(() => sync.data.session.find((s) => s.id === props.request.sessionID))
 
-  const input = createMemo(() => {
+  // P0 (commit f4b08c75b) relaxed ToolStatePending/Running/Error.input from
+  // `record<string, any>` to `z.unknown()` so the SDK persists whatever the
+  // model emitted (including invalid scalars). Each permission branch below
+  // already type-guards every field via `typeof data.X === "string"`, so the
+  // memo only needs to narrow the raw `unknown` back to an object surface
+  // and let the per-field guards reject non-strings.
+  const input = createMemo<Record<string, unknown>>(() => {
     const tool = props.request.tool
     if (!tool) return {}
     const parts = sync.data.part[tool.messageID] ?? []
     for (const part of parts) {
       if (part.type === "tool" && part.callID === tool.callID && part.state.status !== "pending") {
-        return part.state.input ?? {}
+        const raw = part.state.input
+        if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+          return raw as Record<string, unknown>
+        }
+        return {}
       }
     }
     return {}

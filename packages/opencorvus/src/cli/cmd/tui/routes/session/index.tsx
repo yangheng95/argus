@@ -75,6 +75,7 @@ import { PermissionPrompt } from "./permission"
 import { QuestionPrompt } from "./question"
 import { DialogExportOptions } from "../../ui/dialog-export-options"
 import { formatMessage, formatTranscript } from "../../util/transcript"
+import { renderToolFailureCause } from "@/session/tool-failure-cause"
 import { UI } from "@/cli/ui.ts"
 import { useTuiConfig } from "../../context/tui-config"
 
@@ -1455,7 +1456,9 @@ function InlineTool(props: {
     return theme.text
   })
 
-  const error = createMemo(() => (props.part.state.status === "error" ? props.part.state.error : undefined))
+  const error = createMemo(() =>
+    props.part.state.status === "error" ? renderToolFailureCause(props.part.state.failure) : undefined,
+  )
 
   const denied = createMemo(
     () =>
@@ -1513,7 +1516,9 @@ function BlockTool(props: {
   const { theme } = useTheme()
   const renderer = useRenderer()
   const [hover, setHover] = createSignal(false)
-  const error = createMemo(() => (props.part?.state.status === "error" ? props.part.state.error : undefined))
+  const error = createMemo(() =>
+    props.part?.state.status === "error" ? renderToolFailureCause(props.part.state.failure) : undefined,
+  )
   return (
     <box
       border={["left"]}
