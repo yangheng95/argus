@@ -194,30 +194,40 @@ function buildFactCheckUserPrompt(input: FactCheckAgent.RunInput, targetMessageT
   return sections.join("\n\n")
 }
 
-/** Extract the concatenated text/reasoning content of the target session's
- *  latest assistant message so the fact-check agent can inspect the actual
- *  claims (codex impl review §2). Returns empty string if absent. */
+/**
+ * Extract the concatenated text/reasoning content of the target session's
+ * latest assistant message so the fact-check agent can inspect the actual
+ * claims (codex impl review §2).
+ *
+ * Failure semantics (codex impl review round 2 §B-2 — rule 7 no silent
+ * fallback):
+ *   - Message.stream errors (DB error, session not found) → THROW.  The
+ *     orchestrator tool's catch persists outcome=tool_error so the
+ *     orchestrator LLM sees the failure rather than getting a fake
+ *     "no text" report.
+ *   - Message exists in stream but has no text/reasoning parts → return
+ *     empty string (this IS the honest "no text" case).
+ *   - Message id not in stream (worker truncated the session or a stale
+ *     id was passed) → THROW with a clear error message.
+ */
 async function loadTargetMessageText(sessionID: string, messageID: string): Promise<string> {
-  try {
-    const { Message } = await import("@/session/message")
-    for await (const msg of Message.stream(sessionID)) {
-      if (msg.info.id !== messageID) continue
-      const parts: string[] = []
-      for (const part of msg.parts) {
-        if (part.type === "text" || part.type === "reasoning") {
-          parts.push(part.text)
-        }
+  const { Message } = await import("@/session/message")
+  for await (const msg of Message.stream(sessionID)) {
+    if (msg.info.id !== messageID) continue
+    const parts: string[] = []
+    for (const part of msg.parts) {
+      if (part.type === "text" || part.type === "reasoning") {
+        parts.push(part.text)
       }
-      return parts.join("\n\n").trim()
     }
-  } catch (err) {
-    log.warn("fact-check: failed to load target message text (non-fatal)", {
-      sessionID,
-      messageID,
-      error: err instanceof Error ? err.message : String(err),
-    })
+    return parts.join("\n\n").trim()
   }
-  return ""
+  // The stream completed without seeing the requested message id.
+  // Throw — orchestrator catch persists tool_error so the caller knows
+  // the snapshot the host took has gone stale (rule 7).
+  throw new Error(
+    `fact-check: target message ${messageID} not found in session ${sessionID} (snapshot stale or wrong target id)`,
+  )
 }
 
 export namespace FactCheckAgent {
