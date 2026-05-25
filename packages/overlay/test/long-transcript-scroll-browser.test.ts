@@ -15,8 +15,8 @@ test("browser keeps a long transcript pinned without dynamic scrollbar resizing"
   const cardCss = readFileSync(join(import.meta.dir, "../src/styles/surfaces/card.css"), "utf8");
   const structuredCardRule = cssRule(
     conversationCss,
-    /\.chat-scroll > \.card,\s*\.chat-scroll > \.interaction-card\s*\{[^}]*\}/,
-    "chat-scroll direct card containment",
+    /\.conversation-virtual-item > \.card,\s*\.conversation-virtual-item > \.interaction-card\s*\{[^}]*\}/,
+    "virtualized conversation card containment",
   );
   const bubbleRowRule = cssRule(bubbleCss, /\.chat-bubble-row\s*\{[^}]*\}/, "chat bubble row containment");
   const cardRule = cssRule(cardCss, /\.card\s*\{[^}]*\}/, "base card");
@@ -62,6 +62,14 @@ test("browser keeps a long transcript pinned without dynamic scrollbar resizing"
         .card { padding: 12px; min-height: 92px; }
         .card .card { min-height: 76px; margin: 8px 0 0; background: #f0f3f6; }
         .chat-bubble-row { min-height: 92px; }
+        .conversation-virtual-item {
+          flex: 0 0 auto;
+          width: 100%;
+          min-width: 0;
+          max-width: 100%;
+          box-sizing: border-box;
+          padding-block-end: 8px;
+        }
         .chat-bubble {
           width: min(640px, 100%);
           min-height: 72px;
@@ -79,6 +87,8 @@ test("browser keeps a long transcript pinned without dynamic scrollbar resizing"
       const scroll = document.getElementById("scroll") as HTMLElement;
       const frame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
       const appendCard = (index: number) => {
+        const item = document.createElement("div");
+        item.className = "conversation-virtual-item";
         const card = document.createElement("section");
         card.className = "card";
         card.textContent = `card ${index} ${"content ".repeat(18)}`;
@@ -88,14 +98,18 @@ test("browser keeps a long transcript pinned without dynamic scrollbar resizing"
           nested.textContent = `nested ${index} ${"detail ".repeat(14)}`;
           card.appendChild(nested);
         }
-        scroll.appendChild(card);
+        item.appendChild(card);
+        scroll.appendChild(item);
       };
       const appendBubble = (index: number) => {
+        const item = document.createElement("div");
+        item.className = "conversation-virtual-item";
         const row = document.createElement("div");
         row.className = "chat-bubble-row";
         row.dataset.role = index % 2 === 0 ? "assistant" : "user";
         row.innerHTML = `<div class="chat-bubble">bubble ${index} ${"stream ".repeat(22)}</div>`;
-        scroll.appendChild(row);
+        item.appendChild(row);
+        scroll.appendChild(item);
       };
 
       for (let i = 0; i < 180; i += 1) {
@@ -118,7 +132,7 @@ test("browser keeps a long transcript pinned without dynamic scrollbar resizing"
         maxDistance = Math.max(maxDistance, distance);
       }
 
-      const topCard = scroll.querySelector(":scope > .card") as HTMLElement;
+      const topCard = scroll.querySelector(".conversation-virtual-item > .card") as HTMLElement;
       const nestedCard = scroll.querySelector(".nested-card") as HTMLElement;
       const bubbleRows = Array.from(scroll.querySelectorAll(".chat-bubble-row")) as HTMLElement[];
       const bubbleRow = bubbleRows[bubbleRows.length - 1]!;

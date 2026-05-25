@@ -5,12 +5,14 @@ import { join } from "node:path";
 const repoRoot = join(import.meta.dir, "..", "..", "..");
 
 describe("conversation virtualization motion", () => {
-  test("keeps virtual segments stable across measurement updates", () => {
+  test("uses virtua instead of the old spacer-based virtual window", () => {
     const source = readFileSync(join(repoRoot, "packages/overlay/src/components/Conversation.tsx"), "utf8");
 
-    expect(source).toContain("import { For, Index, Show");
-    expect(source).toContain("<Index each={segments()}>");
-    expect(source).toContain("</Index>");
+    expect(source).toContain('from "virtua/solid"');
+    expect(source).toContain("<Virtualizer");
+    expect(source).toContain("scrollRef={props.container}");
+    expect(source).not.toContain("conversation-virtual-spacer");
+    expect(source).not.toContain("bottomPadding");
   });
 
   test("does not replay bubble enter animations for virtualized cards", () => {
