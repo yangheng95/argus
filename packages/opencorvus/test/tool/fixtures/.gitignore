@@ -51,3 +51,16 @@ lpt6
 lpt7
 lpt8
 lpt9
+
+# Auto-added by OpenCorvus
+.opencorvus/runtime/
+.opencorvus/intent/
+.opencorvus/design-analysis/
+.opencorvus/decision-log.md
+.opencorvus/worktrees/
+.opencorvus/ownership/
+.opencorvus/trace/
+.opencorvus/attachments/
+.opencorvus/logs/
+.opencorvus/specs/
+/artifacts/
