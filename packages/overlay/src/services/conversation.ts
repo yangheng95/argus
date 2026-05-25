@@ -7,6 +7,7 @@ import {
   setBoardUpdatedAt,
   setTaskSequence,
 } from "../store/board";
+import { cardTreeStore } from "../store/card-tree";
 import {
   mergeLoadedConversationMessages,
 } from "../store/messages";
@@ -431,4 +432,17 @@ export async function loadOlderConversationHistory(
     if (historyAbort === controller) historyAbort = null;
     historyLoading = false;
   }
+}
+
+export async function loadConversationHistoryUntilCard(
+  cardID: string,
+  taskID = boardStore.selectedTaskID,
+): Promise<boolean> {
+  const targetCardID = String(cardID || "");
+  if (!targetCardID) return false;
+  while (!cardTreeStore.cards[targetCardID] && canLoadOlderConversationHistory(taskID)) {
+    const loaded = await loadOlderConversationHistory(taskID);
+    if (!loaded) break;
+  }
+  return !!cardTreeStore.cards[targetCardID];
 }

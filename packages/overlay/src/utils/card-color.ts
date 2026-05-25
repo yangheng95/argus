@@ -9,6 +9,8 @@ const KNOWN_STAGES = new Set([
   "assistant",
   "system",
   "orchestrator",
+  "gateway",
+  "intent-analysis",
   "spec",
   "requirements",
   "design-analyst",
@@ -17,7 +19,9 @@ const KNOWN_STAGES = new Set([
   "goal",
   "executor",
   "build",
+  "explore",
   "evaluator",
+  "delivery",
   "integrity",
   "tool",
 ]);

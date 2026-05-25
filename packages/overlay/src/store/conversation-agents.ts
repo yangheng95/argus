@@ -7,9 +7,10 @@ export interface ConversationAgentSessionView {
   stage: string;
   parentSessionID?: string;
   goalID?: string;
+  messageIDs?: string[];
   firstMessageTime: number;
   lastMessageTime: number;
-  placement?: string;
+  placement?: "top_level" | "goal_phase" | "hidden" | "filtered" | string;
   phase?: {
     stepID: string;
     phaseID: string;
@@ -30,12 +31,46 @@ export const [conversationAgentStore, setConversationAgentStore] = createStore<C
   records: [],
 });
 
+function firstMessageID(session: ConversationAgentSessionView): string {
+  return Array.isArray(session?.messageIDs) ? String(session.messageIDs[0] || "") : "";
+}
+
+function renderedTargetForSession(
+  session: ConversationAgentSessionView,
+  stage: string,
+): Pick<AgentWorkflowRecord, "cardID" | "renderedCardID"> {
+  const goalID = String(session?.goalID || "");
+  const stepID = String(session?.phase?.stepID || "");
+  const phaseID = String(session?.phase?.phaseID || "");
+  if (goalID && stepID && phaseID) {
+    const renderedCardID = `step:${goalID}:${stepID}`;
+    return {
+      cardID: `${renderedCardID}:phase:${phaseID}`,
+      renderedCardID,
+    };
+  }
+  const messageID = firstMessageID(session);
+  return messageID
+    ? { renderedCardID: `${stage}:session:${session.sessionID}:message:${messageID}` }
+    : {};
+}
+
 function agentRecordFromSession(session: ConversationAgentSessionView): AgentWorkflowRecord | null {
   const sessionID = String(session?.sessionID || "");
   const rawStage = String(session?.stage || "");
   const stage = normalizeAgentRole(rawStage);
   const startedAt = Number(session?.firstMessageTime || 0);
-  if (!sessionID || !stage || stage === "user" || rawStage === "filtered" || !(startedAt > 0)) return null;
+  if (
+    !sessionID ||
+    !stage ||
+    stage === "user" ||
+    session?.placement === "hidden" ||
+    session?.placement === "filtered" ||
+    rawStage === "filtered" ||
+    !(startedAt > 0)
+  ) {
+    return null;
+  }
   const lastObservedAt = Math.max(startedAt, Number(session?.lastMessageTime || 0));
   return {
     id: sessionID,
@@ -52,6 +87,7 @@ function agentRecordFromSession(session: ConversationAgentSessionView): AgentWor
     goalID: session?.goalID,
     stepID: session?.phase?.stepID,
     phaseID: session?.phase?.phaseID,
+    ...renderedTargetForSession(session, stage),
   };
 }
 

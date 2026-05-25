@@ -62,6 +62,8 @@ export interface ChatComposerProps {
 
 // Cap auto-grow at 10 visible lines; beyond that the textarea scrolls.
 const MAX_VISIBLE_LINES = 10;
+const REQUEST_PERFORMANCE_WARNING_BYTES = 50 * 1024;
+const UTF8_ENCODER = new TextEncoder();
 
 // ── Helpers ──
 //
@@ -99,6 +101,10 @@ function chooseAttachmentFilename(original: string | undefined, mime: string): s
   return `pasted-${stamp}.${ext || "bin"}`;
 }
 
+function utf8ByteLength(value: string): number {
+  return UTF8_ENCODER.encode(value).byteLength;
+}
+
 // ── Component ──
 
 export function ChatComposer(props: ChatComposerProps) {
@@ -132,6 +138,7 @@ export function ChatComposer(props: ChatComposerProps) {
     | undefined;
 
   const hasText = createMemo(() => text().trim().length > 0);
+  const showLargeRequestWarning = createMemo(() => utf8ByteLength(text()) > REQUEST_PERFORMANCE_WARNING_BYTES);
   const stopping = () => props.stopping === true;
 
   // ── Rotating placeholder ──
@@ -581,6 +588,13 @@ export function ChatComposer(props: ChatComposerProps) {
           <span class="chat-send-label">{sendLabel()}</span>
         </button>
       </div>
+
+      <Show when={showLargeRequestWarning()}>
+        <div class="chat-input-warning" role="status" aria-live="polite">
+          <Icon name="info-circle" size={13} />
+          <span>{t("chat.large_input_warning")}</span>
+        </div>
+      </Show>
 
       {/* Compose meta (executor selector). The drag/resize tip is now a
        * native title on the textarea — appears only on hover so the row

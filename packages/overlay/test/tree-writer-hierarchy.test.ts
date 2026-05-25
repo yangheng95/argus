@@ -1015,7 +1015,7 @@ function seedTurnBoard(request: string): void {
   resetWriter();
 }
 
-test("orchestrator turns interleave with child agent cards by message time", () => {
+test("orchestrator turns stay in one complete session card around child agents", () => {
   seedTurnBoard("interleave turns");
 
   const o1 = `assistant:session:${ROOT_SID}:message:msg_o1`;
@@ -1039,20 +1039,19 @@ test("orchestrator turns interleave with child agent cards by message time", () 
     id: "prt_o2", messageID: "msg_o2", sessionID: ROOT_SID, type: "text", text: "turn two" }) } });
 
   const ordered = cardTreeStore.order.filter((id) => id === o1 || id === childCard || id === o2);
-  expect(ordered).toEqual([o1, childCard, o2]);
+  expect(ordered).toEqual([o1, childCard]);
 
   const o1Texts = (cardTreeStore.cards[o1]?.parts || []).map((p: any) => p.text);
   expect(o1Texts).toContain("turn one");
-  expect(o1Texts).not.toContain("turn two");
-  expect((cardTreeStore.cards[o2]?.parts || []).map((p: any) => p.text)).toContain("turn two");
+  expect(o1Texts).toContain("turn two");
+  expect(cardTreeStore.cards[o2]).toBeUndefined();
 
-  expect(cardTreeStore.cards[o1]?.status).toBe("completed");
-  expect(cardTreeStore.cards[o2]?.status).toBe("running");
-  expect(cardTreeStore.cards[o2]?.sessionID).toBe(ROOT_SID);
-  expect(cardTreeStore.cards[o2]?.messageID).toBe("msg_o2");
+  expect(cardTreeStore.cards[o1]?.status).toBe("running");
+  expect(cardTreeStore.cards[o1]?.sessionID).toBe(ROOT_SID);
+  expect(cardTreeStore.cards[o1]?.messageID).toBe("msg_o1");
 });
 
-test("late child agent event splits an already-arrived orchestrator resume turn by message time", () => {
+test("late child agent event does not split an already-arrived orchestrator session card", () => {
   seedTurnBoard("out-of-order interleave turns");
 
   const o1 = `assistant:session:${ROOT_SID}:message:msg_late_o1`;
@@ -1079,10 +1078,9 @@ test("late child agent event splits an already-arrived orchestrator resume turn 
     parentSessionID: ROOT_SID, time: { created: 1_776_000_000_200 } }) } });
 
   const ordered = cardTreeStore.order.filter((id) => id === o1 || id === childCard || id === o2);
-  expect(ordered).toEqual([o1, childCard, o2]);
-  expect(cardTreeStore.cards[o2]).toBeDefined();
-  expect((cardTreeStore.cards[o1]?.parts || []).map((p: any) => p.text)).not.toContain("turn two after late child");
-  expect((cardTreeStore.cards[o2]?.parts || []).map((p: any) => p.text)).toContain("turn two after late child");
+  expect(ordered).toEqual([o1, childCard]);
+  expect(cardTreeStore.cards[o2]).toBeUndefined();
+  expect((cardTreeStore.cards[o1]?.parts || []).map((p: any) => p.text)).toContain("turn two after late child");
 });
 
 test("consecutive messages from the same agent stay in one card", () => {
@@ -1114,7 +1112,38 @@ test("consecutive messages from the same agent stay in one card", () => {
   expect(cardTreeStore.cards[cardID]?.parts.some((p: any) => p.type === "boundary" && p.role === "assistant")).toBe(true);
 });
 
-test("phase-absorbed agent interrupts a later orchestrator turn", () => {
+test("explore channel owns the card and in-card boundaries even when resolvedRole is stale", () => {
+  seedTurnBoard("explore card ownership");
+
+  const cardID = "explore:session:ses_explore_mixed:message:msg_explore_1";
+  const secondCardID = "explore:session:ses_explore_mixed:message:msg_explore_2";
+
+  applyEvent({ type: "message.updated", properties: { taskID: TASK_ID, info: stampedInfo("explore", {
+    id: "msg_explore_1", sessionID: "ses_explore_mixed", role: "user", resolvedRole: "orchestrator", agent: "build",
+    parentSessionID: ROOT_SID, time: { created: 1_776_000_000_100 } }) } });
+  applyEvent({ type: "message.part.updated", properties: { taskID: TASK_ID, part: stampedPart("explore", {
+    id: "prt_explore_1", messageID: "msg_explore_1", sessionID: "ses_explore_mixed", type: "text", text: "inspect repo" }) } });
+
+  applyEvent({ type: "message.updated", properties: { taskID: TASK_ID, info: stampedInfo("explore", {
+    id: "msg_explore_2", sessionID: "ses_explore_mixed", role: "assistant", resolvedRole: "orchestrator", agent: "build",
+    parentSessionID: ROOT_SID, time: { created: 1_776_000_000_200 } }) } });
+  applyEvent({ type: "message.part.updated", properties: { taskID: TASK_ID, part: stampedPart("explore", {
+    id: "prt_explore_2", messageID: "msg_explore_2", sessionID: "ses_explore_mixed", type: "text", text: "repo inspected" }) } });
+
+  const card = cardTreeStore.cards[cardID];
+  expect(card).toBeDefined();
+  expect(cardTreeStore.cards[secondCardID]).toBeUndefined();
+  expect(card?.stage).toBe("explore");
+  expect(card?.title).toBe("chat.role.explore");
+  expect(card?.parts.map((part: any) => part.text)).toEqual([
+    "inspect repo",
+    undefined,
+    "repo inspected",
+  ]);
+  expect(card?.parts.some((part: any) => part.type === "boundary" && part.role === "explore")).toBe(true);
+});
+
+test("phase-absorbed agent does not split a later orchestrator turn", () => {
   seedTurnBoard("phase interruption");
 
   const o1 = `assistant:session:${ROOT_SID}:message:msg_phase_i1`;
@@ -1131,8 +1160,8 @@ test("phase-absorbed agent interrupts a later orchestrator turn", () => {
     time: { created: 1_776_000_000_200 } }) } });
 
   expect(cardTreeStore.cards[o1]).toBeDefined();
-  expect(cardTreeStore.cards[o2]).toBeDefined();
-  expect(cardTreeStore.order.filter((id) => id === o1 || id === o2)).toEqual([o1, o2]);
+  expect(cardTreeStore.cards[o2]).toBeUndefined();
+  expect(cardTreeStore.order.filter((id) => id === o1 || id === o2)).toEqual([o1]);
 });
 
 test("interaction remains attached to the turn active at interaction time", () => {
@@ -1202,7 +1231,7 @@ test("late part.delta lands on the original turn card after a newer message star
   expect((cardTreeStore.cards[o2]?.parts || []).map((p: any) => p.text)).not.toContain("late tail");
 });
 
-test("session.status terminal updates only the active turn card", () => {
+test("session.status terminal updates the complete session card", () => {
   seedTurnBoard("status active only");
 
   const o1 = `assistant:session:${ROOT_SID}:message:msg_s1`;
@@ -1222,9 +1251,8 @@ test("session.status terminal updates only the active turn card", () => {
     sessionID: ROOT_SID, status: { type: "terminal", reason: "completed" } } });
 
   expect(cardTreeStore.cards[o1]?.status).toBe("completed");
-  expect(cardTreeStore.cards[o1]?.terminalReason).toBeUndefined();
-  expect(cardTreeStore.cards[o2]?.status).toBe("completed");
-  expect(cardTreeStore.cards[o2]?.terminalReason).toBe("completed");
+  expect(cardTreeStore.cards[o1]?.terminalReason).toBe("completed");
+  expect(cardTreeStore.cards[o2]).toBeUndefined();
 });
 
 test("hydrate keeps consecutive same-agent messages in one card", () => {
