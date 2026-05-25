@@ -1,12 +1,23 @@
 # Fact-Check Agent 设计方案
 
 日期：2026-05-25
-作者：HengYang + Claude（codex round 1/2 评审已纳入）
-状态：v3 — 已纳入 codex round 2 反馈，待 round 3
+作者：HengYang + Claude（codex round 1/2/3 评审已纳入）
+状态：v4 — 已纳入 codex round 3 反馈，待 round 4 复核
 
 ---
 
 ## Changelog
+
+### v3 → v4（codex round 3 评审）
+
+| v3 错误 / 漏点 | v4 修正 |
+|---|---|
+| §5.2 给 integrity 3 处都注入 fragment | **事实错误**：team-agent.ts:197 是 PLAN（`submit_integrity_review_plan`），:265 是 CONSENSUS（产 `IntegrityTeamReport`），:404 是 REVIEWER（`submit_reviewer_report`，不同 schema）。**只 CONSENSUS（:265）注入**；plan/reviewer 不注入，且只 `IntegrityTeamReport` 加 `fact_check_items` 字段。reviewer/plan schema 不改 |
+| §5.2 6 worker 各自 `[CORE, fragment].join("\n\n")` 裸拼接（违反 rule 9 抽象设计模式） | v4：抽 `withFactCheckRegistration(core: string): string` 辅助函数放在 `fragments/fact-check-registration.ts`；6 处调用点统一改为 `core: withFactCheckRegistration(XXX_CORE)` |
+| §6.1.3 external executor 在 6 个 `structured` return literal 各自补 `fact_check_items: []`（rule 8 双源） | v4：单一适配点 in `runWithExternalProvider` wrapper，在 `BuildResultSchema.safeParse(result.structured)` 之前 normalize — 若 `structured.fact_check_items` 缺失则注入 `[]`。具体位置：build/agent.ts 中 external executor 路径的 schema parse 前一道 normalize 步骤 |
+| §3.1 / §6.1.1 schema 单源位置矛盾（一处说 `fact-check/schema.ts`，另一处说 `fact-check/tools.ts`） | v4：统一 `fact-check/schema.ts` 单源；`fact-check/tools.ts` 与 6 个 worker schema 都 `import` 它 |
+| §8 step 1 只注册 Info/NATIVE_DEFAULTS（build/runtime 会炸） | v4：step 1 内容扩展为"注册 + prompt stub + runtime stub"——含最小 fact-check-core.txt + 最小 `FactCheckAgent.run` stub（throw "not implemented"），保证每个 commit 可 build |
+| §7 e2e D 没写清楚 finished=false 怎么模拟 | v4：明确 `SessionStatus.set(targetSessionID, { type: "streaming" })`（同进程态），现有 test/engine/active-sessions.test.ts:92-99 已有此用法 |
 
 ### v2 → v3（codex round 2 评审）
 
@@ -51,7 +62,7 @@
 | architect | `packages/opencorvus/src/architect/output-tools.ts` | ✅ |
 | design-analyst | `packages/opencorvus/src/design-analyst/output-tools.ts` | ✅ |
 | intent-analysis | `packages/opencorvus/src/intent-analysis/output-tools.ts` | ✅ |
-| integrity | `packages/opencorvus/src/integrity/team-schema.ts`（IntegrityTeamReport） | ✅ |
+| integrity（仅 consensus 阶段） | `packages/opencorvus/src/integrity/team-schema.ts`（IntegrityTeamReport — supervisor consensus 产出） | ✅ |
 
 ### 1.2 不覆盖（不是例外，是定义不适用）
 
@@ -127,11 +138,10 @@ export const FactCheckItemListSchema = z.array(FactCheckItemSchema)
   fact_check_items: FactCheckItemListSchema,  // 必填
 }
 
-// requirements/output-tools.ts submit_requirements_report schema 顶层
-// architect/output-tools.ts submit_architect_report schema 顶层
-// design-analyst/output-tools.ts submit_design_prd_spec schema 顶层
-// intent-analysis/output-tools.ts 同
-// integrity/team-schema.ts IntegrityTeamReport 顶层（注意：integrity 是 plan/review/consensus 三阶段，fact_check_items 落在 consensus 报告）
+// 五个 output-tools.ts（requirements / architect / design-analyst / intent-analysis）submit schema 顶层
+//   注：实际 schema 名按既有命名（submit_requirements_report 等）
+// integrity/team-schema.ts：只 IntegrityTeamReport（CONSENSUS 产出）加 fact_check_items 顶层
+//   — submit_integrity_review_plan 和 submit_reviewer_report 不改 schema、不加字段
 ```
 
 ### 3.3 Fact-check agent 终端工具：`report_fact_check_result`
@@ -332,9 +342,9 @@ After fact_check returns:
 
 ---
 
-## 5. Prompt 注入：每个 worker `agent.ts` 的 `core:` 处单源拼接（v3 重写）
+## 5. Prompt 注入：辅助函数 + 各 worker `agent.ts` 的 `core:` 处统一调用（v4 抽象）
 
-### 5.1 单源 TS 常量
+### 5.1 单源 TS 常量 + 辅助函数
 
 新文件 `packages/opencorvus/src/prompt/fragments/fact-check-registration.ts`：
 
@@ -363,22 +373,41 @@ observed in this session, contents of files you read in this session.
 Empty list (\`fact_check_items: []\`) is fine when you genuinely have no unverified claims.
 Over-claiming verified-ness will be flagged as a violation in fact-check.
 `.trim()
+
+/**
+ * Append the fact-check registration fragment to a worker core prompt.
+ * Single abstraction point for rule 9 (extract repeating structural pattern).
+ * Used at every covered worker's `core:` site in its agent.ts run-function.
+ *
+ * Usage:
+ *   core: withFactCheckRegistration(BUILD_CORE)
+ *   core: withFactCheckRegistration(composeBuildCore(autoIteration))
+ *   core: withFactCheckRegistration([DESIGN_ANALYST_CORE, renderAutoIterationMode(...)].join("\n\n"))
+ */
+export function withFactCheckRegistration(core: string): string {
+  return [core, FACT_CHECK_REGISTRATION_FRAGMENT].join("\n\n")
+}
 ```
 
-### 5.2 各 worker `agent.ts` 改动（v3 实际注入点）
+### 5.2 各 worker `agent.ts` 改动（v4 — 通过辅助函数统一）
 
-**6 个 worker，6 处一行字符串拼接改动**：
+**5 个 worker + integrity 仅 consensus 阶段 = 6 个注入点**，每处一行替换为 `withFactCheckRegistration(...)` 调用：
 
-| Worker | 文件:行 | 改动 |
+| Worker / 阶段 | 文件:行 | 改动 |
 |---|---|---|
-| build | `build/agent.ts:747` | `core: composeBuildCore(autoIteration)` → `core: [composeBuildCore(autoIteration), FACT_CHECK_REGISTRATION_FRAGMENT].join("\n\n")` |
-| requirements | `requirements/agent.ts:99` | `core: REQUIREMENTS_CORE` → `core: [REQUIREMENTS_CORE, FACT_CHECK_REGISTRATION_FRAGMENT].join("\n\n")` |
-| architect | `architect/agent.ts:121` | 同上模式 |
-| design-analyst | `design-analyst/agent.ts:98` | 既有 `[DESIGN_ANALYST_CORE, renderAutoIterationMode(autoIteration)].join("\n\n")` → 末尾追加 `FACT_CHECK_REGISTRATION_FRAGMENT` |
-| intent-analysis | `intent-analysis/agent.ts:74` | 同 requirements 模式 |
-| integrity | `integrity/team-agent.ts:197, 265, 404`（3 处） | 同 requirements 模式（每个 reviewer / supervisor 调用都注入） |
+| build | `build/agent.ts:747` | `core: composeBuildCore(autoIteration)` → `core: withFactCheckRegistration(composeBuildCore(autoIteration))` |
+| requirements | `requirements/agent.ts:99` | `core: REQUIREMENTS_CORE` → `core: withFactCheckRegistration(REQUIREMENTS_CORE)` |
+| architect | `architect/agent.ts:121` | `core: ARCHITECT_CORE` → `core: withFactCheckRegistration(ARCHITECT_CORE)` |
+| design-analyst | `design-analyst/agent.ts:98` | `core: [DESIGN_ANALYST_CORE, renderAutoIterationMode(autoIteration)].join("\n\n")` → `core: withFactCheckRegistration([DESIGN_ANALYST_CORE, renderAutoIterationMode(autoIteration)].join("\n\n"))` |
+| intent-analysis | `intent-analysis/agent.ts:74` | `core: INTENT_CORE` → `core: withFactCheckRegistration(INTENT_CORE)` |
+| **integrity 仅 consensus**（**v4 修正**） | `integrity/team-agent.ts:265` | `core: TEAM_CORE` → `core: withFactCheckRegistration(TEAM_CORE)` |
+| ~~integrity plan~~ | `team-agent.ts:197` | **不改**——`submit_integrity_review_plan` 不产 `IntegrityTeamReport`，不该登记 |
+| ~~integrity reviewer~~ | `team-agent.ts:404` | **不改**——`submit_reviewer_report` 不产 `IntegrityTeamReport`，不该登记 |
 
-**单源原则**：内容只在 `fragments/fact-check-registration.ts`；注入点 N 处是事实——每个 worker 有自己的运行时入口。
+**单源原则**（v4 强化）：
+- 内容只在 `fragments/fact-check-registration.ts`（`FACT_CHECK_REGISTRATION_FRAGMENT` 常量）
+- 拼接模式只在 `withFactCheckRegistration()` 辅助函数中（rule 9 抽象设计模式）
+- 6 个调用点统一调辅助函数，无裸 `[...].join("\n\n")` 重复
 
 **Fact-check agent 自己不导入**该 fragment（防自递归）。Compaction/title/summary/orchestrator/control/coding/general 不导入。
 
@@ -419,12 +448,13 @@ with unresolved items marked `why_unresolved="tool_failed"`. Do NOT fabricate ev
 
 | 文件 | 用途 |
 |---|---|
-| `packages/opencorvus/src/prompt/fragments/fact-check-registration.ts` | FACT_CHECK_REGISTRATION_FRAGMENT 常量 |
+| `packages/opencorvus/src/prompt/fragments/fact-check-registration.ts` | `FACT_CHECK_REGISTRATION_FRAGMENT` 常量 + `withFactCheckRegistration()` 辅助函数 |
 | `packages/opencorvus/src/prompt/core/fact-check-core.txt` | fact-check agent 核心 prompt |
 | `packages/opencorvus/src/fact-check/index.ts` | `FactCheckAgent.run` 实现 |
-| `packages/opencorvus/src/fact-check/tools.ts` | terminal tool + FactCheckReportSchema + FactCheckItemSchema |
-| `packages/opencorvus/src/fact-check/persist.ts` | `fact_check_attempt` artifact 读写 + 幂等查询 |
-| `packages/opencorvus/src/fact-check/snapshot.ts` | `Session.snapshotLatestAssistant` 工具方法（或集成到 session/index.ts） |
+| `packages/opencorvus/src/fact-check/schema.ts`（**v4 单源**） | `FactCheckItemSchema` + `FactCheckItemListSchema` + `FactCheckReportSchema` + `FactCheckAttemptArtifactSchema`——**全部 schema 单源**；`tools.ts` 与 6 个 worker schema 都 import 此处 |
+| `packages/opencorvus/src/fact-check/tools.ts` | terminal tool 实现，schema 全部从 `./schema` import |
+| `packages/opencorvus/src/fact-check/persist.ts` | `fact_check_attempt` artifact 读写 + 幂等查询，schema 从 `./schema` import |
+| `packages/opencorvus/src/fact-check/snapshot.ts` 或 `session/index.ts` 扩展 | `Session.snapshotLatestAssistant(sessionID)` — codex 验证现有无此 API，需新增（基于 `Session.messages()` + `SessionStatus.get()` 组合） |
 
 #### 6.1.2 既有文件改动（按 codex round 2 实际路径）
 
@@ -448,8 +478,8 @@ with unresolved items marked `why_unresolved="tool_failed"`. Do NOT fabricate ev
 | `packages/opencorvus/src/design-analyst/output-tools.ts` | submit schema 加 `fact_check_items` 必填 |
 | `packages/opencorvus/src/intent-analysis/agent.ts:74` | `core:` 行拼接 fragment |
 | `packages/opencorvus/src/intent-analysis/output-tools.ts` | submit schema 加 `fact_check_items` 必填 |
-| `packages/opencorvus/src/integrity/team-agent.ts:197/265/404` | 3 处 `core:` 行拼接 fragment |
-| `packages/opencorvus/src/integrity/team-schema.ts` | IntegrityTeamReport 加 `fact_check_items` 必填 |
+| `packages/opencorvus/src/integrity/team-agent.ts:265`（**仅 consensus**） | 一处 `core: withFactCheckRegistration(TEAM_CORE)`；line 197 (plan) / line 404 (reviewer) **不改** |
+| `packages/opencorvus/src/integrity/team-schema.ts` | **仅 IntegrityTeamReport**（consensus 产出）加 `fact_check_items` 必填；`submit_integrity_review_plan` / `submit_reviewer_report` schema 不动 |
 | `packages/opencorvus/src/decision-log/index.ts` | `DecisionLogWriter.record` 调用：fact-check 完成时写 phase=`fact_check` 条目 |
 | `packages/opencorvus/src/decision-log/schema.ts` | DecisionEntry phase 允许 `"fact_check"`（如 phase 是枚举） |
 | `packages/opencorvus/src/config/config.ts` | agent 配置允许 fact-check 覆盖 prompt/model/tools/step_cap（按现有 agent 配置模式） |
@@ -460,7 +490,7 @@ with unresolved items marked `why_unresolved="tool_failed"`. Do NOT fabricate ev
 
 | 破坏面 | 适配 |
 |---|---|
-| 外部 executor（codex / claude-code）模式 | external executor 的 build 路径不强制 `fact_check_items` 必填——但需要在 BuildAgent 外部 executor 分支处显式构造空数组（`fact_check_items: []`），让 schema 通过。同时在 spec 记录"external executor 不参与 fact-check 登记"作为已知限制 |
+| 外部 executor（codex / claude-code）模式 | **单一适配点**（v4 修正）：`build/agent.ts` 中 `runWithExternalProvider` / `runWithExternalProviderImpl` 包装层，在 `BuildResultSchema.safeParse(result.structured)` **之前**做一次 normalize：若 `result.structured.fact_check_items` 缺失，注入 `[]`。**不**在 6 个 `structured` return literal（codex 验证：build/agent.ts 行 1846/1865/1954/1979/1999/2017）各自补字段——那是 rule 8 双源违规。Spec 记录"external executor 不参与 fact-check 登记"作为已知限制 |
 | 测试 fixture / contract test | `test/build-agent/contract-error.test.ts`、`test/build/result-schema.test.ts`、`test/agent/agent.test.ts`、整套 fixture 添加 `fact_check_items: []` 字段 |
 | Prompt-catalog NATIVE_DEFAULTS（`agent.ts`） | 每个 covered worker 的 NATIVE_DEFAULTS 入口同步含 fragment 字符串（保持 overlay prompt-catalog 显示与运行时一致） |
 | Collector report 构造 | 每个 worker 的 `getCollector()` / `buildReport()` 构造空 `fact_check_items: []` 默认，让初始 collector 状态合法 |
@@ -517,7 +547,7 @@ with unresolved items marked `why_unresolved="tool_failed"`. Do NOT fabricate ev
 | e2e A | build worker terminal report 含 items → integrity pass → orchestrator 调 fact_check → corrected blocking → orchestrator 据 recommended_action 调 modify_goal |
 | e2e B 反向 | worker items=[] → orchestrator 不调 fact_check（验证 LLM 决策能力） |
 | e2e C 幂等 | 连续两次同参数 → 第二次 cached=true 且 0 LLM token |
-| e2e D 拒绝 | target session 未终态 → fact_check 立即 reject，不记 artifact |
+| e2e D 拒绝 | target session 未终态 → fact_check 立即 reject，不记 artifact。**模拟方法**（v4 补）：测试中 `SessionStatus.set(targetSessionID, { type: "streaming" })`（同进程态，参考 `test/engine/active-sessions.test.ts:92-99`）；snapshot test 必须同进程跑 |
 | e2e E cancel | fact_check 跑到一半 cancel → signal 传播 → artifact outcome="aborted" |
 | e2e F tool 全败 | websearch/webfetch/code search 全失败 → verdict=inconclusive，unresolved 全 `tool_failed`，无伪 evidence |
 | e2e G external executor | codex executor 模式下 build → BuildResult 含 `fact_check_items: []`，schema 通过；orchestrator 据空列表决定不调 fact_check |
@@ -530,10 +560,15 @@ with unresolved items marked `why_unresolved="tool_failed"`. Do NOT fabricate ev
 
 ### 强串行链
 
-1. **类型骨架闭合**：`SESSION_KINDS` 加 `"fact-check"`；`AgentRoleID` 加 `"fact-check"`；`role-contract.ts` 加 contract；`agent.ts` 加 Info + NATIVE_DEFAULTS + orchestrator tool whitelist；`config/config.ts` 允许 fact-check agent config 覆盖。  
-   Commit: `feat(agent): register fact-check role + session kind (skeleton)`.
+1. **类型骨架 + 最小 stub 闭合**（v4 扩展）：
+   - `SESSION_KINDS` 加 `"fact-check"`；`AgentRoleID` 加 `"fact-check"`；`role-contract.ts` 加 contract
+   - `agent.ts` 加 Info + NATIVE_DEFAULTS + orchestrator tool whitelist
+   - `config/config.ts` 允许 fact-check agent config 覆盖
+   - **新增 stub**：最小 `prompt/core/fact-check-core.txt`（占位文本）+ 最小 `fact-check/index.ts` 导出 `FactCheckAgent.run` stub（throw "not implemented"）
+   - **目的**：保证每个 commit 可 build（typecheck + import resolution），真实逻辑在后续步骤填  
+   Commit: `feat(agent): register fact-check role + session kind (skeleton + stubs)`.
 
-2. **Schema + artifact + persist**：FactCheckItemSchema、FactCheckItemListSchema、FactCheckReportSchema、FactCheckAttemptArtifactSchema、`fact-check/persist.ts`、snapshotLatestAssistant + 单测。  
+2. **Schema + artifact + persist**：`fact-check/schema.ts` 单源（FactCheckItemSchema、FactCheckItemListSchema、FactCheckReportSchema、FactCheckAttemptArtifactSchema）；`fact-check/persist.ts`；`Session.snapshotLatestAssistant`（新 API，基于 `Session.messages()` + `SessionStatus.get()`）+ 单测。  
    Commit: `feat(fact-check): add schemas + artifact persistence + idempotency`.
 
 3. **Worker terminal schema 加 fact_check_items + 全套契约破坏适配**（build/types.ts + 5 个 output-tools.ts + team-schema.ts + 所有 fixture / contract test + external executor 分支构造 `[]` + collector 默认 `[]` + NATIVE_DEFAULTS 同步）+ 单测。  
@@ -599,17 +634,28 @@ with unresolved items marked `why_unresolved="tool_failed"`. Do NOT fabricate ev
 
 ---
 
-## 11. 待 codex round 3 复核
+## 11. Round 3 复核结论（codex 已答）
 
-1. **§3.4 snapshot 协议中 `Session.snapshotLatestAssistant(target_session_id)` 的具体实现位置**：grep 现有 `Session` namespace 中是否已有类似工具（`getLatestMessage` / `getTerminalAssistant`）？还是要新增？是否破坏既有 session API 契约？
-2. **§4.3 工具入口的 reject 分支**：现在 orchestrator 工具描述说 "tool dedupes automatically"——如果 reject 是另一种返回（不是 cached），LLM 会不会困惑？是否需要在 orchestrator-core.txt §Fact-check dispatch 节再加一句关于 reject 后的重试策略？
-3. **§5.2 integrity 3 处 `core:` 拼接**：integrity 是 plan/review/consensus 三阶段。reviewer 阶段（line 265）的 individual reviewer 应该登记 `fact_check_items` 吗？还是只 supervisor consensus（line 197/404）阶段登记？
-4. **§6.1.3 external executor 适配**：external executor 模式下 build 的 BuildResult 是怎么构造的？我说"显式构造空数组让 schema 通过"——具体在哪个函数？验证。
-5. **§7.2 e2e G**：现有 e2e 测试基础设施支持外部 executor 模式吗？还是要 mock？
-6. **§8 step 1 类型骨架闭合后能 build 通过吗？**比如 `agent.ts` 注册了 fact-check Info 但实现还在 step 5——会不会编译失败 / runtime 抛？
-7. **Rule 6.1（prompt-over-host-invariant）二次审视**：v3 §4.3 工具入口的"snapshot + reject + cached"逻辑，是不是被理解为"host 状态机"？我的论据：这只是数据完整性检查（target 必须 terminal）+ 幂等查询（artifact lookup），属 rule 6.1 允许的 (a) 数据完整性场景。但需要 codex 二次确认。
-8. **任何未发现的 CLAUDE.md 违规？**
+| 问题 | Round 3 回应 | v4 处理 |
+|---|---|---|
+| 1. snapshotLatestAssistant 实际存在吗 | 不存在，需新增；基于现有 `Session.messages()` (session/index.ts:551) + `SessionStatus.get()` (session/status.ts:71) 组合 | §6.1.1 新增明确 |
+| 2. reject vs cached 分支 LLM 是否困惑 | 不会；§4.4 已写"reject; retry after it finishes"，可接受 | 保留 |
+| 3. integrity 3 阶段注入 | 错误，**只 consensus (line 265)** 注入 + 加字段 | v4 §5.2 + §6.1.2 修正 |
+| 4. external executor 构造点 | build/agent.ts 行 1846/1865/1954/1979/1999/2017 六处 `structured` return literal；应在 `runWithExternalProvider` 包装层统一 normalize | v4 §6.1.3 修正 |
+| 5. e2e G 外部 executor 支持 | `test/e2e/full-pipeline-*.test.ts` 用 `OPENCORVUS_E2E_EXECUTOR`；fact-check G 更适合 mock provider | §7.2 沿用 |
+| 6. step 1 是否可 build | 不能；必须含 prompt + runtime stub | v4 §8 step 1 扩展 |
+| 7. Rule 6.1 二次审视 §4.3 | 不违规；snapshot terminal = 数据完整性，cached = 幂等查询，非状态机 | 保留 |
+| 8. 任何未发现违规 | 仅指出：integrity 注入、schema 单源位置矛盾、重复拼接未抽象 — 均已在 v4 解决 | v4 已处理 |
+
+## 12. 待 codex round 4 复核
+
+1. **§5.2 `withFactCheckRegistration()` 辅助函数**：放在 `fragments/fact-check-registration.ts` 是否合适？还是该放到 `prompt/` 更高层（无 fact-check 业务概念耦合的位置）？
+2. **§6.1.1 schema 单源 `fact-check/schema.ts`**：worker schema（如 build/types.ts）import `FactCheckItemListSchema` 是否会产生循环依赖？build/types.ts 是较底层模块，fact-check/ 是较上层——方向是否健康？
+3. **§6.1.3 external executor 单一适配点**：在 `BuildResultSchema.safeParse` 之前 normalize 字段——这算 fallback / 兼容层吗？是否违反 rule 7？我的论据：external executor 不参与 fact-check 协议是**已声明的不覆盖范围**（§1.2），normalize 是协议边界翻译而非降级兼容；类似 i18n 字段默认值。需要 codex 二次审视。
+4. **§8 step 1 stub 范围**：fact-check-core.txt 占位文本最少包含什么才能不触发 hygiene 测试（如已有 core-prompt-hygiene.test.ts）？
+5. **是否还有 CLAUDE.md 违规未发现？**
+6. **最终结论**：若全部解决，可否给 RECOMMEND_PROCEED？
 
 ---
 
-（v3 结束。等待 codex round 3 评审。）
+（v4 结束。等待 codex round 4 评审。）
