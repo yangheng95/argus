@@ -1,147 +1,163 @@
 # Fact-Check Agent 设计方案
 
 日期：2026-05-25
-作者：HengYang + Claude（codex 评审已纳入）
-状态：v2 — 已纳入 codex round 1 反馈，待 round 2
+作者：HengYang + Claude（codex round 1/2 评审已纳入）
+状态：v3 — 已纳入 codex round 2 反馈，待 round 3
 
 ---
 
-## Changelog（v1 → v2，依据 codex round 1 评审）
+## Changelog
 
-| v1 错误 / 漏点 | v2 修正 |
+### v2 → v3（codex round 2 评审）
+
+| v2 错误 / 漏点 | v3 修正 |
 |---|---|
-| §5 假设 `session/prompt/system.txt` 注入到所有 agent | **事实错误**：`session/llm.ts:73-78` 显示 `system.txt` 仅当 `agent.prompt` 缺失时才用；所有 worker agent 都有自己的 core prompt → system.txt 对它们无效。v2 改为**共享 TS 常量 + 各 worker 的 prompt 组装函数**注入。 |
-| §3.1 用 inline XML `<fact-check>` 标签 | 标签会污染用户可见文本 + overlay markdown escape。v2 改为：**fact-check 项进各 worker 的 terminal report schema**（结构化字段），不在 chat text 中暴露。 |
-| §3.3 CompactionHandoff schema 加 `factCheckItems` | 不需要。terminal report 是 artifact，本来就跨 compaction 持久。v2 删除此节。 |
-| §4.3 `target_message_id` 必填 | worker tool 当前不返回 message_id。v2 改为：fact-check 输入只要 `target_session_id`，自己读该 session 最新 Assistant message。 |
-| §4.2 工具集含 `bash` + `memory` 全 CRUD | 过度授权。v2：删 `bash`，`memory` 仅保留 `search/get`（只读）。 |
-| §4.1 hardcoded step cap 300 | 违反 rule 10。v2 走 agent config 默认。 |
-| §6.1 触点清单不完整 | v2 补：`SESSION_KINDS` / `runtimeContractRequiredAgentKinds` / `OverlayChannel` / overlay role / i18n / icon / card-color / decision_log / read_context / integrity replay / `fact_check_attempt` 持久化 artifact。 |
-| §3.2 verdict 映射 prompt-only | 没有可读事实源，LLM 无法稳定知道已查过。v2 加 `fact_check_attempt` artifact + 幂等键 `(target_session_id, latest_assistant_hash)`。 |
-| §9 R3/R6 缓解不足 | v2：fact-check core prompt 显式禁止自递归（不许 emit fact-check 标记 / 字段）；orchestrator tool 自带幂等（artifact 命中即返回旧结果）。 |
+| §5.2 假设各 worker 都有 prompt builder | **实测**：只 build 用 `composeBuildCore()`；其它 worker 在 agent.ts 的 `runAgentSession({ core: XXX_CORE })` 字符串处直接组装（design-analyst 已用 `[CORE, ...].join("\n\n")`）。v3 改为：注入点 = 每个 worker 的 agent.ts 中 `core:` 那一行，单源 TS 常量 + N 个调用点改字符串拼接 |
+| §1 / §10 覆盖范围矛盾（一边说全覆盖一边排除 coding/general） | v3 重定义覆盖范围为"**有 terminal report schema 的 worker**"（build / requirements / architect / design-analyst / intent-analysis / integrity）。coding / general 不在范围内不是例外——它们没有结构化产出位 |
+| `FactCheckItemListSchema.default([])` 与"必填"矛盾 | 删 `.default([])`，纯 `z.array(FactCheckItemSchema)` 必填字段 |
+| `claim` 禁词 regex 拒绝（违反 rule 20 关键字匹配） | 删 host-side regex。禁词约束移到：(a) fragment prompt 文本规则；(b) fact-check agent 在 inspect 阶段把无信息 claim 标 `unresolved.why_unresolved="ambiguous"` |
+| `inconclusive` 在 `items_total=0` 的边界异常 | v3 显式：`items_total === 0 → verdict="clean"`，artifact 记 `items_inspected: 0`；不靠表达式副作用 |
+| `target_message_hash = sha256(latest assistant content)` 漂移风险 | v3：fact_check 工具调用瞬间 snapshot `{message_id, content_hash, finished: bool}`；若 `finished=false` 工具直接 reject "target session not in terminal state, retry later" |
+| §6.1 多处"推测路径 / 待复核"违反 rule 35 | v3 全部用 codex grep 验证后的实际路径：`build/types.ts`、`requirements/output-tools.ts`、`architect/output-tools.ts`、`design-analyst/output-tools.ts`、`intent-analysis/output-tools.ts`、`integrity/team-schema.ts`、`config/config.ts`、`decision-log/index.ts` |
+| §B-2 "rule 18 reset DB 就解决了" 不实 | v3 §6.2 列出**全部契约破坏面**：external executor (codex/claude-code) 解析、test fixture、prompt-catalog NATIVE_DEFAULTS、collector report 构造、overlay event-stream parsers、既有 contract test，每项列入实施 |
+| §8 步骤顺序：UI 在 SessionKind 闭合前做 | v3 重排：强串行链 SESSION_KINDS/AgentRoleID/registry → schema+artifact+persist → worker schema/prompt → e2e；UI/overlay 在 SessionKind 闭合后并行 |
+| §4.4 orchestrator prompt 暴露 hash 细节 | v3 改为对 LLM 友好措辞 "tool dedupes automatically; call when relevant" |
+
+### v1 → v2 仍有效的修正
+
+`system.txt 全注入`废除、inline `<fact-check>` XML 废除、`CompactionHandoff` 字段废除、`target_message_id` 改为 `target_session_id`、`bash` / `memory write` 删除、step cap 不硬编码 — 见 v2 changelog 段。
 
 ---
 
 ## 0. 背景与动机
 
-现有所有 worker agent（build / requirements / architect / design-analyst / coding / general / intent-analysis / integrity）在输出
-时做出大量**未经验证的事实性断言**——API 行为、库版本、错误码、第三方协议字段、性能数字、历史决策、文件路径
-等。Integrity 团队（`integrity/team-agent.ts`）只检查"是否满足 acceptance / 是否完整"，**不检查"声明是否属实"**。
+现有所有有 terminal report schema 的 worker agent（build / requirements / architect / design-analyst / intent-analysis / integrity）在产出报告时做出大量**未经验证的事实性断言**——API 行为、库版本、错误码、第三方协议字段、性能数字、历史决策、文件路径等。Integrity 团队（`integrity/team-agent.ts`）只检查"是否满足 acceptance / 是否完整"，**不检查"声明是否属实"**。
 
 需求：
 
-1. 所有用户可见工作 agent 必须**显式登记**自己未验证的事实性断言或待填充项，登记字段写入该 agent 的
-   terminal report schema 中。
-2. 新增 **fact-check agent**，由 orchestrator 在合适时机调用，检索网络/代码库/记忆，对登记项做核查，
-   产出结构化 `verified / corrected / unresolved` 列表。
-3. 更正以**新消息**形式回流给 orchestrator（rule 15 — 不改写源消息），orchestrator LLM 决定
-   `modify_goal` / `restart_from_stage` / `accept-as-is`。
-4. fact-check 结果以 `fact_check_attempt` artifact 形式持久化，被 decision_log / read_context / integrity replay 消费。
+1. 覆盖范围内的 worker agent **必须**在其 terminal report 中登记 `fact_check_items[]`（结构化必填字段）。
+2. 新增 **fact-check agent**，由 orchestrator 在合适时机调用，检索网络/代码库/记忆，对登记项做核查，产出 `verified / corrected / unresolved` 列表。
+3. 更正以**新消息**形式回流给 orchestrator（rule 15），orchestrator LLM 决定 `modify_goal` / `restart_from_stage` / `accept-as-is`。
+4. fact-check 结果以 `fact_check_attempt` artifact 持久化，被 decision_log / read_context / integrity replay 消费。
 
-## 1. 用户已拍板的 4 项设计决策（v1 沿用）
+## 1. 范围定义（v3 重写消除矛盾）
+
+### 1.1 覆盖范围：**"有 terminal report schema 的 worker"**
+
+| Worker | Terminal Schema 实际路径（codex grep 已验证） | 覆盖 |
+|---|---|---|
+| build | `packages/opencorvus/src/build/types.ts`（BuildResultSchema） | ✅ |
+| requirements | `packages/opencorvus/src/requirements/output-tools.ts`（collector submit schema） | ✅ |
+| architect | `packages/opencorvus/src/architect/output-tools.ts` | ✅ |
+| design-analyst | `packages/opencorvus/src/design-analyst/output-tools.ts` | ✅ |
+| intent-analysis | `packages/opencorvus/src/intent-analysis/output-tools.ts` | ✅ |
+| integrity | `packages/opencorvus/src/integrity/team-schema.ts`（IntegrityTeamReport） | ✅ |
+
+### 1.2 不覆盖（不是例外，是定义不适用）
+
+| Agent | 不覆盖理由 |
+|---|---|
+| coding / general | 直接对话产出，无 terminal report schema，无结构化登记位。其断言通过对话直接给用户审阅 |
+| orchestrator / control | 决策叙述非事实声明 |
+| compaction / title / summary | 不产生面向用户的断言 |
+| explore | 只读检索 subagent，输出本身是引用证据 |
+| fact-check 自己 | schema-level 防自递归（§3.4） |
+
+如未来要覆盖 coding / general，需先给它们引入 finalizer 机制（独立需求，本方案外）。
+
+### 1.3 用户已拍板的 4 项决策（v1 沿用）
 
 | 维度 | 选择 |
 |---|---|
-| Agent 形态 | **新建独立 agent**（不 fork build，不扩展 integrity） |
-| 触发时机 | **Orchestrator 决定**（prompt 引导，非 host 状态机） |
-| 更正形态 | **独立报告消息 + 回流 orchestrator** + 持久 artifact（源消息 append-only 不动） |
-| 覆盖范围 | **所有用户可见工作 agent**（build / requirements / architect / design-analyst / coding / general / intent-analysis / integrity；跳过 orchestrator / control / compaction / title / summary / explore） |
-
-### 1.1 为什么不选 codex 提出的替代方案
-
-| 替代 | trade-off | 决定 |
-|---|---|---|
-| 复用 integrity team 加 factuality reviewer | 改动小，但 integrity 是**判断式审查**（要不要 pass），fact-check 是**检索式核查**（声明是否属实）——认知形态不同，混在一起会污染 reviewer 单一职责，违反 rule 11 设计模式纪律 | **不采纳** |
-| 复用 `acceptance/types.ts` 的 prebuilt `factuality` scorer | 当前只是 schema 字段，无 executor；要写执行器仍需 retrieval-capable agent → 等价于本方案，外加扩展 acceptance 引擎的复杂度 | **不采纳**，但**复用 `factuality` 这个语义槽**作为 fact-check 结果在 acceptance 框架中的呈现位（§6.1 详述） |
+| Agent 形态 | 新建独立 agent |
+| 触发时机 | Orchestrator 决定（rule 13） |
+| 更正形态 | 独立报告消息 + 持久 artifact（源消息 append-only 不动） |
+| 覆盖范围 | **有 terminal report schema 的 6 个 worker**（§1.1） |
 
 ---
 
-## 2. CLAUDE.md 规则合规性检查
+## 2. CLAUDE.md 规则合规性
 
-| Rule | 关切 | v2 如何合规 |
+| Rule | 关切 | v3 如何合规 |
 |---|---|---|
-| 5 / 6 第一性 / 禁过工 | 不引入超出需求的工具/字段 | 工具集只剩 read/search/web/memory.search.get；fact-check 自己不写 memory；不引入新数据库表，只用既有 `engine_artifact` |
-| 6.1 / 11 prompt-over-host | 不在 host 端硬编码"integrity pass → fact-check 必跑"状态机 | Orchestrator core prompt 写决策规则，host 只暴露 `fact_check` 工具，不拦截 |
-| 7 / 8 单源 / 禁 fallback | 不允许"老 agent 不登记也行"的兼容路径 | 共享 `FACT_CHECK_REGISTRATION_FRAGMENT` TS 常量，每个 worker 的 prompt builder 单源导入；terminal schema 增字段必填 |
-| 10 禁硬编码 | step cap 等参数不硬编码 | step cap 走 agent config 系统默认 |
-| 13 禁状态机 | 触发由 orchestrator LLM 决定 | `fact_check` 是 orchestrator tool，LLM 自决调用与否 |
+| 5 / 6 第一性 / 禁过工 | 不引入超出需求的工具/字段 | 工具集只剩 read/search/web/memory.search.get；fact-check 不写记忆；不引入新表，只用既有 `engine_artifact` |
+| 6.1 / 11 prompt-over-host | 不在 host 端硬编码触发链 | Orchestrator core prompt 写决策规则，host 只暴露 `fact_check` 工具，仅做 artifact 幂等查询（非状态机） |
+| 7 / 8 单源 / 禁 fallback | 范围矛盾 / 默认值 fallback | 范围在 §1.1 单一表格枚举；`fact_check_items` 必填字段无 `.default([])` |
+| 10 禁硬编码 | step cap / 工具列表 | step cap 走 agent config 默认；工具列表 §4.2 表 |
+| 13 禁状态机 | 触发 / 后续行动 | `fact_check` 是 orchestrator tool；后续 `modify_goal`/`restart_from_stage`/`fail_task` 由 orchestrator LLM 据 `recommended_action` 决定调用 |
 | 14 流式 | fact-check 通过 `runAgentSession` 跑（已流式） | 复用现有 worker agent runtime |
-| 15 禁合成 / 隐藏消息 | fact-check 不改写源消息 | 终端 yield 单条 markdown 报告 → 作为 orchestrator 工具结果出现在对话流；artifact 持久化是 evidence channel，不是消息分叉 |
-| 16 / 17 禁补丁 / 死代码 | 不留 legacy 路径 | terminal schema 增字段为**必填**（不 optional），rule 18 允许 reset DB；旧 session 不兼容 |
-| 18 直接 reset DB | 涉及 schema 改动 | `engine_artifact` 加新 kind 不需要迁移；session 表新增 kind 由 SESSION_KINDS 枚举控制 |
-| 19 缩写注释 | FCI 等术语 | spec + 代码注释里说明（FCI = Fact-Check Item，FCA = Fact-Check Attempt） |
-| 22 commit + push | 分阶段提交 | §8 实施步骤每步独立 commit |
-| 28 / 36 改动配测试 | 每个 touch point 配测试 | §7 测试清单覆盖每个新文件 + 既有文件改动 |
-| 35 全仓 grep 穷举 | 影响面调查 | §6 调用点清单经 codex round 1 复核扩充 |
+| 15 禁合成 / 隐藏消息 | 不改写源消息 | terminal yield 单条 markdown 报告作为 orchestrator 工具结果出现在对话流；artifact 持久化是 evidence channel，不是消息分叉 |
+| 16 / 17 禁补丁 / 死代码 | 不留 legacy 路径 | terminal schema 增字段必填；现有 collector / fixture / external executor 适配在实施步骤显式列出（§6.2） |
+| 18 直接 reset DB | session 表 SESSION_KINDS 扩展 | `engine_artifact` 加新 kind 不需迁移；rule 18 允许的 DB 改动列入 §6.2 |
+| 19 缩写注释 | FCI / FCA | FCI = Fact-Check Item，FCA = Fact-Check Attempt（首次出现处注释） |
+| 20 禁关键字规则逻辑 | claim 禁词检查 | **v3 删 host-side regex**；禁词约束由 prompt 文本 + fact-check agent 复核职责承载 |
+| 22 commit + push | 分阶段提交 | §8 每步独立 commit |
+| 28 / 36 改动配测试 | 每个 touch point 配测试 | §7 测试清单 |
+| 35 全仓 grep 穷举 | 影响面 | v3 §6 全部路径经 codex round 2 grep 验证；无"推测/待复核"残留 |
 
 ---
 
-## 3. 协议设计（v2 重写）
+## 3. 协议设计
 
-### 3.1 登记字段：进各 worker 的 terminal report schema
-
-**核心变化**：登记不走 inline XML 标签，走结构化 terminal schema 字段。
-
-**通用字段（FCI = Fact-Check Item）**：
+### 3.1 通用字段
 
 ```ts
+// packages/opencorvus/src/fact-check/schema.ts
 export const FactCheckItemSchema = z.object({
   claim: z.string().min(20).max(280),
   confidence: z.enum(["low", "medium", "high"]),
   category: z.enum(["api", "library", "number", "history", "path", "protocol", "other"]),
-  source: z.string().min(3),                    // "assumed" | "model prior" | "<url>" | "<file:line>" | "user-said:<short>"
+  source: z.string().min(3),
 })
 
-export const FactCheckItemListSchema = z.array(FactCheckItemSchema).default([])
+// 必填，无 default，无 optional
+export const FactCheckItemListSchema = z.array(FactCheckItemSchema)
 ```
 
-**校验规则**（schema-level 拒绝，**非 host preflight**——CompactionHandoff 已有 `GenericAction` 拒绝模式可借鉴）：
-- `claim`：禁包含 `tbd/unknown/n/a/继续/下一步` 这类无信息词（regex 拒绝）
-- `source` 禁空字符串
-- 待填充占位写法：`claim` 以 `"<待填充：..."` 开头 + `confidence="low"` + `source="assumed"`
+**禁词约束不进 schema**（rule 20）。仅 fragment prompt 文本（§5.1）说明"generic 词无意义，会被 fact-check 标 unresolved"；fact-check agent 在 inspect 阶段把这种 claim 归类为 `unresolved.why_unresolved="ambiguous"`，按职责自然过滤。
 
-**每个覆盖范围内 worker 的 terminal schema 增 `fact_check_items` 字段**：
+### 3.2 各 worker terminal schema 改动（v3 实际路径）
 
-| Worker | Terminal Schema 文件 | 字段位置 |
-|---|---|---|
-| build | `build/agent.ts`（BuildResultSchema） | top-level `fact_check_items` |
-| requirements | `requirements/types.ts`（推测，待 §6 grep 复核） | 顶层 |
-| architect | `architect/types.ts`（推测） | 顶层 |
-| design-analyst | `design-analyst/types.ts`（推测） | 顶层 |
-| intent-analysis | `intent-analysis/types.ts`（推测） | 顶层 |
-| integrity | `integrity/types.ts`（IntegrityTeamReport） | 顶层 |
-| coding / general | 无 terminal schema（直接对话） | 用例外 channel：§3.2 |
-
-**例外**：coding / general 不走 terminal schema，没有结构化输出位。两种处理：
-- **方案 A**：这两个 agent 用 inline XML 标签（仅这两个例外，因为它们直接对话），fact-check agent 解析 chat text 而非 artifact
-- **方案 B**：让 coding/general 不参与"被 fact-check"，因为它们是 ad-hoc 工作模式，输出直接给用户审阅
-
-v2 默认**方案 B**（更简单，rule 5/6 不过度工程）。需用户确认。
-
-### 3.2 Fact-check agent 终端工具：`report_fact_check_result`
-
-参考 `report_build_result` 的契约模式。Schema：
+每个 §1.1 covered worker 的 terminal schema 文件 top-level 加 `fact_check_items: FactCheckItemListSchema` 必填字段。具体：
 
 ```ts
+// build/types.ts BuildResultSchema 顶层
+{
+  ...existing fields,
+  fact_check_items: FactCheckItemListSchema,  // 必填
+}
+
+// requirements/output-tools.ts submit_requirements_report schema 顶层
+// architect/output-tools.ts submit_architect_report schema 顶层
+// design-analyst/output-tools.ts submit_design_prd_spec schema 顶层
+// intent-analysis/output-tools.ts 同
+// integrity/team-schema.ts IntegrityTeamReport 顶层（注意：integrity 是 plan/review/consensus 三阶段，fact_check_items 落在 consensus 报告）
+```
+
+### 3.3 Fact-check agent 终端工具：`report_fact_check_result`
+
+```ts
+// packages/opencorvus/src/fact-check/tools.ts
 export const FactCheckReportSchema = z.object({
   scope: z.object({
     target_session_id: z.string(),
     target_agent: z.string(),
-    target_message_hash: z.string(),              // sha256 of latest assistant message content (用于幂等)
-    items_total: z.number().int(),
-    items_inspected: z.number().int(),
+    target_message_id: z.string(),                  // snapshot 取得的 message id
+    target_message_content_hash: z.string(),        // sha256 of target message content at snapshot time
+    items_total: z.number().int().nonnegative(),
+    items_inspected: z.number().int().nonnegative(),
   }),
   verified: z.array(z.object({
     claim: z.string(),
     evidence: z.array(z.object({
       kind: z.enum(["web", "code", "memory"]),
-      pointer: z.string(),                        // URL / file:line / memory:id
+      pointer: z.string(),
       excerpt: z.string().max(800),
     })).min(1),
   })),
   corrected: z.array(z.object({
-    claim: z.string(),                            // 原断言
-    correction: z.string(),                       // 修正后的事实
+    claim: z.string(),
+    correction: z.string(),
     severity: z.enum(["minor", "material", "blocking"]),
     evidence: z.array(z.object({
       kind: z.enum(["web", "code", "memory"]),
@@ -157,26 +173,34 @@ export const FactCheckReportSchema = z.object({
   })),
   overall_verdict: z.enum(["clean", "minor_corrections", "needs_orchestrator_action", "inconclusive"]),
 })
+// schema 不含 fact_check_items 字段——防自递归（rule 8 单源约束）
 ```
 
-**Verdict 映射**（fact-check core prompt 中说明，**非 host 拦截**）：
-- `clean`：`corrected` 空 + `unresolved` 全 minor
-- `minor_corrections`：`corrected` 全 minor + `unresolved` 全 minor
-- `needs_orchestrator_action`：`corrected` 含 material/blocking 或 `unresolved` 含 material/blocking
-- `inconclusive`：`items_inspected < items_total * 0.5` 且 `corrected` 全 minor 时优先选 inconclusive 而非 clean
+**Verdict 决策树**（fact-check core prompt 写明，非 host 拦截）：
 
-### 3.3 持久化：`fact_check_attempt` artifact
+```
+if items_total === 0:                                 → verdict = "clean"      // 明示边界
+elif corrected.contains(material|blocking) OR unresolved.contains(material|blocking):
+                                                       → "needs_orchestrator_action"
+elif items_inspected < items_total / 2 AND corrected has no minor+:
+                                                       → "inconclusive"
+elif corrected.length > 0 (all minor) OR unresolved.length > 0 (all minor):
+                                                       → "minor_corrections"
+else:                                                   → "clean"
+```
 
-参考 `recordIntegrityAttempt`（`integrity/team-agent.ts`）模式。`engine_artifact` 新增 kind：
+### 3.4 持久化：`fact_check_attempt` artifact
 
 ```ts
+// packages/opencorvus/src/fact-check/persist.ts
 export const FactCheckAttemptArtifactSchema = z.object({
   kind: z.literal("fact_check_attempt"),
   fact_check_session_id: z.string(),
   target_session_id: z.string(),
   target_agent: z.string(),
-  target_message_hash: z.string(),                // 幂等键的一半
-  invoked_by_orchestrator_session_id: z.string(),  // 幂等键的另一半（同一 task 内复用）
+  target_message_id: z.string(),                       // snapshot 取得
+  target_message_content_hash: z.string(),
+  invoked_by_orchestrator_session_id: z.string(),
   report: FactCheckReportSchema,
   time_started: z.number(),
   time_completed: z.number(),
@@ -184,84 +208,92 @@ export const FactCheckAttemptArtifactSchema = z.object({
 })
 ```
 
-**幂等键**：`(invoked_by_orchestrator_session_id, target_session_id, target_message_hash)`。Orchestrator tool 接到调用：
-1. 计算 `target_message_hash`
-2. 查既有 `fact_check_attempt` 命中 → 返回旧 report（标记 `cached: true` 在工具响应里）
-3. 未命中 → 拉起 fact-check session
+**幂等键**：`(invoked_by_orchestrator_session_id, target_session_id, target_message_id, target_message_content_hash)`。  
+**Snapshot 协议**：fact_check 工具入口先调 `Session.latestAssistantMessage(target_session_id)`：
+- 若 `finished === false`（流仍在跑）→ 工具立即返回 `{ status: "rejected", reason: "target_not_terminal" }`，**不**记 artifact，让 orchestrator 重试。
+- 若 `finished === true` → 取 `(message_id, content_hash)`，查 artifact 命中即返回 cached；未命中拉起 fact-check session。
 
-被 integrity replay / `read_context` 自然消费（它们都已经在读 artifact stream）。
+### 3.5 跨 compaction 持久化
 
-### 3.4 跨 compaction 持久化
-
-**v1 错改 CompactionHandoff schema 被废弃**。fact-check 项现在活在两个地方：
-1. Worker 的 terminal report artifact（已经 append-only 持久）
-2. `fact_check_attempt` artifact（同上）
-
-Compaction 是 transcript 压缩，不影响 artifact stream。无需改 compaction-handoff.ts。
+不动 `CompactionHandoff` schema。`fact_check_attempt` 与 worker terminal report 都是 artifact，本来跨 compaction 安全。
 
 ---
 
-## 4. 架构与编排（v2 重写）
+## 4. 架构与编排
 
 ### 4.1 Fact-check agent 注册
-
-新 agent role：`fact-check`。
 
 | 字段 | 值 |
 |---|---|
 | Mode | `subagent` |
 | Native | true |
 | Hidden | false |
-| Step cap | 走 agent config 默认（不硬编码） |
+| Step cap | 不硬编码，走 agent config 默认 |
 | Permission | 默认 allow，受 user config 覆盖 |
 | SessionKind | 新增 `"fact-check"` 到 `SESSION_KINDS`（§6.1） |
-| runtimeContractRequiredAgentKinds | **不加入**（fact-check 不是 goal-scoped，无 runtime contract） |
+| runtimeContractRequiredAgentKinds | 不加入（fact-check 非 goal-scoped） |
 
-### 4.2 工具集（v2 收紧）
+### 4.2 工具集
 
 ```ts
 tools: {
   include: [
-    "read", "glob", "search_code",            // 代码库只读检索
-    "websearch", "webfetch",                  // 网络
-    "external_code_search",                   // 第三方 SDK / 文档
-    "memory_search", "memory_get",            // 记忆只读
-    "todoread", "todowrite",                  // bookkeeping
+    "read", "glob", "search_code",
+    "websearch", "webfetch",
+    "external_code_search",
+    "memory_search", "memory_get",
+    "todoread", "todowrite",
   ]
 }
 ```
 
-**显式不给**（物理上无法滥用）：
-- `edit` / `write` / `merge_back` / git 写操作 → 不能改源消息或交付物
-- `bash` → 收紧到只读检索；若未来证明确需 verifier 脚本再放开（rule 5/6）
-- `memory_write` / `memory_delete` → fact-check 是核查员不是记忆官；写记忆是 build/orchestrator 的活
-- `task_report` / `panel` → 不是用户交付 channel
+不给：`edit` / `write` / `merge_back` / git 写 / `bash` / `memory_write` / `memory_delete` / `task_report` / `panel`。
 
-**终端工具**：`report_fact_check_result`（仅本 agent 拥有，BuildAgent 模式）。
+终端工具：`report_fact_check_result`（仅本 agent 持有）。
 
-### 4.3 Orchestrator 编排
-
-`orchestrator/tools.ts` 新增 `fact_check` 工具：
+### 4.3 Orchestrator 工具
 
 ```ts
+// packages/opencorvus/src/orchestrator/tools.ts
 fact_check: tool({
-  description: "Run fact-check on the most recent worker output in a target session. Use when (1) integrity verdict=pass AND (2) the worker's terminal report has non-empty fact_check_items OR makes load-bearing factual claims about external systems. Tool is idempotent: same (target_session_id, latest_assistant_hash) returns cached report.",
+  description: "Run fact-check on a worker session's latest terminal report. Tool dedupes automatically; call when relevant. Use when (1) integrity verdict=pass AND (2) the worker's terminal report has non-empty fact_check_items OR makes load-bearing factual claims about external systems.",
   inputSchema: z.object({
-    target_session_id: z.string(),               // 被核查 worker session（不传 message_id）
-    target_agent: z.string(),                    // "build" | "architect" | ...
-    reason: z.string().min(10),                  // LLM 必须解释为何调用
+    target_session_id: z.string(),
+    target_agent: z.string(),
+    reason: z.string().min(10),
   }),
   execute: async (input, ctx) => {
+    // Step 1: snapshot target message
+    const snap = await Session.snapshotLatestAssistant(input.target_session_id)
+    if (!snap.finished) {
+      return SubAgentProtocol.yieldResult({
+        headline: "fact_check rejected: target session not in terminal state",
+        fields: [["status", "rejected"], ["reason", "target_not_terminal"]],
+        pointer: `target session ${input.target_session_id}`,
+      })
+    }
+    // Step 2: idempotency
+    const cached = await FactCheckPersist.lookup({
+      orchestratorSessionID: ctx.sessionID,
+      targetSessionID: input.target_session_id,
+      targetMessageID: snap.messageID,
+      targetMessageContentHash: snap.contentHash,
+    })
+    if (cached) return renderFactCheckMarkdown(cached.report, { cached: true })
+    // Step 3: run
     const { FactCheckAgent } = await import("@/fact-check")
     const result = await FactCheckAgent.run({
       targetSessionID: input.target_session_id,
       targetAgent: input.target_agent,
+      targetMessageID: snap.messageID,
+      targetMessageContentHash: snap.contentHash,
       reason: input.reason,
       orchestratorSessionID: ctx.sessionID,
       signal: ctx.signal,
       onSessionCreated: (id) => { /* overlay routing */ },
     })
-    return renderFactCheckMarkdown(result)        // result 含 cached: bool
+    await FactCheckPersist.record({ ...result, outcome: signal.aborted ? "aborted" : "completed" })
+    return renderFactCheckMarkdown(result.report, { cached: false })
   }
 })
 ```
@@ -270,18 +302,20 @@ fact_check: tool({
 
 ### 4.4 Orchestrator core prompt 增量
 
-`prompt/core/orchestrator-core.txt` 增加一节：
+`prompt/core/orchestrator-core.txt` 新增一节（v3 措辞调整，不暴露 hash 细节）：
 
 ```
 ## Fact-check dispatch (rule 13: you decide, not the host)
 
 After integrity verdict = pass, you MAY (not MUST) call `fact_check` on a worker session when ALL hold:
 1. The worker's terminal report has `fact_check_items.length > 0`, OR the worker's narrative makes
-   load-bearing factual claims about external systems (APIs, library versions, third-party protocols, numbers).
+   load-bearing factual claims about external systems (APIs, library versions, third-party
+   protocols, numbers).
 2. The downstream consumer (user / next stage) would be materially misled by an incorrect claim.
 
-Idempotency: The tool caches results by (target_session_id, latest_assistant_hash). Calling twice
-with no upstream change returns the same report — you do NOT need to track "already checked".
+The tool dedupes automatically across repeated calls — you do NOT need to track "already
+checked". If the target session is still streaming, the tool will reject; retry after it
+finishes.
 
 Do NOT call fact_check:
 - For trivial / opinion / preference outputs.
@@ -292,185 +326,243 @@ After fact_check returns:
 - verdict=minor_corrections → quote corrections in your next user-facing message, proceed.
 - verdict=needs_orchestrator_action → invoke modify_goal / restart_from_stage / fail_task per
   the corrected[i].recommended_action.
-- verdict=inconclusive → either retry fact_check (after addressing why_unresolved) or proceed with
-  caveat note.
+- verdict=inconclusive → either retry fact_check (after addressing why_unresolved) or proceed
+  with caveat note.
 ```
 
 ---
 
-## 5. Prompt 注入：单源共享片段（v2 重写）
+## 5. Prompt 注入：每个 worker `agent.ts` 的 `core:` 处单源拼接（v3 重写）
 
-### 5.1 共享 TS 常量
+### 5.1 单源 TS 常量
 
-**新文件**：`packages/opencorvus/src/prompt/fragments/fact-check-registration.ts`
+新文件 `packages/opencorvus/src/prompt/fragments/fact-check-registration.ts`：
 
 ```ts
 export const FACT_CHECK_REGISTRATION_FRAGMENT = `
 ## Fact-check item registration
 
-Before calling your terminal report tool, populate \`fact_check_items[]\` with any factual claim
-in your output that you have NOT directly verified via tool calls in this session, AND any
-placeholder for information you do not have.
+Before calling your terminal report tool, populate \`fact_check_items[]\` with EVERY factual
+claim in your output that you have NOT directly verified via tool calls in this session, AND
+EVERY placeholder for information you do not have.
 
 Each item:
-- \`claim\`: full standalone assertion (≥20 chars, ≤280 chars). No generic words like "tbd",
-  "unknown", "n/a", "continue", "next step".
+- \`claim\`: full standalone assertion (≥20 chars, ≤280 chars). Avoid generic words like
+  "tbd", "unknown", "n/a", "continue", "next step" — they get classified as ambiguous and
+  count against you in the fact-check report.
 - \`confidence\`: low | medium | high (self-assessment).
 - \`category\`: api | library | number | history | path | protocol | other.
 - \`source\`: where you got it. "assumed" | "model prior" | "<url>" | "<file:line>" |
-  "user-said:<short>". Empty string is REJECTED.
+  "user-said:<short>".
 
-Placeholders: claim="<待填充：...>" + confidence="low" + source="assumed".
+Placeholders: \`claim="<待填充：...>"\` + confidence="low" + source="assumed".
 
-DO NOT register: opinions, preferences, plans, your own decisions, tool-call results you observed
-in this session, contents of files you read in this session.
+DO NOT register: opinions, preferences, plans, your own decisions, tool-call results you
+observed in this session, contents of files you read in this session.
 
-This list is consumed downstream by an independent fact-check agent. Being honest about
-uncertainty is rewarded; over-claiming verified-ness will be flagged as a violation in fact-check.
+Empty list (\`fact_check_items: []\`) is fine when you genuinely have no unverified claims.
+Over-claiming verified-ness will be flagged as a violation in fact-check.
 `.trim()
 ```
 
-### 5.2 各 worker 的 prompt 组装
+### 5.2 各 worker `agent.ts` 改动（v3 实际注入点）
 
-每个覆盖 worker 的 prompt builder（如 `composeBuildCore` in `build/agent.ts`）末尾追加 import 与拼接：
+**6 个 worker，6 处一行字符串拼接改动**：
 
-```ts
-import { FACT_CHECK_REGISTRATION_FRAGMENT } from "@/prompt/fragments/fact-check-registration"
-import BUILD_CORE from "@/prompt/core/build-core.txt"
+| Worker | 文件:行 | 改动 |
+|---|---|---|
+| build | `build/agent.ts:747` | `core: composeBuildCore(autoIteration)` → `core: [composeBuildCore(autoIteration), FACT_CHECK_REGISTRATION_FRAGMENT].join("\n\n")` |
+| requirements | `requirements/agent.ts:99` | `core: REQUIREMENTS_CORE` → `core: [REQUIREMENTS_CORE, FACT_CHECK_REGISTRATION_FRAGMENT].join("\n\n")` |
+| architect | `architect/agent.ts:121` | 同上模式 |
+| design-analyst | `design-analyst/agent.ts:98` | 既有 `[DESIGN_ANALYST_CORE, renderAutoIterationMode(autoIteration)].join("\n\n")` → 末尾追加 `FACT_CHECK_REGISTRATION_FRAGMENT` |
+| intent-analysis | `intent-analysis/agent.ts:74` | 同 requirements 模式 |
+| integrity | `integrity/team-agent.ts:197, 265, 404`（3 处） | 同 requirements 模式（每个 reviewer / supervisor 调用都注入） |
 
-export function composeBuildCore(autoIteration: boolean): string {
-  return [
-    BUILD_CORE,
-    // ... existing fragments ...
-    FACT_CHECK_REGISTRATION_FRAGMENT,
-  ].join("\n\n")
-}
-```
+**单源原则**：内容只在 `fragments/fact-check-registration.ts`；注入点 N 处是事实——每个 worker 有自己的运行时入口。
 
-**单源原则**：常量只此一份；改文案只改 fragments/fact-check-registration.ts。
-**覆盖范围控制**：只在 §1 覆盖名单的 worker 的 prompt 组装函数中导入。fact-check agent 自己**不**导入（防自递归）；compaction/title/summary/orchestrator/control 不导入。
+**Fact-check agent 自己不导入**该 fragment（防自递归）。Compaction/title/summary/orchestrator/control/coding/general 不导入。
 
-### 5.3 fact-check core prompt 的反向规则
+### 5.3 fact-check core prompt（防自递归）
 
-`prompt/core/fact-check-core.txt` 显式声明：
+`prompt/core/fact-check-core.txt`：
 
 ```
-You are a fact-check agent. You verify factual claims; you do NOT make new factual claims.
+You are a fact-check agent. You verify factual claims; you do NOT make new factual claims
+of your own.
 
 You MUST NOT:
-- Emit fact_check_items in your own terminal report (self-recursion forbidden).
+- Emit fact_check_items in your own terminal report. Your `report_fact_check_result` schema
+  has no such field — this is enforced at schema level.
 - Use <fact-check> tags in chat text.
-- Speculate beyond what evidence supports — if uncertain, classify as "unresolved" with
-  why_unresolved set.
+- Speculate beyond what evidence supports. If uncertain, classify the item as `unresolved`
+  with an explicit `why_unresolved`.
 
-Every `verified` and `corrected` item MUST cite at least one `evidence` entry with a concrete
-pointer (URL / file:line / memory:id) and excerpt.
+Every `verified` and `corrected` item MUST cite at least one `evidence` entry with a
+concrete pointer (URL / file:line / memory:id) and excerpt — your terminal schema rejects
+items without evidence.
+
+If a registered claim's `claim` text is too vague to verify (generic words like "tbd",
+"unknown", or content-free placeholders), classify it as `unresolved.why_unresolved=
+"ambiguous"` — your job is to flag laziness, not to guess intent.
+
+If all tool calls fail or you can't reach external info, return verdict="inconclusive"
+with unresolved items marked `why_unresolved="tool_failed"`. Do NOT fabricate evidence.
 ```
 
-`report_fact_check_result` schema 本身不含 `fact_check_items` 字段——schema-level 防递归（rule 8 单源，schema 是约束源）。
-
 ---
 
-## 6. 影响面 / 调用点清单（v2 扩充，rule 35 全仓 grep 复核）
+## 6. 影响面 / 调用点清单（v3 全部 grep 验证）
 
-> ⚠️ 标 `[codex round 1 补充]` 的是 v1 漏掉、codex 指出后核实的。
+### 6.1 必改文件（新增 / 修改）
 
-### 6.1 必改文件
+#### 6.1.1 新文件
 
-| 文件 | 改动 | 状态 |
-|---|---|---|
-| `packages/opencorvus/src/agent/role-contract.ts` | AgentRoleID 加 `"fact-check"` + contract 配置 | v1 已列 |
-| `packages/opencorvus/src/agent/agent.ts` | 注册 fact-check Info + NATIVE_DEFAULTS + orchestrator info.tools.include 加 `fact_check` | v1 已列 |
-| `packages/opencorvus/src/prompt/core/fact-check-core.txt` | 新文件 | v1 已列 |
-| `packages/opencorvus/src/prompt/fragments/fact-check-registration.ts` | **新文件**：FACT_CHECK_REGISTRATION_FRAGMENT 常量 | **[codex round 1 补充]** v2 新增 |
-| `packages/opencorvus/src/fact-check/index.ts` | 新文件，`FactCheckAgent.run` 实现 | v1 已列 |
-| `packages/opencorvus/src/fact-check/tools.ts` | 新文件，terminal tool 与 schema | v1 已列 |
-| `packages/opencorvus/src/fact-check/persist.ts` | 新文件，`fact_check_attempt` artifact 读写 + 幂等查询 | **[codex round 1 补充]** v2 新增 |
-| `packages/opencorvus/src/orchestrator/tools.ts` | 注册 `fact_check` tool（含幂等查询逻辑） | v1 已列 |
-| `packages/opencorvus/src/prompt/core/orchestrator-core.txt` | 新增 §Fact-check dispatch | v1 已列 |
-| `packages/opencorvus/src/session/session.sql.ts` | `SESSION_KINDS` 加 `"fact-check"` | **[codex round 1 补充]** |
-| `packages/opencorvus/src/session/loop.ts` | `runtimeContractRequiredAgentKinds` **保持不变**（fact-check 不需要 runtime contract，理由 §4.1） | **[codex round 1 补充]** 显式不改也要说明 |
-| `packages/opencorvus/src/orchestrator/protocol/message-bridge.ts` | `OverlayChannel` 路由覆盖新 SessionKind（按既有模式） | **[codex round 1 补充]** |
-| `packages/opencorvus/src/build/agent.ts` | BuildResultSchema 加 `fact_check_items: FactCheckItemListSchema`；`composeBuildCore` 注入 fragment | **[codex round 1 补充]**（v1 §3.2 只提了通用，未列具体文件） |
-| `packages/opencorvus/src/requirements/types.ts`（实际路径待 implementation grep 复核） | 同上模式 | **[codex round 1 补充]** |
-| `packages/opencorvus/src/architect/types.ts` | 同上模式 | **[codex round 1 补充]** |
-| `packages/opencorvus/src/design-analyst/types.ts` | 同上模式 | **[codex round 1 补充]** |
-| `packages/opencorvus/src/intent-analysis/types.ts` | 同上模式 | **[codex round 1 补充]** |
-| `packages/opencorvus/src/integrity/types.ts`（IntegrityTeamReport） | 同上模式 | **[codex round 1 补充]** |
-| `packages/opencorvus/src/decision-log/...`（路径待复核） | 写入 fact-check 事件到 decision_log | **[codex round 1 补充]** |
-| `packages/opencorvus/src/orchestrator/tools.ts`（`read_context` 实现处） | 让 read_context 渲染 fact_check_attempt 给 orchestrator 看 | **[codex round 1 补充]** |
-| `packages/opencorvus/src/integrity/...`（replay 路径） | integrity replay 能读到 fact_check_attempt artifact | **[codex round 1 补充]** |
-| `packages/opencorvus/src/config/schema.ts` | agent 配置允许 fact-check 覆盖 prompt/model/tools/step_cap | v1 已列 |
-| **Overlay 前端**：`packages/overlay/src/utils/message.ts` | SessionKind 路由 +「fact-check」角色映射 | **[codex round 1 补充]** |
-| `packages/overlay/src/components/Avatar.tsx` | fact-check 角色头像 | **[codex round 1 补充]** |
-| `packages/overlay/src/components/Icon.tsx` | fact-check 角色图标 | **[codex round 1 补充]** |
-| `packages/overlay/src/utils/card-color.ts` | fact-check 卡片配色 | **[codex round 1 补充]** |
-| `packages/overlay/src/i18n/en-US.json`、`zh-CN.json` | fact-check 文案 | **[codex round 1 补充]** |
-| `packages/overlay/src/utils/markdown.ts` / `TextPart.tsx`（按需） | v1 错以为要渲染 inline 标签；v2 不再用 inline，**不改** | **[codex round 1 补充]** 显式不改说明 |
-
-### 6.2 测试新增
-
-| 测试文件 | 覆盖 |
+| 文件 | 用途 |
 |---|---|
-| `packages/opencorvus/test/fact-check/agent.test.ts` | `run()` happy / corrected / unresolved / inconclusive / cached-hit / cancel-mid-run / tool-error 七 case |
-| `packages/opencorvus/test/fact-check/schema.test.ts` | FactCheckItemSchema 拒绝 generic 词 + FactCheckReportSchema 边界 + verdict 映射 |
-| `packages/opencorvus/test/fact-check/persist.test.ts` | `fact_check_attempt` artifact 读写 + 幂等键命中 |
-| `packages/opencorvus/test/agent/role-contract.test.ts`（扩展） | 新 role 加入后契约自洽 + `agentKindRequiresRuntimeContract("fact-check") === false` |
-| `packages/opencorvus/test/orchestrator/tools.test.ts` | `fact_check` 工具 input schema + dispatch + 幂等查询 + 错误传播 |
-| `packages/opencorvus/test/orchestrator/orchestrator-tool-descriptions.test.ts` | description 含关键词（rule 13 合规检查） |
-| `packages/opencorvus/test/build-agent/contract-error.test.ts`（扩展） | BuildResultSchema 增加 fact_check_items 字段后 contract test |
-| `packages/opencorvus/test/agent/core-prompt-hygiene.test.ts`（扩展） | fact-check-core.txt hygiene + 反向：不含 `<fact-check>` 标签字面 + 不含 fact_check_items 字面（防自递归） |
-| `packages/opencorvus/test/prompt/fact-check-fragment.test.ts`（新） | FACT_CHECK_REGISTRATION_FRAGMENT 含必需短语 + 反向：禁止短语不出现 |
-| `packages/opencorvus/test/prompt/worker-prompt-composition.test.ts`（新） | 各 worker 的 prompt builder 输出含 fragment / fact-check 自己的 builder 不含 |
-| `packages/opencorvus/test/session/session-kinds.test.ts`（扩展或新） | `SESSION_KINDS` 含 `"fact-check"` |
-| `packages/opencorvus/test/orchestrator/orchestrator-no-auto-dispatch.test.ts`（新） | 反向：当 worker 输出 fact_check_items 为空时，orchestrator LLM 决定不调 fact_check（验证 LLM 决策能力，非 host 拦截） |
+| `packages/opencorvus/src/prompt/fragments/fact-check-registration.ts` | FACT_CHECK_REGISTRATION_FRAGMENT 常量 |
+| `packages/opencorvus/src/prompt/core/fact-check-core.txt` | fact-check agent 核心 prompt |
+| `packages/opencorvus/src/fact-check/index.ts` | `FactCheckAgent.run` 实现 |
+| `packages/opencorvus/src/fact-check/tools.ts` | terminal tool + FactCheckReportSchema + FactCheckItemSchema |
+| `packages/opencorvus/src/fact-check/persist.ts` | `fact_check_attempt` artifact 读写 + 幂等查询 |
+| `packages/opencorvus/src/fact-check/snapshot.ts` | `Session.snapshotLatestAssistant` 工具方法（或集成到 session/index.ts） |
 
-### 6.3 全仓 grep 复核 token
+#### 6.1.2 既有文件改动（按 codex round 2 实际路径）
 
-实施前 grep 并审视：
+| 文件 | 改动 |
+|---|---|
+| `packages/opencorvus/src/agent/role-contract.ts` | AgentRoleID 加 `"fact-check"` + contract 配置 |
+| `packages/opencorvus/src/agent/agent.ts` | 注册 fact-check Info + NATIVE_DEFAULTS + orchestrator info.tools.include 加 `fact_check` |
+| `packages/opencorvus/src/orchestrator/tools.ts` | 注册 `fact_check` tool（含 snapshot + 幂等查询 + 工具入口 reject 分支） |
+| `packages/opencorvus/src/orchestrator/tools.ts`（read_context 实现处约 line 3814+） | read_context scope 增加 fact_check_attempt 渲染 |
+| `packages/opencorvus/src/prompt/core/orchestrator-core.txt` | 新增 §Fact-check dispatch |
+| `packages/opencorvus/src/session/session.sql.ts` | `SESSION_KINDS` 加 `"fact-check"` |
+| `packages/opencorvus/src/session/loop.ts` | `runtimeContractRequiredAgentKinds` **保持不变**（fact-check 无 runtime contract）；显式断言测试 |
+| `packages/opencorvus/src/orchestrator/protocol/message-bridge.ts` | OverlayChannel 路由覆盖新 SessionKind（按既有 SessionKind 注册模式） |
+| `packages/opencorvus/src/build/agent.ts:747` | `core:` 行拼接 fragment |
+| `packages/opencorvus/src/build/types.ts` | BuildResultSchema 加 `fact_check_items: FactCheckItemListSchema` 必填 |
+| `packages/opencorvus/src/requirements/agent.ts:99` | `core:` 行拼接 fragment |
+| `packages/opencorvus/src/requirements/output-tools.ts` | submit schema 加 `fact_check_items` 必填 |
+| `packages/opencorvus/src/architect/agent.ts:121` | `core:` 行拼接 fragment |
+| `packages/opencorvus/src/architect/output-tools.ts` | submit schema 加 `fact_check_items` 必填 |
+| `packages/opencorvus/src/design-analyst/agent.ts:98` | 既有 join 末尾追加 fragment |
+| `packages/opencorvus/src/design-analyst/output-tools.ts` | submit schema 加 `fact_check_items` 必填 |
+| `packages/opencorvus/src/intent-analysis/agent.ts:74` | `core:` 行拼接 fragment |
+| `packages/opencorvus/src/intent-analysis/output-tools.ts` | submit schema 加 `fact_check_items` 必填 |
+| `packages/opencorvus/src/integrity/team-agent.ts:197/265/404` | 3 处 `core:` 行拼接 fragment |
+| `packages/opencorvus/src/integrity/team-schema.ts` | IntegrityTeamReport 加 `fact_check_items` 必填 |
+| `packages/opencorvus/src/decision-log/index.ts` | `DecisionLogWriter.record` 调用：fact-check 完成时写 phase=`fact_check` 条目 |
+| `packages/opencorvus/src/decision-log/schema.ts` | DecisionEntry phase 允许 `"fact_check"`（如 phase 是枚举） |
+| `packages/opencorvus/src/config/config.ts` | agent 配置允许 fact-check 覆盖 prompt/model/tools/step_cap（按现有 agent 配置模式） |
+
+#### 6.1.3 契约破坏适配（rule 16 / 18：不留死代码 / 不留补丁）
+
+> codex round 2 §B-2 指出 reset DB 不解决全部破坏面。v3 显式列入实施：
+
+| 破坏面 | 适配 |
+|---|---|
+| 外部 executor（codex / claude-code）模式 | external executor 的 build 路径不强制 `fact_check_items` 必填——但需要在 BuildAgent 外部 executor 分支处显式构造空数组（`fact_check_items: []`），让 schema 通过。同时在 spec 记录"external executor 不参与 fact-check 登记"作为已知限制 |
+| 测试 fixture / contract test | `test/build-agent/contract-error.test.ts`、`test/build/result-schema.test.ts`、`test/agent/agent.test.ts`、整套 fixture 添加 `fact_check_items: []` 字段 |
+| Prompt-catalog NATIVE_DEFAULTS（`agent.ts`） | 每个 covered worker 的 NATIVE_DEFAULTS 入口同步含 fragment 字符串（保持 overlay prompt-catalog 显示与运行时一致） |
+| Collector report 构造 | 每个 worker 的 `getCollector()` / `buildReport()` 构造空 `fact_check_items: []` 默认，让初始 collector 状态合法 |
+| Overlay event-stream parsers | overlay 解析 BuildResult / IntegrityTeamReport 等的位置（如 cards 渲染）容忍新字段（v1 实际就有此字段，UI 不需立即展示） |
+| 既有 e2e benchmark | benchmark fixture 同步更新 |
+
+#### 6.1.4 Overlay UI 文件（最小骨架）
+
+| 文件 | 改动 |
+|---|---|
+| `packages/overlay/src/utils/message.ts` | SessionKind 路由 + `"fact-check"` 角色映射 |
+| `packages/overlay/src/components/Avatar.tsx` | fact-check 头像（v1 可复用 integrity 资产） |
+| `packages/overlay/src/components/Icon.tsx` | fact-check 图标 |
+| `packages/overlay/src/utils/card-color.ts` | fact-check 卡片配色 |
+| `packages/overlay/src/i18n/en-US.json`、`zh-CN.json` | 角色文案 |
+
+**显式不改**：`packages/overlay/src/utils/markdown.ts` / `TextPart.tsx`——v3 不用 inline 标签，无需 markdown 渲染层改动。
+
+### 6.2 全仓 grep 复核 token
+
+实施前 grep 并审视，确认无残留：
 - `fact-check`, `factcheck`, `FactCheck`, `事实核查`
-- `verify`, `verifier`, `verification`（避免与 `verification/` 模块语义混淆）
-- `factuality`（acceptance/types.ts 已存在的预制 scorer 名）
-- `<fact-check`（防止 v1 实验残留）
-- 各 worker terminal schema 文件实际路径（`Requirements*Schema`, `Architect*Schema`, `Integrity*Report` 等）
+- `factuality`（acceptance/types.ts 既有，本方案不复用）
+- `<fact-check`（v1/v2 实验残留必须为 0）
+- `FACT_CHECK_REGISTRATION_FRAGMENT`（应只在 fragments/ + 6 个 worker agent.ts 出现）
 
 ---
 
-## 7. 测试策略（rule 28 / 36）
+## 7. 测试策略
 
 ### 7.1 单测
 
-每个 §6.2 列项含 ≥3 case：happy / 边界 / 反向（禁项不存在）。
+| 测试文件 | 覆盖 |
+|---|---|
+| `test/fact-check/agent.test.ts` | `run()` happy / corrected / unresolved / inconclusive / cached-hit / cancel-mid-run / tool-error 七 case |
+| `test/fact-check/schema.test.ts` | FactCheckItemSchema 边界（min/max claim 长度、source 空字符串拒绝）+ FactCheckReportSchema verdict 决策树 + items_total=0 边界 |
+| `test/fact-check/persist.test.ts` | artifact 读写 + 幂等键命中 + outcome=aborted 持久化正确 |
+| `test/fact-check/snapshot.test.ts` | `snapshotLatestAssistant` finished=false → 拒绝；finished=true → snapshot 正确 |
+| `test/agent/role-contract.test.ts` 扩展 | 新 role 加入 + `agentKindRequiresRuntimeContract("fact-check") === false` |
+| `test/orchestrator/tools.test.ts` 扩展 | `fact_check` 工具：input schema、reject (not terminal)、cached、dispatch、错误传播 |
+| `test/orchestrator/orchestrator-tool-descriptions.test.ts` 扩展 | fact_check description 含必要关键词 |
+| `test/build-agent/contract-error.test.ts` 扩展 | BuildResultSchema 增字段后 contract test；external executor 分支空数组路径 |
+| `test/build/result-schema.test.ts`（如存在或新建） | BuildResultSchema 含必填字段 |
+| `test/agent/core-prompt-hygiene.test.ts` 扩展 | fact-check-core.txt hygiene + 反向（不含 `<fact-check>` 字面 + 不含 fact_check_items 字面） |
+| `test/prompt/fact-check-fragment.test.ts`（新） | fragment 含必需短语 + 反向 |
+| `test/prompt/worker-prompt-composition.test.ts`（新） | 6 个 covered worker 的 `core:` 拼接含 fragment；fact-check / compaction / title / summary / orchestrator / control / coding / general 不含 |
+| `test/session/session-kinds.test.ts`（扩展或新） | `SESSION_KINDS` 含 `"fact-check"` |
+| `test/decision-log/factcheck-record.test.ts`（新） | fact-check 完成写 phase="fact_check" 条目可读 |
 
 ### 7.2 集成 / e2e
 
-- **e2e A**：build worker terminal report 含 fact_check_items → integrity pass → orchestrator 调用 fact_check → corrected blocking → recommended_action=modify_goal → orchestrator 据此调用 modify_goal。
-- **e2e B 反向**：worker 输出 fact_check_items 为空 → orchestrator 决定**不**调 fact_check（验证 LLM 决策，**非 host 拦截**）。
-- **e2e C 幂等**：连续两次同参数 fact_check 调用 → 第二次返回 cached=true 且 0 LLM token 消耗。
-- **e2e D cancel**：fact_check 跑到一半 task cancel → signal 传播 → artifact outcome="aborted"。
-- **e2e E tool 失败**：websearch / webfetch 全失败 → fact_check 返回 verdict=inconclusive + unresolved 全 `why_unresolved="tool_failed"`，**不**伪造 evidence。
-
-### 7.3 Prompt hygiene
-
-`core-prompt-hygiene.test.ts` 规则集扩展到 fact-check-core.txt + fragment。
+| Case | 验证 |
+|---|---|
+| e2e A | build worker terminal report 含 items → integrity pass → orchestrator 调 fact_check → corrected blocking → orchestrator 据 recommended_action 调 modify_goal |
+| e2e B 反向 | worker items=[] → orchestrator 不调 fact_check（验证 LLM 决策能力） |
+| e2e C 幂等 | 连续两次同参数 → 第二次 cached=true 且 0 LLM token |
+| e2e D 拒绝 | target session 未终态 → fact_check 立即 reject，不记 artifact |
+| e2e E cancel | fact_check 跑到一半 cancel → signal 传播 → artifact outcome="aborted" |
+| e2e F tool 全败 | websearch/webfetch/code search 全失败 → verdict=inconclusive，unresolved 全 `tool_failed`，无伪 evidence |
+| e2e G external executor | codex executor 模式下 build → BuildResult 含 `fact_check_items: []`，schema 通过；orchestrator 据空列表决定不调 fact_check |
 
 ---
 
-## 8. 实施步骤（每步独立 commit + push，rule 33）
+## 8. 实施步骤（v3 重排：强串行链优先）
 
-> 顺序按 codex round 1 建议调整：先协议入口（SessionKind / 持久化 schema），再 agent，再 orchestrator，UI 早做。
+每步独立 commit + push（rule 33）。
 
-1. **Spec 落盘**（本文件 v2）→ codex round 2 评审 → v3 等。Commit: `docs(specs): add fact-check agent design (v2)`.
-2. **SessionKind + 持久化 schema 骨架**：`SESSION_KINDS` 加 `"fact-check"` / `engine_artifact` 加 `fact_check_attempt` kind / `FactCheckAttemptArtifactSchema`。Commit: `feat(session): register fact-check session kind`.
-3. **Overlay UI 骨架**：role mapping / Avatar / Icon / card-color / i18n。先放 placeholder UI，给 SessionKind 落 channel。Commit: `feat(overlay): register fact-check role surface`.
-4. **共享 fragment + 各 worker schema 加 fact_check_items**（build / requirements / architect / design-analyst / intent-analysis / integrity） + 测试。Commit: `feat(prompt): single-source fact-check registration fragment`.
-5. **Fact-check agent 注册骨架**：role-contract / agent.ts / NATIVE_DEFAULTS / fact-check-core.txt 占位 / 实现 stub + 测试。Commit: `feat(agent): scaffold fact-check agent`.
-6. **Terminal tool + report schema** + persist 模块（幂等查询） + 测试。Commit: `feat(fact-check): add report tool + idempotent persist`.
-7. **FactCheckAgent.run 实现**（toolKit 组装 + runAgentSession 调用 + 输出解析 + cancel 路径）+ 测试。Commit: `feat(fact-check): implement agent runtime`.
-8. **Orchestrator tool 接入**（含幂等命中分支）+ orchestrator-core prompt + read_context 让 fact_check_attempt 可见 + 测试。Commit: `feat(orchestrator): expose fact_check dispatch + read_context integration`.
-9. **decision_log 写入 + integrity replay 读取** + 测试。Commit: `feat(decision-log): record fact-check outcomes for integrity replay`.
-10. **e2e A-E 五场景** + smoke。Commit: `test(fact-check): end-to-end orchestrator + cancel + idempotency`.
-11. 删除草稿、更新文档、commit 最终版。Commit: `docs: finalize fact-check agent spec`.
+### 强串行链
+
+1. **类型骨架闭合**：`SESSION_KINDS` 加 `"fact-check"`；`AgentRoleID` 加 `"fact-check"`；`role-contract.ts` 加 contract；`agent.ts` 加 Info + NATIVE_DEFAULTS + orchestrator tool whitelist；`config/config.ts` 允许 fact-check agent config 覆盖。  
+   Commit: `feat(agent): register fact-check role + session kind (skeleton)`.
+
+2. **Schema + artifact + persist**：FactCheckItemSchema、FactCheckItemListSchema、FactCheckReportSchema、FactCheckAttemptArtifactSchema、`fact-check/persist.ts`、snapshotLatestAssistant + 单测。  
+   Commit: `feat(fact-check): add schemas + artifact persistence + idempotency`.
+
+3. **Worker terminal schema 加 fact_check_items + 全套契约破坏适配**（build/types.ts + 5 个 output-tools.ts + team-schema.ts + 所有 fixture / contract test + external executor 分支构造 `[]` + collector 默认 `[]` + NATIVE_DEFAULTS 同步）+ 单测。  
+   Commit: `feat(workers): require fact_check_items in terminal schemas`.
+
+4. **Prompt fragment + 6 个 worker `core:` 注入**（build/requirements/architect/design-analyst/intent-analysis/integrity，含 integrity 3 处）+ hygiene 测试。  
+   Commit: `feat(prompt): inject fact-check registration fragment into worker cores`.
+
+5. **fact-check agent runtime**：`fact-check/tools.ts`、`fact-check/index.ts`（`FactCheckAgent.run`）+ cancel/error 路径 + 单测。  
+   Commit: `feat(fact-check): implement agent runtime`.
+
+6. **Orchestrator fact_check tool**：`orchestrator/tools.ts` 加 tool（含 snapshot + reject + cached + dispatch）+ `read_context` 渲染 fact_check_attempt + orchestrator-core.txt §Fact-check dispatch + 单测。  
+   Commit: `feat(orchestrator): expose fact_check tool with idempotency`.
+
+7. **decision_log 集成 + integrity replay**：decision_log 写入 phase=`fact_check` + integrity replay 路径能读到 artifact + 单测。  
+   Commit: `feat(integrity): consume fact-check evidence via decision-log + read_context`.
+
+### 可并行（在 step 1 闭合后）
+
+8a. **Overlay UI 骨架**（utils/message.ts、Avatar、Icon、card-color、i18n）。  
+    Commit: `feat(overlay): register fact-check role surface`.
+
+8b. **prompt hygiene / schema / persist / snapshot 单测**（与 step 6 / 7 可并行写）。
+
+### 最后
+
+9. **e2e A-G 七场景**。Commit: `test(fact-check): end-to-end coverage incl. cancel/cached/reject/inconclusive/external-executor`.
+
+10. **删除草稿 + 最终化文档**。Commit: `docs: finalize fact-check agent spec`.
 
 ---
 
@@ -478,46 +570,46 @@ pointer (URL / file:line / memory:id) and excerpt.
 
 | 风险 | 缓解 |
 |---|---|
-| **R1**：各 worker terminal schema 同步改动多文件，单源原则可能因疏漏破裂 | 通过 `prompt/fragments/fact-check-registration.ts` + 中央 `FactCheckItemListSchema` 双重单源；CI 测试遍历 worker 列表确认每个都引入 |
-| **R2**：fact-check 自递归（自己输出含 fact_check_items） | 双重防御：(a) `report_fact_check_result` schema 无 fact_check_items 字段（schema-level 拒绝）；(b) fact-check-core.txt 显式 forbid（prompt-level 拒绝） |
-| **R3**：Orchestrator LLM 不调用 fact_check / 反复调用 | (a) 反复调用由 artifact 幂等键自动去重；(b) 不调用属 LLM 决策能力问题，靠 orchestrator-core prompt 引导 + e2e 反向 case 验证，不做 host 兜底 |
-| **R4**：worker LLM 不填 fact_check_items / 乱填 | (a) Schema-level 拒绝 generic 词；(b) fact-check 跑出 corrected 项时给 recommended_action="modify_goal"，下次 build 会读到 integrity feedback，迭代学到要登记；(c) prompt hygiene 测试反向覆盖 |
-| **R5**：tool 失败时 fact-check 报伪 evidence | core prompt 显式规则 + schema 强制每个 verified/corrected 必须有 ≥1 evidence pointer + e2e E case 验证 |
-| **R6**：cancel 没清理 ownership / 留 orphan artifact | (a) 复用 BuildAgent 的 signal 传播 + Ownership 模式；(b) artifact `outcome` 字段标 "aborted" 而非"completed"，read_context 据此处理 |
-| **R7**：取代 integrity 的疑虑 | 明确分工：integrity = "是否满足 acceptance / 完整性"，fact-check = "声明是否属实"。fact-check-core.txt §0 + 用户文档说明 |
-| **R8**：external executor（codex / claude-code）模式下 fact-check 如何工作 | v1 仅覆盖 opencorvus native；外部 executor 不强制 fact_check_items 字段（schema 在 terminal 处只对 native 强制）；写入 spec 已知限制 |
-| **R9**：旧 session 反序列化失败（terminal schema 字段从 optional 升 required） | 按 rule 18 直接 reset DB；DB 不做兼容；spec 记录此为已知 breaking change |
-| **R10**：overlay UI 骨架不放可能漏入 channel | §8 step 3 提前到 step 5 之前；e2e 中确认 SessionKind 不落空 |
+| **R1**：6 个 worker terminal schema 同步改动，遗漏导致 contract 局部破裂 | step 3 单 commit 包含全套改动 + worker-prompt-composition 测试遍历名单 |
+| **R2**：fact-check 自递归 | 双重防御：(a) report 终端 schema 无 fact_check_items 字段；(b) fact-check core prompt 显式 forbid |
+| **R3**：Orchestrator LLM 不调用 fact_check / 反复调用 | (a) 反复调用由 artifact 幂等键自动去重；(b) 不调用属决策能力问题，orchestrator-core prompt 引导 + e2e B 反向验证，host 不兜底 |
+| **R4**：worker LLM 不填 / 乱填 `fact_check_items` | (a) Schema 必填（无 default）；(b) fragment prompt 解释 generic 词后果；(c) fact-check agent 把 ambiguous claim 归为 unresolved；(d) 后续 build 在 integrity feedback 中看到，迭代学到 |
+| **R5**：tool 失败时 fact-check 伪 evidence | core prompt 显式规则 + report schema 每 verified/corrected 必须 ≥1 evidence + e2e F 验证 |
+| **R6**：cancel 留 orphan artifact | (a) signal 透传；(b) artifact `outcome="aborted"`；(c) read_context 据 outcome 过滤 aborted |
+| **R7**：target session 还在流时被核查 → hash 漂移 | 工具入口 snapshot + finished=false reject |
+| **R8**：external executor 不参与 fact-check 登记 | step 3 显式构造 `fact_check_items: []`；spec 记录已知限制；e2e G 验证 |
+| **R9**：DB / fixture / contract test 漂移 | rule 18 允许 reset DB；step 3 显式列入所有适配；CI 抓 schema/contract 漂移 |
+| **R10**：与 integrity 职责模糊 | fact-check-core.txt §0 + 用户文档：integrity = "是否满足 acceptance / 完整性"；fact-check = "声明是否属实" |
+| **R11**：禁词 regex 删除后，worker 写垃圾 claim 怎么办 | 由 fact-check agent 复核：generic claim 归 unresolved.ambiguous，自然计入 inconclusive 分母 → orchestrator 据此修复 |
 
 ---
 
-## 10. 已确认架构决策
+## 10. 已确认架构决策（v3 不再争议）
 
-> 这些是 codex round 1 已澄清、本轮不再争议的：
-
-1. **形态**：新建独立 agent（用户钦定，§1.1 已驳回 codex 替代方案）。
-2. **登记 channel**：terminal report schema 字段，不用 inline XML。
-3. **触发**：orchestrator LLM 决定（rule 13），host 不拦截，但 artifact 提供幂等。
-4. **更正形态**：独立 fact-check session yield 一条 markdown + 持久 artifact；源消息不动。
-5. **覆盖范围**：build / requirements / architect / design-analyst / intent-analysis / integrity；coding / general 暂排除（§3.1 方案 B），需用户复核。
-
----
-
-## 11. 待 codex round 2 复核
-
-请 codex 重点回答：
-
-1. **§3.1 方案 B（coding / general 不参与）是否合理？**Codex 自己提到 fact-check 应"覆盖每个 worker 产物"——coding / general 没有 terminal schema，要么例外，要么也加 inline XML 标签。哪个更合规？
-2. **§3.3 幂等键 `target_message_hash` 的取值**：fact-check session 是 sub-agent，被核查的 target session 可能在 fact-check 跑时仍在变（罕见但可能）。如何稳定 hash？建议：fact-check 启动瞬间 snapshot latest assistant message id + hash。
-3. **§6.1 触点清单是否还有遗漏？**特别是：
-   - decision_log 实际写入接口？
-   - read_context 渲染 artifact 的实际位置？
-   - integrity replay 路径具体在哪？
-4. **§5.2 各 worker prompt builder**：有些 worker（requirements/architect 等）是不是没有 `composeXxxCore()` 函数，而是直接 `import XXX_CORE`？那 fragment 怎么注入？
-5. **§6.2 测试目录约定**：`test/fact-check/` 是不是 opencorvus 包内惯例？还是该走 `test/agent/fact-check/`？
-6. **新引入的 schema 改动**：BuildResultSchema 加必填字段会破坏既有 build session 的反序列化吗？rule 18 直接 reset DB 是不是合适？
-7. **§4.4 orchestrator prompt 中"latest_assistant_hash"措辞**：LLM 看到这个概念会困惑吗？是否需要改为对 LLM 友好的措辞（"the tool dedupes automatically, just call when relevant"）？
+1. **形态**：新建独立 agent。
+2. **登记 channel**：worker terminal report schema 必填字段，不用 inline XML。
+3. **触发**：orchestrator LLM 决定（rule 13），host 不拦截；artifact 提供幂等。
+4. **更正形态**：独立 fact-check session yield markdown + 持久 artifact；源消息 append-only 不动。
+5. **覆盖范围**：6 个有 terminal report schema 的 worker（§1.1）；coding / general / 控制平面 / 内部 agent 不在范围内（定义不适用，非例外）。
+6. **注入点**：每个 worker 的 agent.ts 中 `core:` 行字符串拼接 + 单源 TS 常量。
+7. **幂等键**：`(orchestrator_session_id, target_session_id, target_message_id, target_message_content_hash)`。
+8. **Snapshot**：target session 必须 finished=true，否则工具入口 reject。
+9. **禁词约束**：移到 prompt 层 + fact-check agent 复核职责，host 无 regex 关键字规则（rule 20）。
+10. **schema 必填**：worker `fact_check_items` 必填、无 default、无 optional。
 
 ---
 
-（v2 结束。等待 codex round 2 评审。）
+## 11. 待 codex round 3 复核
+
+1. **§3.4 snapshot 协议中 `Session.snapshotLatestAssistant(target_session_id)` 的具体实现位置**：grep 现有 `Session` namespace 中是否已有类似工具（`getLatestMessage` / `getTerminalAssistant`）？还是要新增？是否破坏既有 session API 契约？
+2. **§4.3 工具入口的 reject 分支**：现在 orchestrator 工具描述说 "tool dedupes automatically"——如果 reject 是另一种返回（不是 cached），LLM 会不会困惑？是否需要在 orchestrator-core.txt §Fact-check dispatch 节再加一句关于 reject 后的重试策略？
+3. **§5.2 integrity 3 处 `core:` 拼接**：integrity 是 plan/review/consensus 三阶段。reviewer 阶段（line 265）的 individual reviewer 应该登记 `fact_check_items` 吗？还是只 supervisor consensus（line 197/404）阶段登记？
+4. **§6.1.3 external executor 适配**：external executor 模式下 build 的 BuildResult 是怎么构造的？我说"显式构造空数组让 schema 通过"——具体在哪个函数？验证。
+5. **§7.2 e2e G**：现有 e2e 测试基础设施支持外部 executor 模式吗？还是要 mock？
+6. **§8 step 1 类型骨架闭合后能 build 通过吗？**比如 `agent.ts` 注册了 fact-check Info 但实现还在 step 5——会不会编译失败 / runtime 抛？
+7. **Rule 6.1（prompt-over-host-invariant）二次审视**：v3 §4.3 工具入口的"snapshot + reject + cached"逻辑，是不是被理解为"host 状态机"？我的论据：这只是数据完整性检查（target 必须 terminal）+ 幂等查询（artifact lookup），属 rule 6.1 允许的 (a) 数据完整性场景。但需要 codex 二次确认。
+8. **任何未发现的 CLAUDE.md 违规？**
+
+---
+
+（v3 结束。等待 codex round 3 评审。）
