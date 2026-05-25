@@ -1437,7 +1437,13 @@ export class ChannelRuntime {
 
         if (part.state?.status === "error") {
           const statusMsg = this.formatToolStatus(toolName, toolInput) ?? `\`${toolName}\``
-          const err = String(part.state.error ?? "Unknown tool error")
+          // Mirrors packages/opencorvus/src/session/tool-failure-cause.ts:renderToolFailureCause.
+          // channel-runtime only depends on @opencorvus-ai/sdk (generated types,
+          // no runtime exports), so we cannot import the renderer directly.
+          const failure = (part.state as { failure?: { kind?: string; name?: string; originSite?: string; message?: string } }).failure
+          const err = failure?.message
+            ? `${failure.kind ?? ""}/${failure.name ?? ""} at ${failure.originSite ?? "unknown"}: ${failure.message}`
+            : "Unknown tool error"
           this.mirrorSessions("system", `${statusMsg} failed: ${err}`, part.sessionID, sessions)
           for (const session of sessions) {
             await this.safeSend(session.adapter, session.channel, session.thread, `${statusMsg} failed: ${err}`)
