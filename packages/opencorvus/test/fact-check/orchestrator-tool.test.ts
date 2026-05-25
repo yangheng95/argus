@@ -435,6 +435,97 @@ describe("fact_check orchestrator tool (e2e A–G)", () => {
     })
   })
 
+  // Regression: empty fact_check_items + tool error → verdict MUST be
+  // inconclusive (codex impl review round 3 §B-1). Without the explicit
+  // verdict override in synthesizeToolErrorReport, items_total=0 would
+  // hit deriveFactCheckVerdict's "clean" short-circuit even though the
+  // agent never operated.
+  test("[regression] empty items + agent throw → outcome=tool_error AND verdict=inconclusive (NOT clean)", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        seedTask("proj_fc_empty_err", "tsk_fc_empty_err", Date.now())
+        const { sessionID: targetSession } = await createTerminalSessionWithAssistant(
+          "Worker output. No structured items registered, but agent errored mid-run.",
+        )
+
+        factCheckAgentImpl = async () => {
+          throw new Error("simulated mid-run failure (no provider available)")
+        }
+
+        const tools = createOrchestratorTools({ taskID: "tsk_fc_empty_err", agentSessionID: "ses_orch_empty_err" }).tools
+        const result = await tools.fact_check.execute(
+          {
+            target_session_id: targetSession,
+            target_agent: "build",
+            fact_check_items: [], // empty — exercises items_total=0 boundary
+            reason: "Orchestrator asked for prose verification; no structured items.",
+          },
+          {} as any,
+        )
+        expect(String(result)).toContain("tool_error")
+
+        const rows = listFactCheckAttempts("tsk_fc_empty_err")
+        expect(rows.length).toBe(1)
+        expect(rows[0].payload.outcome).toBe("tool_error")
+        // The blocker: verdict must NOT be clean for tool_error path even
+        // when items_total = 0. Tool failure is categorically inconclusive.
+        expect(rows[0].payload.report.overall_verdict).toBe("inconclusive")
+        expect(rows[0].payload.report.overall_verdict).not.toBe("clean")
+      },
+    })
+  })
+
+  // Regression: stale targetMessageID → loadTargetMessageText throws,
+  // orchestrator persists tool_error (codex impl review round 2 §B-2).
+  test("[regression] stale target message id throws + persists tool_error (not silent fallback)", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        seedTask("proj_fc_stale", "tsk_fc_stale", Date.now())
+        const { sessionID: targetSession } = await createTerminalSessionWithAssistant("Real message.")
+
+        // Bypass the FactCheckAgent mock — force the real run() to fire
+        // so loadTargetMessageText() is actually exercised.  We point the
+        // agent runner at a wrong messageID via the snapshot path: but
+        // Session.snapshotLatestAssistant returns the REAL latest, so
+        // to trigger the stale path we mock FactCheckAgent.run to call
+        // loadTargetMessageText with a bogus id.  Simpler: stage the
+        // synthetic error path directly by having the mock throw with
+        // the loadTargetMessageText error message; we're regression-
+        // testing the persist-error-as-tool_error contract.
+        factCheckAgentImpl = async () => {
+          throw new Error(
+            "fact-check: target message msg_stale_id_xyz not found in session ses_stale (snapshot stale or wrong target id)",
+          )
+        }
+
+        const tools = createOrchestratorTools({ taskID: "tsk_fc_stale", agentSessionID: "ses_orch_stale" }).tools
+        const result = await tools.fact_check.execute(
+          {
+            target_session_id: targetSession,
+            target_agent: "build",
+            fact_check_items: [SAMPLE_ITEM],
+            reason: "Exercise the stale-id catch + persist path.",
+          },
+          {} as any,
+        )
+        expect(String(result)).toContain("tool_error")
+        expect(String(result)).toContain("snapshot stale")
+
+        const rows = listFactCheckAttempts("tsk_fc_stale")
+        expect(rows.length).toBe(1)
+        expect(rows[0].payload.outcome).toBe("tool_error")
+        expect(rows[0].payload.report.overall_verdict).toBe("inconclusive")
+        // The error reason must be captured in the unresolved claim so the
+        // orchestrator can read it back via read_context.
+        expect(rows[0].payload.report.unresolved[0].claim).toContain("snapshot stale")
+      },
+    })
+  })
+
   // e2e G: external-executor path — fact_check_items: [] always passes schema
   test("[G] external-executor surrogate: empty fact_check_items array still produces a valid report scope", async () => {
     await using tmp = await tmpdir({ git: true })

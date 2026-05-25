@@ -10,7 +10,7 @@ import path from "node:path"
 import fs from "node:fs/promises"
 import { createHash } from "node:crypto"
 import { Session } from "@/session"
-import { FactCheckItemListSchema, type FactCheckReport, deriveFactCheckVerdict } from "@/fact-check/schema"
+import { FactCheckItemListSchema, type FactCheckReport } from "@/fact-check/schema"
 import { resolveAgentModel, resolveAgentModelRef } from "@/agent/model"
 import { SessionPrompt } from "@/session/prompt"
 import { SessionStatus } from "@/session/status"
@@ -1192,14 +1192,20 @@ export { STATEFUL_SNAPSHOT_TOOL_NAMES, type StatefulSnapshotToolName } from "./s
  * scope (so the idempotency lookup still works) plus one `unresolved` entry
  * naming the host-side reason — read_context surfaces this verbatim.
  *
- * Severity is **minor** (not blocking) so the verdict decision tree from
- * fact-check/schema.ts resolves to `inconclusive`.  Tool failure says "we
- * could not verify", not "we found something bad" — inconclusive is the
- * correct semantic (orchestrator → retry or proceed with caveat per
- * fact-check-core.txt verdict rules). Using blocking severity would
- * trigger `needs_orchestrator_action`, which means "the worker is wrong"
- * — but we don't know the worker is wrong, we only know we couldn't
- * verify. Codex impl review round 2 §B-1.
+ * **Verdict is unconditionally `inconclusive`** — tool failure / cancel /
+ * scope-mismatch is by definition "we could not verify", which is exactly
+ * what inconclusive means.  This is NOT the same category as
+ * `deriveFactCheckVerdict()`'s decision tree, which assumes a SUCCESSFUL
+ * agent run: that tree's `items_total === 0 → clean` boundary fires when
+ * a worker registered zero claims AND the agent ran cleanly through
+ * verification.  Here the agent never operated, so the items_total=0
+ * boundary doesn't apply — a tool-error artifact must never be marked
+ * clean (codex impl review round 3 §B-1; round 2 §B-1 backstory).
+ *
+ * Severity on the unresolved entry is `minor` — tool failure says
+ * "could not verify", not "the worker is wrong".  Blocking severity
+ * would trigger `needs_orchestrator_action`, which is reserved for
+ * cases where the agent SUCCESSFULLY found something wrong.
  */
 function synthesizeToolErrorReport(input: {
   snap: { messageID?: string; contentHash?: string }
@@ -1207,19 +1213,6 @@ function synthesizeToolErrorReport(input: {
   reason: string
 }): FactCheckReport {
   const itemsTotal = input.args.fact_check_items.length
-  const unresolved: FactCheckReport["unresolved"] = [
-    {
-      claim: input.reason.slice(0, 600),
-      why_unresolved: "tool_failed" as const,
-      severity: "minor" as const,
-    },
-  ]
-  const verdict = deriveFactCheckVerdict({
-    items_total: itemsTotal,
-    items_inspected: 0,
-    corrected: [],
-    unresolved,
-  })
   return {
     scope: {
       target_session_id: input.args.target_session_id,
@@ -1231,8 +1224,14 @@ function synthesizeToolErrorReport(input: {
     },
     verified: [],
     corrected: [],
-    unresolved,
-    overall_verdict: verdict,
+    unresolved: [
+      {
+        claim: input.reason.slice(0, 600),
+        why_unresolved: "tool_failed" as const,
+        severity: "minor" as const,
+      },
+    ],
+    overall_verdict: "inconclusive",
   }
 }
 
