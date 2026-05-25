@@ -5,7 +5,7 @@ import { conversationAgentStore } from "../src/store/conversation-agents";
 import {
   cancelConversationReplay,
   hydrateTaskConversation,
-  loadOlderConversationHistory,
+  loadConversationHistoryUntilCard,
 } from "../src/services/conversation";
 import { replayTaskEventToTree } from "../src/services/events";
 import {
@@ -16,7 +16,7 @@ import {
   type TransportRequest,
   type TransportResponse,
 } from "../src/services/host-transport";
-import { resetWriter } from "../src/services/tree-writer";
+import { flushBufferedPartDeltas, resetWriter } from "../src/services/tree-writer";
 
 const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
 const originalCancelAnimationFrame = globalThis.cancelAnimationFrame;
@@ -90,6 +90,7 @@ test("hydration replay projects persisted executor output into the card tree", (
       text: "Recovered streamed output.",
     },
   });
+  flushBufferedPartDeltas();
 
   const cardID = "executor:session:ses_executor:message:executor:msg:run_1";
   expect(cardTreeStore.cards[cardID]).toBeDefined();
@@ -214,7 +215,7 @@ test("hydrateTaskConversation renders the live tail first and prepends older his
       sessionID: "ses_old",
       role: "assistant",
       resolvedRole: "assistant",
-      channel: "assistant",
+      channel: "integrity",
       time: { created: 1_776_000_000_100 },
     },
     parts: [
@@ -303,7 +304,7 @@ test("hydrateTaskConversation renders the live tail first and prepends older his
               sessions: [
                 {
                   sessionID: "ses_old",
-                  stage: "assistant",
+                  stage: "integrity",
                   messageIDs: ["msg_old"],
                   firstMessageTime: 1_776_000_000_100,
                   lastMessageTime: 1_776_000_000_100,
@@ -328,10 +329,12 @@ test("hydrateTaskConversation renders the live tail first and prepends older his
     "ses_old",
     "ses_root",
   ]);
+  expect(conversationAgentStore.records[0]?.renderedCardID).toBe("integrity:session:ses_old:message:msg_old");
+  expect(cardTreeStore.cards["integrity:session:ses_old:message:msg_old"]).toBeUndefined();
 
-  await expect(loadOlderConversationHistory("tsk_lazy")).resolves.toBe(true);
+  await expect(loadConversationHistoryUntilCard("integrity:session:ses_old:message:msg_old", "tsk_lazy")).resolves.toBe(true);
   expect(cardTreeStore.order.filter((id) => id !== "ctx:user-request")).toEqual([
-    "assistant:session:ses_old:message:msg_old",
+    "integrity:session:ses_old:message:msg_old",
     "assistant:session:ses_root:message:msg_latest",
   ]);
   expect(requests.map((req) => req.path)).toEqual([

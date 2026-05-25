@@ -429,13 +429,12 @@ function sessionCardID(stage: string, sid: string): string {
   return `${stage}:session:${sid}`;
 }
 
-/** Per-message-turn card id. A long-lived session (orchestrator especially)
- *  produces a new real `message.updated` every time it resumes reasoning;
- *  each becomes its own top-level card so later turns sort AFTER the child
- *  agent cards that ran between them, instead of back-filling the earliest
- *  card. Keeps the old `<stage>:session:<sid>` prefix recognizable for
- *  diagnostics and appends `:message:<mid>`; sorting is still by
- *  `CardNode.time`, never by id. */
+/** Stable session card id seeded by the first visible message. A long-lived
+ *  session can produce many real `message.updated` rows; they must stay in
+ *  one complete card so parallel child agents do not visually split the
+ *  parent session. The first message id stays in the id for deterministic
+ *  hydration and diagnostics; sorting is still by `CardNode.time`, never by
+ *  id. */
 function messageTurnCardID(stage: string, sid: string, messageID: string): string {
   return `${stage}:session:${sid}:message:${messageID}`;
 }
@@ -556,7 +555,6 @@ function handleMessageUpdated(event: any): void {
   if (typeof rawResolvedRole !== "string" || rawResolvedRole.length === 0) {
     throw new Error(`message.updated info missing resolvedRole/agent for message ${info.id}`);
   }
-  const resolvedRole = String(rawResolvedRole);
   const agent = String(info.agent || "");
   const parentSessionID = String(info.parentSessionID || "");
   const goalID = String(info.goalID || "");
@@ -570,6 +568,7 @@ function handleMessageUpdated(event: any): void {
   // channel is a bridge bug, not a case we silently accommodate.
   const stage = deriveSessionStage(info);
   if (stage === "filtered") return;
+  const displayRole = displayRoleForStage(stage);
 
   // Index the message.
   messages.set(id, {
@@ -577,7 +576,7 @@ function handleMessageUpdated(event: any): void {
     sessionID,
     stage,
     role,
-    resolvedRole,
+    resolvedRole: displayRole,
     agent,
     parentSessionID,
     goalID,
@@ -591,7 +590,7 @@ function handleMessageUpdated(event: any): void {
   const { cardID, isPhase } = ensureTurnCard(session, id, {
     stage,
     goalID,
-    role: resolvedRole,
+    role: displayRole,
     time: timeCreated,
     stampServerTime: true,
     deferHierarchy: !isPhaseAbsorbedSession(stage, goalID),
@@ -601,7 +600,7 @@ function handleMessageUpdated(event: any): void {
   // regrouped by the authoritative message timeline below; doing that from
   // live arrival order is the regression this path avoids.
   if (isPhase) {
-    ensureBoundaryPart(session, cardID, id, resolvedRole, timeCreated);
+    ensureBoundaryPart(session, cardID, id, displayRole, timeCreated);
   } else {
     regroupTimelineSegments();
   }
@@ -1482,6 +1481,11 @@ function deriveSessionStage(info: any): string {
   return channel;
 }
 
+function displayRoleForStage(stage: string): string {
+  if (stage === "filtered") return "filtered";
+  return normalizeAgentRole(stage);
+}
+
 interface EnsureSessionOpts {
   stage: string;
   parentSessionID: string;
@@ -1743,10 +1747,9 @@ function regroupTimelineSegments(opts: { deferHierarchy?: boolean } = {}): void 
   if (ordered.length === 0) return;
 
   const segments: TimelineSegment[] = [];
+  const segmentBySession = new Map<string, TimelineSegment>();
   const desiredCardByMessage = new Map<string, string>();
   const targetMessageIDs = new Set<string>();
-  let previousVisibleSessionID = "";
-  let previousNonPhaseCardID = "";
 
   for (const message of ordered) {
     const session = sessions.get(message.sessionID);
@@ -1754,25 +1757,19 @@ function regroupTimelineSegments(opts: { deferHierarchy?: boolean } = {}): void 
     const stage = message.stage || session.stage;
     const goalID = message.goalID || session.goalID;
     if (isPhaseAbsorbedSession(stage, goalID)) {
-      previousVisibleSessionID = message.sessionID;
-      previousNonPhaseCardID = "";
       continue;
     }
 
-    const cardID =
-      previousVisibleSessionID === message.sessionID && previousNonPhaseCardID
-        ? previousNonPhaseCardID
-        : messageTurnCardID(stage, message.sessionID, message.id);
-    let segment = segments[segments.length - 1];
-    if (!segment || segment.cardID !== cardID) {
+    let segment = segmentBySession.get(message.sessionID);
+    if (!segment) {
+      const cardID = messageTurnCardID(stage, message.sessionID, message.id);
       segment = { cardID, session, stage, goalID, messages: [] };
+      segmentBySession.set(message.sessionID, segment);
       segments.push(segment);
     }
     segment.messages.push(message);
-    desiredCardByMessage.set(message.id, cardID);
+    desiredCardByMessage.set(message.id, segment.cardID);
     targetMessageIDs.add(message.id);
-    previousVisibleSessionID = message.sessionID;
-    previousNonPhaseCardID = cardID;
   }
   if (segments.length === 0) return;
 
@@ -1883,9 +1880,10 @@ function regroupTimelineSegments(opts: { deferHierarchy?: boolean } = {}): void 
 }
 
 /** Replay a persisted task into the exact same visible card identity the
- *  live SSE stream would have built. Single render identity = `messageID`:
- *  turn cards are derived straight from the transcript in chronological
- *  order. `view.sessions` is metadata only (parentSessionID / goalID
+ *  live SSE stream would have built. Single render identity = session:
+ *  each session's first visible message seeds the durable card id, then later
+ *  messages are folded into that same card in chronological order.
+ *  `view.sessions` is metadata only (parentSessionID / goalID
  *  fallback) and MUST NOT regroup multiple messages into one session card
  *  (spec §6 — the highest replay-collapse risk). */
 export function hydrateConversationView(view: any, transcript: any[]): void {
@@ -1925,7 +1923,6 @@ export function hydrateConversationView(view: any, transcript: any[]): void {
     if (typeof rawResolvedRole !== "string" || rawResolvedRole.length === 0) {
       throw new Error(`hydrateConversationView: message ${messageID} missing resolvedRole/agent`);
     }
-    const resolvedRole = String(rawResolvedRole);
     const meta = sessionMeta.get(sessionID);
     const parentSessionID = String(info.parentSessionID || meta?.parentSessionID || "");
     const goalID = String(info.goalID || meta?.goalID || "");
@@ -1937,12 +1934,13 @@ export function hydrateConversationView(view: any, transcript: any[]): void {
       Number.isFinite(info?.time?.completed) && Number(info.time.completed) > 0;
     const stage = deriveSessionStage(info);
     if (stage === "filtered") continue;
+    const displayRole = displayRoleForStage(stage);
     messages.set(messageID, {
       id: messageID,
       sessionID,
       stage,
       role,
-      resolvedRole,
+      resolvedRole: displayRole,
       agent: String(info.agent || ""),
       parentSessionID,
       goalID,
@@ -1954,13 +1952,13 @@ export function hydrateConversationView(view: any, transcript: any[]): void {
     const { cardID, isPhase } = ensureTurnCard(session, messageID, {
       stage,
       goalID,
-      role: resolvedRole,
+      role: displayRole,
       time: timeCreated,
       stampServerTime: true,
       deferHierarchy: true,
     });
     if (isPhase) {
-      ensureBoundaryPart(session, cardID, messageID, resolvedRole, timeCreated);
+      ensureBoundaryPart(session, cardID, messageID, displayRole, timeCreated);
     }
     const parts = Array.isArray(message?.parts) ? message.parts : [];
     for (const part of parts) {

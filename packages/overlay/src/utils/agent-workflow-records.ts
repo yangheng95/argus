@@ -21,6 +21,9 @@ export function mergeAgentRecords(
     baseBySession.set(record.sessionID, { ...record })
   }
   const merged = new Map<string, AgentWorkflowRecord>()
+  for (const record of baseRecords) {
+    if (record.renderedCardID) merged.set(record.sessionID, { ...record })
+  }
   for (const record of liveRecords) {
     if (!record.renderedCardID) continue
     const base = baseBySession.get(record.sessionID)

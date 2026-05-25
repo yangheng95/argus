@@ -19,6 +19,7 @@
 import { For, Show, createMemo, createSignal, onCleanup, onMount } from "solid-js";
 import { boardStore } from "../store/board";
 import { cardTreeStore } from "../store/card-tree";
+import { requestConversationCardScroll } from "../services/conversation-scroll";
 import { t } from "../utils/i18n";
 import { goalRevisionLabelFromIndexes } from "../utils/goal-label";
 import { goalState, type GoalState } from "../utils/goal-state";
@@ -176,16 +177,12 @@ export function TaskProgressBar() {
   const onPillClick = (goalID: string) => {
     const cardID = findGoalCardID(goalID);
     if (!cardID) return;
-    // Stable id selector — Card writes article[data-kind][data-stage]
-    // but no `data-card-id`. Use a CSS-attribute selector that matches
-    // the article whose React/Solid key was this id. We tag the article
-    // with `id={cardID}` via a separate scroll target attribute.
-    // Falls back to no-op when the article isn't in the DOM yet.
-    const escaped = (window as any).CSS?.escape ? (window as any).CSS.escape(cardID) : cardID;
-    const node = document.querySelector(`[data-card-id="${escaped}"]`) as HTMLElement | null;
-    if (node) {
-      node.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
+    void requestConversationCardScroll({
+      cardID,
+      behavior: "smooth",
+      block: "start",
+      focus: "card",
+    });
   };
 
   return (

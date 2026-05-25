@@ -10,6 +10,8 @@ export type AgentRole =
   | "user"
   | "assistant"
   | "orchestrator"
+  | "gateway"
+  | "intent-analysis"
   | "spec"
   | "requirements"
   | "design-analyst"
@@ -21,12 +23,15 @@ export type AgentRole =
   | "build"
   | "explore"
   | "integrity"
+  | "delivery"
   | "system";
 
 /** Stages that get their own collapsible agent card in the conversation view. */
 export const AGENT_CARD_STAGES = new Set<AgentRole>([
   "assistant",
   "orchestrator",
+  "gateway",
+  "intent-analysis",
   "spec",
   "requirements",
   "design-analyst",
@@ -38,6 +43,8 @@ export const AGENT_CARD_STAGES = new Set<AgentRole>([
   "build",
   "explore",
   "integrity",
+  "delivery",
+  "system",
 ]);
 
 /**
@@ -49,6 +56,8 @@ export function normalizeAgentRole(name: string): AgentRole {
   if (!text) return "assistant";
   if (text === "user") return "user";
   if (text === "orchestrator") return "orchestrator";
+  if (text === "gateway") return "gateway";
+  if (text === "intent-analysis" || text === "intent_analysis" || text === "analyze-intent" || text === "analyze_intent" || text === "intent") return "intent-analysis";
   if (text === "spec") return "spec";
   if (text === "requirements") return "requirements";
   if (text === "design-analyst" || text === "design_analyst" || text === "design-analysis" || text === "design_analysis") return "design-analyst";
@@ -62,13 +71,13 @@ export function normalizeAgentRole(name: string): AgentRole {
   // Read-only repository-investigation subagent. Its own lane/icon so explore
   // dispatches are split out of the executor bucket (matches SessionKind
   // "explore" on the backend).
-  if (text === "explore") return "explore";
+  if (text === "explore" || text === "explorer") return "explore";
   if (text === "executor" ||
       text === "general" || text === "execute" ||
       text === "opencorvus" || text === "codex" || text === "claude-code") return "executor";
   if (text === "judge" || text === "evaluator" || text === "evaluation" || text === "eval" ||
       text === "scheduler" || text === "review" || text === "evaluate") return "evaluator";
-  if (text === "delivery" || text === "deliver" || text === "publish") return "assistant";
+  if (text === "delivery" || text === "deliver" || text === "publish" || text === "refine") return "delivery";
   if (text === "files") return "assistant";
   if (text === "integrity") return "integrity";
   if (text === "system" || text === "compaction" || text === "title" || text === "summary") return "system";
@@ -82,12 +91,14 @@ export function normalizeAgentRole(name: string): AgentRole {
 export function agentRoleToSectionPhase(role: AgentRole): string {
   if (role === "spec") return "spec";
   if (role === "requirements") return "requirements";
+  if (role === "intent-analysis") return "intent";
   if (role === "design-analyst") return "design";
   if (role === "architect") return "architect";
   if (role === "planner") return "plan";
   if (role === "goal") return "goals";
   if (role === "executor") return "executor";
   if (role === "evaluator") return "evaluation";
+  if (role === "delivery") return "delivery";
   return "";
 }
 
@@ -125,6 +136,8 @@ export function roleLabel(role: string): string {
   if (role === "user") return t("chat.role.user");
   if (role === "assistant") return t("chat.role.assistant");
   if (role === "orchestrator") return t("chat.role.orchestrator");
+  if (role === "gateway") return t("chat.role.gateway");
+  if (role === "intent-analysis") return t("chat.role.intent-analysis");
   if (role === "requirements") return t("chat.role.requirements");
   if (role === "design-analyst" || role === "design_analyst") return t("chat.role.design-analyst");
   if (role === "architect") return t("chat.role.architect");
@@ -135,6 +148,8 @@ export function roleLabel(role: string): string {
   if (role === "goal" || role === "goal_gate") return t("chat.role.goal");
   if (role === "executor") return t("chat.role.executor");
   if (role === "build") return t("chat.role.build");
+  if (role === "explore") return t("chat.role.explore");
+  if (role === "delivery") return t("chat.role.delivery");
   if (role === "integrity") return t("chat.role.integrity");
   return t("chat.role.assistant");
 }
@@ -156,8 +171,8 @@ export function classifyMessage(msg: any, rootSessionID: string): string {
   if (backendChannel && backendChannel !== "main") {
     // "filtered" means the backend intentionally hid this message
     if (backendChannel === "filtered") return "filtered";
-    const resolved = String(msg?.info?.resolvedRole || "").trim().toLowerCase() as AgentRole;
-    if (AGENT_CARD_STAGES.has(resolved)) return resolved;
+    const normalizedChannel = normalizeAgentRole(backendChannel);
+    if (AGENT_CARD_STAGES.has(normalizedChannel)) return normalizedChannel;
   }
 
   // User-role messages without a backend channel go to main conversation
@@ -183,6 +198,8 @@ export function classifyMessage(msg: any, rootSessionID: string): string {
 export function agentStageLabel(stage: string): string {
   const role = normalizeAgentRole(stage);
   if (role === "spec") return t("chat.role.spec");
+  if (role === "gateway") return t("chat.role.gateway");
+  if (role === "intent-analysis") return t("chat.role.intent-analysis");
   if (role === "requirements") return t("chat.role.requirements");
   if (role === "design-analyst") return t("chat.role.design-analyst");
   if (role === "architect") return t("chat.role.architect");
@@ -191,6 +208,8 @@ export function agentStageLabel(stage: string): string {
   if (role === "evaluator") return t("chat.role.evaluator");
   if (role === "executor") return t("chat.role.executor");
   if (role === "build") return t("chat.role.build");
+  if (role === "explore") return t("chat.role.explore");
+  if (role === "delivery") return t("chat.role.delivery");
   if (role === "integrity") return t("chat.role.integrity");
   return t("chat.role.assistant");
 }

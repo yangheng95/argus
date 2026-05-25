@@ -2,6 +2,8 @@ import { Index, Show, createMemo, type Accessor } from "solid-js"
 import { cardTreeStore } from "../store/card-tree"
 import { conversationAgentStore } from "../store/conversation-agents"
 import { setCardExpanded } from "../store/conversation-ui"
+import { loadConversationHistoryUntilCard } from "../services/conversation"
+import { requestConversationCardScroll } from "../services/conversation-scroll"
 import { notifyWarning } from "../services/notify"
 import { buildAgentWorkflow, type AgentWorkflowRecord } from "../utils/agent-workflow"
 import { mergeAgentRecords } from "../utils/agent-workflow-records"
@@ -29,17 +31,6 @@ function parentIDsForCard(cardID: string): string[] {
   return parents
 }
 
-function highlightCard(target: HTMLElement): void {
-  target.classList.add("conversation-agent-target--pulse")
-  window.setTimeout(() => target.classList.remove("conversation-agent-target--pulse"), 1400)
-}
-
-function renderedCardHead(target: HTMLElement): HTMLElement | null {
-  return target.querySelector<HTMLElement>(
-    ":scope > .chat-bubble-shell > .chat-bubble > .chat-bubble__head, :scope > .card__head",
-  )
-}
-
 function describeRecord(record: AgentWorkflowRecord): string {
   const lines = [
     `agent: ${record.agentName}`,
@@ -51,7 +42,7 @@ function describeRecord(record: AgentWorkflowRecord): string {
   return lines.join("\n")
 }
 
-function locateRecord(record: AgentWorkflowRecord): void {
+async function locateRecord(record: AgentWorkflowRecord): Promise<void> {
   if (!record.renderedCardID) {
     notifyWarning({
       title: "Agent card unavailable",
@@ -60,33 +51,30 @@ function locateRecord(record: AgentWorkflowRecord): void {
     })
     return
   }
+  if (!cardTreeStore.cards[record.renderedCardID]) {
+    await loadConversationHistoryUntilCard(record.renderedCardID)
+  }
   for (const parentID of parentIDsForCard(record.renderedCardID)) {
     const parent = cardTreeStore.cards[parentID]
     setCardExpanded(parentID, true, parent?.status)
   }
   window.requestAnimationFrame(() => {
     window.requestAnimationFrame(() => {
-      const selector = `[data-card-id="${CSS.escape(record.renderedCardID!)}"]`
-      const target = document.querySelector<HTMLElement>(selector)
-      if (!target) {
+      void requestConversationCardScroll({
+        cardID: record.renderedCardID!,
+        behavior: "smooth",
+        block: "start",
+        focus: "header",
+        highlight: true,
+      }).then((found) => {
+        if (found) return
+        const selector = `[data-card-id="${CSS.escape(record.renderedCardID!)}"]`
         notifyWarning({
           title: "Agent card unavailable",
-          message: `Rendered card ${record.renderedCardID} is not mounted in the conversation.`,
+          message: `Rendered card ${record.renderedCardID} could not be located in the conversation.`,
           details: `${describeRecord(record)}\n\nselector: ${selector}`,
         })
-        return
-      }
-      const head = renderedCardHead(target)
-      if (!head) {
-        notifyWarning({
-          title: "Agent card unavailable",
-          message: `Rendered card ${record.renderedCardID} has no mounted header target.`,
-          details: `${describeRecord(record)}\n\nmatched element outerHTML head missing:\n${target.outerHTML.slice(0, 400)}`,
-        })
-        return
-      }
-      head.scrollIntoView({ block: "start", inline: "nearest", behavior: "smooth" })
-      highlightCard(target)
+      })
     })
   })
 }

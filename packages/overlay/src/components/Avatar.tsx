@@ -7,6 +7,8 @@ export const AVATAR_ICON_BY_ROLE: Record<AgentRole, IconName> = {
   assistant: "avatar-assistant",
   system: "avatar-system",
   orchestrator: "avatar-orchestrator",
+  gateway: "avatar-gateway",
+  "intent-analysis": "avatar-intent-analysis",
   spec: "avatar-spec",
   requirements: "avatar-requirements",
   "design-analyst": "avatar-design-analyst",
@@ -18,6 +20,7 @@ export const AVATAR_ICON_BY_ROLE: Record<AgentRole, IconName> = {
   explore: "avatar-explore",
   evaluator: "avatar-evaluator",
   integrity: "avatar-integrity",
+  delivery: "avatar-delivery",
 }
 
 export function avatarRole(role: string): AgentRole {

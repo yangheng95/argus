@@ -276,6 +276,25 @@
   border-radius: 0;
 }
 
+.chat-input-warning {
+  display: flex;
+  align-items: center;
+  gap: calc(6px * var(--ui-scale));
+  min-width: 0;
+  padding: calc(4px * var(--ui-scale)) calc(6px * var(--ui-scale));
+  color: var(--warn);
+  font-size: var(--ui-font-meta);
+  line-height: 1.35;
+}
+
+.chat-input-warning svg {
+  flex: 0 0 auto;
+}
+
+.chat-input-warning span {
+  min-width: 0;
+}
+
 /* Compose meta: the bottom row beneath the textarea showing build /
    permissions / shortcut hints. Two-up flex layout that wraps on narrow
    compose containers. */

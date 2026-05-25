@@ -168,6 +168,38 @@
   outline-offset: calc(2px * var(--ui-scale));
 }
 
+.conversation-virtual-window {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.conversation-virtual-item {
+  flex: 0 0 auto;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  margin-block-end: calc(8px * var(--ui-scale));
+}
+
+.conversation-virtual-item .chat-bubble,
+.conversation-virtual-item .chat-avatar,
+.conversation-virtual-item .chat-bubble__body-inner {
+  animation: none;
+}
+
+.conversation-virtual-spacer {
+  flex: 0 0 auto;
+  width: 100%;
+  min-height: 0;
+  pointer-events: none;
+}
+
+.conversation-virtual-item > .card,
+.conversation-virtual-item > .interaction-card,
 .chat-scroll > .card,
 .chat-scroll > .interaction-card {
   width: var(--conversation-card-inline-size);
@@ -175,11 +207,13 @@
   align-self: stretch;
 }
 
+.conversation-virtual-item > .card[data-kind="message"][data-role="user"],
 .chat-scroll > .card[data-kind="message"][data-role="user"] {
   width: var(--conversation-user-card-inline-size);
   align-self: flex-end;
 }
 
+.conversation-virtual-item > .card[data-kind="message"][data-role="system"],
 .chat-scroll > .card[data-kind="message"][data-role="system"] {
   width: var(--conversation-system-card-inline-size);
   align-self: center;
@@ -187,6 +221,10 @@
 
 @media (max-width: 900px) {
   /* breakpoint: --ui-breakpoint-lg */
+  .conversation-virtual-item > .card,
+  .conversation-virtual-item > .interaction-card,
+  .conversation-virtual-item > .card[data-kind="message"][data-role="user"],
+  .conversation-virtual-item > .card[data-kind="message"][data-role="system"],
   .chat-scroll > .card,
   .chat-scroll > .interaction-card,
   .chat-scroll > .card[data-kind="message"][data-role="user"],
@@ -1539,6 +1577,10 @@
     display: none;
   }
 
+  .conversation-virtual-item > .card,
+  .conversation-virtual-item > .interaction-card,
+  .conversation-virtual-item > .card[data-kind="message"][data-role="user"],
+  .conversation-virtual-item > .card[data-kind="message"][data-role="system"],
   .chat-scroll > .card,
   .chat-scroll > .interaction-card,
   .chat-scroll > .card[data-kind="message"][data-role="user"],

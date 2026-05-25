@@ -26,11 +26,11 @@ function record(
   }
 }
 
-test("ConversationAgentRail drops hydrated sessions without rendered card targets", () => {
+test("ConversationAgentRail keeps hydrated sessions with deterministic rendered card targets", () => {
   const merged = mergeAgentRecords(
     [
       record("ses_build_orphan_1", 100),
-      record("ses_build_orphan_2", 110),
+      record("ses_build_hydrated", 110, "build:session:ses_build_hydrated:message:msg_1"),
       { ...record("ses_build_live", 120), goalID: "goal_a" },
     ],
     [
@@ -42,9 +42,10 @@ test("ConversationAgentRail drops hydrated sessions without rendered card target
     ],
   )
 
-  expect(merged.map((item) => item.sessionID)).toEqual(["ses_build_live"])
-  expect(merged[0]?.renderedCardID).toBe("step:goal_a:build")
-  expect(merged[0]?.goalID).toBe("goal_a")
+  expect(merged.map((item) => item.sessionID)).toEqual(["ses_build_hydrated", "ses_build_live"])
+  expect(merged[0]?.renderedCardID).toBe("build:session:ses_build_hydrated:message:msg_1")
+  expect(merged[1]?.renderedCardID).toBe("step:goal_a:build")
+  expect(merged[1]?.goalID).toBe("goal_a")
 })
 
 test("ConversationAgentRail records stay in global chronological order", () => {
