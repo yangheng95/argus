@@ -127,6 +127,7 @@ function replayContext(attemptNumber: number): IntegrityReplayContext {
       inheritedSpecSnapshotIDs: [],
       reason: "active_only",
     },
+    priorFactCheckAttempts: [],
     priorAttempts: [],
     buildEvidenceSinceLastReview: {
       changedFiles: [],
@@ -140,6 +141,7 @@ function replayContext(attemptNumber: number): IntegrityReplayContext {
       acceptanceSpecs: 0,
       changedFilesTotal: 0,
       changedFilesSinceLastReview: 0,
+      priorFactCheckAttempts: [],
       priorAttempts: attemptNumber - 1,
       priorBlockingFindings: 0,
       phase: "post_build",
@@ -157,6 +159,7 @@ function reReviewReplayContext(): IntegrityReplayContext {
       inheritedSpecSnapshotIDs: [],
       reason: "active_only",
     },
+    priorFactCheckAttempts: [],
     priorAttempts: [
       {
         attemptNumber: 1,

@@ -190,6 +190,7 @@ test("reviewIntegrity active path delivers severity discipline, lineage replay, 
         inheritedSpecSnapshotIDs: ["spec_prev"],
         reason: "integrity_correction_lineage",
       },
+      priorFactCheckAttempts: [],
       priorAttempts: [
         {
           attemptNumber: 1,

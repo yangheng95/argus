@@ -1185,6 +1185,45 @@ export { STATEFUL_SNAPSHOT_TOOL_NAMES, type StatefulSnapshotToolName } from "./s
 // ---------------------------------------------------------------------------
 
 /**
+ * Synthesize a `FactCheckReport` for tool-error / aborted / scope-mismatch
+ * paths where the LLM never returned a valid report.  Single construction
+ * site so every error path persists a schema-valid artifact (rule 8 single
+ * source; codex impl review §1).  The synthetic report carries the snapshot
+ * scope (so the idempotency lookup still works) plus one `unresolved` entry
+ * naming the host-side reason — read_context surfaces this verbatim.
+ */
+function synthesizeToolErrorReport(input: {
+  snap: { messageID?: string; contentHash?: string }
+  args: { target_session_id: string; target_agent: string; fact_check_items: unknown[] }
+  reason: string
+}): FactCheckReport {
+  const itemsTotal = input.args.fact_check_items.length
+  return {
+    scope: {
+      target_session_id: input.args.target_session_id,
+      target_agent: input.args.target_agent,
+      target_message_id: input.snap.messageID ?? "",
+      target_message_content_hash: input.snap.contentHash ?? "",
+      items_total: itemsTotal,
+      items_inspected: 0,
+    },
+    verified: [],
+    corrected: [],
+    // Per spec §3.2 verdict tree, tool-error claims must surface as
+    // unresolved/tool_failed so the orchestrator's response mapping
+    // can pick the right next step (inconclusive → retry / caveat).
+    unresolved: [
+      {
+        claim: input.reason.slice(0, 600),
+        why_unresolved: "tool_failed" as const,
+        severity: "blocking" as const,
+      },
+    ],
+    overall_verdict: "inconclusive",
+  }
+}
+
+/**
  * Render a FactCheckReport as orchestrator-facing markdown.  Single-file
  * inline because the orchestrator yield is a string; the agent's own
  * markdown renderer at fact-check/tools.ts uses a different shape.
@@ -3489,7 +3528,6 @@ export function createOrchestratorTools(input: {
 
         // Step 3: run agent.
         const timeStarted = Date.now()
-        let outcome: "completed" | "aborted" | "tool_error" = "tool_error"
         try {
           const result = await FactCheckAgent.run({
             targetSessionID: args.target_session_id,
@@ -3505,7 +3543,43 @@ export function createOrchestratorTools(input: {
             // creates the child session under parentSessionID for overlay
             // nesting automatically.
           })
-          outcome = result.outcome
+          // Step 3a: scope consistency check (codex impl review §3).  The
+          // LLM populates report.scope itself; we must assert it matches
+          // the snapshot the host took so a wrong scope cannot poison the
+          // idempotency cache or read_context downstream.  Mismatch is
+          // a contract violation, not a soft warning — return tool error
+          // and persist outcome=tool_error so the orchestrator knows to
+          // retry (rule 7: no silent fallback).
+          const scope = result.report.scope
+          const scopeMismatch =
+            scope.target_session_id !== args.target_session_id ||
+            scope.target_agent !== args.target_agent ||
+            scope.target_message_id !== snap.messageID ||
+            scope.target_message_content_hash !== snap.contentHash
+          if (scopeMismatch) {
+            const synthetic = synthesizeToolErrorReport({
+              snap,
+              args,
+              reason:
+                `fact-check returned a report.scope inconsistent with the host snapshot ` +
+                `(expected target_session=${args.target_session_id} agent=${args.target_agent} ` +
+                `message_id=${snap.messageID}; got session=${scope.target_session_id} ` +
+                `agent=${scope.target_agent} message_id=${scope.target_message_id})`,
+            })
+            recordFactCheckAttempt({
+              taskID: task.id,
+              factCheckSessionID: result.sessionID,
+              targetSessionID: args.target_session_id,
+              targetAgent: args.target_agent,
+              targetMessageID: snap.messageID,
+              targetMessageContentHash: snap.contentHash,
+              invokedByOrchestratorSessionID: input.agentSessionID,
+              report: synthetic,
+              timeStarted,
+              outcome: "tool_error",
+            })
+            return `fact_check tool_error: ${synthetic.unresolved[0].claim}`
+          }
           recordFactCheckAttempt({
             taskID: task.id,
             factCheckSessionID: result.sessionID,
@@ -3516,7 +3590,7 @@ export function createOrchestratorTools(input: {
             invokedByOrchestratorSessionID: input.agentSessionID,
             report: result.report,
             timeStarted,
-            outcome,
+            outcome: result.outcome,
           })
           // Surface a one-line summary in decision_log so integrity replay
           // and read_context can mention "fact-check verdict was X" without
@@ -3543,10 +3617,40 @@ export function createOrchestratorTools(input: {
             renderFactCheckReport(result.report)
           )
         } catch (err) {
-          outcome = input.signal?.aborted ? "aborted" : "tool_error"
-          return (
-            `fact_check ${outcome}: ${err instanceof Error ? err.message : String(err)}`
-          )
+          // codex impl review §1: persist tool_error / aborted artifacts
+          // too. Without this the `outcome` enum would be half-dead and
+          // the orchestrator couldn't see that fact-check tried and
+          // failed (vs never ran).
+          const outcome: "aborted" | "tool_error" = input.signal?.aborted ? "aborted" : "tool_error"
+          const errMessage = err instanceof Error ? err.message : String(err)
+          const synthetic = synthesizeToolErrorReport({
+            snap,
+            args,
+            reason: `fact-check ${outcome}: ${errMessage}`,
+          })
+          try {
+            recordFactCheckAttempt({
+              taskID: task.id,
+              // No child session id available — the run threw before
+              // returning a session reference.  Mark explicitly so
+              // listFactCheckAttempts consumers can distinguish.
+              factCheckSessionID: `(no-session:${outcome})`,
+              targetSessionID: args.target_session_id,
+              targetAgent: args.target_agent,
+              targetMessageID: snap.messageID,
+              targetMessageContentHash: snap.contentHash,
+              invokedByOrchestratorSessionID: input.agentSessionID,
+              report: synthetic,
+              timeStarted,
+              outcome,
+            })
+          } catch (persistErr) {
+            log.warn("fact_check: persist of error-outcome artifact failed (non-fatal)", {
+              taskID: task.id,
+              error: persistErr instanceof Error ? persistErr.message : String(persistErr),
+            })
+          }
+          return `fact_check ${outcome}: ${errMessage}`
         }
       },
     }),

@@ -4,7 +4,7 @@ Every agent owns its file mutations: if you modify project files, commit your ow
 
 ## Your Role
 
-The orchestrator dispatches you on a worker session whose terminal report registered `fact_check_items[]` (or whose narrative made load-bearing factual claims about external systems). Your job is to retrieve evidence — from the web, the codebase, and project memory — and classify each registered item into one of three buckets:
+The orchestrator dispatches you on a worker session whose terminal report registered factual claims for verification (or whose narrative made load-bearing factual claims about external systems). Your job is to retrieve evidence — from the web, the codebase, and project memory — and classify each registered claim into one of three buckets:
 
 - `verified` — the claim holds up; cite the supporting evidence pointer.
 - `corrected` — the claim is wrong or stale; give the correction and cite evidence. Pick a `severity` and a `recommended_action` so the orchestrator knows how to repair the upstream work.

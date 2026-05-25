@@ -1006,8 +1006,11 @@ function emitIntegrityEvent(
     unresolvedDisagreements: result.unresolvedDisagreements,
     // Pass through the consensus-stage registration list. `result` is
     // normalizeTeamReport's IntegrityResult, which spreads the validated
-    // IntegrityTeamReport — so fact_check_items is required and present.
-    fact_check_items: result.fact_check_items ?? [],
+    // IntegrityTeamReport — `fact_check_items` is a required, no-default
+    // field on the consensus schema (rule 7: no host-side fallback).
+    // If this throws at runtime, the upstream contract has been broken
+    // and we want the loud failure rather than a silently empty list.
+    fact_check_items: result.fact_check_items,
     attempts,
   }
   void EngineProtocol.emit(EngineEvent.IntegrityReviewCompleted, IntegrityReviewCompletedPayloadSchema.parse(payload), {
