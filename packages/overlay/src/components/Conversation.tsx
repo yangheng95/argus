@@ -1,4 +1,5 @@
-import { For, Index, Show, createMemo, onMount, onCleanup, createSignal, createEffect, on } from "solid-js";
+import { Show, createMemo, onMount, onCleanup, createSignal, createEffect, on } from "solid-js";
+import { Virtualizer, type CustomContainerComponentProps, type VirtualizerHandle } from "virtua/solid";
 import { Card } from "./Card";
 import { ChatBubble } from "./ChatBubble";
 import { TaskProgressBar } from "./TaskProgressBar";
@@ -11,11 +12,9 @@ import { StoreCardNode } from "./StoreCardNode";
 import { canLoadOlderConversationHistory, loadOlderConversationHistory } from "../services/conversation";
 import { conversationAgentStore } from "../store/conversation-agents";
 import { listenConversationCardScroll, type ConversationCardScrollRequest } from "../services/conversation-scroll";
-import { buildVirtualWindowLayout, computeVirtualWindowRange, virtualOffsetForIndex } from "../utils/virtual-window";
 
-const VIRTUAL_OVERSCAN_PX = 1600;
+const VIRTUAL_OVERSCAN_ITEMS = 16;
 const ESTIMATED_CARD_HEIGHT = 132;
-const MIN_MEASURED_CARD_HEIGHT = 24;
 
 function clipText(value: string, limit = 96): string {
   const text = String(value || "").replace(/\s+/g, " ").trim();
@@ -63,34 +62,11 @@ function waitForAnimationFrame(): Promise<void> {
   return new Promise((resolve) => requestAnimationFrame(() => resolve()));
 }
 
-function measuredBlockHeight(node: HTMLElement): number {
-  const rect = node.getBoundingClientRect();
-  const style = getComputedStyle(node);
-  const marginTop = Number.parseFloat(style.marginTop) || 0;
-  const marginBottom = Number.parseFloat(style.marginBottom) || 0;
-  return Math.max(MIN_MEASURED_CARD_HEIGHT, Math.ceil(rect.height + marginTop + marginBottom));
-}
-
 function VirtualizedConversationItem(props: {
   id: string;
-  onMeasure: (id: string, node: HTMLElement) => void;
 }) {
-  let itemEl: HTMLDivElement | undefined;
-
-  const measure = () => {
-    if (!itemEl) return;
-    props.onMeasure(props.id, itemEl);
-  };
-
-  onMount(() => {
-    queueMicrotask(measure);
-    const ro = new ResizeObserver(measure);
-    if (itemEl) ro.observe(itemEl);
-    onCleanup(() => ro.disconnect());
-  });
-
   return (
-    <div ref={itemEl} class="conversation-virtual-item" data-virtual-card-id={props.id}>
+    <div class="conversation-virtual-item" data-virtual-card-id={props.id}>
       <StoreCardNode id={props.id}>
         {(node) =>
           renderAsBubble(node)
@@ -108,57 +84,11 @@ function VirtualizedConversationCards(props: {
   onMeasuredContentChanged: () => void;
   onCardScrollRequest: () => void;
 }) {
+  let virtualizer: VirtualizerHandle | undefined;
   let rootEl: HTMLDivElement | undefined;
-  let raf = 0;
-  let measureRaf = 0;
-  const measuredHeights = new Map<string, number>();
-  const pendingMeasurements = new Map<string, HTMLElement>();
-
-  const [scrollTop, setScrollTop] = createSignal(props.container.scrollTop);
-  const [viewportHeight, setViewportHeight] = createSignal(props.container.clientHeight);
-  const [rootTop, setRootTop] = createSignal(0);
-  const [measurementVersion, setMeasurementVersion] = createSignal(0);
   const [scrollPinID, setScrollPinID] = createSignal<string | null>(null);
 
   const order = createMemo(() => cardTreeStore.order.slice());
-  const layout = createMemo(() => {
-    const ids = order();
-    measurementVersion();
-    return buildVirtualWindowLayout({
-      count: ids.length,
-      estimatedItemSize: ESTIMATED_CARD_HEIGHT,
-      getItemSize: (index) => measuredHeights.get(ids[index]),
-    });
-  });
-
-  const syncMetrics = () => {
-    raf = 0;
-    const container = props.container;
-    setScrollTop(container.scrollTop);
-    setViewportHeight(container.clientHeight);
-    if (!rootEl) {
-      setRootTop(0);
-      return;
-    }
-    const containerRect = container.getBoundingClientRect();
-    const rootRect = rootEl.getBoundingClientRect();
-    setRootTop(Math.max(0, container.scrollTop + rootRect.top - containerRect.top));
-  };
-
-  const scheduleSyncMetrics = () => {
-    if (raf) return;
-    raf = requestAnimationFrame(syncMetrics);
-  };
-
-  const range = createMemo(() => {
-    const localScrollTop = Math.max(0, scrollTop() - rootTop());
-    return computeVirtualWindowRange(layout(), {
-      scrollTop: localScrollTop,
-      viewportHeight: viewportHeight(),
-      overscanPx: VIRTUAL_OVERSCAN_PX,
-    });
-  });
-
   const activePinID = createMemo(() => props.pinnedCardID() || scrollPinID());
 
   const topLevelIDForCard = (cardID: string): string | undefined => {
@@ -176,76 +106,14 @@ function VirtualizedConversationCards(props: {
     return undefined;
   };
 
-  const segments = createMemo(() => {
-    const ids = order();
-    const r = range();
-    const rawRanges = [{ startIndex: r.startIndex, endIndex: r.endIndex }];
+  const pinnedIndexes = createMemo(() => {
     const pinID = activePinID();
-    if (pinID) {
-      const topLevelID = topLevelIDForCard(pinID);
-      const pinnedIndex = topLevelID ? ids.indexOf(topLevelID) : -1;
-      if (pinnedIndex >= 0 && (pinnedIndex < r.startIndex || pinnedIndex >= r.endIndex)) {
-        rawRanges.push({ startIndex: pinnedIndex, endIndex: pinnedIndex + 1 });
-      }
-    }
-    rawRanges.sort((a, b) => a.startIndex - b.startIndex);
-    const merged: Array<{ startIndex: number; endIndex: number }> = [];
-    for (const item of rawRanges) {
-      const previous = merged[merged.length - 1];
-      if (previous && item.startIndex <= previous.endIndex) {
-        previous.endIndex = Math.max(previous.endIndex, item.endIndex);
-      } else {
-        merged.push({ ...item });
-      }
-    }
-
-    let previousOffset = 0;
-    return merged.map((item) => {
-      const startOffset = virtualOffsetForIndex(layout(), item.startIndex);
-      const endOffset = virtualOffsetForIndex(layout(), item.endIndex);
-      const segment = {
-        key: `${item.startIndex}:${item.endIndex}`,
-        paddingBefore: Math.max(0, startOffset - previousOffset),
-        ids: ids.slice(item.startIndex, item.endIndex),
-      };
-      previousOffset = endOffset;
-      return segment;
-    });
-  });
-
-  const bottomPadding = createMemo(() => {
-    const rendered = segments();
-    if (rendered.length === 0) return 0;
-    const last = rendered[rendered.length - 1];
+    if (!pinID) return [];
     const ids = order();
-    const lastID = last.ids[last.ids.length - 1];
-    const lastIndex = lastID ? ids.indexOf(lastID) : -1;
-    return Math.max(0, layout().totalSize - virtualOffsetForIndex(layout(), lastIndex + 1));
+    const topLevelID = topLevelIDForCard(pinID);
+    const pinnedIndex = topLevelID ? ids.indexOf(topLevelID) : -1;
+    return pinnedIndex >= 0 ? [pinnedIndex] : [];
   });
-
-  const flushMeasurements = () => {
-    measureRaf = 0;
-    let changed = false;
-    for (const [id, node] of pendingMeasurements) {
-      if (!node.isConnected) continue;
-      const height = measuredBlockHeight(node);
-      const previous = measuredHeights.get(id);
-      if (previous !== undefined && Math.abs(previous - height) < 1) continue;
-      measuredHeights.set(id, height);
-      changed = true;
-    }
-    pendingMeasurements.clear();
-    if (!changed) return;
-    setMeasurementVersion((value) => value + 1);
-    scheduleSyncMetrics();
-    props.onMeasuredContentChanged();
-  };
-
-  const onMeasure = (id: string, node: HTMLElement) => {
-    pendingMeasurements.set(id, node);
-    if (measureRaf) return;
-    measureRaf = requestAnimationFrame(flushMeasurements);
-  };
 
   const scrollTargetElement = (request: ConversationCardScrollRequest): HTMLElement | null => {
     const escaped = CSS.escape(request.cardID);
@@ -264,14 +132,14 @@ function VirtualizedConversationCards(props: {
   };
 
   const scrollCardIntoView = async (request: ConversationCardScrollRequest): Promise<boolean> => {
+    if (!virtualizer) return false;
     const topLevelID = topLevelIDForCard(request.cardID);
     if (!topLevelID) return false;
     const index = order().indexOf(topLevelID);
     if (index < 0) return false;
     props.onCardScrollRequest();
     setScrollPinID(topLevelID);
-    props.container.scrollTop = Math.max(0, rootTop() + virtualOffsetForIndex(layout(), index));
-    syncMetrics();
+    virtualizer.scrollToIndex(index, { align: request.block ?? "start" });
     await waitForAnimationFrame();
     await waitForAnimationFrame();
     const target = scrollTargetElement(request);
@@ -289,65 +157,56 @@ function VirtualizedConversationCards(props: {
     return true;
   };
 
+  const VirtualWindowShell = (shellProps: CustomContainerComponentProps) => {
+    const setRef = (node: HTMLDivElement) => {
+      rootEl = node;
+      if (typeof shellProps.ref === "function") shellProps.ref(node);
+    };
+    return (
+      <div
+        ref={setRef}
+        class="conversation-virtual-window"
+        data-count={order().length}
+        style={shellProps.style}
+      >
+        {shellProps.children}
+      </div>
+    );
+  };
+
   onMount(() => {
-    syncMetrics();
-    const container = props.container;
-    container.addEventListener("scroll", scheduleSyncMetrics, { passive: true });
-    const ro = new ResizeObserver(scheduleSyncMetrics);
-    ro.observe(container);
-    if (rootEl) ro.observe(rootEl);
+    const ro = new ResizeObserver(() => props.onMeasuredContentChanged());
+    ro.observe(props.container);
+    queueMicrotask(() => {
+      if (rootEl) ro.observe(rootEl);
+    });
     const stopCardScrollListener = listenConversationCardScroll(scrollCardIntoView);
     const onLayoutShiftSignal = () => {
-      scheduleSyncMetrics();
-      requestAnimationFrame(scheduleSyncMetrics);
+      props.onMeasuredContentChanged();
+      requestAnimationFrame(props.onMeasuredContentChanged);
     };
-    container.addEventListener("click", onLayoutShiftSignal, { passive: true });
-    container.addEventListener("transitionend", onLayoutShiftSignal, true);
+    props.container.addEventListener("click", onLayoutShiftSignal, { passive: true });
+    props.container.addEventListener("transitionend", onLayoutShiftSignal, true);
     onCleanup(() => {
-      container.removeEventListener("scroll", scheduleSyncMetrics);
-      container.removeEventListener("click", onLayoutShiftSignal);
-      container.removeEventListener("transitionend", onLayoutShiftSignal, true);
+      props.container.removeEventListener("click", onLayoutShiftSignal);
+      props.container.removeEventListener("transitionend", onLayoutShiftSignal, true);
       ro.disconnect();
-      if (raf) cancelAnimationFrame(raf);
-      if (measureRaf) cancelAnimationFrame(measureRaf);
       stopCardScrollListener();
     });
   });
 
-  createEffect(() => {
-    const liveIDs = new Set(order());
-    for (const id of measuredHeights.keys()) {
-      if (!liveIDs.has(id)) measuredHeights.delete(id);
-    }
-    scheduleSyncMetrics();
-  });
-
   return (
-    <div ref={rootEl} class="conversation-virtual-window" data-count={order().length}>
-      <Index each={segments()}>
-        {(segment) => (
-          <>
-            <Show when={segment().paddingBefore > 0}>
-              <div
-                class="conversation-virtual-spacer"
-                style={{ height: `${segment().paddingBefore}px` }}
-                aria-hidden="true"
-              />
-            </Show>
-            <For each={segment().ids}>
-              {(id) => <VirtualizedConversationItem id={id} onMeasure={onMeasure} />}
-            </For>
-          </>
-        )}
-      </Index>
-      <Show when={bottomPadding() > 0}>
-        <div
-          class="conversation-virtual-spacer"
-          style={{ height: `${bottomPadding()}px` }}
-          aria-hidden="true"
-        />
-      </Show>
-    </div>
+    <Virtualizer
+      ref={(handle) => { virtualizer = handle; }}
+      data={order()}
+      scrollRef={props.container}
+      overscan={VIRTUAL_OVERSCAN_ITEMS}
+      itemSize={ESTIMATED_CARD_HEIGHT}
+      keepMounted={pinnedIndexes()}
+      as={VirtualWindowShell}
+    >
+      {(id) => <VirtualizedConversationItem id={id} />}
+    </Virtualizer>
   );
 }
 
@@ -421,9 +280,9 @@ export function Conversation(props: { container: HTMLElement }) {
     });
     scrollController = c;
     // Conversation is rendered directly into an existing `.chat-scroll`
-    // host (see main.tsx and TaskDetailOverlay). Keeping the passive
-    // listener on that host preserves `.chat-scroll > .card` layout and
-    // browser scroll performance without introducing a wrapper element.
+    // host (see main.tsx and TaskDetailOverlay). The host remains the
+    // single scroll container while `virtua` owns only the virtualized
+    // content window inside it.
     const markHistoryIntent = () => {
       historyIntentUntil = Date.now() + 700;
     };

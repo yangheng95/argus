@@ -169,9 +169,6 @@
 }
 
 .conversation-virtual-window {
-  flex: 0 0 auto;
-  display: flex;
-  flex-direction: column;
   width: 100%;
   min-width: 0;
   max-width: 100%;
@@ -182,7 +179,8 @@
   width: 100%;
   min-width: 0;
   max-width: 100%;
-  margin-block-end: calc(8px * var(--ui-scale));
+  box-sizing: border-box;
+  padding-block-end: calc(8px * var(--ui-scale));
 }
 
 .conversation-virtual-item .chat-bubble,
@@ -191,30 +189,19 @@
   animation: none;
 }
 
-.conversation-virtual-spacer {
-  flex: 0 0 auto;
-  width: 100%;
-  min-height: 0;
-  pointer-events: none;
-}
-
 .conversation-virtual-item > .card,
-.conversation-virtual-item > .interaction-card,
-.chat-scroll > .card,
-.chat-scroll > .interaction-card {
+.conversation-virtual-item > .interaction-card {
   width: var(--conversation-card-inline-size);
   max-width: 100%;
   align-self: stretch;
 }
 
-.conversation-virtual-item > .card[data-kind="message"][data-role="user"],
-.chat-scroll > .card[data-kind="message"][data-role="user"] {
+.conversation-virtual-item > .card[data-kind="message"][data-role="user"] {
   width: var(--conversation-user-card-inline-size);
   align-self: flex-end;
 }
 
-.conversation-virtual-item > .card[data-kind="message"][data-role="system"],
-.chat-scroll > .card[data-kind="message"][data-role="system"] {
+.conversation-virtual-item > .card[data-kind="message"][data-role="system"] {
   width: var(--conversation-system-card-inline-size);
   align-self: center;
 }
@@ -224,11 +211,7 @@
   .conversation-virtual-item > .card,
   .conversation-virtual-item > .interaction-card,
   .conversation-virtual-item > .card[data-kind="message"][data-role="user"],
-  .conversation-virtual-item > .card[data-kind="message"][data-role="system"],
-  .chat-scroll > .card,
-  .chat-scroll > .interaction-card,
-  .chat-scroll > .card[data-kind="message"][data-role="user"],
-  .chat-scroll > .card[data-kind="message"][data-role="system"] {
+  .conversation-virtual-item > .card[data-kind="message"][data-role="system"] {
     width: 100%;
     align-self: stretch;
   }
@@ -1580,11 +1563,7 @@
   .conversation-virtual-item > .card,
   .conversation-virtual-item > .interaction-card,
   .conversation-virtual-item > .card[data-kind="message"][data-role="user"],
-  .conversation-virtual-item > .card[data-kind="message"][data-role="system"],
-  .chat-scroll > .card,
-  .chat-scroll > .interaction-card,
-  .chat-scroll > .card[data-kind="message"][data-role="user"],
-  .chat-scroll > .card[data-kind="message"][data-role="system"] {
+  .conversation-virtual-item > .card[data-kind="message"][data-role="system"] {
     width: 100%;
     max-width: 100%;
     align-self: stretch;
