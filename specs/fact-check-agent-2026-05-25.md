@@ -1,12 +1,31 @@
 # Fact-Check Agent 设计方案
 
-日期：2026-05-25
-作者：HengYang + Claude（codex round 1/2/3 评审已纳入）
-状态：v4 — 已纳入 codex round 3 反馈，待 round 4 复核
+日期：2026-05-25（最终化于 2026-05-26）
+作者：HengYang + Claude（codex round 1/2/3/4 评审已纳入）
+状态：**v4-final** — codex round 4 给出 `RECOMMEND_PROCEED`；剩余 3 处 minor 文档调整已纳入；进入实施
+
+---
+
+## 共识达成
+
+| 轮 | Codex VERDICT | 主要议题 |
+|---|---|---|
+| Round 1 | RECOMMEND_WITH_CHANGES | system.txt 注入误判；inline XML；CompactionHandoff 字段；target_message_id；bash/memory 权限；step cap；触点清单 |
+| Round 2 | RECOMMEND_WITH_CHANGES | 6 个 worker 实际注入点（行号）；覆盖范围矛盾；schema fallback (`default([])`)；禁词 regex (rule 20)；触点路径"推测/待复核"；契约破坏面（external executor / fixture / NATIVE_DEFAULTS / collector / overlay parser / contract test） |
+| Round 3 | RECOMMEND_WITH_CHANGES | integrity 三阶段注入误判（仅 consensus 应注入）；external executor 适配点；step 1 build 闭合 stub；`withFactCheckRegistration` 抽象函数；schema 单源位置 |
+| **Round 4** | **RECOMMEND_PROCEED** ✅ | 剩余 3 处 minor 文档落点（§8 step 4 措辞 / §7.1 hygiene 反向断言 / §6.1.3 factory 措辞）已在 v4-final 修正 |
 
 ---
 
 ## Changelog
+
+### v4 → v4-final（codex round 4 minor 文档调整）
+
+| 项 | 调整 |
+|---|---|
+| §8 step 4 残留"integrity 含 3 处" | 改为"integrity-consensus，仅 team-agent.ts:265 一处" + 同 commit 更新 hygiene inventory（避免 stub 触发反向断言） |
+| §7.1 hygiene 反向断言（"不含 fact_check_items 字面"）与 §5.3 prompt 文本（含此字段名于 NOT/forbid 上下文）冲突 | 改为"fact_check_items 字面**只能**出现在 NOT/forbid 上下文，否则 fail"——hygiene 语义化检查 |
+| §6.1.3 external executor "缺失则 inject `[]`" 字面像 fallback（rule 7） | 改为 `makeExternalBuildResult(...)` 单源 factory，恒含 `fact_check_items: []`；6 个 `structured` return literal 全部走 factory（rule 8 单源 + rule 9 抽象）；**不**做 safeParse 前 normalize |
 
 ### v3 → v4（codex round 3 评审）
 
@@ -490,7 +509,7 @@ with unresolved items marked `why_unresolved="tool_failed"`. Do NOT fabricate ev
 
 | 破坏面 | 适配 |
 |---|---|
-| 外部 executor（codex / claude-code）模式 | **单一适配点**（v4 修正）：`build/agent.ts` 中 `runWithExternalProvider` / `runWithExternalProviderImpl` 包装层，在 `BuildResultSchema.safeParse(result.structured)` **之前**做一次 normalize：若 `result.structured.fact_check_items` 缺失，注入 `[]`。**不**在 6 个 `structured` return literal（codex 验证：build/agent.ts 行 1846/1865/1954/1979/1999/2017）各自补字段——那是 rule 8 双源违规。Spec 记录"external executor 不参与 fact-check 登记"作为已知限制 |
+| 外部 executor（codex / claude-code）模式 | **单源 factory**（v4-fix codex round 4）：抽 `makeExternalBuildResult(...)` 工厂函数（建议放 `build/external-result.ts` 或合适既有文件），由 `runWithExternalProvider` / `runWithExternalProviderImpl` 中每个原 `structured` return literal（codex 验证：build/agent.ts 行 1846/1865/1954/1979/1999/2017）改为调用 factory。Factory 内部恒含 `fact_check_items: []`——**不是 runtime 缺字段补默认**（rule 7 fallback），是构造时固定字段。**不**在 safeParse 前做 normalize（那是 fallback 字面）；6 个 literal 全部走 factory（rule 8 单源 + rule 9 抽象设计模式）。Spec 记录"external executor 不参与 fact-check 登记"作为已知限制 |
 | 测试 fixture / contract test | `test/build-agent/contract-error.test.ts`、`test/build/result-schema.test.ts`、`test/agent/agent.test.ts`、整套 fixture 添加 `fact_check_items: []` 字段 |
 | Prompt-catalog NATIVE_DEFAULTS（`agent.ts`） | 每个 covered worker 的 NATIVE_DEFAULTS 入口同步含 fragment 字符串（保持 overlay prompt-catalog 显示与运行时一致） |
 | Collector report 构造 | 每个 worker 的 `getCollector()` / `buildReport()` 构造空 `fact_check_items: []` 默认，让初始 collector 状态合法 |
@@ -534,7 +553,7 @@ with unresolved items marked `why_unresolved="tool_failed"`. Do NOT fabricate ev
 | `test/orchestrator/orchestrator-tool-descriptions.test.ts` 扩展 | fact_check description 含必要关键词 |
 | `test/build-agent/contract-error.test.ts` 扩展 | BuildResultSchema 增字段后 contract test；external executor 分支空数组路径 |
 | `test/build/result-schema.test.ts`（如存在或新建） | BuildResultSchema 含必填字段 |
-| `test/agent/core-prompt-hygiene.test.ts` 扩展 | fact-check-core.txt hygiene + 反向（不含 `<fact-check>` 字面 + 不含 fact_check_items 字面） |
+| `test/agent/core-prompt-hygiene.test.ts` 扩展 | fact-check-core.txt hygiene + 反向：禁止 `<fact-check>` XML 标签字面（fact-check 自己用 schema 字段而非 inline 标签）。**允许**否定性提及 `fact_check_items`（如 "You MUST NOT emit fact_check_items in your own terminal report" — 这是反递归约束的语义化表达，不是字段使用）；hygiene 检查策略：fact_check_items 字面只能出现在 NOT/forbid 上下文，否则 fail |
 | `test/prompt/fact-check-fragment.test.ts`（新） | fragment 含必需短语 + 反向 |
 | `test/prompt/worker-prompt-composition.test.ts`（新） | 6 个 covered worker 的 `core:` 拼接含 fragment；fact-check / compaction / title / summary / orchestrator / control / coding / general 不含 |
 | `test/session/session-kinds.test.ts`（扩展或新） | `SESSION_KINDS` 含 `"fact-check"` |
@@ -574,7 +593,7 @@ with unresolved items marked `why_unresolved="tool_failed"`. Do NOT fabricate ev
 3. **Worker terminal schema 加 fact_check_items + 全套契约破坏适配**（build/types.ts + 5 个 output-tools.ts + team-schema.ts + 所有 fixture / contract test + external executor 分支构造 `[]` + collector 默认 `[]` + NATIVE_DEFAULTS 同步）+ 单测。  
    Commit: `feat(workers): require fact_check_items in terminal schemas`.
 
-4. **Prompt fragment + 6 个 worker `core:` 注入**（build/requirements/architect/design-analyst/intent-analysis/integrity，含 integrity 3 处）+ hygiene 测试。  
+4. **Prompt fragment + 6 个 worker `core:` 注入**（build / requirements / architect / design-analyst / intent-analysis / integrity-consensus，**integrity 仅 team-agent.ts:265 一处**）+ hygiene 测试 + hygiene inventory / line budget 同步更新（避免 step 1 stub 触发现有 hygiene 反向断言）。  
    Commit: `feat(prompt): inject fact-check registration fragment into worker cores`.
 
 5. **fact-check agent runtime**：`fact-check/tools.ts`、`fact-check/index.ts`（`FactCheckAgent.run`）+ cancel/error 路径 + 单测。  
@@ -647,15 +666,26 @@ with unresolved items marked `why_unresolved="tool_failed"`. Do NOT fabricate ev
 | 7. Rule 6.1 二次审视 §4.3 | 不违规；snapshot terminal = 数据完整性，cached = 幂等查询，非状态机 | 保留 |
 | 8. 任何未发现违规 | 仅指出：integrity 注入、schema 单源位置矛盾、重复拼接未抽象 — 均已在 v4 解决 | v4 已处理 |
 
-## 12. 待 codex round 4 复核
+## 12. Round 4 复核结论（codex 已答 + v4-final 已纳入）
 
-1. **§5.2 `withFactCheckRegistration()` 辅助函数**：放在 `fragments/fact-check-registration.ts` 是否合适？还是该放到 `prompt/` 更高层（无 fact-check 业务概念耦合的位置）？
-2. **§6.1.1 schema 单源 `fact-check/schema.ts`**：worker schema（如 build/types.ts）import `FactCheckItemListSchema` 是否会产生循环依赖？build/types.ts 是较底层模块，fact-check/ 是较上层——方向是否健康？
-3. **§6.1.3 external executor 单一适配点**：在 `BuildResultSchema.safeParse` 之前 normalize 字段——这算 fallback / 兼容层吗？是否违反 rule 7？我的论据：external executor 不参与 fact-check 协议是**已声明的不覆盖范围**（§1.2），normalize 是协议边界翻译而非降级兼容；类似 i18n 字段默认值。需要 codex 二次审视。
-4. **§8 step 1 stub 范围**：fact-check-core.txt 占位文本最少包含什么才能不触发 hygiene 测试（如已有 core-prompt-hygiene.test.ts）？
-5. **是否还有 CLAUDE.md 违规未发现？**
-6. **最终结论**：若全部解决，可否给 RECOMMEND_PROCEED？
+| 问题 | Round 4 回应 | v4-final 处理 |
+|---|---|---|
+| 1. `withFactCheckRegistration` 位置 | 通过；`prompt/fragments/` 是 prompt 组合片段，方向正确；只 worker `agent.ts` 导入；`build/types.ts` 不该导入 | 保留 |
+| 2. `fact-check/schema.ts` 单源循环依赖 | 通过；前提是该文件**纯 zod，零 runtime import**（不能 import Session / orchestrator / build / persist / tools），否则把 agent runtime 变成底层依赖 | spec 实施约束记录 |
+| 3. external executor normalize 是否 rule 7 fallback | 按"missing then inject"字面有风险；按"factory 永远产 `[]`"不算 | **v4-final §6.1.3 改为 factory 模式** |
+| 4. step 1 stub 范围 | stub prompt 至少进入 hygiene inventory + 行数预算 + 共享 ownership principle；不要先写会触发反向断言的字面 | v4-final §8 step 4 同步更新 hygiene inventory |
+| 5. v4 仍存在矛盾？ | 是：§8 step 4 写 "integrity 3 处"（应仅 consensus）；§7.1 反向断言与 §5.3 prompt 文本冲突 | **v4-final 已修正** |
+| 6. 是否可 PROCEED | 是；剩余皆实施时直接修的 minor 文档/落点问题 | **VERDICT: RECOMMEND_PROCEED** ✅ |
+
+## 13. 进入实施
+
+Spec 已达成共识，进入 §8 实施步骤。每步独立 commit + push，按 rule 33。
+
+实施时三个额外提醒（codex round 4 §E）：
+1. **Step 1 commit**：必须同时更新 core-prompt-hygiene inventory（行数预算、prompt 文件列表），否则 hygiene test 会因 `fact-check-core.txt` 是新文件 fail。
+2. **Step 4 commit**：integrity 只改 `team-agent.ts:265`；不要触碰 `:197` (plan) / `:404` (reviewer)。
+3. **Step 3 commit**：external executor 用 `makeExternalBuildResult(...)` factory；禁止实现成"缺字段则补默认"的通用 normalize。
 
 ---
 
-（v4 结束。等待 codex round 4 评审。）
+（spec 最终化结束。下一步：用户确认是否启动实施。）
