@@ -942,17 +942,13 @@ export type FilePart = {
 
 export type ToolStatePending = {
   status: "pending"
-  input: {
-    [key: string]: unknown
-  }
+  input: unknown
   raw: string
 }
 
 export type ToolStateRunning = {
   status: "running"
-  input: {
-    [key: string]: unknown
-  }
+  input: unknown
   title?: string
   metadata?: {
     [key: string]: unknown
@@ -964,9 +960,7 @@ export type ToolStateRunning = {
 
 export type ToolStateCompleted = {
   status: "completed"
-  input: {
-    [key: string]: unknown
-  }
+  input: unknown
   output: string
   title: string
   metadata: {
@@ -980,12 +974,21 @@ export type ToolStateCompleted = {
   attachments?: Array<FilePart>
 }
 
-export type ToolStateError = {
-  status: "error"
-  input: {
+export type ToolFailureCause = {
+  kind: string
+  name: string
+  message: string
+  originSite: string
+  classification: "tool-input-invalid" | "tool-execution" | "llm-activity" | "processor-contract"
+  data?: {
     [key: string]: unknown
   }
-  error: string
+}
+
+export type ToolStateError = {
+  status: "error"
+  input: unknown
+  failure: ToolFailureCause
   metadata?: {
     [key: string]: unknown
   }

@@ -30698,13 +30698,7 @@
             "type": "string",
             "const": "pending"
           },
-          "input": {
-            "type": "object",
-            "propertyNames": {
-              "type": "string"
-            },
-            "additionalProperties": {}
-          },
+          "input": {},
           "raw": {
             "type": "string"
           }
@@ -30722,13 +30716,7 @@
             "type": "string",
             "const": "running"
           },
-          "input": {
-            "type": "object",
-            "propertyNames": {
-              "type": "string"
-            },
-            "additionalProperties": {}
-          },
+          "input": {},
           "title": {
             "type": "string"
           },
@@ -30764,13 +30752,7 @@
             "type": "string",
             "const": "completed"
           },
-          "input": {
-            "type": "object",
-            "propertyNames": {
-              "type": "string"
-            },
-            "additionalProperties": {}
-          },
+          "input": {},
           "output": {
             "type": "string"
           },
@@ -30818,6 +30800,50 @@
           "time"
         ]
       },
+      "ToolFailureCause": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "minLength": 1
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "message": {
+            "type": "string",
+            "minLength": 1
+          },
+          "originSite": {
+            "type": "string",
+            "minLength": 1
+          },
+          "classification": {
+            "type": "string",
+            "enum": [
+              "tool-input-invalid",
+              "tool-execution",
+              "llm-activity",
+              "processor-contract"
+            ]
+          },
+          "data": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {}
+          }
+        },
+        "required": [
+          "kind",
+          "name",
+          "message",
+          "originSite",
+          "classification"
+        ]
+      },
       "ToolStateError": {
         "type": "object",
         "properties": {
@@ -30825,15 +30851,9 @@
             "type": "string",
             "const": "error"
           },
-          "input": {
-            "type": "object",
-            "propertyNames": {
-              "type": "string"
-            },
-            "additionalProperties": {}
-          },
-          "error": {
-            "type": "string"
+          "input": {},
+          "failure": {
+            "$ref": "#/components/schemas/ToolFailureCause"
           },
           "metadata": {
             "type": "object",
@@ -30861,7 +30881,7 @@
         "required": [
           "status",
           "input",
-          "error",
+          "failure",
           "time"
         ]
       },

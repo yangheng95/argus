@@ -123,3 +123,10 @@ _codex_*.log
 
 # Auto-added by OpenCorvus
 /artifacts/
+
+# Codex brief / review scratch files
+.tmp-codex-*
+_codex_*.prompt.md
+
+# SDK regen transient error logs
+packages/sdk/js/openapi-ts-error-*.log
