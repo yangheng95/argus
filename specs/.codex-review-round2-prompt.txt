@@ -1,0 +1,54 @@
+你是 opencorvus 项目的资深架构评审者。这是第 2 轮评审。请尖锐、具体，不要客套。
+
+## 上下文
+
+第 1 轮评审你已经给过 RECOMMEND_WITH_CHANGES 和具体修改建议。我已经更新方案到 v2，落盘在
+D:\myhexin-local\opencorvus\specs\fact-check-agent-2026-05-25.md
+
+v2 顶部有 changelog 说明 v1→v2 的具体修改。
+
+## 关键变化（请逐项验证你 round 1 的诉求是否被解决）
+
+1. v1 §5 "system.txt 末尾追加" 已废，改为 v2 §5 "共享 TS 常量 FACT_CHECK_REGISTRATION_FRAGMENT + 各 worker 的 prompt builder 单源导入"。我已经验证了 session/llm.ts:73-78 的事实：worker 有自己的 agent.prompt，所以 system.txt 不注入。
+2. v1 §3.1 inline `<fact-check>` XML 标签已废，改为 v2 §3.1 "fact-check 项进各 worker 的 terminal report schema"（structured field，无 chat text 污染）。
+3. v1 §3.3 CompactionHandoff schema 加字段已废（artifact-resident，跨 compaction 安全）。
+4. v1 §4.3 `target_message_id` 必填已废，改为只传 `target_session_id`，fact-check agent 自己读 latest assistant message。
+5. v1 §4.2 工具集已收紧：删 bash、memory 只保留 search/get 只读。
+6. v1 §4.1 hardcoded step cap 300 已删，走 agent config 默认。
+7. v1 §6.1 触点清单已扩充：补 SESSION_KINDS、OverlayChannel、overlay role/i18n/icon/card-color、decision_log/read_context/integrity replay、各 worker 的 terminal schema 文件、fact_check_attempt artifact 持久层。
+8. 新增：fact_check_attempt artifact（engine_artifact kind 新增）+ 幂等键 (orchestrator_session_id, target_session_id, target_message_hash)。
+9. fact-check core prompt + report schema 双重防自递归。
+10. §1.1 显式说明为什么不选你提的两个替代架构（reviewer-shape 不同 / factuality scorer 仍需 retrieval agent）。
+
+## 必答清单
+
+### A. v2 是否真的解决了你 round 1 的所有诉求？
+逐一核对你 round 1 §F 的前 3 必改项 + §A 漏掉的触点 + §C CLAUDE.md 违规清单。每项给 ✅ 解决 / ⚠️ 部分 / ❌ 未解决，附 ≤ 60 字解释。
+
+### B. v2 是否引入新的问题？
+- v2 §3.1 把 fact_check_items 加进每个 worker 的 terminal report schema：是否破坏现有 BuildResultSchema 等的契约？破坏面多大？rule 18 reset DB 是不是真的能解决，还是会让既有用户的 task 历史炸掉？
+- v2 §3.2 verdict 映射"inconclusive"判定条件 `items_inspected < items_total * 0.5`：会不会出现 0/0 (items_total=0) 的除零问题或边界异常？
+- v2 §3.3 幂等键里的 `target_message_hash`：怎么稳定 hash？target session 在 fact-check 跑时可能还在 stream（罕见但可能）。
+- v2 §5.2 单源 fragment + 多 worker 导入：实际 grep 看看各 worker 是不是真的都有 prompt builder 函数（codex round 1 提到的 systemMode="complete"），如果是直接 `agent.prompt = BUILD_CORE` 这种静态导入，那 fragment 怎么塞？
+
+### C. v2 §11 待复核问题逐项回答（每项 ≤ 100 字）
+
+### D. CLAUDE.md 违规复核
+v2 文档现在还有任何 CLAUDE.md 违规吗？引用具体的方案文字和规则编号。
+
+### E. 实施风险
+v2 §8 的实施步骤 1-11 排序是否合理？哪些步骤之间有强依赖必须串行？哪些可以并行？特别是 step 3 (overlay UI 骨架) 在没有 step 5 (agent 注册) 之前能 build / 测试通过吗？
+
+### F. 最终结论
+明确给出一个标签：
+- `RECOMMEND_PROCEED`（直接推进实施，无需再改）
+- `RECOMMEND_WITH_CHANGES`（必须改后才能推进，列出最关键前 3 项）
+- `RECOMMEND_REJECT`（建议拒绝整个方向，换替代架构）
+
+最后一行必须以 `VERDICT: <label>` 结尾。
+
+## 输出约束
+- markdown，分节
+- 全文 ≤ 3500 字
+- 对你不确定的明确说"我没查到"，不要编
+- 不修改代码，不修改方案文件
