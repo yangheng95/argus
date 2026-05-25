@@ -23,6 +23,7 @@ const KNOWN_STAGES = new Set([
   "evaluator",
   "delivery",
   "integrity",
+  "fact-check",
   "tool",
 ]);
 

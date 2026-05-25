@@ -23,6 +23,7 @@ export type AgentRole =
   | "build"
   | "explore"
   | "integrity"
+  | "fact-check"
   | "delivery"
   | "system";
 
@@ -43,6 +44,7 @@ export const AGENT_CARD_STAGES = new Set<AgentRole>([
   "build",
   "explore",
   "integrity",
+  "fact-check",
   "delivery",
   "system",
 ]);
@@ -80,6 +82,7 @@ export function normalizeAgentRole(name: string): AgentRole {
   if (text === "delivery" || text === "deliver" || text === "publish" || text === "refine") return "delivery";
   if (text === "files") return "assistant";
   if (text === "integrity") return "integrity";
+  if (text === "fact-check" || text === "fact_check" || text === "factcheck") return "fact-check";
   if (text === "system" || text === "compaction" || text === "title" || text === "summary") return "system";
   return "assistant";
 }
@@ -151,6 +154,7 @@ export function roleLabel(role: string): string {
   if (role === "explore") return t("chat.role.explore");
   if (role === "delivery") return t("chat.role.delivery");
   if (role === "integrity") return t("chat.role.integrity");
+  if (role === "fact-check") return t("chat.role.fact-check");
   return t("chat.role.assistant");
 }
 
@@ -211,6 +215,7 @@ export function agentStageLabel(stage: string): string {
   if (role === "explore") return t("chat.role.explore");
   if (role === "delivery") return t("chat.role.delivery");
   if (role === "integrity") return t("chat.role.integrity");
+  if (role === "fact-check") return t("chat.role.fact-check");
   return t("chat.role.assistant");
 }
 
