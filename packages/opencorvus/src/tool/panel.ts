@@ -1,6 +1,7 @@
 import z from "zod"
 import { Tool } from "./tool"
 import { EngineService } from "@/task-api"
+import { findChildrenOfTask } from "@/engine"
 import { Session } from "@/session"
 import { Question } from "@/question"
 import { captureWindowScreenshot } from "@/gui/screenshot"
@@ -96,6 +97,51 @@ export const PanelTool = Tool.define("panel", {
           output: board.tasks.length === 0
             ? "No tasks found."
             : board.tasks.map((item, index) => `${index + 1}. ${item.task.title} [${item.task.status}] (${item.task.id})`).join("\n"),
+          metadata: {},
+        }
+      }
+      case "query_task": {
+        // Structured batch reconciliation for agents (gateway-master, etc.).
+        // view_board is the prose surface; this is the stable JSON surface.
+        // Each input ID maps to one output entry — failures (not found,
+        // cross-project, etc.) surface as { taskID, error } so the caller
+        // gets a deterministic 1:1 row count back.
+        const results = await Promise.all(
+          params.taskIDs.map(async (taskID) => {
+            try {
+              const board = await EngineService.getBoard(taskID)
+              const item: Record<string, unknown> = {
+                taskID: board.task.id,
+                title: board.task.title,
+                status: board.task.status,
+                created: board.task.time?.created,
+              }
+              if (board.task.error) item.error = board.task.error
+              if (board.task.time?.started) item.started = board.task.time.started
+              if (board.task.time?.completed) item.completed = board.task.time.completed
+              if (board.evaluation) {
+                item.evaluation = { verdict: board.evaluation.verdict, summary: board.evaluation.summary }
+              }
+              if (board.delivery) {
+                item.delivery = { summary: board.delivery.summary }
+              }
+              if (params.includeChildren) {
+                item.children = findChildrenOfTask(taskID)
+              }
+              if (params.includeInteractions) {
+                item.pendingInteractions = (board.interactions ?? []).filter(
+                  (req) => req.status === "pending",
+                ).length
+              }
+              return item
+            } catch (err) {
+              return { taskID, error: err instanceof Error ? err.message : String(err) }
+            }
+          }),
+        )
+        return {
+          title: "Tasks",
+          output: JSON.stringify({ tasks: results }),
           metadata: {},
         }
       }
