@@ -4,7 +4,7 @@ import { EngineService } from "@/task-api"
 import { Session } from "@/session"
 import { Question } from "@/question"
 import { captureWindowScreenshot } from "@/gui/screenshot"
-import { PanelActionSchema } from "@/panel/capability"
+import { PanelActionSchema, derivePanelActor } from "@/panel/capability"
 import { isDecodableText, decodeDataUrlText, decodeDataUrlBase64 } from "@/session/text-mime"
 
 const localOnly = (ctx: Tool.Context) => ctx.extra?.surface === "panel"
@@ -172,7 +172,11 @@ export const PanelTool = Tool.define("panel", {
               }
             : {}),
           ...(binaryAttachments.length > 0 ? { attachments: binaryAttachments } : {}),
-          metadata: params.metadata,
+          // Server-derived `actor` is the authoritative provenance field;
+          // any client-supplied `actor` in params.metadata is overridden so
+          // callers cannot forge the audit trail. See PanelActor in
+          // panel/capability.ts.
+          metadata: { ...(params.metadata ?? {}), actor: derivePanelActor(ctx.agent) },
         })
         return {
           title: "Task created",
