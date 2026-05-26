@@ -170,8 +170,8 @@
 | POST | `/gateway/channel/{platform}/message` | Handle gateway channel message | `gateway.channel.message` |
 | POST | `/gateway/control/action` | Run gateway control action | `gateway.control.action` |
 | POST | `/gateway/control/message` | Handle gateway control message | `gateway.control.message` |
+| POST | `/gateway/master/wake` | Wake the gateway-master mission supervisor | `gateway.master.wake` |
 | GET | `/gateway/stats` | Get gateway stats | `gateway.stats` |
-| POST | `/gateway/task/decompose` | Propose task decomposition | `gateway.task.decompose` |
 
 ### Attachment
 

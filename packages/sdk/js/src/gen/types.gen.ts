@@ -445,6 +445,13 @@ export type EventDeliveryEvidenceUpdated = {
   }
 }
 
+export type FactCheckItem = {
+  claim: string
+  confidence: "low" | "medium" | "high"
+  category: "api" | "library" | "number" | "history" | "path" | "protocol" | "other"
+  source: string
+}
+
 export type EventIntegrityReviewCompleted = {
   type: "integrity.review.completed"
   properties: {
@@ -456,6 +463,25 @@ export type EventIntegrityReviewCompleted = {
       scope: string
       verdict: "pass" | "concerns" | "needs_correction"
       summary: string
+      investigationPlan?: {
+        requestPromise: string
+        hypothesis: string
+        evidencePlan: Array<string>
+        passCriteria: Array<string>
+      }
+      drilldowns?: Array<{
+        kind: string
+        target: string
+        purpose: string
+        result: string
+      }>
+      coverage?: Array<{
+        requirementID?: string
+        specID?: string
+        userRequestQuote?: string
+        status: "covered" | "missing" | "inconclusive"
+        evidence: string
+      }>
       evidence?: Array<string>
       findings?: Array<{
         id: string
@@ -480,6 +506,17 @@ export type EventIntegrityReviewCompleted = {
         consensus?: "agreed" | "disputed" | "unresolved"
       }>
       openQuestions?: Array<string>
+    }>
+    coverageAudit?: Array<{
+      promise: string
+      reviewerIDs?: Array<string>
+      status: "covered" | "missing" | "inconclusive"
+      notes: string
+    }>
+    uninspectedRisks?: Array<{
+      risk: string
+      reason: string
+      action: "block" | "re-review" | "advisory"
     }>
     findings?: Array<{
       id: string
@@ -533,6 +570,10 @@ export type EventIntegrityReviewCompleted = {
       reviewerIDs: Array<string>
       consequence: string
     }>
+    /**
+     * Every factual claim (API behaviour, library version, third-party protocol, number, path, history) the integrity team has NOT verified via tool calls in this session. Empty when only review judgments or in-session-verified statements.
+     */
+    fact_check_items: Array<FactCheckItem>
     taskID: string
     sessionID: string
     attempts: number
@@ -1524,6 +1565,7 @@ export type Session = {
     | "goal"
     | "architect"
     | "integrity"
+    | "fact-check"
     | "delivery"
     | "executor"
     | "build"
@@ -2746,6 +2788,10 @@ export type Config = {
      */
     continue_loop_on_deny?: boolean
     /**
+     * Require user confirmation before the orchestrator creates proposed follow-up tasks
+     */
+    confirm_proposed_tasks?: boolean
+    /**
      * Auto-reject unanswered question interactions after the five-minute stale timeout. Independent fine-grained switch. When false, questions wait indefinitely for a user reply.
      */
     auto_question?: boolean
@@ -2779,6 +2825,13 @@ export type BadRequestError = {
     [key: string]: unknown
   }>
   success: false
+}
+
+export type ReplyTargetEnvelopeMissingError = {
+  name: "ReplyTargetEnvelopeMissingError"
+  data: {
+    [key: string]: unknown
+  }
 }
 
 export type OAuth = {
@@ -3019,6 +3072,7 @@ export type GlobalSession = {
     | "goal"
     | "architect"
     | "integrity"
+    | "fact-check"
     | "delivery"
     | "executor"
     | "build"
@@ -3132,6 +3186,13 @@ export type CodingCliProfileList = {
 
 export type CodingCliOpenResponse = {
   ok: boolean
+}
+
+export type SessionRuntimeContractMissingError = {
+  name: "SessionRuntimeContractMissingError"
+  data: {
+    [key: string]: unknown
+  }
 }
 
 export type Symbol = {
@@ -3390,6 +3451,15 @@ export type GlobalDbResetData = {
   query?: never
   url: "/global/db/reset"
 }
+
+export type GlobalDbResetErrors = {
+  /**
+   * Reply target not ready
+   */
+  409: ReplyTargetEnvelopeMissingError
+}
+
+export type GlobalDbResetError = GlobalDbResetErrors[keyof GlobalDbResetErrors]
 
 export type GlobalDbResetResponses = {
   /**
@@ -4578,6 +4648,7 @@ export type SessionCreateData = {
       | "goal"
       | "architect"
       | "integrity"
+      | "fact-check"
       | "delivery"
       | "executor"
       | "build"
@@ -7058,6 +7129,12 @@ export type GatewayControlActionData = {
         action: "view_tasks"
       }
     | {
+        action: "query_task"
+        taskIDs: Array<string>
+        includeChildren?: boolean
+        includeInteractions?: boolean
+      }
+    | {
         action: "create_task"
         request: string
         request_id?: string
@@ -7383,68 +7460,31 @@ export type GatewayControlActionResponses = {
 
 export type GatewayControlActionResponse = GatewayControlActionResponses[keyof GatewayControlActionResponses]
 
-export type GatewayTaskDecomposeData = {
+export type GatewayMasterWakeData = {
   body?: {
-    requirement: string
-    executor?: "opencorvus" | "codex" | "claude-code"
+    missionID?: string
+    text: string
+    title?: string
   }
   path?: never
   query?: {
     directory?: string
   }
-  url: "/gateway/task/decompose"
+  url: "/gateway/master/wake"
 }
 
-export type GatewayTaskDecomposeResponses = {
+export type GatewayMasterWakeResponses = {
   /**
-   * Decomposition proposal
+   * Master wake accepted
    */
   200: {
-    proposal_id: string
-    requirement: string
-    summary: string
-    tasks: Array<{
-      /**
-       * Stable within-proposal identifier in snake_case (e.g. "add_login_route"). Used by other candidates' `dependencies` lists.
-       */
-      id: string
-      /**
-       * Imperative, concise task title (≤80 chars).
-       */
-      title: string
-      /**
-       * Detailed actionable description of the task — what to do and the rough scope.
-       */
-      description: string
-      /**
-       * Concrete acceptance criteria. Each item is a single observable condition.
-       */
-      acceptance?: Array<string>
-      /**
-       * Priority bucket. Default to "normal"; raise to "high" or "critical" only when other candidates depend on this one or it's a blocker.
-       */
-      priority: "critical" | "high" | "normal" | "low"
-      /**
-       * Optional executor hint. Leave empty unless the task strongly favours a specific executor.
-       */
-      executor?: "opencorvus" | "codex" | "claude-code"
-      /**
-       * true = recommended to enter the directory queue, false = recommended to start immediately and bypass the directory queue.
-       */
-      recommended_queue: boolean
-      /**
-       * Within-proposal dependency IDs (must match other candidates' `id` fields). Empty for independent tasks.
-       */
-      dependencies?: Array<string>
-      /**
-       * Short risk notes (one per item). Empty when no notable risk.
-       */
-      risks?: Array<string>
-    }>
+    missionID: string
+    sessionID: string
+    created: boolean
   }
 }
 
-export type GatewayTaskDecomposeResponse = GatewayTaskDecomposeResponses[keyof GatewayTaskDecomposeResponses]
+export type GatewayMasterWakeResponse = GatewayMasterWakeResponses[keyof GatewayMasterWakeResponses]
 
 export type GatewayChannelMessageData = {
   body?: {
@@ -10168,13 +10208,39 @@ export type TaskSessionReplyData = {
 
 export type TaskSessionReplyErrors = {
   /**
-   * Bad request
+   * Reply rejected before persistence
    */
-  400: BadRequestError
+  400:
+    | {
+        name: "InvalidReplyTargetKindError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "BuildSessionDirectReplyError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "MissingModelConfigError"
+        data: {
+          [key: string]: unknown
+        }
+      }
   /**
    * Not found
    */
   404: NotFoundError
+  /**
+   * Reply target not ready
+   */
+  409: ReplyTargetEnvelopeMissingError
+  /**
+   * Session runtime contract no longer present
+   */
+  410: SessionRuntimeContractMissingError
 }
 
 export type TaskSessionReplyError = TaskSessionReplyErrors[keyof TaskSessionReplyErrors]
@@ -11390,6 +11456,10 @@ export type ExportImportErrors = {
    * Bad request
    */
   400: BadRequestError
+  /**
+   * Reply target not ready
+   */
+  409: ReplyTargetEnvelopeMissingError
 }
 
 export type ExportImportError = ExportImportErrors[keyof ExportImportErrors]

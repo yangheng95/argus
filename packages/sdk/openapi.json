@@ -55,13 +55,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.global.health({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/global/event": {
@@ -80,13 +74,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.global.event({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/global/config": {
@@ -105,13 +93,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.global.config.get({\n  ...\n})"
-          }
-        ]
+        }
       },
       "patch": {
         "operationId": "global.config.update",
@@ -147,13 +129,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.global.config.update({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/global/dispose": {
@@ -172,13 +148,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.global.dispose({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/global/db/reset": {
@@ -230,6 +200,16 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "Reply target not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReplyTargetEnvelopeMissingError"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -249,13 +229,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.global.db.reset({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/auth/{providerID}": {
@@ -303,13 +277,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.auth.set({\n  ...\n})"
-          }
-        ]
+        }
       },
       "delete": {
         "operationId": "auth.remove",
@@ -346,12 +314,6 @@
             },
             "required": true
           }
-        ],
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.auth.remove({\n  ...\n})"
-          }
         ]
       }
     },
@@ -383,13 +345,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.project.list({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/project/current": {
@@ -417,13 +373,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.project.current({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/project/current/init-git": {
@@ -471,13 +421,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.project.current.initGit({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/project/{projectID}": {
@@ -570,13 +514,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.project.update({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/terminal/profiles": {
@@ -614,13 +552,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.terminal.profiles({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/terminal/open": {
@@ -680,13 +612,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.terminal.open({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/config": {
@@ -714,13 +640,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.config.get({\n  ...\n})"
-          }
-        ]
+        }
       },
       "patch": {
         "operationId": "config.update",
@@ -769,13 +689,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.config.update({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/config/prompt": {
@@ -804,13 +718,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.config.prompt({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/config/providers": {
@@ -859,13 +767,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.config.providers({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/channel": {
@@ -969,13 +871,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.channel.list({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/channel/attachment": {
@@ -1065,13 +961,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.channel.attachment.create({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/channel/attachment/{id}": {
@@ -1117,13 +1007,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.channel.attachment.get({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/channel/message": {
@@ -1388,13 +1272,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.channel.message({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/channel/runtime": {
@@ -1468,13 +1346,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.channel.runtime({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/channel/runtime/restart": {
@@ -1548,13 +1420,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.channel.runtime.restart({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/executor": {
@@ -1683,13 +1549,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.executor.list({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/executor/{executorID}/model": {
@@ -1730,13 +1590,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.executor.getModel({\n  ...\n})"
-          }
-        ]
+        }
       },
       "patch": {
         "operationId": "executor.setModel",
@@ -1781,13 +1635,7 @@
           "404": {
             "description": "Executor not found or does not support model switching"
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.executor.setModel({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/experimental/tool/ids": {
@@ -1825,13 +1673,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.tool.ids({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/experimental/tool": {
@@ -1885,13 +1727,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.tool.list({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/experimental/worktree": {
@@ -1938,13 +1774,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.worktree.create({\n  ...\n})"
-          }
-        ]
+        }
       },
       "get": {
         "operationId": "worktree.list",
@@ -1973,13 +1803,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.worktree.list({\n  ...\n})"
-          }
-        ]
+        }
       },
       "delete": {
         "operationId": "worktree.remove",
@@ -2024,13 +1848,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.worktree.remove({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/experimental/workspace/{id}": {
@@ -2118,13 +1936,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.experimental.workspace.create({\n  ...\n})"
-          }
-        ]
+        }
       },
       "delete": {
         "operationId": "experimental.workspace.remove",
@@ -2169,13 +1981,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.experimental.workspace.remove({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/experimental/workspace": {
@@ -2206,13 +2012,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.experimental.workspace.list({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/experimental/worktree/reset": {
@@ -2259,13 +2059,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.worktree.reset({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/experimental/schedule": {
@@ -2361,13 +2155,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.experimental.schedule.list({\n  ...\n})"
-          }
-        ]
+        }
       },
       "post": {
         "operationId": "experimental.schedule.create",
@@ -2443,13 +2231,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.experimental.schedule.create({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/experimental/schedule/{id}": {
@@ -2500,13 +2282,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.experimental.schedule.delete({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/experimental/event-schedule": {
@@ -2618,13 +2394,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.experimental.eventschedule.list({\n  ...\n})"
-          }
-        ]
+        }
       },
       "post": {
         "operationId": "experimental.eventschedule.create",
@@ -2724,13 +2494,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.experimental.eventschedule.create({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/experimental/event-schedule/{id}": {
@@ -2781,13 +2545,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.experimental.eventschedule.delete({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/experimental/task-plan": {
@@ -2856,13 +2614,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.experimental.taskplan.list({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/experimental/scratchpad": {
@@ -2905,13 +2657,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.experimental.scratchpad.get({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/experimental/resource": {
@@ -2945,13 +2691,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.experimental.resource.list({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/session": {
@@ -3015,13 +2755,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.session.list({\n  ...\n})"
-          }
-        ]
+        }
       },
       "post": {
         "operationId": "session.create",
@@ -3077,6 +2811,7 @@
                       "goal",
                       "architect",
                       "integrity",
+                      "fact-check",
                       "delivery",
                       "executor",
                       "build",
@@ -3106,13 +2841,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.session.create({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/session/global": {
@@ -3192,13 +2921,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.session.listGlobal({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/session/status": {
@@ -3242,13 +2965,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.session.status({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/session/{sessionID}/config": {
@@ -3305,13 +3022,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.session.config.get({\n  ...\n})"
-          }
-        ]
+        }
       },
       "patch": {
         "operationId": "session.config.update",
@@ -3497,13 +3208,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.session.config.update({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/session/{sessionID}": {
@@ -3563,13 +3268,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.session.get({\n  ...\n})"
-          }
-        ]
+        }
       },
       "delete": {
         "operationId": "session.delete",
@@ -3631,13 +3330,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.session.delete({\n  ...\n})"
-          }
-        ]
+        }
       },
       "patch": {
         "operationId": "session.update",
@@ -3713,13 +3406,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.session.update({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/session/{sessionID}/children": {
@@ -3782,13 +3469,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.session.children({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/session/{sessionID}/todo": {
@@ -3848,13 +3529,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.session.todo({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/session/{sessionID}/init": {
@@ -3937,13 +3612,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.session.init({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/session/{sessionID}/fork": {
@@ -3995,13 +3664,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.session.fork({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/session/{sessionID}/abort": {
@@ -4057,13 +3720,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.session.abort({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/session/{sessionID}/diff": {
@@ -4111,13 +3768,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.session.diff({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/session/{sessionID}/summarize": {
@@ -4202,13 +3853,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.session.summarize({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/session/{sessionID}/message": {
@@ -4290,13 +3935,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.session.messages({\n  ...\n})"
-          }
-        ]
+        }
       },
       "post": {
         "operationId": "session.prompt",
@@ -4456,13 +4095,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.session.prompt({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/session/{sessionID}/message/{messageID}": {
@@ -4543,13 +4176,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.session.message({\n  ...\n})"
-          }
-        ]
+        }
       },
       "delete": {
         "operationId": "session.deleteMessage",
@@ -4613,13 +4240,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.session.deleteMessage({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/session/{sessionID}/message/{messageID}/part/{partID}": {
@@ -4693,13 +4314,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.part.delete({\n  ...\n})"
-          }
-        ]
+        }
       },
       "patch": {
         "operationId": "part.update",
@@ -4780,13 +4395,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.part.update({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/session/{sessionID}/prompt_async": {
@@ -4941,13 +4550,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.session.prompt_async({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/session/{sessionID}/prompt_async/{taskID}": {
@@ -5099,13 +4702,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.session.prompt_async_status({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/session/{sessionID}/command": {
@@ -5247,13 +4844,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.session.command({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/session/{sessionID}/shell": {
@@ -5346,13 +4937,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.session.shell({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/permission/{requestID}/reply": {
@@ -5437,13 +5022,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.permission.reply({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/permission": {
@@ -5474,13 +5053,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.permission.list({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/question": {
@@ -5511,13 +5084,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.question.list({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/question/{requestID}/reply": {
@@ -5594,13 +5161,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.question.reply({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/question/{requestID}/reject": {
@@ -5656,13 +5217,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.question.reject({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/provider": {
@@ -5960,13 +5515,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.provider.list({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/provider/auth": {
@@ -6003,13 +5552,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.provider.auth({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/provider/refresh": {
@@ -6051,13 +5594,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.provider.refresh({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/provider/hexin/refresh": {
@@ -6107,13 +5644,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.provider.hexin.refresh({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/provider/{providerID}/test": {
@@ -6202,13 +5733,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.provider.test({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/provider/{providerID}/auth/prompts": {
@@ -6286,13 +5811,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.provider.auth.prompts({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/provider/{providerID}/auth/execute": {
@@ -6367,13 +5886,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.provider.auth.execute({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/provider/{providerID}/oauth/authorize": {
@@ -6448,13 +5961,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.provider.oauth.authorize({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/provider/{providerID}/oauth/callback": {
@@ -6523,13 +6030,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.provider.oauth.callback({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/skill": {
@@ -6655,13 +6156,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.app.skills({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/skill/installed": {
@@ -6855,13 +6350,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.skill.installed({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/skill/market": {
@@ -6945,13 +6434,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.skill.market({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/skill/directories": {
@@ -6995,13 +6478,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.skill.directories({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/skill/install": {
@@ -7079,13 +6556,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.skill.install({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/skill/remove": {
@@ -7139,13 +6610,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.skill.remove({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/skill/policy": {
@@ -7195,13 +6660,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.skill.policy({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/panel/capabilities": {
@@ -7381,13 +6840,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.panel.capabilities({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/panel/message": {
@@ -7639,13 +7092,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.panel.message({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/panel/message/stream": {
@@ -7897,13 +7344,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.panel.message.stream({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/panel/knowledge/memory": {
@@ -7990,13 +7431,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.panel.knowledge.memory.list({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/panel/knowledge/memory/{id}": {
@@ -8086,13 +7521,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.panel.knowledge.memory.get({\n  ...\n})"
-          }
-        ]
+        }
       },
       "delete": {
         "operationId": "panel.knowledge.memory.delete",
@@ -8133,13 +7562,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.panel.knowledge.memory.delete({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/panel/knowledge/memory/search": {
@@ -8244,13 +7667,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.panel.knowledge.memory.search({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/control/timeline": {
@@ -8429,13 +7846,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.control.timeline({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/coding/cli/profiles": {
@@ -8463,13 +7874,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.coding.cli.profiles({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/coding/cli/open": {
@@ -8525,13 +7930,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.coding.cli.open({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/coding/message/stream": {
@@ -8597,13 +7996,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.coding.message.stream({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/coding/session/{sessionID}/messages": {
@@ -8637,13 +8030,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.coding.session.messages({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/gateway/capabilities": {
@@ -8797,13 +8184,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.gateway.capabilities({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/gateway/stats": {
@@ -8973,13 +8354,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.gateway.stats({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/gateway/control/message": {
@@ -9213,13 +8588,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.gateway.control.message({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/gateway/control/action": {
@@ -9314,6 +8683,34 @@
                     },
                     "required": [
                       "action"
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "action": {
+                        "type": "string",
+                        "const": "query_task"
+                      },
+                      "taskIDs": {
+                        "minItems": 1,
+                        "maxItems": 50,
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "includeChildren": {
+                        "type": "boolean"
+                      },
+                      "includeInteractions": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "action",
+                      "taskIDs"
                     ]
                   },
                   {
@@ -10606,18 +10003,12 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.gateway.control.action({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
-    "/gateway/task/decompose": {
+    "/gateway/master/wake": {
       "post": {
-        "operationId": "gateway.task.decompose",
+        "operationId": "gateway.master.wake",
         "parameters": [
           {
             "in": "query",
@@ -10627,109 +10018,33 @@
             }
           }
         ],
-        "summary": "Propose task decomposition",
-        "description": "Run a one-shot LLM call that turns a free-text big requirement into a structured proposal of small task candidates. The endpoint is read-only — no engine_task or session row is written. The Gateway page presents the proposal to the operator, who chooses which candidates to actually create via POST /task.",
+        "summary": "Wake the gateway-master mission supervisor",
+        "description": "Start (or resume) a mission supervisor session and inject a user prompt. Omit `missionID` to start a new mission; supply it to resume an existing one. The route is idempotent for (project, missionID) — channelKey `master:<missionID>` keys exactly one gateway session per mission.",
         "responses": {
           "200": {
-            "description": "Decomposition proposal",
+            "description": "Master wake accepted",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "proposal_id": {
+                    "missionID": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 64,
+                      "pattern": "^[a-z0-9-]+$"
+                    },
+                    "sessionID": {
                       "type": "string"
                     },
-                    "requirement": {
-                      "type": "string"
-                    },
-                    "summary": {
-                      "type": "string"
-                    },
-                    "tasks": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "properties": {
-                          "id": {
-                            "description": "Stable within-proposal identifier in snake_case (e.g. \"add_login_route\"). Used by other candidates' `dependencies` lists.",
-                            "type": "string",
-                            "minLength": 1
-                          },
-                          "title": {
-                            "description": "Imperative, concise task title (≤80 chars).",
-                            "type": "string",
-                            "minLength": 1
-                          },
-                          "description": {
-                            "description": "Detailed actionable description of the task — what to do and the rough scope.",
-                            "type": "string",
-                            "minLength": 1
-                          },
-                          "acceptance": {
-                            "description": "Concrete acceptance criteria. Each item is a single observable condition.",
-                            "default": [],
-                            "type": "array",
-                            "items": {
-                              "type": "string",
-                              "minLength": 1
-                            }
-                          },
-                          "priority": {
-                            "description": "Priority bucket. Default to \"normal\"; raise to \"high\" or \"critical\" only when other candidates depend on this one or it's a blocker.",
-                            "type": "string",
-                            "enum": [
-                              "critical",
-                              "high",
-                              "normal",
-                              "low"
-                            ]
-                          },
-                          "executor": {
-                            "description": "Optional executor hint. Leave empty unless the task strongly favours a specific executor.",
-                            "type": "string",
-                            "enum": [
-                              "opencorvus",
-                              "codex",
-                              "claude-code"
-                            ]
-                          },
-                          "recommended_queue": {
-                            "description": "true = recommended to enter the directory queue, false = recommended to start immediately and bypass the directory queue.",
-                            "type": "boolean"
-                          },
-                          "dependencies": {
-                            "description": "Within-proposal dependency IDs (must match other candidates' `id` fields). Empty for independent tasks.",
-                            "default": [],
-                            "type": "array",
-                            "items": {
-                              "type": "string"
-                            }
-                          },
-                          "risks": {
-                            "description": "Short risk notes (one per item). Empty when no notable risk.",
-                            "default": [],
-                            "type": "array",
-                            "items": {
-                              "type": "string"
-                            }
-                          }
-                        },
-                        "required": [
-                          "id",
-                          "title",
-                          "description",
-                          "priority",
-                          "recommended_queue"
-                        ]
-                      }
+                    "created": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
-                    "proposal_id",
-                    "requirement",
-                    "summary",
-                    "tasks"
+                    "missionID",
+                    "sessionID",
+                    "created"
                   ]
                 }
               }
@@ -10742,33 +10057,30 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "requirement": {
+                  "missionID": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64,
+                    "pattern": "^[a-z0-9-]+$"
+                  },
+                  "text": {
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 32000
                   },
-                  "executor": {
+                  "title": {
                     "type": "string",
-                    "enum": [
-                      "opencorvus",
-                      "codex",
-                      "claude-code"
-                    ]
+                    "minLength": 1,
+                    "maxLength": 120
                   }
                 },
                 "required": [
-                  "requirement"
+                  "text"
                 ]
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.gateway.task.decompose({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/gateway/channel/{platform}/message": {
@@ -11040,13 +10352,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.gateway.channel.message({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/shutdown": {
@@ -11082,13 +10388,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.server.shutdown({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/restart": {
@@ -11124,13 +10424,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.server.restart({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/task": {
@@ -12618,13 +11912,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.task.create({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/tasks": {
@@ -13266,13 +12554,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.task.list({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/global/tasks": {
@@ -13923,13 +13205,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.task.global.list({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/task-queue/reorder": {
@@ -14009,13 +13285,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.task.queue.reorder({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/task/{taskID}/start-now": {
@@ -14283,13 +13553,7 @@
           "422": {
             "description": "Task has no working directory"
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.task.queue.startNow({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/task/events": {
@@ -14367,13 +13631,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.task.list.events({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/task/{taskID}": {
@@ -14608,13 +13866,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.task.get({\n  ...\n})"
-          }
-        ]
+        }
       },
       "delete": {
         "operationId": "task.delete",
@@ -14651,13 +13903,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.task.delete({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/task/{taskID}/bindings": {
@@ -14734,13 +13980,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.task.bindings({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/task/{taskID}/progress": {
@@ -15752,13 +14992,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.task.progress({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/task/{taskID}/events": {
@@ -15879,13 +15113,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.task.events({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/task/{taskID}/conversation": {
@@ -18045,13 +17273,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.task.conversation({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/task/{taskID}/conversation/history": {
@@ -18257,13 +17479,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.task.conversation.history({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/task/{taskID}/conversation/events": {
@@ -18483,13 +17699,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.task.conversation.events({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/task/{taskID}/brief": {
@@ -18581,13 +17791,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.task.brief({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/task/{taskID}/board": {
@@ -20379,13 +19583,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.task.board({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/task/{taskID}/transcript": {
@@ -20449,13 +19647,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.task.transcript({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/task/{taskID}/runs": {
@@ -20628,13 +19820,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.task.runs({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/task/{taskID}/interactions": {
@@ -20776,13 +19962,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.task.interactions({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/task/{taskID}/message": {
@@ -20923,13 +20103,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.task.message({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/task/{taskID}/inject": {
@@ -21027,13 +20201,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.task.inject({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/task/{taskID}/session/{sessionID}/reply": {
@@ -21067,7 +20235,7 @@
           }
         ],
         "summary": "Reply directly to a task agent session",
-        "description": "Append a human-authored message to a non-orchestrator task agent session. This is scoped input for the target agent session, not a global task routing command.",
+        "description": "Append a human-authored message to a non-orchestrator task agent session. This is scoped input for the target agent session, not a global task routing command. Returns 400 InvalidReplyTargetKindError / BuildSessionDirectReplyError for kinds the route refuses, 409 ReplyTargetEnvelopeMissingError when the session has no prior user envelope yet, and 410 SessionRuntimeContractMissingError when the in-memory runtime contract is gone (process restart or terminal collector already satisfied) — the overlay uses these to decide whether to retry, hide the reply box, or surface a generic failure.",
         "responses": {
           "202": {
             "description": "Reply accepted",
@@ -21099,11 +20267,72 @@
             }
           },
           "400": {
-            "description": "Bad request",
+            "description": "Reply rejected before persistence",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/BadRequestError"
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "const": "InvalidReplyTargetKindError"
+                        },
+                        "data": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {}
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "data"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "const": "BuildSessionDirectReplyError"
+                        },
+                        "data": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {}
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "data"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "const": "MissingModelConfigError"
+                        },
+                        "data": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {}
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "data"
+                      ]
+                    }
+                  ]
                 }
               }
             }
@@ -21114,6 +20343,26 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Reply target not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReplyTargetEnvelopeMissingError"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Session runtime contract no longer present",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionRuntimeContractMissingError"
                 }
               }
             }
@@ -21158,13 +20407,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.task.session.reply({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/task/{taskID}/session/{sessionID}/cancel": {
@@ -21249,13 +20492,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.task.session.cancel({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/task/{taskID}/cancel": {
@@ -21301,13 +20538,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.task.cancel({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/task/{taskID}/rewind": {
@@ -21453,13 +20684,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.task.rewind({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/task/{taskID}/rewind/clear": {
@@ -21505,13 +20730,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.task.rewind.clear({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/task/{taskID}/retry": {
@@ -21681,13 +20900,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.task.retry({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/task/{taskID}/replan": {
@@ -21857,13 +21070,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.task.replan({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/task/{taskID}/followup": {
@@ -21917,13 +21124,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.task.followup({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/run/{runID}": {
@@ -22093,13 +21294,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.run.get({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/run/{runID}/executor": {
@@ -22369,13 +21564,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.run.executorSession({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/run/{runID}/brief": {
@@ -22467,13 +21656,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.run.brief({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/run/{runID}/abort": {
@@ -22519,13 +21702,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.run.abort({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/run/{runID}/delivery": {
@@ -22678,13 +21855,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.run.delivery({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/goal-run/{goalRunID}/delivery": {
@@ -22844,13 +22015,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.goalRun.delivery({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/session/{sessionID}/trace": {
@@ -22944,13 +22109,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.session.trace({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/task/{taskID}/trace": {
@@ -23054,13 +22213,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.task.trace({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/run/{runID}/artifacts": {
@@ -23181,13 +22334,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.run.artifacts({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/run/{runID}/evaluations": {
@@ -23342,13 +22489,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.run.evaluations({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/interaction/{interactionID}/reply": {
@@ -23531,13 +22672,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.interaction.reply({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/interaction/{interactionID}/reject": {
@@ -23706,13 +22841,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.interaction.reject({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/goal/{goalID}": {
@@ -24113,13 +23242,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.goal.update({\n  ...\n})"
-          }
-        ]
+        }
       },
       "delete": {
         "operationId": "goal.delete",
@@ -24162,13 +23285,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.goal.delete({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/task/{taskID}/budget": {
@@ -24238,13 +23355,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.task.updateBudget({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/export/task/{taskID}": {
@@ -24342,13 +23453,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.export.task({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/export/task/{taskID}/archive": {
@@ -24396,13 +23501,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.export.task.archive({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/export/import": {
@@ -24485,14 +23584,18 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "Reply target not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReplyTargetEnvelopeMissingError"
+                }
+              }
+            }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.export.import({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/export/session/{sessionID}": {
@@ -24548,13 +23651,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.export.session({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/find": {
@@ -24660,13 +23757,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.find.text({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/find/file": {
@@ -24736,13 +23827,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.find.files({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/find/symbol": {
@@ -24781,13 +23866,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.find.symbols({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/file": {
@@ -24826,13 +23905,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.file.list({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/file/content": {
@@ -24868,13 +23941,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.file.read({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/file/status": {
@@ -24905,13 +23972,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.file.status({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/attachment/{projectID}/{name}": {
@@ -24950,13 +24011,7 @@
           "404": {
             "description": "Not found"
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.attachment.get({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/mcp": {
@@ -24990,13 +24045,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.mcp.status({\n  ...\n})"
-          }
-        ]
+        }
       },
       "post": {
         "operationId": "mcp.add",
@@ -25066,13 +24115,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.mcp.add({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/mcp/{name}/auth": {
@@ -25137,13 +24180,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.mcp.auth.start({\n  ...\n})"
-          }
-        ]
+        }
       },
       "delete": {
         "operationId": "mcp.auth.remove",
@@ -25196,13 +24233,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.mcp.auth.remove({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/mcp/{name}/auth/callback": {
@@ -25276,13 +24307,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.mcp.auth.callback({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/mcp/{name}/auth/authenticate": {
@@ -25338,13 +24363,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.mcp.auth.authenticate({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/mcp/{name}/connect": {
@@ -25379,13 +24398,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.mcp.connect({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/mcp/{name}/disconnect": {
@@ -25420,13 +24433,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.mcp.disconnect({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/tui/runtime/start": {
@@ -25534,13 +24541,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.tui.runtime.start({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/tui/runtime/status": {
@@ -25607,13 +24608,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.tui.runtime.status({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/tui/runtime/stop": {
@@ -25641,13 +24636,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.tui.runtime.stop({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/tui/status": {
@@ -25747,13 +24736,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.tui.status({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/tui/runtime/submit-task": {
@@ -25866,13 +24849,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.tui.runtime.submitTask({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/tui/runtime/proxy": {
@@ -25926,13 +24903,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.tui.runtime.proxy({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/tui/runtime/task-status": {
@@ -26052,13 +25023,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.tui.runtime.taskStatus({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/tui/open-help": {
@@ -26086,13 +25051,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.tui.openHelp({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/tui/open-sessions": {
@@ -26120,13 +25079,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.tui.openSessions({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/tui/open-themes": {
@@ -26154,13 +25107,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.tui.openThemes({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/tui/open-models": {
@@ -26188,13 +25135,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.tui.openModels({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/tui/execute-command": {
@@ -26249,13 +25190,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.tui.executeCommand({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/tui/show-toast": {
@@ -26318,13 +25253,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.tui.showToast({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/tui/publish": {
@@ -26384,13 +25313,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.tui.publish({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/tui/select-session": {
@@ -26457,13 +25380,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.tui.selectSession({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/tui/control/next": {
@@ -26505,13 +25422,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.tui.control.next({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/tui/control/response": {
@@ -26561,13 +25472,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.tui.control.response({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/instance/dispose": {
@@ -26595,13 +25500,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.instance.dispose({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/path": {
@@ -26629,13 +25528,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.path.get({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/vcs": {
@@ -26663,13 +25556,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.vcs.get({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/command": {
@@ -26700,13 +25587,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.command.list({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/log": {
@@ -26786,13 +25667,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.app.log({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/log/tail": {
@@ -26845,13 +25720,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.log.tail({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/agent": {
@@ -26882,13 +25751,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.app.agents({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/lsp": {
@@ -26919,13 +25782,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.lsp.status({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/formatter": {
@@ -26956,13 +25813,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.formatter.status({\n  ...\n})"
-          }
-        ]
+        }
       }
     },
     "/event": {
@@ -26990,13 +25841,7 @@
               }
             }
           }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.event.subscribe({\n  ...\n})"
-          }
-        ]
+        }
       }
     }
   },
@@ -28701,6 +27546,46 @@
           "properties"
         ]
       },
+      "FactCheckItem": {
+        "type": "object",
+        "properties": {
+          "claim": {
+            "type": "string",
+            "minLength": 20,
+            "maxLength": 280
+          },
+          "confidence": {
+            "type": "string",
+            "enum": [
+              "low",
+              "medium",
+              "high"
+            ]
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "api",
+              "library",
+              "number",
+              "history",
+              "path",
+              "protocol",
+              "other"
+            ]
+          },
+          "source": {
+            "type": "string",
+            "minLength": 3
+          }
+        },
+        "required": [
+          "claim",
+          "confidence",
+          "category",
+          "source"
+        ]
+      },
       "Event.integrity.review.completed": {
         "type": "object",
         "properties": {
@@ -28752,6 +27637,112 @@
                     "summary": {
                       "type": "string",
                       "minLength": 1
+                    },
+                    "investigationPlan": {
+                      "type": "object",
+                      "properties": {
+                        "requestPromise": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "hypothesis": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "evidencePlan": {
+                          "minItems": 1,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        },
+                        "passCriteria": {
+                          "minItems": 1,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        }
+                      },
+                      "required": [
+                        "requestPromise",
+                        "hypothesis",
+                        "evidencePlan",
+                        "passCriteria"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "drilldowns": {
+                      "default": [],
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "target": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "purpose": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "result": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "target",
+                          "purpose",
+                          "result"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "coverage": {
+                      "default": [],
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "requirementID": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "specID": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "userRequestQuote": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "covered",
+                              "missing",
+                              "inconclusive"
+                            ]
+                          },
+                          "evidence": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        },
+                        "required": [
+                          "status",
+                          "evidence"
+                        ],
+                        "additionalProperties": false
+                      }
                     },
                     "evidence": {
                       "default": [],
@@ -28929,6 +27920,76 @@
                     "scope",
                     "verdict",
                     "summary"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "coverageAudit": {
+                "default": [],
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "promise": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "reviewerIDs": {
+                      "default": [],
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "covered",
+                        "missing",
+                        "inconclusive"
+                      ]
+                    },
+                    "notes": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "promise",
+                    "status",
+                    "notes"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "uninspectedRisks": {
+                "default": [],
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "risk": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "reason": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "action": {
+                      "type": "string",
+                      "enum": [
+                        "block",
+                        "re-review",
+                        "advisory"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "risk",
+                    "reason",
+                    "action"
                   ],
                   "additionalProperties": false
                 }
@@ -29278,6 +28339,13 @@
                   "additionalProperties": false
                 }
               },
+              "fact_check_items": {
+                "description": "Every factual claim (API behaviour, library version, third-party protocol, number, path, history) the integrity team has NOT verified via tool calls in this session. Empty when only review judgments or in-session-verified statements.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/FactCheckItem"
+                }
+              },
               "taskID": {
                 "type": "string",
                 "minLength": 1
@@ -29297,6 +28365,7 @@
               "summary",
               "teamReportMarkdown",
               "reviewers",
+              "fact_check_items",
               "taskID",
               "sessionID",
               "attempts"
@@ -32569,6 +31638,7 @@
               "goal",
               "architect",
               "integrity",
+              "fact-check",
               "delivery",
               "executor",
               "build",
@@ -34898,6 +33968,10 @@
                 "description": "Continue the agent loop when a tool call is denied",
                 "type": "boolean"
               },
+              "confirm_proposed_tasks": {
+                "description": "Require user confirmation before the orchestrator creates proposed follow-up tasks",
+                "type": "boolean"
+              },
               "auto_question": {
                 "description": "Auto-reject unanswered question interactions after the five-minute stale timeout. Independent fine-grained switch. When false, questions wait indefinitely for a user reply.",
                 "default": true,
@@ -34957,6 +34031,26 @@
           "data",
           "errors",
           "success"
+        ]
+      },
+      "ReplyTargetEnvelopeMissingError": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "const": "ReplyTargetEnvelopeMissingError"
+          },
+          "data": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {}
+          }
+        },
+        "required": [
+          "name",
+          "data"
         ]
       },
       "OAuth": {
@@ -35744,6 +34838,7 @@
               "goal",
               "architect",
               "integrity",
+              "fact-check",
               "delivery",
               "executor",
               "build",
@@ -36160,6 +35255,26 @@
         },
         "required": [
           "ok"
+        ]
+      },
+      "SessionRuntimeContractMissingError": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "const": "SessionRuntimeContractMissingError"
+          },
+          "data": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {}
+          }
+        },
+        "required": [
+          "name",
+          "data"
         ]
       },
       "Symbol": {
