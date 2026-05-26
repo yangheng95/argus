@@ -4,6 +4,7 @@ import { join } from "node:path";
 
 const SOURCE = readFileSync(join(import.meta.dir, "../src/components/NotificationCenter.tsx"), "utf8");
 const STYLES = readFileSync(join(import.meta.dir, "../src/styles/surfaces/notifications.css"), "utf8");
+const MAIN = readFileSync(join(import.meta.dir, "../src/main.tsx"), "utf8");
 
 test("NotificationCenter routes dismiss control through the Button primitive", () => {
   expect(SOURCE).toContain('import { Button } from "./ui/Button";');
@@ -13,11 +14,17 @@ test("NotificationCenter routes dismiss control through the Button primitive", (
   expect(STYLES).not.toContain(".app-notification__close");
 });
 
-test("NotificationCenter routes task notification activation through task selection and ack", () => {
+test("NotificationCenter routes task notification activation through task selection", () => {
   expect(SOURCE).toContain("activateTaskNotification");
   expect(SOURCE).toContain("await selectTask(item.taskID)");
   expect(SOURCE).toContain("await loadTasks()");
-  expect(SOURCE).toContain("ackTaskNotification(item.taskID)");
+  expect(SOURCE).not.toContain("ackTaskNotification(item.taskID)");
   expect(SOURCE).toContain("dismissNotification(item.id)");
   expect(SOURCE).toContain('data-clickable={item.taskID ? "true" : undefined}');
+});
+
+test("foregrounding the overlay recomputes the notification projection", () => {
+  expect(MAIN).toContain("recomputeBadgeFromTasks");
+  expect(MAIN).toContain('window.addEventListener("focus"');
+  expect(MAIN).toContain('document.addEventListener(\n  "visibilitychange"');
 });

@@ -442,7 +442,27 @@ function pushBadgeProjection(count: number): void {
   });
 }
 
+function addTaskNotificationAcks(item: any): boolean {
+  let changed = false;
+  for (const key of taskNotificationAckKeys(item)) {
+    if (!badgeAcks.has(key)) {
+      badgeAcks.add(key);
+      changed = true;
+    }
+  }
+  return changed;
+}
+
+function ackVisibleSelectedTaskNotifications(tasks: any[]): void {
+  const selectedTaskID = boardStore.selectedTaskID;
+  if (!selectedTaskID || isGatewayPage() || !windowFocused()) return;
+  const item = tasks.find((entry: any) => entry?.task?.id === selectedTaskID);
+  if (!item || !addTaskNotificationAcks(item)) return;
+  persistBadgeAcks();
+}
+
 export function recomputeBadgeFromTasks(tasks: any[] = boardStore.tasks): BadgeProjection {
+  ackVisibleSelectedTaskNotifications(tasks);
   const projection = computeBadge(tasks, badgeAcks);
   pushBadgeProjection(projection.count);
   return projection;
@@ -457,10 +477,14 @@ export function ackBadge(key: BadgeAckKey): BadgeProjection {
 export function ackTaskNotification(taskID: string): BadgeProjection {
   const item = boardStore.tasks.find((entry: any) => entry?.task?.id === taskID);
   if (!item) throw new Error(`ackTaskNotification: task ${taskID} is missing from task summary`);
-  for (const key of taskNotificationAckKeys(item)) {
-    badgeAcks.add(key);
-  }
-  persistBadgeAcks();
+  if (addTaskNotificationAcks(item)) persistBadgeAcks();
+  return recomputeBadgeFromTasks();
+}
+
+export function ackTaskNotificationIfPresent(taskID: string): BadgeProjection | undefined {
+  const item = boardStore.tasks.find((entry: any) => entry?.task?.id === taskID);
+  if (!item) return undefined;
+  if (addTaskNotificationAcks(item)) persistBadgeAcks();
   return recomputeBadgeFromTasks();
 }
 

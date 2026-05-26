@@ -1,4 +1,5 @@
 import z from "zod"
+import { Todo } from "./todo"
 
 export namespace CompactionHandoff {
   const NonEmpty = z.string().trim().min(1)
@@ -97,6 +98,7 @@ export namespace CompactionHandoff {
       acceptanceCriteria: z.array(SpecificText),
       durableInstructionSources: z.array(InstructionSource),
       activeBuildContracts: z.array(ActiveBuildContract),
+      todos: z.array(Todo.Info),
       currentState: CurrentState,
       decisions: z.array(Decision),
       evidence: z.array(Evidence),
@@ -120,6 +122,7 @@ export namespace CompactionHandoff {
     fileEvidence: boolean
     errorsAndBlockers: boolean
     acceptanceCriteria: boolean
+    todos: Todo.Info[]
   }
 
   export const MODEL_OUTPUT_INSTRUCTIONS = [
@@ -134,6 +137,7 @@ export namespace CompactionHandoff {
     'Generic placeholders such as "continue implementation" are invalid.',
     "Do not treat assistant reasoning, tool-choice indecision, or checkpoint prompts as user requirements.",
     "When active build-session contract facts are supplied, copy their ids into activeBuildContracts instead of paraphrasing them.",
+    "When current todos are supplied, copy the todo array exactly into todos with the same item order, content, status, and priority.",
   ].join("\n")
 
   export function renderRequiredEvidence(requirements: Pick<EvidenceRequirements, "patchFiles" | "errorNames">) {
@@ -153,6 +157,7 @@ export namespace CompactionHandoff {
   "acceptanceCriteria": ["durable requirements and explicit acceptance checks"],
   "durableInstructionSources": [{"path": "absolute or configured instruction path", "role": "why this source is authoritative"}],
   "activeBuildContracts": [{"sessionID": "build session id", "goalID": "goal id", "goalRunID": "active logical attempt id", "artifactID": "build_session_contract artifact id", "sourceArtifactIDs": ["source artifact ids"], "digest": "contract snapshot digest"}],
+  "todos": [{"content": "exact todo content", "status": "exact todo status", "priority": "exact todo priority"}],
   "currentState": {
     "phase": "specific current phase",
     "activeTask": "specific active task",
@@ -217,6 +222,9 @@ export namespace CompactionHandoff {
     }
     if (requirements.acceptanceCriteria && handoff.acceptanceCriteria.length === 0) {
       missing.push("acceptanceCriteria")
+    }
+    if (JSON.stringify(handoff.todos) !== JSON.stringify(requirements.todos)) {
+      missing.push("todos")
     }
     if (missing.length === 0) return { success: true as const }
     return {
@@ -296,15 +304,20 @@ export namespace CompactionHandoff {
       section(normalized.userMessages, (item) => `   - ${item}`),
       `   - Source user message id: ${source.id}`,
       "",
-      "7. Pending Tasks:",
+      "7. Todo List (verbatim):",
+      "```json",
+      JSON.stringify(normalized.todos, null, 2),
+      "```",
+      "",
+      "8. Pending Tasks:",
       list(normalized.nextActions).replaceAll("\n- ", "\n   - ").replace(/^- /, "   - "),
       "",
-      "8. Current Work:",
+      "9. Current Work:",
       `   - Phase: ${normalized.currentState.phase}`,
       `   - Active task: ${normalized.currentState.activeTask}`,
       ...normalized.testsAndCommands.map((item) => `   - ${item.command}: ${item.result} Evidence: ${item.evidence}`),
       "",
-      "9. Optional Next Step:",
+      "10. Optional Next Step:",
       normalized.nextActions[0] ? `   - ${normalized.nextActions[0]}` : "   - (none)",
       ...normalized.openRisks.map((item) => `   - Risk: ${item}`),
     ].join("\n")

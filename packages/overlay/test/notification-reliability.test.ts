@@ -287,4 +287,20 @@ describe("computeBadge projection", () => {
     expect(calls.lastBadge).toBe(2);
     expect(calls.lastAttention).toBe(true);
   });
+
+  test("focused selected task facts are acked before pushing tray attention", async () => {
+    const calls = installTransport();
+    const visible = taskItem({ id: "tsk_visible", pending: 1, updated: 100 });
+    setFocus(true);
+    setBoardStore("selectedTaskID", "tsk_visible");
+    setBoardStore("tasks", [visible]);
+
+    const projection = recomputeBadgeFromTasks([visible]);
+
+    expect(projection.count).toBe(0);
+    expect(taskHasUnreadNotification(visible)).toBe(false);
+    await flushNotifications();
+    expect(calls.lastBadge).toBe(0);
+    expect(calls.lastAttention).toBe(false);
+  });
 });

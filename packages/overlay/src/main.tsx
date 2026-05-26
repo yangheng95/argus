@@ -65,7 +65,7 @@ import { stopTimers } from "./services/sync"
 import { nativeOpen, nativePrompt } from "./utils/native"
 import { eventClosest } from "./utils/dom-utils"
 import { shortPath } from "./utils/tool"
-import { notifyError, notifyWarning, formatErrorDetails } from "./services/notify"
+import { notifyError, notifyWarning, formatErrorDetails, recomputeBadgeFromTasks } from "./services/notify"
 import {
   applyDirectory,
   browseDirectory,
@@ -547,6 +547,21 @@ const notificationHost = document.createElement("div")
 notificationHost.id = "notificationCenterHost"
 document.body.appendChild(notificationHost)
 render(() => <NotificationCenter />, notificationHost)
+
+function recomputeNotificationsOnForeground() {
+  recomputeBadgeFromTasks()
+}
+
+window.addEventListener("focus", recomputeNotificationsOnForeground, {
+  signal: moduleTeardown.signal,
+})
+document.addEventListener(
+  "visibilitychange",
+  () => {
+    if (document.visibilityState !== "hidden") recomputeNotificationsOnForeground()
+  },
+  { signal: moduleTeardown.signal },
+)
 
 // ── Mount: Gateway page ──
 // The Gateway page mode lives next to the default panel. The CSS

@@ -88,6 +88,7 @@ function handoffFixture(sourceUserMessageID = "m-source"): CompactionHandoff.Inf
     acceptanceCriteria: ["The dispatch anchor remains verbatim in the visible message stream"],
     durableInstructionSources: [{ path: "/repo/AGENTS.md", role: "project rules" }],
     activeBuildContracts: [],
+    todos: [],
     currentState: {
       phase: "validating dispatch anchor preservation",
       activeTask: "keep the first user message visible after compaction",
