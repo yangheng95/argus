@@ -56,6 +56,16 @@ export const BuildSessionDirectReplyError = NamedError.create(
   z.object({
     message: z.string(),
     sessionID: z.string(),
+    /** The session's underlying kind. When sessionKind === "build" the
+     *  reply was rejected because the session itself is a build attempt.
+     *  When sessionKind !== "build" but envelopeAgent === "build", the
+     *  reply was rejected because the last user envelope is tagged to
+     *  resume under the build agent (which would wake build tools on a
+     *  non-build session, bypassing the build retry lifecycle). The
+     *  overlay reads these to render hybrid-specific UX rather than the
+     *  generic "kind not allowed" copy. */
+    sessionKind: z.string(),
+    envelopeAgent: z.string(),
   }),
 )
 

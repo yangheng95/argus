@@ -24,7 +24,13 @@ import { Filesystem } from "@/util/filesystem"
 import { createDecisionLog } from "@/decision-log"
 import { EngineService } from "@/task-api"
 import { EngineConfig } from "@/engine/config"
-import { canReceiveDirectAgentSessionControl } from "./direct-reply"
+import {
+  canReceiveDirectAgentSessionControl,
+  BuildSessionDirectReplyError,
+  SessionRuntimeContractMissingError,
+  ReplyTargetEnvelopeMissingError,
+  InvalidReplyTargetKindError,
+} from "./direct-reply"
 import { sessionGoalID, sessionRole, taskIDForSession } from "./task-event"
 import { Publisher } from "@/engine/publisher"
 import { EngineGit } from "@/engine/git"
@@ -4485,8 +4491,49 @@ export function createOrchestratorTools(input: {
             ` Reason received: ${reason}`
           )
         }
-        const result = await EngineService.replyAgentSession(taskID, target.sessionID, { message })
-        return `Steered sub-agent session ${result.session_id}. source=${target.source}. message=${result.message_id}. Reason: ${reason}`
+        // The reply route turns these conditions into NamedError that
+        // ApiError would surface as 4xx/410 to overlay. Inside the
+        // orchestrator's own tool call the same errors throw as
+        // execution errors and the AI SDK would relay them as opaque
+        // tool failures — denying the model the actionable guidance
+        // the build-kind branch above already gives. Catch the named
+        // subclasses we know about and return human-readable next-step
+        // text instead, matching the build-kind branch's contract.
+        // codex review round 2 — minor.
+        try {
+          const result = await EngineService.replyAgentSession(taskID, target.sessionID, { message })
+          return `Steered sub-agent session ${result.session_id}. source=${target.source}. message=${result.message_id}. Reason: ${reason}`
+        } catch (err) {
+          if (BuildSessionDirectReplyError.isInstance(err)) {
+            return (
+              `Error: steer_subagent refused to inject into session ${target.sessionID}: ${err.data.message}` +
+              ` Use build({ goalID, request }) for a fresh stage-attempt runtime contract instead.` +
+              ` Reason received: ${reason}`
+            )
+          }
+          if (SessionRuntimeContractMissingError.isInstance(err)) {
+            return (
+              `Error: steer_subagent could not reach session ${target.sessionID} — ${err.data.message}` +
+              ` The session's in-memory runtime contract is no longer present (reason=${err.data.reason}).` +
+              ` Re-dispatch the parent goal/stage to reinstate the runtime contract before attempting to steer again.` +
+              ` Reason received: ${reason}`
+            )
+          }
+          if (ReplyTargetEnvelopeMissingError.isInstance(err)) {
+            return (
+              `Error: steer_subagent could not reach session ${target.sessionID} — ${err.data.message}` +
+              ` Wait for the agent to issue its first turn before attempting to steer it.` +
+              ` Reason received: ${reason}`
+            )
+          }
+          if (InvalidReplyTargetKindError.isInstance(err)) {
+            return (
+              `Error: steer_subagent refused session ${target.sessionID}: ${err.data.message}` +
+              ` Reason received: ${reason}`
+            )
+          }
+          throw err
+        }
       },
     }),
 

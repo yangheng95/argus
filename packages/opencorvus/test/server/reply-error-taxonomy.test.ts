@@ -195,9 +195,17 @@ describe("AgentSessionReplyBox error taxonomy", () => {
         })
 
         expect(response.status).toBe(400)
-        const body = await response.json() as { name?: string; data?: { sessionID?: string } }
+        const body = await response.json() as {
+          name?: string
+          data?: { sessionID?: string; sessionKind?: string; envelopeAgent?: string }
+        }
         expect(body.name).toBe("BuildSessionDirectReplyError")
         expect(body.data?.sessionID).toBe(architect.id)
+        // codex round 2 minor: overlay needs structured fields to pick
+        // the hybrid-specific UX copy instead of the generic
+        // kind_not_allowed message.
+        expect(body.data?.sessionKind).toBe("architect")
+        expect(body.data?.envelopeAgent).toBe("build")
       },
     })
   })
