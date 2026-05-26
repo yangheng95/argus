@@ -68,29 +68,24 @@ export interface ChannelInfo {
   bindings_endpoint?: string
 }
 
-export interface GatewayTaskCandidate {
-  id: string
-  title: string
-  description: string
-  acceptance: string[]
-  priority: "critical" | "high" | "normal" | "low"
-  executor?: "opencorvus" | "codex" | "claude-code"
-  recommended_queue: boolean
-  dependencies: string[]
-  risks: string[]
-}
-
-export interface GatewayTaskDecomposition {
-  proposal_id: string
-  requirement: string
-  summary: string
-  tasks: GatewayTaskCandidate[]
-}
-
-export interface DecomposeRequestInput {
-  requirement: string
-  executor?: "opencorvus" | "codex" | "claude-code"
+// Mission supervisor wake — single endpoint that starts or resumes a
+// gateway-master session for one mission. See
+// specs/gateway-master-supervisor-2026-05-26.md §2.5.
+export interface MasterWakeInput {
+  /** Existing missionID to resume. Omit to start a new mission. */
+  missionID?: string
+  /** User prompt to inject into the supervisor session. */
+  text: string
+  /** Optional human-readable title for the mission (not yet persisted). */
+  title?: string
   signal?: AbortSignal
+}
+
+export interface MasterWakeResult {
+  missionID: string
+  sessionID: string
+  /** true when the wake created a fresh session; false when it resumed one. */
+  created: boolean
 }
 
 export interface ChannelBindingRow {
@@ -158,17 +153,18 @@ export async function loadTaskBindings(taskID: string, signal?: AbortSignal): Pr
   return data as ChannelBindingRow[]
 }
 
-export async function decomposeRequirement(input: DecomposeRequestInput): Promise<GatewayTaskDecomposition> {
-  const requirement = input.requirement.trim()
-  if (!requirement) throw new Error("decomposeRequirement: requirement text is required")
+export async function wakeMaster(input: MasterWakeInput): Promise<MasterWakeResult> {
+  const text = input.text.trim()
+  if (!text) throw new Error("wakeMaster: text is required")
   const body = JSON.stringify({
-    requirement,
-    ...(input.executor ? { executor: input.executor } : {}),
+    text,
+    ...(input.missionID ? { missionID: input.missionID } : {}),
+    ...(input.title ? { title: input.title } : {}),
   })
-  return (await apiJson(`gateway/task/decompose`, {
+  return (await apiJson(`gateway/master/wake`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body,
     signal: input.signal,
-  })) as GatewayTaskDecomposition
+  })) as MasterWakeResult
 }

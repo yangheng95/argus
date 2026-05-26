@@ -1,17 +1,16 @@
-import type { GatewayTaskCandidate } from "../services/gateway"
 import { ApiError } from "../services/api"
 import { t } from "./i18n"
 
 export type LedgerFilter = "all" | "active" | "queued" | "waiting" | "failed" | "completed" | "cancelled"
 
 /**
- * Hard upper bound on the requirement text the operator can submit to
- * `/gateway/task/decompose`. The server (`gateway.ts:298`) caps the
- * payload at 32_000 characters; the overlay surfaces the same number so
- * the operator sees a counter approach the limit and the textarea
- * itself refuses extra typing instead of letting them queue up a
- * request that will fail at the network layer. Single source — the
- * server route should keep parity with this constant.
+ * Hard upper bound on the prompt text the operator can submit to
+ * `/gateway/master/wake`. The server caps the payload at 32_000
+ * characters; the overlay surfaces the same number so the operator
+ * sees a counter approach the limit and the textarea itself refuses
+ * extra typing instead of letting them queue up a request that will
+ * fail at the network layer. Single source — the server route should
+ * keep parity with this constant.
  */
 export const GATEWAY_REQUIREMENT_MAX_CHARS = 32_000
 export type GatewayStatusIconName =
@@ -122,26 +121,3 @@ export function humanizeApiError(err: unknown): string {
   return raw.length > 240 ? `${raw.slice(0, 240)}…` : raw
 }
 
-export function composeTaskText(candidate: GatewayTaskCandidate): string {
-  const lines: string[] = []
-  if (candidate.title) lines.push(`# ${candidate.title}`)
-  if (candidate.description) {
-    lines.push("")
-    lines.push(candidate.description.trim())
-  }
-  if (candidate.acceptance.length > 0) {
-    lines.push("")
-    lines.push("## Acceptance")
-    for (const a of candidate.acceptance) lines.push(`- ${a}`)
-  }
-  if (candidate.dependencies.length > 0) {
-    lines.push("")
-    lines.push(`## Depends on candidates: ${candidate.dependencies.join(", ")}`)
-  }
-  if (candidate.risks.length > 0) {
-    lines.push("")
-    lines.push("## Risks")
-    for (const r of candidate.risks) lines.push(`- ${r}`)
-  }
-  return lines.join("\n").trim()
-}
