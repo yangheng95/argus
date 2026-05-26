@@ -21,9 +21,15 @@ import { Timestamps } from "@/storage/schema.sql"
  *                  sessions (MCP, Debug, Coding, Panel, scheduled wakes). Standalone
  *                  callers are filtered out at the bridge by `taskIDForSession`
  *                  failing naturally; no separate "standalone" kind is needed.
- *   gateway        remote/mobile control-plane session. It stores gateway
- *                  metadata such as channel key and current cwd; it must not
- *                  run the task scheduler itself.
+ *   gateway        remote/mobile control-plane session AND mission-supervisor
+ *                  session. Stores gateway metadata such as channel key /
+ *                  current cwd, and (for missions) the channelKey `master:<id>`
+ *                  pinning the gateway-master agent to a single mission. The
+ *                  supervisor dispatches engine_tasks via panel.create_task
+ *                  (actor=gateway_master) but does not execute work itself —
+ *                  every concrete artifact is produced by a dispatched task,
+ *                  not by this session. See specs/gateway-master-supervisor-
+ *                  2026-05-26.md §2.5.
  *   requirements   requirements sub-agent (goal decomposition)
  *   design-analyst design-analyst sub-agent (vision → layout/style/component spec)
  *   goal           legacy catch-all for sub-agents that predate the dedicated

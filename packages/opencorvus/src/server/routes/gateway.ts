@@ -13,13 +13,6 @@ import { Instance } from "@/project/instance"
 import { PanelActionSchema, PanelCapabilityResponse, panelCapabilities } from "@/panel/capability"
 import { PanelTool } from "@/tool/panel"
 import type { Tool } from "@/tool/tool"
-import {
-  decomposeRequirement,
-  GatewayCandidateExecutor,
-  GatewayTaskDecomposition,
-} from "@/gateway/decompose"
-
-const decomposeLog = Log.create({ service: "gateway.routes.decompose" })
 
 const GatewayControlMessageInput = ControlMessageInput.omit({ surface: true }).extend({
   surface: z.literal("gateway").optional(),
@@ -241,68 +234,6 @@ export function GatewayRoutes() {
           output: result.output,
           metadata: result.metadata ?? {},
         }))
-      },
-    )
-    .post(
-      "/task/decompose",
-      describeRoute({
-        summary: "Propose task decomposition",
-        description:
-          "Run a one-shot LLM call that turns a free-text big requirement into a structured proposal " +
-          "of small task candidates. The endpoint is read-only — no engine_task or session row is " +
-          "written. The Gateway page presents the proposal to the operator, who chooses which " +
-          "candidates to actually create via POST /task.",
-        operationId: "gateway.task.decompose",
-        responses: {
-          200: {
-            description: "Decomposition proposal",
-            content: { "application/json": { schema: resolver(GatewayTaskDecomposition) } },
-          },
-        },
-      }),
-      validator(
-        "json",
-        z.object({
-          // Cap the requirement at 32 KB so a single call cannot blow the
-          // model's context budget (or a malicious caller can't burn tokens
-          // with an unbounded prompt). 32 KB is comfortably above any real
-          // operator-typed requirement and well under model context limits.
-          requirement: z.string().min(1).max(32_000),
-          executor: GatewayCandidateExecutor.optional(),
-        }),
-      ),
-      async (c) => {
-        const input = c.req.valid("json")
-        try {
-          const proposal = await decomposeRequirement({
-            requirement: input.requirement,
-            executor: input.executor,
-            // Propagate the HTTP request's abort signal so a client
-            // disconnect (operator closes Gateway, navigates away,
-            // hits Cancel) tears down the model stream instead of
-            // letting it run to completion at provider cost.
-            signal: c.req.raw.signal,
-          })
-          return c.json(proposal)
-        } catch (err) {
-          // Log the full error server-side for diagnostics.
-          decomposeLog.error("decompose failed", {
-            error: err instanceof Error ? err.message : String(err),
-            stack: err instanceof Error ? err.stack : undefined,
-          })
-          // Return an actionable but sanitized message:
-          //   • truncate to keep response small and avoid leaking long
-          //     stack traces or provider verbose error bodies;
-          //   • include the error class name so the UI can distinguish
-          //     model-config / validation / network failures and the
-          //     operator gets a useful PRD §14-mandated error state.
-          const detail = err instanceof Error ? err.message : String(err)
-          const safeDetail = detail.length > 240 ? `${detail.slice(0, 240)}…` : detail
-          const cls = err instanceof Error && err.name && err.name !== "Error" ? `${err.name}: ` : ""
-          throw new HTTPException(500, {
-            message: `Gateway decomposition failed — ${cls}${safeDetail}`,
-          })
-        }
       },
     )
     .post(
