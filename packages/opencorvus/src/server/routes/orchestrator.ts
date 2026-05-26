@@ -46,7 +46,7 @@ import { Identifier } from "@/id/id"
 import { Session } from "@/session"
 import { Message } from "@/session/message"
 import { SessionPrompt } from "@/session/prompt"
-import { errors } from "../error"
+import { errors, replyRouteErrors } from "../error"
 import { lazy } from "../../util/lazy"
 import { Log } from "@/util/log"
 import { sessionGoalID, sessionParentID, sessionRole, taskIDForSession, taskMessageWatermark, taskSession } from "@/orchestrator/task-event"
@@ -948,7 +948,7 @@ export const EngineRoutes = lazy(() =>
               },
             },
           },
-          ...errors(400, 404, 409, 410),
+          ...replyRouteErrors(400, 404, 409, 410),
         },
       }),
       validator("param", z.object({ taskID: Task.shape.id, sessionID: z.string().min(1) })),

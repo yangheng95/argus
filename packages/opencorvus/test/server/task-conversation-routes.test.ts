@@ -627,8 +627,19 @@ describe("task conversation routes", () => {
           patch: {
             model: "overlay/default",
             agent: {
-              build: {
-                model: "overlay/build",
+              // Codex review 2026-05-26: tagging a requirements
+              // envelope with `agent: "build"` is no longer accepted as
+              // a model-resolution hint — Message.User.agent is the
+              // agent definition the next loop turn will resume under,
+              // so envelope.agent === "build" on a non-build session
+              // throws BuildSessionDirectReplyError. The test's
+              // original intent (envelope carry-over preserves
+              // system/tools/format + resolves model from overlay) is
+              // preserved by tagging the envelope with the SAME kind
+              // as the session and resolving the model via
+              // agent.requirements.model.
+              requirements: {
+                model: "overlay/requirements",
               },
             },
           },
@@ -659,7 +670,7 @@ describe("task conversation routes", () => {
           sessionID: requirements.id,
           role: "user",
           time: { created: now + 1 },
-          agent: "build",
+          agent: "requirements",
           model: { providerID: "test-provider", modelID: "test-model" },
           system: "requirements system prompt",
           systemMode: "complete",
@@ -687,7 +698,7 @@ describe("task conversation routes", () => {
           sessionID: requirements.id,
           role: "user",
           time: { created: now + 2 },
-          agent: "build",
+          agent: "requirements",
           model: { providerID: "test-provider", modelID: "test-model" },
           extra: {
             overlay_direct_reply: true,
@@ -705,7 +716,7 @@ describe("task conversation routes", () => {
         SessionPrompt.setSessionRuntimeContract(requirements.id, {
           identity: {
             sessionID: requirements.id,
-            agentKind: "build",
+            agentKind: "requirements",
             contractKind: "stage-attempt",
             installedAt: Date.now(),
           },
@@ -752,7 +763,7 @@ describe("task conversation routes", () => {
           },
           retryCount: 2,
         })
-        expect(message.info.model).toEqual({ providerID: "overlay", modelID: "build" })
+        expect(message.info.model).toEqual({ providerID: "overlay", modelID: "requirements" })
         expect(message.info.variant).toBeUndefined()
         expect(message.info.extra?.resume_scope).toBe("requirements")
         expect(message.parts[0]?.type).toBe("text")

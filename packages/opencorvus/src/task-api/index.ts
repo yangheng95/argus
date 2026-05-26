@@ -270,15 +270,28 @@ async function appendDirectAgentSessionReply(input: {
   const text = input.message.trim()
   if (!text) throw new Error("message is required")
   const target = await resolveDirectReplyTarget(input.taskID, input.sessionID)
-  // Operative check is session.kind — the envelope's `agent` field is
-  // carried forward from prior turns and may legitimately differ (e.g. a
-  // requirements session whose last user envelope was tagged `agent:
-  // "build"` for model resolution). Only reject when the underlying
-  // session itself is a build attempt; that needs a fresh stage runtime
-  // contract, not a generic reply.
-  if (target.session.kind === "build") {
+  // Both halves of the build check are load-bearing:
+  //
+  //   - session.kind === "build" catches the obvious case where the
+  //     underlying session was created as a build attempt.
+  //   - prompt.agent === "build" catches the hybrid case where the
+  //     session.kind is something else (requirements / architect / …)
+  //     but the envelope has been tagged `agent: "build"`. Message.User.agent
+  //     is NOT just a model-resolution hint — session/loop.ts:1196
+  //     `Agent.get(input.lastUser.agent)` reads it to materialise the
+  //     agent definition for the next turn. If we let this pass through
+  //     a generic reply, the next loop iteration would wake the build
+  //     agent (its system prompt, its tools, its terminal contract)
+  //     under a non-build session — bypassing the build retry lifecycle
+  //     that exists precisely to install a fresh stage runtime contract.
+  //     codex review 2026-05-26: a previous attempt at this fix
+  //     mistakenly dropped this half.
+  if (target.session.kind === "build" || target.prompt.agent === "build") {
     throw new BuildSessionDirectReplyError({
-      message: `replyAgentSession: build session ${target.session.id} cannot be continued through generic direct reply; dispatch build retry so a fresh stage runtime contract is installed.`,
+      message:
+        target.session.kind === "build"
+          ? `replyAgentSession: build session ${target.session.id} cannot be continued through generic direct reply; dispatch build retry so a fresh stage runtime contract is installed.`
+          : `replyAgentSession: session ${target.session.id} (kind=${target.session.kind}) has its last user envelope tagged agent="build" and would wake the build agent on resume; dispatch build retry so a fresh stage runtime contract is installed.`,
       sessionID: target.session.id,
     })
   }

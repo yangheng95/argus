@@ -81,7 +81,16 @@ describe("AgentSessionReplyBox error taxonomy", () => {
     })
   })
 
-  test("build session → 400 BuildSessionDirectReplyError", async () => {
+  test("build kind is rejected at the route preflight (not appendDirectAgentSessionReply)", async () => {
+    // "build" is not in DIRECT_REPLY_AGENT_KINDS so the kind preflight
+    // in appendDirectAgentSessionReply -> resolveDirectReplyTarget
+    // refuses with InvalidReplyTargetKindError before the route ever
+    // reaches the session.kind === "build" half of the
+    // BuildSessionDirectReplyError check. This test pins that ordering
+    // so a future refactor doesn't reintroduce a duplicate refusal path
+    // (rule 8). The DIFFERENT case — session.kind !== "build" but
+    // envelope.agent === "build" — has its own test below because that
+    // IS the path BuildSessionDirectReplyError actually defends.
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,
@@ -111,12 +120,6 @@ describe("AgentSessionReplyBox error taxonomy", () => {
           }).run(),
         )
 
-        // assertDirectAgentSession at the route level filters build out
-        // first because "build" is not in DIRECT_REPLY_AGENT_KINDS, so the
-        // request never reaches the appendDirectAgentSessionReply's
-        // session.kind === "build" branch. The route returns the same
-        // InvalidReplyTargetKindError 400 — that's a single-source
-        // refusal, not a duplicate path. (rule 8)
         const response = await app.request(`/task/${taskID}/session/${build.id}/reply`, {
           method: "POST",
           headers: {
@@ -130,6 +133,71 @@ describe("AgentSessionReplyBox error taxonomy", () => {
         const body = await response.json() as { name?: string; data?: { kind?: string } }
         expect(body.name).toBe("InvalidReplyTargetKindError")
         expect(body.data?.kind).toBe("build")
+      },
+    })
+  })
+
+  test("non-build session with envelope.agent === 'build' → 400 BuildSessionDirectReplyError", async () => {
+    // This is the hybrid case BuildSessionDirectReplyError exists for:
+    // the session.kind passes the route preflight (e.g. requirements)
+    // but the last user envelope carries agent: "build", meaning the
+    // next loop turn would `Agent.get("build")` and wake the build
+    // agent's tools/system/terminal contract on a non-build session.
+    // That bypasses the build retry lifecycle — refuse early. codex
+    // review 2026-05-26 flagged that the previous version of this test
+    // never actually exercised this error class.
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const taskID = Identifier.ascending("task")
+        const now = Date.now()
+        const root = await Session.create({ kind: "root", title: "root" })
+        const architect = await Session.create({
+          kind: "architect",
+          parentID: root.id,
+          title: "architect with build-tagged envelope",
+        })
+
+        Database.use((db) =>
+          db.insert(EngineTaskTable).values({
+            id: taskID,
+            project_id: Instance.project.id,
+            session_id: root.id,
+            source: "panel",
+            title: "hybrid build envelope",
+            request: "hybrid build envelope",
+            priority: "normal",
+            time_created: now,
+            time_updated: now,
+            time_started: now,
+          }).run(),
+        )
+
+        await Session.updateMessage({
+          id: Identifier.ascending("message"),
+          sessionID: architect.id,
+          role: "user",
+          time: { created: now + 1 },
+          // This is the misconfiguration the check defends against.
+          agent: "build",
+          model: { providerID: "test-provider", modelID: "test-model" },
+        })
+
+        const response = await app.request(`/task/${taskID}/session/${architect.id}/reply`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({ message: "ignored" }),
+        })
+
+        expect(response.status).toBe(400)
+        const body = await response.json() as { name?: string; data?: { sessionID?: string } }
+        expect(body.name).toBe("BuildSessionDirectReplyError")
+        expect(body.data?.sessionID).toBe(architect.id)
       },
     })
   })
@@ -243,6 +311,82 @@ describe("AgentSessionReplyBox error taxonomy", () => {
         expect(body.data?.sessionID).toBe(architect.id)
         expect(body.data?.reason).toBe("missing")
         expect(body.data?.agentKind).toBe("architect")
+      },
+    })
+  })
+
+  test("worker kind with contract but no model config → 400 MissingModelConfigError (not 500)", async () => {
+    // codex review 2026-05-26: when the contract validator passes
+    // (contract installed) but resolveAgentModelRef can't find a model
+    // for the agent, the throw used to fall through onError's default
+    // arm and surface as 500 — indistinguishable from a real server
+    // crash, even though "set agent.X.model in opencorvus.jsonc" is a
+    // user-fixable config error. server.ts maps it to 400 explicitly.
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const taskID = Identifier.ascending("task")
+        const now = Date.now()
+        const root = await Session.create({ kind: "root", title: "root" })
+        const architect = await Session.create({
+          kind: "architect",
+          parentID: root.id,
+          title: "architect",
+        })
+
+        Database.use((db) =>
+          db.insert(EngineTaskTable).values({
+            id: taskID,
+            project_id: Instance.project.id,
+            session_id: root.id,
+            source: "panel",
+            title: "model missing",
+            request: "model missing",
+            priority: "normal",
+            time_created: now,
+            time_updated: now,
+            time_started: now,
+          }).run(),
+        )
+
+        await Session.updateMessage({
+          id: Identifier.ascending("message"),
+          sessionID: architect.id,
+          role: "user",
+          time: { created: now + 1 },
+          agent: "architect",
+          model: { providerID: "test-provider", modelID: "test-model" },
+        })
+
+        // Contract installed → validator passes → resolveAgentModelRef
+        // is the next step. No overlay config means architect has no
+        // resolvable model.
+        SessionPrompt.setSessionRuntimeContract(architect.id, {
+          identity: {
+            sessionID: architect.id,
+            agentKind: "architect",
+            contractKind: "stage-attempt",
+            installedAt: Date.now(),
+          },
+          tools: {},
+          structuredOutputGuard: () => undefined,
+        })
+
+        const response = await app.request(`/task/${taskID}/session/${architect.id}/reply`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({ message: "continue" }),
+        })
+
+        expect(response.status).toBe(400)
+        const body = await response.json() as { name?: string; data?: { agent?: string } }
+        expect(body.name).toBe("MissingModelConfigError")
+        expect(body.data?.agent).toBe("architect")
       },
     })
   })
