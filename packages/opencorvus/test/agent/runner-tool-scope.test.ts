@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test"
-import { promptToolSwitchesForAgentRun, shouldFailUnreadableBuildReference } from "../../src/agent/runner"
+import {
+  preTerminalReflectionPrompt,
+  promptToolSwitchesForAgentRun,
+  shouldFailUnreadableBuildReference,
+} from "../../src/agent/runner"
 
 describe("agent runner build tool scope", () => {
   test("plain build runs keep terminal tools and skill discovery but hide non-build and reference tools", () => {
@@ -70,5 +74,35 @@ describe("agent runner build tool scope", () => {
       userText: "## Visual Reference Contract (binding for this dispatch)\nref.png",
       droppedFileParts: [{ mime: "image/png" }],
     })).toBe(false)
+  })
+
+  test("pre-terminal reflection applies to terminal tools", () => {
+    const prompt = preTerminalReflectionPrompt({
+      agentName: "build",
+      terminalToolName: "report_build_result",
+    })
+
+    expect(prompt).toContain("report_build_result")
+    expect(prompt).toContain("original user request")
+    expect(prompt).toContain("generated REQ rows")
+    expect(prompt).toContain("architect goals")
+    expect(prompt).toContain("integrity feedback")
+    expect(prompt).toContain("correct the mismatch before finalizing")
+    expect(prompt).toContain("not an additional deliverable")
+  })
+
+  test("pre-terminal reflection applies to StructuredOutput agents", () => {
+    const prompt = preTerminalReflectionPrompt({
+      agentName: "intent-analysis",
+      usesStructuredOutput: true,
+    })
+
+    expect(prompt).toContain("StructuredOutput")
+    expect(prompt).toContain("intent-analysis")
+    expect(prompt).toContain("prompt-visible original user request")
+  })
+
+  test("pre-terminal reflection is absent without a finalization contract", () => {
+    expect(preTerminalReflectionPrompt({ agentName: "scratch" })).toBeUndefined()
   })
 })

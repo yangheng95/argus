@@ -6,6 +6,7 @@ import { tmpdir } from "../fixture/fixture"
 let runnerCalls: any[] = []
 let forwarders: any[] = []
 let progressEvents: any[] = []
+let startedEvents: any[] = []
 let completedEvents: any[] = []
 let createdSessions: any[] = []
 let userPrompts: string[] = []
@@ -40,9 +41,10 @@ mock.module("@/agent/runner", () => ({
         ],
       }
     } else if (input.terminalTool.toolName === "submit_reviewer_report") {
-      const reviewerID = runnerCalls.filter((call) => call.terminalTool.toolName === "submit_reviewer_report").length === 1
-        ? "rev_a"
-        : "rev_b"
+      const reviewerID =
+        runnerCalls.filter((call) => call.terminalTool.toolName === "submit_reviewer_report").length === 1
+          ? "rev_a"
+          : "rev_b"
       collector.report = {
         reviewerID,
         scope: reviewerID === "rev_a" ? "Surface A" : "Surface B",
@@ -97,7 +99,9 @@ mock.module("@/review/stream", () => ({
   emitReviewStreamProgress: (payload: any) => {
     progressEvents.push(payload)
   },
-  emitReviewStreamStarted: () => undefined,
+  emitReviewStreamStarted: (payload: any) => {
+    startedEvents.push(payload)
+  },
   reviewIDForIntegrity: (sessionID: string) => `review_${sessionID}`,
 }))
 
@@ -132,7 +136,7 @@ function replayContext(attemptNumber: number): IntegrityReplayContext {
     buildEvidenceSinceLastReview: {
       changedFiles: [],
       diffs: [],
-      deliverySummaries: [],
+      buildSummaries: [],
       goalRuns: [],
     },
     scaleSignals: {
@@ -195,7 +199,7 @@ function reReviewReplayContext(): IntegrityReplayContext {
       sinceTimeCreated: priorTime,
       changedFiles: ["src/services/storage.ts"],
       diffs: [{ file: "src/services/storage.ts", status: "modified", additions: 8, deletions: 2 }],
-      deliverySummaries: ["Delivery updated the storage guard."],
+      buildSummaries: ["Build updated the storage guard."],
       goalRuns: [
         {
           goalID: "goal_settings",
@@ -219,12 +223,6 @@ function reReviewReplayContext(): IntegrityReplayContext {
   }
 }
 
-const contractGraph = {
-  contracts: [],
-  dependency_contracts: [],
-  audit_criteria: [],
-}
-
 describe("integrity team-agent replay attempts", () => {
   const originalSetInterval = globalThis.setInterval
   const originalClearInterval = globalThis.clearInterval
@@ -233,6 +231,7 @@ describe("integrity team-agent replay attempts", () => {
     runnerCalls = []
     forwarders = []
     progressEvents = []
+    startedEvents = []
     completedEvents = []
     createdSessions = []
     userPrompts = []
@@ -269,7 +268,6 @@ describe("integrity team-agent replay attempts", () => {
               requirement_ids: [],
             },
           ],
-          contractGraph,
           replayContext: reReviewReplayContext(),
           taskID: "tsk_team_attempt",
           parentSessionID: "ses_parent",
@@ -278,6 +276,44 @@ describe("integrity team-agent replay attempts", () => {
     })
 
     expect(forwarders.map((item) => item.attempt())).toEqual([2, 2, 2, 2])
+    // Supervisor (plan + consensus) shares the supervisor reviewID;
+    // each reviewer must carry its OWN reviewID derived from its
+    // child session id. Sharing the supervisor reviewID would collapse
+    // every reviewer's reasoning into a single overlay partID and
+    // produce ~195KB of cross-contaminated render-thrashing text
+    // (specs/new-arch/2026-05-26-integrity-reviewer-stream-reviewid.md).
+    expect(forwarders.map((item) => item.reviewID())).toEqual([
+      "review_ses_integrity_plan",
+      "review_ses_reviewer_2",
+      "review_ses_reviewer_3",
+      "review_ses_integrity_plan",
+    ])
+    expect(forwarders.map((item) => item.source)).toEqual([
+      "architect.integrity.supervisor",
+      "architect.integrity.reviewer.rev_a",
+      "architect.integrity.reviewer.rev_b",
+      "architect.integrity.supervisor",
+    ])
+    // Each reviewer must emit its own review.stream.started so the
+    // overlay tree-writer's runningReviews map has a per-reviewer
+    // entry; otherwise reviewer chunks would either hit the
+    // "arrived before started" throw or alias onto supervisor's card.
+    expect(startedEvents).toHaveLength(3)
+    expect(startedEvents.map((e) => e.reviewID)).toEqual([
+      "review_ses_integrity_plan",
+      "review_ses_reviewer_2",
+      "review_ses_reviewer_3",
+    ])
+    expect(startedEvents.map((e) => e.sessionID)).toEqual([
+      "ses_integrity_plan",
+      "ses_reviewer_2",
+      "ses_reviewer_3",
+    ])
+    expect(startedEvents.map((e) => e.source)).toEqual([
+      "architect.integrity",
+      "architect.integrity.reviewer.rev_a",
+      "architect.integrity.reviewer.rev_b",
+    ])
     expect(progressEvents).toHaveLength(1)
     expect(progressEvents[0].attempt).toBe(2)
     expect(completedEvents).toHaveLength(1)
@@ -290,7 +326,8 @@ describe("integrity team-agent replay attempts", () => {
       expect(prompt).toContain("BF-1: Settings validation blind spot")
       expect(prompt).toContain("repair: Reject invalid settings before persisting.")
       expect(prompt).toContain("repair-settings: Add settings validation")
-      expect(prompt).toContain("src/services/storage.ts")
+      expect(prompt).toContain("src/services")
+      expect(prompt).not.toContain("src/services/storage.ts")
       expect(prompt).toContain("\\# injected user heading")
       expect(prompt).not.toContain("\u001B")
       expect(prompt).toContain("- prior_blocking_findings=1")
@@ -311,7 +348,6 @@ describe("integrity team-agent replay attempts", () => {
           userRequest: "Ship settings validation",
           taskTitle: "Settings validation",
           goals: [],
-          contractGraph,
           replayContext: replayContext(4),
           taskID: "tsk_team_no_goals",
           parentSessionID: "ses_parent",

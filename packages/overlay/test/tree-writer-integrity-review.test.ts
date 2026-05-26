@@ -114,6 +114,153 @@ test("integrity review stream builds the integrity session card", () => {
   });
 });
 
+test("multiple reviewers with independent reviewIDs do not cross-contaminate a single part", () => {
+  // Regression: before the fix in
+  // specs/new-arch/2026-05-26-integrity-reviewer-stream-reviewid.md
+  // all N integrity reviewers shared the supervisor's reviewID, so
+  // their reasoning streams collapsed onto one overlay partID and the
+  // SolidJS Store rendered ~195KB of interleaved text per task.
+  resetWriter();
+
+  // Supervisor opens the integrity review stream.
+  applyEvent({
+    type: "review.stream.started",
+    emittedAt: 1700000000000,
+    properties: {
+      taskID: "tsk_team",
+      reviewID: "integrity:ses_super",
+      phase: "integrity",
+      sessionID: "ses_super",
+    },
+  });
+  // Each reviewer opens its OWN review stream against its own session.
+  applyEvent({
+    type: "review.stream.started",
+    emittedAt: 1700000000010,
+    properties: {
+      taskID: "tsk_team",
+      reviewID: "integrity:ses_rev_a",
+      phase: "integrity",
+      sessionID: "ses_rev_a",
+    },
+  });
+  applyEvent({
+    type: "review.stream.started",
+    emittedAt: 1700000000020,
+    properties: {
+      taskID: "tsk_team",
+      reviewID: "integrity:ses_rev_b",
+      phase: "integrity",
+      sessionID: "ses_rev_b",
+    },
+  });
+
+  // Interleaved chunks from all three sources.
+  applyEvent({
+    type: "review.stream.chunk",
+    emittedAt: 1700000000100,
+    properties: {
+      taskID: "tsk_team",
+      reviewID: "integrity:ses_super",
+      phase: "integrity",
+      kind: "reasoning",
+      attempt: 1,
+      delta: "S",
+    },
+  });
+  applyEvent({
+    type: "review.stream.chunk",
+    emittedAt: 1700000000110,
+    properties: {
+      taskID: "tsk_team",
+      reviewID: "integrity:ses_rev_a",
+      phase: "integrity",
+      kind: "reasoning",
+      attempt: 1,
+      delta: "A",
+    },
+  });
+  applyEvent({
+    type: "review.stream.chunk",
+    emittedAt: 1700000000120,
+    properties: {
+      taskID: "tsk_team",
+      reviewID: "integrity:ses_rev_b",
+      phase: "integrity",
+      kind: "reasoning",
+      attempt: 1,
+      delta: "B",
+    },
+  });
+  applyEvent({
+    type: "review.stream.chunk",
+    emittedAt: 1700000000130,
+    properties: {
+      taskID: "tsk_team",
+      reviewID: "integrity:ses_rev_a",
+      phase: "integrity",
+      kind: "reasoning",
+      attempt: 1,
+      delta: "AA",
+    },
+  });
+
+  const supervisorCard = cardTreeStore.cards["integrity:session:ses_super"];
+  const reviewerACard = cardTreeStore.cards["integrity:session:ses_rev_a"];
+  const reviewerBCard = cardTreeStore.cards["integrity:session:ses_rev_b"];
+
+  expect(supervisorCard).toBeDefined();
+  expect(reviewerACard).toBeDefined();
+  expect(reviewerBCard).toBeDefined();
+
+  expect(supervisorCard?.parts[0]).toMatchObject({
+    partID: "review:integrity:ses_super:reasoning:1",
+    text: "S",
+  });
+  expect(reviewerACard?.parts[0]).toMatchObject({
+    partID: "review:integrity:ses_rev_a:reasoning:1",
+    text: "AAA",
+  });
+  expect(reviewerBCard?.parts[0]).toMatchObject({
+    partID: "review:integrity:ses_rev_b:reasoning:1",
+    text: "B",
+  });
+});
+
+test("reviewer chunk without its own started event throws (writer invariant)", () => {
+  // If a future code path regresses and emits reviewer chunks under the
+  // supervisor's reviewID without registering its own started event,
+  // tree-writer should not silently graft them onto the supervisor card.
+  resetWriter();
+
+  applyEvent({
+    type: "review.stream.started",
+    emittedAt: 1700000000000,
+    properties: {
+      taskID: "tsk_team",
+      reviewID: "integrity:ses_super",
+      phase: "integrity",
+      sessionID: "ses_super",
+    },
+  });
+
+  expect(() =>
+    applyEvent({
+      type: "review.stream.chunk",
+      emittedAt: 1700000000100,
+      properties: {
+        taskID: "tsk_team",
+        // A reviewer-shaped reviewID that never had its own started event.
+        reviewID: "integrity:ses_rev_orphan",
+        phase: "integrity",
+        kind: "reasoning",
+        attempt: 1,
+        delta: "orphan",
+      },
+    }),
+  ).toThrow(/arrived before started/);
+});
+
 test("review stream rejects retired delivery phase", () => {
   resetWriter();
 

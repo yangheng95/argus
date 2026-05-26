@@ -4,7 +4,7 @@ import { Database } from "../../src/storage/db"
 import { EngineSpecSnapshotTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import { recordIntegrityAttempt } from "../../src/engine/persist"
 import { findLatestIntegrityAttemptArtifact, listIntegrityAttemptArtifacts } from "../../src/engine/store"
-import type { DeliveryRow, GoalRunRow } from "../../src/engine/store"
+import type { GoalRunRow } from "../../src/engine/store"
 import {
   buildIntegrityReplayContext,
   buildSpecSnapshotLineage,
@@ -12,6 +12,18 @@ import {
 } from "../../src/integrity/replay-context"
 import type { GoalContractFields } from "../../src/pipeline/types"
 import { resetDatabase } from "../fixture/db"
+
+type BuildRecordRow = {
+  id: string
+  task_id: string
+  run_id: string
+  goal_run_id: string
+  status: string
+  summary: string
+  result: Record<string, unknown>
+  time_created: number
+  time_updated: number
+}
 
 function seedTask(input: { projectID: string; taskID: string; specIDs: string[]; now: number }) {
   Database.use((db) => {
@@ -62,7 +74,7 @@ function lineage(taskID: string, activeSpecSnapshotID: string, inheritedSpecSnap
     taskID,
     activeSpecSnapshotID,
     inheritedSpecSnapshotIDs,
-    reason: inheritedSpecSnapshotIDs.length > 0 ? "integrity_correction_lineage" as const : "active_only" as const,
+    reason: inheritedSpecSnapshotIDs.length > 0 ? ("integrity_correction_lineage" as const) : ("active_only" as const),
   }
 }
 
@@ -85,20 +97,20 @@ function goal(id: string, acceptanceSpecs = 1): GoalContractFields {
   }
 }
 
-function delivery(input: {
+function buildRecord(input: {
   id: string
   taskID: string
   now: number
   result: Record<string, unknown>
   summary?: string
-}): DeliveryRow {
+}): BuildRecordRow {
   return {
     id: input.id,
     task_id: input.taskID,
     run_id: `${input.id}_run`,
     goal_run_id: `${input.id}_goal_run`,
     status: "candidate",
-    summary: input.summary ?? `Delivery ${input.id}`,
+    summary: input.summary ?? `Build record ${input.id}`,
     result: input.result,
     time_created: input.now,
     time_updated: input.now,
@@ -199,7 +211,7 @@ describe("integrity replay context artifact source", () => {
     )
   })
 
-  test("builds first-attempt replay context with scale counts and all delivery evidence", () => {
+  test("builds first-attempt replay context with scale counts and all build evidence", () => {
     const now = Date.now()
     const taskID = `tsk_replay_first_${now.toString(16)}`
     const ctx = buildIntegrityReplayContext({
@@ -211,9 +223,9 @@ describe("integrity replay context artifact source", () => {
         { id: "REQ-1", type: "explicit", description: "Settings persist" },
         { id: "REQ-2", type: "implicit", description: "Validation handles bad input" },
       ],
-      deliveries: [
-        delivery({
-          id: "delivery_first",
+      buildRecords: [
+        buildRecord({
+          id: "build_record_first",
           taskID,
           now,
           result: {
@@ -280,7 +292,7 @@ describe("integrity replay context artifact source", () => {
       phase: "post_build",
       goals: [goal("lineage", 1)],
       requirements: [],
-      deliveries: [],
+      buildRecords: [],
       goalRuns: [],
     })
     const twoAncestorLineage = buildSpecSnapshotLineage({
@@ -293,7 +305,7 @@ describe("integrity replay context artifact source", () => {
       phase: "post_build",
       goals: [goal("lineage", 1)],
       requirements: [],
-      deliveries: [],
+      buildRecords: [],
       goalRuns: [],
     })
 
@@ -364,7 +376,7 @@ describe("integrity replay context artifact source", () => {
       findings: [],
       requiredRepairs: [],
       unresolvedDisagreements: [],
-        fact_check_items: [],
+      fact_check_items: [],
       reason: "Only concerns remain.",
       now: now + 20,
     })
@@ -375,19 +387,19 @@ describe("integrity replay context artifact source", () => {
       phase: "post_build",
       goals: [goal("settings", 1), goal("storage", 1)],
       requirements: [{ id: "REQ-2", type: "explicit", description: "Reject invalid settings" }],
-      deliveries: [
-        delivery({
-          id: "delivery_old",
+      buildRecords: [
+        buildRecord({
+          id: "build_record_old",
           taskID,
           now: now + 15,
-          summary: "Old delivery before latest review",
+          summary: "Old build record before latest review",
           result: { changed_files: ["src/old.ts"] },
         }),
-        delivery({
-          id: "delivery_new",
+        buildRecord({
+          id: "build_record_new",
           taskID,
           now: now + 25,
-          summary: "New delivery after latest review",
+          summary: "New build record after latest review",
           result: {
             changed_files: ["src/settings.ts"],
             changedFiles: ["src/storage.ts"],
@@ -418,7 +430,9 @@ describe("integrity replay context artifact source", () => {
           specIDs: ["settings_validation"],
         },
       ],
-      requiredRepairs: [{ id: "repair-settings", description: "Add settings validation", filePaths: ["src/settings.ts"] }],
+      requiredRepairs: [
+        { id: "repair-settings", description: "Add settings validation", filePaths: ["src/settings.ts"] },
+      ],
       unresolvedDisagreements: [{ id: "dispute-1", description: "Reviewer disagreement" }],
     })
     expect(ctx.priorAttempts[1]).toMatchObject({ attemptNumber: 2, artifactID: secondAttemptID })
@@ -427,7 +441,7 @@ describe("integrity replay context artifact source", () => {
       sinceTimeCreated: now + 20,
       changedFiles: ["src/settings.ts", "src/storage.ts"],
       diffs: [{ file: "src/settings.ts", status: "modified", additions: 4, deletions: 2 }],
-      deliverySummaries: ["New delivery after latest review"],
+      buildSummaries: ["New build record after latest review"],
       goalRuns: [
         {
           goalID: "storage",
@@ -456,7 +470,7 @@ describe("integrity replay context artifact source", () => {
       phase: "pre_build",
       goals: [goal("first", 1)],
       requirements: [],
-      deliveries: [],
+      buildRecords: [],
       goalRuns: [],
     })
 
@@ -506,12 +520,12 @@ describe("integrity replay context artifact source", () => {
       phase: "post_build",
       goals: [goal("settings", 1)],
       requirements: [{ id: "REQ-2", type: "explicit", description: "Reject invalid settings" }],
-      deliveries: [
-        delivery({
-          id: "delivery_render_new",
+      buildRecords: [
+        buildRecord({
+          id: "build_record_render_new",
           taskID,
           now: now + 20,
-          summary: "Settings validation repair delivery",
+          summary: "Settings validation repair build record",
           result: { changed_files: ["src/settings.ts"], diffs: [{ file: "src/storage.ts", status: "modified" }] },
         }),
       ],
@@ -525,8 +539,9 @@ describe("integrity replay context artifact source", () => {
     expect(prompt).toContain("BF-1: Settings validation blind spot")
     expect(prompt).toContain("repair: Reject invalid settings before persisting.")
     expect(prompt).toContain("repair-settings: Add settings validation")
-    expect(prompt).toContain("src/settings.ts")
-    expect(prompt).toContain("src/storage.ts")
+    expect(prompt).toContain("directories: src")
+    expect(prompt).not.toContain("src/settings.ts")
+    expect(prompt).not.toContain("src/storage.ts")
     expect(prompt).toContain("- prior_attempts=1")
     expect(prompt).toContain("- prior_blocking_findings=1")
   })

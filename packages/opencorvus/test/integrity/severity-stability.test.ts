@@ -2,12 +2,6 @@ import { expect, test } from "bun:test"
 import TEAM_CORE from "../../src/prompt/core/integrity-team-core.txt"
 import { buildReviewerPrompt, type ReviewPromptInput } from "../../src/integrity/team-agent"
 
-const contractGraph = {
-  contracts: [],
-  dependency_contracts: [],
-  audit_criteria: [],
-}
-
 function r7ToR8PromptInput(): ReviewPromptInput {
   return {
     userRequest: "写一个成熟的输入 deepseek key 即可聊天的 ai chat 页面",
@@ -34,7 +28,6 @@ function r7ToR8PromptInput(): ReviewPromptInput {
         non_goals: "Browser quota exhaustion hardening is not a bounded REQ.",
       },
     ],
-    contractGraph,
     replayContext: {
       attemptNumber: 8,
       lineage: {
@@ -69,7 +62,7 @@ function r7ToR8PromptInput(): ReviewPromptInput {
           blockingFindings: [],
           requiredRepairs: [],
           unresolvedDisagreements: [],
-        fact_check_items: [],
+          fact_check_items: [],
         },
       ],
       buildEvidenceSinceLastReview: {
@@ -77,7 +70,7 @@ function r7ToR8PromptInput(): ReviewPromptInput {
         sinceTimeCreated: Date.UTC(2026, 4, 23, 14, 0),
         changedFiles: [],
         diffs: [],
-        deliverySummaries: ["No storage surface changed after R7."],
+        buildSummaries: ["No storage surface changed after R7."],
         goalRuns: [],
       },
       scaleSignals: {
@@ -112,7 +105,7 @@ test("R7 to R8 same quota finding prompt keeps advisory promotion barred without
   expect(prompt).toContain("Shared Prompt Context (severity_context)")
   expect(prompt).toContain("active_spec_snapshot=spec_r8")
   expect(prompt).toContain("inherited_spec_snapshots=spec_r7")
-  expect(prompt).toContain("Changed files: (none)")
+  expect(prompt).toContain("Changed directories: (none)")
   expect(prompt).toContain("code lines on the same defect surface changed after the prior attempt")
   expect(prompt).toContain("a new explicit REQ row was added after the prior attempt")
   expect(prompt).toContain("newly executed runtime observation")

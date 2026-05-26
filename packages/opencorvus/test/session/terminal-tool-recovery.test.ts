@@ -85,6 +85,8 @@ describe("SessionLoop terminal tool recovery", () => {
     const prompt = terminalToolSystemPrompt("submit_design_prd_spec")
 
     expect(prompt).toContain("MUST call the submit_design_prd_spec tool")
+    expect(prompt).toContain("prompt-visible original user request")
+    expect(prompt).toContain("upstream contracts")
     expect(prompt).toContain("Do NOT respond with plain text")
     expect(prompt).toContain("input matching its schema")
   })

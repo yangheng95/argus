@@ -19,38 +19,44 @@ import { tmpdir } from "../fixture/fixture"
 
 function seedTaskAndSpec(projectID: string, taskID: string, specID: string, now: number) {
   Database.use((db) => {
-    db.insert(ProjectTable).values({
-      id: projectID,
-      worktree: "D:/tmp/fc-replay",
-      name: "FC replay test",
-      sandboxes: "[]",
-      time_created: now,
-      time_updated: now,
-    }).run()
-    db.insert(EngineTaskTable).values({
-      id: taskID,
-      project_id: projectID,
-      session_id: null,
-      source: "test",
-      title: "FC replay task",
-      request: "Run the thing",
-      kind: "workflow",
-      priority: "normal",
-      time_created: now,
-      time_updated: now,
-      time_started: now,
-    }).run()
-    db.insert(EngineSpecSnapshotTable).values({
-      id: specID,
-      task_id: taskID,
-      version: 1,
-      status: "ready",
-      summary: "test snapshot",
-      content: "(content)",
-      scope: "",
-      time_created: now,
-      time_updated: now,
-    }).run()
+    db.insert(ProjectTable)
+      .values({
+        id: projectID,
+        worktree: "D:/tmp/fc-replay",
+        name: "FC replay test",
+        sandboxes: "[]",
+        time_created: now,
+        time_updated: now,
+      })
+      .run()
+    db.insert(EngineTaskTable)
+      .values({
+        id: taskID,
+        project_id: projectID,
+        session_id: null,
+        source: "test",
+        title: "FC replay task",
+        request: "Run the thing",
+        kind: "workflow",
+        priority: "normal",
+        time_created: now,
+        time_updated: now,
+        time_started: now,
+      })
+      .run()
+    db.insert(EngineSpecSnapshotTable)
+      .values({
+        id: specID,
+        task_id: taskID,
+        version: 1,
+        status: "ready",
+        summary: "test snapshot",
+        content: "(content)",
+        scope: "",
+        time_created: now,
+        time_updated: now,
+      })
+      .run()
   })
 }
 
@@ -111,7 +117,7 @@ describe("integrity replay surfaces prior fact_check_attempt rows", () => {
           lineage,
           phase: "post_build",
           goals: [],
-          deliveries: [],
+          buildRecords: [],
           goalRuns: [],
         })
 
@@ -140,7 +146,7 @@ describe("integrity replay surfaces prior fact_check_attempt rows", () => {
           lineage,
           phase: "post_build",
           goals: [],
-          deliveries: [],
+          buildRecords: [],
           goalRuns: [],
         })
         expect(ctx.priorFactCheckAttempts.length).toBe(0)

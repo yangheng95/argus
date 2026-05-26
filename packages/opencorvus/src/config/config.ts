@@ -1473,6 +1473,10 @@ export namespace Config {
             .optional()
             .describe("Tools that should only be available to primary agents."),
           continue_loop_on_deny: z.boolean().optional().describe("Continue the agent loop when a tool call is denied"),
+          confirm_proposed_tasks: z
+            .boolean()
+            .optional()
+            .describe("Require user confirmation before the orchestrator creates proposed follow-up tasks"),
           auto_question: z
             .boolean()
             .optional()

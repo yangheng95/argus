@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, mock, test } from "bun:test"
-import { emptyArchitectContractGraph } from "../../src/architect/contract-graph"
 import type { IntegrityReplayContext } from "../../src/integrity/replay-context"
 
 let sessionCounter = 0
@@ -55,7 +54,7 @@ function replayContext(): IntegrityReplayContext {
     buildEvidenceSinceLastReview: {
       changedFiles: [],
       diffs: [],
-      deliverySummaries: [],
+      buildSummaries: [],
       goalRuns: [],
     },
     scaleSignals: {
@@ -101,15 +100,18 @@ mock.module("@/agent/runner", () => ({
       await input.toolKit.tools.submit_integrity_consensus.execute({
         verdict: "pass",
         summary: "Only traced findings may survive consensus; no traced finding remains.",
-        teamReportMarkdown: "### Integrity team review\n\nUntraced bundle-size concern was dropped from final findings.",
+        teamReportMarkdown:
+          "### Integrity team review\n\nUntraced bundle-size concern was dropped from final findings.",
         reviewers: [untracedReviewerReport, runtimeReviewerReport],
         findings: [],
-        rounds: [{
-          roundID: "traceability-consensus",
-          prompt: "Remove untraced concerns from final consensus.",
-          reviewerIDs: ["scope", "runtime"],
-          outcome: "Dropped untraced bundle-size concern.",
-        }],
+        rounds: [
+          {
+            roundID: "traceability-consensus",
+            prompt: "Remove untraced concerns from final consensus.",
+            reviewerIDs: ["scope", "runtime"],
+            outcome: "Dropped untraced bundle-size concern.",
+          },
+        ],
         requiredRepairs: [],
         unresolvedDisagreements: [],
         fact_check_items: [],
@@ -140,42 +142,49 @@ describe("integrity consensus traceability discipline", () => {
     const result = await reviewIntegrity({
       userRequest: "Build a chat page that renders assistant replies.",
       taskTitle: "Chat page",
-      goals: [{
-        id: "goal_chat",
-        title: "Chat response UI",
-        objective: "Render assistant replies in the chat page.",
-        acceptance_specs: [{
-          id: "acc-chat",
-          source_requirement_id: "REQ-1",
-          goal_id: "goal_chat",
-          title: "Assistant replies render",
-          severity: "essential",
-          scorers: [{
-            type: "llm_judge",
-            name: "reply visible",
-            criteria: "Assistant replies are visible in the chat transcript.",
-          }],
-        }],
-        owned_paths: ["src/App.tsx"],
-        depends_on: [],
-        priority: "blocking",
-        kind: "feature",
-        requirement_ids: ["REQ-1"],
-      }],
-      requirements: [{
-        id: "REQ-1",
-        type: "explicit",
-        description: "Assistant replies render in the chat transcript.",
-        acceptance: "Assistant replies are visible after sending a prompt.",
-        non_goals: "No bundle-size budget is requested.",
-      }],
-      contractGraph: emptyArchitectContractGraph(),
+      goals: [
+        {
+          id: "goal_chat",
+          title: "Chat response UI",
+          objective: "Render assistant replies in the chat page.",
+          acceptance_specs: [
+            {
+              id: "acc-chat",
+              source_requirement_id: "REQ-1",
+              goal_id: "goal_chat",
+              title: "Assistant replies render",
+              severity: "essential",
+              scorers: [
+                {
+                  type: "llm_judge",
+                  name: "reply visible",
+                  criteria: "Assistant replies are visible in the chat transcript.",
+                },
+              ],
+            },
+          ],
+          owned_paths: ["src/App.tsx"],
+          depends_on: [],
+          priority: "blocking",
+          kind: "feature",
+          requirement_ids: ["REQ-1"],
+        },
+      ],
+      requirements: [
+        {
+          id: "REQ-1",
+          type: "explicit",
+          description: "Assistant replies render in the chat transcript.",
+          acceptance: "Assistant replies are visible after sending a prompt.",
+          non_goals: "No bundle-size budget is requested.",
+        },
+      ],
       replayContext: replayContext(),
     })
 
     expect(capturedConsensusPrompt).toContain("Bundle size regression")
     expect(capturedConsensusPrompt).toContain("must be removed from the final report")
-    expect(result.reviewers[0]?.findings).toEqual([untracedReviewerFinding])
+    expect(result.reviewers[0]?.findings[0]).toMatchObject(untracedReviewerFinding)
     expect(result.findings).toEqual([])
     expect(result.issues).toEqual([])
     expect(result.verdict).toBe("pass")

@@ -137,17 +137,11 @@ mock.module("@/engine/protocol", () => ({
   },
 }))
 
-const contractGraph = {
-  contracts: [],
-  dependency_contracts: [],
-  audit_criteria: [],
-}
-
 afterEach(() => {
   capturedPrompts = []
 })
 
-test("reviewIntegrity active path delivers severity discipline, lineage replay, and maturity read-through", async () => {
+test("reviewIntegrity active path emits severity discipline, lineage replay, and maturity read-through", async () => {
   const { reviewIntegrity } = await import("../../src/integrity/team-agent")
   await reviewIntegrity({
     userRequest: "写一个成熟的输入 deepseek key 即可聊天的 ai chat 页面",
@@ -181,7 +175,6 @@ test("reviewIntegrity active path delivers severity discipline, lineage replay, 
         reason: "Scope did not produce a bounded REQ for every maturity aspect.",
       },
     ],
-    contractGraph,
     replayContext: {
       attemptNumber: 2,
       lineage: {
@@ -216,7 +209,7 @@ test("reviewIntegrity active path delivers severity discipline, lineage replay, 
           blockingFindings: [],
           requiredRepairs: [],
           unresolvedDisagreements: [],
-        fact_check_items: [],
+          fact_check_items: [],
         },
       ],
       buildEvidenceSinceLastReview: {
@@ -224,7 +217,7 @@ test("reviewIntegrity active path delivers severity discipline, lineage replay, 
         sinceTimeCreated: Date.UTC(2026, 4, 23, 12),
         changedFiles: [],
         diffs: [],
-        deliverySummaries: ["No storage file changed after the advisory finding."],
+        buildSummaries: ["No storage file changed after the advisory finding."],
         goalRuns: [],
       },
       scaleSignals: {
@@ -252,7 +245,8 @@ test("reviewIntegrity active path delivers severity discipline, lineage replay, 
     expect(prompt).toContain("inherited_spec_snapshots=spec_prev")
     expect(prompt).toContain("ADV-3-silent-quota-error")
     expect(prompt).toContain("# Scope-Bounded Maturity Evidence")
-    expect(prompt).toContain("maturity_scope_pending")
+    expect(prompt).toContain("Requirement decision-log entries are not part of the initial integrity context.")
+    expect(prompt).not.toContain("maturity_scope_pending")
   }
   expect(capturedPrompts[3]).toContain("# Severity Reconciliation Pass")
   expect(capturedPrompts[3]).toContain("keep it advisory")

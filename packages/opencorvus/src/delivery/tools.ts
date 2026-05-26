@@ -21,7 +21,6 @@ import { Log } from "@/util/log"
 import {
   findActiveSpecForTask,
   findDeliveriesForTask,
-  findLatestArchitectContractGraph,
   findRequirements,
   findTask,
   listGoalRunsForTask,
@@ -40,7 +39,6 @@ import type { DeliveryInfo, GoalInfo } from "@/delivery/checks"
 import type { AcceptanceSpec } from "@/acceptance/types"
 import { createDecisionLog } from "@/decision-log"
 import { renderIntegrityMarkdown } from "@/integrity/render-markdown"
-import type { VisualSpec } from "@/design-analyst/types"
 import { parsedRequirementFromRow } from "@/requirements/row"
 
 const log = Log.create({ service: "delivery-tools" })
@@ -78,11 +76,7 @@ export function normalizeVerifyPageIntegrityInput(args: RuntimeCaptureRequest) {
   return normalizeRuntimeCaptureRequest(args)
 }
 
-async function runDeliveryIntegrityReview(input: {
-  taskID?: string
-  parentSessionID?: string
-  signal?: AbortSignal
-}) {
+async function runDeliveryIntegrityReview(input: { taskID?: string; parentSessionID?: string; signal?: AbortSignal }) {
   if (!input.taskID) {
     throw new Error("run_integrity_review requires taskID in the delivery tool context")
   }
@@ -97,30 +91,15 @@ async function runDeliveryIntegrityReview(input: {
   const dbGoals = listGoals(task.id).filter((goal) => goal.spec_snapshot_id === activeSpec.id)
   if (dbGoals.length === 0) throw new Error(`run_integrity_review: spec ${activeSpec.id} has no goals`)
 
-  const contractGraph = findLatestArchitectContractGraph(task.id)
-  if (!contractGraph) {
-    throw new Error(
-      `run_integrity_review: task ${task.id} is missing architect_contract_graph; run Architect again before integrity review`,
-    )
-  }
-  if (!Array.isArray(task.design_specs)) {
-    throw new Error(`run_integrity_review: task ${task.id} has malformed design_specs`)
-  }
   if (task.attachments !== null && task.attachments !== undefined && !Array.isArray(task.attachments)) {
     throw new Error(`run_integrity_review: task ${task.id} has malformed attachments`)
   }
-  const designSpecs: VisualSpec[] | undefined = task.design_specs.length > 0 ? task.design_specs : undefined
   const taskAttachments: AttachmentStore.Reference[] | undefined =
     task.attachments && task.attachments.length > 0 ? task.attachments : undefined
 
   const reqRows = findRequirements(activeSpec.id)
   const requirements = reqRows.map(parsedRequirementFromRow)
   const decisionLog = createDecisionLog(task.id)
-  const requirementDecisions = decisionLog.readByPhase("requirements").map((entry) => ({
-    key: entry.key,
-    value: entry.value,
-    reason: entry.reason,
-  }))
   const goalsForReview = dbGoals.map((goal) => ({
     id: goal.id,
     title: goal.title,
@@ -158,7 +137,7 @@ async function runDeliveryIntegrityReview(input: {
     phase,
     goals: goalsForReview,
     requirements,
-    deliveries: findDeliveriesForTask(task.id),
+    buildRecords: findDeliveriesForTask(task.id),
     goalRuns: listGoalRunsForTask(task.id),
   })
 
@@ -167,11 +146,7 @@ async function runDeliveryIntegrityReview(input: {
     taskTitle: task.title,
     goals: goalsForReview,
     requirements,
-    requirementDecisions,
     requirementStatus,
-    designSpecs,
-    contractGraph,
-    decisionLog,
     attachments: taskAttachments,
     replayContext,
     signal: input.signal,
@@ -854,7 +829,9 @@ function renderDeliveryContextSection(
       if (!input.taskID) return "No task_id is available; upstream context cannot be loaded."
       const sections = buildTaskUpstreamAgentContextSections(input.taskID)
       if (sections.length === 0) {
-        throw new Error(`Cannot inspect delivery upstream context for task ${input.taskID}: no upstream context sections.`)
+        throw new Error(
+          `Cannot inspect delivery upstream context for task ${input.taskID}: no upstream context sections.`,
+        )
       }
       return sections.join("\n\n---\n\n")
 

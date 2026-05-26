@@ -4,11 +4,6 @@ import { runAgentSession } from "@/agent/runner"
 import { withFactCheckRegistration } from "@/prompt/fragments/fact-check-registration"
 import { limitSummary, markdownList } from "@/agent/report"
 import type { AcceptanceSpec } from "@/acceptance/types"
-import { renderSpecsAsText } from "@/acceptance/types"
-import { renderContractGraphForPrompt, type ArchitectContractGraph } from "@/architect/contract-graph"
-import { renderVisualContractPromptSection } from "@/design-analyst/prompt-section"
-import type { VisualSpec } from "@/design-analyst/types"
-import type { DecisionLog } from "@/decision-log"
 import { Event as EngineEvent } from "@/engine/model"
 import { EngineProtocol } from "@/engine/protocol"
 import { renderUserRequestSection } from "@/intent/request-prompt"
@@ -23,7 +18,6 @@ import {
 import type { ParsedRequirement, RequirementsDecision } from "@/requirements/types"
 import { AttachmentStore } from "@/storage/attachment-store"
 import { Log } from "@/util/log"
-import type { DeliveryInfo, GoalInfo } from "@/delivery/checks"
 import { createIntegrityAcceptanceTools } from "./acceptance-tools"
 import {
   buildPriorManifestIndex,
@@ -129,7 +123,9 @@ export interface IntegrityResult extends IntegrityTeamReport {
   missingGoals: MissingGoal[]
 }
 
-export interface IntegrityAcceptanceContext extends DeliveryInfo {}
+type IntegrityEvidenceToolInput = NonNullable<Parameters<typeof createIntegrityAcceptanceTools>[0]>
+type IntegrityAcceptanceContext = NonNullable<IntegrityEvidenceToolInput["buildEvidence"]>
+type IntegrityEvidenceGoalInfo = NonNullable<IntegrityEvidenceToolInput["goals"]>[number]
 
 export type ReviewPromptInput = {
   userRequest: string
@@ -137,9 +133,6 @@ export type ReviewPromptInput = {
   goals: GoalContractFields[]
   requirements?: ParsedRequirement[]
   requirementDecisions?: RequirementsDecision[]
-  designSpecs?: VisualSpec[]
-  contractGraph: ArchitectContractGraph
-  decisionLog?: DecisionLog
   requirementStatus?: RequirementStatusRow[]
   attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>
   acceptance?: IntegrityAcceptanceContext
@@ -152,15 +145,31 @@ type PlanCollector = { plan?: IntegrityReviewerPlan }
 type ReviewerCollector = { report?: IntegrityReviewerReport }
 type ConsensusCollector = { report?: IntegrityTeamReport }
 
+const INTEGRITY_EVIDENCE_PROMPT_MAX_CHARS = 12_000
+const INTEGRITY_EVIDENCE_LIMITS = {
+  userRequestChars: 800,
+  requirements: 8,
+  requirementDescriptionChars: 120,
+  requirementAcceptanceChars: 100,
+  requirementNonGoalChars: 80,
+  requirementStatusRows: 8,
+  requirementStatusGoals: 4,
+  requirementStatusSpecs: 6,
+  buildDirectories: 24,
+  buildSummaryChars: 500,
+  goals: 24,
+  goalObjectiveChars: 140,
+  goalDirectories: 6,
+  goalAcceptanceSpecs: 2,
+  goalAcceptanceTitleChars: 80,
+} as const
+
 export async function reviewIntegrity(input: {
   userRequest: string
   taskTitle: string
   goals: GoalContractFields[]
   requirements?: ParsedRequirement[]
   requirementDecisions?: RequirementsDecision[]
-  designSpecs?: VisualSpec[]
-  contractGraph?: ArchitectContractGraph
-  decisionLog?: DecisionLog
   requirementStatus?: RequirementStatusRow[]
   attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>
   acceptance?: IntegrityAcceptanceContext
@@ -184,11 +193,7 @@ export async function reviewIntegrity(input: {
     if (softSessionID) input.onSessionCreated?.(softSessionID)
     return { ...result, sessionID: softSessionID ?? "" }
   }
-  if (!input.contractGraph) {
-    throw new Error(`reviewIntegrity requires architect_contract_graph when reviewing ${input.goals.length} goal(s).`)
-  }
-
-  const promptInput: ReviewPromptInput = { ...input, contractGraph: input.contractGraph, replayContext }
+  const promptInput: ReviewPromptInput = { ...input, replayContext }
   const startedAt = Date.now()
   let activeReviewID: string | undefined
 
@@ -255,7 +260,6 @@ export async function reviewIntegrity(input: {
         input: promptInput,
         scope,
         parentSessionID: planOut.session.id,
-        activeReviewID: () => activeReviewID,
       }),
     ),
   )
@@ -338,8 +342,8 @@ function createReviewerToolKit(input: {
   const evidenceTools = input.taskID
     ? createIntegrityAcceptanceTools({
         taskID: input.taskID,
-        goals: input.goals.map(goalToDeliveryGoalInfo),
-        delivery: input.acceptance,
+        goals: input.goals.map(goalToIntegrityEvidenceGoalInfo),
+        buildEvidence: input.acceptance,
         attachments: input.attachments,
         signal: input.signal,
       })
@@ -400,9 +404,15 @@ async function runReviewerSession(input: {
   input: ReviewPromptInput
   scope: IntegrityReviewerScope
   parentSessionID: string
-  activeReviewID: () => string | undefined
 }): Promise<IntegrityReviewerReport> {
   const collector: ReviewerCollector = {}
+  // Each reviewer streams reasoning under its OWN reviewID derived from its
+  // own child session id. Sharing the supervisor's reviewID would collapse
+  // N reviewers' reasoning into a single overlay partID and produce the
+  // 168KB-cross-contaminated-text render-thrash described in
+  // specs/new-arch/2026-05-26-integrity-reviewer-stream-reviewid.md.
+  let reviewerReviewID: string | undefined
+  const reviewerSource = `architect.integrity.reviewer.${input.scope.reviewerID}`
   const out = await runAgentSession<ReviewerCollector>({
     kind: "integrity",
     core: TEAM_CORE,
@@ -441,11 +451,21 @@ async function runReviewerSession(input: {
     },
     stream: createReviewReasoningForwarder({
       taskID: input.input.taskID,
-      reviewID: input.activeReviewID,
+      reviewID: () => reviewerReviewID,
       phase: "integrity",
       attempt: () => input.input.replayContext.attemptNumber,
-      source: `architect.integrity.reviewer.${input.scope.reviewerID}`,
+      source: reviewerSource,
     }),
+    onSessionCreated: (session) => {
+      reviewerReviewID = reviewIDForIntegrity(session.id)
+      emitReviewStreamStarted({
+        taskID: input.input.taskID,
+        reviewID: reviewerReviewID,
+        phase: "integrity",
+        sessionID: session.id,
+        source: reviewerSource,
+      })
+    },
   })
   if (!out.collector.report) throw new Error(`integrity reviewer ${input.scope.reviewerID} did not submit a report.`)
   return out.collector.report
@@ -457,11 +477,15 @@ export function buildSupervisorPlanPrompt(input: ReviewPromptInput): string {
     renderIntegrityReplayContextPrompt(input.replayContext),
     renderSeverityNewEvidenceSection(input),
     [
-      "Choose 2-6 independent reviewers for the actual task risk surface. Use the scale signals: larger goal/REQ/changed-file surfaces should push the plan toward more reviewers; narrow surfaces can use fewer. Do not default to five reviewers. Do not use fixed dimensions or a stock checklist.",
+      "First build a task-specific audit strategy. Derive `taskProfile`, `riskHypotheses`, and `coveragePlan` from the request promises, REQ summaries, goal summaries, replay context, and changed directory surface. Do not use a fixed checklist.",
+      "Risk hypotheses must name concrete ways this task could fail the user's intent, such as missing real API integration, failing to reuse existing components, visual/layout defects, source translation parity gaps, persistence/auth/data loss, or behavior regressions when those are relevant. Omit categories that are not relevant.",
+      "For each reviewer, include riskHypothesisIDs and a drilldownPlan that uses scoped evidence tools. Reviewers should start from `inspect_integrity_evidence` overview/changed_directories/goal_summary, then request exact directories, files, diffs, runtime screenshots, or commands only when needed.",
+      "Do not plan default reads of upstream_context, contract graph, visual specs, decision log, full file lists, or full diffs. Those are not initial audit material.",
+      "Choose 2-6 independent reviewers for the actual task risk surface. Use the scale signals: larger goal/REQ/changed-directory surfaces should push the plan toward more reviewers; narrow surfaces can use fewer. Do not default to five reviewers. Do not use fixed dimensions or a stock checklist.",
       "When no prior integrity attempt exists for this task/spec snapshot, build the reviewer team from the task's actual risk surface.",
       "When prior attempts exist, start from prior blocking findings, required repairs, and prior reviewer focuses. Verify whether prior blockers were actually repaired using build evidence since the latest review, then cover new or changed risk surfaces. Do not spend a fresh full team rediscovering the same unchanged blocker. If a prior blocker still appears unresolved, assign a reviewer to verify it as persistent with evidence rather than renaming it as a new finding.",
-      "Prior reviewer focuses are the list of surfaces that were inspected, not a proof that those surfaces are healthy or that uninspected surfaces are absent. Re-walk the actual task surface from the user request, REQ rows, goals, acceptance specs, contract graph, and changed files. If a category looks uninspected in prior rounds, do not assume it is irrelevant -- it may have been missed. Match reviewers to surface by semantic responsibility, not by similarity to prior reviewer ids or names.",
-      "Use 2-3 reviewers when the replay context shows a narrow re-review with a small changed-file set and a small number of prior blockers. Use 4-6 reviewers when the task spans many goals/requirements/acceptance specs, when changed files cross several runtime surfaces, or when the replay context has no prior attempts. Avoid substantial overlap with prior reviewer focuses unless the rationale ties it to persistent blockers or changed repair evidence.",
+      "Prior reviewer focuses are the list of surfaces that were inspected, not a proof that those surfaces are healthy or that uninspected surfaces are absent. Re-walk the actual task surface from the user request, REQ rows, goals, acceptance specs, changed directories, and build summaries. If a category looks uninspected in prior rounds, do not assume it is irrelevant -- it may have been missed. Match reviewers to surface by semantic responsibility, not by similarity to prior reviewer ids or names.",
+      "Use 2-3 reviewers when the replay context shows a narrow re-review with a small changed-directory set and a small number of prior blockers. Use 4-6 reviewers when the task spans many goals/requirements/acceptance specs, when changed directories cross several runtime surfaces, or when the replay context has no prior attempts. Avoid substantial overlap with prior reviewer focuses unless the rationale ties it to persistent blockers or changed repair evidence.",
     ].join("\n\n"),
     buildIntegrityEvidencePrompt(input),
     "Call submit_integrity_review_plan exactly once.",
@@ -481,6 +505,9 @@ export function buildReviewerPrompt(input: ReviewPromptInput, scope: IntegrityRe
     FINDING_MANIFEST_PROMPT,
     renderSeverityNewEvidenceSection(input),
     [
+      "Before deep evidence reads, form an investigation plan for your scope: request promise, risk hypothesis, evidence plan, and pass/finding criteria. Include it in `investigationPlan` in submit_reviewer_report.",
+      "Record scoped tool work in `drilldowns[]`, and record request/REQ/spec coverage in `coverage[]`. A pass report still needs coverage evidence.",
+      "Use scoped drilldown. Prefer `inspect_integrity_evidence` sections such as overview, changed_directories, changed_files_in_directory, diff_for_file, goal_summary, and goal_detail. Do not request full upstream context, contract graph, visual specs, decision log, or broad full-diff dumps.",
       "Explore independently, gather evidence, and call submit_reviewer_report once.",
       "When no prior integrity attempt exists for this task/spec, review your assigned surface independently using evidence from files, diffs, commands, runtime checks, requirements, goals, and the original request.",
       "When prior attempts exist, you are reviewing the current attempt, not starting from zero. Prior findings and required repairs are evidence. First check whether prior blockers relevant to your scope were repaired in the files/evidence changed since the latest review. If the same blocker remains, report it as persistent and cite both the prior finding id and current evidence. Then inspect new risk introduced by the repair. Do not relabel an unchanged prior blocker as a brand-new discovery.",
@@ -509,6 +536,7 @@ export function buildSupervisorConsensusPrompt(
     reports.map(renderReviewerReportMarkdown).join("\n\n"),
     "Original review context:",
     buildIntegrityEvidencePrompt(input),
+    "Perform a coverage audit before final verdict: every critical request promise from the plan should be covered, missing, or explicitly inconclusive. Include `coverageAudit`; include `uninspectedRisks` for high-risk surfaces that no reviewer actually checked.",
     "Call submit_integrity_consensus exactly once.",
   ].join("\n\n")
 }
@@ -522,81 +550,114 @@ export function buildIntegrityEvidencePrompt(input: ReviewPromptInput): string {
       request: sanitizeIntegrityPromptText({
         text: input.userRequest,
         field: "user_request_quote",
+        maxChars: INTEGRITY_EVIDENCE_LIMITS.userRequestChars,
         markdownContext: "block",
       }).text,
       taskID: input.taskID,
     }),
   )
   if (input.requirements?.length) {
-    sections.push(
-      [
-        "# Requirements",
-        ...input.requirements.map((r) => {
-          const lines = [`- ${r.id} (${r.type}): ${r.description}`]
-          if (r.acceptance.trim().length > 0) lines.push(`  Acceptance: ${r.acceptance}`)
-          if (r.non_goals.trim().length > 0) lines.push(`  Non-goals: ${r.non_goals}`)
-          return lines.join("\n")
-        }),
-      ].join("\n"),
-    )
+    sections.push(renderRequirementsSummary(input.requirements))
   }
   if (input.requirementStatus?.length) {
-    const lines = ["# Requirement Status Snapshot"]
-    for (const row of input.requirementStatus) {
-      lines.push(`## ${row.reqID}: ${row.reqDescription}`)
-      for (const cg of row.claimingGoals) {
-        const specStr = cg.specOutcomes
-          .map(
-            (s) =>
-              `${s.specID}/${s.severity}=${s.passed === true ? "passed" : s.passed === false ? "failed" : "no-evidence"}${s.summary ? ` (${s.summary})` : ""}`,
-          )
-          .join(", ")
-        lines.push(
-          `- ${cg.goalID} "${cg.goalTitle}" runStatus=${cg.runStatus}: ${specStr || "no related specs evaluated"}`,
-        )
-      }
-      if (row.claimingGoals.length === 0) lines.push("- no claiming goal")
-    }
-    sections.push(lines.join("\n"))
+    sections.push(renderRequirementStatusSummary(input.requirementStatus))
   }
-  sections.push(renderScopeBoundedMaturityEvidenceSection(input))
   if (input.acceptance) {
-    const changed = input.acceptance.changedFiles.slice(0, 80)
-    const diffLines = (input.acceptance.diffs ?? []).slice(0, 12).map((diff) => `- ${diff.file}`)
-    sections.push(
+    sections.push(renderBuildEvidenceSummary(input.acceptance))
+  }
+  sections.push(renderGoalContractSummary(input.goals))
+  sections.push(renderScopeBoundedMaturityEvidenceSection(input))
+  return clipIntegrityEvidenceText(
+    sections.filter((section) => section.trim().length > 0).join("\n\n"),
+    INTEGRITY_EVIDENCE_PROMPT_MAX_CHARS,
+  )
+}
+
+function renderRequirementsSummary(requirements: ParsedRequirement[]): string {
+  const visible = requirements.slice(0, INTEGRITY_EVIDENCE_LIMITS.requirements)
+  const lines = ["# Requirements", `Rendered ${visible.length}/${requirements.length} requirements.`]
+  for (const r of visible) {
+    const row = [
+      `- ${r.id} (${r.type}): ${sanitizePromptBlock(r.description, INTEGRITY_EVIDENCE_LIMITS.requirementDescriptionChars)}`,
+    ]
+    const acceptance = requirementAcceptanceLines(r.acceptance)
+    if (acceptance.length > 0) {
+      row.push(
+        `  acceptance: ${acceptance
+          .map((item) => sanitizePromptBlock(item, INTEGRITY_EVIDENCE_LIMITS.requirementAcceptanceChars))
+          .join("; ")}`,
+      )
+    }
+    if (r.non_goals.trim().length > 0) {
+      row.push(`  non_goals: ${sanitizePromptBlock(r.non_goals, INTEGRITY_EVIDENCE_LIMITS.requirementNonGoalChars)}`)
+    }
+    lines.push(row.join("\n"))
+  }
+  appendOmittedLine(lines, requirements.length, visible.length, "requirements")
+  return lines.join("\n")
+}
+
+function renderRequirementStatusSummary(rows: RequirementStatusRow[]): string {
+  const visibleRows = rows.slice(0, INTEGRITY_EVIDENCE_LIMITS.requirementStatusRows)
+  const lines = [
+    "# Requirement Status Snapshot",
+    `Rendered ${visibleRows.length}/${rows.length} requirement status rows.`,
+  ]
+  for (const row of visibleRows) {
+    lines.push(
+      `## ${row.reqID}: ${sanitizePromptBlock(row.reqDescription, INTEGRITY_EVIDENCE_LIMITS.requirementDescriptionChars)}`,
+    )
+    const visibleGoals = row.claimingGoals.slice(0, INTEGRITY_EVIDENCE_LIMITS.requirementStatusGoals)
+    for (const cg of visibleGoals) {
+      const visibleSpecs = cg.specOutcomes.slice(0, INTEGRITY_EVIDENCE_LIMITS.requirementStatusSpecs)
+      const specStr = visibleSpecs
+        .map(
+          (s) =>
+            `${s.specID}/${s.severity}=${s.passed === true ? "passed" : s.passed === false ? "failed" : "no-evidence"}${s.summary ? ` (${sanitizePromptBlock(s.summary, 160)})` : ""}`,
+        )
+        .join(", ")
+      lines.push(
+        `- ${cg.goalID} "${sanitizePromptLine(cg.goalTitle, "generic")}" runStatus=${cg.runStatus}: ${specStr || "no related specs evaluated"}`,
+      )
+    }
+    if (row.claimingGoals.length === 0) lines.push("- no claiming goal")
+    appendOmittedLine(lines, row.claimingGoals.length, visibleGoals.length, "claiming goals")
+  }
+  appendOmittedLine(lines, rows.length, visibleRows.length, "requirement status rows")
+  return lines.join("\n")
+}
+
+function renderBuildEvidenceSummary(acceptance: IntegrityAcceptanceContext): string {
+  const allChangedDirectories = promptPathDirectories(acceptance.changedFiles)
+  const changedDirectories = allChangedDirectories.slice(0, INTEGRITY_EVIDENCE_LIMITS.buildDirectories)
+  const allDiffDirectories = promptPathDirectories((acceptance.diffs ?? []).map((diff) => diff.file))
+  const diffDirectories = allDiffDirectories.slice(0, INTEGRITY_EVIDENCE_LIMITS.buildDirectories)
+  const lines = [
+    "# Build Evidence Context",
+    `Summary: ${sanitizePromptBlock(acceptance.summary || "(no summary)", INTEGRITY_EVIDENCE_LIMITS.buildSummaryChars)}`,
+    `Changed directories (${changedDirectories.length}/${allChangedDirectories.length}; files=${acceptance.changedFiles.length}):`,
+    ...(changedDirectories.length > 0 ? changedDirectories.map((directory) => `- ${directory}`) : ["- (none)"]),
+  ]
+  appendOmittedLine(lines, allChangedDirectories.length, changedDirectories.length, "changed directories")
+  lines.push(
+    `Representative diff directories (${diffDirectories.length}/${allDiffDirectories.length}; diffs=${acceptance.diffs?.length ?? 0}):`,
+  )
+  for (const directory of diffDirectories) lines.push(`- ${directory}`)
+  appendOmittedLine(lines, allDiffDirectories.length, diffDirectories.length, "diff directories")
+  return lines.join("\n")
+}
+
+function renderGoalContractSummary(goals: GoalContractFields[]): string {
+  const visible = goals.slice(0, INTEGRITY_EVIDENCE_LIMITS.goals)
+  const lines = [`# Goal Contracts Summary (${visible.length}/${goals.length})`]
+  for (const goal of visible) {
+    const directories = promptPathDirectories(goal.owned_paths).slice(0, INTEGRITY_EVIDENCE_LIMITS.goalDirectories)
+    lines.push(
       [
-        "# Delivery Evidence Context",
-        `Summary: ${input.acceptance.summary || "(no summary)"}`,
-        "Changed files:",
-        ...changed.map((file) => `- ${file}`),
-        "Representative diffs:",
-        ...diffLines,
-      ].join("\n"),
-    )
-  }
-  if (input.requirementDecisions?.length) {
-    sections.push(
-      ["# Foundational Decisions", ...input.requirementDecisions.map((d) => `- ${d.key}=${d.value}: ${d.reason}`)].join(
-        "\n",
-      ),
-    )
-  }
-  if (input.designSpecs?.length) {
-    sections.push(
-      renderVisualContractPromptSection({
-        specs: input.designSpecs,
-        instructions: ["Use design specs as evidence, not as trusted truth."],
-      }),
-    )
-  }
-  sections.push(`# Goal Contracts (${input.goals.length})`)
-  for (const goal of input.goals) {
-    sections.push(
-      [
-        `## ${goal.id}: ${goal.title}`,
-        `Objective: ${goal.objective}`,
-        `Acceptance Specs:\n${renderSpecsAsText(goal.acceptance_specs ?? [])}`,
-        `Responsibility Paths: ${goal.owned_paths.join(", ") || "(none)"}`,
+        `## ${goal.id}: ${sanitizePromptLine(goal.title, "generic")}`,
+        `Objective: ${sanitizePromptBlock(goal.objective, INTEGRITY_EVIDENCE_LIMITS.goalObjectiveChars)}`,
+        `Acceptance Specs Summary:\n${renderAcceptanceSpecSummary(goal.acceptance_specs ?? [])}`,
+        `Responsibility Directories (${directories.length}/${promptPathDirectories(goal.owned_paths).length}; paths=${goal.owned_paths.length}): ${directories.join(", ") || "(none)"}`,
         `Priority: ${goal.priority}`,
         `Kind: ${goal.kind}`,
         goal.depends_on?.length ? `Depends on: ${goal.depends_on.join(", ")}` : "",
@@ -606,10 +667,24 @@ export function buildIntegrityEvidencePrompt(input: ReviewPromptInput): string {
         .join("\n"),
     )
   }
-  sections.push(renderContractGraphForPrompt(input.contractGraph))
-  const dlSection = input.decisionLog?.toPromptSection()
-  if (dlSection) sections.push(dlSection)
-  return sections.join("\n\n")
+  appendOmittedLine(lines, goals.length, visible.length, "goals")
+  return lines.join("\n")
+}
+
+function renderAcceptanceSpecSummary(specs: readonly AcceptanceSpec[]): string {
+  if (specs.length === 0) return "(no acceptance specs)"
+  const visible = specs.slice(0, INTEGRITY_EVIDENCE_LIMITS.goalAcceptanceSpecs)
+  const lines: string[] = []
+  for (const spec of visible) {
+    lines.push(
+      `- [${spec.severity}] ${spec.id} <- ${spec.source_requirement_id}: ${sanitizePromptBlock(
+        spec.title,
+        INTEGRITY_EVIDENCE_LIMITS.goalAcceptanceTitleChars,
+      )}; trigger=${spec.trigger ?? "default"}; scorer_count=${spec.scorers.length}`,
+    )
+  }
+  appendOmittedLine(lines, specs.length, visible.length, "acceptance specs")
+  return lines.join("\n")
 }
 
 export function renderSeverityNewEvidenceSection(input: ReviewPromptInput): string {
@@ -624,18 +699,22 @@ export function renderSeverityNewEvidenceSection(input: ReviewPromptInput): stri
   if (evidence.sinceTimeCreated !== undefined) {
     changedEvidenceLines.push(`- Since time: ${new Date(evidence.sinceTimeCreated).toISOString()}`)
   }
+  const changedDirectories = promptPathDirectories(evidence.changedFiles)
   changedEvidenceLines.push(
-    `- Changed files: ${evidence.changedFiles.length > 0 ? evidence.changedFiles.join(", ") : "(none)"}`,
+    `- Changed directories: ${changedDirectories.length > 0 ? changedDirectories.join(", ") : "(none)"}`,
   )
-  if (evidence.deliverySummaries.length > 0) {
-    changedEvidenceLines.push("- Delivery summaries:")
-    for (const summary of evidence.deliverySummaries) changedEvidenceLines.push(`  - ${summary}`)
+  if (evidence.buildSummaries.length > 0) {
+    changedEvidenceLines.push("- Build summaries:")
+    for (const summary of evidence.buildSummaries.slice(0, 12)) {
+      changedEvidenceLines.push(`  - ${sanitizePromptBlock(summary, INTEGRITY_EVIDENCE_LIMITS.buildSummaryChars)}`)
+    }
+    appendOmittedLine(changedEvidenceLines, evidence.buildSummaries.length, 12, "build summaries")
   }
   const rendered = renderSharedIntegrityPromptContext({
     surface: "severity_context",
     lineage: input.replayContext.lineage,
     latestAttempt,
-    changedFiles: evidence.changedFiles,
+    changedDirectories,
     changedEvidenceMarkdown: changedEvidenceLines.join("\n"),
     oldAttempts,
     reviewerTextBlocks: renderPriorFindingsForSeverity(input.replayContext),
@@ -658,7 +737,8 @@ function renderPriorFindingsForSeverity(context: IntegrityReplayContext): string
       lines.push(`- [${finding.severity}] ${finding.id}: ${finding.title}`)
       if (finding.description) lines.push(`  description: ${finding.description}`)
       if (finding.repair) lines.push(`  repair: ${finding.repair}`)
-      if (finding.filePaths.length > 0) lines.push(`  files: ${finding.filePaths.join(", ")}`)
+      if (finding.filePaths.length > 0)
+        lines.push(`  directories: ${promptPathDirectories(finding.filePaths).join(", ")}`)
       if (finding.requirementIDs.length > 0) lines.push(`  requirements: ${finding.requirementIDs.join(", ")}`)
       if (finding.specIDs.length > 0) lines.push(`  specs: ${finding.specIDs.join(", ")}`)
     }
@@ -685,35 +765,43 @@ function renderScopeBoundedMaturityEvidenceSection(input: ReviewPromptInput): st
   const lines = [
     "# Scope-Bounded Maturity Evidence",
     "",
-    "Severity reads maturity meaning only from the scope discipline path: bounded REQ rows or a durable `maturity_scope_pending` decision. This section is a read-through; severity does not classify the task into a local maturity tier.",
+    "Severity reads maturity meaning only from bounded REQ rows rendered here. Requirement decision-log entries are not part of the initial integrity context.",
     "",
     "Visible bounded REQs from requirements/scope:",
   ]
   if (input.requirements?.length) {
-    for (const req of input.requirements) {
-      lines.push(`- ${req.id}: ${sanitizePromptLine(req.description, "generic")}`)
+    const visible = input.requirements.slice(0, INTEGRITY_EVIDENCE_LIMITS.requirements)
+    for (const req of visible) {
+      lines.push(
+        `- ${req.id}: ${sanitizePromptBlock(req.description, INTEGRITY_EVIDENCE_LIMITS.requirementDescriptionChars)}`,
+      )
       const acceptance = requirementAcceptanceLines(req.acceptance)
       if (acceptance.length > 0)
-        lines.push(`  acceptance: ${acceptance.map((item) => sanitizePromptLine(item, "generic")).join("; ")}`)
+        lines.push(
+          `  acceptance: ${acceptance
+            .map((item) => sanitizePromptBlock(item, INTEGRITY_EVIDENCE_LIMITS.requirementAcceptanceChars))
+            .join("; ")}`,
+        )
       if (req.non_goals.trim().length > 0) {
-        lines.push(`  non_goals: ${sanitizePromptLine(req.non_goals, "generic")}`)
+        lines.push(
+          `  non_goals: ${sanitizePromptBlock(req.non_goals, INTEGRITY_EVIDENCE_LIMITS.requirementNonGoalChars)}`,
+        )
       }
     }
+    appendOmittedLine(lines, input.requirements.length, visible.length, "bounded maturity requirements")
   } else {
     lines.push("- (none rendered)")
   }
 
-  lines.push("", "Maturity terms from original request not landed as bounded REQs:")
+  lines.push("", "Omitted maturity decisions:")
   const pending = input.requirementDecisions?.filter((decision) => decision.key === "maturity_scope_pending") ?? []
   if (pending.length > 0) {
-    for (const decision of pending) {
-      lines.push(
-        `- maturity_scope_pending: ${sanitizePromptLine(decision.value, "generic")}; reason: ${sanitizePromptLine(decision.reason, "generic")}. Valid integrity action: at most one requirements-extraction concern; do not derive severity thresholds from this word.`,
-      )
-    }
+    lines.push(
+      `- ${pending.length} requirement decision-log entr${pending.length === 1 ? "y is" : "ies are"} omitted from the initial integrity context. If a maturity phrase is absent from bounded REQs, reviewers may raise at most one requirements-extraction concern from the rendered user request and REQ rows; do not derive severity thresholds from hidden decisions.`,
+    )
   } else {
     lines.push(
-      "- No `maturity_scope_pending` decision is present in rendered requirements/scope decisions. Do not infer one here; use only bounded REQs above and explicit request phrases already rendered.",
+      "- No omitted maturity decision is rendered here. Do not infer one; use only bounded REQs above and explicit request phrases already rendered.",
     )
   }
   return lines.join("\n")
@@ -742,6 +830,35 @@ function sanitizePromptLine(text: string, field: "user_request_quote" | "generic
   })
     .text.replace(/\s+/g, " ")
     .trim()
+}
+
+function sanitizePromptBlock(text: string, maxChars: number): string {
+  return sanitizeIntegrityPromptText({
+    text,
+    field: "generic",
+    markdownContext: "block",
+    maxChars,
+  }).text
+}
+
+function promptPathDirectories(paths: readonly string[]): string[] {
+  const directories = new Set<string>()
+  for (const path of paths) {
+    const normalized = path.replace(/\\/g, "/").replace(/^\/+/, "")
+    const index = normalized.lastIndexOf("/")
+    directories.add(index > 0 ? normalized.slice(0, index) : ".")
+  }
+  return [...directories].sort((left, right) => left.localeCompare(right))
+}
+
+function appendOmittedLine(lines: string[], total: number, rendered: number, label: string) {
+  if (total > rendered) lines.push(`- omitted ${total - rendered} ${label} from initial integrity context`)
+}
+
+function clipIntegrityEvidenceText(text: string, maxChars: number): string {
+  if (text.length <= maxChars) return text
+  const marker = "\n[omitted_by_initial_integrity_context_cap]"
+  return `${text.slice(0, Math.max(0, maxChars - marker.length)).trimEnd()}${marker}`
 }
 
 function normalizeTeamReport(report: IntegrityTeamReport, replayContext?: IntegrityReplayContext): IntegrityResult {
@@ -799,7 +916,7 @@ function normalizeManifestFinding(
   const fingerprint = integrityFindingFingerprint({ ...finding, canonicalSymptom })
   const prior = priorByFingerprint.get(fingerprint)
   const priorAttemptRefs = stableList([
-    ...finding.priorAttemptRefs,
+    ...(finding.priorAttemptRefs ?? []),
     ...(prior?.attemptNumber ? [`R${prior.attemptNumber}:${prior.id}`] : []),
   ])
   return {
@@ -807,9 +924,9 @@ function normalizeManifestFinding(
     id: prior?.id ?? finding.id,
     fingerprint,
     canonicalSymptom,
-    affectedSymbols: stableList(finding.affectedSymbols),
+    affectedSymbols: stableList(finding.affectedSymbols ?? []),
     verify: defaultIntegrityVerify(finding),
-    sourceFindingIDs: stableList([...finding.sourceFindingIDs, finding.id, ...(prior ? [prior.id] : [])]),
+    sourceFindingIDs: stableList([...(finding.sourceFindingIDs ?? []), finding.id, ...(prior ? [prior.id] : [])]),
     priorAttemptRefs,
   }
 }
@@ -821,9 +938,9 @@ function normalizeManifestRepair(
 ): IntegrityRequiredRepair {
   const linkedFinding = findings.find(
     (finding) =>
-      repair.sourceFindingIDs.includes(finding.id) ||
-      repair.sourceFindingIDs.some((id) => finding.sourceFindingIDs.includes(id)) ||
-      finding.sourceFindingIDs.includes(repair.id) ||
+      (repair.sourceFindingIDs ?? []).includes(finding.id) ||
+      (repair.sourceFindingIDs ?? []).some((id) => (finding.sourceFindingIDs ?? []).includes(id)) ||
+      (finding.sourceFindingIDs ?? []).includes(repair.id) ||
       repair.id === finding.id ||
       repair.id === `repair-${finding.id}` ||
       integrityFindingFingerprint(repair) === finding.fingerprint,
@@ -843,23 +960,23 @@ function normalizeManifestRepair(
     severity: repair.severity ?? linkedFinding?.severity ?? "blocking",
     title: repair.title ?? linkedFinding?.title,
     canonicalSymptom,
-    evidence: repair.evidence.length > 0 ? repair.evidence : linkedFinding?.evidence ?? [],
-    targetIDs: stableList([...repair.targetIDs, ...(linkedFinding?.targetIDs ?? [])]),
-    requirementIDs: stableList([...repair.requirementIDs, ...(linkedFinding?.requirementIDs ?? [])]),
-    specIDs: stableList([...repair.specIDs, ...(linkedFinding?.specIDs ?? [])]),
-    filePaths: stableList([...repair.filePaths, ...(linkedFinding?.filePaths ?? [])]),
-    affectedSymbols: stableList([...repair.affectedSymbols, ...(linkedFinding?.affectedSymbols ?? [])]),
+    evidence: (repair.evidence ?? []).length > 0 ? repair.evidence : (linkedFinding?.evidence ?? []),
+    targetIDs: stableList([...(repair.targetIDs ?? []), ...(linkedFinding?.targetIDs ?? [])]),
+    requirementIDs: stableList([...(repair.requirementIDs ?? []), ...(linkedFinding?.requirementIDs ?? [])]),
+    specIDs: stableList([...(repair.specIDs ?? []), ...(linkedFinding?.specIDs ?? [])]),
+    filePaths: stableList([...(repair.filePaths ?? []), ...(linkedFinding?.filePaths ?? [])]),
+    affectedSymbols: stableList([...(repair.affectedSymbols ?? []), ...(linkedFinding?.affectedSymbols ?? [])]),
     repair: repair.repair ?? linkedFinding?.repair ?? repair.description,
     verify: defaultIntegrityVerify({
       ...repair,
       repair: repair.repair ?? linkedFinding?.repair ?? repair.description,
-      evidence: repair.evidence.length > 0 ? repair.evidence : linkedFinding?.evidence,
-      filePaths: repair.filePaths.length > 0 ? repair.filePaths : linkedFinding?.filePaths,
-      verify: repair.verify.length > 0 ? repair.verify : linkedFinding?.verify,
+      evidence: (repair.evidence ?? []).length > 0 ? repair.evidence : linkedFinding?.evidence,
+      filePaths: (repair.filePaths ?? []).length > 0 ? repair.filePaths : linkedFinding?.filePaths,
+      verify: (repair.verify ?? []).length > 0 ? repair.verify : linkedFinding?.verify,
     }),
-    sourceFindingIDs: stableList([...repair.sourceFindingIDs, ...(linkedFinding ? [linkedFinding.id] : [])]),
+    sourceFindingIDs: stableList([...(repair.sourceFindingIDs ?? []), ...(linkedFinding ? [linkedFinding.id] : [])]),
     priorAttemptRefs: stableList([
-      ...repair.priorAttemptRefs,
+      ...(repair.priorAttemptRefs ?? []),
       ...(prior?.attemptNumber ? [`R${prior.attemptNumber}:${prior.id}`] : []),
     ]),
   }
@@ -912,6 +1029,8 @@ function createNoGoalsResult(): IntegrityResult {
       scope: "Goal graph existence",
       verdict: "needs_correction",
       summary: "No goal contracts exist.",
+      drilldowns: [],
+      coverage: [],
       evidence: ["goals.length=0"],
       findings: [finding],
       openQuestions: [],
@@ -921,6 +1040,8 @@ function createNoGoalsResult(): IntegrityResult {
       scope: "User request completion",
       verdict: "needs_correction",
       summary: "Completion cannot be reviewed without goals.",
+      drilldowns: [],
+      coverage: [],
       evidence: ["No goal accepts ownership of the user request."],
       findings: [finding],
       openQuestions: [],
@@ -932,6 +1053,21 @@ function createNoGoalsResult(): IntegrityResult {
     teamReportMarkdown:
       "### Integrity team review (verdict=needs_correction)\n\nBlocking: no goal contracts exist. Run architect again before review.",
     reviewers,
+    coverageAudit: [
+      {
+        promise: "Active task has goal contracts before integrity review.",
+        reviewerIDs: reviewers.map((r) => r.reviewerID),
+        status: "missing",
+        notes: "No goal contracts were available for request coverage audit.",
+      },
+    ],
+    uninspectedRisks: [
+      {
+        risk: "User request completion cannot be inspected without goal contracts.",
+        reason: "The active spec snapshot has no goals.",
+        action: "block",
+      },
+    ],
     findings: [finding],
     rounds: [
       {
@@ -1000,6 +1136,8 @@ function emitIntegrityEvent(
     summary: result.summary,
     teamReportMarkdown: result.teamReportMarkdown,
     reviewers: result.reviewers,
+    coverageAudit: result.coverageAudit,
+    uninspectedRisks: result.uninspectedRisks,
     findings: result.findings,
     rounds: result.rounds,
     requiredRepairs: result.requiredRepairs,
@@ -1025,13 +1163,46 @@ function assertUniqueReviewerIDs(plan: IntegrityReviewerPlan): void {
 }
 
 function renderReviewerPlanMarkdown(plan: IntegrityReviewerPlan): string {
-  return [
-    `## Reviewer Plan`,
-    `Rationale: ${plan.rationale}`,
-    ...plan.reviewers.map(
-      (r) => `### ${r.reviewerID}: ${r.title}\nFocus: ${r.focus}\nQuestions:\n${markdownList(r.adversarialQuestions)}`,
-    ),
-  ].join("\n\n")
+  const lines = [`## Reviewer Plan`, `Rationale: ${plan.rationale}`]
+  if (plan.taskProfile) {
+    lines.push(
+      [
+        "Task profile:",
+        `- categories: ${plan.taskProfile.categories.join(", ") || "(none)"}`,
+        `- request critical promises: ${plan.taskProfile.requestCriticalPromises.join(" | ") || "(none)"}`,
+        `- changed surfaces: ${plan.taskProfile.changedSurfaces.join(", ") || "(none)"}`,
+        `- available evidence surfaces: ${plan.taskProfile.availableEvidenceSurfaces.join(", ") || "(none)"}`,
+      ].join("\n"),
+    )
+  }
+  if ((plan.riskHypotheses ?? []).length > 0) {
+    lines.push(
+      [
+        "Risk hypotheses:",
+        ...plan.riskHypotheses.map(
+          (risk) =>
+            `- ${risk.id}: ${risk.title}; relevant=${risk.whyRelevantToRequest}; evidence=${risk.evidenceNeeded.join(
+              " | ",
+            )}${risk.suggestedReviewerID ? `; suggested=${risk.suggestedReviewerID}` : ""}`,
+        ),
+      ].join("\n"),
+    )
+  }
+  if ((plan.coveragePlan ?? []).length > 0) lines.push("Coverage plan:", markdownList(plan.coveragePlan))
+  for (const reviewer of plan.reviewers) {
+    lines.push(
+      [
+        `### ${reviewer.reviewerID}: ${reviewer.title}`,
+        `Focus: ${reviewer.focus}`,
+        (reviewer.riskHypothesisIDs ?? []).length ? `Risk hypotheses: ${reviewer.riskHypothesisIDs.join(", ")}` : "",
+        (reviewer.drilldownPlan ?? []).length ? `Drilldown plan:\n${markdownList(reviewer.drilldownPlan)}` : "",
+        `Questions:\n${markdownList(reviewer.adversarialQuestions)}`,
+      ]
+        .filter(Boolean)
+        .join("\n"),
+    )
+  }
+  return lines.join("\n\n")
 }
 
 function renderReviewerReportMarkdown(report: IntegrityReviewerReport): string {
@@ -1040,8 +1211,40 @@ function renderReviewerReportMarkdown(report: IntegrityReviewerReport): string {
     `Scope: ${report.scope}`,
     `Summary: ${report.summary}`,
   ]
-  if (report.evidence.length) lines.push("Evidence:", markdownList(report.evidence))
-  if (report.findings.length) {
+  if (report.investigationPlan) {
+    lines.push(
+      [
+        "Investigation plan:",
+        `- request promise: ${report.investigationPlan.requestPromise}`,
+        `- hypothesis: ${report.investigationPlan.hypothesis}`,
+        `- evidence plan: ${report.investigationPlan.evidencePlan.join(" | ")}`,
+        `- pass criteria: ${report.investigationPlan.passCriteria.join(" | ")}`,
+      ].join("\n"),
+    )
+  }
+  if ((report.drilldowns ?? []).length > 0) {
+    lines.push(
+      "Drilldowns:",
+      markdownList(
+        report.drilldowns.map(
+          (drilldown) => `${drilldown.kind}:${drilldown.target} - ${drilldown.purpose} => ${drilldown.result}`,
+        ),
+      ),
+    )
+  }
+  if ((report.coverage ?? []).length > 0) {
+    lines.push(
+      "Coverage:",
+      markdownList(
+        report.coverage.map((row) => {
+          const target = row.requirementID ?? row.specID ?? row.userRequestQuote ?? "(unanchored)"
+          return `${target}: ${row.status} - ${row.evidence}`
+        }),
+      ),
+    )
+  }
+  if ((report.evidence ?? []).length) lines.push("Evidence:", markdownList(report.evidence))
+  if ((report.findings ?? []).length) {
     lines.push("Findings:")
     for (const finding of report.findings) {
       const quotes =
@@ -1053,16 +1256,16 @@ function renderReviewerReportMarkdown(report: IntegrityReviewerReport): string {
       )
     }
   }
-  if (report.openQuestions.length) lines.push("Open questions:", markdownList(report.openQuestions))
+  if ((report.openQuestions ?? []).length) lines.push("Open questions:", markdownList(report.openQuestions))
   return lines.join("\n")
 }
 
-function goalToDeliveryGoalInfo(goal: GoalContractFields): GoalInfo {
+function goalToIntegrityEvidenceGoalInfo(goal: GoalContractFields): IntegrityEvidenceGoalInfo {
   return {
     id: goal.id,
     title: goal.title,
     description: goal.objective,
-    criteria: renderSpecsAsText(goal.acceptance_specs ?? []),
+    criteria: renderAcceptanceSpecSummary(goal.acceptance_specs ?? []),
     priority: goal.priority,
     acceptance_spec_count: goal.acceptance_specs?.length ?? 0,
     acceptance_scenarios: (goal.acceptance_specs ?? []).filter((spec) => Boolean(spec.scenario)),
