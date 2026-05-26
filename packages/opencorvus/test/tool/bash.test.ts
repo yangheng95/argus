@@ -1,6 +1,7 @@
-import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
+import { afterEach, describe, expect, mock, test } from "bun:test"
 import os from "os"
 import path from "path"
+import { PassThrough } from "stream"
 import { BashTool, DEFAULT_TIMEOUT, disposeSyntaxTree } from "../../src/tool/bash"
 import { DEFAULT_BASH_TIMEOUT_MS } from "../../src/shell/timeout"
 import { Instance } from "../../src/project/instance"
@@ -9,7 +10,7 @@ import { tmpdir } from "../fixture/fixture"
 import type { PermissionNext } from "../../src/permission/next"
 import { Truncate } from "../../src/tool/truncation"
 import { Agent } from "../../src/agent/agent"
-import { Shell } from "../../src/shell/shell"
+import { ProcessSupervisor } from "../../src/shell/process-supervisor"
 
 const ctx = {
   sessionID: "ses_test",
@@ -134,19 +135,39 @@ describe("tool.bash", () => {
     await Instance.provide({
       directory: projectRoot,
       fn: async () => {
-        const cleanupCalls: any[] = []
-        spyOn(Shell, "killTree").mockImplementation(async (_proc, opts) => {
-          cleanupCalls.push(opts)
+        let disposeCalls = 0
+        const restore = ProcessSupervisor.setFactoryForTest(async () => {
+          const stdout = new PassThrough()
+          let resolveExit!: (code: number) => void
+          const exited = new Promise<number>((resolve) => { resolveExit = resolve })
+          queueMicrotask(() => {
+            stdout.write("shell-cleanup\n")
+            stdout.end()
+            setTimeout(() => resolveExit(0), 0)
+          })
+          return {
+            pid: 9001,
+            stdout,
+            stderr: new PassThrough(),
+            exited,
+            terminate: async () => {},
+            dispose: async () => { disposeCalls++ },
+            unref: () => {},
+          }
         })
-        const bash = await BashTool.init()
-        await bash.execute(
-          {
-            command: "echo shell-cleanup",
-            description: "Echo cleanup marker",
-          },
-          ctx,
-        )
-        expect(cleanupCalls.some((opts) => opts?.allowExitedRoot === true)).toBe(true)
+        try {
+          const bash = await BashTool.init()
+          await bash.execute(
+            {
+              command: "echo shell-cleanup",
+              description: "Echo cleanup marker",
+            },
+            ctx,
+          )
+          expect(disposeCalls).toBe(1)
+        } finally {
+          restore()
+        }
       },
     })
   })
@@ -155,22 +176,32 @@ describe("tool.bash", () => {
     await Instance.provide({
       directory: projectRoot,
       fn: async () => {
-        const cleanupCalls: any[] = []
-        spyOn(Shell, "killTree").mockImplementation(async (_proc, opts) => {
-          cleanupCalls.push(opts)
-        })
-        const bash = await BashTool.init()
-        await bash.execute(
-          {
-            command: "echo background-cleanup",
-            description: "Exit quickly in background",
-            background: true,
-            timeout: 50,
-          },
-          ctx,
-        )
-        await Bun.sleep(150)
-        expect(cleanupCalls.some((opts) => opts?.allowExitedRoot === true)).toBe(true)
+        let disposeCalls = 0
+        const restore = ProcessSupervisor.setFactoryForTest(async () => ({
+          pid: 9002,
+          stdout: new PassThrough(),
+          stderr: new PassThrough(),
+          exited: Promise.resolve(0),
+          terminate: async () => {},
+          dispose: async () => { disposeCalls++ },
+          unref: () => {},
+        }))
+        try {
+          const bash = await BashTool.init()
+          await bash.execute(
+            {
+              command: "echo background-cleanup",
+              description: "Exit quickly in background",
+              background: true,
+              timeout: 50,
+            },
+            ctx,
+          )
+          await Bun.sleep(150)
+          expect(disposeCalls).toBe(1)
+        } finally {
+          restore()
+        }
       },
     })
   })

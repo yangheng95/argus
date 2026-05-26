@@ -119,7 +119,6 @@ bun install && bun run build && bun run start
 - `qualityVerdict` 与 `localVerify`
 - 失败样本：stderr / stdout 尾部 + 相关 artifact 路径
 
-可通过 `GET /export/task/<id>/archive` 把 benchmark 产物打包成 zip 供后续 import 复查（commit `4fc10fae5`）。
 
 ## 在 CI 中运行
 

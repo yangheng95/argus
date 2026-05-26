@@ -156,6 +156,8 @@ different form and will fail downstream verification just the same.
 Call `merge_back` once after step 4, before step 6, when this session changed
 project files. Clean no-change implementation outcomes skip `merge_back` and
 still close through `report_build_result`.
+Do not batch or repeat `merge_back` in the same assistant response. Wait for
+the tool result before deciding whether a conflict-resolution retry is needed.
 No arguments. Outcomes:
 
 - `{status:"merged", primary_head, primary_branch}` — your work is on primary HEAD. Proceed to `report_build_result` with status="passed". The host records `commit_ref` from the merged primary HEAD; you do not need to compute the post-merge SHA yourself.
@@ -165,7 +167,8 @@ No arguments. Outcomes:
     3. `write` (or `edit`) the reconciled content with all markers removed, then `bash`: `git add <path>`.
     4. After every path in `conflict_paths` has been reconciled and added: `bash`: `git commit -m "reconcile with <primary_branch>"`. This commit FINALIZES the merge — it is the merge commit at the topology join point.
     5. Call `merge_back` again. The host now sees a clean tree whose tip strictly descends `<primary_branch>` and ff-publishes. If new commits arrived on primary in the meantime a fresh conflict may appear; repeat the loop.
-- `{status:"error", reason}` — infrastructure problem (no primary branch, lock failure, dirty worktree, or unfinished MERGING state from a prior attempt). If the reason names an unfinished MERGING state in this worktree, finish that merge by resolving markers, `git add`, and `git commit`, then call `merge_back` again. For other infrastructure errors, or if the merge state cannot be reconciled, call `report_build_result` with status="failed" and `reason` in `error`.
+- `{status:"blocked", reason}` — the worktree is not currently safe to merge (dirty worktree, unfinished MERGING state, or another local precondition). If the reason names an unfinished MERGING state in this worktree, finish that merge by resolving markers, `git add`, and `git commit`, then call `merge_back` again. For other blocked states, report status="failed" with `reason` in `error` unless you can directly fix the precondition.
+- `{status:"infra_error", reason}` — infrastructure problem (no primary branch, lock failure, git command failure). Report status="failed" with `reason` in `error`.
 
 merge_back is idempotent: if your branch already strictly descends primary, the merge is a fast-forward / no-op and ff-merge advances primary cleanly.
 ## Terminal Report Tools

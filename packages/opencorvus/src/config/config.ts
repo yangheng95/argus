@@ -151,6 +151,7 @@ export namespace Config {
     result.plugin = result.plugin || []
     result.experimental = {
       auto_question: true,
+      confirm_proposed_tasks: false,
       ...(result.experimental ?? {}),
     }
 
@@ -1473,16 +1474,19 @@ export namespace Config {
             .optional()
             .describe("Tools that should only be available to primary agents."),
           continue_loop_on_deny: z.boolean().optional().describe("Continue the agent loop when a tool call is denied"),
-          confirm_proposed_tasks: z
-            .boolean()
-            .optional()
-            .describe("Require user confirmation before the orchestrator creates proposed follow-up tasks"),
           auto_question: z
             .boolean()
             .optional()
             .default(true)
             .describe(
               "Auto-reject unanswered question interactions after the five-minute stale timeout. Independent fine-grained switch. When false, questions wait indefinitely for a user reply.",
+            ),
+          confirm_proposed_tasks: z
+            .boolean()
+            .optional()
+            .default(false)
+            .describe(
+              "Require operator confirmation before the orchestrator creates a proposed follow-up task. Default false lets the orchestrator create the task directly.",
             ),
           mcp_timeout: z
             .number()

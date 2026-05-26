@@ -29,10 +29,28 @@ import { listLiveOrchestratorToolOwnership } from "./tool-ownership"
 
 const log = Log.create({ service: "engine.queue" })
 
-// Process-local dedup — prevents two loops running for the same taskID
-// in the same process. The real queue lock is in the DB (claimNextForCwd).
-const loopInFlight = new Set<string>()
+// Process-local loop accounting. The real queue lock is in the DB
+// (claimNextForCwd), but interrupt-driven replacement can briefly overlap an
+// old loop that is unwinding with the new wake that supersedes it.
+const loopInFlight = new Map<string, number>()
 const queuedTaskEvents = new Map<string, OrchestratorEvent>()
+
+function loopInFlightFor(taskID: string): boolean {
+  return (loopInFlight.get(taskID) ?? 0) > 0
+}
+
+function retainLoop(taskID: string): void {
+  loopInFlight.set(taskID, (loopInFlight.get(taskID) ?? 0) + 1)
+}
+
+function releaseLoop(taskID: string): void {
+  const next = (loopInFlight.get(taskID) ?? 0) - 1
+  if (next > 0) {
+    loopInFlight.set(taskID, next)
+  } else {
+    loopInFlight.delete(taskID)
+  }
+}
 
 type QueuedTask = {
   id: string
@@ -166,9 +184,9 @@ async function launchTaskLoop(taskID: string, event: OrchestratorEvent | undefin
  * add/delete and the claim SQL both treat repeated calls as no-ops.
  */
 function attachLoopCompletion(taskID: string, cwd: string, loopPromise: Promise<void>): void {
-  loopInFlight.add(taskID)
+  retainLoop(taskID)
   loopPromise.finally(() => {
-    loopInFlight.delete(taskID)
+    releaseLoop(taskID)
     // Detach via queueMicrotask so `advanceQueue` → `startLoopForTask` →
     // `.finally` re-entry doesn't stack synchronously.
     queueMicrotask(() => {
@@ -404,7 +422,7 @@ export function listOrphanedActiveInProject(projectID: string): TaskRow[] {
       )
       .all(),
   )
-  return rows.filter((row) => !loopInFlight.has(row.id))
+  return rows.filter((row) => !loopInFlightFor(row.id))
 }
 
 /**
@@ -447,12 +465,20 @@ export async function dispatchTaskLoop(input: {
   }
 
   const liveOwners = listLiveOrchestratorToolOwnership(task.id)
-  if (liveOwners.length > 0 && loopInFlight.has(task.id)) {
+  if (liveOwners.length > 0 && loopInFlightFor(task.id)) {
+    if (input.interrupt === true) {
+      log.info("dispatchTaskLoop: interrupting live orchestrator tool ownership for operator wake", {
+        taskID: task.id,
+        liveOwners: liveOwners.map((owner) => owner.ownershipID),
+      })
+      attachLoopCompletion(task.id, cwd, launchTaskLoop(task.id, input.event, true))
+      return
+    }
     if (input.event) queuedTaskEvents.set(task.id, input.event)
     log.info("dispatchTaskLoop: queued wake behind live orchestrator tool ownership", {
       taskID: task.id,
       liveOwners: liveOwners.map((owner) => owner.ownershipID),
-      interrupt: input.interrupt === true,
+      interrupt: Boolean(input.interrupt),
     })
     return
   }
@@ -478,7 +504,7 @@ async function startLoopForTask(
   event: OrchestratorEvent | undefined,
   cwd: string,
 ): Promise<void> {
-  if (loopInFlight.has(task.id)) {
+  if (loopInFlightFor(task.id)) {
     log.info("loop already in flight, skipping", { taskID: task.id })
     return
   }

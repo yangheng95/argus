@@ -6,8 +6,9 @@ const promptPath = path.join(repoRoot, "packages/opencorvus/src/prompt/core/orch
 
 test("orchestrator prompt stops repeated stale build recover/build loops", async () => {
   const text = await Bun.file(promptPath).text()
-  expect(text).toContain("If the same stale")
-  expect(text).toContain("build evidence repeats after recovery")
+  const normalized = text.replace(/\s+/g, " ")
+  expect(normalized).toContain("If the same stale")
+  expect(normalized).toContain("build evidence repeats after recovery")
   expect(text).toContain("stop the recover/build loop")
   expect(text).toContain("`fail_task`, `question`, `modify_goal`, or `architect`")
 })

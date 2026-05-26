@@ -220,6 +220,259 @@ test("session processor preserves invalid tool-call input and paired tool-error 
   expect(part?.state.status === "error" ? part.state.input : undefined).toEqual([])
 })
 
+test("session processor closes a persisted running tool part when only the result event is in memory", async () => {
+  spyOn(Config, "get").mockResolvedValue({ experimental: {} } as Awaited<ReturnType<typeof Config.get>>)
+  spyOn(EngineConfig, "get").mockResolvedValue({
+    activity: { session_llm_idle_ms: 60 },
+  } as Awaited<ReturnType<typeof EngineConfig.get>>)
+  spyOn(SessionStatus, "set").mockImplementation(() => {})
+  spyOn(Bus, "publish").mockResolvedValue(undefined as never)
+  spyOn(Session, "updateMessage").mockResolvedValue(undefined as never)
+  spyOn(SessionSummary, "summarize").mockImplementation(() => {})
+  spyOn(SessionCompaction, "isOverflow").mockResolvedValue(false)
+  spyOn(Snapshot, "track").mockResolvedValue("snap_persisted_tool_result")
+
+  const messageID = "msg_persisted_tool_result"
+  const store = new Map<string, Message.Part>()
+  store.set("prt_persisted_merge", {
+    id: "prt_persisted_merge",
+    messageID,
+    sessionID: "ses_persisted_tool_result",
+    type: "tool",
+    callID: "call_persisted_merge",
+    tool: "merge_back",
+    state: {
+      status: "running",
+      input: {},
+      time: { start: Date.now() - 10 },
+    },
+  } as Message.ToolPart)
+  spyOn(Session, "updatePart").mockImplementation(async (part) => {
+    store.set(part.id, part as Message.Part)
+    return part as never
+  })
+  spyOn(Message, "parts").mockImplementation(
+    (async (id: string) =>
+      [...store.values()].filter((p) => p.messageID === id)) as typeof Message.parts,
+  )
+  spyOn(LLM, "stream").mockResolvedValue({
+    fullStream: streamOf([
+      {
+        type: "tool-result",
+        toolCallId: "call_persisted_merge",
+        toolName: "merge_back",
+        input: {},
+        output: { output: "{\"status\":\"merged\"}" },
+      },
+      {
+        type: "finish-step",
+        finishReason: "tool-calls",
+        usage: {
+          inputTokens: 1,
+          outputTokens: 1,
+          reasoningTokens: 0,
+          cachedInputTokens: 0,
+          totalTokens: 2,
+        },
+      },
+      { type: "finish", finishReason: "tool-calls" },
+    ]),
+  } as Awaited<ReturnType<typeof LLM.stream>>)
+
+  const processor = SessionProcessor.create({
+    assistantMessage: {
+      id: messageID,
+      sessionID: "ses_persisted_tool_result",
+      role: "assistant",
+      agent: "build",
+      parentID: "msg_parent",
+      cost: 0,
+      tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+      time: { created: Date.now() },
+    } as Message.Assistant,
+    sessionID: "ses_persisted_tool_result",
+    model: {
+      providerID: "test-provider",
+      id: "test-model",
+      api: { npm: "@ai-sdk/openai" },
+    } as Provider.Model,
+    abort: new AbortController().signal,
+  })
+
+  await processor.process({} as LLM.StreamInput)
+
+  const part = store.get("prt_persisted_merge") as Message.ToolPart
+  expect(part.state.status).toBe("completed")
+  expect(part.state.status === "completed" ? part.state.output : undefined).toBe("{\"status\":\"merged\"}")
+})
+
+test("session processor closes a persisted running tool part when only the error event is in memory", async () => {
+  spyOn(Config, "get").mockResolvedValue({ experimental: {} } as Awaited<ReturnType<typeof Config.get>>)
+  spyOn(EngineConfig, "get").mockResolvedValue({
+    activity: { session_llm_idle_ms: 60 },
+  } as Awaited<ReturnType<typeof EngineConfig.get>>)
+  spyOn(SessionStatus, "set").mockImplementation(() => {})
+  spyOn(Bus, "publish").mockResolvedValue(undefined as never)
+  spyOn(Session, "updateMessage").mockResolvedValue(undefined as never)
+  spyOn(SessionSummary, "summarize").mockImplementation(() => {})
+  spyOn(SessionCompaction, "isOverflow").mockResolvedValue(false)
+  spyOn(Snapshot, "track").mockResolvedValue("snap_persisted_tool_error")
+
+  const messageID = "msg_persisted_tool_error"
+  const store = new Map<string, Message.Part>()
+  store.set("prt_persisted_error", {
+    id: "prt_persisted_error",
+    messageID,
+    sessionID: "ses_persisted_tool_error",
+    type: "tool",
+    callID: "call_persisted_error",
+    tool: "merge_back",
+    state: {
+      status: "running",
+      input: {},
+      time: { start: Date.now() - 10 },
+    },
+  } as Message.ToolPart)
+  spyOn(Session, "updatePart").mockImplementation(async (part) => {
+    store.set(part.id, part as Message.Part)
+    return part as never
+  })
+  spyOn(Message, "parts").mockImplementation(
+    (async (id: string) =>
+      [...store.values()].filter((p) => p.messageID === id)) as typeof Message.parts,
+  )
+  spyOn(LLM, "stream").mockResolvedValue({
+    fullStream: streamOf([
+      {
+        type: "tool-error",
+        toolCallId: "call_persisted_error",
+        toolName: "merge_back",
+        input: {},
+        error: "merge failed",
+      },
+      {
+        type: "finish-step",
+        finishReason: "tool-calls",
+        usage: {
+          inputTokens: 1,
+          outputTokens: 1,
+          reasoningTokens: 0,
+          cachedInputTokens: 0,
+          totalTokens: 2,
+        },
+      },
+      { type: "finish", finishReason: "tool-calls" },
+    ]),
+  } as Awaited<ReturnType<typeof LLM.stream>>)
+
+  const processor = SessionProcessor.create({
+    assistantMessage: {
+      id: messageID,
+      sessionID: "ses_persisted_tool_error",
+      role: "assistant",
+      agent: "build",
+      parentID: "msg_parent",
+      cost: 0,
+      tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+      time: { created: Date.now() },
+    } as Message.Assistant,
+    sessionID: "ses_persisted_tool_error",
+    model: {
+      providerID: "test-provider",
+      id: "test-model",
+      api: { npm: "@ai-sdk/openai" },
+    } as Provider.Model,
+    abort: new AbortController().signal,
+  })
+
+  await processor.process({} as LLM.StreamInput)
+
+  const part = store.get("prt_persisted_error") as Message.ToolPart
+  expect(part.state.status).toBe("error")
+  expect(part.state.status === "error" ? part.state.failure.message : "").toContain("merge failed")
+})
+
+test("session processor marks a superseded duplicate merge_back call instead of losing the open part", async () => {
+  spyOn(Config, "get").mockResolvedValue({ experimental: {} } as Awaited<ReturnType<typeof Config.get>>)
+  spyOn(EngineConfig, "get").mockResolvedValue({
+    activity: { session_llm_idle_ms: 60 },
+  } as Awaited<ReturnType<typeof EngineConfig.get>>)
+  spyOn(SessionStatus, "set").mockImplementation(() => {})
+  spyOn(Bus, "publish").mockResolvedValue(undefined as never)
+  spyOn(Session, "updateMessage").mockResolvedValue(undefined as never)
+  spyOn(SessionSummary, "summarize").mockImplementation(() => {})
+  spyOn(SessionCompaction, "isOverflow").mockResolvedValue(false)
+  spyOn(Snapshot, "track").mockResolvedValue("snap_duplicate_merge_back")
+
+  const messageID = "msg_duplicate_merge_back"
+  const store = new Map<string, Message.Part>()
+  spyOn(Session, "updatePart").mockImplementation(async (part) => {
+    store.set(part.id, part as Message.Part)
+    return part as never
+  })
+  spyOn(Message, "parts").mockImplementation(
+    (async (id: string) =>
+      [...store.values()].filter((p) => p.messageID === id)) as typeof Message.parts,
+  )
+  spyOn(LLM, "stream").mockResolvedValue({
+    fullStream: streamOf([
+      { type: "tool-call", toolCallId: "call_merge_first", toolName: "merge_back", input: {} },
+      { type: "tool-call", toolCallId: "call_merge_second", toolName: "merge_back", input: {} },
+      {
+        type: "tool-result",
+        toolCallId: "call_merge_second",
+        toolName: "merge_back",
+        input: {},
+        output: { output: "{\"status\":\"merged\",\"primary_head\":\"abc\"}" },
+      },
+      {
+        type: "finish-step",
+        finishReason: "tool-calls",
+        usage: {
+          inputTokens: 1,
+          outputTokens: 1,
+          reasoningTokens: 0,
+          cachedInputTokens: 0,
+          totalTokens: 2,
+        },
+      },
+      { type: "finish", finishReason: "tool-calls" },
+    ]),
+  } as Awaited<ReturnType<typeof LLM.stream>>)
+
+  const processor = SessionProcessor.create({
+    assistantMessage: {
+      id: messageID,
+      sessionID: "ses_duplicate_merge_back",
+      role: "assistant",
+      agent: "build",
+      parentID: "msg_parent",
+      cost: 0,
+      tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+      time: { created: Date.now() },
+    } as Message.Assistant,
+    sessionID: "ses_duplicate_merge_back",
+    model: {
+      providerID: "test-provider",
+      id: "test-model",
+      api: { npm: "@ai-sdk/openai" },
+    } as Provider.Model,
+    abort: new AbortController().signal,
+  })
+
+  await processor.process({} as LLM.StreamInput)
+
+  const first = [...store.values()].find(
+    (p): p is Message.ToolPart => p.type === "tool" && p.callID === "call_merge_first",
+  )
+  const second = [...store.values()].find(
+    (p): p is Message.ToolPart => p.type === "tool" && p.callID === "call_merge_second",
+  )
+  expect(first?.state.status).toBe("error")
+  expect(first?.state.status === "error" ? first.state.failure.name : "").toBe("SupersededDuplicateToolCall")
+  expect(second?.state.status).toBe("completed")
+})
+
 test("session processor throws when a clean finish leaves an open tool part", async () => {
   spyOn(Config, "get").mockResolvedValue({ experimental: {} } as Awaited<ReturnType<typeof Config.get>>)
   spyOn(EngineConfig, "get").mockResolvedValue({

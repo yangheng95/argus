@@ -55,6 +55,7 @@ import { ConnectionBanner } from "./components/ConnectionBanner"
 import { CommandPalette } from "./components/CommandPalette"
 import { NotificationCenter } from "./components/NotificationCenter"
 import { AppDialogHost } from "./components/AppDialogHost"
+import { InteractionDialogHost } from "./components/InteractionDialogHost"
 import { SessionDialogHost } from "./components/SessionDialogHost"
 import { GoalDialogHost } from "./components/GoalDialogHost"
 import { ConfigDialogHost } from "./components/ConfigDialogHost"
@@ -1424,6 +1425,10 @@ void (async () => {
     appDialogHost.id = "appDialogHost"
     document.body.appendChild(appDialogHost)
     render(() => <AppDialogHost />, appDialogHost)
+    const interactionDialogHost = document.createElement("div")
+    interactionDialogHost.id = "interactionDialogHost"
+    document.body.appendChild(interactionDialogHost)
+    render(() => <InteractionDialogHost />, interactionDialogHost)
     const goalDialogHost = document.createElement("div")
     goalDialogHost.id = "goalDialogHost"
     document.body.appendChild(goalDialogHost)

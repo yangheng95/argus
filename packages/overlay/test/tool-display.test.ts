@@ -81,7 +81,7 @@ describe("tool display helpers", () => {
         metadata: {},
         time: { start: 1, end: 2 },
       },
-    })?.detail).toBe("merged main@abcdef123456");
+    })?.detail).toBe("merged main@abcdef1234567890");
 
     expect(describeToolPart({
       type: "tool",
@@ -117,5 +117,23 @@ describe("tool display helpers", () => {
         time: { start: 1, end: 2 },
       },
     })?.detail).toBe("failed: verification command exited 1");
+  });
+
+  test("does not truncate generic tool detail text", () => {
+    const payload = JSON.stringify({
+      from_goal_id: "goal_aigc_block_cloud",
+      reason: "integration_order",
+      summary: "Integration ".repeat(30).trim(),
+    });
+
+    expect(describeToolPart({
+      type: "tool",
+      tool: "register_dependency_contract",
+      state: {
+        status: "running",
+        input: { raw: payload },
+        raw: payload,
+      },
+    })?.detail).toBe(payload);
   });
 });

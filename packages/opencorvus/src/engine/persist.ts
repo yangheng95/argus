@@ -66,7 +66,6 @@ import { syncGoalStatus } from "./goal-status"
 import { createDecisionLog } from "@/decision-log"
 import {
   ArchitectContractGraphSchema,
-  remapArchitectContractGraphGoalIDs,
   type ArchitectContractGraph,
 } from "@/architect/contract-graph"
 
@@ -446,120 +445,6 @@ export function persistTaskArchitectContractGraph(input: {
       now: input.now ?? Date.now(),
     }),
   )
-}
-
-export type ImportedArchitectPlanGoal = {
-  oldID: string
-  title: string
-  objective: string
-  acceptanceSpecs: unknown[]
-  ownedPaths: string[]
-  dependsOn: string[]
-  kind: string
-  requirementIDs: string[]
-  priority: "advisory" | "blocking"
-  orderIndex: number
-  metadata: Record<string, unknown> | null
-}
-
-export function persistImportedArchitectPlan(input: {
-  taskID: string
-  plan: {
-    version: number
-    summary: string
-    prompt: string
-    metadata: Record<string, unknown> | null
-  }
-  snapshot: {
-    version: number
-    summary: string
-    content: string
-    scope: string
-    outOfScope: string | null
-    evidence: string[] | null
-    metadata: Record<string, unknown> | null
-  }
-  goals: ImportedArchitectPlanGoal[]
-  graph: ArchitectContractGraph
-  now?: number
-}) {
-  const now = input.now ?? Date.now()
-  const specID = Identifier.ascending("spec")
-  const planID = Identifier.ascending("plan")
-  const goalIDMap = new Map<string, string>()
-  for (const goal of input.goals) {
-    goalIDMap.set(goal.oldID, Identifier.ascending("goal"))
-  }
-  const mappedGraph = remapArchitectContractGraphGoalIDs(input.graph, (goalID) => goalIDMap.get(goalID))
-
-  Database.use((db) => {
-    db.insert(EngineSpecSnapshotTable)
-      .values({
-        id: specID,
-        task_id: input.taskID,
-        version: input.snapshot.version,
-        status: "ready",
-        summary: input.snapshot.summary,
-        content: input.snapshot.content,
-        scope: input.snapshot.scope,
-        out_of_scope: input.snapshot.outOfScope,
-        evidence: input.snapshot.evidence,
-        metadata: input.snapshot.metadata,
-        time_created: now,
-        time_updated: now,
-      })
-      .run()
-    db.insert(EnginePlanVersionTable)
-      .values({
-        id: planID,
-        task_id: input.taskID,
-        spec_snapshot_id: specID,
-        version: input.plan.version,
-        status: "active",
-        summary: input.plan.summary,
-        prompt: input.plan.prompt,
-        metadata: input.plan.metadata,
-        time_created: now,
-        time_updated: now,
-      })
-      .run()
-    for (const goal of input.goals) {
-      const newGoalID = goalIDMap.get(goal.oldID)!
-      db.insert(EngineGoalTable)
-        .values({
-          id: newGoalID,
-          task_id: input.taskID,
-          plan_version_id: planID,
-          spec_snapshot_id: specID,
-          title: goal.title,
-          slug: goalSlug(goal.title),
-          objective: goal.objective,
-          acceptance_specs: goal.acceptanceSpecs.map((spec) =>
-            spec && typeof spec === "object" ? { ...(spec as Record<string, unknown>), goal_id: newGoalID } : spec,
-          ) as any,
-          owned_paths: goal.ownedPaths,
-          depends_on: goal.dependsOn.map((goalID) => {
-            const mapped = goalIDMap.get(goalID)
-            if (!mapped) throw new Error(`Imported architect plan goal ${goal.oldID} depends on unknown goal ${goalID}.`)
-            return mapped
-          }),
-          kind: goal.kind,
-          requirement_ids: goal.requirementIDs,
-          priority: goal.priority,
-          source: "import",
-          order_index: goal.orderIndex,
-          metadata: goal.metadata,
-          time_created: now,
-          time_updated: now,
-        })
-        .run()
-    }
-    persistArchitectContractGraph(db, {
-      taskID: input.taskID,
-      graph: mappedGraph,
-      now,
-    })
-  })
 }
 
 export function insertRequirements(

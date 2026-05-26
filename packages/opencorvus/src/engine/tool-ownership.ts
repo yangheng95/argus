@@ -102,6 +102,7 @@ export function completeOrchestratorToolOwnership(input: {
 }): void {
   const current = findLatestOwnershipByID(input.taskID, input.ownershipID)
   if (!current) return
+  if (current.payload.time_completed) return
   const now = input.now ?? Date.now()
   insertOrchestratorToolOwnershipArtifact({
     taskID: input.taskID,

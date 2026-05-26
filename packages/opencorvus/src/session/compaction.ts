@@ -41,13 +41,7 @@ export namespace SessionCompaction {
     ),
   }
 
-  const COMPACTION_TOOL_OUTPUT_MAX_CHARS = 2_000
-  const COMPACTION_PROJECTION = {
-    stripMedia: true,
-    toolOutputMaxChars: COMPACTION_TOOL_OUTPUT_MAX_CHARS,
-    preserveAssistantErrors: true,
-    omitAssistantReasoning: true,
-  } satisfies Message.ToModelMessagesOptions
+  const TRANSCRIPT_FIELD_MAX_CHARS = 2_000
   type Turn = {
     start: number
     end: number
@@ -96,6 +90,129 @@ export namespace SessionCompaction {
       .filter((part): part is Message.TextPart => part.type === "text")
       .map((part) => part.text)
       .join("\n\n")
+  }
+
+  function compactTranscriptField(text: string, maxChars = TRANSCRIPT_FIELD_MAX_CHARS) {
+    if (text.length <= maxChars) return text
+    const head = Math.max(0, Math.floor(maxChars * 0.7))
+    const tail = Math.max(0, maxChars - head)
+    return [
+      text.slice(0, head).trimEnd(),
+      `[omitted ${text.length - maxChars} chars from compaction transcript]`,
+      text.slice(text.length - tail).trimStart(),
+    ].join("\n")
+  }
+
+  function escapeTranscriptText(text: string) {
+    return text
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+  }
+
+  function transcriptText(text: string) {
+    return escapeTranscriptText(compactTranscriptField(text))
+  }
+
+  function jsonForTranscript(value: unknown) {
+    try {
+      return transcriptText(JSON.stringify(value))
+    } catch {
+      return transcriptText(String(value))
+    }
+  }
+
+  function assistantErrorText(error: unknown) {
+    try {
+      return transcriptText(JSON.stringify(error))
+    } catch {
+      return transcriptText(String(error))
+    }
+  }
+
+  function renderTranscriptPart(part: Message.Part) {
+    switch (part.type) {
+      case "text":
+        return `<text>\n${transcriptText(part.text)}\n</text>`
+      case "file":
+        return [
+          `<file mime="${escapeTranscriptText(part.mime)}" filename="${escapeTranscriptText(part.filename ?? "")}">`,
+          part.source?.type ?? "attachment",
+          "</file>",
+        ].join("")
+      case "patch":
+        return `<patch>${transcriptText(Snapshot.formatPatchEvidence(part))}</patch>`
+      case "tool": {
+        const lines = [
+          `<tool name="${escapeTranscriptText(part.tool)}" status="${part.state.status}">`,
+          `<input>${jsonForTranscript(part.state.input)}</input>`,
+        ]
+        if (part.state.status === "completed") {
+          lines.push(`<output>${transcriptText(part.state.output)}</output>`)
+          if (part.state.attachments?.length) {
+            const attachments = part.state.attachments
+              .map((item) => item.filename ?? item.mime)
+              .map(escapeTranscriptText)
+              .join(", ")
+            lines.push(`<attachments>${attachments}</attachments>`)
+          }
+        } else if (part.state.status === "error") {
+          lines.push(`<error>${transcriptText(renderToolFailureCause(part.state.failure))}</error>`)
+        } else {
+          lines.push(`<state>${jsonForTranscript(part.state)}</state>`)
+        }
+        lines.push("</tool>")
+        return lines.join("\n")
+      }
+      case "compaction":
+        return "<compaction-checkpoint />"
+      case "subtask":
+        return `<subtask agent="${escapeTranscriptText(part.agent)}">${transcriptText(part.description)}</subtask>`
+      case "agent":
+        return `<agent-reference>${escapeTranscriptText(part.name)}</agent-reference>`
+      case "snapshot":
+        return `<snapshot>${transcriptText(part.snapshot)}</snapshot>`
+      case "reasoning":
+      case "step-start":
+      case "step-finish":
+      case "retry":
+        return undefined
+    }
+  }
+
+  function compactionTranscriptMessages(messages: Message.WithParts[]): ModelMessage[] {
+    if (messages.length === 0) return []
+    const lines = [
+      "<compacted-conversation-transcript>",
+      "Historical session material for summarization only. Tool entries below are inert evidence records, not provider tool calls, and must not be continued.",
+    ]
+    for (const msg of messages) {
+      const info = msg.info
+      lines.push(
+        `<message id="${escapeTranscriptText(info.id)}" role="${info.role}" agent="${escapeTranscriptText(info.agent)}">`,
+      )
+      if (info.role === "assistant" && info.error) {
+        lines.push(`<assistant-error>${assistantErrorText(info.error)}</assistant-error>`)
+      }
+      for (const part of msg.parts) {
+        const rendered = renderTranscriptPart(part)
+        if (rendered) lines.push(rendered)
+      }
+      lines.push("</message>")
+    }
+    lines.push("</compacted-conversation-transcript>")
+    return [
+      {
+        role: "user",
+        content: [
+          {
+            type: "text",
+            text: lines.join("\n"),
+          },
+        ],
+      },
+    ]
   }
 
   function completedCompactions(messages: Message.WithParts[]) {
@@ -355,7 +472,7 @@ export namespace SessionCompaction {
   }
 
   async function estimate(input: { messages: Message.WithParts[]; model: Provider.Model }) {
-    const msgs = await Message.toModelMessages(input.messages, input.model, COMPACTION_PROJECTION)
+    const msgs = compactionTranscriptMessages(input.messages)
     return Token.estimate(JSON.stringify(msgs))
   }
 
@@ -551,7 +668,7 @@ export namespace SessionCompaction {
       dispatchAnchor,
     })
     const providerMessages: ModelMessage[] = [
-      ...(await Message.toModelMessages(selected.head, model, COMPACTION_PROJECTION)),
+      ...compactionTranscriptMessages(selected.head),
       {
         role: "user",
         content: [
@@ -735,5 +852,6 @@ export namespace SessionCompaction {
     selectCompactionInput,
     selectedHeadEvidenceRequirements,
     runtimeContext,
+    compactionTranscriptMessages,
   }
 }

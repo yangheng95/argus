@@ -3,6 +3,10 @@ import { advanceQueue, directoryQueueSnapshot, dispatchTaskLoop, reorderQueuedTa
 import { EngineArtifactTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import { findTask } from "../../src/engine/store"
 import { deriveTaskStatus } from "../../src/engine/task-status"
+import {
+  createOrchestratorToolOwnershipPayload,
+  insertOrchestratorToolOwnershipArtifact,
+} from "../../src/engine/tool-ownership"
 import { EngineService } from "../../src/task-api"
 
 function taskStatus(id: string): string | undefined {
@@ -215,6 +219,80 @@ describe("engine queue", () => {
       },
     })
   }, { timeout: 10_000 })
+
+  test("interrupting a live-owned active task starts a replacement orchestrator wake", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const now = Date.now()
+        const taskID = `task_queue_live_interrupt_${now}`
+        let release: (() => void) | undefined
+        const holdLoop = new Promise<void>((resolve) => {
+          release = resolve
+        })
+        let runCount = 0
+        const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockImplementation(async () => {
+          runCount += 1
+          if (runCount === 1) await holdLoop
+        })
+        const interruptTaskLoop = spyOn(TaskLoop, "interruptTaskLoop")
+
+        Database.use((db) =>
+          db.insert(EngineTaskTable).values({
+            id: taskID,
+            project_id: Instance.project.id,
+            source: "test",
+            title: "live owned task",
+            request: "operator must be able to interrupt a running child agent",
+            priority: "normal",
+            time_started: now,
+            time_created: now,
+            time_updated: now,
+          }).run(),
+        )
+
+        await dispatchTaskLoop({ taskID })
+        await new Promise((resolve) => setTimeout(resolve, 0))
+        expect(runTaskLoop).toHaveBeenCalledTimes(1)
+
+        const ownershipPayload = createOrchestratorToolOwnershipPayload({
+          taskID,
+          orchestratorSessionID: `ses_orchestrator_${now}`,
+          orchestratorMessageID: `msg_orchestrator_${now}`,
+          toolCallID: `cal_build_${now}`,
+          toolPartID: `prt_build_${now}`,
+          childSessionID: `ses_build_${now}`,
+          scope: "task",
+          now,
+        })
+        insertOrchestratorToolOwnershipArtifact({
+          taskID,
+          label: "tool-ownership-start",
+          payload: ownershipPayload,
+          now,
+        })
+
+        await dispatchTaskLoop({
+          taskID,
+          event: { note: "stop the running agent and reconsider" },
+          interrupt: true,
+        })
+        await new Promise((resolve) => setTimeout(resolve, 0))
+
+        expect(interruptTaskLoop).toHaveBeenCalledWith(taskID, "task loop dispatch interrupt")
+        expect(runTaskLoop).toHaveBeenCalledTimes(2)
+        expect(runTaskLoop.mock.calls[1]?.[0]).toMatchObject({
+          taskID,
+          event: { note: "stop the running agent and reconsider" },
+        })
+
+        release!()
+        await holdLoop
+      },
+    })
+  })
 
   test("loop exit flips the queued sibling in the same cwd to active", async () => {
     await using tmp = await tmpdir({ git: true })

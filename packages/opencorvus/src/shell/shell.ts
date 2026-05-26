@@ -2,11 +2,9 @@ import { Flag } from "@/flag/flag"
 import { lazy } from "@/util/lazy"
 import { Filesystem } from "@/util/filesystem"
 import path from "path"
-import { spawn, type ChildProcess } from "child_process"
 import { which } from "@/util/which"
 import { PidGuard } from "./pid-guard"
-
-const SIGKILL_TIMEOUT_MS = 200
+import { ProcessSupervisor } from "./process-supervisor"
 
 export namespace Shell {
   export interface RunOptions {
@@ -32,11 +30,8 @@ export namespace Shell {
     /** True when idleTimeoutMs of inactivity was reached (process went quiet). */
     idleTimedOut: boolean
     aborted: boolean
-    /** OS PID of the spawned shell process. Surfaced so callers (tool wrappers,
-     *  LLM output) can target it with `taskkill /T /PID <pid>` or `kill -TERM
-     *  -<pid>` on a later turn — lets an agent cleanly kill a backgrounded
-     *  child (`cmd & …`) instead of guessing the PID via netstat. Undefined
-     *  only if spawn failed before a PID was assigned. */
+    /** Diagnostic PID of the supervised shell root. Cleanup is owned by the
+     * process supervisor, not by later PID-tree commands. */
     pid?: number
   }
 
@@ -76,49 +71,14 @@ export namespace Shell {
     return [...fromGit, ...fromCommonInstalls, ...genericBash]
   }
 
-  export async function killTree(proc: ChildProcess, opts?: { exited?: () => boolean; allowExitedRoot?: boolean }): Promise<void> {
-    const pid = proc.pid
-    if (!pid || (!opts?.allowExitedRoot && opts?.exited?.())) return
-
-    if (process.platform === "win32") {
-      const killed = await new Promise<boolean>((resolve) => {
-        const killer = spawn("taskkill", ["/pid", String(pid), "/f", "/t"], { stdio: "ignore" })
-        killer.once("exit", (code) => resolve(code === 0))
-        killer.once("error", () => resolve(false))
-      })
-      if (!killed && !opts?.exited?.()) {
-        proc.kill("SIGTERM")
-        await Bun.sleep(SIGKILL_TIMEOUT_MS)
-        if (!opts?.exited?.()) {
-          proc.kill("SIGKILL")
-        }
-      }
-      return
-    }
-
-    try {
-      process.kill(-pid, "SIGTERM")
-      await Bun.sleep(SIGKILL_TIMEOUT_MS)
-      if (!opts?.exited?.()) {
-        process.kill(-pid, "SIGKILL")
-      }
-    } catch (_e) {
-      proc.kill("SIGTERM")
-      await Bun.sleep(SIGKILL_TIMEOUT_MS)
-      if (!opts?.exited?.()) {
-        proc.kill("SIGKILL")
-      }
-    }
-  }
-
   export async function run(command: string, opts: RunOptions = {}): Promise<RunResult> {
-    const guardEnv = await PidGuard.env(acceptable())
-    const proc = spawn(command, {
-      shell: acceptable(),
+    const shell = acceptable()
+    const guardEnv = await PidGuard.env(shell)
+    const supervisor = await ProcessSupervisor.spawnShell({
+      command,
+      shell,
       cwd: opts.cwd,
       env: { ...opts.env, ...guardEnv },
-      stdio: ["ignore", "pipe", "pipe"],
-      detached: process.platform !== "win32",
     })
 
     let stdout = ""
@@ -126,11 +86,9 @@ export namespace Shell {
     let timedOut = false
     let idleTimedOut = false
     let aborted = false
-    let exited = false
 
-    const kill = () => killTree(proc, { exited: () => exited })
+    const terminate = () => supervisor.terminate()
 
-    // ── Idle timeout: reset on every data event ──
     const idleMs = typeof opts.idleTimeoutMs === "number" && Number.isFinite(opts.idleTimeoutMs) && opts.idleTimeoutMs > 0
       ? opts.idleTimeoutMs
       : undefined
@@ -141,73 +99,58 @@ export namespace Shell {
       if (idleTimer) clearTimeout(idleTimer)
       idleTimer = setTimeout(() => {
         idleTimedOut = true
-        void kill()
+        void terminate()
       }, idleMs)
       idleTimer.unref?.()
     }
 
-    proc.stdout?.on("data", (chunk) => {
+    supervisor.stdout?.on("data", (chunk) => {
       stdout += chunk.toString()
       resetIdleTimer()
     })
-    proc.stderr?.on("data", (chunk) => {
+    supervisor.stderr?.on("data", (chunk) => {
       stderr += chunk.toString()
       resetIdleTimer()
     })
 
-    // Start idle timer after process launch
     resetIdleTimer()
 
     if (opts.abort?.aborted) {
       aborted = true
-      await kill()
+      await terminate()
     }
 
     const abortHandler = () => {
       aborted = true
-      void kill()
+      void terminate()
     }
-
     opts.abort?.addEventListener("abort", abortHandler, { once: true })
 
-    // ── Hard wall-clock timeout (safety cap) ──
     const timeoutMs = typeof opts.timeoutMs === "number" && Number.isFinite(opts.timeoutMs) ? opts.timeoutMs : undefined
     const timer = timeoutMs && timeoutMs > 0
       ? setTimeout(() => {
           timedOut = true
-          void kill()
+          void terminate()
         }, timeoutMs)
       : undefined
     timer?.unref?.()
 
-    const exitCode = await new Promise<number>((resolve, reject) => {
-      const cleanup = () => {
-        if (timer) clearTimeout(timer)
-        if (idleTimer) clearTimeout(idleTimer)
-        opts.abort?.removeEventListener("abort", abortHandler)
+    try {
+      const exitCode = await supervisor.exited
+      return {
+        exitCode,
+        stdout,
+        stderr,
+        timedOut,
+        idleTimedOut,
+        aborted,
+        pid: supervisor.pid,
       }
-
-      proc.once("error", (error) => {
-        exited = true
-        cleanup()
-        reject(error)
-      })
-
-      proc.once("exit", (code, signal) => {
-        exited = true
-        cleanup()
-        resolve(code ?? (signal ? 1 : 0))
-      })
-    })
-
-    return {
-      exitCode,
-      stdout,
-      stderr,
-      timedOut,
-      idleTimedOut,
-      aborted,
-      pid: typeof proc.pid === "number" ? proc.pid : undefined,
+    } finally {
+      if (timer) clearTimeout(timer)
+      if (idleTimer) clearTimeout(idleTimer)
+      opts.abort?.removeEventListener("abort", abortHandler)
+      await supervisor.dispose()
     }
   }
 
@@ -221,50 +164,47 @@ export namespace Shell {
    * Launch a long-running process in the background.
    *
    * Spawns the process, collects initial output for `outputSniffMs` to detect
-   * the address/port, then unrefs the process so it keeps running independently.
-   * Returns the PID and detected address (if any).
+   * the address/port, then unrefs the supervisor so it keeps running under the
+   * same ownership boundary. Returns the diagnostic PID and detected address.
    */
   export async function launch(
     command: string,
     opts: { cwd?: string; env?: NodeJS.ProcessEnv; outputSniffMs?: number } = {},
   ): Promise<LaunchResult> {
     const { cwd, env, outputSniffMs = 8000 } = opts
-    const guardEnv = await PidGuard.env(acceptable())
-    const proc = spawn(command, {
-      shell: acceptable(),
+    const shell = acceptable()
+    const guardEnv = await PidGuard.env(shell)
+    const supervisor = await ProcessSupervisor.spawnShell({
+      command,
+      shell,
       cwd,
       env: { ...process.env, ...env, ...guardEnv },
-      stdio: ["ignore", "pipe", "pipe"],
-      detached: process.platform !== "win32",
     })
-
-    if (!proc.pid) throw new Error(`Failed to start process: ${command}`)
 
     let initialOutput = ""
     let exited = false
-    proc.stdout?.on("data", (chunk: Buffer) => { initialOutput += chunk.toString() })
-    proc.stderr?.on("data", (chunk: Buffer) => { initialOutput += chunk.toString() })
-    proc.once("exit", () => { exited = true })
+    supervisor.stdout?.on("data", (chunk: Buffer) => { initialOutput += chunk.toString() })
+    supervisor.stderr?.on("data", (chunk: Buffer) => { initialOutput += chunk.toString() })
+    supervisor.exited.then(() => { exited = true }, () => { exited = true })
 
     await new Promise((r) => setTimeout(r, outputSniffMs))
 
     if (exited) {
+      await supervisor.dispose()
       throw new Error(
         `Process exited immediately after launch. Output:\n${initialOutput.slice(0, 1000)}`,
       )
     }
 
-    proc.unref()
+    supervisor.unref()
 
     const address = detectLaunchAddress(initialOutput)
-    return { pid: proc.pid, address, initialOutput: initialOutput.slice(0, 2000) }
+    return { pid: supervisor.pid, address, initialOutput: initialOutput.slice(0, 2000) }
   }
 
   function detectLaunchAddress(output: string): string | undefined {
-    // Match full http/https URLs first
     const urlMatch = output.match(/https?:\/\/[^\s\n"'><,]+/)
     if (urlMatch) return urlMatch[0].replace(/\/$/, "")
-    // Match bare host:port
     const hostPortMatch = output.match(/(?:localhost|0\.0\.0\.0|127\.0\.0\.1):\d{2,5}/)
     if (hostPortMatch) return `http://${hostPortMatch[0]}`
   }

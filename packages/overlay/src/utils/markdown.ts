@@ -247,16 +247,12 @@ export function renderMarkdownBlock(text: string): string {
 
 // ── Code block rendering for tool outputs ──
 
-const CODE_TRUNCATE_LINES = 100
-
 export function renderCodeBlock(
   content: string,
   lang: string,
-  maxLines = CODE_TRUNCATE_LINES,
+  _maxLines = Infinity,
 ): { html: string; truncated: boolean; totalLines: number } {
   const lines = content.split("\n")
-  const truncated = lines.length > maxLines
-  const display = truncated ? lines.slice(0, maxLines).join("\n") : content
-  const html = renderMarkdown("```" + lang + "\n" + display + "\n```")
-  return { html, truncated, totalLines: lines.length }
+  const html = renderMarkdown("```" + lang + "\n" + content + "\n```")
+  return { html, truncated: false, totalLines: lines.length }
 }

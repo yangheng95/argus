@@ -2788,7 +2788,7 @@ export type Config = {
      */
     continue_loop_on_deny?: boolean
     /**
-     * Require user confirmation before the orchestrator creates proposed follow-up tasks
+     * Require operator confirmation before the orchestrator creates a proposed follow-up task. Default false lets the orchestrator create the task directly.
      */
     confirm_proposed_tasks?: boolean
     /**
@@ -11370,114 +11370,6 @@ export type TaskUpdateBudgetResponses = {
    */
   200: unknown
 }
-
-export type ExportTaskData = {
-  body?: never
-  path: {
-    taskID: string
-  }
-  query?: {
-    directory?: string
-  }
-  url: "/export/task/{taskID}"
-}
-
-export type ExportTaskErrors = {
-  /**
-   * Not found
-   */
-  404: NotFoundError
-}
-
-export type ExportTaskError = ExportTaskErrors[keyof ExportTaskErrors]
-
-export type ExportTaskResponses = {
-  /**
-   * Complete task export including plan, runs, evaluations, goals, milestones, interactions, snapshots, and artifacts
-   */
-  200: {
-    task: unknown
-    plan?: unknown
-    goals: Array<unknown>
-    milestones: Array<unknown>
-    runs: Array<unknown>
-    interactions: Array<unknown>
-    snapshots: Array<unknown>
-    specSnapshots: Array<unknown>
-    deliveries: Array<unknown>
-    evaluations: Array<unknown>
-    artifacts: Array<unknown>
-  }
-}
-
-export type ExportTaskResponse = ExportTaskResponses[keyof ExportTaskResponses]
-
-export type ExportTaskArchiveData = {
-  body?: never
-  path: {
-    taskID: string
-  }
-  query?: {
-    directory?: string
-  }
-  url: "/export/task/{taskID}/archive"
-}
-
-export type ExportTaskArchiveErrors = {
-  /**
-   * Not found
-   */
-  404: NotFoundError
-}
-
-export type ExportTaskArchiveError = ExportTaskArchiveErrors[keyof ExportTaskArchiveErrors]
-
-export type ExportTaskArchiveResponses = {
-  /**
-   * Zip archive (application/zip) — see Content-Disposition for filename
-   */
-  200: Blob | File
-}
-
-export type ExportTaskArchiveResponse = ExportTaskArchiveResponses[keyof ExportTaskArchiveResponses]
-
-export type ExportImportData = {
-  body?: never
-  path?: never
-  query?: {
-    directory?: string
-    overwrite?: "true" | "false"
-  }
-  url: "/export/import"
-}
-
-export type ExportImportErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-  /**
-   * Reply target not ready
-   */
-  409: ReplyTargetEnvelopeMissingError
-}
-
-export type ExportImportError = ExportImportErrors[keyof ExportImportErrors]
-
-export type ExportImportResponses = {
-  /**
-   * Import succeeded
-   */
-  201: {
-    taskID: string
-    importedFromTaskID?: string
-    restoredFiles: number
-    skippedFiles: Array<string>
-    directory: string
-  }
-}
-
-export type ExportImportResponse = ExportImportResponses[keyof ExportImportResponses]
 
 export type ExportSessionData = {
   body?: never

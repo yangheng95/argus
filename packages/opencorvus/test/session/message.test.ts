@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { APICallError } from "ai"
+import { convertToOpenAICompatibleChatMessages } from "@ai-sdk/openai-compatible/internal"
 import { Message } from "../../src/session/message"
 import { CompactionHandoff } from "../../src/session/compaction-handoff"
 import { Instance } from "../../src/project/instance"
@@ -1053,7 +1054,7 @@ describe("session.message.toModelMessage", () => {
             type: "tool-call",
             toolCallId: "call-running",
             toolName: "read",
-            input: [],
+            input: {},
             providerExecuted: undefined,
           },
         ],
@@ -1073,6 +1074,43 @@ describe("session.message.toModelMessage", () => {
         ],
       },
     ])
+  })
+
+  test("normalizes persisted string tool inputs before provider replay", async () => {
+    const userID = "m-user-string-input"
+    const assistantID = "m-assistant-string-input"
+    const input: Message.WithParts[] = [
+      {
+        info: userInfo(userID),
+        parts: [{ ...basePart(userID, "u1"), type: "text", text: "run tool" }] as Message.Part[],
+      },
+      {
+        info: assistantInfo(assistantID, userID),
+        parts: [
+          {
+            ...basePart(assistantID, "a1"),
+            type: "tool",
+            callID: "call-string",
+            tool: "read",
+            state: {
+              status: "completed",
+              input: "{\"path\":\"src/index.ts\"}",
+              output: "ok",
+              title: "Read",
+              metadata: {},
+              attachments: [],
+              time: { start: 0, end: 1 },
+            },
+          },
+        ] as Message.Part[],
+      },
+    ]
+
+    const result = await Message.toModelMessages(input, model)
+    expect((result[1] as any).content[0].input).toEqual({ path: "src/index.ts" })
+
+    const bodyMessages = convertToOpenAICompatibleChatMessages(result as any)
+    expect(bodyMessages[1].tool_calls[0].function.arguments).toBe("{\"path\":\"src/index.ts\"}")
   })
 
   test("projects earlier stateful-snapshot tool results to a superseded note", async () => {

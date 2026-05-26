@@ -725,6 +725,8 @@
   "titlebar.background_notice": "OpenCorvus is still running in the background. Use the tray icon to reopen, or choose Quit from the tray menu to exit completely.",
   "titlebar.budget_max_executor_groups": "Goal parallelism",
   "titlebar.compaction_threshold": "Auto-compact threshold",
+  "titlebar.confirm_proposed_tasks": "Confirm proposed tasks",
+  "titlebar.confirm_proposed_tasks_hint": "Ask before creating tasks proposed by the supervisor.",
   "titlebar.background_notice_title": "Running in background",
   "titlebar.close": "Close",
   "titlebar.connection.connecting": "Connecting",

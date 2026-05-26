@@ -51,6 +51,7 @@ test("no project config files: does NOT auto-write a project config and does NOT
       // In-memory computed defaults (NOT model, NOT a file write) still hold.
       expect(config.username).toBeDefined()
       expect(config.experimental?.auto_question).toBe(true)
+      expect(config.experimental?.confirm_proposed_tasks).toBe(false)
     },
   })
 })
