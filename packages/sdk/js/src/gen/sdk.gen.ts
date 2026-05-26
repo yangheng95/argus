@@ -79,11 +79,12 @@ import type {
   GatewayChannelMessageResponses,
   GatewayControlActionResponses,
   GatewayControlMessageResponses,
+  GatewayMasterWakeResponses,
   GatewayStatsResponses,
-  GatewayTaskDecomposeResponses,
   GlobalConfigGetResponses,
   GlobalConfigUpdateErrors,
   GlobalConfigUpdateResponses,
+  GlobalDbResetErrors,
   GlobalDbResetResponses,
   GlobalDisposeResponses,
   GlobalEventResponses,
@@ -426,7 +427,7 @@ export class Db extends HeyApiClient {
     options?: Options<never, ThrowOnError>,
   ) {
     const params = buildClientParams([parameters], [{ args: [{ in: "body", key: "projectDir" }] }])
-    return (options?.client ?? this.client).post<GlobalDbResetResponses, unknown, ThrowOnError>({
+    return (options?.client ?? this.client).post<GlobalDbResetResponses, GlobalDbResetErrors, ThrowOnError>({
       url: "/global/db/reset",
       ...options,
       ...params,
@@ -1879,6 +1880,7 @@ export class Session extends HeyApiClient {
         | "goal"
         | "architect"
         | "integrity"
+        | "fact-check"
         | "delivery"
         | "executor"
         | "build"
@@ -4158,6 +4160,12 @@ export class Control2 extends HeyApiClient {
             action: "view_tasks"
           }
         | {
+            action: "query_task"
+            taskIDs: Array<string>
+            includeChildren?: boolean
+            includeInteractions?: boolean
+          }
+        | {
             action: "create_task"
             request: string
             request_id?: string
@@ -4488,17 +4496,18 @@ export class Control2 extends HeyApiClient {
   }
 }
 
-export class Task extends HeyApiClient {
+export class Master extends HeyApiClient {
   /**
-   * Propose task decomposition
+   * Wake the gateway-master mission supervisor
    *
-   * Run a one-shot LLM call that turns a free-text big requirement into a structured proposal of small task candidates. The endpoint is read-only — no engine_task or session row is written. The Gateway page presents the proposal to the operator, who chooses which candidates to actually create via POST /task.
+   * Start (or resume) a mission supervisor session and inject a user prompt. Omit `missionID` to start a new mission; supply it to resume an existing one. The route is idempotent for (project, missionID) — channelKey `master:<missionID>` keys exactly one gateway session per mission.
    */
-  public decompose<ThrowOnError extends boolean = false>(
+  public wake<ThrowOnError extends boolean = false>(
     parameters?: {
       directory?: string
-      requirement?: string
-      executor?: "opencorvus" | "codex" | "claude-code"
+      missionID?: string
+      text?: string
+      title?: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -4508,14 +4517,15 @@ export class Task extends HeyApiClient {
         {
           args: [
             { in: "query", key: "directory" },
-            { in: "body", key: "requirement" },
-            { in: "body", key: "executor" },
+            { in: "body", key: "missionID" },
+            { in: "body", key: "text" },
+            { in: "body", key: "title" },
           ],
         },
       ],
     )
-    return (options?.client ?? this.client).post<GatewayTaskDecomposeResponses, unknown, ThrowOnError>({
-      url: "/gateway/task/decompose",
+    return (options?.client ?? this.client).post<GatewayMasterWakeResponses, unknown, ThrowOnError>({
+      url: "/gateway/master/wake",
       ...options,
       ...params,
       headers: {
@@ -4676,9 +4686,9 @@ export class Gateway extends HeyApiClient {
     return (this._control ??= new Control2({ client: this.client }))
   }
 
-  private _task?: Task
-  get task(): Task {
-    return (this._task ??= new Task({ client: this.client }))
+  private _master?: Master
+  get master(): Master {
+    return (this._master ??= new Master({ client: this.client }))
   }
 
   private _channel?: Channel2
@@ -4947,7 +4957,7 @@ export class Session3 extends HeyApiClient {
   /**
    * Reply directly to a task agent session
    *
-   * Append a human-authored message to a non-orchestrator task agent session. This is scoped input for the target agent session, not a global task routing command.
+   * Append a human-authored message to a non-orchestrator task agent session. This is scoped input for the target agent session, not a global task routing command. Returns 400 InvalidReplyTargetKindError / BuildSessionDirectReplyError for kinds the route refuses, 409 ReplyTargetEnvelopeMissingError when the session has no prior user envelope yet, and 410 SessionRuntimeContractMissingError when the in-memory runtime contract is gone (process restart or terminal collector already satisfied) — the overlay uses these to decide whether to retry, hide the reply box, or surface a generic failure.
    */
   public reply<ThrowOnError extends boolean = false>(
     parameters: {
@@ -5052,7 +5062,7 @@ export class Rewind extends HeyApiClient {
   }
 }
 
-export class Task2 extends HeyApiClient {
+export class Task extends HeyApiClient {
   /**
    * Create task
    */
@@ -6693,7 +6703,7 @@ export class Goal extends HeyApiClient {
   }
 }
 
-export class Task3 extends HeyApiClient {
+export class Task2 extends HeyApiClient {
   /**
    * Export task as zip archive
    *
@@ -6812,9 +6822,9 @@ export class Export extends HeyApiClient {
     })
   }
 
-  private _task?: Task3
-  get task2(): Task3 {
-    return (this._task ??= new Task3({ client: this.client }))
+  private _task?: Task2
+  get task2(): Task2 {
+    return (this._task ??= new Task2({ client: this.client }))
   }
 }
 
@@ -8117,9 +8127,9 @@ export class OpencodeClient extends HeyApiClient {
     return (this._server ??= new Server({ client: this.client }))
   }
 
-  private _task?: Task2
-  get task(): Task2 {
-    return (this._task ??= new Task2({ client: this.client }))
+  private _task?: Task
+  get task(): Task {
+    return (this._task ??= new Task({ client: this.client }))
   }
 
   private _run?: Run
