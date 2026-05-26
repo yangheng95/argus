@@ -8,7 +8,7 @@
 // Layout (PRD §7):
 //   header    : workspace, gateway health, channel runtime, counts, actions
 //   ledger    : task list (project + global, filterable, queue-aware)
-//   workbench : selected task summary + actions, OR decomposition composer
+//   workbench : selected task summary + actions, OR mission launcher
 //   channels  : channel catalog, runtime status, restart, selected-task
 //               bindings
 //
@@ -17,7 +17,8 @@
 //   • boardStore.board          — selected task detail
 //   • GatewayStats              — gateway/stats endpoint (counts + project)
 //   • Channel runtime + list    — existing channel routes
-//   • /gateway/task/decompose   — proposal endpoint (no task creation)
+//   • /gateway/master/wake      — start or resume a mission supervisor
+//                                 session (gateway-master agent)
 //
 // Errors are surfaced explicitly (PRD §14): no silent fallback, no
 // degraded state. Each error block names the operation and the server
