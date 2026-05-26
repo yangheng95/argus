@@ -79,7 +79,12 @@ import { persistQueuedTask, abortTaskPipeline, awaitPipelineSettled } from "@/en
 import { withTimeout, AwaitTimeoutError } from "@/util/await-with-timeout"
 import { createDecisionLog } from "@/decision-log"
 import { Orchestrator } from "@/orchestrator/agent"
-import { DIRECT_REPLY_AGENT_KINDS } from "@/orchestrator/direct-reply"
+import {
+  DIRECT_REPLY_AGENT_KINDS,
+  BuildSessionDirectReplyError,
+  InvalidReplyTargetKindError,
+  ReplyTargetEnvelopeMissingError,
+} from "@/orchestrator/direct-reply"
 import { overlayMeta } from "@/orchestrator/protocol/message-bridge"
 import { sessionRole, taskIDForSession } from "@/orchestrator/task-event"
 import {
@@ -176,12 +181,19 @@ async function resolveDirectReplyTarget(taskID: string, sessionID: string) {
     throw new NotFoundError({ message: `Session ${sessionID} has no task agent kind` })
   }
   if (!DIRECT_REPLY_AGENT_KINDS.has(kind)) {
-    throw new Error(`Session ${sessionID} has kind "${kind}" and cannot receive direct agent replies`)
+    throw new InvalidReplyTargetKindError({
+      message: `Session ${sessionID} has kind "${kind}" and cannot receive direct agent replies`,
+      sessionID,
+      kind,
+    })
   }
   const session = await Session.get(sessionID)
   const latest = await latestSessionPromptEnvelope(sessionID)
   if (!latest) {
-    throw new Error(`Session ${sessionID} has no prior user prompt envelope to continue`)
+    throw new ReplyTargetEnvelopeMissingError({
+      message: `Session ${sessionID} has no prior user prompt envelope to continue`,
+      sessionID,
+    })
   }
 
   return {
@@ -258,19 +270,26 @@ async function appendDirectAgentSessionReply(input: {
   const text = input.message.trim()
   if (!text) throw new Error("message is required")
   const target = await resolveDirectReplyTarget(input.taskID, input.sessionID)
-  if (target.session.kind === "build" || target.prompt.agent === "build") {
-    throw new Error(
-      `replyAgentSession: build session ${target.session.id} cannot be continued through generic direct reply; dispatch build retry so a fresh stage runtime contract is installed.`,
-    )
+  // Operative check is session.kind — the envelope's `agent` field is
+  // carried forward from prior turns and may legitimately differ (e.g. a
+  // requirements session whose last user envelope was tagged `agent:
+  // "build"` for model resolution). Only reject when the underlying
+  // session itself is a build attempt; that needs a fresh stage runtime
+  // contract, not a generic reply.
+  if (target.session.kind === "build") {
+    throw new BuildSessionDirectReplyError({
+      message: `replyAgentSession: build session ${target.session.id} cannot be continued through generic direct reply; dispatch build retry so a fresh stage runtime contract is installed.`,
+      sessionID: target.session.id,
+    })
   }
-  const messageID = Identifier.ascending("message")
-  // R5.1 item 6: the agent is the session's stable conversation role from the
-  // envelope, but the MODEL is resolved fresh from the single resolver keyed
-  // by the current taskID + agent — never reused from the history envelope.
-  // The historical `variant` (model-selection family, §14.2) is dropped for
-  // the same single-source reason; the effective variant comes from the
-  // session overlay at stream time, not from a pinned history value.
-  const resolvedModel = await resolveAgentModelRef(target.prompt.agent, { taskID: input.taskID })
+  // Validate the runtime contract BEFORE doing any model resolution.
+  // resolveAgentModelRef can throw MissingModelConfigError (mapped to
+  // server 500 by default) which would mask the more actionable 410
+  // SessionRuntimeContractMissingError when both conditions apply —
+  // a misconfigured project with a missing contract would surface as
+  // a confusing "model missing" rather than the real "session is gone"
+  // story the operator needs to act on. (rule 7 / rule 35 — single
+  // unambiguous diagnostic per failure mode.)
   SessionPrompt.validateSessionRuntimeContractForContinuation({
     sessionID: target.session.id,
     sessionKind: target.session.kind,
@@ -280,6 +299,14 @@ async function appendDirectAgentSessionReply(input: {
       SessionPrompt.agentKindRequiresRuntimeContract(target.prompt.agent) ||
       SessionPrompt.agentKindRequiresRuntimeContract(target.session.kind),
   })
+  const messageID = Identifier.ascending("message")
+  // R5.1 item 6: the agent is the session's stable conversation role from the
+  // envelope, but the MODEL is resolved fresh from the single resolver keyed
+  // by the current taskID + agent — never reused from the history envelope.
+  // The historical `variant` (model-selection family, §14.2) is dropped for
+  // the same single-source reason; the effective variant comes from the
+  // session overlay at stream time, not from a pinned history value.
+  const resolvedModel = await resolveAgentModelRef(target.prompt.agent, { taskID: input.taskID })
   const message: Message.User = {
     id: messageID,
     sessionID: target.session.id,

@@ -43,6 +43,7 @@ import { Config } from "@/config/config"
 import { decodeDataUrlBase64 } from "./text-mime"
 import { normalizeToolInput } from "./tool-input-norm"
 import { toolFailureCauseFromUnknown } from "./tool-failure-cause"
+import { SessionRuntimeContractMissingError } from "@/orchestrator/direct-reply"
 
 muteAISdkWarnings()
 
@@ -185,9 +186,13 @@ export namespace SessionLoop {
     const contract = sessionRuntimeContracts.get(input.sessionID)
     if (!contract) {
       if (input.requireRuntimeContract) {
-        throw new Error(
-          `SessionRuntimeContract missing for ${input.sessionID}; ${input.expectedAgentKind ?? input.sessionKind ?? "this session"} cannot continue without a runtime tool contract`,
-        )
+        const agentKind = input.expectedAgentKind ?? input.sessionKind
+        throw new SessionRuntimeContractMissingError({
+          message: `SessionRuntimeContract missing for ${input.sessionID}; ${agentKind ?? "this session"} cannot continue without a runtime tool contract`,
+          sessionID: input.sessionID,
+          ...(agentKind ? { agentKind } : {}),
+          reason: "missing",
+        })
       }
       return undefined
     }
@@ -226,9 +231,13 @@ export namespace SessionLoop {
       )
     }
     if (input.rejectSatisfiedTerminal !== false && contract.terminalToolContract?.isSatisfied()) {
-      throw new Error(
-        `SessionRuntimeContract terminal collector is already satisfied for ${input.sessionID}; install a fresh contract before continuing`,
-      )
+      const agentKind = input.expectedAgentKind ?? input.sessionKind
+      throw new SessionRuntimeContractMissingError({
+        message: `SessionRuntimeContract terminal collector is already satisfied for ${input.sessionID}; install a fresh contract before continuing`,
+        sessionID: input.sessionID,
+        ...(agentKind ? { agentKind } : {}),
+        reason: "terminal_satisfied",
+      })
     }
     return contract
   }

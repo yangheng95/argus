@@ -2,6 +2,17 @@ import { resolver } from "hono-openapi"
 import z from "zod"
 import { NotFoundError } from "../storage/db"
 
+function namedErrorSchema(name: string) {
+  return resolver(
+    z
+      .object({
+        name: z.literal(name),
+        data: z.record(z.string(), z.any()),
+      })
+      .meta({ ref: name }),
+  )
+}
+
 export const ERRORS = {
   400: {
     description: "Bad request",
@@ -26,6 +37,22 @@ export const ERRORS = {
     content: {
       "application/json": {
         schema: resolver(NotFoundError.Schema),
+      },
+    },
+  },
+  409: {
+    description: "Reply target not ready",
+    content: {
+      "application/json": {
+        schema: namedErrorSchema("ReplyTargetEnvelopeMissingError"),
+      },
+    },
+  },
+  410: {
+    description: "Session runtime contract no longer present",
+    content: {
+      "application/json": {
+        schema: namedErrorSchema("SessionRuntimeContractMissingError"),
       },
     },
   },

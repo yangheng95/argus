@@ -9,6 +9,7 @@ import { Server } from "../../src/server/server"
 import { Session } from "../../src/session"
 import { MessageTable, PartTable } from "../../src/session/session.sql"
 import { SessionStatus } from "../../src/session/status"
+import { SessionPrompt } from "../../src/session/prompt"
 import { Message } from "../../src/session/message"
 import { Database, eq } from "../../src/storage/db"
 import { Log } from "../../src/util/log"
@@ -694,6 +695,27 @@ describe("task conversation routes", () => {
           },
         })
         SessionStatus.set(requirements.id, { type: "busy" })
+
+        // Resumable worker sessions require an in-memory runtime contract
+        // (session/loop.ts:159 runtimeContractRequiredAgentKinds). Install
+        // one whose identity.agentKind matches the envelope's `agent`
+        // field (the validator compares against the envelope, not the
+        // session kind, when the envelope sets one) so the resume passes
+        // validateSessionRuntimeContractForContinuation.
+        SessionPrompt.setSessionRuntimeContract(requirements.id, {
+          identity: {
+            sessionID: requirements.id,
+            agentKind: "build",
+            contractKind: "stage-attempt",
+            installedAt: Date.now(),
+          },
+          tools: {},
+          // structuredOutputGuard is a function — its truthiness prevents
+          // setSessionRuntimeContract's "empty contract" deleter from
+          // wiping the install (loop.ts:128). The guard itself is never
+          // invoked by the reply preflight, so a no-op suffices.
+          structuredOutputGuard: () => undefined,
+        })
 
         const response = await app.request(`/task/${taskID}/session/${requirements.id}/reply`, {
           method: "POST",
