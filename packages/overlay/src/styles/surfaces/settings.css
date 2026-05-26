@@ -5,115 +5,321 @@
    `.knowledge-*` / `.pref-*` / `.market-*` / `.channel-doc-*`
    blocks still live in styles.css until each gets a token sweep. */
 
-/* ── PermissionsPanel.tsx ────────────────────────────────── */
+/* ──────────────────────────────────────────────────────────
+   PRIMITIVE LAYER — `.s-*` single-source contract for every
+   settings panel. VSCode/JetBrains visual style: flat, no card
+   border, hover via the dialog's settings-surface-hover wash,
+   hierarchy expressed through `--ui-font-weight-*` + the
+   text-strong / text-soft / text-muted triad (not font size —
+   --ui-font-heading / title / body remain 14/13/12).
 
-.perm-panel {
-  padding: var(--ui-gap-lg) calc(var(--ui-gap-lg) * 1.5);
+   Migration map (see specs/overlay-settings-primitives-2026-05-26.md):
+     perm-row / extension-row / market-card / channel-doc-card /
+     provider-flat-row / agent-model-row / knowledge-item /
+     config-toggle-list-item → .s-row
+     config-panel-group / extension-block / ext-group → .s-group
+     extension-status / provider-row-status / provider-count-pill /
+     knowledge-scope → .s-pill
+     perm-action-btn → .s-segmented-btn
+   ────────────────────────────────────────────────────────── */
+
+.s-panel {
   display: flex;
   flex-direction: column;
   gap: var(--ui-gap-lg);
+  min-width: 0;
 }
 
-.perm-panel-intro {
-  font-size: var(--ui-font-control);
-  color: var(--text-muted);
-  line-height: 1.5;
-  margin: 0 0 var(--ui-gap-xs);
-}
-
-.perm-list {
+.s-group {
   display: flex;
   flex-direction: column;
-  gap: var(--ui-gap-xs);
+  gap: var(--ui-gap-sm);
+  min-width: 0;
 }
 
-.perm-row {
+.s-group-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--ui-gap-lg);
-  padding: var(--ui-gap-md) var(--ui-gap-lg);
-  border-radius: var(--oc-radius-soft);
-  background: var(--settings-surface-base);
-  transition: background var(--ui-duration-base);
+  gap: var(--ui-gap-md);
+  min-height: calc(28px * var(--ui-scale));
+  /* Group title leans on weight + soft-uppercase tracking to feel like a
+   * VSCode "subhead" without spending more pixels. */
+  color: var(--text-muted);
+  font-size: var(--ui-font-control);
+  font-weight: var(--ui-font-weight-strong);
+  letter-spacing: var(--ui-letter-spacing-loose);
+  text-transform: uppercase;
 }
 
-.perm-row:hover {
+.s-group-head-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.s-group-head-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ui-gap-sm);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  /* Re-flatten the SHOUTY group head so action buttons keep their own
+   * typography contract instead of inheriting the uppercase + weight. */
+  text-transform: none;
+  letter-spacing: var(--ui-letter-spacing-normal);
+  font-weight: var(--ui-font-weight-body);
+}
+
+.s-group-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+}
+
+.s-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--ui-gap-md);
+  min-width: 0;
+  padding: var(--ui-gap-sm) var(--ui-gap-md);
+  border: 0 solid transparent;
+  border-radius: var(--oc-radius-soft);
+  background: transparent;
+  transition:
+    background var(--ui-duration-base) var(--ui-timing-standard),
+    color var(--ui-duration-base) var(--ui-timing-standard);
+}
+
+.s-row[data-align="center"] {
+  align-items: center;
+}
+
+/* Hover wash is opt-in via `data-interactive="true"` so static info rows
+ * (e.g. About panel runtime grid lines) do not pick up a hover glow on
+ * an inert region. */
+.s-row[data-interactive="true"]:hover,
+.s-row[data-interactive="true"]:focus-within {
   background: var(--settings-surface-hover);
 }
 
-.perm-row-info {
+.s-row + .s-row {
+  /* Hairline separator via box-shadow so it does not contribute layout
+   * height and so it cleanly disappears under :hover wash. The
+   * vertical offset routes through --ui-scale (per surface guard
+   * convention) so the divider still reads as 1px on every density. */
+  box-shadow: inset 0 calc(1px * var(--ui-scale)) 0 0 var(--divider-soft);
+}
+
+.s-row-leading {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-soft);
+}
+
+.s-row-main {
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: var(--ui-gap-xs);
-  min-width: 0;
-  flex: 1;
 }
 
-.perm-row-label {
-  font-size: var(--ui-font-body);
+.s-row-title {
+  font-size: var(--ui-font-title);
   font-weight: var(--ui-font-weight-medium);
   color: var(--text-strong);
-  white-space: nowrap;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
 }
 
-.perm-row-desc {
-  font-size: var(--ui-font-small);
+.s-row-desc {
+  font-size: var(--ui-font-body);
+  color: var(--text-soft);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.s-row-meta {
+  font-size: var(--ui-font-meta);
   color: var(--text-muted);
   line-height: 1.4;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ui-gap-xs) var(--ui-gap-md);
 }
 
-.perm-row-actions {
-  display: flex;
+.s-row-actions {
+  display: inline-flex;
+  align-items: center;
   gap: var(--ui-gap-xs);
   flex-shrink: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
-/* Permission action button: tri-state allow/ask/deny pill. The
-   active variant routes through `color-mix` on the matching
-   semantic token (`--good` / `--warn` / `--bad`). */
-.perm-action-btn {
-  padding: var(--ui-gap-xs) var(--ui-gap-md);
-  border-radius: var(--oc-radius-soft);
-  border: var(--oc-border-width) solid var(--border);
-  background: transparent;
+/* Pill — used for status badges (configured / partial / missing) plus
+ * count chips. `data-tone` drives the wash; default is neutral. */
+.s-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ui-gap-xs);
+  padding: calc(2px * var(--ui-scale)) var(--ui-gap-sm);
+  border-radius: var(--oc-radius-pill);
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--border) 60%, transparent);
+  background: var(--settings-surface-muted);
   color: var(--text-soft);
-  font-size: var(--ui-font-control);
-  cursor: pointer;
-  transition:
-    background var(--ui-duration-base),
-    color var(--ui-duration-base),
-    border-color var(--ui-duration-base);
+  font-size: var(--ui-font-meta);
+  font-weight: var(--ui-font-weight-medium);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
   white-space: nowrap;
 }
 
-.perm-action-btn:hover {
+.s-pill[data-tone="ok"] {
+  background: color-mix(in srgb, var(--good) 18%, transparent);
+  border-color: color-mix(in srgb, var(--good) 40%, transparent);
+  color: var(--good);
+}
+
+.s-pill[data-tone="warn"] {
+  background: color-mix(in srgb, var(--warn) 18%, transparent);
+  border-color: color-mix(in srgb, var(--warn) 40%, transparent);
+  color: var(--warn);
+}
+
+.s-pill[data-tone="bad"] {
+  background: color-mix(in srgb, var(--bad) 18%, transparent);
+  border-color: color-mix(in srgb, var(--bad) 40%, transparent);
+  color: var(--bad);
+}
+
+.s-pill[data-tone="accent"] {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+  color: var(--accent-hover);
+}
+
+.s-pill[data-tone="muted"] {
+  background: transparent;
+  border-color: color-mix(in srgb, var(--border) 50%, transparent);
+  color: var(--text-muted);
+}
+
+/* Toolbar — search + filter strip above a list. Flat by default, the
+ * children own their own chrome (`.field-input`, `.s-pill`, etc.). */
+.s-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-gap-sm);
+  flex-wrap: wrap;
+  padding: 0;
+}
+
+.s-toolbar > .field-input,
+.s-toolbar > input.s-toolbar-search {
+  flex: 1;
+  min-width: calc(160px * var(--ui-scale));
+}
+
+.s-empty {
+  padding: var(--ui-gap-lg) var(--ui-gap-md);
+  color: var(--text-muted);
+  font-size: var(--ui-font-body);
+  text-align: left;
+  line-height: 1.45;
+}
+
+/* Segmented control — tri-state toggle used by permissions (allow / ask
+ * / deny). Each button stores its tone on `data-tone` so the active wash
+ * routes through the matching semantic token (good / warn / bad). Keeps
+ * the old perm-action-btn visual contract so the migration is invisible
+ * to the user. */
+.s-segmented {
+  display: inline-flex;
+  align-items: stretch;
+  gap: calc(2px * var(--ui-scale));
+  padding: calc(2px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
   background: var(--settings-surface-muted);
+}
+
+.s-segmented-btn {
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: calc(22px * var(--ui-scale));
+  padding: calc(2px * var(--ui-scale)) var(--ui-gap-sm);
+  border: var(--oc-border-width) solid transparent;
+  border-radius: calc(var(--oc-radius-soft) - calc(1px * var(--ui-scale)));
+  background: transparent;
+  color: var(--text-soft);
+  font: inherit;
+  font-size: var(--ui-font-control);
+  font-family: var(--font);
+  line-height: 1.2;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background var(--ui-duration-base) var(--ui-timing-standard),
+    color var(--ui-duration-base) var(--ui-timing-standard),
+    border-color var(--ui-duration-base) var(--ui-timing-standard);
+}
+
+.s-segmented-btn:hover {
+  background: var(--settings-surface-hover);
   color: var(--text-strong);
 }
 
-.perm-action-btn:focus-visible {
+.s-segmented-btn:focus-visible {
   outline: none;
   box-shadow: 0 0 0 calc(2px * var(--ui-scale)) color-mix(in srgb, var(--accent) 60%, transparent);
 }
 
-.perm-action-btn[data-active="true"][data-action="allow"] {
+.s-segmented-btn[data-active="true"][data-tone="ok"] {
   background: color-mix(in srgb, var(--good) 24%, transparent);
   border-color: color-mix(in srgb, var(--good) 60%, transparent);
   color: var(--good);
 }
 
-.perm-action-btn[data-active="true"][data-action="ask"] {
+.s-segmented-btn[data-active="true"][data-tone="warn"] {
   background: color-mix(in srgb, var(--warn) 24%, transparent);
   border-color: color-mix(in srgb, var(--warn) 60%, transparent);
   color: var(--warn);
 }
 
-.perm-action-btn[data-active="true"][data-action="deny"] {
+.s-segmented-btn[data-active="true"][data-tone="bad"] {
   background: color-mix(in srgb, var(--bad) 24%, transparent);
   border-color: color-mix(in srgb, var(--bad) 60%, transparent);
   color: var(--bad);
 }
+
+.s-segmented-btn[data-active="true"][data-tone="accent"] {
+  background: color-mix(in srgb, var(--accent) 24%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 60%, transparent);
+  color: var(--accent-hover);
+}
+
+.s-segmented-btn[data-active="true"][data-tone="neutral"] {
+  background: var(--surface);
+  border-color: color-mix(in srgb, var(--border) 60%, transparent);
+  color: var(--text-strong);
+}
+
+/* ── PermissionsPanel.tsx ────────────────────────────────── */
+/* PermissionsPanel migrated to .s-* primitives on 2026-05-26. The
+   former perm-panel / perm-row / perm-action-btn class family was
+   the canonical source for the segmented control + row layout;
+   that contract now lives in the primitive layer above.
+   See specs/overlay-settings-primitives-2026-05-26.md. */
 
 /* ── MemoryPanel.tsx (Knowledge tab) ─────────────────────── */
 

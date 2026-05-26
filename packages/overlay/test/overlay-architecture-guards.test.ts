@@ -413,9 +413,9 @@ describe("overlay architecture guards", () => {
       lastBlock = styles.slice(open + 1, close)
     }
     expect(lastBlock).not.toBeNull()
-    expect(lastBlock!).toMatch(/--rail-surface:\s*var\(--surface\)/)
-    expect(lastBlock!).toMatch(/--chat-canvas:\s*var\(--bg\)/)
-    expect(lastBlock!).toMatch(/--inspector-surface:\s*var\(--surface\)/)
+    expect(lastBlock!).toMatch(/--rail-surface:\s*color-mix\(in srgb,\s*var\(--surface\)/)
+    expect(lastBlock!).toMatch(/--chat-canvas:\s*color-mix\(in srgb,\s*var\(--bg\)/)
+    expect(lastBlock!).toMatch(/--inspector-surface:\s*color-mix\(in srgb,\s*var\(--surface\)/)
   })
 
   test("inline-pill family has no theme chrome override", () => {
@@ -1337,12 +1337,17 @@ describe("overlay architecture guards", () => {
     expect(settingsSurface).not.toMatch(/rgba\(255,\s*255,\s*255,\s*0\.04\)/)
   })
 
-  test("permissions panel is owned by surfaces/settings.css", () => {
+  test("permissions panel uses the .s-* settings primitives", () => {
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const settingsSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/settings.css"))
+    const panelSource = readText(join(OVERLAY_ROOT, "src/components/settings/PermissionsPanel.tsx"))
     const html = readText(join(OVERLAY_ROOT, "src/index.html"))
 
-    for (const className of [
+    // Legacy perm-* class family was deleted on 2026-05-26 when the
+    // panel migrated onto the primitives. The guard now asserts the
+    // *absence* of the old classes anywhere, plus that the panel uses
+    // the new primitive components.
+    for (const legacy of [
       "perm-panel",
       "perm-panel-intro",
       "perm-list",
@@ -1353,17 +1358,48 @@ describe("overlay architecture guards", () => {
       "perm-row-actions",
       "perm-action-btn",
     ]) {
-      expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
-      expect(settingsSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+      expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${legacy}\\s*\\{`))
+      expect(settingsSurface).not.toMatch(new RegExp(`(^|\\n)\\.${legacy}\\s*\\{`))
+      expect(panelSource).not.toContain(`class="${legacy}`)
+      expect(panelSource).not.toContain(`"${legacy}"`)
     }
 
-    for (const action of ["allow", "ask", "deny"]) {
+    // Primitive ownership: the .s-* contract lives in settings.css and
+    // the panel imports the matching Solid components.
+    for (const primitive of [
+      "s-panel",
+      "s-group",
+      "s-group-head",
+      "s-group-body",
+      "s-row",
+      "s-row-main",
+      "s-row-title",
+      "s-row-desc",
+      "s-row-actions",
+      "s-pill",
+      "s-segmented",
+      "s-segmented-btn",
+    ]) {
+      expect(settingsSurface).toMatch(new RegExp(`(^|\\n)\\.${primitive}\\s*[\\[\\{,:+>~]`))
+    }
+    for (const component of [
+      "SettingsPanel",
+      "SettingsGroup",
+      "SettingsRow",
+      "SettingsSegmented",
+    ]) {
+      expect(panelSource).toContain(component)
+    }
+
+    // Segmented tone wiring stays semantic — allow/ask/deny still route
+    // through good/warn/bad via data-tone, just on the primitive class.
+    for (const tone of ["ok", "warn", "bad"]) {
       expect(settingsSurface).toMatch(
-        new RegExp(`\\.perm-action-btn\\[data-active="true"\\]\\[data-action="${action}"\\]\\s*\\{`),
+        new RegExp(`\\.s-segmented-btn\\[data-active="true"\\]\\[data-tone="${tone}"\\]\\s*\\{`),
       )
     }
 
-    expect(settingsSurface).toMatch(/\.perm-action-btn:focus-visible\s*\{/)
+    expect(settingsSurface).toMatch(/\.s-segmented-btn:focus-visible\s*\{/)
     expect(settingsSurface).toContain("var(--oc-border-width)")
 
     const settingsAt = html.indexOf('href="styles/surfaces/settings.css"')
