@@ -5,6 +5,37 @@ import { ChannelId, ChannelSurface as SharedChannelSurface } from "@/channel/cat
 export const PanelSurface = SharedChannelSurface
 export const PanelCapabilityKind = z.enum(["query", "mutation"])
 export const PanelLocalActionType = z.enum(["set_executor", "select_task", "select_session", "invalidate_session"])
+
+/**
+ * Who initiated a panel action — server-derived, NEVER client-supplied.
+ *
+ *   panel_ui        external UI / mobile gateway client / direct HTTP call
+ *   control_agent   the OpenCorvus control LLM agent (`control`)
+ *   gateway_master  the OpenCorvus mission supervisor LLM agent (`gateway-master`)
+ *
+ * `actor` is the provenance dimension (who); `surface` is the channel
+ * dimension (where). They are independent: a control_agent can run on
+ * panel surface, a panel_ui can run on gateway surface, etc.
+ *
+ * Replaces the prior free-text `source` field as the authoritative input
+ * for authorization decisions and audit trails. `source` is preserved
+ * for business-meaningful labels (e.g. "channel:slack:thread-123").
+ */
+export const PanelActor = z.enum(["panel_ui", "control_agent", "gateway_master"])
+export type PanelActor = z.infer<typeof PanelActor>
+
+/**
+ * Map a Tool.Context agent name to the panel actor identity.
+ *
+ * Only LLM agents that legitimately drive the panel are recognized.
+ * Anything else collapses to `panel_ui` — the safest default, treats the
+ * caller as if it were an external UI client (no implicit elevation).
+ */
+export function derivePanelActor(agent: string | undefined): PanelActor {
+  if (agent === "control") return "control_agent"
+  if (agent === "gateway-master") return "gateway_master"
+  return "panel_ui"
+}
 export const PanelCapabilityQuery = z.object({
   surface: PanelSurface.default("panel"),
 })
