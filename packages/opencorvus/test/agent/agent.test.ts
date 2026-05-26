@@ -372,7 +372,7 @@ test("orchestrator registry exposes lifecycle tools it teaches in prompt", async
         "retry_task",
         "restart_from_stage",
         "inject_operator_message",
-        "recover_stale_build",
+        "cancel_subagent",
       ]) {
         expect(include).toContain(tool)
       }
@@ -1038,6 +1038,110 @@ test("defaultAgent throws when all primary agents are disabled", async () => {
     directory: tmp.path,
     fn: async () => {
       await expect(Agent.defaultAgent()).rejects.toThrow("no primary visible agent found")
+    },
+  })
+})
+
+/**
+ * Spec: gateway-master-supervisor-2026-05-26.md §2.1.
+ *
+ * gateway-master is a hidden primary agent whose tool surface is
+ * deliberately narrow. The orchestrator-core comment block (see
+ * agent.ts ~266-283) is the historical reason: a scheduler-style agent
+ * given bash/edit/read drifted into executing work itself. These
+ * assertions guard against that regression for the supervisor.
+ */
+test("gateway-master is hidden primary with the supervisor tool whitelist", async () => {
+  await using tmp = await tmpdir()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const master = await Agent.get("gateway-master")
+      expect(master).toBeDefined()
+      expect(master?.mode).toBe("primary")
+      expect(master?.hidden).toBe(true)
+      expect(master?.native).toBe(true)
+      expect(master?.prompt).toContain("Gateway Master")
+      // Worktree convention contract surfaced in the prompt — the four
+      // mission files are part of master's persistence contract, not
+      // free LLM choice.
+      expect(master?.prompt).toContain("frontier.md")
+      expect(master?.prompt).toContain("handoff.md")
+    },
+  })
+})
+
+test("gateway-master's resolved tool surface includes only supervisor tools", async () => {
+  // ToolRegistry.tools() does first-time tool-init on every registered
+  // tool (~25 of them, several of which do real I/O on init), so this
+  // assertion needs more headroom than the 5 s default. Matches the
+  // pattern used by the explore/general assertions earlier in this file.
+  await using tmp = await tmpdir()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const master = await Agent.get("gateway-master")
+      const tools = await ToolRegistry.tools({ providerID: "", modelID: "" }, master)
+      const ids = tools.map((tool) => tool.id).sort()
+
+      // Forward assertion: every tool master needs to dispatch + carry state.
+      expect(ids).toContain("mission_state")
+      expect(ids).toContain("panel")
+      expect(ids).toContain("webfetch")
+      expect(ids).toContain("websearch")
+      expect(ids).toContain("memory")
+      expect(ids).toContain("todoread")
+      expect(ids).toContain("todowrite")
+
+      // Reverse assertion: no executor tools, ever. If any of these
+      // fires, master has acquired the ability to do work itself —
+      // re-read the orchestrator-core comment block before "fixing".
+      for (const forbidden of [
+        "bash",
+        "edit",
+        "read",
+        "write",
+        "glob",
+        "search_code",
+        "apply_patch",
+        "task",
+        "task_report",
+        "goal_report",
+        "skill",
+        "webpage_extract",
+        "url_screenshot",
+        "webpage_render",
+        "webpage_evaluate",
+      ]) {
+        expect(ids).not.toContain(forbidden)
+      }
+    },
+  })
+}, 30_000)
+
+test("Agent.defaultAgent() does NOT select gateway-master even when only it is primary", async () => {
+  // hidden:true keeps defaultAgent from ever returning it implicitly.
+  // The gateway page wakes master through an explicit endpoint instead.
+  await using tmp = await tmpdir()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const def = await Agent.defaultAgent()
+      expect(def).not.toBe("gateway-master")
+    },
+  })
+})
+
+test("operator cannot promote gateway-master into the default-agent slot (hidden agents are rejected)", async () => {
+  await using tmp = await tmpdir({
+    config: {
+      default_agent: "gateway-master",
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await expect(Agent.defaultAgent()).rejects.toThrow(/hidden/)
     },
   })
 })

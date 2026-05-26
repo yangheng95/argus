@@ -6,6 +6,13 @@ import { Session } from "@/session"
 import { Question } from "@/question"
 import { captureWindowScreenshot } from "@/gui/screenshot"
 import { PanelActionSchema, derivePanelActor } from "@/panel/capability"
+
+// Action whitelist by actor. Only `gateway_master` is restricted today —
+// it is a supervisor that may only create new tasks and query task
+// status. control_agent and panel_ui retain their existing surface.
+// Keep this set tight: anything the supervisor needs beyond these two
+// belongs in a dispatched engine_task, not in the supervisor itself.
+const GATEWAY_MASTER_ALLOWED_ACTIONS = new Set(["create_task", "query_task"])
 import { isDecodableText, decodeDataUrlText, decodeDataUrlBase64 } from "@/session/text-mime"
 
 const localOnly = (ctx: Tool.Context) => ctx.extra?.surface === "panel"
@@ -50,6 +57,19 @@ export const PanelTool = Tool.define("panel", {
   description: "Operate the OpenCorvus control plane: inspect plans/boards, manage task state, reply to interactions, and manage sessions.",
   parameters: PanelActionSchema,
   async execute(params, ctx) {
+    // Actor-based action filter. Master is a scheduler, not an executor —
+    // it must not be able to retry/cancel/replan tasks or manage sessions
+    // through this surface. The host enforces here so even if a future
+    // config mis-grants `panel` to a different agent identity, the
+    // boundary holds.
+    const actor = derivePanelActor(ctx.agent)
+    if (actor === "gateway_master" && !GATEWAY_MASTER_ALLOWED_ACTIONS.has(params.action)) {
+      throw new Error(
+        `panel action "${params.action}" is not permitted for gateway_master. ` +
+          `Master may only call create_task and query_task. ` +
+          `For any other panel operation, dispatch an engine_task whose executor can perform it.`,
+      )
+    }
     switch (params.action) {
       case "view_plan": {
         const board = await EngineService.getBoard(params.taskID)

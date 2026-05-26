@@ -11,6 +11,7 @@ import { ProviderTransform } from "../provider/transform"
 import PROMPT_GENERATE from "./generate.txt"
 import ARCHITECT_CORE from "@/prompt/core/architect-core.txt"
 import BUILD_CORE from "@/prompt/core/build-core.txt"
+import GATEWAY_MASTER_CORE from "@/prompt/core/gateway-master-core.txt"
 import REQUIREMENTS_CORE from "@/prompt/core/requirements-core.txt"
 import DESIGN_ANALYST_CORE from "@/prompt/core/design-analyst-core.txt"
 import INTEGRITY_CORE from "@/prompt/core/integrity-core.txt"
@@ -246,6 +247,61 @@ export namespace Agent {
         prompt: CONTROL_RUNTIME_PROMPT,
         mode: "primary",
         native: true,
+        hidden: true,
+      },
+      "gateway-master": {
+        name: "gateway-master",
+        description: AgentRoleContract.description("gateway-master"),
+        prompt: GATEWAY_MASTER_CORE,
+        // Mission supervisor primary agent. Runs through the standard
+        // SessionWake → SessionPrompt.loop primary-agent runtime (same as
+        // `coding` / `control`), NOT runAgentSession. See
+        // gateway-master-supervisor-2026-05-26.md §2.5.
+        //
+        // Tool whitelist is deliberately narrow — the orchestrator-core
+        // comment above (lines 266-283) is a literal history log of how a
+        // scheduler-style agent given executor tools (bash/edit/read)
+        // bypassed worker dispatch and tried to do work itself. Do NOT
+        // add bash/edit/read/write/glob/webpage_extract/url_screenshot
+        // here under any circumstance.
+        //
+        // panel is allowed but action-filtered to create_task + query_task
+        // by panel.ts execute (actor-based whitelist on derivePanelActor
+        // value). Master cannot retry/cancel/replan/send_message/manage
+        // sessions through panel.
+        tools: {
+          include: [
+            "mission_state",
+            "panel",
+            "webfetch",
+            "websearch",
+            "memory",
+            "todoread",
+            "todowrite",
+            "question",
+          ],
+        },
+        permission: nonDesignPermissions(
+          PermissionNext.fromConfig({
+            panel: "allow",
+            mission_state: "allow",
+            webfetch: "allow",
+            websearch: "allow",
+            memory: "allow",
+            question: "allow",
+          }),
+        ),
+        // Step cap mirrors orchestrator: per-agent budget should not
+        // constrain a legitimate long-running supervisor loop. Per-wake
+        // exhaustion is bounded by the LLM provider's own context limit
+        // plus compaction.
+        steps: 1000,
+        options: {},
+        mode: "primary",
+        native: true,
+        // hidden: true keeps Agent.defaultAgent() from picking master
+        // over coding (defaultAgent throws on hidden, agent.ts:597). The
+        // gateway page wakes master through an explicit endpoint.
         hidden: true,
       },
       orchestrator: {
@@ -525,6 +581,7 @@ export namespace Agent {
     "intent-analysis": INTENT_ANALYSIS_CORE,
     integrity: INTEGRITY_RUNTIME_PROMPT,
     "fact-check": FACT_CHECK_CORE,
+    "gateway-master": GATEWAY_MASTER_CORE,
   }
 
   /** Returns the built-in default prompt for a native agent (before config overrides). */

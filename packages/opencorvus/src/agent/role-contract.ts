@@ -8,6 +8,7 @@ export type AgentRoleID =
   | "summary"
   | "control"
   | "orchestrator"
+  | "gateway-master"
   | "requirements"
   | "architect"
   | "design-analyst"
@@ -87,6 +88,14 @@ export namespace AgentRoleContract {
       promptEditable: false,
       defaultPromptRequired: false,
       promptConfigMode: "none",
+    },
+    "gateway-master": {
+      id: "gateway-master",
+      description:
+        "Mission supervisor primary agent. Owns long-running cross-task research strategy: maintains mission state in worktree files and dispatches engine_tasks through panel.create_task. Does NOT execute work itself.",
+      promptEditable: true,
+      defaultPromptRequired: true,
+      promptConfigMode: "append",
     },
     requirements: {
       id: "requirements",
