@@ -82,6 +82,18 @@ export namespace Server {
             // the latter is a one-click recovery prompt.
             else if (err.name === "WorktreeNotGitError") status = 412
             else if (err.name.startsWith("Worktree")) status = 400
+            // Direct-reply taxonomy — see orchestrator/direct-reply.ts.
+            // These three are all about "this session structurally cannot
+            // accept the reply you sent", which is a 4xx client situation,
+            // not a server crash. The overlay reads err.name to decide
+            // whether to retry, hide the reply box, or surface a generic
+            // failure dialog. Without this mapping all three collapsed to
+            // 500 and AgentSessionReplyBox could not tell them apart from
+            // a real server error.
+            else if (err.name === "InvalidReplyTargetKindError") status = 400
+            else if (err.name === "BuildSessionDirectReplyError") status = 400
+            else if (err.name === "ReplyTargetEnvelopeMissingError") status = 409
+            else if (err.name === "SessionRuntimeContractMissingError") status = 410
             else status = 500
             return c.json(err.toObject(), { status })
           }

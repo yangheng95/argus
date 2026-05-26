@@ -51,7 +51,7 @@ import { lazy } from "../../util/lazy"
 import { Log } from "@/util/log"
 import { sessionGoalID, sessionParentID, sessionRole, taskIDForSession, taskMessageWatermark, taskSession } from "@/orchestrator/task-event"
 import { ensureTaskMessageProtocolBridge, overlayMeta } from "@/orchestrator/protocol/message-bridge"
-import { DIRECT_REPLY_AGENT_KINDS } from "@/orchestrator/direct-reply"
+import { DIRECT_AGENT_SESSION_CONTROL_KINDS } from "@/orchestrator/direct-reply"
 import { BusEvent } from "@/bus/bus-event"
 const log = Log.create({ service: "server.routes.orchestrator" })
 const CONVERSATION_EVENT_PAGE_LIMIT = 500
@@ -932,7 +932,12 @@ export const EngineRoutes = lazy(() =>
         summary: "Reply directly to a task agent session",
         description:
           "Append a human-authored message to a non-orchestrator task agent session. " +
-          "This is scoped input for the target agent session, not a global task routing command.",
+          "This is scoped input for the target agent session, not a global task routing command. " +
+          "Returns 400 InvalidReplyTargetKindError / BuildSessionDirectReplyError for kinds the route refuses, " +
+          "409 ReplyTargetEnvelopeMissingError when the session has no prior user envelope yet, and " +
+          "410 SessionRuntimeContractMissingError when the in-memory runtime contract is gone (process " +
+          "restart or terminal collector already satisfied) — the overlay uses these to decide whether " +
+          "to retry, hide the reply box, or surface a generic failure.",
         operationId: "task.session.reply",
         responses: {
           202: {
@@ -943,7 +948,7 @@ export const EngineRoutes = lazy(() =>
               },
             },
           },
-          ...errors(400, 404),
+          ...errors(400, 404, 409, 410),
         },
       }),
       validator("param", z.object({ taskID: Task.shape.id, sessionID: z.string().min(1) })),
@@ -1496,9 +1501,15 @@ async function assertDirectAgentSession(taskID: string, sessionID: string) {
       message: `Session ${sessionID} has no task agent kind`,
     })
   }
-  if (!DIRECT_REPLY_AGENT_KINDS.has(kind)) {
+  // The cancel route is a SESSION CONTROL surface, not the reply surface
+  // — its allowed kinds include "build" (per DIRECT_AGENT_SESSION_CONTROL_KINDS).
+  // Until this fix the route reused DIRECT_REPLY_AGENT_KINDS, which
+  // excludes build, so cancelling a build session 400'd. The two sets
+  // exist precisely to keep these two surfaces distinct (rule 8 single
+  // source per concept).
+  if (!DIRECT_AGENT_SESSION_CONTROL_KINDS.has(kind)) {
     throw new HTTPException(400, {
-      message: `Session ${sessionID} has kind "${kind}" and cannot receive direct agent replies`,
+      message: `Session ${sessionID} has kind "${kind}" and cannot be controlled through the direct agent session control surface`,
     })
   }
   return Session.get(sessionID)
