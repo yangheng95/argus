@@ -87,6 +87,7 @@ import { TaskContext } from "@/task-context"
 import type { AgentReport, AgentReportContext } from "@/agent/report"
 import { SessionContext } from "@/session/context"
 import { recordToolExecuteError } from "@/engine/persist"
+import { renderPreTerminalReflectionPrompt } from "@/prompt/fragments/pre-terminal-reflection"
 
 const log = Log.create({ service: "agent-runner" })
 
@@ -304,6 +305,8 @@ export function shouldFailUnreadableBuildReference(input: {
     input.droppedFileParts.some((part) => isReferenceModality(part.mime))
   )
 }
+
+export { renderPreTerminalReflectionPrompt as preTerminalReflectionPrompt }
 
 // ---------------------------------------------------------------------------
 // Error types — every failure surfaces as AgentRunError so callers do not
@@ -632,9 +635,17 @@ export async function runAgentSession<C>(
   // opencorvus.jsonc. Default off — runs go through unchanged in
   // production. Spec — 2026-05-07 INFORMATION MISSING debug toggle.
   const debugCfg = (await EngineConfig.get()).debug
-  const baseSystemPrompt = liveContext.trim().length > 0
-    ? `${composed.prompt}\n\n${liveContext}`
-    : composed.prompt
+  const preTerminalReflection = renderPreTerminalReflectionPrompt({
+    agentName,
+    terminalToolName: input.terminalTool?.toolName,
+    usesStructuredOutput: input.format !== undefined,
+  })
+  const baseSystemPrompt = [
+    composed.prompt,
+    liveContext.trim().length > 0 ? liveContext : undefined,
+    preTerminalReflection,
+  ].filter((section): section is string => typeof section === "string" && section.trim().length > 0)
+    .join("\n\n")
   const systemPrompt = debugCfg.fail_on_information_missing
     ? appendInformationMissingFallback(baseSystemPrompt)
     : baseSystemPrompt

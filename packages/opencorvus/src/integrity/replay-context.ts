@@ -1,6 +1,6 @@
 import type { GoalContractFields } from "@/pipeline/types"
 import type { ParsedRequirement } from "@/requirements/types"
-import type { DeliveryRow, GoalRunRow } from "@/engine/store"
+import type { GoalRunRow } from "@/engine/store"
 import { listIntegrityAttemptArtifacts, listSpecSnapshots } from "@/engine/store"
 import { listFactCheckAttempts } from "@/fact-check/persist"
 import { canonicalIntegritySymptom, defaultIntegrityVerify, integrityFindingFingerprint } from "./finding-manifest"
@@ -8,6 +8,14 @@ import { renderSharedIntegrityPromptContext } from "./shared-prompt"
 import type { SpecSnapshotLineage } from "./replay-lineage"
 
 export type { SpecSnapshotLineage } from "./replay-lineage"
+
+type BuildRecordRow = {
+  id: string
+  task_id: string
+  summary: string
+  result: unknown
+  time_created: number
+}
 
 export type IntegrityPriorAttemptSummary = {
   attemptNumber: number
@@ -68,7 +76,7 @@ export type IntegrityBuildEvidenceSinceLastReview = {
   sinceTimeCreated?: number
   changedFiles: string[]
   diffs: Array<{ file: string; status?: string; additions?: number; deletions?: number }>
-  deliverySummaries: string[]
+  buildSummaries: string[]
   goalRuns: Array<{
     goalID: string
     goalRunID: string
@@ -129,7 +137,7 @@ export type BuildIntegrityReplayContextInput = {
   phase?: "pre_build" | "post_build"
   goals: GoalContractFields[]
   requirements?: ParsedRequirement[]
-  deliveries: DeliveryRow[]
+  buildRecords: BuildRecordRow[]
   goalRuns: GoalRunRow[]
 }
 
@@ -188,16 +196,16 @@ export function buildIntegrityReplayContext(input: BuildIntegrityReplayContextIn
   })
   const latestPrior = priorAttempts.at(-1)
   const sinceTimeCreated = latestPrior?.timeCreated
-  const deliveriesSince =
+  const buildRecordsSince =
     sinceTimeCreated === undefined
-      ? input.deliveries
-      : input.deliveries.filter((delivery) => delivery.time_created > sinceTimeCreated)
+      ? input.buildRecords
+      : input.buildRecords.filter((record) => record.time_created > sinceTimeCreated)
   const goalRunsSince =
     sinceTimeCreated === undefined
       ? input.goalRuns
       : input.goalRuns.filter((run) => (run.time_completed ?? run.time_created) > sinceTimeCreated)
-  const changedFilesTotal = changedFilesFromDeliveries(input.deliveries)
-  const changedFilesSinceLastReview = changedFilesFromDeliveries(deliveriesSince)
+  const changedFilesTotal = changedFilesFromBuildRecords(input.buildRecords)
+  const changedFilesSinceLastReview = changedFilesFromBuildRecords(buildRecordsSince)
 
   const factCheckRows = listFactCheckAttempts(input.taskID)
   const priorFactCheckAttempts: IntegrityPriorFactCheckAttempt[] = factCheckRows.map((row) => ({
@@ -225,8 +233,8 @@ export function buildIntegrityReplayContext(input: BuildIntegrityReplayContextIn
       sinceAttemptNumber: latestPrior?.attemptNumber,
       sinceTimeCreated,
       changedFiles: changedFilesSinceLastReview,
-      diffs: diffsFromDeliveries(deliveriesSince),
-      deliverySummaries: deliveriesSince.map((delivery) => delivery.summary).filter((item) => item.trim().length > 0),
+      diffs: diffsFromBuildRecords(buildRecordsSince),
+      buildSummaries: buildRecordsSince.map((record) => record.summary).filter((item) => item.trim().length > 0),
       goalRuns: goalRunsSince.map((run) => ({
         goalID: run.goal_id,
         goalRunID: run.id,
@@ -251,28 +259,38 @@ export function buildIntegrityReplayContext(input: BuildIntegrityReplayContextIn
 export function renderIntegrityReplayContextPrompt(context: IntegrityReplayContext): string {
   const lines = ["# Integrity Replay Context", "", `Current integrity attempt: #${context.attemptNumber}.`, ""]
   const evidence = context.buildEvidenceSinceLastReview
+  const changedDirectories = replayPathDirectories(evidence.changedFiles)
+  const visibleChangedDirectories = changedDirectories.slice(0, 24)
+  const diffDirectories = replayPathDirectories(evidence.diffs.map((diff) => diff.file))
+  const visibleDiffDirectories = diffDirectories.slice(0, 24)
   const evidenceLines = ["Build evidence after latest integrity attempt:"]
   if (evidence.sinceAttemptNumber !== undefined) evidenceLines.push(`- Since attempt: #${evidence.sinceAttemptNumber}`)
   if (evidence.sinceTimeCreated !== undefined) {
     evidenceLines.push(`- Since time: ${new Date(evidence.sinceTimeCreated).toISOString()}`)
   }
   evidenceLines.push(
-    `- Changed files: ${evidence.changedFiles.length > 0 ? evidence.changedFiles.join(", ") : "(none)"}`,
+    `- Changed directories (${visibleChangedDirectories.length}/${changedDirectories.length}; files=${evidence.changedFiles.length}): ${
+      visibleChangedDirectories.length > 0 ? visibleChangedDirectories.join(", ") : "(none)"
+    }`,
+  )
+  replayAppendOmittedLine(
+    evidenceLines,
+    changedDirectories.length,
+    visibleChangedDirectories.length,
+    "changed directories",
   )
   if (evidence.diffs.length > 0) {
-    evidenceLines.push("- Diffs:")
-    for (const diff of evidence.diffs) {
-      const stats = [
-        diff.status ? `status=${diff.status}` : "",
-        diff.additions !== undefined ? `+${diff.additions}` : "",
-        diff.deletions !== undefined ? `-${diff.deletions}` : "",
-      ].filter(Boolean)
-      evidenceLines.push(`  - ${diff.file}${stats.length > 0 ? ` (${stats.join(", ")})` : ""}`)
-    }
+    evidenceLines.push(
+      `- Diff directories (${visibleDiffDirectories.length}/${diffDirectories.length}; diffs=${evidence.diffs.length}):`,
+    )
+    for (const directory of visibleDiffDirectories) evidenceLines.push(`  - ${directory}`)
+    replayAppendOmittedLine(evidenceLines, diffDirectories.length, visibleDiffDirectories.length, "diff directories")
   }
-  if (evidence.deliverySummaries.length > 0) {
-    evidenceLines.push("- Delivery summaries:")
-    for (const summary of evidence.deliverySummaries) evidenceLines.push(`  - ${summary}`)
+  if (evidence.buildSummaries.length > 0) {
+    evidenceLines.push("- Build summaries:")
+    const summaries = evidence.buildSummaries.slice(0, 6)
+    for (const summary of summaries) evidenceLines.push(`  - ${clipReplayText(summary, 300)}`)
+    replayAppendOmittedLine(evidenceLines, evidence.buildSummaries.length, summaries.length, "build summaries")
   }
   if (evidence.goalRuns.length > 0) {
     evidenceLines.push("- Goal runs after latest review:")
@@ -289,7 +307,7 @@ export function renderIntegrityReplayContextPrompt(context: IntegrityReplayConte
       surface: "integrity_replay",
       lineage: context.lineage,
       latestAttempt,
-      changedFiles: evidence.changedFiles,
+      changedDirectories: visibleChangedDirectories,
       changedEvidenceMarkdown: evidenceLines.join("\n"),
       oldAttempts,
     }).promptMarkdown,
@@ -310,14 +328,15 @@ export function renderIntegrityReplayContextPrompt(context: IntegrityReplayConte
   // verified / corrected and don't redundantly flag the same claim.  Spec
   // §6.1.2 step 7 / codex impl review §4.  Bounded to 10 newest rows; the
   // full stream lives in the artifact table for read_context drill-down.
-  if (context.priorFactCheckAttempts.length > 0) {
+  const priorFactCheckAttempts = context.priorFactCheckAttempts ?? []
+  if (priorFactCheckAttempts.length > 0) {
     const cap = 10
-    const newest = context.priorFactCheckAttempts.slice(0, cap)
-    const omitted = context.priorFactCheckAttempts.length - newest.length
+    const newest = priorFactCheckAttempts.slice(0, cap)
+    const omitted = priorFactCheckAttempts.length - newest.length
     lines.push(
       "",
       omitted > 0
-        ? `Prior fact-check attempts on this task (latest ${newest.length} of ${context.priorFactCheckAttempts.length}; ${omitted} older omitted):`
+        ? `Prior fact-check attempts on this task (latest ${newest.length} of ${priorFactCheckAttempts.length}; ${omitted} older omitted):`
         : `Prior fact-check attempts on this task (${newest.length}):`,
     )
     for (const fc of newest) {
@@ -330,6 +349,26 @@ export function renderIntegrityReplayContextPrompt(context: IntegrityReplayConte
     }
   }
   return lines.join("\n")
+}
+
+function replayPathDirectories(paths: readonly string[]): string[] {
+  const directories = new Set<string>()
+  for (const path of paths) {
+    const normalized = path.replace(/\\/g, "/").replace(/^\/+/, "")
+    const index = normalized.lastIndexOf("/")
+    directories.add(index > 0 ? normalized.slice(0, index) : ".")
+  }
+  return [...directories].sort((left, right) => left.localeCompare(right))
+}
+
+function replayAppendOmittedLine(lines: string[], total: number, rendered: number, label: string) {
+  if (total > rendered) lines.push(`- omitted ${total - rendered} ${label} from initial integrity replay context`)
+}
+
+function clipReplayText(text: string, maxChars: number): string {
+  if (text.length <= maxChars) return text
+  const marker = "\n[truncated_by_integrity_replay_prompt_cap]"
+  return `${text.slice(0, Math.max(0, maxChars - marker.length)).trimEnd()}${marker}`
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -410,7 +449,8 @@ function findingSummaries(value: unknown): NonNullable<IntegrityPriorAttemptSumm
       {
         ...withSymptom,
         fingerprint: stringFrom(finding.fingerprint) ?? integrityFindingFingerprint(withSymptom),
-        verify: stringArray(finding.verify).length > 0 ? stringArray(finding.verify) : defaultIntegrityVerify(withSymptom),
+        verify:
+          stringArray(finding.verify).length > 0 ? stringArray(finding.verify) : defaultIntegrityVerify(withSymptom),
       },
     ]
   })
@@ -441,7 +481,8 @@ function requiredRepairSummaries(value: unknown): IntegrityPriorAttemptSummary["
       {
         ...withSymptom,
         fingerprint: stringFrom(repair.fingerprint) ?? integrityFindingFingerprint(withSymptom),
-        verify: stringArray(repair.verify).length > 0 ? stringArray(repair.verify) : defaultIntegrityVerify(withSymptom),
+        verify:
+          stringArray(repair.verify).length > 0 ? stringArray(repair.verify) : defaultIntegrityVerify(withSymptom),
       },
     ]
   })
@@ -458,10 +499,10 @@ function disagreementSummaries(value: unknown): IntegrityPriorAttemptSummary["un
   })
 }
 
-function changedFilesFromDeliveries(deliveries: DeliveryRow[]): string[] {
+function changedFilesFromBuildRecords(records: BuildRecordRow[]): string[] {
   const out = new Set<string>()
-  for (const delivery of deliveries) {
-    const result = asRecord(delivery.result)
+  for (const record of records) {
+    const result = asRecord(record.result)
     for (const file of stringArray(result.changed_files)) out.add(file)
     for (const file of stringArray(result.changedFiles)) out.add(file)
     if (Array.isArray(result.diffs)) {
@@ -474,11 +515,11 @@ function changedFilesFromDeliveries(deliveries: DeliveryRow[]): string[] {
   return [...out].sort()
 }
 
-function diffsFromDeliveries(deliveries: DeliveryRow[]): IntegrityBuildEvidenceSinceLastReview["diffs"] {
+function diffsFromBuildRecords(records: BuildRecordRow[]): IntegrityBuildEvidenceSinceLastReview["diffs"] {
   const seen = new Set<string>()
   const diffs: IntegrityBuildEvidenceSinceLastReview["diffs"] = []
-  for (const delivery of deliveries) {
-    const result = asRecord(delivery.result)
+  for (const record of records) {
+    const result = asRecord(record.result)
     if (!Array.isArray(result.diffs)) continue
     for (const raw of result.diffs) {
       const diff = asRecord(raw)

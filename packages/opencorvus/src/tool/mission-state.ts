@@ -151,7 +151,7 @@ export const MissionStateTool = Tool.define("mission_state", {
         return {
           title: `mission_state read ${params.missionID}/${params.file}`,
           output: content,
-          metadata: { missionID: params.missionID, file: params.file, exists: content.length > 0 },
+          metadata: { missionID: params.missionID, file: params.file, exists: content.length > 0 } as Record<string, unknown>,
         }
       }
       case "write": {
@@ -167,7 +167,7 @@ export const MissionStateTool = Tool.define("mission_state", {
         return {
           title: `mission_state write ${params.missionID}/${params.file}`,
           output: `Wrote ${bytes} bytes to ${params.file}.`,
-          metadata: { missionID: params.missionID, file: params.file, bytes },
+          metadata: { missionID: params.missionID, file: params.file, exists: true, bytes } as Record<string, unknown>,
         }
       }
       case "list": {
@@ -184,7 +184,7 @@ export const MissionStateTool = Tool.define("mission_state", {
         return {
           title: `mission_state list ${params.missionID}`,
           output: JSON.stringify({ missionID: params.missionID, files: present }),
-          metadata: { missionID: params.missionID, count: present.length },
+          metadata: { missionID: params.missionID, count: present.length } as Record<string, unknown>,
         }
       }
     }

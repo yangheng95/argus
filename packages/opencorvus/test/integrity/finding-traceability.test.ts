@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test"
 import path from "node:path"
-import { emptyArchitectContractGraph } from "../../src/architect/contract-graph"
 import {
   buildReviewerPrompt,
   buildSupervisorConsensusPrompt,
@@ -33,7 +32,7 @@ function replayContext(): IntegrityReplayContext {
     buildEvidenceSinceLastReview: {
       changedFiles: [],
       diffs: [],
-      deliverySummaries: [],
+      buildSummaries: [],
       goalRuns: [],
     },
     scaleSignals: {
@@ -76,7 +75,6 @@ const promptInput: ReviewPromptInput = {
     acceptance: "401 errors render in Chinese.",
     non_goals: "This does not cover bundle-size budgets.",
   }],
-  contractGraph: emptyArchitectContractGraph(),
   replayContext: replayContext(),
 }
 

@@ -7,6 +7,29 @@ export type IntegrityVerdict = z.infer<typeof IntegrityVerdictSchema>
 export const IntegrityReviewerPlanSchema = z
   .object({
     rationale: z.string().min(1),
+    taskProfile: z
+      .object({
+        categories: z.array(z.string().min(1)).default([]),
+        requestCriticalPromises: z.array(z.string().min(1)).default([]),
+        changedSurfaces: z.array(z.string().min(1)).default([]),
+        availableEvidenceSurfaces: z.array(z.string().min(1)).default([]),
+      })
+      .strict()
+      .optional(),
+    riskHypotheses: z
+      .array(
+        z
+          .object({
+            id: z.string().min(1),
+            title: z.string().min(1),
+            whyRelevantToRequest: z.string().min(1),
+            evidenceNeeded: z.array(z.string().min(1)).min(1),
+            suggestedReviewerID: z.string().min(1).optional(),
+          })
+          .strict(),
+      )
+      .default([]),
+    coveragePlan: z.array(z.string().min(1)).default([]),
     reviewers: z
       .array(
         z
@@ -14,6 +37,8 @@ export const IntegrityReviewerPlanSchema = z
             reviewerID: z.string().min(1),
             title: z.string().min(1),
             focus: z.string().min(1),
+            riskHypothesisIDs: z.array(z.string().min(1)).default([]),
+            drilldownPlan: z.array(z.string().min(1)).default([]),
             adversarialQuestions: z.array(z.string().min(1)).min(1),
           })
           .strict(),
@@ -59,6 +84,44 @@ export const IntegrityReviewerReportSchema = z
     scope: z.string().min(1),
     verdict: IntegrityVerdictSchema,
     summary: z.string().min(1),
+    investigationPlan: z
+      .object({
+        requestPromise: z.string().min(1),
+        hypothesis: z.string().min(1),
+        evidencePlan: z.array(z.string().min(1)).min(1),
+        passCriteria: z.array(z.string().min(1)).min(1),
+      })
+      .strict()
+      .optional(),
+    drilldowns: z
+      .array(
+        z
+          .object({
+            kind: z.string().min(1),
+            target: z.string().min(1),
+            purpose: z.string().min(1),
+            result: z.string().min(1),
+          })
+          .strict(),
+      )
+      .default([]),
+    coverage: z
+      .array(
+        z
+          .object({
+            requirementID: z.string().min(1).optional(),
+            specID: z.string().min(1).optional(),
+            userRequestQuote: z.string().min(1).optional(),
+            status: z.enum(["covered", "missing", "inconclusive"]),
+            evidence: z.string().min(1),
+          })
+          .strict()
+          .refine(
+            (value) => Boolean(value.requirementID || value.specID || value.userRequestQuote),
+            "coverage rows require requirementID, specID, or userRequestQuote",
+          ),
+      )
+      .default([]),
     evidence: z.array(z.string().min(1)).default([]),
     findings: z.array(IntegrityFindingSchema).default([]),
     openQuestions: z.array(z.string().min(1)).default([]),
@@ -118,6 +181,29 @@ export const IntegrityTeamReportSchema = z
     summary: z.string().min(1),
     teamReportMarkdown: z.string().min(1),
     reviewers: z.array(IntegrityReviewerReportSchema).min(2),
+    coverageAudit: z
+      .array(
+        z
+          .object({
+            promise: z.string().min(1),
+            reviewerIDs: z.array(z.string().min(1)).default([]),
+            status: z.enum(["covered", "missing", "inconclusive"]),
+            notes: z.string().min(1),
+          })
+          .strict(),
+      )
+      .default([]),
+    uninspectedRisks: z
+      .array(
+        z
+          .object({
+            risk: z.string().min(1),
+            reason: z.string().min(1),
+            action: z.enum(["block", "re-review", "advisory"]),
+          })
+          .strict(),
+      )
+      .default([]),
     findings: z.array(IntegrityFindingSchema).default([]),
     rounds: z.array(IntegrityReviewRoundSchema).default([]),
     requiredRepairs: z.array(IntegrityRequiredRepairSchema).default([]),

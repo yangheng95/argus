@@ -182,9 +182,7 @@ function requireOrchestratorToolExecutionContext(options: unknown, toolName: str
  * `## Git Merge Repair Bash` section of `orchestrator-core.txt` for the
  * positive/negative scope catalog.
  */
-export function validateOrchestratorBashCommand(
-  command: string,
-): { ok: true } | { ok: false; reason: string } {
+export function validateOrchestratorBashCommand(command: string): { ok: true } | { ok: false; reason: string } {
   const trimmed = command.trim()
   if (!trimmed) return { ok: false, reason: "empty command" }
   if (trimmed !== "git" && !/^git[\s]/.test(trimmed)) {
@@ -224,7 +222,8 @@ export function validateOrchestratorBashCommand(
   if (isHostKillingCommand(trimmed)) {
     return {
       ok: false,
-      reason: "command matches host-process-killing pattern. Use a process-specific path (kill a PID you own); never name-killing.",
+      reason:
+        "command matches host-process-killing pattern. Use a process-specific path (kill a PID you own); never name-killing.",
     }
   }
   return { ok: true }
@@ -718,10 +717,7 @@ async function markOwnedBuildToolPartErrored(input: {
   if (!part || part.type !== "tool" || part.state.status === "completed" || part.state.status === "error") return
 
   const now = input.now ?? Date.now()
-  const start =
-    part.state.status === "running"
-      ? part.state.time.start
-      : input.ownership.time_started
+  const start = part.state.status === "running" ? part.state.time.start : input.ownership.time_started
   await Session.updatePart({
     ...part,
     state: {
@@ -738,7 +734,7 @@ async function markOwnedBuildToolPartErrored(input: {
         },
       }),
       metadata: {
-        ...(part.state.status === "running" ? part.state.metadata ?? {} : {}),
+        ...(part.state.status === "running" ? (part.state.metadata ?? {}) : {}),
         ...(input.metadata ?? {}),
       },
       time: {
@@ -1259,9 +1255,7 @@ function renderFactCheckReport(report: FactCheckReport): string {
           .map(
             (v, i) =>
               `${i + 1}. ${v.claim}\n` +
-              v.evidence
-                .map((e) => `   - [${e.kind}] ${e.pointer}: ${e.excerpt.slice(0, 240)}`)
-                .join("\n"),
+              v.evidence.map((e) => `   - [${e.kind}] ${e.pointer}: ${e.excerpt.slice(0, 240)}`).join("\n"),
           )
           .join("\n\n"),
     )
@@ -1275,9 +1269,7 @@ function renderFactCheckReport(report: FactCheckReport): string {
               `${i + 1}. [${c.severity}] ${c.claim}\n` +
               `   → **${c.correction}**\n` +
               `   recommended_action: \`${c.recommended_action}\`\n` +
-              c.evidence
-                .map((e) => `   - [${e.kind}] ${e.pointer}: ${e.excerpt.slice(0, 240)}`)
-                .join("\n"),
+              c.evidence.map((e) => `   - [${e.kind}] ${e.pointer}: ${e.excerpt.slice(0, 240)}`).join("\n"),
           )
           .join("\n\n"),
     )
@@ -1285,9 +1277,7 @@ function renderFactCheckReport(report: FactCheckReport): string {
   if (report.unresolved.length > 0) {
     sections.push(
       `### Unresolved (${report.unresolved.length})\n` +
-        report.unresolved
-          .map((u, i) => `${i + 1}. [${u.severity}, ${u.why_unresolved}] ${u.claim}`)
-          .join("\n"),
+        report.unresolved.map((u, i) => `${i + 1}. [${u.severity}, ${u.why_unresolved}] ${u.claim}`).join("\n"),
     )
   }
   return sections.join("\n\n")
@@ -1736,19 +1726,18 @@ export function createOrchestratorTools(input: {
       })
     }
     if (outcome.status === "reviewed") {
-      const headline =
-        outcome.artifactMissing
-          ? `Integrity session completed but status=artifact_missing — durable integrity_attempt persistence failed. ` +
-            `Do not treat an older artifact as the current verdict until recovery or explicit user confirmation.`
-          : outcome.verdict === "pass" && outcome.phase === "post_build"
+      const headline = outcome.artifactMissing
+        ? `Integrity session completed but status=artifact_missing — durable integrity_attempt persistence failed. ` +
+          `Do not treat an older artifact as the current verdict until recovery or explicit user confirmation.`
+        : outcome.verdict === "pass" && outcome.phase === "post_build"
+          ? `Integrity verdict: pass — ${outcome.perDimension.join(", ")}. ` +
+            `Integrity is the workflow gate; task completed.`
+          : outcome.verdict === "pass"
             ? `Integrity verdict: pass — ${outcome.perDimension.join(", ")}. ` +
-              `Integrity is the workflow gate; task completed.`
-            : outcome.verdict === "pass"
-              ? `Integrity verdict: pass — ${outcome.perDimension.join(", ")}. ` +
-                `Pre-build integrity passed, but task is not complete until post-build integrity passes after terminal build evidence exists.`
-              : `Integrity verdict: ${outcome.verdict} — ${outcome.perDimension.join(", ")}. ` +
-                `Task is not accepted. Nothing in code supersedes goals, opens new attempts, or mutates the graph based on this verdict. ` +
-                `Read the full markdown below and choose modify_goal / build({goalID}) / architect / fail_task explicitly.`
+              `Pre-build integrity passed, but task is not complete until post-build integrity passes after terminal build evidence exists.`
+            : `Integrity verdict: ${outcome.verdict} — ${outcome.perDimension.join(", ")}. ` +
+              `Task is not accepted. Nothing in code supersedes goals, opens new attempts, or mutates the graph based on this verdict. ` +
+              `Read the full markdown below and choose modify_goal / build({goalID}) / architect / fail_task explicitly.`
       return SubAgentProtocol.yieldResult({
         headline,
         fields: [
@@ -1926,17 +1915,9 @@ export function createOrchestratorTools(input: {
       phase,
       goals: goalsForReview,
       requirements,
-      deliveries: deliveriesForAcceptance,
+      buildRecords: deliveriesForAcceptance,
       goalRuns: listGoalRunsForTask(taskID),
     })
-    const contractGraph = findLatestArchitectContractGraph(taskID)
-    if (!contractGraph) {
-      throw new Error(
-        `Cannot run integrity review for task ${taskID}: missing architect_contract_graph artifact. ` +
-          `Run Architect again so graph contracts and dependency reasons are available.`,
-      )
-    }
-
     const verdict = await reviewIntegrity({
       userRequest: task.request,
       taskTitle: task.title,
@@ -1944,9 +1925,6 @@ export function createOrchestratorTools(input: {
       requirements,
       requirementDecisions,
       requirementStatus,
-      designSpecs: Array.isArray(task.design_specs) ? (task.design_specs as any) : undefined,
-      contractGraph,
-      decisionLog,
       attachments: Array.isArray(task.attachments) ? (task.attachments as any) : undefined,
       acceptance: {
         summary: acceptanceSummary,
@@ -2004,7 +1982,9 @@ export function createOrchestratorTools(input: {
     }
     if (artifactPersisted) {
       try {
-        persistentRootsValue = persistentRootSummary(buildIntegrityRootHistory({ taskID, specSnapshotLineage: lineage }))
+        persistentRootsValue = persistentRootSummary(
+          buildIntegrityRootHistory({ taskID, specSnapshotLineage: lineage }),
+        )
       } catch (err) {
         log.warn("integrity: persistent root summary failed (non-fatal)", {
           taskID,
@@ -2026,7 +2006,8 @@ export function createOrchestratorTools(input: {
           .slice(0, 5)
           .map((i) => `[${i.severity}] ${i.title}: ${i.description}`)
           .join("; ")
-        const issueTail = verdict.findings.length > 5 ? ` (+${verdict.findings.length - 5} more in engine_artifact)` : ""
+        const issueTail =
+          verdict.findings.length > 5 ? ` (+${verdict.findings.length - 5} more in engine_artifact)` : ""
         const value =
           `verdict=${verdict.verdict} | reviewers=${verdict.reviewers.length} | findings=${verdict.findings.length} | required_repairs=${verdict.requiredRepairs.length} | unresolved=${verdict.unresolvedDisagreements.length}` +
           ` | ${persistentRootsValue}` +
@@ -2318,8 +2299,9 @@ export function createOrchestratorTools(input: {
             result.summary,
             "",
             "## Requirements",
-            ...result.requirements.map((r) =>
-              `- **${r.id}** [${r.type}]: ${r.description} Acceptance: ${r.acceptance} Non-goals: ${r.non_goals}`,
+            ...result.requirements.map(
+              (r) =>
+                `- **${r.id}** [${r.type}]: ${r.description} Acceptance: ${r.acceptance} Non-goals: ${r.non_goals}`,
             ),
             "",
             "## Decisions",
@@ -3490,9 +3472,7 @@ export function createOrchestratorTools(input: {
         "fail_task per the corrected[i].recommended_action.\n" +
         "- verdict=inconclusive → retry fact_check or proceed with a caveat note.",
       inputSchema: z.object({
-        target_session_id: z
-          .string()
-          .describe("Session id of the worker whose terminal report you want fact-checked."),
+        target_session_id: z.string().describe("Session id of the worker whose terminal report you want fact-checked."),
         target_agent: z
           .string()
           .describe(
@@ -3503,10 +3483,7 @@ export function createOrchestratorTools(input: {
             "Empty array is allowed only when you also explain `reason` why fact-check is " +
             "still useful (e.g., load-bearing prose claims the worker didn't register).",
         ),
-        reason: z
-          .string()
-          .min(10)
-          .describe("Why you decided to dispatch fact-check on this worker output."),
+        reason: z.string().min(10).describe("Why you decided to dispatch fact-check on this worker output."),
       }),
       execute: async (args) => {
         const task = requireTask(taskID)
@@ -3618,7 +3595,8 @@ export function createOrchestratorTools(input: {
             createDecisionLog(task.id).append({
               phase: "fact_check",
               key: `fact_check:${args.target_session_id}:${snap.messageID}`,
-              value: `verdict=${result.report.overall_verdict} ` +
+              value:
+                `verdict=${result.report.overall_verdict} ` +
                 `verified=${result.report.verified.length} ` +
                 `corrected=${result.report.corrected.length} ` +
                 `unresolved=${result.report.unresolved.length}`,
@@ -4229,11 +4207,9 @@ export function createOrchestratorTools(input: {
 
         if (scope === "evaluations" || scope === "integrity_history" || scope === "all") {
           const activeSpec = findActiveSpecForTask(taskID)
-          const {
-            buildSpecSnapshotLineage,
-            buildIntegrityRootHistory,
-            renderIntegrityRootHistoryBlock,
-          } = await import("@/integrity")
+          const { buildSpecSnapshotLineage, buildIntegrityRootHistory, renderIntegrityRootHistoryBlock } = await import(
+            "@/integrity"
+          )
           const { findLatestIntegrityArtifactMissingStatus } = await import("@/engine/store")
           const missingStatus = findLatestIntegrityArtifactMissingStatus(taskID)
           if (missingStatus) {
@@ -4756,13 +4732,15 @@ export function createOrchestratorTools(input: {
         })
         const RefineResultSchema = z.object({
           summary: z.string(),
-          suggestions: z.array(z.object({
-            category: z.enum(["feature", "quality", "test", "performance", "refactor"]),
-            title: z.string(),
-            description: z.string(),
-            priority: z.enum(["high", "medium", "low"]),
-            effort: z.enum(["small", "medium", "large"]),
-          })),
+          suggestions: z.array(
+            z.object({
+              category: z.enum(["feature", "quality", "test", "performance", "refactor"]),
+              title: z.string(),
+              description: z.string(),
+              priority: z.enum(["high", "medium", "low"]),
+              effort: z.enum(["small", "medium", "large"]),
+            }),
+          ),
         })
 
         const systemPrompt = [
@@ -4813,9 +4791,10 @@ export function createOrchestratorTools(input: {
           })
           throw err
         }
-        const parsed = finalMessage.info.role === "assistant" && finalMessage.info.structured
-          ? RefineResultSchema.safeParse(finalMessage.info.structured)
-          : { success: false as const, error: new Error("refine session ended without StructuredOutput") }
+        const parsed =
+          finalMessage.info.role === "assistant" && finalMessage.info.structured
+            ? RefineResultSchema.safeParse(finalMessage.info.structured)
+            : { success: false as const, error: new Error("refine session ended without StructuredOutput") }
         if (!parsed.success) {
           const error = parsed.error instanceof z.ZodError ? z.prettifyError(parsed.error) : parsed.error.message
           SessionStatus.set(refineSession.id, { type: "terminal", reason: "error", error })
@@ -4931,40 +4910,40 @@ export function createOrchestratorTools(input: {
         const requireConfirmation = cfg.experimental?.confirm_proposed_tasks === true
         log.info("propose_task requested", { taskID, title, priority, kind, requireConfirmation })
         if (requireConfirmation) {
-        const { output, answers } = await Question.askAndFormat({
-          sessionID: input.agentSessionID,
-          questions: [
-            {
-              header: "新任务",
-              question: `是否创建这个新任务？\n\n${title}\n\n${request}`,
-              options: [
-                {
-                  label: "创建任务",
-                  description: "确认后立即提交为一个新的任务。",
-                },
-                {
-                  label: "不创建",
-                  description: "保留当前任务，不提交新的任务。",
-                },
-              ],
-              multiple: false,
-              custom: false,
-            },
-          ],
-        })
-        const selected = answers?.[0]?.[0]
-        if (selected !== "创建任务") {
-          return SubAgentProtocol.yieldResult({
-            headline: "Follow-up task proposal was not created.",
-            summary: output,
-            fields: [
-              ["proposal", title],
-              ["reason", reason],
-              ["selection", selected ?? "dismissed"],
+          const { output, answers } = await Question.askAndFormat({
+            sessionID: input.agentSessionID,
+            questions: [
+              {
+                header: "新任务",
+                question: `是否创建这个新任务？\n\n${title}\n\n${request}`,
+                options: [
+                  {
+                    label: "创建任务",
+                    description: "确认后立即提交为一个新的任务。",
+                  },
+                  {
+                    label: "不创建",
+                    description: "保留当前任务，不提交新的任务。",
+                  },
+                ],
+                multiple: false,
+                custom: false,
+              },
             ],
-            pointer: `current task ${taskID}; no new task was created`,
           })
-        }
+          const selected = answers?.[0]?.[0]
+          if (selected !== "创建任务") {
+            return SubAgentProtocol.yieldResult({
+              headline: "Follow-up task proposal was not created.",
+              summary: output,
+              fields: [
+                ["proposal", title],
+                ["reason", reason],
+                ["selection", selected ?? "dismissed"],
+              ],
+              pointer: `current task ${taskID}; no new task was created`,
+            })
+          }
         }
         const requestID =
           "orchestrator-proposed-task:" +
@@ -5499,7 +5478,11 @@ export function createOrchestratorTools(input: {
             const designSpecs = Array.isArray(task.design_specs) ? (task.design_specs as any) : undefined
             const designAnalysis = renderDesignAnalysisHandoffReference(taskID)
             context =
-              integrityFeedback || deliveryFeedback || retryAttachments || designSpecs || designAnalysis.trim().length > 0
+              integrityFeedback ||
+              deliveryFeedback ||
+              retryAttachments ||
+              designSpecs ||
+              designAnalysis.trim().length > 0
                 ? {
                     designSpecs,
                     designAnalysis: designAnalysis.trim().length > 0 ? designAnalysis : undefined,
@@ -5565,21 +5548,16 @@ export function createOrchestratorTools(input: {
           // concrete build session. The first artifact must already contain
           // session_id so retry has exactly one session identity source.
           let goalRunID: string | undefined
-          const buildSessionContractArtifactForAttempt = (input: {
-            sessionID: string
-            goalRunID: string
-          }) => {
+          const buildSessionContractArtifactForAttempt = (input: { sessionID: string; goalRunID: string }) => {
             if (!attachedGoalID || target.kind !== "goal") return undefined
             const now = Date.now()
             const artifactID = Identifier.ascending("artifact")
             const activePlan = findActivePlanForTask(taskID)
             const graphArtifact = findLatestArchitectContractGraphArtifact(taskID)
             const goalRow = findGoal(attachedGoalID)
-            const sourceArtifactIDs = [
-              activePlan?.spec_snapshot_id,
-              activePlan?.id,
-              graphArtifact?.id,
-            ].filter((item): item is string => typeof item === "string" && item.length > 0)
+            const sourceArtifactIDs = [activePlan?.spec_snapshot_id, activePlan?.id, graphArtifact?.id].filter(
+              (item): item is string => typeof item === "string" && item.length > 0,
+            )
             const payload = {
               session_id: input.sessionID,
               task_id: taskID,
@@ -5600,12 +5578,14 @@ export function createOrchestratorTools(input: {
               requirements_snapshot: context?.requirements ?? [],
               source_artifact_ids: sourceArtifactIDs,
               digest: createHash("sha256")
-                .update(JSON.stringify({
-                  goal: target,
-                  collaborationGoals: context?.collaborationGoals ?? [],
-                  requirements: context?.requirements ?? [],
-                  sourceArtifactIDs,
-                }))
+                .update(
+                  JSON.stringify({
+                    goal: target,
+                    collaborationGoals: context?.collaborationGoals ?? [],
+                    requirements: context?.requirements ?? [],
+                    sourceArtifactIDs,
+                  }),
+                )
                 .digest("hex"),
             }
             return {
@@ -6129,7 +6109,10 @@ export function createOrchestratorTools(input: {
             (worktreeHeadLine ? `${worktreeHeadLine}\n` : "") +
             `- actual_changed_files (vs contribution base):\n${actualFilesLines}`
 
-          closeBuildOwnership(result.status === "passed" ? "completed" : "failed", result.status === "failed" ? result.error : undefined)
+          closeBuildOwnership(
+            result.status === "passed" ? "completed" : "failed",
+            result.status === "failed" ? result.error : undefined,
+          )
 
           return (
             `Build agent finished (status=${result.status}, session ${sessionID}).\n\n` +
@@ -6192,9 +6175,7 @@ export function createOrchestratorTools(input: {
         description: z
           .string()
           .min(1)
-          .describe(
-            "Concise 5-15 word statement of the git merge-state symptom you are repairing.",
-          ),
+          .describe("Concise 5-15 word statement of the git merge-state symptom you are repairing."),
         timeout: z
           .number()
           .int()
@@ -6353,9 +6334,7 @@ export function createOrchestratorTools(input: {
           aborted,
         })
         if (aborted) {
-          return (
-            `wait aborted after ${elapsed}ms (requested ${duration_ms}ms). Reason: ${reason}`
-          )
+          return `wait aborted after ${elapsed}ms (requested ${duration_ms}ms). Reason: ${reason}`
         }
         return (
           `Waited ${elapsed}ms (requested ${duration_ms}ms). Reason: ${reason}. ` +

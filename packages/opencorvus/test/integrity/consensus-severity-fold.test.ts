@@ -3,12 +3,6 @@ import TEAM_CORE from "../../src/prompt/core/integrity-team-core.txt"
 import { buildSupervisorConsensusPrompt, type ReviewPromptInput } from "../../src/integrity/team-agent"
 import type { IntegrityReviewerPlan, IntegrityReviewerReport } from "../../src/integrity/team-schema"
 
-const contractGraph = {
-  contracts: [],
-  dependency_contracts: [],
-  audit_criteria: [],
-}
-
 const input: ReviewPromptInput = {
   userRequest: "Ship a chat page.",
   taskTitle: "Chat page",
@@ -34,7 +28,6 @@ const input: ReviewPromptInput = {
       non_goals: "Quota exhaustion hardening is out of this bounded REQ.",
     },
   ],
-  contractGraph,
   replayContext: {
     attemptNumber: 2,
     lineage: {
@@ -77,7 +70,7 @@ const input: ReviewPromptInput = {
       sinceTimeCreated: Date.UTC(2026, 4, 23, 10),
       changedFiles: [],
       diffs: [],
-      deliverySummaries: [],
+      buildSummaries: [],
       goalRuns: [],
     },
     scaleSignals: {

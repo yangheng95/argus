@@ -32,7 +32,7 @@ export type SharedPromptCapInput = {
     latestSeverity: "blocking" | "advisory"
     symptomSummaryMarkdown: string
   }>
-  changedFiles: string[]
+  changedDirectories: string[]
   changedEvidenceMarkdown?: string
   oldAttempts: IntegrityPriorAttemptSummary[]
   reviewerTextBlocks?: string[]
@@ -129,7 +129,7 @@ export function renderSharedIntegrityPromptContext(input: SharedPromptCapInput):
     )
   } else {
     append(
-      "No prior integrity attempts exist for this task/spec snapshot lineage. Treat this as a first review and choose reviewers from the actual request, goals, requirements, changed files, runtime evidence, and risk surface.",
+      "No prior integrity attempts exist for this task/spec snapshot lineage. Treat this as a first review and choose reviewers from the actual request, goals, requirements, changed directories, runtime evidence, and risk surface.",
     )
   }
 
@@ -160,10 +160,7 @@ export function renderSharedIntegrityPromptContext(input: SharedPromptCapInput):
       return
     }
 
-    const summary = clipText(
-      sanitize(attempt.summary ?? attempt.teamReportMarkdown ?? "(no summary)", "generic", "block"),
-      budget.oldAttemptSummaryCharCap,
-    )
+    const summary = clipText(sanitize(attempt.summary ?? "(no summary)", "generic", "block"), budget.oldAttemptSummaryCharCap)
     const before = renderedChars
     append(renderOldAttemptPointer(attempt, summary))
     if (renderedChars === before || renderedChars >= budget.totalCharCap) {
@@ -297,8 +294,9 @@ function renderFullAttemptMarkdown(
     `- verdict=${attempt.verdict ?? "unknown"}`,
   ]
   if (attempt.summary) lines.push("", "Summary:", sanitize(attempt.summary, "generic", "block"))
-  if (attempt.teamReportMarkdown)
-    lines.push("", "Team report:", sanitize(attempt.teamReportMarkdown, "reviewer_text", "block"))
+  if (attempt.teamReportMarkdown) {
+    lines.push("", "Team report: omitted from replay prompt; structured summary, findings, repairs, and reviewer focus rows follow.")
+  }
   if (attempt.reviewers.length > 0) {
     lines.push("", "Reviewer focuses:")
     for (const reviewer of attempt.reviewers) {
@@ -324,8 +322,11 @@ function renderFullAttemptMarkdown(
           `  repair: ${clipText(sanitize(finding.repair, "finding_repair", "block"), budget.findingRepairCharCap)}`,
         )
       }
-      if (finding.verify?.length > 0) lines.push(`  verify: ${finding.verify.join(" | ")}`)
-      if (finding.filePaths.length > 0) lines.push(`  files: ${finding.filePaths.join(", ")}`)
+      if (finding.verify?.length > 0)
+        lines.push(
+          `  verify: ${finding.verify.map((item) => directoryizePathMentions(item, finding.filePaths)).join(" | ")}`,
+        )
+      if (finding.filePaths.length > 0) lines.push(`  directories: ${pathDirectories(finding.filePaths).join(", ")}`)
       if (finding.requirementIDs.length > 0) lines.push(`  requirements: ${finding.requirementIDs.join(", ")}`)
       if (finding.specIDs.length > 0) lines.push(`  specs: ${finding.specIDs.join(", ")}`)
     }
@@ -349,8 +350,11 @@ function renderFullAttemptMarkdown(
           `  repair: ${clipText(sanitize(finding.repair, "finding_repair", "block"), budget.findingRepairCharCap)}`,
         )
       }
-      if (finding.verify?.length > 0) lines.push(`  verify: ${finding.verify.join(" | ")}`)
-      if (finding.filePaths.length > 0) lines.push(`  files: ${finding.filePaths.join(", ")}`)
+      if (finding.verify?.length > 0)
+        lines.push(
+          `  verify: ${finding.verify.map((item) => directoryizePathMentions(item, finding.filePaths)).join(" | ")}`,
+        )
+      if (finding.filePaths.length > 0) lines.push(`  directories: ${pathDirectories(finding.filePaths).join(", ")}`)
       if (finding.requirementIDs.length > 0) lines.push(`  requirements: ${finding.requirementIDs.join(", ")}`)
       if (finding.specIDs.length > 0) lines.push(`  specs: ${finding.specIDs.join(", ")}`)
     }
@@ -363,8 +367,11 @@ function renderFullAttemptMarkdown(
       )
       if (repair.fingerprint) lines.push(`  fingerprint: ${repair.fingerprint}`)
       if (repair.canonicalSymptom) lines.push(`  canonical symptom: ${repair.canonicalSymptom}`)
-      if (repair.verify?.length > 0) lines.push(`  verify: ${repair.verify.join(" | ")}`)
-      if (repair.filePaths.length > 0) lines.push(`  files: ${repair.filePaths.join(", ")}`)
+      if (repair.verify?.length > 0)
+        lines.push(
+          `  verify: ${repair.verify.map((item) => directoryizePathMentions(item, repair.filePaths)).join(" | ")}`,
+        )
+      if (repair.filePaths.length > 0) lines.push(`  directories: ${pathDirectories(repair.filePaths).join(", ")}`)
     }
   }
   if (attempt.unresolvedDisagreements.length > 0) {
@@ -407,8 +414,9 @@ function renderChangedEvidenceMarkdown(
   budget: SharedPromptBudget,
   sanitize: PromptSanitizer,
 ): string {
-  const lines = ["## Changed Files And Evidence", "", `- changed_files=${input.changedFiles.length}`]
-  for (const file of input.changedFiles) lines.push(`- ${file}`)
+  const directories = normalizeDirectories(input.changedDirectories)
+  const lines = ["## Changed Directories And Evidence", "", `- changed_directories=${directories.length}`]
+  for (const directory of directories) lines.push(`- ${directory}`)
   if (input.changedEvidenceMarkdown) {
     lines.push(
       "",
@@ -416,6 +424,42 @@ function renderChangedEvidenceMarkdown(
     )
   }
   return lines.join("\n")
+}
+
+function pathDirectories(paths: readonly string[]): string[] {
+  const directories = new Set<string>()
+  for (const path of paths) {
+    const normalized = path.replace(/\\/g, "/").replace(/^\/+/, "")
+    const index = normalized.lastIndexOf("/")
+    directories.add(index > 0 ? normalized.slice(0, index) : ".")
+  }
+  return [...directories].sort((left, right) => left.localeCompare(right))
+}
+
+function normalizeDirectories(directories: readonly string[]): string[] {
+  return [
+    ...new Set(
+      directories.map((directory) => {
+        const normalized = directory.replace(/\\/g, "/").replace(/^\/+/, "").replace(/\/+$/, "") || "."
+        const slash = normalized.lastIndexOf("/")
+        const basename = slash >= 0 ? normalized.slice(slash + 1) : normalized
+        if (basename.includes(".") && slash > 0) return normalized.slice(0, slash)
+        if (basename.includes(".")) return "."
+        return normalized
+      }),
+    ),
+  ].sort((left, right) => left.localeCompare(right))
+}
+
+function directoryizePathMentions(text: string, paths: readonly string[]): string {
+  let output = text
+  for (const filePath of paths) {
+    const normalized = filePath.replace(/\\/g, "/")
+    const index = normalized.lastIndexOf("/")
+    const directory = index > 0 ? normalized.slice(0, index) : "."
+    output = output.split(filePath).join(directory).split(normalized).join(directory)
+  }
+  return output
 }
 
 function renderOldAttemptPointer(attempt: IntegrityPriorAttemptSummary, summary: string): string {

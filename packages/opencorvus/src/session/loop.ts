@@ -44,6 +44,7 @@ import { decodeDataUrlBase64 } from "./text-mime"
 import { normalizeToolInput } from "./tool-input-norm"
 import { toolFailureCauseFromUnknown } from "./tool-failure-cause"
 import { SessionRuntimeContractMissingError } from "@/orchestrator/direct-reply"
+import { renderPreTerminalReflectionReminder } from "@/prompt/fragments/pre-terminal-reflection"
 
 muteAISdkWarnings()
 
@@ -58,7 +59,11 @@ IMPORTANT:
 const STRUCTURED_OUTPUT_SYSTEM_PROMPT = `IMPORTANT: The user has requested structured output. You MUST use the StructuredOutput tool to provide your final response. Do NOT respond with plain text - you MUST call the StructuredOutput tool with your answer formatted according to the schema.`
 
 export function terminalToolSystemPrompt(toolName: string): string {
-  return `IMPORTANT: The current task is ready for terminal handoff. You MUST call the ${toolName} tool to provide your final response. Do NOT respond with plain text - you MUST call ${toolName} with input matching its schema.`
+  return [
+    `IMPORTANT: The current task is ready for terminal handoff. You MUST call the ${toolName} tool to provide your final response.`,
+    renderPreTerminalReflectionReminder(toolName),
+    `Do NOT respond with plain text - you MUST call ${toolName} with input matching its schema.`,
+  ].join(" ")
 }
 
 // Terminal-call recovery runs through provider-level toolChoice where possible.

@@ -1,12 +1,6 @@
 import { expect, test } from "bun:test"
 import { buildIntegrityEvidencePrompt, type ReviewPromptInput } from "../../src/integrity/team-agent"
 
-const contractGraph = {
-  contracts: [],
-  dependency_contracts: [],
-  audit_criteria: [],
-}
-
 function baseInput(overrides: Partial<ReviewPromptInput> = {}): ReviewPromptInput {
   return {
     userRequest: "写一个成熟的输入 deepseek key 即可聊天的 ai chat 页面",
@@ -25,7 +19,6 @@ function baseInput(overrides: Partial<ReviewPromptInput> = {}): ReviewPromptInpu
       },
     ],
     requirements: [],
-    contractGraph,
     replayContext: {
       attemptNumber: 1,
       lineage: {
@@ -39,7 +32,7 @@ function baseInput(overrides: Partial<ReviewPromptInput> = {}): ReviewPromptInpu
       buildEvidenceSinceLastReview: {
         changedFiles: [],
         diffs: [],
-        deliverySummaries: [],
+        buildSummaries: [],
         goalRuns: [],
       },
       scaleSignals: {
@@ -79,7 +72,7 @@ test("renders bounded maturity REQ evidence from scope output", () => {
   expect(prompt).toContain("No browser quota exhaustion guarantee is part of this REQ.")
 })
 
-test("renders maturity_scope_pending as the missing bounded REQ branch", () => {
+test("omits decision-log maturity markers from initial integrity context", () => {
   const prompt = buildIntegrityEvidencePrompt(
     baseInput({
       requirementDecisions: [
@@ -92,12 +85,12 @@ test("renders maturity_scope_pending as the missing bounded REQ branch", () => {
     }),
   )
 
-  expect(prompt).toContain("Maturity terms from original request not landed as bounded REQs")
-  expect(prompt).toContain("maturity_scope_pending")
+  expect(prompt).toContain("Omitted maturity decisions")
+  expect(prompt).toContain("Requirement decision-log entries are not part of the initial integrity context.")
+  expect(prompt).not.toContain("maturity_scope_pending")
   expect(prompt).toContain("at most one requirements-extraction concern")
-  expect(prompt).toContain("do not derive severity thresholds from this word")
-  expect(prompt).not.toContain("Delivery Maturity Class")
-  expect(prompt).not.toContain("delivery_class")
+  expect(prompt).toContain("do not derive severity thresholds from hidden decisions")
+  expect(prompt).not.toContain("Maturity Class")
   expect(prompt).not.toContain("demo")
   expect(prompt).not.toContain("production")
 })

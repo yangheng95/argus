@@ -69,25 +69,26 @@ describe("shared integrity prompt cap", () => {
           symptomSummaryMarkdown: "Persistent root survives cap.",
         },
       ],
-      changedFiles: ["src/current.ts"],
+      changedDirectories: ["src"],
       changedEvidenceMarkdown: "Changed evidence survives cap.",
       oldAttempts,
     })
 
     expect(output.capHit).toBe(true)
-    expect(output.promptMarkdown).toContain("LATEST_FULL_REPORT")
+    expect(output.promptMarkdown).not.toContain("LATEST_FULL_REPORT")
+    expect(output.promptMarkdown).toContain("Team report: omitted from replay prompt")
     expect(output.promptMarkdown).toContain("LATEST-BLOCKER")
     expect(output.promptMarkdown).toContain("PERSISTENT_ROOT_LABEL")
-    expect(output.promptMarkdown).toContain("src/current.ts")
+    expect(output.promptMarkdown).toContain("src")
     expect(output.promptMarkdown).toContain("Changed evidence survives cap.")
     expect(output.promptMarkdown).not.toContain("OLD_FULL_PROSE_80")
     expect(output.omittedAttempts.some((item) => item.artifactID === "artifact_old_80")).toBe(true)
 
-    expect(output.promptMarkdown.indexOf("LATEST_FULL_REPORT")).toBeLessThan(
+    expect(output.promptMarkdown.indexOf("Team report: omitted from replay prompt")).toBeLessThan(
       output.promptMarkdown.indexOf("PERSISTENT_ROOT_LABEL"),
     )
     expect(output.promptMarkdown.indexOf("PERSISTENT_ROOT_LABEL")).toBeLessThan(
-      output.promptMarkdown.indexOf("src/current.ts"),
+      output.promptMarkdown.indexOf("Changed evidence survives cap."),
     )
   })
 
@@ -119,6 +120,19 @@ describe("shared integrity prompt cap", () => {
     })
     expect(truncated.truncated).toBe(true)
     expect(truncated.text).toHaveLength(10)
+  })
+
+  test("changed directory evidence does not render file-level paths when callers pass files", () => {
+    const output = renderSharedIntegrityPromptContext({
+      surface: "severity_context",
+      lineage,
+      changedDirectories: ["src/features/orders/OrdersPage.tsx", "src/shared"],
+      oldAttempts: [],
+    })
+
+    expect(output.promptMarkdown).toContain("src/features/orders")
+    expect(output.promptMarkdown).toContain("src/shared")
+    expect(output.promptMarkdown).not.toContain("OrdersPage.tsx")
   })
 
   test("does not truncate user request quotes by default", () => {
@@ -157,7 +171,7 @@ describe("shared integrity prompt cap", () => {
           },
         ],
       }),
-      changedFiles: ["src/current.ts"],
+      changedDirectories: ["src"],
       changedEvidenceMarkdown: "```changed evidence",
       oldAttempts: [
         attempt({

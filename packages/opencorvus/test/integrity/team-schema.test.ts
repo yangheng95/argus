@@ -1,5 +1,10 @@
 import { expect, test } from "bun:test"
-import { IntegrityReviewCompletedPayloadSchema } from "../../src/integrity"
+import {
+  IntegrityReviewCompletedPayloadSchema,
+  IntegrityReviewerPlanSchema,
+  IntegrityReviewerReportSchema,
+  IntegrityTeamReportSchema,
+} from "../../src/integrity"
 
 const basePayload = {
   taskID: "tsk_schema",
@@ -31,7 +36,7 @@ const basePayload = {
   rounds: [],
   requiredRepairs: [],
   unresolvedDisagreements: [],
-        fact_check_items: [],
+  fact_check_items: [],
   attempts: 1,
 }
 
@@ -66,4 +71,100 @@ test("integrity completed payload cannot pass with required repairs or unresolve
       ],
     }).success,
   ).toBe(false)
+})
+
+test("integrity schemas carry dynamic audit strategy and coverage evidence", () => {
+  const plan = IntegrityReviewerPlanSchema.parse({
+    rationale: "Task-specific risks need scoped reviewers.",
+    taskProfile: {
+      categories: ["migration", "frontend"],
+      requestCriticalPromises: ["reuse existing components", "wire real API"],
+      changedSurfaces: ["src/features/orders"],
+      availableEvidenceSurfaces: ["changed_directories", "goal_summary"],
+    },
+    riskHypotheses: [
+      {
+        id: "risk-api",
+        title: "API integration may be mocked",
+        whyRelevantToRequest: "The request asks for real integration.",
+        evidenceNeeded: ["diff_for_file", "runtime command"],
+        suggestedReviewerID: "rev-api",
+      },
+    ],
+    coveragePlan: ["Cover each user promise before consensus."],
+    reviewers: [
+      {
+        reviewerID: "rev-api",
+        title: "API reviewer",
+        focus: "Real API integration",
+        riskHypothesisIDs: ["risk-api"],
+        drilldownPlan: ["inspect changed directory then exact API diff"],
+        adversarialQuestions: ["Is the API still mocked?"],
+      },
+      {
+        reviewerID: "rev-ui",
+        title: "UI reviewer",
+        focus: "Visual/component reuse",
+        riskHypothesisIDs: [],
+        drilldownPlan: ["inspect component directories"],
+        adversarialQuestions: ["Were existing components reused?"],
+      },
+    ],
+  })
+  expect(plan.riskHypotheses[0]?.id).toBe("risk-api")
+  expect(plan.reviewers[0]?.drilldownPlan).toEqual(["inspect changed directory then exact API diff"])
+
+  const reviewer = IntegrityReviewerReportSchema.parse({
+    reviewerID: "rev-api",
+    scope: "Real API integration",
+    verdict: "pass",
+    summary: "API integration is backed by the real client.",
+    investigationPlan: {
+      requestPromise: "wire real API",
+      hypothesis: "implementation may still use mock data",
+      evidencePlan: ["inspect diff_for_file for src/features/orders/api.ts"],
+      passCriteria: ["real client imported and exercised"],
+    },
+    drilldowns: [
+      {
+        kind: "diff_for_file",
+        target: "src/features/orders/api.ts",
+        purpose: "Check mock replacement",
+        result: "real client imported",
+      },
+    ],
+    coverage: [
+      {
+        userRequestQuote: "wire real API",
+        status: "covered",
+        evidence: "diff shows real client path",
+      },
+    ],
+    evidence: ["Scoped diff inspected."],
+    findings: [],
+    openQuestions: [],
+  })
+  expect(reviewer.coverage[0]?.status).toBe("covered")
+
+  const team = IntegrityTeamReportSchema.parse({
+    verdict: "pass",
+    summary: "Covered critical request promises.",
+    teamReportMarkdown: "pass",
+    reviewers: [reviewer, { ...reviewer, reviewerID: "rev-ui", scope: "UI", summary: "UI covered" }],
+    coverageAudit: [
+      {
+        promise: "wire real API",
+        reviewerIDs: ["rev-api"],
+        status: "covered",
+        notes: "Scoped diff and runtime evidence inspected.",
+      },
+    ],
+    uninspectedRisks: [],
+    findings: [],
+    rounds: [],
+    requiredRepairs: [],
+    unresolvedDisagreements: [],
+    fact_check_items: [],
+  })
+  expect(team.coverageAudit[0]?.promise).toBe("wire real API")
 })
