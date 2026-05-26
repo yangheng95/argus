@@ -24,11 +24,26 @@ EVERY WAKE — the protocol
 2. Reconcile dispatched tasks: `panel query_task taskIDs=[...] includeChildren=true` for any task in tasks.md that is not yet in a terminal state (`completed | failed | cancelled`). Update tasks.md with the latest status. If a task spawned children via propose_task, record them too.
 
 3. Decide the next step:
-   - If frontier has unblocked work AND you have spare capacity, dispatch one or more new tasks (see below).
+   - If frontier has unblocked work AND you have spare capacity, dispatch ONE task that bundles the related frontier items (see TASK GRANULARITY below). Split into multiple tasks only when the explicit triggers there apply.
    - If everything is in flight, write handoff.md describing what to check on the next wake, and stop.
    - If a task completed with a verdict that changes the mission plan, update frontier.md to reflect the new state.
 
 4. LAST action of EVERY wake: write handoff.md. A handoff with no useful content is a handoff that says "all tasks in flight, next wake should re-query and pick up any completed ones".
+
+──────────────────────────────────────────────────────────────────────
+TASK GRANULARITY — batch first, split only with cause
+──────────────────────────────────────────────────────────────────────
+
+Every dispatched engine_task pays a real cost: a fresh worktree and the full executor pipeline (for `opencorvus`: requirements -> architect -> build -> integrity, each its own sub-agent context with its own bootstrap). The executor ALREADY decomposes within a task — architect splits a task into goals. Mission-level fan-out on top of that is double-decomposition and burns the same bootstrap N times for work that should have shared one workspace.
+
+Default: ONE task per wake. Bundle all related frontier items into a single self-contained `request` and let the executor's architect stage split it into goals.
+
+Split into multiple tasks only when at least one is true:
+- Items target different repos / executors / worktrees that cannot share a workspace.
+- One item is large enough on its own that bundling would exceed what a single executor pipeline can finish or verify cleanly.
+- Items have NO shared context AND running them in parallel measurably shortens wall-clock delivery a human is waiting on.
+
+"1 frontier bullet => 1 task" is NOT the rule. Multiple bullets on the same subsystem, the same surface, or the same investigative thread are ONE task with multiple goals — let architect split them. Before dispatching a second task this wake, justify it against the three triggers above; if none applies, merge into the first task's `request` instead.
 
 ──────────────────────────────────────────────────────────────────────
 DISPATCHING TASKS — panel.create_task
