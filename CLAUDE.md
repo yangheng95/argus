@@ -85,6 +85,8 @@
 
 **22.** 禁止无脑使用 git 回退修改。不要通过粗暴回退破坏未提交代码或掩盖真实问题。
 
+**22.1（reset 事故教训 — 2026-05-26）**：禁止使用 `git reset` 处理代码工作区，尤其禁止在存在未提交 tracked 改动时执行 `git reset --hard`、`git reset --merge`、`git reset --keep` 或 `git reset <tree-ish>`。如果必须恢复特定文件，必须先用 `git status --short` 和 `git diff -- <path>` 证明目标文件没有用户未提交改动，再使用单文件 patch / `git restore --source=<commit> -- <path>` 精确恢复；禁止整仓 reset、禁止用 reset 清理索引或工作树。执行任何会覆盖 tracked 文件内容的 Git 命令前，必须先保存证据（diff 或 stash/commit），否则视为破坏用户代码。
+
 **23.** 如果工具本身异常，先修工具。例如 git、rg、测试命令、运行器不可用时，应主动修复工具链，再继续任务。
 
 ---
