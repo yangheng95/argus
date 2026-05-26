@@ -1052,6 +1052,19 @@ body {
   gap: var(--card-gap);
 }
 
+/* InteractionDialogHost reuses <InteractionCard> as the dialog body. The
+   card's own margin/min-width are tuned for inline / sidebar layouts; inside
+   the dialog form (which already has its own padding + gap) those would
+   double-pad and force a horizontal overflow on narrow viewports. */
+.interaction-dialog-form .interaction-card {
+  margin: 0;
+  min-width: 0;
+  border-left-width: 0;
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+
 
 /* ── AgentTrace surface (per-session 🔍 button + inline TracePanel) ── */
 

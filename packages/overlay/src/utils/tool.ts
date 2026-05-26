@@ -59,14 +59,14 @@ function parseDisplayRecord(value: unknown): Record<string, unknown> | undefined
   }
 }
 
-function shortValue(value: unknown, limit = 96): string {
+function shortValue(value: unknown): string {
   const text = singleLine(value);
-  return text.length > limit ? `${text.slice(0, limit - 1)}…` : text;
+  return text;
 }
 
 function shortSha(value: unknown): string {
   const text = typeof value === "string" ? value.trim() : "";
-  return text.length > 12 ? text.slice(0, 12) : text;
+  return text;
 }
 
 function displayToolResultDetail(name: string, state: Record<string, unknown>): string {
@@ -332,10 +332,7 @@ export function relativePathFrom(base: string, target: string): string {
 }
 
 export function shortPath(p: string): string {
- // Show only last 2-3 path segments for readability
-  if (!p) return "";
-  const parts = p.replace(/\\/g, "/").split("/");
-  return parts.length > 3 ? ".../" + parts.slice(-3).join("/") : p;
+  return p || "";
 }
 
 /** Shorten a path relative to a base directory.

@@ -16,6 +16,16 @@ import { STATEFUL_SNAPSHOT_TOOL_NAMES } from "@/orchestrator/stateful-tool-names
 import { AttachmentStore } from "@/storage/attachment-store"
 import { CompactionHandoff } from "./compaction-handoff"
 import { ToolFailureCause, renderToolFailureCause } from "./tool-failure-cause"
+import { normalizeToolInput } from "./tool-input-norm"
+
+function replayToolInput(raw: unknown): Record<string, unknown> {
+  const normalized = normalizeToolInput(raw)
+  if (normalized.ok) return normalized.value
+  // The persisted part keeps the raw invalid value for diagnostics. The model
+  // replay path must still emit object-shaped tool arguments; the paired
+  // tool-error result carries the exact validation failure back to the model.
+  return {}
+}
 
 export namespace Message {
   export const OutputLengthError = NamedError.create("MessageOutputLengthError", z.object({}))
@@ -892,7 +902,7 @@ export namespace Message {
                 type: ("tool-" + part.tool) as `tool-${string}`,
                 state: "output-available",
                 toolCallId: part.callID,
-                input: part.state.input as any,
+                input: replayToolInput(part.state.input),
                 output,
                 ...(differentModel ? {} : { callProviderMetadata: part.metadata }),
               })
@@ -907,7 +917,7 @@ export namespace Message {
                 type: ("tool-" + part.tool) as `tool-${string}`,
                 state: "output-error",
                 toolCallId: part.callID,
-                input: part.state.input as any,
+                input: replayToolInput(part.state.input),
                 errorText,
                 ...(differentModel ? {} : { callProviderMetadata: part.metadata }),
               })

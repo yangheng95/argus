@@ -86,9 +86,6 @@ Overlay 用系统终端打开 worktree 的能力（替代旧嵌入 PTY，commit 
 
 确保 spec 的 `check_selectors` 包含 `lint` 或显式声明 `typecheck` family。check selector 必须来自 spec / architect 的结构化输出，**不从关键字推断**（`check/policy.ts::inferSelectors` 返回空数组）。
 
-### Task archive 导入失败
-
-`POST /import/task/archive` 失败常因 `ARCHIVE_VERSION` 不匹配（commit `4fc10fae5`）。检查 zip 顶层 `manifest.json` 的 `version` 字段是否被当前 server 接受；版本号在 `engine/workspace-export.ts` 中常量定义。
 
 ## Channel 类
 

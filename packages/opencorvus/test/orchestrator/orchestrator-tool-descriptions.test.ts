@@ -13,8 +13,11 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
     expect(tools.fail_task.description).toContain("persistent blocking root")
   })
 
-  test("propose_task describes out-of-contract persistent roots", () => {
-    expect(tools.propose_task.description).toContain("outside the current task contract")
+  test("propose_task describes inheriting evidence-backed follow-up work", () => {
+    expect(tools.propose_task.description).toContain("execution evidence")
+    expect(tools.propose_task.description).toContain("artifact state")
+    expect(tools.propose_task.description).toContain("supplemental features")
+    expect(tools.propose_task.description).toContain("project-improvement suggestions")
     expect(tools.propose_task.description).toContain("original user request never authorised")
   })
 

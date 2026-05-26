@@ -107,6 +107,8 @@ describe("CompactionHandoff", () => {
     expect(first).toContain("Fix compaction so it preserves resumable task state.")
     expect(first).toContain("bun test packages/opencorvus/test/session/compaction.test.ts")
     expect(first).toContain("packages/opencorvus/src/session/compaction-handoff.ts")
+    expect(first).toContain("Source enabled tool switches: shell")
+    expect(first).not.toContain("Source tools:")
   })
 
   test("rejects schema-valid handoff that omits required input evidence", () => {

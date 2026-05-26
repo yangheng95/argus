@@ -58,14 +58,8 @@ import type {
   ExperimentalWorkspaceListResponses,
   ExperimentalWorkspaceRemoveErrors,
   ExperimentalWorkspaceRemoveResponses,
-  ExportImportErrors,
-  ExportImportResponses,
   ExportSessionErrors,
   ExportSessionResponses,
-  ExportTaskArchiveErrors,
-  ExportTaskArchiveResponses,
-  ExportTaskErrors,
-  ExportTaskResponses,
   FileListResponses,
   FilePartInput,
   FilePartSource,
@@ -6703,97 +6697,7 @@ export class Goal extends HeyApiClient {
   }
 }
 
-export class Task2 extends HeyApiClient {
-  /**
-   * Export task as zip archive
-   *
-   * Returns a zip archive bundling task.json (full DB snapshot), manifest.json (format metadata), and project/<path> for every non-gitignored file in the task's working tree.
-   */
-  public archive<ThrowOnError extends boolean = false>(
-    parameters: {
-      taskID: string
-      directory?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "path", key: "taskID" },
-            { in: "query", key: "directory" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).get<ExportTaskArchiveResponses, ExportTaskArchiveErrors, ThrowOnError>({
-      url: "/export/task/{taskID}/archive",
-      ...options,
-      ...params,
-    })
-  }
-}
-
 export class Export extends HeyApiClient {
-  /**
-   * Export full task data
-   */
-  public task<ThrowOnError extends boolean = false>(
-    parameters: {
-      taskID: string
-      directory?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "path", key: "taskID" },
-            { in: "query", key: "directory" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).get<ExportTaskResponses, ExportTaskErrors, ThrowOnError>({
-      url: "/export/task/{taskID}",
-      ...options,
-      ...params,
-    })
-  }
-
-  /**
-   * Import a task archive
-   *
-   * Accepts a zip archive previously produced by GET /export/task/:taskID/archive. Restores project/<path> files into the request's directory and creates a new task copying title/request from the bundled task.json. Existing run/interaction history is NOT replayed; the original taskID is recorded in metadata.imported_from for traceability.
-   */
-  public import<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-      overwrite?: "true" | "false"
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "query", key: "directory" },
-            { in: "query", key: "overwrite" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).post<ExportImportResponses, ExportImportErrors, ThrowOnError>({
-      url: "/export/import",
-      ...options,
-      ...params,
-    })
-  }
-
   /**
    * Export session messages
    */
@@ -6820,11 +6724,6 @@ export class Export extends HeyApiClient {
       ...options,
       ...params,
     })
-  }
-
-  private _task?: Task2
-  get task2(): Task2 {
-    return (this._task ??= new Task2({ client: this.client }))
   }
 }
 

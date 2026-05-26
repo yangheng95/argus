@@ -7,9 +7,9 @@ import { Instance } from "../project/instance"
 import { Plugin } from "../plugin"
 import { defer } from "../util/defer"
 import { ulid } from "ulid"
-import { spawn } from "child_process"
 import { Shell } from "@/shell/shell"
 import { PidGuard } from "@/shell/pid-guard"
+import { ProcessSupervisor } from "@/shell/process-supervisor"
 import { SessionPromptState } from "./prompt/state"
 import { gitCeilingEnvForWorktree } from "@/worktree/git-ceiling"
 import { SessionContext } from "./context"
@@ -127,51 +127,26 @@ export namespace SessionShell {
       process.platform === "win32" ? path.win32.basename(shellBin, ".exe") : path.basename(shellBin)
     ).toLowerCase()
 
-    const invocations: Record<string, { args: string[] }> = {
-      nu: {
-        args: ["-c", input.command],
-      },
-      fish: {
-        args: ["-c", input.command],
-      },
-      zsh: {
-        args: [
-          "-c",
-          "-l",
-          `
+    const invocationCommand: Record<string, string> = {
+      nu: input.command,
+      fish: input.command,
+      zsh: `
             [[ -f ~/.zshenv ]] && source ~/.zshenv >/dev/null 2>&1 || true
             [[ -f "\${ZDOTDIR:-$HOME}/.zshrc" ]] && source "\${ZDOTDIR:-$HOME}/.zshrc" >/dev/null 2>&1 || true
             eval ${JSON.stringify(input.command)}
           `,
-        ],
-      },
-      bash: {
-        args: [
-          "-c",
-          "-l",
-          `
+      bash: `
             shopt -s expand_aliases
             [[ -f ~/.bashrc ]] && source ~/.bashrc >/dev/null 2>&1 || true
             eval ${JSON.stringify(input.command)}
           `,
-        ],
-      },
-      cmd: {
-        args: ["/c", input.command],
-      },
-      powershell: {
-        args: ["-NoProfile", "-Command", input.command],
-      },
-      pwsh: {
-        args: ["-NoProfile", "-Command", input.command],
-      },
-      "": {
-        args: ["-c", `${input.command}`],
-      },
+      cmd: input.command,
+      powershell: input.command,
+      pwsh: input.command,
+      "": input.command,
     }
 
-    const matchingInvocation = invocations[shellName] ?? invocations[""]
-    const args = matchingInvocation?.args
+    const supervisedCommand = invocationCommand[shellName] ?? invocationCommand[""]
 
     const cwd = Instance.directory
     const shellEnv = await Plugin.trigger(
@@ -180,10 +155,10 @@ export namespace SessionShell {
       { env: {} },
     )
     const guardEnv = await PidGuard.env(shellBin)
-    const proc = spawn(shellBin, args, {
+    const supervisor = await ProcessSupervisor.spawnShell({
+      command: supervisedCommand,
+      shell: shellBin,
       cwd,
-      detached: process.platform !== "win32",
-      stdio: ["ignore", "pipe", "pipe"],
       env: {
         ...process.env,
         ...shellEnv.env,
@@ -195,7 +170,7 @@ export namespace SessionShell {
 
     let output = ""
 
-    proc.stdout?.on("data", (chunk) => {
+    supervisor.stdout?.on("data", (chunk) => {
       output += chunk.toString()
       if (part.state.status === "running") {
         part.state.metadata = {
@@ -206,7 +181,7 @@ export namespace SessionShell {
       }
     })
 
-    proc.stderr?.on("data", (chunk) => {
+    supervisor.stderr?.on("data", (chunk) => {
       output += chunk.toString()
       if (part.state.status === "running") {
         part.state.metadata = {
@@ -218,31 +193,27 @@ export namespace SessionShell {
     })
 
     let aborted = false
-    let exited = false
 
-    const kill = () => Shell.killTree(proc, { exited: () => exited })
+    const terminate = () => supervisor.terminate()
 
     if (abort.aborted) {
       aborted = true
-      await kill()
+      await terminate()
     }
 
     const abortHandler = () => {
       aborted = true
-      void kill()
+      void terminate()
     }
 
     abort.addEventListener("abort", abortHandler, { once: true })
 
-    await new Promise<void>((resolve) => {
-      proc.on("close", () => {
-        exited = true
-        abort.removeEventListener("abort", abortHandler)
-        resolve()
-      })
-    })
-
-    await Shell.killTree(proc, { exited: () => exited, allowExitedRoot: true })
+    try {
+      await supervisor.exited
+    } finally {
+      abort.removeEventListener("abort", abortHandler)
+      await supervisor.dispose()
+    }
 
     if (aborted) {
       output += "\n\n" + ["<metadata>", "User aborted the command", "</metadata>"].join("\n")

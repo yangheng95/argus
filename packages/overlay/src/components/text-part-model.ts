@@ -1,6 +1,6 @@
 import { createEffect, createSignal } from "solid-js";
 
-export const STREAMING_ACTIVE_TEXT_LIMIT = 12_000;
+export const STREAMING_ACTIVE_TEXT_LIMIT = Infinity;
 
 interface BlockScanState {
   completed: string[];
@@ -70,9 +70,8 @@ function blocksFromScan(state: BlockScanState): string[] {
   return active ? [...state.completed, active] : state.completed;
 }
 
-export function visibleStreamingText(text: string, limit = STREAMING_ACTIVE_TEXT_LIMIT): string {
-  if (text.length <= limit) return text;
-  return `...\n${text.slice(-limit)}`;
+export function visibleStreamingText(text: string, _limit = STREAMING_ACTIVE_TEXT_LIMIT): string {
+  return text;
 }
 
 export function createStreamingTextPartModel(

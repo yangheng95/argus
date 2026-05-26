@@ -153,7 +153,7 @@ opencorvus db --query "SELECT id, status FROM task ORDER BY id DESC LIMIT 20"
 | `opencorvus upgrade` | 升级自身 |
 | `opencorvus uninstall` | 卸载 |
 | `opencorvus sidecar` | 嵌入式 sidecar 进程入口（一般由 overlay / 上游 host 内部调用） |
-| `opencorvus import` | 导入 session / task（含 task archive zip，commit `4fc10fae5`） |
+| `opencorvus import` | 导入 session |
 | `opencorvus github` | GitHub Action runtime 入口（通常由 Action 内部调用） |
 | `opencorvus pr` | PR 相关辅助 |
 | `opencorvus mcp` | MCP 子命令族（`mcp serve` / `mcp auth` / `mcp status` / `mcp remove-auth`） |

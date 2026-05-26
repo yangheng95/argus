@@ -362,4 +362,42 @@ describe("session compaction dispatch anchor", () => {
     expect(prompt).toContain("Do not re-summarize it into userMessages[]")
     expect(selectedWire).not.toContain("DISPATCH ANCHOR")
   })
+
+  test("compaction transcript flattens historical tool calls into inert text", () => {
+    const assistant = assistantInfo("m-assistant", "m-user")
+    const messages: Message.WithParts[] = [
+      textMessage("m-user", "user", "Inspect the repository"),
+      {
+        info: assistant,
+        parts: [
+          {
+            ...basePart(assistant.id, "p-tool"),
+            type: "tool",
+            callID: "call_read",
+            tool: "read",
+            state: {
+              status: "completed",
+              input: { filePath: "src/App.tsx" },
+              output: "file contents",
+              title: "Read",
+              metadata: {},
+              time: { start: 1, end: 2 },
+            },
+          },
+        ],
+      },
+    ] as Message.WithParts[]
+
+    const transcript = SessionCompaction.TestHooks.compactionTranscriptMessages(messages)
+    const transcriptText = (transcript[0].content as Array<{ type: "text"; text: string }>)[0].text
+    const wire = JSON.stringify(transcript)
+
+    expect(transcript).toHaveLength(1)
+    expect(transcript[0].role).toBe("user")
+    expect(transcriptText).toContain('<tool name="read" status="completed">')
+    expect(transcriptText).toContain("file contents")
+    expect(wire).not.toContain('"type":"tool-call"')
+    expect(wire).not.toContain('"type":"tool-result"')
+    expect(wire).not.toContain('"role":"tool"')
+  })
 })

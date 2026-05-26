@@ -568,10 +568,8 @@ export function createDeliveryTools(input?: DeliveryToolContext) {
         "For server startup verification, use a short timeout (e.g., 10-15 seconds) to check if " +
         "the server starts without crashing — do NOT keep servers running indefinitely.\n\n" +
         "If you background a process (`cmd &`) and it keeps the port alive past this call, " +
-        "note the returned `pid` line — that is the PID of the SHELL that spawned " +
-        "your backgrounded child, and you can target its whole tree on a later turn with " +
-        "`taskkill /F /T /PID <pid>` (Windows) or `kill -TERM -- -<pid>` (Unix). Prefer " +
-        "that over `netstat | findstr :3000` guessing — the shell's own PID is deterministic.",
+        "note the returned `pid` line for diagnostics. OpenCorvus owns shell cleanup through " +
+        "its process supervisor; do not use global process-name kills or PID-tree sweeps.",
       inputSchema: z.object({
         command: z.string().describe("Shell command to run (runs in project root)"),
         timeout_ms: z.number().default(DEFAULT_BASH_TIMEOUT_MS).describe("Max execution time ms"),

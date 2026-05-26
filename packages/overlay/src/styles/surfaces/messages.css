@@ -59,9 +59,10 @@
   min-width: 0;
   color: var(--text-soft);
   display: block;
-  white-space: pre-wrap;
-  word-break: break-word;
-  overflow-wrap: anywhere;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-family: var(--mono);
   font-size: var(--ui-font-control);
   line-height: 1.45;

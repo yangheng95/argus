@@ -214,10 +214,7 @@
 
 | Method | 路径 | 说明 | operationId |
 |---|---|---|---|
-| POST | `/export/import` | Import a task archive | `export.import` |
 | GET | `/export/session/{sessionID}` | Export session messages | `export.session` |
-| GET | `/export/task/{taskID}` | Export full task data | `export.task` |
-| GET | `/export/task/{taskID}/archive` | Export task as zip archive | `export.task.archive` |
 
 ### MCP
 

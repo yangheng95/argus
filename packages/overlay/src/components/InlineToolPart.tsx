@@ -226,7 +226,7 @@ export function InlineToolPart(props: { part: any; mode?: "inline" | "block" | "
           <span class="tool-icon">{icon()}</span>
           <span class="tool-name">{toolName()}</span>
           <Show when={detail()}>
-            <span class="tool-detail">{detail()}</span>
+            <span class="tool-detail" title={detail()}>{detail()}</span>
           </Show>
           <span class="tool-status" data-status={status()} title={statusLabel()}>
             {statusLabel()}

@@ -229,6 +229,10 @@ export function TitlebarMenubar(props: TitlebarMenubarProps) {
     await patchConfig({ compaction: { threshold: ratio } });
   }
 
+  async function handlePatchProposedTaskConfirmation(enabled: boolean) {
+    await patchConfig({ experimental: { confirm_proposed_tasks: enabled } });
+  }
+
   function setTheme(value: string) {
     setSettingsStore("theme", value);
     applyTheme(value);
@@ -437,6 +441,19 @@ export function TitlebarMenubar(props: TitlebarMenubarProps) {
                         checked={(appStore.config as any)?.experimental?.auto_question === true}
                         aria-label={t("titlebar.auto_question")}
                         onChange={(event) => void patchConfig({ experimental: { auto_question: (event.currentTarget as HTMLInputElement).checked } })}
+                      />
+                    </label>
+                    <label class="titlebar-menubar-toggle">
+                      <span>
+                        <span class="titlebar-menubar-item-title">{t("titlebar.confirm_proposed_tasks")}</span>
+                        <span class="titlebar-menubar-item-meta">{t("titlebar.confirm_proposed_tasks_hint")}</span>
+                      </span>
+                      <input
+                        type="checkbox"
+                        checked={(appStore.config as any)?.experimental?.confirm_proposed_tasks === true}
+                        aria-label={t("titlebar.confirm_proposed_tasks")}
+                        data-testid="titlebar-confirm-proposed-tasks"
+                        onChange={(event) => void handlePatchProposedTaskConfirmation((event.currentTarget as HTMLInputElement).checked)}
                       />
                     </label>
                     <MenuRange

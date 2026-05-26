@@ -28,6 +28,7 @@ import { toolFailureCauseFromUnknown, type ToolFailureCause } from "./tool-failu
 
 export namespace SessionProcessor {
   const DOOM_LOOP_THRESHOLD = 3
+  const SUPERSEDE_DUPLICATE_OPEN_TOOLS = new Set(["merge_back"])
   const log = Log.create({ service: "session.processor" })
 
   export class ProcessorLostPartsError extends Error {
@@ -94,6 +95,45 @@ export namespace SessionProcessor {
     const failOpenToolParts = async (failure: ToolFailureCause): Promise<void> => {
       for (const part of await openToolParts()) {
         await failToolPart(part, failure)
+      }
+    }
+
+    const closeSupersededDuplicateOpenToolParts = async (): Promise<void> => {
+      const parts = await Message.parts(input.assistantMessage.id)
+      const terminalParts = parts.filter(
+        (part): part is Message.ToolPart =>
+          part.type === "tool" && (part.state.status === "completed" || part.state.status === "error"),
+      )
+      for (const part of parts) {
+        if (
+          part.type !== "tool" ||
+          !SUPERSEDE_DUPLICATE_OPEN_TOOLS.has(part.tool) ||
+          (part.state.status !== "pending" && part.state.status !== "running")
+        ) {
+          continue
+        }
+        const duplicate = terminalParts.find((candidate) =>
+          candidate.id !== part.id &&
+          candidate.callID !== part.callID &&
+          candidate.tool === part.tool &&
+          JSON.stringify(candidate.state.input) === JSON.stringify(part.state.input),
+        )
+        if (!duplicate) continue
+        await failToolPart(part, {
+          kind: "processor-contract",
+          name: "SupersededDuplicateToolCall",
+          classification: "processor-contract",
+          originSite: "session.processor.superseded-duplicate-tool",
+          message:
+            `${part.tool} call ${part.callID} was superseded by duplicate terminal call ${duplicate.callID} ` +
+            "in the same assistant message.",
+          data: {
+            tool: part.tool,
+            callID: part.callID,
+            duplicateCallID: duplicate.callID,
+            duplicatePartID: duplicate.id,
+          },
+        })
       }
     }
 
@@ -390,7 +430,7 @@ export namespace SessionProcessor {
                   // matching tool-call after a recovery), so this is safe to
                   // run unconditionally before the match check.
                   run.resume("tool-call")
-                  const match = toolcalls[value.toolCallId]
+                  const match = toolcalls[value.toolCallId] ?? await priorToolPart(value.toolCallId)
                   if (match && (match.state.status === "running" || match.state.status === "pending")) {
                     const resolvedInput = value.input === undefined ? match.state.input : value.input
                     await Session.updatePart({
@@ -417,7 +457,7 @@ export namespace SessionProcessor {
                   // Pair with `run.pause("tool-call")` from tool-call (errors close the
                   // tool-call window just like results).
                   run.resume("tool-call")
-                  const match = toolcalls[value.toolCallId]
+                  const match = toolcalls[value.toolCallId] ?? await priorToolPart(value.toolCallId)
                   if (match && (match.state.status === "running" || match.state.status === "pending")) {
                     const resolvedInput = value.input === undefined ? match.state.input : value.input
                     const classification = (value as { dynamic?: boolean }).dynamic === true
@@ -662,6 +702,7 @@ export namespace SessionProcessor {
             }
             snapshot = undefined
           }
+          await closeSupersededDuplicateOpenToolParts()
           const lostParts = await openToolParts()
           if (lostParts.length > 0) {
             throw new ProcessorLostPartsError(lostParts.map((part) => part.id))

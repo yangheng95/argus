@@ -106,7 +106,9 @@ export function CardParts(props: { parts: any[]; depth: number; streaming?: bool
             <div class="msg-tool">
               <span class="tool-icon">{"\u2192"}</span>
               <span class="tool-name">Subtask</span>
-              <span class="tool-detail">{part.description || part.prompt || ""}</span>
+              <span class="tool-detail" title={part.description || part.prompt || ""}>
+                {part.description || part.prompt || ""}
+              </span>
             </div>
           </Match>
         </Switch>

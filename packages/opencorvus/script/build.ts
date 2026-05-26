@@ -179,6 +179,22 @@ if (!noCleanFlag) {
 }
 
 const binaries: Record<string, string> = {}
+let windowsSupervisorHelper: string | undefined
+
+async function buildWindowsSupervisorHelper() {
+  if (windowsSupervisorHelper) return windowsSupervisorHelper
+  if (process.platform !== "win32") {
+    throw new Error("Windows process supervisor helper must be built on Windows")
+  }
+  const manifest = path.join(dir, "native", "process-supervisor", "Cargo.toml")
+  await $`cargo build --manifest-path ${manifest} --release`
+  windowsSupervisorHelper = path.join(dir, "native", "process-supervisor", "target", "release", "opencorvus-process-supervisor.exe")
+  if (!fs.existsSync(windowsSupervisorHelper)) {
+    throw new Error(`Missing Windows process supervisor helper at ${windowsSupervisorHelper}`)
+  }
+  return windowsSupervisorHelper
+}
+
 for (const item of targets) {
   const compileTarget = [
     "bun",
@@ -243,6 +259,11 @@ for (const item of targets) {
       OPENCORVUS_EMBEDDED_ENV: embeddedEnvDefine,
     },
   })
+
+  if (item.os === "win32") {
+    const helper = await buildWindowsSupervisorHelper()
+    await fs.promises.copyFile(helper, path.join(dir, "dist", name, "opencorvus-process-supervisor.exe"))
+  }
 
   await $`rm -rf ./dist/${name}/tui`
   if (binaryOnly) {

@@ -1,5 +1,4 @@
 import z from "zod"
-import { spawn } from "child_process"
 import { Tool } from "./tool"
 import path from "path"
 import fs from "fs/promises"
@@ -14,6 +13,7 @@ import { fileURLToPath } from "url"
 import { Flag } from "@/flag/flag.ts"
 import { Shell } from "@/shell/shell"
 import { BASH_BACKGROUND_READINESS_MAX_MS, DEFAULT_BASH_TIMEOUT_MS } from "@/shell/timeout"
+import { ProcessSupervisor } from "@/shell/process-supervisor"
 
 import { BashArity } from "@/permission/arity"
 import { Truncate } from "./truncation"
@@ -242,7 +242,8 @@ export const BashTool = Tool.define("bash", async () => {
         { env: {} },
       )
       const guardEnv = await PidGuard.env(shell)
-      const proc = spawn(params.command, {
+      const supervisor = await ProcessSupervisor.spawnShell({
+        command: params.command,
         shell,
         cwd,
         env: sanitizeChildEnv(process.env, {
@@ -250,8 +251,6 @@ export const BashTool = Tool.define("bash", async () => {
           ...gitCeilingEnvForWorktree(cwd, { ...process.env, ...shellEnv.env }),
           ...guardEnv,
         }),
-        stdio: ["ignore", "pipe", "pipe"],
-        detached: process.platform !== "win32",
       })
 
       let output = ""
@@ -275,53 +274,52 @@ export const BashTool = Tool.define("bash", async () => {
         })
       }
 
-      proc.stdout?.on("data", append)
-      proc.stderr?.on("data", append)
+      supervisor.stdout?.on("data", append)
+      supervisor.stderr?.on("data", append)
 
       let timedOut = false
       let aborted = false
       let exited = false
+      let exitCode: number | null = null
 
-      const kill = () => Shell.killTree(proc, { exited: () => exited })
+      const terminate = () => supervisor.terminate()
 
       if (ctx.abort.aborted) {
         aborted = true
-        await kill()
+        await terminate()
       }
 
       if (params.background) {
         let backgroundLeaseTimer: ReturnType<typeof setTimeout> | undefined
-        const markExited = () => {
+        supervisor.exited.then((code) => {
           exited = true
-        }
-        proc.once("exit", () => {
-          markExited()
-        })
-        proc.once("error", () => {
-          markExited()
+          exitCode = code
+        }, () => {
+          exited = true
+          exitCode = null
         })
         backgroundLeaseTimer = setTimeout(() => {
           timedOut = true
-          void Shell.killTree(proc, { exited: () => exited, allowExitedRoot: true })
+          void supervisor.dispose()
         }, timeout)
         backgroundLeaseTimer.unref?.()
-        proc.unref?.()
+        supervisor.unref()
         const readinessMs = Math.min(timeout, BASH_BACKGROUND_READINESS_MAX_MS)
         await new Promise<void>((resolve) => {
           const timer = setTimeout(resolve, readinessMs)
-          proc.once("exit", () => {
+          supervisor.exited.finally(() => {
             clearTimeout(timer)
             resolve()
           })
         })
         const resultMetadata: string[] = [
-          `bash tool returned while command continues running in background (pid=${proc.pid ?? "unknown"})`,
+          `bash tool returned while command continues running in background (pid=${supervisor.pid ?? "unknown"})`,
           `background process lease timeout: ${timeout} ms`,
           `OpenCorvus will terminate this process tree when the lease expires unless you stop it first`,
-          `stop it later with: kill ${proc.pid ?? "<pid>"} (or kill by port)`,
+          `stop it later with the process-specific PID ${supervisor.pid ?? "<pid>"} (or kill by port)`,
         ]
         if (timedOut) resultMetadata.push(`background process exceeded lease before readiness window`)
-        if (exited) resultMetadata.push(`background process exited before readiness window (exit=${proc.exitCode})`)
+        if (exited) resultMetadata.push(`background process exited before readiness window (exit=${exitCode})`)
         output += "\n\n<bash_metadata>\n" + resultMetadata.join("\n") + "\n</bash_metadata>"
         return {
           title: params.description,
@@ -329,8 +327,8 @@ export const BashTool = Tool.define("bash", async () => {
             refused: false as boolean,
             command: params.command,
             output: output.length > MAX_METADATA_LENGTH ? output.slice(0, MAX_METADATA_LENGTH) + "\n\n..." : output,
-            exit: exited ? proc.exitCode : null,
-            pid: proc.pid ?? null,
+            exit: exited ? exitCode : null,
+            pid: supervisor.pid ?? null,
             background: true,
             description: params.description,
           },
@@ -340,36 +338,24 @@ export const BashTool = Tool.define("bash", async () => {
 
       const abortHandler = () => {
         aborted = true
-        void kill()
+        void terminate()
       }
 
       ctx.abort.addEventListener("abort", abortHandler, { once: true })
 
       const timeoutTimer = setTimeout(() => {
         timedOut = true
-        void kill()
+        void terminate()
       }, timeout + 100)
 
-      await new Promise<void>((resolve, reject) => {
-        const cleanup = () => {
-          clearTimeout(timeoutTimer)
-          ctx.abort.removeEventListener("abort", abortHandler)
-        }
-
-        proc.once("exit", () => {
-          exited = true
-          cleanup()
-          resolve()
-        })
-
-        proc.once("error", (error) => {
-          exited = true
-          cleanup()
-          reject(error)
-        })
-      })
-
-      await Shell.killTree(proc, { exited: () => exited, allowExitedRoot: true })
+      try {
+        exitCode = await supervisor.exited
+        exited = true
+      } finally {
+        clearTimeout(timeoutTimer)
+        ctx.abort.removeEventListener("abort", abortHandler)
+        await supervisor.dispose()
+      }
 
       const resultMetadata: string[] = []
 
@@ -391,7 +377,7 @@ export const BashTool = Tool.define("bash", async () => {
           refused: false as boolean,
           command: params.command,
           output: output.length > MAX_METADATA_LENGTH ? output.slice(0, MAX_METADATA_LENGTH) + "\n\n..." : output,
-          exit: proc.exitCode,
+          exit: exitCode,
           pid: null as number | null,
           background: false,
           description: params.description,

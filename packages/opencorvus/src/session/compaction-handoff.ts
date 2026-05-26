@@ -167,7 +167,7 @@ export namespace CompactionHandoff {
       "model": {"providerID": "provider id", "modelID": "model id"},
       "formatType": "text or structured output format type",
       "systemMode": "system mode or null",
-      "toolNames": ["enabled tool names"],
+      "toolNames": ["explicit tool switches enabled on the source user message"],
       "variant": "message variant",
       "extraKeys": ["source extra keys"]
     }
@@ -279,7 +279,7 @@ export namespace CompactionHandoff {
       ),
       `   - Source agent/model: ${source.agent} using ${source.model.providerID}/${source.model.modelID}`,
       `   - Source format/system mode: ${source.formatType}; ${source.systemMode ?? "(none)"}`,
-      `   - Source tools: ${source.toolNames.join(", ") || "(none)"}`,
+      `   - Source enabled tool switches: ${source.toolNames.join(", ") || "(none)"}`,
       `   - Source variant: ${source.variant ?? "(none)"}`,
       `   - Source extra keys: ${source.extraKeys.join(", ") || "(none)"}`,
       "",
