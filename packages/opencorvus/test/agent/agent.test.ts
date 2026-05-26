@@ -1067,6 +1067,15 @@ test("gateway-master is hidden primary with the supervisor tool whitelist", asyn
       // free LLM choice.
       expect(master?.prompt).toContain("frontier.md")
       expect(master?.prompt).toContain("handoff.md")
+      // Task granularity convention (spec §2.7, prompt-only rule per
+      // CLAUDE.md rule 6.1). Default is ONE task per wake bundling
+      // related frontier items; master must not fan out 1-bullet-=>-
+      // 1-task by default. The executor's architect already decomposes
+      // a task into goals — mission-level fan-out is double-decomposition
+      // and burns the worktree + sub-agent bootstrap N times.
+      expect(master?.prompt).toContain("TASK GRANULARITY")
+      expect(master?.prompt).toContain("Default: ONE task per wake")
+      expect(master?.prompt).toContain("double-decomposition")
     },
   })
 })

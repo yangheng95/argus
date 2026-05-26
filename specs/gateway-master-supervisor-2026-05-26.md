@@ -221,7 +221,21 @@ master prompt 强制：
 
 **compaction 缓解**：master prompt 顶部嵌入"frontier/tasks/handoff 文件存在于 .opencorvus/runtime/gateway-master/<missionID>/"的强提示，避免几天后 compaction 把这条事实丢掉。
 
-### 2.7 Overlay 改动
+### 2.7 Task granularity convention（2026-05-26 补丁，gap fix）
+
+**问题**：本 spec § 2.6 定义了 master 的 I/O contract，但**完全没有约束 task 粒度**。`gateway-master-core.txt` 初版第 27 行只说 "dispatch one or more new tasks"，没有任何合批指导。用户观测到 master 一次 wake fan-out 3 个独立 task。
+
+**根因**：执行链路在 task **内部**已经有完整的 architect 拆 goal 机制（requirements → architect → build → integrity，每段是独立 sub-agent context）。Master 再按 frontier bullet 拆 task，就是**双层拆分**——每个 task 都要新起一个 worktree + 全套 sub-agent bootstrap，把本可共享的工作变成 N 倍 bootstrap 开销。这属于 CLAUDE.md rule 5/6 的"过度工程"——叠加 LLM 不需要的额外分解层。
+
+**修复（rule 6.1 prompt-only）**：在 `gateway-master-core.txt` 新增 "TASK GRANULARITY — batch first, split only with cause" 章节（在 EVERY WAKE 与 DISPATCHING TASKS 之间）。规则：
+
+- **默认**：一次 wake 只发 1 个 task，把所有相关 frontier 项打包进单个自洽 `request`，让 executor 的 architect 阶段去拆 goal。
+- **拆分触发器（满足其一才可发多 task）**：① 不同 repo / executor / worktree；② 单项体量已经够一个 task；③ 项之间无共享上下文且并行能显著缩短墙钟时间。
+- **反模式**：1 frontier bullet => 1 task **不是**规则；同子系统/同 surface/同调查线的多个 bullet 是 1 个 task 多个 goal。
+
+§ 2.6 的"派 task 后 append tasks.md"约定不变；这里只是收紧"何时算一个 task"。
+
+### 2.8 Overlay 改动
 
 `packages/overlay/src/components/Gateway.tsx` 的 `GatewayComposer`（line 1480-1622）**整块重写**：
 - 移除 decompose proposal preview UI
