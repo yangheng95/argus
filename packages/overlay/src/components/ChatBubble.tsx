@@ -14,6 +14,7 @@ import {
 } from "../utils/card-tree"
 import { bubbleAlign } from "../utils/chat-bubble"
 import { normalizeAgentRole, roleLabel } from "../utils/message"
+import { canReceiveDirectAgentReply } from "../utils/direct-reply-kinds"
 import { stageAccent } from "../utils/card-color"
 import { formatDuration, fullStampWithRelative, stamp } from "../utils/time"
 import { useNowTick } from "../services/clock"
@@ -177,6 +178,11 @@ export function ChatBubble(props: { node: CardNode; depth: number }) {
     if (props.node.kind !== "agent") return undefined
     const sessionID = traceSessionID()
     if (!sessionID || sessionID === rootTaskSessionID()) return undefined
+    // Filter by the agent card's stage (the session kind it represents);
+    // if it's not in the reply whitelist the backend route would 400 and
+    // showing the reply box would just bait the user into a wasted click.
+    // See utils/direct-reply-kinds.ts for the mirrored set.
+    if (!canReceiveDirectAgentReply(props.node.stage)) return undefined
     return sessionID
   })
 
