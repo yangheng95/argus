@@ -38,8 +38,17 @@ type ReplyErrorName =
   | "ReplyTargetEnvelopeMissingError"
   | "SessionRuntimeContractMissingError";
 
-function pickErrorName(err: unknown): ReplyErrorName | undefined {
-  if (!err || typeof err !== "object") return undefined;
+interface ReplyErrorInfo {
+  name: ReplyErrorName | undefined;
+  /** NamedError body data — currently only BuildSessionDirectReplyError
+   *  carries fields the overlay branches on (sessionKind, envelopeAgent
+   *  to pick the hybrid-specific copy when sessionKind !== "build" but
+   *  envelopeAgent === "build"). Other errors don't need this yet. */
+  data: Record<string, unknown> | undefined;
+}
+
+function pickErrorInfo(err: unknown): ReplyErrorInfo {
+  if (!err || typeof err !== "object") return { name: undefined, data: undefined };
   // ApiError attaches the parsed JSON body verbatim. NamedError.toObject()
   // shape is `{ name: "...", data: {...} }` — read body.name when
   // available, falling back to top-level name on raw error objects.
@@ -51,24 +60,44 @@ function pickErrorName(err: unknown): ReplyErrorName | undefined {
     ? (err as { name: string }).name
     : undefined;
   const candidate = fromBody ?? fromError;
+  const rawData = body && typeof body === "object" ? (body as { data?: unknown }).data : undefined;
+  const data = rawData && typeof rawData === "object" && !Array.isArray(rawData)
+    ? (rawData as Record<string, unknown>)
+    : undefined;
+  let name: ReplyErrorName | undefined;
   switch (candidate) {
     case "InvalidReplyTargetKindError":
     case "BuildSessionDirectReplyError":
     case "ReplyTargetEnvelopeMissingError":
     case "SessionRuntimeContractMissingError":
-      return candidate;
+      name = candidate;
+      break;
     default:
-      return undefined;
+      name = undefined;
   }
+  return { name, data };
 }
 
-function messageForError(name: ReplyErrorName | undefined, fallback: string): string {
-  switch (name) {
+function messageForError(info: ReplyErrorInfo, fallback: string): string {
+  switch (info.name) {
     case "SessionRuntimeContractMissingError":
       return t("card.agent_reply_contract_gone");
     case "InvalidReplyTargetKindError":
-    case "BuildSessionDirectReplyError":
       return t("card.agent_reply_kind_not_allowed");
+    case "BuildSessionDirectReplyError": {
+      // Hybrid case (session.kind !== "build" but envelope.agent ===
+      // "build") gets its own copy: the SESSION is fine, but its last
+      // envelope is tagged to resume under the build agent. Generic
+      // "kind not allowed" would be misleading because the session.kind
+      // IS in the reply whitelist. Falls back to kind_not_allowed when
+      // backend data is malformed. codex review round 2 — minor.
+      const sessionKind = typeof info.data?.sessionKind === "string" ? info.data.sessionKind : "";
+      const envelopeAgent = typeof info.data?.envelopeAgent === "string" ? info.data.envelopeAgent : "";
+      if (sessionKind && sessionKind !== "build" && envelopeAgent === "build") {
+        return t("card.agent_reply_build_envelope");
+      }
+      return t("card.agent_reply_kind_not_allowed");
+    }
     case "ReplyTargetEnvelopeMissingError":
       return t("card.agent_reply_envelope_missing");
     default:
@@ -118,10 +147,10 @@ export function AgentSessionReplyBox(props: AgentSessionReplyBoxProps) {
       // the operator's text so they don't have to retype after a retry.
       setText("");
     } catch (e) {
-      const name = pickErrorName(e);
+      const info = pickErrorInfo(e);
       const fallback = e instanceof Error ? e.message : String(e);
-      setError(messageForError(name, fallback));
-      if (isTerminalError(name)) setTerminalError(name);
+      setError(messageForError(info, fallback));
+      if (isTerminalError(info.name)) setTerminalError(info.name);
     } finally {
       setSending(false);
     }

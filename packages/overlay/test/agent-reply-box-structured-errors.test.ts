@@ -87,7 +87,22 @@ describe("AgentSessionReplyBox structured errors", () => {
       expect(locale).toContain("card.agent_reply_contract_gone");
       expect(locale).toContain("card.agent_reply_kind_not_allowed");
       expect(locale).toContain("card.agent_reply_envelope_missing");
+      // Hybrid case BuildSessionDirectReplyError gets its own copy when
+      // the backend's data.sessionKind !== "build" and data.envelopeAgent
+      // === "build" (codex round 2 minor).
+      expect(locale).toContain("card.agent_reply_build_envelope");
     }
+  });
+
+  test("BuildSessionDirectReplyError hybrid branch routes through data fields", () => {
+    // Source-level assertion: the messageForError switch must inspect
+    // info.data.sessionKind and info.data.envelopeAgent for the hybrid
+    // branch, so a future refactor that drops the data plumbing fails
+    // here rather than silently showing the generic kind_not_allowed
+    // copy on the hybrid case.
+    expect(replyBox).toContain("info.data?.sessionKind");
+    expect(replyBox).toContain("info.data?.envelopeAgent");
+    expect(replyBox).toContain("card.agent_reply_build_envelope");
   });
 });
 

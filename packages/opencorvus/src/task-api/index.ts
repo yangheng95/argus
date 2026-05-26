@@ -293,6 +293,8 @@ async function appendDirectAgentSessionReply(input: {
           ? `replyAgentSession: build session ${target.session.id} cannot be continued through generic direct reply; dispatch build retry so a fresh stage runtime contract is installed.`
           : `replyAgentSession: session ${target.session.id} (kind=${target.session.kind}) has its last user envelope tagged agent="build" and would wake the build agent on resume; dispatch build retry so a fresh stage runtime contract is installed.`,
       sessionID: target.session.id,
+      sessionKind: target.session.kind,
+      envelopeAgent: target.prompt.agent,
     })
   }
   // Validate the runtime contract BEFORE doing any model resolution.
