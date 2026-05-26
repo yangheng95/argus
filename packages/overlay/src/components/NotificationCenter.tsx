@@ -1,6 +1,6 @@
 import { For, Show, createSignal } from "solid-js";
 import { loadTasks } from "../store/board";
-import { ackTaskNotification, dismissNotification, notificationStore, type AppNotificationItem } from "../services/notify";
+import { dismissNotification, notificationStore, type AppNotificationItem } from "../services/notify";
 import { selectTask } from "../services/task";
 import { t } from "../utils/i18n";
 import { Icon } from "./Icon";
@@ -18,7 +18,6 @@ export async function activateTaskNotification(item: AppNotificationItem): Promi
   if (!item.taskID) return;
   await selectTask(item.taskID);
   await loadTasks();
-  ackTaskNotification(item.taskID);
   dismissNotification(item.id);
 }
 

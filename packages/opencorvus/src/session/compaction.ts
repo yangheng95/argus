@@ -27,6 +27,7 @@ import { EngineArtifactTable } from "@/engine/engine.sql"
 import type { ModelMessage } from "ai"
 import { stepCountIs } from "ai"
 import { SessionLoop } from "./loop"
+import { Todo } from "./todo"
 
 export namespace SessionCompaction {
   const log = Log.create({ service: "session.compaction" })
@@ -146,6 +147,7 @@ export namespace SessionCompaction {
     messages: Message.WithParts[]
     instructionPaths: string[]
     sourceUserMessageID: string
+    todos?: Todo.Info[]
     summarizePatchEvidence?: typeof Snapshot.patchEvidenceSummary
   }): CompactionHandoff.EvidenceRequirements {
     let userMessages = false
@@ -171,6 +173,7 @@ export namespace SessionCompaction {
       instructionPaths: input.instructionPaths,
       patchFiles: [...patchFiles],
       errorNames: [...errorNames],
+      todos: input.todos ?? [],
       userMessages,
       fileEvidence: patchFiles.size > 0,
       errorsAndBlockers: errorNames.size > 0,
@@ -218,6 +221,7 @@ export namespace SessionCompaction {
   }) {
     const instructionPaths = Array.from(await InstructionPrompt.systemPaths())
     const taskPlan = TaskPlan.toMarkdown(input.sessionID)
+    const todos = Todo.get(input.sessionID)
     const scratchpad = Scratchpad.get(input.sessionID)
     const patches = patchEvidence(input.selectedHead)
     const activeBuildContracts = activeBuildContractsForSession(input.sessionID)
@@ -225,6 +229,7 @@ export namespace SessionCompaction {
       messages: input.selectedHead,
       instructionPaths,
       sourceUserMessageID: input.userMessage.id,
+      todos,
     })
     const requiredEvidence = CompactionHandoff.renderRequiredEvidence(evidenceRequirements)
     const text = [
@@ -237,6 +242,9 @@ export namespace SessionCompaction {
       "",
       "Active build-session contracts for this session. Copy these exact ids into activeBuildContracts; they are the durable source for build retry context after compaction:",
       JSON.stringify(activeBuildContracts, null, 2),
+      "",
+      "Current todos. Copy this JSON array exactly into CompactionHandoff.todos; preserve item order, content, status, and priority:",
+      JSON.stringify(todos, null, 2),
       input.focus ? ["", "Manual compaction focus:", input.focus].join("\n") : "",
       taskPlan ? ["", "Current task plan:", taskPlan].join("\n") : "",
       scratchpad.trim()
@@ -726,5 +734,6 @@ export namespace SessionCompaction {
   export const TestHooks = {
     selectCompactionInput,
     selectedHeadEvidenceRequirements,
+    runtimeContext,
   }
 }

@@ -1133,7 +1133,7 @@ fn badge_count_value(count: i64) -> Option<i64> {
 fn overlay_badge_set<R: Runtime>(app: AppHandle<R>, count: i64) -> Result<bool, String> {
     if let Some(window) = app.get_webview_window("main") {
         let icon = if count > 0 {
-            Some(create_attention_tray_icon())
+            Some(create_taskbar_badge_icon())
         } else {
             None
         };
@@ -1442,6 +1442,42 @@ fn build_attention_tray_icon() -> CachedIcon {
     CachedIcon { rgba, width, height }
 }
 
+fn build_taskbar_badge_icon() -> CachedIcon {
+    let size: u32 = 16;
+    let mut rgba = vec![0u8; (size * size * 4) as usize];
+    let center = (size as f64 - 1.0) / 2.0;
+    let outer = 6.0_f64;
+    let inner = 2.6_f64;
+
+    for y in 0..size {
+        for x in 0..size {
+            let dx = x as f64 - center;
+            let dy = y as f64 - center;
+            let dist = (dx * dx + dy * dy).sqrt();
+            let idx = ((y * size + x) * 4) as usize;
+
+            if dist <= outer {
+                rgba[idx] = 0xf8;
+                rgba[idx + 1] = 0x71;
+                rgba[idx + 2] = 0x71;
+                rgba[idx + 3] = if outer - dist >= 1.0 {
+                    255
+                } else {
+                    ((outer - dist).max(0.0) * 255.0) as u8
+                };
+            }
+            if dist <= inner {
+                rgba[idx] = 0xff;
+                rgba[idx + 1] = 0xff;
+                rgba[idx + 2] = 0xff;
+                rgba[idx + 3] = 255;
+            }
+        }
+    }
+
+    CachedIcon { rgba, width: size, height: size }
+}
+
 fn create_tray_icon() -> tauri::image::Image<'static> {
     static CACHED: OnceLock<CachedIcon> = OnceLock::new();
     cached_icon_image(CACHED.get_or_init(build_normal_tray_icon))
@@ -1450,6 +1486,11 @@ fn create_tray_icon() -> tauri::image::Image<'static> {
 fn create_attention_tray_icon() -> tauri::image::Image<'static> {
     static CACHED: OnceLock<CachedIcon> = OnceLock::new();
     cached_icon_image(CACHED.get_or_init(build_attention_tray_icon))
+}
+
+fn create_taskbar_badge_icon() -> tauri::image::Image<'static> {
+    static CACHED: OnceLock<CachedIcon> = OnceLock::new();
+    cached_icon_image(CACHED.get_or_init(build_taskbar_badge_icon))
 }
 
 #[cfg(test)]
@@ -1518,5 +1559,23 @@ mod tests {
         assert_eq!(badge_count_value(0), None);
         assert_eq!(badge_count_value(-1), None);
         assert_eq!(badge_count_value(42_i64), Some(42_i64));
+    }
+
+    #[test]
+    fn taskbar_badge_icon_is_dot_only_not_full_app_icon() {
+        let icon = build_taskbar_badge_icon();
+        assert_eq!(icon.width, 16);
+        assert_eq!(icon.height, 16);
+        assert_eq!(icon.rgba.len(), 16 * 16 * 4);
+        assert_eq!(icon.rgba[3], 0, "corner must stay transparent");
+
+        let center = ((8 * icon.width + 8) * 4) as usize;
+        assert_eq!(&icon.rgba[center..center + 4], &[0xff, 0xff, 0xff, 0xff]);
+
+        let opaque_pixels = icon.rgba.chunks_exact(4).filter(|px| px[3] > 0).count();
+        assert!(
+            opaque_pixels < (16 * 16) / 2,
+            "taskbar badge overlay must be a small glyph, not a full icon"
+        );
     }
 }

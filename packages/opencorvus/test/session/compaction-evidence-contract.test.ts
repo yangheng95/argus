@@ -12,6 +12,7 @@ function handoffFixture(): CompactionHandoff.Info {
     acceptanceCriteria: ["Every required evidence token survives the handoff exactly"],
     durableInstructionSources: [{ path: "/repo/AGENTS.md", role: "project rules" }],
     activeBuildContracts: [],
+    todos: [],
     currentState: {
       phase: "validating compaction handoff evidence",
       activeTask: "pin required file and error evidence",
@@ -65,6 +66,7 @@ describe("compaction evidence contract", () => {
       fileEvidence: true,
       errorsAndBlockers: true,
       acceptanceCriteria: true,
+      todos: [],
     })
 
     expect(result.success).toBe(true)
@@ -85,6 +87,7 @@ describe("compaction evidence contract", () => {
         fileEvidence: true,
         errorsAndBlockers: true,
         acceptanceCriteria: true,
+        todos: [],
       },
     )
 
@@ -129,6 +132,7 @@ describe("compaction evidence contract", () => {
       fileEvidence: true,
       errorsAndBlockers: true,
       acceptanceCriteria: true,
+      todos: [],
     })
 
     expect(result.success).toBe(true)
@@ -155,6 +159,7 @@ describe("compaction evidence contract", () => {
         fileEvidence: true,
         errorsAndBlockers: true,
         acceptanceCriteria: true,
+        todos: [],
       },
     )
 
@@ -172,6 +177,7 @@ describe("compaction evidence contract", () => {
       fileEvidence: true,
       errorsAndBlockers: true,
       acceptanceCriteria: true,
+      todos: [],
     })
 
     expect(result.success).toBe(false)
@@ -188,6 +194,7 @@ describe("compaction evidence contract", () => {
       fileEvidence: true,
       errorsAndBlockers: true,
       acceptanceCriteria: true,
+      todos: [],
     }
 
     const runtime = CompactionHandoff.renderRequiredEvidence(requirements)

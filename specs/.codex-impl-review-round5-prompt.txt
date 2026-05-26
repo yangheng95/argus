@@ -1,0 +1,53 @@
+你是 opencorvus 项目的资深架构评审者。这是第 5 轮实施评审。请尖锐、具体，不要客套。
+
+## 上下文
+
+Round 4 你给过 REQUEST_CHANGES，列出 2 个问题：
+1. error-outcome 持久化失败被 silently swallowed（log.warn + 继续返回 "tool_error: ..." 字符串，artifact 没落库）
+2. stale targetMessageID 回归测试只 mock FactCheckAgent.run 用相同文案 throw，没有真正跑 loadTargetMessageText 函数
+
+## 我的处理（commit 49066a825）
+
+1. **Persist 错误不再吞掉**：删 catch 内层 try/catch，让 recordFactCheckAttempt 的任何 throw 沿正常路径向上传播到 AI SDK tool 层。happy / scope-mismatch / cancel / tool_error 四条路径现在 persist 失败行为一致（都允许 throw）。
+
+2. **loadTargetMessageText 直接单测**：把函数从 `async function` 改成 `export async function`，新建 test/fact-check/load-target-message-text.test.ts，3 个 case 直接调用：
+   - happy: 返回 concatenated text
+   - empty parts: 消息存在但无 text/reasoning parts → ""
+   - stale id: bogus messageID → throw /snapshot stale|not found/
+
+## 测试状态
+34/34 fact-check 测试 pass.
+
+## 必答清单
+
+### A. Round 4 是否全部解决？
+- 错误路径 persist 失败是否真的不再 silently swallow？
+- loadTargetMessageText 是否真的被独立测试覆盖（不只是 mock 同文案）？
+
+### B. 是否引入新 bug？
+- 把 loadTargetMessageText export 出来，是否扩大了 API surface 让其他模块误用？是不是该用 internal 还是 namespace 标记？
+- 删 catch 后，AI SDK 层抛错是怎么处理的？会不会让整个 orchestrator session 炸？
+
+### C. 实际跑测试
+- bun test packages/opencorvus/test/fact-check/  — 期望全 pass
+- bun test packages/opencorvus/test/agent/role-contract.test.ts  — 期望全 pass
+
+### D. 实际 grep
+- `rg -n 'log\.warn.*persist' packages/opencorvus/src/orchestrator/tools.ts` — 应零（不应有"persist 失败 log warn"路径）
+- `rg -n 'export async function loadTargetMessageText' packages/opencorvus/src` — 应一处
+
+### E. 最终结论
+我们已经迭代到第 5 轮实施评审，每轮 codex 都找出真实问题已修。如果还有问题，是不是该让 implementation 进入 monitoring 模式（合并后追踪），还是必须再返工？
+
+- `APPROVE` — 可合并，无遗漏
+- `APPROVE_WITH_NITS` — minor 问题（列 ≤ 3 项）
+- `REQUEST_CHANGES` — 仍需返工，详细列出 blocker
+
+注意：实施已跨 9 个步骤 + 4 轮 review 修复，总共 13 commits。如果剩余问题是 nit 级别，请直接 APPROVE。如果是 blocker，请明确"为什么是 blocker 而非 nit"。
+
+最后一行 `VERDICT: <label>`
+
+## 输出约束
+- markdown 分节，≤ 2500 字
+- 实际 grep / read 验证每条断言
+- 不修改代码或文件

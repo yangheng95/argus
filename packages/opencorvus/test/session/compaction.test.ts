@@ -8,8 +8,10 @@ import { Instance } from "../../src/project/instance"
 import { Log } from "../../src/util/log"
 import { tmpdir } from "../fixture/fixture"
 import { Session } from "../../src/session"
+import { Message } from "../../src/session/message"
 import type { Provider } from "../../src/provider/provider"
 import type { Config } from "../../src/config/config"
+import { Todo } from "../../src/session/todo"
 
 Log.init({ print: false })
 
@@ -19,6 +21,13 @@ function handoffFixture(): CompactionHandoff.Info {
     acceptanceCriteria: ["The handoff must preserve exact acceptance criteria and command evidence"],
     durableInstructionSources: [{ path: "/repo/AGENTS.md", role: "project rules" }],
     activeBuildContracts: [],
+    todos: [
+      {
+        content: "Run targeted compaction tests",
+        status: "pending",
+        priority: "high",
+      },
+    ],
     currentState: {
       phase: "implementing structured handoff validation",
       activeTask: "replace generic Markdown summary with host-rendered handoff",
@@ -90,9 +99,11 @@ describe("CompactionHandoff", () => {
     ).toBe(true)
     expect(first).toContain("Summary:")
     expect(first).toContain("1. Primary Request and Intent:")
-    expect(first).toContain("8. Current Work:")
-    expect(first).toContain("9. Optional Next Step:")
+    expect(first).toContain("7. Todo List (verbatim):")
+    expect(first).toContain("9. Current Work:")
+    expect(first).toContain("10. Optional Next Step:")
     expect(first).toContain("Acceptance: The handoff must preserve exact acceptance criteria and command evidence")
+    expect(first).toContain('"content": "Run targeted compaction tests"')
     expect(first).toContain("Fix compaction so it preserves resumable task state.")
     expect(first).toContain("bun test packages/opencorvus/test/session/compaction.test.ts")
     expect(first).toContain("packages/opencorvus/src/session/compaction-handoff.ts")
@@ -115,6 +126,7 @@ describe("CompactionHandoff", () => {
       fileEvidence: true,
       errorsAndBlockers: false,
       acceptanceCriteria: true,
+      todos: handoffFixture().todos,
     })
 
     expect(result.success).toBe(false)
@@ -142,9 +154,38 @@ describe("CompactionHandoff", () => {
       fileEvidence: false,
       errorsAndBlockers: false,
       acceptanceCriteria: true,
+      todos: handoffFixture().todos,
     })
 
     expect(result.success).toBe(true)
+  })
+
+  test("rejects handoff todos that do not exactly match runtime todo order and fields", () => {
+    const handoff = {
+      ...handoffFixture(),
+      todos: [
+        {
+          content: "Run targeted compaction tests",
+          status: "in_progress",
+          priority: "high",
+        },
+      ],
+    }
+
+    const result = CompactionHandoff.validateMinimumEvidence(handoff, {
+      sourceUserMessageID: "m-user",
+      instructionPaths: ["/repo/AGENTS.md"],
+      patchFiles: [],
+      errorNames: [],
+      userMessages: true,
+      fileEvidence: false,
+      errorsAndBlockers: false,
+      acceptanceCriteria: true,
+      todos: handoffFixture().todos,
+    })
+
+    expect(result.success).toBe(false)
+    if (!result.success) expect(result.error).toContain("todos")
   })
 
   test("rejects non-empty handoff evidence that does not match runtime facts", () => {
@@ -170,6 +211,7 @@ describe("CompactionHandoff", () => {
       fileEvidence: true,
       errorsAndBlockers: false,
       acceptanceCriteria: true,
+      todos: handoffFixture().todos,
     })
 
     expect(result.success).toBe(false)
@@ -203,6 +245,7 @@ describe("CompactionHandoff", () => {
       fileEvidence: true,
       errorsAndBlockers: true,
       acceptanceCriteria: true,
+      todos: handoffFixture().todos,
     })
 
     expect(result.success).toBe(false)
@@ -221,6 +264,7 @@ describe("CompactionHandoff", () => {
 
     expect(prompt).toContain("CompactionHandoff schema")
     expect(prompt).toContain('"durableInstructionSources"')
+    expect(prompt).toContain('"todos"')
     expect(prompt).toContain('"userMessages"')
     expect(prompt).toContain("If the StructuredOutput tool returns an error")
     expect(prompt).toContain("plugin context")
@@ -232,7 +276,7 @@ describe("CompactionHandoff", () => {
     expect(format.type).toBe("json_schema")
     expect(format.schema).toMatchObject({
       type: "object",
-      required: expect.arrayContaining(["objective", "currentState", "nextActions"]),
+      required: expect.arrayContaining(["objective", "currentState", "todos", "nextActions"]),
     })
     expect(format.retryCount).toBe(2)
     expect(JSON.stringify(format.schema)).toContain("activeBuildContracts")
@@ -249,6 +293,7 @@ describe("CompactionHandoff", () => {
       fileEvidence: false,
       errorsAndBlockers: false,
       acceptanceCriteria: true,
+      todos: handoff.todos,
     }
 
     expect(SessionCompaction.validateHandoffPayload(handoff, requirements).success).toBe(true)
@@ -275,6 +320,39 @@ describe("CompactionHandoff", () => {
 
     expect(oversized.exceeds).toBe(true)
     expect(normal.exceeds).toBe(false)
+  })
+
+  test("runtime context injects current todos as exact structured handoff requirements", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ kind: "assistant", title: "todo compaction" })
+        const todos = [
+          { content: "Keep exact todo text", status: "in_progress", priority: "high" },
+          { content: "Do not reorder this item", status: "pending", priority: "medium" },
+        ]
+        Todo.update({ sessionID: session.id, todos })
+        const user = {
+          id: "m-user",
+          sessionID: session.id,
+          role: "user",
+          time: { created: 0 },
+          agent: "build",
+          model: { providerID: "test", modelID: "test-model" },
+        } as Message.User
+
+        const runtime = await SessionCompaction.TestHooks.runtimeContext({
+          sessionID: session.id,
+          userMessage: user,
+          selectedHead: [],
+        })
+
+        expect(runtime.text).toContain("Current todos. Copy this JSON array exactly")
+        expect(runtime.text).toContain('"content": "Keep exact todo text"')
+        expect(runtime.evidenceRequirements.todos).toEqual(todos)
+      },
+    })
   })
 })
 

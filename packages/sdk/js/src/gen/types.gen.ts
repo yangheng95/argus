@@ -644,6 +644,29 @@ export type EventLspUpdated = {
   }
 }
 
+export type Todo = {
+  /**
+   * Brief description of the task
+   */
+  content: string
+  /**
+   * Current status of the task: pending, in_progress, completed, cancelled
+   */
+  status: string
+  /**
+   * Priority level of the task: high, medium, low
+   */
+  priority: string
+}
+
+export type EventTodoUpdated = {
+  type: "todo.updated"
+  properties: {
+    sessionID: string
+    todos: Array<Todo>
+  }
+}
+
 export type OutputFormatText = {
   type: "text"
 }
@@ -1267,29 +1290,6 @@ export type EventPermissionReplied = {
   }
 }
 
-export type Todo = {
-  /**
-   * Brief description of the task
-   */
-  content: string
-  /**
-   * Current status of the task: pending, in_progress, completed, cancelled
-   */
-  status: string
-  /**
-   * Priority level of the task: high, medium, low
-   */
-  priority: string
-}
-
-export type EventTodoUpdated = {
-  type: "todo.updated"
-  properties: {
-    sessionID: string
-    todos: Array<Todo>
-  }
-}
-
 export type SessionStatus =
   | {
       type: "idle"
@@ -1686,6 +1686,7 @@ export type Event =
   | EventServerInstanceDisposed
   | EventLspClientDiagnostics
   | EventLspUpdated
+  | EventTodoUpdated
   | EventMessageUpdated
   | EventMessageRemoved
   | EventMessagePartUpdated
@@ -1699,7 +1700,6 @@ export type Event =
   | EventCommandExecuted
   | EventPermissionAsked
   | EventPermissionReplied
-  | EventTodoUpdated
   | EventSessionStatus
   | EventSessionIdle
   | EventTaskQueueCompleted

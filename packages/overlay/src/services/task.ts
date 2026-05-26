@@ -42,6 +42,7 @@ import { applyDirectory } from "./workspace";
 import { resetWriter } from "./tree-writer";
 import { cancelConversationReplay, hydrateTaskConversation } from "./conversation";
 import { resetSelectedLiveCursor } from "./selected-stream-cursor";
+import { ackTaskNotificationIfPresent } from "./notify";
 
 // ── Types ──
 
@@ -219,6 +220,9 @@ export async function selectTask(
     if (nextTaskID && boardStore.board && !boardStore.taskSwitching && !isSelectedTaskSSEConnected(nextTaskID)) {
       startSSE(nextTaskID, boardStore.taskSequence);
     }
+    if (nextTaskID && boardStore.board && !boardStore.taskSwitching) {
+      ackTaskNotificationIfPresent(nextTaskID);
+    }
     return;
   }
 
@@ -292,6 +296,7 @@ export async function selectTask(
     setSettingsStore("workspaceTaskID", nextTaskID);
     setSettingsStore("workspaceDirectory", restoreDir);
     saveSettings();
+    ackTaskNotificationIfPresent(nextTaskID);
   } catch (error) {
     if (stale() && isAbortError(error)) return;
     throw error;
