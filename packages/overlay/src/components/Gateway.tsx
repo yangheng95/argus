@@ -48,24 +48,21 @@ import {
 } from "../services/task"
 import { reorderTaskQueue, startQueuedTaskNow } from "../services/task-queue"
 import {
-  decomposeRequirement,
   loadChannelList,
   loadChannelRuntime,
   loadGatewayStats,
   loadTaskBindings,
   restartChannelRuntime,
+  wakeMaster,
   type ChannelInfo,
   type ChannelRuntimeStatus,
   type GatewayStats,
-  type GatewayTaskCandidate,
-  type GatewayTaskDecomposition,
 } from "../services/gateway"
 import { ApiError } from "../services/api"
 import { t } from "../utils/i18n"
 import { stamp } from "../utils/time"
 import {
   compactDirectory,
-  composeTaskText,
   filterMatches,
   GATEWAY_REQUIREMENT_MAX_CHARS,
   humanizeApiError,
@@ -1478,43 +1475,52 @@ function GatewaySelectedTask(props: {
 // ── Decomposition composer ────────────────────────────────────────────
 
 function GatewayComposer(props: { onClose: () => void }) {
-  const [requirement, setRequirement] = createSignal("")
-  const [executor, setExecutor] = createSignal<"" | "opencorvus" | "codex" | "claude-code">("")
+  // ── MissionLauncher — supervisor wake surface ─────────────────────────
+  //
+  // Single textarea + optional missionID input. Submitting POSTs to
+  // /gateway/master/wake which either starts a new gateway-master
+  // session (no missionID) or resumes an existing one (operator-typed
+  // missionID). Once wake returns, the operator's mission is owned by
+  // the supervisor LLM — no proposal preview / candidate selection here.
+  //
+  // The previous GatewayComposer surfaced a decomposition proposal +
+  // per-candidate review UI; that workflow is superseded by the
+  // supervisor (specs/gateway-master-supervisor-2026-05-26.md §2.7).
+  const [text, setText] = createSignal("")
+  const [missionID, setMissionID] = createSignal("")
   const [submitting, setSubmitting] = createSignal(false)
   const [error, setError] = createSignal("")
-  const [proposal, setProposal] = createSignal<GatewayTaskDecomposition | null>(null)
-  // Owns the in-flight decompose request so closing / unmounting the
-  // composer cancels the LLM stream instead of letting it run to
-  // completion at provider cost (codex round-3 P2).
+  const [lastResult, setLastResult] = createSignal<{ missionID: string; sessionID: string; created: boolean } | null>(null)
+
   let activeController: AbortController | null = null
   const cancelActive = (reason?: unknown): void => {
     if (!activeController) return
-    activeController.abort(reason ?? new DOMException("Decompose composer dismissed", "AbortError"))
+    activeController.abort(reason ?? new DOMException("Mission launcher dismissed", "AbortError"))
     activeController = null
   }
   onCleanup(() => cancelActive())
 
   async function handleSubmit() {
-    const text = requirement().trim()
-    if (!text) return
+    const t = text().trim()
+    if (!t) return
     setSubmitting(true)
     setError("")
-    cancelActive() // collapse any prior in-flight call before starting a new one
+    cancelActive()
     const controller = new AbortController()
     activeController = controller
     try {
-      const data = await decomposeRequirement({
-        requirement: text,
-        executor: executor() || undefined,
+      const result = await wakeMaster({
+        text: t,
+        missionID: missionID().trim() || undefined,
         signal: controller.signal,
       })
-      // Bail if a later submit / dismount aborted this run.
       if (controller.signal.aborted) return
-      setProposal(data)
+      setLastResult(result)
+      setText("")
     } catch (err) {
       if (controller.signal.aborted) return
       setError(humanizeApiError(err))
-      setProposal(null)
+      setLastResult(null)
     } finally {
       if (activeController === controller) activeController = null
       setSubmitting(false)
@@ -1523,406 +1529,98 @@ function GatewayComposer(props: { onClose: () => void }) {
 
   function handleDiscard() {
     cancelActive()
-    setProposal(null)
-    setRequirement("")
+    setText("")
+    setMissionID("")
     setError("")
+    setLastResult(null)
     props.onClose()
   }
 
-  function handleProposalCleared() {
-    // "Discard proposal" from the proposal-preview surface returns the
-    // operator to an empty composer — pre-fix the proposal cleared but
-    // the textarea kept the previous requirement, so re-opening the
-    // composer surfaced stale draft (round-3 visual review P1-1). Both
-    // discard paths now mean the same thing: throw the iteration away.
-    cancelActive()
-    setProposal(null)
-    setRequirement("")
-    setError("")
-  }
-
   return (
-    <Show
-      when={proposal()}
-      fallback={
-        <div class="gateway-composer" data-ui="gateway-composer">
-          <header class="gateway-composer-header">
-            <h2 class="gateway-composer-title">{t("gateway.compose.title")}</h2>
-            <Button
-              type="button"
-              variant="ghost"
-              size="md"
-              tone="neutral"
-              data-ui="gateway-composer-discard"
-              title={t("gateway.compose.discard_title")}
-              onClick={handleDiscard}
-            >
-              <Icon name="close" size={12} />
-              <span>{t("gateway.compose.discard")}</span>
-            </Button>
-          </header>
-          <textarea
-            class="gateway-composer-textarea"
-            rows={8}
-            placeholder={t("gateway.compose.placeholder")}
-            value={requirement()}
-            maxLength={GATEWAY_REQUIREMENT_MAX_CHARS}
-            onInput={(e) => setRequirement(e.currentTarget.value)}
-            disabled={submitting()}
-            data-ui="gateway-composer-input"
-          />
-          <div class="gateway-composer-counter" data-ui="gateway-composer-counter">
-            <span
-              data-near-limit={requirement().length >= GATEWAY_REQUIREMENT_MAX_CHARS - 200 ? "true" : undefined}
-              data-at-limit={requirement().length >= GATEWAY_REQUIREMENT_MAX_CHARS ? "true" : undefined}
-            >
-              {t("gateway.compose.length_counter", {
-                count: String(requirement().length),
-                max: String(GATEWAY_REQUIREMENT_MAX_CHARS),
-              })}
-            </span>
-          </div>
-          <div class="gateway-composer-controls">
-            <label class="gateway-composer-executor">
-              <span>{t("gateway.compose.executor_label")}</span>
-              <select
-                class="gateway-composer-executor-select"
-                value={executor()}
-                disabled={submitting()}
-                onChange={(e) => setExecutor(e.currentTarget.value as any)}
-                data-ui="gateway-composer-executor"
-              >
-                <option value="">—</option>
-                <option value="opencorvus">opencorvus</option>
-                <option value="codex">codex</option>
-                <option value="claude-code">claude-code</option>
-              </select>
-            </label>
-            <Button
-              type="button"
-              variant="solid"
-              size="md"
-              tone="accent"
-              data-ui="gateway-composer-submit"
-              disabled={!requirement().trim() || submitting()}
-              onClick={() => void handleSubmit()}
-            >
-              {submitting() ? t("gateway.compose.submitting") : t("gateway.compose.submit")}
-            </Button>
-          </div>
-          <Show when={error()}>
-            <div class="gateway-error" role="alert" data-ui="gateway-composer-error">
-              <span>{t("gateway.compose.error", { error: error() })}</span>
-            </div>
-          </Show>
-        </div>
-      }
-    >
-      <GatewayProposalReview
-        proposal={proposal()!}
-        onDiscard={() => {
-          handleProposalCleared()
-        }}
-        onClose={handleDiscard}
-      />
-    </Show>
-  )
-}
-
-// ── Proposal review (Phase 3) ─────────────────────────────────────────
-
-interface ProposalCandidateState {
-  candidate: GatewayTaskCandidate
-  include: boolean
-  queue: boolean
-  /** taskID returned by createTask. Set the moment the task is
-   *  successfully created — used to lock the row so a subsequent
-   *  "Create selected" click cannot duplicate it (codex review round 2
-   *  P2). */
-  createdTaskID?: string
-}
-
-function GatewayProposalReview(props: {
-  proposal: GatewayTaskDecomposition
-  onDiscard: () => void
-  onClose: () => void
-}) {
-  const [states, setStates] = createSignal<ProposalCandidateState[]>(
-    props.proposal.tasks.map((c) => ({
-      candidate: c,
-      include: true,
-      queue: c.recommended_queue,
-    })),
-  )
-  const [creating, setCreating] = createSignal(false)
-  const [results, setResults] = createSignal<Array<{ id: string; title: string; ok: boolean; error?: string; taskID?: string }>>([])
-
-  function setIncluded(idx: number, value: boolean) {
-    setStates((prev) => prev.map((s, i) => (i === idx ? { ...s, include: value } : s)))
-  }
-  function setQueue(idx: number, value: boolean) {
-    setStates((prev) => prev.map((s, i) => (i === idx ? { ...s, queue: value } : s)))
-  }
-
-  // Only un-created rows count toward the "Create selected" enable state.
-  // A proposal where every candidate has already been created means the
-  // operator's work here is done — disable the button rather than silently
-  // accept a no-op click.
-  const pendingCount = createMemo(() => states().filter((s) => s.include && !s.createdTaskID).length)
-
-  async function handleCreate() {
-    if (creating()) return
-    // Skip rows that are already created — clicking "Create selected"
-    // a second time should ONLY retry the candidates that failed
-    // (or new ones the operator added back into the include set), not
-    // resubmit successful rows (codex review round 2 P2 — pre-fix, every
-    // included candidate was sent every time, producing duplicate tasks
-    // on the second click).
-    const selected = states().filter((s) => s.include && !s.createdTaskID)
-    if (selected.length === 0) return
-    setCreating(true)
-    setResults([])
-    const out: Array<{ id: string; title: string; ok: boolean; error?: string; taskID?: string }> = []
-    for (const s of selected) {
-      const c = s.candidate
-      try {
-        const taskID = await createTask({
-          text: composeTaskText(c),
-          queue: s.queue,
-          kind: "workflow",
-          // Propagate the operator-confirmed priority and executor onto
-          // the actual task creation so the queue ordering and executor
-          // routing match what the proposal review showed (codex review:
-          // P2 — losing per-candidate priority/executor was the bug).
-          priority: c.priority,
-          ...(c.executor ? { executor: c.executor } : {}),
-          title: c.title,
-          metadata: {
-            source: "gateway:decompose",
-            proposal_id: props.proposal.proposal_id,
-            candidate_id: c.id,
-            recommended_queue: c.recommended_queue,
-            risks: c.risks,
-            dependencies: c.dependencies,
-          },
-        })
-        out.push({ id: c.id, title: c.title, ok: true, taskID })
-        // Lock the row immediately so the next iteration can't see it
-        // as un-created if the operator double-clicks.
-        setStates((prev) =>
-          prev.map((row) => (row.candidate.id === c.id ? { ...row, createdTaskID: taskID } : row)),
-        )
-      } catch (err) {
-        out.push({ id: c.id, title: c.title, ok: false, error: humanizeApiError(err) })
-      }
-    }
-    setResults(out)
-    setCreating(false)
-    // Refresh whenever ANY candidate succeeded — partial success is the
-    // common case (one candidate fails server-side, others succeeded);
-    // the operator must see the created tasks in the ledger immediately
-    // even if a sibling row failed (codex review: P2).
-    if (out.some((r) => r.ok)) {
-      void loadTasks().catch(() => undefined)
-    }
-  }
-
-  return (
-    <div class="gateway-proposal" data-ui="gateway-proposal">
-      <header class="gateway-proposal-header">
-        <div>
-          <h2 class="gateway-proposal-title">{t("gateway.proposal.heading")}</h2>
-          <p class="gateway-proposal-summary">
-            <Show when={props.proposal.summary} fallback={<em>{t("gateway.proposal.summary_empty")}</em>}>
-              {props.proposal.summary}
-            </Show>
-          </p>
-        </div>
-        <div class="gateway-proposal-actions">
-          <Button
-            type="button"
-            variant="ghost"
-            size="md"
-            tone="neutral"
-            data-ui="gateway-proposal-discard"
-            onClick={props.onDiscard}
-          >
-            {t("gateway.compose.discard")}
-          </Button>
-          <Button
-            type="button"
-            variant="solid"
-            size="md"
-            tone="accent"
-            data-ui="gateway-proposal-create"
-            disabled={creating() || pendingCount() === 0}
-            onClick={() => void handleCreate()}
-          >
-            {creating() ? t("gateway.proposal.creating") : t("gateway.proposal.create_all")}
-          </Button>
-        </div>
+    <div class="gateway-composer" data-ui="gateway-composer">
+      <header class="gateway-composer-header">
+        <h2 class="gateway-composer-title">{t("gateway.master.title")}</h2>
+        <Button
+          type="button"
+          variant="ghost"
+          size="md"
+          tone="neutral"
+          data-ui="gateway-composer-discard"
+          title={t("gateway.master.discard_title")}
+          onClick={handleDiscard}
+        >
+          <Icon name="close" size={12} />
+          <span>{t("gateway.master.discard")}</span>
+        </Button>
       </header>
-
-      <Show when={pendingCount() === 0 && !creating()}>
-        <div class="gateway-proposal-warning" role="alert">
-          {t("gateway.proposal.no_selection")}
+      <textarea
+        class="gateway-composer-textarea"
+        rows={8}
+        placeholder={t("gateway.master.placeholder")}
+        value={text()}
+        maxLength={GATEWAY_REQUIREMENT_MAX_CHARS}
+        onInput={(e) => setText(e.currentTarget.value)}
+        disabled={submitting()}
+        data-ui="gateway-composer-input"
+      />
+      <div class="gateway-composer-counter" data-ui="gateway-composer-counter">
+        <span
+          data-near-limit={text().length >= GATEWAY_REQUIREMENT_MAX_CHARS - 200 ? "true" : undefined}
+          data-at-limit={text().length >= GATEWAY_REQUIREMENT_MAX_CHARS ? "true" : undefined}
+        >
+          {t("gateway.master.length_counter", {
+            count: String(text().length),
+            max: String(GATEWAY_REQUIREMENT_MAX_CHARS),
+          })}
+        </span>
+      </div>
+      <div class="gateway-composer-controls">
+        <label class="gateway-composer-mission-id">
+          <span>{t("gateway.master.mission_id_label")}</span>
+          <input
+            type="text"
+            class="gateway-composer-mission-id-input"
+            placeholder={t("gateway.master.mission_id_placeholder")}
+            value={missionID()}
+            disabled={submitting()}
+            onInput={(e) => setMissionID(e.currentTarget.value)}
+            data-ui="gateway-composer-mission-id"
+          />
+        </label>
+        <Button
+          type="button"
+          variant="solid"
+          size="md"
+          tone="accent"
+          data-ui="gateway-composer-submit"
+          disabled={!text().trim() || submitting()}
+          onClick={() => void handleSubmit()}
+        >
+          {submitting()
+            ? t("gateway.master.submitting")
+            : missionID().trim()
+              ? t("gateway.master.resume")
+              : t("gateway.master.start")}
+        </Button>
+      </div>
+      <Show when={error()}>
+        <div class="gateway-error" role="alert" data-ui="gateway-composer-error">
+          <span>{t("gateway.master.error", { error: error() })}</span>
         </div>
       </Show>
-
-      <ol class="gateway-proposal-list">
-        <For each={states()}>
-          {(state, idx) => {
-            const i = idx()
-            const c = state.candidate
-            return (
-              <li
-                class="gateway-proposal-card"
-                data-include={state.include ? "true" : "false"}
-                data-created={state.createdTaskID ? "true" : undefined}
-                data-task-candidate={c.id}
-              >
-                <header class="gateway-proposal-card-header">
-                  <span class="gateway-proposal-card-index">
-                    {t("gateway.proposal.task_index", { n: String(i + 1), total: String(states().length) })}
-                  </span>
-                  <Show
-                    when={state.createdTaskID}
-                    fallback={
-                      <label class="gateway-proposal-include">
-                        <input
-                          type="checkbox"
-                          checked={state.include}
-                          disabled={creating()}
-                          title={t("gateway.proposal.include_title")}
-                          onChange={(e) => setIncluded(i, e.currentTarget.checked)}
-                          data-ui="gateway-proposal-include"
-                          data-candidate-id={c.id}
-                        />
-                        <span>{t("gateway.proposal.include")}</span>
-                      </label>
-                    }
-                  >
-                    <span class="gateway-proposal-created" data-ui="gateway-proposal-created">
-                      {t("gateway.proposal.created_badge", { taskID: state.createdTaskID! })}
-                    </span>
-                  </Show>
-                </header>
-                <dl class="gateway-proposal-card-body">
-                  <div class="gateway-proposal-card-row">
-                    <dt>{t("gateway.proposal.title_label")}</dt>
-                    <dd><strong>{c.title}</strong></dd>
-                  </div>
-                  <div class="gateway-proposal-card-row">
-                    <dt>{t("gateway.proposal.description_label")}</dt>
-                    <dd>{c.description}</dd>
-                  </div>
-                  <div class="gateway-proposal-card-row">
-                    <dt>{t("gateway.proposal.acceptance_label")}</dt>
-                    <dd>
-                      <Show when={c.acceptance.length > 0} fallback={<em>{t("gateway.proposal.acceptance_empty")}</em>}>
-                        <ul class="gateway-proposal-acceptance">
-                          <For each={c.acceptance}>
-                            {(a) => <li>{a}</li>}
-                          </For>
-                        </ul>
-                      </Show>
-                    </dd>
-                  </div>
-                  <div class="gateway-proposal-card-row">
-                    <dt>{t("gateway.proposal.priority_label")}</dt>
-                    <dd>{c.priority}</dd>
-                  </div>
-                  <Show when={c.executor}>
-                    <div class="gateway-proposal-card-row">
-                      <dt>{t("gateway.proposal.executor_label")}</dt>
-                      <dd>{c.executor}</dd>
-                    </div>
-                  </Show>
-                  <div class="gateway-proposal-card-row">
-                    <dt>{t("gateway.proposal.dependencies_label")}</dt>
-                    <dd>
-                      <Show when={c.dependencies.length > 0} fallback={<em>{t("gateway.proposal.dependencies_empty")}</em>}>
-                        <code>{c.dependencies.join(", ")}</code>
-                      </Show>
-                    </dd>
-                  </div>
-                  <div class="gateway-proposal-card-row">
-                    <dt>{t("gateway.proposal.risks_label")}</dt>
-                    <dd>
-                      <Show when={c.risks.length > 0} fallback={<em>{t("gateway.proposal.risks_empty")}</em>}>
-                        <ul class="gateway-proposal-risks">
-                          <For each={c.risks}>
-                            {(r) => <li>{r}</li>}
-                          </For>
-                        </ul>
-                      </Show>
-                    </dd>
-                  </div>
-                </dl>
-                <footer class="gateway-proposal-card-footer">
-                  <span class="gateway-proposal-recommended">
-                    {c.recommended_queue
-                      ? t("gateway.proposal.recommended_queue_yes")
-                      : t("gateway.proposal.recommended_queue_no")}
-                  </span>
-                  <fieldset class="gateway-proposal-queue" disabled={!state.include || creating() || !!state.createdTaskID} aria-label={t("gateway.proposal.queue_choice")}>
-                    <legend class="gateway-proposal-queue-legend">{t("gateway.proposal.queue_choice")}</legend>
-                    <label class="gateway-proposal-queue-option">
-                      <input
-                        type="radio"
-                        name={`gateway-queue-${i}`}
-                        value="start"
-                        checked={!state.queue}
-                        onChange={() => setQueue(i, false)}
-                        data-ui="gateway-proposal-queue-start"
-                      />
-                      <span>{t("gateway.proposal.queue_start_now")}</span>
-                    </label>
-                    <label class="gateway-proposal-queue-option">
-                      <input
-                        type="radio"
-                        name={`gateway-queue-${i}`}
-                        value="queue"
-                        checked={state.queue}
-                        onChange={() => setQueue(i, true)}
-                        data-ui="gateway-proposal-queue-queue"
-                      />
-                      <span>{t("gateway.proposal.queue_queue")}</span>
-                    </label>
-                  </fieldset>
-                </footer>
-              </li>
-            )
-          }}
-        </For>
-      </ol>
-
-      <Show when={results().length > 0}>
-        <section class="gateway-proposal-results" data-ui="gateway-proposal-results">
-          <h3>{t("gateway.proposal.results_heading")}</h3>
-          <ul>
-            <For each={results()}>
-              {(r) => (
-                <li data-ok={r.ok ? "true" : "false"}>
-                  <Show
-                    when={r.ok}
-                    fallback={<>{t("gateway.proposal.create_failed_one", { title: r.title, error: r.error ?? "" })}</>}
-                  >
-                    <span><strong>{r.title}</strong> → <code>{r.taskID}</code></span>
-                  </Show>
-                </li>
-              )}
-            </For>
-          </ul>
-          <Show when={results().every((r) => r.ok)}>
-            <p>{t("gateway.proposal.created", { count: String(results().length) })}</p>
-          </Show>
-          <div class="gateway-proposal-results-actions">
-            <Button type="button" variant="ghost" size="md" tone="neutral" onClick={props.onClose}>
-              {t("gateway.compose.discard")}
-            </Button>
+      <Show when={lastResult()}>
+        {(result) => (
+          <div class="gateway-master-result" role="status" data-ui="gateway-master-result">
+            <p>
+              {result().created
+                ? t("gateway.master.result_created", { missionID: result().missionID })
+                : t("gateway.master.result_resumed", { missionID: result().missionID })}
+            </p>
+            <p class="gateway-master-result-session">
+              <code>{result().sessionID}</code>
+            </p>
           </div>
-        </section>
+        )}
       </Show>
     </div>
   )
