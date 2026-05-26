@@ -27,6 +27,18 @@ function findGatewaySessionID(channelKey: string) {
   )
 }
 
+/**
+ * Look up an existing gateway session by channelKey without creating one.
+ *
+ * The /gateway/master/wake route uses this to distinguish "started a
+ * new mission" from "resumed an existing mission" in its response. The
+ * actual session acquisition still goes through `ensureGatewaySession`
+ * — this lookup intentionally has no create semantics.
+ */
+export function findExistingGatewaySession(channelKey: string): string | undefined {
+  return findGatewaySessionID(channelKey)
+}
+
 async function ensureGatewaySessionInner(input: { channelKey: string; defaultCwd: string }) {
   const existingID = findGatewaySessionID(input.channelKey)
   if (existingID) return withChannelKey(await Session.get(existingID), input.channelKey)
