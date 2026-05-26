@@ -115,6 +115,20 @@ export const PanelCapabilityRegistry = list(
     params: {},
   }),
   item({
+    action: "query_task",
+    description:
+      "Structured batch task status query for LLM reconciliation. Returns stable JSON for up to 50 taskIDs " +
+      "at a time. Distinct from view_board (which produces human-oriented prose, single-task at a time) — " +
+      "use this when an agent needs to programmatically inspect outcomes of tasks it has dispatched.",
+    kind: "query",
+    surfaces: all,
+    params: {
+      taskIDs: z.array(z.string().min(1)).min(1).max(50),
+      includeChildren: z.boolean().optional(),
+      includeInteractions: z.boolean().optional(),
+    },
+  }),
+  item({
     action: "create_task",
     description: "Create a task, optionally binding it to a channel thread.",
     kind: "mutation",
