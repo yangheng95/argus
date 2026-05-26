@@ -1,0 +1,86 @@
+独立审查任务 — 不要假设我（Claude）的判断正确，按你自己的标准核对。
+
+# 背景
+
+仓库 D:/myhexin-local/opencorvus（TypeScript + Hono + Bun + SolidJS）。
+overlay AgentSessionReplyBox 给任何子 agent 发消息收到 HTTP 500。
+我已经做了三段修复，最新三个 commit：
+
+  5125c14e1 fix(overlay): structured reply errors + pre-filter reply box by kind
+  f0cc9ac8d fix(fact-check): hoist TARGET_MESSAGE_TEXT_CAP + tolerate undefined abortSignal
+  d985a38c5 fix(reply): direct-reply 500 → structured 4xx/410 taxonomy
+
+详细方案在 specs/agent-reply-500-fix-2026-05-26.md。
+
+# 你的任务
+
+对这三个 commit 做严格 review。不要被我的注释或 commit message 说服 —
+独立判断。重点检查：
+
+1. **NamedError 分层正确性**
+   - packages/opencorvus/src/orchestrator/direct-reply.ts 的四个错误类的
+     status 映射（400/400/409/410）是否与语义匹配？
+   - packages/opencorvus/src/server/server.ts onError 的分支顺序有没有问题？
+     有没有可能被前面分支抢先匹配？
+   - packages/opencorvus/src/server/error.ts 中 409/410 的 OpenAPI schema
+     是否真的反映了实际响应体？
+
+2. **rule 8 双源检查**
+   - packages/overlay/src/utils/direct-reply-kinds.ts 复制了后端的
+     DIRECT_REPLY_AGENT_KIND_VALUES。test 用 equality 守护。
+     这个安排是否真的能防漂？是否有别的地方还需要同步？
+   - 后端 DIRECT_REPLY_AGENT_KINDS 和 DIRECT_AGENT_SESSION_CONTROL_KINDS
+     两个集合的语义边界是否清晰？我把 assertDirectAgentSession 从前者
+     切到了后者，是否引入了任何意外的 cancel 行为变化？
+
+3. **task-api/index.ts appendDirectAgentSessionReply 的修改**
+   - 我把 validateSessionRuntimeContractForContinuation 移到了
+     resolveAgentModelRef 之前。这个顺序变更会不会破坏什么？
+     有没有调用者依赖 model 已被 resolve 后再做 contract 校验？
+   - 我去掉了 target.prompt.agent === "build" 的判断，只留
+     target.session.kind === "build"。这是否会让某些 build 场景漏过
+     正当的拒绝？想清楚：envelope.agent === "build" 但 session.kind !==
+     "build" 真实场景是什么？我的判断是这只是 model 解析的延续，但
+     需要你独立核对。
+
+4. **orchestrator/tools.ts 的 steer_subagent 工具**
+   - 这个工具也走 EngineService.replyAgentSession。我把 reply 路径
+     的 plain Error 换成了 NamedError —— steer_subagent 接收到这些
+     NamedError 时会怎么样？它会原样传回给 LLM 作为 tool result 吗？
+     看 packages/opencorvus/src/orchestrator/tools.ts 4488 行附近的
+     调用，确认错误传播路径是否合理。
+
+5. **session/loop.ts validateSessionRuntimeContractForContinuation**
+   - 我把"missing"和"terminal_satisfied"两条改成 SessionRuntimeContractMissingError
+     抛出，但保留了 identity-mismatch / agent-mismatch / goal-mismatch 等
+     internal bug 类作为 plain Error（→ 500）。这种区分对吗？还是这些
+     mismatch 本身也是用户可恢复的应该 4xx？
+   - 这个 validator 被 loop.ts:1200 的 processTurn 同样调用。我的修改
+     会不会改变 in-loop 校验的语义？
+
+6. **测试覆盖**
+   - packages/opencorvus/test/server/reply-error-taxonomy.test.ts 5 个 case
+     覆盖是否充分？有没有遗漏的边界（比如：session 不属于 task → 404，
+     已经测过吗）？
+   - packages/overlay/test/agent-reply-box-structured-errors.test.ts 是源码
+     字符串断言（沿用 overlay 测试约定），强度是否够？终端 vs 可重试
+     的分类是否真的测到了行为，还是只测了字符串存在？
+
+7. **未覆盖的隐患**
+   - 我没动 spec §6（contract DB rebuild）—— 觉得 closure 不可序列化、
+     rebuild 等价于 re-dispatch。这个判断对吗？你看了 spec
+     specs/new-arch/2026-05-21-build-retry-session-reuse-runtime-contract.md
+     之后是否同意？
+   - 有没有别的 500 在 reply 路径上但我和 3 个 sub-agent 都漏看的？
+
+# 输出
+
+按"严重 → 不严重"列出你独立发现的问题，每条给：
+  - 文件:行号
+  - 具体问题描述
+  - 修复建议（如果有）
+  - 严重程度（critical / major / minor / nit）
+
+如果某条我做对了，**不要**写"good"或"correct"夸我 —— 只写需要修的。
+如果没有 critical / major 问题，结论里直说"无 critical / major"。
+报告控制在 1000 字内。

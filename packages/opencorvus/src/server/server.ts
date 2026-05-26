@@ -94,6 +94,15 @@ export namespace Server {
             else if (err.name === "BuildSessionDirectReplyError") status = 400
             else if (err.name === "ReplyTargetEnvelopeMissingError") status = 409
             else if (err.name === "SessionRuntimeContractMissingError") status = 410
+            // MissingModelConfigError is a user-fixable config error
+            // ("set agent.X.model in opencorvus.jsonc"), not a server
+            // crash. agent/model.ts throws it from resolveAgentModelRef
+            // which the reply route hits after the runtime-contract
+            // validator — if it falls through to the default `500` arm
+            // the overlay can't distinguish "your config is missing a
+            // model" from "the server is broken". codex review
+            // 2026-05-26.
+            else if (err.name === "MissingModelConfigError") status = 400
             else status = 500
             return c.json(err.toObject(), { status })
           }
