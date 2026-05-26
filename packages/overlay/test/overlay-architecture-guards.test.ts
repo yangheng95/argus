@@ -554,8 +554,8 @@ describe("overlay architecture guards", () => {
       "project-group-copy",
       "project-group-name",
       "project-group-parent",
-      "project-group-count",
       "project-group-body",
+      "project-group-show-more",
     ]) {
       expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
       expect(sidebarSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
@@ -563,7 +563,7 @@ describe("overlay architecture guards", () => {
 
     expect(sidebarSurface).toMatch(/\.sidebar-footer a:hover\s*\{/)
     expect(sidebarSurface).toMatch(/\.sidebar-list\.session-list-panel\s*\{/)
-    expect(sidebarSurface).toMatch(/\.project-group-icon,\s*\.project-group-chevron\s*\{/)
+    expect(sidebarSurface).toMatch(/\.project-group-icon\s*\{/)
     expect(sidebarSurface).toMatch(/@keyframes project-group-body-reveal\s*\{/)
     expect(sidebarSurface).not.toMatch(/data-active-project/)
   })

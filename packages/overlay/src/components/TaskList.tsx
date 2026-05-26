@@ -1,23 +1,19 @@
 // ── TaskList Component ──
 // Solid.js port of renderTaskList / taskSection / taskRow / visibleTasks
-// Displays active and recently-completed tasks from boardStore.
+// Displays tasks from boardStore in stable creation-time order.
 
 import { createMemo, createSelector, createSignal, For, Show } from "solid-js";
 import { boardStore, visibleTasks, loadTasks, taskCreatedAt } from "../store/board";
 import { settingsStore } from "../store/settings";
 import { reorderTaskQueue, startQueuedTaskNow } from "../services/task-queue";
-import { exportTaskArchive, importTaskArchive } from "../services/task-archive";
-import { notifyError, notifyProgress, notifySuccess, notifyWarning, taskHasUnreadNotification, formatErrorDetails } from "../services/notify";
+import { notifyError, notifySuccess, notifyWarning, taskHasUnreadNotification, formatErrorDetails } from "../services/notify";
 import { useArmedConfirm } from "../solid/armed-confirm";
-import { useAsyncAction } from "../solid/async-action";
 import { t } from "../utils/i18n";
 import { stamp, fullStampWithRelative } from "../utils/time";
 import { Icon } from "./Icon";
 import { Button } from "./ui/Button";
 
-// ── Task status constants ──
-
-const COMPLETED_STATUSES = new Set(["completed", "failed", "cancelled"]);
+const COMPACT_GROUP_VISIBLE_LIMIT = 5;
 
 // ── Inline helpers (ports of functions) ──
 
@@ -26,12 +22,6 @@ function clipText(value: string, limit = 80): string {
   if (!text) return "";
   if (text.length <= limit) return text;
   return `${text.slice(0, Math.max(0, limit - 3)).trim()}...`;
-}
-
-function shortPath(p: string): string {
-  if (!p) return "";
-  const parts = p.replace(/\\/g, "/").split("/");
-  return parts.length > 3 ? ".../" + parts.slice(-3).join("/") : p;
 }
 
 function joinBullet(values: (string | undefined | null | false)[]): string {
@@ -67,6 +57,16 @@ function taskListBadge(item: any, queuePos?: number): string {
 
 function taskListMeta(item: any): string {
   return joinBullet([stamp(taskCreatedAt(item))]);
+}
+
+function taskListFullTip(item: any, queuePos?: number): string {
+  return joinBullet([
+    item?.task?.title || item?.overview?.headline || item?.task?.id || "",
+    taskListBadge(item, queuePos),
+    fullStampWithRelative(taskCreatedAt(item)),
+    item?.task?.id ? `ID: ${item.task.id}` : "",
+    item?.task?.directory || "",
+  ]);
 }
 
 function queueRevision(items: any[]): string | undefined {
@@ -116,6 +116,13 @@ function projectLabel(directory: string): { name: string; parent: string } {
   return { name, parent };
 }
 
+function projectGroupTip(directory: string, count: number): string {
+  return joinBullet([
+    directory || t("task.project.unknown"),
+    t("task.project.count", { count: String(count) }),
+  ]);
+}
+
 // ── DeleteButton (two-step inline confirm) ──
 // First click arms the button (data-confirm="true") and shows the confirm
 // icon; a second click within the confirm window fires the delete. The state
@@ -151,58 +158,6 @@ function DeleteButton(props: { id: string; onDelete: (id: string) => void }) {
       <span class="task-row-delete-icon" data-icon="confirm" aria-hidden="true">
         <Icon name="check" size={11} />
       </span>
-    </Button>
-  );
-}
-
-// ── ExportButton (single-click, no confirm) ──
-// Exporting is non-destructive — bytes flow OUT only — so unlike
-// cancel/delete we don't gate it behind a two-step confirm. The button is
-// visible on every persisted task.
-
-function ExportButton(props: { id: string; directory?: string }) {
-  const exportAction = useAsyncAction(async () => {
-    return await exportTaskArchive({ taskID: props.id, directory: props.directory });
-  });
-  const noticeID = () => `task-archive:export:${props.id}`;
-  return (
-    <Button
-      type="button"
-      variant="ghost"
-      size="icon"
-      tone="accent"
-      data-chrome="icon-action"
-      data-ui="task-row-export"
-      data-task-export={props.id}
-      data-busy={exportAction.pending() ? "true" : undefined}
-      disabled={exportAction.pending()}
-      title={t("task.export_button_title")}
-      aria-label={t("task.export_button_title")}
-      onClick={async (e) => {
-        e.stopPropagation();
-        try {
-          notifyProgress({
-            id: noticeID(),
-            title: t("task.export_started"),
-            message: props.id,
-          });
-          const result = await exportAction.run();
-          notifySuccess({
-            id: noticeID(),
-            title: t("task.export_done_title"),
-            message: t("task.export_done", { filename: result.filename }),
-          });
-        } catch (err) {
-          notifyError({
-            id: noticeID(),
-            title: t("task.export_failed_title"),
-            message: t("task.export_failed", { error: err instanceof Error ? err.message : String(err) }),
-            details: formatErrorDetails(err),
-          });
-        }
-      }}
-    >
-      <Icon name="download" size={11} />
     </Button>
   );
 }
@@ -298,18 +253,14 @@ function TaskRow(props: {
   const isActive = () => !pending() && props.isSelected(id());
   const hasUnreadNotification = () => !pending() && taskHasUnreadNotification(props.item);
   const badgeLabel = () => taskListBadge(props.item, props.queuePos);
+  const rowTip = () => taskListFullTip(props.item, props.queuePos);
   const canCancel = () =>
     !pending() && !!id() && !!props.onCancelTask && INTERRUPTABLE_TASK_STATUSES.has(status());
   const canStartNow = () =>
     !pending() && !!id() && !!props.onStartNow && status() === "queued";
   const canDelete = () =>
     !pending() && !!id() && !!props.onDeleteTask;
-  // Export is offered for any persisted task — no status gate (you can
-  // archive a completed/failed/cancelled task, that's the typical case).
-  const canExport = () => !pending() && !!id();
-  const directory = () =>
-    typeof props.item?.task?.directory === "string" ? props.item.task.directory : undefined;
-  const hasActions = () => canStartNow() || canCancel() || canDelete() || canExport();
+  const hasActions = () => canStartNow() || canCancel() || canDelete();
   const canDrag = () => props.canDrag === true && status() === "queued" && !pending();
 
   return (
@@ -322,7 +273,7 @@ function TaskRow(props: {
       data-dragging={props.dragging ? "true" : undefined}
       data-drag-over={props.dragOver ? "true" : undefined}
       draggable={canDrag()}
-      title={title()}
+      title={rowTip()}
       onDragStart={(event) => {
         if (!canDrag()) return;
         event.dataTransfer?.setData("text/plain", id());
@@ -339,6 +290,16 @@ function TaskRow(props: {
       }}
       onDragEnd={() => props.onDragEnd?.()}
     >
+      <span
+        class="task-row-badge"
+        data-status={status()}
+        aria-live="polite"
+        aria-atomic="true"
+        aria-label={badgeLabel()}
+        title={badgeLabel()}
+      >
+        <span class="task-row-badge-text">{badgeLabel()}</span>
+      </span>
       <Show when={canDrag()}>
         <span class="task-row-drag-handle" title={t("task.reorder_button_title")} aria-hidden="true">
           <Icon name="drag-handle" size={12} />
@@ -351,7 +312,7 @@ function TaskRow(props: {
         disabled={pending()}
         aria-disabled={pending() ? "true" : undefined}
         aria-current={isActive() ? "page" : undefined}
-        title={title()}
+        title={rowTip()}
         onClick={() => {
           if (!pending() && id()) props.onSelectTask(id());
         }}
@@ -359,28 +320,7 @@ function TaskRow(props: {
         <div class="task-row-head">
           <strong>{title()}</strong>
         </div>
-        <div class="task-row-meta">
-          <span
-            class="task-row-badge"
-            data-status={status()}
-            aria-live="polite"
-            aria-atomic="true"
-            aria-label={badgeLabel()}
-            title={badgeLabel()}
-          >
-            <span class="task-row-badge-text">{badgeLabel()}</span>
-          </span>
-        </div>
       </button>
-      {/* iter45: stamp + cancel/delete actions live in a right
-          column (vertical stack), both anchored to the row's
-          right edge. Pre-iter45 the stamp lived inline inside
-          .task-row-meta (left-aligned next to the status badge)
-          and the actions were a separate right-side cluster. The
-          two split treatments meant the stamp and the actions
-          for the SAME row were in different visual axes — the
-          user requested they share the right column with stamp
-          on top and actions below. */}
       <div class="task-row-right">
         <small
           class="task-row-stamp"
@@ -394,9 +334,6 @@ function TaskRow(props: {
                 busy={props.startNowBusyID === id()}
                 onStartNow={props.onStartNow!}
               />
-            </Show>
-            <Show when={canExport()}>
-              <ExportButton id={id()} directory={directory()} />
             </Show>
             <Show when={canCancel()}>
               <CancelButton id={id()} onCancel={props.onCancelTask!} />
@@ -414,7 +351,6 @@ function TaskRow(props: {
 // ── TaskSection ──
 
 function TaskSection(props: {
-  label: string;
   items: any[];
   isSelected: (id: string) => boolean;
   queuePositions?: Map<string, number>;
@@ -434,7 +370,6 @@ function TaskSection(props: {
   return (
     <Show when={props.items.length > 0}>
       <section class="sidebar-list-group">
-        <div class="sidebar-list-heading">{props.label}</div>
         <div class="sidebar-list-cluster">
           <For each={props.items}>
             {(item) => (
@@ -462,7 +397,6 @@ function TaskSection(props: {
     </Show>
   );
 }
-
 // ── TaskList ──
 
 export interface TaskListProps {
@@ -480,6 +414,8 @@ export function TaskList(props: TaskListProps) {
   // the right scope: a stale filter on cold start would hide tasks the
   // operator forgot they typed about.
   const [searchQuery, setSearchQuery] = createSignal("");
+  const [expandedDirectories, setExpandedDirectories] = createSignal<Record<string, boolean>>({});
+  const [collapsedDirectories, setCollapsedDirectories] = createSignal<Record<string, boolean>>({});
   const matchesQuery = (item: any, q: string): boolean => {
     if (!q) return true;
     const haystack = [
@@ -502,7 +438,6 @@ export function TaskList(props: TaskListProps) {
   });
   const [draggingID, setDraggingID] = createSignal("");
   const [dragOverID, setDragOverID] = createSignal("");
-  const [collapsedDirectories, setCollapsedDirectories] = createSignal<Record<string, boolean>>({});
 
   // Queue badges follow the same creation-time row order as the sidebar list.
   const queuePositions = createMemo<Map<string, number>>(() => {
@@ -517,31 +452,31 @@ export function TaskList(props: TaskListProps) {
     return map;
   });
 
-  // Group tasks by project directory; group order also follows latest task
-  // creation time so the sidebar has one ordering source.
-  type Group = { directory: string; latest: number; active: any[]; recent: any[] };
+  // Group tasks by project directory; each project renders one stable
+  // creation-time stream. Lifecycle changes must not move rows between
+  // "active" and "recent" sections.
+  type Group = { directory: string; latest: number; items: any[] };
   const grouped = createMemo<Group[]>(() => {
     const byDir = new Map<string, Group>();
     for (const item of sortedItems()) {
       const dir = projectDirectoryOf(item);
       let g = byDir.get(dir);
       if (!g) {
-        g = { directory: dir, latest: 0, active: [], recent: [] };
+        g = { directory: dir, latest: 0, items: [] };
         byDir.set(dir, g);
       }
-      const status = item?.task?.status || "";
-      if (item?._pending || !COMPLETED_STATUSES.has(status)) g.active.push(item);
-      else g.recent.push(item);
+      g.items.push(item);
       const created = taskCreatedAt(item);
       if (created > g.latest) g.latest = created;
     }
-    return [...byDir.values()].map((group) => ({
-      ...group,
-      active: sortTaskItemsByCreated(group.active),
-      recent: sortTaskItemsByCreated(group.recent),
-    })).sort((a, b) => {
-      return b.latest - a.latest;
-    });
+    return [...byDir.values()]
+      .map((group) => ({
+        ...group,
+        items: sortTaskItemsByCreated(group.items),
+      }))
+      .sort((a, b) => {
+        return b.latest - a.latest;
+      });
   });
 
   // createSelector returns a function that's true only for the currently
@@ -552,6 +487,15 @@ export function TaskList(props: TaskListProps) {
 
   function directoryGroupKey(directory: string): string {
     return directory || "__opencorvus_unassigned_project__";
+  }
+
+  function isDirectoryExpanded(directory: string): boolean {
+    return expandedDirectories()[directoryGroupKey(directory)] === true;
+  }
+
+  function expandDirectoryGroup(directory: string): void {
+    const key = directoryGroupKey(directory);
+    setExpandedDirectories((current) => ({ ...current, [key]: true }));
   }
 
   function isDirectoryCollapsed(directory: string): boolean {
@@ -574,7 +518,7 @@ export function TaskList(props: TaskListProps) {
   function queuedItems(directory: string): any[] {
     const group = grouped().find((item) => item.directory === directory);
     if (!group) return [];
-    return group.active.filter((item) => item?.task?.status === "queued" && !item?._pending);
+    return group.items.filter((item) => item?.task?.status === "queued" && !item?._pending);
   }
 
   async function handleDrop(directory: string, targetID: string, event: DragEvent) {
@@ -647,94 +591,8 @@ export function TaskList(props: TaskListProps) {
     }
   }
 
-  let importInputEl: HTMLInputElement | undefined;
-  const [importing, setImporting] = createSignal(false);
-  const [importOverwrite, setImportOverwrite] = createSignal(false);
-
-  async function handleImportFile(file: File) {
-    const directory = settingsStore.directory || "";
-    if (!directory) {
-      notifyWarning({
-        id: "task-archive:import",
-        title: t("task.import_no_directory_title"),
-        message: t("task.import_no_directory"),
-      });
-      return;
-    }
-    setImporting(true);
-    notifyProgress({
-      id: "task-archive:import",
-      title: t("task.import_started"),
-      message: file.name,
-    });
-    try {
-      const result = await importTaskArchive({ file, directory, overwrite: importOverwrite() });
-      notifySuccess({
-        id: "task-archive:import",
-        title: t("task.import_done_title"),
-        message: t("task.import_done", {
-          restored: String(result.restoredFiles),
-          skipped: String(result.skippedFiles.length),
-        }),
-      });
-      await loadTasks();
-    } catch (err) {
-      notifyError({
-        id: "task-archive:import",
-        title: t("task.import_failed_title"),
-        message: t("task.import_failed", { error: err instanceof Error ? err.message : String(err) }),
-        details: formatErrorDetails(err),
-      });
-    } finally {
-      setImporting(false);
-    }
-  }
-
   return (
     <div class="task-list-panel">
-      <div class="task-list-toolbar">
-        <label
-          class="task-list-import-overwrite"
-          title={t("task.import_overwrite_title")}
-        >
-          <input
-            type="checkbox"
-            checked={importOverwrite()}
-            disabled={importing()}
-            onChange={(e) => setImportOverwrite(e.currentTarget.checked)}
-            data-task-import-overwrite
-          />
-          <span>{t("task.import_overwrite_label")}</span>
-        </label>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          tone="neutral"
-          data-ui="task-list-import-button"
-          data-task-import
-          disabled={importing()}
-          title={t("task.import_button_title")}
-          aria-label={t("task.import_button_title")}
-          onClick={() => importInputEl?.click()}
-        >
-          <Icon name="upload" size={11} />
-          <span class="task-list-import-button-text">{t("task.import_button")}</span>
-        </Button>
-        <input
-          ref={(el) => (importInputEl = el)}
-          type="file"
-          accept=".zip,application/zip"
-          class="task-list-import-input"
-          data-testid="task-import-input"
-          onChange={(e) => {
-            const file = e.currentTarget.files?.[0];
-            // Reset value so picking the same file twice still fires onChange.
-            e.currentTarget.value = "";
-            if (file) void handleImportFile(file);
-          }}
-        />
-      </div>
       <Show when={allItems().length > 4 || searchQuery()}>
         <div class="task-list-search">
           <Icon name="search" size={12} class="task-list-search-icon" />
@@ -805,23 +663,23 @@ export function TaskList(props: TaskListProps) {
         <For each={grouped()}>
           {(group) => {
             const label = projectLabel(group.directory);
-            const taskCount = () => group.active.length + group.recent.length;
+            const expanded = () => isDirectoryExpanded(group.directory);
             const collapsed = () => isDirectoryCollapsed(group.directory);
+            const visibleGroupItems = () =>
+              expanded() ? group.items : group.items.slice(0, COMPACT_GROUP_VISIBLE_LIMIT);
+            const hiddenCount = () => Math.max(0, group.items.length - visibleGroupItems().length);
             return (
-              <section
-                class="project-group"
-                data-collapsed={collapsed() ? "true" : undefined}
-              >
+              <section class="project-group" data-collapsed={collapsed() ? "true" : undefined}>
                 <button
                   type="button"
                   class="project-group-heading"
-                  title={group.directory}
+                  title={projectGroupTip(group.directory, group.items.length)}
                   aria-expanded={collapsed() ? "false" : "true"}
                   aria-label={collapsed() ? t("task.project.expand", { name: label.name }) : t("task.project.collapse", { name: label.name })}
                   onClick={() => toggleDirectoryGroup(group.directory)}
                 >
                   <span class="project-group-icon" aria-hidden="true">
-                    <Icon name={collapsed() ? "folder" : "folder-open"} size={14} />
+                    <Icon name={collapsed() ? "folder" : "folder-open"} size={15} />
                   </span>
                   <span class="project-group-copy">
                     <span class="project-group-name">{label.name}</span>
@@ -829,8 +687,8 @@ export function TaskList(props: TaskListProps) {
                       <span class="project-group-parent">{label.parent}</span>
                     </Show>
                   </span>
-                  <span class="project-group-count" aria-label={t("task.project.count", { count: String(taskCount()) })}>
-                    {taskCount()}
+                  <span class="project-group-count" aria-label={t("task.project.count", { count: String(group.items.length) })}>
+                    {group.items.length}
                   </span>
                   <span class="project-group-chevron" aria-hidden="true">
                     <Icon name={collapsed() ? "chevron" : "chevron-down"} size={12} />
@@ -838,43 +696,44 @@ export function TaskList(props: TaskListProps) {
                 </button>
                 <Show when={!collapsed()}>
                   <div class="project-group-body">
-                    <Show when={group.active.length > 0}>
-                      <TaskSection
-                        label={t("task.group.active")}
-                        items={group.active}
-                        isSelected={isSelected}
-                        queuePositions={queuePositions()}
-                        onSelectTask={props.onSelectTask}
-                        onDeleteTask={props.onDeleteTask}
-                        onCancelTask={props.onCancelTask}
-                        onStartNow={handleStartNow}
-                        startNowBusyID={startNowBusyID()}
-                        canReorder={group.active.filter((item) => item?.task?.status === "queued" && !item?._pending).length > 1}
-                        draggingID={draggingID()}
-                        dragOverID={dragOverID()}
-                        onDragStart={setDraggingID}
-                        onDragOver={(id, event) => {
-                          event.preventDefault();
-                          if (draggingID() && id !== draggingID()) setDragOverID(id);
-                        }}
-                        onDrop={(id, event) => handleDrop(group.directory, id, event)}
-                        onDragEnd={() => {
-                          setDraggingID("");
-                          setDragOverID("");
-                        }}
-                      />
-                    </Show>
-                    <Show when={group.recent.length > 0}>
-                      <TaskSection
-                        label={t("task.group.recent")}
-                        items={group.recent}
-                        isSelected={isSelected}
-                        onSelectTask={props.onSelectTask}
-                        onDeleteTask={props.onDeleteTask}
-                        onCancelTask={props.onCancelTask}
-                        onStartNow={handleStartNow}
-                        startNowBusyID={startNowBusyID()}
-                      />
+                    <TaskSection
+                      items={visibleGroupItems()}
+                      isSelected={isSelected}
+                      queuePositions={queuePositions()}
+                      onSelectTask={props.onSelectTask}
+                      onDeleteTask={props.onDeleteTask}
+                      onCancelTask={props.onCancelTask}
+                      onStartNow={handleStartNow}
+                      startNowBusyID={startNowBusyID()}
+                      canReorder={
+                        group.items.filter((item) => item?.task?.status === "queued" && !item?._pending).length > 1
+                      }
+                      draggingID={draggingID()}
+                      dragOverID={dragOverID()}
+                      onDragStart={setDraggingID}
+                      onDragOver={(id, event) => {
+                        event.preventDefault();
+                        if (draggingID() && id !== draggingID()) setDragOverID(id);
+                      }}
+                      onDrop={(id, event) => handleDrop(group.directory, id, event)}
+                      onDragEnd={() => {
+                        setDraggingID("");
+                        setDragOverID("");
+                      }}
+                    />
+                    <Show when={hiddenCount() > 0}>
+                      <span class="project-group-show-more">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          tone="neutral"
+                          onClick={() => expandDirectoryGroup(group.directory)}
+                          aria-label={t("progress.expand_more", { count: String(hiddenCount()) })}
+                        >
+                          {t("delivery.show_more")}
+                        </Button>
+                      </span>
                     </Show>
                   </div>
                 </Show>

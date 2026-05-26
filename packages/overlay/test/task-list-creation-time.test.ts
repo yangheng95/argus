@@ -14,12 +14,7 @@ import {
 
 const TASK_LIST_SOURCE = readFileSync(join(import.meta.dir, "../src/components/TaskList.tsx"), "utf8");
 
-function taskItem(
-  id: string,
-  created: number,
-  updated: number,
-  status = "active",
-): any {
+function taskItem(id: string, created: number, updated: number, status = "active"): any {
   return {
     updated_at: updated,
     task: {
@@ -96,19 +91,13 @@ test("task list refresh preserves unchanged row references", () => {
   const firstActive = boardStore.tasks[0];
   const firstCompleted = boardStore.tasks[1];
 
-  setTasksData([
-    taskItem("active", 2_000, 4_000, "active"),
-    taskItem("completed", 1_000, 5_000, "completed"),
-  ]);
+  setTasksData([taskItem("active", 2_000, 4_000, "active"), taskItem("completed", 1_000, 5_000, "completed")]);
 
   expect(boardStore.tasks).toBe(firstArray);
   expect(boardStore.tasks[0]).toBe(firstActive);
   expect(boardStore.tasks[1]).toBe(firstCompleted);
 
-  setTasksData([
-    taskItem("active", 2_000, 4_000, "active"),
-    taskItem("completed", 1_000, 6_000, "failed"),
-  ]);
+  setTasksData([taskItem("active", 2_000, 4_000, "active"), taskItem("completed", 1_000, 6_000, "failed")]);
 
   expect(boardStore.tasks).not.toBe(firstArray);
   expect(boardStore.tasks[0]).toBe(firstActive);
@@ -117,12 +106,14 @@ test("task list refresh preserves unchanged row references", () => {
 
 test("TaskList has no lifecycle timestamp or status-priority sort path", () => {
   expect(TASK_LIST_SOURCE).toContain("taskCreatedAt");
-  expect(TASK_LIST_SOURCE).toContain("recent: sortTaskItemsByCreated(group.recent)");
+  expect(TASK_LIST_SOURCE).toContain("items: sortTaskItemsByCreated(group.items)");
   expect(TASK_LIST_SOURCE).toContain('class="project-group"');
-  expect(TASK_LIST_SOURCE).toContain('aria-expanded={collapsed() ? "false" : "true"}');
-  expect(TASK_LIST_SOURCE).toContain("toggleDirectoryGroup(group.directory)");
-  expect(TASK_LIST_SOURCE).toContain('<Icon name={collapsed() ? "folder" : "folder-open"}');
-  expect(TASK_LIST_SOURCE).toContain('<Icon name={collapsed() ? "chevron" : "chevron-down"}');
+  expect(TASK_LIST_SOURCE).toContain("COMPACT_GROUP_VISIBLE_LIMIT");
+  expect(TASK_LIST_SOURCE).toContain("visibleGroupItems");
+  expect(TASK_LIST_SOURCE).toContain("expandDirectoryGroup(group.directory)");
+  expect(TASK_LIST_SOURCE).not.toContain("COMPLETED_STATUSES");
+  expect(TASK_LIST_SOURCE).not.toContain('t("task.group.recent")');
+  expect(TASK_LIST_SOURCE).not.toContain('t("task.group.active")');
   expect(TASK_LIST_SOURCE).not.toContain("taskUpdated");
   expect(TASK_LIST_SOURCE).not.toContain("queueOrder");
   expect(TASK_LIST_SOURCE).not.toContain("TASK_STATUS_PRIORITY");

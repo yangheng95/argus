@@ -122,7 +122,7 @@
 .sidebar-list-cluster {
   display: flex;
   flex-direction: column;
-  gap: calc(6px * var(--ui-scale));
+  gap: calc(2px * var(--ui-scale));
 }
 
 /* Task row mini: a single task entry in the sidebar list. Flat shell —
@@ -131,14 +131,18 @@
    active background) still live in styles.css until the action button
    chrome is reworked, but the resting shell is the canonical here. */
 .task-row-mini {
-  display: flex;
-  align-items: stretch;
-  gap: calc(6px * var(--ui-scale));
+  display: grid;
+  grid-template-columns: calc(20px * var(--ui-scale)) 0 minmax(0, 1fr) max-content;
+  align-items: center;
+  gap: calc(4px * var(--ui-scale));
   flex: 0 0 auto;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   padding:
-    calc(5px * var(--ui-scale))
+    calc(2px * var(--ui-scale))
     calc(6px * var(--ui-scale))
-    calc(5px * var(--ui-scale))
+    calc(2px * var(--ui-scale))
     calc(9px * var(--ui-scale));
   border: var(--oc-border-width) solid transparent;
   border-radius: 0;
@@ -147,11 +151,17 @@
   overflow: hidden;
   background: transparent;
   box-shadow: none;
-  min-height: calc(48px * var(--ui-scale));
+  min-height: calc(28px * var(--ui-scale));
+}
+
+.task-row-mini[data-draggable="true"] {
+  grid-template-columns: calc(20px * var(--ui-scale)) calc(14px * var(--ui-scale)) minmax(0, 1fr) max-content;
+  cursor: grab;
 }
 
 .task-row-drag-handle {
-  width: calc(16px * var(--ui-scale));
+  grid-column: 2;
+  width: calc(14px * var(--ui-scale));
   height: calc(18px * var(--ui-scale));
   display: inline-flex;
   align-items: center;
@@ -169,24 +179,30 @@
 }
 
 .task-row-main {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  align-items: start;
+  grid-column: 3;
+  display: flex;
+  align-items: center;
   gap: calc(4px * var(--ui-scale));
-  flex: 1 1 auto;
-  padding: calc(4px * var(--ui-scale)) calc(5px * var(--ui-scale));
+  flex: 1 1 0;
+  padding: calc(2px * var(--ui-scale)) calc(3px * var(--ui-scale));
   min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
   text-align: left;
   border: 0 solid transparent;
   background: transparent;
-  color: var(--text);
+  color: var(--text-soft);
   cursor: pointer;
 }
 
 .task-row-head {
   flex: 1;
   min-width: 0;
-  display: block;
+  max-width: 100%;
+  display: flex;
+  align-items: center;
+  gap: calc(5px * var(--ui-scale));
+  overflow: hidden;
 }
 
 .task-row-meta {
@@ -200,12 +216,14 @@
 
 .task-row-main strong {
   display: block;
-  font-size: var(--ui-font-title);
+  font-size: var(--ui-font-body);
   font-weight: var(--ui-font-weight-medium);
-  line-height: 1.3;
+  line-height: 1.25;
   letter-spacing: var(--ui-letter-spacing-normal);
-  color: var(--text-strong);
+  color: var(--text-soft);
   min-width: 0;
+  max-width: 100%;
+  flex: 1 1 auto;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -216,7 +234,7 @@
   margin-left: auto;
   flex-shrink: 0;
   font-size: var(--ui-font-small);
-  line-height: 1.25;
+  line-height: 1;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -225,21 +243,19 @@
   letter-spacing: var(--ui-letter-spacing-loose);
 }
 
-/* Status badge: an auto-width chip with a small leading pip. The pip is
-   a 6x6 circle (no halo); the chip wraps an inline-flex of the dot +
-   sr-only label. Status tone applies to text color + border-color +
-   pip background. The flat baseline (no background) keeps badges
-   visually quiet inside the row hover background. */
+/* Status badge: compact icon + label chip. Status tone applies to icon,
+   text color, border-color, and the optional active/queued wash. */
 .task-row-badge {
+  grid-column: 1;
   position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: auto;
   min-width: 0;
-  min-height: calc(18px * var(--ui-scale));
-  gap: calc(5px * var(--ui-scale));
-  padding: 0 calc(6px * var(--ui-scale));
+  height: calc(18px * var(--ui-scale));
+  gap: 0;
+  padding: 0;
   border: var(--oc-border-width) solid var(--border);
   border-radius: var(--oc-radius-pill);
   background: transparent;
@@ -253,24 +269,30 @@
   width: calc(6px * var(--ui-scale));
   height: calc(6px * var(--ui-scale));
   border-radius: var(--oc-radius-pill);
-  background: color-mix(in srgb, var(--subtle-4) 96%, transparent);
-  box-shadow: none;
+  background: color-mix(in srgb, var(--text-muted) 74%, transparent);
+  box-shadow: 0 0 0 calc(2px * var(--ui-scale)) color-mix(in srgb, currentColor 10%, transparent);
+}
+
+.task-row-badge-icon {
+  flex: 0 0 auto;
+  width: calc(13px * var(--ui-scale));
+  height: calc(13px * var(--ui-scale));
+  opacity: var(--ui-opacity-subtle);
 }
 
 /* The badge text label is visible (not sr-only) once the chip has
    width — see status tone variants below. */
 .task-row-badge-text {
-  position: static;
-  width: auto;
-  height: auto;
+  --px-exact: 1; /* visually-hidden text uses exact 1px clipping geometry. */
+  position: absolute;
+  width: 1px;
+  height: 1px;
   padding: 0;
-  margin: 0;
-  overflow: visible;
-  clip: auto;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
   white-space: nowrap;
   border: 0;
-  font-size: var(--ui-font-meta);
-  line-height: 1;
 }
 
 .task-row-badge[data-status="active"] {
@@ -280,7 +302,7 @@
 }
 
 .task-row-badge[data-status="active"]::before {
-  background: color-mix(in srgb, var(--accent) 84%, transparent);
+  background: color-mix(in srgb, var(--accent) 88%, transparent);
 }
 
 .task-row-badge[data-status="queued"] {
@@ -290,46 +312,51 @@
 }
 
 .task-row-badge[data-status="queued"]::before {
-  background: color-mix(in srgb, var(--warn) 82%, transparent);
+  background: color-mix(in srgb, var(--warn) 88%, transparent);
 }
 
 .task-row-badge[data-status="completed"] {
   color: var(--good);
   border-color: color-mix(in srgb, var(--good) 28%, transparent);
+  background: color-mix(in srgb, var(--good) 10%, transparent);
 }
 
 .task-row-badge[data-status="completed"]::before {
-  background: color-mix(in srgb, var(--good) 82%, transparent);
+  background: color-mix(in srgb, var(--good) 88%, transparent);
 }
 
 .task-row-badge[data-status="failed"] {
   color: var(--bad);
   border-color: color-mix(in srgb, var(--bad) 30%, transparent);
+  background: color-mix(in srgb, var(--bad) 10%, transparent);
 }
 
 .task-row-badge[data-status="failed"]::before {
-  background: color-mix(in srgb, var(--bad) 82%, transparent);
+  background: color-mix(in srgb, var(--bad) 88%, transparent);
 }
 
-.task-row-badge[data-status="completed"]::before,
-.task-row-badge[data-status="cancelled"]::before,
-.task-row-badge[data-status="idle"]::before {
-  background: color-mix(in srgb, var(--text-muted) 74%, transparent);
+.task-row-badge[data-status="cancelled"] {
+  color: var(--text-muted);
+  border-color: color-mix(in srgb, var(--text-muted) 28%, transparent);
+  background: color-mix(in srgb, var(--text-muted) 8%, transparent);
 }
 
-.task-row-badge[data-status="cancelled"],
+.task-row-badge[data-status="cancelled"]::before {
+  background: color-mix(in srgb, var(--text-muted) 84%, transparent);
+}
+
 .task-row-badge[data-status="idle"] {
   color: var(--text-muted);
 }
 
-.task-row-mini:hover,
-.task-row-mini:focus-within {
-  background: var(--surface-hover);
-  border-color: var(--border);
+.task-row-badge[data-status="idle"]::before {
+  background: color-mix(in srgb, var(--text-muted) 72%, transparent);
 }
 
-.task-row-mini[data-draggable="true"] {
-  cursor: grab;
+.task-row-mini:hover,
+.task-row-mini:focus-within {
+  background: color-mix(in srgb, var(--surface-hover) 72%, transparent);
+  border-color: color-mix(in srgb, var(--border) 72%, transparent);
 }
 
 .task-row-mini[data-dragging="true"] {
@@ -346,16 +373,16 @@
   content: "";
   position: absolute;
   left: calc(3px * var(--ui-scale));
-  top: calc(8px * var(--ui-scale));
-  bottom: calc(8px * var(--ui-scale));
+  top: calc(6px * var(--ui-scale));
+  bottom: calc(6px * var(--ui-scale));
   width: calc(2px * var(--ui-scale));
   border-radius: var(--oc-radius-pill);
   background: transparent;
 }
 
 .task-row-mini[data-active="true"] {
-  background: color-mix(in srgb, var(--accent) 10%, var(--surface-hover));
-  border-color: color-mix(in srgb, var(--accent) 34%, transparent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface-hover));
+  border-color: color-mix(in srgb, var(--accent) 28%, transparent);
 }
 
 .task-row-mini[data-active="true"]::before {
@@ -381,29 +408,35 @@
 }
 
 .task-row-right {
+  grid-column: 4;
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: calc(2px * var(--ui-scale));
-  flex-shrink: 0;
-  padding: calc(2px * var(--ui-scale)) 0;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-end;
+  gap: calc(3px * var(--ui-scale));
+  flex: 0 0 auto;
+  min-width: 0;
+  padding: 0;
+  position: relative;
+  z-index: 1;
 }
 .task-row-right .task-row-stamp {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: calc(54px * var(--ui-scale));
   margin: 0;
 }
 
 .task-row-actions {
   display: inline-flex;
   align-items: center;
-  gap: calc(4px * var(--ui-scale));
-  flex-shrink: 0;
+  gap: calc(2px * var(--ui-scale));
+  flex: 0 0 auto;
   padding-top: 0;
 }
 
 .task-row-actions .oc-button[data-ui="task-row-delete"],
 .task-row-actions .oc-button[data-ui="task-row-cancel"],
-.task-row-actions .oc-button[data-ui="task-row-export"],
 .task-row-actions .oc-button[data-ui="task-row-start-now"] {
   --oc-button-height: calc(22px * var(--ui-scale));
   --oc-button-padding-x: 0;
@@ -411,12 +444,18 @@
   --oc-button-bg: transparent;
 
   position: static;
-  width: calc(22px * var(--ui-scale));
-  height: calc(22px * var(--ui-scale));
-  min-width: calc(22px * var(--ui-scale));
-  min-height: calc(22px * var(--ui-scale));
-  opacity: var(--ui-opacity-subtle);
-  pointer-events: auto;
+  width: calc(20px * var(--ui-scale));
+  height: calc(20px * var(--ui-scale));
+  min-width: calc(20px * var(--ui-scale));
+  min-height: calc(20px * var(--ui-scale));
+  /* Hover-only chrome: buttons stay hidden until the row is hovered, focused,
+     or active. opacity:0 + pointer-events:none keeps them out of the way and
+     also keeps the box around them un-clickable so a cursor near a fading
+     icon can't fire a delete by mistake. The .task-row-actions container
+     still occupies its slot in the row layout, so revealing the buttons on
+     hover does not shift the row's text or stamp. */
+  opacity: 0;
+  pointer-events: none;
   transition:
     opacity var(--ui-duration-base) var(--ui-timing-standard),
     background var(--ui-duration-base) var(--ui-timing-standard),
@@ -430,13 +469,11 @@
 .task-row-mini:hover .oc-button[data-ui="task-row-cancel"],
 .task-row-mini:focus-within .oc-button[data-ui="task-row-cancel"],
 .task-row-mini[data-active="true"] .oc-button[data-ui="task-row-cancel"],
-.task-row-mini:hover .oc-button[data-ui="task-row-export"],
-.task-row-mini:focus-within .oc-button[data-ui="task-row-export"],
-.task-row-mini[data-active="true"] .oc-button[data-ui="task-row-export"],
 .task-row-mini:hover .oc-button[data-ui="task-row-start-now"],
 .task-row-mini:focus-within .oc-button[data-ui="task-row-start-now"],
 .task-row-mini[data-active="true"] .oc-button[data-ui="task-row-start-now"] {
   opacity: var(--ui-opacity-full);
+  pointer-events: auto;
 }
 
 .task-row-actions .oc-button[data-ui="task-row-start-now"]:hover,
@@ -447,18 +484,6 @@
 }
 
 .task-row-actions .oc-button[data-ui="task-row-start-now"][data-busy="true"] {
-  opacity: var(--ui-opacity-subtle);
-  cursor: progress;
-}
-
-.task-row-actions .oc-button[data-ui="task-row-export"]:hover,
-.task-row-actions .oc-button[data-ui="task-row-export"]:focus-visible {
-  opacity: var(--ui-opacity-full);
-  --oc-button-bg: color-mix(in srgb, var(--accent) 10%, transparent);
-  --oc-button-color: var(--accent);
-}
-
-.task-row-actions .oc-button[data-ui="task-row-export"][data-busy="true"] {
   opacity: var(--ui-opacity-subtle);
   cursor: progress;
 }
@@ -516,88 +541,9 @@
 
 .task-row-main:focus-visible,
 .task-row-actions .oc-button[data-ui="task-row-delete"]:focus-visible,
-.task-row-actions .oc-button[data-ui="task-row-cancel"]:focus-visible,
-.task-row-actions .oc-button[data-ui="task-row-export"]:focus-visible {
+.task-row-actions .oc-button[data-ui="task-row-cancel"]:focus-visible {
   outline: var(--oc-border-width) solid var(--accent);
   outline-offset: calc(1px * var(--ui-scale));
-}
-
-/* Sidebar Import button — sits above the search field. Native file
- * <input> stays visually hidden; the visible <button> proxies the click. */
-.task-list-toolbar {
-  display: flex;
-  align-items: center;
-  gap: calc(6px * var(--ui-scale));
-  padding: calc(6px * var(--ui-scale)) calc(8px * var(--ui-scale)) 0;
-}
-
-.task-list-import-overwrite {
-  display: inline-flex;
-  align-items: center;
-  gap: calc(4px * var(--ui-scale));
-  min-width: 0;
-  color: var(--text-muted);
-  font-size: var(--ui-font-meta);
-  line-height: 1;
-  cursor: pointer;
-  user-select: none;
-}
-
-.task-list-import-overwrite input {
-  width: calc(13px * var(--ui-scale));
-  height: calc(13px * var(--ui-scale));
-  margin: 0;
-  /* `accent-color` declared globally on body (tokens/design-language.css). */
-  flex: 0 0 auto;
-}
-
-.task-list-import-overwrite span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.task-list-import-overwrite:has(input:disabled) {
-  opacity: var(--ui-opacity-disabled);
-  cursor: progress;
-}
-
-.task-list-import-input {
-  --px-exact: 1; /* visually-hidden: 1px collapses layout, not a design spacing value */
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  border: 0;
-}
-
-.task-list-toolbar .oc-button[data-ui="task-list-import-button"] {
-  --oc-button-gap: calc(4px * var(--ui-scale));
-  --oc-button-padding-x: calc(8px * var(--ui-scale));
-  --oc-button-border: var(--oc-border-width) solid color-mix(in srgb, var(--border) 78%, transparent);
-  --oc-button-color: var(--text-muted);
-}
-
-.task-list-toolbar .oc-button[data-ui="task-list-import-button"]:hover:not(:disabled),
-.task-list-toolbar .oc-button[data-ui="task-list-import-button"]:focus-visible:not(:disabled) {
-  --oc-button-bg: color-mix(in srgb, var(--accent) 8%, transparent);
-  --oc-button-border: var(--oc-border-width) solid color-mix(in srgb, var(--accent) 32%, var(--border));
-  --oc-button-color: var(--accent);
-}
-
-.task-list-toolbar .oc-button[data-ui="task-list-import-button"]:disabled {
-  cursor: progress;
-}
-
-.task-list-import-button-text {
-  line-height: 1;
-}
-
-.global-task-row .task-row-head {
-  display: block;
 }
 
 .task-list-error {
@@ -771,7 +717,7 @@
 .project-group {
   display: flex;
   flex-direction: column;
-  gap: calc(4px * var(--ui-scale));
+  gap: calc(2px * var(--ui-scale));
   padding: calc(2px * var(--ui-scale)) 0 0;
   border: none;
   border-radius: 0;
@@ -780,20 +726,21 @@
 }
 
 .project-group + .project-group {
-  margin-top: calc(4px * var(--ui-scale));
-  padding-top: calc(6px * var(--ui-scale));
+  margin-top: calc(3px * var(--ui-scale));
+  padding-top: calc(4px * var(--ui-scale));
   border-top: var(--oc-border-width) solid color-mix(in srgb, var(--border) 74%, transparent);
 }
 
 .project-group-heading {
+  appearance: none;
   width: 100%;
   min-width: 0;
   display: grid;
-  grid-template-columns: calc(20px * var(--ui-scale)) minmax(0, 1fr) auto calc(16px * var(--ui-scale));
+  grid-template-columns: calc(18px * var(--ui-scale)) minmax(0, 1fr) auto calc(16px * var(--ui-scale));
   align-items: center;
-  gap: calc(6px * var(--ui-scale));
-  min-height: calc(34px * var(--ui-scale));
-  padding: calc(4px * var(--ui-scale)) calc(6px * var(--ui-scale));
+  gap: calc(5px * var(--ui-scale));
+  min-height: calc(26px * var(--ui-scale));
+  padding: calc(2px * var(--ui-scale)) calc(6px * var(--ui-scale));
   border: 0 solid transparent;
   border-radius: 0;
   background: transparent;
@@ -818,7 +765,13 @@
   outline-offset: calc(1px * var(--ui-scale));
 }
 
-.project-group-icon,
+.project-group-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: color-mix(in srgb, var(--text-muted) 86%, transparent);
+}
+
 .project-group-chevron {
   display: inline-flex;
   align-items: center;
@@ -828,8 +781,10 @@
 
 .project-group-copy {
   min-width: 0;
-  display: grid;
-  gap: calc(1px * var(--ui-scale));
+  display: flex;
+  align-items: baseline;
+  gap: calc(5px * var(--ui-scale));
+  overflow: hidden;
 }
 
 .project-group-name {
@@ -841,6 +796,8 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  flex: 0 1 auto;
+  min-width: calc(42px * var(--ui-scale));
 }
 
 .project-group-parent {
@@ -852,25 +809,36 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   min-width: 0;
+  flex: 1 1 auto;
 }
 
 .project-group-count {
-  min-width: calc(20px * var(--ui-scale));
-  height: calc(18px * var(--ui-scale));
-  padding: 0 calc(6px * var(--ui-scale));
+  min-width: calc(18px * var(--ui-scale));
+  height: calc(17px * var(--ui-scale));
+  padding: 0 calc(5px * var(--ui-scale));
   border: var(--oc-border-width) solid color-mix(in srgb, var(--border) 86%, transparent);
   border-radius: var(--oc-radius-pill);
   color: var(--text-muted);
   font-size: var(--ui-font-meta);
-  line-height: calc(18px * var(--ui-scale));
+  line-height: calc(17px * var(--ui-scale));
   text-align: center;
   font-variant-numeric: tabular-nums;
 }
 
 .project-group-body {
   display: grid;
-  gap: calc(6px * var(--ui-scale));
+  gap: calc(2px * var(--ui-scale));
+  padding-left: calc(18px * var(--ui-scale) + 5px * var(--ui-scale));
   animation: project-group-body-reveal var(--ui-duration-base) var(--ui-timing-standard);
+}
+
+.project-group[data-collapsed="true"] .project-group-heading {
+  color: var(--text-muted);
+}
+
+.project-group-show-more {
+  justify-self: center;
+  margin-top: calc(2px * var(--ui-scale));
 }
 
 @keyframes project-group-body-reveal {

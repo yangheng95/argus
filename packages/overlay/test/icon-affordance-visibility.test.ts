@@ -45,14 +45,14 @@ describe("icon affordances stay visible at rest", () => {
     expect(css).not.toContain(".workspace-toggle")
   })
 
-  test("task row icon actions keep a visible resting shell", () => {
+  test("task row icon actions are intentionally hover-only", () => {
     const css = read("src/styles/surfaces/sidebar.css")
     const body = soloRuleBody(
       css,
-      '.task-row-actions .oc-button[data-ui="task-row-delete"],\n.task-row-actions .oc-button[data-ui="task-row-cancel"],\n.task-row-actions .oc-button[data-ui="task-row-export"]',
+      '.task-row-actions .oc-button[data-ui="task-row-delete"],\n.task-row-actions .oc-button[data-ui="task-row-cancel"],\n.task-row-actions .oc-button[data-ui="task-row-start-now"]',
     )
-    expect(body).toContain("opacity: var(--ui-opacity-subtle);")
-    expect(body).not.toContain("opacity: var(--ui-opacity-disabled);")
+    expect(body).toContain("opacity: 0;")
+    expect(body).toContain("pointer-events: none;")
     expect(body).not.toContain("--oc-button-color: var(--text-muted);")
   })
 
