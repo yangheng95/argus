@@ -13,6 +13,7 @@ import { boardStore, rootTaskSessionID } from "../store/board";
 import { cancelAgentSession, replyToAgentSession } from "../services/task";
 import { apiRequest } from "../services/api";
 import { normalizeAgentRole } from "../utils/message";
+import { canReceiveDirectAgentReply } from "../utils/direct-reply-kinds";
 import { AgentSessionReplyBox } from "./AgentSessionReplyBox";
 import { CardHeader } from "./CardHeader";
 import { CardParts } from "./CardParts";
@@ -110,14 +111,27 @@ export function Card(props: { node: CardNode; depth: number }) {
         : undefined,
   );
   const directAgentSessionID = createMemo(() => {
-    const sessionID =
-      props.node.kind === "phase"
-        ? props.node.phaseSessionID
-        : props.node.kind === "step"
-          ? promotedBuildPhase()?.phaseSessionID
-          : undefined;
+    // Source the (sessionID, kind) pair from the same node branch so we
+    // never compare a session id from one branch against a kind from
+    // another. Build/coding phase cards carry a phaseSessionID too (they
+    // are absorbed phase sessions) but their kind is not in the reply
+    // whitelist — pre-filter here so the reply box never renders on a
+    // card whose backend reply route would 400. The runtime-contract /
+    // envelope-readiness branches remain handled by AgentSessionReplyBox
+    // via the structured 4xx the route returns.
+    let sessionID: string | undefined;
+    let kind: string | undefined;
+    if (props.node.kind === "phase") {
+      sessionID = props.node.phaseSessionID;
+      kind = props.node.phaseSessionKind;
+    } else if (props.node.kind === "step") {
+      const phase = promotedBuildPhase();
+      sessionID = phase?.phaseSessionID;
+      kind = phase?.phaseSessionKind;
+    }
     if (!sessionID) return undefined;
     if (sessionID === rootTaskSessionID()) return undefined;
+    if (!canReceiveDirectAgentReply(kind)) return undefined;
     return sessionID;
   });
   const [traceOpen, setTraceOpen] = createSignal(false);
