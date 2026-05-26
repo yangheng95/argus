@@ -31,6 +31,7 @@ import { MemoryTool } from "./memory"
 import { ScheduleTool } from "./schedule"
 import { PlannerTool } from "./planner"
 import { PanelTool } from "./panel"
+import { MissionStateTool } from "./mission-state"
 import { TaskReportTool } from "./task-report"
 import { GoalReportTool } from "./goal-report"
 import {
@@ -142,6 +143,7 @@ export namespace ToolRegistry {
       ScheduleTool,
       PlannerTool,
       PanelTool,
+      MissionStateTool,
       TaskReportTool,
       GoalReportTool,
       AnalyticsTool,
