@@ -33,6 +33,18 @@ const WEBFETCH_MAX_BYTES = 5 * 1024 * 1024
 const WEBFETCH_DEFAULT_TIMEOUT_MS = 30 * 1000
 const WEBFETCH_MAX_TIMEOUT_MS = 120 * 1000
 
+/** Maximum number of characters of target-message text injected into the
+ *  fact-check user prompt.  Bounded because the message can be large
+ *  (e.g. an architect goal graph dump) and an unbounded copy would blow
+ *  the prompt budget. The fact-check agent has `read_file` etc. if it
+ *  needs to inspect more.
+ *
+ *  Module-scope so buildFactCheckUserPrompt (also at module scope) can
+ *  see it. Previously a duplicate lived inside FactCheckAgent namespace
+ *  — buildFactCheckUserPrompt could not reach it from outside the
+ *  namespace, producing TS2552 against the local `targetMessageText`. */
+const TARGET_MESSAGE_TEXT_CAP = 8000
+
 /**
  * fact-check uses a read-only retrieval surface. The codebase / memory /
  * websearch tools come from createAgentContextTools (single source); we
@@ -60,7 +72,8 @@ function buildFactCheckRetrievalTools() {
           (timeout ?? WEBFETCH_DEFAULT_TIMEOUT_MS / 1000) * 1000,
           WEBFETCH_MAX_TIMEOUT_MS,
         )
-        const { signal, clearTimeout: clearTo } = abortAfterAny(timeoutMs, options?.abortSignal)
+        const extraSignals = options?.abortSignal ? [options.abortSignal] : []
+        const { signal, clearTimeout: clearTo } = abortAfterAny(timeoutMs, ...extraSignals)
         try {
           const resp = await fetch(url, {
             signal,
@@ -261,13 +274,6 @@ export namespace FactCheckAgent {
     signal?: AbortSignal
     onSessionCreated?: (sessionID: string) => void
   }
-
-  /** Maximum number of characters of target-message text injected into the
-   *  fact-check user prompt.  Bounded because the message can be large
-   *  (e.g. an architect goal graph dump) and an unbounded copy would blow
-   *  the prompt budget. The fact-check agent has `read_file` etc. if it
-   *  needs to inspect more. */
-  const TARGET_MESSAGE_TEXT_CAP = 8000
 
   export interface RunOutput {
     /** Child fact-check session id (surfaced to overlay for UI nesting). */
