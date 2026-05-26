@@ -2,6 +2,7 @@ import { Hono } from "hono"
 import { HTTPException } from "hono/http-exception"
 import { describeRoute, resolver, validator } from "hono-openapi"
 import z from "zod"
+import { randomBytes } from "node:crypto"
 import { Log } from "@/util/log"
 import { ChannelId } from "@/channel/catalog"
 import { ChannelIngress, ChannelIngressInput, ChannelIngressResult } from "@/channel/ingress"
@@ -13,6 +14,34 @@ import { Instance } from "@/project/instance"
 import { PanelActionSchema, PanelCapabilityResponse, panelCapabilities } from "@/panel/capability"
 import { PanelTool } from "@/tool/panel"
 import type { Tool } from "@/tool/tool"
+import { ensureGatewaySession, findExistingGatewaySession } from "@/gateway/session"
+import { SessionWake } from "@/session/wake"
+
+// Mission identifier shape — must match the mission_state tool's regex
+// (/^[a-z0-9-]{1,64}$/) so the supervisor's per-mission worktree path
+// stays valid. Auto-generated IDs use 16 lowercase hex chars; operators
+// may also supply their own (e.g. "tv-replay-1").
+const MissionID = z
+  .string()
+  .min(1)
+  .max(64)
+  .regex(/^[a-z0-9-]+$/, "missionID must be lowercase alphanumerics and hyphens only")
+
+function newMissionID(): string {
+  return randomBytes(8).toString("hex")
+}
+
+const MasterWakeInput = z.object({
+  missionID: MissionID.optional(),
+  text: z.string().min(1).max(32_000),
+  title: z.string().min(1).max(120).optional(),
+})
+
+const MasterWakeResult = z.object({
+  missionID: MissionID,
+  sessionID: z.string(),
+  created: z.boolean(),
+})
 
 const GatewayControlMessageInput = ControlMessageInput.omit({ surface: true }).extend({
   surface: z.literal("gateway").optional(),
@@ -234,6 +263,52 @@ export function GatewayRoutes() {
           output: result.output,
           metadata: result.metadata ?? {},
         }))
+      },
+    )
+    .post(
+      "/master/wake",
+      describeRoute({
+        summary: "Wake the gateway-master mission supervisor",
+        description:
+          "Start (or resume) a mission supervisor session and inject a user prompt. " +
+          "Omit `missionID` to start a new mission; supply it to resume an existing one. " +
+          "The route is idempotent for (project, missionID) — channelKey `master:<missionID>` " +
+          "keys exactly one gateway session per mission.",
+        operationId: "gateway.master.wake",
+        responses: {
+          200: {
+            description: "Master wake accepted",
+            content: { "application/json": { schema: resolver(MasterWakeResult) } },
+          },
+        },
+      }),
+      validator("json", MasterWakeInput),
+      async (c) => {
+        const input = c.req.valid("json")
+        const missionID = input.missionID ?? newMissionID()
+        const channelKey = `master:${missionID}`
+        // Snapshot existence BEFORE ensureGatewaySession so the response
+        // distinguishes "started" from "resumed". The lookup and the
+        // ensure call both go through the same in-process lock on
+        // channelKey, so they observe the same state for any single
+        // wake call.
+        const existing = findExistingGatewaySession(channelKey)
+        const session = await ensureGatewaySession({
+          channelKey,
+          defaultCwd: Instance.directory,
+        })
+        await SessionWake.wake({
+          sessionID: session.id,
+          prompt: input.text,
+          agent: "gateway-master",
+        })
+        return c.json(
+          MasterWakeResult.parse({
+            missionID,
+            sessionID: session.id,
+            created: !existing,
+          }),
+        )
       },
     )
     .post(
