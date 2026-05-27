@@ -91,7 +91,14 @@ async function resolveStaticPathArg(arg: string, cwd: string) {
   const cleaned = stripShellQuotes(arg)
   if (!cleaned || DYNAMIC_PATH_PATTERN.test(cleaned)) return undefined
 
-  const absolute = path.resolve(cwd, cleaned)
+  // On win32, translate Git Bash / Cygwin / WSL mount paths (`/c/Users/...`,
+  // `/mnt/c/...`, etc.) to native Windows form BEFORE path.resolve. node's
+  // path.resolve treats `/c/...` as a POSIX absolute path rooted at the
+  // current drive, producing the `C:\c\Users\...` duplication that previously
+  // forced two bash-permission tests to be skipped.
+  const normalizedArg = process.platform === "win32" ? Filesystem.windowsPath(cleaned) : cleaned
+  const normalizedCwd = process.platform === "win32" ? Filesystem.windowsPath(cwd) : cwd
+  const absolute = path.resolve(normalizedCwd, normalizedArg)
   const real = await fs.realpath(absolute).catch(() => absolute)
   return process.platform === "win32" ? Filesystem.windowsPath(real).replace(/\//g, "\\") : real
 }
@@ -140,7 +147,15 @@ export const BashTool = Tool.define("bash", async () => {
         .optional(),
     }),
     async execute(params, ctx) {
-      const cwd = params.workdir || Instance.directory
+      // Workdir from the LLM can arrive in Git Bash / Cygwin / WSL form
+      // (`/c/Users/...`, `/mnt/c/...`) on Windows. Translate to native form
+      // up front so every downstream consumer (containsPath, ProcessSupervisor
+      // spawn cwd, the resolveStaticPathArg call below) sees a single
+      // canonical shape. Without this, containsPath silently mismatches the
+      // project root and an external_directory permission ask is raised for
+      // workdirs that are actually inside the project.
+      const rawCwd = params.workdir || Instance.directory
+      const cwd = process.platform === "win32" ? Filesystem.windowsPath(rawCwd) : rawCwd
       if (params.timeout !== undefined && params.timeout < 0) {
         throw new Error(`Invalid timeout value: ${params.timeout}. Timeout must be a positive number.`)
       }
