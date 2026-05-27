@@ -11,6 +11,7 @@ import { formatDuration } from "../utils/time";
 import { useNowTick } from "../services/clock";
 import { goalRevisionLabel } from "../utils/goal-label";
 import { useCardHeadActions } from "../hooks/use-card-head-actions";
+import { formatCostUSD, formatTokenCount } from "../utils/format-usage";
 import { Icon } from "./Icon";
 
 function leadingGlyph(node: CardNode): string {
@@ -20,26 +21,6 @@ function leadingGlyph(node: CardNode): string {
 
 function isStageCard(node: CardNode): boolean {
   return node.kind === "phase" || node.kind === "step";
-}
-
-/** Compact token count — "8.4k" rather than "8432", so the low-contrast
- *  header hint reads at a glance without dominating the row. */
-function formatTokenCount(n: number): string {
-  if (!Number.isFinite(n) || n < 0) return "—";
-  if (n < 1000) return String(n);
-  if (n < 10_000) return (n / 1000).toFixed(1) + "k";
-  return Math.round(n / 1000) + "k";
-}
-
-/** Format a cost in USD as a tight badge value: under $0.01 → "<$0.01",
- *  under $1 → 3-decimal cents-wise, otherwise 2 decimals. The composer is
- *  scanning hundreds of these so we stay under 7 chars. */
-function formatCostUSD(n: number): string {
-  if (!Number.isFinite(n) || n < 0) return "";
-  if (n === 0) return "$0";
-  if (n < 0.01) return "<$0.01";
-  if (n < 1) return "$" + n.toFixed(3);
-  return "$" + n.toFixed(2);
 }
 
 async function writeClipboard(text: string): Promise<boolean> {

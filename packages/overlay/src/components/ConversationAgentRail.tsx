@@ -1,4 +1,4 @@
-import { Index, Show, createMemo, type Accessor } from "solid-js"
+import { Index, Show, createMemo, onCleanup, type Accessor } from "solid-js"
 import { cardTreeStore } from "../store/card-tree"
 import { conversationAgentStore } from "../store/conversation-agents"
 import { setCardExpanded } from "../store/conversation-ui"
@@ -79,6 +79,86 @@ async function locateRecord(record: AgentWorkflowRecord): Promise<void> {
   })
 }
 
+/** Wire up pointer-driven drag-to-scroll on the rail's lanes container.
+ *  Press-and-drag horizontally scrolls the rail like a trackpad; a real
+ *  click (no drag past the 4px threshold) still reaches the avatar
+ *  button and triggers `locateRecord`. The dataset flag `data-dragging`
+ *  lets CSS swap the cursor between `grab` and `grabbing` and disable
+ *  text selection during the drag. */
+function attachRailDragScroll(el: HTMLElement): () => void {
+  const DRAG_THRESHOLD_PX = 4
+  let pointerId: number | null = null
+  let startX = 0
+  let startScrollLeft = 0
+  let dragging = false
+  let suppressClick = false
+
+  function onPointerDown(event: PointerEvent) {
+    if (event.pointerType === "mouse" && event.button !== 0) return
+    pointerId = event.pointerId
+    startX = event.clientX
+    startScrollLeft = el.scrollLeft
+    dragging = false
+    suppressClick = false
+  }
+
+  function onPointerMove(event: PointerEvent) {
+    if (pointerId === null || event.pointerId !== pointerId) return
+    const dx = event.clientX - startX
+    if (!dragging) {
+      if (Math.abs(dx) < DRAG_THRESHOLD_PX) return
+      dragging = true
+      suppressClick = true
+      try {
+        el.setPointerCapture(pointerId)
+      } catch {
+        // setPointerCapture can throw if the pointer was already
+        // released; the drag still works via the document listeners.
+      }
+      el.dataset.dragging = "true"
+    }
+    el.scrollLeft = startScrollLeft - dx
+    event.preventDefault()
+  }
+
+  function onPointerEnd(event: PointerEvent) {
+    if (pointerId === null || event.pointerId !== pointerId) return
+    if (dragging) {
+      try {
+        el.releasePointerCapture(pointerId)
+      } catch {
+        /* same reason as setPointerCapture */
+      }
+      delete el.dataset.dragging
+    }
+    dragging = false
+    pointerId = null
+    // suppressClick stays true so the click event that follows the
+    // pointerup gets swallowed; it resets itself inside onClickCapture.
+  }
+
+  function onClickCapture(event: MouseEvent) {
+    if (!suppressClick) return
+    event.stopPropagation()
+    event.preventDefault()
+    suppressClick = false
+  }
+
+  el.addEventListener("pointerdown", onPointerDown)
+  el.addEventListener("pointermove", onPointerMove)
+  el.addEventListener("pointerup", onPointerEnd)
+  el.addEventListener("pointercancel", onPointerEnd)
+  el.addEventListener("click", onClickCapture, true)
+
+  return () => {
+    el.removeEventListener("pointerdown", onPointerDown)
+    el.removeEventListener("pointermove", onPointerMove)
+    el.removeEventListener("pointerup", onPointerEnd)
+    el.removeEventListener("pointercancel", onPointerEnd)
+    el.removeEventListener("click", onClickCapture, true)
+  }
+}
+
 function AgentRailRow(props: {
   record: Accessor<AgentWorkflowRecord>
   onLocate: (record: AgentWorkflowRecord) => void
@@ -124,7 +204,15 @@ export function ConversationAgentRail() {
       class="conversation-agent-rail"
       aria-label="Agent workflow"
     >
-      <div class="conversation-agent-rail__lanes" role="list">
+      <div
+        class="conversation-agent-rail__lanes"
+        role="list"
+        ref={(el) => {
+          if (!el) return
+          const dispose = attachRailDragScroll(el)
+          onCleanup(dispose)
+        }}
+      >
         <div class="conversation-agent-rail__lane" data-kind="timeline" role="listitem">
           <Index each={records()}>
             {(record) => (

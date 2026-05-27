@@ -31,14 +31,14 @@ import { initApp } from "./services/init"
 import { loadTasks, boardStore, loadBoard } from "./store/board"
 import { messageStore } from "./store/messages"
 import { appStore } from "./store/app"
-import { selectTask, retryTask, replanTask, cancelTask, createTask, deleteTask } from "./services/task"
+import { selectTask, retryTask, replanTask, cancelTask, createTask, deleteTask, renameTask } from "./services/task"
 import { canComposeChat, stopChatRequest } from "./services/chat"
 import { isTaskInterruptable } from "./store/board"
 import { setLocale } from "./utils/i18n"
 import { apiJson, apiRequest, configure as configureApi, getServerUrl } from "./services/api"
 import { t } from "./utils/i18n"
 import { renderMarkdown, escapeHtml } from "./utils/markdown"
-import { conversationTranscriptMessageCount, copyChatConversation } from "./utils/transcript"
+import { aggregateUsageAcrossSessions, formatUsageStrip } from "./utils/format-usage"
 import {
   applyTheme,
   applyZoom,
@@ -671,6 +671,7 @@ if (taskListEl) {
         onSelectTask={(taskID) => void selectTask(taskID)}
         onDeleteTask={(taskID) => void deleteTask(taskID)}
         onCancelTask={(taskID) => void cancelTask(taskID)}
+        onRenameTask={(taskID, title) => void renameTask(taskID, title)}
       />
     ),
     taskListEl,
@@ -988,10 +989,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
 // ── Initialise application ──
 
-document.getElementById("btnChatCopyAll")?.addEventListener("click", () => {
-  void copyChatConversation()
-})
-
 const [settingsHydrated, setSettingsHydrated] = createSignal(false)
 
 disposers.push(
@@ -1021,12 +1018,21 @@ disposers.push(
       void setLocale(settingsStore.locale)
     })
 
+    // Chat header usage strip — whole-conversation token + USD-cost
+    // estimate aggregated across every runtime session in the selected
+    // task's card tree. The aggregation kernel lives in
+    // `utils/format-usage.ts` (`aggregateUsageAcrossSessions` +
+    // `formatUsageStrip`) so it can be unit-tested without DOM or Solid.
+    // This effect is the reactive glue: it reads the cards proxy so
+    // Solid re-runs the effect whenever a card is added, removed, or
+    // its `usage` field changes, and writes the formatted string into
+    // `#chatUsage`. An empty string hides the chip via the
+    // `.chat-usage:empty { display: none }` rule.
     createEffect(() => {
-      const count = conversationTranscriptMessageCount()
-      const chatCount = document.getElementById("chatCount")
-      const copyBtn = document.getElementById("btnChatCopyAll") as HTMLButtonElement | null
-      if (chatCount) chatCount.textContent = count > 0 ? String(count) : ""
-      if (copyBtn) copyBtn.disabled = count === 0
+      const target = document.getElementById("chatUsage")
+      if (!target) return
+      const aggregate = aggregateUsageAcrossSessions(Object.values(cardTreeStore.cards))
+      target.textContent = formatUsageStrip(aggregate)
     })
 
     // ── Debug-copy (double-click `任务` header) ──

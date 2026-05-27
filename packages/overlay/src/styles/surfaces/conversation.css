@@ -108,6 +108,18 @@
   column-gap: calc(6px * var(--ui-scale));
   padding: 0 calc(1px * var(--ui-scale));
   scrollbar-width: none;
+  /* Drag-to-scroll: cursor:grab while idle, flips to grabbing once the
+     pointer crosses the 4px drag threshold in
+     ConversationAgentRail.attachRailDragScroll. user-select disabled
+     during the drag so dragging across avatar labels does not start a
+     text selection. */
+  cursor: grab;
+  touch-action: pan-y;
+}
+
+.conversation-agent-rail__lanes[data-dragging="true"] {
+  cursor: grabbing;
+  user-select: none;
 }
 
 .conversation-agent-rail__lanes::-webkit-scrollbar {
@@ -313,10 +325,11 @@
   line-height: 1;
 }
 
-/* Late `.chat-count` chrome that supersedes the simple meta-text
-   variant above: dot-prefixed lane with tabular numerals, hidden when
-   empty. The dot routes through `--oc-radius-pill`. */
-.chat-count {
+/* Chat header usage strip — whole-session token + USD cost estimate
+   aggregated across every runtime session in the selected task.
+   Dot-prefixed lane with tabular numerals so the two values scan
+   cleanly. Hidden when empty (no usage observed yet). */
+.chat-usage {
   display: inline-flex;
   align-items: center;
   gap: calc(6px * var(--ui-scale));
@@ -327,56 +340,17 @@
   white-space: nowrap;
 }
 
-.chat-count:empty {
+.chat-usage:empty {
   display: none;
 }
 
-.chat-count::before {
+.chat-usage::before {
   content: "";
   width: calc(4px * var(--ui-scale));
   height: calc(4px * var(--ui-scale));
   border-radius: var(--oc-radius-pill);
   background: color-mix(in srgb, var(--text-muted) 72%, transparent);
   flex-shrink: 0;
-}
-
-/* Chat header copy-all action: a calm dot-prefixed text lane (not a
-   button shell). Scoped to `.chat-header-meta` so the dot pseudo and
-   no-border treatment only applies inside the conversation header. */
-.chat-header-meta #btnChatCopyAll {
-  min-height: var(--oc-density-control-height);
-  padding: 0 calc(6px * var(--ui-scale)) 0 var(--ui-btn-mini-padding-x);
-  border: 0 solid transparent;
-  border-radius: var(--oc-radius-soft);
-  background: transparent;
-  box-shadow: none;
-  position: relative;
-  color: var(--text-strong);
-  font-size: var(--ui-font-meta);
-  font-weight: var(--ui-font-weight-strong);
-}
-
-.chat-header-meta #btnChatCopyAll::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 50%;
-  width: calc(5px * var(--ui-scale));
-  height: calc(5px * var(--ui-scale));
-  border-radius: var(--oc-radius-pill);
-  background: color-mix(in srgb, var(--subtle-4) 94%, transparent);
-  transform: translateY(-50%);
-}
-
-.chat-header-meta #btnChatCopyAll:hover {
-  background: transparent;
-  color: var(--text-strong);
-}
-
-.chat-header-meta #btnChatCopyAll:focus-visible {
-  outline: var(--oc-border-width) solid color-mix(in srgb, var(--accent) 40%, transparent);
-  outline-offset: calc(2px * var(--ui-scale));
-  box-shadow: none;
 }
 
 /* Goals strip (inline goal status above the chat scroll). The HTML
@@ -1315,7 +1289,10 @@
 }
 
 .recent-dir-row {
-  display: flex;
+  --recent-dir-remove-slot-width: calc(28px * var(--ui-scale));
+
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
   align-items: stretch;
   gap: calc(6px * var(--ui-scale));
   padding: calc(2px * var(--ui-scale));
@@ -1328,7 +1305,9 @@
     background var(--ui-duration-base),
     border-color var(--ui-duration-base),
     box-shadow var(--ui-duration-base),
+    grid-template-columns var(--ui-duration-base),
     transform var(--ui-duration-base);
+  position: relative;
 }
 
 .recent-dir-row:hover {
@@ -1359,8 +1338,14 @@
   box-shadow: inset 0 0 0 var(--oc-border-width) color-mix(in srgb, var(--accent) 8%, transparent);
 }
 
+.recent-dir-row:has(.recent-dir-remove):hover,
+.recent-dir-row:has(.recent-dir-remove):focus-within,
+.recent-dir-row:has(.recent-dir-remove)[data-active="true"] {
+  grid-template-columns: minmax(0, 1fr) var(--recent-dir-remove-slot-width);
+}
+
 .recent-dir-item {
-  flex: 1;
+  grid-column: 1;
   min-width: 0;
   text-align: left;
   display: flex;
@@ -1427,7 +1412,6 @@
 }
 
 .recent-dir-remove {
-  flex-shrink: 0;
   width: calc(22px * var(--ui-scale));
   height: calc(22px * var(--ui-scale));
   display: inline-flex;
@@ -1440,8 +1424,13 @@
   font-size: var(--ui-font-heading);
   line-height: 1;
   cursor: pointer;
-  margin: calc(6px * var(--ui-scale)) calc(6px * var(--ui-scale)) 0 0;
+  margin: 0;
+  position: absolute;
+  top: 50%;
+  right: calc(6px * var(--ui-scale));
+  transform: translateY(-50%);
   opacity: var(--ui-opacity-hidden);
+  pointer-events: none;
   transition:
     background var(--ui-duration-fast),
     color var(--ui-duration-fast),
@@ -1452,6 +1441,7 @@
 .recent-dir-row:focus-within .recent-dir-remove,
 .recent-dir-row[data-active="true"] .recent-dir-remove {
   opacity: var(--ui-opacity-full);
+  pointer-events: auto;
 }
 
 .recent-dir-remove:hover {

@@ -32,8 +32,12 @@ test("ConversationAgentRail stays a fixed narrow bottom strip", () => {
   const css = readFileSync(join(import.meta.dir, "../src/styles/surfaces/conversation.css"), "utf8")
   const html = readFileSync(join(import.meta.dir, "../src/index.html"), "utf8")
   expect(source).not.toContain("--conversation-agent-rail-height")
+  // Old vertical drag-to-resize affordance: `startY - move.clientY` is
+  // its diagnostic fingerprint. Drag-to-scroll (a horizontal scroll
+  // gesture on a fixed-height strip — `attachRailDragScroll` below) is
+  // intentionally allowed and pinned by the positive assertions later
+  // in this test.
   expect(source).not.toContain("startY - move.clientY")
-  expect(source).not.toContain("onPointerDown")
   expect(source).not.toContain("data-wide")
   expect(source).not.toContain("--conversation-agent-rail-width")
   expect(css).toContain("border-top: var(--oc-border-width) solid color-mix(in srgb, var(--border) 82%, transparent)")
@@ -53,6 +57,16 @@ test("ConversationAgentRail stays a fixed narrow bottom strip", () => {
   expect(css).toContain(".conversation-agent-rail .chat-avatar")
   expect(css).toContain("animation: none;")
   expect(html.indexOf('id="conversationBody"')).toBeLessThan(html.indexOf('id="solidConversationAgentRailMount"'))
+  // Drag-to-scroll: horizontal press-and-drag gesture on the lanes
+  // container. The drag handler is `attachRailDragScroll`, wired via
+  // a `ref` callback that registers `onCleanup` for the listener pair.
+  // The CSS shows the `grab` cursor when idle and `grabbing` while the
+  // dataset flag `data-dragging="true"` is set by the handler.
+  expect(source).toContain("attachRailDragScroll")
+  expect(source).toContain("onCleanup(dispose)")
+  expect(css).toContain("cursor: grab")
+  expect(css).toContain('.conversation-agent-rail__lanes[data-dragging="true"]')
+  expect(css).toContain("cursor: grabbing")
 })
 
 test("ConversationAgentRail keeps avatar DOM stable across workflow refreshes", () => {

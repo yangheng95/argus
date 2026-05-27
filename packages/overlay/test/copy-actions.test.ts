@@ -21,7 +21,7 @@ async function browser() {
   throw new Error("No local Edge/Chrome executable found for overlay copy action test")
 }
 
-test("copying chat and logs does not open the dialog", async () => {
+test("copying logs does not open the dialog", async () => {
   const exe = await browser()
   const now = Date.now()
   const task = {
@@ -254,26 +254,6 @@ test("copying chat and logs does not open the dialog", async () => {
     await tab.waitForFunction(() => document.querySelector("#connBadge")?.dataset.status === "online")
     await tab.waitForSelector(".task-row-main[data-task-id='task-1']")
     await tab.click(".task-row-main[data-task-id='task-1']")
-    await tab.waitForFunction(() => (document.querySelector("#chatCount")?.textContent || "").trim().length > 0)
-    await tab.waitForFunction(() => {
-      const button = document.querySelector("#btnChatCopyAll")
-      return button instanceof HTMLButtonElement && !button.disabled
-    })
-
-    await tab.click("#btnChatCopyAll")
-    await new Promise((resolve) => setTimeout(resolve, 200))
-
-    const afterChat = await tab.evaluate(() => {
-      const state = (window as typeof window & { __copyTest: { writes: string[] } }).__copyTest
-      return {
-        writes: [...state.writes],
-        dialogOpen: (document.querySelector("#appDialog") as HTMLDialogElement | null)?.open === true,
-      }
-    })
-
-    expect(afterChat.dialogOpen).toBe(false)
-    expect(afterChat.writes.length).toBe(1)
-    expect(afterChat.writes[0]).toContain("Transcript ready.")
 
     await tab.click('[data-menu-trigger="help"]')
     await tab.waitForSelector('[data-testid="titlebar-help-logs"]')
@@ -295,8 +275,8 @@ test("copying chat and logs does not open the dialog", async () => {
     })
 
     expect(afterLog.dialogOpen).toBe(false)
-    expect(afterLog.writes.length).toBe(2)
-    expect(afterLog.writes[1]).toContain("overlay ready")
+    expect(afterLog.writes.length).toBe(1)
+    expect(afterLog.writes[0]).toContain("overlay ready")
   } finally {
     await page.close().catch(() => undefined)
     server.stop(true)
