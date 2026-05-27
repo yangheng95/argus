@@ -3,7 +3,9 @@
 // Displays tasks from boardStore in stable creation-time order.
 
 import { createMemo, createSelector, createSignal, For, Show } from "solid-js";
-import { boardStore, visibleTasks, loadTasks, taskCreatedAt } from "../store/board";
+import { boardStore, visibleTasks, loadTasks, taskCreatedAt,
+  activeTaskID,
+} from "../store/board";
 import {
   buildTaskTree,
   flattenGroup as flattenGroupPure,
@@ -257,7 +259,7 @@ function TaskRow(props: {
   item: any;
   /** Solid createSelector function — returns true only for the currently
    *  selected task id. Lets only the previously-selected and newly-selected
-   *  rows reconcile when boardStore.selectedTaskID changes, instead of
+   *  rows reconcile when activeTaskID() changes, instead of
    *  re-running every row's `isActive` memo. */
   isSelected: (id: string) => boolean;
   queuePos?: number;
@@ -406,79 +408,27 @@ function TaskRow(props: {
           <Icon name="drag-handle" size={12} />
         </span>
       </Show>
-      <Show
-        when={!editing()}
-        fallback={
-          <div class="task-row-main task-row-main--editing" data-ui="task-row-rename-editor">
-            <div class="task-row-head">
-              <input
-                ref={(el) => (inputRef = el)}
-                class="task-row-rename-input"
-                data-ui="task-row-rename-input"
-                type="text"
-                maxLength={200}
-                value={draftTitle()}
-                aria-label={t("task.rename_placeholder")}
-                placeholder={t("task.rename_placeholder")}
-                onInput={(e) => setDraftTitle(e.currentTarget.value)}
-                onClick={(e) => e.stopPropagation()}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    commitRename();
-                  } else if (e.key === "Escape") {
-                    e.preventDefault();
-                    cancelRename();
-                  }
-                }}
-                onBlur={() => {
-                  // Microtask: if the blur was caused by clicking the
-                  // confirm button, that click handler runs immediately
-                  // after blur — committing here would race. Defer one
-                  // tick and re-check whether the editor is still open.
-                  queueMicrotask(() => {
-                    if (editing()) commitRename();
-                  });
-                }}
-              />
-            </div>
-          </div>
-        }
-      >
-        <button
-          type="button"
-          class="task-row-main"
-          data-task-id={pending() ? undefined : id()}
-          disabled={pending()}
-          aria-disabled={pending() ? "true" : undefined}
-          aria-current={isActive() ? "page" : undefined}
-          title={rowTip()}
-          onClick={(event) => {
-            event.stopPropagation();
-            if (!pending() && id()) props.onSelectTask(id());
-          }}
-          onDblClick={(e) => {
-            if (!canRename()) return;
-            e.stopPropagation();
-            e.preventDefault();
-            beginRename();
-          }}
-        >
-          <div class="task-row-head">
-            <strong>{title()}</strong>
-          </div>
-        </button>
-      </Show>
-      <div class="task-row-right">
+      <div class="task-row-body">
         <Show when={directChildCount() > 0}>
-          {/* draggable=false + mousedown stop-propagation: the outer
-              .task-row-mini is draggable for queue reorder; without
-              these guards the browser interprets mousedown on this
-              button as the drag-start and the click event is swallowed
-              (Chrome on Windows). That was reported as "after clicking
-              a task with children, other tasks become unclickable" —
-              the drag was firing but never cleared because the user
-              never released over a valid drop target. */}
+          {/* Chevron lives in .task-row-body (row-head, after the badge
+              / drag handle, before .task-row-main) instead of inside
+              .task-row-right. .task-row-actions is position:absolute;
+              right:0; width:64px; z-index:2 — on row hover its buttons
+              gain pointer-events:auto and overlay the right column,
+              including any chevron rendered there. User reported "点不了"
+              because cancel/rename were sitting on top of the chevron
+              and intercepting clicks. Row-head placement removes the
+              chevron from the action panel's coverage area entirely
+              (sibling layout puts it on the OPPOSITE side of the row).
+
+              Three guards still needed because .task-row-mini is itself
+              draggable for queue reorder, and a button inside a
+              draggable parent has the browser treat mousedown as a
+              drag-start — the click event gets swallowed and dragStart
+              fires on the outer div. draggable={false} opts the button
+              out, onMouseDown stopPropagation keeps the outer div from
+              seeing the press, onDragStart preventDefault is belt-and-
+              suspenders for browsers that still try to initiate. */}
           <button
             type="button"
             class="task-row-children-toggle"
@@ -509,6 +459,71 @@ function TaskRow(props: {
             <span class="task-row-children-count">{directChildCount()}</span>
           </button>
         </Show>
+        <Show
+          when={!editing()}
+          fallback={
+            <div class="task-row-main task-row-main--editing" data-ui="task-row-rename-editor">
+              <div class="task-row-head">
+                <input
+                  ref={(el) => (inputRef = el)}
+                  class="task-row-rename-input"
+                  data-ui="task-row-rename-input"
+                  type="text"
+                  maxLength={200}
+                  value={draftTitle()}
+                  aria-label={t("task.rename_placeholder")}
+                  placeholder={t("task.rename_placeholder")}
+                  onInput={(e) => setDraftTitle(e.currentTarget.value)}
+                  onClick={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      commitRename();
+                    } else if (e.key === "Escape") {
+                      e.preventDefault();
+                      cancelRename();
+                    }
+                  }}
+                  onBlur={() => {
+                    // Microtask: if the blur was caused by clicking the
+                    // confirm button, that click handler runs immediately
+                    // after blur — committing here would race. Defer one
+                    // tick and re-check whether the editor is still open.
+                    queueMicrotask(() => {
+                      if (editing()) commitRename();
+                    });
+                  }}
+                />
+              </div>
+            </div>
+          }
+        >
+          <button
+            type="button"
+            class="task-row-main"
+            data-task-id={pending() ? undefined : id()}
+            disabled={pending()}
+            aria-disabled={pending() ? "true" : undefined}
+            aria-current={isActive() ? "page" : undefined}
+            title={rowTip()}
+            onClick={(event) => {
+              event.stopPropagation();
+              if (!pending() && id()) props.onSelectTask(id());
+            }}
+            onDblClick={(e) => {
+              if (!canRename()) return;
+              e.stopPropagation();
+              e.preventDefault();
+              beginRename();
+            }}
+          >
+            <div class="task-row-head">
+              <strong>{title()}</strong>
+            </div>
+          </button>
+        </Show>
+      </div>
+      <div class="task-row-right">
         <small
           class="task-row-stamp"
           title={fullStampWithRelative(taskCreatedAt(props.item))}
@@ -722,7 +737,7 @@ export function TaskList(props: TaskListProps) {
   // selected task id. With this in place, selecting a different task
   // re-runs the `isActive` memo on exactly two rows (previously selected,
   // newly selected) instead of all N rows in the list. Wins scale with N.
-  const isSelected = createSelector(() => boardStore.selectedTaskID);
+  const isSelected = createSelector(() => activeTaskID());
 
   function directoryGroupKey(directory: string): string {
     return directory || "__opencorvus_unassigned_project__";

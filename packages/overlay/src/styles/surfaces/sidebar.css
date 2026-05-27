@@ -190,8 +190,25 @@
   opacity: var(--ui-opacity-full);
 }
 
-.task-row-main {
+/* Row body: flex container that pairs the optional chevron with the
+   main title button at grid-column 3. The chevron used to live in
+   .task-row-right but on hover the absolutely-positioned
+   .task-row-actions panel (right:0; z-index:2) covered it and its
+   buttons intercepted clicks — "点不了" bug 2026-05-27. Putting the
+   chevron on the OPPOSITE side of the row (next to the badge / drag
+   handle) puts it outside the action panel's coverage area. The flex
+   gap only applies between siblings, so when no chevron is rendered
+   the title sits flush against the drag handle (no extra spacing). */
+.task-row-body {
   grid-column: 3;
+  display: flex;
+  align-items: center;
+  gap: calc(4px * var(--ui-scale));
+  min-width: 0;
+  max-width: 100%;
+}
+
+.task-row-main {
   display: flex;
   align-items: center;
   gap: calc(4px * var(--ui-scale));

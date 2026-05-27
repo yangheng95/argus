@@ -55,7 +55,12 @@ test("TaskList task rows stay one-line while preserving detail in tooltips", () 
   expect(SIDEBAR_CSS).toMatch(/\.task-row-mini\s*\{[^}]*width:\s*100%;/);
   expect(SIDEBAR_CSS).toMatch(/\.task-row-badge\s*\{[^}]*grid-column:\s*1;/);
   expect(SIDEBAR_CSS).toMatch(/\.task-row-drag-handle\s*\{[^}]*grid-column:\s*2;/);
-  expect(SIDEBAR_CSS).toMatch(/\.task-row-main\s*\{[^}]*grid-column:\s*3;/);
+  // grid-column:3 lives on the .task-row-body wrapper, not on
+  // .task-row-main itself — the wrapper pairs the optional chevron with
+  // the main title button at column 3 so the chevron sits outside the
+  // .task-row-actions absolute panel's coverage area (bug 2026-05-27).
+  expect(SIDEBAR_CSS).toMatch(/\.task-row-body\s*\{[^}]*grid-column:\s*3;/);
+  expect(SIDEBAR_CSS).toMatch(/\.task-row-body\s*\{[^}]*display:\s*flex;/);
   expect(SIDEBAR_CSS).toMatch(/\.task-row-main\s*\{[^}]*flex:\s*1 1 0;/);
   expect(SIDEBAR_CSS).toMatch(/\.task-row-main\s*\{[^}]*color:\s*var\(--text-soft\);/);
   expect(SIDEBAR_CSS).toMatch(/\.task-row-main\s*\{[^}]*max-width:\s*100%;/);
