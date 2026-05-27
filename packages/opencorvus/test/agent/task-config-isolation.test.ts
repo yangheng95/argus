@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test"
+import { Agent } from "../../src/agent/agent"
 import { EffectiveConfig } from "../../src/config/effective"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { Instance } from "../../src/project/instance"
@@ -10,6 +11,7 @@ import { tmpdir } from "../fixture/fixture"
 
 describe("task config isolation", () => {
   afterEach(async () => {
+    Agent.resetAll()
     Provider.resetAll()
     await resetDatabase()
   })
@@ -46,6 +48,46 @@ describe("task config isolation", () => {
           providerID: "task",
           modelID: "snapshot",
         })
+      },
+    })
+  })
+
+  test("agent config resolves from the task root snapshot", async () => {
+    await using tmp = await tmpdir({ config: { agent: { coding: { prompt: "live project prompt" } } } })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ kind: "root", title: "isolated agent config" })
+        await Session.mergeMetadata({
+          sessionID: session.id,
+          patch: {
+            [EffectiveConfig.TASK_SNAPSHOT_KEY]: {
+              agent: {
+                coding: {
+                  prompt: "task snapshot prompt",
+                },
+              },
+            },
+          },
+        })
+        const taskID = "task-agent-config-snapshot"
+        Database.use((db) =>
+          db.insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: session.id,
+              title: "isolated agent config",
+              request: "isolated agent config",
+            })
+            .run(),
+        )
+
+        const scoped = await Agent.get("coding", { config: await EffectiveConfig.effective({ taskID }) })
+        const live = await Agent.get("coding")
+
+        expect(scoped.prompt).toBe("task snapshot prompt")
+        expect(live.prompt).toBe("live project prompt")
       },
     })
   })

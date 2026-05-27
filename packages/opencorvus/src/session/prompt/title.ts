@@ -4,6 +4,7 @@ import { Message } from "../message"
 import { LLM } from "../llm"
 import { resolveAgentModel } from "@/agent/model"
 import { Log } from "../../util/log"
+import { EffectiveConfig } from "@/config/effective"
 
 const log = Log.create({ service: "session.prompt" })
 
@@ -30,7 +31,8 @@ export async function ensureTitle(input: {
   const subtaskParts = firstRealUser.parts.filter((p) => p.type === "subtask") as Message.SubtaskPart[]
   const hasOnlySubtaskParts = subtaskParts.length > 0 && firstRealUser.parts.every((p) => p.type === "subtask")
 
-  const agent = await Agent.get("title")
+  const config = await EffectiveConfig.effective({ sessionID: input.session.id })
+  const agent = await Agent.get("title", { config })
   if (!agent) return
   const model = await resolveAgentModel("title", { sessionID: input.session.id })
   const result = await LLM.stream({

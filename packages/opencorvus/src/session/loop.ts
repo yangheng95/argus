@@ -1862,7 +1862,7 @@ export namespace SessionLoop {
           if (
             lastFinished &&
             lastFinished.summary !== true &&
-            (await SessionCompaction.isOverflow({ tokens: lastFinished.tokens, model }))
+            (await SessionCompaction.isOverflow({ tokens: lastFinished.tokens, model, sessionID }))
           ) {
             await SessionCompaction.create({
               sessionID,

@@ -13,6 +13,7 @@ import { fn } from "@/util/fn"
 import { Agent } from "@/agent/agent"
 import { Plugin } from "@/plugin"
 import { Config } from "@/config/config"
+import { EffectiveConfig } from "@/config/effective"
 import { MemoryFlush } from "@/memory/flush"
 import { resolveAgentModel } from "@/agent/model"
 import { ContextBudget } from "./context-budget"
@@ -65,8 +66,8 @@ export namespace SessionCompaction {
     summary: string | undefined
   }
 
-  export async function isOverflow(input: { tokens: Message.Assistant["tokens"]; model: Provider.Model }) {
-    const config = await Config.get()
+  export async function isOverflow(input: { tokens: Message.Assistant["tokens"]; model: Provider.Model; sessionID?: string }) {
+    const config = input.sessionID ? await EffectiveConfig.effective({ sessionID: input.sessionID }) : await Config.get()
     return ContextBudget.isUsageOverflow({ config, tokens: input.tokens, model: input.model })
   }
 
@@ -540,7 +541,7 @@ export namespace SessionCompaction {
   // calls. then erases output of previous tool calls. idea is to throw away old
   // tool calls that are no longer relevant.
   export async function prune(input: { sessionID: string }) {
-    const config = await Config.get()
+    const config = await EffectiveConfig.effective({ sessionID: input.sessionID })
     if (config.compaction?.prune === false) return
     log.info("pruning")
     const msgs = await Session.messages({ sessionID: input.sessionID })
@@ -595,9 +596,9 @@ export namespace SessionCompaction {
     }
     const userMessage = parent.info as Message.User
     const compactionPart = parent.parts.find((part): part is Message.CompactionPart => part.type === "compaction")
-    const agent = await Agent.get("compaction")
+    const config = await EffectiveConfig.effective({ sessionID: input.sessionID })
+    const agent = await Agent.get("compaction", { config })
     const model = await resolveAgentModel(agent.name, { sessionID: input.sessionID })
-    const config = await Config.get()
     const history =
       compactionPart && input.messages.at(-1)?.info.id === input.parentID ? input.messages.slice(0, -1) : input.messages
     const prior = completedCompactions(history)

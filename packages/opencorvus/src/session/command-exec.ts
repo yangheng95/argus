@@ -47,7 +47,8 @@ export namespace SessionCommand {
   export async function command(input: CommandInput) {
     log.info("command", input)
     const cmd = await Command.get(input.command)
-    const agentName = cmd.agent ?? input.agent ?? (await Agent.defaultAgent())
+    const config = await EffectiveConfig.effective({ sessionID: input.sessionID })
+    const agentName = cmd.agent ?? input.agent ?? (await Agent.defaultAgent({ config }))
 
     const raw = input.arguments.match(argsRegex) ?? []
     const args = raw.map((arg) => arg.replace(quoteTrimRegex, ""))
@@ -101,15 +102,13 @@ export namespace SessionCommand {
       : input.model
         ? Provider.parseModel(input.model)
         : null
-    const taskModel = await resolveAgentModelRef(cmd.agent ?? (await Agent.defaultAgent()), {
+    const taskModel = await resolveAgentModelRef(cmd.agent ?? (await Agent.defaultAgent({ config })), {
       explicitModel,
       sessionID: input.sessionID,
     })
 
     try {
-      await Provider.getModel(taskModel.providerID, taskModel.modelID, {
-        config: await EffectiveConfig.effective({ sessionID: input.sessionID }),
-      })
+      await Provider.getModel(taskModel.providerID, taskModel.modelID, { config })
     } catch (e) {
       if (Provider.ModelNotFoundError.isInstance(e)) {
         const { providerID, modelID, suggestions } = e.data
@@ -121,9 +120,9 @@ export namespace SessionCommand {
       }
       throw e
     }
-    const agent = await Agent.get(agentName)
+    const agent = await Agent.get(agentName, { config })
     if (!agent) {
-      const available = await Agent.list().then((agents) => agents.filter((a) => !a.hidden).map((a) => a.name))
+      const available = await Agent.list({ config }).then((agents) => agents.filter((a) => !a.hidden).map((a) => a.name))
       const hint = available.length ? ` Available agents: ${available.join(", ")}` : ""
       const error = new NamedError.Unknown({ message: `Agent not found: "${agentName}".${hint}` })
       Bus.publish(Session.Event.Error, {
@@ -152,7 +151,7 @@ export namespace SessionCommand {
         ]
       : [...templateParts, ...(input.parts ?? [])]
 
-    const userAgent = isSubtask ? (input.agent ?? (await Agent.defaultAgent())) : agentName
+    const userAgent = isSubtask ? (input.agent ?? (await Agent.defaultAgent({ config }))) : agentName
     const userModel = isSubtask
       ? await resolveAgentModelRef(userAgent, {
           explicitModel: input.model ? Provider.parseModel(input.model) : null,

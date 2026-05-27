@@ -533,8 +533,9 @@ async function appendTaskSessionMessage(
  * project-setup error that must surface, not be papered over.
  */
 async function messageContext(sessionID: string, taskID: string) {
-  const name = (await latestSessionAgent(sessionID)) ?? (await Agent.defaultAgent().catch(() => undefined))
-  const agent = name ? await Agent.get(name).catch(() => undefined) : undefined
+  const config = await EffectiveConfig.effective({ taskID, sessionID })
+  const name = (await latestSessionAgent(sessionID)) ?? (await Agent.defaultAgent({ config }).catch(() => undefined))
+  const agent = name ? await Agent.get(name, { config }).catch(() => undefined) : undefined
   const model = name
     ? await resolveAgentModelRef(name, { taskID })
     : await resolveConfiguredModelRef({ taskID })
