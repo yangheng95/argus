@@ -281,6 +281,8 @@ import type {
   TaskTranscriptResponses,
   TaskUpdateBudgetErrors,
   TaskUpdateBudgetResponses,
+  TaskUpdateTitleErrors,
+  TaskUpdateTitleResponses,
   TerminalOpenErrors,
   TerminalOpenResponses,
   TerminalProfilesErrors,
@@ -6156,6 +6158,41 @@ export class Task extends HeyApiClient {
     )
     return (options?.client ?? this.client).patch<TaskUpdateBudgetResponses, TaskUpdateBudgetErrors, ThrowOnError>({
       url: "/task/{taskID}/budget",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Update task title
+   */
+  public updateTitle<ThrowOnError extends boolean = false>(
+    parameters: {
+      taskID: string
+      directory?: string
+      title?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "taskID" },
+            { in: "query", key: "directory" },
+            { in: "body", key: "title" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).patch<TaskUpdateTitleResponses, TaskUpdateTitleErrors, ThrowOnError>({
+      url: "/task/{taskID}/title",
       ...options,
       ...params,
       headers: {

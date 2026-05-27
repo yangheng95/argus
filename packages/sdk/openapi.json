@@ -12740,6 +12740,17 @@
                               "requestID": {
                                 "type": "string"
                               },
+                              "parentTaskID": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "pattern": "^tsk.*"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
                               "source": {
                                 "type": "string"
                               },
@@ -13397,6 +13408,17 @@
                               },
                               "requestID": {
                                 "type": "string"
+                              },
+                              "parentTaskID": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "pattern": "^tsk.*"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
                               },
                               "source": {
                                 "type": "string"
@@ -14063,6 +14085,17 @@
                         "requestID": {
                           "type": "string"
                         },
+                        "parentTaskID": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "pattern": "^tsk.*"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
                         "source": {
                           "type": "string"
                         },
@@ -14417,6 +14450,17 @@
                     },
                     "requestID": {
                       "type": "string"
+                    },
+                    "parentTaskID": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "pattern": "^tsk.*"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     },
                     "source": {
                       "type": "string"
@@ -14787,6 +14831,17 @@
                         },
                         "requestID": {
                           "type": "string"
+                        },
+                        "parentTaskID": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "pattern": "^tsk.*"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
                         },
                         "source": {
                           "type": "string"
@@ -15961,6 +16016,17 @@
                             },
                             "requestID": {
                               "type": "string"
+                            },
+                            "parentTaskID": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "pattern": "^tsk.*"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
                             },
                             "source": {
                               "type": "string"
@@ -18641,6 +18707,17 @@
                         },
                         "requestID": {
                           "type": "string"
+                        },
+                        "parentTaskID": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "pattern": "^tsk.*"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
                         },
                         "source": {
                           "type": "string"
@@ -24294,6 +24371,78 @@
         ]
       }
     },
+    "/task/{taskID}/title": {
+      "patch": {
+        "operationId": "task.updateTitle",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "taskID",
+            "schema": {
+              "type": "string",
+              "pattern": "^tsk.*"
+            },
+            "required": true
+          }
+        ],
+        "summary": "Update task title",
+        "responses": {
+          "200": {
+            "description": "Title updated"
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "title"
+                ]
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.task.updateTitle({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/export/session/{sessionID}": {
       "get": {
         "operationId": "export.session",
@@ -28635,18 +28784,22 @@
                         "type": "object",
                         "properties": {
                           "kind": {
+                            "description": "Evidence tool or inspection category.",
                             "type": "string",
                             "minLength": 1
                           },
                           "target": {
+                            "description": "Concrete file, directory, command, evidence section, or artifact inspected.",
                             "type": "string",
                             "minLength": 1
                           },
                           "purpose": {
+                            "description": "Why this evidence was inspected for the reviewer scope.",
                             "type": "string",
                             "minLength": 1
                           },
                           "result": {
+                            "description": "What the inspection showed. Do not add finding fields such as affectedSymbols here.",
                             "type": "string",
                             "minLength": 1
                           }
@@ -28667,18 +28820,22 @@
                         "type": "object",
                         "properties": {
                           "requirementID": {
+                            "description": "Singular coverage anchor such as REQ-1. Do not use requirementIDs here.",
                             "type": "string",
                             "minLength": 1
                           },
                           "specID": {
+                            "description": "Singular coverage anchor for one acceptance spec id. Do not use specIDs here.",
                             "type": "string",
                             "minLength": 1
                           },
                           "userRequestQuote": {
+                            "description": "Singular literal user-request quote. Do not use userRequestQuotes here.",
                             "type": "string",
                             "minLength": 1
                           },
                           "status": {
+                            "description": "Coverage status only. Do not use verdict values such as pass, concerns, or needs_correction here.",
                             "type": "string",
                             "enum": [
                               "covered",
@@ -28897,6 +29054,7 @@
                       }
                     },
                     "status": {
+                      "description": "Coverage status only. Do not use verdict values such as pass, concerns, or needs_correction here.",
                       "type": "string",
                       "enum": [
                         "covered",
@@ -34804,7 +34962,7 @@
                 }
               },
               "max_executor_groups": {
-                "description": "Maximum parallel executor groups",
+                "description": "Maximum parallel agent sessions in fan-out phases such as goal builds and integrity reviewers",
                 "type": "integer",
                 "minimum": 1,
                 "maximum": 9007199254740991
@@ -34922,14 +35080,14 @@
                 "description": "Continue the agent loop when a tool call is denied",
                 "type": "boolean"
               },
-              "confirm_proposed_tasks": {
-                "description": "Require operator confirmation before the orchestrator creates a proposed follow-up task. Default false lets the orchestrator create the task directly.",
-                "default": false,
-                "type": "boolean"
-              },
               "auto_question": {
                 "description": "Auto-reject unanswered question interactions after the five-minute stale timeout. Independent fine-grained switch. When false, questions wait indefinitely for a user reply.",
                 "default": true,
+                "type": "boolean"
+              },
+              "confirm_proposed_tasks": {
+                "description": "Require operator confirmation before the orchestrator creates a proposed follow-up task. Default false lets the orchestrator create the task directly.",
+                "default": false,
                 "type": "boolean"
               },
               "mcp_timeout": {

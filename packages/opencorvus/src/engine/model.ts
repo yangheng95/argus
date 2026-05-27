@@ -268,6 +268,11 @@ export const Task = z.object({
   activePlanVersionID: Identifier.schema("plan").nullable().optional(),
   activeRunID: Identifier.schema("run").nullable().optional(),
   requestID: z.string().optional(),
+  /** ID of the task that spawned this one — projected read-only from
+   *  `metadata.parent_task_id` (single source of truth, no DB column).
+   *  Overlay uses this to render lineage as a tree; agent panels can also
+   *  see it but reconcile children via findChildrenOfTask(). */
+  parentTaskID: Identifier.schema("task").nullable().optional(),
   source: z.string(),
   title: z.string(),
   request: z.string(),
