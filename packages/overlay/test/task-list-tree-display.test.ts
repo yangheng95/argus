@@ -1,52 +1,52 @@
-// Frontend acceptance tests for the task tree display feature.
-// Spec: docs/superpowers/specs/2026-05-27-task-tree-display.md §Acceptance criteria.
+// Source-contract tests for the task tree UI wiring inside TaskList.tsx.
+// Behavioural correctness of tree assembly, cycle, orphan fallback, dedup
+// is exercised by the runtime suite at task-tree-helpers.test.ts; this
+// file locks the *integration* — that TaskList still imports the helpers,
+// renders the chevron + count badge, uses canDrag for the drag guard,
+// and ships the matching CSS + i18n keys.
 //
-// The tree-assembly logic lives as a Solid `createMemo` inside TaskList,
-// which is the right scope (per-component lifecycle, no extra abstraction
-// — rule 5/6). These tests lock the contract via source-string assertions
-// on TaskList.tsx + the related CSS / i18n files, the same idiom used by
-// task-list-creation-time.test.ts and task-row-mini-*.test.ts.
+// Spec: docs/superpowers/specs/2026-05-27-task-tree-display.md.
 
 import { describe, expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 
 const TASK_LIST = readFileSync(join(import.meta.dir, "../src/components/TaskList.tsx"), "utf8")
+const TASK_TREE = readFileSync(join(import.meta.dir, "../src/components/taskTree.ts"), "utf8")
 const SIDEBAR_CSS = readFileSync(join(import.meta.dir, "../src/styles/surfaces/sidebar.css"), "utf8")
 const EN_JSON = readFileSync(join(import.meta.dir, "../src/i18n/en-US.json"), "utf8")
 const ZH_JSON = readFileSync(join(import.meta.dir, "../src/i18n/zh-CN.json"), "utf8")
 
-describe("TaskList reads task.parentTaskID as the lineage source", () => {
-  test("reads task.parentTaskID, not metadata.parent_task_id directly", () => {
-    // The frontend consumes the hoisted camelCase field on the task
-    // object — it MUST NOT poke into raw metadata to reconstruct
-    // lineage (rule 8 — single read source per consumer).
-    expect(TASK_LIST).toContain("task?.parentTaskID")
+describe("Lineage source: task.parentTaskID (read-only, no metadata digging)", () => {
+  test("the pure helper reads task.parentTaskID", () => {
+    expect(TASK_TREE).toContain("task?.parentTaskID")
+  })
+
+  test("nobody in the overlay frontend reaches into raw metadata.parent_task_id", () => {
+    // Rule 8 — single read source. The overlay reads the hoisted
+    // camelCase projection, not the snake_case metadata key.
     expect(TASK_LIST).not.toMatch(/metadata\??\.parent_task_id/)
+    expect(TASK_TREE).not.toMatch(/metadata\??\.parent_task_id/)
   })
 })
 
-describe("Tree memo + flattenGroup are present and used", () => {
-  test("declares a `tree` memo with childMap + topLevelItems shape", () => {
-    expect(TASK_LIST).toMatch(/tree\s*=\s*createMemo<\{\s*childMap:\s*Map<string,\s*any\[\]>;\s*topLevelItems:\s*any\[\]/)
+describe("TaskList integrates the extracted helpers", () => {
+  test("imports buildTaskTree + flattenGroup from ./taskTree", () => {
+    expect(TASK_LIST).toContain('from "./taskTree"')
+    expect(TASK_LIST).toContain("buildTaskTree")
+    expect(TASK_LIST).toContain("flattenGroupPure")
   })
 
   test("derives directory groups from tree().topLevelItems, not raw sortedItems()", () => {
-    // Orphan fallback works because top-level items are computed
-    // post-filter, so anything whose parent is filtered out (or
-    // missing) is treated as a top-level row.
     expect(TASK_LIST).toContain("for (const item of tree().topLevelItems)")
   })
 
   test("flattens each group via flattenGroup(visibleGroupItems, group.directory)", () => {
     expect(TASK_LIST).toContain("flattenGroup(visibleGroupItems(), group.directory)")
   })
-})
 
-describe("Cycle guard logs a warning and treats victims as top-level", () => {
-  test("walks parent chains and accumulates cycleVictims", () => {
-    expect(TASK_LIST).toContain("cycleVictims")
-    expect(TASK_LIST).toMatch(/console\.warn\(\s*[\s\S]{0,40}cycle detected/)
+  test("flattenGroup binding feeds the live expandedTasks() signal in", () => {
+    expect(TASK_LIST).toContain("expandedTasks(),")
   })
 })
 
@@ -62,18 +62,23 @@ describe("Per-task expand state is per-session (Set<string>, no localStorage)", 
   })
 })
 
-describe("Cross-directory drag is disabled via canDrag (not draggable=false)", () => {
-  test("canDrag returns false when crossDirectory is true", () => {
-    // Idiom: TaskRow.canDrag already gates draggable + onDragStart
-    // early-return at TaskList.tsx:329; we extend its predicate.
-    expect(TASK_LIST).toMatch(/canDrag\s*=\s*\(\)\s*=>[\s\S]+?!props\.crossDirectory/)
+describe("Drag is disabled on any nested row (depth > 0)", () => {
+  // codex code review 2026-05-27 caught that v3's original cross-
+  // directory-only guard left same-directory nested queued rows
+  // appearing draggable while the drop handler silently no-opped
+  // (queue is computed from group.items = top-level only). Extending
+  // the rule to all nested rows removes the inconsistency.
+  test("canDrag requires depth === 0", () => {
+    expect(TASK_LIST).toMatch(/canDrag\s*=\s*\(\)\s*=>[\s\S]+?\(props\.depth\s*\?\?\s*0\)\s*===\s*0/)
   })
 
-  test("TreeEntry carries crossDirectory and depth>0 cross-dir flag", () => {
-    expect(TASK_LIST).toContain("crossDirectory: depth > 0 && itemDir !== groupDirectory")
+  test("TreeEntry still carries crossDirectory for the visual hint", () => {
+    // The cross-directory flag drives the dim-the-row visual but
+    // no longer drives drag — drag is gated by depth alone.
+    expect(TASK_TREE).toContain("crossDirectory: depth > 0 && itemDir !== groupDirectory")
   })
 
-  test("renders data-cross-directory attribute when set", () => {
+  test("renders data-cross-directory attribute for the cross-dir visual dim", () => {
     expect(TASK_LIST).toContain(`data-cross-directory={props.crossDirectory ? "true" : undefined}`)
   })
 })
@@ -95,9 +100,10 @@ describe("Parent-row badge: count + run-pulse + fail-color", () => {
     expect(TASK_LIST).toMatch(/hasFailedChild\s*=\s*\(\)\s*=>[\s\S]+?props\.directChildren\?\.some/)
   })
 
-  test("default render is collapsed (expanded passed in only when expandedTasks has the id)", () => {
-    expect(TASK_LIST).toContain("expanded: isExpanded")
-    expect(TASK_LIST).toMatch(/const\s+isExpanded\s*=\s*id\s*\?\s*expanded\.has\(id\)\s*:\s*false/)
+  test("chevron click stops propagation so the row is not selected on toggle", () => {
+    // Without stopPropagation the chevron click would bubble into
+    // the outer .task-row-main button and trigger task selection.
+    expect(TASK_LIST).toMatch(/onClick=\{\(event\)\s*=>\s*\{\s*event\.stopPropagation\(\);\s*props\.onToggleExpand/)
   })
 })
 

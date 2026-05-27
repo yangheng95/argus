@@ -4,6 +4,12 @@
 
 import { createMemo, createSelector, createSignal, For, Show } from "solid-js";
 import { boardStore, visibleTasks, loadTasks, taskCreatedAt } from "../store/board";
+import {
+  buildTaskTree,
+  flattenGroup as flattenGroupPure,
+  type TaskTreeEntry,
+  type TaskTreeShape,
+} from "./taskTree";
 import { settingsStore } from "../store/settings";
 import { reorderTaskQueue, startQueuedTaskNow } from "../services/task-queue";
 import { notifyError, notifySuccess, notifyWarning, taskHasUnreadNotification, formatErrorDetails } from "../services/notify";
@@ -301,8 +307,19 @@ function TaskRow(props: {
   const canRename = () =>
     !pending() && !!id() && !!props.onRenameTask;
   const hasActions = () => canStartNow() || canCancel() || canDelete() || canRename();
+  // Drag is disabled on any nested row (depth > 0). The drop handler at
+  // handleDrop() reorders within a single directory's queue, computed from
+  // the directory group's top-level items; nested children — whether
+  // cross-directory or same-directory — are not in that queue, so dragging
+  // would either be a silent no-op (same-directory nested) or mis-route
+  // the reorder to the wrong directory (cross-directory nested). Reordering
+  // a child also contradicts the lineage model: a child task follows its
+  // parent, not a sibling-queue position. (codex review 2026-05-27.)
   const canDrag = () =>
-    props.canDrag === true && status() === "queued" && !pending() && !props.crossDirectory;
+    props.canDrag === true
+    && status() === "queued"
+    && !pending()
+    && (props.depth ?? 0) === 0;
   const directChildCount = () => props.directChildren?.length ?? 0;
   const hasActiveChild = () =>
     !!props.directChildren?.some((child) => child?.task?.status === "active" || child?._pending);
@@ -499,23 +516,10 @@ function TaskRow(props: {
   );
 }
 
-// ── Tree entry ──
-
-/** One pre-flattened row in a directory group. depth drives indent; the
- *  `crossDirectory` flag force-disables drag when a child rendered under
- *  its parent has a different `task.directory` than the enclosing group. */
-type TreeEntry = {
-  item: any;
-  depth: number;
-  directChildren: any[];
-  crossDirectory: boolean;
-  expanded: boolean;
-};
-
 // ── TaskSection ──
 
 function TaskSection(props: {
-  entries: TreeEntry[];
+  entries: TaskTreeEntry[];
   isSelected: (id: string) => boolean;
   queuePositions?: Map<string, number>;
   onSelectTask: (id: string) => void;
@@ -644,61 +648,12 @@ export function TaskList(props: TaskListProps) {
     return map;
   });
 
-  // Tree lineage: parentID → direct visible children. Walks parent chains
-  // once to detect cycles (treat all members as top-level if any cycle is
-  // found in their chain) and to enable orphan fallback (children whose
-  // parent is filtered out of the visible set bubble up to top-level too).
-  const tree = createMemo<{ childMap: Map<string, any[]>; topLevelItems: any[] }>(() => {
-    const items = sortedItems();
-    const byID = new Map<string, any>();
-    for (const item of items) {
-      const id = item?.task?.id;
-      if (id) byID.set(id, item);
-    }
-    const cycleVictims = new Set<string>();
-    for (const item of items) {
-      const startID = item?.task?.id;
-      if (!startID || cycleVictims.has(startID)) continue;
-      const seen = new Set<string>();
-      let cur: any = item;
-      while (cur) {
-        const curID: string | undefined = cur?.task?.id;
-        if (!curID) break;
-        if (seen.has(curID)) {
-          console.warn(
-            `[TaskList] task tree cycle detected involving ${curID} — rendering cycle members as top-level`,
-          );
-          for (const v of seen) cycleVictims.add(v);
-          cycleVictims.add(curID);
-          break;
-        }
-        seen.add(curID);
-        const parentID: string | undefined = cur?.task?.parentTaskID ?? undefined;
-        if (!parentID) break;
-        const next = byID.get(parentID);
-        if (!next) break; // parent not visible — orphan, not a cycle
-        cur = next;
-      }
-    }
-    const childMap = new Map<string, any[]>();
-    const isNestedChild = new Set<string>();
-    for (const item of items) {
-      const id: string | undefined = item?.task?.id;
-      const parentID: string | undefined = item?.task?.parentTaskID ?? undefined;
-      if (!id || !parentID) continue;
-      if (cycleVictims.has(id) || cycleVictims.has(parentID)) continue;
-      if (!byID.has(parentID)) continue; // orphan fallback — parent filtered out
-      const arr = childMap.get(parentID) ?? [];
-      arr.push(item);
-      childMap.set(parentID, arr);
-      isNestedChild.add(id);
-    }
-    const topLevelItems = items.filter((item) => {
-      const id: string | undefined = item?.task?.id;
-      return !id || !isNestedChild.has(id);
-    });
-    return { childMap, topLevelItems };
-  });
+  // Tree lineage: parentID → direct visible children. Pure data transform
+  // extracted to ./taskTree.ts so cycle / orphan / dedup behaviour is
+  // exercised by real unit tests (rule 36) instead of source-string
+  // contract assertions. Wraps it in a createMemo so the shape is shared
+  // by `grouped` and `flattenGroup` without redoing the walk.
+  const tree = createMemo<TaskTreeShape>(() => buildTaskTree(sortedItems()));
 
   // Group tasks by project directory; each project renders one stable
   // creation-time stream. Lifecycle changes must not move rows between
@@ -728,31 +683,17 @@ export function TaskList(props: TaskListProps) {
       });
   });
 
-  // Flatten a directory group's top-level items into a render-ready entry
-  // list. Walks children depth-first when the parent is expanded; deeper
-  // descendants only appear after each ancestor is expanded individually.
-  function flattenGroup(topLevel: any[], groupDirectory: string): TreeEntry[] {
-    const { childMap } = tree();
-    const expanded = expandedTasks();
-    const out: TreeEntry[] = [];
-    const visit = (item: any, depth: number) => {
-      const id: string | undefined = item?.task?.id;
-      const direct = (id && childMap.get(id)) ?? [];
-      const itemDir = projectDirectoryOf(item);
-      const isExpanded = id ? expanded.has(id) : false;
-      out.push({
-        item,
-        depth,
-        directChildren: direct,
-        crossDirectory: depth > 0 && itemDir !== groupDirectory,
-        expanded: isExpanded,
-      });
-      if (id && isExpanded && direct.length > 0) {
-        for (const child of direct) visit(child, depth + 1);
-      }
-    };
-    for (const item of topLevel) visit(item, 0);
-    return out;
+  // Bind the pure flattenGroup helper to this component's reactive
+  // tree() shape, expandedTasks() signal, and projectDirectoryOf helper
+  // so callers see the same call-site idiom as before.
+  function flattenGroup(topLevel: any[], groupDirectory: string): TaskTreeEntry[] {
+    return flattenGroupPure(
+      topLevel,
+      groupDirectory,
+      tree().childMap,
+      expandedTasks(),
+      projectDirectoryOf,
+    );
   }
 
   // createSelector returns a function that's true only for the currently
