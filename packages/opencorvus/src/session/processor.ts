@@ -10,7 +10,7 @@ import { SessionStatus } from "./status"
 import { Plugin } from "@/plugin"
 import type { Provider } from "@/provider/provider"
 import { LLM } from "./llm"
-import { Config } from "@/config/config"
+import { EffectiveConfig } from "@/config/effective"
 import { EngineConfig } from "@/engine/config"
 import { SessionCompaction } from "./compaction"
 import { PermissionNext } from "@/permission/next"
@@ -180,7 +180,9 @@ export namespace SessionProcessor {
       async process(streamInput: LLM.StreamInput) {
         log.info("process")
         needsCompaction = false
-        const shouldBreak = (await Config.get()).experimental?.continue_loop_on_deny !== true
+        const shouldBreak =
+          (await EffectiveConfig.effective({ sessionID: input.assistantMessage.sessionID })).experimental
+            ?.continue_loop_on_deny !== true
         const idleMs = (await EngineConfig.get()).activity.session_llm_idle_ms
         // Activity owns retries (rule 8 â€” single source). The runner's
         // classifier + per-class maxRetries + totalMs deadline replace the
@@ -438,7 +440,8 @@ export namespace SessionProcessor {
                     )
 
                   if (exactMatch) {
-                    const agent = await Agent.get(input.assistantMessage.agent)
+                    const config = await EffectiveConfig.effective({ sessionID: input.assistantMessage.sessionID })
+                    const agent = await Agent.get(input.assistantMessage.agent, { config })
                     await PermissionNext.ask({
                       permission: "doom_loop",
                       patterns: [value.toolName],
@@ -592,7 +595,13 @@ export namespace SessionProcessor {
                     sessionID: input.sessionID,
                     messageID: input.assistantMessage.parentID,
                   })
-                  if (await SessionCompaction.isOverflow({ tokens: usage.tokens, model: input.model })) {
+                  if (
+                    await SessionCompaction.isOverflow({
+                      tokens: usage.tokens,
+                      model: input.model,
+                      sessionID: input.assistantMessage.sessionID,
+                    })
+                  ) {
                     needsCompaction = true
                   }
                   break

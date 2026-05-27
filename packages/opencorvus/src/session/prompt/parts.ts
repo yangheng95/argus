@@ -87,16 +87,16 @@ export async function resolvePromptParts(template: string): Promise<PromptInput[
 }
 
 export async function createUserMessage(input: PromptInput) {
-  const agentName = input.agent ?? (await Agent.defaultAgent())
+  const config = await EffectiveConfig.effective({ sessionID: input.sessionID })
+  const agentName = input.agent ?? (await Agent.defaultAgent({ config }))
   if (agentName === "build" && input.systemMode !== "complete") {
     throw new Error('The workflow build agent requires systemMode="complete"; use agent "coding" for direct coding assistant sessions.')
   }
-  const agent = await Agent.get(agentName)
+  const agent = await Agent.get(agentName, { config })
   if (!agent) throw new Error(`Unknown agent: ${agentName}`)
 
   // Single model resolver (spec §13.1): explicit > session overlay > base.
   const model = await resolveAgentModelRef(agentName, { explicitModel: input.model, sessionID: input.sessionID })
-  const config = await EffectiveConfig.effective({ sessionID: input.sessionID })
   const full =
     !input.variant && agent.variant
       ? await Provider.getModel(model.providerID, model.modelID, { config }).catch((error) => {

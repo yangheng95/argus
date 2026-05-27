@@ -3,7 +3,7 @@ import os from "os"
 import { readdir } from "fs/promises"
 import { Global } from "../global"
 import { Filesystem } from "../util/filesystem"
-import { Config } from "../config/config"
+import { EffectiveConfig } from "../config/effective"
 import { Instance, lazyInstanceState } from "../project/instance"
 import { Flag } from "@/flag/flag"
 import { Log } from "../util/log"
@@ -101,7 +101,7 @@ export namespace InstructionPrompt {
   }
 
   export async function systemPaths() {
-    const config = await Config.get()
+    const config = await EffectiveConfig.effective()
     const paths = new Set<string>()
 
     const globalFile = await firstGlobalInstructionFile()
@@ -180,7 +180,7 @@ export namespace InstructionPrompt {
   }
 
   export async function system() {
-    const config = await Config.get()
+    const config = await EffectiveConfig.effective()
     const paths = await systemPaths()
 
     const visited = new Set<string>()
