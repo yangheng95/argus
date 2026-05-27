@@ -831,11 +831,10 @@ body {
 }
 
 /* card__usage-hint — sibling of card__token-hint that surfaces actual LLM
-   usage (input/output/total tokens + USD cost) emitted by the executor via
-   `usage.updated`. Sits to the right of the context-token estimate so the
-   operator gets both "what fits in the prompt window" and "what we
-   actually spent". Same low-contrast treatment so it doesn't fight the
-   title row. */
+   usage (input/output/total tokens + USD cost) for this turn. Backed by
+   the per-message `Message.Assistant.{tokens,cost}` row projected onto
+   the card by tree-writer's handleMessageUpdated. Same low-contrast
+   treatment so it doesn't fight the title row. */
 .card__usage-hint {
   display: inline-flex;
   align-items: center;

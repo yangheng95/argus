@@ -48,55 +48,35 @@ describe("aggregateUsageAcrossSessions", () => {
     expect(aggregateUsageAcrossSessions([])).toEqual({ tokens: 0, costUSD: 0 })
   })
 
-  test("skips cards without a session attribution", () => {
-    const cards: UsageCardLike[] = [
-      { usage: { totalTokens: 9_999, costUSD: 5 } }, // no sessionID/phaseSessionID
-    ]
-    expect(aggregateUsageAcrossSessions(cards)).toEqual({ tokens: 0, costUSD: 0 })
-  })
-
   test("skips cards without a usage payload", () => {
-    const cards: UsageCardLike[] = [{ sessionID: "s1" }]
+    const cards: UsageCardLike[] = [{}, {}, {}]
     expect(aggregateUsageAcrossSessions(cards)).toEqual({ tokens: 0, costUSD: 0 })
   })
 
-  test("takes max per session, not sum, to avoid double-counting cumulative snapshots", () => {
-    // tree-writer stamps cumulative session totals onto whichever turn
-    // card was active at event time; older turn cards in the same
-    // session retain stale snapshots. The aggregator must use max.
+  test("sums per-message tokens and cost across all cards in the tree", () => {
+    // tree-writer projects Message.Assistant.{tokens,cost} onto exactly
+    // one turn card per assistant message — no overlap — so a straight
+    // sum yields the conversation total. No session bucketing.
     const cards: UsageCardLike[] = [
-      { sessionID: "s1", usage: { totalTokens: 100, costUSD: 0.05 } },
-      { sessionID: "s1", usage: { totalTokens: 250, costUSD: 0.12 } },
-      { sessionID: "s1", usage: { totalTokens: 180, costUSD: 0.09 } },
+      { usage: { totalTokens: 100, costUSD: 0.05 } },
+      { usage: { totalTokens: 250, costUSD: 0.12 } },
+      { usage: { totalTokens: 180, costUSD: 0.09 } },
     ]
-    expect(aggregateUsageAcrossSessions(cards)).toEqual({ tokens: 250, costUSD: 0.12 })
+    expect(aggregateUsageAcrossSessions(cards)).toEqual({ tokens: 530, costUSD: 0.26 })
   })
 
-  test("sums across distinct sessions", () => {
+  test("aggregates across many sessions (cards from orchestrator + build + planner)", () => {
     const cards: UsageCardLike[] = [
-      { sessionID: "s1", usage: { totalTokens: 250, costUSD: 0.12 } },
-      { sessionID: "s2", usage: { totalTokens: 400, costUSD: 0.20 } },
-      { sessionID: "s3", usage: { totalTokens: 80, costUSD: 0.03 } },
-    ]
-    expect(aggregateUsageAcrossSessions(cards)).toEqual({ tokens: 730, costUSD: 0.35 })
-  })
-
-  test("counts phase-absorbed sessions via phaseSessionID", () => {
-    // Phase cards (build / planner under a goal) don't set sessionID;
-    // the owning session id lives on phaseSessionID. Without this
-    // fallback the build pipeline's tokens — typically the dominant
-    // chunk — would be silently dropped.
-    const cards: UsageCardLike[] = [
-      { sessionID: "orchestrator", usage: { totalTokens: 200, costUSD: 0.10 } },
-      { phaseSessionID: "build-1", usage: { totalTokens: 5_000, costUSD: 1.50 } },
-      { phaseSessionID: "planner-1", usage: { totalTokens: 800, costUSD: 0.25 } },
+      { usage: { totalTokens: 200, costUSD: 0.10 } },
+      { usage: { totalTokens: 5_000, costUSD: 1.50 } },
+      { usage: { totalTokens: 800, costUSD: 0.25 } },
     ]
     expect(aggregateUsageAcrossSessions(cards)).toEqual({ tokens: 6_000, costUSD: 1.85 })
   })
 
   test("falls back to inputTokens + outputTokens when totalTokens is absent", () => {
     const cards: UsageCardLike[] = [
-      { sessionID: "s1", usage: { inputTokens: 120, outputTokens: 80 } },
+      { usage: { inputTokens: 120, outputTokens: 80 } },
     ]
     expect(aggregateUsageAcrossSessions(cards)).toEqual({ tokens: 200, costUSD: 0 })
   })
@@ -105,7 +85,7 @@ describe("aggregateUsageAcrossSessions", () => {
     const cards = [
       undefined,
       null,
-      { sessionID: "s1", usage: { totalTokens: 50, costUSD: 0.02 } },
+      { usage: { totalTokens: 50, costUSD: 0.02 } },
     ] as Array<UsageCardLike | undefined | null>
     expect(aggregateUsageAcrossSessions(cards)).toEqual({ tokens: 50, costUSD: 0.02 })
   })

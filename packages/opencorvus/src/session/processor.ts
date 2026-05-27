@@ -547,7 +547,21 @@ export namespace SessionProcessor {
                   })
                   input.assistantMessage.finish = value.finishReason
                   input.assistantMessage.cost += usage.cost
-                  input.assistantMessage.tokens = usage.tokens
+                  // Accumulate across steps so multi-step messages keep all
+                  // tokens (overwrite-only would silently drop earlier steps;
+                  // `cost +=` is already cumulative — match it).
+                  input.assistantMessage.tokens = {
+                    input: input.assistantMessage.tokens.input + usage.tokens.input,
+                    output: input.assistantMessage.tokens.output + usage.tokens.output,
+                    reasoning: input.assistantMessage.tokens.reasoning + usage.tokens.reasoning,
+                    total:
+                      (input.assistantMessage.tokens.total ?? 0) +
+                      (usage.tokens.total ?? 0),
+                    cache: {
+                      read: input.assistantMessage.tokens.cache.read + usage.tokens.cache.read,
+                      write: input.assistantMessage.tokens.cache.write + usage.tokens.cache.write,
+                    },
+                  }
                   await Session.updatePart({
                     id: Identifier.ascending("part"),
                     reason: value.finishReason,

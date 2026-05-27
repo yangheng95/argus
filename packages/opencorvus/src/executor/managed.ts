@@ -380,7 +380,8 @@ async function consume(stream: AsyncIterable<CodingEventInfo>, state: State, lat
         })
       })
     }
-    push(state, map(state, event))
+    const notify = map(state, event)
+    if (notify) push(state, notify)
 
     if (event.type === "text_delta") {
       state.output += event.text
@@ -473,7 +474,7 @@ function completeConsumers(state: State) {
   state.consumers.clear()
 }
 
-function map(state: State, event: CodingEventInfo): Notify {
+function map(state: State, event: CodingEventInfo): Notify | null {
   if (event.type === "progress") {
     return {
       type: "executor.progress",
@@ -599,19 +600,12 @@ function map(state: State, event: CodingEventInfo): Notify {
     }
   }
   if (event.type === "usage") {
-    return {
-      type: "usage.updated",
-      summary: event.totalTokens ? `${event.totalTokens} tokens` : "Usage updated",
-      payload: {
-        sessionID: state.sessionID,
-        queueTaskID: state.id,
-        inputTokens: event.inputTokens,
-        outputTokens: event.outputTokens,
-        totalTokens: event.totalTokens,
-        costUSD: event.costUSD,
-        ...(event.meta ?? {}),
-      },
-    }
+    // Tokens/cost are written into the active assistant message row by
+    // `build/agent.ts:case "usage"` and surfaced to overlay through
+    // `message.updated` — same path as internal sessions. No parallel
+    // Notify stream needed; dropping here keeps message-row the single
+    // source (rule 8).
+    return null
   }
   if (event.type === "done") {
     return {

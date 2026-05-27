@@ -231,13 +231,13 @@ export interface CardNode {
   toolPart?: any;
   contextTokens?: number;
   contextTokensEstimated?: boolean;
-  /** Aggregate LLM usage observed for this card's session — populated from
-   *  `usage.updated` events emitted by the executor / managed runtime
-   *  (packages/opencorvus/src/executor/managed.ts). Renderer (CardHeader)
-   *  prints `↑in / ↓out · $cost` next to the card's existing context
-   *  hint. Optional fields stay undefined until the first event arrives;
-   *  once populated, later events overwrite (executor sends cumulative
-   *  totals, not deltas). */
+  /** Per-message LLM usage projected from `Message.Assistant.{tokens,cost}`
+   *  in tree-writer's `handleMessageUpdated`. The engine writes
+   *  cumulative-within-message tokens onto the message row
+   *  (session/processor.ts step-finish + build/agent.ts case "usage")
+   *  and message.updated carries them through unchanged — the single
+   *  source. Renderer (CardHeader) prints `↑in / ↓out · $cost`. Stays
+   *  undefined for non-assistant cards. */
   usage?: {
     inputTokens?: number;
     outputTokens?: number;
