@@ -500,8 +500,7 @@ describe("scheduler.task-queue-service", () => {
     expect(prompt).toHaveBeenCalledTimes(0)
   })
 
-  // Cross-file Question.ask pollution leaks "user dismissed" rejections into this run.
-  test.skip("with concurrency=1 skips blocked session and executes another eligible session", async () => {
+  test("with concurrency=1 skips blocked session and executes another eligible session", async () => {
     await using tmp = await tmpdir({ git: true })
     process.env.OPENCORVUS_TASK_QUEUE_CONCURRENCY = "1"
     const seen: string[] = []
@@ -601,11 +600,19 @@ describe("scheduler.task-queue-service", () => {
     expect(prompt).toHaveBeenCalledTimes(1)
   })
 
-  // Same Question.ask cross-file pollution as the previous test.
-  test.skip("recovery uses time_updated heartbeat for running tasks", async () => {
-    await using tmp = await tmpdir({ git: true })
+  test("recovery uses time_updated heartbeat for running tasks", async () => {
+    // The OPENCORVUS_TASK_QUEUE_RUN_TIMEOUT_MS env var was retired in favor
+    // of the single-source `assistant.activity.task_queue_run_timeout_ms`
+    // config field (rule 25 — one place to adjust). Inject via tmpdir's
+    // config option so EngineConfig.get() picks it up; setting the env var
+    // is a no-op now and silently leaves the default 600_000ms in place,
+    // which is the bug the old skip annotation misattributed to
+    // "Question.ask cross-file pollution".
+    await using tmp = await tmpdir({
+      git: true,
+      config: { assistant: { activity: { task_queue_run_timeout_ms: 1000 } } },
+    })
     const prompt = spyOn(SessionPrompt, "prompt").mockResolvedValue(result())
-    process.env.OPENCORVUS_TASK_QUEUE_RUN_TIMEOUT_MS = "1000"
 
     await Instance.provide({
       directory: tmp.path,
@@ -666,7 +673,6 @@ describe("scheduler.task-queue-service", () => {
       },
     })
 
-    delete process.env.OPENCORVUS_TASK_QUEUE_RUN_TIMEOUT_MS
     expect(prompt).toHaveBeenCalledTimes(0)
   })
 })
