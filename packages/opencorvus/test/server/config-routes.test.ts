@@ -1,9 +1,17 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
+import { readFile } from "fs/promises"
+import path from "path"
 import { Config } from "../../src/config/config"
 import { Instance } from "../../src/project/instance"
 import { Server } from "../../src/server/server"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
+
+const ROOT = path.resolve(import.meta.dir, "..", "..", "..", "..")
+
+async function repoFile(...parts: string[]) {
+  return await readFile(path.join(ROOT, ...parts), "utf8")
+}
 
 describe("config prompt routes", () => {
   beforeEach(async () => {
@@ -104,5 +112,15 @@ describe("config prompt routes", () => {
     })
     if (nameParsed.success) throw new Error("expected agent rename to be rejected")
     expect(JSON.stringify(nameParsed.error.issues)).toContain("config.agent.build.name cannot rename")
+  })
+
+  test("PATCH /config validates model refs before writing config", async () => {
+    const source = await repoFile("packages", "opencorvus", "src", "server", "routes", "config.ts")
+    const start = source.indexOf('operationId: "config.update"')
+    expect(start).toBeGreaterThan(0)
+    const body = source.slice(start, source.indexOf("const updated = await Config.get()", start))
+
+    expect(body).toContain("validateConfigModelReferences(partial, \"config\")")
+    expect(body.indexOf("validateConfigModelReferences")).toBeLessThan(body.indexOf("Config.update"))
   })
 })

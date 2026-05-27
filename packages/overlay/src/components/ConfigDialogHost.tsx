@@ -291,7 +291,7 @@ export function ConfigDialogHost() {
                   </svg>
                 </div>
                 <div class="about-author-info">
-                  <strong class="about-author-name">杨恒@代码生成组</strong>
+                  <strong class="about-author-name">杨恒@Hithink Research</strong>
                 </div>
               </div>
             </div>

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { BuildAgentContractError, BuildResultSchema } from "../../src/build/types"
-import { convertMissingTerminalToolError, createMergeBackSingleFlight } from "../../src/build/agent"
+import { convertMissingTerminalToolError, createMergeBackSingleFlight, evaluateBuildReportSubmission } from "../../src/build/agent"
 import { AgentRunError } from "../../src/agent/runner"
 import { Message } from "../../src/session/message"
 
@@ -208,6 +208,47 @@ describe("convertMissingTerminalToolError", () => {
       lastMergeBackOutcome: "conflict on src/components/MessageList.tsx",
     })
     expect(converted!.diagnostics.lastMergeBackOutcome).toBe("conflict on src/components/MessageList.tsx")
+  })
+})
+
+describe("evaluateBuildReportSubmission", () => {
+  test("rejects invalid build terminal payload as visible feedback instead of throwing", () => {
+    const evaluated = evaluateBuildReportSubmission({
+      result: {
+        status: "passed",
+        summary: "Implemented the goal",
+        files_changed: [],
+        tests: [],
+      },
+      ownsWorktree: true,
+      worktreeBranch: "opencorvus/task/t/goal/g/run/r",
+    })
+
+    expect(evaluated.accepted).toBe(false)
+    expect(evaluated.output).toContain("REJECTED: build report did not match BuildResultSchema")
+    expect(evaluated.output).toContain("fact_check_items")
+    expect(evaluated.output).toContain("call report_build_result again")
+  })
+
+  test("accepts valid build terminal payload and normalizes managed worktree commit_ref", () => {
+    const evaluated = evaluateBuildReportSubmission({
+      result: {
+        status: "passed",
+        summary: "Implemented the goal",
+        files_changed: [],
+        tests: [],
+        fact_check_items: [],
+        commit_ref: "worktree-only",
+      },
+      ownsWorktree: true,
+      worktreeBranch: "opencorvus/task/t/goal/g/run/r",
+    })
+
+    expect(evaluated.accepted).toBe(true)
+    if (evaluated.accepted) {
+      expect(evaluated.result.commit_ref).toBe("")
+      expect(evaluated.output).toBe("RECORDED: build report status=passed.")
+    }
   })
 })
 

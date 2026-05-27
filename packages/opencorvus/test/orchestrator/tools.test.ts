@@ -2762,7 +2762,10 @@ describe("orchestrator tools", () => {
     })
   })
 
-  test("visual reference tasks require design_analysis before downstream stages", async () => {
+  test("visual reference inputs do not host-block downstream tool calls", async () => {
+    await tmp?.[Symbol.asyncDispose]?.()
+    tmp = await tmpdir({ git: true })
+
     const now = Date.now()
     const stamp = now.toString(16)
     const projectID = `project_visual_gate_${stamp}`
@@ -2786,11 +2789,23 @@ describe("orchestrator tools", () => {
       now,
     })
 
-    buildAgentRunImpl = async () => {
-      throw new Error("build must not run before design_analysis")
-    }
-    architectCoordinateImpl = async () => {
-      throw new Error("architect must not run before design_analysis")
+    let buildCalled = false
+    buildAgentRunImpl = async (input: any) => {
+      buildCalled = true
+      await markBuildSlotAcquired(input)
+      return {
+        result: {
+          status: "passed",
+          summary: "Visual URL did not force a design_analysis host gate.",
+          files_changed: [],
+          tests: [],
+        },
+        sessionID: "ses_visual_no_host_gate_build",
+        worktreeDir: input.managedWorktree.directory,
+        worktreeBranch: input.managedWorktree.branch,
+        worktreeBaseRef: input.managedWorktree.baseRef,
+        diffs: [],
+      }
     }
 
     await Instance.provide({
@@ -2805,21 +2820,6 @@ describe("orchestrator tools", () => {
           workflowState,
         })
 
-        const requirementsResult = await tools.requirements.execute({ reason: "Need requirements" }, {} as any)
-        expect(requirementsResult).toContain("blocked")
-        expect(requirementsResult).toContain("design_analysis")
-        expect(requirementsResult).toContain("evidence_source_manifest")
-        expect(findActiveSpecForTask(taskID)).toBeDefined()
-
-        const intentResult = await tools.analyze_intent.execute({ reason: "Need intent reading" }, {} as any)
-        expect(intentResult).toContain("blocked")
-        expect(intentResult).toContain("design_analysis")
-        expect(intentResult).toContain("evidence_source_manifest")
-
-        const architectResult = await tools.architect.execute({ reason: "Need goals" }, {} as any)
-        expect(architectResult).toContain("blocked")
-        expect(architectResult).toContain("design_analysis")
-
         const buildResult = await tools.build.execute(
           {
             goalID,
@@ -2827,12 +2827,12 @@ describe("orchestrator tools", () => {
           },
           buildToolOptions(),
         )
-        expect(buildResult).toContain("blocked")
-        expect(buildResult).toContain("design_analysis")
-        expect(buildResult).toContain("evidence_source_manifest")
+        expect(buildCalled).toBe(true)
+        expect(buildResult).toContain("Build agent finished")
+        expect(buildResult).toContain("Visual URL did not force a design_analysis host gate")
       },
     })
-  })
+  }, 30_000)
 
   test("design_analysis materializes PRD/SPEC and source manifest files", async () => {
     const now = Date.now()
@@ -2918,6 +2918,57 @@ describe("orchestrator tools", () => {
         expect(manifest).toContain(`Canonical PRD/SPEC file: ${paths.prdRelative}`)
         expect(manifest).toContain("design-reference.png")
         expect(manifest).toContain("mirror/reference.png")
+      },
+    })
+  })
+
+  test("design_analysis exposes materialization failure details", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_design_material_fail_${stamp}`
+    const taskID = `tsk_design_material_fail_${stamp}`
+    const goalID = `gol_design_material_fail_${stamp}`
+    const pipeline = WorkflowRegistry.resolveSync("pipeline")!
+    const workflowState = createWorkflowState(pipeline)
+    const missingMaterial = "docs/prd/missing-reference.png"
+
+    insertWorkflowTaskWithGoal({
+      projectID,
+      taskID,
+      goalID,
+      sessionID: null,
+      worktree: tmp.path,
+      projectName: "Design material failure project",
+      taskTitle: "Design material failure task",
+      request: "Create the page from provided local material.",
+      goalTitle: "Implement page",
+      goalSlug: "implement-page",
+      objective: "Implement the page from material evidence",
+      now,
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "design material failure test" })
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+          workflow: pipeline,
+          workflowState,
+        })
+
+        await expect(
+          tools.design_analysis.execute(
+            { reason: "material should be inspected", materials: [missingMaterial] },
+            {} as any,
+          ),
+        ).rejects.toThrow(missingMaterial)
+
+        const entry = createDecisionLog(taskID).readByKey("abort_materialization_failed")
+        expect(entry?.value).toContain(missingMaterial)
+        expect(entry?.value).toContain("Materialization errors")
       },
     })
   })

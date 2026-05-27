@@ -72,7 +72,7 @@ describe("BuildAgent.run (real-LLM smoke)", () => {
       await Instance.provide({
         directory: tmp.path,
         fn: async () => {
-          // Seed a fake task so BuildSemaphore has something to gate on.
+          // Seed a fake task so AgentSemaphore has something to gate on.
           const taskID = `task_build_smoke_${Date.now()}`
           const now = Date.now()
           Database.use((db) =>

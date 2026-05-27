@@ -359,44 +359,6 @@ function readPersistedArchitectFidelity(task: TaskRow): ArchitectFidelityState {
   }
 }
 
-function visualReferenceSignals(task: TaskRow): string[] {
-  const signals: string[] = []
-  if (/https?:\/\/\S+/i.test(task.request)) signals.push("request_url")
-  const metadata =
-    task.metadata && typeof task.metadata === "object" && !Array.isArray(task.metadata)
-      ? (task.metadata as Record<string, unknown>)
-      : {}
-  if (typeof metadata.figma_url === "string" && metadata.figma_url.trim()) signals.push("figma_url")
-
-  const materialAttachments = [
-    ...(Array.isArray(task.attachments) ? (task.attachments as any[]) : []),
-    ...(Array.isArray(task.system_artifacts) ? (task.system_artifacts as any[]) : []),
-  ]
-  for (const item of materialAttachments) {
-    const mime = typeof item?.mime === "string" ? item.mime : ""
-    const intent = typeof item?.intent === "string" ? item.intent : ""
-    if (mime.startsWith("image/") || mime === "application/pdf" || intent === "visual_reference") {
-      signals.push("visual_material")
-      break
-    }
-  }
-  return [...new Set(signals)]
-}
-
-function designAnalysisContractComplete(task: TaskRow): boolean {
-  const entries = createDecisionLog(task.id).readByPhase("design_analysis")
-  const keys = new Set(entries.map((entry) => entry.key))
-  return [
-    "product_spec",
-    "frontend_spec",
-    "visual_consistency_spec",
-    "backend_spec",
-    "prd_iteration_notes",
-    "completeness_review",
-    "evidence_source_manifest",
-  ].every((key) => keys.has(key))
-}
-
 function renderEvidenceSourceManifest(input: {
   task: TaskRow
   liveUrls: readonly string[]
@@ -569,26 +531,6 @@ async function writeDesignAnalysisArtifacts(input: {
     prdRelative: paths.prdRelative,
     manifestRelative: paths.manifestRelative,
   }
-}
-
-function requireDesignAnalysisBefore(stage: string, task: TaskRow) {
-  const signals = visualReferenceSignals(task)
-  if (signals.length === 0 || designAnalysisContractComplete(task)) return undefined
-  return SubAgentProtocol.yieldResult({
-    headline: `${stage}: blocked — call design_analysis before any downstream stage for visual/reference tasks.`,
-    summary:
-      `This task has visual/reference inputs (${signals.join(", ")}), but the active design-analysis contract is incomplete. ` +
-      "Run design_analysis first and require it to complete mirror extraction plus the PRD/SPEC review pass(es) required by assistant.auto_iteration. " +
-      "Downstream agents must consume decision_log phase=design_analysis, including visual_consistency_spec and evidence_source_manifest; they must not infer from the raw URL or attachments.",
-    fields: [
-      ["next_action", "design_analysis"],
-      [
-        "required_contract",
-        "product_spec + frontend_spec + visual_consistency_spec + backend_spec + prd_iteration_notes + completeness_review + evidence_source_manifest",
-      ],
-    ],
-    pointer: "design_analysis",
-  })
 }
 
 function acceptanceSpecsToPromptLines(raw: unknown): string[] {
@@ -1934,6 +1876,7 @@ export function createOrchestratorTools(input: {
       replayContext,
       signal: input.signal,
       taskID,
+      task,
       parentSessionID: input.agentSessionID,
     })
 
@@ -2225,8 +2168,8 @@ export function createOrchestratorTools(input: {
         "or concrete evidence that the active REQ snapshot is invalid.\n" +
         "SKIP WHEN: trivial direct edit (single-file bug fix, typo / config tweak); " +
         "build agent can run against the user's text alone and `deliver` has enough " +
-        "signal in the request to verify. For visual/reference tasks, design_analysis is a hard prerequisite: " +
-        "do not call requirements until design_analysis has persisted PRD/SPEC review entries.",
+        "signal in the request to verify. When a visual/reference artifact is actually the task contract, " +
+        "prefer `design_analysis` first so requirements can consume its PRD/SPEC review entries.",
       inputSchema: z.object({
         reason: z.string().optional().describe("Why you decided to analyze requirements"),
       }),
@@ -2236,9 +2179,6 @@ export function createOrchestratorTools(input: {
         // Rule 23: no host-side status gate. Tool selection is governed by
         // the orchestrator prompt/tool contract; reruns supersede the prior
         // spec and insert a new v1 snapshot only when task evidence justifies it.
-
-        const designGate = requireDesignAnalysisBefore("requirements", task)
-        if (designGate) return designGate
 
         await trackStepStart("requirements")
         task = await updateTask(task, { status: "active" }, "Requirements analysis started")
@@ -2617,6 +2557,12 @@ export function createOrchestratorTools(input: {
         // all 3 ENOENT'd, design-analyst still ran for 45s producing
         // nothing, and the pipeline stalled on the empty verdict.
         let materializedCount = 0
+        const materializationFailures: Array<{
+          source: "url" | "material"
+          target: string
+          stage: string
+          error: string
+        }> = []
 
         // --- Figma MCP references --------------------------------------------
         for (const figmaUrl of figmaUrls) {
@@ -2694,11 +2640,19 @@ export function createOrchestratorTools(input: {
               // 真实性闸拒收：向上抛，让 design_analysis 工具调用整体 fail。
               throw shotErr
             }
+            const stage = shotErr instanceof CaptureGateError ? shotErr.stage : "unknown"
+            const error = shotErr instanceof Error ? shotErr.message : String(shotErr)
+            materializationFailures.push({
+              source: "url",
+              target: liveUrl,
+              stage,
+              error,
+            })
             log.warn("design_analysis: url screenshot failed (non-gate)", {
               taskID,
               url: liveUrl,
-              stage: shotErr instanceof CaptureGateError ? shotErr.stage : "unknown",
-              error: shotErr instanceof Error ? shotErr.message : String(shotErr),
+              stage,
+              error,
             })
           }
         }
@@ -2713,6 +2667,12 @@ export function createOrchestratorTools(input: {
               ? pathMod.normalize(rawPath)
               : pathMod.normalize(pathMod.resolve(projectRoot, rawPath))
             if (!abs.startsWith(pathMod.normalize(projectRoot))) {
+              materializationFailures.push({
+                source: "material",
+                target: rawPath,
+                stage: "path",
+                error: `resolved path escapes project root: ${abs}`,
+              })
               log.warn("design_analysis: material path escapes project root — skipped", {
                 taskID,
                 rawPath,
@@ -2738,6 +2698,12 @@ export function createOrchestratorTools(input: {
             })
             materializedCount++
           } catch (matErr) {
+            materializationFailures.push({
+              source: "material",
+              target: rawPath,
+              stage: "read",
+              error: matErr instanceof Error ? matErr.message : String(matErr),
+            })
             log.warn("design_analysis: material materialization failed", {
               taskID,
               path: rawPath,
@@ -2765,17 +2731,24 @@ export function createOrchestratorTools(input: {
         if (!enrichedHasAttachments && materializedCount === 0) {
           await trackStepComplete("design_analysis", undefined, true)
           const providedCount = liveUrls.length + figmaUrls.length + materialPaths.length
+          const failureDetail = materializationFailures.length > 0
+            ? " Materialization errors: " + materializationFailures
+              .map((failure) => `${failure.source}:${failure.target} [${failure.stage}] ${failure.error}`)
+              .join("; ")
+            : ""
           const message =
             `Design analysis aborted: all ${providedCount} provided visual source(s) ` +
             `failed to materialize (URLs unreachable, Figma fetch failed, or local material ` +
             `paths did not exist). Check that the paths/URLs in the 'materials' / 'url' / ` +
             `'urls' / 'figma_url' arguments actually exist. If no real visual reference is ` +
-            `available, skip design_analysis and call requirements directly.`
+            `available, skip design_analysis and call requirements directly.` +
+            failureDetail
           log.warn("design_analysis: no visual input materialized — aborting before agent call", {
             taskID,
             liveUrlCount: liveUrls.length,
             figmaUrlCount: figmaUrls.length,
             materialCount: materialPaths.length,
+            materializationFailures,
           })
           // P4: write decision_log so downstream agents see "design analysis
           // was attempted but produced no visual context" rather than
@@ -2789,7 +2762,7 @@ export function createOrchestratorTools(input: {
               value:
                 `Design analysis aborted before agent call: all ${providedCount} provided visual ` +
                 `source(s) (live=${liveUrls.length}, figma=${figmaUrls.length}, materials=${materialPaths.length}) ` +
-                `failed to materialize.`,
+                `failed to materialize.${failureDetail}`,
               reason: "materialization_failed_all_sources",
             })
           } catch (logErr) {
@@ -3024,15 +2997,13 @@ export function createOrchestratorTools(input: {
         "re-run architect merely to widen owned_paths or bless ordinary shared-file " +
         "edits; build sessions may edit outside responsibility paths when needed " +
         "and must explain every touched file in files_changed[]. For contract-level " +
-        "point fixes prefer `modify_goal`. For visual/reference tasks, design_analysis is a hard prerequisite " +
-        "before architect even if requirements already exist.",
+        "point fixes prefer `modify_goal`. When a visual/reference artifact is actually the task contract, " +
+        "prefer `design_analysis` before architect so the goal graph can consume its PRD/SPEC review entries.",
       inputSchema: z.object({
         reason: z.string().optional().describe("Why you decided to run architect"),
       }),
       execute: async () => {
         const task = requireTask(taskID)
-        const designGate = requireDesignAnalysisBefore("architect", task)
-        if (designGate) return designGate
         const activeSpec = findActiveSpecForTask(task.id)
         if (!activeSpec) {
           return SubAgentProtocol.yieldResult({
@@ -3399,8 +3370,6 @@ export function createOrchestratorTools(input: {
         reason: z.string().optional().describe("Why you decided to run integrity review"),
       }),
       execute: async () => {
-        const designGate = requireDesignAnalysisBefore("integrity", requireTask(taskID))
-        if (designGate) return designGate
         const outcome = await runIntegrityReview()
         if (outcome.status === "reviewed" && outcome.artifactMissing && outcome.phase === "post_build") {
           await blockActiveRunForTask(taskID, {
@@ -3660,9 +3629,10 @@ export function createOrchestratorTools(input: {
     // pipeline (before requirements / architect) to reconstruct the user's
     // real intent from a typically-terse request, the surrounding work
     // record (decision log + prior delivery feedback when re-entering a
-    // task), and a read-only tour of the repository. Visual/reference tasks
-    // are gated through design_analysis first so intent analysis reads the
-    // same PRD/SPEC source as every downstream stage.
+    // task), and a read-only tour of the repository. When visual/reference
+    // artifacts are actually the task contract, the orchestrator can run
+    // design_analysis first so intent analysis reads the same PRD/SPEC source
+    // as downstream stages.
     // -----------------------------------------------------------------------
 
     analyze_intent: tool({
@@ -3674,8 +3644,7 @@ export function createOrchestratorTools(input: {
         "and scope estimates in the repo's actual shape. Output: an " +
         "IntentAnalysisResult (intent class, complexity band, extracted slots, " +
         "missing-info keys, blocker / nice clarifications, overall confidence, " +
-        "one-sentence summary). For visual/reference tasks, this tool is blocked " +
-        "until design_analysis has produced the PRD/SPEC contract and source manifest.\n\n" +
+        "one-sentence summary).\n\n" +
         "USE WHEN: terse request, ambiguous scope, multiple plausible intent classes " +
         "(feature vs refactor vs bug-fix), the user's intent might silently mislead " +
         "downstream stages, OR re-entering after operator_message / refine / " +
@@ -3694,8 +3663,6 @@ export function createOrchestratorTools(input: {
       }),
       execute: async () => {
         const task = requireTask(taskID)
-        const designBlock = requireDesignAnalysisBefore("analyze_intent", task)
-        if (designBlock) return designBlock
         await trackStepStart("analyze_intent")
         let out
         try {
@@ -5018,8 +4985,8 @@ export function createOrchestratorTools(input: {
         "recover that artifact or get explicit user confirmation before continuing from stale integrity data. " +
         "DO NOT USE FOR: multi-file features, UI replication from designs, anything with explicit acceptance " +
         "criteria, cross-module refactors, new subsystems — those go through requirements → architect → " +
-        "per-goal build → integrity (the pipeline workflow). For visual/reference tasks, design_analysis must " +
-        "already have produced PRD/SPEC review entries, especially visual_consistency_spec, before any build dispatch.",
+        "per-goal build → integrity (the pipeline workflow). When a visual/reference artifact is actually " +
+        "the task contract, prefer design_analysis before build so build can consume its PRD/SPEC review entries.",
       inputSchema: z.object({
         request: z
           .string()
@@ -5093,9 +5060,6 @@ export function createOrchestratorTools(input: {
           )
         }
 
-        const designGate = requireDesignAnalysisBefore("build", task)
-        if (designGate) return designGate
-
         // Inherit goalID from the parent agent session if one isn't explicitly
         // passed — this nests the build card under the originating goal in the
         // overlay instead of floating at the conversation root.
@@ -5145,7 +5109,7 @@ export function createOrchestratorTools(input: {
 
         // Phase 5-c: delegate to BuildAgent.run. It owns the child session
         // (kind=build), creates an isolated worktree (parallel-safe for
-        // multi-goal fan-out), gates concurrency via BuildSemaphore, and
+        // multi-goal fan-out), gates concurrency via AgentSemaphore, and
         // returns a structured BuildResult the orchestrator can judge.
         //
         // For goalID path, build the structured BuildTarget from the DB row

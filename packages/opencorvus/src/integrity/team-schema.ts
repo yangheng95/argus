@@ -4,6 +4,10 @@ import { FactCheckItemListSchema } from "@/fact-check/schema"
 export const IntegrityVerdictSchema = z.enum(["pass", "concerns", "needs_correction"])
 export type IntegrityVerdict = z.infer<typeof IntegrityVerdictSchema>
 
+export const IntegrityCoverageStatusValues = ["covered", "missing", "inconclusive"] as const
+export const IntegrityCoverageStatusSchema = z.enum(IntegrityCoverageStatusValues)
+export type IntegrityCoverageStatus = z.infer<typeof IntegrityCoverageStatusSchema>
+
 export const IntegrityReviewerPlanSchema = z
   .object({
     rationale: z.string().min(1),
@@ -97,10 +101,13 @@ export const IntegrityReviewerReportSchema = z
       .array(
         z
           .object({
-            kind: z.string().min(1),
-            target: z.string().min(1),
-            purpose: z.string().min(1),
-            result: z.string().min(1),
+            kind: z.string().min(1).describe("Evidence tool or inspection category."),
+            target: z.string().min(1).describe("Concrete file, directory, command, evidence section, or artifact inspected."),
+            purpose: z.string().min(1).describe("Why this evidence was inspected for the reviewer scope."),
+            result: z
+              .string()
+              .min(1)
+              .describe("What the inspection showed. Do not add finding fields such as affectedSymbols here."),
           })
           .strict(),
       )
@@ -109,10 +116,24 @@ export const IntegrityReviewerReportSchema = z
       .array(
         z
           .object({
-            requirementID: z.string().min(1).optional(),
-            specID: z.string().min(1).optional(),
-            userRequestQuote: z.string().min(1).optional(),
-            status: z.enum(["covered", "missing", "inconclusive"]),
+            requirementID: z
+              .string()
+              .min(1)
+              .describe("Singular coverage anchor such as REQ-1. Do not use requirementIDs here.")
+              .optional(),
+            specID: z
+              .string()
+              .min(1)
+              .describe("Singular coverage anchor for one acceptance spec id. Do not use specIDs here.")
+              .optional(),
+            userRequestQuote: z
+              .string()
+              .min(1)
+              .describe("Singular literal user-request quote. Do not use userRequestQuotes here.")
+              .optional(),
+            status: IntegrityCoverageStatusSchema.describe(
+              "Coverage status only. Do not use verdict values such as pass, concerns, or needs_correction here.",
+            ),
             evidence: z.string().min(1),
           })
           .strict()
@@ -187,7 +208,9 @@ export const IntegrityTeamReportSchema = z
           .object({
             promise: z.string().min(1),
             reviewerIDs: z.array(z.string().min(1)).default([]),
-            status: z.enum(["covered", "missing", "inconclusive"]),
+            status: IntegrityCoverageStatusSchema.describe(
+              "Coverage status only. Do not use verdict values such as pass, concerns, or needs_correction here.",
+            ),
             notes: z.string().min(1),
           })
           .strict(),

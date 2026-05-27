@@ -1486,6 +1486,31 @@ export const EngineRoutes = lazy(() =>
         return c.json(await EngineService.updateTaskBudget(c.req.valid("param").taskID, budget))
       },
     )
+    .patch(
+      "/task/:taskID/title",
+      describeRoute({
+        summary: "Update task title",
+        operationId: "task.updateTitle",
+        responses: {
+          200: { description: "Title updated" },
+          ...errors(400, 404),
+        },
+      }),
+      validator("param", z.object({ taskID: Task.shape.id })),
+      validator(
+        "json",
+        z.object({
+          title: z
+            .string()
+            .transform((value) => value.trim())
+            .pipe(z.string().min(1).max(200)),
+        }),
+      ),
+      async (c) => {
+        const { title } = c.req.valid("json")
+        return c.json(await EngineService.updateTaskTitle(c.req.valid("param").taskID, title))
+      },
+    )
 )
 
 async function assertDirectAgentSession(taskID: string, sessionID: string) {

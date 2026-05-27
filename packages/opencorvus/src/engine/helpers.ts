@@ -50,7 +50,7 @@ export function budgetRow(input?: z.infer<typeof Budget>): EngineBudget | undefi
 }
 
 /**
- * Resolve the effective max executor groups for a task.
+ * Resolve the effective parallel-agent ceiling for a task.
  * Priority: task budget > config (env + jsonc) > DEFAULTS.max_executor_groups.
  *
  * Reads the live `EngineConfig.get()` snapshot so UI-driven updates to
@@ -58,7 +58,7 @@ export function budgetRow(input?: z.infer<typeof Budget>): EngineBudget | undefi
  * no cache invalidation. Callers must be in async context; the three
  * budget-class helpers here share that contract.
  */
-export async function effectiveMaxExecutorGroups(task: TaskRow): Promise<number> {
+export async function effectiveMaxAgentParallelism(task: TaskRow): Promise<number> {
   const budgetMax = (task.budget as EngineBudget | null)?.max_executor_groups
   if (typeof budgetMax === "number" && budgetMax >= 1) return budgetMax
   const cfg = await EngineConfig.get()

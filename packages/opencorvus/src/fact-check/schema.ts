@@ -157,3 +157,26 @@ export function deriveFactCheckVerdict(input: {
   if (correctedCount > 0 || input.unresolved.length > 0) return "minor_corrections"
   return "clean"
 }
+
+export function validateFactCheckAgentReportSemantics(report: FactCheckReport): string | undefined {
+  if (report.scope.items_inspected > report.scope.items_total) {
+    return `items_inspected (${report.scope.items_inspected}) cannot exceed items_total (${report.scope.items_total}).`
+  }
+  const classifiedCount = report.verified.length + report.corrected.length + report.unresolved.length
+  if (classifiedCount !== report.scope.items_inspected) {
+    return (
+      `classified item count (${classifiedCount}) must equal scope.items_inspected ` +
+      `(${report.scope.items_inspected}) for successful fact-check agent reports.`
+    )
+  }
+  const expected = deriveFactCheckVerdict({
+    items_total: report.scope.items_total,
+    items_inspected: report.scope.items_inspected,
+    corrected: report.corrected,
+    unresolved: report.unresolved,
+  })
+  if (report.overall_verdict !== expected) {
+    return `overall_verdict must be "${expected}" for the submitted corrected/unresolved/items counts; got "${report.overall_verdict}".`
+  }
+  return undefined
+}

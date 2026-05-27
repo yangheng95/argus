@@ -4,8 +4,10 @@ import { runAgentSession } from "@/agent/runner"
 import { withFactCheckRegistration } from "@/prompt/fragments/fact-check-registration"
 import { limitSummary, markdownList } from "@/agent/report"
 import type { AcceptanceSpec } from "@/acceptance/types"
+import { AgentSemaphore } from "@/engine/agent-semaphore"
 import { Event as EngineEvent } from "@/engine/model"
 import { EngineProtocol } from "@/engine/protocol"
+import type { TaskRow } from "@/engine/store"
 import { renderUserRequestSection } from "@/intent/request-prompt"
 import type { GoalContractFields } from "@/pipeline/types"
 import { Instance } from "@/project/instance"
@@ -31,6 +33,7 @@ import { renderSharedIntegrityPromptContext, sanitizeIntegrityPromptText } from 
 import type { RequirementStatusRow } from "./requirement-status"
 import {
   IntegrityReviewCompletedPayloadSchema,
+  IntegrityCoverageStatusValues,
   IntegrityReviewerPlanSchema,
   IntegrityReviewerReportSchema,
   IntegrityTeamReportSchema,
@@ -67,6 +70,28 @@ const FINDING_MANIFEST_PROMPT = [
   "When a finding repeats a prior blocker, keep the same defect surface: set `sourceFindingIDs[]` and `priorAttemptRefs[]` when known, and do not rename it to escape repair accountability.",
   "For every blocking finding, the final consensus must have a matching required repair. The host will also enforce this, but the report should make the repair contract explicit.",
   "Do not invent fingerprints. The host computes deterministic fingerprints after schema validation.",
+].join("\n")
+
+const COVERAGE_AUDIT_STATUS_CONTRACT_PROMPT = [
+  "Coverage audit status contract:",
+  `- \`coverageAudit[].status\` and reviewer \`coverage[].status\` must be exactly one of: ${IntegrityCoverageStatusValues.map((value) => `\`${value}\``).join(", ")}.`,
+  "- Use `missing` when a request promise is not satisfied. Do not use `concerns`, `needs_correction`, `failed`, `uncovered`, or `partial` in coverage status fields.",
+  "- Overall verdict values belong only in `verdict` / `verdictImpact`; never copy those verdict values into coverage audit rows.",
+].join("\n")
+
+const REVIEWER_COVERAGE_ROW_CONTRACT_PROMPT = [
+  "Reviewer coverage row contract:",
+  "- Each `coverage[]` row uses singular anchor fields only: `requirementID?: string`, `specID?: string`, `userRequestQuote?: string`, `status`, and `evidence`.",
+  "- Do not put finding traceability fields inside `coverage[]`: no `requirementIDs`, `specIDs`, `userRequestQuotes`, `affectedSymbols`, or plural arrays.",
+  "- Every `coverage[]` row must include at least one singular anchor: `requirementID`, `specID`, or `userRequestQuote`.",
+  "- If several anchors apply, emit several coverage rows or choose the strongest single anchor; reserve plural traceability arrays for `findings[]` only.",
+].join("\n")
+
+const REVIEWER_DRILLDOWN_ROW_CONTRACT_PROMPT = [
+  "Reviewer drilldown row contract:",
+  "- Each `drilldowns[]` row uses exactly `kind`, `target`, `purpose`, and `result`.",
+  "- Do not put finding fields inside `drilldowns[]`: no `affectedSymbols`, `requirementIDs`, `specIDs`, `userRequestQuotes`, `filePaths`, or typo variants.",
+  "- Put impacted symbols and files on `findings[]` only when there is an actual finding.",
 ].join("\n")
 
 export interface IntegrityIssue {
@@ -176,6 +201,7 @@ export async function reviewIntegrity(input: {
   replayContext?: IntegrityReplayContext
   signal?: AbortSignal
   taskID?: string
+  task?: TaskRow
   parentSessionID?: string
   onSessionCreated?: (sessionID: string) => void
 }): Promise<IntegrityResult & { sessionID: string }> {
@@ -256,10 +282,11 @@ export async function reviewIntegrity(input: {
 
   const reviewerReports = await Promise.all(
     plan.reviewers.map((scope) =>
-      runReviewerSession({
+      runReviewerSessionWithSlot({
         input: promptInput,
         scope,
         parentSessionID: planOut.session.id,
+        task: input.task,
       }),
     ),
   )
@@ -352,7 +379,8 @@ function createReviewerToolKit(input: {
     tools: {
       ...evidenceTools,
       submit_reviewer_report: tool({
-        description: "Submit this independent reviewer's evidence-backed report. Do not emit code changes.",
+        description:
+          "Submit this independent reviewer's evidence-backed report. Do not emit code changes. coverage[] rows must use singular anchor fields requirementID/specID/userRequestQuote; drilldowns[] rows must use kind/target/purpose/result only.",
         inputSchema: IntegrityReviewerReportSchema,
         execute: async (raw) => {
           const parsed = IntegrityReviewerReportSchema.safeParse(raw)
@@ -378,7 +406,7 @@ function createConsensusToolKit(collector: ConsensusCollector, reviewerReports: 
     tools: {
       submit_integrity_consensus: tool({
         description:
-          "Submit the final integrity team consensus. Fold runtime/acceptance evidence into findings; do not emit dimensions or acceptance objects.",
+          `Submit the final integrity team consensus. Fold runtime/acceptance evidence into findings; do not emit dimensions or acceptance objects. coverageAudit[].status must be exactly one of ${IntegrityCoverageStatusValues.join(", ")}; do not use verdict values such as concerns there.`,
         inputSchema: IntegrityTeamReportSchema,
         execute: async (raw) => {
           const parsed = IntegrityTeamReportSchema.safeParse(raw)
@@ -471,6 +499,22 @@ async function runReviewerSession(input: {
   return out.collector.report
 }
 
+async function runReviewerSessionWithSlot(input: {
+  input: ReviewPromptInput
+  scope: IntegrityReviewerScope
+  parentSessionID: string
+  task?: TaskRow
+}): Promise<IntegrityReviewerReport> {
+  const run = () =>
+    runReviewerSession({
+      input: input.input,
+      scope: input.scope,
+      parentSessionID: input.parentSessionID,
+    })
+  if (!input.task) return await run()
+  return await AgentSemaphore.withSlot(input.task, run)
+}
+
 export function buildSupervisorPlanPrompt(input: ReviewPromptInput): string {
   return [
     "# Integrity Supervisor Planning",
@@ -503,6 +547,9 @@ export function buildReviewerPrompt(input: ReviewPromptInput, scope: IntegrityRe
     renderIntegrityReplayContextPrompt(input.replayContext),
     FINDING_TRACEABILITY_PROMPT,
     FINDING_MANIFEST_PROMPT,
+    COVERAGE_AUDIT_STATUS_CONTRACT_PROMPT,
+    REVIEWER_COVERAGE_ROW_CONTRACT_PROMPT,
+    REVIEWER_DRILLDOWN_ROW_CONTRACT_PROMPT,
     renderSeverityNewEvidenceSection(input),
     [
       "Before deep evidence reads, form an investigation plan for your scope: request promise, risk hypothesis, evidence plan, and pass/finding criteria. Include it in `investigationPlan` in submit_reviewer_report.",
@@ -530,13 +577,16 @@ export function buildSupervisorConsensusPrompt(
     "Compare the current reviewer reports against prior attempts. A repeated blocking finding should be represented as persistent or regressed when the evidence supports that conclusion. Do not pass while a prior blocking repair has no convincing current evidence. Do not suppress a prior blocker merely because current reviewers used a different id.",
     CONSENSUS_TRACEABILITY_PROMPT,
     FINDING_MANIFEST_PROMPT,
+    COVERAGE_AUDIT_STATUS_CONTRACT_PROMPT,
+    REVIEWER_COVERAGE_ROW_CONTRACT_PROMPT,
+    REVIEWER_DRILLDOWN_ROW_CONTRACT_PROMPT,
     "Reviewer plan:",
     renderReviewerPlanMarkdown(plan),
     "Reviewer reports:",
     reports.map(renderReviewerReportMarkdown).join("\n\n"),
     "Original review context:",
     buildIntegrityEvidencePrompt(input),
-    "Perform a coverage audit before final verdict: every critical request promise from the plan should be covered, missing, or explicitly inconclusive. Include `coverageAudit`; include `uninspectedRisks` for high-risk surfaces that no reviewer actually checked.",
+    "Perform a coverage audit before final verdict: every critical request promise from the plan should be `covered`, `missing`, or explicitly `inconclusive`. Include `coverageAudit`; include `uninspectedRisks` for high-risk surfaces that no reviewer actually checked.",
     "Call submit_integrity_consensus exactly once.",
   ].join("\n\n")
 }

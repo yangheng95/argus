@@ -151,6 +151,7 @@ async function runDeliveryIntegrityReview(input: { taskID?: string; parentSessio
     replayContext,
     signal: input.signal,
     taskID: task.id,
+    task,
     parentSessionID: input.parentSessionID,
   })
 

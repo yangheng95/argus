@@ -220,6 +220,107 @@ test("session processor preserves invalid tool-call input and paired tool-error 
   expect(part?.state.status === "error" ? part.state.input : undefined).toEqual([])
 })
 
+test("session processor pauses terminal payload generation at tool-input-start for pre-submit reflection", async () => {
+  spyOn(Config, "get").mockResolvedValue({ experimental: {} } as Awaited<ReturnType<typeof Config.get>>)
+  spyOn(EngineConfig, "get").mockResolvedValue({
+    activity: { session_llm_idle_ms: 60 },
+  } as Awaited<ReturnType<typeof EngineConfig.get>>)
+  spyOn(SessionStatus, "set").mockImplementation(() => {})
+  spyOn(Bus, "publish").mockResolvedValue(undefined as never)
+  spyOn(Session, "updateMessage").mockResolvedValue(undefined as never)
+  spyOn(PermissionNext, "ask").mockResolvedValue(undefined as never)
+
+  const store = new Map<string, Message.Part>()
+  spyOn(Session, "updatePart").mockImplementation(async (part) => {
+    store.set(part.id, part as Message.Part)
+    return part as never
+  })
+  spyOn(Session, "updatePartDelta").mockImplementation(async () => undefined as never)
+  spyOn(Message, "parts").mockImplementation(
+    (async (messageID: string) =>
+      [...store.values()].filter((p) => p.messageID === messageID)) as typeof Message.parts,
+  )
+
+  let payloadConsumed = false
+  let streamClosed = false
+  const terminalStream: AsyncIterable<any> = {
+    [Symbol.asyncIterator]() {
+      let index = 0
+      return {
+        async next() {
+          index += 1
+          if (index === 1) return { done: false, value: { type: "start" } }
+          if (index === 2) {
+            return {
+              done: false,
+              value: {
+                type: "tool-input-start",
+                toolCallId: "call_terminal",
+                toolName: "report_build_result",
+              },
+            }
+          }
+          payloadConsumed = true
+          return {
+            done: false,
+            value: {
+              type: "tool-input-delta",
+              toolCallId: "call_terminal",
+              toolName: "report_build_result",
+              inputTextDelta: "{\"summary\":\"large terminal payload\"}",
+            },
+          }
+        },
+        async return() {
+          streamClosed = true
+          return { done: true, value: undefined }
+        },
+      }
+    },
+  }
+
+  spyOn(LLM, "stream").mockResolvedValue({
+    fullStream: terminalStream,
+  } as Awaited<ReturnType<typeof LLM.stream>>)
+
+  const processor = SessionProcessor.create({
+    assistantMessage: {
+      id: "msg_pre_submit_reflection",
+      sessionID: "ses_pre_submit_reflection",
+      role: "assistant",
+      agent: "build",
+      parentID: "msg_parent",
+      cost: 0,
+      tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+      time: { created: Date.now() },
+    } as Message.Assistant,
+    sessionID: "ses_pre_submit_reflection",
+    model: { providerID: "test-provider", id: "test-model" } as Provider.Model,
+    abort: new AbortController().signal,
+  })
+
+  const result = await processor.process({
+    preTerminalToolInputStart: ({ toolName }) =>
+      toolName === "report_build_result"
+        ? {
+          title: "Pre-terminal Reflection Required",
+          output: "reflect first",
+          metadata: { preTerminalReflection: true },
+        }
+        : undefined,
+  } as LLM.StreamInput)
+
+  expect(result).toBe("continue")
+  expect(payloadConsumed).toBe(false)
+  expect(streamClosed).toBe(true)
+  const toolParts = [...store.values()].filter((p): p is Message.ToolPart => p.type === "tool")
+  expect(toolParts).toHaveLength(1)
+  expect(toolParts[0]!.tool).toBe("report_build_result")
+  expect(toolParts[0]!.state.status).toBe("completed")
+  expect((toolParts[0]!.state as Message.ToolStateCompleted).output).toBe("reflect first")
+  expect((toolParts[0]!.state as Message.ToolStateCompleted).input).toEqual({})
+})
+
 test("session processor closes a persisted running tool part when only the result event is in memory", async () => {
   spyOn(Config, "get").mockResolvedValue({ experimental: {} } as Awaited<ReturnType<typeof Config.get>>)
   spyOn(EngineConfig, "get").mockResolvedValue({

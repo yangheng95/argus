@@ -21,10 +21,17 @@ const ZH = JSON.parse(readFileSync(join(import.meta.dir, "../src/i18n/zh-CN.json
 
 test("Run-menu compaction threshold slider routes through patchConfig", () => {
   expect(TITLEBAR_SOURCE).toContain('titlebar.compaction_threshold');
+  expect(TITLEBAR_SOURCE).toContain('titlebar.compaction_threshold_hint');
   expect(TITLEBAR_SOURCE).toContain('handlePatchCompactionThreshold');
   expect(TITLEBAR_SOURCE).toContain('patchConfig({ compaction: { threshold:');
   expect(TITLEBAR_SOURCE).toContain('compactionThresholdPercent');
   expect(TITLEBAR_SOURCE).toContain('data-testid={`titlebar-menu-${menu.id}`}');
+});
+
+test("Run-menu range values render beside the slider, not under the label", () => {
+  expect(TITLEBAR_SOURCE).toContain('class="titlebar-menubar-range-control"');
+  expect(TITLEBAR_SOURCE).toContain('class="titlebar-menubar-range-value"');
+  expect(TITLEBAR_SOURCE).toContain('class="titlebar-menubar-item-meta">{props.description}</span>');
 });
 
 test("Run-menu proposed-task confirmation toggle routes through patchConfig", () => {
@@ -41,9 +48,13 @@ test("GeneralPanel no longer owns the compaction threshold control", () => {
 
 test("compaction threshold i18n key exists in both locales (titlebar-scoped)", () => {
   expect(typeof EN["titlebar.compaction_threshold"]).toBe("string");
+  expect(typeof EN["titlebar.compaction_threshold_hint"]).toBe("string");
   expect(typeof ZH["titlebar.compaction_threshold"]).toBe("string");
+  expect(typeof ZH["titlebar.compaction_threshold_hint"]).toBe("string");
   expect(EN["titlebar.compaction_threshold"]).not.toBe("");
+  expect(EN["titlebar.compaction_threshold_hint"]).not.toBe("");
   expect(ZH["titlebar.compaction_threshold"]).not.toBe("");
+  expect(ZH["titlebar.compaction_threshold_hint"]).not.toBe("");
   // legacy GeneralPanel keys must be gone (rule 8: single source for the label)
   expect(EN["settings.compaction_threshold_label"]).toBeUndefined();
   expect(ZH["settings.compaction_threshold_label"]).toBeUndefined();

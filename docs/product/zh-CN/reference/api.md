@@ -98,6 +98,7 @@
 | POST | `/task/{taskID}/session/{sessionID}/cancel` | Cancel a task agent session | `task.session.cancel` |
 | POST | `/task/{taskID}/session/{sessionID}/reply` | Reply directly to a task agent session | `task.session.reply` |
 | POST | `/task/{taskID}/start-now` | Start a queued task immediately | `task.queue.startNow` |
+| PATCH | `/task/{taskID}/title` | Update task title | `task.updateTitle` |
 | GET | `/task/{taskID}/trace` | Get task AgentTrace events (all sessions) | `task.trace` |
 | GET | `/task/{taskID}/transcript` | Get task transcript | `task.transcript` |
 | GET | `/tasks` | List project tasks | `task.list` |

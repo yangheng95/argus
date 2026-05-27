@@ -1,9 +1,6 @@
 import { describe, expect, test } from "bun:test"
-import {
-  preTerminalReflectionPrompt,
-  promptToolSwitchesForAgentRun,
-  shouldFailUnreadableBuildReference,
-} from "../../src/agent/runner"
+import { promptToolSwitchesForAgentRun, shouldFailUnreadableBuildReference } from "../../src/agent/runner"
+import { renderPreTerminalReflectionPrompt as preTerminalReflectionPrompt } from "../../src/prompt/fragments/pre-terminal-reflection"
 
 describe("agent runner build tool scope", () => {
   test("plain build runs keep terminal tools and skill discovery but hide non-build and reference tools", () => {

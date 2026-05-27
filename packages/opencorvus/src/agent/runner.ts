@@ -87,7 +87,6 @@ import { TaskContext } from "@/task-context"
 import type { AgentReport, AgentReportContext } from "@/agent/report"
 import { SessionContext } from "@/session/context"
 import { recordToolExecuteError } from "@/engine/persist"
-import { renderPreTerminalReflectionPrompt } from "@/prompt/fragments/pre-terminal-reflection"
 
 const log = Log.create({ service: "agent-runner" })
 
@@ -306,8 +305,6 @@ export function shouldFailUnreadableBuildReference(input: {
   )
 }
 
-export { renderPreTerminalReflectionPrompt as preTerminalReflectionPrompt }
-
 // ---------------------------------------------------------------------------
 // Error types — every failure surfaces as AgentRunError so callers do not
 // need to know about kind-specific exception classes.
@@ -517,6 +514,29 @@ export function terminalToolMissingErrorFor(input: {
   return { message: data.message ?? `missing terminal tool ${input.toolName}` }
 }
 
+export function buildUnsatisfiedTerminalToolError(input: {
+  kind: SessionKind
+  agentName: string
+  toolName: string
+}): AgentRunError {
+  const message =
+    `Agent ${input.agentName} ended without satisfying terminal tool ${input.toolName}. ` +
+    `A pre-submit reflection hook result is not a terminal submission; the agent must call ${input.toolName} again with the final payload.`
+  const terminalError = new Message.TerminalToolMissingError({
+    message,
+    toolName: input.toolName,
+    retries: 0,
+  })
+  return new AgentRunError(
+    input.kind,
+    `LLM error during ${input.agentName}: TerminalToolMissingError: ${message}`,
+    {
+      nonRetryable: true,
+      cause: terminalError,
+    },
+  )
+}
+
 async function recordAgentErrorForOrchestrator(input: {
   taskID?: string
   goalID?: string
@@ -635,15 +655,9 @@ export async function runAgentSession<C>(
   // opencorvus.jsonc. Default off — runs go through unchanged in
   // production. Spec — 2026-05-07 INFORMATION MISSING debug toggle.
   const debugCfg = (await EngineConfig.get()).debug
-  const preTerminalReflection = renderPreTerminalReflectionPrompt({
-    agentName,
-    terminalToolName: input.terminalTool?.toolName,
-    usesStructuredOutput: input.format !== undefined,
-  })
   const baseSystemPrompt = [
     composed.prompt,
     liveContext.trim().length > 0 ? liveContext : undefined,
-    preTerminalReflection,
   ].filter((section): section is string => typeof section === "string" && section.trim().length > 0)
     .join("\n\n")
   const systemPrompt = debugCfg.fail_on_information_missing
@@ -817,6 +831,7 @@ export async function runAgentSession<C>(
     : undefined
 
   let finalMessage: Message.WithParts | undefined
+  let collector: C | undefined
   const terminalToolContract = input.terminalTool
     ? {
         toolName: input.terminalTool.toolName,
@@ -947,6 +962,15 @@ export async function runAgentSession<C>(
       })
       throw hardError
     }
+
+    collector = input.toolKit.getCollector()
+    if (input.terminalTool && !input.terminalTool.isSatisfied(collector)) {
+      throw buildUnsatisfiedTerminalToolError({
+        kind,
+        agentName,
+        toolName: input.terminalTool.toolName,
+      })
+    }
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err)
     await recordAgentErrorForOrchestrator({
@@ -988,13 +1012,14 @@ export async function runAgentSession<C>(
     throw err
   }
 
-  SessionStatus.set(session.id, { type: "terminal", reason: "completed" })
-
   // ── 7. Return collector + structured output ──────────────────────────
   const structured = input.format
     ? (finalMessage.info as Message.Assistant).structured
     : undefined
-  const collector = input.toolKit.getCollector()
+  collector ??= input.toolKit.getCollector()
+
+  SessionStatus.set(session.id, { type: "terminal", reason: "completed" })
+
   const finalText = finalTextFromMessage(finalMessage)
 
   log.info(`${agentName} agent finished`, {

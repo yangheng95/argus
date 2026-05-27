@@ -4,6 +4,7 @@ import {
   FactCheckItemListSchema,
   FactCheckReportSchema,
   deriveFactCheckVerdict,
+  validateFactCheckAgentReportSemantics,
 } from "../../src/fact-check/schema"
 
 describe("FactCheckItemSchema", () => {
@@ -131,5 +132,58 @@ describe("deriveFactCheckVerdict", () => {
     expect(
       deriveFactCheckVerdict({ items_total: 5, items_inspected: 5, corrected: [], unresolved: [] }),
     ).toBe("clean")
+  })
+})
+
+describe("validateFactCheckAgentReportSemantics", () => {
+  test("rejects overall_verdict that does not match the decision tree", () => {
+    const semanticError = validateFactCheckAgentReportSemantics({
+      scope: {
+        target_session_id: "ses_target",
+        target_agent: "build",
+        target_message_id: "msg_target",
+        target_message_content_hash: "hash",
+        items_total: 1,
+        items_inspected: 1,
+      },
+      verified: [],
+      corrected: [
+        {
+          claim: "React 19 introduced the use() hook for resource reading",
+          correction: "The claim needs a material correction.",
+          severity: "material",
+          evidence: [{ kind: "web", pointer: "https://example.com", excerpt: "evidence" }],
+          recommended_action: "modify_goal",
+        },
+      ],
+      unresolved: [],
+      overall_verdict: "clean",
+    })
+
+    expect(semanticError).toContain('overall_verdict must be "needs_orchestrator_action"')
+  })
+
+  test("rejects hidden omissions between items_inspected and classified buckets", () => {
+    const semanticError = validateFactCheckAgentReportSemantics({
+      scope: {
+        target_session_id: "ses_target",
+        target_agent: "integrity",
+        target_message_id: "msg_target",
+        target_message_content_hash: "hash",
+        items_total: 2,
+        items_inspected: 2,
+      },
+      verified: [
+        {
+          claim: "The package manifest declares React as a dependency.",
+          evidence: [{ kind: "code", pointer: "package.json", excerpt: "react" }],
+        },
+      ],
+      corrected: [],
+      unresolved: [],
+      overall_verdict: "clean",
+    })
+
+    expect(semanticError).toContain("classified item count (1) must equal scope.items_inspected (2)")
   })
 })
