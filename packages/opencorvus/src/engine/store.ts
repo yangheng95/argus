@@ -1503,6 +1503,9 @@ export function viewTask(row: TaskRow, input?: { directory?: string }) {
      *  (was a cache column on engine_task). */
     activeRunID: findActiveRunForTask(row.id)?.id,
     requestID: row.request_id ?? undefined,
+    parentTaskID:
+      ((row.metadata as Record<string, unknown> | null | undefined)?.parent_task_id as string | undefined) ??
+      undefined,
     source: row.source,
     title: row.title,
     request: row.request,

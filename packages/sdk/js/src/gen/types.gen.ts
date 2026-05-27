@@ -470,15 +470,39 @@ export type EventIntegrityReviewCompleted = {
         passCriteria: Array<string>
       }
       drilldowns?: Array<{
+        /**
+         * Evidence tool or inspection category.
+         */
         kind: string
+        /**
+         * Concrete file, directory, command, evidence section, or artifact inspected.
+         */
         target: string
+        /**
+         * Why this evidence was inspected for the reviewer scope.
+         */
         purpose: string
+        /**
+         * What the inspection showed. Do not add finding fields such as affectedSymbols here.
+         */
         result: string
       }>
       coverage?: Array<{
+        /**
+         * Singular coverage anchor such as REQ-1. Do not use requirementIDs here.
+         */
         requirementID?: string
+        /**
+         * Singular coverage anchor for one acceptance spec id. Do not use specIDs here.
+         */
         specID?: string
+        /**
+         * Singular literal user-request quote. Do not use userRequestQuotes here.
+         */
         userRequestQuote?: string
+        /**
+         * Coverage status only. Do not use verdict values such as pass, concerns, or needs_correction here.
+         */
         status: "covered" | "missing" | "inconclusive"
         evidence: string
       }>
@@ -510,6 +534,9 @@ export type EventIntegrityReviewCompleted = {
     coverageAudit?: Array<{
       promise: string
       reviewerIDs?: Array<string>
+      /**
+       * Coverage status only. Do not use verdict values such as pass, concerns, or needs_correction here.
+       */
       status: "covered" | "missing" | "inconclusive"
       notes: string
     }>
@@ -2710,7 +2737,7 @@ export type Config = {
       fail_on_information_missing?: boolean
     }
     /**
-     * Maximum parallel executor groups
+     * Maximum parallel agent sessions in fan-out phases such as goal builds and integrity reviewers
      */
     max_executor_groups?: number
     /**
@@ -2788,13 +2815,13 @@ export type Config = {
      */
     continue_loop_on_deny?: boolean
     /**
-     * Require operator confirmation before the orchestrator creates a proposed follow-up task. Default false lets the orchestrator create the task directly.
-     */
-    confirm_proposed_tasks?: boolean
-    /**
      * Auto-reject unanswered question interactions after the five-minute stale timeout. Independent fine-grained switch. When false, questions wait indefinitely for a user reply.
      */
     auto_question?: boolean
+    /**
+     * Require operator confirmation before the orchestrator creates a proposed follow-up task. Default false lets the orchestrator create the task directly.
+     */
+    confirm_proposed_tasks?: boolean
     /**
      * Timeout in milliseconds for model context protocol (MCP) requests
      */
@@ -8101,6 +8128,7 @@ export type TaskListResponses = {
         activePlanVersionID?: string | null
         activeRunID?: string | null
         requestID?: string
+        parentTaskID?: string | null
         source: string
         title: string
         request: string
@@ -8246,6 +8274,7 @@ export type TaskGlobalListResponses = {
         activePlanVersionID?: string | null
         activeRunID?: string | null
         requestID?: string
+        parentTaskID?: string | null
         source: string
         title: string
         request: string
@@ -8432,6 +8461,7 @@ export type TaskQueueStartNowResponses = {
       activePlanVersionID?: string | null
       activeRunID?: string | null
       requestID?: string
+      parentTaskID?: string | null
       source: string
       title: string
       request: string
@@ -8560,6 +8590,7 @@ export type TaskGetResponses = {
     activePlanVersionID?: string | null
     activeRunID?: string | null
     requestID?: string
+    parentTaskID?: string | null
     source: string
     title: string
     request: string
@@ -8662,6 +8693,7 @@ export type TaskProgressResponses = {
       activePlanVersionID?: string | null
       activeRunID?: string | null
       requestID?: string
+      parentTaskID?: string | null
       source: string
       title: string
       request: string
@@ -8940,6 +8972,7 @@ export type TaskConversationResponses = {
         activePlanVersionID?: string | null
         activeRunID?: string | null
         requestID?: string
+        parentTaskID?: string | null
         source: string
         title: string
         request: string
@@ -9580,6 +9613,7 @@ export type TaskBoardResponses = {
       activePlanVersionID?: string | null
       activeRunID?: string | null
       requestID?: string
+      parentTaskID?: string | null
       source: string
       title: string
       request: string
@@ -11367,6 +11401,39 @@ export type TaskUpdateBudgetError = TaskUpdateBudgetErrors[keyof TaskUpdateBudge
 export type TaskUpdateBudgetResponses = {
   /**
    * Budget updated
+   */
+  200: unknown
+}
+
+export type TaskUpdateTitleData = {
+  body?: {
+    title: string
+  }
+  path: {
+    taskID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/task/{taskID}/title"
+}
+
+export type TaskUpdateTitleErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type TaskUpdateTitleError = TaskUpdateTitleErrors[keyof TaskUpdateTitleErrors]
+
+export type TaskUpdateTitleResponses = {
+  /**
+   * Title updated
    */
   200: unknown
 }
