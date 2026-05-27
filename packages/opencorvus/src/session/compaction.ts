@@ -457,8 +457,13 @@ export namespace SessionCompaction {
     const result: Turn[] = []
     for (let i = 0; i < messages.length; i++) {
       const msg = messages[i]
-      if (msg.info.role !== "user") continue
-      if (msg.parts.some((part) => part.type === "compaction")) continue
+      // Turn boundaries follow real conversation starts and assistant step starts,
+      // which keeps long dispatcher-owned build sessions compactable without a kind branch.
+      const isUserBoundary =
+        msg.info.role === "user" && !msg.parts.some((part) => part.type === "compaction")
+      const isAssistantStepBoundary =
+        msg.info.role === "assistant" && msg.parts.some((part) => part.type === "step-start")
+      if (!isUserBoundary && !isAssistantStepBoundary) continue
       result.push({
         start: i,
         end: messages.length,
