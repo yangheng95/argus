@@ -666,14 +666,35 @@
   gap: calc(2px * var(--ui-scale));
 }
 
+.titlebar-menubar-range-copy {
+  flex: 1 1 auto;
+}
+
+.titlebar-menubar-range-control {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: calc(116px * var(--ui-scale)) minmax(calc(34px * var(--ui-scale)), auto);
+  align-items: center;
+  gap: calc(8px * var(--ui-scale));
+}
+
+.titlebar-menubar-range-value {
+  color: var(--text-muted);
+  font-size: var(--ui-font-small);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  text-align: right;
+  white-space: nowrap;
+}
+
 .titlebar-menubar-toggle input[type="checkbox"] {
   flex: none;
   /* `accent-color` declared globally on body (tokens/design-language.css). */
 }
 
 .titlebar-menubar-range input[type="range"] {
-  width: calc(116px * var(--ui-scale));
-  flex: none;
+  width: 100%;
+  min-width: 0;
   /* `accent-color` declared globally on body (tokens/design-language.css). */
 }
 

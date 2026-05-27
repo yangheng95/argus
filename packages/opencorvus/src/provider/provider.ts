@@ -912,7 +912,7 @@ export namespace Provider {
   }
 
   export async function getModel(providerID: string, modelID: string) {
-    const s = await state()
+    let s = await state()
     const provider = s.providers[providerID]
     if (!provider) {
       const availableProviders = Object.keys(s.providers)
@@ -921,9 +921,27 @@ export namespace Provider {
       throw new ModelNotFoundError({ providerID, modelID, suggestions })
     }
 
-    const info = provider.models[modelID]
+    let info = provider.models[modelID]
+    let refreshedModels: Record<string, Model> | undefined
+    if (!info && providerID === "hexin") {
+      try {
+        const { refreshHexinCache } = await import("./hexin-discovery")
+        const cfg = await Config.get()
+        const apiKey = await hexinApiKey(cfg)
+        refreshedModels = await refreshHexinCache(apiKey)
+        reset()
+        info = refreshedModels[modelID]
+      } catch (error) {
+        log.warn("hexin model miss refresh failed", {
+          providerID,
+          modelID,
+          error,
+        })
+      }
+    }
+
     if (!info) {
-      const availableModels = Object.keys(provider.models)
+      const availableModels = Object.keys(refreshedModels ?? s.providers[providerID]?.models ?? provider.models)
       const matches = fuzzysort.go(modelID, availableModels, { limit: 3, threshold: -10000 })
       const suggestions = matches.map((m) => m.target)
       throw new ModelNotFoundError({ providerID, modelID, suggestions })

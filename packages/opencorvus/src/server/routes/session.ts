@@ -4,6 +4,7 @@ import z from "zod"
 import { Session } from "../../session"
 import { SessionStatus } from "@/session"
 import { Config } from "@/config/config"
+import { validateConfigModelReferences } from "@/config/model-reference-validation"
 import { SessionPrompt } from "../../session/prompt"
 import { SessionContext } from "@/session/context"
 import { clearRewindCursorForSession } from "@/engine/rewind"
@@ -256,7 +257,9 @@ export const SessionRoutes = lazy(() =>
       validator("json", Config.Overlay),
       async (c) => {
         const sessionID = c.req.valid("param").sessionID
-        await Session.mergeConfigOverlay({ sessionID, patch: c.req.valid("json") })
+        const patch = c.req.valid("json")
+        await validateConfigModelReferences(patch, "configOverlay")
+        await Session.mergeConfigOverlay({ sessionID, patch })
         return c.json(await sessionConfig(sessionID))
       },
     )

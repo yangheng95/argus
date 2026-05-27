@@ -129,6 +129,22 @@ describe("BuildResultSchema", () => {
     }
   })
 
+  test("explains missing fact_check_items without terminal-shape noise", () => {
+    const parsed = BuildResultSchema.safeParse({
+      status: "passed",
+      summary: "implemented",
+      files_changed: [],
+      tests: [],
+    })
+    expect(parsed.success).toBe(false)
+    if (!parsed.success) {
+      const message = formatBuildResultSchemaError(parsed.error)
+      expect(message).toContain("Missing required fact_check_items")
+      expect(message).toContain("fact_check_items: []")
+      expect(message).not.toContain("Choose exactly one terminal shape")
+    }
+  })
+
   test("accepts passed result with empty files_changed (B1: 0-edit reuse legal)", () => {
     // CLAUDE.md rule 6/13: the host doesn't enforce a minimum on
     // files_changed. The build agent may legitimately publish a prior

@@ -333,6 +333,34 @@ export async function deleteTask(taskID: string): Promise<boolean> {
   }
 }
 
+// ── Public: renameTask ──
+
+/**
+ * Rename a task in place. Trimming and length enforcement match the server-side
+ * Zod schema (1–200 chars after trim). Returns true on success, false on any
+ * failure so the caller can revert the optimistic UI edit and surface a notice.
+ */
+export async function renameTask(taskID: string, title: string): Promise<boolean> {
+  if (!taskID) return false;
+  const trimmed = title.trim();
+  if (!trimmed || trimmed.length > 200) return false;
+  try {
+    await apiJson(taskPath(taskID, "/title"), {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: trimmed }),
+    });
+    await loadTasks();
+    if (boardStore.selectedTaskID === taskID) {
+      await loadBoard();
+    }
+    return true;
+  } catch (e) {
+    console.error("[renameTask] failed", { error: String(e), taskID });
+    return false;
+  }
+}
+
 // ── Public: submitMessage ──
 
 /**

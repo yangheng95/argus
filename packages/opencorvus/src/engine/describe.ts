@@ -33,7 +33,7 @@ import { ToolFailureCause, renderToolFailureCause } from "@/session/tool-failure
  *  The column it used to shadow (engine_goal.status) is gone; this is
  *  the function-return type for the live derivation. */
 export type EngineGoalStatus = "pending" | "running" | "passed" | "failed"
-import { effectiveMaxExecutorGroups, clarificationTranscriptSection, operatorNotesSection } from "./helpers"
+import { effectiveMaxAgentParallelism, clarificationTranscriptSection, operatorNotesSection } from "./helpers"
 import {
   findActivePlanForTask,
   findActiveRunForTask,
@@ -417,7 +417,7 @@ async function describeTaskFromRow(task: TaskRow): Promise<TaskDesc> {
   }
 
   const totalRuns = findRuns(task.id).length
-  const maxExecutorGroups = await effectiveMaxExecutorGroups(task)
+  const maxExecutorGroups = await effectiveMaxAgentParallelism(task)
   const fixCount = activeRunForTask?.retry_count ?? 0
 
   const history = readHistory(task.id)
@@ -667,7 +667,7 @@ export function renderTaskDescription(desc: TaskDesc, options: { autoIteration?:
     `Runtime facts: ${desc.budget.runs_used} run(s) recorded, ` +
       `${desc.budget.fix_count} fix attempt(s) on the active run, ` +
       `${desc.iterations_count} delivery iteration(s), ` +
-      `goal_parallelism=${desc.budget.max_executor_groups}.`,
+      `agent_parallelism=${desc.budget.max_executor_groups}.`,
   )
   lines.push(
     "No numeric run/fix budget is enforced by the host. Decide whether to continue, change strategy, ask the operator, or fail_task from the evidence above and below.",

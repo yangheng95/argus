@@ -12,7 +12,7 @@
  * goal description (or a free-form request in the direct-build path) and
  * gets back a single terminal `BuildResult` per invocation. Multi-goal
  * parallelism happens through AI SDK parallel tool_calls, capped by
- * `BuildSemaphore` — no external GoalPool scheduler.
+ * `AgentSemaphore` — no external GoalPool scheduler.
  */
 
 import z from "zod"
@@ -254,8 +254,13 @@ export function formatBuildResultSchemaError(error: z.ZodError): string {
   const hasPassedWithError = error.issues.some(
     (issue) => issue.code === "unrecognized_keys" && Array.isArray(issue.keys) && issue.keys.includes("error"),
   )
+  const hasFactCheckItemsIssue = error.issues.some(
+    (issue) => issue.path.length === 1 && issue.path[0] === "fact_check_items",
+  )
   const guidance = hasPassedWithError
     ? "status='passed' cannot include error. If any blocking verification failed, call report_build_result with status='failed' and put the reason in error; otherwise remove error and keep the caveat in summary."
+    : hasFactCheckItemsIssue
+      ? "Missing required fact_check_items. Include fact_check_items: [] when you have no unverified factual claims."
     : "Choose exactly one terminal shape: status='passed' without error, or status='failed' with a non-empty error."
   return `${guidance} Schema issues: ${issues.join("; ")}`
 }

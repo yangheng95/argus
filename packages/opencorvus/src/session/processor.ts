@@ -199,6 +199,7 @@ export namespace SessionProcessor {
           try {
             let currentText: Message.TextPart | undefined
             let reasoningMap: Record<string, Message.ReasoningPart> = {}
+            let preTerminalInterrupted = false
             await withLLMActivity(
               {
                 sessionID: input.sessionID,
@@ -313,6 +314,34 @@ export namespace SessionProcessor {
                         ? (value as any).id
                         : ""
                   if (!toolCallID) break
+                  const preTerminalReflection = streamInput.preTerminalToolInputStart?.({
+                    toolName: value.toolName,
+                    toolCallID,
+                  })
+                  if (preTerminalReflection) {
+                    await Session.updatePart({
+                      id: (await priorToolPart(toolCallID))?.id ?? Identifier.ascending("part"),
+                      messageID: input.assistantMessage.id,
+                      sessionID: input.assistantMessage.sessionID,
+                      type: "tool",
+                      tool: value.toolName,
+                      callID: toolCallID,
+                      state: {
+                        status: "completed",
+                        input: {},
+                        output: preTerminalReflection.output,
+                        title: preTerminalReflection.title,
+                        metadata: preTerminalReflection.metadata,
+                        time: {
+                          start: Date.now(),
+                          end: Date.now(),
+                        },
+                      },
+                    })
+                    input.assistantMessage.finish = "tool-calls"
+                    preTerminalInterrupted = true
+                    return
+                  }
                   const part = await Session.updatePart({
                     id: (await priorToolPart(toolCallID))?.id ?? Identifier.ascending("part"),
                     messageID: input.assistantMessage.id,
@@ -618,6 +647,7 @@ export namespace SessionProcessor {
                   continue
               }
               if (needsCompaction) break
+              if (preTerminalInterrupted) break
             }
               },
               (event: LLMActivityEvent) => {

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, mock, test } from "bun:test"
+import { AgentSemaphore } from "../../src/engine/agent-semaphore"
 import { Instance } from "../../src/project/instance"
 import type { IntegrityReplayContext } from "../../src/integrity/replay-context"
 import { tmpdir } from "../fixture/fixture"
@@ -10,6 +11,9 @@ let startedEvents: any[] = []
 let completedEvents: any[] = []
 let createdSessions: any[] = []
 let userPrompts: string[] = []
+let slowReviewerReports = false
+let activeReviewerAgents = 0
+let maxActiveReviewerAgents = 0
 
 mock.module("@/agent/runner", () => ({
   runAgentSession: async (input: any) => {
@@ -41,6 +45,12 @@ mock.module("@/agent/runner", () => ({
         ],
       }
     } else if (input.terminalTool.toolName === "submit_reviewer_report") {
+      if (slowReviewerReports) {
+        activeReviewerAgents++
+        maxActiveReviewerAgents = Math.max(maxActiveReviewerAgents, activeReviewerAgents)
+        await new Promise((resolve) => setTimeout(resolve, 25))
+        activeReviewerAgents--
+      }
       const reviewerID =
         runnerCalls.filter((call) => call.terminalTool.toolName === "submit_reviewer_report").length === 1
           ? "rev_a"
@@ -235,6 +245,10 @@ describe("integrity team-agent replay attempts", () => {
     completedEvents = []
     createdSessions = []
     userPrompts = []
+    slowReviewerReports = false
+    activeReviewerAgents = 0
+    maxActiveReviewerAgents = 0
+    AgentSemaphore.reset()
     globalThis.setInterval = originalSetInterval
     globalThis.clearInterval = originalClearInterval
     await Instance.disposeAll().catch(() => undefined)
@@ -336,7 +350,7 @@ describe("integrity team-agent replay attempts", () => {
     expect(userPrompts[0]).toContain("Do not default to five reviewers")
     expect(userPrompts[1]).toContain("you are reviewing the current attempt, not starting from zero")
     expect(userPrompts[3]).toContain("Compare the current reviewer reports against prior attempts")
-  })
+  }, 20_000)
 
   test("uses replayContext attempt number for no-goals soft completed event", async () => {
     await using tmp = await tmpdir({ git: true })
@@ -358,5 +372,176 @@ describe("integrity team-agent replay attempts", () => {
     expect(createdSessions).toHaveLength(1)
     expect(completedEvents).toHaveLength(1)
     expect(completedEvents[0].payload.attempts).toBe(4)
+  }, 20_000)
+
+  test("limits integrity reviewer agents with the task parallel-agent ceiling", async () => {
+    await using tmp = await tmpdir({ git: true })
+    slowReviewerReports = true
+    const { reviewIntegrity } = await import("../../src/integrity/team-agent")
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await reviewIntegrity({
+          userRequest: "Ship settings validation",
+          taskTitle: "Settings validation",
+          goals: [
+            {
+              id: "goal_settings",
+              title: "Settings",
+              objective: "Validate settings",
+              acceptance_specs: [],
+              owned_paths: ["src/settings.ts"],
+              depends_on: [],
+              priority: "blocking",
+              kind: "feature",
+              requirement_ids: [],
+            },
+          ],
+          replayContext: replayContext(1),
+          taskID: "tsk_team_parallelism",
+          task: {
+            id: "tsk_team_parallelism",
+            budget: { max_executor_groups: 1 },
+          } as any,
+          parentSessionID: "ses_parent",
+        })
+      },
+    })
+
+    expect(runnerCalls.filter((call) => call.terminalTool.toolName === "submit_reviewer_report")).toHaveLength(2)
+    expect(maxActiveReviewerAgents).toBe(1)
+  }, 20_000)
+
+  test("consensus prompt separates coverage audit status from verdict enums", async () => {
+    const { buildSupervisorConsensusPrompt } = await import("../../src/integrity/team-agent")
+    const prompt = buildSupervisorConsensusPrompt(
+      {
+        userRequest: "Use only API names from SdkAdapter authority.",
+        taskTitle: "API authority",
+        goals: [
+          {
+            id: "goal_api",
+            title: "API authority",
+            objective: "Verify API names.",
+            acceptance_specs: [],
+            owned_paths: ["src/api.ts"],
+            depends_on: [],
+            priority: "blocking",
+            kind: "verification",
+            requirement_ids: ["REQ-1"],
+          },
+        ],
+        replayContext: replayContext(1),
+      },
+      {
+        rationale: "Need API reviewer.",
+        riskHypotheses: [],
+        coveragePlan: [],
+        reviewers: [
+          {
+            reviewerID: "rev_api",
+            title: "API reviewer",
+            focus: "API authority",
+            riskHypothesisIDs: [],
+            drilldownPlan: [],
+            adversarialQuestions: ["Are API names authoritative?"],
+          },
+          {
+            reviewerID: "rev_flow",
+            title: "Flow reviewer",
+            focus: "Flow behavior",
+            riskHypothesisIDs: [],
+            drilldownPlan: [],
+            adversarialQuestions: ["Does the flow still work?"],
+          },
+        ],
+      },
+      [
+        {
+          reviewerID: "rev_api",
+          scope: "API authority",
+          verdict: "concerns",
+          summary: "API status has concerns.",
+          drilldowns: [],
+          coverage: [
+            {
+              userRequestQuote: "Use only API names from SdkAdapter authority.",
+              status: "missing",
+              evidence: "One API name is not in SdkAdapter.",
+            },
+          ],
+          evidence: ["Read SdkAdapter."],
+          findings: [],
+          openQuestions: [],
+        },
+        {
+          reviewerID: "rev_flow",
+          scope: "Flow behavior",
+          verdict: "pass",
+          summary: "Flow checked.",
+          drilldowns: [],
+          coverage: [
+            {
+              userRequestQuote: "Use only API names from SdkAdapter authority.",
+              status: "covered",
+              evidence: "Flow reviewed.",
+            },
+          ],
+          evidence: ["Read handlers."],
+          findings: [],
+          openQuestions: [],
+        },
+      ],
+    )
+
+    expect(prompt).toContain("Coverage audit status contract:")
+    expect(prompt).toContain("`coverageAudit[].status`")
+    expect(prompt).toContain("`covered`, `missing`, `inconclusive`")
+    expect(prompt).toContain("Do not use `concerns`")
+    expect(prompt).toContain("Overall verdict values belong only in `verdict` / `verdictImpact`")
+  })
+
+  test("reviewer prompt separates coverage anchors from finding traceability arrays", async () => {
+    const { buildReviewerPrompt } = await import("../../src/integrity/team-agent")
+    const prompt = buildReviewerPrompt(
+      {
+        userRequest: "Use only API names from SdkAdapter authority.",
+        taskTitle: "API authority",
+        goals: [
+          {
+            id: "goal_api",
+            title: "API authority",
+            objective: "Verify API names.",
+            acceptance_specs: [],
+            owned_paths: ["src/api.ts"],
+            depends_on: [],
+            priority: "blocking",
+            kind: "verification",
+            requirement_ids: ["REQ-1"],
+          },
+        ],
+        replayContext: replayContext(1),
+      },
+      {
+        reviewerID: "rev_api",
+        title: "API reviewer",
+        focus: "API authority",
+        riskHypothesisIDs: [],
+        drilldownPlan: [],
+        adversarialQuestions: ["Are API names authoritative?"],
+      },
+    )
+
+    expect(prompt).toContain("Reviewer coverage row contract:")
+    expect(prompt).toContain("`requirementID?: string`")
+    expect(prompt).toContain("`specID?: string`")
+    expect(prompt).toContain("`userRequestQuote?: string`")
+    expect(prompt).toContain("no `requirementIDs`, `specIDs`, `userRequestQuotes`")
+    expect(prompt).toContain("reserve plural traceability arrays for `findings[]` only")
+    expect(prompt).toContain("Coverage audit status contract:")
+    expect(prompt).toContain("reviewer `coverage[].status`")
+    expect(prompt).toContain("Reviewer drilldown row contract:")
+    expect(prompt).toContain("`kind`, `target`, `purpose`, and `result`")
+    expect(prompt).toContain("no `affectedSymbols`")
   })
 })

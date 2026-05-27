@@ -7,7 +7,7 @@
  * toolset (read / write / edit / bash / ...) and the build-core prompt.
  *
  * Lifecycle:
- *   1. BuildSemaphore.withSlot gates concurrency per-task. Orchestrator's
+ *   1. AgentSemaphore.withSlot gates parallel agents per task. Orchestrator's
  *      parallel tool_calls fan out with this cap.
  *   2. Worktree.create under `<primary>/.opencorvus/runtime/`. Ownership
  *      marker is written via Ownership.Worktree.record so OS-level restart
@@ -41,7 +41,7 @@ import { resolveSessionOverlay } from "@/agent/model"
 import { SessionStatus } from "@/session/status"
 import { toolFailureCauseFromUnknown } from "@/session/tool-failure-cause"
 import { Worktree } from "@/worktree"
-import { BuildSemaphore } from "@/engine/build-semaphore"
+import { AgentSemaphore } from "@/engine/agent-semaphore"
 import { Ownership } from "@/engine/ownership"
 import { findActiveRunForTask, type TaskRow } from "@/engine/store"
 import { EngineConfig } from "@/engine/config"
@@ -108,6 +108,40 @@ export function createMergeBackSingleFlight<T extends { status: string }>(
     } finally {
       if (!merged) inFlight = undefined
     }
+  }
+}
+
+export type BuildReportSubmission =
+  | { accepted: true; result: BuildResult; output: string }
+  | { accepted: false; output: string }
+
+export function evaluateBuildReportSubmission(input: {
+  result: unknown
+  mergedHead?: string
+  ownsWorktree: boolean
+  worktreeBranch?: string
+}): BuildReportSubmission {
+  const parsedResult = BuildResultSchema.safeParse(input.result)
+  if (!parsedResult.success) {
+    return {
+      accepted: false,
+      output:
+        "REJECTED: build report did not match BuildResultSchema. " +
+        `${formatBuildResultSchemaError(parsedResult.error)} ` +
+        "Fix the payload and call report_build_result again.",
+    }
+  }
+
+  const commit_ref = input.mergedHead
+    ? input.mergedHead.slice(0, 12)
+    : input.ownsWorktree && input.worktreeBranch
+      ? ""
+      : (parsedResult.data.commit_ref ?? "")
+
+  return {
+    accepted: true,
+    result: { ...parsedResult.data, commit_ref },
+    output: `RECORDED: build report status=${parsedResult.data.status}.`,
   }
 }
 
@@ -216,7 +250,7 @@ export namespace BuildAgent {
     /** The work target — either a scoped goal (pipeline workflow) or a
      *  free-form request (direct workflow). See build/types.ts. */
     target: BuildTarget
-    /** The owning task row; drives BuildSemaphore limits + worktree
+    /** The owning task row; drives AgentSemaphore limits + worktree
      *  metadata. The build agent does NOT read DB state itself — `task` is
      *  threaded in by the orchestrator's build tool wrapper. */
     task: TaskRow
@@ -353,7 +387,7 @@ export namespace BuildAgent {
    * (model unavailable, worktree creation failed, session stream error).
    */
   export async function run(input: RunInput): Promise<RunOutput> {
-    return BuildSemaphore.withSlot(input.task, async () => {
+    return AgentSemaphore.withSlot(input.task, async () => {
       const autoIteration = (await EngineConfig.get()).auto_iteration === true
       // ── Worktree acquisition ─────────────────────────────────────────────
       // Happens OUTSIDE runAgentSession because the worktree is the
@@ -656,10 +690,13 @@ export namespace BuildAgent {
             "If you legitimately reused a prior attempt's worktree without further edits, or the scoped implementation was already satisfied with a clean worktree, status='passed' with files_changed=[] is fine.",
           inputSchema: BuildResultSchema,
           execute: async (result) => {
-            const parsedResult = BuildResultSchema.safeParse(result)
-            if (!parsedResult.success) {
-              throw new Error(formatBuildResultSchemaError(parsedResult.error))
-            }
+            const evaluated = evaluateBuildReportSubmission({
+              result,
+              mergedHead,
+              ownsWorktree,
+              worktreeBranch,
+            })
+            if (!evaluated.accepted) return evaluated.output
             // No host-side enforcement of merge_back-before-passed and no
             // diff-coverage audit. Both facts are surfaced separately on
             // RunOutput (mergeBackStatus / actualChangedFiles) and rendered
@@ -673,13 +710,8 @@ export namespace BuildAgent {
             // succeeded, we drop the LLM's self-reported value rather than
             // store a worktree tip that nothing downstream can verify
             // (rule 8 single source — the host knows the truth, not the LLM).
-            const commit_ref = mergedHead
-              ? mergedHead.slice(0, 12)
-              : ownsWorktree && worktreeBranch
-                ? ""
-                : (parsedResult.data.commit_ref ?? "")
-            buildCollector.result = { ...parsedResult.data, commit_ref }
-            return `RECORDED: build report status=${result.status}.`
+            buildCollector.result = evaluated.result
+            return evaluated.output
           },
         }),
       })

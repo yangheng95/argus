@@ -50,6 +50,9 @@ function renderedTargetForSession(
     };
   }
   const messageID = firstMessageID(session);
+  if (stage === "integrity") {
+    return { renderedCardID: `integrity:session:${session.sessionID}` };
+  }
   return messageID
     ? { renderedCardID: `${stage}:session:${session.sessionID}:message:${messageID}` }
     : {};

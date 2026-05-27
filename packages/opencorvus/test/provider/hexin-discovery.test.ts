@@ -166,6 +166,33 @@ describe("hexin model discovery", () => {
     }
   })
 
+  test("Provider.getModel refreshes hexin catalog once on model miss", async () => {
+    let modelFetches = 0
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (!url.endsWith("/models")) throw new Error(`unexpected fetch ${url}`)
+      modelFetches++
+      const ids = modelFetches === 1 ? ["stale-model"] : ["stale-model", "late-model"]
+      return new Response(JSON.stringify({ data: ids.map((id) => ({ id })) }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      })
+    }) as typeof fetch
+
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const providers = await Provider.list()
+        expect(Object.keys(providers.hexin.models)).toEqual(["stale-model"])
+
+        const model = await Provider.getModel("hexin", "late-model")
+        expect(model.id).toBe("late-model")
+        expect(modelFetches).toBe(2)
+      },
+    })
+  })
+
   test("Provider.list does not reject when hexin /v1/models returns budget_exceeded — /config/providers stays 200", async () => {
     // Regression: previously Provider.list() rejected when hexin /v1/models
     // returned 4xx (e.g. budget exceeded). That 500-ed /config/providers and

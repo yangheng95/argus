@@ -2,6 +2,7 @@ import { Hono } from "hono"
 import { describeRoute, validator, resolver } from "hono-openapi"
 import z from "zod"
 import { Config } from "../../config/config"
+import { validateConfigModelReferences } from "@/config/model-reference-validation"
 import { EngineConfig } from "../../engine/config"
 import { ChannelSupervisor } from "@/channel/supervisor"
 import { Provider } from "../../provider/provider"
@@ -97,6 +98,7 @@ export const ConfigRoutes = lazy(() =>
             }
           }
         }
+        await validateConfigModelReferences(partial, "config")
         // Config.update() internally reads current config and deep-merges
         await Config.update(partial as Config.Info)
         const updated = await Config.get()

@@ -30,18 +30,18 @@ body[data-theme="dark"] {
   --surface-hover: rgba(48, 50, 55, 0.78);
   --surface-inset: rgba(31, 33, 37, 0.72);
   --surface-strong: rgba(42, 44, 49, 0.8);
-  --rail-surface: var(--surface);
-  --chat-canvas: var(--bg);
-  --inspector-surface: var(--surface);
+  --rail-surface: color-mix(in srgb, var(--surface) calc(var(--ui-window-opacity) * 100%), transparent);
+  --chat-canvas: color-mix(in srgb, var(--bg) calc(var(--ui-window-opacity) * 100%), transparent);
+  --inspector-surface: color-mix(in srgb, var(--surface) calc(var(--ui-window-opacity) * 100%), transparent);
 
   /* Body background alpha tracks --ui-window-opacity (single source for
    * window translucency, rule 8). Does NOT alias --bg because --bg is the
    * fixed-alpha surface tint shared by panels/canvases; only the body
    * itself reacts to the opacity slider. */
   --body-bg: color-mix(in srgb, rgb(26, 27, 30) calc(var(--ui-window-opacity) * 100%), transparent);
-  --panel-body-bg: var(--bg);
+  --panel-body-bg: color-mix(in srgb, var(--bg) calc(var(--ui-window-opacity) * 100%), transparent);
   --panel-body-blur: none;
-  --chrome: rgba(32, 34, 38, 0.76);
+  --chrome: color-mix(in srgb, rgba(32, 34, 38, 0.76) calc(var(--ui-window-opacity) * 100%), transparent);
   --border: rgba(255, 255, 255, 0.1);
   --border-hover: rgba(255, 255, 255, 0.18);
   --border-strong: rgba(255, 255, 255, 0.24);

@@ -13,7 +13,7 @@
  * inspection is done it calls this tool exactly once.
  */
 import { tool } from "ai"
-import { FactCheckReportSchema, type FactCheckReport } from "./schema"
+import { FactCheckReportSchema, validateFactCheckAgentReportSemantics, type FactCheckReport } from "./schema"
 import { limitSummary } from "@/agent/report"
 
 export interface FactCheckCollector {
@@ -91,9 +91,12 @@ export function createFactCheckOutputTools() {
       description:
         "Submit the structured fact-check report. Call exactly once when you have inspected every item " +
         "you can. The report MUST classify each registered claim as verified / corrected / unresolved " +
-        "and pick the right overall_verdict per the decision tree in fact-check-core.txt.",
+        "and pick the right overall_verdict per the decision tree in fact-check-core.txt. " +
+        "overall_verdict must be exactly one of clean, minor_corrections, needs_orchestrator_action, inconclusive.",
       inputSchema: FactCheckReportSchema,
       execute: async (report) => {
+        const semanticError = validateFactCheckAgentReportSemantics(report)
+        if (semanticError) return `Error: fact-check report failed semantic validation: ${semanticError}`
         collector.report = report
         return (
           `OK: fact-check report submitted ` +

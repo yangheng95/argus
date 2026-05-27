@@ -168,3 +168,93 @@ test("integrity schemas carry dynamic audit strategy and coverage evidence", () 
   })
   expect(team.coverageAudit[0]?.promise).toBe("wire real API")
 })
+
+test("integrity coverage audit status rejects verdict enums such as concerns", () => {
+  const payload = {
+    verdict: "concerns",
+    summary: "Coverage has concerns.",
+    teamReportMarkdown: "concerns",
+    reviewers: basePayload.reviewers,
+    coverageAudit: [
+      {
+        promise: "API names from authority only",
+        reviewerIDs: ["reviewer-a"],
+        status: "concerns",
+        notes: "This is a verdict value and must not be used as coverage status.",
+      },
+    ],
+    uninspectedRisks: [],
+    findings: [],
+    rounds: [],
+    requiredRepairs: [],
+    unresolvedDisagreements: [],
+    fact_check_items: [],
+  }
+
+  const parsed = IntegrityTeamReportSchema.safeParse(payload)
+
+  expect(parsed.success).toBe(false)
+  if (!parsed.success) {
+    expect(parsed.error.issues.some((issue) => issue.path.join(".") === "coverageAudit.0.status")).toBe(true)
+  }
+})
+
+test("integrity reviewer coverage rejects finding traceability field names", () => {
+  const parsed = IntegrityReviewerReportSchema.safeParse({
+    reviewerID: "reviewer-a",
+    scope: "API authority",
+    verdict: "concerns",
+    summary: "API authority has a gap.",
+    drilldowns: [],
+    coverage: [
+      {
+        requirementIDs: ["REQ-1"],
+        status: "missing",
+        evidence: "The row uses finding traceability fields instead of coverage anchors.",
+      },
+    ],
+    evidence: ["Inspected changed files."],
+    findings: [],
+    openQuestions: [],
+  })
+
+  expect(parsed.success).toBe(false)
+  if (!parsed.success) {
+    expect(parsed.error.issues.some((issue) => issue.message.includes("requirementIDs"))).toBe(true)
+    expect(parsed.error.issues.some((issue) => issue.path.join(".") === "coverage.0")).toBe(true)
+  }
+})
+
+test("integrity reviewer drilldowns reject finding-only fields", () => {
+  const parsed = IntegrityReviewerReportSchema.safeParse({
+    reviewerID: "reviewer-a",
+    scope: "API authority",
+    verdict: "pass",
+    summary: "API authority was inspected.",
+    drilldowns: [
+      {
+        kind: "diff_for_file",
+        target: "src/api.ts",
+        purpose: "Check dispatch authority",
+        result: "Dispatch uses SdkAdapter.",
+        affectedSymbols: ["dispatch"],
+      },
+    ],
+    coverage: [
+      {
+        requirementID: "REQ-1",
+        status: "covered",
+        evidence: "Dispatch authority inspected.",
+      },
+    ],
+    evidence: ["Inspected changed files."],
+    findings: [],
+    openQuestions: [],
+  })
+
+  expect(parsed.success).toBe(false)
+  if (!parsed.success) {
+    expect(parsed.error.issues.some((issue) => issue.message.includes("affectedSymbols"))).toBe(true)
+    expect(parsed.error.issues.some((issue) => issue.path.join(".") === "drilldowns.0")).toBe(true)
+  }
+})

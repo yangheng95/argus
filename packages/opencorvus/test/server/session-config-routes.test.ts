@@ -76,6 +76,16 @@ describe("session config route contract", () => {
     })
   })
 
+  test("session config PATCH validates model refs before writing overlay", async () => {
+    const source = await repoFile("packages", "opencorvus", "src", "server", "routes", "session.ts")
+    const start = source.indexOf('operationId: "session.config.update"')
+    expect(start).toBeGreaterThan(0)
+    const body = source.slice(start, source.indexOf("return c.json(await sessionConfig(sessionID))", start))
+
+    expect(body).toContain("validateConfigModelReferences(patch, \"configOverlay\")")
+    expect(body.indexOf("validateConfigModelReferences")).toBeLessThan(body.indexOf("Session.mergeConfigOverlay"))
+  })
+
   test("stored configOverlay cannot contain persisted null delete markers", async () => {
     await using tmp = await tmpdir({ config: { model: "base/top" } })
     await Instance.provide({

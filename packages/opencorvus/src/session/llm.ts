@@ -57,6 +57,10 @@ export namespace LLM {
      */
     toolChoice?: "auto" | "required" | "none" | { type: "tool"; toolName: string }
     stream?: TextHooks
+    preTerminalToolInputStart?: (input: {
+      toolName: string
+      toolCallID: string
+    }) => { output: string; title: string; metadata: object } | undefined
   }
 
   export type StreamOutput = ReturnType<typeof streamText<ToolSet>>

@@ -21,9 +21,9 @@ body[data-theme="light"] {
   --surface-hover: rgba(243, 247, 255, 0.96);
   --surface-inset: rgba(247, 249, 255, 0.72);
   --surface-strong: rgba(255, 255, 255, 0.94);
-  --rail-surface: rgba(250, 252, 255, 0.9);
-  --chat-canvas: rgba(255, 255, 255, 0.78);
-  --inspector-surface: rgba(250, 252, 255, 0.9);
+  --rail-surface: color-mix(in srgb, rgba(250, 252, 255, 0.9) calc(var(--ui-window-opacity) * 100%), transparent);
+  --chat-canvas: color-mix(in srgb, rgba(255, 255, 255, 0.78) calc(var(--ui-window-opacity) * 100%), transparent);
+  --inspector-surface: color-mix(in srgb, rgba(250, 252, 255, 0.9) calc(var(--ui-window-opacity) * 100%), transparent);
 
   /* Body background alpha tracks --ui-window-opacity (single source for
    * window translucency, rule 8). Slider at 100 → calc(100%) → fully opaque;
@@ -37,9 +37,9 @@ body[data-theme="light"] {
     color-mix(in srgb, rgb(244, 247, 255) calc(var(--ui-window-opacity) * 100%), transparent) 42%,
     color-mix(in srgb, rgb(238, 241, 255) calc(var(--ui-window-opacity) * 100%), transparent) 100%
   );
-  --panel-body-bg: rgba(255, 255, 255, 0.44);
+  --panel-body-bg: color-mix(in srgb, rgba(255, 255, 255, 0.44) calc(var(--ui-window-opacity) * 100%), transparent);
   --panel-body-blur: blur(20px);
-  --chrome: rgba(255, 255, 255, 0.78);
+  --chrome: color-mix(in srgb, rgba(255, 255, 255, 0.78) calc(var(--ui-window-opacity) * 100%), transparent);
   --border: rgba(92, 112, 163, 0.16);
   --border-hover: rgba(85, 101, 238, 0.34);
   --border-strong: rgba(84, 103, 165, 0.22);

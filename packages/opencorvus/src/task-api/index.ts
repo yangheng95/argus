@@ -1313,6 +1313,17 @@ export namespace EngineService {
     })
     return true
   }
+
+  export async function updateTaskTitle(taskID: string, title: string) {
+    const task = requireTask(taskID)
+    Database.use((db) => db.update(EngineTaskTable).set({ title }).where(eq(EngineTaskTable.id, taskID)).run())
+    await Bus.publish(Event.TaskUpdated, {
+      taskID,
+      status: deriveTaskStatus(task),
+      summary: "Task title updated",
+    })
+    return true
+  }
 }
 
 function recoverTaskByRequest(requestID: string, error: unknown) {

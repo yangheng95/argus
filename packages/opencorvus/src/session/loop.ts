@@ -44,7 +44,10 @@ import { decodeDataUrlBase64 } from "./text-mime"
 import { normalizeToolInput } from "./tool-input-norm"
 import { toolFailureCauseFromUnknown } from "./tool-failure-cause"
 import { SessionRuntimeContractMissingError } from "@/orchestrator/direct-reply"
-import { renderPreTerminalReflectionReminder } from "@/prompt/fragments/pre-terminal-reflection"
+import {
+  renderPreTerminalReflectionPrompt,
+  renderPreTerminalReflectionReminder,
+} from "@/prompt/fragments/pre-terminal-reflection"
 
 muteAISdkWarnings()
 
@@ -126,6 +129,7 @@ export namespace SessionLoop {
   // live collectors and tool functions, so they cannot be serialized into DB.
   // ---------------------------------------------------------------------------
   const sessionRuntimeContracts = new Map<string, SessionRuntimeContract>()
+  const preTerminalReflectionSeen = new Set<string>()
 
   export function setSessionRuntimeContract(
     sessionID: string,
@@ -140,6 +144,7 @@ export namespace SessionLoop {
         contract.identity.contractKind !== "orchestrator-wake")
     ) {
       sessionRuntimeContracts.delete(sessionID)
+      clearPreTerminalReflectionForSession(sessionID)
       return
     }
     if (contract.identity.sessionID !== sessionID) {
@@ -156,6 +161,47 @@ export namespace SessionLoop {
 
   export function clearSessionRuntimeContract(sessionID: string): void {
     sessionRuntimeContracts.delete(sessionID)
+    clearPreTerminalReflectionForSession(sessionID)
+  }
+
+  function clearPreTerminalReflectionForSession(sessionID: string): void {
+    const prefix = `${sessionID}:`
+    for (const key of preTerminalReflectionSeen) {
+      if (key.startsWith(prefix)) preTerminalReflectionSeen.delete(key)
+    }
+  }
+
+  export function takePreTerminalReflection(input: {
+    sessionID: string
+    agentName: string
+    finalizerName: string
+    markerID?: string | number
+  }): { output: string; title: string; metadata: object } | undefined {
+    const contract = sessionRuntimeContracts.get(input.sessionID)
+    const marker = input.markerID ?? contract?.identity.installedAt ?? "session"
+    const key = `${input.sessionID}:${marker}:${input.finalizerName}`
+    if (preTerminalReflectionSeen.has(key)) return undefined
+    preTerminalReflectionSeen.add(key)
+    const prompt = renderPreTerminalReflectionPrompt({
+      agentName: input.agentName,
+      terminalToolName: input.finalizerName === "StructuredOutput" ? undefined : input.finalizerName,
+      usesStructuredOutput: input.finalizerName === "StructuredOutput",
+    })
+    return {
+      title: "Pre-terminal Reflection Required",
+      output: [
+        "This terminal submission is paused for the required pre-submit reflection.",
+        "",
+        prompt ?? renderPreTerminalReflectionReminder(input.finalizerName),
+        "",
+        `After checking and correcting any mismatch, call ${input.finalizerName} again with the final payload.`,
+      ].join("\n"),
+      metadata: {
+        preTerminalReflection: true,
+        agentName: input.agentName,
+        finalizerName: input.finalizerName,
+      },
+    }
   }
 
   function runtimeContractTools(sessionID: string): Record<string, AITool> {
@@ -1274,6 +1320,13 @@ export namespace SessionLoop {
         tool: createStructuredOutputTool({
           schema: input.lastUser.format.schema,
           validate: getStructuredOutputGuard(input.sessionID),
+          preTerminalReflection: () =>
+            takePreTerminalReflection({
+              sessionID: input.sessionID,
+              agentName: input.lastUser.agent,
+              finalizerName: "StructuredOutput",
+              markerID: input.lastUser.id,
+            }),
           onSuccess(output) {
             structured = output
           },
@@ -1587,6 +1640,25 @@ export namespace SessionLoop {
       model: input.model,
       toolChoice: turnToolChoice,
       stream: runtimeContract?.stream,
+      preTerminalToolInputStart: ({ toolName }) => {
+        if (format.type === "json_schema" && toolName === "StructuredOutput") {
+          return takePreTerminalReflection({
+            sessionID: input.sessionID,
+            agentName: input.lastUser.agent,
+            finalizerName: "StructuredOutput",
+            markerID: input.lastUser.id,
+          })
+        }
+        if (terminalToolContract && terminalToolContract.toolName === toolName) {
+          return takePreTerminalReflection({
+            sessionID: input.sessionID,
+            agentName: input.lastUser.agent,
+            finalizerName: toolName,
+            markerID: runtimeContract?.identity.installedAt,
+          })
+        }
+        return undefined
+      },
     })
 
     if (structured !== undefined) {
@@ -2089,6 +2161,16 @@ export namespace SessionLoop {
         partFromToolCall: (toolCallID) => input.processor.partFromToolCall(toolCallID),
         ensureToolPart: (toolCallID, toolName, toolInput) =>
           input.processor.ensureToolPart(toolCallID, toolName, toolInput),
+        preTerminalReflection:
+          runtimeContract?.terminalToolContract?.toolName === name
+            ? () =>
+                takePreTerminalReflection({
+                  sessionID: input.session.id,
+                  agentName: runtimeContract.identity.agentKind,
+                  finalizerName: name,
+                  markerID: runtimeContract.identity.installedAt,
+                })
+            : undefined,
       })
       tools[name] = prepareProviderTool({
         name,
@@ -2136,6 +2218,7 @@ export namespace SessionLoop {
       messageID: string
       partFromToolCall: (toolCallID: string) => Message.ToolPart | undefined
       ensureToolPart: (toolCallID: string, toolName: string, toolInput: Record<string, unknown>) => Promise<Message.ToolPart>
+      preTerminalReflection?: () => { output: string; title: string; metadata: object } | undefined
     },
   ): AITool {
     const original = raw as AITool & { execute?: (...args: any[]) => any }
@@ -2179,6 +2262,8 @@ export namespace SessionLoop {
             toolPartID: toolPart?.id,
           },
         }
+        const reflection = ctx.preTerminalReflection?.()
+        if (reflection) return reflection
         const result = await execute(args, enrichedOptions)
         const normalized = normalizeExtraToolResult(result)
         const materializedAttachments = await materializeToolResultAttachments(normalized.attachments)
@@ -2195,6 +2280,7 @@ export namespace SessionLoop {
   export function createStructuredOutputTool(input: {
     schema: Record<string, any>
     validate?: StructuredOutputGuard
+    preTerminalReflection?: () => { output: string; title: string; metadata: object } | undefined
     onSuccess: (output: unknown) => void
   }): AITool {
     const { $schema, ...toolSchema } = input.schema
@@ -2213,6 +2299,8 @@ export namespace SessionLoop {
             reason: payload.reason,
           })
         }
+        const reflection = input.preTerminalReflection?.()
+        if (reflection) return reflection
         const rejection = await input.validate?.(payload.value)
         if (rejection) throw new Error(rejection)
         input.onSuccess(payload.value)

@@ -1424,7 +1424,12 @@ export namespace Config {
             .describe(
               "Operator-toggled debug behaviour. Settings here are diagnostic — they affect host runtime decisions and prompt content.",
             ),
-          max_executor_groups: z.number().int().min(1).optional().describe("Maximum parallel executor groups"),
+          max_executor_groups: z
+            .number()
+            .int()
+            .min(1)
+            .optional()
+            .describe("Maximum parallel agent sessions in fan-out phases such as goal builds and integrity reviewers"),
           default_workflow: z
             .string()
             .optional()

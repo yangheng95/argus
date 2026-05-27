@@ -360,11 +360,11 @@ await SessionPrompt.prompt({
 
 **子阶段分解**（每项独立 PR，顺序执行）：
 
-- **5-a**（✅ 2026-04-24）：`engine/build-semaphore.ts` — `BuildSemaphore.acquire(task) / withSlot(task, fn) / inFlight(id) / waiting(id) / reset()`；per-task 计数，FIFO waiter 队列；limit 每次 acquire 动态读 `effectiveMaxExecutorGroups(task)`；空 entry 自动 GC；in-memory only（rule 23 / 26 合规：无 FSM、无持久化）；6 单测覆盖立即获取 / 排队 / 多任务隔离 / withSlot ok+throw / reset 排空
+- **5-a**（✅ 2026-04-24，更新 2026-05-26）：`engine/agent-semaphore.ts` — `AgentSemaphore.acquire(task) / withSlot(task, fn) / inFlight(id) / waiting(id) / reset()`；per-task 计数，FIFO waiter 队列；limit 每次 acquire 动态读 `effectiveMaxAgentParallelism(task)`；goal/build fan-out 与 integrity reviewer fan-out 共用这一全局 agent 并行上限；空 entry 自动 GC；in-memory only（rule 23 / 26 合规：无 FSM、无持久化）；单测覆盖立即获取 / 排队 / 多任务隔离 / withSlot ok+throw / reset 排空
 - **5-b** 拆为两步以缩小单 PR 风险：
   - **5-b-1**（✅ 2026-04-24）：`src/build-agent/types.ts`（目录名避开 `.gitignore` 的 `build/` 条目）— `BuildResultSchema`（status=passed|failed / summary / patch_summary / commit_ref? / tests / error?）+ `BuildTarget` 区分 request-path 与 goal-path + `BuildTestResult`；9 zod shape 单测锁死。API 合约定义完毕，5-b-2 实现不再反复重改
   - **5-b-2**（✅ 2026-04-24 代码完成，real-LLM smoke 留 5-b-3）：`src/build-agent/agent.ts` 实现 `BuildAgent.run({target, task, parentSessionID, model?, signal?, workDir?}): Promise<{result, sessionID, worktreeDir?}>`
-    - 内部调用链：`BuildSemaphore.withSlot` → `Worktree.create`（`ownsWorktree = !input.workDir` 时自动建，否则用 caller 的）→ `Ownership.Worktree.record`（marker）→ `Session.createNext({kind:"build", directory: worktreeDir})` → `SessionPrompt.prompt({ agent:"build", system: BUILD_CORE, format: json_schema(BuildResultSchema) })`
+    - 内部调用链：`AgentSemaphore.withSlot` → `Worktree.create`（`ownsWorktree = !input.workDir` 时自动建，否则用 caller 的）→ `Ownership.Worktree.record`（marker）→ `Session.createNext({kind:"build", directory: worktreeDir})` → `SessionPrompt.prompt({ agent:"build", system: BUILD_CORE, format: json_schema(BuildResultSchema) })`
     - finally 块：`signal.removeEventListener(abortPrompt)`；若 ownsWorktree 自动调 `cleanupGoalWorkspace(worktreeDir)`
     - 返回值：从 `finalMessage.info.structured` zod safeParse 到 `BuildResult`；校验失败 throw（StructuredOutput 契约失败属于 infra 故障）
     - 复用现有 `build` agent registry entry（默认 coding agent，tools exclude planner/panel/tui 等），system prompt 由 call-site 覆盖为 build-core
@@ -386,7 +386,7 @@ await SessionPrompt.prompt({
     - `## After a delivery rejection` 段：rung 5 从 retry_goal 切换到 `build({ goalID })`；rung 8 "shared-state obstacle" 依然用 `build`
   - typecheck clean；232 session+engine+build-agent 测试通过（5 pre-existing flaky 无回归）
 - **5-d**（✅ 2026-04-24）：`orchestrator/loop.ts` 完整重写
-  - 删除：`GoalPool` 导入、`PoolHooks`、`effectiveMaxExecutorGroups`、`mergeGoalDelivery`、`findRun` / `findPlan`、`isRunReadyForGoalDispatch`、`dispatch-queue` 动态引用、`describeTaskFromRow` 全部从 loop 消失
+  - 删除：`GoalPool` 导入、`PoolHooks`、旧 build-only executor-group helper 命名、`mergeGoalDelivery`、`findRun` / `findPlan`、`isRunReadyForGoalDispatch`、`dispatch-queue` 动态引用、`describeTaskFromRow` 全部从 loop 消失
   - 删除：`waitForGoalCompletion` 函数（70 行 goal_run polling）
   - 删除：`GoalDesc` / `RunRow` / `PlanRow` import，`decisionTurn` 之后的 "is goal-pool driving" 200+ 行
   - 保留：serial per-task 链、MAX_TASK_ITERATIONS 上限、delivery rejection artifact 监测 + auto-rewake with note、terminal-status 退出、combineSignals / interruptTaskLoop

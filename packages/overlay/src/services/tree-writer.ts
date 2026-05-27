@@ -1544,6 +1544,17 @@ function resolveTurnCardID(
   cardID: string;
   isPhase: boolean;
 } {
+  if (stage === "integrity" && !goalID) {
+    const cardID = integrityCardID(sessionID);
+    if (!cardTreeStore.cards[cardID]) {
+      setCardTreeStore(
+        "cards",
+        cardID,
+        createSessionCardNode(cardID, "integrity", "", time, sessionID, ""),
+      );
+    }
+    return { cardID, isPhase: false };
+  }
   if (isPhaseAbsorbedSession(stage, goalID)) {
     const phase = goalStagePhaseID(stage)!;
     // Read the live run id so the stub lands on the current attempt's card.
@@ -1703,6 +1714,10 @@ function nonPhaseMessageTurnCardID(cardID: string): boolean {
   return cardID.includes(":session:") && cardID.includes(":message:");
 }
 
+function timelineCardID(stage: string, sessionID: string, messageID: string): string {
+  return stage === "integrity" ? integrityCardID(sessionID) : messageTurnCardID(stage, sessionID, messageID);
+}
+
 function collectTimelineParts(messageIDs: Set<string>): Map<string, any[]> {
   const byMessage = new Map<string, any[]>();
   const seenPartIDs = new Set<string>();
@@ -1762,7 +1777,7 @@ function regroupTimelineSegments(opts: { deferHierarchy?: boolean } = {}): void 
 
     let segment = segmentBySession.get(message.sessionID);
     if (!segment) {
-      const cardID = messageTurnCardID(stage, message.sessionID, message.id);
+      const cardID = timelineCardID(stage, message.sessionID, message.id);
       segment = { cardID, session, stage, goalID, messages: [] };
       segmentBySession.set(message.sessionID, segment);
       segments.push(segment);
@@ -2523,6 +2538,25 @@ function rebuildCardHierarchyImpl(): void {
   }
   for (const childID of interactions.topLevel) {
     nextChildIDs.set(childID, nextChildIDs.get(childID) || []);
+  }
+
+  // Integrity team sessions form a supervisor -> reviewer tree. The
+  // reviewer streams still need independent cards so their reasoning parts
+  // cannot collide, but those cards belong under the supervisor integrity
+  // card instead of surfacing as top-level siblings.
+  for (const info of orderedSessions) {
+    if (info.stage !== "integrity" || !info.parentSessionID) continue;
+    const parent = sessions.get(info.parentSessionID);
+    if (!parent || parent.stage !== "integrity") continue;
+    const parentCardID = parent.activeCardID;
+    if (!parentCardID || !cardTreeStore.cards[parentCardID]) continue;
+    const bucket = nextChildIDs.get(parentCardID) || [];
+    for (const childID of sessionOwnedCardIDs(info)) {
+      if (childID === parentCardID || !cardTreeStore.cards[childID]) continue;
+      pushUniqueChild(bucket, childID);
+      nextChildIDs.set(childID, nextChildIDs.get(childID) || []);
+    }
+    nextChildIDs.set(parentCardID, bucket);
   }
 
   // Integrity verdict cards attach under their owning requirements session.

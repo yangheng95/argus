@@ -134,6 +134,7 @@ function RecentDirectoryMenuItem(props: {
 
 function MenuRange(props: {
   label: string;
+  description: string;
   value: number;
   min: number;
   max: number;
@@ -151,22 +152,25 @@ function MenuRange(props: {
     <label class="titlebar-menubar-range">
       <span class="titlebar-menubar-range-copy">
         <span class="titlebar-menubar-item-title">{props.label}</span>
-        <span class="titlebar-menubar-item-meta">
+        <span class="titlebar-menubar-item-meta">{props.description}</span>
+      </span>
+      <span class="titlebar-menubar-range-control">
+        <input
+          type="range"
+          min={props.min}
+          max={props.max}
+          step={props.step}
+          value={props.value}
+          disabled={props.disabled}
+          aria-label={props.label}
+          data-testid={props.testid}
+          onInput={commit}
+          onChange={commit}
+        />
+        <span class="titlebar-menubar-range-value" aria-hidden="true">
           {props.value}{props.unit || ""}
         </span>
       </span>
-      <input
-        type="range"
-        min={props.min}
-        max={props.max}
-        step={props.step}
-        value={props.value}
-        disabled={props.disabled}
-        aria-label={props.label}
-        data-testid={props.testid}
-        onInput={commit}
-        onChange={commit}
-      />
     </label>
   );
 }
@@ -458,6 +462,7 @@ export function TitlebarMenubar(props: TitlebarMenubarProps) {
                     </label>
                     <MenuRange
                       label={t("titlebar.budget_max_executor_groups")}
+                      description={t("titlebar.budget_max_executor_groups_hint")}
                       value={maxGroups() ?? 1}
                       min={1}
                       max={10}
@@ -467,6 +472,7 @@ export function TitlebarMenubar(props: TitlebarMenubarProps) {
                     />
                     <MenuRange
                       label={t("titlebar.compaction_threshold")}
+                      description={t("titlebar.compaction_threshold_hint")}
                       value={compactionThresholdPercent()}
                       min={10}
                       max={100}
@@ -530,6 +536,7 @@ export function TitlebarMenubar(props: TitlebarMenubarProps) {
                     </MenuItem>
                     <MenuRange
                       label={t("settings.opacity.label")}
+                      description={t("settings.opacity.hint")}
                       value={opacityPercent()}
                       min={50}
                       max={100}
@@ -540,6 +547,7 @@ export function TitlebarMenubar(props: TitlebarMenubarProps) {
                     />
                     <MenuRange
                       label={t("titlebar.zoom")}
+                      description={t("titlebar.zoom_hint")}
                       value={zoomPercent()}
                       min={80}
                       max={160}

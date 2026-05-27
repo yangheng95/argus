@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { AgentRunError, buildHardErrorFromFinalMessage } from "../../src/agent/runner"
+import { AgentRunError, buildHardErrorFromFinalMessage, buildUnsatisfiedTerminalToolError } from "../../src/agent/runner"
 import { Message } from "../../src/session/message"
 
 /**
@@ -188,6 +188,22 @@ describe("buildHardErrorFromFinalMessage", () => {
     expect(result).not.toBeNull()
     // ECMAScript ErrorOptions.cause flows through to Error.cause.
     expect(Message.TerminalToolMissingError.isInstance(result!.cause as Error)).toBe(true)
+  })
+
+  test("unsatisfied terminal collector becomes TerminalToolMissingError before session completion", () => {
+    const result = buildUnsatisfiedTerminalToolError({
+      kind: "build" as const,
+      agentName: "build",
+      toolName: "report_build_result",
+    })
+
+    expect(result).toBeInstanceOf(AgentRunError)
+    expect(result.nonRetryable).toBe(true)
+    expect(result.message).toContain("TerminalToolMissingError")
+    expect(result.message).toContain("report_build_result")
+    expect(result.message).toContain("pre-submit reflection hook result is not a terminal submission")
+    expect(Message.TerminalToolMissingError.isInstance(result.cause as Error)).toBe(true)
+    expect((result.cause as { data?: { toolName?: string } }).data?.toolName).toBe("report_build_result")
   })
 
   test("agentName appears in the error message for operator triage", () => {
