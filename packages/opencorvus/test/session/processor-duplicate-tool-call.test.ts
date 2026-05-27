@@ -1,6 +1,7 @@
-import { afterEach, expect, mock, spyOn, test } from "bun:test"
+import { afterEach, beforeEach, expect, mock, spyOn, test } from "bun:test"
 import { Bus } from "../../src/bus"
 import { Config } from "../../src/config/config"
+import { EffectiveConfig } from "../../src/config/effective"
 import { EngineConfig } from "../../src/engine/config"
 import { PermissionNext } from "../../src/permission/next"
 import type { Provider } from "../../src/provider/provider"
@@ -15,6 +16,12 @@ import { SessionStatus } from "../../src/session/status"
 
 afterEach(() => {
   mock.restore()
+})
+
+beforeEach(() => {
+  spyOn(EffectiveConfig, "effective").mockResolvedValue({
+    experimental: {},
+  } as Awaited<ReturnType<typeof EffectiveConfig.effective>>)
 })
 
 function streamOf(events: Array<Record<string, unknown>>): AsyncIterable<any> {
@@ -122,6 +129,69 @@ test("session processor reuses one part when the same tool callID is delivered t
   // No callID may appear on more than one part — that is exactly what produces
   // a duplicate provider tool_call_id.
   expect(new Set(callIDs).size).toBe(toolParts.length)
+})
+
+test("session processor closes duplicate same-callID tool-call deltas with one result", async () => {
+  spyOn(Config, "get").mockResolvedValue({ experimental: {} } as Awaited<ReturnType<typeof Config.get>>)
+  spyOn(EngineConfig, "get").mockResolvedValue({
+    activity: { session_llm_idle_ms: 60 },
+  } as Awaited<ReturnType<typeof EngineConfig.get>>)
+  spyOn(SessionStatus, "set").mockImplementation(() => {})
+  spyOn(Bus, "publish").mockResolvedValue(undefined as never)
+  spyOn(Session, "updateMessage").mockResolvedValue(undefined as never)
+  spyOn(PermissionNext, "ask").mockResolvedValue(undefined as never)
+
+  const store = new Map<string, Message.Part>()
+  spyOn(Session, "updatePart").mockImplementation(async (part) => {
+    store.set(part.id, part as Message.Part)
+    return part as never
+  })
+  spyOn(Message, "parts").mockImplementation(
+    (async (messageID: string) =>
+      [...store.values()].filter((p) => p.messageID === messageID)) as typeof Message.parts,
+  )
+
+  const input = { path: "packages/opencorvus/src/session/processor.ts" }
+  spyOn(LLM, "stream").mockResolvedValue({
+    fullStream: streamOf([
+      { type: "start" },
+      { type: "tool-call", toolCallId: "read_file:11", toolName: "read_file", input },
+      { type: "tool-call", toolCallId: "read_file:11", toolName: "read_file", input },
+      {
+        type: "tool-result",
+        toolCallId: "read_file:11",
+        toolName: "read_file",
+        input,
+        output: { output: "file contents", title: "read_file" },
+      },
+      { type: "finish", finishReason: "tool-calls" },
+    ]),
+  } as Awaited<ReturnType<typeof LLM.stream>>)
+
+  const processor = SessionProcessor.create({
+    assistantMessage: {
+      id: "msg_same_call_delta",
+      sessionID: "ses_same_call_delta",
+      role: "assistant",
+      agent: "architect",
+      parentID: "msg_parent",
+      cost: 0,
+      tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+      time: { created: Date.now() },
+    } as Message.Assistant,
+    sessionID: "ses_same_call_delta",
+    model: { providerID: "test-provider", id: "test-model" } as Provider.Model,
+    abort: new AbortController().signal,
+  })
+
+  await expect(processor.process({} as LLM.StreamInput)).resolves.toBe("continue")
+
+  const toolParts = [...store.values()].filter((p): p is Message.ToolPart => p.type === "tool")
+  expect(toolParts).toHaveLength(1)
+  expect(toolParts[0]!.callID).toBe("read_file:11")
+  expect(toolParts[0]!.state.status).toBe("completed")
+  const openParts = toolParts.filter((part) => part.state.status === "pending" || part.state.status === "running")
+  expect(openParts).toHaveLength(0)
 })
 
 test("session processor preserves invalid tool-call input and paired tool-error cause", async () => {
@@ -493,7 +563,7 @@ test("session processor closes a persisted running tool part when only the error
   expect(part.state.status === "error" ? part.state.failure.message : "").toContain("merge failed")
 })
 
-test("session processor marks a superseded duplicate merge_back call instead of losing the open part", async () => {
+test("session processor does not supersede different-callID duplicate merge_back calls", async () => {
   spyOn(Config, "get").mockResolvedValue({ experimental: {} } as Awaited<ReturnType<typeof Config.get>>)
   spyOn(EngineConfig, "get").mockResolvedValue({
     activity: { session_llm_idle_ms: 60 },
@@ -561,7 +631,7 @@ test("session processor marks a superseded duplicate merge_back call instead of 
     abort: new AbortController().signal,
   })
 
-  await processor.process({} as LLM.StreamInput)
+  await expect(processor.process({} as LLM.StreamInput)).rejects.toThrow(SessionProcessor.ProcessorLostPartsError)
 
   const first = [...store.values()].find(
     (p): p is Message.ToolPart => p.type === "tool" && p.callID === "call_merge_first",
@@ -569,8 +639,7 @@ test("session processor marks a superseded duplicate merge_back call instead of 
   const second = [...store.values()].find(
     (p): p is Message.ToolPart => p.type === "tool" && p.callID === "call_merge_second",
   )
-  expect(first?.state.status).toBe("error")
-  expect(first?.state.status === "error" ? first.state.failure.name : "").toBe("SupersededDuplicateToolCall")
+  expect(first?.state.status).toBe("running")
   expect(second?.state.status).toBe("completed")
 })
 

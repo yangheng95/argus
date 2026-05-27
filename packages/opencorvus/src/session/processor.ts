@@ -28,7 +28,6 @@ import { toolFailureCauseFromUnknown, type ToolFailureCause } from "./tool-failu
 
 export namespace SessionProcessor {
   const DOOM_LOOP_THRESHOLD = 3
-  const SUPERSEDE_DUPLICATE_OPEN_TOOLS = new Set(["merge_back"])
   const log = Log.create({ service: "session.processor" })
 
   export class ProcessorLostPartsError extends Error {
@@ -48,6 +47,23 @@ export namespace SessionProcessor {
     abort: AbortSignal
   }) {
     const toolcalls: Record<string, Message.ToolPart> = {}
+    const toolPartLocks = new Map<string, Promise<void>>()
+
+    const withToolPartLock = async <T>(toolCallID: string, fn: () => Promise<T>): Promise<T> => {
+      const previous = toolPartLocks.get(toolCallID)
+      let release!: () => void
+      const current = new Promise<void>((resolve) => {
+        release = resolve
+      })
+      toolPartLocks.set(toolCallID, current)
+      try {
+        if (previous) await previous.catch(() => {})
+        return await fn()
+      } finally {
+        release()
+        if (toolPartLocks.get(toolCallID) === current) toolPartLocks.delete(toolCallID)
+      }
+    }
 
     // Resolve the part that already represents `toolCallID` on this assistant
     // message. `toolcalls` only tracks IN-FLIGHT calls â€” the tool-result /
@@ -98,45 +114,6 @@ export namespace SessionProcessor {
       }
     }
 
-    const closeSupersededDuplicateOpenToolParts = async (): Promise<void> => {
-      const parts = await Message.parts(input.assistantMessage.id)
-      const terminalParts = parts.filter(
-        (part): part is Message.ToolPart =>
-          part.type === "tool" && (part.state.status === "completed" || part.state.status === "error"),
-      )
-      for (const part of parts) {
-        if (
-          part.type !== "tool" ||
-          !SUPERSEDE_DUPLICATE_OPEN_TOOLS.has(part.tool) ||
-          (part.state.status !== "pending" && part.state.status !== "running")
-        ) {
-          continue
-        }
-        const duplicate = terminalParts.find((candidate) =>
-          candidate.id !== part.id &&
-          candidate.callID !== part.callID &&
-          candidate.tool === part.tool &&
-          JSON.stringify(candidate.state.input) === JSON.stringify(part.state.input),
-        )
-        if (!duplicate) continue
-        await failToolPart(part, {
-          kind: "processor-contract",
-          name: "SupersededDuplicateToolCall",
-          classification: "processor-contract",
-          originSite: "session.processor.superseded-duplicate-tool",
-          message:
-            `${part.tool} call ${part.callID} was superseded by duplicate terminal call ${duplicate.callID} ` +
-            "in the same assistant message.",
-          data: {
-            tool: part.tool,
-            callID: part.callID,
-            duplicateCallID: duplicate.callID,
-            duplicatePartID: duplicate.id,
-          },
-        })
-      }
-    }
-
     let snapshot: string | undefined
     let blocked = false
     let needsCompaction = false
@@ -152,30 +129,32 @@ export namespace SessionProcessor {
         return toolcalls[toolCallID]
       },
       async ensureToolPart(toolCallID: string, toolName: string, toolInput: Record<string, unknown>) {
-        const existing = await priorToolPart(toolCallID)
-        const start =
-          existing?.type === "tool" && existing.state.status === "running"
-            ? existing.state.time.start
-            : Date.now()
-        const part = await Session.updatePart({
-          ...(existing ?? {
-            id: Identifier.ascending("part"),
-            messageID: input.assistantMessage.id,
-            sessionID: input.assistantMessage.sessionID,
-            type: "tool" as const,
-            callID: toolCallID,
+        return withToolPartLock(toolCallID, async () => {
+          const existing = await priorToolPart(toolCallID)
+          const start =
+            existing?.type === "tool" && existing.state.status === "running"
+              ? existing.state.time.start
+              : Date.now()
+          const part = await Session.updatePart({
+            ...(existing ?? {
+              id: Identifier.ascending("part"),
+              messageID: input.assistantMessage.id,
+              sessionID: input.assistantMessage.sessionID,
+              type: "tool" as const,
+              callID: toolCallID,
+              tool: toolName,
+            }),
             tool: toolName,
-          }),
-          tool: toolName,
-          callID: toolCallID,
-          state: {
-            status: "running",
-            input: toolInput,
-            time: { start },
-          },
+            callID: toolCallID,
+            state: {
+              status: "running",
+              input: toolInput,
+              time: { start },
+            },
+          })
+          toolcalls[toolCallID] = part as Message.ToolPart
+          return part as Message.ToolPart
         })
-        toolcalls[toolCallID] = part as Message.ToolPart
-        return part as Message.ToolPart
       },
       async process(streamInput: LLM.StreamInput) {
         log.info("process")
@@ -321,7 +300,33 @@ export namespace SessionProcessor {
                     toolCallID,
                   })
                   if (preTerminalReflection) {
-                    await Session.updatePart({
+                    await withToolPartLock(toolCallID, async () => {
+                      await Session.updatePart({
+                        id: (await priorToolPart(toolCallID))?.id ?? Identifier.ascending("part"),
+                        messageID: input.assistantMessage.id,
+                        sessionID: input.assistantMessage.sessionID,
+                        type: "tool",
+                        tool: value.toolName,
+                        callID: toolCallID,
+                        state: {
+                          status: "completed",
+                          input: {},
+                          output: preTerminalReflection.output,
+                          title: preTerminalReflection.title,
+                          metadata: preTerminalReflection.metadata,
+                          time: {
+                            start: Date.now(),
+                            end: Date.now(),
+                          },
+                        },
+                      })
+                    })
+                    input.assistantMessage.finish = "tool-calls"
+                    preTerminalInterrupted = true
+                    return
+                  }
+                  const part = await withToolPartLock(toolCallID, async () => {
+                    return await Session.updatePart({
                       id: (await priorToolPart(toolCallID))?.id ?? Identifier.ascending("part"),
                       messageID: input.assistantMessage.id,
                       sessionID: input.assistantMessage.sessionID,
@@ -329,33 +334,11 @@ export namespace SessionProcessor {
                       tool: value.toolName,
                       callID: toolCallID,
                       state: {
-                        status: "completed",
+                        status: "pending",
                         input: {},
-                        output: preTerminalReflection.output,
-                        title: preTerminalReflection.title,
-                        metadata: preTerminalReflection.metadata,
-                        time: {
-                          start: Date.now(),
-                          end: Date.now(),
-                        },
+                        raw: "",
                       },
                     })
-                    input.assistantMessage.finish = "tool-calls"
-                    preTerminalInterrupted = true
-                    return
-                  }
-                  const part = await Session.updatePart({
-                    id: (await priorToolPart(toolCallID))?.id ?? Identifier.ascending("part"),
-                    messageID: input.assistantMessage.id,
-                    sessionID: input.assistantMessage.sessionID,
-                    type: "tool",
-                    tool: value.toolName,
-                    callID: toolCallID,
-                    state: {
-                      status: "pending",
-                      input: {},
-                      raw: "",
-                    },
                   })
                   toolcalls[toolCallID] = part as Message.ToolPart
                   break
@@ -401,28 +384,30 @@ export namespace SessionProcessor {
                   // pause is scoped to known stream-pause semantics (tool-call
                   // boundary), not a generic disable switch.
                   run.pause("tool-call")
-                  const match = await priorToolPart(value.toolCallId)
-                  const part = await Session.updatePart({
-                    ...(match ?? {
-                      id: Identifier.ascending("part"),
-                      messageID: input.assistantMessage.id,
-                      sessionID: input.assistantMessage.sessionID,
-                      type: "tool" as const,
-                      callID: value.toolCallId,
+                  const part = await withToolPartLock(value.toolCallId, async () => {
+                    const match = await priorToolPart(value.toolCallId)
+                    return await Session.updatePart({
+                      ...(match ?? {
+                        id: Identifier.ascending("part"),
+                        messageID: input.assistantMessage.id,
+                        sessionID: input.assistantMessage.sessionID,
+                        type: "tool" as const,
+                        callID: value.toolCallId,
+                        tool: value.toolName,
+                      }),
                       tool: value.toolName,
-                    }),
-                    tool: value.toolName,
-                    state: {
-                      status: "running",
-                      input: value.input,
-                      time: {
-                        start:
-                          match?.state.status === "running"
-                            ? match.state.time.start
-                            : Date.now(),
+                      state: {
+                        status: "running",
+                        input: value.input,
+                        time: {
+                          start:
+                            match?.state.status === "running"
+                              ? match.state.time.start
+                              : Date.now(),
+                        },
                       },
-                    },
-                    metadata: value.providerMetadata,
+                      metadata: value.providerMetadata,
+                    })
                   })
                   toolcalls[value.toolCallId] = part as Message.ToolPart
 
@@ -462,26 +447,28 @@ export namespace SessionProcessor {
                   // matching tool-call after a recovery), so this is safe to
                   // run unconditionally before the match check.
                   run.resume("tool-call")
-                  const match = toolcalls[value.toolCallId] ?? await priorToolPart(value.toolCallId)
-                  if (match && (match.state.status === "running" || match.state.status === "pending")) {
-                    const resolvedInput = value.input === undefined ? match.state.input : value.input
-                    await Session.updatePart({
-                      ...match,
-                      state: {
-                        status: "completed",
-                        input: resolvedInput,
-                        output: value.output.output,
-                        metadata: value.output.metadata,
-                        title: value.output.title,
-                        time: {
-                          start: match.state.status === "running" ? match.state.time.start : Date.now(),
-                          end: Date.now(),
+                  await withToolPartLock(value.toolCallId, async () => {
+                    const match = toolcalls[value.toolCallId] ?? await priorToolPart(value.toolCallId)
+                    if (match && (match.state.status === "running" || match.state.status === "pending")) {
+                      const resolvedInput = value.input === undefined ? match.state.input : value.input
+                      await Session.updatePart({
+                        ...match,
+                        state: {
+                          status: "completed",
+                          input: resolvedInput,
+                          output: value.output.output,
+                          metadata: value.output.metadata,
+                          title: value.output.title,
+                          time: {
+                            start: match.state.status === "running" ? match.state.time.start : Date.now(),
+                            end: Date.now(),
+                          },
+                          attachments: value.output.attachments,
                         },
-                        attachments: value.output.attachments,
-                      },
-                    })
-                    delete toolcalls[value.toolCallId]
-                  }
+                      })
+                      delete toolcalls[value.toolCallId]
+                    }
+                  })
                   break
                 }
 
@@ -489,43 +476,45 @@ export namespace SessionProcessor {
                   // Pair with `run.pause("tool-call")` from tool-call (errors close the
                   // tool-call window just like results).
                   run.resume("tool-call")
-                  const match = toolcalls[value.toolCallId] ?? await priorToolPart(value.toolCallId)
-                  if (match && (match.state.status === "running" || match.state.status === "pending")) {
-                    const resolvedInput = value.input === undefined ? match.state.input : value.input
-                    const classification = (value as { dynamic?: boolean }).dynamic === true
-                      ? "tool-input-invalid"
-                      : "tool-execution"
-                    const failure = toolFailureCauseFromUnknown({
-                      error: value.error,
-                      originSite: "session.processor.tool-error",
-                      classification,
-                      kind: classification,
-                      data: {
-                        toolCallId: value.toolCallId,
-                        toolName: value.toolName,
-                      },
-                    })
-                    await Session.updatePart({
-                      ...match,
-                      state: {
-                        status: "error",
-                        input: resolvedInput,
-                        failure,
-                        time: {
-                          start: match.state.status === "running" ? match.state.time.start : Date.now(),
-                          end: Date.now(),
+                  await withToolPartLock(value.toolCallId, async () => {
+                    const match = toolcalls[value.toolCallId] ?? await priorToolPart(value.toolCallId)
+                    if (match && (match.state.status === "running" || match.state.status === "pending")) {
+                      const resolvedInput = value.input === undefined ? match.state.input : value.input
+                      const classification = (value as { dynamic?: boolean }).dynamic === true
+                        ? "tool-input-invalid"
+                        : "tool-execution"
+                      const failure = toolFailureCauseFromUnknown({
+                        error: value.error,
+                        originSite: "session.processor.tool-error",
+                        classification,
+                        kind: classification,
+                        data: {
+                          toolCallId: value.toolCallId,
+                          toolName: value.toolName,
                         },
-                      },
-                    })
+                      })
+                      await Session.updatePart({
+                        ...match,
+                        state: {
+                          status: "error",
+                          input: resolvedInput,
+                          failure,
+                          time: {
+                            start: match.state.status === "running" ? match.state.time.start : Date.now(),
+                            end: Date.now(),
+                          },
+                        },
+                      })
 
-                    if (
-                      value.error instanceof PermissionNext.RejectedError ||
-                      value.error instanceof Question.RejectedError
-                    ) {
-                      blocked = shouldBreak
+                      if (
+                        value.error instanceof PermissionNext.RejectedError ||
+                        value.error instanceof Question.RejectedError
+                      ) {
+                        blocked = shouldBreak
+                      }
+                      delete toolcalls[value.toolCallId]
                     }
-                    delete toolcalls[value.toolCallId]
-                  }
+                  })
                   break
                 }
                 case "error":
@@ -755,7 +744,6 @@ export namespace SessionProcessor {
             }
             snapshot = undefined
           }
-          await closeSupersededDuplicateOpenToolParts()
           const lostParts = await openToolParts()
           if (lostParts.length > 0) {
             throw new ProcessorLostPartsError(lostParts.map((part) => part.id))
