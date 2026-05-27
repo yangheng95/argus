@@ -80,12 +80,24 @@ interface SessionInfo {
    *  message-turn card (`<stage>:session:<sid>:message:<mid>`). */
   messageCardIDs: Map<string, string>;
   /** The message turn currently receiving session-level events
-   *  (session.status / session.error / usage.updated). The newest
-   *  `message.updated` for this session sets it. */
+   *  (session.status / session.error). The newest `message.updated` for
+   *  this session sets it. */
   activeMessageID?: string;
-  /** Display card for `activeMessageID`. Session lifecycle/usage events
+  /** Display card for `activeMessageID`. Session lifecycle events
    *  mutate THIS card only — older turn cards are frozen history. */
   activeCardID?: string;
+  /** Per-message cumulative usage observed for assistant messages in
+   *  this session. `regroupTimelineSegments` collapses every assistant
+   *  message in a non-phase session into ONE display card (each
+   *  message becomes a boundary + parts inside the same card), so a
+   *  raw setCardTreeStore("cards", cardID, "usage", ...) would
+   *  overwrite earlier messages' tokens. Instead we record per-message
+   *  totals here and write the SUM onto the owning card whenever a
+   *  message.updated arrives. */
+  messageUsage: Map<
+    string,
+    { inputTokens: number; outputTokens: number; totalTokens: number; costUSD: number }
+  >;
   /** part id → its exact {cardID,index} target — O(1) lookup for updates. */
   partIndex: Map<string, PartTarget>;
   /** Last known executor top-level visibility; gates expensive order rebuilds. */
@@ -378,11 +390,6 @@ export function applyEvent(event: any): void {
   // here.
   if (type === "session.idle") return;
 
-  // ── Cumulative LLM usage for a session (token + cost). ──
-  if (type === "usage.updated") {
-    return applyVisibleCardTreeEvent(() => handleUsageUpdated(event));
-  }
-
   // ── Interactive prompts that need operator response. ──
   // approval.request / input.request payloads carry { id, approval / questions }
   // — they DO need a UI surface (Round-4 work), but until that lands we
@@ -603,6 +610,52 @@ function handleMessageUpdated(event: any): void {
     ensureBoundaryPart(session, cardID, id, displayRole, timeCreated);
   } else {
     regroupTimelineSegments();
+  }
+
+  // Project per-message LLM usage (tokens + cost) onto this turn's card.
+  // The engine writes cumulative-within-message tokens onto
+  // `Message.Assistant.tokens` (session/processor.ts step-finish) and
+  // `cost` likewise; external executors do the same via
+  // `build/agent.ts:case "usage"`. message.updated is the single source —
+  // there is no parallel usage.updated event.
+  //
+  // Non-phase sessions collapse every assistant message into ONE display
+  // card via `regroupTimelineSegments`, so we store per-message usage in
+  // `session.messageUsage` and write the SUM onto the (possibly newly
+  // resolved) card. A later message.updated for the same message
+  // overwrites that message's slot rather than double-counting.
+  if (role === "assistant") {
+    const tokens = (info as any).tokens;
+    const cost = (info as any).cost;
+    if (tokens || typeof cost === "number") {
+      const inputTokens = Number(tokens?.input ?? 0);
+      const outputTokens = Number(tokens?.output ?? 0);
+      const totalTokens = Number(tokens?.total ?? inputTokens + outputTokens);
+      const costUSD = Number.isFinite(cost) ? Number(cost) : 0;
+      if (inputTokens > 0 || outputTokens > 0 || totalTokens > 0 || costUSD > 0) {
+        session.messageUsage.set(id, { inputTokens, outputTokens, totalTokens, costUSD });
+        const targetCardID = session.messageCardIDs.get(id) ?? cardID;
+        if (cardTreeStore.cards[targetCardID]) {
+          let sumInput = 0;
+          let sumOutput = 0;
+          let sumTotal = 0;
+          let sumCost = 0;
+          for (const [mid, u] of session.messageUsage) {
+            if (session.messageCardIDs.get(mid) !== targetCardID) continue;
+            sumInput += u.inputTokens;
+            sumOutput += u.outputTokens;
+            sumTotal += u.totalTokens;
+            sumCost += u.costUSD;
+          }
+          setCardTreeStore("cards", targetCardID, "usage", {
+            inputTokens: sumInput,
+            outputTokens: sumOutput,
+            totalTokens: sumTotal,
+            costUSD: sumCost,
+          });
+        }
+      }
+    }
   }
 
   drainPendingSessionStatus(sessionID);
@@ -953,31 +1006,6 @@ function handleSessionError(event: any): void {
     return;
   }
   applyProjectedSessionStatus(activeCardID, projected);
-}
-
-// usage.updated — cumulative LLM token / cost totals from the executor for a
-// session. Backend payload shape (executor/managed.ts:525-538):
-//   { sessionID, queueTaskID, inputTokens?, outputTokens?, totalTokens?, costUSD? }
-// Maps onto the session card's `usage` field; CardHeader renders a compact
-// `↑in/↓out · $cost` strip next to the existing context-token hint.
-function handleUsageUpdated(event: any): void {
-  const props = propsOf(event);
-  const sessionID = String(props.sessionID || "");
-  if (!sessionID) return;
-  const info = sessions.get(sessionID);
-  const activeCardID = info?.activeCardID;
-  if (!info || !activeCardID || !cardTreeStore.cards[activeCardID]) return;
-  const usage: { inputTokens?: number; outputTokens?: number; totalTokens?: number; costUSD?: number } = {};
-  if (Number.isFinite(props.inputTokens)) usage.inputTokens = Number(props.inputTokens);
-  if (Number.isFinite(props.outputTokens)) usage.outputTokens = Number(props.outputTokens);
-  if (Number.isFinite(props.totalTokens)) usage.totalTokens = Number(props.totalTokens);
-  if (Number.isFinite(props.costUSD)) usage.costUSD = Number(props.costUSD);
-  if (Object.keys(usage).length === 0) return;
-  // Usage is cumulative for the runtime session. P1 writes it onto the
-  // active turn card only; a later usage event naturally moves the chip to
-  // the newest turn (per-turn split would need backend per-message
-  // accounting — out of scope, spec §3.5).
-  setCardTreeStore("cards", activeCardID, "usage", usage);
 }
 
 /** Drain any session.status buffered for this session. Called from
@@ -1512,6 +1540,7 @@ function ensureSession(sessionID: string, opts: EnsureSessionOpts): SessionInfo 
     messageCardIDs: new Map(),
     partIndex: new Map(),
     executorTopLevelVisible: false,
+    messageUsage: new Map(),
   };
   sessions.set(sessionID, info);
   return info;

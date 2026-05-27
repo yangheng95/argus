@@ -1349,6 +1349,34 @@ export function composeBuildCore(autoIteration: boolean): string {
   return [BUILD_CORE, ENGINEERING_CRAFT, renderBuildAutoIterationMode(autoIteration)].join("\n\n")
 }
 
+/**
+ * Project an external-executor `usage` event onto the active assistant
+ * message row in place. External executors emit cumulative totals
+ * (claude-agent at `result`; codex-app-server at each
+ * `thread/tokenUsage/updated`), so the latest event wins — no
+ * accumulation here, the executor already accumulated. Exported so the
+ * mapping is unit-testable without spinning up a full external build.
+ */
+export function applyExternalUsageToAssistantMessage(
+  assistantMessage: Message.Assistant,
+  event: Extract<CodingEventInfo, { type: "usage" }>,
+): void {
+  if (typeof event.costUSD === "number" && Number.isFinite(event.costUSD)) {
+    assistantMessage.cost = event.costUSD
+  }
+  if (event.inputTokens != null || event.outputTokens != null || event.totalTokens != null) {
+    const input = event.inputTokens ?? assistantMessage.tokens.input
+    const output = event.outputTokens ?? assistantMessage.tokens.output
+    assistantMessage.tokens = {
+      input,
+      output,
+      reasoning: assistantMessage.tokens.reasoning,
+      total: event.totalTokens ?? input + output,
+      cache: assistantMessage.tokens.cache,
+    }
+  }
+}
+
 export function externalEventPartText(event: CodingEventInfo, executor: string): string | undefined {
   // Progress events are intentionally NOT rendered as user-visible parts:
   // claude-code + codex both emit a stream of fine-grained "Phase: X" /
@@ -1853,9 +1881,13 @@ async function runWithExternalProviderImpl(args: {
         case "progress":
         case "plan_delta":
         case "diff_delta":
-        case "usage":
           await appendExternalEventPart(event)
           break
+        case "usage": {
+          applyExternalUsageToAssistantMessage(assistantMessage, event)
+          await Session.updateMessage(assistantMessage)
+          break
+        }
         case "approval_request":
           await appendExternalEventPart(event)
           await resolveExternalApproval({ provider, sessionID: session.id, event })

@@ -2,7 +2,7 @@
 //
 // Shared compact token / cost formatters used by every surface that prints
 // LLM usage hints: per-card chrome (CardHeader, ChatBubble) and the chat
-// header's whole-session aggregate strip. Single-source so the three
+// header's whole-conversation aggregate strip. Single-source so the three
 // surfaces stay byte-aligned — rule 8 (no double source) / rule 9 (no
 // copy-paste).
 //
@@ -35,8 +35,6 @@ export function formatCostUSD(n: number): string {
  *  independent of the full `CardNode` interface so tests can build
  *  fixtures without importing the store. */
 export interface UsageCardLike {
-  sessionID?: string;
-  phaseSessionID?: string;
   usage?: {
     inputTokens?: number;
     outputTokens?: number;
@@ -45,42 +43,27 @@ export interface UsageCardLike {
   };
 }
 
-/** Aggregate per-session usage into a single whole-conversation total.
- *  Each runtime session emits cumulative totals; tree-writer writes the
- *  latest value onto whichever card was the active turn at event time
- *  (`services/tree-writer.ts:handleUsageUpdated`). To avoid double-
- *  counting stale snapshots on older turn cards within the same session,
- *  we take the max per session, then sum across sessions.
- *
- *  Phase-absorbed sessions (build / planner under a goal — see
- *  tree-writer's `isPhaseAbsorbedSession`) store the owning session in
- *  `phaseSessionID` instead of `sessionID`, so the grouping key falls
- *  back to it. Cards with neither key are skipped (no session
- *  attribution means we cannot tell which max to compare against). */
+/** Aggregate whole-conversation usage by summing each card's own
+ *  per-message usage. tree-writer projects `Message.Assistant.{tokens,cost}`
+ *  onto exactly one turn card per assistant message — every card carries
+ *  its own message's totals, no overlap between cards — so a straight
+ *  sum-across-cards gives the conversation total. Cards without a `usage`
+ *  field (user messages, phase boundaries, tool-result chrome) contribute
+ *  nothing. */
 export function aggregateUsageAcrossSessions(
   cards: Iterable<UsageCardLike | undefined | null>,
 ): { tokens: number; costUSD: number } {
-  const perSessionTokens = new Map<string, number>();
-  const perSessionCost = new Map<string, number>();
+  let tokens = 0;
+  let costUSD = 0;
   for (const card of cards) {
-    const sessionKey = card?.sessionID ?? card?.phaseSessionID;
     const usage = card?.usage;
-    if (!sessionKey || !usage) continue;
-    const totalTokens =
+    if (!usage) continue;
+    const total =
       (usage.totalTokens ?? 0) ||
       ((usage.inputTokens ?? 0) + (usage.outputTokens ?? 0));
-    const cost = usage.costUSD ?? 0;
-    if (totalTokens > (perSessionTokens.get(sessionKey) ?? 0)) {
-      perSessionTokens.set(sessionKey, totalTokens);
-    }
-    if (cost > (perSessionCost.get(sessionKey) ?? 0)) {
-      perSessionCost.set(sessionKey, cost);
-    }
+    tokens += total;
+    costUSD += usage.costUSD ?? 0;
   }
-  let tokens = 0;
-  for (const value of perSessionTokens.values()) tokens += value;
-  let costUSD = 0;
-  for (const value of perSessionCost.values()) costUSD += value;
   return { tokens, costUSD };
 }
 
