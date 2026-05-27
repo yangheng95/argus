@@ -550,20 +550,6 @@ test("parseModel rejects bare model IDs before provider lookup", () => {
   expect(() => Provider.parseModel("iwc-aime/")).toThrow('Model must be in the format "provider/model"')
 })
 
-// providers list no longer surfaces a fallback first-entry: needs a recent.json hit
-// or explicit cfg.model. Pending product decision on what "first available" means.
-test.skip("defaultModel returns first available model when no config set", async () => {
-  await using tmp = await tmpdir()
-  await Instance.provide({
-    directory: tmp.path,
-    fn: async () => {
-      const model = await Provider.defaultModel()
-      expect(model.providerID).toBeDefined()
-      expect(model.modelID).toBeDefined()
-    },
-  })
-})
-
 test("configured default model resolves through the single model resolver", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
