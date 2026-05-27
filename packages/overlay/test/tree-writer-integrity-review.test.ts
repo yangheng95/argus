@@ -5,6 +5,36 @@ import { test, expect } from "bun:test";
 const { applyEvent, resetWriter } = await import("../src/services/tree-writer");
 const { cardTreeStore } = await import("../src/store/card-tree");
 
+function stampedInfo(channel: string, info: Record<string, any>) {
+  return {
+    ...info,
+    resolvedRole: info.resolvedRole ?? channel,
+    agent: info.agent ?? channel,
+    channel,
+  };
+}
+
+function applyIntegrityMessage(input: {
+  sessionID: string
+  messageID: string
+  parentSessionID?: string
+  created: number
+}) {
+  applyEvent({
+    type: "message.updated",
+    properties: {
+      taskID: "tsk_team",
+      info: stampedInfo("integrity", {
+        id: input.messageID,
+        sessionID: input.sessionID,
+        parentSessionID: input.parentSessionID,
+        role: "assistant",
+        time: { created: input.created },
+      }),
+    },
+  });
+}
+
 test("retired legacy gate event is not accepted by the tree writer", () => {
   resetWriter();
 
@@ -154,6 +184,23 @@ test("multiple reviewers with independent reviewIDs do not cross-contaminate a s
       sessionID: "ses_rev_b",
     },
   });
+  applyIntegrityMessage({
+    sessionID: "ses_super",
+    messageID: "msg_super",
+    created: 1700000000030,
+  });
+  applyIntegrityMessage({
+    sessionID: "ses_rev_a",
+    messageID: "msg_rev_a",
+    parentSessionID: "ses_super",
+    created: 1700000000040,
+  });
+  applyIntegrityMessage({
+    sessionID: "ses_rev_b",
+    messageID: "msg_rev_b",
+    parentSessionID: "ses_super",
+    created: 1700000000050,
+  });
 
   // Interleaved chunks from all three sources.
   applyEvent({
@@ -225,6 +272,13 @@ test("multiple reviewers with independent reviewIDs do not cross-contaminate a s
     partID: "review:integrity:ses_rev_b:reasoning:1",
     text: "B",
   });
+  expect(supervisorCard?.childIDs).toEqual([
+    "integrity:session:ses_rev_a",
+    "integrity:session:ses_rev_b",
+  ]);
+  expect(cardTreeStore.order).toContain("integrity:session:ses_super");
+  expect(cardTreeStore.order).not.toContain("integrity:session:ses_rev_a");
+  expect(cardTreeStore.order).not.toContain("integrity:session:ses_rev_b");
 });
 
 test("reviewer chunk without its own started event throws (writer invariant)", () => {
