@@ -1,4 +1,5 @@
-import { sqliteTable, text, integer, index, primaryKey } from "drizzle-orm/sqlite-core"
+import { sql } from "drizzle-orm"
+import { sqliteTable, text, integer, index, primaryKey, uniqueIndex } from "drizzle-orm/sqlite-core"
 import { ProjectTable } from "../project/project.sql"
 import type { Message } from "./message"
 import type { PermissionNext } from "@/permission/next"
@@ -154,6 +155,9 @@ export const PartTable = sqliteTable(
     index("part_message_idx").on(table.message_id),
     index("part_session_idx").on(table.session_id),
     index("part_session_time_idx").on(table.session_id, table.time_created),
+    uniqueIndex("part_message_tool_call_idx")
+      .on(table.message_id, sql<string>`json_extract(${table.data}, '$.callID')`)
+      .where(sql`json_extract(${table.data}, '$.type') = 'tool'`),
   ],
 )
 
