@@ -275,12 +275,23 @@ describe("session.message.toModelMessage", () => {
       fn: async () => {
         const output = await Message.toModelMessages(input, model)
         const assistant = output.at(-1)
+        const serialized = JSON.stringify(assistant)
         expect(patchPart.files.length).toBe(4_000)
-        expect(JSON.stringify(assistant)).toContain("Patch evidence truncated: 4000 files total, 3960 omitted")
-        expect(JSON.stringify(assistant)).toContain("file-0000.ts")
-        expect(JSON.stringify(assistant)).toContain("file-3999.ts")
-        expect(JSON.stringify(assistant)).not.toContain("file-1000.ts")
-        expect(JSON.stringify(assistant).length).toBeLessThan(3_000)
+        expect(serialized).toContain("Patch evidence truncated: 4000 files total, 3960 omitted")
+        expect(serialized).toContain("file-0000.ts")
+        expect(serialized).toContain("file-3999.ts")
+        expect(serialized).not.toContain("file-1000.ts")
+        expect(serialized.length).toBeLessThan(3_000)
+        // Patch breadcrumb must be wrapped in a <patch> XML tag so the
+        // model treats it as a system-injected protocol element rather
+        // than prose to mimic. The earlier `[Patch evidence ...]` form
+        // was easy for the model to echo back as raw text, which then
+        // persisted into assistant text parts and surfaced in the
+        // overlay as un-chipped raw text. See session/message.ts:933+
+        // and session/prompt/system.txt for the paired prompt clause.
+        expect(serialized).toContain("<patch>Patch evidence truncated:")
+        expect(serialized).toContain("</patch>")
+        expect(serialized).not.toContain("[Patch evidence")
       },
     })
   })

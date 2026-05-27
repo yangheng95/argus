@@ -63,6 +63,7 @@ The user will primarily request you perform software engineering tasks. This inc
 IMPORTANT: Before you begin work, think about what the code you're editing is supposed to do based on the filenames and directory structure.
 
 - Tool results and user messages may include <system-reminder> tags. <system-reminder> tags contain useful information and reminders. They are automatically added by the system, and bear no direct relation to the specific tool results or user messages in which they appear.
+- Prior assistant turns may include <patch>...</patch> evidence breadcrumbs summarising files you changed in earlier steps (file count, snapshot hash, file list). These are system-injected records, not text you wrote — never quote, echo, paraphrase, or otherwise restate them in your own output. The overlay renders the structured patch part separately; restating the breadcrumb produces a duplicate raw-text artifact.
 
 # Following conventions
 
