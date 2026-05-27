@@ -445,12 +445,48 @@ export namespace Orchestrator {
       })
 
       // Abort hooks translate external interrupts to SessionPrompt.cancel on
-      // the child session so the loop releases its processor cleanly.
+      // the child session so the loop releases its processor cleanly. We
+      // ALSO cascade the cancel to every descendant session: orchestrator
+      // tools (`explore`, `requirements`, `design_analysis`, `architect`,
+      // `build`, ...) spawn their own SessionPrompt loops, and the
+      // orchestrator's ctrl signal is not threaded into them — without
+      // cascading here, an `interruptTaskLoop` (or a hard abort) returns
+      // immediately from the orchestrator while every in-flight subagent
+      // keeps burning tokens producing results no one is awaiting. The
+      // task-api cancelTask path ALREADY walks the session tree
+      // (task-api/index.ts cancelTask), so this brings the in-process
+      // interrupt path in line with the explicit-cancel API path.
+      // Cancel order is descendants-first so a parent's processor sees its
+      // tool's child session already terminal when it unwinds.
       const abortPrompt = () => {
         try {
-          SessionPrompt.cancel(agentSession.id)
+          void (async () => {
+            try {
+              const ids = await Session.tree(agentSession.id)
+              for (const descendantID of ids.slice().reverse()) {
+                try {
+                  SessionPrompt.cancel(descendantID)
+                } catch {
+                  /* descendant session may already be stopped */
+                }
+              }
+            } catch (err) {
+              log.warn("orchestrator abort cascade failed", {
+                taskID,
+                sessionID: agentSession.id,
+                error: err instanceof Error ? err.message : String(err),
+              })
+              // Still cancel the orchestrator session itself even if the
+              // tree walk failed, so the LLM loop unblocks.
+              try {
+                SessionPrompt.cancel(agentSession.id)
+              } catch {
+                /* already stopped */
+              }
+            }
+          })()
         } catch {
-          /* session may already be stopped */
+          /* already-aborted listener was a no-op */
         }
       }
       ctrl.signal.addEventListener("abort", abortPrompt, { once: true })
@@ -643,17 +679,43 @@ export namespace Orchestrator {
     } catch (error) {
       // SessionLoop persists its own assistant parts; no explicit flush
       // equivalent for the post-phase-3 the pre-migration runtime hooks path.
-      if (ctrl.signal.aborted) {
-        log.info("orchestrator was aborted", { taskID })
-        return
-      }
+      //
+      // Two distinct catch paths share this handler:
+      //  (1) Hard failure mid-prompt — model unavailable, provider 4xx,
+      //      stream protocol violation, tool exec error. Recorded as an
+      //      orchestrator-stream-error artifact AND stamped on task.error
+      //      so the UI surfaces "task is broken" and orphan-recovery can
+      //      see the cause.
+      //  (2) Ctrl-aborted mid-prompt — `Orchestrator.abort(taskID)` was
+      //      called from `interruptTaskLoop` (operator added a new message
+      //      → restart with new event) or from `cancelTask` (explicit
+      //      cancellation). SessionPromptState.cancel rejected the prompt
+      //      with `new Error("session cancelled")`, which lands here.
+      //      Previously the handler returned silently on ctrl.signal.aborted,
+      //      so the next wake's describe block had no record of the in-flight
+      //      turn being killed — the LLM saw a half-conversation with
+      //      dangling tool_use blocks and no signal it had been pre-empted.
+      //      Per rule 23 the artifact is the single source of truth for
+      //      stream failures; the next wake reads it via describe and
+      //      decides whether to retry / restart / fail. We do NOT stamp
+      //      task.error on an abort: aborts are control-flow signals,
+      //      not task-broken states.
+      const wasCtrlAborted = ctrl.signal.aborted
       const structured = serializeOrchestratorTaskError(error)
-      log.error("orchestrator failed", {
+      const abortReasonText = (() => {
+        if (!wasCtrlAborted) return undefined
+        const reason = ctrl.signal.reason
+        if (typeof reason === "string" && reason.length > 0) return reason
+        if (reason instanceof Error && reason.message) return reason.message
+        return "orchestrator aborted"
+      })()
+      const logLevel = wasCtrlAborted ? log.info : log.error
+      logLevel(wasCtrlAborted ? "orchestrator aborted mid-prompt" : "orchestrator failed", {
         taskID,
         note: event?.note,
-        errorName: structured.envelope.errorName,
-        error: structured.message,
-        data: structured.envelope.data,
+        errorName: wasCtrlAborted ? "OrchestratorAborted" : structured.envelope.errorName,
+        error: wasCtrlAborted ? abortReasonText : structured.message,
+        data: wasCtrlAborted ? undefined : structured.envelope.data,
       })
       if (AgentTrace.isEnabled() && agentSessionID) {
         AgentTrace.recordAgentReport({
@@ -661,8 +723,11 @@ export namespace Orchestrator {
           taskID,
           agentName: "orchestrator",
           kind: "orchestrator_wake_failure",
-          error: structured.message,
-          report: { summary: structured.message, detail: structured.message },
+          error: wasCtrlAborted ? abortReasonText : structured.message,
+          report: {
+            summary: wasCtrlAborted ? `aborted: ${abortReasonText}` : structured.message,
+            detail: wasCtrlAborted ? `aborted: ${abortReasonText}` : structured.message,
+          },
         })
       }
       if (agentSessionID) {
@@ -671,6 +736,21 @@ export namespace Orchestrator {
             taskID,
             sessionID: agentSessionID,
             error,
+          })
+        } else if (wasCtrlAborted) {
+          // Abort path: synthesize an envelope from the ctrl reason so the
+          // artifact reads "OrchestratorAborted: task loop dispatch interrupt"
+          // (or similar) — the next wake's describe needs to know WHY the
+          // prior turn was interrupted, not just that it threw an opaque
+          // "session cancelled" Error from SessionPromptState.cancel.
+          await recordOrchestratorSessionErrorEnvelope({
+            taskID,
+            sessionID: agentSessionID,
+            envelope: {
+              errorName: "OrchestratorAborted",
+              message: abortReasonText ?? "orchestrator aborted",
+            },
+            summaryPrefix: "Orchestrator aborted mid-prompt",
           })
         } else if (promptInFlight) {
           await recordOrchestratorSessionErrorEnvelope({
@@ -684,18 +764,23 @@ export namespace Orchestrator {
       // Surface the error on the task so UI/orphan-recovery can see it.
       // Don't change task status here — runtime-visible stream faults are
       // persisted as artifacts above; missing startup prerequisites fast-fail
-      // at their source before the LLM wake begins.
-      try {
-        const current = requireTask(taskID)
-        const { isTaskTerminal } = await import("@/engine/task-status")
-        if (!isTaskTerminal(current)) {
-          await updateTask(
-            current,
-            { error: structured.taskError },
-            `Orchestrator failed: ${structured.message}`,
-          )
-        }
-      } catch { /* task may have been deleted */ }
+      // at their source before the LLM wake begins. Also skip on ctrl abort:
+      // aborts are control-flow signals (operator-driven restart or explicit
+      // cancel), not "task broken" — task.error would mislead the UI and
+      // orphan-recovery into treating the next wake as stuck on a hard failure.
+      if (!wasCtrlAborted) {
+        try {
+          const current = requireTask(taskID)
+          const { isTaskTerminal } = await import("@/engine/task-status")
+          if (!isTaskTerminal(current)) {
+            await updateTask(
+              current,
+              { error: structured.taskError },
+              `Orchestrator failed: ${structured.message}`,
+            )
+          }
+        } catch { /* task may have been deleted */ }
+      }
     } finally {
       running.delete(taskID)
     }
