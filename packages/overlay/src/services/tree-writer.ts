@@ -1718,6 +1718,10 @@ function timelineCardID(stage: string, sessionID: string, messageID: string): st
   return stage === "integrity" ? integrityCardID(sessionID) : messageTurnCardID(stage, sessionID, messageID);
 }
 
+function isReviewStreamPart(part: any): boolean {
+  return String(part?.partID || "").startsWith("review:integrity:");
+}
+
 function collectTimelineParts(messageIDs: Set<string>): Map<string, any[]> {
   const byMessage = new Map<string, any[]>();
   const seenPartIDs = new Set<string>();
@@ -1847,7 +1851,7 @@ function regroupTimelineSegments(opts: { deferHierarchy?: boolean } = {}): void 
       parts: [],
     });
 
-    const rebuiltParts: any[] = [];
+    const rebuiltParts: any[] = existing?.parts?.filter(isReviewStreamPart) ?? [];
     for (const [index, message] of segment.messages.entries()) {
       if (index > 0 && !isUserStage(segment.stage)) {
         const boundaryKey = `__boundary__:${segment.session.sessionID}:${message.id}`;

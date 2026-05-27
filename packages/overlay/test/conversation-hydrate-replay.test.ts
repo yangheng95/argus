@@ -329,12 +329,12 @@ test("hydrateTaskConversation renders the live tail first and prepends older his
     "ses_old",
     "ses_root",
   ]);
-  expect(conversationAgentStore.records[0]?.renderedCardID).toBe("integrity:session:ses_old:message:msg_old");
-  expect(cardTreeStore.cards["integrity:session:ses_old:message:msg_old"]).toBeUndefined();
+  expect(conversationAgentStore.records[0]?.renderedCardID).toBe("integrity:session:ses_old");
+  expect(cardTreeStore.cards["integrity:session:ses_old"]).toBeUndefined();
 
-  await expect(loadConversationHistoryUntilCard("integrity:session:ses_old:message:msg_old", "tsk_lazy")).resolves.toBe(true);
+  await expect(loadConversationHistoryUntilCard("integrity:session:ses_old", "tsk_lazy")).resolves.toBe(true);
   expect(cardTreeStore.order.filter((id) => id !== "ctx:user-request")).toEqual([
-    "integrity:session:ses_old:message:msg_old",
+    "integrity:session:ses_old",
     "assistant:session:ses_root:message:msg_latest",
   ]);
   expect(requests.map((req) => req.path)).toEqual([
