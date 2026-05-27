@@ -1472,7 +1472,7 @@ export namespace EngineService {
     // Abort Orchestrator and any in-progress pipeline stage
     Orchestrator.abort(taskID)
     abortTaskPipeline(taskID)
-    const sessionIDs = task.session_id ? await sessionTree(task.session_id) : []
+    const sessionIDs = task.session_id ? await Session.tree(task.session_id) : []
     for (const sessionID of sessionIDs.reverse()) {
       SessionPrompt.cancel(sessionID)
     }
@@ -1550,7 +1550,7 @@ export namespace EngineService {
   }
 
   export async function deleteSession(sessionID: string, input?: { deleteTasks?: boolean }) {
-    const ids = await sessionTree(sessionID)
+    const ids = await Session.tree(sessionID)
     if (input?.deleteTasks) {
       const tasks = Database.use((db) =>
         db
@@ -1991,8 +1991,3 @@ function markProtocolInteraction(
   })
 }
 
-async function sessionTree(sessionID: string): Promise<string[]> {
-  const children = await Session.children(sessionID)
-  const nested = await Promise.all(children.map((item) => sessionTree(item.id)))
-  return [sessionID, ...nested.flat()]
-}

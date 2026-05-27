@@ -270,12 +270,6 @@ export interface AbortActiveTasksResult {
   toolParts: number
 }
 
-async function sessionTree(sessionID: string): Promise<string[]> {
-  const children = await Session.children(sessionID)
-  const nested = await Promise.all(children.map((item) => sessionTree(item.id)))
-  return [sessionID, ...nested.flat()]
-}
-
 async function abortOpenToolParts(sessionID: string, reason: string): Promise<number> {
   const messages = await Session.messages({ sessionID })
   let updated = 0
@@ -345,7 +339,7 @@ export async function abortActiveTasksForProject(input: {
   const activeTasks = listActiveTasksForProject(input.projectID)
   for (const task of activeTasks) {
     if (task.session_id) {
-      const ids = await sessionTree(task.session_id)
+      const ids = await Session.tree(task.session_id)
       for (const sessionID of ids.slice().reverse()) {
         toolParts += await abortOpenToolParts(sessionID, input.reason)
         SessionPrompt.cancel(sessionID)

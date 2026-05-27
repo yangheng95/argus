@@ -741,6 +741,26 @@ export namespace Session {
     return rows.map(fromRow)
   })
 
+  // Flat list of session IDs in the subtree rooted at `sessionID`, parent
+  // first then descendants. Lives here as the single source for "walk the
+  // session tree" — callers that need to cancel/abort/cleanup every session
+  // under a parent must use this instead of rolling their own recursion
+  // (rule 8 single source, rule 9 shared abstraction). Previously duplicated
+  // as private `sessionTree` helpers in engine/writer.ts and task-api/index.ts.
+  export const tree = fn(Identifier.schema("session"), async (sessionID) => {
+    const ids: string[] = [sessionID]
+    const queue: string[] = [sessionID]
+    while (queue.length > 0) {
+      const next = queue.shift()!
+      const direct = await children(next)
+      for (const child of direct) {
+        ids.push(child.id)
+        queue.push(child.id)
+      }
+    }
+    return ids
+  })
+
   export const childrenInProject = fn(
     z.object({
       parentID: Identifier.schema("session"),
