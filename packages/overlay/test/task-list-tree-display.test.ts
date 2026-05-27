@@ -105,6 +105,21 @@ describe("Parent-row badge: count + run-pulse + fail-color", () => {
     // the outer .task-row-main button and trigger task selection.
     expect(TASK_LIST).toMatch(/onClick=\{\(event\)\s*=>\s*\{\s*event\.stopPropagation\(\);\s*props\.onToggleExpand/)
   })
+
+  test("chevron opts out of HTML5 drag so clicking it never starts a row drag", () => {
+    // Regression bug 2026-05-27: a button inside a draggable=true parent
+    // div has the browser treat mousedown on the button as a potential
+    // drag-start. The click event was being swallowed AND draggingID
+    // was getting stuck because dragEnd didn't always fire — manifested
+    // to the user as "after clicking a task with children, other tasks
+    // become unclickable". Three guards: draggable={false} on the
+    // button, stopPropagation on mousedown so the outer div never sees
+    // the mousedown that would initiate drag, and a preventDefault
+    // dragstart handler as belt-and-suspenders.
+    expect(TASK_LIST).toMatch(/class="task-row-children-toggle"[\s\S]+?draggable=\{false\}/)
+    expect(TASK_LIST).toMatch(/class="task-row-children-toggle"[\s\S]+?onMouseDown=\{\(event\)\s*=>\s*\{\s*event\.stopPropagation\(\)/)
+    expect(TASK_LIST).toMatch(/class="task-row-children-toggle"[\s\S]+?onDragStart=\{\(event\)\s*=>\s*\{\s*event\.preventDefault\(\);\s*event\.stopPropagation\(\)/)
+  })
 })
 
 describe("Depth-based indent via padding-inline-start", () => {
