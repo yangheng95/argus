@@ -1115,7 +1115,7 @@ export namespace Message {
         if (!retain.tailSatisfied) {
           result.push(msg)
           if (msg.info.id === retain.tailID) {
-            if (msg.info.role !== "user") {
+            if (msg.info.role !== "user" && !retain.anchorID) {
               result.splice(retain.afterCompactionIndex)
               retain = undefined
               break
