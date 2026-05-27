@@ -9,6 +9,7 @@ import {
   loadTasks,
   setTaskSequence,
   setSnapshotVersion,
+  activeTaskID,
 } from "../store/board";
 import { configRefreshIncludesSettingsData, loadConfigInfo, loadSettingsInfo } from "./init";
 import { markSessionConfigStale } from "./config";
@@ -46,7 +47,7 @@ function record(value: any): boolean {
 function currentTaskSessionID(): string {
   const boardSession = boardStore.board?.task?.sessionID;
   if (typeof boardSession === "string" && boardSession) return boardSession;
-  const taskID = boardStore.selectedTaskID;
+  const taskID = activeTaskID();
   if (!taskID) return "";
   const entry = boardStore.tasks.find((item: any) => item?.task?.id === taskID);
   return typeof entry?.task?.sessionID === "string" ? entry.task.sessionID : "";
@@ -66,14 +67,14 @@ function messageEventSessionID(event: any): string {
 function shouldRecoverForMessageEvent(event: any): boolean {
   const type = String(event?.type || "").trim();
   if (!isMessageStreamEvent(type)) return false;
-  if (!boardStore.selectedTaskID) return false;
+  if (!activeTaskID()) return false;
   if (currentTaskSessionID()) return false;
   return !!messageEventSessionID(event);
 }
 
 function shouldRecoverSelectedTaskSequenceGap(event: any): boolean {
   const taskID = eventTaskID(event);
-  if (!taskID || taskID !== boardStore.selectedTaskID) return false;
+  if (!taskID || taskID !== activeTaskID()) return false;
   const sequence = eventSequence(event);
   if (sequence <= 0) return false;
   const current = boardStore.taskSequence;
@@ -82,7 +83,7 @@ function shouldRecoverSelectedTaskSequenceGap(event: any): boolean {
 
 function advanceHandledSelectedTaskSequence(event: any): void {
   const taskID = eventTaskID(event);
-  if (!taskID || taskID !== boardStore.selectedTaskID) return;
+  if (!taskID || taskID !== activeTaskID()) return;
   const sequence = eventSequence(event);
   if (sequence <= 0) return;
   const current = boardStore.taskSequence;
@@ -95,7 +96,7 @@ function advanceHandledSelectedTaskSequence(event: any): void {
 
 function markHandledSelectedLiveEvent(event: any): void {
   const taskID = eventTaskID(event);
-  if (taskID && taskID !== boardStore.selectedTaskID) return;
+  if (taskID && taskID !== activeTaskID()) return;
   markSelectedLiveEventConsumed(event);
 }
 
@@ -111,7 +112,7 @@ function isMessageWriterPrerequisiteError(error: unknown): boolean {
   );
 }
 
-function scheduleSelectedTaskRecovery(reason: string, taskID = boardStore.selectedTaskID): void {
+function scheduleSelectedTaskRecovery(reason: string, taskID = activeTaskID()): void {
   const selectedTaskID = String(taskID || "");
   if (!selectedTaskID) return;
   void import("./selected-task-recovery")
@@ -557,8 +558,8 @@ export function routeSSEEvent(event: any): boolean {
   }
 
   if (type === "task.messages.changed") {
-    const taskID = eventTaskID(event) || boardStore.selectedTaskID || "";
-    if (taskID && taskID === boardStore.selectedTaskID) {
+    const taskID = eventTaskID(event) || activeTaskID() || "";
+    if (taskID && taskID === activeTaskID()) {
       void import("./conversation")
         .then(({ scheduleLatestConversationTailMerge }) => scheduleLatestConversationTailMerge(taskID))
         .catch((error) => {
@@ -577,7 +578,7 @@ export function routeSSEEvent(event: any): boolean {
   // Replay buffer expiry is loud. Do not full-refresh the loaded transcript:
   // that clears cardTreeStore and causes the observed scroll jump.
   if (type === "task.replay_expired") {
-    const taskID: string = boardStore.selectedTaskID || "";
+    const taskID: string = activeTaskID() || "";
     if (taskID) scheduleSelectedTaskRecovery("task.replay_expired", taskID);
     markHandledSelectedLiveEvent(event);
     return true;
@@ -597,7 +598,7 @@ export function routeSSEEvent(event: any): boolean {
     if (!evtTaskID || cursorTime === undefined) return true;
     // Only prune when the event concerns the currently-selected task —
     // other tasks' card trees are not loaded in this overlay instance.
-    if (evtTaskID === boardStore.selectedTaskID && cursorTime > 0) {
+    if (evtTaskID === activeTaskID() && cursorTime > 0) {
       // Idempotent — pruneCardsAfterCursor is a no-op if the cards are
       // already gone (e.g. the local initiator already pruned optimistically).
       void (async () => {
@@ -608,7 +609,7 @@ export function routeSSEEvent(event: any): boolean {
         void clearPruneCursor;
       })();
       advanceHandledSelectedTaskSequence(event);
-    } else if (evtTaskID === boardStore.selectedTaskID && cursorTime === 0) {
+    } else if (evtTaskID === activeTaskID() && cursorTime === 0) {
       // Rewind cleared by backend — full reload to restore the suppressed tail.
       scheduleSelectedTaskRecovery("task rewind cleared", evtTaskID);
     }
@@ -759,14 +760,14 @@ export function handleEventStreamEvent(event: any): void {
     return;
   }
   if (type === "task.replay_expired") {
-    if (boardStore.selectedTaskID) {
-      scheduleSelectedTaskRecovery("task.replay_expired", boardStore.selectedTaskID);
+    if (activeTaskID()) {
+      scheduleSelectedTaskRecovery("task.replay_expired", activeTaskID());
     }
     return;
   }
   const taskID = eventTaskID(event);
   const sequence = eventSequence(event);
-  if (taskID && taskID === boardStore.selectedTaskID && sequence > 0) {
+  if (taskID && taskID === activeTaskID() && sequence > 0) {
     const current = boardStore.taskSequence;
     if (current > 0 && sequence <= current) return;
     if (current > 0 && sequence > current + 1) {
@@ -782,7 +783,7 @@ export function handleEventStreamEvent(event: any): void {
   if (boardInvalidatingEvent(type)) {
     scheduleTasksCompat(BOARD_EVENT_DEBOUNCE);
   }
-  if (taskID && taskID === boardStore.selectedTaskID && shouldRefreshSelectedBoard(type)) {
+  if (taskID && taskID === activeTaskID() && shouldRefreshSelectedBoard(type)) {
     scheduleBoard(BOARD_EVENT_DEBOUNCE);
   }
   markHandledSelectedLiveEvent(event);
@@ -818,14 +819,14 @@ export function handleTaskListNotification(event: any): void {
   const type = normalizedEventType(event);
   routeNotification({ ...event, type });
   if (type === "task.replay_expired") {
-    if (boardStore.selectedTaskID) {
-      scheduleSelectedTaskRecovery("task.replay_expired", boardStore.selectedTaskID);
+    if (activeTaskID()) {
+      scheduleSelectedTaskRecovery("task.replay_expired", activeTaskID());
     }
     return;
   }
   const taskID = eventTaskID(event);
   const sequence = eventSequence(event);
-  if (taskID && taskID === boardStore.selectedTaskID && sequence > 0) {
+  if (taskID && taskID === activeTaskID() && sequence > 0) {
     const current = boardStore.taskSequence;
     if (current > 0 && sequence > current + 1) {
       scheduleSelectedTaskRecovery("task-list selected task sequence gap", taskID);
@@ -836,7 +837,7 @@ export function handleTaskListNotification(event: any): void {
   if (taskID) {
     scheduleTasksCompat(BOARD_EVENT_DEBOUNCE);
   }
-  if (taskID && taskID === boardStore.selectedTaskID && shouldRefreshSelectedBoard(type)) {
+  if (taskID && taskID === activeTaskID() && shouldRefreshSelectedBoard(type)) {
     scheduleBoard(BOARD_EVENT_DEBOUNCE);
   }
 }

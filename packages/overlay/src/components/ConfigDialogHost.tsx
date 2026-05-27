@@ -10,7 +10,9 @@ import { PermissionsPanel } from "./settings/PermissionsPanel";
 import { MemoryPanel } from "./MemoryPanel";
 import { Dialog } from "./primitives/Dialog";
 import { appStore } from "../store/app";
-import { boardStore } from "../store/board";
+import { boardStore,
+  activeTaskID,
+} from "../store/board";
 import { settingsStore } from "../store/settings";
 import { closeConfigDialog, setConfigSidebarWidth, switchConfigTab } from "../services/dialog";
 import { dialogStore, type ConfigDialogTab } from "../store/dialog";
@@ -267,7 +269,7 @@ export function ConfigDialogHost() {
       case "mcp":
         return <McpPanel />;
       case "memory":
-        return <MemoryPanel taskID={boardStore.selectedTaskID || undefined} />;
+        return <MemoryPanel taskID={activeTaskID() || undefined} />;
       case "providers":
         return <ProvidersPanel />;
       case "agent-models":

@@ -24,7 +24,9 @@
 // during startup or background SSE dispatch.
 
 import { settingsStore } from "../store/settings";
-import { boardStore, setTaskListProjectionHandler } from "../store/board";
+import { boardStore, setTaskListProjectionHandler,
+  activeTaskID,
+} from "../store/board";
 import { isGatewayPage } from "../store/page-mode";
 import { t } from "../utils/i18n";
 import { createStore } from "solid-js/store";
@@ -45,6 +47,10 @@ export interface RoutedNotificationEvent {
   type: string;
   taskID?: string | null;
   notify?: NotifyDescriptor;
+  notificationDetails?: string;
+  details?: string;
+  payload?: Record<string, unknown>;
+  summary?: string;
 }
 
 export interface AppNotificationInput {
@@ -284,7 +290,7 @@ function lookupTaskTitle(taskID: string): string {
       return String(item?.task?.title || item?.overview?.headline || taskID);
     }
   }
-  if (boardStore.selectedTaskID === taskID && boardStore.board?.task?.title) {
+  if (activeTaskID() === taskID && boardStore.board?.task?.title) {
     return String(boardStore.board.task.title);
   }
   return taskID;
@@ -316,12 +322,28 @@ function toneForTier(notify: NotifyDescriptor): AppNotificationTone {
   return "info";
 }
 
+function notificationDetails(event: RoutedNotificationEvent): string {
+  if (typeof event.notificationDetails === "string") return event.notificationDetails;
+  if (typeof event.details === "string") return event.details;
+  if (!event.payload && !event.summary) return "";
+  try {
+    return JSON.stringify({
+      type: event.type,
+      taskID: event.taskID ?? null,
+      summary: event.summary ?? "",
+      payload: event.payload ?? {},
+    }, null, 2);
+  } catch {
+    return String(event.summary || "");
+  }
+}
+
 function shouldSendDesktop(event: RoutedNotificationEvent, taskID: string): boolean {
   if (!settingsStore.desktopNotifications) return false;
   const focused = windowFocused();
   if (event.notify?.tier === 2) return !focused;
   if (event.notify?.tier !== 1) return false;
-  return !(focused && taskID && boardStore.selectedTaskID === taskID && !isGatewayPage());
+  return !(focused && taskID && activeTaskID() === taskID && !isGatewayPage());
 }
 
 async function sendDesktopIfAllowed(
@@ -352,6 +374,7 @@ export function routeNotification(event: RoutedNotificationEvent): void {
     tone: toneForTier(notify),
     title,
     message: body,
+    details: notificationDetails(event),
     taskID,
   });
   void sendDesktopIfAllowed(event, taskID, title, body);
@@ -454,7 +477,7 @@ function addTaskNotificationAcks(item: any): boolean {
 }
 
 function ackVisibleSelectedTaskNotifications(tasks: any[]): void {
-  const selectedTaskID = boardStore.selectedTaskID;
+  const selectedTaskID = activeTaskID();
   if (!selectedTaskID || isGatewayPage() || !windowFocused()) return;
   const item = tasks.find((entry: any) => entry?.task?.id === selectedTaskID);
   if (!item || !addTaskNotificationAcks(item)) return;

@@ -82,6 +82,8 @@ describe("orchestrator protocol", () => {
     const taskList = taskListProtocolEvent(event)
     expect(taskList.notify).toEqual({ tier: 1, badge: true })
     expect(TaskListEvent.parse(taskList).notify).toEqual({ tier: 1, badge: true })
+    expect(TaskListEvent.parse(taskList).notificationDetails).toContain('"type": "task.failed"')
+    expect(TaskListEvent.parse(taskList).notificationDetails).toContain('"summary": "Task failed"')
   })
 
   test("omits notify metadata for NOOP protocol events", () => {
@@ -97,6 +99,7 @@ describe("orchestrator protocol", () => {
 
     expect(protocolTaskEvent(event)).not.toHaveProperty("notify")
     expect(taskListProtocolEvent(event)).not.toHaveProperty("notify")
+    expect(taskListProtocolEvent(event)).not.toHaveProperty("notificationDetails")
   })
 
   test("evaluation.completed notify tier is resolved from payload at the protocol stamp seam", () => {

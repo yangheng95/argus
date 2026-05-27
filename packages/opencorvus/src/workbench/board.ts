@@ -48,6 +48,9 @@ import { findLatestDeliveryEvidenceManifest } from "@/delivery/manifest"
 const BOARD_SNAPSHOT_LIMIT = 80
 const BOARD_CHANGED_FILE_LIMIT = 80
 const BOARD_SUMMARY_LIMIT = 4000
+const BOARD_ARTIFACT_STRING_LIMIT = 1200
+const BOARD_ARTIFACT_ARRAY_LIMIT = 8
+const BOARD_ARTIFACT_OBJECT_DEPTH_LIMIT = 3
 
 const boardCache = new Map<string, { tag: string; board: ReturnType<typeof buildBoard> }>()
 
@@ -517,6 +520,37 @@ function clipBoard(input: string) {
   return `${input.slice(0, BOARD_SUMMARY_LIMIT)}\n...[truncated]`
 }
 
+function clipArtifactString(input: string) {
+  if (input.length <= BOARD_ARTIFACT_STRING_LIMIT) return input
+  return `${input.slice(0, BOARD_ARTIFACT_STRING_LIMIT)}\n...[truncated ${input.length - BOARD_ARTIFACT_STRING_LIMIT} chars]`
+}
+
+function compactArtifactValue(input: unknown, depth = 0): unknown {
+  if (typeof input === "string") return clipArtifactString(input)
+  if (input == null || typeof input !== "object") return input
+  if (Array.isArray(input)) {
+    const items = input.slice(0, BOARD_ARTIFACT_ARRAY_LIMIT).map((item) => compactArtifactValue(item, depth + 1))
+    if (input.length <= BOARD_ARTIFACT_ARRAY_LIMIT) return items
+    return {
+      items,
+      truncated: true,
+      total: input.length,
+    }
+  }
+  if (depth >= BOARD_ARTIFACT_OBJECT_DEPTH_LIMIT) {
+    return {
+      truncated: true,
+      keys: Object.keys(input as Record<string, unknown>).slice(0, BOARD_ARTIFACT_ARRAY_LIMIT),
+    }
+  }
+  return Object.fromEntries(
+    Object.entries(input as Record<string, unknown>).map(([key, value]) => [
+      key,
+      compactArtifactValue(value, depth + 1),
+    ]),
+  )
+}
+
 function compactArtifactPayload(kind: string, input: unknown) {
   if (!input || typeof input !== "object") return undefined
   const item = input as Record<string, unknown>
@@ -535,7 +569,28 @@ function compactArtifactPayload(kind: string, input: unknown) {
       ]),
     )
   }
-  return item
+  if (kind === "build_session_contract") {
+    return {
+      session_id: item.session_id,
+      task_id: item.task_id,
+      goal_id: item.goal_id,
+      goal_run_id: item.goal_run_id,
+      spec_snapshot_id: item.spec_snapshot_id,
+      plan_version_id: item.plan_version_id,
+      digest: item.digest,
+      goal_contract_snapshot: compactArtifactValue(item.goal_contract_snapshot),
+      collaboration_goals_count: Array.isArray(item.collaboration_goals_snapshot)
+        ? item.collaboration_goals_snapshot.length
+        : undefined,
+      requirements_count: Array.isArray(item.requirements_snapshot)
+        ? item.requirements_snapshot.length
+        : undefined,
+      source_artifact_ids: Array.isArray(item.source_artifact_ids)
+        ? item.source_artifact_ids.slice(0, BOARD_ARTIFACT_ARRAY_LIMIT)
+        : undefined,
+    }
+  }
+  return compactArtifactValue(item)
 }
 
 function boardChecks(input: unknown) {

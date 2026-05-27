@@ -23,6 +23,14 @@ test("NotificationCenter routes task notification activation through task select
   expect(SOURCE).toContain('data-clickable={item.taskID ? "true" : undefined}');
 });
 
+test("NotificationCenter exposes a copy control whenever details exist", () => {
+  const copyIndex = SOURCE.indexOf('data-ui="app-notification-details-copy"');
+  const detailsBodyIndex = SOURCE.indexOf('class="app-notification__details-body"');
+  expect(copyIndex).toBeGreaterThan(-1);
+  expect(detailsBodyIndex).toBeGreaterThan(-1);
+  expect(copyIndex).toBeLessThan(detailsBodyIndex);
+});
+
 test("foregrounding the overlay recomputes the notification projection", () => {
   expect(MAIN).toContain("recomputeBadgeFromTasks");
   expect(MAIN).toContain('window.addEventListener("focus"');

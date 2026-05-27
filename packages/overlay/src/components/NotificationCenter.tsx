@@ -51,18 +51,16 @@ function NotificationDetails(props: { details: string }) {
         >
           {expanded() ? t("notify.hide_details") : t("notify.show_details")}
         </Button>
-        <Show when={expanded()}>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            tone="neutral"
-            data-ui="app-notification-details-copy"
-            onClick={copyDetails}
-          >
-            {copied() ? t("notify.copied") : t("notify.copy_details")}
-          </Button>
-        </Show>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          tone="neutral"
+          data-ui="app-notification-details-copy"
+          onClick={copyDetails}
+        >
+          {copied() ? t("notify.copied") : t("notify.copy_details")}
+        </Button>
       </div>
       <Show when={expanded()}>
         <pre class="app-notification__details-body">{props.details}</pre>

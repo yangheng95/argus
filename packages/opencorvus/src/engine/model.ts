@@ -980,6 +980,36 @@ export const TaskConversationHydration = z.object({
   view: TaskConversationView,
 })
 
+export const SessionBoardEnvelope = z.object({
+  kind: z.literal("session"),
+  sessionID: z.string(),
+  status: z.string(),
+  title: z.string().nullable().optional(),
+  directory: z.string().nullable().optional(),
+})
+
+export const SessionEvent = z.object({
+  event_id: z.string(),
+  session_id: z.string(),
+  type: z.string(),
+  emittedAt: z.number().int().positive(),
+  timestamp: z.number(),
+  sequence: z.number().int().nonnegative().optional(),
+  summary: z.string(),
+  payload: z.record(z.string(), z.any()),
+  notify: BusEvent.NotifyDescriptorSchema.optional(),
+})
+
+export const SessionConversationHydration = z.object({
+  board: SessionBoardEnvelope,
+  transcript: z.array(z.any()),
+  timeline: z.array(z.any()),
+  events: SessionEvent.array(),
+  history: TaskConversationHistoryState.optional(),
+  agentView: TaskConversationView.optional(),
+  view: TaskConversationView,
+})
+
 export const TaskConversationEventPage = z.object({
   events: TaskEvent.array(),
   eventReplay: TaskConversationEventReplay,

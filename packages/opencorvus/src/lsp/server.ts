@@ -13,6 +13,8 @@ import { Flag } from "../flag/flag"
 import { Archive } from "../util/archive"
 import { Process } from "../util/process"
 import { which } from "@/util/which"
+import { ProcessSupervisor } from "@/shell/process-supervisor"
+import { Shell } from "@/shell/shell"
 
 export namespace LSPServer {
   const log = Log.create({ service: "lsp.server" })
@@ -37,9 +39,58 @@ export namespace LSPServer {
     return process.platform === "win32" ? "npm.cmd" : "npm"
   }
 
+  function quotePosix(value: string) {
+    return `'${value.replaceAll("'", "'\"'\"'")}'`
+  }
+
+  function quotePowerShell(value: string) {
+    return `'${value.replaceAll("'", "''")}'`
+  }
+
+  function quoteCmd(value: string) {
+    if (/^[A-Za-z0-9_./:=+-]+$/.test(value)) return value
+    return `"${value.replaceAll('"', '""')}"`
+  }
+
+  function shellCommand(argv: string[], shell: string) {
+    const name = path.basename(shell, path.extname(shell)).toLowerCase()
+    if (name === "powershell" || name === "pwsh") return `& ${argv.map(quotePowerShell).join(" ")}`
+    if (name === "cmd") return argv.map(quoteCmd).join(" ")
+    return `exec ${argv.map(quotePosix).join(" ")}`
+  }
+
+  async function spawnSupervisedStdio(root: string, argv: string[], env?: NodeJS.ProcessEnv): Promise<Handle> {
+    const shell = Shell.acceptable()
+    const supervisor = await ProcessSupervisor.spawnShell({
+      command: shellCommand(argv, shell),
+      shell,
+      cwd: root,
+      env,
+      stdin: "pipe",
+    })
+    if (!supervisor.stdin || !supervisor.stdout || !supervisor.stderr) {
+      await supervisor.dispose()
+      throw new Error("Process supervisor did not provide stdio pipes")
+    }
+    return {
+      process: {
+        pid: supervisor.pid,
+        stdin: supervisor.stdin,
+        stdout: supervisor.stdout,
+        stderr: supervisor.stderr,
+        kill: () => {
+          void supervisor.terminate()
+          return true
+        },
+      } as ChildProcessWithoutNullStreams,
+      dispose: () => supervisor.dispose(),
+    }
+  }
+
   export interface Handle {
     process: ChildProcessWithoutNullStreams
     initialization?: Record<string, any>
+    dispose?: () => Promise<void>
   }
 
   type RootFunction = (file: string) => Promise<string | undefined>
@@ -115,15 +166,12 @@ export namespace LSPServer {
       const tsserver = await Bun.resolve("typescript/lib/tsserver.js", Instance.directory).catch(() => {})
       log.info("typescript server", { tsserver })
       if (!tsserver) return
-      const proc = spawn(BunProc.which(), ["x", "typescript-language-server", "--stdio"], {
-        cwd: root,
-        env: {
-          ...process.env,
-          BUN_BE_BUN: "1",
-        },
+      const handle = await spawnSupervisedStdio(root, [BunProc.which(), "x", "typescript-language-server", "--stdio"], {
+        ...process.env,
+        BUN_BE_BUN: "1",
       })
       return {
-        process: proc,
+        ...handle,
         initialization: {
           tsserver: {
             path: tsserver,

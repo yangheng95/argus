@@ -455,6 +455,7 @@ export namespace ProtocolStore {
   }) {
     const now = Date.now()
     const taskID = input.aggregate === "task" ? input.taskID : undefined
+    const aggregateID = input.aggregate === "task" ? taskID : input.sessionID
     const liveSequence = taskID ? (taskLiveSequences.get(taskID) ?? 0) + 1 : undefined
     if (taskID && liveSequence !== undefined) taskLiveSequences.set(taskID, liveSequence)
     const event: EventView = {
@@ -462,7 +463,7 @@ export namespace ProtocolStore {
       kind: "event",
       type: input.type,
       aggregate: input.aggregate,
-      aggregateID: taskID ?? "",
+      aggregateID: aggregateID ?? "",
       taskID,
       runID: input.runID,
       goalRunID: undefined,

@@ -4,7 +4,9 @@
 import { createStore, produce } from "solid-js/store";
 import { batch, createMemo, createRoot, type Accessor } from "solid-js";
 import { apiJson } from "../services/api";
-import { boardStore } from "../store/board";
+import { boardStore,
+  activeTaskID,
+} from "../store/board";
 import { clearConversationUiState, loadConversationUiStateForTask } from "./conversation-ui";
 import { touchReasoningPart as trackReasoningPart } from "./reasoning";
 import { syncSectionPhases } from "../utils/section";
@@ -382,7 +384,7 @@ function touchReasoningPart(part: any): any {
 }
 
 export async function loadConversation(): Promise<void> {
-  if (!boardStore.selectedTaskID) {
+  if (!activeTaskID()) {
     setMessages([]);
     return;
   }
@@ -393,7 +395,7 @@ export async function loadConversation(): Promise<void> {
   }
   const loading = (async () => {
     // audit-2026-04-29 W2-V16 — pre-fix the loop condition was
-    // `_convQueued && requestTaskID === boardStore.selectedTaskID`,
+    // `_convQueued && requestTaskID === activeTaskID()`,
     // where `requestTaskID` was the task at the FIRST call's entry.
     // Concurrent scenario: user on task A → loadConversation runs;
     // user switches to B mid-fetch and a second loadConversation
@@ -408,7 +410,7 @@ export async function loadConversation(): Promise<void> {
     // loop just needs `while (_convQueued)`.
     do {
       _convQueued = false;
-      const taskID = String(boardStore.selectedTaskID || "");
+      const taskID = String(activeTaskID() || "");
       if (!taskID) {
         setMessages([]);
         return;
@@ -422,7 +424,7 @@ export async function loadConversation(): Promise<void> {
       const timeline = await apiJson(
         `control/timeline?taskID=${encodeURIComponent(taskID)}`,
       ).catch(() => []);
-      if (taskID !== boardStore.selectedTaskID) continue;
+      if (taskID !== activeTaskID()) continue;
       const merged = mergeLoadedConversationMessages(
         Array.isArray(timeline) ? timeline : [],
         Array.isArray(transcript) ? transcript : [],

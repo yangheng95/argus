@@ -16,7 +16,9 @@ import {
   setChatAttachments,
   mergeLoadedConversationMessages,
 } from "../store/messages";
-import { boardStore, setTasksData, loadBoard, loadTasks } from "../store/board";
+import { boardStore, setTasksData, loadBoard, loadTasks,
+  activeTaskID,
+} from "../store/board";
 import { appStore, setConnectionStatus } from "../store/app";
 import { workspaceMode } from "./workspace";
 import {
@@ -58,7 +60,7 @@ function currentTaskSessionID(): string {
   return (
     boardStore.board?.task?.sessionID ||
     boardStore.tasks.find(
-      (item: any) => item?.task?.id === boardStore.selectedTaskID,
+      (item: any) => item?.task?.id === activeTaskID(),
     )?.task?.sessionID ||
     ""
   );
@@ -79,7 +81,7 @@ export function classifyPanelMessageTarget(input: {
 }
 
 async function resolvePanelMessageTaskID(): Promise<string> {
-  const selectedTaskID = String(boardStore.selectedTaskID || "").trim();
+  const selectedTaskID = String(activeTaskID() || "").trim();
   if (!selectedTaskID) return "";
 
   let target = classifyPanelMessageTarget({
@@ -101,7 +103,7 @@ async function resolvePanelMessageTaskID(): Promise<string> {
 
   if (target === "reload") {
     await selectTask(selectedTaskID);
-    return String(boardStore.selectedTaskID || "").trim();
+    return String(activeTaskID() || "").trim();
   }
 
   await selectTask("");
@@ -114,10 +116,10 @@ async function resolvePanelMessageTaskID(): Promise<string> {
  * Returns the current conversation target (task or empty).
  */
 export function conversationTarget(): ConversationTarget {
-  if (boardStore.selectedTaskID) {
+  if (activeTaskID()) {
     return {
       kind: "task",
-      taskID: boardStore.selectedTaskID,
+      taskID: activeTaskID(),
     };
   }
   return { kind: "empty" };
@@ -191,7 +193,7 @@ export function chatAbortTargets(seed?: ChatAbortTarget): ChatAbortTarget[] {
   };
 
   push(seed);
-  if (!boardStore.selectedTaskID) return items;
+  if (!activeTaskID()) return items;
 
   const runID = boardStore.board?.task?.activeRunID || "";
   if (runID) {
@@ -201,7 +203,7 @@ export function chatAbortTargets(seed?: ChatAbortTarget): ChatAbortTarget[] {
   if (sessionID) {
     push({ kind: "session", sessionID });
   }
-  push({ kind: "task", taskID: boardStore.selectedTaskID });
+  push({ kind: "task", taskID: activeTaskID() });
 
   return items;
 }

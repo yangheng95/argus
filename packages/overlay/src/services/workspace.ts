@@ -11,7 +11,9 @@
 // delegates timers / loading to callers via callbacks.
 
 import { saveSettings, settingsStore, setSettingsStore } from "../store/settings";
-import { applyTasks, boardStore, setBoardStore } from "../store/board";
+import { applyTasks, boardStore, setBoardStore,
+  activeTaskID,
+} from "../store/board";
 import { clearMessages } from "../store/messages";
 import { setAppStore } from "../store/app";
 import { AppLog } from "../utils/log";
@@ -180,15 +182,15 @@ export function restoreWorkspaceDirectory(): string {
  * Mirrors workspace.js workspaceMode.
  */
 export function workspaceMode(): WorkspaceMode {
-  if (!boardStore.selectedTaskID && !boardStore.board) {
+  if (!activeTaskID() && !boardStore.board) {
  // Check app connection state — treat no-board as offline proxy
  // Real connected flag lives in appStore, but workspace.js keyed off
  // state.connected. We approximate using boardStore + presence of data.
  // Callers that need a precise offline check should read appStore.connected
  // directly.
   }
- // Use the boardStore selectedTaskID as the primary signal
-  if (boardStore.selectedTaskID) return "task";
+ // Use the selected task source as the primary signal
+  if (activeTaskID()) return "task";
   return "empty";
 }
 
@@ -199,7 +201,7 @@ export function workspaceMode(): WorkspaceMode {
  */
 export function workspaceModeWithConnection(connected: boolean): WorkspaceMode {
   if (!connected) return "offline";
-  if (boardStore.selectedTaskID) return "task";
+  if (activeTaskID()) return "task";
   return "empty";
 }
 
@@ -210,7 +212,7 @@ export function workspaceModeWithConnection(connected: boolean): WorkspaceMode {
  * Mirrors workspace.js hasWorkspaceSelection.
  */
 export function hasWorkspaceSelection(): boolean {
-  return !!boardStore.selectedTaskID;
+  return !!activeTaskID();
 }
 
 // ── enterSessionWorkspace ──
@@ -333,7 +335,7 @@ export function closeProject(): void {
 
 /**
  * Switch to the "empty" workspace (no task selected).
- * - Clears the selectedTaskID.
+ * - Clears the selected source.
  * - Optionally restores the saved/temp directory.
  * - Clears all runtime state.
  * Mirrors workspace.js enterEmptyWorkspace.
@@ -341,7 +343,7 @@ export function closeProject(): void {
 export function enterEmptyWorkspace(
   options: EnterEmptyWorkspaceOptions = {},
 ): void {
-  setBoardStore("selectedTaskID", "");
+  setBoardStore("selectedSource", null);
 
   if (options.restoreDirectory !== false) {
     restoreWorkspaceDirectory();
@@ -355,7 +357,7 @@ export function enterEmptyWorkspace(
 /**
  * Switch to a specific task workspace.
  * - Optionally sets the workspace directory with source "task".
- * - Sets the selectedTaskID.
+ * - Sets the selected task source.
  * - Clears all runtime state.
  * Mirrors workspace.js enterTaskWorkspace.
  */
@@ -370,7 +372,7 @@ export function enterTaskWorkspace(
     setWorkspaceDirectory(options.directory, "task");
   }
 
-  setBoardStore("selectedTaskID", taskID || "");
+  setBoardStore("selectedSource", taskID ? { kind: "task", id: taskID } : null);
   clearWorkspaceRuntime(options);
 }
 

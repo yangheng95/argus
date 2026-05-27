@@ -28,7 +28,9 @@ import {
   type ToolPermissions,
 } from "../store/settings";
 import { appStore, setAppStore } from "../store/app";
-import { boardStore, setBoardStore, loadTasks, clearTasksForMissingDirectory } from "../store/board";
+import { boardStore, setBoardStore, loadTasks, clearTasksForMissingDirectory,
+  activeTaskID,
+} from "../store/board";
 import { dialogStore } from "../store/dialog";
 import { loadMeta } from "./meta";
 import { loadExtensions } from "./extensions";
@@ -409,7 +411,7 @@ export async function restoreInitialWorkspace(): Promise<boolean> {
   );
 
   if (taskID) {
-    if (boardStore.selectedTaskID !== taskID || !boardStore.board) {
+    if (activeTaskID() !== taskID || !boardStore.board) {
       await selectTask(taskID);
     }
  // body.dataset.workspace/connection is updated reactively by main.tsx createEffect.

@@ -1,9 +1,12 @@
 import { Hono } from "hono"
+import { streamSSE } from "hono/streaming"
 import { describeRoute, validator, resolver } from "hono-openapi"
 import z from "zod"
 import { Session } from "../../session"
 import { SessionStatus } from "@/session"
+import { projectConversationView } from "@/conversation/view"
 import { Config } from "@/config/config"
+import { EffectiveConfig } from "@/config/effective"
 import { validateConfigModelReferences } from "@/config/model-reference-validation"
 import { SessionPrompt } from "../../session/prompt"
 import { SessionContext } from "@/session/context"
@@ -19,8 +22,33 @@ import { TaskQueueService } from "@/scheduler/task-queue-service"
 import { Log } from "../../util/log"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
+import { ProtocolStore } from "@/protocol/store"
+import { enrichGatewaySessionTranscript, subscribeGatewaySessionMirror } from "@/protocol/session-mirror"
+import { BusEvent } from "@/bus/bus-event"
+import { SessionConversationHydration, SessionEvent } from "@/engine/model"
 
 const log = Log.create({ service: "server" })
+
+function protocolSessionEvent(event: ReturnType<typeof ProtocolStore.listTaskEventsAfter>[number]) {
+  const timestamp = event.time.emitted
+  if (!(typeof timestamp === "number" && timestamp > 0)) {
+    throw new Error(
+      `protocolSessionEvent: event ${event.id} missing time.emitted (schema-invariant violated)`,
+    )
+  }
+  const notify = BusEvent.resolveNotify(event.type, event.payload ?? {})
+  return {
+    event_id: event.id,
+    session_id: event.sessionID,
+    type: event.type.replace("engine.", ""),
+    emittedAt: timestamp,
+    timestamp,
+    sequence: event.sequence,
+    summary: event.summary,
+    payload: event.payload || {},
+    ...(notify ? { notify } : {}),
+  }
+}
 
 const SessionConfigResponse = z
   .object({
@@ -78,7 +106,7 @@ async function sessionConfig(sessionID: string): Promise<z.output<typeof Session
   // R5.1 item 2: only a root session (task root or standalone root) owns a
   // config overlay; a child session is rejected (same guard as the write path).
   Session.assertConfigurableRoot(session)
-  const base = await Config.get()
+  const base = await EffectiveConfig.base({ sessionID })
   const stored = session.metadata?.configOverlay ?? {}
   // R5.1 item 7: fail fast on a null or pinned key in the STORED overlay.
   // `.strict()` rejects pinned/unknown keys; assertNoStoredNull rejects nulls.
@@ -261,6 +289,135 @@ export const SessionRoutes = lazy(() =>
         await validateConfigModelReferences(patch, "configOverlay")
         await Session.mergeConfigOverlay({ sessionID, patch })
         return c.json(await sessionConfig(sessionID))
+      },
+    )
+    .get(
+      "/:sessionID/conversation",
+      describeRoute({
+        summary: "Hydrate session conversation state",
+        description:
+          "Load the persisted conversation inputs needed to rebuild the overlay conversation tree for a supervisor session before SSE resumes.",
+        operationId: "session.conversation",
+        responses: {
+          200: {
+            description: "Session conversation hydrate payload",
+            content: {
+              "application/json": {
+                schema: resolver(SessionConversationHydration),
+              },
+            },
+          },
+          ...errors(404),
+        },
+      }),
+      validator(
+        "param",
+        z.object({
+          sessionID: z.string().meta({ description: "Session ID" }),
+        }),
+      ),
+      async (c) => {
+        const sessionID = c.req.valid("param").sessionID
+        const session = await Session.get(sessionID)
+        const transcript = enrichGatewaySessionTranscript(await Session.messages({ sessionID }))
+        const board = {
+          kind: "session" as const,
+          sessionID,
+          status: session.time.archived ? "archived" : "active",
+          title: session.title ?? null,
+          directory: session.directory ?? null,
+        }
+        const view = projectConversationView(board, transcript)
+        return c.json({
+          board,
+          transcript,
+          timeline: [],
+          events: [],
+          view,
+          agentView: view,
+          history: {
+            oldestTimestamp: transcript[0]?.info?.time?.created ?? null,
+            oldestMessageID: transcript[0]?.info?.id ?? null,
+            hasMore: false,
+            limit: transcript.length,
+          },
+        })
+      },
+    )
+    .get(
+      "/:sessionID/events",
+      describeRoute({
+        summary: "Subscribe to session events",
+        operationId: "session.events",
+        responses: {
+          200: {
+            description: "Session event stream",
+            content: {
+              "text/event-stream": {
+                schema: resolver(SessionEvent),
+              },
+            },
+          },
+        },
+      }),
+      validator(
+        "param",
+        z.object({
+          sessionID: z.string().meta({ description: "Session ID" }),
+        }),
+      ),
+      async (c) => {
+        const sessionID = c.req.valid("param").sessionID
+        await Session.get(sessionID)
+        c.header("X-Accel-Buffering", "no")
+        c.header("X-Content-Type-Options", "nosniff")
+        return streamSSE(c, async (stream) => {
+          let writes = Promise.resolve()
+          const writeData = (data: string) => {
+            writes = writes.then(() => stream.writeSSE({ data }))
+            return writes
+          }
+          const stopProtocol = ProtocolStore.subscribeEvents(
+            (event) => {
+              if (event.sessionID !== sessionID) return
+              void writeData(JSON.stringify(protocolSessionEvent(event)))
+            },
+            { sessionID },
+          )
+          const stopMirror = subscribeGatewaySessionMirror(sessionID)
+          await writeData(JSON.stringify({
+            event_id: `session-connected-${Date.now()}`,
+            session_id: sessionID,
+            type: "session.connected",
+            emittedAt: Date.now(),
+            timestamp: Date.now(),
+            sequence: 0,
+            summary: "Session event stream connected",
+            payload: { sessionID },
+          }))
+          const heartbeat = setInterval(() => {
+            const now = Date.now()
+            void writeData(JSON.stringify({
+              event_id: `session-heartbeat-${now}`,
+              session_id: sessionID,
+              type: "session.heartbeat",
+              emittedAt: now,
+              timestamp: now,
+              sequence: 0,
+              summary: "Session event stream heartbeat",
+              payload: { sessionID },
+            }))
+          }, 10_000)
+          await new Promise<void>((resolve) => {
+            stream.onAbort(() => {
+              clearInterval(heartbeat)
+              stopMirror()
+              stopProtocol()
+              resolve()
+            })
+          })
+          await writes
+        })
       },
     )
     .get(

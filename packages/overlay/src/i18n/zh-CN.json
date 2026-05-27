@@ -122,7 +122,7 @@
   "notify.dismiss": "关闭通知",
   "notify.show_details": "展开详情",
   "notify.hide_details": "收起详情",
-  "notify.copy_details": "复制",
+  "notify.copy_details": "复制详情",
   "notify.copied": "已复制",
   "notify.permission_unsupported_title": "桌面通知不可用",
   "notify.permission_unsupported_body": "当前环境没有提供 Notification API。OpenCorvus 会继续显示界面内通知。",
@@ -810,8 +810,6 @@
   "gateway.open_title": "切换到 Gateway 控制台",
   "gateway.title": "Gateway",
   "gateway.subtitle": "操作面控制台 — 管理多个任务、需求拆解和外部通道接入",
-  "gateway.back": "返回面板",
-  "gateway.back_title": "返回默认会话面板",
   "gateway.refresh": "刷新",
   "gateway.refresh_title": "重新拉取任务、统计和通道信息",
   "gateway.refreshing": "刷新中…",
@@ -934,6 +932,7 @@
   "gateway.master.error": "主管唤醒失败：{{error}}",
   "gateway.master.discard": "关闭",
   "gateway.master.discard_title": "关闭启动器",
+  "gateway.master.conversation_title": "Mission 对话",
   "gateway.master.result_created": "已创建 Mission：{{missionID}}",
   "gateway.master.result_resumed": "已恢复 Mission：{{missionID}}"
 }

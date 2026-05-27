@@ -237,9 +237,15 @@ export namespace LSPClient {
       },
       async shutdown() {
         l.info("shutting down")
+        await withTimeout(connection.sendRequest("shutdown"), 1_000).catch(() => {})
+        await connection.sendNotification("exit").catch(() => {})
         connection.end()
         connection.dispose()
-        input.server.process.kill()
+        if (input.server.dispose) {
+          await input.server.dispose()
+        } else {
+          input.server.process.kill()
+        }
         l.info("shutdown")
       },
     }

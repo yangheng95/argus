@@ -352,7 +352,7 @@ export function TitlebarMenubar(props: TitlebarMenubarProps) {
   const maxGroups = createMemo(() => clampInt(configNumber("max_executor_groups"), 1, 10));
   const compactionThresholdPercent = createMemo(() => {
     const raw = Number((appStore.config as any)?.compaction?.threshold);
-    const ratio = Number.isFinite(raw) && raw > 0 ? raw : 0.8;
+    const ratio = Number.isFinite(raw) && raw > 0 ? raw : 0.9;
     return Math.round(ratio * 100);
   });
   const opacityPercent = createMemo(() => Math.round(settingsStore.opacity * 100));

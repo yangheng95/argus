@@ -35,7 +35,10 @@ import {
   onMount,
 } from "solid-js"
 import { useArmedConfirm, type ArmedConfirm } from "../solid/armed-confirm"
-import { boardStore, isTaskInterruptable, isTaskTerminal, loadTasks, taskByID, visibleTasks } from "../store/board"
+import { boardStore, setBoardStore, isTaskInterruptable, isTaskTerminal, loadTasks, taskByID, visibleTasks,
+  activeTaskID,
+} from "../store/board"
+import { clearMessages, setChatAttachments } from "../store/messages"
 import { settingsStore, sanitizeExecutor } from "../store/settings"
 import { isGatewayPage, setPageMode } from "../store/page-mode"
 import {
@@ -60,6 +63,9 @@ import {
   type GatewayStats,
 } from "../services/gateway"
 import { ApiError } from "../services/api"
+import { loadConversation } from "../services/conversation"
+import { startSSE, stopSSE } from "../services/sse"
+import { resetWriter } from "../services/tree-writer"
 import { t } from "../utils/i18n"
 import { stamp } from "../utils/time"
 import {
@@ -75,6 +81,8 @@ import {
 import { Icon } from "./Icon"
 import { Button } from "./ui/Button"
 import { ConversationAgentRail } from "./ConversationAgentRail"
+import { Conversation } from "./Conversation"
+import { ChatComposer } from "./ChatComposer"
 
 // ── Status taxonomies ──
 //
@@ -254,7 +262,7 @@ export function Gateway() {
   const [bindings, bindingsCtl] = createResource(
     () => {
       const onGatewayPage = isGatewayPage()
-      const taskID = boardStore.selectedTaskID
+      const taskID = activeTaskID()
       return onGatewayPage && taskID ? taskID : null
     },
     async (taskID) => {
@@ -426,7 +434,7 @@ export function Gateway() {
     return { active, queued, waiting, failed, completed, cancelled, total: list.length }
   })
 
-  const selectedItem = () => taskByID(boardStore.selectedTaskID)
+  const selectedItem = () => taskByID(activeTaskID())
   const selectedBoard = () => boardStore.board ?? null
   // Workbench shows progressively: if the operator selects a task we have
   // *any* data on (the ledger row from boardStore.tasks), render the
@@ -439,7 +447,7 @@ export function Gateway() {
   // P0-1). GatewaySelectedTask already reads task/* fields from item
   // when board is null, so the partial render is correct, not a fallback.
   const hasSelection = () =>
-    !!boardStore.selectedTaskID && (!!selectedItem() || !!selectedBoard())
+    !!activeTaskID() && (!!selectedItem() || !!selectedBoard())
 
   // ── Refresh / actions ──────────────────────────────────────────────
 
@@ -498,7 +506,7 @@ export function Gateway() {
     })
   }
   async function handleSendMessage(): Promise<void> {
-    const taskID = boardStore.selectedTaskID
+    const taskID = activeTaskID()
     if (!taskID) return
     const text = messageDraft().trim()
     if (!text) return
@@ -506,7 +514,7 @@ export function Gateway() {
     setMessageNotice(null)
     try {
       // Force the stream onto the selected task: submitMessage reads
-      // boardStore.selectedTaskID for the destination so a panel-side
+      // activeTaskID() for the destination so a panel-side
       // selection swap mid-await would mis-route. Selection guard is
       // upstream — submitMessage rejects if the route is wrong.
       await submitMessage(text, [], { metadata: { source: "gateway" } })
@@ -526,8 +534,29 @@ export function Gateway() {
     setPageMode("panel")
   }
 
-  function handleBackToPanel(): void {
-    setPageMode("panel")
+  async function handleMissionAwake(result: { sessionID: string }): Promise<void> {
+    const source = { kind: "session" as const, id: result.sessionID }
+    stopSSE()
+    clearMessages()
+    setChatAttachments([])
+    resetWriter({ scrollIntent: "bottom", cause: "gateway-session-switch" })
+    setBoardStore("selectedSource", source)
+    await loadConversation(source, {
+      scrollIntent: "bottom",
+      resetCause: "gateway-session-hydrate",
+    })
+    startSSE(source, 0)
+    setComposerOpen(false)
+  }
+
+  function handleCloseMission(): void {
+    if (boardStore.selectedSource?.kind !== "session") return
+    stopSSE()
+    clearMessages()
+    setChatAttachments([])
+    resetWriter({ scrollIntent: "bottom", cause: "gateway-session-close" })
+    setBoardStore("selectedSource", null)
+    setBoardStore("board", null)
   }
 
   // ── Render ─────────────────────────────────────────────────────────
@@ -546,7 +575,6 @@ export function Gateway() {
           composerOpen={composerOpen()}
           onRefresh={() => void refreshAll()}
           onCompose={() => setComposerOpen(true)}
-          onBack={handleBackToPanel}
         />
       </Show>
 
@@ -573,7 +601,7 @@ export function Gateway() {
         <Show when={isGatewayPage()}>
           <GatewayTaskLedger
             tasks={filteredTasks()}
-            selectedTaskID={boardStore.selectedTaskID}
+            selectedTaskID={activeTaskID()}
             filter={filter()}
             onFilterChange={setFilter}
             scope={scope()}
@@ -612,11 +640,14 @@ export function Gateway() {
           messageNotice={messageNotice()}
           actionBusy={actionBusy()}
           actionError={actionError()}
+          selectedSource={boardStore.selectedSource}
           onSendMessage={() => void handleSendMessage()}
           onCancelTask={(id) => void handleCancelTask(id)}
           onRetryTask={(id) => void handleRetryTask(id)}
           onReplanTask={(id) => void handleReplanTask(id)}
           onOpenInPanel={handleOpenInPanel}
+          onCloseMission={handleCloseMission}
+          onMissionAwake={(result) => void handleMissionAwake(result)}
         />
 
         <Show when={isGatewayPage()}>
@@ -628,7 +659,7 @@ export function Gateway() {
             restartError={channelRestartError()}
             bindings={bindings()}
             bindingsError={bindings.error ? humanizeApiError(bindings.error) : ""}
-            selectedTaskID={boardStore.selectedTaskID}
+            selectedTaskID={activeTaskID()}
             actionBusy={actionBusy()}
             onRestartRuntime={async () => {
               // Restart errors live in `channelRestartError` (rendered by
@@ -673,7 +704,6 @@ function GatewayHeader(props: {
   composerOpen: boolean
   onRefresh: () => void
   onCompose: () => void
-  onBack: () => void
 }) {
   const runtimeStatusLabel = () => {
     const r = props.runtime
@@ -719,18 +749,11 @@ function GatewayHeader(props: {
             <Icon name="refresh" size={12} />
             <span>{props.refreshing ? t("gateway.refreshing") : t("gateway.refresh")}</span>
           </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="md"
-            tone="neutral"
-            data-ui="gateway-back"
-            title={t("gateway.back_title")}
-            onClick={props.onBack}
-          >
-            <Icon name="panel-left" size={12} />
-            <span>{t("gateway.back")}</span>
-          </Button>
+          {/* Page-mode toggle lives in the titlebar Gateway button now —
+              one button, one stable position across both modes. The
+              in-page back affordance was removed because keeping two
+              navigation surfaces meant the operator's eye had to relearn
+              the toggle position when crossing pages. */}
         </div>
       </div>
       <div class="gateway-header-row gateway-header-row--stats">
@@ -1171,11 +1194,14 @@ function GatewayWorkbench(props: {
   messageNotice: { kind: "ok" | "error"; text: string } | null
   actionBusy: string
   actionError: { action: string; error: string } | null
+  selectedSource: { kind: "task" | "session"; id: string } | null
   onSendMessage: () => void
   onCancelTask: (id: string) => void
   onRetryTask: (id: string) => void
   onReplanTask: (id: string) => void
   onOpenInPanel: () => void
+  onCloseMission: () => void
+  onMissionAwake: (result: { sessionID: string }) => void
 }) {
   return (
     <section class="gateway-workbench" data-ui="gateway-workbench">
@@ -1183,30 +1209,34 @@ function GatewayWorkbench(props: {
         when={props.composerOpen}
         fallback={
           <Show when={props.active}>
-            <Show
-              when={props.hasSelection}
-              fallback={<GatewayEmptyWorkbench />}
-            >
-              <GatewaySelectedTask
-                item={props.selectedItem}
-                board={props.board}
-                messageDraft={props.messageDraft}
-                onMessageDraftChange={props.onMessageDraftChange}
-                messageSending={props.messageSending}
-                messageNotice={props.messageNotice}
-                actionBusy={props.actionBusy}
-                actionError={props.actionError}
-                onSendMessage={props.onSendMessage}
-                onCancelTask={props.onCancelTask}
-                onRetryTask={props.onRetryTask}
-                onReplanTask={props.onReplanTask}
-                onOpenInPanel={props.onOpenInPanel}
-              />
+            <Show when={props.selectedSource?.kind === "session"} fallback={
+              <Show
+                when={props.hasSelection}
+                fallback={<GatewayEmptyWorkbench />}
+              >
+                <GatewaySelectedTask
+                  item={props.selectedItem}
+                  board={props.board}
+                  messageDraft={props.messageDraft}
+                  onMessageDraftChange={props.onMessageDraftChange}
+                  messageSending={props.messageSending}
+                  messageNotice={props.messageNotice}
+                  actionBusy={props.actionBusy}
+                  actionError={props.actionError}
+                  onSendMessage={props.onSendMessage}
+                  onCancelTask={props.onCancelTask}
+                  onRetryTask={props.onRetryTask}
+                  onReplanTask={props.onReplanTask}
+                  onOpenInPanel={props.onOpenInPanel}
+                />
+              </Show>
+            }>
+              <GatewayMissionConversation onClose={props.onCloseMission} />
             </Show>
           </Show>
         }
       >
-        <GatewayComposer onClose={props.onCloseComposer} />
+        <GatewayComposer onClose={props.onCloseComposer} onAwake={props.onMissionAwake} />
       </Show>
     </section>
   )
@@ -1218,6 +1248,40 @@ function GatewayEmptyWorkbench() {
       <Icon name="gateway" size={28} class="gateway-workbench-empty-icon" />
       <h2 class="gateway-workbench-empty-title">{t("gateway.workbench.no_selection_title")}</h2>
       <p class="gateway-workbench-empty-body">{t("gateway.workbench.no_selection_body")}</p>
+    </div>
+  )
+}
+
+function GatewayMissionConversation(props: { onClose: () => void }) {
+  let conversationContainer!: HTMLDivElement
+  return (
+    <div class="gateway-mission-conversation" data-ui="gateway-mission-conversation">
+      <header class="gateway-mission-conversation-header">
+        <h2 class="gateway-mission-conversation-title">{t("gateway.master.conversation_title")}</h2>
+        <Button
+          type="button"
+          variant="ghost"
+          size="md"
+          tone="neutral"
+          data-ui="gateway-mission-close"
+          title={t("common.close")}
+          onClick={props.onClose}
+        >
+          <Icon name="close" size={12} />
+        </Button>
+      </header>
+      <div class="gateway-mission-conversation-body" ref={conversationContainer}>
+        <Conversation container={conversationContainer} />
+      </div>
+      <div class="gateway-mission-conversation-composer">
+        <ChatComposer
+          enabled={true}
+          busy={false}
+          onSubmit={async (text, attachments) => {
+            await submitMessage(text, attachments, { metadata: { source: "gateway" } })
+          }}
+        />
+      </div>
     </div>
   )
 }
@@ -1475,7 +1539,10 @@ function GatewaySelectedTask(props: {
 
 // ── Decomposition composer ────────────────────────────────────────────
 
-function GatewayComposer(props: { onClose: () => void }) {
+function GatewayComposer(props: {
+  onClose: () => void
+  onAwake: (result: { missionID: string; sessionID: string; created: boolean }) => void
+}) {
   // ── MissionLauncher — supervisor wake surface ─────────────────────────
   //
   // Single textarea + optional missionID input. Submitting POSTs to
@@ -1518,6 +1585,7 @@ function GatewayComposer(props: { onClose: () => void }) {
       if (controller.signal.aborted) return
       setLastResult(result)
       setText("")
+      props.onAwake(result)
     } catch (err) {
       if (controller.signal.aborted) return
       setError(humanizeApiError(err))

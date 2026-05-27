@@ -3,7 +3,9 @@
 // loadMeta, loadChanges, normalizeDiffs, diffStatus, openDiffDialog.
 
 import { setAppStore } from "../store/app";
-import { boardStore, setPath, setVcs } from "../store/board";
+import { boardStore, setPath, setVcs,
+  activeTaskID,
+} from "../store/board";
 import { settingsStore } from "../store/settings";
 import { AppLog } from "../utils/log";
 import { apiJson } from "./api";
@@ -122,7 +124,7 @@ export function diffStatus(item: any): DiffStatus {
  * Mirrors loadChanges.
  */
 export function deriveChanges(): DiffItem[] {
-  if (!boardStore.selectedTaskID) return [];
+  if (!activeTaskID()) return [];
   const board = boardStore.board as any;
   const delivery =
     board?.acceptedDelivery?.result?.diffs ||

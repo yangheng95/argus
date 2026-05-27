@@ -84,8 +84,7 @@ export namespace Agent {
     })
   export type Info = z.infer<typeof Info>
 
-  const state = lazyInstanceState(async () => {
-    const cfg = await Config.get()
+  async function buildState(cfg: Config.Info): Promise<Record<string, Info>> {
     // Debug-default permission policy: tools are accepted unless an operator
     // supplies an explicit `deny` or `ask` rule in config. Tool availability is
     // still controlled separately by each agent's include/exclude list.
@@ -561,7 +560,24 @@ export namespace Agent {
     }
 
     return result
-  })
+  }
+
+  const state = lazyInstanceState(async () => buildState(await Config.get()))
+  const scopedStates = new Map<string, Promise<Record<string, Info>>>()
+
+  function configStateKey(config: Config.Info): string {
+    return String(Bun.hash.xxHash64(JSON.stringify(config)))
+  }
+
+  function stateFor(config?: Config.Info): Promise<Record<string, Info>> {
+    if (!config) return state()
+    const key = configStateKey(config)
+    const existing = scopedStates.get(key)
+    if (existing) return existing
+    const next = buildState(config)
+    scopedStates.set(key, next)
+    return next
+  }
 
   /** Map of native agent name → built-in default prompt (before config overrides).
    *  Every native agent that appears in state() must map to its own distinct
@@ -593,14 +609,16 @@ export namespace Agent {
    *  next Agent.get()/list() call rebuilds with the fresh user overrides. */
   export function reset() {
     ;(state as any).reset()
+    scopedStates.clear()
   }
 
   export function resetAll() {
     ;(state as any).resetAll()
+    scopedStates.clear()
   }
 
-  export async function get(agent: string) {
-    return state().then((x) => x[agent])
+  export async function get(agent: string, opts?: { config?: Config.Info }) {
+    return stateFor(opts?.config).then((x) => x[agent])
   }
 
   export function resolveSessionAgent(baseAgent: Info, overlay: Config.Overlay | undefined): Info {
@@ -634,18 +652,18 @@ export namespace Agent {
     }
   }
 
-  export async function list() {
-    const cfg = await Config.get()
+  export async function list(opts?: { config?: Config.Info }) {
+    const cfg = opts?.config ?? (await Config.get())
     return pipe(
-      await state(),
+      await stateFor(opts?.config),
       values(),
       sortBy([(x) => (cfg.default_agent ? x.name === cfg.default_agent : x.name === "coding"), "desc"]),
     )
   }
 
-  export async function defaultAgent() {
-    const cfg = await Config.get()
-    const agents = await state()
+  export async function defaultAgent(opts?: { config?: Config.Info }) {
+    const cfg = opts?.config ?? (await Config.get())
+    const agents = await stateFor(opts?.config)
 
     if (cfg.default_agent) {
       const agent = agents[cfg.default_agent]

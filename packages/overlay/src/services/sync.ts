@@ -1,19 +1,19 @@
 // ── Sync Service ──
 // Coordinates loading board, tasks, and transcript in one shot.
 
-import { loadBoard, loadTasks, setBoardStore, boardStore, setBoardRetryCount, setBoardSyncPending } from "../store/board";
+import { loadBoard, loadTasks, setBoardStore, boardStore, setBoardRetryCount, setBoardSyncPending, activeTaskID } from "../store/board";
 import { stopSSE } from "./sse";
 import { recoverSelectedTaskConversation } from "./selected-task-recovery";
 
 /**
  * Sync board data, task list, and (optionally) a specific task's transcript.
  * @param taskID If provided, also loads the transcript for this task and
- * updates selectedTaskID in the board store.
+ * updates selectedSource in the board store.
  */
 export async function syncBoardAndTasks(taskID?: string): Promise<void> {
   await Promise.all([loadBoard(), loadTasks()]);
   if (taskID) {
-    setBoardStore("selectedTaskID", taskID);
+    setBoardStore("selectedSource", { kind: "task", id: taskID });
     await recoverSelectedTaskConversation("sync board and selected task", taskID);
   }
 }
@@ -40,7 +40,7 @@ export function clearBoardRetry(): void {
  * When `sync` is true the reload will request a server-side sync.
  */
 export function retryBoard(sync?: boolean): void {
-  if (!boardStore.selectedTaskID || _boardRetryTimer !== null) return;
+  if (!activeTaskID() || _boardRetryTimer !== null) return;
   if (sync) setBoardSyncPending(true);
   const delay = Math.min(1000 * Math.pow(2, Math.min(boardStore.boardRetryCount, 4)), 15000);
   setBoardRetryCount(boardStore.boardRetryCount + 1);

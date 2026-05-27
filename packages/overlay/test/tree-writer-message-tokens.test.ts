@@ -8,7 +8,7 @@ if (typeof globalThis.requestAnimationFrame === "undefined") {
 }
 
 const { setBoardStore } = await import("../src/store/board");
-const { applyEvent, resetWriter } = await import("../src/services/tree-writer");
+const { applyEvent, hydrateConversationView, resetWriter } = await import("../src/services/tree-writer");
 const { cardTreeStore } = await import("../src/store/card-tree");
 const { aggregateUsageAcrossSessions } = await import("../src/utils/format-usage");
 
@@ -69,11 +69,14 @@ test("handleMessageUpdated projects info.tokens + info.cost onto the turn card",
     totalTokens: 1_550,
     costUSD: 0.0182,
   });
+  expect(card!.contextTokens).toBe(1_200);
+  expect(card!.contextTokensEstimated).toBe(false);
 
   // The chat-usage aggregator should now see this card.
   const agg = aggregateUsageAcrossSessions(Object.values(cardTreeStore.cards));
   expect(agg.tokens).toBe(1_550);
   expect(agg.costUSD).toBe(0.0182);
+  expect(agg.estimated).toBe(false);
 });
 
 test("handleMessageUpdated leaves card.usage unset for assistant messages with zero usage", async () => {
@@ -103,6 +106,48 @@ test("handleMessageUpdated leaves card.usage unset for assistant messages with z
   const card = cardTreeStore.cards[cardID];
   expect(card).toBeDefined();
   expect(card!.usage).toBeUndefined();
+  expect(card!.contextTokens).toBeUndefined();
+});
+
+test("hydrateConversationView restores usage and context tokens from transcript messages", async () => {
+  setBoardStore("board", {
+    task: { id: TASK_ID, status: "active", time: { created: T0 }, request: "test", attachments: [] },
+    goals: [],
+    interactions: [],
+    goalWorkflows: [],
+  } as any);
+  setBoardStore("selectedTaskID", TASK_ID);
+  resetWriter();
+
+  hydrateConversationView(
+    { sessions: [{ sessionID: SID, stage: "assistant" }] },
+    [{
+      info: {
+        id: "msg_hydrated_usage",
+        sessionID: SID,
+        role: "assistant",
+        agent: "assistant",
+        resolvedRole: "assistant",
+        channel: "assistant",
+        time: { created: T0 + 150 },
+        tokens: { input: 700, output: 80, reasoning: 0, total: 780, cache: { read: 50, write: 25 } },
+        cost: 0.012,
+      },
+      parts: [{ id: "part_hydrated_usage", type: "text", text: "done", messageID: "msg_hydrated_usage", sessionID: SID }],
+    }],
+  );
+
+  const cardID = `assistant:session:${SID}:message:msg_hydrated_usage`;
+  const card = cardTreeStore.cards[cardID];
+  expect(card).toBeDefined();
+  expect(card!.usage).toEqual({
+    inputTokens: 700,
+    outputTokens: 80,
+    totalTokens: 780,
+    costUSD: 0.012,
+  });
+  expect(card!.contextTokens).toBe(775);
+  expect(card!.contextTokensEstimated).toBe(false);
 });
 
 test("user messages do not get a usage chip even when tokens accidentally appear on info", async () => {
@@ -130,6 +175,7 @@ test("user messages do not get a usage chip even when tokens accidentally appear
   const userCard = cards.find((c) => c.id.includes("msg_user_1"));
   expect(userCard).toBeDefined();
   expect(userCard!.usage).toBeUndefined();
+  expect(userCard!.contextTokens).toBeUndefined();
 });
 
 // Regression for the cross-session conversation total. Each card carries
@@ -174,4 +220,5 @@ test("aggregateUsageAcrossSessions sums per-message usage across multiple sessio
   // 600 + 1050 + 4600 = 6250 tokens; 0.01 + 0.025 + 0.08 = 0.115 USD.
   expect(agg.tokens).toBe(6_250);
   expect(agg.costUSD).toBeCloseTo(0.115, 5);
+  expect(agg.estimated).toBe(false);
 });

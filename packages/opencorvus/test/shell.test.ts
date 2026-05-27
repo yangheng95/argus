@@ -33,6 +33,7 @@ describe("shell process supervisor contract", () => {
       })
       return {
         pid: 123,
+        stdin: null,
         stdout,
         stderr: new PassThrough(),
         exited,
@@ -59,6 +60,7 @@ describe("shell process supervisor contract", () => {
     const keepAlive = setInterval(() => {}, 10)
     const restore = ProcessSupervisor.setFactoryForTest(async () => ({
       pid: 124,
+      stdin: null,
       stdout: new PassThrough(),
       stderr: new PassThrough(),
       exited,
@@ -88,6 +90,7 @@ describe("shell process supervisor contract", () => {
       queueMicrotask(() => stdout.write("http://127.0.0.1:4321\n"))
       return {
         pid: 125,
+        stdin: null,
         stdout,
         stderr: new PassThrough(),
         exited: new Promise<number>(() => {}),

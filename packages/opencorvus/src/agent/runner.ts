@@ -68,7 +68,7 @@ import type { TextHooks } from "@/llm/api"
 import { resolveAgentModel, resolveSessionOverlay } from "@/agent/model"
 import { Agent } from "@/agent/agent"
 import { Provider } from "@/provider/provider"
-import { Config } from "@/config/config"
+import { EffectiveConfig } from "@/config/effective"
 import { EngineConfig } from "@/engine"
 import { appendInformationMissingFallback } from "@/prompt/information-missing"
 import { Instance } from "@/project/instance"
@@ -606,7 +606,8 @@ export async function runAgentSession<C>(
   let model: Awaited<ReturnType<typeof resolveAgentModel>> | undefined
   let modelResolutionError: unknown
   if (input.model) {
-    model = await Provider.getModel(input.model.providerID, input.model.modelID).catch((err) => {
+    const config = await EffectiveConfig.effective(input.taskID ? { taskID: input.taskID } : undefined)
+    model = await Provider.getModel(input.model.providerID, input.model.modelID, { config }).catch((err) => {
       modelResolutionError = err
       return undefined
     })
@@ -1391,9 +1392,9 @@ async function composeSystemPrompt(
   core: string,
   taskID: string | undefined,
 ): Promise<{ prompt: string }> {
+  const config = await EffectiveConfig.effective(taskID ? { taskID } : undefined)
   const overlay = await resolveSessionOverlay(taskID ? { taskID } : undefined)
-  const config = Config.mergeOverlay(await Config.get(), overlay ?? {})
-  const baseAgent = await Agent.get(agentName)
+  const baseAgent = await Agent.get(agentName, { config })
   const effectiveAgent = baseAgent ? Agent.resolveSessionAgent(baseAgent, overlay) : undefined
   const userAppend = effectiveAgent?.promptAppend ?? (config.agent as Record<string, any> | undefined)?.[agentName]?.prompt_append
   const prompt =

@@ -35,6 +35,8 @@ export function formatCostUSD(n: number): string {
  *  independent of the full `CardNode` interface so tests can build
  *  fixtures without importing the store. */
 export interface UsageCardLike {
+  contextTokens?: number;
+  contextTokensEstimated?: boolean;
   usage?: {
     inputTokens?: number;
     outputTokens?: number;
@@ -52,19 +54,29 @@ export interface UsageCardLike {
  *  nothing. */
 export function aggregateUsageAcrossSessions(
   cards: Iterable<UsageCardLike | undefined | null>,
-): { tokens: number; costUSD: number } {
+): { tokens: number; costUSD: number; estimated: boolean } {
   let tokens = 0;
   let costUSD = 0;
+  let estimated = false;
   for (const card of cards) {
     const usage = card?.usage;
-    if (!usage) continue;
-    const total =
-      (usage.totalTokens ?? 0) ||
-      ((usage.inputTokens ?? 0) + (usage.outputTokens ?? 0));
-    tokens += total;
-    costUSD += usage.costUSD ?? 0;
+    if (usage) {
+      const total =
+        (usage.totalTokens ?? 0) ||
+        ((usage.inputTokens ?? 0) + (usage.outputTokens ?? 0));
+      if (total > 0 || (usage.costUSD ?? 0) > 0) {
+        tokens += total;
+        costUSD += usage.costUSD ?? 0;
+        continue;
+      }
+    }
+    const contextTokens = card?.contextTokens ?? 0;
+    if (contextTokens > 0) {
+      tokens += contextTokens;
+      estimated = estimated || !!card?.contextTokensEstimated;
+    }
   }
-  return { tokens, costUSD };
+  return { tokens, costUSD, estimated };
 }
 
 /** Format a `{tokens, costUSD}` aggregate as the strip text. Empty
@@ -72,9 +84,9 @@ export function aggregateUsageAcrossSessions(
  *  chip). Segments with zero value are dropped — a session that
  *  reports tokens but no cost should not show a stray "· $0", and
  *  vice-versa. */
-export function formatUsageStrip(input: { tokens: number; costUSD: number }): string {
+export function formatUsageStrip(input: { tokens: number; costUSD: number; estimated?: boolean }): string {
   const parts: string[] = [];
-  if (input.tokens > 0) parts.push(`${formatTokenCount(input.tokens)} tok`);
+  if (input.tokens > 0) parts.push(`${input.estimated ? "~" : ""}${formatTokenCount(input.tokens)} tok`);
   if (input.costUSD > 0) {
     const costLabel = formatCostUSD(input.costUSD);
     if (costLabel) parts.push(costLabel);

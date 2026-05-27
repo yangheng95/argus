@@ -58,6 +58,14 @@ test("Gateway.tsx uses wakeMaster from the gateway service", () => {
   expect(GATEWAY_TSX).toContain('wakeMaster')
 })
 
+test("Gateway wake result opens the shared mission conversation surface", () => {
+  expect(GATEWAY_TSX).toContain("handleMissionAwake")
+  expect(GATEWAY_TSX).toContain('setBoardStore("selectedSource", source)')
+  expect(GATEWAY_TSX).toContain("loadConversation(source")
+  expect(GATEWAY_TSX).toContain("startSSE(source")
+  expect(GATEWAY_TSX).toContain("GatewayMissionConversation")
+})
+
 test("services/gateway.ts exports wakeMaster pointed at /gateway/master/wake", () => {
   expect(SERVICES_GATEWAY).toContain("export async function wakeMaster")
   expect(SERVICES_GATEWAY).toContain("`gateway/master/wake`")

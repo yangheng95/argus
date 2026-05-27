@@ -4873,6 +4873,142 @@ export type SessionConfigUpdateResponses = {
 
 export type SessionConfigUpdateResponse = SessionConfigUpdateResponses[keyof SessionConfigUpdateResponses]
 
+export type SessionConversationData = {
+  body?: never
+  path: {
+    /**
+     * Session ID
+     */
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/session/{sessionID}/conversation"
+}
+
+export type SessionConversationErrors = {
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type SessionConversationError = SessionConversationErrors[keyof SessionConversationErrors]
+
+export type SessionConversationResponses = {
+  /**
+   * Session conversation hydrate payload
+   */
+  200: {
+    board: {
+      kind: "session"
+      sessionID: string
+      status: string
+      title?: string | null
+      directory?: string | null
+    }
+    transcript: Array<unknown>
+    timeline: Array<unknown>
+    events: Array<{
+      event_id: string
+      session_id: string
+      type: string
+      emittedAt: number
+      timestamp: number
+      sequence?: number
+      summary: string
+      payload: {
+        [key: string]: unknown
+      }
+      notify?: {
+        tier: 1 | 2 | 3
+        badge?: boolean
+      }
+    }>
+    history?: {
+      oldestTimestamp: number | null
+      oldestMessageID?: string | null
+      hasMore: boolean
+      limit: number
+    }
+    agentView?: {
+      topLevelSessionIDs: Array<string>
+      sessions: Array<{
+        sessionID: string
+        stage: string
+        parentSessionID?: string
+        goalID?: string
+        messageIDs: Array<string>
+        firstMessageTime: number
+        lastMessageTime: number
+        placement: "top_level" | "goal_phase" | "hidden" | "filtered"
+        phase?: {
+          stepID: string
+          phaseID: string
+        }
+      }>
+    }
+    view: {
+      topLevelSessionIDs: Array<string>
+      sessions: Array<{
+        sessionID: string
+        stage: string
+        parentSessionID?: string
+        goalID?: string
+        messageIDs: Array<string>
+        firstMessageTime: number
+        lastMessageTime: number
+        placement: "top_level" | "goal_phase" | "hidden" | "filtered"
+        phase?: {
+          stepID: string
+          phaseID: string
+        }
+      }>
+    }
+  }
+}
+
+export type SessionConversationResponse = SessionConversationResponses[keyof SessionConversationResponses]
+
+export type SessionEventsData = {
+  body?: never
+  path: {
+    /**
+     * Session ID
+     */
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/session/{sessionID}/events"
+}
+
+export type SessionEventsResponses = {
+  /**
+   * Session event stream
+   */
+  200: {
+    event_id: string
+    session_id: string
+    type: string
+    emittedAt: number
+    timestamp: number
+    sequence?: number
+    summary: string
+    payload: {
+      [key: string]: unknown
+    }
+    notify?: {
+      tier: 1 | 2 | 3
+      badge?: boolean
+    }
+  }
+}
+
+export type SessionEventsResponse = SessionEventsResponses[keyof SessionEventsResponses]
+
 export type SessionDeleteData = {
   body?: never
   path: {
@@ -8526,6 +8662,7 @@ export type TaskListEventsResponses = {
       tier: 1 | 2 | 3
       badge?: boolean
     }
+    notificationDetails?: string
   }
 }
 

@@ -9,10 +9,12 @@ import { t } from "../utils/i18n";
 
 // ── Store ──
 
+export type BoardSource = { kind: "task" | "session"; id: string };
+
 export const [boardStore, setBoardStore] = createStore({
   board: null as any,
   tasks: [] as any[],
-  selectedTaskID: "" as string,
+  selectedSource: null as BoardSource | null,
   taskSequence: 0 as number,
   loading: false,
   /** Monotonic counter incremented on each selectTask() call. Used to detect
@@ -80,7 +82,7 @@ let _boardLoading: Promise<void> | null = null;
 let _boardQueued = false;
 let _tasksLoading: Promise<void> | null = null;
 
-// Invariant handler: fires when the current `selectedTaskID` no longer refers
+// Invariant handler: fires when the current task source no longer refers
 // to any task in the merged (tasks + pendingTasks) list. Registered by
 // services/task.ts so that board.ts doesn't need to import selectTask (which
 // would create a cycle). If not registered, the invariant silently degrades —
@@ -120,7 +122,7 @@ function notifyTaskListProjection(tasks: any[]): void {
 }
 
 function selectionIsOrphaned(tasks: any[], pending: any[]): boolean {
-  const id = boardStore.selectedTaskID;
+  const id = activeTaskID();
   if (!id) return false;
   // Stable-state guard: during selectTask()'s async phase a concurrent
   // loadTasks() response may not yet include the freshly-created task, and
@@ -257,7 +259,7 @@ function clearBoardRetry(): void {
 }
 
 function retryBoard(sync: boolean): void {
-  if (!boardStore.selectedTaskID || _boardRetryTimer) return;
+  if (!activeTaskID() || _boardRetryTimer) return;
   if (sync) setBoardSyncPending(true);
   const delay = Math.min(1000 * Math.pow(2, Math.min(boardStore.boardRetryCount, 4)), 15000);
   setBoardRetryCount(boardStore.boardRetryCount + 1);
@@ -268,7 +270,7 @@ function retryBoard(sync: boolean): void {
 }
 
 export async function loadBoard(options: LoadBoardOptions = {}): Promise<void> {
-  const taskID = boardStore.selectedTaskID;
+  const taskID = activeTaskID();
   if (!taskID) {
     setBoardStore("board", null);
     setSnapshotVersion("");
@@ -294,7 +296,7 @@ export async function loadBoard(options: LoadBoardOptions = {}): Promise<void> {
           signal: AbortSignal.timeout(10000),
         },
       );
-      if (taskID !== boardStore.selectedTaskID) return;
+      if (taskID !== activeTaskID()) return;
       setBoardSyncPending(false);
       if (res.status === 304) {
         clearBoardRetry();
@@ -331,7 +333,7 @@ export async function loadBoard(options: LoadBoardOptions = {}): Promise<void> {
     } catch (e) {
       failed = true;
       console.error("loadBoard failed", e);
-      if (taskID === boardStore.selectedTaskID) retryBoard(sync);
+      if (taskID === activeTaskID()) retryBoard(sync);
     } finally {
       _boardLoading = null;
       setBoardStore("loading", false);
@@ -353,7 +355,7 @@ export async function loadBoard(options: LoadBoardOptions = {}): Promise<void> {
 
 /**
  * Canonical writer for `boardStore.tasks`. All paths that replace the task
- * list MUST go through here so that the "`selectedTaskID` always refers to an
+ * list MUST go through here so that the selected task source always refers to an
  * existing task" invariant is enforced. After the list is applied, if the
  * current selection no longer exists (in tasks or pendingTasks), the
  * registered orphan handler is invoked to reset the selection — this is the
@@ -561,17 +563,17 @@ export function scheduleBoard(delay = 0): void {
  * Returns the selected task's ROOT sessionID.
  *
  * R5.1 item 9: this resolver must not look only at `boardStore.board` — a
- * task can be selected (boardStore.selectedTaskID) before its board has
+ * task can be selected before its board has
  * loaded, in which case the root session lives on the task-list entry. So we
  * prefer the loaded board's task sessionID and fall back to the
- * selectedTaskID's entry in `boardStore.tasks`. Returns "" when the selected
+ * selected source's entry in `boardStore.tasks`. Returns "" when the selected
  * task's root session is not yet resolved — callers MUST treat "" as
  * "do not write /config" (never silently fall back to the project config).
  */
 export function rootTaskSessionID(): string {
   const boardSession = boardStore.board?.task?.sessionID;
   if (typeof boardSession === "string" && boardSession) return boardSession;
-  const taskID = boardStore.selectedTaskID;
+  const taskID = activeTaskID();
   if (!taskID) return "";
   const entry = boardStore.tasks.find((item: any) => item?.task?.id === taskID);
   return typeof entry?.task?.sessionID === "string" ? entry.task.sessionID : "";
@@ -584,7 +586,7 @@ export function rootTaskSessionID(): string {
  * (R5.1 item 9). When false, the picker is in project scope.
  */
 export function hasSelectedTask(): boolean {
-  return !!boardStore.selectedTaskID;
+  return !!activeTaskID();
 }
 
 
@@ -601,6 +603,16 @@ export function hasSelectedTask(): boolean {
  *  actually want. */
 export function selectedTaskDirectory(): string {
   return boardStore.board?.task?.directory ?? "";
+}
+
+export function activeTaskID(): string {
+  const source = boardStore.selectedSource;
+  return source?.kind === "task" ? source.id : "";
+}
+
+export function activeSessionID(): string {
+  const source = boardStore.selectedSource;
+  return source?.kind === "session" ? source.id : "";
 }
 
 // ── VCS setters ──

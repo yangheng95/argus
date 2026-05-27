@@ -28,7 +28,9 @@ import { LogViewer } from "./components/LogViewer"
 import { WorkspacePanel } from "./components/WorkspacePanel"
 import type { DiffTarget } from "./services/diff"
 import { initApp } from "./services/init"
-import { loadTasks, boardStore, loadBoard } from "./store/board"
+import { loadTasks, boardStore, loadBoard,
+  activeTaskID,
+} from "./store/board"
 import { messageStore } from "./store/messages"
 import { appStore } from "./store/app"
 import { selectTask, retryTask, replanTask, cancelTask, createTask, deleteTask, renameTask } from "./services/task"
@@ -679,18 +681,18 @@ if (taskListEl) {
 }
 
 function retrySelectedTask(): void {
-  const id = boardStore.selectedTaskID
+  const id = activeTaskID()
   if (!id) return
   void retryTask(id)
 }
 
 function replanSelectedTask(): void {
-  const id = boardStore.selectedTaskID
+  const id = activeTaskID()
   if (id) void replanTask(id)
 }
 
 function cancelSelectedTask(): void {
-  const id = boardStore.selectedTaskID
+  const id = activeTaskID()
   if (id) void cancelTask(id)
 }
 
@@ -699,12 +701,12 @@ function editGoal(goalId: string, title: string, detail: string): void {
 }
 
 function deleteGoal(goalId: string): void {
-  if (!goalId || !boardStore.selectedTaskID) return
+  if (!goalId || !activeTaskID()) return
   void (async () => {
     try {
       await panelMessage(`Delete goal ${goalId}.`, {
         goalID: goalId,
-        taskID: boardStore.selectedTaskID || undefined,
+        taskID: activeTaskID() || undefined,
       })
       await loadBoard({ sync: true })
     } catch (e) {
@@ -766,7 +768,7 @@ if (btnTerminateRun) {
       return
     }
     // Otherwise cancel the active task
-    const taskID = boardStore.selectedTaskID
+    const taskID = activeTaskID()
     if (taskID) void cancelTask(taskID)
   })
 }
@@ -856,7 +858,7 @@ disposers.push(
         return
       }
       if (!wasBusy || busyNow) return
-      const taskID = boardStore.selectedTaskID
+      const taskID = activeTaskID()
       if (!taskID) return
       if (lastSuggestionTaskID === taskID) return
       lastSuggestionTaskID = taskID

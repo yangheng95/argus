@@ -4,7 +4,9 @@ import { Card } from "./Card";
 import { ChatBubble } from "./ChatBubble";
 import { TaskProgressBar } from "./TaskProgressBar";
 import { cardTreeStore } from "../store/card-tree";
-import { boardStore } from "../store/board";
+import { boardStore,
+  activeTaskID,
+} from "../store/board";
 import { t } from "../utils/i18n";
 import { renderAsBubble } from "../utils/chat-bubble";
 import { setupAutoScroll, type AutoScrollController } from "../utils/dom-utils";
@@ -230,7 +232,7 @@ export function Conversation(props: { container: HTMLElement }) {
 
   const [tracking, setTracking] = createSignal(true);
   const [historyAnchorPinID, setHistoryAnchorPinID] = createSignal<string | null>(null);
-  const currentTaskID = () => String(boardStore.selectedTaskID || boardStore.board?.task?.id || "");
+  const currentTaskID = () => String(activeTaskID() || boardStore.board?.task?.id || "");
   const taskContextItem = () => {
     const taskID = currentTaskID();
     const tasks = [...boardStore.tasks, ...boardStore.pendingTasks];

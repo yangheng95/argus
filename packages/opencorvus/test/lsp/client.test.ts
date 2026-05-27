@@ -92,4 +92,35 @@ describe("LSPClient interop", () => {
 
     await client.shutdown()
   })
+
+  test("shutdown uses server dispose hook when provided", async () => {
+    const handle = spawnFakeServer() as any
+    const originalKill = handle.process.kill.bind(handle.process)
+    let disposeCalls = 0
+    let directKillCalls = 0
+
+    handle.dispose = async () => {
+      disposeCalls++
+      originalKill()
+    }
+    handle.process.kill = () => {
+      directKillCalls++
+      return true
+    }
+
+    const client = await Instance.provide({
+      directory: process.cwd(),
+      fn: () =>
+        LSPClient.create({
+          serverID: "fake",
+          server: handle as unknown as LSPServer.Handle,
+          root: process.cwd(),
+        }),
+    })
+
+    await client.shutdown()
+
+    expect(disposeCalls).toBe(1)
+    expect(directKillCalls).toBe(0)
+  })
 })

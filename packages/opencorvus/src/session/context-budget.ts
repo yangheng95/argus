@@ -5,7 +5,7 @@ import type { Message } from "./message"
 
 export namespace ContextBudget {
   export const COMPACTION_BUFFER = 20_000
-  export const COMPACTION_THRESHOLD_DEFAULT = 0.8
+  export const COMPACTION_THRESHOLD_DEFAULT = 0.9
   export const DEFAULT_TAIL_TURNS = 2
   export const MIN_PRESERVE_RECENT_TOKENS = 2_000
   export const MAX_PRESERVE_RECENT_TOKENS = 8_000

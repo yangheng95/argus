@@ -3,7 +3,7 @@
 // Uses direct imports.
 // imports as of Phase 4 cleanup.
 
-import { boardStore, loadBoard } from "../store/board";
+import { boardStore, loadBoard, activeTaskID } from "../store/board";
 import { appStore } from "../store/app";
 import { loadSettingsInfo } from "./init";
 import { apiJson } from "./api";
@@ -175,7 +175,7 @@ export function closeGoalDialog(): void {
 }
 
 export async function saveGoalDialog(): Promise<void> {
-  if (dialogStore.goal.saving || !boardStore.selectedTaskID) return;
+  if (dialogStore.goal.saving || !activeTaskID()) return;
   const goalID = dialogStore.goal.goalID.trim();
   const title = dialogStore.goal.title.trim();
   const acceptanceText = dialogStore.goal.acceptance.trim();
@@ -183,7 +183,7 @@ export async function saveGoalDialog(): Promise<void> {
 
   setDialogStore("goal", "saving", true);
   try {
-    const taskID = boardStore.selectedTaskID || undefined;
+    const taskID = activeTaskID() || undefined;
     if (goalID) {
       const criterion = acceptanceText || "The requested change is implemented and acceptance checks pass.";
       const acceptanceSpec = {
