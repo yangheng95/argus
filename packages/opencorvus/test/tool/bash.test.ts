@@ -325,9 +325,7 @@ describe("tool.bash permissions", () => {
     })
   })
 
-  // Hard-codes "C:\\Program Files\\Git\\bin\\bash.exe" — fails on dev boxes without that exact path.
-  // Path normalization for /c/-prefixed paths also still produces "C:\\c\\Users\\..." duplication.
-  test.skip("does not ask for external_directory permission for git bash workdir inside project on windows", async () => {
+  test("does not ask for external_directory permission for git bash workdir inside project on windows", async () => {
     if (process.platform !== "win32") return
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
@@ -391,8 +389,7 @@ describe("tool.bash permissions", () => {
     })
   })
 
-  // Same Windows /c/ path normalization issue as the workdir variant above.
-  test.skip("does not ask for external_directory permission for git bash file path inside project on windows", async () => {
+  test("does not ask for external_directory permission for git bash file path inside project on windows", async () => {
     if (process.platform !== "win32") return
     await using tmp = await tmpdir({
       git: true,

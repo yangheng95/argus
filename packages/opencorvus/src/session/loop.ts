@@ -1057,8 +1057,8 @@ export namespace SessionLoop {
     sessionID: string
     abort: AbortSignal
   }) {
-    const taskTool = await TaskTool.init()
     const config = await EffectiveConfig.effective({ sessionID: input.sessionID })
+    const taskTool = await TaskTool.init({ config })
     const taskModel = input.task.model
       ? await Provider.getModel(input.task.model.providerID, input.task.model.modelID, { config })
       : input.model
@@ -1314,6 +1314,7 @@ export namespace SessionLoop {
       bypassAgentCheck,
       extra: input.lastUser.extra,
       messages: input.msgs,
+      config,
     })
     if (input.lastUser.format?.type === "json_schema") {
       tools["StructuredOutput"] = prepareProviderTool({
@@ -1959,6 +1960,7 @@ export namespace SessionLoop {
     bypassAgentCheck: boolean
     extra?: Record<string, unknown>
     messages: Message.WithParts[]
+    config: Config.Info
   }) {
     using _ = log.time("resolveTools")
     const tools: Record<string, AITool> = {}
@@ -2006,6 +2008,7 @@ export namespace SessionLoop {
       for (const item of await ToolRegistry.tools(
         { modelID: input.model.api.id, providerID: input.model.providerID },
         input.agent,
+        input.config,
       )) {
         // Session-level deny rules take precedence (e.g. build fast-path denying "task")
         if (input.session.permission?.length) {
