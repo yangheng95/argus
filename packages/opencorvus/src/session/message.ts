@@ -931,9 +931,19 @@ export namespace Message {
             })
           }
           if (part.type === "patch") {
+            // Wrap with <patch>...</patch> XML tag (same shape as the
+            // compaction transcript at session/compaction.ts:145) so the
+            // breadcrumb reads as a structural protocol element. The
+            // earlier `[...]` prose-style marker was easy for the model
+            // to mimic — it would echo `[Patch evidence: ...]` back as
+            // its own assistant text, which then persisted and surfaced
+            // as raw text in the overlay UI (overlay only chips
+            // structured patch parts, not text parts containing the
+            // marker). Pair this with the system-prompt clause forbidding
+            // restatement of <patch> evidence.
             assistantMessage.parts.push({
               type: "text",
-              text: `[${Snapshot.formatPatchEvidence(part)}]`,
+              text: `<patch>${Snapshot.formatPatchEvidence(part)}</patch>`,
             })
           }
         }
