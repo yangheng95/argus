@@ -1787,7 +1787,7 @@ describe("overlay architecture guards", () => {
     expect(conversationSurface).toMatch(/@keyframes task-switch-progress-slide/)
     expect(conversationSurface).toMatch(/\.task-switch-progress::before/)
     expect(conversationSurface).toMatch(/\.chat-header-meta\s*\{/)
-    expect(conversationSurface).toMatch(/\.chat-count\s*\{/)
+    expect(conversationSurface).toMatch(/\.chat-usage\s*\{/)
   })
 
   test("conversation chat-scroll is owned by surfaces/conversation.css", () => {

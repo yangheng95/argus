@@ -1,7 +1,5 @@
 // ── Transcript & context utilities ──
-// imported from there; nothing is duplicated.
 // Exported surface:
-// formatConversationTranscript – plain-text conversation export
 // boardArtifact – find a named artifact in board.artifacts
 // specContextText – spec → plain text
 // planContextText – plan + goals → plain text
@@ -11,15 +9,9 @@
 // interactionReplyLabel – permission reply enum → label
 // interactionAnswerLines – interaction answers → string[]
 // interactionResponseText – full interaction response → plain text
-// copyChatConversation – copy current conversation to clipboard
+// hashText – FNV-1a 32-bit hash (used by message identity helpers)
 
-import { t, tc, localeTag } from "./i18n";
-import { joinBullet, stripAssistantBrief } from "./string";
-import { roleLabel } from "./message";
-import { displayToolDetail, toolStatusLabel } from "./tool";
-import { cardTreeStore, type CardNode } from "../store/card-tree";
-import { AppLog } from "./log";
-import { nativeMessage } from "../services/app-dialog";
+import { t, tc } from "./i18n";
 
 // ── Internal helpers ──
 
@@ -44,140 +36,12 @@ function evaluationVerdictLabel(status: string): string {
   return t("evaluation.verdict.pending");
 }
 
-// ── Transcript formatting helpers ──
-
-function transcriptRole(role: string): string {
-  return roleLabel(role);
-}
-
-function transcriptTime(value: number | undefined): string {
-  if (!value) return "";
-  return new Date(value).toLocaleString(localeTag(), {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-  });
-}
-
-function formatTranscriptText(part: any, role: string): string {
-  let text: string = part?.text || "";
-  if (!text.trim()) return "";
-  const briefRoles = ["user", "planner", "evaluator", "system"];
-  if (briefRoles.includes(role) && text.includes("<assistant-brief>")) {
-    text = stripAssistantBrief(text);
-  }
-  return text.trim();
-}
-
-function formatTranscriptTool(part: any): string {
-  const toolName: string = part?.tool || "unknown";
-  const st = part?.state || {};
-  const detail = displayToolDetail(toolName, st.input || {}, st);
-  const status: string = st.status || "pending";
-  return [t("transcript.tool", { status: toolStatusLabel(status), tool: toolName }), detail]
-    .filter(Boolean)
-    .join(" ");
-}
-
-function formatTranscriptPart(part: any, role: string): string {
-  if (!part || typeof part !== "object") return "";
-  if (part.type === "text") return formatTranscriptText(part, role);
-  if (part.type === "reasoning") {
-    return part.text?.trim()
-      ? `${t("transcript.reasoning")}\n${part.text.trim()}`
-      : "";
-  }
-  if (part.type === "tool") return formatTranscriptTool(part);
-  if (part.type === "file") {
-    return part.filename || part.url
-      ? t("transcript.file", { value: part.filename || part.url })
-      : "";
-  }
-  if (part.type === "subtask") {
-    const text: string = part.description || part.prompt || "";
-    return text ? t("transcript.subtask", { value: text }) : "";
-  }
-  if (part.type === "patch") {
-    const files: string[] = Array.isArray(part.files) ? part.files.filter(Boolean) : [];
-    return files.length
-      ? t("transcript.patch", { value: files.join(", ") })
-      : t("transcript.patch_empty");
-  }
-  if (part.type === "compaction") return t("transcript.compaction");
-  return "";
-}
-
-// ── Clipboard helpers (
-
-async function copyText(text: string): Promise<boolean> {
-  if (!text) return false;
-  if (navigator.clipboard?.writeText) {
-    try {
-      await navigator.clipboard.writeText(text);
-      return true;
-    } catch {
-      /* clipboard API not available, fall back to execCommand */
-    }
-  }
-  const textarea = document.createElement("textarea");
-  textarea.value = text;
-  textarea.setAttribute("readonly", "true");
-  textarea.style.position = "fixed";
-  textarea.style.opacity = "0";
-  textarea.style.pointerEvents = "none";
-  document.body.appendChild(textarea);
-  textarea.select();
-  textarea.setSelectionRange(0, text.length);
-  const ok = document.execCommand("copy");
-  textarea.remove();
-  return ok;
-}
-
-function errorText(key: string, error: unknown): string {
-  const detail = error instanceof Error ? error.message : String(error || "");
-  return `${t(key)}: ${detail}`;
-}
-
 // ── Public exports ──
 
 /** Find a named artifact in board.artifacts. */
 export function boardArtifact(board: any, label: string): any {
   const list: any[] = board?.artifacts || [];
   return list.find((item) => item.label === label);
-}
-
-/**
- * Format an array of conversation messages as a plain-text transcript
- * (
- */
-export function formatConversationTranscript(messages: any[]): string {
-  return (Array.isArray(messages) ? messages : [])
-    .map((item) => {
-      // No assistant-fallback (一个萝卜一个坑). Each message must carry an
-      // explicit role; mis-attributing role-less items to "assistant" hides
-      // bugs in the upstream emitter.
-      const role: string = item?.info?.role;
-      if (typeof role !== "string" || role.length === 0) {
-        throw new Error(`transcript: message ${item?.info?.id ?? "<unknown>"} missing info.role`);
-      }
-      const header = joinBullet([
-        transcriptRole(role),
-        transcriptTime(item?.info?.time?.created),
-      ]);
-      const body = (Array.isArray(item?.parts) ? item.parts : [])
-        .map((part: any) => formatTranscriptPart(part, role))
-        .filter(Boolean)
-        .join("\n\n")
-        .trim();
-      if (!body) return "";
-      return `${header}\n${body}`;
-    })
-    .filter(Boolean)
-    .join("\n\n---\n\n");
 }
 
 /** Extract spec content as plain text (mirrors app.js specContextText). */
@@ -515,67 +379,3 @@ export function interactionResponseText(interaction: any): string {
   return prefix + t("interaction.answer");
 }
 
-/**
- * Copy the current chat conversation transcript to the clipboard.
- * Shows a native error dialog on failure.
- */
-/** Flatten a `cardTreeStore` card plus its descendants into a flat array
- *  of transcript-compatible pseudo-messages. Each session / goal card
- *  emits one entry with `role` = the card's role/stage and `parts` =
- *  its rendered leaf parts; children are walked recursively via
- *  `childIDs`. Callers pass this to `formatConversationTranscript`. */
-function flattenCardToMessages(node: CardNode | undefined, out: any[]): void {
-  if (!node) return;
-  // No assistant-fallback (一个萝卜一个坑). A card without role AND without
-  // stage has no business in the transcript — surface the gap.
-  const role = node.role || node.stage;
-  if (typeof role !== "string" || role.length === 0) {
-    throw new Error(`transcript flatten: card ${node.id ?? "<unknown>"} has no role/stage attribution`);
-  }
-  const time = { created: node.time };
-  const parts: any[] = [];
-  if (node.kind === "step" && node.goalDescription) {
-    parts.push({ type: "text", text: node.goalDescription });
-  }
-  if (Array.isArray(node.parts)) {
-    for (const p of node.parts) parts.push(p);
-  }
-  out.push({ info: { role, time }, parts });
-  const childIDs = node.childIDs ?? [];
-  for (const cid of childIDs) {
-    flattenCardToMessages(cardTreeStore.cards[cid], out);
-  }
-  // Transient cards (tool promotion) use the inline `children` field.
-  for (const child of node.children ?? []) {
-    flattenCardToMessages(child, out);
-  }
-}
-
-export function conversationTranscriptMessageCount(): number {
-  const items: any[] = [];
-  for (const id of cardTreeStore.order) {
-    flattenCardToMessages(cardTreeStore.cards[id], items);
-  }
-  return items.filter((item) => Array.isArray(item.parts) && item.parts.length > 0).length;
-}
-
-export async function copyChatConversation(): Promise<void> {
-  try {
-    const items: any[] = [];
-    for (const id of cardTreeStore.order) {
-      flattenCardToMessages(cardTreeStore.cards[id], items);
-    }
-    const transcript = formatConversationTranscript(items);
-    if (!transcript) return;
-    const ok = await copyText(transcript);
-    if (!ok) throw new Error(t("chat.copy_failed"));
-  } catch (e) {
-    AppLog.error("ui", "Failed to copy chat conversation", {
-      error: String(e),
-    });
-    await nativeMessage(errorText("chat.copy_failed", e), {
-      title: t("chat.copy_title"),
-      kind: "error",
-    });
-  }
-}

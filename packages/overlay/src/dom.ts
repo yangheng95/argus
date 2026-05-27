@@ -97,8 +97,6 @@ export interface DomRefs {
   chatGoalsStrip: HTMLElement | null;
   chatScroll: HTMLElement | null;
   chatEmpty: HTMLElement | null;
-  chatCount: HTMLElement | null;
-  btnChatCopyAll: HTMLButtonElement | null;
 
  // Chat form
   chatForm: HTMLFormElement | null;
@@ -245,8 +243,6 @@ export function getDomRefs(): DomRefs {
     chatGoalsStrip: $<HTMLElement>("#chatGoalsStrip"),
     chatScroll: $<HTMLElement>("#chatScroll"),
     chatEmpty: $<HTMLElement>("#chatEmpty"),
-    chatCount: $<HTMLElement>("#chatCount"),
-    btnChatCopyAll: $<HTMLButtonElement>("#btnChatCopyAll"),
 
  // Chat form
     chatForm: $<HTMLFormElement>("#chatForm"),

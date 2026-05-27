@@ -190,15 +190,6 @@
         <footer class="sidebar-footer" aria-label="Author">
           <span class="chat-version">
             <span class="chat-version-copy" id="chatVersion">OpenCorvus v%OPENCORVUS_OVERLAY_VERSION%</span>
-            <span class="chat-version-sep" aria-hidden="true">·</span>
-            <a
-              class="chat-version-link"
-              href="https://github.com/yangheng95"
-              target="_blank"
-              rel="noopener"
-            >
-              <span class="chat-version-name">杨恒@代码生成组</span>
-            </a>
           </span>
         </footer>
 
@@ -222,19 +213,12 @@
           </div>
           <div class="chat-header-status" id="solidTaskStatusMount"></div>
           <div class="chat-header-meta oc-surface-header__actions">
-            <span class="chat-count" id="chatCount"></span>
-            <button
-              type="button"
-              class="oc-button"
-              id="btnChatCopyAll"
-              data-variant="ghost"
-              data-size="mini"
-              data-i18n="chat.copy_all"
-              data-i18n-title="chat.copy_all"
-              data-i18n-aria-label="chat.copy_all"
-              title="Copy All"
-              aria-label="Copy All"
-            >Copy All</button>
+            <span
+              class="chat-usage"
+              id="chatUsage"
+              data-i18n-title="chat.usage_tooltip"
+              data-i18n-aria-label="chat.usage_aria"
+            ></span>
           </div>
         </header>
         <div class="conversation-body" id="conversationBody">

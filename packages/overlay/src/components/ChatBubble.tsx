@@ -21,6 +21,7 @@ import { useNowTick } from "../services/clock"
 import { apiRequest } from "../services/api"
 import { cancelAgentSession, replyToAgentSession } from "../services/task"
 import { t } from "../utils/i18n"
+import { formatCostUSD, formatTokenCount } from "../utils/format-usage"
 import { useCardHeadActions } from "../hooks/use-card-head-actions"
 import { AgentSessionReplyBox } from "./AgentSessionReplyBox"
 import { AgentFileChanges } from "./AgentFileChanges"
@@ -38,21 +39,6 @@ async function writeClipboard(text: string): Promise<boolean> {
     return true
   }
   return false
-}
-
-function formatTokenCount(n: number): string {
-  if (!Number.isFinite(n) || n < 0) return "—"
-  if (n < 1000) return String(n)
-  if (n < 10_000) return (n / 1000).toFixed(1) + "k"
-  return Math.round(n / 1000) + "k"
-}
-
-function formatCostUSD(n: number): string {
-  if (!Number.isFinite(n) || n < 0) return ""
-  if (n === 0) return "$0"
-  if (n < 0.01) return "<$0.01"
-  if (n < 1) return "$" + n.toFixed(3)
-  return "$" + n.toFixed(2)
 }
 
 function UnsupportedChatBubbleChild(props: { child: CardNode; parentID: string }): null {
