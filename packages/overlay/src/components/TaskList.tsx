@@ -355,6 +355,7 @@ function TaskRow(props: {
   return (
     <div
       class="task-row-mini global-task-row"
+      data-task-row-id={pending() ? undefined : id()}
       data-active={isActive() ? "true" : undefined}
       data-status={status()}
       data-notification-unread={hasUnreadNotification() ? "true" : undefined}
@@ -370,6 +371,10 @@ function TaskRow(props: {
       }
       draggable={canDrag()}
       title={rowTip()}
+      onClick={(event) => {
+        if (event.defaultPrevented || editing()) return;
+        if (!pending() && id()) props.onSelectTask(id());
+      }}
       onDragStart={(event) => {
         if (!canDrag()) return;
         event.dataTransfer?.setData("text/plain", id());
@@ -448,7 +453,8 @@ function TaskRow(props: {
           aria-disabled={pending() ? "true" : undefined}
           aria-current={isActive() ? "page" : undefined}
           title={rowTip()}
-          onClick={() => {
+          onClick={(event) => {
+            event.stopPropagation();
             if (!pending() && id()) props.onSelectTask(id());
           }}
           onDblClick={(e) => {
@@ -465,9 +471,18 @@ function TaskRow(props: {
       </Show>
       <div class="task-row-right">
         <Show when={directChildCount() > 0}>
+          {/* draggable=false + mousedown stop-propagation: the outer
+              .task-row-mini is draggable for queue reorder; without
+              these guards the browser interprets mousedown on this
+              button as the drag-start and the click event is swallowed
+              (Chrome on Windows). That was reported as "after clicking
+              a task with children, other tasks become unclickable" —
+              the drag was firing but never cleared because the user
+              never released over a valid drop target. */}
           <button
             type="button"
             class="task-row-children-toggle"
+            draggable={false}
             data-expanded={props.expanded ? "true" : undefined}
             data-has-active={hasActiveChild() ? "true" : undefined}
             data-has-failed={hasFailedChild() ? "true" : undefined}
@@ -478,6 +493,13 @@ function TaskRow(props: {
                 : t("task.tree.expand_children", { count: String(directChildCount()) })
             }
             title={t("task.tree.children_count", { count: String(directChildCount()) })}
+            onMouseDown={(event) => {
+              event.stopPropagation();
+            }}
+            onDragStart={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+            }}
             onClick={(event) => {
               event.stopPropagation();
               props.onToggleExpand?.();
