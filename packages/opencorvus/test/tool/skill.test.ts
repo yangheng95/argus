@@ -130,44 +130,4 @@ Use this skill.
     }
   })
 
-  // audit-2026-04-29 W2-V33 — `opencorvus-channel-config-wizard`
-  // is no longer a bundled builtin skill (no directory under
-  // builtin-skills/, no references in production source). The test
-  // was authored against a removed feature; Skill.all() returns
-  // 4 skills none of which match. Skip until the bundled skill
-  // is re-added or the spec confirms the new name.
-  test.skip("execute loads builtin channel skill with bundled files", async () => {
-    await using tmp = await tmpdir({ git: true })
-
-    const home = process.env.OPENCORVUS_TEST_HOME
-    process.env.OPENCORVUS_TEST_HOME = tmp.path
-
-    try {
-      await Instance.provide({
-        directory: tmp.path,
-        fn: async () => {
-          const tool = await SkillTool.init()
-          const requests: Array<Omit<PermissionNext.Request, "id" | "sessionID" | "tool">> = []
-          const ctx: Tool.Context = {
-            ...baseCtx,
-            ask: async (req) => {
-              requests.push(req)
-            },
-          }
-
-          const result = await tool.execute({ name: "opencorvus-channel-config-wizard" }, ctx)
-          const ref = path.join(result.metadata.dir, "references", "channel-matrix.md")
-
-          expect(requests.length).toBe(1)
-          expect(requests[0].permission).toBe("skill")
-          expect(requests[0].patterns).toContain("opencorvus-channel-config-wizard")
-          expect(result.metadata.dir).toContain(path.join("builtin-skills", "opencorvus-channel-config-wizard"))
-          expect(result.output).toContain(`<file>${path.resolve(ref)}</file>`)
-          expect(await Bun.file(ref).text()).toContain("# OpenCorvus Channel Runtime Matrix")
-        },
-      })
-    } finally {
-      process.env.OPENCORVUS_TEST_HOME = home
-    }
-  })
 })

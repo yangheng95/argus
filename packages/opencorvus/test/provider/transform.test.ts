@@ -2021,53 +2021,6 @@ describe("ProviderTransform.message - cache control on gateway", () => {
     expect(result[0].providerOptions).toBeUndefined()
   })
 
-  // System anthropic messages now carry ttl: "1h" by intentional cache optimization
-  // in transform.ts. Test expected the prior (no-ttl) shape — superseded.
-  test.skip("non-gateway anthropic keeps existing cache control behavior", async () => {
-    const model = createModel({
-      providerID: "anthropic",
-      api: {
-        id: "claude-sonnet-4",
-        url: "https://api.anthropic.com",
-        npm: "@ai-sdk/anthropic",
-      },
-    })
-    const msgs = [
-      {
-        role: "system",
-        content: "You are a helpful assistant",
-      },
-      {
-        role: "user",
-        content: "Hello",
-      },
-    ] as any[]
-
-    const result = await ProviderTransform.message(msgs, model, {}) as any[]
-
-    expect(result[0].providerOptions).toEqual({
-      anthropic: {
-        cacheControl: {
-          type: "ephemeral",
-        },
-      },
-      openrouter: {
-        cacheControl: {
-          type: "ephemeral",
-        },
-      },
-      bedrock: {
-        cachePoint: {
-          type: "default",
-        },
-      },
-      openaiCompatible: {
-        cache_control: {
-          type: "ephemeral",
-        },
-      },
-    })
-  })
 })
 
 describe("ProviderTransform.variants", () => {

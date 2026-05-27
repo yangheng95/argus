@@ -90,36 +90,6 @@ test("coding agent owns direct assistant prompt", async () => {
   })
 })
 
-// audit-2026-04-29 W2-V27 — `Agent.get("plan")` returns undefined in
-// the current build: there is no "plan" entry in agent.ts's BUILT_IN
-// dict (only build / general / explore / compaction / title /
-// summary / orchestrator / requirements / architect /
-// integrity — see agent.ts). The
-// plan-mode feature was either renamed or removed; the
-// `plan_enter`/`plan_exit` permission keys are no longer in the
-// Permission schema either (see config.ts:625-647 — they fall
-// through to .catchall). The test was authored against a removed
-// feature and silently failed across the suite. Skip until the
-// "plan mode primary agent" feature is reinstated or the spec
-// confirms removal.
-test.skip("plan agent is read-only except for plan files", async () => {
-  await using tmp = await tmpdir()
-  await Instance.provide({
-    directory: tmp.path,
-    fn: async () => {
-      const plan = await Agent.get("plan")
-      expect(plan).toBeDefined()
-      expect(plan?.mode).toBe("primary")
-      expect(plan?.native).toBe(true)
-      expect(evalPerm(plan, "bash")).toBe("deny")
-      expect(evalPerm(plan, "question")).toBe("allow")
-      expect(evalPerm(plan, "plan_exit")).toBe("allow")
-      expect(PermissionNext.evaluate("edit", ".opencorvus/plans/demo.md", plan!.permission).action).toBe("allow")
-      expect(PermissionNext.evaluate("edit", "src/demo.ts", plan!.permission).action).toBe("deny")
-    },
-  })
-})
-
 test("explore agent limits exposed tools without permission denials", async () => {
   await using tmp = await tmpdir()
   await Instance.provide({

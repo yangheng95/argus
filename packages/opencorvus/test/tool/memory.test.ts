@@ -144,46 +144,4 @@ describe("tool.memory", () => {
     })
   })
 
-  // audit-2026-04-29 W2-V33 — same plan-mode removal as W2-V27
-  // (plan agent removed from agent.ts, plan_enter/plan_exit
-  // removed from Permission schema, plan_enter/plan_exit removed
-  // from ToolRegistry). The MemoryTool no longer special-cases
-  // plan mode; the test was authored against a removed feature.
-  // Skip with the spec preserved for review.
-  test.skip("blocks mutating memory actions in plan mode", async () => {
-    await using tmp = await tmpdir({ git: true })
-
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const memory = await MemoryTool.init()
-        const planCtx = {
-          ...ctx("ses_plan_memory"),
-          agent: "plan",
-          extra: { planMode: true },
-        }
-
-        await expect(
-          memory.execute(
-            {
-              action: "write",
-              title: "Should fail",
-              content: "not allowed",
-            },
-            planCtx,
-          ),
-        ).rejects.toThrow("memory.write is disabled in plan mode")
-
-        await expect(
-          memory.execute(
-            {
-              action: "delete",
-              fileId: "mem_missing",
-            },
-            planCtx,
-          ),
-        ).rejects.toThrow("memory.delete is disabled in plan mode")
-      },
-    })
-  })
 })

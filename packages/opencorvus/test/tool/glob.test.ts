@@ -34,8 +34,7 @@ describe("tool.glob", () => {
     })
   })
 
-  // ripgrep wrapper does not yet translate /mnt/c/... paths back to C:\... before fs.stat.
-  test.skip("accepts /mnt-style paths on Windows", async () => {
+  test("accepts /mnt-style paths on Windows", async () => {
     if (process.platform !== "win32") return
     await using tmp = await tmpdir({
       init: async (dir) => {

@@ -30,6 +30,14 @@ export const GlobTool = Tool.define("glob", {
     })
 
     let search = params.path ?? Instance.directory
+    // On win32, translate Git Bash / Cygwin / WSL mount paths
+    // (`/c/...`, `/mnt/c/...`) to native Windows form BEFORE path.isAbsolute
+    // / path.resolve / fs.stat see it. path.isAbsolute("/mnt/c/...") returns
+    // false on Windows, which would silently re-root the search at
+    // Instance.directory and the assertExternalDirectory check would never
+    // see the LLM-supplied path. Reuses the same Filesystem.windowsPath
+    // translator the bash tool uses (rule 8 single source).
+    if (process.platform === "win32") search = Filesystem.windowsPath(search)
     search = path.isAbsolute(search) ? search : path.resolve(Instance.directory, search)
     await assertExternalDirectory(ctx, search, { kind: "directory" })
 
