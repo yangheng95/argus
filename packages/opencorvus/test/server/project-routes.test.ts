@@ -14,8 +14,7 @@ describe("project routes", () => {
     await resetDatabase()
   })
 
-  // Cross-file Question.ask cross-pollution: a prior unresolved question rejects here.
-  test.skip("POST /project/current/init-git initializes a standalone directory", async () => {
+  test("POST /project/current/init-git initializes a standalone directory", async () => {
     await using tmp = await tmpdir()
     const app = Server.App()
 
@@ -39,8 +38,7 @@ describe("project routes", () => {
     expect(current.status).toBe(200)
   })
 
-  // Same Question.ask cross-file pollution as the standalone-init test above.
-  test.skip("POST /project/current/init-git is idempotent for git projects", async () => {
+  test("POST /project/current/init-git is idempotent for git projects", async () => {
     await using tmp = await tmpdir({ git: true })
     const app = Server.App()
 
