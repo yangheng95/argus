@@ -85,6 +85,7 @@ export type IconName =
   | "check"
   | "inspect"
   | "cancel"
+  | "edit"
   | "rewind"
   // Misc UI (was scattered inline svg)
   | "caret-up"
@@ -787,6 +788,21 @@ const ICON_PATHS: Record<IconName, IconRecord> = {
   cancel: {
     body: () => <path d="M5 5l6 6M11 5l-6 6" />,
     strokeWidth: 1.7,
+  },
+  edit: {
+    // Pencil glyph: angled body with a tip at the bottom-left and a
+    // small eraser cap at the top-right. Strokes only, so it tracks
+    // currentColor like the other action chrome.
+    // Sized to occupy ~7.5/16 of the viewBox so it reads at the same
+    // visual weight as `stop`/`close` when shown in the task row's
+    // action cluster — otherwise the larger pencil dominates its
+    // smaller-glyph neighbours at the same icon size.
+    body: () => (
+      <>
+        <path d="M9.4 4.2 11.8 6.6 6.7 11.7H4.3V9.3Z" />
+        <path d="M8.6 5 11 7.4" />
+      </>
+    ),
   },
   rewind: {
     body: () => (

@@ -107,7 +107,7 @@ export function WorkspaceLayoutControls() {
       onOpenChange={setOpen}
       primaryChildren={(
         <span class="workspace-terminal-select-icon" data-terminal-icon={selectedProfile()?.icon ?? "terminal"} aria-hidden="true">
-          <Icon name={triggerIcon()} size={16} />
+          <Icon name={triggerIcon()} size={18} />
         </span>
       )}
       menuButtonChildren={(
@@ -130,7 +130,7 @@ export function WorkspaceLayoutControls() {
               data-terminal-icon={profile.icon}
               aria-hidden="true"
             >
-              <Icon name={terminalIconName(profile.icon)} size={16} />
+              <Icon name={terminalIconName(profile.icon)} size={18} />
             </span>
             <span class="workspace-terminal-option-label">
               {profile.label}{profile.id === defaultTerminalProfileID() ? ` ${t("terminal.default_profile_suffix")}` : ""}
