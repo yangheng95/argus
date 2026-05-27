@@ -2,7 +2,9 @@ import { For, Match, Show, Switch, createMemo, createSignal } from "solid-js"
 
 import type { CardNode } from "../store/card-tree"
 import { cardTreeStore, pruneCardsAfterCursor } from "../store/card-tree"
-import { boardStore, rootTaskSessionID } from "../store/board"
+import { boardStore, rootTaskSessionID,
+  activeTaskID,
+} from "../store/board"
 import { cardExpanded, setCardExpanded } from "../store/conversation-ui"
 import {
   collapsedActivityPreviewText,
@@ -179,7 +181,7 @@ export function ChatBubble(props: { node: CardNode; depth: number }) {
   }
 
   const onRewind = async (cursorTime: number, anchorID: string, opts: { resetWorktree: boolean }) => {
-    const taskID = boardStore.selectedTaskID
+    const taskID = activeTaskID()
     if (!taskID) return
     pruneCardsAfterCursor(cursorTime)
     try {
@@ -202,13 +204,13 @@ export function ChatBubble(props: { node: CardNode; depth: number }) {
   }
 
   const onAgentReply = async (sessionID: string, message: string) => {
-    const taskID = boardStore.selectedTaskID
+    const taskID = activeTaskID()
     if (!taskID) return
     await replyToAgentSession(taskID, sessionID, message)
   }
 
   const onAgentCancel = async (sessionID: string) => {
-    const taskID = boardStore.selectedTaskID
+    const taskID = activeTaskID()
     if (!taskID) return
     await cancelAgentSession(taskID, sessionID)
   }

@@ -18,6 +18,7 @@ import { LSP } from "../../lsp"
 import { ReadTool } from "../../tool/read"
 import { FileTime } from "../../file/time"
 import { ConfigMarkdown } from "../../config/markdown"
+import { EffectiveConfig } from "../../config/effective"
 import { NamedError } from "@opencorvus-ai/util/error"
 import { PermissionNext } from "@/permission/next"
 import { Tool } from "@/tool/tool"
@@ -95,9 +96,10 @@ export async function createUserMessage(input: PromptInput) {
 
   // Single model resolver (spec §13.1): explicit > session overlay > base.
   const model = await resolveAgentModelRef(agentName, { explicitModel: input.model, sessionID: input.sessionID })
+  const config = await EffectiveConfig.effective({ sessionID: input.sessionID })
   const full =
     !input.variant && agent.variant
-      ? await Provider.getModel(model.providerID, model.modelID).catch((error) => {
+      ? await Provider.getModel(model.providerID, model.modelID, { config }).catch((error) => {
           log.warn("optional agent variant lookup failed", {
             sessionID: input.sessionID,
             agent: agent.name,

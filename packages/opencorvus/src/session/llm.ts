@@ -14,7 +14,7 @@ import { streamText } from "@/llm/api"
 import type { TextHooks } from "@/llm/api"
 import { mergeDeep, pipe } from "remeda"
 import { ProviderTransform } from "@/provider/transform"
-import { Config } from "@/config/config"
+import { EffectiveConfig } from "@/config/effective"
 import { Instance } from "@/project/instance"
 import { Agent } from "@/agent/agent"
 import { Message } from "./message"
@@ -72,14 +72,15 @@ export namespace LLM {
     model: Provider.Model
     system: string[]
     user: Message.User
+    sessionID?: string
   }) {
-    const agent = Agent.resolveSessionAgent(input.agent, await resolveSessionOverlay())
+    const agent = Agent.resolveSessionAgent(input.agent, await resolveSessionOverlay(input.sessionID ? { sessionID: input.sessionID } : undefined))
     const providerPrompt =
       input.user.systemMode === "complete"
         ? []
         : agent.prompt
           ? [agent.prompt]
-          : await SystemPrompt.provider(input.model)
+          : await SystemPrompt.provider(input.model, { sessionID: input.sessionID })
 
     return [
       [
@@ -97,7 +98,9 @@ export namespace LLM {
   }
 
   export async function stream(input: StreamInput): Promise<StreamResult> {
-    const agent = Agent.resolveSessionAgent(input.agent, await resolveSessionOverlay())
+    const config = await EffectiveConfig.effective({ sessionID: input.sessionID })
+    const overlay = await resolveSessionOverlay({ sessionID: input.sessionID })
+    const agent = Agent.resolveSessionAgent(input.agent, overlay)
     const l = log
       .clone()
       .tag("providerID", input.model.providerID)
@@ -111,14 +114,14 @@ export namespace LLM {
       providerID: input.model.providerID,
     })
     const [language, cfg, provider, auth] = await Promise.all([
-      Provider.getLanguage(input.model),
-      Config.get(),
-      Provider.getProvider(input.model.providerID),
+      Provider.getLanguage(input.model, { config }),
+      Promise.resolve(config),
+      Provider.getProvider(input.model.providerID, { config }),
       Auth.get(input.model.providerID),
     ])
     const isOpenaiOauth = provider.id === "openai" && auth?.type === "oauth"
 
-    const system = await composeSystem({ ...input, agent })
+    const system = await composeSystem({ ...input, agent, sessionID: input.sessionID })
     const responseLanguage = SystemPrompt.responseLanguage(cfg.locale)
     if (responseLanguage) {
       system[0] = [system[0], responseLanguage].filter(Boolean).join("\n\n")

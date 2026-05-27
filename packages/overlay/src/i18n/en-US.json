@@ -122,7 +122,7 @@
   "notify.dismiss": "Dismiss notification",
   "notify.show_details": "Show details",
   "notify.hide_details": "Hide details",
-  "notify.copy_details": "Copy",
+  "notify.copy_details": "Copy details",
   "notify.copied": "Copied",
   "notify.permission_unsupported_title": "Desktop notifications unavailable",
   "notify.permission_unsupported_body": "This environment does not expose the Notification API. OpenCorvus will keep showing in-app notifications.",
@@ -810,8 +810,6 @@
   "gateway.open_title": "Switch to the Gateway control room",
   "gateway.title": "Gateway",
   "gateway.subtitle": "Operator control room — manage tasks, decompose requirements, and supervise channel ingress.",
-  "gateway.back": "Back to Panel",
-  "gateway.back_title": "Return to the default conversation panel",
   "gateway.refresh": "Refresh",
   "gateway.refresh_title": "Refetch tasks, stats, and channel info",
   "gateway.refreshing": "Refreshing…",
@@ -934,6 +932,7 @@
   "gateway.master.error": "Master wake failed: {{error}}",
   "gateway.master.discard": "Close",
   "gateway.master.discard_title": "Close the launcher",
+  "gateway.master.conversation_title": "Mission conversation",
   "gateway.master.result_created": "Created mission: {{missionID}}",
   "gateway.master.result_resumed": "Resumed mission: {{missionID}}"
 }

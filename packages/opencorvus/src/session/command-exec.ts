@@ -9,6 +9,7 @@ import { Plugin } from "../plugin"
 import { Command } from "../command"
 import { $ } from "bun"
 import { ConfigMarkdown } from "../config/markdown"
+import { EffectiveConfig } from "../config/effective"
 import { NamedError } from "@opencorvus-ai/util/error"
 import { Session } from "."
 import { SessionPromptState } from "./prompt/state"
@@ -106,7 +107,9 @@ export namespace SessionCommand {
     })
 
     try {
-      await Provider.getModel(taskModel.providerID, taskModel.modelID)
+      await Provider.getModel(taskModel.providerID, taskModel.modelID, {
+        config: await EffectiveConfig.effective({ sessionID: input.sessionID }),
+      })
     } catch (e) {
       if (Provider.ModelNotFoundError.isInstance(e)) {
         const { providerID, modelID, suggestions } = e.data

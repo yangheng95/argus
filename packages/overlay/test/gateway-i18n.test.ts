@@ -9,7 +9,9 @@ const REQUIRED_KEYS = [
   "gateway.open",
   "gateway.title",
   "gateway.subtitle",
-  "gateway.back",
+  // gateway.back was the in-page "Back to Panel" affordance. The Gateway
+  // toggle now lives in the titlebar and toggles the page mode in place,
+  // so there is no separate back button to translate.
   "gateway.refresh",
   "gateway.new_requirement",
   "gateway.workspace_label",

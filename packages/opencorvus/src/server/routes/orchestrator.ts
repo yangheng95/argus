@@ -62,6 +62,7 @@ export const TaskListEvent = z.object({
   taskID: z.string().nullable(),
   sequence: z.number(),
   notify: BusEvent.NotifyDescriptorSchema.optional(),
+  notificationDetails: z.string().optional(),
 })
 
 const ConversationEventPageQuery = z.object({
@@ -71,7 +72,7 @@ const ConversationEventPageQuery = z.object({
   since: z.coerce.number().positive().optional(),
 })
 
-const CONVERSATION_TAIL_MESSAGE_LIMIT = 240
+const CONVERSATION_TAIL_MESSAGE_LIMIT = 80
 const CONVERSATION_HISTORY_PAGE_LIMIT = 160
 
 const ConversationHydrationQuery = z.object({
@@ -293,7 +294,8 @@ export const EngineRoutes = lazy(() =>
         description:
           "Pure change-notification SSE for the task list sidebar. Emits " +
           "`{type, taskID, sequence}` whenever any task aggregate event is " +
-          "persisted (created/updated/completed/failed/cancelled/...). No " +
+          "persisted (created/updated/completed/failed/cancelled/...). Notify-worthy " +
+          "events also carry `notificationDetails` for copyable diagnostics. No " +
           "replay — clients call /task separately to fetch the refreshed list.",
         operationId: "task.list.events",
         responses: {
@@ -1599,13 +1601,7 @@ function isBeforeConversationCursor(item: any, cursor: { before: number; beforeI
 }
 
 function expandWindowStartToSessionBoundary(items: any[], start: number): number {
-  if (start <= 0 || start >= items.length) return Math.max(0, start)
-  const sessionID = conversationItemSessionID(items[start])
-  if (!sessionID) return start
-  for (let index = 0; index < start; index += 1) {
-    if (conversationItemSessionID(items[index]) === sessionID) return index
-  }
-  return start
+  return Math.max(0, Math.min(start, items.length))
 }
 
 function conversationHistoryState(
@@ -1757,7 +1753,18 @@ export function taskListProtocolEvent(event: ReturnType<typeof ProtocolStore.lis
     taskID: event.taskID ?? null,
     sequence: event.sequence,
     ...(notify ? { notify } : {}),
+    ...(notify ? { notificationDetails: taskListNotificationDetails(event) } : {}),
   }
+}
+
+function taskListNotificationDetails(event: ReturnType<typeof ProtocolStore.listTaskEventsAfter>[number]): string {
+  return JSON.stringify({
+    type: event.type.replace("engine.", ""),
+    taskID: event.taskID ?? null,
+    sequence: event.sequence,
+    summary: event.summary ?? (event.payload as Record<string, unknown> | undefined)?.summary ?? "",
+    payload: event.payload ?? {},
+  }, null, 2)
 }
 
 export function protocolTaskEvent(event: ReturnType<typeof ProtocolStore.listTaskEventsAfter>[number]) {

@@ -45,12 +45,12 @@ describe("formatCostUSD", () => {
 
 describe("aggregateUsageAcrossSessions", () => {
   test("returns zero totals for an empty tree", () => {
-    expect(aggregateUsageAcrossSessions([])).toEqual({ tokens: 0, costUSD: 0 })
+    expect(aggregateUsageAcrossSessions([])).toEqual({ tokens: 0, costUSD: 0, estimated: false })
   })
 
   test("skips cards without a usage payload", () => {
     const cards: UsageCardLike[] = [{}, {}, {}]
-    expect(aggregateUsageAcrossSessions(cards)).toEqual({ tokens: 0, costUSD: 0 })
+    expect(aggregateUsageAcrossSessions(cards)).toEqual({ tokens: 0, costUSD: 0, estimated: false })
   })
 
   test("sums per-message tokens and cost across all cards in the tree", () => {
@@ -62,7 +62,7 @@ describe("aggregateUsageAcrossSessions", () => {
       { usage: { totalTokens: 250, costUSD: 0.12 } },
       { usage: { totalTokens: 180, costUSD: 0.09 } },
     ]
-    expect(aggregateUsageAcrossSessions(cards)).toEqual({ tokens: 530, costUSD: 0.26 })
+    expect(aggregateUsageAcrossSessions(cards)).toEqual({ tokens: 530, costUSD: 0.26, estimated: false })
   })
 
   test("aggregates across many sessions (cards from orchestrator + build + planner)", () => {
@@ -71,14 +71,14 @@ describe("aggregateUsageAcrossSessions", () => {
       { usage: { totalTokens: 5_000, costUSD: 1.50 } },
       { usage: { totalTokens: 800, costUSD: 0.25 } },
     ]
-    expect(aggregateUsageAcrossSessions(cards)).toEqual({ tokens: 6_000, costUSD: 1.85 })
+    expect(aggregateUsageAcrossSessions(cards)).toEqual({ tokens: 6_000, costUSD: 1.85, estimated: false })
   })
 
   test("falls back to inputTokens + outputTokens when totalTokens is absent", () => {
     const cards: UsageCardLike[] = [
       { usage: { inputTokens: 120, outputTokens: 80 } },
     ]
-    expect(aggregateUsageAcrossSessions(cards)).toEqual({ tokens: 200, costUSD: 0 })
+    expect(aggregateUsageAcrossSessions(cards)).toEqual({ tokens: 200, costUSD: 0, estimated: false })
   })
 
   test("treats nullish and undefined card entries as no-ops", () => {
@@ -87,13 +87,25 @@ describe("aggregateUsageAcrossSessions", () => {
       null,
       { usage: { totalTokens: 50, costUSD: 0.02 } },
     ] as Array<UsageCardLike | undefined | null>
-    expect(aggregateUsageAcrossSessions(cards)).toEqual({ tokens: 50, costUSD: 0.02 })
+    expect(aggregateUsageAcrossSessions(cards)).toEqual({ tokens: 50, costUSD: 0.02, estimated: false })
+  })
+
+  test("uses context token estimates for cards without finalized usage", () => {
+    const cards: UsageCardLike[] = [
+      { contextTokens: 1_200, contextTokensEstimated: true },
+      { usage: { totalTokens: 300, costUSD: 0.01 }, contextTokens: 900, contextTokensEstimated: true },
+    ]
+    expect(aggregateUsageAcrossSessions(cards)).toEqual({ tokens: 1_500, costUSD: 0.01, estimated: true })
   })
 })
 
 describe("formatUsageStrip", () => {
   test("returns empty string when nothing was spent — hides the chip via :empty", () => {
     expect(formatUsageStrip({ tokens: 0, costUSD: 0 })).toBe("")
+  })
+
+  test("marks estimated token-only totals", () => {
+    expect(formatUsageStrip({ tokens: 1_250, costUSD: 0, estimated: true })).toBe("~1.3k tok")
   })
 
   test("formats tokens and cost separated by middle dot", () => {

@@ -110,6 +110,7 @@ beforeEach(() => {
   setFocus(false);
   clearNotifications();
   setBoardStore("selectedTaskID", "");
+  setBoardStore("selectedSource", null);
   setBoardStore("tasks", [taskItem({ id: "tsk_notify" })]);
   replaceBadgeAcksForTest([]);
 });
@@ -118,6 +119,7 @@ afterEach(() => {
   __setHostTransportForTest(undefined);
   clearNotifications();
   setBoardStore("selectedTaskID", "");
+  setBoardStore("selectedSource", null);
   setBoardStore("tasks", []);
   setPageMode("panel");
   replaceBadgeAcksForTest([]);
@@ -128,6 +130,7 @@ describe("routeNotification tier matrix", () => {
     const calls = installTransport();
     setFocus(true);
     setBoardStore("selectedTaskID", "tsk_notify");
+    setBoardStore("selectedSource", { kind: "task", id: "tsk_notify" });
 
     routeNotification({ type: "task.failed", taskID: "tsk_notify", notify: { tier: 1, badge: true } });
     await flushNotifications();
@@ -175,6 +178,18 @@ describe("routeNotification tier matrix", () => {
     await flushNotifications();
     expect(calls.badge).toBe(0);
     expect(calls.attention).toBe(0);
+  });
+
+  test("routeNotification preserves copyable diagnostic details", async () => {
+    routeNotification({
+      type: "session.error",
+      taskID: "tsk_notify",
+      notify: { tier: 1 },
+      notificationDetails: '{"error":"provider quota exceeded"}',
+    });
+    await flushNotifications();
+    expect(notificationStore.items).toHaveLength(1);
+    expect(notificationStore.items[0]?.details).toBe('{"error":"provider quota exceeded"}');
   });
 });
 
@@ -293,6 +308,7 @@ describe("computeBadge projection", () => {
     const visible = taskItem({ id: "tsk_visible", pending: 1, updated: 100 });
     setFocus(true);
     setBoardStore("selectedTaskID", "tsk_visible");
+    setBoardStore("selectedSource", { kind: "task", id: "tsk_visible" });
     setBoardStore("tasks", [visible]);
 
     const projection = recomputeBadgeFromTasks([visible]);

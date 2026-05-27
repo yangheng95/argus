@@ -200,21 +200,21 @@ export namespace LSP {
         serverID: server.id,
         server: handle,
         root,
-      }).catch((err) => {
+      }).catch(async (err) => {
         s.broken.add(key)
-        handle.process.kill()
+        await (handle.dispose?.() ?? Promise.resolve(handle.process.kill()))
         log.error(`Failed to initialize LSP client ${server.id}`, { error: err })
         return undefined
       })
 
       if (!client) {
-        handle.process.kill()
+        await (handle.dispose?.() ?? Promise.resolve(handle.process.kill()))
         return undefined
       }
 
       const existing = s.clients.find((x) => x.root === root && x.serverID === server.id)
       if (existing) {
-        handle.process.kill()
+        await (handle.dispose?.() ?? Promise.resolve(handle.process.kill()))
         return existing
       }
 

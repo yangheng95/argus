@@ -9,7 +9,9 @@ import {
   visibleChildIDsForCard,
 } from "../utils/card-tree";
 import { cardExpanded, setCardExpanded } from "../store/conversation-ui";
-import { boardStore, rootTaskSessionID } from "../store/board";
+import { boardStore, rootTaskSessionID,
+  activeTaskID,
+} from "../store/board";
 import { cancelAgentSession, replyToAgentSession } from "../services/task";
 import { apiRequest } from "../services/api";
 import { normalizeAgentRole } from "../utils/message";
@@ -151,7 +153,7 @@ export function Card(props: { node: CardNode; depth: number }) {
    * sync. No full-refresh — we walk the store incrementally.
    */
   const onRewind = async (cursorTime: number, anchorID: string, opts: { resetWorktree: boolean }) => {
-    const taskID = boardStore.selectedTaskID;
+    const taskID = activeTaskID();
     if (!taskID) return;
     // Optimistic local prune — user feels instant feedback. If the HTTP
     // call fails the cards are gone until selected-task recovery reloads, which is
@@ -186,13 +188,13 @@ export function Card(props: { node: CardNode; depth: number }) {
   };
 
   const onAgentReply = async (sessionID: string, message: string) => {
-    const taskID = boardStore.selectedTaskID;
+    const taskID = activeTaskID();
     if (!taskID) return;
     await replyToAgentSession(taskID, sessionID, message);
   };
 
   const onAgentCancel = async (sessionID: string) => {
-    const taskID = boardStore.selectedTaskID;
+    const taskID = activeTaskID();
     if (!taskID) return;
     await cancelAgentSession(taskID, sessionID);
   };

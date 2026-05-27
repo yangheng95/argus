@@ -16,6 +16,7 @@ import { materializeMcpToolResult } from "@/mcp/materialize"
 import { Bus } from "../bus"
 import { ProviderTransform } from "../provider/transform"
 import { SystemPrompt } from "./system"
+import { EffectiveConfig } from "@/config/effective"
 import { InstructionPrompt } from "./instruction"
 import { Plugin } from "../plugin"
 import MAX_STEPS from "../session/prompt/max-steps.txt"
@@ -1057,8 +1058,9 @@ export namespace SessionLoop {
     abort: AbortSignal
   }) {
     const taskTool = await TaskTool.init()
+    const config = await EffectiveConfig.effective({ sessionID: input.sessionID })
     const taskModel = input.task.model
-      ? await Provider.getModel(input.task.model.providerID, input.task.model.modelID)
+      ? await Provider.getModel(input.task.model.providerID, input.task.model.modelID, { config })
       : input.model
     const assistantMessage = (await Session.updateMessage({
       id: Identifier.ascending("message"),
@@ -1120,7 +1122,7 @@ export namespace SessionLoop {
       { args },
     )
     let fail: Error | undefined
-    const taskAgent = await Agent.get(input.task.agent)
+    const taskAgent = await Agent.get(input.task.agent, { config })
     const ctx: Tool.Context = {
       agent: input.task.agent,
       messageID: assistantMessage.id,
@@ -1253,7 +1255,8 @@ export namespace SessionLoop {
     abort: AbortSignal
   }) {
     let structured: unknown | undefined
-    const agent = await Agent.get(input.lastUser.agent)
+    const config = await EffectiveConfig.effective({ sessionID: input.sessionID })
+    const agent = await Agent.get(input.lastUser.agent, { config })
     const maxSteps = agent.steps ?? Infinity
     const isLastStep = input.step >= maxSteps
     const runtimeExpectation = runtimeContractExpectationFromExtra(input.lastUser.extra)
@@ -1515,8 +1518,10 @@ export namespace SessionLoop {
     //
     // Predictive and reactive compaction share ContextBudget so config flags
     // (`auto`, `reserved`, `threshold`) cannot diverge between the preflight
-    // and post-turn gates.
-    const config = await Config.get()
+    // and post-turn gates. Reuse the `config` resolved at the top of
+    // processTurn — a turn is the unit of config snapshotting, so a second
+    // EffectiveConfig.effective() call here would be redundant work + a
+    // TS2451 redeclaration in the same function scope.
     const predictiveBudget = ContextBudget.predictiveLimit({ config, model: input.model })
     if (!predictiveBudget) {
       log.warn("predictive-compaction-skipped-no-budget", {
@@ -1822,7 +1827,8 @@ export namespace SessionLoop {
               history: msgs,
             }).catch((err) => log.error("failed to ensure session title", { error: String(err) }))
 
-          const model = await Provider.getModel(lastUser.model.providerID, lastUser.model.modelID).catch((e) => {
+          const config = await EffectiveConfig.effective({ sessionID })
+          const model = await Provider.getModel(lastUser.model.providerID, lastUser.model.modelID, { config }).catch((e) => {
             if (Provider.ModelNotFoundError.isInstance(e)) {
               const hint = e.data.suggestions?.length ? ` Did you mean: ${e.data.suggestions.join(", ")}?` : ""
               Bus.publish(Session.Event.Error, {

@@ -6,14 +6,16 @@
 
 import { createMemo, Show } from "solid-js";
 import { ChangesPanel } from "./ChangesPanel";
-import { boardStore } from "../store/board";
+import { boardStore,
+  activeTaskID,
+} from "../store/board";
 import { Icon } from "./Icon";
 import { Section } from "./primitives/Section";
 import { currentChangeGroups } from "../services/diff";
 import { t } from "../utils/i18n";
 
 export function FilesSection() {
-  const hasSelectedTask = createMemo(() => Boolean(boardStore.selectedTaskID));
+  const hasSelectedTask = createMemo(() => Boolean(activeTaskID()));
   const totalFiles = createMemo(() =>
     currentChangeGroups().reduce((sum, group) => sum + group.changes.length, 0),
   );

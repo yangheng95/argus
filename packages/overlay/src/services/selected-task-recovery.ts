@@ -1,4 +1,4 @@
-import { boardStore } from "../store/board";
+import { boardStore, activeTaskID } from "../store/board";
 import { cancelConversationReplay, mergeLatestConversationTail } from "./conversation";
 import { resetSelectedLiveCursor } from "./selected-stream-cursor";
 import {
@@ -19,7 +19,7 @@ function abortError(message: string): DOMException {
 function assertCurrentRecovery(taskID: string, generation: number, signal: AbortSignal): void {
   if (signal.aborted) throw signal.reason ?? abortError("Selected task recovery aborted");
   if (generation !== recoveryGeneration) throw abortError("Selected task recovery superseded");
-  if (boardStore.selectedTaskID !== taskID) throw abortError("Selected task recovery task changed");
+  if (activeTaskID() !== taskID) throw abortError("Selected task recovery task changed");
 }
 
 function errorMessage(error: unknown): string {
@@ -52,11 +52,11 @@ function isLiveReplayExpiredReason(reason: string): boolean {
 
 export async function recoverSelectedTaskConversation(
   reason: string,
-  requestedTaskID = boardStore.selectedTaskID,
+  requestedTaskID = activeTaskID(),
 ): Promise<number> {
   const taskID = String(requestedTaskID || "");
   if (!taskID) throw new Error(`selected-task recovery requires a taskID: ${reason}`);
-  if (boardStore.selectedTaskID !== taskID) {
+  if (activeTaskID() !== taskID) {
     throw abortError("Selected task recovery task changed");
   }
 
@@ -84,7 +84,7 @@ export async function recoverSelectedTaskConversation(
     const replayLive = !isLiveReplayExpiredReason(reason);
     if (!replayLive) resetSelectedLiveCursor();
     if (replayLive) cancelConversationReplay();
-    startSSE(taskID, sequence, { replayLive });
+    startSSE({ kind: "task", id: taskID }, sequence, { replayLive });
     if (!replayLive) {
       void mergeLatestConversationTail(taskID).catch((error) => {
         if (error instanceof DOMException && error.name === "AbortError") return;

@@ -3,9 +3,13 @@ import { replayTaskEventToTree } from "./events";
 import { hydrateConversationView, resetWriter } from "./tree-writer";
 import {
   boardStore,
+  setBoardStore,
   setBoardData,
   setBoardUpdatedAt,
   setTaskSequence,
+  activeTaskID,
+  activeSessionID,
+  type BoardSource,
 } from "../store/board";
 import { cardTreeStore } from "../store/card-tree";
 import {
@@ -32,7 +36,7 @@ type HistoryState = {
   limit: number;
 };
 
-const INITIAL_CONVERSATION_TAIL_LIMIT = 240;
+const INITIAL_CONVERSATION_TAIL_LIMIT = 80;
 const LIVE_MESSAGE_CHANGE_TAIL_LIMIT = 32;
 const CONVERSATION_HISTORY_PAGE_LIMIT = 160;
 
@@ -159,16 +163,29 @@ function parseMessageWatermark(raw: any): number {
   return Math.floor(value);
 }
 
-function assertActiveReplay(taskID: string, epoch: number, signal: AbortSignal): void {
+function sourceKey(source: BoardSource): string {
+  return `${source.kind}:${source.id}`;
+}
+
+function activeSourceMatches(source: BoardSource): boolean {
+  return source.kind === "task" ? activeTaskID() === source.id : activeSessionID() === source.id;
+}
+
+function conversationHydratePath(source: BoardSource, tailLimit: number): string {
+  const prefix = source.kind === "task" ? "task" : "session";
+  return `${prefix}/${encodeURIComponent(source.id)}/conversation?tail_limit=${encodeURIComponent(String(tailLimit))}`;
+}
+
+function assertActiveReplay(source: BoardSource, epoch: number, signal: AbortSignal): void {
   if (signal.aborted) throw signal.reason ?? new DOMException("Conversation replay aborted", "AbortError");
   if (epoch !== replayEpoch) throw new DOMException("Conversation replay superseded", "AbortError");
-  if (boardStore.selectedTaskID !== taskID) throw new DOMException("Conversation replay task changed", "AbortError");
+  if (!activeSourceMatches(source)) throw new DOMException("Conversation replay source changed", "AbortError");
 }
 
 function assertActiveHistory(taskID: string, epoch: number, signal: AbortSignal): void {
   if (signal.aborted) throw signal.reason ?? new DOMException("Conversation history aborted", "AbortError");
   if (epoch !== historyEpoch) throw new DOMException("Conversation history superseded", "AbortError");
-  if (boardStore.selectedTaskID !== taskID || historyTaskID !== taskID) {
+  if (activeTaskID() !== taskID || historyTaskID !== taskID) {
     throw new DOMException("Conversation history task changed", "AbortError");
   }
 }
@@ -176,7 +193,7 @@ function assertActiveHistory(taskID: string, epoch: number, signal: AbortSignal)
 function assertActiveTailMerge(taskID: string, epoch: number, signal: AbortSignal): void {
   if (signal.aborted) throw signal.reason ?? new DOMException("Conversation tail merge aborted", "AbortError");
   if (epoch !== tailMergeEpoch) throw new DOMException("Conversation tail merge superseded", "AbortError");
-  if (boardStore.selectedTaskID !== taskID) throw new DOMException("Conversation tail merge task changed", "AbortError");
+  if (activeTaskID() !== taskID) throw new DOMException("Conversation tail merge task changed", "AbortError");
 }
 
 function linkedReplayController(signal?: AbortSignal): AbortController {
@@ -221,7 +238,7 @@ async function continueConversationReplay(
 ): Promise<EventReplay> {
   let replay = initialReplay;
   while (!replay.complete) {
-    assertActiveReplay(taskID, epoch, signal);
+    assertActiveReplay({ kind: "task", id: taskID }, epoch, signal);
     await waitForReplayTurn(signal);
     const sinceQuery = replay.sinceTimestamp === null
       ? ""
@@ -238,7 +255,7 @@ async function continueConversationReplay(
       );
     }
     for (const event of events) {
-      assertActiveReplay(taskID, epoch, signal);
+      assertActiveReplay({ kind: "task", id: taskID }, epoch, signal);
       replayTaskEventToTree(event);
     }
     replay = nextReplay;
@@ -255,6 +272,30 @@ export async function hydrateTaskConversation(
     tailLimit?: number;
   } = {},
 ): Promise<number> {
+  return hydrateConversation({ kind: "task", id: taskID }, options);
+}
+
+export async function loadConversation(
+  source: BoardSource,
+  options: {
+    signal?: AbortSignal;
+    scrollIntent?: "preserve" | "bottom";
+    resetCause?: string;
+    tailLimit?: number;
+  } = {},
+): Promise<number> {
+  return hydrateConversation(source, options);
+}
+
+export async function hydrateConversation(
+  source: BoardSource,
+  options: {
+    signal?: AbortSignal;
+    scrollIntent?: "preserve" | "bottom";
+    resetCause?: string;
+    tailLimit?: number;
+  } = {},
+): Promise<number> {
   cancelConversationReplay();
   const controller = linkedReplayController(options.signal);
   replayAbort = controller;
@@ -264,43 +305,50 @@ export async function hydrateTaskConversation(
   try {
     const tailLimit = Math.max(1, Math.floor(Number(options.tailLimit ?? INITIAL_CONVERSATION_TAIL_LIMIT) || INITIAL_CONVERSATION_TAIL_LIMIT));
     const data = await apiJson(
-      `task/${encodeURIComponent(taskID)}/conversation?tail_limit=${encodeURIComponent(String(tailLimit))}`,
+      conversationHydratePath(source, tailLimit),
       { signal },
     );
-    assertActiveReplay(taskID, epoch, signal);
+    assertActiveReplay(source, epoch, signal);
     const board = requireObject(data?.board, "board");
     const transcript = requireArray(data?.transcript, "transcript");
     const timeline = requireArray(data?.timeline, "timeline");
     const events = requireArray(data?.events, "events");
     const view = requireObject(data?.view, "view");
     const agentView = requireObject(data?.agentView ?? data?.view, "agentView");
-    const replay = parseEventReplay(data?.eventReplay);
+    const replay = source.kind === "task"
+      ? parseEventReplay(data?.eventReplay)
+      : { cursor: 0, latestSequence: 0, complete: true, limit: CONVERSATION_HISTORY_PAGE_LIMIT, sinceTimestamp: null };
     const history = parseHistoryState(data?.history, CONVERSATION_HISTORY_PAGE_LIMIT);
     const messageWatermark = parseMessageWatermark(data?.messageWatermark);
     const mergedMessages = mergeLoadedConversationMessages(timeline, transcript);
-    const lastSequence = requireNonnegativeInteger(data?.lastSequence, "lastSequence");
+    const lastSequence = source.kind === "task" ? requireNonnegativeInteger(data?.lastSequence, "lastSequence") : 0;
 
     resetWriter({
       scrollIntent: options.scrollIntent ?? "preserve",
       cause: options.resetCause ?? "conversation-hydrate",
     });
-    setBoardData(board);
-    setTaskSequence(Number.isFinite(lastSequence) && lastSequence > 0 ? lastSequence : 0);
+    if (source.kind === "task") {
+      setBoardData(board);
+      setTaskSequence(Number.isFinite(lastSequence) && lastSequence > 0 ? lastSequence : 0);
+    } else {
+      setBoardStore("board", board);
+      setTaskSequence(0);
+    }
     setBoardUpdatedAt(Date.now());
     hydrateConversationView(view, mergedMessages);
-    hydrateConversationAgentView(taskID, agentView);
+    hydrateConversationAgentView(sourceKey(source), agentView);
     markSelectedMessageWatermark(messageWatermark);
-    historyTaskID = taskID;
+    historyTaskID = source.kind === "task" ? source.id : "";
     historyState = history;
 
     for (const event of events) {
-      assertActiveReplay(taskID, epoch, signal);
+      assertActiveReplay(source, epoch, signal);
       replayTaskEventToTree(event);
     }
 
-    if (history.hasMore && !replay.complete) {
+    if (source.kind === "task" && history.hasMore && !replay.complete) {
       backgroundReplay = true;
-      void continueConversationReplay(taskID, replay, epoch, signal)
+      void continueConversationReplay(source.id, replay, epoch, signal)
         .catch((error) => {
           if (error instanceof DOMException && error.name === "AbortError") return;
           console.error("[conversation] background protocol replay failed", error);
@@ -310,7 +358,9 @@ export async function hydrateTaskConversation(
         });
       return Math.max(lastSequence, replay.latestSequence);
     }
-    const finalReplay = await continueConversationReplay(taskID, replay, epoch, signal);
+    const finalReplay = source.kind === "task"
+      ? await continueConversationReplay(source.id, replay, epoch, signal)
+      : replay;
     return Math.max(lastSequence, finalReplay.latestSequence);
   } finally {
     if (replayAbort === controller && !backgroundReplay) replayAbort = null;
@@ -386,7 +436,7 @@ export function scheduleLatestConversationTailMerge(taskID: string): void {
   void run();
 }
 
-export function canLoadOlderConversationHistory(taskID = boardStore.selectedTaskID): boolean {
+export function canLoadOlderConversationHistory(taskID = activeTaskID()): boolean {
   return (
     !!taskID &&
     taskID === historyTaskID &&
@@ -397,7 +447,7 @@ export function canLoadOlderConversationHistory(taskID = boardStore.selectedTask
 }
 
 export async function loadOlderConversationHistory(
-  taskID = boardStore.selectedTaskID,
+  taskID = activeTaskID(),
 ): Promise<boolean> {
   const selectedTaskID = String(taskID || "");
   if (!canLoadOlderConversationHistory(selectedTaskID)) return false;
@@ -436,7 +486,7 @@ export async function loadOlderConversationHistory(
 
 export async function loadConversationHistoryUntilCard(
   cardID: string,
-  taskID = boardStore.selectedTaskID,
+  taskID = activeTaskID(),
 ): Promise<boolean> {
   const targetCardID = String(cardID || "");
   if (!targetCardID) return false;

@@ -13,10 +13,12 @@ export namespace ProcessSupervisor {
     shell: string
     cwd?: string
     env?: NodeJS.ProcessEnv
+    stdin?: "ignore" | "pipe"
   }
 
   export interface Handle {
     pid: number
+    stdin: NodeJS.WritableStream | null
     stdout: NodeJS.ReadableStream | null
     stderr: NodeJS.ReadableStream | null
     exited: Promise<number>
@@ -61,7 +63,7 @@ export namespace ProcessSupervisor {
       shell: opts.shell,
       cwd: opts.cwd,
       env: opts.env,
-      stdio: ["ignore", "pipe", "pipe"],
+      stdio: [opts.stdin ?? "ignore", "pipe", "pipe"],
       detached: true,
     })
     if (!proc.pid) throw new Error(`Failed to start process: ${opts.command}`)
@@ -86,7 +88,7 @@ export namespace ProcessSupervisor {
       "utf8",
     )
     const proc = spawn(helper, ["--request", requestPath], {
-      stdio: ["ignore", "pipe", "pipe"],
+      stdio: [opts.stdin ?? "ignore", "pipe", "pipe"],
       windowsHide: true,
     })
     const helperHandle = childHandle(proc, { cleanupProcessGroup: false })
@@ -106,7 +108,7 @@ export namespace ProcessSupervisor {
       shell: opts.shell,
       cwd: opts.cwd,
       env: opts.env,
-      stdio: ["ignore", "pipe", "pipe"],
+      stdio: [opts.stdin ?? "ignore", "pipe", "pipe"],
       windowsHide: true,
     })
     if (!proc.pid) throw new Error(`Failed to start process: ${opts.command}`)
@@ -154,6 +156,7 @@ export namespace ProcessSupervisor {
 
     return {
       pid: proc.pid,
+      stdin: proc.stdin,
       stdout: proc.stdout,
       stderr: proc.stderr,
       exited,

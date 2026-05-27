@@ -5,7 +5,9 @@
 // render the diff inline any more.
 
 import { createMemo, createResource } from "solid-js";
-import { boardStore } from "../store/board";
+import { boardStore,
+  activeTaskID,
+} from "../store/board";
 import {
   changeGroupsRevisionKey,
   currentChangeGroups,
@@ -44,7 +46,7 @@ export function ChangesPanel(props: ChangesPanelProps) {
     const groups = sourceGroups();
     return props.changes !== undefined
       ? `props:${groups[0]?.changes.length ?? 0}`
-      : `${boardStore.selectedTaskID}:${boardStore.snapshotVersion}:${changeGroupsRevisionKey(groups)}`;
+      : `${activeTaskID()}:${boardStore.snapshotVersion}:${changeGroupsRevisionKey(groups)}`;
   });
 
   const [resolvedGroups] = createResource(requestKey, async () => {

@@ -341,9 +341,18 @@ export namespace Provider {
     }
   }
 
-  const state = lazyInstanceState(async () => {
+  type ProviderState = {
+    models: Map<string, LanguageModel>
+    providers: { [providerID: string]: Info }
+    database: { [providerID: string]: Info }
+    sdk: Map<number, LanguageModelProvider>
+    modelLoaders: {
+      [providerID: string]: CustomModelLoader
+    }
+  }
+
+  async function buildState(config: Config.Info): Promise<ProviderState> {
     using _ = log.time("state")
-    const config = await Config.get()
     const modelsDev = await ModelsDev.get()
     const database = mapValues(modelsDev, fromModelsDevProvider)
 
@@ -580,7 +589,7 @@ export namespace Provider {
         log.error("Provider does not exist in model list " + providerID)
         continue
       }
-      const result = await fn(data)
+      const result = await fn(data, { config })
       if (result && (result.autoload || providers[providerID])) {
         if (result.getModel) modelLoaders[providerID] = result.getModel
         const opts = result.options ?? {}
@@ -653,14 +662,33 @@ export namespace Provider {
       sdk,
       modelLoaders,
     }
-  })
+  }
+
+  const state = lazyInstanceState(async () => buildState(await Config.get()))
+  const scopedStates = new Map<string, Promise<ProviderState>>()
+
+  function configStateKey(config: Config.Info): string {
+    return String(Bun.hash.xxHash64(JSON.stringify(config)))
+  }
+
+  function stateFor(config?: Config.Info): Promise<ProviderState> {
+    if (!config) return state()
+    const key = configStateKey(config)
+    const existing = scopedStates.get(key)
+    if (existing) return existing
+    const next = buildState(config)
+    scopedStates.set(key, next)
+    return next
+  }
 
   export function reset() {
     ;(state as any).reset()
+    scopedStates.clear()
   }
 
   export function resetAll() {
     ;(state as any).resetAll()
+    scopedStates.clear()
   }
 
   /** Re-fetch the hexin /v1/models list bypassing cache, then reset provider state. */
@@ -673,8 +701,8 @@ export namespace Provider {
     return Object.keys(models)
   }
 
-  export async function list() {
-    return state().then((state) => state.providers)
+  export async function list(opts?: { config?: Config.Info }) {
+    return stateFor(opts?.config).then((state) => state.providers)
   }
 
   /**
@@ -684,16 +712,16 @@ export namespace Provider {
    * "API key required" for unconfigured providers); use list() when you only
    * want providers with actual credentials.
    */
-  export async function database() {
-    return state().then((state) => state.database)
+  export async function database(opts?: { config?: Config.Info }) {
+    return stateFor(opts?.config).then((state) => state.database)
   }
 
-  async function getSDK(model: Model) {
+  async function getSDK(model: Model, opts?: { config?: Config.Info }) {
     try {
       using _ = log.time("getSDK", {
         providerID: model.providerID,
       })
-      const s = await state()
+      const s = await stateFor(opts?.config)
       const provider = s.providers[model.providerID]
       const options = { ...provider.options }
       if (options["apiKey"] === undefined && provider.key) options["apiKey"] = provider.key
@@ -907,12 +935,12 @@ export namespace Provider {
     }
   }
 
-  export async function getProvider(providerID: string) {
-    return state().then((s) => s.providers[providerID])
+  export async function getProvider(providerID: string, opts?: { config?: Config.Info }) {
+    return stateFor(opts?.config).then((s) => s.providers[providerID])
   }
 
-  export async function getModel(providerID: string, modelID: string) {
-    let s = await state()
+  export async function getModel(providerID: string, modelID: string, opts?: { config?: Config.Info }) {
+    let s = await stateFor(opts?.config)
     const provider = s.providers[providerID]
     if (!provider) {
       const availableProviders = Object.keys(s.providers)
@@ -926,7 +954,7 @@ export namespace Provider {
     if (!info && providerID === "hexin") {
       try {
         const { refreshHexinCache } = await import("./hexin-discovery")
-        const cfg = await Config.get()
+        const cfg = opts?.config ?? await Config.get()
         const apiKey = await hexinApiKey(cfg)
         refreshedModels = await refreshHexinCache(apiKey)
         reset()
@@ -949,13 +977,13 @@ export namespace Provider {
     return info
   }
 
-  export async function getLanguage(model: Model): Promise<LanguageModel> {
-    const s = await state()
+  export async function getLanguage(model: Model, opts?: { config?: Config.Info }): Promise<LanguageModel> {
+    const s = await stateFor(opts?.config)
     const key = `${model.providerID}/${model.id}`
     if (s.models.has(key)) return s.models.get(key)!
 
     const provider = s.providers[model.providerID]
-    const sdk = await getSDK(model)
+    const sdk = await getSDK(model, opts)
 
     try {
       const language = s.modelLoaders[model.providerID]
@@ -976,8 +1004,8 @@ export namespace Provider {
     }
   }
 
-  export async function closest(providerID: string, query: string[]) {
-    const s = await state()
+  export async function closest(providerID: string, query: string[], opts?: { config?: Config.Info }) {
+    const s = await stateFor(opts?.config)
     const provider = s.providers[providerID]
     if (!provider) return undefined
     for (const item of query) {

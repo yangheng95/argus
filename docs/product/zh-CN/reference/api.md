@@ -119,7 +119,9 @@
 | POST | `/session/{sessionID}/command` | Send command | `session.command` |
 | GET | `/session/{sessionID}/config` | Get session effective configuration | `session.config.get` |
 | PATCH | `/session/{sessionID}/config` | Update session configuration overlay | `session.config.update` |
+| GET | `/session/{sessionID}/conversation` | Hydrate session conversation state | `session.conversation` |
 | GET | `/session/{sessionID}/diff` | Get message diff | `session.diff` |
+| GET | `/session/{sessionID}/events` | Subscribe to session events | `session.events` |
 | POST | `/session/{sessionID}/fork` | Fork session | `session.fork` |
 | POST | `/session/{sessionID}/init` | Initialize session | `session.init` |
 | GET | `/session/{sessionID}/message` | Get session messages | `session.messages` |

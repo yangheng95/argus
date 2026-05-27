@@ -1277,7 +1277,7 @@ export namespace Config {
             .max(1)
             .optional()
             .describe(
-              "Fraction of usable context (after reserved buffer) that must be consumed before auto-compaction triggers. Defaults to 0.8 — compact early enough to keep ample headroom for the next reply without sacrificing prompt-cache stability for typical turns.",
+              "Fraction of usable context (after reserved buffer) that must be consumed before auto-compaction triggers. Defaults to 0.9 — compact late enough to use more of the available prompt window while still preserving reserved reply headroom.",
             ),
           tail_turns: z
             .number()

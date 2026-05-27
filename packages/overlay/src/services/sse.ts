@@ -13,7 +13,7 @@
 // sequence without full-hydrating the already mounted conversation.
 
 import { clearEventQueue, messageStore, setSseConnected } from "../store/messages"
-import { boardStore, loadTasks } from "../store/board"
+import { boardStore, loadTasks, activeTaskID, type BoardSource } from "../store/board"
 import { routeSSEEvent, handleEventStreamEvent, handleTaskListNotification } from "./events"
 import { recomputeBadgeFromTasks, notifyError, formatErrorDetails } from "./notify"
 import { getHostTransport, type StreamHandle } from "./host-transport"
@@ -32,6 +32,7 @@ let sseHandle: StreamHandle | null = null
 let sseRetryTimer: any = null
 let sseWatchdogTimer: ReturnType<typeof setTimeout> | null = null
 let sseTaskID = ""
+let sseSource: BoardSource | null = null
 
 // audit-2026-04-29 W2-V10 — reconnect tick extracted so the regression
 // test can exercise restart failures and task-switch races directly, without
@@ -42,7 +43,7 @@ export interface SseReconnectDeps {
   after: number
   currentTaskID: () => string
   resumeAfter: () => number
-  restart: (taskID: string, after: number, options?: SseStartOptions) => void
+  restart: (source: BoardSource, after: number, options?: SseStartOptions) => void
   scheduleRetry: (fn: () => void, ms: number) => void
   retryDelayMs: number
   replayLive?: boolean
@@ -76,7 +77,7 @@ export async function performSseReconnect(deps: SseReconnectDeps): Promise<void>
   }
   try {
     deps.restart(
-      deps.taskID,
+      { kind: "task", id: deps.taskID },
       nextSequence,
       deps.replayLive === false ? { replayLive: false } : undefined,
     )
@@ -131,9 +132,11 @@ export function isSelectedTaskSSEConnected(taskID: string): boolean {
   return !!taskID && sseTaskID === taskID && sseHandle !== null && messageStore.sseConnected
 }
 
-export function startSSE(taskID: string, after = 0, options: SseStartOptions = {}) {
+export function startSSE(source: BoardSource, after = 0, options: SseStartOptions = {}) {
   stopSSE()
   setSseConnected(false)
+  sseSource = source
+  const taskID = source.kind === "task" ? source.id : ""
   sseTaskID = taskID
   const replayLive = options.replayLive !== false
 
@@ -165,13 +168,15 @@ export function startSSE(taskID: string, after = 0, options: SseStartOptions = {
     setSseConnected(false)
     sseHandle = null
     sseTaskID = ""
+    sseSource = null
+    if (source.kind !== "task") return
     if (sseRetryTimer) clearTimeout(sseRetryTimer)
     sseRetryTimer = setTimeout(() => {
       sseRetryTimer = null
       void performSseReconnect({
-        taskID,
+        taskID: source.id,
         after,
-        currentTaskID: () => boardStore.selectedTaskID,
+        currentTaskID: () => activeTaskID(),
         resumeAfter: () => boardStore.taskSequence,
         restart: startSSE,
         replayLive: liveReplayExpiredClose ? false : replayLive,
@@ -195,10 +200,10 @@ export function startSSE(taskID: string, after = 0, options: SseStartOptions = {
   }
   const handle = transport.openStream(
     {
-      path: `task/${encodeURIComponent(taskID)}/events`,
+      path: `${source.kind}/${encodeURIComponent(source.id)}/events`,
       query: {
-        ...(after > 0 ? { after: String(after) } : {}),
-        ...selectedLiveReplayQuery({ include: replayLive }),
+        ...(source.kind === "task" && after > 0 ? { after: String(after) } : {}),
+        ...(source.kind === "task" ? selectedLiveReplayQuery({ include: replayLive }) : {}),
       },
     },
     {
@@ -220,6 +225,7 @@ export function startSSE(taskID: string, after = 0, options: SseStartOptions = {
           return
         }
         if (event.type === "task.heartbeat" || event.type === "task.connected") return
+        if (event.type === "session.heartbeat" || event.type === "session.connected") return
         if (event.type === "task.live_replay_expired") {
           liveReplayExpiredClose = true
           resetSelectedLiveCursor()
@@ -270,6 +276,7 @@ export function stopSSE() {
   const handle = sseHandle
   sseHandle = null
   sseTaskID = ""
+  sseSource = null
   if (handle) handle.close()
   setSseConnected(false)
   clearEventQueue()

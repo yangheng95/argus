@@ -147,6 +147,7 @@ describe("tool.bash", () => {
           })
           return {
             pid: 9001,
+            stdin: null,
             stdout,
             stderr: new PassThrough(),
             exited,
@@ -179,6 +180,7 @@ describe("tool.bash", () => {
         let disposeCalls = 0
         const restore = ProcessSupervisor.setFactoryForTest(async () => ({
           pid: 9002,
+          stdin: null,
           stdout: new PassThrough(),
           stderr: new PassThrough(),
           exited: Promise.resolve(0),

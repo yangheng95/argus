@@ -6,7 +6,9 @@
 // that updates only the affected text/attribute when boardStore changes.
 
 import { createMemo, Show } from "solid-js";
-import { boardStore } from "../store/board";
+import { boardStore,
+  activeTaskID,
+} from "../store/board";
 import { statusIconName } from "../utils/status-mapping";
 import { Icon } from "./Icon";
 import { t } from "../utils/i18n";
@@ -21,7 +23,7 @@ export function TaskStatusHeader() {
   const startTime = createMemo<number>(() => task()?.time?.created || 0);
   const completedTime = createMemo<number>(() => task()?.time?.completed || 0);
   const isLive = createMemo(() => LIVE_STATUSES.has(status()));
-  const visible = createMemo(() => Boolean(boardStore.selectedTaskID));
+  const visible = createMemo(() => Boolean(activeTaskID()));
 
   // Shared 1Hz tick from services/clock.ts. The clock module owns the
   // visibility-gated setInterval and reference-counts subscribers so

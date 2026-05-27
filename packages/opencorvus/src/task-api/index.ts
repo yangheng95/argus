@@ -6,6 +6,7 @@ import { Agent } from "@/agent/agent"
 import { resolveAgentModel, resolveAgentModelRef, resolveConfiguredModelRef } from "@/agent/model"
 import { Bus } from "@/bus"
 import { Config } from "@/config/config"
+import { EffectiveConfig } from "@/config/effective"
 import { discoverChecks, resolveConfig, resolvedChecks } from "@/delivery/checks/discovery"
 import { ExecutorNotConfiguredError } from "@/executor/contract"
 import { ExecutorBootstrap } from "@/executor/bootstrap"
@@ -740,7 +741,12 @@ export namespace EngineService {
     // The task's root session: it holds the user's original request and the
     // pointer engine_task.session_id. Its children are the orchestrator's
     // own session and each sub-agent session (planner/executor/...).
+    const taskConfigSnapshot = await EffectiveConfig.snapshotCurrent()
     const session = await Session.create({ kind: "root", title })
+    await Session.mergeMetadata({
+      sessionID: session.id,
+      patch: { [EffectiveConfig.TASK_SNAPSHOT_KEY]: taskConfigSnapshot },
+    })
     const resolvedChecks = await taskChecks(input.checks)
     const now = Date.now()
     const taskID = Identifier.ascending("task")
@@ -765,7 +771,7 @@ export namespace EngineService {
     // NOT inject a `*: "ask"` catch-all; that turned the LLM autonomy gate
     // into an indefinite block whenever the agent reached for a tool the
     // catch-all lookup happened to land on (todoread, planner, panel, …).
-    const cfg = await Config.get()
+    const cfg = taskConfigSnapshot
     const tp = cfg.tool_permissions ?? {}
     const overrides: Array<{ permission: string; pattern: string; action: "allow" | "ask" | "deny" }> = []
     for (const [key, action] of Object.entries(tp)) {
@@ -1706,10 +1712,12 @@ export namespace EngineService {
    */
   export async function generateFollowup(taskID: string): Promise<{ suggestion: string }> {
     const task = requireTask(taskID)
-    const model = await resolveAgentModel("summary", { sessionID: task.session_id ?? undefined })
-    const language = await Provider.getLanguage(model)
-
     const sessionID = task.session_id ?? undefined
+    const model = await resolveAgentModel("summary", { sessionID })
+    const language = await Provider.getLanguage(model, {
+      config: await EffectiveConfig.effective(sessionID ? { sessionID } : undefined),
+    })
+
     const messages = sessionID ? await Session.messages({ sessionID, limit: 6 }) : []
     const transcript = messages
       .flatMap((msg) => {

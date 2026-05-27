@@ -56,6 +56,58 @@ import { goalStagePhaseID } from "../utils/workflow-step";
 
 // ── Internal indices ──
 
+function finitePositiveNumber(value: unknown): number {
+  const n = Number(value ?? 0);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+function usageProjectionFromInfo(info: any): MessageUsageProjection | undefined {
+  if (String(info?.role || "") !== "assistant") return undefined;
+  const tokens = info?.tokens;
+  const cost = info?.cost;
+  if (!tokens && typeof cost !== "number") return undefined;
+  const inputTokens = finitePositiveNumber(tokens?.input);
+  const outputTokens = finitePositiveNumber(tokens?.output);
+  const totalTokens = finitePositiveNumber(tokens?.total) || inputTokens + outputTokens;
+  const cacheReadTokens = finitePositiveNumber(tokens?.cache?.read);
+  const cacheWriteTokens = finitePositiveNumber(tokens?.cache?.write);
+  const costUSD = Number.isFinite(Number(cost)) ? Number(cost) : 0;
+  const contextTokens = inputTokens + cacheReadTokens + cacheWriteTokens;
+  if (inputTokens <= 0 && outputTokens <= 0 && totalTokens <= 0 && costUSD <= 0 && contextTokens <= 0) {
+    return undefined;
+  }
+  return { inputTokens, outputTokens, totalTokens, costUSD, contextTokens };
+}
+
+function projectUsageOntoCard(session: SessionInfo, messageID: string, fallbackCardID: string, usage: MessageUsageProjection): void {
+  session.messageUsage.set(messageID, usage);
+  const targetCardID = session.messageCardIDs.get(messageID) ?? fallbackCardID;
+  if (!cardTreeStore.cards[targetCardID]) return;
+  let sumInput = 0;
+  let sumOutput = 0;
+  let sumTotal = 0;
+  let sumCost = 0;
+  let sumContext = 0;
+  for (const [mid, u] of session.messageUsage) {
+    if (session.messageCardIDs.get(mid) !== targetCardID) continue;
+    sumInput += u.inputTokens;
+    sumOutput += u.outputTokens;
+    sumTotal += u.totalTokens;
+    sumCost += u.costUSD;
+    sumContext += u.contextTokens;
+  }
+  setCardTreeStore("cards", targetCardID, "usage", {
+    inputTokens: sumInput,
+    outputTokens: sumOutput,
+    totalTokens: sumTotal,
+    costUSD: sumCost,
+  });
+  if (sumContext > 0) {
+    setCardTreeStore("cards", targetCardID, "contextTokens", sumContext);
+    setCardTreeStore("cards", targetCardID, "contextTokensEstimated", false);
+  }
+}
+
 /** A part's exact display target: which card owns it and at which index in
  *  that card's `parts` array. Carrying the cardID (not just the index) is
  *  mandatory — a long-lived session has many turn cards, and a late delta
@@ -96,7 +148,7 @@ interface SessionInfo {
    *  message.updated arrives. */
   messageUsage: Map<
     string,
-    { inputTokens: number; outputTokens: number; totalTokens: number; costUSD: number }
+    MessageUsageProjection
   >;
   /** part id → its exact {cardID,index} target — O(1) lookup for updates. */
   partIndex: Map<string, PartTarget>;
@@ -115,6 +167,14 @@ interface MessageInfo {
   goalID: string;
   time: number;
   completed: boolean;
+}
+
+interface MessageUsageProjection {
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  costUSD: number;
+  contextTokens: number;
 }
 
 const sessions = new Map<string, SessionInfo>();
@@ -624,39 +684,8 @@ function handleMessageUpdated(event: any): void {
   // `session.messageUsage` and write the SUM onto the (possibly newly
   // resolved) card. A later message.updated for the same message
   // overwrites that message's slot rather than double-counting.
-  if (role === "assistant") {
-    const tokens = (info as any).tokens;
-    const cost = (info as any).cost;
-    if (tokens || typeof cost === "number") {
-      const inputTokens = Number(tokens?.input ?? 0);
-      const outputTokens = Number(tokens?.output ?? 0);
-      const totalTokens = Number(tokens?.total ?? inputTokens + outputTokens);
-      const costUSD = Number.isFinite(cost) ? Number(cost) : 0;
-      if (inputTokens > 0 || outputTokens > 0 || totalTokens > 0 || costUSD > 0) {
-        session.messageUsage.set(id, { inputTokens, outputTokens, totalTokens, costUSD });
-        const targetCardID = session.messageCardIDs.get(id) ?? cardID;
-        if (cardTreeStore.cards[targetCardID]) {
-          let sumInput = 0;
-          let sumOutput = 0;
-          let sumTotal = 0;
-          let sumCost = 0;
-          for (const [mid, u] of session.messageUsage) {
-            if (session.messageCardIDs.get(mid) !== targetCardID) continue;
-            sumInput += u.inputTokens;
-            sumOutput += u.outputTokens;
-            sumTotal += u.totalTokens;
-            sumCost += u.costUSD;
-          }
-          setCardTreeStore("cards", targetCardID, "usage", {
-            inputTokens: sumInput,
-            outputTokens: sumOutput,
-            totalTokens: sumTotal,
-            costUSD: sumCost,
-          });
-        }
-      }
-    }
-  }
+  const usageProjection = usageProjectionFromInfo(info);
+  if (usageProjection) projectUsageOntoCard(session, id, cardID, usageProjection);
 
   drainPendingSessionStatus(sessionID);
   drainPendingIntegrity(sessionID);
@@ -2019,6 +2048,17 @@ export function hydrateConversationView(view: any, transcript: any[]): void {
     touched.add(sessionID);
   }
   regroupTimelineSegments({ deferHierarchy: true });
+  for (const message of ordered) {
+    const info = message?.info;
+    const messageID = String(info?.id || "");
+    const sessionID = String(info?.sessionID || "");
+    const session = sessions.get(sessionID);
+    const cardID = session?.messageCardIDs.get(messageID);
+    const usageProjection = usageProjectionFromInfo(info);
+    if (session && cardID && usageProjection) {
+      projectUsageOntoCard(session, messageID, cardID, usageProjection);
+    }
+  }
   rebuildCardHierarchy();
   for (const sessionID of touched) {
     drainPendingIntegrity(sessionID);

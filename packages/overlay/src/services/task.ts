@@ -28,6 +28,7 @@ import {
   setBoardStore,
   setOrphanedSelectionHandler,
   taskByID,
+  activeTaskID,
 } from "../store/board";
 import {
   settingsStore,
@@ -151,7 +152,7 @@ export function panelRequestBody(
   attachments: Attachment[] = [],
   executor: string = "opencorvus",
 ): Record<string, unknown> {
-  const taskID = boardStore.selectedTaskID || undefined;
+  const taskID = activeTaskID() || undefined;
   const body: Record<string, unknown> = {
     surface: "panel",
     text,
@@ -214,11 +215,11 @@ export async function selectTask(
   // clicking the same task before the first load finishes would interrupt
   // and restart their own load.
   if (
-    nextTaskID === boardStore.selectedTaskID &&
+    nextTaskID === activeTaskID() &&
     (boardStore.board || boardStore.taskSwitching)
   ) {
     if (nextTaskID && boardStore.board && !boardStore.taskSwitching && !isSelectedTaskSSEConnected(nextTaskID)) {
-      startSSE(nextTaskID, boardStore.taskSequence);
+      startSSE({ kind: "task", id: nextTaskID }, boardStore.taskSequence);
     }
     if (nextTaskID && boardStore.board && !boardStore.taskSwitching) {
       ackTaskNotificationIfPresent(nextTaskID);
@@ -246,7 +247,7 @@ export async function selectTask(
   // masked the leak until the new writer became source-of-truth.
   resetWriter({ scrollIntent: "bottom", cause: "task-switch" });
   setSelectedTaskID(nextTaskID);
-  setBoardStore("selectedTaskID", nextTaskID);
+  setBoardStore("selectedSource", nextTaskID ? { kind: "task", id: nextTaskID } : null);
 
   if (!nextTaskID) {
     // Deselection has no async work; make sure any lingering progress UI
@@ -285,7 +286,7 @@ export async function selectTask(
     });
     if (stale()) return;
 
-    startSSE(nextTaskID, lastSequence);
+    startSSE({ kind: "task", id: nextTaskID }, lastSequence);
 
     // Persist the active task so initApp -> restoreInitialWorkspace() can
     // resume it on the next launch. Without this write the localStorage key
@@ -322,7 +323,7 @@ export async function deleteTask(taskID: string): Promise<boolean> {
     await apiJson(taskPath(taskID), {
       method: "DELETE",
     });
-    if (boardStore.selectedTaskID === taskID) {
+    if (activeTaskID() === taskID) {
       await selectTask("");
     }
     await loadTasks();
@@ -351,7 +352,7 @@ export async function renameTask(taskID: string, title: string): Promise<boolean
       body: JSON.stringify({ title: trimmed }),
     });
     await loadTasks();
-    if (boardStore.selectedTaskID === taskID) {
+    if (activeTaskID() === taskID) {
       await loadBoard();
     }
     return true;
@@ -398,6 +399,30 @@ export async function submitMessage(
   );
 
   markActivity();
+
+  const selectedSource = boardStore.selectedSource;
+  if (selectedSource?.kind === "session") {
+    try {
+      return await apiJson(`session/${encodeURIComponent(selectedSource.id)}/prompt_async`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          parts: [
+            {
+              type: "text",
+              text,
+              ...(options.metadata ? { metadata: options.metadata } : {}),
+            },
+          ],
+          ...(attachments.length > 0 ? { attachments } : {}),
+        }),
+        signal: controller.signal,
+      });
+    } finally {
+      if (inactivityTimer) clearTimeout(inactivityTimer);
+      cleanupRelay();
+    }
+  }
 
   // Route through HostTransport.openStream so this POST-stream pattern
   // works identically under Tauri (fetch + ReadableStream + manual

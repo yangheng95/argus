@@ -10,7 +10,9 @@ import { Show, createEffect, createSignal } from "solid-js";
 import { Board } from "./Board";
 import { Conversation } from "./Conversation";
 import { selectTask } from "../services/task";
-import { boardStore } from "../store/board";
+import { boardStore,
+  activeTaskID,
+} from "../store/board";
 import { t } from "../utils/i18n";
 import { useHotkey } from "../solid/hotkey";
 
@@ -43,7 +45,7 @@ export function TaskDetailOverlay(props: TaskDetailOverlayProps) {
   createEffect(() => {
     const id = props.taskID;
     if (!id) return;
-    if (boardStore.selectedTaskID === id) {
+    if (activeTaskID() === id) {
       setError("");
       return;
     }

@@ -182,6 +182,8 @@ import type {
   SessionConfigGetResponses,
   SessionConfigUpdateErrors,
   SessionConfigUpdateResponses,
+  SessionConversationErrors,
+  SessionConversationResponses,
   SessionCreateErrors,
   SessionCreateResponses,
   SessionDeleteErrors,
@@ -189,6 +191,7 @@ import type {
   SessionDeleteMessageResponses,
   SessionDeleteResponses,
   SessionDiffResponses,
+  SessionEventsResponses,
   SessionForkResponses,
   SessionGetErrors,
   SessionGetResponses,
@@ -1971,6 +1974,64 @@ export class Session extends HeyApiClient {
     const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
     return (options?.client ?? this.client).get<SessionStatusResponses, SessionStatusErrors, ThrowOnError>({
       url: "/session/status",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Hydrate session conversation state
+   *
+   * Load the persisted conversation inputs needed to rebuild the overlay conversation tree for a supervisor session before SSE resumes.
+   */
+  public conversation<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<SessionConversationResponses, SessionConversationErrors, ThrowOnError>({
+      url: "/session/{sessionID}/conversation",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Subscribe to session events
+   */
+  public events<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).sse.get<SessionEventsResponses, unknown, ThrowOnError>({
+      url: "/session/{sessionID}/events",
       ...options,
       ...params,
     })
