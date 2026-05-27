@@ -132,6 +132,21 @@ function hasCollectorDependencyPath(
   return false
 }
 
+function normalizeOwnedPathForOverlap(ownedPath: string): string {
+  return ownedPath
+    .trim()
+    .replaceAll("\\", "/")
+    .replace(/\/+/g, "/")
+    .replace(/^\.\/+/, "")
+    .replace(/^\/+/, "")
+    .replace(/\/+$/g, "")
+    .toLowerCase()
+}
+
+function ownedPathsOverlap(left: string, right: string): boolean {
+  return left === right || left.startsWith(`${right}/`) || right.startsWith(`${left}/`)
+}
+
 function dependencyDirectionGuidance(fromGoalID: string, toGoalID: string): string {
   return `Dependency contract direction is producer/prerequisite -> consumer/dependent. If ${toGoalID}.depends_on includes ${fromGoalID}, call register_dependency_contract({ from_goal_id: "${fromGoalID}", to_goal_id: "${toGoalID}", ... }).`
 }
@@ -211,6 +226,35 @@ export function architectValidationFindings(
   const knownGoalIDs = new Set(collector.goals.map((g) => g.id))
   const knownRequirementIDs = new Set(input?.knownRequirementIDs ?? [])
   const requiredTraceability = new Map<string, Set<string>>()
+  const executableGoals = collector.goals.filter((goal) => goal.kind !== "verification")
+  for (let leftIndex = 0; leftIndex < executableGoals.length; leftIndex++) {
+    const leftGoal = executableGoals[leftIndex]
+    const leftPaths = leftGoal.owned_paths.map(normalizeOwnedPathForOverlap).filter(Boolean)
+    for (const rightGoal of executableGoals.slice(leftIndex + 1)) {
+      if (
+        hasCollectorDependencyPath(collector, leftGoal.id, rightGoal.id) ||
+        hasCollectorDependencyPath(collector, rightGoal.id, leftGoal.id)
+      ) {
+        continue
+      }
+      const rightPaths = rightGoal.owned_paths.map(normalizeOwnedPathForOverlap).filter(Boolean)
+      const examples = leftPaths
+        .flatMap((leftPath) =>
+          rightPaths
+            .filter((rightPath) => ownedPathsOverlap(leftPath, rightPath))
+            .map((rightPath) => `${leftGoal.id}:${leftPath} <-> ${rightGoal.id}:${rightPath}`),
+        )
+        .slice(0, 5)
+      if (examples.length > 0) {
+        blocker(
+          "owned_paths_overlap_without_dependency",
+          `Goals ${leftGoal.id} and ${rightGoal.id}: owned_paths overlap without dependency reachability. Add a depends_on edge between the dependent and prerequisite goals, or split ownership so independent goals do not claim the same paths. Examples: ${examples.join(", ")}`,
+          { goal_ids: [leftGoal.id, rightGoal.id] },
+          ["modify_goal", "remove_goal"],
+        )
+      }
+    }
+  }
   const bootstrapGoals = collector.goals.filter((g) => g.kind === "bootstrap")
   if (bootstrapGoals.length > 1) {
     concern(
