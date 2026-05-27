@@ -42,9 +42,11 @@ test("hover-only action rails do not overlap row text", async () => {
           <main class="fixture">
             <div class="task-row-mini global-task-row" data-status="active">
               <span class="task-row-badge" data-status="active"><span class="task-row-badge-text">active</span></span>
-              <button type="button" class="task-row-main">
-                <div class="task-row-head"><strong># TradingView Supercharts full migration long title</strong></div>
-              </button>
+              <div class="task-row-body">
+                <button type="button" class="task-row-main">
+                  <div class="task-row-head"><strong># TradingView Supercharts full migration long title</strong></div>
+                </button>
+              </div>
               <div class="task-row-right">
                 <small class="task-row-stamp">07:56:38</small>
                 <div class="task-row-actions">

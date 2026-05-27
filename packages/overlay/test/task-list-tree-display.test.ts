@@ -122,6 +122,50 @@ describe("Parent-row badge: count + run-pulse + fail-color", () => {
   })
 })
 
+describe("Chevron lives in .task-row-body, never inside .task-row-right (bug 2026-05-27)", () => {
+  // Original placement put the chevron inside .task-row-right alongside
+  // .task-row-actions. .task-row-actions is position:absolute; right:0;
+  // width:64px; z-index:2 — on row hover, its buttons gain
+  // pointer-events:auto and overlay the right column, including any
+  // chevron rendered there. The buttons sit on top of the chevron in
+  // hit-test order, so clicks intended for the chevron land on
+  // cancel/rename/delete instead. User-reported as "chevron 点不了".
+  //
+  // The fix moves the chevron to .task-row-body (row-head, grid-column
+  // 3, on the opposite side of the row from .task-row-right). The
+  // action panel cannot cover it. This contract must not regress.
+
+  test("chevron renders inside .task-row-body (row-head), not inside .task-row-right", () => {
+    const rightStart = TASK_LIST.indexOf('<div class="task-row-right">')
+    const bodyStart = TASK_LIST.indexOf('<div class="task-row-body">')
+    const chevronStart = TASK_LIST.indexOf('class="task-row-children-toggle"')
+    expect(bodyStart).toBeGreaterThan(0)
+    expect(rightStart).toBeGreaterThan(0)
+    expect(chevronStart).toBeGreaterThan(0)
+    // Chevron must appear BEFORE .task-row-right in source order so it
+    // is not nested inside it.
+    expect(chevronStart).toBeLessThan(rightStart)
+    // And AFTER .task-row-body so it is nested inside the body wrapper.
+    expect(chevronStart).toBeGreaterThan(bodyStart)
+  })
+
+  test(".task-row-body wraps chevron + main and is grid-column 3 in CSS", () => {
+    expect(TASK_LIST).toContain('<div class="task-row-body">')
+    expect(SIDEBAR_CSS).toMatch(/\.task-row-body\s*\{[^}]*grid-column:\s*3;/)
+    // The wrapper has to be a flex container so chevron + main lay out
+    // side-by-side, with the flex gap only applying when chevron is
+    // rendered.
+    expect(SIDEBAR_CSS).toMatch(/\.task-row-body\s*\{[^}]*display:\s*flex;/)
+  })
+
+  test(".task-row-main no longer claims grid-column 3 (now a flex item inside body)", () => {
+    // If main re-grabs grid-column 3, it becomes a direct grid child
+    // again and the body wrapper has nothing to do — that would re-
+    // open the door to placing the chevron inside .task-row-right.
+    expect(SIDEBAR_CSS).not.toMatch(/\.task-row-main\s*\{[^}]*grid-column:\s*3;/)
+  })
+})
+
 describe("Depth-based indent via padding-inline-start", () => {
   test("inline style applies (depth * 16px) padding scaled by --ui-scale", () => {
     expect(TASK_LIST).toMatch(/padding-inline-start:\s*calc\(\$\{[\s\S]*?\*\s*16\}px\s*\*\s*var\(--ui-scale\)\)/)
