@@ -197,6 +197,28 @@ function CancelButton(props: { id: string; onCancel: (id: string) => void }) {
   );
 }
 
+function RenameButton(props: { id: string; onClick: () => void }) {
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon"
+      tone="neutral"
+      data-chrome="icon-action"
+      data-ui="task-row-rename"
+      data-task-rename={props.id}
+      title={t("task.rename_button_title")}
+      aria-label={t("task.rename_button_title")}
+      onClick={(e) => {
+        e.stopPropagation();
+        props.onClick();
+      }}
+    >
+      <Icon name="edit" size={11} />
+    </Button>
+  );
+}
+
 function StartNowButton(props: { id: string; busy?: boolean; onStartNow: (id: string) => void }) {
   return (
     <Button
@@ -237,6 +259,7 @@ function TaskRow(props: {
   onDeleteTask?: (id: string) => void;
   onCancelTask?: (id: string) => void;
   onStartNow?: (id: string) => void;
+  onRenameTask?: (id: string, title: string) => void | Promise<void>;
   startNowBusyID?: string;
   canDrag?: boolean;
   dragging?: boolean;
@@ -245,10 +268,25 @@ function TaskRow(props: {
   onDragOver?: (id: string, event: DragEvent) => void;
   onDrop?: (id: string, event: DragEvent) => void;
   onDragEnd?: () => void;
+  /** Tree nesting depth (0 = top-level). Applies left padding so the row
+   *  visually indents under its parent. */
+  depth?: number;
+  /** Direct child tasks visible in the current filtered set. Drives the
+   *  chevron toggle and badge count + active/failed accents. */
+  directChildren?: any[];
+  /** Whether the chevron is in the expanded state (children rendered). */
+  expanded?: boolean;
+  onToggleExpand?: () => void;
+  /** True when this row is a cross-directory nested child — its own
+   *  `task.directory` differs from the directory of the group it renders
+   *  inside. Drag is force-disabled in that case because `handleDrop`
+   *  closes over the group's directory, which would mis-route the reorder. */
+  crossDirectory?: boolean;
 }) {
   const id = () => props.item?.task?.id || "";
   const pending = () => props.item?._pending === true;
   const status = () => (pending() ? "active" : props.item?.task?.status || "idle");
+  const rawTitle = () => props.item?.task?.title || props.item?.overview?.headline || id();
   const title = () => taskListTitle(props.item) || id();
   const isActive = () => !pending() && props.isSelected(id());
   const hasUnreadNotification = () => !pending() && taskHasUnreadNotification(props.item);
@@ -260,8 +298,42 @@ function TaskRow(props: {
     !pending() && !!id() && !!props.onStartNow && status() === "queued";
   const canDelete = () =>
     !pending() && !!id() && !!props.onDeleteTask;
-  const hasActions = () => canStartNow() || canCancel() || canDelete();
-  const canDrag = () => props.canDrag === true && status() === "queued" && !pending();
+  const canRename = () =>
+    !pending() && !!id() && !!props.onRenameTask;
+  const hasActions = () => canStartNow() || canCancel() || canDelete() || canRename();
+  const canDrag = () =>
+    props.canDrag === true && status() === "queued" && !pending() && !props.crossDirectory;
+  const directChildCount = () => props.directChildren?.length ?? 0;
+  const hasActiveChild = () =>
+    !!props.directChildren?.some((child) => child?.task?.status === "active" || child?._pending);
+  const hasFailedChild = () =>
+    !!props.directChildren?.some((child) => child?.task?.status === "failed");
+  const [editing, setEditing] = createSignal(false);
+  const [draftTitle, setDraftTitle] = createSignal("");
+  let inputRef: HTMLInputElement | undefined;
+
+  function beginRename(): void {
+    if (!canRename()) return;
+    setDraftTitle(rawTitle());
+    setEditing(true);
+    queueMicrotask(() => {
+      inputRef?.focus();
+      inputRef?.select();
+    });
+  }
+
+  function cancelRename(): void {
+    setEditing(false);
+    setDraftTitle("");
+  }
+
+  function commitRename(): void {
+    const next = draftTitle().trim();
+    setEditing(false);
+    setDraftTitle("");
+    if (!next || next === rawTitle().trim()) return;
+    void props.onRenameTask?.(id(), next);
+  }
 
   return (
     <div
@@ -272,6 +344,13 @@ function TaskRow(props: {
       data-draggable={canDrag() ? "true" : undefined}
       data-dragging={props.dragging ? "true" : undefined}
       data-drag-over={props.dragOver ? "true" : undefined}
+      data-depth={(props.depth ?? 0) > 0 ? String(props.depth) : undefined}
+      data-cross-directory={props.crossDirectory ? "true" : undefined}
+      style={
+        (props.depth ?? 0) > 0
+          ? `padding-inline-start: calc(${(props.depth ?? 0) * 16}px * var(--ui-scale))`
+          : undefined
+      }
       draggable={canDrag()}
       title={rowTip()}
       onDragStart={(event) => {
@@ -305,23 +384,92 @@ function TaskRow(props: {
           <Icon name="drag-handle" size={12} />
         </span>
       </Show>
-      <button
-        type="button"
-        class="task-row-main"
-        data-task-id={pending() ? undefined : id()}
-        disabled={pending()}
-        aria-disabled={pending() ? "true" : undefined}
-        aria-current={isActive() ? "page" : undefined}
-        title={rowTip()}
-        onClick={() => {
-          if (!pending() && id()) props.onSelectTask(id());
-        }}
+      <Show
+        when={!editing()}
+        fallback={
+          <div class="task-row-main task-row-main--editing" data-ui="task-row-rename-editor">
+            <div class="task-row-head">
+              <input
+                ref={(el) => (inputRef = el)}
+                class="task-row-rename-input"
+                data-ui="task-row-rename-input"
+                type="text"
+                maxLength={200}
+                value={draftTitle()}
+                aria-label={t("task.rename_placeholder")}
+                placeholder={t("task.rename_placeholder")}
+                onInput={(e) => setDraftTitle(e.currentTarget.value)}
+                onClick={(e) => e.stopPropagation()}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    commitRename();
+                  } else if (e.key === "Escape") {
+                    e.preventDefault();
+                    cancelRename();
+                  }
+                }}
+                onBlur={() => {
+                  // Microtask: if the blur was caused by clicking the
+                  // confirm button, that click handler runs immediately
+                  // after blur — committing here would race. Defer one
+                  // tick and re-check whether the editor is still open.
+                  queueMicrotask(() => {
+                    if (editing()) commitRename();
+                  });
+                }}
+              />
+            </div>
+          </div>
+        }
       >
-        <div class="task-row-head">
-          <strong>{title()}</strong>
-        </div>
-      </button>
+        <button
+          type="button"
+          class="task-row-main"
+          data-task-id={pending() ? undefined : id()}
+          disabled={pending()}
+          aria-disabled={pending() ? "true" : undefined}
+          aria-current={isActive() ? "page" : undefined}
+          title={rowTip()}
+          onClick={() => {
+            if (!pending() && id()) props.onSelectTask(id());
+          }}
+          onDblClick={(e) => {
+            if (!canRename()) return;
+            e.stopPropagation();
+            e.preventDefault();
+            beginRename();
+          }}
+        >
+          <div class="task-row-head">
+            <strong>{title()}</strong>
+          </div>
+        </button>
+      </Show>
       <div class="task-row-right">
+        <Show when={directChildCount() > 0}>
+          <button
+            type="button"
+            class="task-row-children-toggle"
+            data-expanded={props.expanded ? "true" : undefined}
+            data-has-active={hasActiveChild() ? "true" : undefined}
+            data-has-failed={hasFailedChild() ? "true" : undefined}
+            aria-expanded={props.expanded ? "true" : "false"}
+            aria-label={
+              props.expanded
+                ? t("task.tree.collapse_children", { count: String(directChildCount()) })
+                : t("task.tree.expand_children", { count: String(directChildCount()) })
+            }
+            title={t("task.tree.children_count", { count: String(directChildCount()) })}
+            onClick={(event) => {
+              event.stopPropagation();
+              props.onToggleExpand?.();
+            }}
+          >
+            <Icon name={props.expanded ? "chevron-down" : "chevron"} size={11} />
+            <span class="task-row-children-count">{directChildCount()}</span>
+          </button>
+        </Show>
         <small
           class="task-row-stamp"
           title={fullStampWithRelative(taskCreatedAt(props.item))}
@@ -338,6 +486,9 @@ function TaskRow(props: {
             <Show when={canCancel()}>
               <CancelButton id={id()} onCancel={props.onCancelTask!} />
             </Show>
+            <Show when={canRename() && !editing()}>
+              <RenameButton id={id()} onClick={beginRename} />
+            </Show>
             <Show when={canDelete()}>
               <DeleteButton id={id()} onDelete={props.onDeleteTask!} />
             </Show>
@@ -348,16 +499,30 @@ function TaskRow(props: {
   );
 }
 
+// ── Tree entry ──
+
+/** One pre-flattened row in a directory group. depth drives indent; the
+ *  `crossDirectory` flag force-disables drag when a child rendered under
+ *  its parent has a different `task.directory` than the enclosing group. */
+type TreeEntry = {
+  item: any;
+  depth: number;
+  directChildren: any[];
+  crossDirectory: boolean;
+  expanded: boolean;
+};
+
 // ── TaskSection ──
 
 function TaskSection(props: {
-  items: any[];
+  entries: TreeEntry[];
   isSelected: (id: string) => boolean;
   queuePositions?: Map<string, number>;
   onSelectTask: (id: string) => void;
   onDeleteTask?: (id: string) => void;
   onCancelTask?: (id: string) => void;
   onStartNow?: (id: string) => void;
+  onRenameTask?: (id: string, title: string) => void | Promise<void>;
   startNowBusyID?: string;
   draggingID?: string;
   dragOverID?: string;
@@ -366,29 +531,39 @@ function TaskSection(props: {
   onDragOver?: (id: string, event: DragEvent) => void;
   onDrop?: (id: string, event: DragEvent) => void;
   onDragEnd?: () => void;
+  onToggleExpand?: (id: string) => void;
 }) {
   return (
-    <Show when={props.items.length > 0}>
+    <Show when={props.entries.length > 0}>
       <section class="sidebar-list-group">
         <div class="sidebar-list-cluster">
-          <For each={props.items}>
-            {(item) => (
+          <For each={props.entries}>
+            {(entry) => (
               <TaskRow
-                item={item}
+                item={entry.item}
                 isSelected={props.isSelected}
-                queuePos={props.queuePositions?.get(item?.task?.id || "")}
+                queuePos={props.queuePositions?.get(entry.item?.task?.id || "")}
                 onSelectTask={props.onSelectTask}
                 onDeleteTask={props.onDeleteTask}
                 onCancelTask={props.onCancelTask}
                 onStartNow={props.onStartNow}
+                onRenameTask={props.onRenameTask}
                 startNowBusyID={props.startNowBusyID}
                 canDrag={props.canReorder}
-                dragging={props.draggingID === (item?.task?.id || "")}
-                dragOver={props.dragOverID === (item?.task?.id || "")}
+                dragging={props.draggingID === (entry.item?.task?.id || "")}
+                dragOver={props.dragOverID === (entry.item?.task?.id || "")}
                 onDragStart={props.onDragStart}
                 onDragOver={props.onDragOver}
                 onDrop={props.onDrop}
                 onDragEnd={props.onDragEnd}
+                depth={entry.depth}
+                directChildren={entry.directChildren}
+                expanded={entry.expanded}
+                crossDirectory={entry.crossDirectory}
+                onToggleExpand={() => {
+                  const id = entry.item?.task?.id;
+                  if (id) props.onToggleExpand?.(id);
+                }}
               />
             )}
           </For>
@@ -406,6 +581,9 @@ export interface TaskListProps {
   onDeleteTask?: (taskID: string) => void;
   /** Called when the user confirms cancellation via the row's cancel button. */
   onCancelTask?: (taskID: string) => void;
+  /** Called when the user commits a new task title via the inline rename
+   *  editor. Passing this enables the rename action (button + double-click). */
+  onRenameTask?: (taskID: string, title: string) => void | Promise<void>;
 }
 
 export function TaskList(props: TaskListProps) {
@@ -438,6 +616,20 @@ export function TaskList(props: TaskListProps) {
   });
   const [draggingID, setDraggingID] = createSignal("");
   const [dragOverID, setDragOverID] = createSignal("");
+  // Per-task expand state for the lineage tree. Per-session only; local-
+  // storage persistence is intentionally out of scope (see spec
+  // docs/superpowers/specs/2026-05-27-task-tree-display.md §3.2).
+  const [expandedTasks, setExpandedTasks] = createSignal<Set<string>>(new Set());
+
+  function toggleTaskExpand(id: string): void {
+    if (!id) return;
+    setExpandedTasks((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   // Queue badges follow the same creation-time row order as the sidebar list.
   const queuePositions = createMemo<Map<string, number>>(() => {
@@ -452,13 +644,70 @@ export function TaskList(props: TaskListProps) {
     return map;
   });
 
+  // Tree lineage: parentID → direct visible children. Walks parent chains
+  // once to detect cycles (treat all members as top-level if any cycle is
+  // found in their chain) and to enable orphan fallback (children whose
+  // parent is filtered out of the visible set bubble up to top-level too).
+  const tree = createMemo<{ childMap: Map<string, any[]>; topLevelItems: any[] }>(() => {
+    const items = sortedItems();
+    const byID = new Map<string, any>();
+    for (const item of items) {
+      const id = item?.task?.id;
+      if (id) byID.set(id, item);
+    }
+    const cycleVictims = new Set<string>();
+    for (const item of items) {
+      const startID = item?.task?.id;
+      if (!startID || cycleVictims.has(startID)) continue;
+      const seen = new Set<string>();
+      let cur: any = item;
+      while (cur) {
+        const curID: string | undefined = cur?.task?.id;
+        if (!curID) break;
+        if (seen.has(curID)) {
+          console.warn(
+            `[TaskList] task tree cycle detected involving ${curID} — rendering cycle members as top-level`,
+          );
+          for (const v of seen) cycleVictims.add(v);
+          cycleVictims.add(curID);
+          break;
+        }
+        seen.add(curID);
+        const parentID: string | undefined = cur?.task?.parentTaskID ?? undefined;
+        if (!parentID) break;
+        const next = byID.get(parentID);
+        if (!next) break; // parent not visible — orphan, not a cycle
+        cur = next;
+      }
+    }
+    const childMap = new Map<string, any[]>();
+    const isNestedChild = new Set<string>();
+    for (const item of items) {
+      const id: string | undefined = item?.task?.id;
+      const parentID: string | undefined = item?.task?.parentTaskID ?? undefined;
+      if (!id || !parentID) continue;
+      if (cycleVictims.has(id) || cycleVictims.has(parentID)) continue;
+      if (!byID.has(parentID)) continue; // orphan fallback — parent filtered out
+      const arr = childMap.get(parentID) ?? [];
+      arr.push(item);
+      childMap.set(parentID, arr);
+      isNestedChild.add(id);
+    }
+    const topLevelItems = items.filter((item) => {
+      const id: string | undefined = item?.task?.id;
+      return !id || !isNestedChild.has(id);
+    });
+    return { childMap, topLevelItems };
+  });
+
   // Group tasks by project directory; each project renders one stable
   // creation-time stream. Lifecycle changes must not move rows between
-  // "active" and "recent" sections.
+  // "active" and "recent" sections. Top-level items only — nested children
+  // are appended below their parent by `flattenGroup` instead.
   type Group = { directory: string; latest: number; items: any[] };
   const grouped = createMemo<Group[]>(() => {
     const byDir = new Map<string, Group>();
-    for (const item of sortedItems()) {
+    for (const item of tree().topLevelItems) {
       const dir = projectDirectoryOf(item);
       let g = byDir.get(dir);
       if (!g) {
@@ -478,6 +727,33 @@ export function TaskList(props: TaskListProps) {
         return b.latest - a.latest;
       });
   });
+
+  // Flatten a directory group's top-level items into a render-ready entry
+  // list. Walks children depth-first when the parent is expanded; deeper
+  // descendants only appear after each ancestor is expanded individually.
+  function flattenGroup(topLevel: any[], groupDirectory: string): TreeEntry[] {
+    const { childMap } = tree();
+    const expanded = expandedTasks();
+    const out: TreeEntry[] = [];
+    const visit = (item: any, depth: number) => {
+      const id: string | undefined = item?.task?.id;
+      const direct = (id && childMap.get(id)) ?? [];
+      const itemDir = projectDirectoryOf(item);
+      const isExpanded = id ? expanded.has(id) : false;
+      out.push({
+        item,
+        depth,
+        directChildren: direct,
+        crossDirectory: depth > 0 && itemDir !== groupDirectory,
+        expanded: isExpanded,
+      });
+      if (id && isExpanded && direct.length > 0) {
+        for (const child of direct) visit(child, depth + 1);
+      }
+    };
+    for (const item of topLevel) visit(item, 0);
+    return out;
+  }
 
   // createSelector returns a function that's true only for the currently
   // selected task id. With this in place, selecting a different task
@@ -665,9 +941,14 @@ export function TaskList(props: TaskListProps) {
             const label = projectLabel(group.directory);
             const expanded = () => isDirectoryExpanded(group.directory);
             const collapsed = () => isDirectoryCollapsed(group.directory);
+            // Compact quota bounds the *top-level* row count of the
+            // directory group. Expanded subtrees push children below their
+            // parent without consuming that quota — they only appear after
+            // explicit user action via the per-task chevron.
             const visibleGroupItems = () =>
               expanded() ? group.items : group.items.slice(0, COMPACT_GROUP_VISIBLE_LIMIT);
             const hiddenCount = () => Math.max(0, group.items.length - visibleGroupItems().length);
+            const entries = () => flattenGroup(visibleGroupItems(), group.directory);
             return (
               <section class="project-group" data-collapsed={collapsed() ? "true" : undefined}>
                 <button
@@ -697,12 +978,13 @@ export function TaskList(props: TaskListProps) {
                 <Show when={!collapsed()}>
                   <div class="project-group-body">
                     <TaskSection
-                      items={visibleGroupItems()}
+                      entries={entries()}
                       isSelected={isSelected}
                       queuePositions={queuePositions()}
                       onSelectTask={props.onSelectTask}
                       onDeleteTask={props.onDeleteTask}
                       onCancelTask={props.onCancelTask}
+                      onRenameTask={props.onRenameTask}
                       onStartNow={handleStartNow}
                       startNowBusyID={startNowBusyID()}
                       canReorder={
@@ -720,6 +1002,7 @@ export function TaskList(props: TaskListProps) {
                         setDraggingID("");
                         setDragOverID("");
                       }}
+                      onToggleExpand={toggleTaskExpand}
                     />
                     <Show when={hiddenCount() > 0}>
                       <span class="project-group-show-more">

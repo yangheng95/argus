@@ -441,6 +441,78 @@
   margin: 0;
 }
 
+/* Tree lineage children toggle — sits at the start of .task-row-right
+   and shows the direct-child count plus a chevron the user clicks to
+   expand/collapse the subtree. data-has-active triggers a subtle pulse
+   when any direct child is mid-run; data-has-failed paints the chip in
+   the danger tone so red bubbles up to the parent. */
+.task-row-children-toggle {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: calc(2px * var(--ui-scale));
+  height: calc(18px * var(--ui-scale));
+  padding: 0 calc(5px * var(--ui-scale));
+  border: var(--oc-border-width) solid var(--border);
+  border-radius: var(--oc-radius-pill);
+  background: transparent;
+  color: var(--text-soft);
+  font-size: var(--ui-font-small);
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+
+.task-row-children-toggle:hover,
+.task-row-children-toggle:focus-visible {
+  background: color-mix(in srgb, var(--text-soft) 10%, transparent);
+  color: var(--text);
+}
+
+.task-row-children-count {
+  font-variant-numeric: tabular-nums;
+}
+
+.task-row-children-toggle[data-has-active="true"] {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 32%, transparent);
+}
+
+.task-row-children-toggle[data-has-active="true"]::before {
+  content: "";
+  display: block;
+  width: calc(6px * var(--ui-scale));
+  height: calc(6px * var(--ui-scale));
+  border-radius: var(--oc-radius-pill);
+  background: var(--accent);
+  animation: task-row-children-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes task-row-children-pulse {
+  0%, 100% { opacity: 0.4; transform: scale(1); }
+  50%      { opacity: 1;   transform: scale(1.25); }
+}
+
+/* Failed beats active — if both are present, failed colour wins so
+   the user is not lulled by the active accent on a row that already
+   has a broken descendant. */
+.task-row-children-toggle[data-has-failed="true"] {
+  color: var(--bad);
+  border-color: color-mix(in srgb, var(--bad) 32%, transparent);
+  background: color-mix(in srgb, var(--bad) 8%, transparent);
+}
+
+.task-row-children-toggle[data-has-failed="true"]::before {
+  background: var(--bad);
+}
+
+/* Cross-directory nested children — drag is disabled (canDrag returns
+   false); fade the row slightly so the user understands it's borrowed
+   from another project rather than queued in this group. */
+.task-row-mini[data-cross-directory="true"] {
+  opacity: 0.88;
+}
+
 .task-row-actions {
   display: inline-flex;
   align-items: center;
