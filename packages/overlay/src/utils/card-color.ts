@@ -9,7 +9,7 @@ const KNOWN_STAGES = new Set([
   "assistant",
   "system",
   "orchestrator",
-  "gateway",
+  "mission",
   "intent-analysis",
   "spec",
   "requirements",

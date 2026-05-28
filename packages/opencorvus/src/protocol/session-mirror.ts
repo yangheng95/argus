@@ -30,7 +30,7 @@ export function sessionBusEventSessionID(event: SessionBusEvent): string | undef
   return undefined
 }
 
-function stampGatewayPayload(type: string, props: Record<string, unknown>): Record<string, unknown> {
+function stampMissionPayload(type: string, props: Record<string, unknown>): Record<string, unknown> {
   const payload = { ...props }
   const info = payload.info
   const part = payload.part
@@ -39,8 +39,8 @@ function stampGatewayPayload(type: string, props: Record<string, unknown>): Reco
       ? String((info as Record<string, unknown>).role)
       : ""
   const isUser = infoRole === "user"
-  const channel = isUser ? "main" : "gateway"
-  const resolvedRole = isUser ? "user" : "gateway"
+  const channel = isUser ? "main" : "mission"
+  const resolvedRole = isUser ? "user" : "mission"
   if (info && typeof info === "object") {
     payload.info = {
       ...(info as Record<string, unknown>),
@@ -51,8 +51,8 @@ function stampGatewayPayload(type: string, props: Record<string, unknown>): Reco
   if (part && typeof part === "object") {
     payload.part = {
       ...(part as Record<string, unknown>),
-      channel: type === "message.part.delta" ? channel : (part as Record<string, unknown>).channel ?? "gateway",
-      resolvedRole: type === "message.part.delta" ? resolvedRole : (part as Record<string, unknown>).resolvedRole ?? "gateway",
+      channel: type === "message.part.delta" ? channel : (part as Record<string, unknown>).channel ?? "mission",
+      resolvedRole: type === "message.part.delta" ? resolvedRole : (part as Record<string, unknown>).resolvedRole ?? "mission",
     }
   }
   payload.channel = channel
@@ -60,11 +60,11 @@ function stampGatewayPayload(type: string, props: Record<string, unknown>): Reco
   return payload
 }
 
-export function enrichGatewaySessionTranscript(messages: Message.WithParts[]): Message.WithParts[] {
+export function enrichMissionSessionTranscript(messages: Message.WithParts[]): Message.WithParts[] {
   return messages.map((message) => {
     const isUser = message.info.role === "user"
-    const channel = isUser ? "main" : "gateway"
-    const resolvedRole = isUser ? "user" : "gateway"
+    const channel = isUser ? "main" : "mission"
+    const resolvedRole = isUser ? "user" : "mission"
     return {
       ...message,
       info: ({
@@ -111,7 +111,7 @@ export function mapSessionBusEvent(
     }
   }
   if (event.type === Message.Event.Updated.type) {
-    const payload = sessionRole(sessionID) === "gateway" ? stampGatewayPayload("message.updated", props) : { ...props }
+    const payload = sessionRole(sessionID) === "mission" ? stampMissionPayload("message.updated", props) : { ...props }
     const info = payload.info as Record<string, unknown>
     if (!info.agent) info.agent = "executor"
     return {
@@ -121,7 +121,7 @@ export function mapSessionBusEvent(
     }
   }
   if (event.type === Message.Event.PartUpdated.type) {
-    const payload = sessionRole(sessionID) === "gateway" ? stampGatewayPayload("message.part.updated", props) : { ...props }
+    const payload = sessionRole(sessionID) === "mission" ? stampMissionPayload("message.part.updated", props) : { ...props }
     const part = payload.part as Record<string, unknown>
     return {
       type: "message.part.updated",
@@ -133,21 +133,21 @@ export function mapSessionBusEvent(
     return {
       type: "message.part.delta",
       summary: typeof props.field === "string" ? `Delta: ${props.field}` : "Message delta",
-      payload: sessionRole(sessionID) === "gateway" ? stampGatewayPayload("message.part.delta", props) : props,
+      payload: sessionRole(sessionID) === "mission" ? stampMissionPayload("message.part.delta", props) : props,
     }
   }
   if (event.type === Message.Event.Removed.type) {
     return {
       type: "message.removed",
       summary: "Message removed",
-      payload: sessionRole(sessionID) === "gateway" ? stampGatewayPayload("message.removed", props) : props,
+      payload: sessionRole(sessionID) === "mission" ? stampMissionPayload("message.removed", props) : props,
     }
   }
   if (event.type === Message.Event.PartRemoved.type) {
     return {
       type: "message.part.removed",
       summary: "Part removed",
-      payload: sessionRole(sessionID) === "gateway" ? stampGatewayPayload("message.part.removed", props) : props,
+      payload: sessionRole(sessionID) === "mission" ? stampMissionPayload("message.part.removed", props) : props,
     }
   }
   if (event.type === Session.Event.Error.type) {
@@ -199,9 +199,9 @@ export function mapSessionBusEvent(
   }
 }
 
-export function mirrorGatewaySessionBusEvent(event: SessionBusEvent, sessionID: string): void {
+export function mirrorMissionSessionBusEvent(event: SessionBusEvent, sessionID: string): void {
   if (sessionBusEventSessionID(event) !== sessionID) return
-  if (sessionRole(sessionID) !== "gateway") return
+  if (sessionRole(sessionID) !== "mission") return
   const mapped = mapSessionBusEvent(event, { sessionID })
   if (!mapped) return
   ProtocolStore.dispatchEphemeral({
@@ -216,11 +216,11 @@ export function mirrorGatewaySessionBusEvent(event: SessionBusEvent, sessionID: 
   })
 }
 
-export function subscribeGatewaySessionMirror(sessionID: string): () => void {
+export function subscribeMissionSessionMirror(sessionID: string): () => void {
   const handler = (envelope: { payload?: SessionBusEvent }) => {
     const event = envelope.payload
     if (!event || typeof event.type !== "string" || !event.properties) return
-    mirrorGatewaySessionBusEvent(event, sessionID)
+    mirrorMissionSessionBusEvent(event, sessionID)
   }
   GlobalBus.on("event", handler)
   return () => GlobalBus.off("event", handler)

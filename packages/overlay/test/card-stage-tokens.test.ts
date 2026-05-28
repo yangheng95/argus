@@ -14,7 +14,7 @@ const KNOWN_STAGES = [
   "assistant",
   "system",
   "orchestrator",
-  "gateway",
+  "mission",
   "intent-analysis",
   "spec",
   "requirements",

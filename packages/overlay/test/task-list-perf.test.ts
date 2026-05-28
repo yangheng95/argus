@@ -9,8 +9,8 @@ const LARGE_TEXT = "large task payload ".repeat(120)
 const PERF_LIMITS = {
   panelRowsMs: 2500,
   selectLastMs: 1200,
-  gatewayRowsMs: 1500,
-  gatewaySearchMs: 600,
+  missionRowsMs: 1500,
+  missionSearchMs: 600,
 }
 
 function send(body: unknown, status = 200): Response {
@@ -195,8 +195,8 @@ test(
         return performance.now() - start
       }, TASK_COUNT)
 
-      const hiddenGatewayRows = await page.evaluate(() => document.querySelectorAll(".gateway-ledger-row").length)
-      expect(hiddenGatewayRows).toBe(0)
+      const hiddenMissionRows = await page.evaluate(() => document.querySelectorAll(".mission-ledger .task-row-main[data-task-id]").length)
+      expect(hiddenMissionRows).toBe(0)
 
       const selectLastMs = await page.evaluate(async () => {
         const rows = Array.from(document.querySelectorAll<HTMLButtonElement>(".task-row-main[data-task-id]"))
@@ -211,32 +211,32 @@ test(
         return performance.now() - start
       })
 
-      const gatewayRowsMs = await page.evaluate(async (count) => {
-        const gateway = document.querySelector<HTMLButtonElement>("#btnGateway")
-        if (!gateway) throw new Error("missing Gateway button")
+      const missionRowsMs = await page.evaluate(async (count) => {
+        const mission = document.querySelector<HTMLButtonElement>("#btnMission")
+        if (!mission) throw new Error("missing Mission button")
         const start = performance.now()
-        gateway.click()
-        while (document.body.getAttribute("data-page-mode") !== "gateway") {
-          if (performance.now() - start > 10_000) throw new Error("Gateway page did not open")
+        mission.click()
+        while (document.body.getAttribute("data-page-mode") !== "mission") {
+          if (performance.now() - start > 10_000) throw new Error("Mission page did not open")
           await new Promise((resolve) => setTimeout(resolve, 16))
         }
-        while (document.querySelectorAll(".gateway-ledger-row").length < count) {
-          if (performance.now() - start > 10_000) throw new Error("Gateway rows did not render")
+        while (document.querySelectorAll(".mission-ledger .task-row-main[data-task-id]").length < count) {
+          if (performance.now() - start > 10_000) throw new Error("Mission rows did not render")
           await new Promise((resolve) => setTimeout(resolve, 16))
         }
         return performance.now() - start
       }, TASK_COUNT)
 
       await page.evaluate(async () => {
-        const newRequirement = document.querySelector<HTMLButtonElement>('[data-ui="gateway-new-requirement"]')
-        if (!newRequirement) throw new Error("missing Gateway new requirement button")
+        const newRequirement = document.querySelector<HTMLButtonElement>('[data-ui="mission-new-requirement"]')
+        if (!newRequirement) throw new Error("missing Mission new requirement button")
         newRequirement.click()
-        const input = await new Promise<HTMLInputElement>((resolve, reject) => {
+        const input = await new Promise<HTMLTextAreaElement>((resolve, reject) => {
           const start = performance.now()
           const tick = () => {
-            const found = document.querySelector<HTMLInputElement>('[data-ui="gateway-composer-input"]')
+            const found = document.querySelector<HTMLTextAreaElement>('[data-ui="mission-composer-input"]')
             if (found) return resolve(found)
-            if (performance.now() - start > 10_000) return reject(new Error("Gateway composer did not open"))
+            if (performance.now() - start > 10_000) return reject(new Error("Mission composer did not open"))
             setTimeout(tick, 16)
           }
           tick()
@@ -244,37 +244,39 @@ test(
         input.value = "preserve composer draft"
         input.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: input.value }))
 
-        const back = document.querySelector<HTMLButtonElement>('[data-ui="gateway-back"]')
-        if (!back) throw new Error("missing Gateway back button")
-        back.click()
+        // The in-page "Back to Panel" affordance was removed — the Mission
+        // page-mode toggle now lives entirely in the titlebar #btnMission
+        // button (Mission.tsx comment, gateway-mission-split-2026-05-28.md §3).
+        // Clicking it from Mission mode flips back to panel.
+        const mission = document.querySelector<HTMLButtonElement>("#btnMission")
+        if (!mission) throw new Error("missing Mission button")
+        mission.click()
         while (document.body.getAttribute("data-page-mode") !== "panel") {
           await new Promise((resolve) => setTimeout(resolve, 16))
         }
-        const hiddenRows = document.querySelectorAll(".gateway-ledger-row").length
-        if (hiddenRows !== 0) throw new Error(`hidden Gateway ledger still rendered ${hiddenRows} rows`)
+        const hiddenRows = document.querySelectorAll(".mission-ledger .task-row-main[data-task-id]").length
+        if (hiddenRows !== 0) throw new Error(`hidden Mission ledger still rendered ${hiddenRows} rows`)
 
-        const gateway = document.querySelector<HTMLButtonElement>("#btnGateway")
-        if (!gateway) throw new Error("missing Gateway button after back")
-        gateway.click()
-        while (document.body.getAttribute("data-page-mode") !== "gateway") {
+        mission.click()
+        while (document.body.getAttribute("data-page-mode") !== "mission") {
           await new Promise((resolve) => setTimeout(resolve, 16))
         }
-        const restored = document.querySelector<HTMLInputElement>('[data-ui="gateway-composer-input"]')
-        if (!restored) throw new Error("Gateway composer unmounted across panel round trip")
+        const restored = document.querySelector<HTMLTextAreaElement>('[data-ui="mission-composer-input"]')
+        if (!restored) throw new Error("Mission composer unmounted across panel round trip")
         if (restored.value !== "preserve composer draft") {
-          throw new Error(`Gateway composer draft was not preserved: ${restored.value}`)
+          throw new Error(`Mission composer draft was not preserved: ${restored.value}`)
         }
-        document.querySelector<HTMLButtonElement>('[data-ui="gateway-composer-discard"]')?.click()
+        document.querySelector<HTMLButtonElement>('[data-ui="mission-composer-discard"]')?.click()
       })
 
-      const gatewaySearchMs = await page.evaluate(async () => {
-        const input = document.querySelector<HTMLInputElement>('[data-ui="gateway-search"]')
-        if (!input) throw new Error("missing Gateway search input")
+      const missionSearchMs = await page.evaluate(async () => {
+        const input = document.querySelector<HTMLInputElement>('[data-ui="mission-search"]')
+        if (!input) throw new Error("missing Mission search input")
         const start = performance.now()
         input.value = "task 149"
         input.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: "task 149" }))
-        while (document.querySelectorAll(".gateway-ledger-row").length !== 1) {
-          if (performance.now() - start > 10_000) throw new Error("Gateway search did not filter")
+        while (document.querySelectorAll(".mission-ledger .task-row-main[data-task-id]").length !== 1) {
+          if (performance.now() - start > 10_000) throw new Error("Mission search did not filter")
           await new Promise((resolve) => setTimeout(resolve, 16))
         }
         return performance.now() - start

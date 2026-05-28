@@ -1,6 +1,8 @@
 # Gateway Master Supervisor — Final Spec
 
-**Status**: Approved by 4-way review (codex round 3 + 3 independent reviewers)
+> **SUPERSEDED 2026-05-28** by `gateway-mission-split-2026-05-28.md`. 上层编排概念已从 gateway 基建命名空间拆出，更名为 **Mission**（agent id `mission`、kind `mission`、`/mission/wake`、`.opencorvus/runtime/mission/`）。本文件仅作历史记录保留；当前实现以新 spec 为准。
+
+**Status**: Superseded — see `gateway-mission-split-2026-05-28.md`
 **Date**: 2026-05-26
 **Supersedes**: `gateway-master-mission-owner-2026-05-26.md`（待用户确认后删除）
 **Author**: Claude Code, in conversation with user

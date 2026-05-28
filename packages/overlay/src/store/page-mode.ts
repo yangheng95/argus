@@ -1,7 +1,7 @@
 // ── Page Mode Store ──
 //
 // Single source of truth for the top-level Overlay page mode. Two values
-// today: "panel" (default conversation/inspector layout) and "gateway"
+// today: "panel" (default conversation/inspector layout) and "mission"
 // (the operator control room that manages tasks and channel ingress).
 //
 // Changing modes does NOT clear or rewrite shared task state — boardStore
@@ -10,25 +10,25 @@
 // without a reload (PRD §6.3).
 //
 // Why a dedicated store instead of a signal living inside main.tsx:
-// Gateway (and any future page) needs to dispatch the toggle from its
+// Mission (and any future page) needs to dispatch the toggle from its
 // own subtree, and tests need a stable import path for assertions about
 // the active mode.
 
 import { createSignal } from "solid-js"
 
-export type PageMode = "panel" | "gateway"
+export type PageMode = "panel" | "mission"
 
 const [pageMode, setPageModeRaw] = createSignal<PageMode>("panel")
 
 export { pageMode }
 
 export function setPageMode(next: PageMode): void {
-  if (next !== "panel" && next !== "gateway") {
+  if (next !== "panel" && next !== "mission") {
     throw new Error(`setPageMode: unsupported page mode ${JSON.stringify(next)}`)
   }
   setPageModeRaw(next)
 }
 
-export function isGatewayPage(): boolean {
-  return pageMode() === "gateway"
+export function isMissionPage(): boolean {
+  return pageMode() === "mission"
 }

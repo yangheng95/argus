@@ -11,17 +11,19 @@ export const PanelLocalActionType = z.enum(["set_executor", "select_task", "sele
  *
  *   panel_ui        external UI / mobile gateway client / direct HTTP call
  *   control_agent   the OpenCorvus control LLM agent (`control`)
- *   gateway_master  the OpenCorvus mission supervisor LLM agent (`gateway-master`)
+ *   mission         the OpenCorvus Mission LLM agent (`mission`)
  *
  * `actor` is the provenance dimension (who); `surface` is the channel
  * dimension (where). They are independent: a control_agent can run on
- * panel surface, a panel_ui can run on gateway surface, etc.
+ * panel surface, a panel_ui can run on the gateway (remote/mobile) surface,
+ * etc. Note `gateway` here is the infrastructure access surface, unrelated
+ * to the `mission` actor identity.
  *
  * Replaces the prior free-text `source` field as the authoritative input
  * for authorization decisions and audit trails. `source` is preserved
  * for business-meaningful labels (e.g. "channel:slack:thread-123").
  */
-export const PanelActor = z.enum(["panel_ui", "control_agent", "gateway_master"])
+export const PanelActor = z.enum(["panel_ui", "control_agent", "mission"])
 export type PanelActor = z.infer<typeof PanelActor>
 
 /**
@@ -33,7 +35,7 @@ export type PanelActor = z.infer<typeof PanelActor>
  */
 export function derivePanelActor(agent: string | undefined): PanelActor {
   if (agent === "control") return "control_agent"
-  if (agent === "gateway-master") return "gateway_master"
+  if (agent === "mission") return "mission"
   return "panel_ui"
 }
 export const PanelCapabilityQuery = z.object({

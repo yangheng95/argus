@@ -188,7 +188,7 @@ export function panelRequestBody(
 // Task IDs are opencorvus identifiers: a lowercase prefix, an underscore, and
 // a ULID/base32 body, optionally with hyphens (requestIDs). Anything outside
 // [A-Za-z0-9_-] (path separators, whitespace, colons, etc.) indicates the
-// caller passed a corrupted value — for example a gateway message metadata
+// caller passed a corrupted value — for example a mission message metadata
 // field polluted with a filesystem path. Fail loudly so the call stack points
 // directly at the source instead of triggering silent 400-request floods.
 const TASK_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
@@ -580,8 +580,8 @@ export async function createTask(options: CreateTaskOptions): Promise<string> {
   const kind = await resolveTaskKindDecision({ kind: options.kind, signal });
   const queue = await resolveTaskQueueDecision({ queue: options.queue, signal });
   const requestID = crypto.randomUUID();
-  // Caller-provided executor wins when supplied (e.g. Gateway proposal
-  // candidate carries its own executor pick); otherwise inherit the
+  // Caller-provided executor wins when supplied (e.g. Mission-dispatched
+  // task carries its own executor pick); otherwise inherit the
   // project setting so panel-driven creation behaves as before.
   const executor = options.executor
     ? sanitizeExecutor(options.executor)

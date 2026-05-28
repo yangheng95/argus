@@ -5,21 +5,23 @@ import { Tool } from "./tool"
 import { Instance } from "@/project/instance"
 
 /**
- * Mission state tool — path-confined worktree I/O for the gateway-master
- * supervisor agent. See specs/gateway-master-supervisor-2026-05-26.md §2.2.
+ * Mission state tool — the Mission agent's durable, write-confined memory.
+ * See specs/gateway-mission-split-2026-05-28.md.
  *
- * Why this tool exists instead of giving master generic read/write/glob:
- * the supervisor MUST NOT acquire general workspace I/O (rule 11 — the
- * orchestrator-core comment block has a literal history log of how a
- * scheduler-style agent with bash/edit/read tools bypassed worker
- * dispatch and tried to do work itself). mission_state restricts master
- * to a fixed directory tree and a fixed file-name vocabulary so it
- * cannot read/overwrite arbitrary repo files even by mistake.
+ * Why this tool instead of giving Mission generic write/edit: Mission may
+ * READ and analyse the project (read/glob/search_code/list/lsp), but its
+ * only WRITE surface to the workspace is these four files. It must NOT
+ * acquire edit/write/bash (rule 11 — the orchestrator-core comment block has
+ * a literal history log of how a coordination agent with executor tools
+ * bypassed worker dispatch and tried to do work itself). mission_state pins
+ * the agent to a fixed directory tree and file-name vocabulary so it cannot
+ * overwrite arbitrary repo files even by mistake; all real changes go through
+ * dispatched engine_tasks.
  *
  * Directory layout (relative to the project directory at run time):
- *   .opencorvus/runtime/gateway-master/<missionID>/
- *     frontier.md   — outstanding work the master is tracking
- *     tasks.md      — engine_task IDs the master has dispatched + status
+ *   .opencorvus/runtime/mission/<missionID>/
+ *     frontier.md   — outstanding work + the mission contract
+ *     tasks.md      — engine_task IDs the mission has dispatched + status
  *     handoff.md    — brief for the next wake of this same mission
  *     notes.md      — free-form scratchpad
  *
@@ -45,11 +47,11 @@ const MAX_CONTENT_BYTES = 256 * 1024
 
 function runtimeBase() {
   // Instance.directory is the project's active working directory; the
-  // master session is always tied to a single project / cwd, so we
-  // resolve relative to it. If the master ever needs to switch cwd
+  // mission session is always tied to a single project / cwd, so we
+  // resolve relative to it. If a mission ever needs to switch cwd
   // (multi-worktree mission), that decision is explicit at the wake
   // boundary, not silently here.
-  return path.resolve(Instance.directory, ".opencorvus", "runtime", "gateway-master")
+  return path.resolve(Instance.directory, ".opencorvus", "runtime", "mission")
 }
 
 function missionDir(missionID: string) {
@@ -133,7 +135,7 @@ const MissionStateAction = z.discriminatedUnion("action", [ReadAction, WriteActi
 export const MissionStateTool = Tool.define("mission_state", {
   description: [
     "Read, write, or list mission supervisor state files for a single mission.",
-    "All I/O is confined to the path `.opencorvus/runtime/gateway-master/<missionID>/`",
+    "All I/O is confined to the path `.opencorvus/runtime/mission/<missionID>/`",
     "with a fixed file-name vocabulary: frontier.md, tasks.md, handoff.md, notes.md.",
     "Use this to carry mission progress across wake cycles — do NOT use read/write/glob.",
     "",

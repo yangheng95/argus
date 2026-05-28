@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, expect, test } from "bun:test"
-import { isGatewayPage, pageMode, setPageMode } from "../src/store/page-mode"
+import { isMissionPage, pageMode, setPageMode } from "../src/store/page-mode"
 
 // The pageMode signal is module-level state — bun:test runs every file
-// in the same process, so leaving it on "gateway" between tests would
+// in the same process, so leaving it on "mission" between tests would
 // silently corrupt other test files that read the signal. Reset before
 // AND after each test so an mid-test crash never poisons later tests.
 beforeEach(() => {
@@ -14,20 +14,20 @@ afterEach(() => {
 
 test("page mode defaults to panel", () => {
   expect(pageMode()).toBe("panel")
-  expect(isGatewayPage()).toBe(false)
+  expect(isMissionPage()).toBe(false)
 })
 
-test("setPageMode toggles between panel and gateway without losing state", () => {
-  setPageMode("gateway")
-  expect(pageMode()).toBe("gateway")
-  expect(isGatewayPage()).toBe(true)
+test("setPageMode toggles between panel and mission without losing state", () => {
+  setPageMode("mission")
+  expect(pageMode()).toBe("mission")
+  expect(isMissionPage()).toBe(true)
 
   setPageMode("panel")
   expect(pageMode()).toBe("panel")
-  expect(isGatewayPage()).toBe(false)
+  expect(isMissionPage()).toBe(false)
 
-  setPageMode("gateway")
-  expect(pageMode()).toBe("gateway")
+  setPageMode("mission")
+  expect(pageMode()).toBe("mission")
 })
 
 test("setPageMode rejects unknown values (rule 7 — no fallback)", () => {

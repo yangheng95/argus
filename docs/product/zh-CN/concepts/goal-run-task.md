@@ -122,7 +122,7 @@ orchestrator-stream-error
 **SessionKind**（固定在 creation time，`session.sql.ts:50-65` 出现顺序）：
 
 ```
-root · orchestrator · assistant · gateway · intent-analysis ·
+root · orchestrator · assistant · mission · intent-analysis ·
 requirements · design-analyst · goal · architect · integrity ·
 delivery · executor · build · evaluator · system
 ```

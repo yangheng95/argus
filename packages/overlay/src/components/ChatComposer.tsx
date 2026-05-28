@@ -14,6 +14,7 @@ import {
 } from "../services/chat-attach-limits";
 import { fileToDataUrl } from "../services/file-to-data-url";
 import { Icon } from "./Icon";
+import { AutoGrowTextarea } from "./primitives/AutoGrowTextarea";
 
 // ── Types ──
 
@@ -60,8 +61,6 @@ export interface ChatComposerProps {
 // services/chat-attach-limits (audit W2-V15) so the cap can be
 // unit-tested without rendering the component.
 
-// Cap auto-grow at 10 visible lines; beyond that the textarea scrolls.
-const MAX_VISIBLE_LINES = 10;
 const REQUEST_PERFORMANCE_WARNING_BYTES = 50 * 1024;
 const UTF8_ENCODER = new TextEncoder();
 
@@ -237,27 +236,10 @@ export function ChatComposer(props: ChatComposerProps) {
   });
 
   // ── Auto-grow textarea ──
-  // Track content height up to MAX_VISIBLE_LINES; beyond that, the existing
-  // overflow-y:auto in composer.css lets the textarea scroll. The drag handle
-  // still sets `--chat-textarea-height` as a min-height floor on the wrap, so
-  // manual resize remains a hard floor while auto-grow handles content-driven
-  // height.
-  function autoResizeTextarea() {
-    if (!textareaRef) return;
-    textareaRef.style.height = "auto";
-    const cs = getComputedStyle(textareaRef);
-    const lineHeight = parseFloat(cs.lineHeight) || 20;
-    const padTop = parseFloat(cs.paddingTop) || 0;
-    const padBottom = parseFloat(cs.paddingBottom) || 0;
-    const maxHeight = Math.ceil(lineHeight * MAX_VISIBLE_LINES + padTop + padBottom);
-    const next = Math.min(textareaRef.scrollHeight, maxHeight);
-    textareaRef.style.height = `${next}px`;
-  }
-
-  createEffect(() => {
-    text();
-    queueMicrotask(autoResizeTextarea);
-  });
+  // Content-driven height (capped, then scroll) is owned by the shared
+  // <AutoGrowTextarea> primitive. The drag handle below still sets
+  // `--chat-textarea-height` as a min-height floor on the wrap, so manual
+  // resize remains a hard floor while the primitive handles content height.
 
   onMount(() => {
     if (!textareaRef) return;
@@ -268,7 +250,6 @@ export function ChatComposer(props: ChatComposerProps) {
     } catch {
       /* ignore — selection APIs throw on detached elements in some hosts */
     }
-    autoResizeTextarea();
   });
 
  // ── Attachment handling ──
@@ -538,8 +519,10 @@ export function ChatComposer(props: ChatComposerProps) {
       {/* Compose row: textarea + send */}
       <div class="chat-compose-row">
         <div class="chat-textarea-wrap" title={t("chat.tip")}>
-          <textarea
-            ref={textareaRef}
+          <AutoGrowTextarea
+            ref={(el) => {
+              textareaRef = el;
+            }}
             id="chatTextarea"
             class="chat-textarea"
             rows={2}

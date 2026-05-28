@@ -72,7 +72,14 @@ function usageProjectionFromInfo(info: any): MessageUsageProjection | undefined 
   const cacheReadTokens = finitePositiveNumber(tokens?.cache?.read);
   const cacheWriteTokens = finitePositiveNumber(tokens?.cache?.write);
   const costUSD = Number.isFinite(Number(cost)) ? Number(cost) : 0;
-  const contextTokens = inputTokens + cacheReadTokens + cacheWriteTokens;
+  const providerID = String(info?.providerID || "").toLowerCase();
+  const modelID = String(info?.modelID || "").toLowerCase();
+  const externalCumulativeUsage =
+    providerID === "claude-agent" ||
+    modelID === "claude-agent" ||
+    providerID === "codex-app-server" ||
+    modelID === "codex-app-server";
+  const contextTokens = externalCumulativeUsage ? 0 : inputTokens + cacheReadTokens + cacheWriteTokens;
   if (inputTokens <= 0 && outputTokens <= 0 && totalTokens <= 0 && costUSD <= 0 && contextTokens <= 0) {
     return undefined;
   }
@@ -87,14 +94,19 @@ function projectUsageOntoCard(session: SessionInfo, messageID: string, fallbackC
   let sumOutput = 0;
   let sumTotal = 0;
   let sumCost = 0;
-  let sumContext = 0;
+  let latestContext = 0;
+  let latestContextTime = Number.NEGATIVE_INFINITY;
   for (const [mid, u] of session.messageUsage) {
     if (session.messageCardIDs.get(mid) !== targetCardID) continue;
     sumInput += u.inputTokens;
     sumOutput += u.outputTokens;
     sumTotal += u.totalTokens;
     sumCost += u.costUSD;
-    sumContext += u.contextTokens;
+    const time = messages.get(mid)?.time ?? 0;
+    if (u.contextTokens > 0 && time >= latestContextTime) {
+      latestContext = u.contextTokens;
+      latestContextTime = time;
+    }
   }
   setCardTreeStore("cards", targetCardID, "usage", {
     inputTokens: sumInput,
@@ -102,8 +114,8 @@ function projectUsageOntoCard(session: SessionInfo, messageID: string, fallbackC
     totalTokens: sumTotal,
     costUSD: sumCost,
   });
-  if (sumContext > 0) {
-    setCardTreeStore("cards", targetCardID, "contextTokens", sumContext);
+  if (latestContext > 0) {
+    setCardTreeStore("cards", targetCardID, "contextTokens", latestContext);
     setCardTreeStore("cards", targetCardID, "contextTokensEstimated", false);
   }
 }
@@ -2292,6 +2304,7 @@ function rebuildGoalStepCards(board: any): void {
         sessionKind: string,
         status: CardStatus,
         startedAt: number,
+        phaseSessionID?: string,
       ) => {
         setCardTreeStore(
           "cards",
@@ -2304,6 +2317,7 @@ function rebuildGoalStepCards(board: any): void {
               prev.title = label;
               prev.phaseID = pid;
               prev.phaseSessionKind = sessionKind;
+              if (phaseSessionID) prev.phaseSessionID = phaseSessionID;
               // startedAt > 0 is invariant (caller filters pending phases).
               prev.time = startedAt;
               // parts / childIDs intentionally preserved.
@@ -2319,6 +2333,7 @@ function rebuildGoalStepCards(board: any): void {
                 childIDs: [],
                 phaseID: pid,
                 phaseSessionKind: sessionKind,
+                ...(phaseSessionID ? { phaseSessionID } : {}),
                 time: startedAt,
               };
             }
@@ -2349,6 +2364,7 @@ function rebuildGoalStepCards(board: any): void {
             String(pdef.sessionKind || ""),
             phaseStatus,
             phaseStartedAt,
+            pid === "build" ? String(step?.payload?.buildSessionID || "") || undefined : undefined,
           );
           phaseChildIDs.push(phaseCardID);
         }

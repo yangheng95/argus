@@ -8,6 +8,8 @@ import { projectConversationView } from "@/conversation/view"
 import { Config } from "@/config/config"
 import { EffectiveConfig } from "@/config/effective"
 import { validateConfigModelReferences } from "@/config/model-reference-validation"
+import { Agent } from "@/agent/agent"
+import { Provider } from "@/provider/provider"
 import { SessionPrompt } from "../../session/prompt"
 import { SessionContext } from "@/session/context"
 import { clearRewindCursorForSession } from "@/engine/rewind"
@@ -23,7 +25,7 @@ import { Log } from "../../util/log"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
 import { ProtocolStore } from "@/protocol/store"
-import { enrichGatewaySessionTranscript, subscribeGatewaySessionMirror } from "@/protocol/session-mirror"
+import { enrichMissionSessionTranscript, subscribeMissionSessionMirror } from "@/protocol/session-mirror"
 import { BusEvent } from "@/bus/bus-event"
 import { SessionConversationHydration, SessionEvent } from "@/engine/model"
 
@@ -288,6 +290,8 @@ export const SessionRoutes = lazy(() =>
         const patch = c.req.valid("json")
         await validateConfigModelReferences(patch, "configOverlay")
         await Session.mergeConfigOverlay({ sessionID, patch })
+        Provider.reset()
+        Agent.reset()
         return c.json(await sessionConfig(sessionID))
       },
     )
@@ -319,7 +323,7 @@ export const SessionRoutes = lazy(() =>
       async (c) => {
         const sessionID = c.req.valid("param").sessionID
         const session = await Session.get(sessionID)
-        const transcript = enrichGatewaySessionTranscript(await Session.messages({ sessionID }))
+        const transcript = enrichMissionSessionTranscript(await Session.messages({ sessionID }))
         const board = {
           kind: "session" as const,
           sessionID,
@@ -384,7 +388,7 @@ export const SessionRoutes = lazy(() =>
             },
             { sessionID },
           )
-          const stopMirror = subscribeGatewaySessionMirror(sessionID)
+          const stopMirror = subscribeMissionSessionMirror(sessionID)
           await writeData(JSON.stringify({
             event_id: `session-connected-${Date.now()}`,
             session_id: sessionID,

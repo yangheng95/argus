@@ -21,7 +21,16 @@ export const MIRROR_TOOL_IDS = [
 
 export type MirrorToolId = typeof MIRROR_TOOL_IDS[number]
 export type MirrorAnalysisToolId = typeof MIRROR_ANALYSIS_TOOL_IDS[number]
+export type MirrorDeliveryToolId = typeof MIRROR_DELIVERY_TOOL_IDS[number]
 
 export function isMirrorToolId(id: string): id is MirrorToolId {
   return (MIRROR_TOOL_IDS as readonly string[]).includes(id)
+}
+
+export function isMirrorAnalysisToolId(id: string): id is MirrorAnalysisToolId {
+  return (MIRROR_ANALYSIS_TOOL_IDS as readonly string[]).includes(id)
+}
+
+export function isMirrorDeliveryToolId(id: string): id is MirrorDeliveryToolId {
+  return (MIRROR_DELIVERY_TOOL_IDS as readonly string[]).includes(id)
 }

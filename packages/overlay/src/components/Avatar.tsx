@@ -7,7 +7,7 @@ export const AVATAR_ICON_BY_ROLE: Record<AgentRole, IconName> = {
   assistant: "avatar-assistant",
   system: "avatar-system",
   orchestrator: "avatar-orchestrator",
-  gateway: "avatar-gateway",
+  mission: "avatar-mission",
   "intent-analysis": "avatar-intent-analysis",
   spec: "avatar-spec",
   requirements: "avatar-requirements",

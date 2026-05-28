@@ -1,10 +1,10 @@
 // ── TaskDetailOverlay (Phase 6) ──
-// Full-screen drawer that slides in over the Gateway view when the user
-// opens a task (via Gateway message chip or the TaskListPane).
+// Full-screen drawer that slides in over the Mission view when the user
+// opens a task (via Mission message chip or the TaskListPane).
 //
 // Composes the existing <Board> component to show the task's pipeline panels
 // (workflow / requirements / architect / criteria / deliveries). Closing the
-// overlay clears the hash and returns to Gateway.
+// overlay clears the hash and returns to Mission.
 
 import { Show, createEffect, createSignal } from "solid-js";
 import { Board } from "./Board";

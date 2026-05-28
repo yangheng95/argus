@@ -4,6 +4,7 @@ import { cardTreeStore } from "../src/store/card-tree";
 import { conversationAgentStore } from "../src/store/conversation-agents";
 import {
   cancelConversationReplay,
+  conversationCardContainsMessage,
   hydrateTaskConversation,
   loadConversationHistoryUntilCard,
 } from "../src/services/conversation";
@@ -52,6 +53,7 @@ afterEach(() => {
   __setHostTransportForTest(undefined);
   resetWriter();
   setBoardStore("selectedTaskID", "");
+  setBoardStore("selectedSource", null);
 });
 
 afterAll(() => {
@@ -104,6 +106,7 @@ test("hydration replay projects persisted executor output into the card tree", (
 test("hydrateTaskConversation waits for persisted event replay before returning resume sequence", async () => {
   resetWriter();
   setBoardStore("selectedTaskID", "tsk_replay");
+  setBoardStore("selectedSource", { kind: "task", id: "tsk_replay" });
 
   let resolveReplayPage!: (body: unknown) => void;
   const replayPage = new Promise<unknown>((resolve) => {
@@ -194,6 +197,7 @@ test("hydrateTaskConversation waits for persisted event replay before returning 
 test("hydrateTaskConversation renders the live tail first and prepends older history on demand", async () => {
   resetWriter();
   setBoardStore("selectedTaskID", "tsk_lazy");
+  setBoardStore("selectedSource", { kind: "task", id: "tsk_lazy" });
   const requests: TransportRequest[] = [];
 
   const board = {
@@ -340,5 +344,412 @@ test("hydrateTaskConversation renders the live tail first and prepends older his
   expect(requests.map((req) => req.path)).toEqual([
     "task/tsk_lazy/conversation",
     "task/tsk_lazy/conversation/history",
+  ]);
+});
+
+test("history paging continues when a goal phase card exists but its target message is not loaded", async () => {
+  resetWriter();
+  setBoardStore("selectedTaskID", "tsk_phase_history");
+  setBoardStore("selectedSource", { kind: "task", id: "tsk_phase_history" });
+  const requests: TransportRequest[] = [];
+  const phaseCardID = "step:gol_phase:build:phase:build";
+
+  const board = {
+    snapshotVersion: "board:phase-history",
+    task: {
+      id: "tsk_phase_history",
+      status: "active",
+      request: "restore phase conversation lazily",
+      sessionID: "ses_root",
+      time: { created: 1_776_000_010_000 },
+      attachments: [],
+    },
+    workflow: {
+      steps: [
+        {
+          id: "build",
+          phases: [{ id: "build", label: "Build", sessionKind: "build" }],
+        },
+      ],
+    },
+    goalWorkflows: [
+      {
+        goalID: "gol_phase",
+        goalTitle: "Phase goal",
+        goalObjective: "Keep build output visible",
+        orderIndex: 0,
+        retryCount: 0,
+        steps: [
+          {
+            stepID: "build",
+            label: "Executor",
+            status: "completed",
+            startedAt: 1_776_000_010_100,
+            phases: {
+              build: {
+                status: "completed",
+                startedAt: 1_776_000_010_120,
+                completedAt: 1_776_000_010_700,
+              },
+            },
+          },
+        ],
+      },
+    ],
+    interactions: [],
+  };
+
+  const latestMessage = {
+    info: {
+      id: "msg_latest_phase",
+      sessionID: "ses_root",
+      role: "assistant",
+      resolvedRole: "assistant",
+      channel: "assistant",
+      time: { created: 1_776_000_010_900 },
+    },
+    parts: [
+      {
+        id: "part_latest_phase",
+        sessionID: "ses_root",
+        messageID: "msg_latest_phase",
+        type: "text",
+        text: "Latest tail.",
+      },
+    ],
+  };
+  const oldBuildMessage = {
+    info: {
+      id: "msg_build_old",
+      sessionID: "ses_build_old",
+      parentSessionID: "ses_root",
+      goalID: "gol_phase",
+      role: "assistant",
+      resolvedRole: "build",
+      channel: "build",
+      time: { created: 1_776_000_010_200, completed: 1_776_000_010_700 },
+    },
+    parts: [
+      {
+        id: "part_build_old",
+        sessionID: "ses_build_old",
+        messageID: "msg_build_old",
+        type: "text",
+        text: "Build output from older history.",
+      },
+    ],
+  };
+
+  __setHostTransportForTest(
+    fakeTransport((req) => {
+      requests.push(req);
+      if (req.path === "task/tsk_phase_history/conversation") {
+        return {
+          status: 200,
+          ok: true,
+          headers: {},
+          body: {
+            board,
+            transcript: [latestMessage],
+            timeline: [],
+            events: [],
+            view: {
+              sessions: [
+                {
+                  sessionID: "ses_root",
+                  stage: "assistant",
+                  messageIDs: ["msg_latest_phase"],
+                  firstMessageTime: 1_776_000_010_900,
+                  lastMessageTime: 1_776_000_010_900,
+                  placement: "top_level",
+                },
+              ],
+              topLevelSessionIDs: ["ses_root"],
+            },
+            agentView: {
+              sessions: [
+                {
+                  sessionID: "ses_build_old",
+                  stage: "build",
+                  parentSessionID: "ses_root",
+                  goalID: "gol_phase",
+                  messageIDs: ["msg_build_old"],
+                  firstMessageTime: 1_776_000_010_200,
+                  lastMessageTime: 1_776_000_010_700,
+                  placement: "goal_phase",
+                  phase: { stepID: "build", phaseID: "build" },
+                },
+                {
+                  sessionID: "ses_root",
+                  stage: "assistant",
+                  messageIDs: ["msg_latest_phase"],
+                  firstMessageTime: 1_776_000_010_900,
+                  lastMessageTime: 1_776_000_010_900,
+                  placement: "top_level",
+                },
+              ],
+              topLevelSessionIDs: ["ses_root"],
+            },
+            eventReplay: { cursor: 7, latestSequence: 7, complete: true, limit: 500 },
+            history: {
+              oldestTimestamp: 1_776_000_010_900,
+              oldestMessageID: "msg_latest_phase",
+              hasMore: true,
+              limit: 1,
+            },
+            lastSequence: 7,
+          },
+        };
+      }
+      if (req.path === "task/tsk_phase_history/conversation/history") {
+        return {
+          status: 200,
+          ok: true,
+          headers: {},
+          body: {
+            transcript: [oldBuildMessage],
+            timeline: [],
+            view: {
+              sessions: [
+                {
+                  sessionID: "ses_build_old",
+                  stage: "build",
+                  parentSessionID: "ses_root",
+                  goalID: "gol_phase",
+                  messageIDs: ["msg_build_old"],
+                  firstMessageTime: 1_776_000_010_200,
+                  lastMessageTime: 1_776_000_010_700,
+                  placement: "goal_phase",
+                  phase: { stepID: "build", phaseID: "build" },
+                },
+              ],
+              topLevelSessionIDs: [],
+            },
+            history: {
+              oldestTimestamp: 1_776_000_010_200,
+              oldestMessageID: "msg_build_old",
+              hasMore: false,
+              limit: 160,
+            },
+          },
+        };
+      }
+      throw new Error(`unexpected request path: ${req.path}`);
+    }),
+  );
+
+  await expect(hydrateTaskConversation("tsk_phase_history", { tailLimit: 1 })).resolves.toBe(7);
+  expect(cardTreeStore.cards[phaseCardID]).toBeDefined();
+  expect(conversationCardContainsMessage(phaseCardID, "msg_build_old")).toBe(false);
+
+  await expect(
+    loadConversationHistoryUntilCard(phaseCardID, "tsk_phase_history", { messageID: "msg_build_old" }),
+  ).resolves.toBe(true);
+  expect(conversationCardContainsMessage(phaseCardID, "msg_build_old")).toBe(true);
+  expect(requests.map((req) => req.path)).toEqual([
+    "task/tsk_phase_history/conversation",
+    "task/tsk_phase_history/conversation/history",
+  ]);
+});
+
+test("goal phase history can hydrate a build session directly by session id", async () => {
+  resetWriter();
+  setBoardStore("selectedTaskID", "tsk_phase_session");
+  setBoardStore("selectedSource", { kind: "task", id: "tsk_phase_session" });
+  const requests: TransportRequest[] = [];
+  const phaseCardID = "step:gol_phase_session:build:phase:build";
+
+  const board = {
+    snapshotVersion: "board:phase-session",
+    task: {
+      id: "tsk_phase_session",
+      status: "active",
+      request: "restore build session directly",
+      sessionID: "ses_root",
+      time: { created: 1_776_000_020_000 },
+      attachments: [],
+    },
+    workflow: {
+      steps: [
+        {
+          id: "build",
+          phases: [{ id: "build", label: "Build", sessionKind: "build" }],
+        },
+      ],
+    },
+    goalWorkflows: [
+      {
+        goalID: "gol_phase_session",
+        goalTitle: "Phase session goal",
+        goalObjective: "Load old build transcript by session id",
+        orderIndex: 0,
+        retryCount: 0,
+        steps: [
+          {
+            stepID: "build",
+            label: "Executor",
+            status: "completed",
+            startedAt: 1_776_000_020_100,
+            payload: { buildSessionID: "ses_build_session" },
+            phases: {
+              build: {
+                status: "completed",
+                startedAt: 1_776_000_020_120,
+                completedAt: 1_776_000_020_700,
+              },
+            },
+          },
+        ],
+      },
+    ],
+    interactions: [],
+  };
+  const latestMessage = {
+    info: {
+      id: "msg_latest_session",
+      sessionID: "ses_root",
+      role: "assistant",
+      resolvedRole: "assistant",
+      channel: "assistant",
+      time: { created: 1_776_000_020_900 },
+    },
+    parts: [
+      {
+        id: "part_latest_session",
+        sessionID: "ses_root",
+        messageID: "msg_latest_session",
+        type: "text",
+        text: "Latest tail.",
+      },
+    ],
+  };
+  const buildMessage = {
+    info: {
+      id: "msg_build_session",
+      sessionID: "ses_build_session",
+      parentSessionID: "ses_root",
+      goalID: "gol_phase_session",
+      role: "assistant",
+      resolvedRole: "build",
+      channel: "build",
+      time: { created: 1_776_000_020_200, completed: 1_776_000_020_700 },
+    },
+    parts: [
+      {
+        id: "part_build_session",
+        sessionID: "ses_build_session",
+        messageID: "msg_build_session",
+        type: "text",
+        text: "Build output loaded directly by session.",
+      },
+    ],
+  };
+
+  __setHostTransportForTest(
+    fakeTransport((req) => {
+      requests.push(req);
+      if (req.path === "task/tsk_phase_session/conversation") {
+        return {
+          status: 200,
+          ok: true,
+          headers: {},
+          body: {
+            board,
+            transcript: [latestMessage],
+            timeline: [],
+            events: [],
+            view: {
+              sessions: [
+                {
+                  sessionID: "ses_root",
+                  stage: "assistant",
+                  messageIDs: ["msg_latest_session"],
+                  firstMessageTime: 1_776_000_020_900,
+                  lastMessageTime: 1_776_000_020_900,
+                  placement: "top_level",
+                },
+              ],
+              topLevelSessionIDs: ["ses_root"],
+            },
+            agentView: {
+              sessions: [
+                {
+                  sessionID: "ses_build_session",
+                  stage: "build",
+                  parentSessionID: "ses_root",
+                  goalID: "gol_phase_session",
+                  messageIDs: ["msg_build_session"],
+                  lastDisplayMessageID: "msg_build_session",
+                  firstMessageTime: 1_776_000_020_200,
+                  lastMessageTime: 1_776_000_020_700,
+                  placement: "goal_phase",
+                  phase: { stepID: "build", phaseID: "build" },
+                },
+              ],
+              topLevelSessionIDs: ["ses_root"],
+            },
+            eventReplay: { cursor: 8, latestSequence: 8, complete: true, limit: 500 },
+            history: {
+              oldestTimestamp: 1_776_000_020_900,
+              oldestMessageID: "msg_latest_session",
+              hasMore: true,
+              limit: 1,
+            },
+            lastSequence: 8,
+          },
+        };
+      }
+      if (req.path === "task/tsk_phase_session/conversation/session/ses_build_session") {
+        return {
+          status: 200,
+          ok: true,
+          headers: {},
+          body: {
+            transcript: [buildMessage],
+            timeline: [],
+            view: {
+              sessions: [
+                {
+                  sessionID: "ses_build_session",
+                  stage: "build",
+                  parentSessionID: "ses_root",
+                  goalID: "gol_phase_session",
+                  messageIDs: ["msg_build_session"],
+                  lastDisplayMessageID: "msg_build_session",
+                  firstMessageTime: 1_776_000_020_200,
+                  lastMessageTime: 1_776_000_020_700,
+                  placement: "goal_phase",
+                  phase: { stepID: "build", phaseID: "build" },
+                },
+              ],
+              topLevelSessionIDs: [],
+            },
+            history: {
+              oldestTimestamp: 1_776_000_020_200,
+              oldestMessageID: "msg_build_session",
+              hasMore: false,
+              limit: 1,
+            },
+          },
+        };
+      }
+      throw new Error(`unexpected request path: ${req.path}`);
+    }),
+  );
+
+  await expect(hydrateTaskConversation("tsk_phase_session", { tailLimit: 1 })).resolves.toBe(8);
+  expect(cardTreeStore.cards[phaseCardID]?.phaseSessionID).toBe("ses_build_session");
+  expect(conversationCardContainsMessage(phaseCardID, "msg_build_session")).toBe(false);
+
+  await expect(
+    loadConversationHistoryUntilCard(phaseCardID, "tsk_phase_session", {
+      messageID: "msg_build_session",
+      sessionID: "ses_build_session",
+    }),
+  ).resolves.toBe(true);
+  expect(conversationCardContainsMessage(phaseCardID, "msg_build_session")).toBe(true);
+  expect(requests.map((req) => req.path)).toEqual([
+    "task/tsk_phase_session/conversation",
+    "task/tsk_phase_session/conversation/session/ses_build_session",
   ]);
 });

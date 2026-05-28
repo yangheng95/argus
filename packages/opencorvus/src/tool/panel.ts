@@ -7,12 +7,28 @@ import { Question } from "@/question"
 import { captureWindowScreenshot } from "@/gui/screenshot"
 import { PanelActionSchema, derivePanelActor } from "@/panel/capability"
 
-// Action whitelist by actor. Only `gateway_master` is restricted today —
-// it is a supervisor that may only create new tasks and query task
-// status. control_agent and panel_ui retain their existing surface.
-// Keep this set tight: anything the supervisor needs beyond these two
-// belongs in a dispatched engine_task, not in the supervisor itself.
-const GATEWAY_MASTER_ALLOWED_ACTIONS = new Set(["create_task", "query_task"])
+// Action whitelist by actor. Only `mission` is restricted — it is a
+// coordinator that drives squad/team work through a bounded set of panel
+// actions. control_agent and panel_ui retain their full existing surface.
+// The coordination set covers dispatch (create_task), reconciliation
+// (query_task / view_*), follow-up (send_task_message), interaction
+// answering (reply/reject_interaction), and stopping work (cancel_task). It
+// deliberately EXCLUDES replan_task / retry_task / update_goal / delete_goal
+// / update_checks / set_executor / select_* / *_session — those belong to
+// the orchestrator and the desktop panel_ui (rule 11: Mission coordinates,
+// it does not replace the orchestrator). The host enforces here so even a
+// future mis-grant of `panel` to a different identity holds.
+const MISSION_ALLOWED_ACTIONS = new Set([
+  "create_task",
+  "query_task",
+  "view_board",
+  "view_plan",
+  "view_tasks",
+  "send_task_message",
+  "cancel_task",
+  "reply_interaction",
+  "reject_interaction",
+])
 import { isDecodableText, decodeDataUrlText, decodeDataUrlBase64 } from "@/session/text-mime"
 
 const localOnly = (ctx: Tool.Context) => ctx.extra?.surface === "panel"
@@ -57,17 +73,17 @@ export const PanelTool = Tool.define("panel", {
   description: "Operate the OpenCorvus control plane: inspect plans/boards, manage task state, reply to interactions, and manage sessions.",
   parameters: PanelActionSchema,
   async execute(params, ctx) {
-    // Actor-based action filter. Master is a scheduler, not an executor —
-    // it must not be able to retry/cancel/replan tasks or manage sessions
-    // through this surface. The host enforces here so even if a future
-    // config mis-grants `panel` to a different agent identity, the
-    // boundary holds.
+    // Actor-based action filter. Mission is a coordinator, not an executor —
+    // it drives squad/team work through a bounded panel surface and must not
+    // replan/retry/edit goals or manage sessions here (rule 11). The host
+    // enforces so even a future mis-grant of `panel` to another identity holds.
     const actor = derivePanelActor(ctx.agent)
-    if (actor === "gateway_master" && !GATEWAY_MASTER_ALLOWED_ACTIONS.has(params.action)) {
+    if (actor === "mission" && !MISSION_ALLOWED_ACTIONS.has(params.action)) {
       throw new Error(
-        `panel action "${params.action}" is not permitted for gateway_master. ` +
-          `Master may only call create_task and query_task. ` +
-          `For any other panel operation, dispatch an engine_task whose executor can perform it.`,
+        `panel action "${params.action}" is not permitted for the mission agent. ` +
+          `Mission may call: ${[...MISSION_ALLOWED_ACTIONS].join(", ")}. ` +
+          `It coordinates squad/team work but does not replace the orchestrator — ` +
+          `replan/retry/goal/session operations belong to the orchestrator and the desktop panel.`,
       )
     }
     switch (params.action) {
@@ -121,7 +137,7 @@ export const PanelTool = Tool.define("panel", {
         }
       }
       case "query_task": {
-        // Structured batch reconciliation for agents (gateway-master, etc.).
+        // Structured batch reconciliation for agents (mission, etc.).
         // view_board is the prose surface; this is the stable JSON surface.
         // Each input ID maps to one output entry — failures (not found,
         // cross-project, etc.) surface as { taskID, error } so the caller
@@ -219,6 +235,37 @@ export const PanelTool = Tool.define("panel", {
         const baseRequest = originalText || params.request
         const request = attachmentTexts ? baseRequest + attachmentTexts : baseRequest
         const queue = await resolveCreateTaskQueueDecision({ queue: params.queue, ctx })
+        // Mission provenance (server-derived, not client-supplied). When the
+        // Mission agent dispatches squad/team work, the task must carry
+        // `source: "mission"` + `metadata.mission.{id,session_id}` so the UI
+        // and downstream queries can show Mission → Squad lineage instead of a
+        // bare panel workflow. missionID is read from the mission session's own
+        // metadata (written at wake) so the agent cannot forge it.
+        let missionProvenance: { id: string; session_id: string } | undefined
+        if (actor === "mission") {
+          const session = await Session.get(ctx.sessionID)
+          const missionMeta = (session.metadata as Record<string, unknown> | undefined)?.mission as
+            | { id?: unknown }
+            | undefined
+          const missionID = typeof missionMeta?.id === "string" ? missionMeta.id : undefined
+          if (!missionID) {
+            throw new Error(
+              `panel.create_task by actor "mission" requires a mission session ` +
+                `(metadata.mission.id). Session ${ctx.sessionID} is not a mission session.`,
+            )
+          }
+          missionProvenance = { id: missionID, session_id: ctx.sessionID }
+        }
+        // Server owns provenance — strip any client-supplied actor/mission so a
+        // caller cannot forge the audit trail or fake Mission → Squad lineage.
+        const baseMetadata: Record<string, unknown> = { ...(params.metadata ?? {}) }
+        delete baseMetadata.actor
+        delete baseMetadata.mission
+        const taskMetadata: Record<string, unknown> = {
+          ...baseMetadata,
+          actor,
+          ...(missionProvenance ? { mission: missionProvenance } : {}),
+        }
         const taskID = await EngineService.createTask({
           requestID: params.request_id ?? ctx.extra?.requestID,
           request,
@@ -226,7 +273,10 @@ export const PanelTool = Tool.define("panel", {
           queue,
           checks: params.checks,
           routing: params.routing,
-          source: params.source ?? ctx.extra?.source ?? (params.platform ? `channel:${params.platform}` : "panel"),
+          source:
+            params.source ??
+            ctx.extra?.source ??
+            (params.platform ? `channel:${params.platform}` : actor === "mission" ? "mission" : "panel"),
           ...(params.platform && params.channel && params.thread
             ? {
                 channelBinding: {
@@ -238,11 +288,10 @@ export const PanelTool = Tool.define("panel", {
               }
             : {}),
           ...(binaryAttachments.length > 0 ? { attachments: binaryAttachments } : {}),
-          // Server-derived `actor` is the authoritative provenance field;
-          // any client-supplied `actor` in params.metadata is overridden so
-          // callers cannot forge the audit trail. See PanelActor in
+          // Server-derived `actor` + `mission` are the authoritative provenance
+          // fields (computed above as taskMetadata). See PanelActor in
           // panel/capability.ts.
-          metadata: { ...(params.metadata ?? {}), actor: derivePanelActor(ctx.agent) },
+          metadata: taskMetadata,
         })
         return {
           title: "Task created",

@@ -49,7 +49,7 @@ export type IconName =
   | "avatar-assistant"
   | "avatar-system"
   | "avatar-orchestrator"
-  | "avatar-gateway"
+  | "avatar-mission"
   | "avatar-intent-analysis"
   | "avatar-spec"
   | "avatar-requirements"
@@ -110,8 +110,8 @@ export type IconName =
   | "status-completed"
   | "status-failed"
   | "status-cancelled"
-  // Gateway entry / control room glyph
-  | "gateway"
+  // Mission entry / control room glyph
+  | "mission"
   | "channel-link";
 
 interface IconRecord {
@@ -520,7 +520,7 @@ const ICON_PATHS: Record<IconName, IconRecord> = {
       </>
     ),
   },
-  "avatar-gateway": {
+  "avatar-mission": {
     body: () => (
       <>
         <path d="M3.2 5.2h9.6v5.9H3.2Z" />
@@ -949,9 +949,9 @@ const ICON_PATHS: Record<IconName, IconRecord> = {
       </>
     ),
   },
-  // Gateway: a hub-and-spokes glyph — a central node with three radials
+  // Mission: a hub-and-spokes glyph — a central node with three radials
   // suggesting "control room that fans out to many runners / channels".
-  gateway: {
+  mission: {
     body: () => (
       <>
         <circle cx="8" cy="8" r="2.4" />

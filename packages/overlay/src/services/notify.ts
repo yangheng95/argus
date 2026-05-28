@@ -27,7 +27,7 @@ import { settingsStore } from "../store/settings";
 import { boardStore, setTaskListProjectionHandler,
   activeTaskID,
 } from "../store/board";
-import { isGatewayPage } from "../store/page-mode";
+import { isMissionPage } from "../store/page-mode";
 import { t } from "../utils/i18n";
 import { createStore } from "solid-js/store";
 import { getHostTransport } from "./host-transport";
@@ -343,7 +343,7 @@ function shouldSendDesktop(event: RoutedNotificationEvent, taskID: string): bool
   const focused = windowFocused();
   if (event.notify?.tier === 2) return !focused;
   if (event.notify?.tier !== 1) return false;
-  return !(focused && taskID && activeTaskID() === taskID && !isGatewayPage());
+  return !(focused && taskID && activeTaskID() === taskID && !isMissionPage());
 }
 
 async function sendDesktopIfAllowed(
@@ -478,7 +478,7 @@ function addTaskNotificationAcks(item: any): boolean {
 
 function ackVisibleSelectedTaskNotifications(tasks: any[]): void {
   const selectedTaskID = activeTaskID();
-  if (!selectedTaskID || isGatewayPage() || !windowFocused()) return;
+  if (!selectedTaskID || isMissionPage() || !windowFocused()) return;
   const item = tasks.find((entry: any) => entry?.task?.id === selectedTaskID);
   if (!item || !addTaskNotificationAcks(item)) return;
   persistBadgeAcks();

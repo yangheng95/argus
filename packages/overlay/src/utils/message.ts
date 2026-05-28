@@ -10,7 +10,7 @@ export type AgentRole =
   | "user"
   | "assistant"
   | "orchestrator"
-  | "gateway"
+  | "mission"
   | "intent-analysis"
   | "spec"
   | "requirements"
@@ -31,7 +31,7 @@ export type AgentRole =
 export const AGENT_CARD_STAGES = new Set<AgentRole>([
   "assistant",
   "orchestrator",
-  "gateway",
+  "mission",
   "intent-analysis",
   "spec",
   "requirements",
@@ -58,7 +58,7 @@ export function normalizeAgentRole(name: string): AgentRole {
   if (!text) return "assistant";
   if (text === "user") return "user";
   if (text === "orchestrator") return "orchestrator";
-  if (text === "gateway") return "gateway";
+  if (text === "mission") return "mission";
   if (text === "intent-analysis" || text === "intent_analysis" || text === "analyze-intent" || text === "analyze_intent" || text === "intent") return "intent-analysis";
   if (text === "spec") return "spec";
   if (text === "requirements") return "requirements";
@@ -139,7 +139,7 @@ export function roleLabel(role: string): string {
   if (role === "user") return t("chat.role.user");
   if (role === "assistant") return t("chat.role.assistant");
   if (role === "orchestrator") return t("chat.role.orchestrator");
-  if (role === "gateway") return t("chat.role.gateway");
+  if (role === "mission") return t("chat.role.mission");
   if (role === "intent-analysis") return t("chat.role.intent-analysis");
   if (role === "requirements") return t("chat.role.requirements");
   if (role === "design-analyst" || role === "design_analyst") return t("chat.role.design-analyst");
@@ -202,7 +202,7 @@ export function classifyMessage(msg: any, rootSessionID: string): string {
 export function agentStageLabel(stage: string): string {
   const role = normalizeAgentRole(stage);
   if (role === "spec") return t("chat.role.spec");
-  if (role === "gateway") return t("chat.role.gateway");
+  if (role === "mission") return t("chat.role.mission");
   if (role === "intent-analysis") return t("chat.role.intent-analysis");
   if (role === "requirements") return t("chat.role.requirements");
   if (role === "design-analyst") return t("chat.role.design-analyst");

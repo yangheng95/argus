@@ -73,7 +73,6 @@ import type {
   GatewayChannelMessageResponses,
   GatewayControlActionResponses,
   GatewayControlMessageResponses,
-  GatewayMasterWakeResponses,
   GatewayStatsResponses,
   GlobalConfigGetResponses,
   GlobalConfigUpdateErrors,
@@ -111,6 +110,7 @@ import type {
   McpLocalConfig,
   McpRemoteConfig,
   McpStatusResponses,
+  MissionWakeResponses,
   OutputFormat,
   PanelCapabilitiesResponses,
   PanelKnowledgeMemoryDeleteResponses,
@@ -240,6 +240,8 @@ import type {
   TaskConversationHistoryErrors,
   TaskConversationHistoryResponses,
   TaskConversationResponses,
+  TaskConversationSessionErrors,
+  TaskConversationSessionResponses,
   TaskCreateErrors,
   TaskCreateResponses,
   TaskDeleteErrors,
@@ -1872,7 +1874,7 @@ export class Session extends HeyApiClient {
         | "root"
         | "orchestrator"
         | "assistant"
-        | "gateway"
+        | "mission"
         | "intent-analysis"
         | "requirements"
         | "design-analyst"
@@ -4553,47 +4555,6 @@ export class Control2 extends HeyApiClient {
   }
 }
 
-export class Master extends HeyApiClient {
-  /**
-   * Wake the gateway-master mission supervisor
-   *
-   * Start (or resume) a mission supervisor session and inject a user prompt. Omit `missionID` to start a new mission; supply it to resume an existing one. The route is idempotent for (project, missionID) — channelKey `master:<missionID>` keys exactly one gateway session per mission.
-   */
-  public wake<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-      missionID?: string
-      text?: string
-      title?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "query", key: "directory" },
-            { in: "body", key: "missionID" },
-            { in: "body", key: "text" },
-            { in: "body", key: "title" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).post<GatewayMasterWakeResponses, unknown, ThrowOnError>({
-      url: "/gateway/master/wake",
-      ...options,
-      ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
-      },
-    })
-  }
-}
-
 export class Channel2 extends HeyApiClient {
   /**
    * Handle gateway channel message
@@ -4743,14 +4704,50 @@ export class Gateway extends HeyApiClient {
     return (this._control ??= new Control2({ client: this.client }))
   }
 
-  private _master?: Master
-  get master(): Master {
-    return (this._master ??= new Master({ client: this.client }))
-  }
-
   private _channel?: Channel2
   get channel(): Channel2 {
     return (this._channel ??= new Channel2({ client: this.client }))
+  }
+}
+
+export class Mission extends HeyApiClient {
+  /**
+   * Wake the Mission agent
+   *
+   * Start (or resume) a Mission agent session and inject a user prompt. Omit `missionID` to start a new mission; supply it to resume an existing one. The route is idempotent for (project, missionID) — exactly one mission session is keyed per mission.
+   */
+  public wake<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      missionID?: string
+      text?: string
+      title?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "body", key: "missionID" },
+            { in: "body", key: "text" },
+            { in: "body", key: "title" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<MissionWakeResponses, unknown, ThrowOnError>({
+      url: "/mission/wake",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
   }
 }
 
@@ -4909,7 +4906,7 @@ export class List extends HeyApiClient {
   /**
    * Subscribe to global task-list change notifications
    *
-   * Pure change-notification SSE for the task list sidebar. Emits `{type, taskID, sequence}` whenever any task aggregate event is persisted (created/updated/completed/failed/cancelled/...). No replay — clients call /task separately to fetch the refreshed list.
+   * Pure change-notification SSE for the task list sidebar. Emits `{type, taskID, sequence}` whenever any task aggregate event is persisted (created/updated/completed/failed/cancelled/...). Notify-worthy events also carry `notificationDetails` for copyable diagnostics. No replay — clients call /task separately to fetch the refreshed list.
    */
   public events<ThrowOnError extends boolean = false>(
     parameters?: {
@@ -4927,6 +4924,42 @@ export class List extends HeyApiClient {
 }
 
 export class Conversation extends HeyApiClient {
+  /**
+   * Get one task conversation session transcript
+   *
+   * Return the persisted transcript for one task child session so the overlay can hydrate old build-agent output directly instead of paging through the whole task history.
+   */
+  public session<ThrowOnError extends boolean = false>(
+    parameters: {
+      taskID: string
+      sessionID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "taskID" },
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      TaskConversationSessionResponses,
+      TaskConversationSessionErrors,
+      ThrowOnError
+    >({
+      url: "/task/{taskID}/conversation/session/{sessionID}",
+      ...options,
+      ...params,
+    })
+  }
+
   /**
    * Page older task conversation transcript
    *
@@ -5059,7 +5092,7 @@ export class Session3 extends HeyApiClient {
   /**
    * Cancel a task agent session
    *
-   * Abort the active SessionLoop for a non-orchestrator task agent session. This cancels the local agent turn without changing global task orchestration.
+   * Abort the active SessionLoop for a non-orchestrator task agent session. For executor-owned child sessions, also abort the live executor stream.
    */
   public cancel<ThrowOnError extends boolean = false>(
     parameters: {
@@ -5663,7 +5696,7 @@ export class Task extends HeyApiClient {
   /**
    * List channel bindings for a task
    *
-   * Return every (platform, channel, thread) binding that points at this task. Used by the Gateway page to surface inbound channel provenance for a selected task.
+   * Return every (platform, channel, thread) binding that points at this task. Used by the Mission page to surface inbound channel provenance for a selected task.
    */
   public bindings<ThrowOnError extends boolean = false>(
     parameters: {
@@ -8117,6 +8150,11 @@ export class OpencodeClient extends HeyApiClient {
   private _gateway?: Gateway
   get gateway(): Gateway {
     return (this._gateway ??= new Gateway({ client: this.client }))
+  }
+
+  private _mission?: Mission
+  get mission(): Mission {
+    return (this._mission ??= new Mission({ client: this.client }))
   }
 
   private _server?: Server

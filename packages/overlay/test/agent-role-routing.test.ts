@@ -15,7 +15,7 @@ const ZH_CN = readFileSync(join(import.meta.dir, "../src/i18n/zh-CN.json"), "utf
 const SESSION_CARD_STAGES = [
   "assistant",
   "orchestrator",
-  "gateway",
+  "mission",
   "intent-analysis",
   "requirements",
   "design-analyst",

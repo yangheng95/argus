@@ -67,7 +67,7 @@ body {
   --card-stage-assistant:      color-mix(in oklch, var(--good) 75%, var(--accent) 25%);
   --card-stage-system:         var(--warn);
   --card-stage-orchestrator:   color-mix(in oklch, var(--accent) 80%, var(--bad) 20%);
-  --card-stage-gateway:        color-mix(in oklch, var(--accent) 62%, var(--good) 38%);
+  --card-stage-mission:        color-mix(in oklch, var(--accent) 62%, var(--good) 38%);
   --card-stage-intent-analysis: color-mix(in oklch, var(--accent) 54%, var(--warn) 46%);
   --card-stage-spec:           color-mix(in oklch, var(--good) 50%, var(--accent) 50%);
   --card-stage-requirements:   var(--warn);
