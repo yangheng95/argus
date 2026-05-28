@@ -3,6 +3,7 @@ import path from "node:path"
 import fs from "node:fs/promises"
 import { Tool } from "./tool"
 import { Instance } from "@/project/instance"
+import { Session } from "@/session"
 
 /**
  * Mission state tool — the Mission agent's durable, write-confined memory.
@@ -75,6 +76,28 @@ function missionFilePath(missionID: string, file: MissionFile) {
   return path.join(missionDir(missionID), file)
 }
 
+/**
+ * The missionID is server-owned, not an agent parameter. It lives in the
+ * mission session's `metadata.mission.id` (written at wake) and is the SINGLE
+ * source for which mission directory this tool touches — mirroring how
+ * `panel.create_task` derives Mission → Squad provenance from the same field
+ * (rule 8: no dual source). Taking it from the LLM instead let the agent
+ * fabricate ids ("smoke-test", "mission_001") and write its durable memory to
+ * a directory no later wake could find, silently breaking cross-wake recall.
+ */
+async function resolveMissionID(sessionID: string): Promise<string> {
+  const session = await Session.get(sessionID)
+  const missionMeta = (session.metadata as Record<string, unknown> | undefined)?.mission as { id?: unknown } | undefined
+  const missionID = typeof missionMeta?.id === "string" ? missionMeta.id : undefined
+  if (!missionID) {
+    throw new Error(
+      `mission_state requires a mission session (metadata.mission.id). ` +
+        `Session ${sessionID} is not a mission session.`,
+    )
+  }
+  return missionID
+}
+
 async function atomicWrite(target: string, content: string) {
   await fs.mkdir(path.dirname(target), { recursive: true })
   // temp + rename: avoids torn writes if the process crashes or another
@@ -114,46 +137,45 @@ async function statIfExists(target: string) {
 
 const ReadAction = z.object({
   action: z.literal("read"),
-  missionID: z.string(),
   file: z.enum(MISSION_FILES),
 })
 
 const WriteAction = z.object({
   action: z.literal("write"),
-  missionID: z.string(),
   file: z.enum(MISSION_FILES),
   content: z.string(),
 })
 
 const ListAction = z.object({
   action: z.literal("list"),
-  missionID: z.string(),
 })
 
 const MissionStateAction = z.discriminatedUnion("action", [ReadAction, WriteAction, ListAction])
 
 export const MissionStateTool = Tool.define("mission_state", {
   description: [
-    "Read, write, or list mission supervisor state files for a single mission.",
-    "All I/O is confined to the path `.opencorvus/runtime/mission/<missionID>/`",
-    "with a fixed file-name vocabulary: frontier.md, tasks.md, handoff.md, notes.md.",
+    "Read, write, or list the state files for the CURRENT mission.",
+    "The mission is resolved automatically from your session — you do NOT pass a missionID.",
+    "All I/O is confined to `.opencorvus/runtime/mission/<this mission>/` with a fixed",
+    "file-name vocabulary: frontier.md, tasks.md, handoff.md, notes.md.",
     "Use this to carry mission progress across wake cycles — do NOT use read/write/glob.",
     "",
     "Actions:",
-    "  read   { missionID, file } → returns the file content as a string (empty when not yet created).",
-    "  write  { missionID, file, content } → atomically replaces the file (≤256 KB).",
-    "  list   { missionID } → returns metadata for each of the four files that currently exist.",
+    "  read   { file } → returns the file content as a string (empty when not yet created).",
+    "  write  { file, content } → atomically replaces the file (≤256 KB).",
+    "  list   {} → returns metadata for each of the four files that currently exist.",
   ].join("\n"),
   parameters: MissionStateAction,
-  async execute(params) {
+  async execute(params, ctx) {
+    const missionID = await resolveMissionID(ctx.sessionID)
     switch (params.action) {
       case "read": {
-        const target = missionFilePath(params.missionID, params.file)
+        const target = missionFilePath(missionID, params.file)
         const content = (await readIfExists(target)) ?? ""
         return {
-          title: `mission_state read ${params.missionID}/${params.file}`,
+          title: `mission_state read ${missionID}/${params.file}`,
           output: content,
-          metadata: { missionID: params.missionID, file: params.file, exists: content.length > 0 } as Record<string, unknown>,
+          metadata: { missionID, file: params.file, exists: content.length > 0 } as Record<string, unknown>,
         }
       }
       case "write": {
@@ -164,16 +186,16 @@ export const MissionStateTool = Tool.define("mission_state", {
               `Trim the file or move bulk data to an engine_artifact.`,
           )
         }
-        const target = missionFilePath(params.missionID, params.file)
+        const target = missionFilePath(missionID, params.file)
         await atomicWrite(target, params.content)
         return {
-          title: `mission_state write ${params.missionID}/${params.file}`,
+          title: `mission_state write ${missionID}/${params.file}`,
           output: `Wrote ${bytes} bytes to ${params.file}.`,
-          metadata: { missionID: params.missionID, file: params.file, exists: true, bytes } as Record<string, unknown>,
+          metadata: { missionID, file: params.file, exists: true, bytes } as Record<string, unknown>,
         }
       }
       case "list": {
-        const dir = missionDir(params.missionID)
+        const dir = missionDir(missionID)
         const entries = await Promise.all(
           MISSION_FILES.map(async (file) => {
             const stat = await statIfExists(path.join(dir, file))
@@ -184,9 +206,9 @@ export const MissionStateTool = Tool.define("mission_state", {
         )
         const present = entries.filter((entry): entry is { file: MissionFile; size: number; mtime: number } => !!entry)
         return {
-          title: `mission_state list ${params.missionID}`,
-          output: JSON.stringify({ missionID: params.missionID, files: present }),
-          metadata: { missionID: params.missionID, count: present.length } as Record<string, unknown>,
+          title: `mission_state list ${missionID}`,
+          output: JSON.stringify({ missionID, files: present }),
+          metadata: { missionID, count: present.length } as Record<string, unknown>,
         }
       }
     }

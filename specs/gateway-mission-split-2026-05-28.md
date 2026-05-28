@@ -161,3 +161,19 @@ UI 凭 `source==="mission"` / `metadata.mission` 可识别 Mission→Squad task�
 - Mission 不获得执行类工具（bash/edit/write）
 - 不引入 MissionTable / 新 propose_task 继承（沿用 metadata + markdown 文件方案）
 - 不改第三方 `@ai-sdk/gateway` provider 语义
+
+---
+
+## 8. 落地后修订：mission_state 的 missionID 是 server 派生（2026-05-28 端到端冒烟发现）
+
+**背景**：在 `D:\myhexin-local\demos\superchart` 对 mission 做了一次真实端到端冒烟（benchmark 脚本 `packages/opencorvus/script/mission-e2e.ts`，真实 auth=hexin/glm51、真实 DB、真实 LLM）。mission 正确加载 mission-core、跑通 wake 协议（read PRD → panel query_task → read 项目文件 → mission_state write）、产出 objective + 5 阶段 roadmap、未越权派发。**但** mission_state 文件落在了错误目录。
+
+**根因**：`mission_state` 工具把 `missionID` 当成 **agent 入参**。可是没有任何地方告诉 mission agent 它自己的 missionID（wake 只注入用户 prompt，mission-core 里 `<missionID>` 只是占位符）。于是 LLM 自己编了 id：先 `mission_001`（下划线，被 `/^[a-z0-9-]{1,64}$/` 拒绝）→ 再 `smoke-test`（恰好合法），把四个文件写进 `.opencorvus/runtime/mission/smoke-test/`。生产环境 missionID 是自动生成的 16 位 hex，agent 根本无从得知 → 跨 wake 的"持久记忆"机制实际失效。
+
+**修复（rule 8 单一来源 + rule 6.1(a) 数据完整性）**：missionID 不再是 agent 入参，而是从会话的 `metadata.mission.id`（wake 时写入）派生——与 `panel.create_task` 推导 Mission→Squad provenance 用的是同一个字段、同一个来源。
+
+- `src/tool/mission-state.ts`：新增 `resolveMissionID(sessionID)`（读 `Session.get(ctx.sessionID).metadata.mission.id`，非 mission 会话则抛错，文案对齐 panel.ts）；`execute(params, ctx)` 在分发前解析；read/write/list 三个 action schema 去掉 `missionID`，仅保留 `file`/`content`；description 改为"自动定位当前 mission，无需传 missionID"。`missionDir()` 的正则 + path-traversal 守卫保留为纵深防御。
+- `src/prompt/core/mission-core.txt`：协议第 1 步与工具说明去掉 `missionID=<id>`，明确"工具从会话自动解析 mission"。
+- `test/tool/mission-state.test.ts`：改为用真实 mission 会话（`ensureMissionSession`）构造 ctx；新增"非 mission 会话被拒"与"metadata 中畸形 id 被路径守卫拒（纵深防御）"两个断言；write 用例断言文件落在 **会话的 missionID** 目录而非调用方臆想的 id。
+
+**验收**：`bun test test/tool/mission-state.test.ts` 11 pass；`bun run typecheck` exit 0；端到端复跑 mission_state 文件落在真实 missionID 目录。
