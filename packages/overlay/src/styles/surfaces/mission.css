@@ -215,30 +215,26 @@ body[data-page-mode="mission"] > main.panel {
 
 /* Body ---------------------------------------------------------------- */
 
+/* Three resizable columns mirroring the default Panel's `.panel-body`
+   (flex row: ledger | resizer | workbench | resizer | channels). Column
+   widths come from CSS custom properties driven by services/pane.ts —
+   the SAME drag service the Panel uses — via MISSION_PANE_CONFIG, so there
+   is one resizer implementation, not two (rule 8/9). */
 .mission-body {
   flex: 1 1 auto;
-  display: grid;
-  grid-template-columns:
-    minmax(calc(248px * var(--ui-scale)), calc(332px * var(--ui-scale)))
-    minmax(0, 1fr)
-    minmax(calc(208px * var(--ui-scale)), calc(276px * var(--ui-scale)));
+  display: flex;
   min-height: 0;
+  min-width: 0;
   overflow: hidden;
   background: var(--chat-canvas);
 }
 
 @media (max-width: 1120px) /* breakpoint: --ui-breakpoint-xl */ {
-  .mission-body {
-    grid-template-columns: minmax(calc(220px * var(--ui-scale)), calc(280px * var(--ui-scale))) minmax(0, 1fr);
-  }
-  /* `.mission-body .mission-channels` not bare `.mission-channels` — the
-     base rule down at the channel-side-panel section sets display: flex,
-     and because both selectors carry the same specificity the LATER
-     source-order rule wins. Without bumping specificity here, the channel
-     column stayed `display: flex` under the narrow breakpoint and CSS
-     grid auto-placement wrapped it onto a fresh row below the ledger
-     (the bug Round 2 visual review caught in screenshot 06). */
-  .mission-body .mission-channels {
+  /* Hide the channel column AND its resize handle together — an orphaned
+     handle would leave a draggable gap with nothing beside it.
+     `.mission-body …` bumps specificity over the base flex rules below. */
+  .mission-body .mission-channels,
+  .mission-body #missionChannelsResizer {
     display: none;
   }
 }
@@ -292,43 +288,37 @@ body[data-page-mode="mission"] > main.panel {
     margin-left: 0;
   }
 
-  .mission-body {
-    grid-template-columns: 1fr;
-  }
-  /* Same specificity logic as the channel-column rule above — the base
-     `.mission-ledger` rule sets display: flex on line ~228, so the
-     narrow-breakpoint hide needs the parent to actually win. */
-  .mission-body .mission-ledger {
+  /* Hide the ledger column AND its resize handle together. */
+  .mission-body .mission-ledger,
+  .mission-body #missionLedgerResizer {
     display: none;
   }
 }
 
 /* Ledger column ------------------------------------------------------- */
 
+/* Ledger column mirrors the Panel `.sidebar`: width driven by the
+   pane-service CSS variable, rail surface background, flat (no border,
+   no radius). The fallback width applies only on the very first frame
+   before the pane effect sets the variable (Mission is display:none
+   until then anyway). */
 .mission-ledger {
-  border-right: var(--oc-border-width) solid var(--border);
+  width: var(--ui-mission-ledger-width, calc(288px * var(--ui-scale)));
+  min-width: min(100%, var(--ui-rail-min-width));
+  max-width: var(--ui-mission-ledger-width, calc(288px * var(--ui-scale)));
+  flex: 0 1 var(--ui-mission-ledger-width, calc(288px * var(--ui-scale)));
   display: flex;
   flex-direction: column;
-  min-width: 0;
   overflow: hidden;
-  /* Match the panel sidebar's rail surface so Mission feels like the
-     same chrome under every theme + opacity setting. */
-  background: color-mix(in srgb, var(--rail-surface) 86%, var(--chat-canvas));
+  border: 0;
+  border-radius: 0;
+  background: var(--rail-surface);
 }
 
-.mission-ledger-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--ui-gap-md);
-  padding: var(--ui-gap-md) var(--ui-gap-lg);
-  border-bottom: var(--oc-border-width) solid var(--border);
-}
-
-.mission-ledger-title {
-  font-weight: var(--ui-font-weight-strong);
-  font-size: var(--ui-font-body);
-}
+/* Header chrome (height / padding / background / border / radius) comes
+   from the shared `.oc-surface-header` primitive — the same one the
+   sidebar/chat/sections headers use. Mission keeps only its own marker
+   class as a hook (no chrome declarations of its own). */
 
 .mission-scope-toggle {
   display: inline-flex;
@@ -435,17 +425,21 @@ body[data-page-mode="mission"] > main.panel {
 
 /* Workbench column --------------------------------------------------- */
 
+/* Workbench (center) column mirrors the Panel `.chat`: grows to fill the
+   space between the two rails, chat-canvas background, flat. Column
+   separation comes from the surface-colour contrast + the resizer gap,
+   exactly like the Panel — no inter-column borders. */
 .mission-workbench {
+  flex: 999 1 var(--ui-chat-priority-width);
   display: flex;
   flex-direction: column;
-  min-width: 0;
+  min-width: min(100%, var(--ui-chat-min-width));
   min-height: 0;
   overflow: hidden;
-  padding: 0;
+  border: 0;
+  border-radius: 0;
   background: var(--chat-canvas);
-  box-shadow:
-    inset var(--oc-border-width) 0 0 color-mix(in srgb, var(--text-strong) 4%, transparent),
-    inset calc(-1 * var(--oc-border-width)) 0 0 color-mix(in srgb, var(--text-strong) 4%, transparent);
+  box-shadow: none;
 }
 
 .mission-conversation {
@@ -457,41 +451,11 @@ body[data-page-mode="mission"] > main.panel {
   background: var(--chat-canvas);
 }
 
-.mission-conversation-header {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--ui-gap-md);
-  padding: var(--ui-gap-md) calc(var(--ui-gap-lg) * 1.25);
-  border-bottom: var(--oc-border-width) solid color-mix(in srgb, var(--border) 72%, transparent);
-  background: color-mix(in srgb, var(--chrome) 74%, var(--chat-canvas));
-  backdrop-filter: var(--task-bar-backdrop-filter);
-}
-
-.mission-conversation-title-block {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--ui-gap-xs);
-}
-
-.mission-conversation-kicker {
-  font-size: var(--ui-font-tiny);
-  line-height: 1;
-  text-transform: uppercase;
-  letter-spacing: var(--ui-letter-spacing-loose);
-  color: var(--text-muted);
-}
-
+/* Title chrome comes from `.oc-surface-header` / `.oc-surface-header__title`
+   (shared with the sidebar/chat/sections headers). The h2 only needs its
+   default heading margin reset so it centres in the fixed-height header. */
 .mission-conversation-title {
   margin: 0;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: var(--ui-font-heading);
-  font-weight: var(--ui-font-weight-strong);
 }
 
 .mission-conversation-body {
@@ -499,37 +463,17 @@ body[data-page-mode="mission"] > main.panel {
   min-height: 0;
 }
 
-.mission-conversation .chat-scroll {
-  --conversation-card-inline-size: min(100%, calc(920px * var(--ui-scale)));
-  --conversation-user-card-inline-size: min(72%, calc(700px * var(--ui-scale)));
-  --conversation-system-card-inline-size: min(86%, calc(760px * var(--ui-scale)));
-}
+/* The conversation body IS a `.chat-scroll`, so it inherits the Panel's
+   card layout verbatim (conversation.css): full-width cards, user bubbles
+   right-aligned, system cards centred, goal-progress strip identical. No
+   Mission-specific card-width / centering / task-progress overrides — those
+   were the source of the "crooked cards" + misaligned goals strip. */
 
-.mission-conversation .chat-scroll > * {
-  width: var(--conversation-card-inline-size);
-  align-self: center;
-}
-
-.mission-conversation .task-progress {
-  width: auto;
-  align-self: stretch;
-  margin: calc(-18px * var(--ui-scale)) calc(-22px * var(--ui-scale)) var(--ui-gap-md);
-  border-radius: 0;
-  border-inline: 0;
-  border-top: 0;
-  background: color-mix(in srgb, var(--chrome) 82%, var(--chat-canvas));
-}
-
+/* Composer mounts flush like the Panel's `#solidChatComposer`: the
+   `.chat-input` shell owns its own padding + background and spans the
+   column width. No wrapper padding, no max-width centering. */
 .mission-conversation-composer {
   flex: 0 0 auto;
-  padding: var(--ui-gap-md) calc(var(--ui-gap-lg) * 1.25) var(--ui-gap-lg);
-  border-top: var(--oc-border-width) solid color-mix(in srgb, var(--border) 72%, transparent);
-  background: color-mix(in srgb, var(--chrome) 72%, var(--chat-canvas));
-}
-
-.mission-conversation-composer .chat-input {
-  max-width: calc(920px * var(--ui-scale));
-  margin-inline: auto;
 }
 
 /* Composer ----------------------------------------------------------- */
@@ -673,28 +617,24 @@ body[data-page-mode="mission"] > main.panel {
 
 /* Channel side panel ------------------------------------------------- */
 
+/* Channels column mirrors the Panel `.sections`: width driven by the
+   pane-service CSS variable, inspector surface background, flat (no border,
+   no radius). Header chrome comes from the shared `.oc-surface-header`. */
 .mission-channels {
-  border-left: var(--oc-border-width) solid var(--border);
+  width: var(--ui-mission-channels-width, calc(248px * var(--ui-scale)));
+  min-width: min(100%, var(--ui-rail-min-width));
+  max-width: var(--ui-mission-channels-width, calc(248px * var(--ui-scale)));
+  flex: 0 1 var(--ui-mission-channels-width, calc(248px * var(--ui-scale)));
   display: flex;
   flex-direction: column;
-  min-width: 0;
   overflow-y: auto;
-  /* Match the panel's right inspector strip. */
-  background: color-mix(in srgb, var(--surface-inset) 88%, var(--chat-canvas));
-}
-
-.mission-channels-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--ui-gap-md) var(--ui-gap-lg);
-  border-bottom: var(--oc-border-width) solid var(--border);
+  border: 0;
+  border-radius: 0;
+  background: var(--inspector-surface);
 }
 
 .mission-channels-heading {
   margin: 0;
-  font-weight: var(--ui-font-weight-strong);
-  font-size: var(--ui-font-body);
 }
 
 .mission-channels-runtime,

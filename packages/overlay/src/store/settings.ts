@@ -34,6 +34,12 @@ export interface OverlaySettings {
   rightPanelCollapsed: boolean;
   sidebarWidth: number | null;
   sectionsWidth: number | null;
+  /** Mission page column widths — persisted independently of the Panel's
+   *  sidebarWidth/sectionsWidth so resizing one mode never moves the other
+   *  (the ledger/channels content differs from the Panel's chat list /
+   *  inspector, so their ideal widths differ too). */
+  missionLedgerWidth: number | null;
+  missionChannelsWidth: number | null;
   workspacePanelHeight: number | null;
   opacity: number;
   zoom: number;
@@ -149,6 +155,8 @@ export const DEFAULT_SETTINGS: OverlaySettings = {
   rightPanelCollapsed: false,
   sidebarWidth: null,
   sectionsWidth: null,
+  missionLedgerWidth: null,
+  missionChannelsWidth: null,
   workspacePanelHeight: null,
   opacity: 0.99,
   zoom: 1,
@@ -218,6 +226,8 @@ export function applySettings(input: Partial<OverlaySettings>): void {
     rightPanelCollapsed: input?.rightPanelCollapsed === true,
     sidebarWidth: sanitizePaneWidth(input?.sidebarWidth),
     sectionsWidth: sanitizePaneWidth(input?.sectionsWidth),
+    missionLedgerWidth: sanitizePaneWidth(input?.missionLedgerWidth),
+    missionChannelsWidth: sanitizePaneWidth(input?.missionChannelsWidth),
     workspacePanelHeight: sanitizePaneWidth(input?.workspacePanelHeight),
     opacity: sanitizeOpacity(input?.opacity),
     zoom: sanitizeZoom(input?.zoom),
@@ -298,6 +308,8 @@ export function bootstrapOverlaySettings(
   directory?: string;
   sidebarWidth?: number;
   sectionsWidth?: number;
+  missionLedgerWidth?: number;
+  missionChannelsWidth?: number;
   workspacePanelHeight?: number;
   preferredProjectEditor?: ProjectEditorID;
   workspaceTaskID?: string;
@@ -317,6 +329,8 @@ export function bootstrapOverlaySettings(
     rightPanelCollapsed: input.rightPanelCollapsed ?? DEFAULT_SETTINGS.rightPanelCollapsed,
     sidebarWidth: input.sidebarWidth || undefined,
     sectionsWidth: input.sectionsWidth || undefined,
+    missionLedgerWidth: input.missionLedgerWidth || undefined,
+    missionChannelsWidth: input.missionChannelsWidth || undefined,
     workspacePanelHeight: input.workspacePanelHeight || undefined,
     opacity: input.opacity ?? DEFAULT_SETTINGS.opacity,
     zoom: input.zoom ?? DEFAULT_SETTINGS.zoom,

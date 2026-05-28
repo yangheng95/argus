@@ -851,7 +851,6 @@
   "mission.ledger.scope.global": "所有项目",
   "mission.ledger.error_load_failed": "任务列表加载失败：{{error}}",
   "mission.ledger.error_retry": "重试",
-  "mission.workbench.task_kicker": "任务上下文",
   "mission.workbench.task_conversation_title": "任务对话",
   "mission.workbench.actions.open_in_panel": "在面板中打开",
   "mission.workbench.error_action_failed": "{{action}} 失败：{{error}}",
@@ -897,7 +896,6 @@
   "mission.launcher.error": "Mission 唤醒失败：{{error}}",
   "mission.launcher.discard": "关闭",
   "mission.launcher.discard_title": "关闭启动器",
-  "mission.launcher.kicker": "Mission",
   "mission.launcher.conversation_title": "Mission 对话",
   "mission.launcher.result_created": "已创建 Mission：{{missionID}}",
   "mission.launcher.result_resumed": "已恢复 Mission：{{missionID}}"
