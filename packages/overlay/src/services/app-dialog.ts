@@ -31,11 +31,31 @@ let resolver: ((value: AppDialogResult) => void) | null = null;
 let restoreConfigSection = "";
 let appDialogSeq = 0;
 let ignoreNextDismiss = false;
+let autoSettleTimer: ReturnType<typeof setTimeout> | null = null;
+
+function clearAutoSettleTimer(): void {
+  if (!autoSettleTimer) return;
+  clearTimeout(autoSettleTimer);
+  autoSettleTimer = null;
+}
+
+function armAutoSettleTimer(epoch: number, countdownSeconds: number): number {
+  clearAutoSettleTimer();
+  if (!Number.isFinite(countdownSeconds) || countdownSeconds <= 0) return 0;
+  const countdownMs = Math.max(1, Math.ceil(countdownSeconds * 1000));
+  const deadline = Date.now() + countdownMs;
+  autoSettleTimer = setTimeout(() => {
+    autoSettleTimer = null;
+    settleAppDialog(true, epoch);
+  }, countdownMs);
+  return deadline;
+}
 
 export function showAppDialog(options: AppDialogOptions = {}): Promise<AppDialogResult> {
   if (resolver) {
     const resolve = resolver;
     resolver = null;
+    clearAutoSettleTimer();
     resolve({ confirmed: false, value: null });
   }
 
@@ -44,9 +64,12 @@ export function showAppDialog(options: AppDialogOptions = {}): Promise<AppDialog
     closeConfigDialog();
   }
 
+  const epoch = ++appDialogSeq;
+  const countdownDeadlineMs = armAutoSettleTimer(epoch, Number(options.countdownSeconds ?? 0));
+
   setDialogStore("app", {
     open: true,
-    epoch: ++appDialogSeq,
+    epoch,
     title: options.title || t("dialog.notice"),
     message: options.message || "",
     kind: options.kind || "",
@@ -63,6 +86,7 @@ export function showAppDialog(options: AppDialogOptions = {}): Promise<AppDialog
     selectOptions: options.selectOptions || [],
     recommendedValue: options.recommendedValue || "",
     countdownSeconds: options.countdownSeconds ?? 0,
+    countdownDeadlineMs,
   });
 
   return new Promise<AppDialogResult>((resolve) => {
@@ -84,6 +108,7 @@ export async function nativeMessage(
 
 export function settleAppDialog(confirmed: boolean, epoch?: number, valueOverride?: string | null): void {
   if (typeof epoch === "number" && epoch !== dialogStore.app.epoch) return;
+  clearAutoSettleTimer();
   const isTaskCardDecision =
     dialogStore.app.kind === "task-route-decision" || dialogStore.app.kind === "task-queue-decision";
   const inputValue =
@@ -123,6 +148,7 @@ export function dismissAppDialog(dialog?: HTMLDialogElement): void {
   }
   const epoch = Number(dialog?.dataset.dialogEpoch || dialogStore.app.epoch);
   if (epoch !== dialogStore.app.epoch) return;
+  clearAutoSettleTimer();
   const resolve = resolver;
   resolver = null;
   setDialogStore("app", "open", false);
