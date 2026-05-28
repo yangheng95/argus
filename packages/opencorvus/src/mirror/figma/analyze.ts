@@ -11,7 +11,7 @@
  *   - tokens.colors / fonts / textStyles  → DesignTokenSystem
  *   - node.layout.padding / layout.gap    → spacing aggregation
  *   - node.style.borderRadius / shadow    → radii / shadows aggregation
- *   - top-level frames per page           → SectionContract entries
+ *   - top-level frames per page           → semantic visual surface entries
  *
  * What's intentionally absent:
  *   - No fingerprint-based pattern detection. Figma's `components` /
@@ -34,12 +34,11 @@ import {
   DesignTokenSystemSchema,
   FileContractSchema,
   ProjectScaffoldSchema,
-  SectionContractSchema,
   type ComponentCatalog,
   type DesignTokenSystem,
   type FileContract,
   type ProjectScaffold,
-  type SectionContract,
+  type VisualSurfaceContract,
   type TokenColor,
   type TokenFont,
   type TokenRadius,
@@ -62,15 +61,16 @@ export function analyzeFigma(rawDesign: CompressedDesign): ProjectScaffold {
 
   const allFrames = collectAllFrames(design)
   const tokens = synthesiseTokenSystem(design, allFrames)
-  const sections = synthesiseSections(design)
+  const surfaces = synthesiseSurfaces(design)
   const tokensFile = synthesiseTokensFileContract()
   const appFile = synthesiseAppFileContract()
   const catalog = synthesiseCatalog(allFrames)
 
   const scaffold: ProjectScaffold = {
+    version: 2,
     tokensFile,
-    sharedComponents: [],
-    sections,
+    sharedViews: [],
+    surfaces,
     appFile,
     tokens,
     catalog,
@@ -211,8 +211,8 @@ function collectAllFrames(design: CompressedDesign): CompressedNode[] {
 
 // ─── Section + file synthesis ────────────────────────────────────────────
 
-function synthesiseSections(design: CompressedDesign): SectionContract[] {
-  const sections: SectionContract[] = []
+function synthesiseSurfaces(design: CompressedDesign): VisualSurfaceContract[] {
+  const surfaces: VisualSurfaceContract[] = []
   for (const page of design.pages) {
     for (let i = 0; i < page.frames.length; i++) {
       const frame = page.frames[i]
@@ -225,21 +225,28 @@ function synthesiseSections(design: CompressedDesign): SectionContract[] {
         propsInterface: "",
         imports: {},
         patterns: frame.componentName ? [frame.componentName] : [],
-        sectionIR: figmaNodeToIR(frame, 0),
+        surfaceIR: figmaNodeToIR(frame, 0),
       }
-      sections.push(
-        SectionContractSchema.parse({
-          name: sectionName,
-          role: undefined,
-          bounds: frame.bounds ?? { x: 0, y: 0, w: 0, h: 0 },
-          file: FileContractSchema.parse(file),
-          subComponents: [],
-          elementCount: countNodes(frame),
-        }),
-      )
+      const bounds = frame.bounds ?? { x: 0, y: 0, w: 0, h: 0 }
+      surfaces.push({
+        id: sectionName,
+        name: fileName,
+        kind: figmaSurfaceKind(frame.name || page.name),
+        bounds,
+        sourceRefs: [{ source: "figma", path: `${page.name}/${frame.name || `frame-${i + 1}`}`, bounds }],
+        view: FileContractSchema.parse(file),
+        slots: [],
+        repeatedPatterns: frame.componentName ? [{ name: frame.componentName, instanceCount: 1 }] : [],
+        containerContract: {
+          owner: "business-container",
+          states: ["ready"],
+          interactions: [],
+          unknowns: ["Figma evidence cannot prove backend/API behavior."],
+        },
+      })
     }
   }
-  return sections
+  return surfaces
 }
 
 function synthesiseTokensFileContract(): FileContract {
@@ -256,12 +263,26 @@ function synthesiseTokensFileContract(): FileContract {
 function synthesiseAppFileContract(): FileContract {
   return FileContractSchema.parse({
     filePath: DEFAULT_REACT_SOURCE_LAYOUT.appFilePath,
-    exportName: "App",
+    exportName: "AppView",
     isDefaultExport: false,
     propsInterface: "",
     imports: {},
     patterns: [],
   })
+}
+
+function figmaSurfaceKind(name: string): VisualSurfaceContract["kind"] {
+  const lower = name.toLowerCase()
+  if (/nav|header|menu/.test(lower)) return "navigation"
+  if (/footer/.test(lower)) return "footer"
+  if (/search/.test(lower)) return "search"
+  if (/form/.test(lower)) return "form"
+  if (/list|feed/.test(lower)) return "list"
+  if (/table|grid/.test(lower)) return "data-grid"
+  if (/chart/.test(lower)) return "chart-panel"
+  if (/hero/.test(lower)) return "hero"
+  if (/modal|dialog/.test(lower)) return "modal"
+  return "content"
 }
 
 function figmaNodeToIR(node: CompressedNode, depth: number): string {

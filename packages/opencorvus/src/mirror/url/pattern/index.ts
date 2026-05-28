@@ -17,16 +17,15 @@ import type { ProjectScaffold } from "../../ir/scaffold"
 
 import { detectPatterns } from "./detect"
 import { extractTokenSystem } from "./tokens"
-import { generateScaffold } from "./contract"
+import { generateScaffold, generateSurfaceCandidates } from "./contract"
 
 // Re-export for test / skill introspection.
-export { detectPatterns, extractTokenSystem, generateScaffold }
+export { detectPatterns, extractTokenSystem, generateScaffold, generateSurfaceCandidates }
 export {
   scaffoldToPlan,
   generateTokensFile,
-  generateAppFile,
-  generateReactSourceFiles,
-  generateSectionFile,
+  generateAppViewFile,
+  generateViewSourceFiles,
   materializeScaffoldForReactSource,
   buildSharedContext,
 } from "../../shared/scaffold-helpers"

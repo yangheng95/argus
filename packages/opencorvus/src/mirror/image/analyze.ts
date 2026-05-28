@@ -14,7 +14,7 @@
  *     downstream contract.
  *   - Rule 24 abstraction: the `ProjectScaffold` shape is the single
  *     downstream interface. Each upstream source's analyze synthesises
- *     a `ProjectScaffold` from its own native IR.
+ *     a semantic `ProjectScaffold` from its own native IR.
  *
  * What's intentionally absent vs URL's `analyzePage`:
  *   - No fingerprint-based pattern detection. The vision-LLM tree has no
@@ -39,12 +39,11 @@ import {
   DesignTokenSystemSchema,
   FileContractSchema,
   ProjectScaffoldSchema,
-  SectionContractSchema,
   type ComponentCatalog,
   type DesignTokenSystem,
   type FileContract,
   type ProjectScaffold,
-  type SectionContract,
+  type VisualSurfaceContract,
   type TokenColor,
   type TokenFont,
   type TokenRadius,
@@ -66,14 +65,15 @@ export function analyzeImage(rawAnalysis: ImageAnalysis): ProjectScaffold {
   const analysis = parsed.data
 
   const tokens = synthesiseTokenSystem(analysis)
-  const sections = synthesiseSections(analysis)
+  const surfaces = synthesiseSurfaces(analysis)
   const tokensFile = synthesiseTokensFileContract()
   const appFile = synthesiseAppFileContract()
   const catalog = synthesiseCatalog(analysis)
   const scaffold: ProjectScaffold = {
+    version: 2,
     tokensFile,
-    sharedComponents: [],
-    sections,
+    sharedViews: [],
+    surfaces,
     appFile,
     tokens,
     catalog,
@@ -201,7 +201,7 @@ function walk(tree: ImageElement[], visit: (el: ImageElement) => void): void {
 
 // ─── Section + file synthesis ────────────────────────────────────────────
 
-function synthesiseSections(analysis: ImageAnalysis): SectionContract[] {
+function synthesiseSurfaces(analysis: ImageAnalysis): VisualSurfaceContract[] {
   return analysis.tree.map((el, i) => {
     const name = sanitiseName(el.role || el.name || `section-${i + 1}`)
     const fileName = pascalCase(name)
@@ -213,17 +213,25 @@ function synthesiseSections(analysis: ImageAnalysis): SectionContract[] {
       propsInterface: "",
       imports: {},
       patterns: el.componentHint ? [el.componentHint] : [],
-      sectionIR: imageElementToIR(el, 0),
+      surfaceIR: imageElementToIR(el, 0),
     }
-    const section: SectionContract = {
-      name,
+    return {
+      id: name,
+      name: fileName,
+      kind: imageSurfaceKind(el.role),
       role: el.role,
       bounds: el.bounds,
-      file: FileContractSchema.parse(file),
-      subComponents: [],
-      elementCount,
+      sourceRefs: [{ source: "image", path: String(i), bounds: el.bounds }],
+      view: FileContractSchema.parse(file),
+      slots: [],
+      repeatedPatterns: el.componentHint ? [{ name: el.componentHint, instanceCount: el.repeatCount ?? 1 }] : [],
+      containerContract: {
+        owner: "business-container",
+        states: ["ready"],
+        interactions: [],
+        unknowns: ["Image-only evidence cannot prove backend/API behavior."],
+      },
     }
-    return SectionContractSchema.parse(section)
   })
 }
 
@@ -241,12 +249,23 @@ function synthesiseTokensFileContract(): FileContract {
 function synthesiseAppFileContract(): FileContract {
   return FileContractSchema.parse({
     filePath: DEFAULT_REACT_SOURCE_LAYOUT.appFilePath,
-    exportName: "App",
+    exportName: "AppView",
     isDefaultExport: false,
     propsInterface: "",
     imports: {},
     patterns: [],
   })
+}
+
+function imageSurfaceKind(role: string | undefined): VisualSurfaceContract["kind"] {
+  if (role === "header" || role === "nav") return "navigation"
+  if (role === "footer") return "footer"
+  if (role === "form") return "form"
+  if (role === "list") return "list"
+  if (role === "hero") return "hero"
+  if (role === "grid") return "data-grid"
+  if (role === "card") return "detail-card"
+  return "content"
 }
 
 function imageElementToIR(el: ImageElement, depth: number): string {
