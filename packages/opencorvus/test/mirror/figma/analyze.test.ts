@@ -5,7 +5,7 @@ import type { CompressedDesign } from "../../../src/mirror/ir/compressed-design"
 import { AnalyzeError } from "../../../src/mirror/errors"
 import {
   generateTokensFile,
-  generateAppFile,
+  generateAppViewFile,
   buildSharedContext,
 } from "../../../src/mirror/shared/scaffold-helpers"
 
@@ -84,13 +84,13 @@ describe("analyzeFigma", () => {
     expect(() => ProjectScaffoldSchema.parse(scaffold)).not.toThrow()
   })
 
-  test("synthesises sections from page frames with PascalCased export names", () => {
+  test("synthesises semantic surfaces from page frames with PascalCased export names", () => {
     const scaffold = analyzeFigma(FIXTURE)
-    expect(scaffold.sections).toHaveLength(2)
-    const heroSec = scaffold.sections.find((s) => s.file.exportName === "HomeHero")
+    expect(scaffold.surfaces).toHaveLength(2)
+    const heroSec = scaffold.surfaces.find((s) => s.view.exportName === "HomeHero")
     expect(heroSec).toBeDefined()
     expect(heroSec!.bounds.h).toBe(480)
-    const cardsSec = scaffold.sections.find((s) => s.file.exportName === "HomeCards")
+    const cardsSec = scaffold.surfaces.find((s) => s.view.exportName === "HomeCards")
     expect(cardsSec).toBeDefined()
   })
 
@@ -141,10 +141,10 @@ describe("analyzeFigma", () => {
     expect(tokensFile.code).toContain("\"#ffffff\"")
     expect(tokensFile.code).toContain("export const FONTS")
 
-    const appFile = generateAppFile(scaffold)
-    expect(appFile.code).toContain("import { HomeHero }")
-    expect(appFile.code).toContain("<HomeHero />")
-    expect(appFile.code).toContain("import { HomeCards }")
+    const appFile = generateAppViewFile(scaffold)
+    expect(appFile.code).toContain("import { HomeHeroView }")
+    expect(appFile.code).toContain("<HomeHeroView />")
+    expect(appFile.code).toContain("import { HomeCardsView }")
 
     const ctx = buildSharedContext(scaffold, {
       url: FIXTURE.figmaUrl,

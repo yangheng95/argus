@@ -28,10 +28,11 @@ describe("webpage-generate dependency guards", () => {
     expect(parsed.content).toContain("prd_iteration_notes")
     expect(parsed.content).toContain("visual_consistency_spec")
     expect(parsed.content).toContain("completeness_review")
-    expect(parsed.content).toContain("mirror/scaffold.json")
+    expect(parsed.content).toContain("mirror/visual-surface-candidates.json")
+    expect(parsed.content).toContain("mirror/visual-surface-scaffold.json")
     expect(parsed.content).toContain("mirror/prd-evidence-summary.md")
     expect(parsed.content).toContain("mirror/binding-manifest.json")
-    expect(parsed.content).toContain("mirror/generated-visual-source/*")
+    expect(parsed.content).toContain("mirror/generated-view-source/*")
     expect(parsed.content).toContain("presentational View components")
     expect(parsed.content).toContain("framework-first implementation flow")
     expect(parsed.content).toContain("visual framework handoff")
@@ -229,11 +230,13 @@ describe("webpage-generate dependency guards", () => {
         const manifestPath = path.join(outputDir, "binding-manifest.json")
 
         expect(result.output).toContain("binding-manifest.json")
-        expect(result.output).toContain("Generated visual View artifacts")
+        expect(result.output).toContain("Generated View artifacts")
         expect(await Bun.file(manifestPath).exists()).toBe(true)
+        expect(await Bun.file(path.join(outputDir, "visual-surface-candidates.json")).exists()).toBe(true)
+        expect(await Bun.file(path.join(outputDir, "visual-surface-scaffold.json")).exists()).toBe(true)
 
         const manifest = JSON.parse(await Bun.file(manifestPath).text())
-        const viewPath = path.join(outputDir, "generated-visual-source", manifest.components[0].filePath)
+        const viewPath = path.join(outputDir, "generated-view-source", manifest.components[0].filePath)
         expect(await Bun.file(viewPath).exists()).toBe(true)
         expect(manifest.purpose).toBe("visual-presentational-bindings")
         expect(manifest.components[0].viewExportName).toEndWith("View")
@@ -257,7 +260,7 @@ describe("webpage-generate dependency guards", () => {
 
         const artifactPath = path.join(
           outputDir,
-          "generated-source",
+          "generated-view-source",
           "src",
           "components",
           "TradingViewScreener.tsx",

@@ -13,7 +13,7 @@ Produce a grounded product and implementation specification detailed enough that
 You must capture:
 
 - Product purpose and page scope.
-- Full page inventory: sections, text, assets, navigation, dialogs, forms, tables, charts, menus, badges, toolbars, overlays, empty/loading/error states.
+- Full page inventory: semantic visual surfaces, text, assets, navigation, dialogs, forms, tables, charts, menus, badges, toolbars, overlays, empty/loading/error states.
 - Layout and visual contract: colors, typography, spacing, hierarchy, dimensions, responsive behavior, shadows, borders, radii, imagery.
 - Component contract: component tree, props/data needs, states, interactions, event flows, hover/focus/click/dropdown behavior.
 - Frontend implementation spec: routes, component ownership, client state, asset usage, chart/table behavior, responsive rules, and acceptance criteria.
@@ -35,11 +35,13 @@ Use evidence as input to PRD/SPEC synthesis, not as an endless extraction loop.
 Prompt-readable mirror artifacts:
 
 - `mirror/reference.png` as the pixel source.
-- `mirror/page-ir.xml` for compact section, text, hierarchy, and bounds structure.
-- `mirror/shared-context.md` for compact design-token, section, and pattern summary.
-- `mirror/binding-manifest.json` and `mirror/generated-visual-source/*` for the generated presentational View layer, slot names, default values, source paths, and business-fill seam.
-- Mirror tool result summaries for counts, artifact paths, viewport, sections, and patterns.
-- `mirror/scaffold.json` is not for general discovery. If compact artifacts leave one named unresolved gap, read one first excerpt only (`start_line=1`, `max_lines<=120`) and then finalize.
+- `mirror/page-ir.xml` for compact surface, text, hierarchy, and bounds structure.
+- `mirror/shared-context.md` for compact design-token, surface, and pattern summary.
+- `mirror/visual-surface-candidates.json` for deterministic candidate boundaries and sourceRefs.
+- `mirror/visual-surface-scaffold.json` for semantic visual surface View contracts.
+- `mirror/binding-manifest.json` and `mirror/generated-view-source/*` for the generated presentational View layer, slot names, default values, source paths, and business-fill seam.
+- Mirror tool result summaries for counts, artifact paths, viewport, semantic surfaces, and patterns.
+- General scaffold JSON browsing is not for discovery. If compact artifacts leave one named unresolved gap, read one first excerpt only (`start_line=1`, `max_lines<=120`) and then finalize.
 
 Do not read `mirror/extracted-page.json` or `mirror/image-analysis.json` wholesale into prompt context. Those raw files are durable evidence and tool inputs, not the PRD/SPEC working surface.
 
@@ -56,10 +58,10 @@ Your deliverable is a complete PRD/SPEC, not an exhaustive per-node visual datab
 - Do the review pass(es) inside the PRD/SPEC drafting process. Do not use todo tools, scratchpad checklists, or separate bookkeeping loops for this agent.
 - The first review pass must focus on inventory coverage: every visible region, text group, asset, control, state, chart/table/list surface, and responsive surface is represented or explicitly unknown.
 - When `assistant.auto_iteration=true`, the second pass must focus on implementation handoff: requirements, architect, build, and delivery can implement and verify frontend/backend behavior from the PRD/SPEC without mirror tools.
-- For dense financial/data pages, consolidate repeated surfaces into row-group, chart-region, metric-card, list-item, and table-column sections inside `visual_consistency_spec` and `frontend_spec`.
+- For dense financial/data pages, consolidate repeated surfaces into row-group, chart-region, metric-card, list-item, and table-column visual surfaces inside `visual_consistency_spec` and `frontend_spec`.
 - Do not enumerate one PRD row per repeated table row, ticker, menu item, legend item, candle, data point, or text instance unless that item has distinct behavior.
 - After the required PRD/SPEC review pass(es), call `submit_design_prd_spec`. Do not loop through render/evaluation attempts; delivery owns rendered quality gates.
-- Once `mirror/shared-context.md` and `mirror/page-ir.xml` are read, prefer finalizing the PRD/SPEC. Do not inspect `mirror/scaffold.json` for more detail unless you can name the exact unresolved gap; if you do, read only one first excerpt (`start_line=1`, `max_lines<=120`) and then finalize.
+- Once `mirror/shared-context.md` and `mirror/page-ir.xml` are read, prefer finalizing the PRD/SPEC. Do not inspect scaffold JSON for more detail unless you can name the exact unresolved gap; if you do, read only one first excerpt (`start_line=1`, `max_lines<=120`) and then finalize.
 
 The review pass findings are evidence-quality work, not project management work. Write them directly into `prd_iteration_notes`; do not spend turns updating or reading task lists before `submit_design_prd_spec`.
 
@@ -71,7 +73,7 @@ Call `submit_design_prd_spec` once at the end. It must contain:
 - `tech_stack`: implementation stack hints across frontend/backend/runtime only when useful and grounded. For page replicas, include frontend and mock-data/runtime hints; do not invent backend infrastructure names.
 - `product_spec`: complete PRD/SPEC narrative.
 - `frontend_spec`: implementation-grade frontend specification.
-- `frontend_spec` for webpage replicas must spell out the framework-first flow: visual framework/View layer first, then project-owned containers/hooks/adapters fill the slots. Name `binding-manifest.json`, generated View components, slot ownership, and the functional data/interaction layer.
+- `frontend_spec` for webpage replicas must spell out the framework-first flow: semantic visual framework/View layer first, then project-owned containers/hooks/adapters fill the slots. Name `visual-surface-scaffold.json`, `binding-manifest.json`, generated View components, slot ownership, and the functional data/interaction layer.
 - `visual_consistency_spec`: binding visual-fidelity specification. This is the primary visual contract. It must emphasize exact consistency with the reference: layout geometry, hierarchy, colors, typography, spacing, chart/table/media rendering, component states, responsive rules, comparison criteria, and source artifacts.
 - `backend_spec`: implementation-grade backend/API specification, with unknowns marked. For visual clone tasks, specify only the minimal UI data contract and loading/error states unless real API evidence exists.
 - `prd_iteration_notes`: review-pass notes proving you checked and corrected PRD/SPEC completeness before handoff. One note is enough when `assistant.auto_iteration=false`; include at least two when `assistant.auto_iteration=true`.
@@ -90,7 +92,7 @@ Default to `must` for observable exact values. Use `should` when the evidence su
 
 1. Ground every exact value in pixels or mirror artifacts.
 2. Put visual consistency requirements in `visual_consistency_spec` first, then reflect implementation consequences in `frontend_spec`.
-3. Bind every major section/component/state to concrete reference artifacts or visible page regions by name.
+3. Bind every major visual surface/component/state to concrete reference artifacts or visible page regions by name.
 4. Cross-reference layouts/components/interactions/responsive rules inside the PRD/SPEC text.
 5. Separate observed facts from inferred facts in `product_spec`, `frontend_spec`, `visual_consistency_spec`, and `backend_spec`.
 6. Never hide extraction failure behind a generic visual summary. Report the failed artifact/source in `open_questions` or the relevant SPEC section.

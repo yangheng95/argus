@@ -4,11 +4,11 @@
  *
  * Reads `extracted-page.json`, runs pattern detection + token extraction, and
  * writes mirror facts plus deterministic scaffold artifacts that design-analysis consumes:
- *   - `<outputDir>/scaffold.json`         full ProjectScaffold
+ *   - `<outputDir>/visual-surface-scaffold.json` semantic ProjectScaffold
+ *   - `<outputDir>/visual-surface-candidates.json` deterministic surface candidates
  *   - `<outputDir>/binding-manifest.json` visual View slot contract
  *   - `<outputDir>/shared-context.md`     compact token + pattern summary
- *   - `<outputDir>/generated-source/*`    scaffold source artifacts for analysis only
- *   - `<outputDir>/generated-visual-source/*` slot-based View artifacts
+ *   - `<outputDir>/generated-view-source/*` slot-based View artifacts
  *
  * Returns only the summary so the tool output stays small.
  */
@@ -21,10 +21,12 @@ import { Tool } from "../../tool/tool"
 import {
   analyzePage,
   buildSharedContext,
+  detectPatterns,
+  generateSurfaceCandidates,
 } from "../url/pattern"
 import {
-  generateReactSourceFiles,
   generateVisualBindingArtifacts,
+  generateViewSourceFiles,
   materializeScaffoldForReactSource,
 } from "../shared/scaffold-helpers"
 import { ExtractedPageSchema } from "../ir/extracted-page"
@@ -36,6 +38,7 @@ function renderPrdEvidenceSummary(input: {
   page: { url: string; title: string; viewport: { width: number; height: number } }
   scaffold: ProjectScaffold
   scaffoldPath: string
+  candidatePath: string
   bindingManifestPath: string
   contextPath: string
   irPath: string
@@ -53,8 +56,8 @@ function renderPrdEvidenceSummary(input: {
     .slice(0, 8)
     .map((s) => `${s.px}px`)
     .join(", ")
-  const sections = scaffold.sections
-    .map((s) => `- ${s.name}: role=${s.role ?? "unknown"}, bounds=${s.bounds.x},${s.bounds.y},${s.bounds.w}x${s.bounds.h}, elements=${s.elementCount}, file=${s.file.filePath}`)
+  const surfaces = scaffold.surfaces
+    .map((s) => `- ${s.name}: kind=${s.kind}, role=${s.role ?? "unknown"}, bounds=${s.bounds.x},${s.bounds.y},${s.bounds.w}x${s.bounds.h}, view=${s.view.filePath}`)
     .join("\n")
   const patterns = scaffold.catalog.patterns
     .slice(0, 12)
@@ -75,14 +78,15 @@ function renderPrdEvidenceSummary(input: {
     `- Pixel reference: ${input.referencePath}`,
     `- Page hierarchy and text IR: ${input.irPath}`,
     `- Compact token/pattern summary: ${input.contextPath}`,
-    `- Full scaffold source for bounded targeted reads: ${input.scaffoldPath}`,
+    `- Visual surface candidates: ${input.candidatePath}`,
+    `- Semantic visual surface scaffold: ${input.scaffoldPath}`,
     `- Visual slot binding manifest: ${input.bindingManifestPath}`,
     "",
     "## PRD/SPEC Draft Surface",
     "Use this as the first draft surface, then perform the PRD/SPEC review pass(es) required by assistant.auto_iteration before submit_design_prd_spec.",
     "",
     "### Page Inventory",
-    sections || "- No sections detected; mark inventory gaps explicitly.",
+    surfaces || "- No visual surfaces detected; mark inventory gaps explicitly.",
     "",
     "### Visual Tokens",
     "Colors:",
@@ -108,17 +112,17 @@ function renderPrdEvidenceSummary(input: {
 }
 
 export const WebpageAnalyzeTool = Tool.define("webpage_analyze", {
-  description: `Analyze an ExtractedPage into a deterministic ProjectScaffold (section list, component-pattern catalog, design-token system, file contracts). Zero LLM.
+  description: `Analyze an ExtractedPage into deterministic surface candidates and a semantic ProjectScaffold (visual surface list, component-pattern catalog, design-token system, View contracts). Zero LLM.
 
 Reads \`<outputDir>/extracted-page.json\` (from webpage_extract). Writes mirror facts plus scaffold artifacts:
-  - scaffold.json           full ProjectScaffold
+  - visual-surface-candidates.json deterministic surface evidence for design-analysis review
+  - visual-surface-scaffold.json   semantic ProjectScaffold with surfaces
   - binding-manifest.json   slot contract for generated presentational View components
   - shared-context.md       compact token + pattern summary for prompts
   - prd-evidence-summary.md direct PRD/SPEC drafting surface
-  - generated-source/*      scaffold-generated source artifacts for analysis only
-  - generated-visual-source/* presentational View source with fillable slots
+  - generated-view-source/* presentational View source with fillable slots
 
-Returns a summary: section list, pattern list, token counts, and the PRD/SPEC evidence summary path. Once these artifacts exist, use them for PRD/SPEC synthesis; bounded targeted \`scaffold.json\` reads are only for specific gaps.
+Returns a summary: visual surface list, pattern list, token counts, and the PRD/SPEC evidence summary path. Once these artifacts exist, use them for PRD/SPEC synthesis; bounded targeted scaffold reads are only for specific gaps.
 
 This tool is artifact-dependent: do NOT call it until \`extracted-page.json\` exists in the output directory. Never batch it with the URL extraction call that creates that file.
 
@@ -127,7 +131,7 @@ Use this only when scaffold and PRD evidence artifacts are missing. Do not rerun
     outputDir: z
       .string()
       .describe(
-        `Directory containing extracted-page.json. Writes scaffold.json, binding-manifest.json, shared-context.md, generated-source/, and generated-visual-source/ here. Defaults to task-scoped \`${DEFAULT_MIRROR_SUBDIR}\` (matching webpage_extract's default). Do not set this during task sessions; overrides are for benchmarks/tests and task-session overrides must stay under \`${DEFAULT_MIRROR_SUBDIR}\`.`,
+        `Directory containing extracted-page.json. Writes visual-surface-candidates.json, visual-surface-scaffold.json, binding-manifest.json, shared-context.md, and generated-view-source/ here. Defaults to task-scoped \`${DEFAULT_MIRROR_SUBDIR}\` (matching webpage_extract's default). Do not set this during task sessions; overrides are for benchmarks/tests and task-session overrides must stay under \`${DEFAULT_MIRROR_SUBDIR}\`.`,
       )
       .optional(),
   }),
@@ -152,7 +156,8 @@ Use this only when scaffold and PRD evidence artifacts are missing. Do not rerun
     const page = ExtractedPageSchema.parse(raw)
 
     const scaffold = materializeScaffoldForReactSource(analyzePage(page))
-    const sourceFiles = generateReactSourceFiles(scaffold)
+    const candidates = generateSurfaceCandidates(page, detectPatterns(page))
+    const sourceFiles = generateViewSourceFiles(scaffold)
     const visualBinding = generateVisualBindingArtifacts(scaffold)
     const sharedContext = buildSharedContext(scaffold, {
       url: page.url,
@@ -160,18 +165,19 @@ Use this only when scaffold and PRD evidence artifacts are missing. Do not rerun
       viewport: page.viewport,
     })
 
-    const scaffoldPath = path.join(outputDir, "scaffold.json")
+    const scaffoldPath = path.join(outputDir, "visual-surface-scaffold.json")
+    const candidatePath = path.join(outputDir, "visual-surface-candidates.json")
     const bindingManifestPath = path.join(outputDir, "binding-manifest.json")
     const contextPath = path.join(outputDir, "shared-context.md")
     const prdEvidencePath = path.join(outputDir, "prd-evidence-summary.md")
     const irPath = path.join(outputDir, "page-ir.xml")
     const referencePath = path.join(outputDir, "reference.png")
-    const sourcePaths = await writeGeneratedSourceFiles(outputDir, sourceFiles)
-    const visualSourcePaths = await writeGeneratedSourceFiles(outputDir, visualBinding.files, "generated-visual-source")
+    const viewSourcePaths = await writeGeneratedSourceFiles(outputDir, sourceFiles)
     const prdEvidenceSummary = renderPrdEvidenceSummary({
       page,
       scaffold,
       scaffoldPath,
+      candidatePath,
       bindingManifestPath,
       contextPath,
       irPath,
@@ -180,6 +186,7 @@ Use this only when scaffold and PRD evidence artifacts are missing. Do not rerun
 
     await Promise.all([
       fs.writeFile(scaffoldPath, JSON.stringify(scaffold, null, 2), "utf8"),
+      fs.writeFile(candidatePath, JSON.stringify(candidates, null, 2), "utf8"),
       fs.writeFile(bindingManifestPath, JSON.stringify(visualBinding.manifest, null, 2), "utf8"),
       fs.writeFile(contextPath, sharedContext, "utf8"),
       fs.writeFile(prdEvidencePath, prdEvidenceSummary, "utf8"),
@@ -193,8 +200,8 @@ Use this only when scaffold and PRD evidence artifacts are missing. Do not rerun
           (p.props.length > 0 ? ` (${p.props.map((pp) => `${pp.name}:${pp.type}`).join(", ")})` : ""),
       )
       .join("\n")
-    const sectionList = scaffold.sections
-      .map((s) => `  - ${s.name} (${s.elementCount} el, ${s.bounds.w}×${s.bounds.h}px)`)
+    const surfaceList = scaffold.surfaces
+      .map((s) => `  - ${s.name} (${s.kind}, ${s.bounds.w}×${s.bounds.h}px, view ${s.view.filePath})`)
       .join("\n")
 
     const coverage =
@@ -203,40 +210,40 @@ Use this only when scaffold and PRD evidence artifacts are missing. Do not rerun
         : 0
 
     return {
-      title: `Scaffold — ${scaffold.sections.length} sections, ${scaffold.catalog.patterns.length} patterns`,
+      title: `Scaffold — ${scaffold.surfaces.length} surfaces, ${scaffold.catalog.patterns.length} patterns`,
       output: [
         `# ProjectScaffold`,
         "",
         `- Source: ${extractedPath}`,
-        `- Sections: ${scaffold.sections.length}`,
-        `- Shared components: ${scaffold.sharedComponents.length}`,
+        `- Surfaces: ${scaffold.surfaces.length}`,
+        `- Shared views: ${scaffold.sharedViews.length}`,
         `- Patterns detected: ${scaffold.catalog.patterns.length} (covering ${coverage}% of elements)`,
         `- Tokens: ${scaffold.tokens.colors.length} colors, ${scaffold.tokens.fonts.length} fonts, ${scaffold.tokens.spacing.length} spacings`,
         "",
-        "## Top sections",
-        sectionList || "  (none)",
+        "## Top visual surfaces",
+        surfaceList || "  (none)",
         "",
         "## Top patterns",
         topPatterns || "  (none)",
         "",
         `**Artifacts written:**`,
+        `- \`${candidatePath}\` - deterministic visual surface candidates`,
         `- \`${bindingManifestPath}\` - visual View slot binding manifest`,
-        `- \`${scaffoldPath}\` — full ProjectScaffold`,
+        `- \`${scaffoldPath}\` — semantic visual surface ProjectScaffold`,
         `- \`${contextPath}\` — compact prompt-ready summary`,
         `- \`${prdEvidencePath}\` — direct PRD/SPEC evidence summary`,
-        `- Generated source artifacts: ${sourcePaths.length}`,
-        `- Generated visual View artifacts: ${visualSourcePaths.length}`,
+        `- Generated View artifacts: ${viewSourcePaths.length}`,
         "",
-        "PRD/SPEC evidence artifacts written. Do not rerun analysis for this evidence package unless the source extraction changed. Use `prd-evidence-summary.md`, `shared-context.md`, and `page-ir.xml` as the working surface; generated source artifacts are not the deliverable.",
+        "PRD/SPEC evidence artifacts written. Do not rerun analysis for this evidence package unless the source extraction changed. Use `prd-evidence-summary.md`, `shared-context.md`, `visual-surface-candidates.json`, and `page-ir.xml` as the working surface; generated View artifacts are the visual framework handoff, not the business implementation.",
       ].join("\n"),
       metadata: {
         scaffoldPath,
+        candidatePath,
         contextPath,
         prdEvidencePath,
-        sourcePaths,
         bindingManifestPath,
-        visualSourcePaths,
-        sectionCount: scaffold.sections.length,
+        viewSourcePaths,
+        surfaceCount: scaffold.surfaces.length,
         patternCount: scaffold.catalog.patterns.length,
         patternCoverage: coverage,
         tokenColors: scaffold.tokens.colors.length,
