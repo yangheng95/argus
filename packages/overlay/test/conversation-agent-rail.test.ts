@@ -19,6 +19,9 @@ test("ConversationAgentRail reads workflow through the projection and renders a 
 test("ConversationAgentRail locates cards through renderedCardID and CSS.escape", () => {
   const source = readFileSync(join(import.meta.dir, "../src/components/ConversationAgentRail.tsx"), "utf8")
   expect(source).toContain("record.renderedCardID")
+  expect(source).toContain("record.targetMessageID")
+  expect(source).toContain("conversationCardContainsMessage")
+  expect(source).toContain("messageID: targetMessageID")
   expect(source).toContain("CSS.escape(record.renderedCardID")
   expect(source).toContain("setCardExpanded(parentID, true")
   expect(source).toContain("requestConversationCardScroll")

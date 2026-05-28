@@ -2,7 +2,7 @@ import { Memory } from "./index"
 import { Session } from "@/session"
 import { Message } from "@/session"
 import { Instance } from "@/project/instance"
-import { Config } from "@/config/config"
+import { EffectiveConfig } from "@/config/effective"
 import { Log } from "@/util/log"
 import { CompactionHandoff } from "@/session/compaction-handoff"
 
@@ -14,7 +14,7 @@ export namespace MemoryFlush {
    * Called after compaction completes successfully.
    */
   export async function flush(input: { sessionID: string; messageID: string }): Promise<void> {
-    const config = await Config.get()
+    const config = await EffectiveConfig.effective({ sessionID: input.sessionID })
     if (config.experimental?.memory?.enabled === false) return
 
     const summaryMsg = await Message.get({

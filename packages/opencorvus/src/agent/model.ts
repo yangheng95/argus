@@ -74,14 +74,12 @@ export async function resolveAgentModelRef(
   if (overlayAgentModel) return Provider.parseModel(overlayAgentModel)
   if (overlay?.model) return Provider.parseModel(overlay.model)
   const cfg = await EffectiveConfig.base(opts)
-  const agentModel = cfg.agent?.[name]?.model
-  if (agentModel) return Provider.parseModel(agentModel)
-  if (cfg.model) return Provider.parseModel(cfg.model)
   const { Agent } = await import("./agent")
-  const agent = await Agent.get(name, { config: await EffectiveConfig.base(opts) })
+  const agent = await Agent.get(name, { config: cfg })
   if (agent?.model) {
     return { providerID: agent.model.providerID, modelID: agent.model.modelID }
   }
+  if (cfg.model) return Provider.parseModel(cfg.model)
   throw new MissingModelConfigError({
     agent: name,
     message:

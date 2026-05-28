@@ -20,6 +20,7 @@ import { Truncate } from "./truncation"
 import { Plugin } from "@/plugin"
 import { PidGuard } from "@/shell/pid-guard"
 import { gitCeilingEnvForWorktree } from "@/worktree/git-ceiling"
+import { assertBuildWriteDirectory } from "./external-directory"
 
 const MAX_METADATA_LENGTH = 30_000
 export const DEFAULT_TIMEOUT = Flag.OPENCORVUS_EXPERIMENTAL_BASH_DEFAULT_TIMEOUT_MS || DEFAULT_BASH_TIMEOUT_MS
@@ -156,6 +157,7 @@ export const BashTool = Tool.define("bash", async () => {
       // workdirs that are actually inside the project.
       const rawCwd = params.workdir || Instance.directory
       const cwd = process.platform === "win32" ? Filesystem.windowsPath(rawCwd) : rawCwd
+      await assertBuildWriteDirectory(ctx, cwd)
       if (params.timeout !== undefined && params.timeout < 0) {
         throw new Error(`Invalid timeout value: ${params.timeout}. Timeout must be a positive number.`)
       }
@@ -210,6 +212,9 @@ export const BashTool = Tool.define("bash", async () => {
               const resolved = await resolveStaticPathArg(arg, cwd)
               log.info("resolved path", { arg, resolved })
               if (resolved) {
+                if (command[0] === "cd") {
+                  await assertBuildWriteDirectory(ctx, resolved)
+                }
                 if (!Instance.containsPath(resolved)) {
                   const dir = (await Filesystem.isDir(resolved)) ? resolved : path.dirname(resolved)
                   directories.add(dir)

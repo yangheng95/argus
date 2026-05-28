@@ -36,6 +36,11 @@
   font-variant-numeric: tabular-nums;
 }
 
+.changes-commit {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
 .changes-total [data-tone="add"] {
   color: var(--diff-add-fg);
 }
@@ -155,8 +160,19 @@
   white-space: nowrap;
   font-weight: var(--ui-font-weight-medium);
 }
-.changes-goal-picker-row-count {
+.changes-goal-picker-row-meta {
   flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: calc(6px * var(--ui-scale));
+}
+
+.changes-goal-picker-row-commit {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.changes-goal-picker-row-count {
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
 }

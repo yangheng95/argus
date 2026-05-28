@@ -104,6 +104,37 @@ test("visual-qa agent is full-function build-grade with visual delivery tools", 
   })
 }, 30_000)
 
+test("visual-qa mirror analysis denial cannot be reopened by per-agent permission config", async () => {
+  await using tmp = await tmpdir({
+    config: {
+      agent: {
+        "visual-qa": {
+          permission: {
+            webpage_extract: "allow",
+            webpage_image_extract: "allow",
+          },
+        },
+      },
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const visualQa = await Agent.get("visual-qa")
+      expect(visualQa).toBeDefined()
+      expect(evalPerm(visualQa, "webpage_extract")).toBe("deny")
+      expect(evalPerm(visualQa, "webpage_image_extract")).toBe("deny")
+      expect(evalPerm(visualQa, "webpage_render")).toBe("allow")
+
+      const tools = await ToolRegistry.tools({ providerID: "", modelID: "" }, visualQa)
+      const ids = new Set(tools.map((tool) => tool.id))
+      expect(ids.has("webpage_extract")).toBe(false)
+      expect(ids.has("webpage_image_extract")).toBe(false)
+      expect(ids.has("webpage_render")).toBe(true)
+    },
+  })
+}, 30_000)
+
 test("coding agent owns direct assistant prompt", async () => {
   await using tmp = await tmpdir()
   await Instance.provide({

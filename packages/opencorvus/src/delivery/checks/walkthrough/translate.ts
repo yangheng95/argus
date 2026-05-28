@@ -1,6 +1,7 @@
 import { tool, type LanguageModel } from "ai"
 import z from "zod"
 import { resolveAgentModel } from "@/agent/model"
+import { EffectiveConfig } from "@/config/effective"
 import { streamText } from "@/llm/api"
 import { Provider } from "@/provider/provider"
 import type { AcceptanceSpec } from "@/acceptance/types"
@@ -8,28 +9,37 @@ import { WalkthroughStepSchema, WalkthroughStepsSchema, type WalkthroughStep } f
 
 const TranslateOutputSchema = z.object({ steps: WalkthroughStepsSchema })
 
+type TranslateScenarioInput = {
+  spec: AcceptanceSpec
+  taskID?: string
+  sessionID?: string
+}
+
 export type TranslateScenarioDependencies = {
-  resolveModel: () => Promise<Provider.Model>
-  getLanguage: (model: Provider.Model) => Promise<LanguageModel>
+  resolveModel: (input: TranslateScenarioInput) => Promise<Provider.Model>
+  getLanguage: (model: Provider.Model, input: TranslateScenarioInput) => Promise<LanguageModel>
   stream: typeof streamText
 }
 
 const defaultDependencies: TranslateScenarioDependencies = {
-  resolveModel: () => resolveAgentModel("requirements"),
-  getLanguage: (model) => Provider.getLanguage(model),
+  resolveModel: (input) => resolveAgentModel("requirements", { taskID: input.taskID, sessionID: input.sessionID }),
+  getLanguage: async (model, input) => {
+    const config = await EffectiveConfig.effective({ taskID: input.taskID, sessionID: input.sessionID })
+    return Provider.getLanguage(model, { config })
+  },
   stream: streamText,
 }
 
-export async function translateScenarioToSteps(input: { spec: AcceptanceSpec }): Promise<WalkthroughStep[]> {
+export async function translateScenarioToSteps(input: TranslateScenarioInput): Promise<WalkthroughStep[]> {
   return translateScenarioToStepsWithDependencies(input, defaultDependencies)
 }
 
 export async function translateScenarioToStepsWithDependencies(
-  input: { spec: AcceptanceSpec },
+  input: TranslateScenarioInput,
   dependencies: TranslateScenarioDependencies,
 ): Promise<WalkthroughStep[]> {
   if (!input.spec.scenario) throw new Error(`acceptance spec ${input.spec.id} has no scenario`)
-  const language = await dependencies.getLanguage(await dependencies.resolveModel())
+  const language = await dependencies.getLanguage(await dependencies.resolveModel(input), input)
   const result = dependencies.stream({
     model: language,
     tools: {

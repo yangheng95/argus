@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test"
 import type { ProjectScaffold } from "../../../src/mirror/ir/scaffold"
 import {
   generateReactSourceFiles,
+  generateVisualBindingArtifacts,
   materializeScaffoldForReactSource,
 } from "../../../src/mirror/shared/scaffold-helpers"
 
@@ -80,5 +81,76 @@ describe("React source materialization", () => {
     expect(byPath.get("src/App.tsx")).toContain('import { Hero } from "./components/hero"')
     expect(byPath.get("src/components/hero.tsx")).toContain("Welcome")
     expect(byPath.get("src/components/hero.tsx")).toContain('src="mirror/images/img-0.png"')
+  })
+
+  test("emits slot-based visual View files and binding manifest", () => {
+    const materialized = materializeScaffoldForReactSource(scaffold())
+    const artifacts = generateVisualBindingArtifacts(materialized)
+    const byPath = new Map(artifacts.files.map((file) => [file.file_path, file.code]))
+
+    expect(artifacts.manifest.purpose).toBe("visual-presentational-bindings")
+    expect(artifacts.manifest.components).toEqual([
+      {
+        sourceExportName: "Hero",
+        viewExportName: "HeroView",
+        filePath: "src/components/hero.view.tsx",
+        slots: [
+          { name: "heading", kind: "text", defaultValue: "Welcome", sourceName: "heading", sourcePath: "0.0" },
+          { name: "logoSrc", kind: "image-src", defaultValue: "mirror/images/img-0.png", sourceName: "logo", sourcePath: "0.1" },
+          { name: "logoAlt", kind: "image-alt", defaultValue: "Logo", sourceName: "logo", sourcePath: "0.1" },
+        ],
+      },
+    ])
+
+    const heroView = byPath.get("src/components/hero.view.tsx")
+    expect(heroView).toContain("export interface HeroViewSlots")
+    expect(heroView).toContain("heading?: React.ReactNode")
+    expect(heroView).toContain("logoSrc?: string")
+    expect(heroView).toContain("{slots.heading ?? \"Welcome\"}")
+    expect(heroView).toContain('src={slots.logoSrc ?? "mirror/images/img-0.png"}')
+    expect(heroView).toContain('alt={slots.logoAlt ?? "Logo"}')
+  })
+
+  test("visual binding keeps duplicate slots distinct and preserves inline/link defaults", () => {
+    const base = materializeScaffoldForReactSource(scaffold())
+    const materialized: ProjectScaffold = {
+      ...base,
+      sections: [
+        {
+          ...base.sections[0],
+          file: {
+            ...base.sections[0].file,
+            sectionIR: [
+              '<Container name="panel" size="320x120">',
+              '  <Text name="action" style="Inter 14px 600 #111827">Learn more</Text>',
+              '  <Text name="action" style="Inter 14px 600 #111827">Learn more</Text>',
+              '  <Text name="cta" href="/details" style="Inter 14px 600 #111827">Details</Text>',
+              '  <Text name="mixed" style="Inter 14px 400 #111827">Total <Inline name="value" style="Inter 14px 700 #111827">$12</Inline></Text>',
+              "</Container>",
+            ].join("\n"),
+          },
+        },
+      ],
+    }
+
+    const artifacts = generateVisualBindingArtifacts(materialized)
+    const component = artifacts.manifest.components[0]
+    const byPath = new Map(artifacts.files.map((file) => [file.file_path, file.code]))
+    const view = byPath.get(component.filePath)
+
+    expect(component.slots.filter((slot) => slot.name.startsWith("action")).map((slot) => slot.name)).toEqual([
+      "action",
+      "action2",
+    ])
+    expect(component.slots.find((slot) => slot.kind === "href")).toMatchObject({
+      name: "ctaHref",
+      defaultValue: "/details",
+      sourcePath: "0.2",
+    })
+    expect(component.slots.every((slot) => slot.sourcePath.length > 0)).toBe(true)
+    expect(view).toContain('href={slots.ctaHref ?? "/details"}')
+    expect(view).toContain("<>")
+    expect(view).toContain('className="mirror-inline"')
+    expect(view).toContain("{slots.mixed ?? (")
   })
 })

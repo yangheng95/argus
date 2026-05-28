@@ -1,12 +1,10 @@
 /**
- * ProjectScaffold → codegen-artifact emitters.
+ * ProjectScaffold → semantic View artifact emitters.
  *
- *   - `scaffoldToPlan(scaffold) → PlanFile[]` — feeds the codegen agent's
- *     per-file plan (tier-graph orders these for parallel codegen).
  *   - `generateTokensFile(scaffold) → GeneratedFile` — pre-built
  *     `design-tokens.ts` with COLORS / FONTS / SPACING / RADII / CSS_VARS.
- *   - `generateAppFile(scaffold) → GeneratedFile` — pre-built `App.tsx`
- *     composing every section.
+ *   - `generateAppViewFile(scaffold) → GeneratedFile` — pre-built `App.tsx`
+ *     composing semantic visual surfaces.
  *   - `buildSharedContext(scaffold, meta) → string` — compact prompt-ready
  *     token + pattern summary (2-5KB vs 50-200KB raw XML).
  *
@@ -28,9 +26,13 @@ import type {
   GeneratedFile,
   PlanFile,
   ProjectScaffold,
-  SectionContract as _SectionContract,
   TokenColor,
+  VisualBindingComponent,
+  VisualBindingManifest,
+  VisualBindingSlot,
+  VisualBindingSlotKind,
 } from "../ir/scaffold"
+import { VisualBindingManifestSchema } from "../ir/scaffold"
 import { parseDocument } from "htmlparser2"
 
 export interface ReactSourceLayout {
@@ -57,24 +59,35 @@ interface XmlNode {
   data?: string
 }
 
+interface VisualBindingArtifacts {
+  files: GeneratedFile[]
+  manifest: VisualBindingManifest
+}
+
+interface VisualRenderContext {
+  slots: Map<string, VisualBindingSlot>
+  nextSlotIndex: number
+}
+
+interface JsxExpression {
+  __jsxExpression: string
+}
+
 // ─── Scaffold → PlanFile[] ───────────────────────────────────────────────
 
 /**
- * Order: shared components → sections (top-to-bottom, sub-components first) →
+ * Order: shared views → semantic surfaces (top-to-bottom) →
  * tokens + App.tsx **excluded** (they're pre-generated deterministically).
  */
 export function scaffoldToPlan(scaffold: ProjectScaffold): PlanFile[] {
   const plan: PlanFile[] = []
 
-  for (const fc of scaffold.sharedComponents) {
-    plan.push(fileContractToPlanFile(fc, "shared"))
+  for (const fc of scaffold.sharedViews) {
+    plan.push(fileContractToPlanFile(fc, "shared-view"))
   }
 
-  for (const sec of scaffold.sections) {
-    for (const sub of sec.subComponents) {
-      plan.push(fileContractToPlanFile(sub, `section:${sec.name}`))
-    }
-    plan.push(fileContractToPlanFile(sec.file, `section:${sec.name}`))
+  for (const surface of scaffold.surfaces) {
+    plan.push(fileContractToPlanFile(surface.view, `surface:${surface.name}`))
   }
 
   return plan
@@ -91,29 +104,24 @@ export function materializeScaffoldForReactSource(
     filePath: layout.tokensFilePath,
   }
 
-  const sharedComponents = scaffold.sharedComponents.map((component) => ({
+  const sharedViews = scaffold.sharedViews.map((component) => ({
     ...component,
     filePath: `${layout.sharedComponentsDir}/${fileBaseName(component.filePath)}`,
   }))
 
-  const sections = scaffold.sections.map((section) => {
-    const sectionFilePath = `${layout.componentsDir}/${section.name}.tsx`
-    const subComponents = section.subComponents.map((component) => ({
-      ...component,
-      filePath: `${layout.componentsDir}/${section.name}/${fileBaseName(component.filePath)}`,
-    }))
+  const surfaces = scaffold.surfaces.map((surface) => {
+    const surfaceFilePath = `${layout.componentsDir}/${surface.id}.tsx`
 
     return {
-      ...section,
-      file: {
-        ...section.file,
-        filePath: sectionFilePath,
+      ...surface,
+      view: {
+        ...surface.view,
+        filePath: surfaceFilePath,
         imports: {
-          ...section.file.imports,
-          [relativeImportPath(sectionFilePath, tokensFile.filePath)]: ["COLORS", "FONTS", "SPACING", "RADII"],
+          ...surface.view.imports,
+          [relativeImportPath(surfaceFilePath, tokensFile.filePath)]: ["COLORS", "FONTS", "SPACING", "RADII"],
         },
       },
-      subComponents,
     }
   })
 
@@ -121,9 +129,9 @@ export function materializeScaffoldForReactSource(
     ...scaffold.appFile,
     filePath: layout.appFilePath,
     imports: Object.fromEntries(
-      sections.map((section) => [
-        relativeImportPath(layout.appFilePath, section.file.filePath),
-        [section.file.exportName],
+      surfaces.map((surface) => [
+        relativeImportPath(layout.appFilePath, visualViewPath(surface.view.filePath)),
+        [`${surface.view.exportName}View`],
       ]),
     ),
   }
@@ -131,19 +139,19 @@ export function materializeScaffoldForReactSource(
   const materialized: ProjectScaffold = {
     ...scaffold,
     tokensFile,
-    sharedComponents,
-    sections,
+    sharedViews,
+    surfaces,
     appFile,
   }
-  assertUniqueGeneratedPaths(generateReactSourceFiles(materialized).map((file) => file.file_path))
+  assertUniqueGeneratedPaths(generateViewSourceFiles(materialized).map((file) => file.file_path))
   return materialized
 }
 
 function fileContractToPlanFile(fc: FileContract, source: string): PlanFile {
   const notesParts: string[] = []
 
-  if (fc.sectionIR) {
-    notesParts.push("## 结构描述 (XML IR)\n\n" + fc.sectionIR)
+  if (fc.surfaceIR) {
+    notesParts.push("## 结构描述 (XML IR)\n\n" + fc.surfaceIR)
   }
 
   if (fc.propsInterface) {
@@ -277,15 +285,16 @@ export function generateTokensFile(scaffold: ProjectScaffold): GeneratedFile {
   }
 }
 
-/** `App.tsx` as a `GeneratedFile` — imports and composes all sections. */
-export function generateAppFile(scaffold: ProjectScaffold): GeneratedFile {
+/** `App.tsx` as a `GeneratedFile` — imports and composes semantic surface views. */
+export function generateAppViewFile(scaffold: ProjectScaffold): GeneratedFile {
   const imports: string[] = ['import React from "react"']
   const components: string[] = []
 
-  for (const sec of scaffold.sections) {
-    const importPath = relativeImportPath(scaffold.appFile.filePath, sec.file.filePath)
-    imports.push(`import { ${sec.file.exportName} } from "${importPath}"`)
-    components.push(`      <${sec.file.exportName} />`)
+  for (const surface of scaffold.surfaces) {
+    const viewExportName = `${surface.view.exportName}View`
+    const importPath = relativeImportPath(scaffold.appFile.filePath, visualViewPath(surface.view.filePath))
+    imports.push(`import { ${viewExportName} } from "${importPath}"`)
+    components.push(`      <${viewExportName} />`)
   }
 
   const code = `${imports.join("\n")}
@@ -305,36 +314,56 @@ ${components.join("\n")}
   }
 }
 
-export function generateReactSourceFiles(scaffold: ProjectScaffold): GeneratedFile[] {
+export function generateViewSourceFiles(scaffold: ProjectScaffold): GeneratedFile[] {
   const files: GeneratedFile[] = [generateTokensFile(scaffold)]
 
-  for (const component of scaffold.sharedComponents) {
-    files.push(generateComponentFile(component, "shared"))
+  for (const component of scaffold.sharedViews) {
+    files.push(generateVisualComponentFile(component).file)
   }
 
-  for (const section of scaffold.sections) {
-    for (const subComponent of section.subComponents) {
-      files.push(generateComponentFile(subComponent, "sub-component"))
-    }
-    files.push(generateSectionFile(section.file))
+  for (const surface of scaffold.surfaces) {
+    files.push(generateVisualComponentFile(surface.view).file)
   }
 
-  files.push(generateAppFile(scaffold))
+  files.push(generateAppViewFile(scaffold))
   assertUniqueGeneratedPaths(files.map((file) => file.file_path))
   return files
 }
 
-export function generateSectionFile(file: FileContract): GeneratedFile {
-  return generateComponentFile(file, "section")
+export function generateVisualBindingArtifacts(scaffold: ProjectScaffold): VisualBindingArtifacts {
+  const files: GeneratedFile[] = [generateTokensFile(scaffold)]
+  const components: VisualBindingComponent[] = []
+
+  for (const component of scaffold.sharedViews) {
+    const artifact = generateVisualComponentFile(component)
+    files.push(artifact.file)
+    components.push(artifact.component)
+  }
+
+  for (const surface of scaffold.surfaces) {
+    const artifact = generateVisualComponentFile(surface.view)
+    files.push(artifact.file)
+    components.push(artifact.component)
+  }
+
+  assertUniqueGeneratedPaths(files.map((file) => file.file_path))
+  return {
+    files,
+    manifest: VisualBindingManifestSchema.parse({
+      version: 1,
+      purpose: "visual-presentational-bindings",
+      components,
+    }),
+  }
 }
 
-export function generateComponentFile(file: FileContract, role: "section" | "shared" | "sub-component"): GeneratedFile {
+function generateComponentFile(file: FileContract, role: "surface" | "shared-view"): GeneratedFile {
   const propsInterface = file.propsInterface.trim()
   const propsName = propsInterface.match(/^interface\s+([A-Za-z_$][\w$]*)/m)?.[1]
   const propsParam = propsName ? `props: ${propsName}` : ""
   const propsReference = propsName ? "\n  void props" : ""
-  const body = file.sectionIR?.trim()
-    ? renderIntermediateRepresentation(file.sectionIR)
+  const body = file.surfaceIR?.trim()
+    ? renderIntermediateRepresentation(file.surfaceIR)
     : `    <section className="mirror-${role}" data-mirror-component="${jsxAttr(file.exportName)}" />`
 
   const code = [
@@ -357,6 +386,250 @@ export function generateComponentFile(file: FileContract, role: "section" | "sha
     file_path: file.filePath,
     code,
   }
+}
+
+function generateVisualComponentFile(file: FileContract): { file: GeneratedFile; component: VisualBindingComponent } {
+  const viewExportName = `${file.exportName}View`
+  const propsInterfaceName = `${viewExportName}Slots`
+  const ctx: VisualRenderContext = { slots: new Map(), nextSlotIndex: 0 }
+  const body = file.surfaceIR?.trim()
+    ? renderVisualIntermediateRepresentation(file.surfaceIR, ctx)
+    : `    <section className="mirror-view" data-mirror-component="${jsxAttr(viewExportName)}" />`
+  const slots = Array.from(ctx.slots.values())
+  const propsInterface = renderVisualSlotsInterface(propsInterfaceName, slots)
+
+  const code = [
+    'import React from "react"',
+    "",
+    propsInterface,
+    "",
+    `export function ${viewExportName}(props: { slots?: ${propsInterfaceName} } = {}) {`,
+    "  const slots = props.slots ?? {}",
+    "  return (",
+    body,
+    "  )",
+    "}",
+    "",
+  ].join("\n")
+
+  const filePath = visualViewPath(file.filePath)
+  return {
+    file: {
+      file_path: filePath,
+      code,
+    },
+    component: {
+      sourceExportName: file.exportName,
+      viewExportName,
+      filePath,
+      slots,
+    },
+  }
+}
+
+function renderVisualSlotsInterface(name: string, slots: VisualBindingSlot[]): string {
+  if (slots.length === 0) return `export interface ${name} {}`
+
+  const lines = [`export interface ${name} {`]
+  for (const slot of slots) {
+    const type = slot.kind === "text" ? "React.ReactNode" : "string"
+    lines.push(`  ${slot.name}?: ${type}`)
+  }
+  lines.push("}")
+  return lines.join("\n")
+}
+
+function renderVisualIntermediateRepresentation(sectionIR: string, ctx: VisualRenderContext): string {
+  const document = parseDocument(sectionIR, {
+    xmlMode: true,
+    lowerCaseTags: false,
+    lowerCaseAttributeNames: false,
+    recognizeSelfClosing: true,
+  })
+  const children = renderVisualNodeList(document.children as XmlNode[], 2, ctx, "")
+  return children.length > 0
+    ? children.join("\n")
+    : '    <section className="mirror-view" data-mirror-empty="true" />'
+}
+
+function renderVisualXmlNode(node: XmlNode, depth: number, ctx: VisualRenderContext, sourcePath: string): string {
+  if (node.type === "text") {
+    const text = (node.data ?? "").trim()
+    return text ? `${indent(depth)}{${JSON.stringify(text)}}` : ""
+  }
+  if (node.type === "comment") return ""
+  if (node.type !== "tag") return ""
+
+  const tagName = node.name ?? ""
+  if (tagName === "Text") return renderVisualTextNode(node, depth, ctx, sourcePath)
+  if (tagName === "Image") return renderVisualImageNode(node, depth, ctx, sourcePath)
+  if (tagName === "Inline") return renderVisualElementNode("span", node, depth, ctx, sourcePath)
+  if (tagName === "Icon") return renderVisualElementNode("span", node, depth, ctx, sourcePath, { role: "img" })
+  if (tagName === "Repeat") {
+    return renderVisualElementNode("div", node, depth, ctx, sourcePath, { "data-mirror-repeat": node.attribs?.count ?? "" })
+  }
+  if (tagName === "Container") return renderVisualElementNode("div", node, depth, ctx, sourcePath)
+  if (tagName === "Box") return renderVisualElementNode("div", node, depth, ctx, sourcePath)
+
+  throw new Error(`Unsupported section IR tag: ${tagName}`)
+}
+
+function renderVisualTextNode(node: XmlNode, depth: number, ctx: VisualRenderContext, sourcePath: string): string {
+  const attrs: Record<string, string | Record<string, string> | JsxExpression> = {
+    ...dataAttrs(node.attribs),
+    className: "mirror-text",
+  }
+  const text = collectNodeText(node)
+  const slot = addVisualSlot(ctx, {
+    name: namedSlot(node.attribs?.name, "text"),
+    kind: "text",
+    defaultValue: text,
+    sourceName: node.attribs?.name,
+    sourcePath,
+  })
+  const tag = node.attribs?.href ? "a" : "p"
+  if (node.attribs?.href) {
+    const hrefSlot = addVisualSlot(ctx, {
+      name: `${namedSlot(node.attribs.name, "link")}Href`,
+      kind: "href",
+      defaultValue: node.attribs.href,
+      sourceName: node.attribs.name,
+      sourcePath,
+    })
+    attrs.href = jsxExpression(`slots.${hrefSlot.name} ?? ${JSON.stringify(node.attribs.href)}`)
+  }
+
+  const hasStructuredChildren = (node.children ?? []).some((child) => child.type === "tag")
+  const defaultChildren = hasStructuredChildren ? renderVisualChildren(node, depth + 3, ctx, sourcePath) : []
+  if (!hasStructuredChildren || defaultChildren.length === 0) {
+    return `${indent(depth)}<${tag}${jsxAttrs(attrs)}>{slots.${slot.name} ?? ${JSON.stringify(text)}}</${tag}>`
+  }
+
+  return [
+    `${indent(depth)}<${tag}${jsxAttrs(attrs)}>`,
+    `${indent(depth + 1)}{slots.${slot.name} ?? (`,
+    `${indent(depth + 2)}<>`,
+    ...defaultChildren,
+    `${indent(depth + 2)}</>`,
+    `${indent(depth + 1)})}`,
+    `${indent(depth)}</${tag}>`,
+  ].join("\n")
+}
+
+function renderVisualImageNode(node: XmlNode, depth: number, ctx: VisualRenderContext, sourcePath: string): string {
+  const attrs = node.attribs ?? {}
+  const src = attrs.src ?? attrs["src-ref"]
+  if (!src) throw new Error("Image node is missing src in section IR")
+
+  const baseName = namedSlot(attrs.name, "image")
+  const srcSlot = addVisualSlot(ctx, {
+    name: `${baseName}Src`,
+    kind: "image-src",
+    defaultValue: src,
+    sourceName: attrs.name,
+    sourcePath,
+  })
+  const alt = attrs.alt ?? attrs.name ?? ""
+  const altSlot = addVisualSlot(ctx, {
+    name: `${baseName}Alt`,
+    kind: "image-alt",
+    defaultValue: alt,
+    sourceName: attrs.name,
+    sourcePath,
+  })
+
+  return `${indent(depth)}<img${jsxAttrs({
+    ...dataAttrs(attrs),
+    className: "mirror-image",
+    src: jsxExpression(`slots.${srcSlot.name} ?? ${JSON.stringify(src)}`),
+    alt: jsxExpression(`slots.${altSlot.name} ?? ${JSON.stringify(alt)}`),
+    style: styleObject(attrs),
+  })} />`
+}
+
+function renderVisualElementNode(
+  tag: string,
+  node: XmlNode,
+  depth: number,
+  ctx: VisualRenderContext,
+  sourcePath: string,
+  extraAttrs: Record<string, string> = {},
+): string {
+  const htmlTag = node.attribs?.href ? "a" : tag
+  const attrs: Record<string, string | Record<string, string> | JsxExpression> = {
+    ...dataAttrs(node.attribs),
+    ...extraAttrs,
+    className: `mirror-${node.name?.toLowerCase()}`,
+    style: styleObject(node.attribs ?? {}),
+  }
+  if (node.attribs?.href) {
+    const slot = addVisualSlot(ctx, {
+      name: `${namedSlot(node.attribs.name, "link")}Href`,
+      kind: "href",
+      defaultValue: node.attribs.href,
+      sourceName: node.attribs.name,
+      sourcePath,
+    })
+    attrs.href = jsxExpression(`slots.${slot.name} ?? ${JSON.stringify(node.attribs.href)}`)
+  }
+
+  return renderElement(
+    htmlTag,
+    attrs,
+    renderVisualChildren(node, depth + 1, ctx, sourcePath),
+    depth,
+  )
+}
+
+function renderVisualChildren(node: XmlNode, depth: number, ctx: VisualRenderContext, sourcePath: string): string[] {
+  return renderVisualNodeList(node.children ?? [], depth, ctx, sourcePath)
+}
+
+function renderVisualNodeList(nodes: XmlNode[], depth: number, ctx: VisualRenderContext, sourcePath: string): string[] {
+  const rendered: string[] = []
+  let renderedIndex = 0
+  for (const node of nodes) {
+    const childSourcePath = sourcePath.length > 0 ? `${sourcePath}.${renderedIndex}` : `${renderedIndex}`
+    const line = renderVisualXmlNode(node, depth, ctx, childSourcePath)
+    if (line.trim().length === 0) continue
+    rendered.push(line)
+    renderedIndex++
+  }
+  return rendered
+}
+
+function addVisualSlot(ctx: VisualRenderContext, slot: VisualBindingSlot): VisualBindingSlot {
+  const base = sanitizeIdentifier(slot.name)
+  let name = base
+  let i = ++ctx.nextSlotIndex
+  while (ctx.slots.has(name)) {
+    name = `${base}${i}`
+    i++
+  }
+
+  const stored = { ...slot, name }
+  ctx.slots.set(name, stored)
+  return stored
+}
+
+function namedSlot(name: string | undefined, fallback: string): string {
+  return sanitizeIdentifier(name && name.trim().length > 0 ? name : fallback)
+}
+
+function sanitizeIdentifier(value: string): string {
+  const cleaned = value
+    .replace(/[^a-zA-Z0-9_$]+(.)/g, (_, c: string) => c.toUpperCase())
+    .replace(/[^a-zA-Z0-9_$]/g, "")
+    .replace(/^[0-9]+/, "")
+  const candidate = cleaned.length > 0 ? cleaned : "slot"
+  return candidate.charAt(0).toLowerCase() + candidate.slice(1)
+}
+
+function visualViewPath(filePath: string): string {
+  const normalized = slashPath(filePath)
+  if (normalized.endsWith(".tsx")) return normalized.replace(/\.tsx$/, ".view.tsx")
+  if (normalized.endsWith(".ts")) return normalized.replace(/\.ts$/, ".view.tsx")
+  return `${normalized}.view.tsx`
 }
 
 function renderIntermediateRepresentation(sectionIR: string): string {
@@ -440,7 +713,7 @@ function renderElementNode(
 
 function renderElement(
   tag: string,
-  attrs: Record<string, string | Record<string, string>>,
+  attrs: Record<string, string | Record<string, string> | JsxExpression>,
   children: string[],
   depth: number,
 ): string {
@@ -512,14 +785,23 @@ function styleObject(attrs: Record<string, string>): Record<string, string> {
   return entries
 }
 
-function jsxAttrs(attrs: Record<string, string | Record<string, string>>): string {
+function jsxAttrs(attrs: Record<string, string | Record<string, string> | JsxExpression>): string {
   const rendered = Object.entries(attrs)
-    .filter(([, value]) => typeof value !== "object" || Object.keys(value).length > 0)
+    .filter(([, value]) => isJsxExpression(value) || typeof value !== "object" || Object.keys(value).length > 0)
     .map(([key, value]) => {
+      if (isJsxExpression(value)) return ` ${key}={${value.__jsxExpression}}`
       if (typeof value === "object") return ` ${key}={${jsxObject(value)}}`
       return ` ${key}=${JSON.stringify(value)}`
     })
   return rendered.join("")
+}
+
+function jsxExpression(value: string): JsxExpression {
+  return { __jsxExpression: value }
+}
+
+function isJsxExpression(value: unknown): value is JsxExpression {
+  return typeof value === "object" && value !== null && "__jsxExpression" in value
 }
 
 function jsxObject(value: Record<string, string>): string {

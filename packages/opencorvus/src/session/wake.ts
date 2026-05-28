@@ -2,10 +2,10 @@ import { Session } from "./index"
 import { Identifier } from "@/id/id"
 import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
-import { Provider } from "@/provider/provider"
 import { SessionPrompt } from "./prompt"
 import { Agent } from "@/agent/agent"
 import { SessionContext } from "./context"
+import { EffectiveConfig } from "@/config/effective"
 
 /**
  * Session wake mechanism.
@@ -36,9 +36,6 @@ export namespace SessionWake {
    * Returns the session ID (existing or newly created).
    */
   export async function wake(input: WakeInput): Promise<string> {
-    // Resolve agent name: use provided name, or fall back to the default agent
-    const agent = input.agent ?? (await Agent.defaultAgent())
-
     // Resolve or create session
     let sessionID = input.sessionID
     let session: Session.Info
@@ -53,6 +50,9 @@ export namespace SessionWake {
     } else {
       session = await Session.get(sessionID)
     }
+
+    const config = await EffectiveConfig.effective({ sessionID })
+    const agent = input.agent ?? (await Agent.defaultAgent({ config }))
 
     return SessionContext.provide(session, async () => {
       const model = await resolveModel(agent, sessionID, input.model)

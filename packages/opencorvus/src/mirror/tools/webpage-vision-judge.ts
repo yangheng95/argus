@@ -31,6 +31,7 @@ import { Tool } from "../../tool/tool"
 import { Provider } from "../../provider/provider"
 import { ProviderLLM } from "../../provider/llm"
 import { resolveConfiguredModelRef } from "../../agent/model"
+import { EffectiveConfig } from "../../config/effective"
 import { Log } from "../../util/log"
 import {
   withLLMActivity,
@@ -144,10 +145,11 @@ Pure transformation, no network besides the LLM call. Deterministic per (model, 
     ])
 
     // Single configured-model resolver (spec §13.2): session overlay > base.
-    const parsed = await resolveConfiguredModelRef()
-    const model = await Provider.getModel(parsed.providerID, parsed.modelID)
+    const config = await EffectiveConfig.effective({ sessionID: ctx.sessionID })
+    const parsed = await resolveConfiguredModelRef({ sessionID: ctx.sessionID })
+    const model = await Provider.getModel(parsed.providerID, parsed.modelID, { config })
     const language = ProviderLLM.wrapModel(
-      await Provider.getLanguage(model),
+      await Provider.getLanguage(model, { config }),
       model,
       {},
     )

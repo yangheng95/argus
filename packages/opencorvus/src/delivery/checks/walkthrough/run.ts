@@ -41,15 +41,17 @@ export async function runWalkthrough(input: {
   spec: AcceptanceSpec
   baseUrl: string
   outDir: string
+  taskID?: string
+  sessionID?: string
 }): Promise<WalkthroughResult> {
   return runWalkthroughWithDependencies(input, defaultDependencies)
 }
 
 export async function runWalkthroughWithDependencies(
-  input: { spec: AcceptanceSpec; baseUrl: string; outDir: string },
+  input: { spec: AcceptanceSpec; baseUrl: string; outDir: string; taskID?: string; sessionID?: string },
   dependencies: RunWalkthroughDependencies,
 ): Promise<WalkthroughResult> {
-  const steps = await dependencies.translate({ spec: input.spec })
+  const steps = await dependencies.translate({ spec: input.spec, taskID: input.taskID, sessionID: input.sessionID })
   await fs.mkdir(input.outDir, { recursive: true })
   const browser = await dependencies.puppeteer.launch({
     executablePath: await dependencies.findBrowserExecutable(),

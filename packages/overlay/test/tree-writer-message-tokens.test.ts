@@ -150,6 +150,73 @@ test("hydrateConversationView restores usage and context tokens from transcript 
   expect(card!.contextTokensEstimated).toBe(false);
 });
 
+test("context token hint uses the latest grouped message instead of cumulative spend", async () => {
+  setBoardStore("board", {
+    task: { id: TASK_ID, status: "active", time: { created: T0 }, request: "test", attachments: [] },
+    goals: [],
+    interactions: [],
+    goalWorkflows: [],
+  } as any);
+  setBoardStore("selectedTaskID", TASK_ID);
+  resetWriter();
+
+  applyEvent(messageUpdated({
+    id: "msg_group_a",
+    sessionID: SID,
+    role: "assistant",
+    time: { created: T0 + 100 },
+    tokens: { input: 500, output: 100, reasoning: 0, total: 600, cache: { read: 0, write: 0 } },
+    cost: 0.01,
+  }));
+  applyEvent(messageUpdated({
+    id: "msg_group_b",
+    sessionID: SID,
+    role: "assistant",
+    time: { created: T0 + 200 },
+    tokens: { input: 800, output: 250, reasoning: 0, total: 1_050, cache: { read: 0, write: 0 } },
+    cost: 0.025,
+  }));
+
+  const cardID = `assistant:session:${SID}:message:msg_group_a`;
+  const card = cardTreeStore.cards[cardID];
+  expect(card).toBeDefined();
+  expect(card!.usage).toEqual({
+    inputTokens: 1_300,
+    outputTokens: 350,
+    totalTokens: 1_650,
+    costUSD: 0.035,
+  });
+  expect(card!.contextTokens).toBe(800);
+});
+
+test("external executor cumulative usage does not masquerade as current context", async () => {
+  setBoardStore("board", {
+    task: { id: TASK_ID, status: "active", time: { created: T0 }, request: "test", attachments: [] },
+    goals: [],
+    interactions: [],
+    goalWorkflows: [],
+  } as any);
+  setBoardStore("selectedTaskID", TASK_ID);
+  resetWriter();
+
+  applyEvent(messageUpdated({
+    id: "msg_external_cumulative",
+    sessionID: SID,
+    role: "assistant",
+    providerID: "codex-app-server",
+    modelID: "codex-app-server",
+    time: { created: T0 + 250 },
+    tokens: { input: 3_889_000, output: 5_000, reasoning: 0, total: 3_894_000, cache: { read: 0, write: 0 } },
+    cost: 0,
+  }));
+
+  const cardID = `assistant:session:${SID}:message:msg_external_cumulative`;
+  const card = cardTreeStore.cards[cardID];
+  expect(card).toBeDefined();
+  expect(card!.usage?.totalTokens).toBe(3_894_000);
+  expect(card!.contextTokens).toBeUndefined();
+});
+
 test("user messages do not get a usage chip even when tokens accidentally appear on info", async () => {
   setBoardStore("board", {
     task: { id: TASK_ID, status: "active", time: { created: T0 }, request: "test", attachments: [] },

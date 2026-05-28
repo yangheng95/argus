@@ -97,6 +97,10 @@ export namespace SessionStatus {
     }
   }
 
+  export function abortActivityGate(sessionID: string, reason?: unknown) {
+    activityGates[sessionID]?.abort(reason)
+  }
+
   export function set(sessionID: string, status: Info) {
     // Single-source terminal guard (rule 8): once a session reaches a
     // terminal state, subsequent set() calls are silently dropped, except

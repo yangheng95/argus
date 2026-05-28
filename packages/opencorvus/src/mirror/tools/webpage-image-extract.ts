@@ -20,6 +20,7 @@ import { Tool } from "../../tool/tool"
 import { Provider } from "../../provider/provider"
 import { ProviderLLM } from "../../provider/llm"
 import { resolveConfiguredModelRef } from "../../agent/model"
+import { EffectiveConfig } from "../../config/effective"
 import { Log } from "../../util/log"
 import { Instance } from "../../project/instance"
 import { extractImage } from "../image/extract"
@@ -63,8 +64,9 @@ Use this only when image-reference evidence is missing for the requested output 
     const outputDir = await resolveMirrorOutputDir({ override: params.outputDir, sessionID: ctx.sessionID })
 
     // Single configured-model resolver (spec §13.2): session overlay > base.
-    const parsed = await resolveConfiguredModelRef()
-    const model = await Provider.getModel(parsed.providerID, parsed.modelID)
+    const config = await EffectiveConfig.effective({ sessionID: ctx.sessionID })
+    const parsed = await resolveConfiguredModelRef({ sessionID: ctx.sessionID })
+    const model = await Provider.getModel(parsed.providerID, parsed.modelID, { config })
     if (!model.capabilities.input.image) {
       throw new Error(
         `webpage_image_extract requires a vision-capable model. ` +
@@ -74,7 +76,7 @@ Use this only when image-reference evidence is missing for the requested output 
       )
     }
     const language = ProviderLLM.wrapModel(
-      await Provider.getLanguage(model),
+      await Provider.getLanguage(model, { config }),
       model,
       {},
     )

@@ -32,6 +32,15 @@ describe("withStreamActivity", () => {
     gate.dispose()
   })
 
+  test("can be aborted by the owning session cancel path", () => {
+    const gate = withStreamActivity({ idleMs: 60_000, label: "session-owned" })
+    gate.abort(new DOMException("session cancelled", "AbortError"))
+    expect(gate.signal.aborted).toBe(true)
+    expect(gate.timedOut()).toBe(false)
+    expect((gate.signal.reason as DOMException).message).toBe("session cancelled")
+    gate.dispose()
+  })
+
   test("dispose() is idempotent and stops the timer", async () => {
     const gate = withStreamActivity({ idleMs: 20 })
     gate.dispose()

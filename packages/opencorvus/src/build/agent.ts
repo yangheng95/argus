@@ -33,11 +33,11 @@ import { tool, type ToolSet } from "ai"
 import { Log } from "@/util/log"
 import { AgentRunError, runAgentSession } from "@/agent/runner"
 import { Agent } from "@/agent/agent"
+import { EffectiveConfig } from "@/config/effective"
 import { Instance } from "@/project/instance"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { TaskRuntimeMaterializer } from "@/project/task-runtime-materializer"
 import { Session } from "@/session"
-import { resolveSessionOverlay } from "@/agent/model"
 import { SessionStatus } from "@/session/status"
 import { toolFailureCauseFromUnknown } from "@/session/tool-failure-cause"
 import { Worktree } from "@/worktree"
@@ -81,7 +81,7 @@ import { renderContractGraphForPrompt } from "@/architect/contract-graph"
 import { withFactCheckRegistration } from "@/prompt/fragments/fact-check-registration"
 import { AttachmentStore } from "@/storage/attachment-store"
 import { renderUserRequestSection } from "@/intent/request-prompt"
-import { withStreamActivity } from "@/util/stream-activity"
+import { abortableIterable, withStreamActivity } from "@/util/stream-activity"
 import { PermissionNext } from "@/permission/next"
 import { Question } from "@/question"
 import { buildBuildAgentReport } from "./report"
@@ -1642,10 +1642,9 @@ async function runWithExternalProviderImpl(args: {
   }
 
   const orchCfg = await EngineConfig.get()
-  const buildAgent = await Agent.get("build")
-  const userAppend = buildAgent
-    ? Agent.resolveSessionAgent(buildAgent, await resolveSessionOverlay()).promptAppend
-    : undefined
+  const config = await EffectiveConfig.effective({ taskID: args.taskID, sessionID: args.existingSessionID })
+  const buildAgent = await Agent.get("build", { config })
+  const userAppend = buildAgent?.promptAppend
   const baseSystem = resolveOption<string>(options.system)
   const projectInstructions = await InstructionPrompt.system()
   const systemWithAutoIteration = [
@@ -1718,7 +1717,7 @@ async function runWithExternalProviderImpl(args: {
     const stream = args.resumeExistingProviderSession
       ? provider.resume(providerInput)
       : provider.run(providerInput)
-    for await (const event of stream) {
+    for await (const event of abortableIterable(stream, gate.signal)) {
       gate.observe()
       events.push(event)
       const sessionRef = extractExecutorSessionRef(event)

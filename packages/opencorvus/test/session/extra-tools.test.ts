@@ -8,6 +8,8 @@ import z from "zod"
 // destructure sees an empty stub.
 import { SessionPrompt } from "../../src/session/prompt"
 import { SessionLoop } from "../../src/session/loop"
+import { SessionStatus } from "../../src/session/status"
+import { withStreamActivity } from "../../src/util/stream-activity"
 import { BuildResultSchema } from "../../src/build/types"
 import { Instance } from "../../src/project/instance"
 import { AttachmentStore } from "../../src/storage/attachment-store"
@@ -78,6 +80,27 @@ describe("SessionLoop session runtime contract", () => {
         SessionPrompt.cancel(sessionID)
         expect(SessionPrompt.getSessionRuntimeContract(sessionID)?.tools).toBeDefined()
         SessionPrompt.clearSessionRuntimeContract(sessionID)
+      },
+    })
+  })
+
+  test("SessionPrompt.cancel aborts a registered activity gate", async () => {
+    const sessionID = `ses_runtime_${Date.now()}_gate`
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const gate = withStreamActivity({ idleMs: 60_000, label: "session-cancel-test" })
+        const unregister = SessionStatus.registerActivityGate(sessionID, gate)
+        try {
+          SessionPrompt.cancel(sessionID)
+          expect(gate.signal.aborted).toBe(true)
+          expect(gate.timedOut()).toBe(false)
+          expect(String(gate.signal.reason)).toContain("session cancelled")
+        } finally {
+          unregister()
+          gate.dispose()
+        }
       },
     })
   })

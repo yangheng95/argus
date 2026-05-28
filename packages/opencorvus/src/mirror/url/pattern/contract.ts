@@ -1,6 +1,6 @@
 /**
  * Contract generation: `ComponentCatalog` + `DesignTokenSystem` + page
- * sections → `ProjectScaffold`.
+ * surface candidates → semantic `ProjectScaffold`.
  *
  * Ported verbatim from `mirror/src/infra/pattern/contract.ts`. Every
  * structural decision (file paths, exports, imports, props interfaces,
@@ -23,7 +23,13 @@ import type {
   DesignTokenSystem,
   ProjectScaffold,
   FileContract,
-  SectionContract,
+  SourceRef,
+  VisualSlotContract,
+  VisualSurfaceCandidate,
+  VisualSurfaceCandidateSet,
+  VisualSurfaceCandidateSetSchema,
+  VisualSurfaceContract,
+  VisualSurfaceKind,
 } from "../../ir/scaffold"
 import { DEFAULT_REACT_SOURCE_LAYOUT } from "../../shared/scaffold-helpers"
 
@@ -286,7 +292,7 @@ function generatePropsInterface(pattern: ComponentPattern): string {
 
 // ─── Contract building ───────────────────────────────────────────────────
 
-function buildSharedComponentContract(pattern: ComponentPattern, imageMap?: Record<string, string>): FileContract {
+function buildSharedViewContract(pattern: ComponentPattern, imageMap?: Record<string, string>): FileContract {
   const kebab = toKebab(pattern.name)
   return {
     filePath: `${DEFAULT_REACT_SOURCE_LAYOUT.sharedComponentsDir}/${kebab}.tsx`,
@@ -295,19 +301,21 @@ function buildSharedComponentContract(pattern: ComponentPattern, imageMap?: Reco
     propsInterface: generatePropsInterface(pattern),
     imports: {},
     patterns: [],
-    sectionIR: compilePatternIR(pattern, imageMap),
+    surfaceIR: compilePatternIR(pattern, imageMap),
   }
 }
 
-function buildSectionContract(
+function buildSurfaceContract(
   section: RawSection,
   _sectionIndex: number,
   patternsInSection: ComponentPattern[],
   sharedPatternNames: Set<string>,
   usedNames: Set<string>,
   imageMap?: Record<string, string>,
-): SectionContract {
-  const kebab = dedup(toKebab(section.name), usedNames)
+): VisualSurfaceContract {
+  const kind = inferSurfaceKind(section)
+  const semanticName = semanticSurfaceName(section, kind)
+  const kebab = dedup(toKebab(semanticName), usedNames)
   usedNames.add(kebab)
   const pascal = toPascal(kebab)
 
@@ -322,14 +330,14 @@ function buildSectionContract(
     }
   }
 
-  let sectionIR = ""
+  let surfaceIR = ""
   for (const el of section.elements) {
     const chunk = compileElement(el, 0, MAX_IR_DEPTH, imageMap) + "\n"
-    if (sectionIR.length + chunk.length > MAX_IR_CHARS) {
-      sectionIR += `<!-- IR truncated: ${section.elementCount} elements total -->\n`
+    if (surfaceIR.length + chunk.length > MAX_IR_CHARS) {
+      surfaceIR += `<!-- IR truncated: ${section.elementCount} elements total -->\n`
       break
     }
-    sectionIR += chunk
+    surfaceIR += chunk
   }
 
   const collapsedDetails: Array<{ role: string; ir: string }> = []
@@ -347,7 +355,7 @@ function buildSectionContract(
   findCollapsed(section.elements, 0)
   if (collapsedDetails.length > 0) {
     for (const detail of collapsedDetails.slice(0, 3)) {
-      sectionIR += `\n<!-- Expanded detail for collapsed "${detail.role}" element:\n${detail.ir}\n-->\n`
+      surfaceIR += `\n<!-- Expanded detail for collapsed "${detail.role}" element:\n${detail.ir}\n-->\n`
     }
   }
 
@@ -366,7 +374,7 @@ function buildSectionContract(
     const imgLines = sectionImages
       .slice(0, 30)
       .map((img, i) => `  ${i}: ${img.src}${img.alt ? ` (${img.alt})` : ""}`)
-    sectionIR += `\n<!-- Section Images (${sectionImages.length} total) — use these paths as src:\n${imgLines.join(
+    surfaceIR += `\n<!-- Surface Images (${sectionImages.length} total) — use these paths as src:\n${imgLines.join(
       "\n",
     )}\n-->\n`
   }
@@ -392,7 +400,7 @@ function buildSectionContract(
   collectTexts(section.elements)
   if (sectionTexts.length > 0) {
     const textLines = sectionTexts.map((t) => `  ${t.tag}: ${t.text}`)
-    sectionIR += `\n<!-- Section Text (${sectionTexts.length} items) — use these EXACT texts, do NOT fabricate:\n${textLines.join(
+    surfaceIR += `\n<!-- Surface Text (${sectionTexts.length} items) — use these EXACT texts, do NOT fabricate:\n${textLines.join(
       "\n",
     )}\n-->\n`
   }
@@ -420,7 +428,7 @@ function buildSectionContract(
         usageLines.push(`  <${pattern.name} ${propStr} />`)
       }
     }
-    sectionIR += `\n<!-- Sub-component prop usage — pass props EXACTLY as shown:\n${usageLines.join(
+    surfaceIR += `\n<!-- Sub-component prop usage — pass props EXACTLY as shown:\n${usageLines.join(
       "\n",
     )}\n-->\n`
   }
@@ -440,25 +448,30 @@ function buildSectionContract(
       "../design-tokens": ["COLORS", "FONTS"],
     },
     patterns: patternNames,
-    sectionIR,
+    surfaceIR,
   }
-  const subComponents: FileContract[] = localPatterns.map((p) => ({
-    filePath: `${DEFAULT_REACT_SOURCE_LAYOUT.componentsDir}/${kebab}/${toKebab(p.name)}.tsx`,
-    exportName: p.name,
-    isDefaultExport: false,
-    propsInterface: generatePropsInterface(p),
-    imports: {},
-    patterns: [],
-    sectionIR: compilePatternIR(p, imageMap),
-  }))
+  const sourceRefs = sourceRefsForSection(section)
 
   return {
-    name: kebab,
+    id: kebab,
+    name: pascal,
+    kind,
     role: section.role,
     bounds: section.bounds,
-    file: mainFile,
-    subComponents,
-    elementCount: section.elementCount,
+    sourceRefs,
+    view: mainFile,
+    slots: collectSlotContracts(section.elements, sourceRefs[0]?.source ?? "url"),
+    repeatedPatterns: patternsInSection.map((pattern) => ({
+      name: pattern.name,
+      instanceCount: pattern.instanceCount,
+    })),
+    containerContract: {
+      owner: "business-container",
+      dataModel: inferDataModel(kind),
+      states: ["ready"],
+      interactions: inferInteractions(kind),
+      unknowns: ["Real backend/API behavior is not observable from static mirror evidence."],
+    },
   }
 }
 
@@ -473,16 +486,17 @@ function buildTokensFileContract(_tokens: DesignTokenSystem): FileContract {
   }
 }
 
-function buildAppFileContract(sections: SectionContract[]): FileContract {
+function buildAppFileContract(surfaces: VisualSurfaceContract[]): FileContract {
   const imports: Record<string, string[]> = {}
-  for (const sec of sections) {
-    const importPath = `./${sec.file.filePath.replace(`${DEFAULT_REACT_SOURCE_LAYOUT.sourceDir}/`, "").replace(/\.tsx$/, "")}`
-    imports[importPath] = [sec.file.exportName]
+  for (const surface of surfaces) {
+    const viewFilePath = surface.view.filePath.replace(/\.tsx$/, ".view.tsx")
+    const importPath = `./${viewFilePath.replace(`${DEFAULT_REACT_SOURCE_LAYOUT.sourceDir}/`, "").replace(/\.tsx$/, "")}`
+    imports[importPath] = [`${surface.view.exportName}View`]
   }
 
   return {
     filePath: DEFAULT_REACT_SOURCE_LAYOUT.appFilePath,
-    exportName: "App",
+    exportName: "AppView",
     isDefaultExport: false,
     propsInterface: "",
     imports,
@@ -508,28 +522,178 @@ export function generateScaffold(
     }
   }
 
-  const sharedComponents = catalog.patterns
+  const sharedViews = catalog.patterns
     .filter((p) => sharedPatternNames.has(p.name))
-    .map((p) => buildSharedComponentContract(p, page.assets.imageMap))
+    .map((p) => buildSharedViewContract(p, page.assets.imageMap))
 
   const usedSectionNames = new Set<string>()
-  const sections: SectionContract[] = rawSections.map((sec, i) => {
+  const surfaces: VisualSurfaceContract[] = rawSections.map((sec, i) => {
     const patternsInSection = catalog.patterns.filter((p) => {
       const secs = patternSections.get(p.name)
       return secs?.has(i)
     })
-    return buildSectionContract(sec, i, patternsInSection, sharedPatternNames, usedSectionNames, page.assets.imageMap)
+    return buildSurfaceContract(sec, i, patternsInSection, sharedPatternNames, usedSectionNames, page.assets.imageMap)
   })
 
   const tokensFile = buildTokensFileContract(tokens)
-  const appFile = buildAppFileContract(sections)
+  const appFile = buildAppFileContract(surfaces)
 
   return {
+    version: 2,
     tokensFile,
-    sharedComponents,
-    sections,
+    sharedViews,
+    surfaces,
     appFile,
     tokens,
     catalog,
   }
+}
+
+export function generateSurfaceCandidates(
+  page: ExtractedPage,
+  catalog: ComponentCatalog,
+): VisualSurfaceCandidateSet {
+  const rawSections = detectSections(page)
+  const patternSections = mapPatternsToSections(catalog.patterns, rawSections)
+  const used = new Set<string>()
+  const candidates: VisualSurfaceCandidate[] = rawSections.map((section, index) => {
+    const kind = inferSurfaceKind(section)
+    const name = semanticSurfaceName(section, kind)
+    const id = dedup(toKebab(name), used)
+    used.add(id)
+    const sourceRefs = sourceRefsForSection(section)
+    const patterns = catalog.patterns.filter((pattern) => patternSections.get(pattern.name)?.has(index))
+    return {
+      id,
+      name: toPascal(id),
+      kind,
+      role: section.role,
+      bounds: section.bounds,
+      sourceRefs,
+      slotCandidates: collectSlotContracts(section.elements, sourceRefs[0]?.source ?? "url"),
+      repeatedPatterns: patterns.map((pattern) => ({
+        name: pattern.name,
+        instanceCount: pattern.instanceCount,
+      })),
+      evidence: [
+        `bounds=${section.bounds.x},${section.bounds.y},${section.bounds.w}x${section.bounds.h}`,
+        `elements=${section.elementCount}`,
+      ],
+    }
+  })
+
+  return VisualSurfaceCandidateSetSchema.parse({
+    version: 1,
+    purpose: "semantic-visual-surface-candidates",
+    candidates,
+  })
+}
+
+function inferSurfaceKind(section: RawSection): VisualSurfaceKind {
+  if (section.role === "nav" || section.role === "header") return "navigation"
+  if (section.role === "footer") return "footer"
+  if (section.role === "form") return "form"
+  if (section.role === "list") return "list"
+  if (section.role === "hero") return "hero"
+  const texts = collectTextValues(section.elements).join(" ")
+  if (/百度一下|搜索|search/i.test(texts)) return "search"
+  if (/关于|ICP备|公网安备|copyright|privacy|terms/i.test(texts)) return "footer"
+  if (section.bounds.y <= 80 && section.bounds.h <= 160) return "navigation"
+  if (section.elements.some((element) => element.styles.position === "fixed")) return "floating-tools"
+  if (section.elements.some((element) => element.role === "list")) return "feed"
+  return "content"
+}
+
+function semanticSurfaceName(section: RawSection, kind: VisualSurfaceKind): string {
+  if (section.role && section.role !== "section") return `${section.role}-surface`
+  if (kind === "navigation") return "header-navigation"
+  if (kind === "search") return "search-hero"
+  if (kind === "feed" || kind === "list") return "trending-list"
+  if (kind === "footer") return "footer-legal-links"
+  if (kind === "floating-tools") return "floating-tools"
+  return "page-surface"
+}
+
+function sourceRefsForSection(section: RawSection): SourceRef[] {
+  return section.elements.map((element, index) => ({
+    source: "url",
+    path: String(index),
+    selector: element.selector,
+    bounds: element.bounds ?? section.bounds,
+  }))
+}
+
+function collectSlotContracts(elements: ExtractedElement[], source: SourceRef["source"]): VisualSlotContract[] {
+  const slots: VisualSlotContract[] = []
+  const used = new Set<string>()
+  function add(name: string, kind: VisualSlotContract["kind"], defaultValue: string | undefined, element: ExtractedElement, path: string) {
+    const base = toSlotName(name)
+    let finalName = base
+    for (let i = 2; used.has(finalName); i++) finalName = `${base}${i}`
+    used.add(finalName)
+    slots.push({
+      name: finalName,
+      kind,
+      required: false,
+      defaultValue,
+      sourceRefs: [{
+        source,
+        path,
+        selector: element.selector,
+        bounds: element.bounds,
+      }],
+    })
+  }
+  function walk(nodes: ExtractedElement[], prefix: string) {
+    for (let index = 0; index < nodes.length; index++) {
+      const element = nodes[index]
+      const path = prefix ? `${prefix}.${index}` : String(index)
+      if (element.text?.trim()) add(element.role || element.tag || "text", "text", element.text.trim(), element, path)
+      if (element.href) add(`${element.role || element.tag || "link"}Href`, "href", element.href, element, path)
+      if (element.imageSrc) {
+        add(`${element.role || element.tag || "image"}Src`, "image-src", element.imageSrc, element, path)
+        add(`${element.role || element.tag || "image"}Alt`, "image-alt", element.imageAlt ?? "", element, path)
+      }
+      if (element.children) walk(element.children, path)
+    }
+  }
+  walk(elements, "")
+  return slots.slice(0, 80)
+}
+
+function collectTextValues(elements: ExtractedElement[]): string[] {
+  const texts: string[] = []
+  function walk(nodes: ExtractedElement[]) {
+    for (const element of nodes) {
+      if (element.text?.trim()) texts.push(element.text.trim())
+      if (element.children) walk(element.children)
+    }
+  }
+  walk(elements)
+  return texts
+}
+
+function inferDataModel(kind: VisualSurfaceKind): string | undefined {
+  if (kind === "feed" || kind === "list") return "Array of visible list/feed items with label, href, rank, and badge fields."
+  if (kind === "search" || kind === "form") return "Form model with current input value, submit action, and auxiliary links."
+  return undefined
+}
+
+function inferInteractions(kind: VisualSurfaceKind) {
+  if (kind === "search" || kind === "form") {
+    return [{ name: "submit", trigger: "form-submit", effect: "Invoke project-owned search handler or mock adapter." }]
+  }
+  if (kind === "navigation") {
+    return [{ name: "navigate", trigger: "link-click", effect: "Navigate through project-owned routing or href adapter." }]
+  }
+  return []
+}
+
+function toSlotName(value: string): string {
+  const cleaned = value
+    .replace(/[^a-zA-Z0-9_$]+(.)/g, (_, c: string) => c.toUpperCase())
+    .replace(/[^a-zA-Z0-9_$]/g, "")
+    .replace(/^[0-9]+/, "")
+  const name = cleaned.length > 0 ? cleaned : "slot"
+  return name.charAt(0).toLowerCase() + name.slice(1)
 }

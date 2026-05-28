@@ -15,6 +15,15 @@ function feed(items: unknown[], wait = 0): AsyncIterable<unknown> {
   }
 }
 
+async function waitFor(predicate: () => boolean | Promise<boolean>, timeoutMs = 1_000) {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    if (await predicate()) return
+    await Bun.sleep(10)
+  }
+  throw new Error("timed out waiting for condition")
+}
+
 describe("managed coding executor", () => {
   afterEach(() => {
     ExecutorRegistry.reset()
@@ -157,6 +166,149 @@ describe("managed coding executor", () => {
     expect(status.status).toBe("failed")
     expect(status.error).toBe("task cancelled")
     expect(stopped).toEqual(["session_2"])
+  })
+
+  test("abort returns promptly when provider interrupt never settles", async () => {
+    let interruptCalled = false
+    const provider: CodingProvider = {
+      name: "codex",
+      capabilities() {
+        return {
+          builtinTools: true,
+          customTools: false,
+          stream: true,
+          resume: true,
+          interrupt: true,
+          cwd: true,
+          system: true,
+        }
+      },
+      run() {
+        let index = 0
+        return {
+          [Symbol.asyncIterator]() {
+            return {
+              next: async () => {
+                if (index++ === 0) {
+                  return {
+                    done: false,
+                    value: {
+                      type: "progress",
+                      phase: "init",
+                      summary: "started",
+                      meta: { session_id: "native_hung_interrupt" },
+                    } satisfies CodingEventInfo,
+                  }
+                }
+                return new Promise<IteratorResult<CodingEventInfo>>(() => {})
+              },
+              return: async () => ({ done: true, value: undefined as any }),
+            }
+          },
+        }
+      },
+      resume() {
+        return feed([]) as AsyncIterable<CodingEventInfo>
+      },
+      interrupt() {
+        interruptCalled = true
+        return new Promise<boolean>(() => {})
+      },
+    }
+
+    const executor = ExecutorRegistry.registerCoding("codex", provider, { cwd: "/repo" })
+    const submitted = await executor.submit({ sessionID: "session_hung_interrupt", prompt: "work" })
+    await waitFor(async () => {
+      const status = await executor.status(submitted.queueTaskID)
+      return status.status === "running"
+    })
+
+    const started = Date.now()
+    const aborted = await executor.abort({ queueTaskID: submitted.queueTaskID })
+    const elapsed = Date.now() - started
+    const status = await executor.status(submitted.queueTaskID)
+
+    expect(aborted).toBe(true)
+    expect(interruptCalled).toBe(true)
+    expect(elapsed).toBeLessThan(500)
+    expect(status.status).toBe("failed")
+    expect(status.error).toBe("task cancelled")
+  })
+
+  test("abort unwinds a parked provider iterator and completes event consumers", async () => {
+    let returned = false
+    const provider: CodingProvider = {
+      name: "codex",
+      capabilities() {
+        return {
+          builtinTools: true,
+          customTools: false,
+          stream: true,
+          resume: true,
+          interrupt: true,
+          cwd: true,
+          system: true,
+        }
+      },
+      run() {
+        let index = 0
+        return {
+          [Symbol.asyncIterator]() {
+            return {
+              next: async () => {
+                if (index++ === 0) {
+                  return {
+                    done: false,
+                    value: {
+                      type: "progress",
+                      phase: "init",
+                      summary: "started",
+                      meta: { session_id: "native_parked" },
+                    } satisfies CodingEventInfo,
+                  }
+                }
+                return new Promise<IteratorResult<CodingEventInfo>>(() => {})
+              },
+              return: async () => {
+                returned = true
+                return { done: true, value: undefined as any }
+              },
+            }
+          },
+        }
+      },
+      resume() {
+        return feed([]) as AsyncIterable<CodingEventInfo>
+      },
+      async interrupt() {
+        return true
+      },
+    }
+
+    const executor = ExecutorRegistry.registerCoding("codex", provider, { cwd: "/repo" })
+    const submitted = await executor.submit({ sessionID: "session_parked", prompt: "work" })
+    const events = (async () => {
+      const seen: string[] = []
+      for await (const event of executor.events!({ queueTaskID: submitted.queueTaskID })) {
+        seen.push(event.type)
+      }
+      return seen
+    })()
+    await waitFor(async () => {
+      const status = await executor.status(submitted.queueTaskID)
+      return status.status === "running"
+    })
+
+    await executor.abort({ queueTaskID: submitted.queueTaskID })
+    const seen = await Promise.race([
+      events,
+      Bun.sleep(1_000).then(() => {
+        throw new Error("managed event consumer did not complete")
+      }),
+    ])
+
+    expect(returned).toBe(true)
+    expect(seen).toContain("session.error")
   })
 
   test("registerCoding exposes planning generation on the adapted executor", async () => {

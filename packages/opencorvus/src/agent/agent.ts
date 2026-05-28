@@ -600,6 +600,9 @@ export namespace Agent {
       // users into thinking the override does something.
       if (item.permission) {
         item.permission = PermissionNext.merge(item.permission, PermissionNext.fromConfig(value.permission ?? {}))
+        if (key === "visual-qa") {
+          item.permission = PermissionNext.merge(item.permission, mirrorAnalysisDenied)
+        }
       }
     }
 

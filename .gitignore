@@ -9,6 +9,7 @@ node_modules
 .codex
 .codex-*-lkg.log
 .codex-*-lkg.txt
+.codex_out/
 .claude
 *~
 playground

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import matter from "gray-matter"
 import path from "path"
+import fs from "node:fs/promises"
 import { tmpdir } from "../fixture/fixture"
 import { Instance } from "../../src/project/instance"
 import { WebpageCompileTool } from "../../src/mirror/tools/webpage-compile"
@@ -29,6 +30,12 @@ describe("webpage-generate dependency guards", () => {
     expect(parsed.content).toContain("completeness_review")
     expect(parsed.content).toContain("mirror/scaffold.json")
     expect(parsed.content).toContain("mirror/prd-evidence-summary.md")
+    expect(parsed.content).toContain("mirror/binding-manifest.json")
+    expect(parsed.content).toContain("mirror/generated-visual-source/*")
+    expect(parsed.content).toContain("presentational View components")
+    expect(parsed.content).toContain("framework-first implementation flow")
+    expect(parsed.content).toContain("visual framework handoff")
+    expect(parsed.content).toContain("functional fill")
     expect(parsed.content).toContain("Do not read `mirror/extracted-page.json` wholesale")
     expect(parsed.content).not.toContain("src/App.tsx")
     expect(parsed.content).not.toContain("src/design-tokens.ts")
@@ -171,6 +178,70 @@ describe("webpage-generate dependency guards", () => {
     })
   })
 
+  test("analyze writes visual View source and binding manifest artifacts", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const outputDir = path.join(tmp.path, "mirror")
+        await fs.mkdir(outputDir, { recursive: true })
+        await Bun.write(
+          path.join(outputDir, "extracted-page.json"),
+          JSON.stringify({
+            url: "https://example.test/",
+            title: "Example",
+            viewport: { width: 1440, height: 900 },
+            screenshotUrl: "",
+            tree: [
+              {
+                selector: "section.hero",
+                tag: "section",
+                role: "hero",
+                bounds: { x: 0, y: 0, w: 1440, h: 400 },
+                styles: { display: "flex", flexDirection: "column", padding: "24px" },
+                children: [
+                  {
+                    selector: "h1",
+                    tag: "h1",
+                    bounds: { x: 24, y: 24, w: 400, h: 48 },
+                    styles: { fontSize: "32px", fontWeight: "700" },
+                    text: "Welcome",
+                  },
+                  {
+                    selector: "img",
+                    tag: "img",
+                    bounds: { x: 24, y: 96, w: 120, h: 40 },
+                    styles: {},
+                    imageSrc: "mirror/images/logo.png",
+                    imageAlt: "Logo",
+                  },
+                ],
+              },
+            ],
+            tokens: { colors: {}, fonts: [], customProperties: {} },
+            assets: { images: [], icons: [] },
+            stats: { totalElements: 3, extractedElements: 3, imageCount: 1, extractionTimeMs: 1 },
+          }),
+        )
+
+        const analyze = await WebpageAnalyzeTool.init()
+        const result = await analyze.execute({ outputDir }, {} as any)
+        const manifestPath = path.join(outputDir, "binding-manifest.json")
+
+        expect(result.output).toContain("binding-manifest.json")
+        expect(result.output).toContain("Generated visual View artifacts")
+        expect(await Bun.file(manifestPath).exists()).toBe(true)
+
+        const manifest = JSON.parse(await Bun.file(manifestPath).text())
+        const viewPath = path.join(outputDir, "generated-visual-source", manifest.components[0].filePath)
+        expect(await Bun.file(viewPath).exists()).toBe(true)
+        expect(manifest.purpose).toBe("visual-presentational-bindings")
+        expect(manifest.components[0].viewExportName).toEndWith("View")
+        expect(manifest.components[0].slots.map((slot: { kind: string }) => slot.kind)).toContain("text")
+      },
+    })
+  })
+
   test("generated source artifacts stay inside mirror output directory", async () => {
     await using tmp = await tmpdir()
     await Instance.provide({
@@ -194,6 +265,29 @@ describe("webpage-generate dependency guards", () => {
         expect(written).toEqual([artifactPath])
         expect(await Bun.file(artifactPath).exists()).toBe(true)
         expect(await Bun.file(path.join(tmp.path, "src", "components", "TradingViewScreener.tsx")).exists()).toBe(false)
+      },
+    })
+  })
+
+  test("generated source subdir cannot escape mirror output directory", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const outputDir = path.join(tmp.path, "mirror")
+        const files = [
+          {
+            file_path: "src/components/TradingViewScreener.tsx",
+            code: "export function TradingViewScreener() { return null }\n",
+          } as any,
+        ]
+
+        await expect(writeGeneratedSourceFiles(outputDir, files, "..")).rejects.toThrow(
+          "Generated source artifact subdir cannot escape output directory",
+        )
+        await expect(writeGeneratedSourceFiles(outputDir, files, path.join(tmp.path, "outside"))).rejects.toThrow(
+          "Generated source artifact subdir must be relative",
+        )
       },
     })
   })

@@ -4,6 +4,11 @@ import {
   sortAgentWorkflowRecordsChronologically,
 } from "../src/utils/agent-workflow-records"
 import type { AgentWorkflowRecord } from "../src/utils/agent-workflow"
+import {
+  conversationAgentStore,
+  hydrateConversationAgentView,
+  resetConversationAgentView,
+} from "../src/store/conversation-agents"
 
 function record(
   sessionID: string,
@@ -60,4 +65,57 @@ test("ConversationAgentRail records stay in global chronological order", () => {
     "early_parent_b",
     "later_parent_a",
   ])
+})
+
+test("hydrated agent records target the latest display message in the session", () => {
+  resetConversationAgentView()
+  hydrateConversationAgentView("task:tsk", {
+    sessions: [
+      {
+        sessionID: "ses_build",
+        stage: "build",
+        messageIDs: ["msg_old", "msg_latest"],
+        lastDisplayMessageID: "msg_old",
+        firstMessageTime: 100,
+        lastMessageTime: 200,
+        placement: "top_level",
+      },
+      {
+        sessionID: "ses_goal_build",
+        stage: "build",
+        parentSessionID: "ses_root",
+        goalID: "goal_a",
+        messageIDs: ["msg_goal_old", "msg_goal_latest"],
+        lastDisplayMessageID: "msg_goal_old",
+        firstMessageTime: 300,
+        lastMessageTime: 400,
+        placement: "goal_phase",
+        phase: { stepID: "build", phaseID: "build" },
+      },
+    ],
+  })
+
+  expect(conversationAgentStore.records[0]?.renderedCardID).toBe("build:session:ses_build:message:msg_old")
+  expect(conversationAgentStore.records[0]?.targetMessageID).toBe("msg_old")
+  expect(conversationAgentStore.records[1]?.renderedCardID).toBe("step:goal_a:build")
+  expect(conversationAgentStore.records[1]?.targetMessageID).toBe("msg_goal_old")
+})
+
+test("hydrated agent records fall back to the latest message without a display marker", () => {
+  resetConversationAgentView()
+  hydrateConversationAgentView("task:tsk", {
+    sessions: [
+      {
+        sessionID: "ses_build",
+        stage: "build",
+        messageIDs: ["msg_old", "msg_latest"],
+        firstMessageTime: 100,
+        lastMessageTime: 200,
+        placement: "top_level",
+      },
+    ],
+  })
+
+  expect(conversationAgentStore.records[0]?.renderedCardID).toBe("build:session:ses_build:message:msg_latest")
+  expect(conversationAgentStore.records[0]?.targetMessageID).toBe("msg_latest")
 })

@@ -118,7 +118,23 @@ export function shouldPromoteTool(part: any): boolean {
 // Used by <Card> and the folding store (S3) to decide what to show when no
 // explicit user override is present.
 
-export function defaultExpandedForNode(node: CardNode): boolean {
+function cardHasDisplayPart(node: CardNode | undefined): boolean {
+  if (!node) return false;
+  for (const part of node.parts || []) {
+    if (!part || part.type === "boundary") continue;
+    if (part.type === "text" || part.type === "reasoning") {
+      if (String(part.text || "").replace(/[\[\]\s]/g, "")) return true;
+      continue;
+    }
+    return true;
+  }
+  return false;
+}
+
+export function defaultExpandedForNode(
+  node: CardNode,
+  cards: Record<string, CardNode | undefined> = cardTreeStore.cards,
+): boolean {
   if (typeof node.defaultExpanded === "boolean") return node.defaultExpanded;
   if (node.status === "running") return true;
   if (node.kind === "agent") return true;
@@ -127,10 +143,14 @@ export function defaultExpandedForNode(node: CardNode): boolean {
   // surface the structured verdict; a collapsed badge would be weaker than
   // the previous raw-JSON render it replaces.
   if (node.kind === "integrity") return true;
-  // Executor step cards carry goal description + phase children — the
-  // operator almost always wants those visible when the goal is alive.
-  // A completed executor collapses to save space.
-  if (node.kind === "step") return node.status !== "completed";
+  // Executor step cards carry goal description plus promoted build output.
+  // Completed empty executors can collapse; completed executors with real
+  // build output stay open so the worker transcript does not disappear.
+  if (node.kind === "step") {
+    const buildPhase = buildPhaseChildForStep(node, cards);
+    if (cardHasDisplayPart(buildPhase)) return true;
+    return node.status !== "completed";
+  }
   // Todo checklists must stay expanded — the card's whole value is the list
   // of remaining items; a collapsed completed card hides the plan itself.
   if (node.kind === "tool" && TODO_TOOLS.has(toolNameKey(node.toolPart?.tool || ""))) return true;

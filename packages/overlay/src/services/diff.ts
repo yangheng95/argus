@@ -23,6 +23,7 @@ export interface ChangeGroup {
   goalRetryCount?: number;
   goalLabel?: string;
   goalTitle?: string;
+  commitRef?: string;
   runID?: string;
   additions: number;
   deletions: number;
@@ -37,6 +38,7 @@ export function changeGroupsRevisionKey(groups: ChangeGroup[]): string {
       group.id,
       group.goalRunID ?? "",
       group.runID ?? "",
+      group.commitRef ?? "",
       group.additions,
       group.deletions,
       ...group.changes.map((change) => [
@@ -111,6 +113,9 @@ function goalWorkflowStubs(workflows: any[]): ChangeGroup[] {
         }
       }
       const stats = payloads.find((payload: any) => payload?.diffStats)?.diffStats;
+      const commitRef = payloads
+        .map((payload: any) => (typeof payload?.commitRef === "string" ? payload.commitRef.trim() : ""))
+        .find(Boolean);
       if (changes.length === 0 && !goalRunID) return null;
       return {
         id: `goal:${String(goal?.goalID || "")}:${String(goal?.goalRunID || "pre")}`,
@@ -120,6 +125,7 @@ function goalWorkflowStubs(workflows: any[]): ChangeGroup[] {
         goalRetryCount: Number.isFinite(Number(goal?.retryCount)) ? Number(goal.retryCount) : undefined,
         goalLabel: goalRevisionLabelFromIndexes(goal?.orderIndex, goal?.retryCount),
         goalTitle: typeof goal?.goalTitle === "string" ? goal.goalTitle : undefined,
+        commitRef: commitRef || undefined,
         additions: typeof stats?.additions === "number" ? stats.additions : 0,
         deletions: typeof stats?.deletions === "number" ? stats.deletions : 0,
         changes,

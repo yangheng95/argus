@@ -22,6 +22,7 @@ test("projectConversationView classifies top-level, hidden, and goal-phase sessi
         channel: "main",
         time: { created: 10 },
       },
+      parts: [{ type: "text", text: "start" }],
     },
     {
       info: {
@@ -31,6 +32,7 @@ test("projectConversationView classifies top-level, hidden, and goal-phase sessi
         parentSessionID: "ses_root",
         time: { created: 20 },
       },
+      parts: [{ type: "step-finish" }],
     },
     {
       info: {
@@ -40,6 +42,7 @@ test("projectConversationView classifies top-level, hidden, and goal-phase sessi
         parentSessionID: "ses_root",
         time: { created: 30 },
       },
+      parts: [{ type: "tool", tool: "build" }],
     },
     {
       info: {
@@ -50,6 +53,7 @@ test("projectConversationView classifies top-level, hidden, and goal-phase sessi
         parentSessionID: "ses_executor",
         time: { created: 40 },
       },
+      parts: [{ type: "tool", tool: "read" }],
     },
   ]
 
@@ -62,6 +66,48 @@ test("projectConversationView classifies top-level, hidden, and goal-phase sessi
       placement: "goal_phase",
       phase: { stepID: "build", phaseID: "build" },
       messageIDs: ["msg_build"],
+      lastDisplayMessageID: "msg_build",
+    }),
+  )
+})
+
+test("projectConversationView tracks the last message with displayable content", () => {
+  const transcript = [
+    {
+      info: {
+        id: "msg_first",
+        sessionID: "ses_build",
+        channel: "build",
+        time: { created: 10 },
+      },
+      parts: [{ type: "step-start" }],
+    },
+    {
+      info: {
+        id: "msg_display",
+        sessionID: "ses_build",
+        channel: "build",
+        time: { created: 20 },
+      },
+      parts: [{ type: "text", text: "checked files" }],
+    },
+    {
+      info: {
+        id: "msg_finish",
+        sessionID: "ses_build",
+        channel: "build",
+        time: { created: 30 },
+      },
+      parts: [{ type: "step-finish" }],
+    },
+  ]
+
+  const view = projectConversationView({}, transcript)
+
+  expect(view.sessions[0]).toEqual(
+    expect.objectContaining({
+      messageIDs: ["msg_first", "msg_display", "msg_finish"],
+      lastDisplayMessageID: "msg_display",
     }),
   )
 })

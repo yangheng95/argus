@@ -446,6 +446,28 @@ export function canLoadOlderConversationHistory(taskID = activeTaskID()): boolea
   );
 }
 
+export function conversationCardContainsMessage(cardID: string, messageID: string): boolean {
+  const targetCardID = String(cardID || "");
+  const targetMessageID = String(messageID || "");
+  if (!targetCardID || !targetMessageID) return false;
+  const seen = new Set<string>();
+  const visit = (id: string): boolean => {
+    if (!id || seen.has(id)) return false;
+    seen.add(id);
+    const card = cardTreeStore.cards[id];
+    if (!card) return false;
+    if (String((card as any).messageID || "") === targetMessageID) return true;
+    for (const part of card.parts || []) {
+      if (String(part?.messageID || "") === targetMessageID) return true;
+    }
+    for (const childID of card.childIDs || []) {
+      if (visit(childID)) return true;
+    }
+    return false;
+  };
+  return visit(targetCardID);
+}
+
 export async function loadOlderConversationHistory(
   taskID = activeTaskID(),
 ): Promise<boolean> {
@@ -484,15 +506,48 @@ export async function loadOlderConversationHistory(
   }
 }
 
+export async function loadConversationSessionHistory(
+  sessionID: string,
+  taskID = activeTaskID(),
+): Promise<boolean> {
+  const selectedTaskID = String(taskID || "");
+  const targetSessionID = String(sessionID || "");
+  if (!selectedTaskID || !targetSessionID) return false;
+  const page = await apiJson(
+    `task/${encodeURIComponent(selectedTaskID)}/conversation/session/${encodeURIComponent(targetSessionID)}`,
+  );
+  const transcript = requireArray(page?.transcript, "transcript");
+  const timeline = requireArray(page?.timeline, "timeline");
+  const view = requireObject(page?.view, "view");
+  if (transcript.length === 0 && timeline.length === 0) return false;
+  hydrateConversationView(view, mergeLoadedConversationMessages(timeline, transcript));
+  return true;
+}
+
 export async function loadConversationHistoryUntilCard(
   cardID: string,
   taskID = activeTaskID(),
+  options: {
+    messageID?: string;
+    sessionID?: string;
+  } = {},
 ): Promise<boolean> {
   const targetCardID = String(cardID || "");
   if (!targetCardID) return false;
-  while (!cardTreeStore.cards[targetCardID] && canLoadOlderConversationHistory(taskID)) {
+  const targetMessageID = String(options.messageID || "");
+  const loaded = () =>
+    !!cardTreeStore.cards[targetCardID] &&
+    (!targetMessageID || conversationCardContainsMessage(targetCardID, targetMessageID));
+  const targetSessionID = String(options.sessionID || "");
+  if (!loaded() && targetSessionID) {
+    await loadConversationSessionHistory(targetSessionID, taskID).catch((error) => {
+      console.warn("[conversation] session history hydrate failed", error);
+      return false;
+    });
+  }
+  while (!loaded() && canLoadOlderConversationHistory(taskID)) {
     const loaded = await loadOlderConversationHistory(taskID);
     if (!loaded) break;
   }
-  return !!cardTreeStore.cards[targetCardID];
+  return loaded();
 }

@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>架构对比 · 编码助手 vs opencorvus</title>
+<style>
+  :root{
+    --bg:#0b0f17;
+    --panel:#101623;
+    --panel2:#0d1320;
+    --ink:#e8edf6;
+    --muted:#94a0b6;
+    --line:#202a3c;
+    --steel:#8b97ad;
+    --steel-bg:#141a27;
+    --steel-line:#2c3750;
+    --acc:#6d8bff;
+    --acc2:#37e0c4;
+    --acc-bg:rgba(109,139,255,.10);
+    --acc-line:rgba(109,139,255,.45);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",Roboto,Arial,sans-serif;
+    line-height:1.55;-webkit-font-smoothing:antialiased;padding:40px 24px 64px;
+  }
+  .wrap{max-width:1180px;margin:0 auto}
+  h1{font-size:28px;font-weight:750;letter-spacing:-.01em;margin-bottom:6px}
+  .meta{color:var(--muted);font-size:14px;margin-bottom:34px}
+
+  .section-label{
+    margin:42px 0 18px;font-size:12.5px;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--muted);font-weight:600;display:flex;align-items:center;gap:14px;
+  }
+  .section-label::after{content:"";flex:1;height:1px;background:var(--line)}
+
+  /* two architecture columns */
+  .duo{display:grid;grid-template-columns:1fr 1.25fr;gap:22px;align-items:start}
+  @media(max-width:880px){.duo{grid-template-columns:1fr}}
+  .col{
+    border:1px solid var(--line);border-radius:16px;padding:22px 20px;background:var(--panel);
+  }
+  .col .ctitle{font-size:17px;font-weight:700;margin-bottom:2px}
+  .col .csub{font-size:13px;color:var(--muted);margin-bottom:18px}
+  .col.assist .ctitle{color:var(--steel)}
+  .col.corvus .ctitle{color:var(--acc2)}
+
+  /* node boxes */
+  .node{
+    border:1px solid var(--line);border-radius:11px;padding:12px 14px;background:var(--panel2);
+  }
+  .node .nt{font-weight:650;font-size:14.5px}
+  .node .nd{font-size:12.5px;color:var(--muted);margin-top:3px}
+  .node.user{border-style:dashed;background:transparent}
+  .node.orc{border-color:var(--acc-line);background:var(--acc-bg)}
+  .node.orc .nt{color:var(--acc)}
+  .node.exec{border-color:var(--steel-line);background:var(--steel-bg)}
+  .node.exec .nt{color:var(--steel)}
+  .node.gate{border-color:rgba(55,224,196,.4);background:rgba(55,224,196,.06)}
+  .node.gate .nt{color:var(--acc2)}
+
+  .arr{color:var(--muted);text-align:center;font-size:15px;line-height:1.1;margin:7px 0}
+  .arr small{display:block;font-size:11px;color:var(--muted);opacity:.8}
+
+  /* inner loop block (assistant) */
+  .loopbox{
+    border:1px solid var(--steel-line);border-radius:11px;padding:14px;background:var(--steel-bg);margin-top:4px;
+  }
+  .loopbox .lh{font-weight:650;color:var(--steel);font-size:14.5px;margin-bottom:10px}
+  .loopflow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12.5px}
+  .loopflow .b{border:1px solid var(--steel-line);border-radius:7px;padding:6px 9px;background:var(--panel2)}
+  .loopflow .a{color:var(--steel)}
+  .loopflow .rev{width:100%;text-align:center;color:var(--steel);font-size:11.5px;margin-top:4px;opacity:.85}
+  .tools{margin-top:11px;font-size:12px;color:var(--muted)}
+  .tools code{background:#0a0e16;border:1px solid var(--line);border-radius:5px;padding:1px 6px;color:#b9c2d4;font-size:11.5px}
+
+  /* sub-agent chips */
+  .agents{display:flex;flex-wrap:wrap;gap:7px}
+  .agents .chip{
+    border:1px solid var(--acc-line);border-radius:8px;padding:6px 10px;font-size:12.5px;
+    background:var(--acc-bg);color:#cdd7f5;
+  }
+  .agents .chip b{color:var(--acc)}
+
+  .note-inline{font-size:12.5px;color:var(--muted);margin:9px 2px 4px}
+
+  /* side rail (persistence) */
+  .rail{
+    margin-top:14px;border:1px dashed var(--acc-line);border-radius:10px;padding:11px 13px;
+    font-size:12.5px;color:var(--muted);background:var(--acc-bg)
+  }
+  .rail b{color:var(--acc2)}
+
+  /* nesting insight */
+  .insight{
+    border:1px solid var(--acc-line);border-radius:16px;padding:24px;background:var(--panel);
+    display:grid;grid-template-columns:1fr 1fr;gap:26px;align-items:center;
+  }
+  @media(max-width:880px){.insight{grid-template-columns:1fr}}
+  .insight h3{font-size:18px;font-weight:700;margin-bottom:10px}
+  .insight p{color:var(--muted);font-size:14px;margin-bottom:9px}
+  .insight p b{color:var(--ink)}
+  .insight .hl{color:var(--acc2);font-weight:600}
+  .mini{border:1px solid var(--acc-line);border-radius:12px;padding:16px;background:var(--acc-bg)}
+  .mini .outer{font-size:12px;color:var(--acc);font-weight:600;margin-bottom:8px}
+  .mini .inner{
+    border:1px dashed var(--steel-line);border-radius:9px;padding:12px;background:var(--steel-bg);
+    color:var(--steel);font-size:13px;font-weight:600;text-align:center;
+  }
+  .mini .inner small{display:block;color:var(--muted);font-weight:400;font-size:11.5px;margin-top:3px}
+  .mini .wraps{font-size:11.5px;color:var(--muted);margin-top:9px;text-align:center}
+
+  /* compact table */
+  table{width:100%;border-collapse:collapse;border:1px solid var(--line);border-radius:14px;overflow:hidden}
+  th,td{padding:13px 16px;text-align:left;font-size:13.5px;vertical-align:top}
+  thead th{background:var(--panel2);color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+  thead th.ha{color:var(--steel)} thead th.hc{color:var(--acc2)}
+  tbody tr{border-top:1px solid var(--line)}
+  tbody td:first-child{color:var(--muted);font-weight:600;width:16%}
+  td.ca{color:#c2c9d6;width:42%}
+  td.cc{color:var(--ink);width:42%;background:rgba(109,139,255,.05)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>架构对比：编码助手 vs opencorvus</h1>
+  <div class="meta">讨论用 · 结构示意（非完整实现细节）</div>
+
+  <!-- ARCHITECTURE DIAGRAMS -->
+  <div class="section-label">两者的结构</div>
+  <div class="duo">
+
+    <!-- ASSISTANT -->
+    <div class="col assist">
+      <div class="ctitle">编码助手</div>
+      <div class="csub">Claude Code · Codex · Cursor — 单 agent</div>
+
+      <div class="node user"><div class="nt">你 / User</div><div class="nd">在对话里全程驱动</div></div>
+      <div class="arr">↕<small>同步对话</small></div>
+
+      <div class="loopbox">
+        <div class="lh">Agent（单个 LLM + 工具）</div>
+        <div class="loopflow">
+          <span class="b">LLM 决策</span><span class="a">→</span>
+          <span class="b">调用工具</span><span class="a">→</span>
+          <span class="b">回填结果</span><span class="a">→</span>
+          <span class="b">下一轮</span>
+          <span class="rev">↺ 循环，直到模型认为可以回复</span>
+        </div>
+        <div class="tools">工具：<code>read</code> <code>edit</code> <code>bash</code> <code>grep</code> …</div>
+      </div>
+
+      <div class="note-inline">· 一个上下文窗口，承载全部任务</div>
+      <div class="note-inline">· 没有外部验收；模型停下 = 任务结束</div>
+      <div class="note-inline">· 会话结束即遗忘，无跨会话状态</div>
+    </div>
+
+    <!-- CORVUS -->
+    <div class="col corvus">
+      <div class="ctitle">opencorvus</div>
+      <div class="csub">Orchestrator + 专职 sub-agent + 执行器 — 多 agent（两层循环）</div>
+
+      <div class="node user"><div class="nt">你 / User</div><div class="nd">下达任务，只在权限 / 反馈节点介入</div></div>
+      <div class="arr">↓</div>
+
+      <div class="node orc">
+        <div class="nt">Orchestrator（唯一决策者）</div>
+        <div class="nd">读全量状态 → 决定：调哪个 agent / 重试 / 交付 / 终止</div>
+      </div>
+      <div class="arr">↓<small>按需调用</small></div>
+
+      <div class="agents">
+        <span class="chip">意图分析</span>
+        <span class="chip">需求</span>
+        <span class="chip">架构</span>
+        <span class="chip">设计分析</span>
+        <span class="chip"><b>构建</b></span>
+        <span class="chip">完整性复核</span>
+        <span class="chip">交付</span>
+      </div>
+      <div class="note-inline">每个 sub-agent 自带 LLM + 工具，独立推理；其中「构建」在隔离工作区启动执行器 ↓</div>
+
+      <div class="node exec">
+        <div class="nt">Executor（worktree 隔离 · 外部进程）</div>
+        <div class="nd">claude-code / codex / 自有内核 —— 跑的就是左边那套单 agent 循环</div>
+      </div>
+      <div class="arr">↓<small>产出 diff</small></div>
+
+      <div class="node gate">
+        <div class="nt">Delivery 验收门</div>
+        <div class="nd">确定性检查（build / test / lint / 视觉）+ LLM 复核 → 通过才算交付</div>
+      </div>
+      <div class="arr">↺<small>不通过 → 回到 Orchestrator 重试 / 重规划</small></div>
+
+      <div class="rail">全程状态落 <b>SQLite</b>：任务 / 计划 / 执行 / 交付 / 记忆——可崩溃恢复、可审计、跨会话复用</div>
+    </div>
+  </div>
+
+  <!-- NESTING INSIGHT -->
+  <div class="section-label">关键关系：编码助手是 opencorvus 的内层</div>
+  <div class="insight">
+    <div>
+      <h3>同一个「单 agent 循环」，<br>在 opencorvus 里只是一个执行器</h3>
+      <p>左侧编码助手的<b>整套对话循环</b>，对应右侧的 <span class="hl">Executor</span> 一格。</p>
+      <p>opencorvus 没有取代它，而是在它<b>外面套了一层</b>：用 Orchestrator 决策、用专职 agent 分工、用验收门判定完成、用 SQLite 保存状态。</p>
+      <p>所以二者不是同一层的竞品——<b>一个是工具，一个是调度工具的外壳</b>。opencorvus 可以直接调度 Codex / Claude Code 当执行器。</p>
+    </div>
+    <div class="mini">
+      <div class="outer">opencorvus 外层 ─ 编排 / 验收 / 持久化</div>
+      <div class="inner">编码助手（单 agent 循环）<small>= Executor 内层</small></div>
+      <div class="wraps">外层负责「定规格 · 分目标 · 卡验收 · 保状态」，内层负责「动手写代码」</div>
+    </div>
+  </div>
+
+  <!-- COMPACT TABLE -->
+  <div class="section-label">结构性差异</div>
+  <table>
+    <thead>
+      <tr><th>维度</th><th class="ha">编码助手</th><th class="hc">opencorvus</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>智能结构</td><td class="ca">单 agent，单上下文窗口</td><td class="cc">多 agent 分工，各自独立 LLM + 工具</td></tr>
+      <tr><td>控制循环</td><td class="ca">一层：LLM ↔ 工具</td><td class="cc">两层：外层 Orchestrator 决策 + 内层执行器循环</td></tr>
+      <tr><td>完成判定</td><td class="ca">模型停下即结束</td><td class="cc">验收门通过才算交付，不过则重试 / 重规划</td></tr>
+      <tr><td>状态</td><td class="ca">会话内，结束即遗忘</td><td class="cc">SQLite 持久化，可恢复 / 审计 / 跨会话</td></tr>
+      <tr><td>隔离与并行</td><td class="ca">单线程对话，共享工作区</td><td class="cc">多目标并行，各自独立 git worktree</td></tr>
+    </tbody>
+  </table>
+
+</div>
+</body>
+</html>

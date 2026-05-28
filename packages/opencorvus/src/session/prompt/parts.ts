@@ -19,6 +19,7 @@ import { ReadTool } from "../../tool/read"
 import { FileTime } from "../../file/time"
 import { ConfigMarkdown } from "../../config/markdown"
 import { EffectiveConfig } from "../../config/effective"
+import type { Config } from "../../config/config"
 import { NamedError } from "@opencorvus-ai/util/error"
 import { PermissionNext } from "@/permission/next"
 import { Tool } from "@/tool/tool"
@@ -35,7 +36,10 @@ function hostFileContextLabel(args: Record<string, unknown>) {
   return `Host-provided file context (not a model tool call): ${JSON.stringify(args)}`
 }
 
-export async function resolvePromptParts(template: string): Promise<PromptInput["parts"]> {
+export async function resolvePromptParts(
+  template: string,
+  opts?: { config?: Config.Info },
+): Promise<PromptInput["parts"]> {
   const parts: PromptInput["parts"] = [
     {
       type: "text",
@@ -55,7 +59,7 @@ export async function resolvePromptParts(template: string): Promise<PromptInput[
 
       const stats = await fs.stat(filepath).catch(() => undefined)
       if (!stats) {
-        const agent = await Agent.get(name)
+        const agent = await Agent.get(name, opts?.config ? { config: opts.config } : undefined)
         if (agent) {
           parts.push({
             type: "agent",
@@ -307,7 +311,7 @@ export async function createUserMessage(input: PromptInput) {
 
                 await ReadTool.init()
                   .then(async (t) => {
-                    const model = await Provider.getModel(info.model.providerID, info.model.modelID)
+                    const model = await Provider.getModel(info.model.providerID, info.model.modelID, { config })
                     const readCtx: Tool.Context = {
                       sessionID: input.sessionID,
                       abort: new AbortController().signal,

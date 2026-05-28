@@ -1926,10 +1926,23 @@ export function finalizeBuildAttempt(input: {
   if (input.workspaceBranch !== undefined) patch.workspace_branch = input.workspaceBranch
   if (input.workspaceBaseRef !== undefined) patch.workspace_base_ref = input.workspaceBaseRef
   updateGoalRun(input.goalRunID, patch)
-  const includeDelivery =
-    input.status === "completed" && !!input.commitRef && Array.isArray(input.diffs) && input.diffs.length > 0
+  const deliveryDiffs =
+    Array.isArray(input.diffs) && input.diffs.length > 0
+      ? input.diffs
+      : (input.fileChanges ?? []).map((item) => ({
+          file: item.path,
+          before: "",
+          after: "",
+          additions: 0,
+          deletions: 0,
+          status: "modified",
+          summary: item.summary,
+          reason: item.reason,
+          source: "build_report_files_changed",
+        }))
+  const includeDelivery = input.status === "completed" && !!input.commitRef && deliveryDiffs.length > 0
   if (!includeDelivery) return
-  const stats = input.diffs!.reduce(
+  const stats = deliveryDiffs.reduce(
     (acc, d) => {
       acc.additions += typeof d.additions === "number" ? d.additions : 0
       acc.deletions += typeof d.deletions === "number" ? d.deletions : 0
@@ -1938,7 +1951,7 @@ export function finalizeBuildAttempt(input: {
     { additions: 0, deletions: 0 },
   )
   const deliveryID = Identifier.ascending("delivery")
-  const summary = input.summary?.trim() || `Goal ${input.goalID} build delivered ${input.diffs!.length} file change(s).`
+  const summary = input.summary?.trim() || `Goal ${input.goalID} build delivered ${deliveryDiffs.length} file change(s).`
   Database.transaction((db) => {
     db.insert(EngineArtifactTable)
       .values({
@@ -1955,9 +1968,9 @@ export function finalizeBuildAttempt(input: {
           result: {
             summary,
             commit_ref: input.commitRef,
-            changed_files: input.diffs!.map((d) => d.file),
+            changed_files: deliveryDiffs.map((d) => d.file),
             file_changes: input.fileChanges ?? [],
-            diffs: input.diffs,
+            diffs: deliveryDiffs,
             stats,
           },
         },

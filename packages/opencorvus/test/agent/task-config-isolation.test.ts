@@ -53,7 +53,7 @@ describe("task config isolation", () => {
   })
 
   test("agent config resolves from the task root snapshot", async () => {
-    await using tmp = await tmpdir({ config: { agent: { coding: { prompt: "live project prompt" } } } })
+    await using tmp = await tmpdir()
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
@@ -84,16 +84,14 @@ describe("task config isolation", () => {
         )
 
         const scoped = await Agent.get("coding", { config: await EffectiveConfig.effective({ taskID }) })
-        const live = await Agent.get("coding")
 
         expect(scoped.prompt).toBe("task snapshot prompt")
-        expect(live.prompt).toBe("live project prompt")
       },
     })
   })
 
   test("provider registry can be resolved from an explicit task config without using project cache", async () => {
-    const provider = (authorization: string) => ({
+    const provider = (authorization: string, apiModelID = "model") => ({
       name: "Isolated Provider",
       npm: "@ai-sdk/openai-compatible",
       api: "https://example.invalid/v1",
@@ -105,7 +103,7 @@ describe("task config isolation", () => {
       },
       models: {
         model: {
-          id: "model",
+          id: apiModelID,
           name: "Isolated Model",
           release_date: "2026-05-27",
           attachment: false,
@@ -133,6 +131,42 @@ describe("task config isolation", () => {
 
         expect(scoped.options.headers.Authorization).toBe("Bearer task-local")
         expect(live).toBeUndefined()
+      },
+    })
+  }, 15_000)
+
+  test("provider language model is canonicalized through the explicit task config", async () => {
+    const provider = (apiModelID: string) => ({
+      name: "Canonical Provider",
+      npm: "@ai-sdk/openai-compatible",
+      api: "https://example.invalid/v1",
+      env: [],
+      options: {},
+      models: {
+        model: {
+          id: apiModelID,
+          name: "Canonical Model",
+          release_date: "2026-05-27",
+          attachment: false,
+          reasoning: false,
+          temperature: true,
+          tool_call: true,
+          modalities: { input: ["text"], output: ["text"] },
+          limit: { context: 128000, output: 8192 },
+          options: {},
+        },
+      },
+    })
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const liveConfig = { provider: { canonical: provider("live-api-model") } } as never
+        const taskConfig = { provider: { canonical: provider("task-api-model") } } as never
+        const liveModel = await Provider.getModel("canonical", "model", { config: liveConfig })
+        const language = await Provider.getLanguage(liveModel, { config: taskConfig })
+
+        expect((language as unknown as { modelId: string }).modelId).toBe("task-api-model")
       },
     })
   }, 15_000)

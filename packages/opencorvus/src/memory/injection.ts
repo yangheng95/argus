@@ -1,4 +1,4 @@
-import { Config } from "@/config/config"
+import { EffectiveConfig } from "@/config/effective"
 import { Memory } from "@/memory"
 import { Log } from "@/util/log"
 
@@ -53,7 +53,7 @@ Write \`kind: "profile"\` for:
     query: string
     memoryToolAvailable: boolean
   }): Promise<string | null> {
-    const config = await Config.get()
+    const config = await EffectiveConfig.effective({ sessionID: input.sessionID })
     if (config.experimental?.memory?.enabled === false) return null
 
     const section = Memory.promptSection({

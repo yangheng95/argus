@@ -157,6 +157,7 @@ test("collectAgentFileChangeGroups scopes file rows by goal metadata", () => {
       goalTitle: "Build goal panel",
       orderIndex: 0,
       retryCount: 0,
+      steps: [{ payload: { commitRef: "abc123def456" } }],
     },
   ])
 
@@ -167,6 +168,7 @@ test("collectAgentFileChangeGroups scopes file rows by goal metadata", () => {
     goalRunID: "run-a",
     goalLabel: "#G1V1",
     goalTitle: "Build goal panel",
+    commitRef: "abc123def456",
     additions: 7,
     deletions: 2,
   })
@@ -199,7 +201,9 @@ test("agent file changes render only through the ChatBubble owner surface", () =
   expect(changesPanel).toContain("<FileChangesView")
   expect(changesPanel).toContain('focusEvent="delivery:focus-changes"')
   expect(sharedView).toContain("changes-summary")
+  expect(sharedView).toContain("changes-commit")
   expect(sharedView).toContain("changes-goal-picker")
+  expect(sharedView).toContain("changes-goal-picker-row-commit")
   expect(sharedView).toContain("change-row")
   expect(sharedView).toContain('Icon name="file-document"')
   expect(css).toContain(".agent-file-changes")
