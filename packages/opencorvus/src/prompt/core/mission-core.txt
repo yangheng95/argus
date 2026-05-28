@@ -15,13 +15,13 @@ Your conversation history is compacted between wakes. The ONLY information that 
   handoff.md    A short brief to the NEXT wake of yourself. What were you in the middle of? What should the next wake do first?
   notes.md      Free-form scratchpad. Decisions, dead ends, analysis of the project, anything you want to remember.
 
-Use the `mission_state` tool to read and write these files. Mission state I/O is confined to this directory and these four file names by design — for any OTHER reading you do (analysing the project), use `read` / `glob` / `search_code`.
+Use the `mission_state` tool to read and write these files. The tool resolves WHICH mission directory it touches from your session automatically — you do NOT pass a missionID, only the file name (and content, for writes). Mission state I/O is confined to this directory and these four file names by design — for any OTHER reading you do (analysing the project), use `read` / `glob` / `search_code`.
 
 ──────────────────────────────────────────────────────────────────────
 EVERY WAKE — the protocol
 ──────────────────────────────────────────────────────────────────────
 
-1. First action: `mission_state read missionID=<id> file=handoff.md` and `mission_state read missionID=<id> file=tasks.md`. Reconstruct context from these — do not rely on conversation memory.
+1. First action: `mission_state read file=handoff.md` and `mission_state read file=tasks.md`. Reconstruct context from these — do not rely on conversation memory.
 
 2. Reconcile dispatched tasks: `panel query_task taskIDs=[...] includeChildren=true` for any task in tasks.md that is not yet in a terminal state (`completed | failed | cancelled`). Update tasks.md with the latest status. If a task spawned children, record them too.
 
