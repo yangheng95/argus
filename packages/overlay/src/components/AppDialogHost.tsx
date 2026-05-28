@@ -16,7 +16,10 @@ export function AppDialogHost() {
   const isTaskRouteDecision = () => dialogStore.app.kind === "task-route-decision";
   const isTaskQueueDecision = () => dialogStore.app.kind === "task-queue-decision";
   const isTaskCardDecision = () => isTaskRouteDecision() || isTaskQueueDecision();
-  const hasTaskDecisionCountdown = () => isTaskCardDecision() && Number(dialogStore.app.countdownSeconds || 0) > 0;
+  const hasTaskDecisionCountdown = () =>
+    isTaskCardDecision() &&
+    Number(dialogStore.app.countdownSeconds || 0) > 0 &&
+    Number(dialogStore.app.countdownDeadlineMs || 0) > 0;
   const decisionEyebrow = () =>
     isTaskQueueDecision() ? t("task.queue_decision.eyebrow") : t("task.route_decision.eyebrow");
   const decisionCountdownText = () =>
@@ -35,18 +38,11 @@ export function AppDialogHost() {
 
   createEffect(() => {
     if (!dialogStore.app.open || !hasTaskDecisionCountdown()) return;
-    const epoch = dialogStore.app.epoch;
-    const seconds = Math.max(1, Math.ceil(Number(dialogStore.app.countdownSeconds || 0)));
-    setRemainingSeconds(seconds);
-    const startedAt = Date.now();
+    const deadlineMs = Number(dialogStore.app.countdownDeadlineMs || 0);
+    const updateRemaining = () => setRemainingSeconds(Math.max(0, Math.ceil((deadlineMs - Date.now()) / 1000)));
+    updateRemaining();
     const timer = window.setInterval(() => {
-      const elapsed = Math.floor((Date.now() - startedAt) / 1000);
-      const next = Math.max(0, seconds - elapsed);
-      setRemainingSeconds(next);
-      if (next <= 0) {
-        window.clearInterval(timer);
-        settleAppDialog(true, epoch);
-      }
+      updateRemaining();
     }, TASK_DECISION_COUNTDOWN_TICK_MS);
     onCleanup(() => window.clearInterval(timer));
   });
