@@ -53,8 +53,12 @@ test("ChatBubble uses one unified IM bubble for user and agent cards with restor
   expect(CHAT_BUBBLE_CSS).not.toMatch(/\.chat-bubble\[data-align="right"\]\s*\{[^}]*color:/)
   expect(CHAT_BUBBLE_CSS).toContain('.chat-bubble-row[data-kind="agent"] .chat-bubble')
   expect(CHAT_BUBBLE_CSS).toContain("border-left: calc(3px * var(--ui-scale)) solid var(--card-stage);")
-  expect(CHAT_BUBBLE_CSS).not.toMatch(/\.chat-bubble-row\[data-kind="agent"\] \.chat-bubble\s*\{[^}]*background:/)
-  expect(CHAT_BUBBLE_CSS).not.toMatch(/\.chat-bubble-row\[data-kind="agent"\] \.chat-bubble:hover\s*\{[^}]*background:/)
+  expect(CHAT_BUBBLE_CSS).toMatch(
+    /\.chat-bubble-row\[data-kind="agent"\] \.chat-bubble\s*\{[^}]*background: var\(--card-bg-0\);/,
+  )
+  expect(CHAT_BUBBLE_CSS).toMatch(
+    /\.chat-bubble-row\[data-kind="agent"\] \.chat-bubble:hover\s*\{[^}]*background: var\(--card-bg-0\);/,
+  )
   expect(CHAT_BUBBLE_CSS).toContain(".chat-bubble__identity")
   expect(CHAT_BUBBLE_CSS).toContain(
     ".chat-bubble__identity {\n  min-width: 0;\n  flex: 1 1 auto;\n  display: flex;\n  align-items: center;",

@@ -84,6 +84,7 @@ export interface StepPayload {
     verificationCommands?: Array<{ command: string; purpose: string }>;
   }>;
   buildSessionID?: string;
+  commitRef?: string;
   changedFiles?: string[];
   changedFileDiffs?: Array<{
     file: string;

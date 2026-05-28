@@ -47,6 +47,8 @@ export interface StreamActivityGate {
   lastActivityAt(): number
   /** True once the gate's own controller has aborted due to inactivity. */
   timedOut(): boolean
+  /** Abort the gate from an owning session/executor cancel path. */
+  abort(reason?: unknown): void
   /** Idempotent. Clears all timers and detaches listeners. */
   dispose(): void
 }
@@ -109,9 +111,10 @@ export function withStreamActivity(options: StreamActivityOptions): StreamActivi
   }
   const label = options.label ?? "stream"
   const inactivity = new AbortController()
+  const manual = new AbortController()
   const combined = options.signal
-    ? AbortSignal.any([options.signal, inactivity.signal])
-    : inactivity.signal
+    ? AbortSignal.any([options.signal, inactivity.signal, manual.signal])
+    : AbortSignal.any([inactivity.signal, manual.signal])
 
   let last = Date.now()
   let disposed = false
@@ -173,6 +176,11 @@ export function withStreamActivity(options: StreamActivityOptions): StreamActivi
     },
     timedOut() {
       return inactivity.signal.aborted
+    },
+    abort(reason?: unknown) {
+      if (disposed) return
+      if (manual.signal.aborted) return
+      manual.abort(reason ?? new DOMException(`stream aborted (${label})`, "AbortError"))
     },
     dispose() {
       if (disposed) return

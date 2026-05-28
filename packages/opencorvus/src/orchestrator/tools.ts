@@ -17,7 +17,7 @@ import { SessionStatus } from "@/session/status"
 import { Database, eq, and, inArray, sql } from "@/storage/db"
 import { Identifier } from "@/id/id"
 import { Instance } from "@/project/instance"
-import { Config } from "@/config/config"
+import { EffectiveConfig } from "@/config/effective"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { Log } from "@/util/log"
 import { Filesystem } from "@/util/filesystem"
@@ -43,6 +43,7 @@ import { EngineMemoryBridge } from "@/engine/memory-bridge"
 import { SubAgentProtocol } from "@/agent/sub-agent-protocol"
 import { Event as EngineEvent } from "@/engine/model"
 import { EngineProtocol } from "@/engine/protocol"
+import { abortChildExecutionForSession, abortGoalRunExecution } from "@/engine/execution-abort"
 import { Message } from "@/session/message"
 import { toolFailureCauseFromUnknown } from "@/session/tool-failure-cause"
 import { PartTable } from "@/session/session.sql"
@@ -51,7 +52,6 @@ import { renderUserRequestSection } from "@/intent/request-prompt"
 import { materializeMcpToolResult } from "@/mcp/materialize"
 import {
   EngineArtifactTable,
-  EngineExecutorSessionTable,
   EngineGoalTable,
   EngineTaskTable,
   type EngineArtifactKind,
@@ -61,7 +61,6 @@ import {
   ensureBuildRetryFeedbackForGoal,
   updateGoalWorkspace,
   updateGoalRun,
-  updateGoalRunExecutorSessionStatus,
 } from "@/engine/persist"
 import {
   findActivePlanForTask,
@@ -70,7 +69,6 @@ import {
   findDeliveriesForTask,
   findDeliveryByRun,
   findEvaluationByRun,
-  findExecutorSession,
   findGoal,
   findGoalRun,
   findLatestArchitectContractGraph,
@@ -617,18 +615,6 @@ function assertDirectReplySessionOwnership(input: { taskID: string; sessionID: s
   return { kind }
 }
 
-function findExecutorSessionByGoalRunID(goalRunID: string) {
-  const row = Database.use((db) =>
-    db
-      .select()
-      .from(EngineExecutorSessionTable)
-      .where(eq(EngineExecutorSessionTable.goal_run_id, goalRunID))
-      .orderBy(sql`${EngineExecutorSessionTable.time_created} desc`)
-      .get(),
-  )
-  return row ? findExecutorSession(row.id) : undefined
-}
-
 async function markOwnedBuildToolPartErrored(input: {
   ownership: OrchestratorToolOwnershipPayload
   reason: string
@@ -709,19 +695,17 @@ async function cancelLiveOwnedBuild(input: {
   const goalRunID = input.goalRunID ?? input.owner.payload.goal_run_id
   let goalFact = ""
   if (goalRunID) {
+    const aborted = await abortGoalRunExecution({
+      taskID: input.taskID,
+      goalRunID,
+      reason: cancelReason,
+    })
     const goalRun = findGoalRun(goalRunID)
-    if (goalRun && isLiveGoalRunStatus(goalRun.status)) {
-      updateGoalRun(goalRun.id, {
-        status: "aborted",
-        error: cancelReason,
-        blocking_reason: null,
-        time_completed: now,
-      })
-      updateGoalRunExecutorSessionStatus(goalRun.id, "aborted")
-      const executorSession = findExecutorSessionByGoalRunID(goalRun.id)
+    if (goalRun && (aborted.goalRunAborted || aborted.executorSessionAborted || aborted.executorAbortAttempted)) {
       goalFact =
         ` goal_run ${goalRun.id} aborted` +
-        `${executorSession ? `; executor_session ${executorSession.id} aborted` : ""}.`
+        `${aborted.executorSessionAborted ? "; executor_session aborted" : ""}` +
+        `${aborted.executorAbortAttempted ? `; executor_abort=${aborted.executorAbortSucceeded ? "ok" : "failed"}` : ""}.`
     } else if (goalRun) {
       goalFact = ` goal_run ${goalRun.id} was already terminal (${goalRun.status}); ownership closed.`
     }
@@ -4568,24 +4552,24 @@ export function createOrchestratorTools(input: {
           )
         }
 
-        SessionPrompt.cancel(target.sessionID)
-
-        let abortedFact = ""
-        if (target.goalRunID) {
-          const goalRun = findGoalRun(target.goalRunID)
-          if (goalRun && isLiveGoalRunStatus(goalRun.status)) {
-            updateGoalRun(goalRun.id, {
-              status: "aborted",
-              error: `cancel_subagent: ${reason}`,
-              blocking_reason: null,
-            })
-            updateGoalRunExecutorSessionStatus(goalRun.id, "aborted")
-            const executorSession = findExecutorSessionByGoalRunID(goalRun.id)
-            abortedFact =
-              ` goal_run ${goalRun.id} aborted` +
-              `${executorSession ? `; executor_session ${executorSession.id} aborted` : ""}.`
-          }
-        }
+        const aborted = target.goalRunID
+          ? await abortGoalRunExecution({
+            taskID,
+            goalRunID: target.goalRunID,
+            reason: `cancel_subagent: ${reason}`,
+          })
+          : await abortChildExecutionForSession({
+            taskID,
+            sessionID: target.sessionID,
+            reason: `cancel_subagent: ${reason}`,
+          })
+        const abortedFact = aborted.goalRunAborted || aborted.executorSessionAborted || aborted.executorAbortAttempted
+          ? (
+            ` goal_run=${aborted.goalRunAborted ? "aborted" : "unchanged"}` +
+            `${aborted.executorSessionAborted ? "; executor_session aborted" : ""}` +
+            `${aborted.executorAbortAttempted ? `; executor_abort=${aborted.executorAbortSucceeded ? "ok" : "failed"}` : ""}.`
+          )
+          : ""
 
         return (
           `Cancelled sub-agent session ${target.sessionID} (kind=${kind}). ` +
@@ -4873,7 +4857,7 @@ export function createOrchestratorTools(input: {
       }),
       execute: async ({ title, request, reason, priority, queue, kind }) => {
         const task = requireTask(taskID)
-        const cfg = await Config.get()
+        const cfg = await EffectiveConfig.effective({ taskID, sessionID: input.agentSessionID })
         const requireConfirmation = cfg.experimental?.confirm_proposed_tasks === true
         log.info("propose_task requested", { taskID, title, priority, kind, requireConfirmation })
         if (requireConfirmation) {

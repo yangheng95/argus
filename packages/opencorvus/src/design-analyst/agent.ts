@@ -75,7 +75,10 @@ export namespace DesignAnalystAgent {
 
   export async function analyze(input: AnalyzeInput): Promise<Result & { sessionID: string }> {
     const autoIteration = (await EngineConfig.get()).auto_iteration === true
-    const contextTools = await filterAgentTools(createAgentContextTools(), "design-analyst")
+    const contextTools = await filterAgentTools(createAgentContextTools(), "design-analyst", {
+      taskID: input.taskID,
+      sessionID: input.parentSessionID,
+    })
     const screenshotToolKit = createUrlScreenshotTool()
     const outputToolKit = createDesignOutputTools({ autoIteration })
     const submitDesignPrdSpecTool = selectDesignSubmitTool(outputToolKit)

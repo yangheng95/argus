@@ -9,7 +9,7 @@ import { SessionPrompt } from "../session/prompt"
 import { SessionStatus } from "../session/status"
 import { iife } from "@/util/iife"
 import { defer } from "@/util/defer"
-import { Config } from "../config/config"
+import { EffectiveConfig } from "../config/effective"
 import { PermissionNext } from "@/permission/next"
 import { resolveAgentModelRef } from "@/agent/model"
 
@@ -27,7 +27,7 @@ const parameters = z.object({
 })
 
 export const TaskTool = Tool.define("task", async (ctx) => {
-  const agents = await Agent.list().then((x) => x.filter((a) => a.mode !== "primary"))
+  const agents = await Agent.list(ctx?.config ? { config: ctx.config } : undefined).then((x) => x.filter((a) => a.mode !== "primary"))
 
   // Filter agents by permissions if agent provided
   const caller = ctx?.agent
@@ -45,7 +45,7 @@ export const TaskTool = Tool.define("task", async (ctx) => {
     description,
     parameters,
     async execute(params: z.infer<typeof parameters>, ctx) {
-      const config = await Config.get()
+      const config = await EffectiveConfig.effective({ sessionID: ctx.sessionID })
 
       // Skip permission check when user explicitly invoked via @ or command subtask
       if (!ctx.extra?.bypassAgentCheck) {
@@ -60,7 +60,7 @@ export const TaskTool = Tool.define("task", async (ctx) => {
         })
       }
 
-      const agent = await Agent.get(params.subagent_type)
+      const agent = await Agent.get(params.subagent_type, { config })
       if (!agent) throw new Error(`Unknown agent type: ${params.subagent_type} is not a valid agent type`)
 
       // Stage agents (no permission ruleset) cannot be the target of the
@@ -126,7 +126,7 @@ export const TaskTool = Tool.define("task", async (ctx) => {
       }
       ctx.abort.addEventListener("abort", cancel)
       using _ = defer(() => ctx.abort.removeEventListener("abort", cancel))
-      const promptParts = await SessionPrompt.resolvePromptParts(params.prompt)
+      const promptParts = await SessionPrompt.resolvePromptParts(params.prompt, { config })
 
       let result: Awaited<ReturnType<typeof SessionPrompt.prompt>>
       try {

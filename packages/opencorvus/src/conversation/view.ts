@@ -9,6 +9,7 @@ export interface ConversationSessionView {
   parentSessionID?: string
   goalID?: string
   messageIDs: string[]
+  lastDisplayMessageID?: string
   firstMessageTime: number
   lastMessageTime: number
   placement: "top_level" | "goal_phase" | "hidden" | "filtered"
@@ -52,6 +53,19 @@ function placementOf(board: any, stage: string, goalID: string): ConversationSes
   return "top_level"
 }
 
+function partHasDisplay(part: any): boolean {
+  const type = String(part?.type || "")
+  if (!type || type === "step-start" || type === "step-finish" || type === "boundary") return false
+  if (type === "text" || type === "reasoning") {
+    return !!String(part?.text || "").trim()
+  }
+  return true
+}
+
+function messageHasDisplay(message: any): boolean {
+  return Array.isArray(message?.parts) && message.parts.some(partHasDisplay)
+}
+
 export function projectConversationView(board: any, transcript: any[]): ConversationView {
   const sorted = [...(Array.isArray(transcript) ? transcript : [])].sort(
     (left, right) =>
@@ -73,9 +87,11 @@ export function projectConversationView(board: any, transcript: any[]): Conversa
     const stage = stageFromChannel(info?.channel)
     const parentSessionID = String(info?.parentSessionID || "")
     const goalID = String(info?.goalID || "")
+    const displayMessageID = messageHasDisplay(message) ? messageID : ""
     const existing = bySession.get(sessionID)
     if (existing) {
       existing.messageIDs.push(messageID)
+      if (displayMessageID) existing.lastDisplayMessageID = displayMessageID
       existing.lastMessageTime = created
       if (!existing.parentSessionID && parentSessionID) existing.parentSessionID = parentSessionID
       if (!existing.goalID && goalID) existing.goalID = goalID
@@ -88,6 +104,7 @@ export function projectConversationView(board: any, transcript: any[]): Conversa
       parentSessionID: parentSessionID || undefined,
       goalID: goalID || undefined,
       messageIDs: [messageID],
+      lastDisplayMessageID: displayMessageID || undefined,
       firstMessageTime: created,
       lastMessageTime: created,
       placement: placementOf(board, stage, goalID),

@@ -14,11 +14,24 @@ describe("formatTokenCount", () => {
     expect(formatTokenCount(999)).toBe("999")
   })
 
-  test("compacts 1k..10k with one decimal, 10k+ as rounded integers", () => {
+  test("compacts 1k..999k with one decimal below 10k and rounded integers after", () => {
     expect(formatTokenCount(1_000)).toBe("1.0k")
     expect(formatTokenCount(8_432)).toBe("8.4k")
     expect(formatTokenCount(10_500)).toBe("11k")
     expect(formatTokenCount(123_456)).toBe("123k")
+  })
+
+  test("uses larger suffixes instead of long k counts", () => {
+    expect(formatTokenCount(1_234_567)).toBe("1.2m")
+    expect(formatTokenCount(12_345_678)).toBe("12m")
+    expect(formatTokenCount(1_234_567_890)).toBe("1.2b")
+    expect(formatTokenCount(12_345_678_901)).toBe("12b")
+    expect(formatTokenCount(1_234_567_890_123)).toBe("1.2t")
+  })
+
+  test("rolls rounded unit boundaries into the next suffix", () => {
+    expect(formatTokenCount(999_500)).toBe("1.0m")
+    expect(formatTokenCount(999_500_000)).toBe("1.0b")
   })
 
   test("returns em-dash on invalid input", () => {

@@ -27,6 +27,7 @@ export interface AgentWorkflowRecord {
   depth: number
   cardID?: string
   renderedCardID?: string
+  targetMessageID?: string
   goalID?: string
   goalDescription?: string
   round?: number

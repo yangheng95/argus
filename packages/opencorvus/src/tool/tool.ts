@@ -2,6 +2,7 @@ import z from "zod"
 import type { Message } from "../session/message"
 import type { Agent } from "../agent/agent"
 import type { PermissionNext } from "../permission/next"
+import type { Config } from "../config/config"
 import { Truncate } from "./truncation"
 
 /**
@@ -27,6 +28,7 @@ export namespace Tool {
 
   export interface InitContext {
     agent?: Agent.Info
+    config?: Config.Info
   }
 
   export type Context<M extends Metadata = Metadata> = {

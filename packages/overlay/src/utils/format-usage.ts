@@ -16,8 +16,32 @@
 export function formatTokenCount(n: number): string {
   if (!Number.isFinite(n) || n < 0) return "—";
   if (n < 1000) return String(n);
-  if (n < 10_000) return (n / 1000).toFixed(1) + "k";
-  return Math.round(n / 1000) + "k";
+  const units = [
+    { value: 1_000, suffix: "k" },
+    { value: 1_000_000, suffix: "m" },
+    { value: 1_000_000_000, suffix: "b" },
+    { value: 1_000_000_000_000, suffix: "t" },
+  ];
+  let unitIndex = 0;
+  while (unitIndex < units.length - 1 && n >= units[unitIndex + 1].value) unitIndex++;
+
+  const render = (index: number): string => {
+    const scaled = n / units[index].value;
+    if (scaled < 10) {
+      const rounded = Number(scaled.toFixed(1));
+      return rounded >= 10
+        ? `${Math.round(scaled)}${units[index].suffix}`
+        : `${scaled.toFixed(1)}${units[index].suffix}`;
+    }
+    return `${Math.round(scaled)}${units[index].suffix}`;
+  };
+
+  let label = render(unitIndex);
+  if (/^1000[.0]*[kmb]$/.test(label) && unitIndex < units.length - 1) {
+    unitIndex++;
+    label = render(unitIndex);
+  }
+  return label;
 }
 
 /** Format a cost in USD as a tight badge value: under $0.01 → "<$0.01",

@@ -46,7 +46,10 @@ describe("core prompt hygiene", () => {
       // decomposition principles — "smallest" governs graph shape not
       // deliverable scope, and every requirement must map to a capable goal.
       architect: 160,
-      build: 175,
+      // Raised from 175 -> 195 on 2026-05-28 to document webpage replica
+      // framework-first build discipline: generated View layer first,
+      // functional containers/adapters second.
+      build: 195,
       designAnalyst: 125,
       factCheck: 80,
       integrity: 175,
@@ -547,6 +550,34 @@ describe("core prompt hygiene", () => {
     expect(acceptanceReview).toContain("final acceptance reviewer")
   })
 
+  test("webpage replica prompts enforce framework-first visual then functional fill", async () => {
+    const design = await readPrompt("designAnalyst")
+    const requirements = await readPrompt("requirements")
+    const architect = await readPrompt("architect")
+    const build = await readPrompt("build")
+    const workflow = await readSource("engine/workflow.ts")
+
+    expect(design).toContain("`mirror/binding-manifest.json` and `mirror/generated-visual-source/*`")
+    expect(design).toContain("visual framework/View layer first")
+    expect(design).toContain("project-owned containers/hooks/adapters fill the slots")
+
+    expect(requirements).toContain("two-phase implementation constraint")
+    expect(requirements).toContain("generated visual framework/View layer first")
+    expect(requirements).toContain("functional container/API/mock logic fills its slots")
+
+    expect(architect).toContain("decompose framework-first")
+    expect(architect).toContain("one prerequisite goal must materialize/adapt the generated presentational View layer")
+    expect(architect).toContain("dependent feature goals then implement project-owned containers")
+    expect(architect).toContain("Do not put API/state wiring directly into extracted static markup")
+
+    expect(build).toContain("A visual-framework goal materializes/adapts generated presentational `*View` components")
+    expect(build).toContain("A functional-fill goal consumes those View exports")
+    expect(build).toContain("Do not wire API/state directly into extracted static markup")
+
+    expect(workflow).toContain("View/slot manifest 先落地，功能容器后填充")
+    expect(workflow).toContain("visual framework -> functional fill")
+  })
+
   test("design-analysis treats raw mirror JSON as evidence, not PRD working context", async () => {
     const design = await readPrompt("designAnalyst")
     expect(design).toContain("After the compact artifacts exist, stop calling mirror acquisition tools")
@@ -571,6 +602,24 @@ describe("core prompt hygiene", () => {
     expect(design).toContain("default to a minimal local mock/static data contract")
     expect(design).toContain("Do not name backend infrastructure, storage, queues, caches, or realtime systems unless directly observed")
     expect(design).toContain("do not invent backend infrastructure names")
+  })
+
+  test("visual-qa core prompt preserves full-agent visual evidence and repair loop", async () => {
+    const text = await readPrompt("visualQa")
+    const normalized = text.replace(/\s+/g, " ")
+    expect(normalized).toContain("same capability level as Build")
+    expect(normalized).toContain("read, edit, write, run commands, start dev servers")
+    expect(normalized).toContain("Test the real running product")
+    expect(normalized).toContain("Do not rely on fixed screenshot baselines as the primary verdict")
+    expect(normalized).toContain("Do not accept build-agent claims")
+    expect(normalized).toContain("fresh evidence")
+    expect(normalized).toContain("previous visual report")
+    expect(normalized).toContain("reproduce every prior blocking finding")
+    expect(normalized).toContain("accepted=true")
+    expect(normalized).toContain("accepted=false")
+    expect(normalized).toContain("coverage")
+    expect(normalized).toContain("findings")
+    expect(normalized).toContain("evidence")
   })
 
   test("no core prompt smuggles JS template-literal escapes into raw text", async () => {

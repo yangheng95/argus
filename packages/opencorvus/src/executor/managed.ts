@@ -2,6 +2,7 @@ import { Identifier } from "@/id/id"
 import { Snapshot } from "@/snapshot"
 import { Log } from "@/util/log"
 import { createEventQueue, type EventQueue } from "@/util/event-queue"
+import { abortableIterable } from "@/util/stream-activity"
 import { EngineConfig } from "@/engine/config"
 import { PlanningCapabilities, type CodingEventInfo, type CodingProvider, type CodingProviderOptions, type ExecutorStatusInfo } from "./contract"
 import type { ExecutorAdapter } from "./contract"
@@ -150,7 +151,14 @@ export const ManagedCodingExecutor = {
       },
       async submit(input) {
         const id = Identifier.ascending("task")
-        const startHash = await Snapshot.track()
+        const startHash = await Snapshot.track().catch((error) => {
+          log.warn("initial snapshot failed; delivery diffs will be empty", {
+            sessionID: input.sessionID,
+            queueTaskID: id,
+            error: error instanceof Error ? error.message : String(error),
+          })
+          return undefined
+        })
         const state: State = {
           id,
           sessionID: input.sessionID,
@@ -174,6 +182,12 @@ export const ManagedCodingExecutor = {
         await persistExecutorSessionRef({
           sessionID: input.sessionID,
           provider: provider.name,
+        }).catch((error) => {
+          log.warn("persist initial executor session ref failed", {
+            sessionID: input.sessionID,
+            queueTaskID: id,
+            error: error instanceof Error ? error.message : String(error),
+          })
         })
         push(state, {
           type: "executor.progress",
@@ -202,8 +216,8 @@ export const ManagedCodingExecutor = {
       async abort(input) {
         const state = pick(tasks, latest, input)
         if (!state) return false
+        if (state.status === "failed" || state.status === "completed") return true
         state.abort.abort()
-        await provider.interrupt(requireExternalSessionID(state, "interrupt")).catch(() => false)
         state.status = "failed"
         state.error = "task cancelled"
         push(state, {
@@ -216,6 +230,7 @@ export const ManagedCodingExecutor = {
           },
         })
         completeConsumers(state)
+        await bestEffortInterrupt(provider, state)
         return true
       },
       async delivery(input) {
@@ -290,7 +305,9 @@ export const ManagedCodingExecutor = {
       async *events(input) {
         const state = pick(tasks, latest, input)
         if (!state) return
-        const cfg = await EngineConfig.get()
+        const cfg = await EngineConfig.get().catch(() => ({
+          activity: { executor_events_idle_ms: 240_000 },
+        }))
         const queue = createEventQueue<Notify>({
           idleMs: cfg.activity.executor_events_idle_ms,
           signal: input.signal,
@@ -360,7 +377,7 @@ function value<T>(input: T | (() => T)) {
 async function consume(stream: AsyncIterable<CodingEventInfo>, state: State, latest: Map<string, string>) {
   let eventCount = 0
   log.info("consume started", { sessionID: state.sessionID, queueTaskID: state.id })
-  for await (const event of stream) {
+  for await (const event of abortableIterable(stream, state.abort.signal)) {
     if (state.abort.signal.aborted || state.status === "failed") return
     eventCount++
     if (eventCount <= 5 || eventCount % 20 === 0) {
@@ -426,6 +443,19 @@ async function consume(stream: AsyncIterable<CodingEventInfo>, state: State, lat
     }
     log.info("consume completed", { sessionID: state.sessionID, queueTaskID: state.id, eventCount, outputLength: state.output.length })
     state.status = "completed"
+  }
+}
+
+async function bestEffortInterrupt(provider: CodingProvider, state: State) {
+  try {
+    const sessionID = state.externalSessionID ?? state.sessionID
+    await Promise.race([
+      provider.interrupt(sessionID).catch(() => false),
+      new Promise<false>((resolve) => setTimeout(() => resolve(false), 100)),
+    ])
+  } catch {
+    // The local executor state is already terminal; provider interrupt is a
+    // best-effort physical stop for adapters that expose a native session id.
   }
 }
 

@@ -32,6 +32,7 @@ describe("session config route contract", () => {
     expect(body).toContain("Config.mergeOverlay")
     expect(body).toContain("configOverlay: nextOverlay")
     expect(body).toContain("Bus.publish(Event.Updated")
+    expect(body).toContain("Bus.publish(Event.ConfigChanged")
   })
 
   test("Session.mergeMetadata remains a shallow top-level metadata merge", async () => {
@@ -54,6 +55,8 @@ describe("session config route contract", () => {
     expect(source).toContain("Session.assertConfigurableRoot(session)")
     expect(source).toContain("assertNoStoredNull(stored)")
     expect(source).toContain("Session.mergeConfigOverlay")
+    expect(source).toContain("Provider.reset()")
+    expect(source).toContain("Agent.reset()")
     expect(source).toContain("Config.mergeOverlay(base, overlay)")
     expect(source).toContain("origin: originTree(config, overlay)")
   })
@@ -80,10 +83,24 @@ describe("session config route contract", () => {
     const source = await repoFile("packages", "opencorvus", "src", "server", "routes", "session.ts")
     const start = source.indexOf('operationId: "session.config.update"')
     expect(start).toBeGreaterThan(0)
-    const body = source.slice(start, source.indexOf("return c.json(await sessionConfig(sessionID))", start))
+    const returnIndex = source.indexOf("return c.json(await sessionConfig(sessionID))", start)
+    const body = source.slice(start, returnIndex)
 
     expect(body).toContain("validateConfigModelReferences(patch, \"configOverlay\")")
     expect(body.indexOf("validateConfigModelReferences")).toBeLessThan(body.indexOf("Session.mergeConfigOverlay"))
+    expect(body.indexOf("Session.mergeConfigOverlay")).toBeLessThan(body.indexOf("Provider.reset()"))
+    expect(source.indexOf("Provider.reset()", start)).toBeLessThan(returnIndex)
+  })
+
+  test("session loop resolves the live overlay model instead of persisted user-message model", async () => {
+    const source = await repoFile("packages", "opencorvus", "src", "session", "loop.ts")
+    const start = source.indexOf("export const loop")
+    expect(start).toBeGreaterThan(0)
+    const body = source.slice(start, source.indexOf("const task = tasks.pop()", start))
+
+    expect(body).toContain("resolveAgentModel(lastUser.agent, { sessionID })")
+    expect(body).not.toContain("lastUser.model.providerID")
+    expect(body).not.toContain("lastUser.model.modelID")
   })
 
   test("stored configOverlay cannot contain persisted null delete markers", async () => {

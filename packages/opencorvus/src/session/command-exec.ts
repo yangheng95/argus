@@ -133,7 +133,7 @@ export namespace SessionCommand {
     }
 
     const { SessionPrompt } = await import("./prompt")
-    const templateParts = await SessionPrompt.resolvePromptParts(template)
+    const templateParts = await SessionPrompt.resolvePromptParts(template, { config })
     const isSubtask = (agent.mode === "subagent" && cmd.subtask !== false) || cmd.subtask === true
     const parts = isSubtask
       ? [

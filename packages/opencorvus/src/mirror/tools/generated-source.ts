@@ -5,8 +5,13 @@ import type { GeneratedFile } from "../ir/scaffold"
 
 const GENERATED_SOURCE_SUBDIR = "generated-source"
 
-export async function writeGeneratedSourceFiles(outputDir: string, files: GeneratedFile[]): Promise<string[]> {
-  const root = path.resolve(outputDir, GENERATED_SOURCE_SUBDIR)
+export async function writeGeneratedSourceFiles(
+  outputDir: string,
+  files: GeneratedFile[],
+  subdir = GENERATED_SOURCE_SUBDIR,
+): Promise<string[]> {
+  validateArtifactSubdir(subdir)
+  const root = path.resolve(outputDir, subdir)
   const written: string[] = []
 
   for (const file of files) {
@@ -17,6 +22,13 @@ export async function writeGeneratedSourceFiles(outputDir: string, files: Genera
   }
 
   return written
+}
+
+function validateArtifactSubdir(subdir: string): void {
+  if (subdir.length === 0) throw new Error("Generated source artifact subdir cannot be empty")
+  if (path.isAbsolute(subdir)) throw new Error(`Generated source artifact subdir must be relative: ${subdir}`)
+  const parts = subdir.split(/[\\/]+/)
+  if (parts.includes("..")) throw new Error(`Generated source artifact subdir cannot escape output directory: ${subdir}`)
 }
 
 function resolveArtifactRelative(root: string, filePath: string): string {

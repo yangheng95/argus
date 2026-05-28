@@ -37,6 +37,25 @@ describe("runWalkthrough", () => {
     expect(result.passed).toBe(false)
     expect(result.evidence.join("\n")).toContain("first_failure=0")
   })
+
+  test("forwards task config scope to scenario translation", async () => {
+    const scopes: unknown[] = []
+    await runWalkthroughWithDependencies({
+      spec: scenarioSpec(),
+      baseUrl: "http://127.0.0.1:3000",
+      outDir: "tmp/walkthrough",
+      taskID: "task-a",
+      sessionID: "session-a",
+    }, {
+      translate: async (input) => {
+        scopes.push({ taskID: input.taskID, sessionID: input.sessionID })
+        return [{ action: "assertSelector", selector: "#app" }]
+      },
+      findBrowserExecutable: async () => "chrome",
+      puppeteer: { launch: async () => ({ newPage: async () => fakePage({ selectors: new Set(["#app"]) }), close: async () => undefined }) },
+    })
+    expect(scopes).toEqual([{ taskID: "task-a", sessionID: "session-a" }])
+  })
 })
 
 function fakePage(input?: { selectors?: Set<string> }): WalkthroughPage & {

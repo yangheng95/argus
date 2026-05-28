@@ -108,7 +108,10 @@ export namespace ArchitectAgent {
       ],
       knownRequirementIDs: input.requirements?.map((requirement) => requirement.id),
     })
-    const contextTools = await filterAgentTools(createAgentContextTools(), "architect")
+    const contextTools = await filterAgentTools(createAgentContextTools(), "architect", {
+      taskID: input.taskID,
+      sessionID: input.parentSessionID,
+    })
 
     log.info("architect agent starting", {
       seedGoals: input.goals.length,

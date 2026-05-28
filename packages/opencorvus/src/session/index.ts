@@ -207,6 +207,12 @@ export namespace Session {
         diff: Snapshot.FileDiff.array(),
       }),
     ),
+    ConfigChanged: BusEvent.define(
+      "config.changed",
+      z.object({
+        sessionID: z.string(),
+      }),
+    ),
     Error: SessionEvents.Error,
   }
 
@@ -466,6 +472,7 @@ export namespace Session {
           .get()!
         const info = fromRow(updated)
         Database.effect(() => Bus.publish(Event.Updated, { info }))
+        Database.effect(() => Bus.publish(Event.ConfigChanged, { sessionID: input.sessionID }))
         return info
       })
     },

@@ -2,7 +2,7 @@ import { Index, Show, createMemo, onCleanup, type Accessor } from "solid-js"
 import { cardTreeStore } from "../store/card-tree"
 import { conversationAgentStore } from "../store/conversation-agents"
 import { setCardExpanded } from "../store/conversation-ui"
-import { loadConversationHistoryUntilCard } from "../services/conversation"
+import { conversationCardContainsMessage, loadConversationHistoryUntilCard } from "../services/conversation"
 import { requestConversationCardScroll } from "../services/conversation-scroll"
 import { notifyWarning } from "../services/notify"
 import { buildAgentWorkflow, type AgentWorkflowRecord } from "../utils/agent-workflow"
@@ -51,8 +51,15 @@ async function locateRecord(record: AgentWorkflowRecord): Promise<void> {
     })
     return
   }
-  if (!cardTreeStore.cards[record.renderedCardID]) {
-    await loadConversationHistoryUntilCard(record.renderedCardID)
+  const targetMessageID = String(record.targetMessageID || "")
+  const needsHistory =
+    !cardTreeStore.cards[record.renderedCardID] ||
+    (!!targetMessageID && !conversationCardContainsMessage(record.renderedCardID, targetMessageID))
+  if (needsHistory) {
+    await loadConversationHistoryUntilCard(record.renderedCardID, undefined, {
+      messageID: targetMessageID,
+      sessionID: record.sessionID,
+    })
   }
   for (const parentID of parentIDsForCard(record.renderedCardID)) {
     const parent = cardTreeStore.cards[parentID]

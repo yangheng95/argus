@@ -291,7 +291,10 @@ export namespace FactCheckAgent {
       items: input.factCheckItems.length,
     })
 
-    const contextTools = await filterAgentTools(createAgentContextTools(), "fact-check")
+    const contextTools = await filterAgentTools(createAgentContextTools(), "fact-check", {
+      taskID: input.taskID,
+      sessionID: input.orchestratorSessionID,
+    })
     const retrievalTools = buildFactCheckRetrievalTools()
     const outputToolKit = createFactCheckOutputTools()
     // Load target message text up-front so the prompt builder has it.

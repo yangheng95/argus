@@ -35,6 +35,11 @@ function ChangeRowContent(props: { item: FileChange }) {
   )
 }
 
+function shortCommit(ref: string | undefined): string {
+  const value = String(ref || "").trim()
+  return value.length > 12 ? value.slice(0, 12) : value
+}
+
 export function FileChangesView(props: FileChangesViewProps) {
   const [selectedGroupID, setSelectedGroupID] = createSignal("")
   const goalMenu = useDisclosure()
@@ -67,6 +72,7 @@ export function FileChangesView(props: FileChangesViewProps) {
   const totalDeletions = createMemo(() =>
     files().reduce((sum, item) => sum + (item.deletions ?? 0), 0),
   )
+  const activeCommitRef = createMemo(() => activeGroup()?.commitRef || "")
   const tabLabel = (group: ChangeGroup): string =>
     group.goalLabel || group.goalTitle || group.id
   const tabTitle = (group: ChangeGroup): string =>
@@ -109,6 +115,11 @@ export function FileChangesView(props: FileChangesViewProps) {
           <div class="changes-summary">
             <span>{tc("files.changed", files().length)}</span>
             <span class="changes-total">
+              <Show when={activeCommitRef()}>
+                <span class="changes-commit" title={`commit ${activeCommitRef()}`}>
+                  commit {shortCommit(activeCommitRef())}
+                </span>
+              </Show>
               <span data-tone="add">+{totalAdditions()}</span>
               <span data-tone="del">-{totalDeletions()}</span>
             </span>
@@ -187,8 +198,15 @@ export function FileChangesView(props: FileChangesViewProps) {
                           }}
                         >
                           <span class="changes-goal-picker-row-label">{tabLabel(group)}</span>
-                          <span class="changes-goal-picker-row-count" aria-hidden="true">
-                            {group.changes.length}
+                          <span class="changes-goal-picker-row-meta" aria-hidden="true">
+                            <Show when={group.commitRef}>
+                              <span class="changes-goal-picker-row-commit">
+                                {shortCommit(group.commitRef)}
+                              </span>
+                            </Show>
+                            <span class="changes-goal-picker-row-count">
+                              {group.changes.length}
+                            </span>
                           </span>
                         </button>
                       )

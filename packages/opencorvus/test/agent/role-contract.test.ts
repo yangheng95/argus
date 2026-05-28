@@ -8,6 +8,7 @@ import { Config } from "../../src/config/config"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
 import BUILD_CORE from "../../src/prompt/core/build-core.txt"
+import VISUAL_QA_CORE from "../../src/prompt/core/visual-qa-core.txt"
 import PROMPT_CODING from "../../src/agent/prompt/coding.txt"
 
 afterEach(async () => {
@@ -73,6 +74,25 @@ test("build prompt catalog default matches the runtime build core prompt", async
       expect(build!.effective_prompt).toBe(BUILD_CORE)
       expect(build!.default_prompt).toBe(BUILD_CORE)
       expect(build!.default_prompt).not.toBe(PROMPT_CODING)
+    },
+  })
+})
+
+test("visual-qa prompt catalog default matches the runtime visual QA core prompt", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const entries = await PromptCatalog.list()
+      const visualQa = entries.find((entry) => entry.scope === "agent" && entry.key === "visual-qa")
+      expect(visualQa).toBeDefined()
+      expect(await Agent.nativeDefaultPrompt("visual-qa")).toBe(VISUAL_QA_CORE)
+      expect(visualQa!.prompt_mode).toBe("append")
+      expect(visualQa!.prompt).toBe("")
+      expect(visualQa!.effective_prompt).toBe(VISUAL_QA_CORE)
+      expect(visualQa!.default_prompt).toBe(VISUAL_QA_CORE)
+      expect(visualQa!.default_prompt).not.toBe(BUILD_CORE)
+      expect(visualQa!.default_prompt).not.toBe(PROMPT_CODING)
     },
   })
 })

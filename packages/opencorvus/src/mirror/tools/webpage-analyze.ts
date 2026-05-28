@@ -5,8 +5,10 @@
  * Reads `extracted-page.json`, runs pattern detection + token extraction, and
  * writes mirror facts plus deterministic scaffold artifacts that design-analysis consumes:
  *   - `<outputDir>/scaffold.json`         full ProjectScaffold
+ *   - `<outputDir>/binding-manifest.json` visual View slot contract
  *   - `<outputDir>/shared-context.md`     compact token + pattern summary
  *   - `<outputDir>/generated-source/*`    scaffold source artifacts for analysis only
+ *   - `<outputDir>/generated-visual-source/*` slot-based View artifacts
  *
  * Returns only the summary so the tool output stays small.
  */
@@ -22,6 +24,7 @@ import {
 } from "../url/pattern"
 import {
   generateReactSourceFiles,
+  generateVisualBindingArtifacts,
   materializeScaffoldForReactSource,
 } from "../shared/scaffold-helpers"
 import { ExtractedPageSchema } from "../ir/extracted-page"
@@ -33,6 +36,7 @@ function renderPrdEvidenceSummary(input: {
   page: { url: string; title: string; viewport: { width: number; height: number } }
   scaffold: ProjectScaffold
   scaffoldPath: string
+  bindingManifestPath: string
   contextPath: string
   irPath: string
   referencePath: string
@@ -72,6 +76,7 @@ function renderPrdEvidenceSummary(input: {
     `- Page hierarchy and text IR: ${input.irPath}`,
     `- Compact token/pattern summary: ${input.contextPath}`,
     `- Full scaffold source for bounded targeted reads: ${input.scaffoldPath}`,
+    `- Visual slot binding manifest: ${input.bindingManifestPath}`,
     "",
     "## PRD/SPEC Draft Surface",
     "Use this as the first draft surface, then perform the PRD/SPEC review pass(es) required by assistant.auto_iteration before submit_design_prd_spec.",
@@ -107,9 +112,11 @@ export const WebpageAnalyzeTool = Tool.define("webpage_analyze", {
 
 Reads \`<outputDir>/extracted-page.json\` (from webpage_extract). Writes mirror facts plus scaffold artifacts:
   - scaffold.json           full ProjectScaffold
+  - binding-manifest.json   slot contract for generated presentational View components
   - shared-context.md       compact token + pattern summary for prompts
   - prd-evidence-summary.md direct PRD/SPEC drafting surface
   - generated-source/*      scaffold-generated source artifacts for analysis only
+  - generated-visual-source/* presentational View source with fillable slots
 
 Returns a summary: section list, pattern list, token counts, and the PRD/SPEC evidence summary path. Once these artifacts exist, use them for PRD/SPEC synthesis; bounded targeted \`scaffold.json\` reads are only for specific gaps.
 
@@ -120,7 +127,7 @@ Use this only when scaffold and PRD evidence artifacts are missing. Do not rerun
     outputDir: z
       .string()
       .describe(
-        `Directory containing extracted-page.json. Writes scaffold.json and shared-context.md here, plus scaffold-generated source artifacts under generated-source/. Defaults to task-scoped \`${DEFAULT_MIRROR_SUBDIR}\` (matching webpage_extract's default). Do not set this during task sessions; overrides are for benchmarks/tests and task-session overrides must stay under \`${DEFAULT_MIRROR_SUBDIR}\`.`,
+        `Directory containing extracted-page.json. Writes scaffold.json, binding-manifest.json, shared-context.md, generated-source/, and generated-visual-source/ here. Defaults to task-scoped \`${DEFAULT_MIRROR_SUBDIR}\` (matching webpage_extract's default). Do not set this during task sessions; overrides are for benchmarks/tests and task-session overrides must stay under \`${DEFAULT_MIRROR_SUBDIR}\`.`,
       )
       .optional(),
   }),
@@ -146,6 +153,7 @@ Use this only when scaffold and PRD evidence artifacts are missing. Do not rerun
 
     const scaffold = materializeScaffoldForReactSource(analyzePage(page))
     const sourceFiles = generateReactSourceFiles(scaffold)
+    const visualBinding = generateVisualBindingArtifacts(scaffold)
     const sharedContext = buildSharedContext(scaffold, {
       url: page.url,
       title: page.title,
@@ -153,15 +161,18 @@ Use this only when scaffold and PRD evidence artifacts are missing. Do not rerun
     })
 
     const scaffoldPath = path.join(outputDir, "scaffold.json")
+    const bindingManifestPath = path.join(outputDir, "binding-manifest.json")
     const contextPath = path.join(outputDir, "shared-context.md")
     const prdEvidencePath = path.join(outputDir, "prd-evidence-summary.md")
     const irPath = path.join(outputDir, "page-ir.xml")
     const referencePath = path.join(outputDir, "reference.png")
     const sourcePaths = await writeGeneratedSourceFiles(outputDir, sourceFiles)
+    const visualSourcePaths = await writeGeneratedSourceFiles(outputDir, visualBinding.files, "generated-visual-source")
     const prdEvidenceSummary = renderPrdEvidenceSummary({
       page,
       scaffold,
       scaffoldPath,
+      bindingManifestPath,
       contextPath,
       irPath,
       referencePath,
@@ -169,6 +180,7 @@ Use this only when scaffold and PRD evidence artifacts are missing. Do not rerun
 
     await Promise.all([
       fs.writeFile(scaffoldPath, JSON.stringify(scaffold, null, 2), "utf8"),
+      fs.writeFile(bindingManifestPath, JSON.stringify(visualBinding.manifest, null, 2), "utf8"),
       fs.writeFile(contextPath, sharedContext, "utf8"),
       fs.writeFile(prdEvidencePath, prdEvidenceSummary, "utf8"),
     ])
@@ -208,10 +220,12 @@ Use this only when scaffold and PRD evidence artifacts are missing. Do not rerun
         topPatterns || "  (none)",
         "",
         `**Artifacts written:**`,
+        `- \`${bindingManifestPath}\` - visual View slot binding manifest`,
         `- \`${scaffoldPath}\` — full ProjectScaffold`,
         `- \`${contextPath}\` — compact prompt-ready summary`,
         `- \`${prdEvidencePath}\` — direct PRD/SPEC evidence summary`,
         `- Generated source artifacts: ${sourcePaths.length}`,
+        `- Generated visual View artifacts: ${visualSourcePaths.length}`,
         "",
         "PRD/SPEC evidence artifacts written. Do not rerun analysis for this evidence package unless the source extraction changed. Use `prd-evidence-summary.md`, `shared-context.md`, and `page-ir.xml` as the working surface; generated source artifacts are not the deliverable.",
       ].join("\n"),
@@ -220,6 +234,8 @@ Use this only when scaffold and PRD evidence artifacts are missing. Do not rerun
         contextPath,
         prdEvidencePath,
         sourcePaths,
+        bindingManifestPath,
+        visualSourcePaths,
         sectionCount: scaffold.sections.length,
         patternCount: scaffold.catalog.patterns.length,
         patternCoverage: coverage,

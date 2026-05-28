@@ -14,7 +14,7 @@ import {
   updateGoalWorkspace,
 } from "../../src/engine/persist"
 import { goalStatusByID } from "../../src/engine/describe"
-import { findGoalLatestWorkspace, findGoalRun, getGoalRetryCount } from "../../src/engine/store"
+import { findDeliveryByGoalRun, findGoalLatestWorkspace, findGoalRun, getGoalRetryCount } from "../../src/engine/store"
 import { createDecisionLog } from "../../src/decision-log"
 import { resetDatabase } from "../fixture/db"
 
@@ -393,5 +393,48 @@ describe("Goal.startNewAttempt — options", () => {
     expect(row?.workspace_dir).toBe("C:/tmp/ws-preserve")
     expect(row?.workspace_branch).toBe("opencorvus/ws-preserve")
     expect(row?.workspace_base_ref).toBe("abc123")
+  })
+
+  test("finalizeBuildAttempt writes goal delivery from published commit and reported files when host diff is empty", () => {
+    const nextRunID = beginBuildAttempt({
+      taskID,
+      goalID,
+      runID,
+      sessionID: "ses_start_new_reported_files_delivery",
+      workspaceDir: "C:/tmp/ws-reported-files",
+      workspaceBranch: "opencorvus/ws-reported-files",
+      workspaceBaseRef: "base123",
+    })
+
+    finalizeBuildAttempt({
+      goalRunID: nextRunID,
+      taskID,
+      goalID,
+      runID,
+      status: "completed",
+      commitRef: "abc1234",
+      workspaceDir: "C:/tmp/ws-reported-files",
+      workspaceBranch: "opencorvus/ws-reported-files",
+      workspaceBaseRef: "base123",
+      summary: "Build changed one file and merged it.",
+      fileChanges: [
+        {
+          path: "src/index.ts",
+          summary: "Updated scoped implementation.",
+          reason: "Required by the goal.",
+        },
+      ],
+      diffs: [],
+    })
+
+    const delivery = findDeliveryByGoalRun(nextRunID)
+    expect(delivery?.result?.commit_ref).toBe("abc1234")
+    expect(delivery?.result?.changed_files).toEqual(["src/index.ts"])
+    expect(delivery?.result?.diffs).toMatchObject([
+      {
+        file: "src/index.ts",
+        source: "build_report_files_changed",
+      },
+    ])
   })
 })

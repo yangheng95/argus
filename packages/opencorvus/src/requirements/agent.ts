@@ -90,7 +90,10 @@ export namespace RequirementsAgent {
     // (`Instance.directory`), not something to keyword-regex out of the
     // user's free-form request. `createAgentContextTools()` resolves to the
     // correct root via Instance.directory by default.
-    const contextTools = await filterAgentTools(createAgentContextTools(), "requirements")
+    const contextTools = await filterAgentTools(createAgentContextTools(), "requirements", {
+      taskID: input.taskID,
+      sessionID: input.parentSessionID,
+    })
     const outputToolKit = createRequirementsOutputTools({ decisionLog: input.decisionLog })
 
     const context = prefetchContext(input.title, input.request)

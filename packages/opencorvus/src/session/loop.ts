@@ -17,6 +17,7 @@ import { Bus } from "../bus"
 import { ProviderTransform } from "../provider/transform"
 import { SystemPrompt } from "./system"
 import { EffectiveConfig } from "@/config/effective"
+import { resolveAgentModel } from "@/agent/model"
 import { InstructionPrompt } from "./instruction"
 import { Plugin } from "../plugin"
 import MAX_STEPS from "../session/prompt/max-steps.txt"
@@ -1828,8 +1829,7 @@ export namespace SessionLoop {
               history: msgs,
             }).catch((err) => log.error("failed to ensure session title", { error: String(err) }))
 
-          const config = await EffectiveConfig.effective({ sessionID })
-          const model = await Provider.getModel(lastUser.model.providerID, lastUser.model.modelID, { config }).catch((e) => {
+          const model = await resolveAgentModel(lastUser.agent, { sessionID }).catch((e) => {
             if (Provider.ModelNotFoundError.isInstance(e)) {
               const hint = e.data.suggestions?.length ? ` Did you mean: ${e.data.suggestions.join(", ")}?` : ""
               Bus.publish(Session.Event.Error, {

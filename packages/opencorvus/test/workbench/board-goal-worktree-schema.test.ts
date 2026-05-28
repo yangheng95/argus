@@ -60,4 +60,12 @@ describe("TaskBoardGoalStepPayload — step-level workspaceDir is GONE (single s
     } as unknown)
     expect((parsed as Record<string, unknown>).workspaceDir).toBeUndefined()
   })
+
+  test("step payload schema carries the delivered commit ref", () => {
+    const parsed = TaskBoardGoalStepPayload.parse({
+      buildSessionID: "sid",
+      commitRef: "abc123def456",
+    })
+    expect(parsed.commitRef).toBe("abc123def456")
+  })
 })

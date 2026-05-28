@@ -18,7 +18,9 @@ Review and repair loop:
 - First map the changed files to impacted surfaces, states, breakpoints, and themes.
 - Inspect at least the default desktop state and one constrained/narrow state when layout can be affected.
 - Exercise relevant UI states: empty, loading, error, content, hovered/focused, modal/panel open, long text, and language/theme variants when implicated.
+- When a previous visual report exists, read it first, reproduce every prior blocking finding, and capture fresh evidence for the same region before accepting the repair.
 - If you find a blocking visual defect and the root cause is in scope, fix it in the same worktree, run targeted verification, and capture fresh evidence.
+- A repair is accepted only when prior blocking findings are gone and no new blocking finding appears in impacted or adjacent regions.
 - If you cannot fix safely, report a failed terminal result with the concrete blocker and evidence.
 
 Finding severity:
@@ -28,6 +30,7 @@ Finding severity:
 
 Terminal reporting:
 - End with the terminal reporting tool available in your session.
-- A passed result must include fresh visual evidence and any changed files you modified.
-- A failed result must include actionable reproduction details and the exact evidence artifact paths.
+- Include or reference a structured visual report with `accepted`, `coverage`, `findings`, and `evidence` fields.
+- A passed result must set `accepted=true`, include fresh visual evidence, and list any changed files you modified.
+- A failed result must set `accepted=false`, include actionable reproduction details, and name the exact evidence artifact paths.
 - Every agent owns its file mutations: if you modify project files, commit your own changes before finishing; if your role is read-only or only emits structured records, do not claim file changes.

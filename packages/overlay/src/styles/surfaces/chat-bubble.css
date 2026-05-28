@@ -91,6 +91,7 @@
 .chat-bubble-row[data-kind="agent"] .chat-bubble {
   gap: 0;
   padding: 0;
+  background: var(--card-bg-0);
   border-color: var(--card-border);
   border-left: calc(3px * var(--ui-scale)) solid var(--card-stage);
   border-radius: var(--oc-radius-soft);
@@ -316,6 +317,7 @@
 }
 
 .chat-bubble-row[data-kind="agent"] .chat-bubble:hover {
+  background: var(--card-bg-0);
   border-color: var(--card-border-strong);
   border-left-color: var(--card-stage);
   transform: none;

@@ -1224,6 +1224,7 @@ function buildStepPayload(step: MiniWorkflowStep, goalID: string, status?: strin
     : undefined
 
   let buildSessionID: string | undefined
+  let commitRef: string | undefined
   let changedFiles: string[] | undefined
   let changedFileDiffs: GoalStepPayload["changedFileDiffs"]
   let diffStats: { files?: number; additions?: number; deletions?: number } | undefined
@@ -1245,10 +1246,14 @@ function buildStepPayload(step: MiniWorkflowStep, goalID: string, status?: strin
   if (deliveredRun) {
     const delivery = findDeliveryByGoalRun(deliveredRun.id)
     const result = delivery?.result as {
+      commit_ref?: unknown
       changed_files?: string[]
       diffs?: { file?: string; additions?: unknown; deletions?: unknown; before?: unknown; after?: unknown; status?: string }[]
       stats?: { additions?: number; deletions?: number }
     } | null
+    commitRef = typeof result?.commit_ref === "string" && result.commit_ref.trim()
+      ? result.commit_ref.trim()
+      : undefined
     const diffRows = Array.isArray(result?.diffs)
       ? result.diffs
           .filter((d): d is { file: string; additions?: unknown; deletions?: unknown; before?: unknown; after?: unknown; status?: string } =>
@@ -1298,7 +1303,7 @@ function buildStepPayload(step: MiniWorkflowStep, goalID: string, status?: strin
   ) {
     return undefined
   }
-  return { planNodes, buildSessionID, changedFiles, changedFileDiffs, diffStats, checks, evalSummary, verdict }
+  return { planNodes, buildSessionID, commitRef, changedFiles, changedFileDiffs, diffStats, checks, evalSummary, verdict }
 }
 
 /** Build architect summary from the Architect Contract Graph artifact. */

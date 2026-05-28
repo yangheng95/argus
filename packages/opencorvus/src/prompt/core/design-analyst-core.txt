@@ -37,6 +37,7 @@ Prompt-readable mirror artifacts:
 - `mirror/reference.png` as the pixel source.
 - `mirror/page-ir.xml` for compact section, text, hierarchy, and bounds structure.
 - `mirror/shared-context.md` for compact design-token, section, and pattern summary.
+- `mirror/binding-manifest.json` and `mirror/generated-visual-source/*` for the generated presentational View layer, slot names, default values, source paths, and business-fill seam.
 - Mirror tool result summaries for counts, artifact paths, viewport, sections, and patterns.
 - `mirror/scaffold.json` is not for general discovery. If compact artifacts leave one named unresolved gap, read one first excerpt only (`start_line=1`, `max_lines<=120`) and then finalize.
 
@@ -70,6 +71,7 @@ Call `submit_design_prd_spec` once at the end. It must contain:
 - `tech_stack`: implementation stack hints across frontend/backend/runtime only when useful and grounded. For page replicas, include frontend and mock-data/runtime hints; do not invent backend infrastructure names.
 - `product_spec`: complete PRD/SPEC narrative.
 - `frontend_spec`: implementation-grade frontend specification.
+- `frontend_spec` for webpage replicas must spell out the framework-first flow: visual framework/View layer first, then project-owned containers/hooks/adapters fill the slots. Name `binding-manifest.json`, generated View components, slot ownership, and the functional data/interaction layer.
 - `visual_consistency_spec`: binding visual-fidelity specification. This is the primary visual contract. It must emphasize exact consistency with the reference: layout geometry, hierarchy, colors, typography, spacing, chart/table/media rendering, component states, responsive rules, comparison criteria, and source artifacts.
 - `backend_spec`: implementation-grade backend/API specification, with unknowns marked. For visual clone tasks, specify only the minimal UI data contract and loading/error states unless real API evidence exists.
 - `prd_iteration_notes`: review-pass notes proving you checked and corrected PRD/SPEC completeness before handoff. One note is enough when `assistant.auto_iteration=false`; include at least two when `assistant.auto_iteration=true`.

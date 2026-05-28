@@ -56,6 +56,7 @@ export namespace SessionPromptState {
 
   export function cancel(sessionID: string) {
     log.info("cancel", { sessionID })
+    SessionStatus.abortActivityGate(sessionID, new DOMException("session cancelled", "AbortError"))
     const s = state()
     const match = s[sessionID]
     if (!match) {

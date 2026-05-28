@@ -69,7 +69,7 @@ export namespace IntentAnalysisAgent {
   }
 
   export async function analyze(input: AnalyzeInput): Promise<AnalyzeOutput> {
-    const toolKit = await buildToolKit()
+    const toolKit = await buildToolKit({ taskID: input.taskID, sessionID: input.parentSessionID })
     const out = await runAgentSession({
       kind: "intent-analysis",
       core: withFactCheckRegistration(INTENT_CORE),
@@ -127,8 +127,8 @@ export namespace IntentAnalysisAgent {
 // Tool kit — shared read-only context tools + intent-specific collector tools.
 // ---------------------------------------------------------------------------
 
-async function buildToolKit() {
-  const contextTools = await filterAgentTools(createAgentContextTools(), "intent-analysis")
+async function buildToolKit(opts?: { taskID?: string; sessionID?: string }) {
+  const contextTools = await filterAgentTools(createAgentContextTools(), "intent-analysis", opts)
   const outputToolKit = createIntentOutputTools()
   return {
     tools: { ...contextTools, ...outputToolKit.tools },

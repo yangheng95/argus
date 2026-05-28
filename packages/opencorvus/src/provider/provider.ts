@@ -979,24 +979,32 @@ export namespace Provider {
 
   export async function getLanguage(model: Model, opts?: { config?: Config.Info }): Promise<LanguageModel> {
     const s = await stateFor(opts?.config)
-    const key = `${model.providerID}/${model.id}`
+    const provider = s.providers[model.providerID]
+    const canonical = provider?.models[model.id]
+    if (!provider || !canonical) {
+      const availableModels = provider ? Object.keys(provider.models) : Object.keys(s.providers)
+      const matches = fuzzysort.go(provider ? model.id : model.providerID, availableModels, { limit: 3, threshold: -10000 })
+      const suggestions = matches.map((m) => m.target)
+      throw new ModelNotFoundError({ providerID: model.providerID, modelID: model.id, suggestions })
+    }
+
+    const key = `${canonical.providerID}/${canonical.id}`
     if (s.models.has(key)) return s.models.get(key)!
 
-    const provider = s.providers[model.providerID]
-    const sdk = await getSDK(model, opts)
+    const sdk = await getSDK(canonical, opts)
 
     try {
-      const language = s.modelLoaders[model.providerID]
-        ? await s.modelLoaders[model.providerID](sdk, model.api.id, provider.options)
-        : sdk.languageModel(model.api.id)
+      const language = s.modelLoaders[canonical.providerID]
+        ? await s.modelLoaders[canonical.providerID](sdk, canonical.api.id, provider.options)
+        : sdk.languageModel(canonical.api.id)
       s.models.set(key, language)
       return language
     } catch (e) {
       if (e instanceof NoSuchModelError)
         throw new ModelNotFoundError(
           {
-            modelID: model.id,
-            providerID: model.providerID,
+            modelID: canonical.id,
+            providerID: canonical.providerID,
           },
           { cause: e },
         )
@@ -1019,15 +1027,15 @@ export namespace Provider {
     }
   }
 
-  export async function getSmallModel(providerID: string) {
-    const cfg = await Config.get()
+  export async function getSmallModel(providerID: string, opts?: { config?: Config.Info }) {
+    const cfg = opts?.config ?? (await Config.get())
 
     if (cfg.small_model) {
       const parsed = parseModel(cfg.small_model)
-      return getModel(parsed.providerID, parsed.modelID)
+      return getModel(parsed.providerID, parsed.modelID, { config: cfg })
     }
 
-    const provider = await state().then((state) => state.providers[providerID])
+    const provider = await stateFor(opts?.config).then((state) => state.providers[providerID])
     if (provider) {
       const priority = smallModelPriority(providerID)
       for (const item of priority) {
@@ -1040,31 +1048,31 @@ export namespace Provider {
           // 2. User's region prefix (us., eu.)
           // 3. Unprefixed model
           const globalMatch = candidates.find((m) => m.startsWith("global."))
-          if (globalMatch) return getModel(providerID, globalMatch)
+          if (globalMatch) return getModel(providerID, globalMatch, { config: cfg })
 
           const region = provider.options?.region
           if (region) {
             const regionPrefix = region.split("-")[0]
             if (regionPrefix === "us" || regionPrefix === "eu") {
               const regionalMatch = candidates.find((m) => m.startsWith(`${regionPrefix}.`))
-              if (regionalMatch) return getModel(providerID, regionalMatch)
+              if (regionalMatch) return getModel(providerID, regionalMatch, { config: cfg })
             }
           }
 
           const unprefixed = candidates.find((m) => !crossRegionPrefixes.some((p) => m.startsWith(p)))
-          if (unprefixed) return getModel(providerID, unprefixed)
+          if (unprefixed) return getModel(providerID, unprefixed, { config: cfg })
         } else {
           for (const model of Object.keys(provider.models)) {
-            if (model.includes(item)) return getModel(providerID, model)
+            if (model.includes(item)) return getModel(providerID, model, { config: cfg })
           }
         }
       }
     }
 
     // Check if opencorvus provider is available before using it
-    const opencorvusProvider = await state().then((state) => state.providers["opencorvus"])
+    const opencorvusProvider = await stateFor(opts?.config).then((state) => state.providers["opencorvus"])
     if (opencorvusProvider && opencorvusProvider.models["gpt-5-nano"]) {
-      return getModel("opencorvus", "gpt-5-nano")
+      return getModel("opencorvus", "gpt-5-nano", { config: cfg })
     }
 
     return undefined

@@ -8,6 +8,7 @@ export interface ConversationAgentSessionView {
   parentSessionID?: string;
   goalID?: string;
   messageIDs?: string[];
+  lastDisplayMessageID?: string;
   firstMessageTime: number;
   lastMessageTime: number;
   placement?: "top_level" | "goal_phase" | "hidden" | "filtered" | string;
@@ -31,8 +32,13 @@ export const [conversationAgentStore, setConversationAgentStore] = createStore<C
   records: [],
 });
 
-function firstMessageID(session: ConversationAgentSessionView): string {
-  return Array.isArray(session?.messageIDs) ? String(session.messageIDs[0] || "") : "";
+function fallbackLastMessageID(session: ConversationAgentSessionView): string {
+  if (!Array.isArray(session?.messageIDs)) return "";
+  return String(session.messageIDs[session.messageIDs.length - 1] || "");
+}
+
+function targetMessageID(session: ConversationAgentSessionView): string {
+  return String(session?.lastDisplayMessageID || "") || fallbackLastMessageID(session);
 }
 
 function renderedTargetForSession(
@@ -49,7 +55,7 @@ function renderedTargetForSession(
       renderedCardID,
     };
   }
-  const messageID = firstMessageID(session);
+  const messageID = targetMessageID(session);
   if (stage === "integrity") {
     return { renderedCardID: `integrity:session:${session.sessionID}` };
   }
@@ -87,6 +93,7 @@ function agentRecordFromSession(session: ConversationAgentSessionView): AgentWor
     completedAt: lastObservedAt,
     attempts: 1,
     depth: 0,
+    targetMessageID: targetMessageID(session),
     goalID: session?.goalID,
     stepID: session?.phase?.stepID,
     phaseID: session?.phase?.phaseID,

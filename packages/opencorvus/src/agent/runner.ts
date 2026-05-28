@@ -597,6 +597,13 @@ export async function runAgentSession<C>(
 ): Promise<RunAgentSessionOutput<C>> {
   const { kind } = input
   const agentName = input.agentName ?? kind
+  const configScope = input.taskID
+    ? { taskID: input.taskID }
+    : input.existingSessionID
+      ? { sessionID: input.existingSessionID }
+      : input.parentSessionID
+        ? { sessionID: input.parentSessionID }
+        : undefined
 
   if (input.signal?.aborted) {
     throw new AgentRunError(kind, "aborted before model resolution")
@@ -606,13 +613,13 @@ export async function runAgentSession<C>(
   let model: Awaited<ReturnType<typeof resolveAgentModel>> | undefined
   let modelResolutionError: unknown
   if (input.model) {
-    const config = await EffectiveConfig.effective(input.taskID ? { taskID: input.taskID } : undefined)
+    const config = await EffectiveConfig.effective(configScope)
     model = await Provider.getModel(input.model.providerID, input.model.modelID, { config }).catch((err) => {
       modelResolutionError = err
       return undefined
     })
   } else {
-    model = await resolveAgentModel(agentName, { taskID: input.taskID }).catch((err) => {
+    model = await resolveAgentModel(agentName, configScope).catch((err) => {
       modelResolutionError = err
       return undefined
     })
@@ -646,7 +653,7 @@ export async function runAgentSession<C>(
       : await composeSystemPrompt(
         agentName,
         input.core,
-        input.taskID,
+        configScope,
       )
   const liveContext = input.taskID ? TaskContext.snapshot(input.taskID) : ""
   // INFORMATION MISSING debug toggle: when on, append the fallback block
@@ -1390,10 +1397,10 @@ export async function runAgentSessionWithRetry<C>(
 async function composeSystemPrompt(
   agentName: string,
   core: string,
-  taskID: string | undefined,
+  scope: { taskID?: string; sessionID?: string } | undefined,
 ): Promise<{ prompt: string }> {
-  const config = await EffectiveConfig.effective(taskID ? { taskID } : undefined)
-  const overlay = await resolveSessionOverlay(taskID ? { taskID } : undefined)
+  const config = await EffectiveConfig.effective(scope)
+  const overlay = await resolveSessionOverlay(scope)
   const baseAgent = await Agent.get(agentName, { config })
   const effectiveAgent = baseAgent ? Agent.resolveSessionAgent(baseAgent, overlay) : undefined
   const userAppend = effectiveAgent?.promptAppend ?? (config.agent as Record<string, any> | undefined)?.[agentName]?.prompt_append
