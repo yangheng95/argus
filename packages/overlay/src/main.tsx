@@ -51,7 +51,7 @@ import {
   toggleDevtools,
 } from "./services/theme"
 import { settingsStore, setSettingsStore, saveSettings } from "./store/settings"
-import { initPaneResizers, cancelPaneResize, currentUIScale, renderPaneLayout } from "./services/pane"
+import { initPaneResizers, cancelPaneResize, currentUIScale, renderPaneLayout, PANEL_PANE_CONFIG } from "./services/pane"
 import { panelMessage } from "./services/chat"
 import { ConnectionBanner } from "./components/ConnectionBanner"
 import { CommandPalette } from "./components/CommandPalette"
@@ -1137,7 +1137,7 @@ disposers.push(
         rightPanelCollapsed,
         sidebarWidth: settingsStore.sidebarWidth,
         sectionsWidth: settingsStore.sectionsWidth,
-      })
+      }, PANEL_PANE_CONFIG)
     })
 
     // Task status header + elapsed timer moved to <TaskStatusHeader/> component
@@ -1168,7 +1168,7 @@ const paneCallbacks = {
     saveSettings()
   },
 }
-initPaneResizers(paneCallbacks)
+initPaneResizers(paneCallbacks, PANEL_PANE_CONFIG)
 
 // ── Global event listeners (
 

@@ -851,7 +851,6 @@
   "mission.ledger.scope.global": "All projects",
   "mission.ledger.error_load_failed": "Failed to load tasks: {{error}}",
   "mission.ledger.error_retry": "Retry",
-  "mission.workbench.task_kicker": "Task context",
   "mission.workbench.task_conversation_title": "Task conversation",
   "mission.workbench.actions.open_in_panel": "Open in Panel",
   "mission.workbench.error_action_failed": "{{action}} failed: {{error}}",
@@ -897,7 +896,6 @@
   "mission.launcher.error": "Mission wake failed: {{error}}",
   "mission.launcher.discard": "Close",
   "mission.launcher.discard_title": "Close the launcher",
-  "mission.launcher.kicker": "Mission",
   "mission.launcher.conversation_title": "Mission conversation",
   "mission.launcher.result_created": "Created mission: {{missionID}}",
   "mission.launcher.result_resumed": "Resumed mission: {{missionID}}"

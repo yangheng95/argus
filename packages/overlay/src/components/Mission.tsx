@@ -26,6 +26,7 @@
 import {
   For,
   Show,
+  createEffect,
   createMemo,
   createResource,
   createSignal,
@@ -36,7 +37,8 @@ import { boardStore, setBoardStore, loadTasks, taskByID, visibleTasks,
   activeTaskID,
 } from "../store/board"
 import { clearMessages, setChatAttachments } from "../store/messages"
-import { settingsStore } from "../store/settings"
+import { settingsStore, setSettingsStore, saveSettings } from "../store/settings"
+import { initPaneResizers, renderPaneLayout, MISSION_PANE_CONFIG } from "../services/pane"
 import { isMissionPage, setPageMode } from "../store/page-mode"
 import {
   cancelTask,
@@ -237,6 +239,65 @@ export function Mission() {
     }
   })
 
+  // ── Resizable three columns ────────────────────────────────────────
+  //
+  // Reuse the default Panel's drag service (services/pane.ts) instead of a
+  // second implementation — Mission supplies its own DOM handles + CSS
+  // variables via MISSION_PANE_CONFIG, and persists its own widths
+  // (settings.missionLedgerWidth / missionChannelsWidth) so resizing
+  // Mission never moves the Panel and vice-versa. Mission has no column
+  // collapse affordance, so the collapse flags are always false.
+  const missionPaneCallbacks = {
+    getState: () => ({
+      sidebarCollapsed: false,
+      rightPanelCollapsed: false,
+      sidebarWidth: settingsStore.missionLedgerWidth,
+      sectionsWidth: settingsStore.missionChannelsWidth,
+    }),
+    onWidthsChanged: (sidebarWidth: number | null, sectionsWidth: number | null) => {
+      setSettingsStore({
+        ...(sidebarWidth != null ? { missionLedgerWidth: sidebarWidth } : {}),
+        ...(sectionsWidth != null ? { missionChannelsWidth: sectionsWidth } : {}),
+      })
+      saveSettings()
+    },
+  }
+
+  // Attach the pointer listeners once. The resize handles live in the DOM
+  // unconditionally (siblings of the columns inside `.mission-body`, not
+  // gated by isMissionPage) so they exist when onMount runs and stay valid
+  // across page-mode toggles — mirroring how the Panel's static handles in
+  // index.html are wired once at boot. Hidden with the rest of
+  // `.mission-mount` (display:none) when Mission is not the active page.
+  onMount(() => {
+    const dispose = initPaneResizers(missionPaneCallbacks, MISSION_PANE_CONFIG)
+    onCleanup(dispose)
+  })
+
+  // Apply (and re-apply) the persisted column widths as CSS custom
+  // properties whenever they change while Mission is the active page —
+  // mirrors the Panel's renderPaneLayout effect in main.tsx.
+  //
+  // Deferred one frame via requestAnimationFrame: `body[data-page-mode]`
+  // (which flips `.mission-mount` from display:none to flex) is written by
+  // a SEPARATE effect in main.tsx that is created AFTER this component
+  // mounts, so it runs AFTER this effect in the same update batch. Without
+  // the rAF, renderPaneLayout would measure `#missionBody` while it is
+  // still display:none (clientWidth 0) and clamp every column to the rail
+  // minimum. The rAF lets the display flip + layout settle first.
+  createEffect(() => {
+    if (!isMissionPage()) return
+    const sidebarWidth = settingsStore.missionLedgerWidth
+    const sectionsWidth = settingsStore.missionChannelsWidth
+    requestAnimationFrame(() => {
+      if (!isMissionPage()) return
+      renderPaneLayout(
+        { sidebarCollapsed: false, rightPanelCollapsed: false, sidebarWidth, sectionsWidth },
+        MISSION_PANE_CONFIG,
+      )
+    })
+  })
+
   // ── Derived task views ─────────────────────────────────────────────
 
   const activeDirectory = () => settingsStore.directory || ""
@@ -422,7 +483,7 @@ export function Mission() {
         </div>
       </Show>
 
-      <div class="mission-body">
+      <div class="mission-body" id="missionBody">
         <Show when={isMissionPage()}>
           <MissionTaskLedger
             tasks={filteredTasks()}
@@ -442,6 +503,18 @@ export function Mission() {
           />
         </Show>
 
+        {/* Resize handles are NOT gated by isMissionPage so they exist in
+            the DOM when onMount wires them (and stay valid across page
+            toggles). Hidden with `.mission-mount` when Mission is inactive,
+            and at narrow breakpoints alongside their column. */}
+        <div
+          class="pane-resizer pane-resizer-left"
+          id="missionLedgerResizer"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label={t("mission.ledger.title")}
+        />
+
         <MissionWorkbench
           active={isMissionPage()}
           composerOpen={composerOpen()}
@@ -451,6 +524,14 @@ export function Mission() {
           onOpenInPanel={handleOpenInPanel}
           onCloseMission={handleCloseMission}
           onMissionAwake={(result) => void handleMissionAwake(result)}
+        />
+
+        <div
+          class="pane-resizer pane-resizer-right"
+          id="missionChannelsResizer"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label={t("mission.channels.heading")}
         />
 
         <Show when={isMissionPage()}>
@@ -640,29 +721,31 @@ function MissionTaskLedger(props: {
   const FILTERS: LedgerFilter[] = ["queued", "active", "waiting", "failed", "completed", "cancelled", "all"]
   return (
     <aside class="mission-ledger" data-ui="mission-ledger">
-      <header class="mission-ledger-header">
-        <span class="mission-ledger-title">{t("mission.ledger.title")}</span>
-        <div class="mission-scope-toggle" role="tablist" aria-label={t("mission.ledger.title")}>
-          <button
-            type="button"
-            class="mission-scope-button"
-            role="tab"
-            aria-selected={props.scope === "project"}
-            data-active={props.scope === "project" ? "true" : undefined}
-            onClick={() => props.onScopeChange("project")}
-          >
-            {t("mission.ledger.scope.project")}
-          </button>
-          <button
-            type="button"
-            class="mission-scope-button"
-            role="tab"
-            aria-selected={props.scope === "global"}
-            data-active={props.scope === "global" ? "true" : undefined}
-            onClick={() => props.onScopeChange("global")}
-          >
-            {t("mission.ledger.scope.global")}
-          </button>
+      <header class="mission-ledger-header oc-surface-header">
+        <span class="mission-ledger-title oc-surface-header__title">{t("mission.ledger.title")}</span>
+        <div class="oc-surface-header__actions">
+          <div class="mission-scope-toggle" role="tablist" aria-label={t("mission.ledger.title")}>
+            <button
+              type="button"
+              class="mission-scope-button"
+              role="tab"
+              aria-selected={props.scope === "project"}
+              data-active={props.scope === "project" ? "true" : undefined}
+              onClick={() => props.onScopeChange("project")}
+            >
+              {t("mission.ledger.scope.project")}
+            </button>
+            <button
+              type="button"
+              class="mission-scope-button"
+              role="tab"
+              aria-selected={props.scope === "global"}
+              data-active={props.scope === "global" ? "true" : undefined}
+              onClick={() => props.onScopeChange("global")}
+            >
+              {t("mission.ledger.scope.global")}
+            </button>
+          </div>
         </div>
       </header>
 
@@ -746,7 +829,7 @@ function MissionWorkbench(props: {
   onMissionAwake: (result: { sessionID: string }) => void
 }) {
   return (
-    <section class="mission-workbench" data-ui="mission-workbench">
+    <section class="mission-workbench" id="missionWorkbench" data-ui="mission-workbench">
       <Show
         when={props.composerOpen}
         fallback={
@@ -777,21 +860,20 @@ function MissionTaskConversation(props: { onOpenInPanel: () => void }) {
   let conversationContainer!: HTMLDivElement
   return (
     <div class="mission-conversation" data-kind="task" data-ui="mission-task-conversation">
-      <header class="mission-conversation-header">
-        <div class="mission-conversation-title-block">
-          <span class="mission-conversation-kicker">{t("mission.workbench.task_kicker")}</span>
-          <h2 class="mission-conversation-title">{t("mission.workbench.task_conversation_title")}</h2>
+      <header class="mission-conversation-header oc-surface-header">
+        <h2 class="mission-conversation-title oc-surface-header__title">{t("mission.workbench.task_conversation_title")}</h2>
+        <div class="oc-surface-header__actions">
+          <Button
+            type="button"
+            variant="ghost"
+            size="md"
+            tone="accent"
+            data-ui="mission-workbench-open-panel"
+            onClick={props.onOpenInPanel}
+          >
+            {t("mission.workbench.actions.open_in_panel")}
+          </Button>
         </div>
-        <Button
-          type="button"
-          variant="ghost"
-          size="md"
-          tone="accent"
-          data-ui="mission-workbench-open-panel"
-          onClick={props.onOpenInPanel}
-        >
-          {t("mission.workbench.actions.open_in_panel")}
-        </Button>
       </header>
       <div class="mission-conversation-body chat-scroll" ref={conversationContainer}>
         <Conversation container={conversationContainer} />
@@ -818,22 +900,21 @@ function MissionConversation(props: { onClose: () => void }) {
   let conversationContainer!: HTMLDivElement
   return (
     <div class="mission-conversation" data-kind="mission" data-ui="mission-conversation">
-      <header class="mission-conversation-header">
-        <div class="mission-conversation-title-block">
-          <span class="mission-conversation-kicker">{t("mission.launcher.kicker")}</span>
-          <h2 class="mission-conversation-title">{t("mission.launcher.conversation_title")}</h2>
+      <header class="mission-conversation-header oc-surface-header">
+        <h2 class="mission-conversation-title oc-surface-header__title">{t("mission.launcher.conversation_title")}</h2>
+        <div class="oc-surface-header__actions">
+          <Button
+            type="button"
+            variant="ghost"
+            size="md"
+            tone="neutral"
+            data-ui="mission-close"
+            title={t("common.close")}
+            onClick={props.onClose}
+          >
+            <Icon name="close" size={12} />
+          </Button>
         </div>
-        <Button
-          type="button"
-          variant="ghost"
-          size="md"
-          tone="neutral"
-          data-ui="mission-close"
-          title={t("common.close")}
-          onClick={props.onClose}
-        >
-          <Icon name="close" size={12} />
-        </Button>
       </header>
       <div class="mission-conversation-body chat-scroll" ref={conversationContainer}>
         <Conversation container={conversationContainer} />
@@ -1041,19 +1122,21 @@ function MissionChannelPanel(props: {
   const restarting = () => props.actionBusy === "restart:channel"
   return (
     <aside class="mission-channels" data-ui="mission-channels">
-      <header class="mission-channels-header">
-        <h2 class="mission-channels-heading">{t("mission.channels.heading")}</h2>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          tone="neutral"
-          data-ui="mission-channels-refresh"
-          title={t("mission.refresh_title")}
-          onClick={props.onRefreshChannels}
-        >
-          <Icon name="refresh" size={12} />
-        </Button>
+      <header class="mission-channels-header oc-surface-header">
+        <h2 class="mission-channels-heading oc-surface-header__title">{t("mission.channels.heading")}</h2>
+        <div class="oc-surface-header__actions">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            tone="neutral"
+            data-ui="mission-channels-refresh"
+            title={t("mission.refresh_title")}
+            onClick={props.onRefreshChannels}
+          >
+            <Icon name="refresh" size={12} />
+          </Button>
+        </div>
       </header>
 
       <section class="mission-channels-runtime" data-ui="mission-channels-runtime">
