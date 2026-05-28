@@ -439,8 +439,8 @@ function renderVisualSlotsInterface(name: string, slots: VisualBindingSlot[]): s
   return lines.join("\n")
 }
 
-function renderVisualIntermediateRepresentation(sectionIR: string, ctx: VisualRenderContext): string {
-  const document = parseDocument(sectionIR, {
+function renderVisualIntermediateRepresentation(surfaceIR: string, ctx: VisualRenderContext): string {
+  const document = parseDocument(surfaceIR, {
     xmlMode: true,
     lowerCaseTags: false,
     lowerCaseAttributeNames: false,
@@ -632,8 +632,8 @@ function visualViewPath(filePath: string): string {
   return `${normalized}.view.tsx`
 }
 
-function renderIntermediateRepresentation(sectionIR: string): string {
-  const document = parseDocument(sectionIR, {
+function renderIntermediateRepresentation(surfaceIR: string): string {
+  const document = parseDocument(surfaceIR, {
     xmlMode: true,
     lowerCaseTags: false,
     lowerCaseAttributeNames: false,

@@ -4,7 +4,7 @@ import {
   analyzePage,
   scaffoldToPlan,
   generateTokensFile,
-  generateAppFile,
+  generateAppViewFile,
   buildSharedContext,
 } from "../../../src/mirror/url/pattern"
 import { ProjectScaffoldSchema } from "../../../src/mirror/ir/scaffold"
@@ -161,12 +161,12 @@ describe("scaffold helpers", () => {
     expect(ours.code).toContain("export const COLORS")
   })
 
-  test("generateAppFile imports generated section files", () => {
+  test("generateAppViewFile imports generated surface view files", () => {
     const p = realisticPage()
     const scaffold = analyzePage(p)
-    const ours = generateAppFile(scaffold)
+    const ours = generateAppViewFile(scaffold)
     expect(ours.file_path).toBe("src/App.tsx")
-    expect(ours.code).toContain('from "./components/')
+    expect(ours.code).toContain(".view")
   })
 
   test("buildSharedContext includes page metadata", () => {

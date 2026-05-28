@@ -17,6 +17,7 @@
 
 import { compileElement } from "../compile"
 import type { ExtractedElement, ExtractedPage } from "../../ir/extracted-page"
+import { VisualSurfaceCandidateSetSchema } from "../../ir/scaffold"
 import type {
   ComponentCatalog,
   ComponentPattern,
@@ -27,7 +28,6 @@ import type {
   VisualSlotContract,
   VisualSurfaceCandidate,
   VisualSurfaceCandidateSet,
-  VisualSurfaceCandidateSetSchema,
   VisualSurfaceContract,
   VisualSurfaceKind,
 } from "../../ir/scaffold"
@@ -111,7 +111,50 @@ function detectSections(page: ExtractedPage): RawSection[] {
     sections.push({ name, role: el.role, bounds, elements: [el], elementCount })
   }
 
-  return splitOversizedSections(mergeTinySections(sections))
+  return splitOversizedSections(mergeTinySections(expandSemanticChildren(sections)))
+}
+
+function expandSemanticChildren(sections: RawSection[]): RawSection[] {
+  const result: RawSection[] = []
+  for (const section of sections) {
+    const root = section.elements.length === 1 ? section.elements[0] : undefined
+    const children = root?.children?.filter((child) => countElements(child) > 1 || hasMeaningfulLeaf(child)) ?? []
+    if (!root || section.elementCount < 80 || children.length < 2) {
+      result.push(section)
+      continue
+    }
+
+    for (let i = 0; i < children.length; i++) {
+      const child = children[i]
+      const elementCount = countElements(child)
+      if (elementCount <= 1 && !hasMeaningfulLeaf(child)) continue
+      const bounds = child.bounds ?? section.bounds
+      const childSection: RawSection = {
+        name: child.role || inferredRawSectionName(child, i),
+        role: child.role,
+        bounds,
+        elements: [child],
+        elementCount,
+      }
+      result.push(...expandSemanticChildren([childSection]))
+    }
+  }
+  return result
+}
+
+function hasMeaningfulLeaf(element: ExtractedElement): boolean {
+  if (element.text?.trim() || element.imageSrc || element.href) return true
+  return (element.children ?? []).some(hasMeaningfulLeaf)
+}
+
+function inferredRawSectionName(element: ExtractedElement, index: number): string {
+  if (element.styles.position === "fixed") return "floating-tools"
+  const texts = collectTextValues([element]).join(" ")
+  if (/关于|ICP备|公网安备|copyright|privacy|terms/i.test(texts)) return "footer"
+  if (/百度一下|搜索|search/i.test(texts)) return "search"
+  if (element.bounds?.y <= 80) return "navigation"
+  if (element.role) return element.role
+  return `surface-${index}`
 }
 
 function mergeTinySections(sections: RawSection[]): RawSection[] {
@@ -121,7 +164,7 @@ function mergeTinySections(sections: RawSection[]): RawSection[] {
   let pending: RawSection | null = null
 
   for (const sec of sections) {
-    const isTiny = sec.elementCount < 15 && sec.bounds.h < 150
+    const isTiny = sec.elementCount < 15 && sec.bounds.h < 150 && !shouldKeepTinySection(sec)
 
     if (isTiny && pending) {
       pending.elements.push(...sec.elements)
@@ -145,6 +188,14 @@ function mergeTinySections(sections: RawSection[]): RawSection[] {
   if (pending) result.push(pending)
 
   return result
+}
+
+function shouldKeepTinySection(section: RawSection): boolean {
+  if (section.elements.some((element) => element.styles.position === "fixed")) return true
+  const texts = collectTextValues(section.elements).join(" ")
+  if (/关于|ICP备|公网安备|copyright|privacy|terms/i.test(texts)) return true
+  if (section.bounds.y <= 80 && section.elementCount > 3) return true
+  return false
 }
 
 function splitOversizedSections(sections: RawSection[]): RawSection[] {

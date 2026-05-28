@@ -81,7 +81,7 @@ secondary anchors when present. The source manifest names the PRD/SPEC origin
 plus any files, images, URLs, staged `references/` entries, or mirror artifacts
 you can read. Open those named references when the implementation depends on
 pixels or source material. Do not re-run mirror extraction or fabricate mirror artifacts.
-When the handoff names `binding-manifest.json` or `generated-visual-source/*`, follow the framework-first split assigned by Architect. A visual-framework goal materializes/adapts generated presentational `*View` components, tokens, assets, and slot types. A functional-fill goal consumes those View exports through project-owned containers/hooks/adapters, mock/API data, interactions, and loading/error/empty states. Do not wire API/state directly into extracted static markup, and do not fork a parallel visual DOM when View components already exist.
+When the handoff names `visual-surface-scaffold.json`, `binding-manifest.json`, or `generated-view-source/*`, follow the framework-first split assigned by Architect. A visual-framework goal materializes/adapts generated semantic presentational `*View` components, tokens, assets, and slot types. A functional-fill goal consumes those View exports through project-owned containers/hooks/adapters, mock/API data, interactions, and loading/error/empty states. Do not wire API/state directly into extracted static markup, and do not fork a parallel visual DOM when View components already exist.
 Integrity owns the final workflow gate inside its own review session. Your job
 is to provide a runnable implementation and the verification evidence your
 acceptance specs require from inside the build session.

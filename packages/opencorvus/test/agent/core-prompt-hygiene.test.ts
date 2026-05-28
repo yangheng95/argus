@@ -557,8 +557,9 @@ describe("core prompt hygiene", () => {
     const build = await readPrompt("build")
     const workflow = await readSource("engine/workflow.ts")
 
-    expect(design).toContain("`mirror/binding-manifest.json` and `mirror/generated-visual-source/*`")
-    expect(design).toContain("visual framework/View layer first")
+    expect(design).toContain("`mirror/visual-surface-scaffold.json` for semantic visual surface View contracts")
+    expect(design).toContain("`mirror/binding-manifest.json` and `mirror/generated-view-source/*`")
+    expect(design).toContain("semantic visual framework/View layer first")
     expect(design).toContain("project-owned containers/hooks/adapters fill the slots")
 
     expect(requirements).toContain("two-phase implementation constraint")
@@ -566,11 +567,11 @@ describe("core prompt hygiene", () => {
     expect(requirements).toContain("functional container/API/mock logic fills its slots")
 
     expect(architect).toContain("decompose framework-first")
-    expect(architect).toContain("one prerequisite goal must materialize/adapt the generated presentational View layer")
+    expect(architect).toContain("one prerequisite goal must materialize/adapt the generated semantic presentational View layer")
     expect(architect).toContain("dependent feature goals then implement project-owned containers")
     expect(architect).toContain("Do not put API/state wiring directly into extracted static markup")
 
-    expect(build).toContain("A visual-framework goal materializes/adapts generated presentational `*View` components")
+    expect(build).toContain("A visual-framework goal materializes/adapts generated semantic presentational `*View` components")
     expect(build).toContain("A functional-fill goal consumes those View exports")
     expect(build).toContain("Do not wire API/state directly into extracted static markup")
 

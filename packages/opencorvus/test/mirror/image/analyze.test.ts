@@ -5,7 +5,7 @@ import type { ImageAnalysis } from "../../../src/mirror/ir/image-analysis"
 import { AnalyzeError } from "../../../src/mirror/errors"
 import {
   generateTokensFile,
-  generateAppFile,
+  generateAppViewFile,
   buildSharedContext,
 } from "../../../src/mirror/shared/scaffold-helpers"
 
@@ -54,15 +54,16 @@ describe("analyzeImage", () => {
     expect(() => ProjectScaffoldSchema.parse(scaffold)).not.toThrow()
   })
 
-  test("synthesises sections from top-level ImageElement entries", () => {
+  test("synthesises semantic surfaces from top-level ImageElement entries", () => {
     const scaffold = analyzeImage(FIXTURE)
-    expect(scaffold.sections).toHaveLength(2)
-    expect(scaffold.sections[0].name).toBe("hero")
-    expect(scaffold.sections[0].bounds.h).toBe(480)
-    expect(scaffold.sections[0].file.exportName).toBe("Hero")
-    expect(scaffold.sections[1].name).toBe("grid")
-    expect(scaffold.sections[1].file.exportName).toBe("Grid")
-    expect(scaffold.sections[1].file.patterns).toContain("ui:Card")
+    expect(scaffold.surfaces).toHaveLength(2)
+    expect(scaffold.surfaces[0].id).toBe("hero")
+    expect(scaffold.surfaces[0].kind).toBe("hero")
+    expect(scaffold.surfaces[0].bounds.h).toBe(480)
+    expect(scaffold.surfaces[0].view.exportName).toBe("Hero")
+    expect(scaffold.surfaces[1].id).toBe("grid")
+    expect(scaffold.surfaces[1].view.exportName).toBe("Grid")
+    expect(scaffold.surfaces[1].view.patterns).toContain("ui:Card")
   })
 
   test("maps LLM tokens to DesignTokenSystem with semantic inference", () => {
@@ -118,10 +119,10 @@ describe("analyzeImage", () => {
     expect(tokensFile.code).toContain("export const SPACING")
     expect(tokensFile.code).toContain("export const RADII")
 
-    const appFile = generateAppFile(scaffold)
-    expect(appFile.code).toContain("import { Hero }")
-    expect(appFile.code).toContain("import { Grid }")
-    expect(appFile.code).toContain("<Hero />")
+    const appFile = generateAppViewFile(scaffold)
+    expect(appFile.code).toContain("import { HeroView }")
+    expect(appFile.code).toContain("import { GridView }")
+    expect(appFile.code).toContain("<HeroView />")
 
     const ctx = buildSharedContext(scaffold, {
       title: "demo",

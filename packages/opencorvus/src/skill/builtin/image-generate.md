@@ -24,11 +24,13 @@ For screenshot-only references, create the mirror evidence package once if it do
 - `mirror/reference.png`
 - `mirror/page-ir.xml`
 - `mirror/shared-context.md`
-- no general `mirror/scaffold.json` browsing; if one named unresolved gap remains, read one first excerpt only (`start_line=1`, `max_lines<=120`)
+- `mirror/visual-surface-scaffold.json`
+- `mirror/generated-view-source/*`
+- no general scaffold JSON browsing; if one named unresolved gap remains, read one first excerpt only (`start_line=1`, `max_lines<=120`)
 
 After that package exists, stop acquiring mirror evidence and move to PRD/SPEC synthesis. The session's main deliverable is the PRD/SPEC, not another extraction pass.
 
-Use the screenshot pixels, `mirror/shared-context.md`, `mirror/page-ir.xml`, and the tool summaries as the PRD/SPEC working surface. Do not read `mirror/image-analysis.json` wholesale; it is the raw source artifact for deterministic tools and the downstream manifest, not prompt working context.
+Use the screenshot pixels, `mirror/shared-context.md`, `mirror/page-ir.xml`, `mirror/visual-surface-scaffold.json`, and the tool summaries as the PRD/SPEC working surface. Do not read `mirror/image-analysis.json` wholesale; it is the raw source artifact for deterministic tools and the downstream manifest, not prompt working context.
 
 ## SPEC Requirements
 

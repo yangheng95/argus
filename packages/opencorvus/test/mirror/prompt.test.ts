@@ -4,21 +4,31 @@ import type { ProjectScaffold } from "@/mirror/ir/scaffold"
 import type { EvaluationReport } from "@/mirror/visual/evaluate"
 
 const scaffoldStub = {
-  sections: [{
-    name: "Header",
-    elementCount: 5,
+  version: 2,
+  surfaces: [{
+    id: "header-navigation",
+    name: "HeaderNavigation",
+    kind: "navigation",
     bounds: { x: 0, y: 0, w: 1440, h: 64 },
-    file: {
-      filePath: "app/sections/Header.tsx",
-      exportName: "Header",
+    sourceRefs: [{ source: "url", path: "0", selector: "header" }],
+    view: {
+      filePath: "app/surfaces/header-navigation.tsx",
+      exportName: "HeaderNavigation",
       isDefaultExport: false,
       propsInterface: "",
       imports: {},
       patterns: [],
     },
-    subComponents: [],
+    slots: [],
+    repeatedPatterns: [],
+    containerContract: {
+      owner: "business-container",
+      states: ["ready"],
+      interactions: [],
+      unknowns: [],
+    },
   }],
-  sharedComponents: [],
+  sharedViews: [],
   catalog: { patterns: [], totalElements: 0, coveredElements: 0 },
   tokens: { colors: [], fonts: [], spacing: [], radii: [], shadows: [], customProperties: {} },
   tokensFile: {
@@ -31,7 +41,7 @@ const scaffoldStub = {
   },
   appFile: {
     filePath: "app/root/GeneratedApp.tsx",
-    exportName: "App",
+    exportName: "AppView",
     isDefaultExport: true,
     propsInterface: "",
     imports: {},
@@ -50,10 +60,10 @@ test("buildClonePrompt enforces generated React source contract", () => {
     xmlIRBytes: 1234,
     scaffold: scaffoldStub,
   })
-  expect(p).toContain("generated React source")
+  expect(p).toContain("generated View source")
   expect(p).toContain("app/root/GeneratedApp.tsx")
   expect(p).toContain("app/tokens/generated.ts")
-  expect(p).toContain("Generated source paths from scaffold.json")
+  expect(p).toContain("Generated View source paths from visual-surface-scaffold.json")
   expect(p).not.toContain("src/App.tsx")
   expect(p).not.toContain("src/design-tokens.ts")
   expect(p).toContain("not create a parallel deliverable")

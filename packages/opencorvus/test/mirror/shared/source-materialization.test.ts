@@ -1,14 +1,15 @@
 import { describe, expect, test } from "bun:test"
 
-import type { ProjectScaffold } from "../../../src/mirror/ir/scaffold"
+import { ProjectScaffoldSchema, VisualBindingManifestSchema, type ProjectScaffold } from "../../../src/mirror/ir/scaffold"
 import {
-  generateReactSourceFiles,
+  generateViewSourceFiles,
   generateVisualBindingArtifacts,
   materializeScaffoldForReactSource,
 } from "../../../src/mirror/shared/scaffold-helpers"
 
 function scaffold(): ProjectScaffold {
   return {
+    version: 2,
     tokensFile: {
       filePath: "packages/app/src/constants/design-tokens.ts",
       exportName: "COLORS",
@@ -17,33 +18,42 @@ function scaffold(): ProjectScaffold {
       imports: {},
       patterns: [],
     },
-    sharedComponents: [],
-    sections: [
+    sharedViews: [],
+    surfaces: [
       {
-        name: "hero",
-        role: "hero",
+        id: "search-hero",
+        name: "SearchHero",
+        kind: "search",
         bounds: { x: 0, y: 0, w: 1440, h: 480 },
-        elementCount: 2,
-        file: {
-          filePath: "packages/app/src/components/hero.tsx",
-          exportName: "Hero",
+        sourceRefs: [{ source: "url", path: "0", selector: "section.hero", bounds: { x: 0, y: 0, w: 1440, h: 480 } }],
+        view: {
+          filePath: "packages/app/src/components/search-hero.tsx",
+          exportName: "SearchHero",
           isDefaultExport: false,
           propsInterface: "",
           imports: {},
           patterns: [],
-          sectionIR: [
+          surfaceIR: [
             '<Container name="hero" size="1440x480" layout="VERTICAL gap:24px" bg="#ffffff">',
             '  <Text name="heading" style="Inter 32px 700 #111827">Welcome</Text>',
             '  <Image name="logo" size="120x40" src="mirror/images/img-0.png" alt="Logo" />',
             "</Container>",
           ].join("\n"),
         },
-        subComponents: [],
+        slots: [],
+        repeatedPatterns: [],
+        containerContract: {
+          owner: "business-container",
+          dataModel: "Search form state.",
+          states: ["ready"],
+          interactions: [{ name: "submit", trigger: "form-submit", effect: "Submit query through adapter." }],
+          unknowns: [],
+        },
       },
     ],
     appFile: {
       filePath: "packages/app/src/App.tsx",
-      exportName: "App",
+      exportName: "AppView",
       isDefaultExport: false,
       propsInterface: "",
       imports: {},
@@ -62,25 +72,37 @@ function scaffold(): ProjectScaffold {
 }
 
 describe("React source materialization", () => {
-  test("projects legacy scaffold paths onto the source layout", () => {
+  test("schema rejects legacy sections payloads and validates binding manifests", () => {
+    expect(() =>
+      ProjectScaffoldSchema.parse({
+        ...scaffold(),
+        sections: [],
+      }),
+    ).toThrow()
+
+    const artifacts = generateVisualBindingArtifacts(materializeScaffoldForReactSource(scaffold()))
+    expect(() => VisualBindingManifestSchema.parse(artifacts.manifest)).not.toThrow()
+  })
+
+  test("projects semantic surfaces onto the source layout", () => {
     const materialized = materializeScaffoldForReactSource(scaffold())
     expect(materialized.tokensFile.filePath).toBe("src/design-tokens.ts")
     expect(materialized.appFile.filePath).toBe("src/App.tsx")
-    expect(materialized.sections[0].file.filePath).toBe("src/components/hero.tsx")
-    expect(materialized.sections[0].file.imports["../design-tokens"]).toEqual(["COLORS", "FONTS", "SPACING", "RADII"])
+    expect(materialized.surfaces[0].view.filePath).toBe("src/components/search-hero.tsx")
+    expect(materialized.surfaces[0].view.imports["../design-tokens"]).toEqual(["COLORS", "FONTS", "SPACING", "RADII"])
   })
 
-  test("emits App, tokens, and existing section files in one source set", () => {
+  test("emits only semantic View files, AppView, and tokens", () => {
     const materialized = materializeScaffoldForReactSource(scaffold())
-    const files = generateReactSourceFiles(materialized)
+    const files = generateViewSourceFiles(materialized)
     const byPath = new Map(files.map((file) => [file.file_path, file.code]))
 
     expect(byPath.has("src/design-tokens.ts")).toBe(true)
     expect(byPath.has("src/App.tsx")).toBe(true)
-    expect(byPath.has("src/components/hero.tsx")).toBe(true)
-    expect(byPath.get("src/App.tsx")).toContain('import { Hero } from "./components/hero"')
-    expect(byPath.get("src/components/hero.tsx")).toContain("Welcome")
-    expect(byPath.get("src/components/hero.tsx")).toContain('src="mirror/images/img-0.png"')
+    expect(byPath.has("src/components/search-hero.view.tsx")).toBe(true)
+    expect(byPath.has("src/components/search-hero.tsx")).toBe(false)
+    expect(byPath.get("src/App.tsx")).toContain('import { SearchHeroView } from "./components/search-hero.view"')
+    expect(byPath.get("src/App.tsx")).toContain("<SearchHeroView />")
   })
 
   test("emits slot-based visual View files and binding manifest", () => {
@@ -91,9 +113,9 @@ describe("React source materialization", () => {
     expect(artifacts.manifest.purpose).toBe("visual-presentational-bindings")
     expect(artifacts.manifest.components).toEqual([
       {
-        sourceExportName: "Hero",
-        viewExportName: "HeroView",
-        filePath: "src/components/hero.view.tsx",
+        sourceExportName: "SearchHero",
+        viewExportName: "SearchHeroView",
+        filePath: "src/components/search-hero.view.tsx",
         slots: [
           { name: "heading", kind: "text", defaultValue: "Welcome", sourceName: "heading", sourcePath: "0.0" },
           { name: "logoSrc", kind: "image-src", defaultValue: "mirror/images/img-0.png", sourceName: "logo", sourcePath: "0.1" },
@@ -102,8 +124,8 @@ describe("React source materialization", () => {
       },
     ])
 
-    const heroView = byPath.get("src/components/hero.view.tsx")
-    expect(heroView).toContain("export interface HeroViewSlots")
+    const heroView = byPath.get("src/components/search-hero.view.tsx")
+    expect(heroView).toContain("export interface SearchHeroViewSlots")
     expect(heroView).toContain("heading?: React.ReactNode")
     expect(heroView).toContain("logoSrc?: string")
     expect(heroView).toContain("{slots.heading ?? \"Welcome\"}")
@@ -115,12 +137,12 @@ describe("React source materialization", () => {
     const base = materializeScaffoldForReactSource(scaffold())
     const materialized: ProjectScaffold = {
       ...base,
-      sections: [
+      surfaces: [
         {
-          ...base.sections[0],
-          file: {
-            ...base.sections[0].file,
-            sectionIR: [
+          ...base.surfaces[0],
+          view: {
+            ...base.surfaces[0].view,
+            surfaceIR: [
               '<Container name="panel" size="320x120">',
               '  <Text name="action" style="Inter 14px 600 #111827">Learn more</Text>',
               '  <Text name="action" style="Inter 14px 600 #111827">Learn more</Text>',

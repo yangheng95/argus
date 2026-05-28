@@ -2,9 +2,9 @@
  * Single source of the webpage-clone prompt + feedback — consumed by both
  * the `mirror-*-clone` benchmark scripts and the `webpage-generate` skill.
  *
- * Output contract: generated React source paths declared by ProjectScaffold
- * and returned by the analyze tool. The LLM edits that source instead of
- * hand-writing a separate deliverable.
+ * Output contract: generated semantic View source paths declared by
+ * ProjectScaffold and returned by the analyze tool. Business code wraps these
+ * Views instead of hand-writing a parallel visual DOM.
  */
 import type { ProjectScaffold } from "../ir/scaffold"
 import type { EvaluationReport } from "../visual/evaluate"
@@ -27,8 +27,8 @@ export function buildClonePrompt(input: BuildClonePromptInput): string {
     ? sourcePaths.map((filePath) => `  - \`${filePath}\``).join("\n")
     : "  - (no generated source paths declared)"
   const tokenPath = input.scaffold.tokensFile.filePath
-  const sectionList = input.scaffold.sections
-    .map((s) => `- ${s.name} (${s.elementCount} el, ${s.bounds.w}×${s.bounds.h}px)`)
+  const surfaceList = input.scaffold.surfaces
+    .map((s) => `- ${s.name} (${s.kind}, ${s.bounds.w}×${s.bounds.h}px)`)
     .join("\n")
   const patternList = input.scaffold.catalog.patterns
     .slice(0, 10)
@@ -41,13 +41,13 @@ export function buildClonePrompt(input: BuildClonePromptInput): string {
   const iterationHeader =
     input.iter === 1
       ? `You are cloning ${input.referenceUrl} by refining generated React source.`
-      : `Iteration ${input.iter}. The previous attempt had visual differences. **Add missing elements and rules with \`edit\`** — do NOT rewrite whole files. Preserve every section that already matches.`
+      : `Iteration ${input.iter}. The previous attempt had visual differences. **Add missing elements and rules with \`edit\`** — do NOT rewrite whole files. Preserve every visual surface that already matches.`
 
   return `
 ${iterationHeader}
 
 # Goal
-Refine the generated React source paths declared by \`scaffold.json\` so the
+Refine the generated View source paths declared by \`visual-surface-scaffold.json\` so the
 running app visually reproduces ${input.referenceUrl}. The acceptance source is
 \`webpage_evaluate.overallScore >= ${input.targetScore}\` and
 \`webpage_vision_judge.accepted = true\` after rendering the deliverable with an
@@ -62,10 +62,10 @@ ${input.outputDir}
 # Deterministic artefacts already on disk (do NOT regenerate these from scratch)
 - \`page-ir.xml\`           — ${input.xmlIRBytes} bytes of structured XML IR describing the page
 - \`shared-context.md\`     — concise design-token + pattern summary
-- \`scaffold.json\`         — ProjectScaffold (file paths + contracts)
+- \`visual-surface-scaffold.json\` — ProjectScaffold (semantic surface View paths + contracts)
 - \`reference.png\`         — pixel-perfect reference screenshot
 
-# Generated source paths from scaffold.json
+# Generated View source paths from visual-surface-scaffold.json
 ${sourcePathList}
 
 # Rules
@@ -78,18 +78,18 @@ ${sourcePathList}
    set \`font-family\` on \`body\`, write media queries when the reference uses them.
 4. **Rendered text**: every visible text node from the reference appears in the
    generated React tree so the browser render exposes the content.
-5. Use **exact text** from the XML IR (\`<Text …>content</Text>\`) and \`Section
+5. Use **exact text** from the XML IR (\`<Text …>content</Text>\`) and \`Surface
    Text\` catalogs. Do not paraphrase headings, nav labels, or button text.
-6. Use **exact image paths**: \`Section Images\` catalogs list \`img-N: path\`.
+6. Use **exact image paths**: \`Surface Images\` catalogs list \`img-N: path\`.
    Reference the local paths where present. If a selected image path is missing,
    stop and report the missing asset instead of linking remote originals.
-7. Structure must match the section list exactly (in order, with matching bounds).
+7. Structure must match the semantic visual surface list exactly (in order, with matching bounds).
 8. Do not fetch \`${input.referenceUrl}\` at runtime; the clone must render from local source.
 9. Before editing generated source, \`read\` \`page-ir.xml\` and at least
     \`shared-context.md\`.
 
-# Section summary
-${sectionList || "- (no sections)"}
+# Visual surface summary
+${surfaceList || "- (no visual surfaces)"}
 
 # Detected component patterns
 ${patternList || "- (none)"}
@@ -97,7 +97,7 @@ ${patternList || "- (none)"}
 ${input.previousFeedback ? `# Diff feedback from previous iteration\n${input.previousFeedback}\n` : ""}
 # Deliverable
 Refine generated source. When finished, reply briefly with the list of top-level
-sections you modified and any known gaps.
+visual surfaces you modified and any known gaps.
 `.trim()
 }
 
@@ -120,7 +120,7 @@ export function buildCloneFeedback(input: BuildCloneFeedbackInput): string {
     missing.length > 0
       ? `Missing textual content (these strings appear in the reference but NOT in your rendered app):\n${missing
           .map((t) => `  - "${t}"`)
-          .join("\n")}\n\nAdd every missing string to generated source in its correct section. Use the \`Section Text\` catalog in \`page-ir.xml\` to find the right parent node for each.`
+          .join("\n")}\n\nAdd every missing string to generated source in its correct visual surface. Use the \`Surface Text\` catalog in \`page-ir.xml\` to find the right parent node for each.`
       : "Text coverage is complete — remaining gap is structural/visual only."
 
   const regressionWarning =
@@ -149,7 +149,7 @@ Required visual review:
   - Your render:          ${renderedPath}
   Open BOTH images and compare them yourself before editing. The score by itself
   cannot tell you whether structural elements (button placement, search box
-  layout, section ordering) are correct — only the side-by-side comparison can.
+  layout, visual surface ordering) are correct — only the side-by-side comparison can.
 ${regressionWarning}${stagnationWarning}
 ${missingLines}
 
@@ -163,7 +163,7 @@ Operating guidance:
      reference them via the \`var(--…)\` custom properties you injected at
      \`:root\`. Do not invent hex values.
 
-Make targeted edits, then stop. Reply with a list of the specific sections you
+Make targeted edits, then stop. Reply with a list of the specific visual surfaces you
 modified.
 `.trim()
 }
@@ -172,11 +172,8 @@ function generatedSourcePaths(scaffold: ProjectScaffold): string[] {
   const paths = [
     scaffold.tokensFile.filePath,
     scaffold.appFile.filePath,
-    ...scaffold.sharedComponents.map((file) => file.filePath),
-    ...scaffold.sections.flatMap((section) => [
-      section.file.filePath,
-      ...section.subComponents.map((file) => file.filePath),
-    ]),
+    ...scaffold.sharedViews.map((file) => file.filePath.replace(/\.tsx$/, ".view.tsx")),
+    ...scaffold.surfaces.map((surface) => surface.view.filePath.replace(/\.tsx$/, ".view.tsx")),
   ]
   return Array.from(new Set(paths.filter(Boolean)))
 }
