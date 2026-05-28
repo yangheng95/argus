@@ -122,7 +122,7 @@ External channel (platform / channel / thread) ↔ task binding; `ChannelIngress
 **SessionKind** (fixed at creation time; order as they appear in `session.sql.ts:50-65`):
 
 ```
-root · orchestrator · assistant · gateway · intent-analysis ·
+root · orchestrator · assistant · mission · intent-analysis ·
 requirements · design-analyst · goal · architect · integrity ·
 delivery · executor · build · evaluator · system
 ```

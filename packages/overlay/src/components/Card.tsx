@@ -12,6 +12,7 @@ import { cardExpanded, setCardExpanded } from "../store/conversation-ui";
 import { boardStore, rootTaskSessionID,
   activeTaskID,
 } from "../store/board";
+import { loadConversationSessionHistory } from "../services/conversation";
 import { cancelAgentSession, replyToAgentSession } from "../services/task";
 import { apiRequest } from "../services/api";
 import { normalizeAgentRole } from "../utils/message";
@@ -26,6 +27,8 @@ import { IntegrityBody } from "./IntegrityCard";
 import { TracePanel } from "./TracePanel";
 import { t } from "../utils/i18n";
 import { StoreCardNode } from "./StoreCardNode";
+
+const inFlightBuildHistorySessions = new Set<string>();
 
 /**
  * Recursive structured-card primitive for non-bubble conversation items.
@@ -52,6 +55,13 @@ export function Card(props: { node: CardNode; depth: number }) {
   const promotedBuildPhase = createMemo(() => buildPhaseChildForStep(props.node));
   const headerNode = createMemo(() => stepHeaderNodeWithBuildPhase(props.node));
   const visibleChildIDs = createMemo(() => visibleChildIDsForCard(props.node));
+  const buildHistorySessionID = createMemo(() => {
+    if (props.node.kind === "phase" && props.node.phaseID === "build") {
+      return props.node.phaseSessionID;
+    }
+    if (props.node.kind !== "step") return undefined;
+    return promotedBuildPhase()?.phaseSessionID || props.node.stepPayload?.buildSessionID;
+  });
 
   // Foot stats are collapsed-only. Expanded stage cards render their actual
   // body and children, so a recursive descendant scan here would only add
@@ -265,6 +275,25 @@ export function Card(props: { node: CardNode; depth: number }) {
       observer.disconnect();
       if (frame) cancelAnimationFrame(frame);
     });
+  });
+
+  createEffect(() => {
+    if (!expanded()) return;
+    const sessionID = String(buildHistorySessionID() || "");
+    const taskID = activeTaskID();
+    if (!sessionID || !taskID) return;
+    const phase = props.node.kind === "phase" ? props.node : promotedBuildPhase();
+    if ((phase?.parts?.length || 0) > 0) return;
+    const key = `${taskID}:${sessionID}`;
+    if (inFlightBuildHistorySessions.has(key)) return;
+    inFlightBuildHistorySessions.add(key);
+    void loadConversationSessionHistory(sessionID, taskID)
+      .catch((error) => {
+        console.warn("[conversation] build session history hydrate failed", error);
+      })
+      .finally(() => {
+        inFlightBuildHistorySessions.delete(key);
+      });
   });
 
   return (

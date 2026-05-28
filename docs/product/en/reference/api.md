@@ -84,6 +84,7 @@ All endpoints are protected by `OPENCORVUS_SERVER_PASSWORD`. When set, clients m
 | GET | `/task/{taskID}/conversation` | Hydrate task conversation state | `task.conversation` |
 | GET | `/task/{taskID}/conversation/events` | Page task conversation replay events | `task.conversation.events` |
 | GET | `/task/{taskID}/conversation/history` | Page older task conversation transcript | `task.conversation.history` |
+| GET | `/task/{taskID}/conversation/session/{sessionID}` | Get one task conversation session transcript | `task.conversation.session` |
 | GET | `/task/{taskID}/events` | Subscribe to task events | `task.events` |
 | POST | `/task/{taskID}/followup` | Generate follow-up suggestion | `task.followup` |
 | POST | `/task/{taskID}/inject` | Inject message into running task | `task.inject` |
@@ -173,7 +174,6 @@ All endpoints are protected by `OPENCORVUS_SERVER_PASSWORD`. When set, clients m
 | POST | `/gateway/channel/{platform}/message` | Handle gateway channel message | `gateway.channel.message` |
 | POST | `/gateway/control/action` | Run gateway control action | `gateway.control.action` |
 | POST | `/gateway/control/message` | Handle gateway control message | `gateway.control.message` |
-| POST | `/gateway/master/wake` | Wake the gateway-master mission supervisor | `gateway.master.wake` |
 | GET | `/gateway/stats` | Get gateway stats | `gateway.stats` |
 
 ### Attachment
@@ -317,6 +317,12 @@ All endpoints are protected by `OPENCORVUS_SERVER_PASSWORD`. When set, clients m
 | GET | `/experimental/worktree` | List worktrees | `worktree.list` |
 | POST | `/experimental/worktree` | Create worktree | `worktree.create` |
 | POST | `/experimental/worktree/reset` | Reset worktree | `worktree.reset` |
+
+### Mission
+
+| Method | Path | Summary | operationId |
+|---|---|---|---|
+| POST | `/mission/wake` | Wake the Mission agent | `mission.wake` |
 
 ### Terminal
 

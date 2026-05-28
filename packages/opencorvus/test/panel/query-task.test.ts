@@ -12,10 +12,10 @@ import { tmpdir } from "../fixture/fixture"
 Log.init({ print: false })
 
 /**
- * Spec: gateway-master-supervisor-2026-05-26.md §2.3.
+ * Spec: gateway-mission-split-2026-05-28.md.
  *
  * `panel.query_task` is a structured batch reconciliation surface for
- * agents (gateway-master, control). It MUST:
+ * agents (mission, control). It MUST:
  *   - return JSON, not markdown prose (distinct from view_board)
  *   - keep 1:1 result rows with input taskIDs (errors as { taskID, error })
  *   - cap input at 50 IDs (Zod schema rejection)

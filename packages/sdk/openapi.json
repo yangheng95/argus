@@ -3080,7 +3080,7 @@
                       "root",
                       "orchestrator",
                       "assistant",
-                      "gateway",
+                      "mission",
                       "intent-analysis",
                       "requirements",
                       "design-analyst",
@@ -3742,6 +3742,9 @@
                                   "type": "string"
                                 }
                               },
+                              "lastDisplayMessageID": {
+                                "type": "string"
+                              },
                               "firstMessageTime": {
                                 "type": "number"
                               },
@@ -3820,6 +3823,9 @@
                                 "items": {
                                   "type": "string"
                                 }
+                              },
+                              "lastDisplayMessageID": {
+                                "type": "string"
                               },
                               "firstMessageTime": {
                                 "type": "number"
@@ -11148,89 +11154,6 @@
         ]
       }
     },
-    "/gateway/master/wake": {
-      "post": {
-        "operationId": "gateway.master.wake",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "directory",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "summary": "Wake the gateway-master mission supervisor",
-        "description": "Start (or resume) a mission supervisor session and inject a user prompt. Omit `missionID` to start a new mission; supply it to resume an existing one. The route is idempotent for (project, missionID) — channelKey `master:<missionID>` keys exactly one gateway session per mission.",
-        "responses": {
-          "200": {
-            "description": "Master wake accepted",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "missionID": {
-                      "type": "string",
-                      "minLength": 1,
-                      "maxLength": 64,
-                      "pattern": "^[a-z0-9-]+$"
-                    },
-                    "sessionID": {
-                      "type": "string"
-                    },
-                    "created": {
-                      "type": "boolean"
-                    }
-                  },
-                  "required": [
-                    "missionID",
-                    "sessionID",
-                    "created"
-                  ]
-                }
-              }
-            }
-          }
-        },
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "missionID": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 64,
-                    "pattern": "^[a-z0-9-]+$"
-                  },
-                  "text": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 32000
-                  },
-                  "title": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 120
-                  }
-                },
-                "required": [
-                  "text"
-                ]
-              }
-            }
-          }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.gateway.master.wake({\n  ...\n})"
-          }
-        ]
-      }
-    },
     "/gateway/channel/{platform}/message": {
       "post": {
         "operationId": "gateway.channel.message",
@@ -11505,6 +11428,89 @@
           {
             "lang": "js",
             "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.gateway.channel.message({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/mission/wake": {
+      "post": {
+        "operationId": "mission.wake",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "summary": "Wake the Mission agent",
+        "description": "Start (or resume) a Mission agent session and inject a user prompt. Omit `missionID` to start a new mission; supply it to resume an existing one. The route is idempotent for (project, missionID) — exactly one mission session is keyed per mission.",
+        "responses": {
+          "200": {
+            "description": "Mission wake accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "missionID": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 64,
+                      "pattern": "^[a-z0-9-]+$"
+                    },
+                    "sessionID": {
+                      "type": "string"
+                    },
+                    "created": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "missionID",
+                    "sessionID",
+                    "created"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "missionID": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64,
+                    "pattern": "^[a-z0-9-]+$"
+                  },
+                  "text": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 32000
+                  },
+                  "title": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  }
+                },
+                "required": [
+                  "text"
+                ]
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.mission.wake({\n  ...\n})"
           }
         ]
       }
@@ -15189,7 +15195,7 @@
           }
         ],
         "summary": "List channel bindings for a task",
-        "description": "Return every (platform, channel, thread) binding that points at this task. Used by the Gateway page to surface inbound channel provenance for a selected task.",
+        "description": "Return every (platform, channel, thread) binding that points at this task. Used by the Mission page to surface inbound channel provenance for a selected task.",
         "responses": {
           "200": {
             "description": "Channel bindings for the task",
@@ -18017,6 +18023,9 @@
                                         "buildSessionID": {
                                           "type": "string"
                                         },
+                                        "commitRef": {
+                                          "type": "string"
+                                        },
                                         "changedFiles": {
                                           "type": "array",
                                           "items": {
@@ -18423,6 +18432,9 @@
                                   "type": "string"
                                 }
                               },
+                              "lastDisplayMessageID": {
+                                "type": "string"
+                              },
                               "firstMessageTime": {
                                 "type": "number"
                               },
@@ -18502,6 +18514,9 @@
                                   "type": "string"
                                 }
                               },
+                              "lastDisplayMessageID": {
+                                "type": "string"
+                              },
                               "firstMessageTime": {
                                 "type": "number"
                               },
@@ -18579,6 +18594,204 @@
           {
             "lang": "js",
             "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.task.conversation({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/task/{taskID}/conversation/session/{sessionID}": {
+      "get": {
+        "operationId": "task.conversation.session",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "taskID",
+            "schema": {
+              "type": "string",
+              "pattern": "^tsk.*"
+            },
+            "required": true
+          },
+          {
+            "in": "path",
+            "name": "sessionID",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true
+          }
+        ],
+        "summary": "Get one task conversation session transcript",
+        "description": "Return the persisted transcript for one task child session so the overlay can hydrate old build-agent output directly instead of paging through the whole task history.",
+        "responses": {
+          "200": {
+            "description": "Task conversation session transcript",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "transcript": {
+                      "type": "array",
+                      "items": {}
+                    },
+                    "timeline": {
+                      "type": "array",
+                      "items": {}
+                    },
+                    "view": {
+                      "type": "object",
+                      "properties": {
+                        "topLevelSessionIDs": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "sessions": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "sessionID": {
+                                "type": "string"
+                              },
+                              "stage": {
+                                "type": "string"
+                              },
+                              "parentSessionID": {
+                                "type": "string"
+                              },
+                              "goalID": {
+                                "type": "string"
+                              },
+                              "messageIDs": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "lastDisplayMessageID": {
+                                "type": "string"
+                              },
+                              "firstMessageTime": {
+                                "type": "number"
+                              },
+                              "lastMessageTime": {
+                                "type": "number"
+                              },
+                              "placement": {
+                                "type": "string",
+                                "enum": [
+                                  "top_level",
+                                  "goal_phase",
+                                  "hidden",
+                                  "filtered"
+                                ]
+                              },
+                              "phase": {
+                                "type": "object",
+                                "properties": {
+                                  "stepID": {
+                                    "type": "string"
+                                  },
+                                  "phaseID": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "stepID",
+                                  "phaseID"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "sessionID",
+                              "stage",
+                              "messageIDs",
+                              "firstMessageTime",
+                              "lastMessageTime",
+                              "placement"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "topLevelSessionIDs",
+                        "sessions"
+                      ]
+                    },
+                    "history": {
+                      "type": "object",
+                      "properties": {
+                        "oldestTimestamp": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "oldestMessageID": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "hasMore": {
+                          "type": "boolean"
+                        },
+                        "limit": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "oldestTimestamp",
+                        "hasMore",
+                        "limit"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "transcript",
+                    "timeline",
+                    "view",
+                    "history"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.task.conversation.session({\n  ...\n})"
           }
         ]
       }
@@ -18679,6 +18892,9 @@
                                 "items": {
                                   "type": "string"
                                 }
+                              },
+                              "lastDisplayMessageID": {
+                                "type": "string"
                               },
                               "firstMessageTime": {
                                 "type": "number"
@@ -20708,6 +20924,9 @@
                                     "buildSessionID": {
                                       "type": "string"
                                     },
+                                    "commitRef": {
+                                      "type": "string"
+                                    },
                                     "changedFiles": {
                                       "type": "array",
                                       "items": {
@@ -21819,7 +22038,7 @@
           }
         ],
         "summary": "Cancel a task agent session",
-        "description": "Abort the active SessionLoop for a non-orchestrator task agent session. This cancels the local agent turn without changing global task orchestration.",
+        "description": "Abort the active SessionLoop for a non-orchestrator task agent session. For executor-owned child sessions, also abort the live executor stream.",
         "responses": {
           "200": {
             "description": "Agent session cancelled",
@@ -33240,7 +33459,7 @@
               "root",
               "orchestrator",
               "assistant",
-              "gateway",
+              "mission",
               "intent-analysis",
               "requirements",
               "design-analyst",
@@ -33433,6 +33652,30 @@
             "required": [
               "sessionID",
               "diff"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.config.changed": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "config.changed"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "sessionID": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "sessionID"
             ]
           }
         },
@@ -33733,6 +33976,9 @@
           },
           {
             "$ref": "#/components/schemas/Event.session.diff"
+          },
+          {
+            "$ref": "#/components/schemas/Event.config.changed"
           },
           {
             "$ref": "#/components/schemas/Event.workspace.ready"
@@ -35275,7 +35521,7 @@
                 "maximum": 9007199254740991
               },
               "threshold": {
-                "description": "Fraction of usable context (after reserved buffer) that must be consumed before auto-compaction triggers. Defaults to 0.8 — compact early enough to keep ample headroom for the next reply without sacrificing prompt-cache stability for typical turns.",
+                "description": "Fraction of usable context (after reserved buffer) that must be consumed before auto-compaction triggers. Defaults to 0.9 — compact late enough to use more of the available prompt window while still preserving reserved reply headroom.",
                 "type": "number",
                 "minimum": 0.1,
                 "maximum": 1
@@ -36441,7 +36687,7 @@
               "root",
               "orchestrator",
               "assistant",
-              "gateway",
+              "mission",
               "intent-analysis",
               "requirements",
               "design-analyst",

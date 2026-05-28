@@ -22,15 +22,16 @@ import { Timestamps } from "@/storage/schema.sql"
  *                  sessions (MCP, Debug, Coding, Panel, scheduled wakes). Standalone
  *                  callers are filtered out at the bridge by `taskIDForSession`
  *                  failing naturally; no separate "standalone" kind is needed.
- *   gateway        remote/mobile control-plane session AND mission-supervisor
- *                  session. Stores gateway metadata such as channel key /
- *                  current cwd, and (for missions) the channelKey `master:<id>`
- *                  pinning the gateway-master agent to a single mission. The
- *                  supervisor dispatches engine_tasks via panel.create_task
- *                  (actor=gateway_master) but does not execute work itself —
- *                  every concrete artifact is produced by a dispatched task,
- *                  not by this session. See specs/gateway-master-supervisor-
- *                  2026-05-26.md §2.5.
+ *   mission        Mission agent session — the user's long-running goal owner.
+ *                  Stores mission metadata (the channelKey `mission:<id>` plus
+ *                  the missionID / current cwd) pinning the `mission` agent to a
+ *                  single mission. Mission dispatches squad/team engine_tasks via
+ *                  panel.create_task (actor=mission, source=mission) and
+ *                  coordinates them, but does not execute work itself — every
+ *                  concrete artifact is produced by a dispatched task led by the
+ *                  orchestrator. Distinct from the `gateway` infrastructure
+ *                  surface (remote/mobile transport), which does not create
+ *                  sessions of this kind. See specs/gateway-mission-split-2026-05-28.md.
  *   requirements   requirements sub-agent (goal decomposition)
  *   design-analyst design-analyst sub-agent (vision → layout/style/component spec)
  *   goal           legacy catch-all for sub-agents that predate the dedicated
@@ -65,7 +66,7 @@ export const SESSION_KINDS = [
   "root",
   "orchestrator",
   "assistant",
-  "gateway",
+  "mission",
   "intent-analysis",
   "requirements",
   "design-analyst",

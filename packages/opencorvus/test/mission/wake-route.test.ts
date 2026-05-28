@@ -1,17 +1,22 @@
 /**
- * POST /gateway/master/wake — mission supervisor wake entry tests.
+ * POST /mission/wake — Mission agent wake entry tests.
  *
- * Spec: gateway-master-supervisor-2026-05-26.md §2.5.
+ * Spec: gateway-mission-split-2026-05-28.md.
  *
  * The route MUST:
  *   - generate a missionID when none is supplied (regex-conformant)
- *   - reuse the same gateway session when an existing missionID is supplied
- *   - hand the prompt to SessionWake.wake with agent="gateway-master"
+ *   - reuse the same mission session when an existing missionID is supplied
+ *   - hand the prompt to SessionWake.wake with agent="mission"
+ *   - create a session of kind "mission" carrying metadata.mission.id
  *   - reject malformed missionID + empty / overlong text
+ *
+ * The old upper-level wake route /gateway/master/wake MUST be gone (404):
+ * the gateway namespace is infrastructure-only now.
  */
 import { afterEach, describe, expect, test, mock, spyOn } from "bun:test"
 import { Instance } from "../../src/project/instance"
 import { Server } from "../../src/server/server"
+import { Session } from "../../src/session"
 import { SessionWake } from "../../src/session/wake"
 import { Log } from "../../src/util/log"
 import { resetDatabase } from "../fixture/db"
@@ -25,11 +30,8 @@ afterEach(async () => {
   await resetDatabase()
 })
 
-async function post(body: unknown) {
-  // /gateway/* is a project-scoped route — server middleware demands
-  // ?directory= or x-opencorvus-directory; every test runs inside
-  // Instance.provide so we forward the directory there.
-  return Server.App().request("/gateway/master/wake", {
+async function post(path: string, body: unknown) {
+  return Server.App().request(path, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -39,7 +41,7 @@ async function post(body: unknown) {
   })
 }
 
-describe("POST /gateway/master/wake — happy path", () => {
+describe("POST /mission/wake — happy path", () => {
   test("auto-generates missionID when omitted; returns {missionID, sessionID, created:true}", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
@@ -49,7 +51,7 @@ describe("POST /gateway/master/wake — happy path", () => {
         // resolves a model — stub it to keep the route test focused on
         // route mechanics, not LLM pipeline integration.
         const wakeSpy = spyOn(SessionWake, "wake").mockResolvedValue("ses_stub")
-        const res = await post({ text: "kick off the TV replay mission" })
+        const res = await post("/mission/wake", { text: "kick off the TV replay mission" })
         expect(res.status).toBe(200)
         const body = (await res.json()) as { missionID: string; sessionID: string; created: boolean }
         expect(body.missionID).toMatch(/^[a-z0-9-]+$/)
@@ -57,8 +59,26 @@ describe("POST /gateway/master/wake — happy path", () => {
         expect(body.sessionID).toMatch(/^ses_/)
         expect(body.created).toBe(true)
         expect(wakeSpy).toHaveBeenCalledTimes(1)
-        expect(wakeSpy.mock.calls[0]?.[0]?.agent).toBe("gateway-master")
+        expect(wakeSpy.mock.calls[0]?.[0]?.agent).toBe("mission")
         expect(wakeSpy.mock.calls[0]?.[0]?.prompt).toBe("kick off the TV replay mission")
+      },
+    })
+  })
+
+  test("creates a session of kind 'mission' carrying metadata.mission.id", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        spyOn(SessionWake, "wake").mockResolvedValue("ses_stub")
+        const res = await post("/mission/wake", { missionID: "tv-replay", text: "go" })
+        expect(res.status).toBe(200)
+        const body = (await res.json()) as { sessionID: string; missionID: string }
+        const session = await Session.get(body.sessionID)
+        expect(session.kind).toBe("mission")
+        const mission = (session.metadata as { mission?: { id?: string; channelKey?: string } } | undefined)?.mission
+        expect(mission?.id).toBe("tv-replay")
+        expect(mission?.channelKey).toBe("mission:tv-replay")
       },
     })
   })
@@ -69,13 +89,13 @@ describe("POST /gateway/master/wake — happy path", () => {
       directory: tmp.path,
       fn: async () => {
         spyOn(SessionWake, "wake").mockResolvedValue("ses_stub")
-        const first = await post({ missionID: "tv-replay", text: "kick off" })
+        const first = await post("/mission/wake", { missionID: "tv-replay", text: "kick off" })
         expect(first.status).toBe(200)
         const firstBody = (await first.json()) as { missionID: string; sessionID: string; created: boolean }
         expect(firstBody.created).toBe(true)
         expect(firstBody.missionID).toBe("tv-replay")
 
-        const second = await post({ missionID: "tv-replay", text: "wake again" })
+        const second = await post("/mission/wake", { missionID: "tv-replay", text: "wake again" })
         expect(second.status).toBe(200)
         const secondBody = (await second.json()) as { missionID: string; sessionID: string; created: boolean }
         expect(secondBody.created).toBe(false)
@@ -91,7 +111,7 @@ describe("POST /gateway/master/wake — happy path", () => {
       directory: tmp.path,
       fn: async () => {
         spyOn(SessionWake, "wake").mockResolvedValue("ses_stub")
-        const res = await post({ missionID: "abc-123-xyz", text: "go" })
+        const res = await post("/mission/wake", { missionID: "abc-123-xyz", text: "go" })
         expect(res.status).toBe(200)
         const body = (await res.json()) as { missionID: string }
         expect(body.missionID).toBe("abc-123-xyz")
@@ -100,7 +120,22 @@ describe("POST /gateway/master/wake — happy path", () => {
   })
 })
 
-describe("POST /gateway/master/wake — input validation", () => {
+describe("legacy /gateway/master/wake is gone", () => {
+  test("POST /gateway/master/wake returns 404 — gateway namespace is infra-only", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const wakeSpy = spyOn(SessionWake, "wake").mockResolvedValue("ses_stub")
+        const res = await post("/gateway/master/wake", { text: "go" })
+        expect(res.status).toBe(404)
+        expect(wakeSpy).not.toHaveBeenCalled()
+      },
+    })
+  })
+})
+
+describe("POST /mission/wake — input validation", () => {
   test.each([
     ["uppercase letters", { missionID: "FOO", text: "go" }],
     ["dots", { missionID: "foo.bar", text: "go" }],
@@ -116,7 +151,7 @@ describe("POST /gateway/master/wake — input validation", () => {
       fn: async () => {
         // SessionWake must never be called for invalid input.
         const wakeSpy = spyOn(SessionWake, "wake").mockResolvedValue("ses_stub")
-        const res = await post(body)
+        const res = await post("/mission/wake", body)
         expect(res.status).toBeGreaterThanOrEqual(400)
         expect(res.status).toBeLessThan(500)
         expect(wakeSpy).not.toHaveBeenCalled()
@@ -130,7 +165,7 @@ describe("POST /gateway/master/wake — input validation", () => {
       directory: tmp.path,
       fn: async () => {
         const wakeSpy = spyOn(SessionWake, "wake").mockResolvedValue("ses_stub")
-        const res = await post({ missionID: "a".repeat(65), text: "go" })
+        const res = await post("/mission/wake", { missionID: "a".repeat(65), text: "go" })
         expect(res.status).toBeGreaterThanOrEqual(400)
         expect(wakeSpy).not.toHaveBeenCalled()
       },
@@ -144,7 +179,7 @@ describe("POST /gateway/master/wake — input validation", () => {
       fn: async () => {
         const wakeSpy = spyOn(SessionWake, "wake").mockResolvedValue("ses_stub")
         const oversized = "x".repeat(32_001)
-        const res = await post({ text: oversized })
+        const res = await post("/mission/wake", { text: oversized })
         expect(res.status).toBeGreaterThanOrEqual(400)
         expect(wakeSpy).not.toHaveBeenCalled()
       },

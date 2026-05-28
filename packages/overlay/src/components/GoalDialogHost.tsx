@@ -3,6 +3,7 @@ import { dialogStore, setDialogStore } from "../store/dialog";
 import { closeGoalDialog, saveGoalDialog } from "../services/dialog";
 import { t } from "../utils/i18n";
 import { Dialog } from "./primitives/Dialog";
+import { AutoGrowTextarea } from "./primitives/AutoGrowTextarea";
 import { Button } from "./ui/Button";
 
 export function GoalDialogHost() {
@@ -60,12 +61,13 @@ export function GoalDialogHost() {
         <input type="hidden" name="goalId" id="goalId" value={dialogStore.goal.goalID} />
         <label class="field">
           <span class="field-label" innerHTML={t("goal.field.title") + " <em>*</em>"} />
-          <textarea
-            class="field-input"
+          <AutoGrowTextarea
+            class="composer-textarea"
             id="goalDescription"
             name="title"
             required={true}
             rows={3}
+            maxLines={4}
             placeholder={t("goal.field.title_placeholder")}
             value={dialogStore.goal.title}
             ref={(el) => {
@@ -78,11 +80,12 @@ export function GoalDialogHost() {
         </label>
         <label class="field">
           <span class="field-label">{t("goal.field.acceptance")}</span>
-          <textarea
-            class="field-input"
+          <AutoGrowTextarea
+            class="composer-textarea"
             id="goalCriteria"
             name="acceptance"
             rows={3}
+            maxLines={10}
             placeholder={t("goal.field.acceptance_placeholder")}
             value={dialogStore.goal.acceptance}
             onInput={(event) => {

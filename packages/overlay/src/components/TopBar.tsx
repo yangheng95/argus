@@ -1,5 +1,5 @@
 // ── TopBar (Phase 6) ──
-// Slim title bar shown above the Gateway main panel.
+// Slim title bar shown above the Mission main panel.
 // Left:  current cwd (clickable to switch project — opens browser dialog).
 // Right: connection badge (reuses ConnectionBadge mount logic via main.tsx).
 //

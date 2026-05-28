@@ -1,19 +1,21 @@
-// ── Gateway Service ──
+// ── Mission Service ──
 //
-// Thin client over the Gateway / Channel / Task server APIs that the
-// Gateway page calls. Every helper returns the parsed JSON body and lets
-// failures propagate as ApiError; the page renders explicit error states
-// (PRD §14 — no silent fallbacks).
+// Thin client over the server APIs the Mission control page calls: the
+// Mission agent wake, plus the gateway/channel infrastructure data sources
+// it surfaces (stats, channel runtime, task bindings). Every helper returns
+// the parsed JSON body and lets failures propagate as ApiError; the page
+// renders explicit error states (PRD §14 — no silent fallbacks).
 //
-// The Gateway page reads the same sources as the panel — boardStore for
-// tasks, settingsStore for the active directory — so this service does
-// not duplicate task storage. It only hosts gateway-specific endpoints.
+// The Mission page reads the same task sources as the panel — boardStore for
+// tasks, settingsStore for the active directory — so this service does not
+// duplicate task storage. The stats/channel endpoints it calls
+// (`gateway/stats`, `channel/*`) are kept gateway infrastructure routes.
 
 import { apiJson } from "./api"
 
 // ── Types mirroring server route responses ──
 
-export interface GatewayStatsRecentTask {
+export interface MissionStatsRecentTask {
   id: string
   title: string
   status: string
@@ -22,7 +24,7 @@ export interface GatewayStatsRecentTask {
   updated?: number
 }
 
-export interface GatewayStats {
+export interface MissionStats {
   generatedAt: number
   project: {
     id: string
@@ -34,7 +36,7 @@ export interface GatewayStats {
     total: number
     status: Record<string, number>
     summary: unknown
-    recent: GatewayStatsRecentTask[]
+    recent: MissionStatsRecentTask[]
   }
   capabilities: {
     total: number
@@ -68,20 +70,19 @@ export interface ChannelInfo {
   bindings_endpoint?: string
 }
 
-// Mission supervisor wake — single endpoint that starts or resumes a
-// gateway-master session for one mission. See
-// specs/gateway-master-supervisor-2026-05-26.md §2.5.
-export interface MasterWakeInput {
+// Mission wake — single endpoint that starts or resumes the Mission agent
+// session for one mission. See specs/gateway-mission-split-2026-05-28.md.
+export interface MissionWakeInput {
   /** Existing missionID to resume. Omit to start a new mission. */
   missionID?: string
-  /** User prompt to inject into the supervisor session. */
+  /** User prompt to inject into the mission session. */
   text: string
   /** Optional human-readable title for the mission (not yet persisted). */
   title?: string
   signal?: AbortSignal
 }
 
-export interface MasterWakeResult {
+export interface MissionWakeResult {
   missionID: string
   sessionID: string
   /** true when the wake created a fresh session; false when it resumed one. */
@@ -101,18 +102,20 @@ export interface ChannelBindingRow {
 
 // ── API helpers ──
 
-export async function loadGatewayStats(opts: { directory?: string; limit?: number; signal?: AbortSignal } = {}): Promise<GatewayStats> {
+// `gateway/stats` is the kept gateway infrastructure endpoint (operator
+// dashboard summary); the Mission page surfaces it as its own stats block.
+export async function loadMissionStats(opts: { directory?: string; limit?: number; signal?: AbortSignal } = {}): Promise<MissionStats> {
   const params = new URLSearchParams()
   if (opts.directory) params.set("directory", opts.directory)
   if (typeof opts.limit === "number") params.set("limit", String(opts.limit))
   const suffix = params.toString() ? `?${params.toString()}` : ""
-  return (await apiJson(`gateway/stats${suffix}`, { signal: opts.signal })) as GatewayStats
+  return (await apiJson(`gateway/stats${suffix}`, { signal: opts.signal })) as MissionStats
 }
 
 export async function loadChannelList(signal?: AbortSignal): Promise<ChannelInfo[]> {
   const data = await apiJson(`channel`, { signal })
   // Server route declares the response as `ChannelRegistry.Info.array()`.
-  // A non-array body means contract drift — surface it so the Gateway's
+  // A non-array body means contract drift — surface it so the Mission page's
   // channel-list error block fires (PRD §14, rule 7) instead of silently
   // rendering an empty channel list.
   if (!Array.isArray(data)) {
@@ -143,7 +146,7 @@ export async function loadTaskBindings(taskID: string, signal?: AbortSignal): Pr
   const data = await apiJson(`task/${encodeURIComponent(taskID)}/bindings`, { signal })
   // The server route declares the response as an array (TaskBindingList
   // in orchestrator.ts). A non-array body means contract drift —
-  // surface it as a loud error so the Gateway error block fires
+  // surface it as a loud error so the Mission error block fires
   // instead of silently rendering an empty list (rule 7).
   if (!Array.isArray(data)) {
     throw new Error(
@@ -153,18 +156,18 @@ export async function loadTaskBindings(taskID: string, signal?: AbortSignal): Pr
   return data as ChannelBindingRow[]
 }
 
-export async function wakeMaster(input: MasterWakeInput): Promise<MasterWakeResult> {
+export async function wakeMission(input: MissionWakeInput): Promise<MissionWakeResult> {
   const text = input.text.trim()
-  if (!text) throw new Error("wakeMaster: text is required")
+  if (!text) throw new Error("wakeMission: text is required")
   const body = JSON.stringify({
     text,
     ...(input.missionID ? { missionID: input.missionID } : {}),
     ...(input.title ? { title: input.title } : {}),
   })
-  return (await apiJson(`gateway/master/wake`, {
+  return (await apiJson(`mission/wake`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body,
     signal: input.signal,
-  })) as MasterWakeResult
+  })) as MissionWakeResult
 }

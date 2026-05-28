@@ -8,7 +8,7 @@ import { createEffect, createRoot, createSignal } from "solid-js"
 import { Conversation } from "./components/Conversation"
 import { TaskList } from "./components/TaskList"
 import { Board } from "./components/Board"
-import { Gateway } from "./components/Gateway"
+import { Mission } from "./components/Mission"
 import { pageMode, setPageMode } from "./store/page-mode"
 import { TaskStatusHeader } from "./components/TaskStatusHeader"
 import { TaskDirContent, VcsBadge } from "./components/TaskDirBar"
@@ -133,6 +133,7 @@ function debugGoalBoardFiles(gw: any): string {
   const steps = Array.isArray(gw?.steps) ? gw.steps : []
   let changedFiles = 0
   let changedFileDiffs = 0
+  const commitRefs = new Set<string>()
   let statFiles: number | undefined
   let additions: number | undefined
   let deletions: number | undefined
@@ -141,6 +142,7 @@ function debugGoalBoardFiles(gw: any): string {
     if (!payload || typeof payload !== "object") continue
     if (Array.isArray(payload.changedFiles)) changedFiles += payload.changedFiles.length
     if (Array.isArray(payload.changedFileDiffs)) changedFileDiffs += payload.changedFileDiffs.length
+    if (typeof payload.commitRef === "string" && payload.commitRef.trim()) commitRefs.add(payload.commitRef.trim())
     const stats = payload.diffStats
     if (stats && typeof stats === "object") {
       if (typeof stats.files === "number") statFiles = (statFiles ?? 0) + stats.files
@@ -151,7 +153,7 @@ function debugGoalBoardFiles(gw: any): string {
   const statText = statFiles === undefined
     ? "—"
     : `${statFiles} files, +${additions ?? 0}/-${deletions ?? 0}`
-  return `changedFiles=${changedFiles}; changedFileDiffs=${changedFileDiffs}; diffStats=${statText}`
+  return `changedFiles=${changedFiles}; changedFileDiffs=${changedFileDiffs}; commits=${commitRefs.size ? Array.from(commitRefs).join(",") : "none"}; diffStats=${statText}`
 }
 
 function psSingleQuote(value: unknown): string {
@@ -210,7 +212,7 @@ function buildTaskDebugBlob(board: any): string {
     `Notes:`,
     `  - engine_goal stores the goal contract only. workspace_dir / workspace_branch / workspace_base_ref / retry_count / status / cascade_state were retired (2026-05-05); workspace + retry live on the latest engine_artifact[kind='goal_run_attempt'].payload row, goal status is derived live via engine/describe.ts::goalStatusByID from the goal_run chain.`,
     `  - engine_artifact is the append-only single source: run / goal_run_attempt / delivery / verification-evidence / architect_contract_graph / integrity_attempt / orchestrator-stream-error all live here. Latest-per-id wins by time_created desc.`,
-    `  - Right-side Files panel reads board.goalWorkflows[].steps[].payload.changedFiles / changedFileDiffs, which are projected from per-goal engine_artifact[kind='delivery']. If SQL shows delivery rows but the panel omits a goal, debug overlay refresh/resource keys before suspecting DB writes.`,
+    `  - Right-side Files panel reads board.goalWorkflows[].steps[].payload.changedFiles / changedFileDiffs / commitRef, which are projected from per-goal engine_artifact[kind='delivery']. If SQL shows delivery rows but the panel omits a goal, debug overlay refresh/resource keys before suspecting DB writes.`,
     `  - Project-scoped HTTP routes require task.directory as ?directory= or x-opencorvus-directory. /global/health is control-plane only; it confirms server health and global paths, not whether this task exists in the selected project instance.`,
     `  - Empty engine_executor_session does NOT mean nothing is running — that table is only populated when the executor protocol formally registers a lease; in-process executors emit only via session.bridge.`,
     `  - LLM stream stalls bound through llm/activity.ts (withLLMActivity): first-byte gate, idle gate (default 180s = session_llm_idle_ms), total deadline (default 30 min). Exactly one terminal event per call — done | failed | aborted. Board "running" past the total deadline with no events ⇒ bug at withLLMActivity or its sink wiring, NOT a missing stalled-detection heuristic elsewhere.`,
@@ -290,6 +292,7 @@ function buildTaskDebugBlob(board: any): string {
     `         gr.goal_run_id,`,
     `         json_extract(gr.payload, '$.retry_count') AS retry_count,`,
     `         d.delivery_id, d.time_created AS delivery_time,`,
+    `         json_extract(d.payload, '$.result.commit_ref') AS commit_ref,`,
     `         json_extract(d.payload, '$.result.changed_files') AS changed_files,`,
     `         json_array_length(json_extract(d.payload, '$.result.changed_files')) AS changed_file_count,`,
     `         json_array_length(json_extract(d.payload, '$.result.diffs')) AS diff_count,`,
@@ -303,7 +306,7 @@ function buildTaskDebugBlob(board: any): string {
     `SELECT g.order_index + 1 AS goal_number,`,
     `       'G' || (g.order_index + 1) || 'V' || (coalesce(delivered.retry_count, 0) + 1) AS delivered_label,`,
     `       g.id AS goal_id, g.title, delivered.goal_run_id, delivered.delivery_id,`,
-    `       delivered.changed_file_count, delivered.diff_count, delivered.additions, delivered.deletions,`,
+    `       delivered.commit_ref, delivered.changed_file_count, delivered.diff_count, delivered.additions, delivered.deletions,`,
     `       delivered.changed_files, delivered.delivery_time`,
     `FROM engine_goal g`,
     `LEFT JOIN delivered ON delivered.goal_id = g.id AND delivered.delivery_rank = 1`,
@@ -321,6 +324,7 @@ function buildTaskDebugBlob(board: any): string {
     `       json_extract(gr.payload, '$.goal_id') AS goal_id,`,
     `       json_extract(gr.payload, '$.retry_count') AS retry_count,`,
     `       json_extract(d.payload, '$.status') AS status,`,
+    `       json_extract(d.payload, '$.result.commit_ref') AS commit_ref,`,
     `       json_array_length(json_extract(d.payload, '$.result.changed_files')) AS changed_file_count,`,
     `       json_array_length(json_extract(d.payload, '$.result.diffs')) AS diff_count,`,
     `       json_extract(d.payload, '$.result.stats.additions') AS additions,`,
@@ -566,19 +570,19 @@ document.addEventListener(
   { signal: moduleTeardown.signal },
 )
 
-// ── Mount: Gateway page ──
-// The Gateway page mode lives next to the default panel. The CSS
-// (`body[data-page-mode="gateway"]`) flips visibility between Panel
-// and Gateway without unmounting either side, so returning to Panel
+// ── Mount: Mission page ──
+// The Mission page mode lives next to the default panel. The CSS
+// (`body[data-page-mode="mission"]`) flips visibility between Panel
+// and Mission without unmounting either side, so returning to Panel
 // preserves selected task / conversation state (PRD §6.3).
-const gatewayMountEl = document.getElementById("solidGatewayMount")
-if (gatewayMountEl) {
-  gatewayMountEl.innerHTML = ""
-  render(() => <Gateway />, gatewayMountEl)
+const missionMountEl = document.getElementById("solidMissionMount")
+if (missionMountEl) {
+  missionMountEl.innerHTML = ""
+  render(() => <Mission />, missionMountEl)
 }
 
 // Reflect the active page mode onto <body> so the surface CSS in
-// gateway.css can hide the panel chrome when Gateway is active.
+// mission.css can hide the panel chrome when Mission is active.
 disposers.push(
   createRoot((dispose) => {
     createEffect(() => {
@@ -977,11 +981,11 @@ document.addEventListener("DOMContentLoaded", () => {
     textarea?.focus()
   })
 
-  // Gateway entry: switch to the Gateway page mode. The mount itself
-  // lives in the static layout (#solidGatewayMount); show/hide is
-  // governed by body[data-page-mode] (see styles/surfaces/gateway.css).
-  document.getElementById("btnGateway")?.addEventListener("click", () => {
-    setPageMode(pageMode() === "gateway" ? "panel" : "gateway")
+  // Mission entry: switch to the Mission page mode. The mount itself
+  // lives in the static layout (#solidMissionMount); show/hide is
+  // governed by body[data-page-mode] (see styles/surfaces/mission.css).
+  document.getElementById("btnMission")?.addEventListener("click", () => {
+    setPageMode(pageMode() === "mission" ? "panel" : "mission")
   })
 
   // Executor selection moved to <ExecutorSelector/> mounted inside ChatComposer
@@ -1222,7 +1226,20 @@ if (import.meta.env.DEV) {
     render(() => <ConfigDialogHost />, host)
     configHostMounted = true
   }
-  ;(window as any).__OC_DEV__ = { openConfigDialog, ensureConfigHost }
+  let goalHostMounted = false
+  function ensureGoalHost(): void {
+    if (goalHostMounted) return
+    if (document.getElementById("goalDialogHost")) {
+      goalHostMounted = true
+      return
+    }
+    const host = document.createElement("div")
+    host.id = "goalDialogHost"
+    document.body.appendChild(host)
+    render(() => <GoalDialogHost />, host)
+    goalHostMounted = true
+  }
+  ;(window as any).__OC_DEV__ = { openConfigDialog, ensureConfigHost, openGoalDialog, ensureGoalHost }
 }
 
 // ── Directory action buttons (#taskDir, #recentDirPanel) ──
@@ -1408,9 +1425,18 @@ document.addEventListener(
 
 // ── Init ──
 
+function ensureAppDialogHost(): void {
+  if (document.getElementById("appDialogHost")) return
+  const appDialogHost = document.createElement("div")
+  appDialogHost.id = "appDialogHost"
+  document.body.appendChild(appDialogHost)
+  render(() => <AppDialogHost />, appDialogHost)
+}
+
 ;(window as any).__overlayInitSettled = false
 void (async () => {
   try {
+    ensureAppDialogHost()
     await initApp({
       onSettingsLoaded: () => {
         setSettingsHydrated(true)
@@ -1429,10 +1455,7 @@ void (async () => {
     sessionDialogHost.id = "sessionDialogHost"
     document.body.appendChild(sessionDialogHost)
     render(() => <SessionDialogHost />, sessionDialogHost)
-    const appDialogHost = document.createElement("div")
-    appDialogHost.id = "appDialogHost"
-    document.body.appendChild(appDialogHost)
-    render(() => <AppDialogHost />, appDialogHost)
+    ensureAppDialogHost()
     const interactionDialogHost = document.createElement("div")
     interactionDialogHost.id = "interactionDialogHost"
     document.body.appendChild(interactionDialogHost)

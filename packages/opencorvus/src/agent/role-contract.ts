@@ -1,6 +1,7 @@
 export type AgentRoleID =
   | "coding"
   | "build"
+  | "visual-qa"
   | "general"
   | "explore"
   | "compaction"
@@ -8,7 +9,7 @@ export type AgentRoleID =
   | "summary"
   | "control"
   | "orchestrator"
-  | "gateway-master"
+  | "mission"
   | "requirements"
   | "architect"
   | "design-analyst"
@@ -36,6 +37,14 @@ export namespace AgentRoleContract {
     build: {
       id: "build",
       description: "Workflow build stage. Executes one scoped task or goal through the build-core terminal-report contract.",
+      promptEditable: true,
+      defaultPromptRequired: true,
+      promptConfigMode: "append",
+    },
+    "visual-qa": {
+      id: "visual-qa",
+      description:
+        "Full-function visual QA agent. Uses browser/runtime evidence to test frontend visual quality, may repair defects like build, and reports reproducible visual findings instead of relying on fixed screenshot baselines.",
       promptEditable: true,
       defaultPromptRequired: true,
       promptConfigMode: "append",
@@ -89,10 +98,10 @@ export namespace AgentRoleContract {
       defaultPromptRequired: false,
       promptConfigMode: "none",
     },
-    "gateway-master": {
-      id: "gateway-master",
+    mission: {
+      id: "mission",
       description:
-        "Mission supervisor primary agent. Owns long-running cross-task research strategy: maintains mission state in worktree files and dispatches engine_tasks through panel.create_task. Does NOT execute work itself.",
+        "Mission primary agent. Owns long-running user goals: intake and clarification, the mission contract and state, the roadmap, and reconciliation of delivered work. A full coordinator (reads/analyses the project, plans, delegates, summarises, asks the user) that delegates execution to orchestrator-led squad/team tasks rather than writing code itself.",
       promptEditable: true,
       defaultPromptRequired: true,
       promptConfigMode: "append",

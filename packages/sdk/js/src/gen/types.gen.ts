@@ -1585,7 +1585,7 @@ export type Session = {
     | "root"
     | "orchestrator"
     | "assistant"
-    | "gateway"
+    | "mission"
     | "intent-analysis"
     | "requirements"
     | "design-analyst"
@@ -1647,6 +1647,13 @@ export type EventSessionDiff = {
   properties: {
     sessionID: string
     diff: Array<FileDiff>
+  }
+}
+
+export type EventConfigChanged = {
+  type: "config.changed"
+  properties: {
+    sessionID: string
   }
 }
 
@@ -1746,6 +1753,7 @@ export type Event =
   | EventSessionUpdated
   | EventSessionDeleted
   | EventSessionDiff
+  | EventConfigChanged
   | EventWorkspaceReady
   | EventWorkspaceFailed
 
@@ -2611,7 +2619,7 @@ export type Config = {
      */
     reserved?: number
     /**
-     * Fraction of usable context (after reserved buffer) that must be consumed before auto-compaction triggers. Defaults to 0.8 — compact early enough to keep ample headroom for the next reply without sacrificing prompt-cache stability for typical turns.
+     * Fraction of usable context (after reserved buffer) that must be consumed before auto-compaction triggers. Defaults to 0.9 — compact late enough to use more of the available prompt window while still preserving reserved reply headroom.
      */
     threshold?: number
     /**
@@ -3092,7 +3100,7 @@ export type GlobalSession = {
     | "root"
     | "orchestrator"
     | "assistant"
-    | "gateway"
+    | "mission"
     | "intent-analysis"
     | "requirements"
     | "design-analyst"
@@ -4668,7 +4676,7 @@ export type SessionCreateData = {
       | "root"
       | "orchestrator"
       | "assistant"
-      | "gateway"
+      | "mission"
       | "intent-analysis"
       | "requirements"
       | "design-analyst"
@@ -4940,6 +4948,7 @@ export type SessionConversationResponses = {
         parentSessionID?: string
         goalID?: string
         messageIDs: Array<string>
+        lastDisplayMessageID?: string
         firstMessageTime: number
         lastMessageTime: number
         placement: "top_level" | "goal_phase" | "hidden" | "filtered"
@@ -4957,6 +4966,7 @@ export type SessionConversationResponses = {
         parentSessionID?: string
         goalID?: string
         messageIDs: Array<string>
+        lastDisplayMessageID?: string
         firstMessageTime: number
         lastMessageTime: number
         placement: "top_level" | "goal_phase" | "hidden" | "filtered"
@@ -7623,32 +7633,6 @@ export type GatewayControlActionResponses = {
 
 export type GatewayControlActionResponse = GatewayControlActionResponses[keyof GatewayControlActionResponses]
 
-export type GatewayMasterWakeData = {
-  body?: {
-    missionID?: string
-    text: string
-    title?: string
-  }
-  path?: never
-  query?: {
-    directory?: string
-  }
-  url: "/gateway/master/wake"
-}
-
-export type GatewayMasterWakeResponses = {
-  /**
-   * Master wake accepted
-   */
-  200: {
-    missionID: string
-    sessionID: string
-    created: boolean
-  }
-}
-
-export type GatewayMasterWakeResponse = GatewayMasterWakeResponses[keyof GatewayMasterWakeResponses]
-
 export type GatewayChannelMessageData = {
   body?: {
     channel: string
@@ -7732,6 +7716,32 @@ export type GatewayChannelMessageResponses = {
 }
 
 export type GatewayChannelMessageResponse = GatewayChannelMessageResponses[keyof GatewayChannelMessageResponses]
+
+export type MissionWakeData = {
+  body?: {
+    missionID?: string
+    text: string
+    title?: string
+  }
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/mission/wake"
+}
+
+export type MissionWakeResponses = {
+  /**
+   * Mission wake accepted
+   */
+  200: {
+    missionID: string
+    sessionID: string
+    created: boolean
+  }
+}
+
+export type MissionWakeResponse = MissionWakeResponses[keyof MissionWakeResponses]
 
 export type ServerShutdownData = {
   body?: never
@@ -9442,6 +9452,7 @@ export type TaskConversationResponses = {
               }>
             }>
             buildSessionID?: string
+            commitRef?: string
             changedFiles?: Array<string>
             changedFileDiffs?: Array<{
               file: string
@@ -9527,6 +9538,7 @@ export type TaskConversationResponses = {
         parentSessionID?: string
         goalID?: string
         messageIDs: Array<string>
+        lastDisplayMessageID?: string
         firstMessageTime: number
         lastMessageTime: number
         placement: "top_level" | "goal_phase" | "hidden" | "filtered"
@@ -9544,6 +9556,7 @@ export type TaskConversationResponses = {
         parentSessionID?: string
         goalID?: string
         messageIDs: Array<string>
+        lastDisplayMessageID?: string
         firstMessageTime: number
         lastMessageTime: number
         placement: "top_level" | "goal_phase" | "hidden" | "filtered"
@@ -9557,6 +9570,63 @@ export type TaskConversationResponses = {
 }
 
 export type TaskConversationResponse = TaskConversationResponses[keyof TaskConversationResponses]
+
+export type TaskConversationSessionData = {
+  body?: never
+  path: {
+    taskID: string
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/task/{taskID}/conversation/session/{sessionID}"
+}
+
+export type TaskConversationSessionErrors = {
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type TaskConversationSessionError = TaskConversationSessionErrors[keyof TaskConversationSessionErrors]
+
+export type TaskConversationSessionResponses = {
+  /**
+   * Task conversation session transcript
+   */
+  200: {
+    transcript: Array<unknown>
+    timeline: Array<unknown>
+    view: {
+      topLevelSessionIDs: Array<string>
+      sessions: Array<{
+        sessionID: string
+        stage: string
+        parentSessionID?: string
+        goalID?: string
+        messageIDs: Array<string>
+        lastDisplayMessageID?: string
+        firstMessageTime: number
+        lastMessageTime: number
+        placement: "top_level" | "goal_phase" | "hidden" | "filtered"
+        phase?: {
+          stepID: string
+          phaseID: string
+        }
+      }>
+    }
+    history: {
+      oldestTimestamp: number | null
+      oldestMessageID?: string | null
+      hasMore: boolean
+      limit: number
+    }
+  }
+}
+
+export type TaskConversationSessionResponse = TaskConversationSessionResponses[keyof TaskConversationSessionResponses]
 
 export type TaskConversationHistoryData = {
   body?: never
@@ -9596,6 +9666,7 @@ export type TaskConversationHistoryResponses = {
         parentSessionID?: string
         goalID?: string
         messageIDs: Array<string>
+        lastDisplayMessageID?: string
         firstMessageTime: number
         lastMessageTime: number
         placement: "top_level" | "goal_phase" | "hidden" | "filtered"
@@ -10083,6 +10154,7 @@ export type TaskBoardResponses = {
             }>
           }>
           buildSessionID?: string
+          commitRef?: string
           changedFiles?: Array<string>
           changedFileDiffs?: Array<{
             file: string

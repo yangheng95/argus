@@ -10,15 +10,46 @@ import { tmpdir } from "../fixture/fixture"
 Log.init({ print: false })
 
 /**
- * Spec: gateway-master-supervisor-2026-05-26.md §2.4.
+ * Spec: gateway-mission-split-2026-05-28.md §1 (Panel = coordination set).
  *
- * Master is a scheduler, not an executor. The panel surface is shared
- * with control_agent + panel_ui, but master may only invoke create_task
- * and query_task — every other panel action is denied at the host
- * boundary so a stray prompt or future config slip cannot give master
- * retry/cancel/replan/session-management powers.
+ * Mission is a coordinator, not an executor. The panel surface is shared
+ * with control_agent + panel_ui, but the `mission` actor may only invoke a
+ * bounded coordination set (dispatch / reconcile / follow-up / interaction /
+ * stop). Every other panel action is denied at the host boundary so a stray
+ * prompt or future config slip cannot give mission replan/goal-edit/session
+ * powers — those belong to the orchestrator and the desktop panel_ui.
  */
-describe("panel actor whitelist — gateway_master", () => {
+const MISSION_ALLOWED = [
+  ["create_task", { request: "do something", allow_create: true, queue: false }],
+  ["query_task", { taskIDs: ["task_1"] }],
+  ["view_board", {}],
+  ["view_plan", { taskID: "task_1" }],
+  ["view_tasks", {}],
+  ["send_task_message", { taskID: "task_1", text: "hi" }],
+  ["cancel_task", { taskID: "task_1" }],
+  ["reply_interaction", { interactionID: "i_1" }],
+  ["reject_interaction", { interactionID: "i_1" }],
+] as const
+
+const MISSION_DENIED = [
+  ["retry_task", { taskID: "task_1" }],
+  ["replan_task", { taskID: "task_1" }],
+  ["update_checks", { taskID: "task_1" }],
+  ["update_goal", { goalID: "g_1", description: "x", acceptance_specs: [{}] }],
+  ["delete_goal", { goalID: "g_1" }],
+  ["fork_session", { sessionID: "s_1" }],
+  ["delete_session", { sessionID: "s_1" }],
+  ["create_session", {}],
+  ["set_executor", { executor: "opencorvus" }],
+  ["select_task", { taskID: "task_1" }],
+  ["select_session", { sessionID: "s_1" }],
+] as const
+
+function isWhitelistDenied(error: unknown): boolean {
+  return error instanceof Error && /not permitted for the mission agent/i.test(error.message)
+}
+
+describe("panel actor whitelist — mission", () => {
   afterEach(async () => {
     mock.restore()
     await resetDatabase()
@@ -51,55 +82,35 @@ describe("panel actor whitelist — gateway_master", () => {
     return { result, error }
   }
 
-  test("gateway_master can call create_task", async () => {
-    const stubID = Identifier.ascending("task")
-    spyOn(EngineService, "createTask").mockResolvedValue(stubID)
-    const { error } = await call(
-      { action: "create_task", request: "do something", allow_create: true, queue: false },
-      "gateway-master",
-    )
-    expect(error).toBeUndefined()
+  // Allowed actions: the host guard must let them through. They may still
+  // fail downstream (no stubbed EngineService / no mission session), so we
+  // only assert the failure is NOT the whitelist denial.
+  test.each(MISSION_ALLOWED)("mission is allowed %s (not blocked by the actor guard)", async (action, params) => {
+    const { error } = await call({ action, ...params }, "mission")
+    expect(isWhitelistDenied(error)).toBe(false)
   })
 
-  test("gateway_master can call query_task", async () => {
-    spyOn(EngineService, "getBoard").mockResolvedValue({
-      task: { id: "task_1", title: "t", status: "active", time: { created: 1, updated: 2 } },
-    } as any)
-    const { error } = await call({ action: "query_task", taskIDs: ["task_1"] }, "gateway-master")
-    expect(error).toBeUndefined()
-  })
-
-  test.each([
-    ["retry_task", { taskID: "task_1" }],
-    ["replan_task", { taskID: "task_1" }],
-    ["cancel_task", { taskID: "task_1" }],
-    ["send_task_message", { taskID: "task_1", text: "hi" }],
-    ["reply_interaction", { interactionID: "i_1" }],
-    ["reject_interaction", { interactionID: "i_1" }],
-    ["update_checks", { taskID: "task_1" }],
-    ["update_goal", { goalID: "g_1", description: "x", acceptance_specs: [{}] }],
-    ["delete_goal", { goalID: "g_1" }],
-    ["fork_session", { sessionID: "s_1" }],
-    ["delete_session", { sessionID: "s_1" }],
-    ["create_session", {}],
-    ["view_plan", { taskID: "task_1" }],
-    ["view_board", {}],
-    ["view_tasks", {}],
-  ])("gateway_master is denied %s", async (action, extraParams) => {
-    const { error } = await call({ action, ...extraParams }, "gateway-master")
+  test.each(MISSION_DENIED)("mission is denied %s", async (action, params) => {
+    const { error } = await call({ action, ...params }, "mission")
     expect(error).toBeInstanceOf(Error)
-    expect(String(error)).toMatch(/not permitted for gateway_master/i)
+    expect(isWhitelistDenied(error)).toBe(true)
   })
 
-  test("control_agent retains access to actions denied for gateway_master", async () => {
+  test("control_agent retains access to actions denied for mission", async () => {
     spyOn(EngineService, "getProjectBoard").mockResolvedValue({ tasks: [] } as any)
     const { error } = await call({ action: "view_tasks" }, "control")
     expect(error).toBeUndefined()
   })
 
-  test("panel_ui (route fake context) retains access to actions denied for gateway_master", async () => {
+  test("panel_ui (route fake context) retains access to actions denied for mission", async () => {
     spyOn(EngineService, "getProjectBoard").mockResolvedValue({ tasks: [] } as any)
-    const { error } = await call({ action: "view_tasks" }, "gateway") // route fake uses "gateway" agent name
+    const { error } = await call({ action: "view_tasks" }, "gateway") // route fake uses "gateway" agent name → panel_ui
     expect(error).toBeUndefined()
+  })
+
+  test("panel_ui is not subject to the mission whitelist (can replan_task)", async () => {
+    spyOn(EngineService, "retryTask").mockResolvedValue(undefined as any)
+    const { error } = await call({ action: "replan_task", taskID: "task_1" }, "gateway")
+    expect(isWhitelistDenied(error)).toBe(false)
   })
 })

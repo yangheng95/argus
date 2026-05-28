@@ -30,6 +30,7 @@ const AGENT_PROMPTS = [
   "intent-analysis-core.txt",
   "orchestrator-core.txt",
   "requirements-core.txt",
+  "visual-qa-core.txt",
 ] as const
 
 describe("INFORMATION MISSING fallback — static prompts must NOT carry the section (toggle = OFF default)", () => {

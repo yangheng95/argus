@@ -9,6 +9,7 @@ import { SystemPrompt } from "../../src/session/system"
 import { ToolRegistry } from "../../src/tool/registry"
 import { MIRROR_ANALYSIS_TOOL_IDS, MIRROR_DELIVERY_TOOL_IDS, MIRROR_TOOL_IDS } from "../../src/mirror/tools/ids"
 import BUILD_CORE from "../../src/prompt/core/build-core.txt"
+import VISUAL_QA_CORE from "../../src/prompt/core/visual-qa-core.txt"
 import PROMPT_CODING from "../../src/agent/prompt/coding.txt"
 
 afterEach(async () => {
@@ -31,6 +32,7 @@ test("returns default native agents when no config", async () => {
       const names = agents.map((a) => a.name)
       expect(names).toContain("coding")
       expect(names).toContain("build")
+      expect(names).toContain("visual-qa")
       expect(names).toContain("general")
       expect(names).toContain("explore")
       expect(names).toContain("compaction")
@@ -74,6 +76,34 @@ test("build agent has correct default properties", async () => {
   })
 })
 
+test("visual-qa agent is full-function build-grade with visual delivery tools", async () => {
+  await using tmp = await tmpdir()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const visualQa = await Agent.get("visual-qa")
+      expect(visualQa).toBeDefined()
+      expect(visualQa?.mode).toBe("primary")
+      expect(visualQa?.native).toBe(true)
+      expect(visualQa?.hidden).toBe(true)
+      expect(visualQa?.prompt).toBe(VISUAL_QA_CORE)
+      expect(evalPerm(visualQa, "edit")).toBe("allow")
+      expect(evalPerm(visualQa, "bash")).toBe("allow")
+      expect(evalPerm(visualQa, "write")).toBe("allow")
+      expect(evalPerm(visualQa, "webpage_render")).toBe("allow")
+      expect(evalPerm(visualQa, "webpage_vision_judge")).toBe("allow")
+      expect(evalPerm(visualQa, "webpage_extract")).toBe("deny")
+      expect(visualQa?.tools?.exclude).toContain("webpage_extract")
+      expect(visualQa?.tools?.exclude).not.toContain("webpage_render")
+
+      const tools = await ToolRegistry.tools({ providerID: "", modelID: "" }, visualQa)
+      const ids = new Set(tools.map((tool) => tool.id))
+      for (const id of MIRROR_DELIVERY_TOOL_IDS) expect(ids.has(id)).toBe(true)
+      for (const id of MIRROR_ANALYSIS_TOOL_IDS) expect(ids.has(id)).toBe(false)
+    },
+  })
+}, 30_000)
+
 test("coding agent owns direct assistant prompt", async () => {
   await using tmp = await tmpdir()
   await Instance.provide({
@@ -111,7 +141,10 @@ test("explore agent limits exposed tools without permission denials", async () =
       expect(exploreTools.map((t) => t.id)).toContain("websearch")
     },
   })
-})
+  // ToolRegistry.tools() does cold first-time init of every registered tool
+  // (~25, several doing real I/O); on Windows the default 5 s flakes. Match
+  // the 30 s headroom the other tool-resolution assertions in this file use.
+}, 30_000)
 
 test("explore agent allows external directories and Truncate.GLOB", async () => {
   const { Truncate } = await import("../../src/tool/truncation")
@@ -796,6 +829,17 @@ test("only design-analyst receives mirror analysis tools from the registry", asy
         }
       }
 
+      const visualQa = await Agent.get("visual-qa")
+      expect(visualQa).toBeDefined()
+      const visualQaTools = await ToolRegistry.tools({ providerID: "", modelID: "" }, visualQa)
+      const visualQaToolIds = new Set(visualQaTools.map((tool) => tool.id))
+      for (const id of MIRROR_ANALYSIS_TOOL_IDS) {
+        expect(visualQaToolIds.has(id)).toBe(false)
+      }
+      for (const id of MIRROR_DELIVERY_TOOL_IDS) {
+        expect(visualQaToolIds.has(id)).toBe(true)
+      }
+
       for (const name of ["coding", "build", "general", "explore", "compaction", "title"]) {
         const agent = await Agent.get(name)
         expect(agent).toBeDefined()
@@ -1013,44 +1057,49 @@ test("defaultAgent throws when all primary agents are disabled", async () => {
 })
 
 /**
- * Spec: gateway-master-supervisor-2026-05-26.md §2.1.
+ * Spec: gateway-mission-split-2026-05-28.md.
  *
- * gateway-master is a hidden primary agent whose tool surface is
- * deliberately narrow. The orchestrator-core comment block (see
- * agent.ts ~266-283) is the historical reason: a scheduler-style agent
- * given bash/edit/read drifted into executing work itself. These
- * assertions guard against that regression for the supervisor.
+ * `mission` is a hidden primary agent — a full coordinator that reads and
+ * analyses the project, plans, and dispatches squad/team work, but is NOT a
+ * coding executor. The orchestrator-core comment block (see agent.ts) is the
+ * historical reason a coordination agent must NOT hold bash/edit/write: such
+ * an agent drifts into executing work itself instead of delegating. These
+ * assertions guard that boundary.
  */
-test("gateway-master is hidden primary with the supervisor tool whitelist", async () => {
+test("mission is hidden primary with the coordinator prompt", async () => {
   await using tmp = await tmpdir()
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      const master = await Agent.get("gateway-master")
-      expect(master).toBeDefined()
-      expect(master?.mode).toBe("primary")
-      expect(master?.hidden).toBe(true)
-      expect(master?.native).toBe(true)
-      expect(master?.prompt).toContain("Gateway Master")
+      const mission = await Agent.get("mission")
+      expect(mission).toBeDefined()
+      expect(mission?.mode).toBe("primary")
+      expect(mission?.hidden).toBe(true)
+      expect(mission?.native).toBe(true)
+      expect(mission?.prompt).toContain("OpenCorvus Mission")
+      // The old supervisor framing must be gone — Mission is a full
+      // coordinator, not a "NOT an executor" dispatcher, and the gateway
+      // naming is retired from the upper-level agent.
+      expect(mission?.prompt).not.toContain("Gateway Master")
+      expect(mission?.prompt).not.toContain("You are NOT an executor")
       // Worktree convention contract surfaced in the prompt — the four
-      // mission files are part of master's persistence contract, not
+      // mission files are part of Mission's persistence contract, not
       // free LLM choice.
-      expect(master?.prompt).toContain("frontier.md")
-      expect(master?.prompt).toContain("handoff.md")
-      // Task granularity convention (spec §2.7, prompt-only rule per
-      // CLAUDE.md rule 6.1). Default is ONE task per wake bundling
-      // related frontier items; master must not fan out 1-bullet-=>-
-      // 1-task by default. The executor's architect already decomposes
-      // a task into goals — mission-level fan-out is double-decomposition
-      // and burns the worktree + sub-agent bootstrap N times.
-      expect(master?.prompt).toContain("TASK GRANULARITY")
-      expect(master?.prompt).toContain("Default: ONE task per wake")
-      expect(master?.prompt).toContain("double-decomposition")
+      expect(mission?.prompt).toContain("frontier.md")
+      expect(mission?.prompt).toContain("handoff.md")
+      // Task granularity convention (prompt-only rule per CLAUDE.md rule 6.1).
+      // Default is ONE task per wake bundling related frontier items; Mission
+      // must not fan out 1-bullet-=>-1-task by default. The executor's
+      // architect already decomposes a task into goals — mission-level fan-out
+      // is double-decomposition and burns the worktree + sub-agent bootstrap.
+      expect(mission?.prompt).toContain("TASK GRANULARITY")
+      expect(mission?.prompt).toContain("Default: ONE task per wake")
+      expect(mission?.prompt).toContain("double-decomposition")
     },
   })
 })
 
-test("gateway-master's resolved tool surface includes only supervisor tools", async () => {
+test("mission's resolved tool surface is the coordinator set (read/analyse + dispatch, no execution)", async () => {
   // ToolRegistry.tools() does first-time tool-init on every registered
   // tool (~25 of them, several of which do real I/O on init), so this
   // assertion needs more headroom than the 5 s default. Matches the
@@ -1059,29 +1108,37 @@ test("gateway-master's resolved tool surface includes only supervisor tools", as
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      const master = await Agent.get("gateway-master")
-      const tools = await ToolRegistry.tools({ providerID: "", modelID: "" }, master)
+      const mission = await Agent.get("mission")
+      const tools = await ToolRegistry.tools({ providerID: "", modelID: "" }, mission)
       const ids = tools.map((tool) => tool.id).sort()
 
-      // Forward assertion: every tool master needs to dispatch + carry state.
-      expect(ids).toContain("mission_state")
-      expect(ids).toContain("panel")
-      expect(ids).toContain("webfetch")
-      expect(ids).toContain("websearch")
-      expect(ids).toContain("memory")
-      expect(ids).toContain("todoread")
-      expect(ids).toContain("todowrite")
+      // Forward: read/analyse the project, research, carry state, dispatch.
+      // (lsp is experimental/flag-gated in the registry, so it is part of the
+      // include but does not resolve in the default test env — not asserted.)
+      for (const allowed of [
+        "read",
+        "glob",
+        "search_code",
+        "mission_state",
+        "panel",
+        "webfetch",
+        "websearch",
+        "memory",
+        "todoread",
+        "todowrite",
+        "question",
+      ]) {
+        expect(ids).toContain(allowed)
+      }
 
-      // Reverse assertion: no executor tools, ever. If any of these
-      // fires, master has acquired the ability to do work itself —
-      // re-read the orchestrator-core comment block before "fixing".
+      // Reverse: no EXECUTION tools, ever. If any of these fires, Mission
+      // has acquired the ability to do work itself instead of delegating to
+      // an orchestrator-led squad/team — re-read the orchestrator-core
+      // comment block before "fixing".
       for (const forbidden of [
         "bash",
         "edit",
-        "read",
         "write",
-        "glob",
-        "search_code",
         "apply_patch",
         "task",
         "task_report",
@@ -1098,23 +1155,23 @@ test("gateway-master's resolved tool surface includes only supervisor tools", as
   })
 }, 30_000)
 
-test("Agent.defaultAgent() does NOT select gateway-master even when only it is primary", async () => {
+test("Agent.defaultAgent() does NOT select mission even when only it is primary", async () => {
   // hidden:true keeps defaultAgent from ever returning it implicitly.
-  // The gateway page wakes master through an explicit endpoint instead.
+  // The Mission page wakes it through an explicit endpoint instead.
   await using tmp = await tmpdir()
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
       const def = await Agent.defaultAgent()
-      expect(def).not.toBe("gateway-master")
+      expect(def).not.toBe("mission")
     },
   })
 })
 
-test("operator cannot promote gateway-master into the default-agent slot (hidden agents are rejected)", async () => {
+test("operator cannot promote mission into the default-agent slot (hidden agents are rejected)", async () => {
   await using tmp = await tmpdir({
     config: {
-      default_agent: "gateway-master",
+      default_agent: "mission",
     },
   })
   await Instance.provide({

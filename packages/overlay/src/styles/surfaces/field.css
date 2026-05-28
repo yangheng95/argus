@@ -294,3 +294,73 @@ select.field-input option {
   border-color: var(--border);
   box-shadow: none;
 }
+
+/* ─────────────────────────────────────────────────────────────
+   .composer-textarea — shared "message box" chrome for the
+   auto-growing <AutoGrowTextarea> primitive on form surfaces
+   (goal dialog, mission launcher). The chat composer keeps its
+   own `.chat-textarea` layout chrome; this is the variant for
+   textareas that live inside a normal form rather than the
+   compose row. Auto-grow height is driven by the primitive; the
+   line cap turns the overflow into a scroll, so the rule below
+   opts BACK INTO a visible scrollbar (base.css hides every
+   scrollbar by default) — without it, content past the cap was
+   silently clipped with no gutter (the reported goal-dialog bug).
+   ───────────────────────────────────────────────────────────── */
+.composer-textarea {
+  /* `appearance: none` strips the UA widget so our background wins inside the
+     top-layer <dialog> (same reason as `.field-input` — Chromium drops the
+     inherited dark color-scheme on modal form controls). */
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  resize: none;
+  /* Floor so an empty / short field still reads as a multi-line input; the
+     primitive auto-grows above this and scrolls past the line cap. */
+  min-height: calc(60px * var(--ui-scale));
+  border: var(--oc-border-width) solid var(--border);
+  border-radius: var(--oc-radius-soft);
+  background: var(--surface-inset);
+  color: var(--text-strong);
+  padding: calc(10px * var(--ui-scale)) calc(12px * var(--ui-scale));
+  font-family: inherit;
+  font-size: var(--ui-font-body);
+  line-height: 1.45;
+  overflow-y: auto;
+  box-shadow: none;
+  /* Re-enable the scrollbar gutter for this textarea only (mirrors the
+     `#chatScroll` opt-in in cascade/base.css using the same tokens) —
+     base.css hides every scrollbar by default. */
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--session-scrollbar-track);
+}
+
+.composer-textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 calc(2px * var(--ui-scale)) color-mix(in srgb, var(--accent) 24%, transparent);
+}
+
+.composer-textarea::placeholder {
+  color: var(--text-muted);
+}
+
+.composer-textarea::-webkit-scrollbar {
+  width: var(--session-scrollbar-size);
+}
+
+.composer-textarea::-webkit-scrollbar-track {
+  background: var(--session-scrollbar-track);
+  border-radius: var(--oc-radius-pill);
+}
+
+.composer-textarea::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: var(--oc-radius-pill);
+  border: calc(2px * var(--ui-scale)) solid transparent;
+  background-clip: padding-box;
+}
+
+.composer-textarea::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+}

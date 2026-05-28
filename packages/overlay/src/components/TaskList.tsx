@@ -616,6 +616,14 @@ function TaskSection(props: {
 // ── TaskList ──
 
 export interface TaskListProps {
+  /** Optional pre-filtered source. Omit to render the global visibleTasks() projection. */
+  items?: any[];
+  /** Disable the component-owned search box when the parent already owns filtering. */
+  showSearch?: boolean;
+  /** Disable the component-owned load error block when the parent renders it. */
+  showError?: boolean;
+  /** Empty text for externally-filtered usages such as Mission. */
+  emptyLabel?: string;
   /** Called when the user clicks a task row. */
   onSelectTask: (taskID: string) => void;
   /** Called when the user confirms deletion via the row's delete button. */
@@ -628,7 +636,9 @@ export interface TaskListProps {
 }
 
 export function TaskList(props: TaskListProps) {
-  const allItems = createMemo<any[]>(() => visibleTasks());
+  const allItems = createMemo<any[]>(() => props.items ?? visibleTasks());
+  const showSearch = () => props.showSearch !== false;
+  const showError = () => props.showError !== false;
   // searchQuery survives only as long as the component is mounted — that's
   // the right scope: a stale filter on cold start would hide tasks the
   // operator forgot they typed about.
@@ -652,7 +662,7 @@ export function TaskList(props: TaskListProps) {
   const sortedItems = createMemo<any[]>(() => {
     const q = searchQuery().trim().toLowerCase();
     const items = allItems();
-    if (!q) return items;
+    if (!showSearch() || !q) return items;
     return items.filter((item) => matchesQuery(item, q));
   });
   const [draggingID, setDraggingID] = createSignal("");
@@ -847,7 +857,7 @@ export function TaskList(props: TaskListProps) {
 
   return (
     <div class="task-list-panel">
-      <Show when={allItems().length > 4 || searchQuery()}>
+      <Show when={showSearch() && (allItems().length > 4 || searchQuery())}>
         <div class="task-list-search">
           <Icon name="search" size={12} class="task-list-search-icon" />
           <input
@@ -875,7 +885,7 @@ export function TaskList(props: TaskListProps) {
           </Show>
         </div>
       </Show>
-      <Show when={boardStore.tasksError}>
+      <Show when={showError() && boardStore.tasksError}>
         <div class="task-list-error" role="alert">
           <div class="task-list-error-msg">
             {t("task.load_failed")}: {boardStore.tasksError}
@@ -908,7 +918,7 @@ export function TaskList(props: TaskListProps) {
               }
             >
               <div class="empty-hint">
-                {searchQuery() ? t("task.search_empty", { query: searchQuery() }) : t("task.none")}
+                {searchQuery() ? t("task.search_empty", { query: searchQuery() }) : props.emptyLabel ?? t("task.none")}
               </div>
             </Show>
           </Show>

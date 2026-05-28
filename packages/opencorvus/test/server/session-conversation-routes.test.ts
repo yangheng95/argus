@@ -44,12 +44,12 @@ describe("session conversation routes", () => {
     await resetDatabase()
   })
 
-  test("GET /session/:sessionID/conversation hydrates gateway session conversation shape", async () => {
+  test("GET /session/:sessionID/conversation hydrates mission session conversation shape", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const session = await Session.create({ kind: "gateway", title: "Gateway mission" })
+        const session = await Session.create({ kind: "mission", title: "Mission Control" })
         const created = Date.now()
         const user = await Session.updateMessage({
           id: Identifier.ascending("message"),
@@ -76,7 +76,7 @@ describe("session conversation routes", () => {
         expect(body.board).toMatchObject({
           kind: "session",
           sessionID: session.id,
-          title: "Gateway mission",
+          title: "Mission Control",
           directory: tmp.path,
         })
         expect(body.timeline).toEqual([])
@@ -90,12 +90,12 @@ describe("session conversation routes", () => {
     })
   })
 
-  test("GET /session/:sessionID/events emits mirrored gateway message events", async () => {
+  test("GET /session/:sessionID/events emits mirrored mission message events", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const session = await Session.create({ kind: "gateway", title: "Gateway SSE mission" })
+        const session = await Session.create({ kind: "mission", title: "Mission SSE" })
         const abort = new AbortController()
         const timeout = setTimeout(() => abort.abort("timed out waiting for message.updated"), 6_000)
         try {
@@ -116,7 +116,7 @@ describe("session conversation routes", () => {
             modelID: "test-model",
             providerID: "test",
             mode: "agent",
-            agent: "gateway",
+            agent: "mission",
             path: { cwd: tmp.path, root: tmp.path },
             cost: 0,
             tokens: {
@@ -134,8 +134,8 @@ describe("session conversation routes", () => {
           }
           expect(mirrored.session_id).toBe(session.id)
           expect(mirrored.payload.info.sessionID).toBe(session.id)
-          expect(mirrored.payload.info.channel).toBe("gateway")
-          expect(mirrored.payload.info.resolvedRole).toBe("gateway")
+          expect(mirrored.payload.info.channel).toBe("mission")
+          expect(mirrored.payload.info.resolvedRole).toBe("mission")
         } finally {
           clearTimeout(timeout)
           abort.abort("test complete")

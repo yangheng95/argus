@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import type { CardNode } from "../src/store/card-tree";
 import {
   buildPhaseChildForStep,
+  defaultExpandedForNode,
   stepHeaderNodeWithBuildPhase,
   visibleChildIDsForCard,
 } from "../src/utils/card-tree";
@@ -16,6 +19,13 @@ function card(partial: Partial<CardNode> & Pick<CardNode, "id" | "kind" | "title
 }
 
 describe("build phase promotion render policy", () => {
+  test("expanded build steps hydrate historical build sessions directly", () => {
+    const source = readFileSync(join(import.meta.dir, "../src/components/Card.tsx"), "utf8");
+    expect(source).toContain('import { loadConversationSessionHistory } from "../services/conversation"');
+    expect(source).toContain("props.node.stepPayload?.buildSessionID");
+    expect(source).toContain("loadConversationSessionHistory(sessionID, taskID)");
+  });
+
   test("filters the build phase from visible step children", () => {
     const step = card({
       id: "step:g1:build",
@@ -72,6 +82,34 @@ describe("build phase promotion render policy", () => {
     expect(headerNode.contextTokensEstimated).toBe(true);
     expect(headerNode.timeCompleted).toBe(6);
     expect(headerNode.errorReason).toBe("done");
+  });
+
+  test("keeps completed executor step expanded when promoted build output exists", () => {
+    const step = card({
+      id: "step:g1:build",
+      kind: "step",
+      title: "Goal",
+      status: "completed",
+      childIDs: ["step:g1:build:phase:build"],
+    });
+    const emptyBuild = card({
+      id: "step:g1:build:phase:build",
+      kind: "phase",
+      phaseID: "build",
+      title: "Build",
+      status: "completed",
+      parts: [{ type: "boundary", messageID: "m1", role: "build", roleLabel: "Build" }],
+    });
+    const buildWithOutput = card({
+      ...emptyBuild,
+      parts: [
+        ...(emptyBuild.parts || []),
+        { id: "p1", messageID: "m1", type: "text", text: "Build finished." },
+      ],
+    });
+
+    expect(defaultExpandedForNode(step, { [emptyBuild.id]: emptyBuild })).toBe(false);
+    expect(defaultExpandedForNode(step, { [buildWithOutput.id]: buildWithOutput })).toBe(true);
   });
 
   test("rejects malformed step children instead of hiding broken card state", () => {

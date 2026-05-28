@@ -14,7 +14,7 @@ import type {
 ;(globalThis as any).window = globalThis
 ;(globalThis as any).location = { protocol: "http:", host: "localhost", origin: "http://localhost", pathname: "/" }
 
-const GATEWAY_TSX = readFileSync(join(import.meta.dir, "../src/components/Gateway.tsx"), "utf8")
+const MISSION_TSX = readFileSync(join(import.meta.dir, "../src/components/Mission.tsx"), "utf8")
 
 function fakeTransport(
   responder: (req: TransportRequest) => Promise<TransportResponse<unknown>> | TransportResponse<unknown>,
@@ -25,10 +25,10 @@ function fakeTransport(
       return responder(req) as Promise<TransportResponse<T>> | TransportResponse<T>
     },
     openStream(_input: StreamOpenRequest, _handlers: StreamHandlers) {
-      throw new Error("openStream not used in gateway session source tests")
+      throw new Error("openStream not used in mission session source tests")
     },
     async native() {
-      throw new Error("native not used in gateway session source tests")
+      throw new Error("native not used in mission session source tests")
     },
     subscribeUiCommand() {
       return { unsubscribe() {} }
@@ -93,9 +93,25 @@ test("session source hydrates conversation and submits to prompt_async", async (
   ])
 })
 
-test("Gateway workbench mounts the shared Conversation and ChatComposer for mission sessions", () => {
-  expect(GATEWAY_TSX).toContain("function GatewayMissionConversation")
-  expect(GATEWAY_TSX).toContain("<Conversation container={conversationContainer} />")
-  expect(GATEWAY_TSX).toContain("<ChatComposer")
-  expect(GATEWAY_TSX).toContain('data-ui="gateway-mission-conversation"')
+test("Mission workbench mounts the shared Conversation and ChatComposer for mission sessions", () => {
+  expect(MISSION_TSX).toContain("function MissionConversation")
+  expect(MISSION_TSX).toContain("<Conversation container={conversationContainer} />")
+  expect(MISSION_TSX).toContain("<ChatComposer")
+  expect(MISSION_TSX).toContain('data-ui="mission-conversation"')
+})
+
+test("Mission reuses the shared task list and task conversation surfaces", () => {
+  expect(MISSION_TSX).toContain('import { TaskList } from "./TaskList"')
+  expect(MISSION_TSX).toContain("<TaskList")
+  expect(MISSION_TSX).toContain("function MissionTaskConversation")
+  expect(MISSION_TSX).toContain('data-ui="mission-task-conversation"')
+  expect(MISSION_TSX).not.toContain("function MissionLedgerRow")
+  expect(MISSION_TSX).not.toContain("function MissionSelectedTask")
+})
+
+test("Mission page submits messages tagged with the mission source label", () => {
+  // The message source label sent from the page is now "mission" (was
+  // "gateway") — the squad/team task provenance keys off source==="mission"
+  // (specs/gateway-mission-split-2026-05-28.md §4).
+  expect(MISSION_TSX).toContain('source: "mission"')
 })

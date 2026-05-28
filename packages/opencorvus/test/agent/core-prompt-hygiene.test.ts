@@ -15,11 +15,13 @@ const promptFiles = {
   intentAnalysis: "intent-analysis-core.txt",
   orchestrator: "orchestrator-core.txt",
   requirements: "requirements-core.txt",
+  visualQa: "visual-qa-core.txt",
 }
 
 const sharedPromptFiles = {
   acceptanceReview: "acceptance-review-core.txt",
   engineeringCraft: "engineering-craft.txt",
+  mission: "mission-core.txt",
 }
 
 async function readPrompt(name: keyof typeof promptFiles) {
@@ -61,6 +63,7 @@ describe("core prompt hygiene", () => {
       // specs/fact-check-agent-2026-05-25.md §4.4).
       orchestrator: 495,
       requirements: 180,
+      visualQa: 45,
     }
 
     for (const name of Object.keys(promptFiles) as Array<keyof typeof promptFiles>) {

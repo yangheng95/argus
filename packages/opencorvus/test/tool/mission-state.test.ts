@@ -11,12 +11,12 @@ import { tmpdir } from "../fixture/fixture"
 Log.init({ print: false })
 
 /**
- * Spec: gateway-master-supervisor-2026-05-26.md §2.2.
+ * Spec: gateway-mission-split-2026-05-28.md.
  *
- * mission_state is path-confined I/O for the gateway-master supervisor.
- * The boundary is the protection — master cannot read or write outside
- * `.opencorvus/runtime/gateway-master/<missionID>/<file>` where file is
- * one of the four hard-coded names.
+ * mission_state is path-confined I/O for the Mission agent. The boundary is
+ * the protection — Mission cannot read or write outside
+ * `.opencorvus/runtime/mission/<missionID>/<file>` where file is one of the
+ * four hard-coded names.
  */
 describe("mission_state validation", () => {
   afterEach(async () => {
@@ -84,7 +84,7 @@ describe("mission_state read / write / list", () => {
           fakeCtx(),
         )
         const onDisk = await fs.readFile(
-          path.join(tmp.path, ".opencorvus", "runtime", "gateway-master", "tv-replay", "frontier.md"),
+          path.join(tmp.path, ".opencorvus", "runtime", "mission", "tv-replay", "frontier.md"),
           "utf8",
         )
         expect(onDisk).toBe(body)
@@ -107,7 +107,7 @@ describe("mission_state read / write / list", () => {
           { action: "write", missionID: "tv-replay", file: "tasks.md", content: "task list" } as any,
           fakeCtx(),
         )
-        const dir = path.join(tmp.path, ".opencorvus", "runtime", "gateway-master", "tv-replay")
+        const dir = path.join(tmp.path, ".opencorvus", "runtime", "mission", "tv-replay")
         const entries = await fs.readdir(dir)
         // Only the durable file should remain — no .tmp leftovers from atomicWrite.
         expect(entries.sort()).toEqual(["tasks.md"])
@@ -187,7 +187,7 @@ function fakeCtx() {
   return {
     sessionID: Identifier.ascending("session"),
     messageID: Identifier.ascending("message"),
-    agent: "gateway-master",
+    agent: "mission",
     abort: new AbortController().signal,
     messages: [],
     metadata() {},

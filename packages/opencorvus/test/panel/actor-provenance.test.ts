@@ -5,27 +5,28 @@ import { PanelTool } from "../../src/tool/panel"
 import { EngineService } from "../../src/task-api"
 import { Log } from "../../src/util/log"
 import { derivePanelActor, PanelActor } from "../../src/panel/capability"
+import { ensureMissionSession } from "../../src/mission/session"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
 Log.init({ print: false })
 
 /**
- * Spec: gateway-master-supervisor-2026-05-26.md §2.4.
+ * Spec: gateway-mission-split-2026-05-28.md §4 (Mission → Squad provenance).
  *
- * `panel.create_task` must record the server-derived `actor` (the LLM
- * agent or external client that drove the call) in the new task's
- * metadata. Auditing and future authorization branch off this field —
- * never off the free-text `source` field, which is reserved for
- * business-meaningful labels.
+ * `panel.create_task` records server-derived provenance: `actor` (the LLM
+ * agent or external client that drove the call) and, when the actor is the
+ * Mission agent, `source: "mission"` + `metadata.mission.{id, session_id}` so
+ * the work shows up as Mission → Squad lineage. Auditing and authorization
+ * branch off `actor`, never off the free-text `source` field.
  */
 describe("derivePanelActor", () => {
   test("control agent maps to control_agent", () => {
     expect(derivePanelActor("control")).toBe(PanelActor.enum.control_agent)
   })
 
-  test("gateway-master agent maps to gateway_master", () => {
-    expect(derivePanelActor("gateway-master")).toBe(PanelActor.enum.gateway_master)
+  test("mission agent maps to mission", () => {
+    expect(derivePanelActor("mission")).toBe(PanelActor.enum.mission)
   })
 
   test("any other agent name (incl. undefined / blank / route fake) collapses to panel_ui", () => {
@@ -43,14 +44,28 @@ describe("panel.create_task actor provenance", () => {
     await resetDatabase()
   })
 
-  async function runCreateTask(agent: string, userMetadata?: Record<string, unknown>) {
+  // Run create_task and capture the EngineService.createTask input. When
+  // `missionSession` is true, a real mission session is created first and
+  // used as ctx.sessionID so the mission-provenance path can read
+  // metadata.mission.id.
+  async function runCreateTask(
+    agent: string,
+    opts: { userMetadata?: Record<string, unknown>; missionSession?: boolean } = {},
+  ) {
     await using tmp = await tmpdir({ git: true })
-    let captured: { metadata?: Record<string, unknown> } | undefined
+    let captured: { metadata?: Record<string, unknown>; source?: string } | undefined
+    let missionID: string | undefined
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         const stubTaskID = Identifier.ascending("task")
         const createSpy = spyOn(EngineService, "createTask").mockResolvedValue(stubTaskID)
+        let sessionID = Identifier.ascending("session")
+        if (opts.missionSession) {
+          const session = await ensureMissionSession({ missionID: "prov-mission", defaultCwd: tmp.path })
+          sessionID = session.id
+          missionID = session.missionID
+        }
         const tool = await PanelTool.init()
         await tool.execute(
           {
@@ -58,10 +73,10 @@ describe("panel.create_task actor provenance", () => {
             request: "do thing",
             allow_create: true,
             queue: false,
-            ...(userMetadata ? { metadata: userMetadata } : {}),
+            ...(opts.userMetadata ? { metadata: opts.userMetadata } : {}),
           },
           {
-            sessionID: Identifier.ascending("session"),
+            sessionID,
             messageID: Identifier.ascending("message"),
             agent,
             abort: new AbortController().signal,
@@ -72,30 +87,50 @@ describe("panel.create_task actor provenance", () => {
           },
         )
         expect(createSpy).toHaveBeenCalledTimes(1)
-        captured = createSpy.mock.calls[0]?.[0] as { metadata?: Record<string, unknown> }
+        captured = createSpy.mock.calls[0]?.[0] as { metadata?: Record<string, unknown>; source?: string }
       },
     })
-    return captured?.metadata ?? {}
+    return { metadata: captured?.metadata ?? {}, source: captured?.source, missionID }
   }
 
   test("control agent stamps actor=control_agent into task metadata", async () => {
-    const metadata = await runCreateTask("control")
+    const { metadata } = await runCreateTask("control")
     expect(metadata.actor).toBe(PanelActor.enum.control_agent)
   })
 
-  test("gateway-master agent stamps actor=gateway_master into task metadata", async () => {
-    const metadata = await runCreateTask("gateway-master")
-    expect(metadata.actor).toBe(PanelActor.enum.gateway_master)
+  test("mission agent stamps actor=mission + source=mission + metadata.mission.{id,session_id}", async () => {
+    const { metadata, source, missionID } = await runCreateTask("mission", { missionSession: true })
+    expect(metadata.actor).toBe(PanelActor.enum.mission)
+    expect(source).toBe("mission")
+    const mission = metadata.mission as { id?: string; session_id?: string } | undefined
+    expect(mission?.id).toBe(missionID)
+    expect(mission?.session_id).toMatch(/^ses_/)
   })
 
-  test("non-control / non-master agent stamps actor=panel_ui (default)", async () => {
-    const metadata = await runCreateTask("gateway")
+  test("mission agent in a non-mission session is rejected (no mission.id to attribute to)", async () => {
+    let error: unknown
+    try {
+      await runCreateTask("mission") // random session, no mission metadata
+    } catch (err) {
+      error = err
+    }
+    expect(error).toBeInstanceOf(Error)
+  })
+
+  test("non-control / non-mission agent stamps actor=panel_ui (default)", async () => {
+    const { metadata, source } = await runCreateTask("gateway")
     expect(metadata.actor).toBe(PanelActor.enum.panel_ui)
+    expect(source).toBe("panel")
   })
 
-  test("client-supplied actor in metadata is overridden by server-derived value", async () => {
-    const metadata = await runCreateTask("control", { actor: "gateway_master", custom: "preserved" })
+  test("client-supplied actor/mission in metadata is overridden by server-derived value", async () => {
+    const { metadata } = await runCreateTask("control", {
+      userMetadata: { actor: "mission", mission: { id: "forged" }, custom: "preserved" },
+    })
     expect(metadata.actor).toBe(PanelActor.enum.control_agent)
+    // control_agent is not the mission actor, so no server-derived mission
+    // block is written; the forged client value must not survive either.
+    expect(metadata.mission).toBeUndefined()
     expect(metadata.custom).toBe("preserved")
   })
 })

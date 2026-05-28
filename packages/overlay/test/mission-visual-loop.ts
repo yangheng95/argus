@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * Gateway visual loop — captures Gateway surface screenshots across the
+ * Mission visual loop — captures Mission surface screenshots across the
  * canonical states the operator sees in production. Built for the double-
  * loop iteration (product-design review + visual-testing review), so each
  * round can re-run the script and feed fresh screenshots to the visual
@@ -12,12 +12,12 @@
  *     for overlay visual capture);
  *   • intercepts every server-bound HTTP request and returns deterministic
  *     mock payloads, so we don't need the opencorvus sidecar running;
- *   • drives the overlay through the Gateway page-mode transitions and
+ *   • drives the overlay through the Mission page-mode transitions and
  *     captures one PNG per surface state under
- *     `tmp/gateway-visual-loop/<state>.png`.
+ *     `tmp/mission-visual-loop/<state>.png`.
  *
  * Usage:
- *   bun run packages/overlay/test/gateway-visual-loop.ts [out_dir]
+ *   bun run packages/overlay/test/mission-visual-loop.ts [out_dir]
  *
  * Exit code: 0 on full success, non-zero on any captured failure.
  * The script writes a `summary.json` next to the PNGs describing each
@@ -31,7 +31,7 @@ import puppeteer, { type Browser, type HTTPRequest, type Page } from "puppeteer-
 import { findBrowserExecutable } from "../../opencorvus/src/delivery/checks/visual"
 
 const OUT_DIR_ARG = process.argv[2]
-const OUT_DIR = path.resolve(OUT_DIR_ARG ?? path.join(tmpdir(), "gateway-visual-loop"))
+const OUT_DIR = path.resolve(OUT_DIR_ARG ?? path.join(tmpdir(), "mission-visual-loop"))
 const VITE_PORT = 5173
 const VIEWPORT_WIDE = { width: 1440, height: 900 }
 const VIEWPORT_NARROW = { width: 900, height: 720 }
@@ -199,8 +199,8 @@ async function applyMocks(page: Page): Promise<void> {
   page.on("request", async (req: HTTPRequest) => {
     const url = req.url()
     // Only intercept opencorvus server calls. The previous regex also
-    // matched any vite-served URL whose path contained "gateway" /
-    // "channel" / etc. (e.g. /src/services/gateway.ts) and responded
+    // matched any vite-served URL whose path contained "mission" /
+    // "channel" / etc. (e.g. /src/services/mission.ts) and responded
     // with JSON, which Chrome rejected with "Expected a JS module …"
     // and bricked overlay init. Pin interception to the opencorvus
     // sidecar port so vite source assets always pass through.
@@ -239,13 +239,13 @@ async function applyMocks(page: Page): Promise<void> {
       // Connection probe — overlay's connection.ts:149 expects
       // `{ paths: { database, data, home } }`. Anything else and
       // checkConnection() returns false, which keeps the Workspace-
-      // Required modal pinned on top and the Gateway invisible behind it.
+      // Required modal pinned on top and the Mission invisible behind it.
       return void ok({
         ok: true,
         paths: {
-          database: "/tmp/gateway-loop/global.db",
-          data: "/tmp/gateway-loop/data",
-          home: "/tmp/gateway-loop",
+          database: "/tmp/mission-loop/global.db",
+          data: "/tmp/mission-loop/data",
+          home: "/tmp/mission-loop",
         },
       })
     }
@@ -256,7 +256,9 @@ async function applyMocks(page: Page): Promise<void> {
       return void ok(STATS_OK)
     }
     if (/\/gateway\/capabilities/.test(url) && method === "GET") return void ok({ surface: "gateway", actions: [] })
-    if (/\/gateway\/task\/decompose/.test(url) && method === "POST") return void ok(DECOMPOSE_FIXTURE)
+    // The Mission launcher POSTs /mission/wake (was the gateway decompose
+    // route). It returns the new/resumed mission + session ids.
+    if (/\/mission\/wake/.test(url) && method === "POST") return void ok({ missionID: "mission_visual_demo", sessionID: "session_mission_visual", created: true })
     if (/\/channel\/runtime$/.test(url) && method === "GET") return void ok(CHANNEL_RUNTIME_OK)
     if (/\/channel\/runtime\/restart/.test(url) && method === "POST") return void ok(CHANNEL_RUNTIME_OK)
     if (/\/channel\b/.test(url) && method === "GET") return void ok(CHANNELS_OK)
@@ -328,26 +330,26 @@ async function bootstrapOverlay(page: Page): Promise<void> {
   // are the right "ready" signal for headed visual capture.
   await page.waitForFunction(() => {
     const w = window as unknown as {
-      setPageMode?: (mode: "panel" | "gateway") => void
+      setPageMode?: (mode: "panel" | "mission") => void
       applyDirectory?: unknown
     }
     return typeof w.setPageMode === "function" && typeof w.applyDirectory === "function"
   }, { timeout: 20_000 })
-  // Apply the fixture directory + switch into Gateway mode via the
+  // Apply the fixture directory + switch into Mission mode via the
   // app-store helpers the overlay deliberately exposes on `window`
   // for headed automation.
   await page.evaluate((directory: string) => {
     const w = window as unknown as {
       applyDirectory: (dir: string, opts: { save: boolean; temp: boolean; restoreWorkspace: boolean }) => void
-      setPageMode: (mode: "panel" | "gateway") => void
+      setPageMode: (mode: "panel" | "mission") => void
     }
     w.applyDirectory(directory, { save: false, temp: true, restoreWorkspace: false })
-    w.setPageMode("gateway")
+    w.setPageMode("mission")
   }, FIXTURE_DIR)
   // One frame for the page-mode createEffect to write body[data-page-mode]
-  // and for Gateway's createResource bindings (gateway/stats, channel,
-  // bindings) to fire their mocked requests.
-  await page.waitForFunction(() => document.body.getAttribute("data-page-mode") === "gateway", { timeout: 5_000 })
+  // and for Mission's createResource bindings (gateway/stats infra endpoint,
+  // channel, bindings) to fire their mocked requests.
+  await page.waitForFunction(() => document.body.getAttribute("data-page-mode") === "mission", { timeout: 5_000 })
   await new Promise((r) => setTimeout(r, 800))
 }
 
@@ -378,7 +380,7 @@ async function captureStates(page: Page): Promise<StateResult[]> {
 
   await step("01-empty-default-wide", async () => {
     await page.evaluate(() => {
-      document.body.setAttribute("data-page-mode", "gateway")
+      document.body.setAttribute("data-page-mode", "mission")
     })
     await new Promise((r) => setTimeout(r, 400))
   })
@@ -401,30 +403,31 @@ async function captureStates(page: Page): Promise<StateResult[]> {
   })
 
   await step("04-composer-open", async () => {
-    const composeBtn = await page.$('[data-ui="gateway-new-requirement"]')
+    const composeBtn = await page.$('[data-ui="mission-new-requirement"]')
     if (composeBtn) await composeBtn.click()
     await new Promise((r) => setTimeout(r, 350))
   })
 
-  await step("05-proposal-preview", async () => {
+  await step("05-launcher-filled", async () => {
+    // The decompose-then-review proposal flow was replaced by the Mission
+    // launcher (gateway-mission-split-2026-05-28.md §3): a single textarea
+    // that POSTs /mission/wake. Capture the filled launcher rather than a
+    // proposal preview, which no longer exists.
     await page.evaluate((requirement: string) => {
-      const input = document.querySelector<HTMLTextAreaElement>('[data-ui="gateway-composer-input"]')
+      const input = document.querySelector<HTMLTextAreaElement>('[data-ui="mission-composer-input"]')
       if (input) {
         input.value = requirement
         input.dispatchEvent(new Event("input", { bubbles: true }))
       }
     }, DECOMPOSE_FIXTURE.requirement)
-    const submit = await page.$('[data-ui="gateway-composer-submit"]')
-    if (submit) await submit.click()
-    // Composer awaits the mock decompose — give it room to render.
-    await new Promise((r) => setTimeout(r, 900))
+    await new Promise((r) => setTimeout(r, 400))
   })
 
-  // Narrow-breakpoint capture — flip viewport, dismiss proposal so the
+  // Narrow-breakpoint capture — flip viewport, dismiss the launcher so the
   // ledger is the front surface, then snap. Keeps the helper signature
   // consistent (state + side effects only).
   try {
-    const discard = await page.$('[data-ui="gateway-proposal-discard"]')
+    const discard = await page.$('[data-ui="mission-composer-discard"]')
     if (discard) await discard.click()
     await new Promise((r) => setTimeout(r, 300))
     const narrowPath = await snap(page, "06-narrow-breakpoint", VIEWPORT_NARROW)
@@ -442,7 +445,7 @@ async function captureStates(page: Page): Promise<StateResult[]> {
     await page.evaluate((message: string) => {
       ;(window as unknown as { __statsForceError?: string }).__statsForceError = message
     }, STATS_ERROR_MESSAGE)
-    const refresh = await page.$('[data-ui="gateway-refresh"]')
+    const refresh = await page.$('[data-ui="mission-refresh"]')
     if (refresh) await refresh.click()
     await new Promise((r) => setTimeout(r, 700))
   })
@@ -454,7 +457,7 @@ async function run(): Promise<void> {
   await ensureOutDir()
   const summaryPath = path.join(OUT_DIR, "summary.json")
 
-  console.log(`[gateway-visual-loop] outDir=${OUT_DIR}`)
+  console.log(`[mission-visual-loop] outDir=${OUT_DIR}`)
   // The loop now REQUIRES an externally-managed vite dev (port :5173).
   // Spawning vite from inside a Bun child proved unreliable on Windows
   // (Bun → node → vite tree did not always surface readiness on stdout,
@@ -463,12 +466,12 @@ async function run(): Promise<void> {
   // Fail fast and tell the operator how to fix it if the port is not bound.
   if (!(await isPortBound(VITE_PORT))) {
     throw new Error(
-      `gateway-visual-loop: vite dev is not listening on :${VITE_PORT}. ` +
+      `mission-visual-loop: vite dev is not listening on :${VITE_PORT}. ` +
       `Start it in a separate shell with ` +
       `\`bun run --cwd packages/overlay dev:vite\` and re-run this script.`,
     )
   }
-  console.log(`[gateway-visual-loop] connecting to external vite on :${VITE_PORT}`)
+  console.log(`[mission-visual-loop] connecting to external vite on :${VITE_PORT}`)
   let browser: Browser | undefined
   const cleanup = async () => {
     try { await browser?.close() } catch {}
@@ -478,7 +481,7 @@ async function run(): Promise<void> {
   process.on("SIGTERM", () => { void cleanup().then(() => process.exit(143)) })
 
   try {
-    console.log(`[gateway-visual-loop] launching chrome`)
+    console.log(`[mission-visual-loop] launching chrome`)
     const executablePath = await findBrowserExecutable()
     browser = await puppeteer.launch({
       executablePath,
@@ -498,13 +501,13 @@ async function run(): Promise<void> {
     }
     await writeFile(summaryPath, JSON.stringify(summary, null, 2), "utf8")
     const failed = results.filter((r) => !r.ok)
-    console.log(`[gateway-visual-loop] captured ${results.length - failed.length}/${results.length} states`)
+    console.log(`[mission-visual-loop] captured ${results.length - failed.length}/${results.length} states`)
     if (failed.length > 0) {
-      console.error(`[gateway-visual-loop] failed states:`, failed)
+      console.error(`[mission-visual-loop] failed states:`, failed)
       process.exitCode = 1
     }
   } catch (err) {
-    console.error(`[gateway-visual-loop] fatal:`, err)
+    console.error(`[mission-visual-loop] fatal:`, err)
     process.exitCode = 2
   } finally {
     await cleanup()

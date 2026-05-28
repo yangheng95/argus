@@ -46,7 +46,7 @@ import {
   WebpageTextDiffTool,
   WebpageVisionJudgeTool,
 } from "../mirror/tools"
-import { isMirrorToolId } from "../mirror/tools/ids"
+import { isMirrorAnalysisToolId, isMirrorToolId } from "../mirror/tools/ids"
 import { Glob } from "../util/glob"
 import { pathToFileURL } from "url"
 
@@ -118,9 +118,9 @@ export namespace ToolRegistry {
     custom.push(tool)
   }
 
-  async function all(): Promise<Tool.Info[]> {
+  async function all(config?: Config.Info): Promise<Tool.Info[]> {
     const custom = await state().then((x) => x.custom)
-    const config = await Config.get()
+    const cfg = config ?? (await Config.get())
     const question = ["app", "cli", "desktop"].includes(Flag.OPENCORVUS_CLIENT) || Flag.OPENCORVUS_ENABLE_QUESTION_TOOL
 
     return [
@@ -158,7 +158,7 @@ export namespace ToolRegistry {
       WebpageTextDiffTool,
       WebpageVisionJudgeTool,
       ...(Flag.OPENCORVUS_EXPERIMENTAL_LSP_TOOL ? [LspTool] : []),
-      ...(config.experimental?.batch_tool === true ? [BatchTool] : []),
+      ...(cfg.experimental?.batch_tool === true ? [BatchTool] : []),
       ...custom,
     ]
   }
@@ -173,14 +173,17 @@ export namespace ToolRegistry {
       modelID: string
     },
     agent?: Agent.Info,
+    config?: Config.Info,
   ) {
-    let items = await all()
+    let items = await all(config)
 
     // Agent tool adapter: filter by agent's declared tool set
     // Design-analysis is the single owner of mirror extraction. Other agents
     // consume decision-log PRD/SPEC entries and optional task.design_specs
     // anchors instead of reopening URL/Figma/image extraction through registry tools.
-    if (agent?.name !== "design-analyst") {
+    if (agent?.name === "visual-qa") {
+      items = items.filter((t) => !isMirrorAnalysisToolId(t.id))
+    } else if (agent?.name !== "design-analyst") {
       items = items.filter((t) => !isMirrorToolId(t.id))
     }
 
@@ -205,7 +208,7 @@ export namespace ToolRegistry {
         })
         .map(async (t) => {
           using _ = log.time(t.id)
-          const tool = await t.init({ agent })
+          const tool = await t.init({ agent, config })
           const output = {
             description: tool.description,
             parameters: tool.parameters,

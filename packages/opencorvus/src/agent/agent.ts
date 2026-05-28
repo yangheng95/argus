@@ -11,7 +11,8 @@ import { ProviderTransform } from "../provider/transform"
 import PROMPT_GENERATE from "./generate.txt"
 import ARCHITECT_CORE from "@/prompt/core/architect-core.txt"
 import BUILD_CORE from "@/prompt/core/build-core.txt"
-import GATEWAY_MASTER_CORE from "@/prompt/core/gateway-master-core.txt"
+import VISUAL_QA_CORE from "@/prompt/core/visual-qa-core.txt"
+import MISSION_CORE from "@/prompt/core/mission-core.txt"
 import REQUIREMENTS_CORE from "@/prompt/core/requirements-core.txt"
 import DESIGN_ANALYST_CORE from "@/prompt/core/design-analyst-core.txt"
 import INTEGRITY_CORE from "@/prompt/core/integrity-core.txt"
@@ -115,8 +116,13 @@ export namespace Agent {
     })
     const user = PermissionNext.fromConfig(cfg.permission ?? {})
     const mirrorDenied = PermissionNext.fromConfig(Object.fromEntries(MIRROR_TOOL_IDS.map((id) => [id, "deny"])))
+    const mirrorAnalysisDenied = PermissionNext.fromConfig(
+      Object.fromEntries(MIRROR_ANALYSIS_TOOL_IDS.map((id) => [id, "deny"])),
+    )
     const nonDesignPermissions = (...rulesets: PermissionNext.Ruleset[]) =>
       PermissionNext.merge(defaults, ...rulesets, user, mirrorDenied)
+    const visualQaPermissions = (...rulesets: PermissionNext.Ruleset[]) =>
+      PermissionNext.merge(defaults, ...rulesets, user, mirrorAnalysisDenied)
 
     const result: Record<string, Info> = {
       coding: {
@@ -144,6 +150,26 @@ export namespace Agent {
           PermissionNext.fromConfig({
             question: "allow",
             webfetch: "allow",
+          }),
+        ),
+        mode: "primary",
+        native: true,
+        hidden: true,
+      },
+      "visual-qa": {
+        name: "visual-qa",
+        description: AgentRoleContract.description("visual-qa"),
+        tools: { exclude: ["panel", "task_report", "analytics", ...MIRROR_ANALYSIS_TOOL_IDS] },
+        options: {},
+        prompt: VISUAL_QA_CORE,
+        permission: visualQaPermissions(
+          PermissionNext.fromConfig({
+            question: "allow",
+            webfetch: "allow",
+            webpage_render: "allow",
+            webpage_evaluate: "allow",
+            webpage_text_diff: "allow",
+            webpage_vision_judge: "allow",
           }),
         ),
         mode: "primary",
@@ -248,32 +274,46 @@ export namespace Agent {
         native: true,
         hidden: true,
       },
-      "gateway-master": {
-        name: "gateway-master",
-        description: AgentRoleContract.description("gateway-master"),
-        prompt: GATEWAY_MASTER_CORE,
-        // Mission supervisor primary agent. Runs through the standard
-        // SessionWake → SessionPrompt.loop primary-agent runtime (same as
-        // `coding` / `control`), NOT runAgentSession. See
-        // gateway-master-supervisor-2026-05-26.md §2.5.
+      mission: {
+        name: "mission",
+        description: AgentRoleContract.description("mission"),
+        prompt: MISSION_CORE,
+        // Mission primary agent — owns long-running user goals. Runs through
+        // the standard SessionWake → SessionPrompt.loop primary-agent runtime
+        // (same as `coding` / `control`), NOT runAgentSession. See
+        // specs/gateway-mission-split-2026-05-28.md.
         //
-        // Tool whitelist is deliberately narrow — the orchestrator-core
-        // comment above (lines 266-283) is a literal history log of how a
-        // scheduler-style agent given executor tools (bash/edit/read)
-        // bypassed worker dispatch and tried to do work itself. Do NOT
-        // add bash/edit/read/write/glob/webpage_extract/url_screenshot
-        // here under any circumstance.
+        // Capability set = COORDINATOR (user-confirmed 2026-05-28): it reads
+        // and analyses the project, maintains mission state, plans, dispatches
+        // squad/team work, reconciles outcomes, and talks to the user. It does
+        // NOT write code or run shells — execution is delegated to
+        // orchestrator-led squad/team tasks.
         //
-        // panel is allowed but action-filtered to create_task + query_task
-        // by panel.ts execute (actor-based whitelist on derivePanelActor
-        // value). Master cannot retry/cancel/replan/send_message/manage
-        // sessions through panel.
+        // Deliberately EXCLUDED (each on purpose): bash / edit / write /
+        // apply_patch (it is not a coding executor — would let it bypass the
+        // orchestrator, rule 11); url_screenshot / webpage_* (crawling/visual
+        // capture belong to design-analyst inside a dispatched task); task
+        // (the generic sub-agent dispatch is the orchestrator's, not mission's).
+        //
+        // panel is allowed but action-filtered to the coordination set by
+        // panel.ts execute (actor-based whitelist on derivePanelActor value):
+        // create_task / query_task / view_* / send_task_message / cancel_task /
+        // reply_interaction / reject_interaction. Mission cannot
+        // replan/update_goal/delete_goal or manage sessions through panel —
+        // those belong to the orchestrator and the desktop panel_ui.
         tools: {
           include: [
-            "mission_state",
-            "panel",
+            "read",
+            "glob",
+            "search_code",
+            // `lsp` is experimental (flag-gated in the tool registry); it
+            // resolves only when OPENCORVUS_EXPERIMENTAL_LSP_TOOL is on, same
+            // as the explore agent. Directory listing is covered by `glob`.
+            "lsp",
             "webfetch",
             "websearch",
+            "mission_state",
+            "panel",
             "memory",
             "todoread",
             "todowrite",
@@ -282,6 +322,10 @@ export namespace Agent {
         },
         permission: nonDesignPermissions(
           PermissionNext.fromConfig({
+            read: "allow",
+            glob: "allow",
+            search_code: "allow",
+            lsp: "allow",
             panel: "allow",
             mission_state: "allow",
             webfetch: "allow",
@@ -291,16 +335,16 @@ export namespace Agent {
           }),
         ),
         // Step cap mirrors orchestrator: per-agent budget should not
-        // constrain a legitimate long-running supervisor loop. Per-wake
+        // constrain a legitimate long-running coordination loop. Per-wake
         // exhaustion is bounded by the LLM provider's own context limit
         // plus compaction.
         steps: 1000,
         options: {},
         mode: "primary",
         native: true,
-        // hidden: true keeps Agent.defaultAgent() from picking master
-        // over coding (defaultAgent throws on hidden, agent.ts:597). The
-        // gateway page wakes master through an explicit endpoint.
+        // hidden: true keeps Agent.defaultAgent() from picking mission
+        // over coding (defaultAgent throws on hidden). The Mission page
+        // wakes it through the explicit /mission/wake endpoint.
         hidden: true,
       },
       orchestrator: {
@@ -587,6 +631,7 @@ export namespace Agent {
   const NATIVE_DEFAULTS: Record<string, string> = {
     coding: PROMPT_CODING,
     build: BUILD_CORE,
+    "visual-qa": VISUAL_QA_CORE,
     general: PROMPT_GENERAL,
     explore: PROMPT_EXPLORE,
     compaction: PROMPT_COMPACTION,
@@ -597,7 +642,7 @@ export namespace Agent {
     "intent-analysis": INTENT_ANALYSIS_CORE,
     integrity: INTEGRITY_RUNTIME_PROMPT,
     "fact-check": FACT_CHECK_CORE,
-    "gateway-master": GATEWAY_MASTER_CORE,
+    mission: MISSION_CORE,
   }
 
   /** Returns the built-in default prompt for a native agent (before config overrides). */

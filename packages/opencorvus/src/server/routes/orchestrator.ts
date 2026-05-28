@@ -38,6 +38,7 @@ import {
 } from "@/engine/model"
 import { RewindTaskInput, taskRewindCursor } from "@/engine/rewind"
 import { requireTask } from "@/engine/store"
+import { abortChildExecutionForSession } from "@/engine/execution-abort"
 import { TaskQueueReorderError } from "@/engine/queue"
 import { ExecutorNotConfiguredError, EngineService, PlannerFailureError, TaskQueueStartError } from "@/task-api"
 import { ProtocolStore } from "@/protocol/store"
@@ -45,7 +46,6 @@ import { ChannelIngress } from "@/channel/ingress"
 import { Identifier } from "@/id/id"
 import { Session } from "@/session"
 import { Message } from "@/session/message"
-import { SessionPrompt } from "@/session/prompt"
 import { errors, replyRouteErrors } from "../error"
 import { lazy } from "../../util/lazy"
 import { Log } from "@/util/log"
@@ -372,7 +372,7 @@ export const EngineRoutes = lazy(() =>
         summary: "List channel bindings for a task",
         description:
           "Return every (platform, channel, thread) binding that points at this task. " +
-          "Used by the Gateway page to surface inbound channel provenance for a selected task.",
+          "Used by the Mission page to surface inbound channel provenance for a selected task.",
         operationId: "task.bindings",
         responses: {
           200: {
@@ -660,6 +660,65 @@ export const EngineRoutes = lazy(() =>
           history: historyWindow.history,
           agentView,
           view,
+        })
+      },
+    )
+    .get(
+      "/task/:taskID/conversation/session/:sessionID",
+      describeRoute({
+        summary: "Get one task conversation session transcript",
+        description:
+          "Return the persisted transcript for one task child session so the overlay can hydrate old build-agent output directly instead of paging through the whole task history.",
+        operationId: "task.conversation.session",
+        responses: {
+          200: {
+            description: "Task conversation session transcript",
+            content: {
+              "application/json": {
+                schema: resolver(TaskConversationHistoryPage),
+              },
+            },
+          },
+          ...errors(404),
+        },
+      }),
+      validator("param", z.object({ taskID: Task.shape.id, sessionID: z.string().min(1) })),
+      async (c) => {
+        const { taskID, sessionID } = c.req.valid("param")
+        const rewindCursor = taskRewindCursor(taskID)
+        const [board, transcript, timeline] = await Promise.all([
+          EngineService.getBoard(taskID, { sync: false }),
+          loadTaskTranscript(taskID),
+          Promise.resolve(ControlTimeline.list({ taskID })),
+        ])
+        const sessionTranscript = transcript.filter((item) => {
+          if (String(item?.info?.sessionID || "") !== sessionID) return false
+          if (rewindCursor == null) return true
+          const created = typeof item?.info?.time?.created === "number" ? item.info.time.created : undefined
+          return created == null || created <= rewindCursor
+        })
+        const oldestTimestamp = sessionTranscript.length > 0
+          ? conversationItemTimestamp(sessionTranscript[0])
+          : null
+        const newestTimestamp = sessionTranscript.length > 0
+          ? conversationItemTimestamp(sessionTranscript[sessionTranscript.length - 1])
+          : null
+        const sessionTimeline = oldestTimestamp == null || newestTimestamp == null
+          ? []
+          : timeline.filter((item) => {
+              const created = conversationItemTimestamp(item)
+              return created >= oldestTimestamp && created <= newestTimestamp
+            })
+        return c.json({
+          transcript: sessionTranscript,
+          timeline: sessionTimeline,
+          view: projectConversationView(board, sessionTranscript),
+          history: {
+            oldestTimestamp,
+            oldestMessageID: sessionTranscript[0] ? conversationItemID(sessionTranscript[0]) || null : null,
+            hasMore: false,
+            limit: sessionTranscript.length,
+          },
         })
       },
     )
@@ -967,7 +1026,7 @@ export const EngineRoutes = lazy(() =>
         summary: "Cancel a task agent session",
         description:
           "Abort the active SessionLoop for a non-orchestrator task agent session. " +
-          "This cancels the local agent turn without changing global task orchestration.",
+          "For executor-owned child sessions, also abort the live executor stream.",
         operationId: "task.session.cancel",
         responses: {
           200: {
@@ -985,7 +1044,11 @@ export const EngineRoutes = lazy(() =>
       async (c) => {
         const params = c.req.valid("param")
         await assertDirectAgentSession(params.taskID, params.sessionID)
-        SessionPrompt.cancel(params.sessionID)
+        await abortChildExecutionForSession({
+          taskID: params.taskID,
+          sessionID: params.sessionID,
+          reason: "agent session cancelled",
+        })
         return c.json({
           task_id: params.taskID,
           session_id: params.sessionID,
