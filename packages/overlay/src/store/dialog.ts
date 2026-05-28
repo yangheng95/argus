@@ -14,6 +14,31 @@ export type ConfigDialogTab =
   | "agent-models"
   | "about";
 
+export interface ConfigSection {
+  id: ConfigDialogTab;
+  labelKey: string;
+}
+
+// Single source for the config sections, their i18n label keys, and their
+// order. Consumed by:
+//   • ConfigDialogHost — renders the sidebar nav (adds per-section icons),
+//   • services/dialog.ts — the valid-tab guard set,
+//   • TitlebarMenubar — the top-level Settings menu.
+// Add a section here once and it surfaces in all three (rule 8 — single source).
+export const CONFIG_SECTIONS: readonly ConfigSection[] = [
+  { id: "general", labelKey: "settings.title" },
+  { id: "permissions", labelKey: "permissions.title" },
+  { id: "prompt", labelKey: "prompt.title" },
+  { id: "channel", labelKey: "channel.title" },
+  { id: "skill", labelKey: "skill.title" },
+  { id: "skill-market", labelKey: "skill.market.title" },
+  { id: "mcp", labelKey: "mcp.title" },
+  { id: "memory", labelKey: "memory.title" },
+  { id: "providers", labelKey: "cmdk.settings.providers" },
+  { id: "agent-models", labelKey: "cmdk.settings.agent_models" },
+  { id: "about", labelKey: "about.title" },
+];
+
 export interface AppDialogState extends AppDialogOptions {
   open: boolean;
   epoch: number;

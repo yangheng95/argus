@@ -11,24 +11,12 @@ import { selectedTaskDirectory } from "../store/board";
 import { t } from "../utils/i18n";
 import { renderMarkdown, escapeHtml } from "../utils/markdown";
 import { describeToolPart } from "../utils/tool";
-import { dialogStore, setDialogStore, type ConfigDialogTab } from "../store/dialog";
+import { dialogStore, setDialogStore, CONFIG_SECTIONS, type ConfigDialogTab } from "../store/dialog";
 import { panelMessage } from "./chat";
 import { OPENCORVUS_VERSION_LABEL, OVERLAY_VERSION } from "../utils/version";
 
 let sessionDialogSeq = 0;
-const CONFIG_DIALOG_TABS = new Set<ConfigDialogTab>([
-  "general",
-  "permissions",
-  "prompt",
-  "channel",
-  "skill",
-  "skill-market",
-  "mcp",
-  "memory",
-  "providers",
-  "agent-models",
-  "about",
-]);
+const CONFIG_DIALOG_TABS = new Set<ConfigDialogTab>(CONFIG_SECTIONS.map((section) => section.id));
 
 const CONFIG_SECTION_TARGETS: Record<string, { tab: ConfigDialogTab; elementID?: string }> = {
   skill: { tab: "skill", elementID: "skillList" },

@@ -250,7 +250,7 @@ test("selecting an oauth-capable provider starts oauth before provider test", as
     await tab.goto(`${base}/ui/index.html`, { waitUntil: "load" })
     await tab.waitForFunction(() => document.querySelector("#connBadge")?.dataset.status === "online")
 
-    await tab.click('[data-menu-trigger="agent"]')
+    await tab.click('[data-menu-trigger="provider"]')
     await tab.waitForSelector('[data-testid="titlebar-open-providers"]')
     await tab.click('[data-testid="titlebar-open-providers"]')
     await tab.waitForFunction(() => (document.querySelector("#configDialog") as HTMLDialogElement | null)?.open === true)

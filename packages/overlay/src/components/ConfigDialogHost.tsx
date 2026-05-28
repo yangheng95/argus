@@ -15,7 +15,7 @@ import { boardStore,
 } from "../store/board";
 import { settingsStore } from "../store/settings";
 import { closeConfigDialog, setConfigSidebarWidth, switchConfigTab } from "../services/dialog";
-import { dialogStore, type ConfigDialogTab } from "../store/dialog";
+import { dialogStore, CONFIG_SECTIONS, type ConfigDialogTab } from "../store/dialog";
 import { getHostTransport } from "../services/host-transport";
 import { t } from "../utils/i18n";
 import { OVERLAY_VERSION } from "../utils/version";
@@ -29,122 +29,91 @@ interface ConfigTabDef {
   badgeID?: string;
 }
 
-const CONFIG_TABS: ConfigTabDef[] = [
-  {
-    id: "general",
-    labelKey: "settings.title",
-    icon: (
-      <svg class="config-nav-icon" viewBox="0 0 24 24" fill="none">
-        <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" stroke="currentColor" stroke-width="1.5" />
-        <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.5" />
-      </svg>
-    ),
-  },
-  {
-    id: "permissions",
-    labelKey: "permissions.title",
-    icon: (
-      <svg class="config-nav-icon" viewBox="0 0 24 24" fill="none">
-        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
-      </svg>
-    ),
-  },
-  {
-    id: "prompt",
-    labelKey: "prompt.title",
-    badgeID: "promptBadge",
-    icon: (
-      <svg class="config-nav-icon" viewBox="0 0 24 24" fill="none">
-        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
-      </svg>
-    ),
-  },
-  {
-    id: "channel",
-    labelKey: "channel.title",
-    icon: (
-      <svg class="config-nav-icon" viewBox="0 0 24 24" fill="none">
-        <path d="M4 11a9 9 0 0 1 9-9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
-        <path d="M4 16a14 14 0 0 1 14-14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
-        <circle cx="5" cy="19" r="2" stroke="currentColor" stroke-width="1.5" />
-      </svg>
-    ),
-  },
-  {
-    id: "skill",
-    labelKey: "skill.title",
-    icon: (
-      <svg class="config-nav-icon" viewBox="0 0 24 24" fill="none">
-        <path d="M7 3h10l2 4v14H5V7l2-4z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" />
-        <path d="M7 7h10M9 12h6M9 16h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
-      </svg>
-    ),
-  },
-  {
-    id: "skill-market",
-    labelKey: "skill.market.title",
-    icon: (
-      <svg class="config-nav-icon" viewBox="0 0 24 24" fill="none">
-        <path d="M4 10h16v11H4V10z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" />
-        <path d="M8 10V7a4 4 0 0 1 8 0v3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
-        <path d="M9 15h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
-      </svg>
-    ),
-  },
-  {
-    id: "mcp",
-    labelKey: "mcp.title",
-    icon: (
-      <svg class="config-nav-icon" viewBox="0 0 24 24" fill="none">
-        <path d="M7 8h10M7 16h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
-        <path d="M9 4h6a4 4 0 0 1 0 8H9a4 4 0 0 1 0-8z" stroke="currentColor" stroke-width="1.5" />
-        <path d="M9 12h6a4 4 0 0 1 0 8H9a4 4 0 0 1 0-8z" stroke="currentColor" stroke-width="1.5" />
-      </svg>
-    ),
-  },
-  {
-    id: "memory",
-    labelKey: "memory.title",
-    badgeID: "memoryBadge",
-    icon: (
-      <svg class="config-nav-icon" viewBox="0 0 24 24" fill="none">
-        <path d="M12 2a7 7 0 0 1 7 7c0 2.5-1.3 4.7-3.2 6H8.2C6.3 13.7 5 11.5 5 9a7 7 0 0 1 7-7z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
-        <path d="M9 18h6M10 21h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
-      </svg>
-    ),
-  },
-  {
-    id: "providers",
-    labelKey: "cmdk.settings.providers",
-    icon: (
-      <svg class="config-nav-icon" viewBox="0 0 24 24" fill="none">
-        <path d="M12 2L2 7l10 5 10-5-10-5z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
-        <path d="M2 17l10 5 10-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
-        <path d="M2 12l10 5 10-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
-      </svg>
-    ),
-  },
-  {
-    id: "agent-models",
-    labelKey: "cmdk.settings.agent_models",
-    icon: (
-      <svg class="config-nav-icon" viewBox="0 0 24 24" fill="none">
-        <rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" stroke-width="1.5" />
-        <path d="M7 9h10M7 13h6M7 17h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
-      </svg>
-    ),
-  },
-  {
-    id: "about",
-    labelKey: "about.title",
-    icon: (
-      <svg class="config-nav-icon" viewBox="0 0 24 24" fill="none">
-        <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.5" />
-        <path d="M12 16v-4M12 8h.01" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
-      </svg>
-    ),
-  },
-];
+// Per-section icons (and badge anchors) are dialog chrome and stay local;
+// the section list, labels, and order come from CONFIG_SECTIONS
+// (store/dialog.ts — single source). CONFIG_TABS merges the two.
+const SECTION_ICONS: Record<ConfigDialogTab, JSX.Element> = {
+  general: (
+    <svg class="config-nav-icon" viewBox="0 0 24 24" fill="none">
+      <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" stroke="currentColor" stroke-width="1.5" />
+      <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.5" />
+    </svg>
+  ),
+  permissions: (
+    <svg class="config-nav-icon" viewBox="0 0 24 24" fill="none">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+    </svg>
+  ),
+  prompt: (
+    <svg class="config-nav-icon" viewBox="0 0 24 24" fill="none">
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+    </svg>
+  ),
+  channel: (
+    <svg class="config-nav-icon" viewBox="0 0 24 24" fill="none">
+      <path d="M4 11a9 9 0 0 1 9-9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+      <path d="M4 16a14 14 0 0 1 14-14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+      <circle cx="5" cy="19" r="2" stroke="currentColor" stroke-width="1.5" />
+    </svg>
+  ),
+  skill: (
+    <svg class="config-nav-icon" viewBox="0 0 24 24" fill="none">
+      <path d="M7 3h10l2 4v14H5V7l2-4z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" />
+      <path d="M7 7h10M9 12h6M9 16h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+    </svg>
+  ),
+  "skill-market": (
+    <svg class="config-nav-icon" viewBox="0 0 24 24" fill="none">
+      <path d="M4 10h16v11H4V10z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" />
+      <path d="M8 10V7a4 4 0 0 1 8 0v3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+      <path d="M9 15h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+    </svg>
+  ),
+  mcp: (
+    <svg class="config-nav-icon" viewBox="0 0 24 24" fill="none">
+      <path d="M7 8h10M7 16h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+      <path d="M9 4h6a4 4 0 0 1 0 8H9a4 4 0 0 1 0-8z" stroke="currentColor" stroke-width="1.5" />
+      <path d="M9 12h6a4 4 0 0 1 0 8H9a4 4 0 0 1 0-8z" stroke="currentColor" stroke-width="1.5" />
+    </svg>
+  ),
+  memory: (
+    <svg class="config-nav-icon" viewBox="0 0 24 24" fill="none">
+      <path d="M12 2a7 7 0 0 1 7 7c0 2.5-1.3 4.7-3.2 6H8.2C6.3 13.7 5 11.5 5 9a7 7 0 0 1 7-7z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+      <path d="M9 18h6M10 21h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+    </svg>
+  ),
+  providers: (
+    <svg class="config-nav-icon" viewBox="0 0 24 24" fill="none">
+      <path d="M12 2L2 7l10 5 10-5-10-5z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+      <path d="M2 17l10 5 10-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+      <path d="M2 12l10 5 10-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+    </svg>
+  ),
+  "agent-models": (
+    <svg class="config-nav-icon" viewBox="0 0 24 24" fill="none">
+      <rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" stroke-width="1.5" />
+      <path d="M7 9h10M7 13h6M7 17h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+    </svg>
+  ),
+  about: (
+    <svg class="config-nav-icon" viewBox="0 0 24 24" fill="none">
+      <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.5" />
+      <path d="M12 16v-4M12 8h.01" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+    </svg>
+  ),
+};
+
+const SECTION_BADGES: Partial<Record<ConfigDialogTab, string>> = {
+  prompt: "promptBadge",
+  memory: "memoryBadge",
+};
+
+const CONFIG_TABS: ConfigTabDef[] = CONFIG_SECTIONS.map((section) => ({
+  id: section.id,
+  labelKey: section.labelKey,
+  icon: SECTION_ICONS[section.id],
+  badgeID: SECTION_BADGES[section.id],
+}));
 
 const MAIN_CONFIG_TABS = CONFIG_TABS.filter((tab) => tab.id !== "about");
 const ABOUT_CONFIG_TAB = CONFIG_TABS.find((tab) => tab.id === "about") as ConfigTabDef;

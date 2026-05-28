@@ -193,11 +193,13 @@ test(
           expect(geometry.triggers).not.toContain("product")
           expect(geometry.triggers).toContain("workspace")
           expect(geometry.triggers).not.toContain("model")
-          expect(geometry.triggers).toContain("agent")
+          expect(geometry.triggers).not.toContain("agent")
+          expect(geometry.triggers).toContain("provider")
           expect(geometry.triggers).toContain("tools")
           expect(geometry.triggers).toContain("skill")
           expect(geometry.triggers).toContain("mcp")
           expect(geometry.triggers).toContain("memory")
+          expect(geometry.triggers).toContain("settings")
           expect(geometry.outOfBounds).toEqual([])
           expect(geometry.overlaps).toEqual([])
           expect(geometry.brandWidth).toBeGreaterThan(24)
@@ -205,7 +207,7 @@ test(
           expect(geometry.badgeTitle).toContain(String(server.port))
           expect(geometry.badgeTitle).toContain("12345")
           expect(geometry.titlebarHeight).toBeGreaterThan(24)
-          for (const menu of ["workspace", "agent", "run", "tools", "skill", "mcp", "memory", "view", "help"]) {
+          for (const menu of ["workspace", "provider", "run", "tools", "skill", "mcp", "memory", "settings", "view", "help"]) {
             await page.click(`[data-menu-trigger="${menu}"]`)
             await page.waitForSelector(`[data-testid="titlebar-menu-${menu}"]`, { visible: true })
             const panelBounds = await page.$eval(`[data-testid="titlebar-menu-${menu}"]`, (node) => {
