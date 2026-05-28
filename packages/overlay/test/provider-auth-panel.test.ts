@@ -229,7 +229,7 @@ async function withOverlay(
 }
 
 async function openProviderSettings(tab: Page) {
-  await tab.click('[data-menu-trigger="agent"]')
+  await tab.click('[data-menu-trigger="provider"]')
   await tab.waitForSelector('[data-testid="titlebar-open-providers"]')
   await tab.click('[data-testid="titlebar-open-providers"]')
   await tab.waitForFunction(() => (document.querySelector("#configDialog") as HTMLDialogElement | null)?.open === true)

@@ -196,8 +196,8 @@ test(
       }, `http://127.0.0.1:${server.port}`)
 
       await page.goto(`http://127.0.0.1:${server.port}/ui/index.html`, { waitUntil: "load" })
-      await page.waitForSelector('[data-menu-trigger="agent"]')
-      await page.click('[data-menu-trigger="agent"]')
+      await page.waitForSelector('[data-menu-trigger="provider"]')
+      await page.click('[data-menu-trigger="provider"]')
       await page.waitForSelector('[data-testid="titlebar-open-providers"]')
       await page.click('[data-testid="titlebar-open-providers"]')
       await page.waitForSelector('[data-testid="provider-api-key-input-hexin"]')

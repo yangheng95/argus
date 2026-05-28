@@ -4,6 +4,7 @@ import { boardStore } from "../../store/board";
 import { settingsStore, setSettingsStore, saveSettings } from "../../store/settings";
 import { patchConfig, reloadProjectScope, syncAgentPromptLocale } from "../../services/config";
 import { openConfigDialog } from "../../services/dialog";
+import { CONFIG_SECTIONS } from "../../store/dialog";
 import { applyOpacity, applyTheme, applyZoom, sanitizeOpacity, sanitizeZoom, toggleDevtools } from "../../services/theme";
 import { themeOptionsForCurrentHost } from "../../services/theme-registry";
 import {
@@ -17,7 +18,7 @@ import {
 import { t } from "../../utils/i18n";
 import { Button } from "../ui/Button";
 
-type MenuID = "workspace" | "agent" | "run" | "tools" | "skill" | "mcp" | "memory" | "view" | "help";
+type MenuID = "workspace" | "provider" | "run" | "tools" | "skill" | "mcp" | "memory" | "settings" | "view" | "help";
 
 type MenuDef = {
   id: MenuID;
@@ -30,15 +31,16 @@ type TitlebarMenubarProps = {
   onOpenLog: () => void;
 };
 
-const MENU_IDS: MenuID[] = ["workspace", "agent", "run", "tools", "skill", "mcp", "memory", "view", "help"];
+const MENU_IDS: MenuID[] = ["workspace", "provider", "run", "tools", "skill", "mcp", "memory", "settings", "view", "help"];
 const MENU_ACCESS_KEYS: Record<MenuID, string> = {
   workspace: "p",
-  agent: "a",
+  provider: "a",
   run: "r",
   tools: "t",
   skill: "s",
   mcp: "c",
   memory: "y",
+  settings: "g",
   view: "v",
   help: "h",
 };
@@ -183,12 +185,13 @@ export function TitlebarMenubar(props: TitlebarMenubarProps) {
 
   const menus = createMemo<MenuDef[]>(() => [
     { id: "workspace", label: t("titlebar.menu.workspace"), compact: "P", accessKey: MENU_ACCESS_KEYS.workspace },
-    { id: "agent", label: t("titlebar.menu.agent"), compact: "A", accessKey: MENU_ACCESS_KEYS.agent },
+    { id: "provider", label: t("titlebar.menu.provider"), compact: "Pr", accessKey: MENU_ACCESS_KEYS.provider },
     { id: "run", label: t("titlebar.menu.run"), compact: "R", accessKey: MENU_ACCESS_KEYS.run },
     { id: "tools", label: t("titlebar.menu.tools"), compact: "T", accessKey: MENU_ACCESS_KEYS.tools },
     { id: "skill", label: t("titlebar.menu.skill"), compact: "S", accessKey: MENU_ACCESS_KEYS.skill },
     { id: "mcp", label: t("titlebar.menu.mcp"), compact: "C", accessKey: MENU_ACCESS_KEYS.mcp },
     { id: "memory", label: t("titlebar.menu.memory"), compact: "Y", accessKey: MENU_ACCESS_KEYS.memory },
+    { id: "settings", label: t("titlebar.menu.settings"), compact: "Se", accessKey: MENU_ACCESS_KEYS.settings },
     { id: "view", label: t("titlebar.menu.view"), compact: "V", accessKey: MENU_ACCESS_KEYS.view },
     { id: "help", label: t("titlebar.menu.help"), compact: "?", accessKey: MENU_ACCESS_KEYS.help },
   ]);
@@ -407,7 +410,6 @@ export function TitlebarMenubar(props: TitlebarMenubarProps) {
                     <MenuItem onClick={() => { closeProject(); closeMenu(); }} disabled={!settingsStore.directory} testid="titlebar-close-project">
                       {t("project.close")}
                     </MenuItem>
-                    <MenuItem onClick={() => openConfig("general")}>{t("config.title")}</MenuItem>
                   </MenuGroup>
                   <Show when={recentDirs().length > 0}>
                     <MenuGroup title={t("cwd.recent")}>
@@ -423,8 +425,8 @@ export function TitlebarMenubar(props: TitlebarMenubarProps) {
                   </Show>
                 </Show>
 
-                <Show when={menu.id === "agent"}>
-                  <MenuGroup title={t("titlebar.menu.agent")}>
+                <Show when={menu.id === "provider"}>
+                  <MenuGroup title={t("titlebar.menu.provider")}>
                     <div class="titlebar-menubar-note">{providerLabel()}</div>
                     <MenuItem onClick={() => openConfig("providers")} testid="titlebar-open-providers">{t("cmdk.settings.providers")}</MenuItem>
                     <MenuItem onClick={() => openConfig("agent-models")} testid="titlebar-open-agent-models">{t("cmdk.settings.agent_models")}</MenuItem>
@@ -508,6 +510,21 @@ export function TitlebarMenubar(props: TitlebarMenubarProps) {
                 <Show when={menu.id === "memory"}>
                   <MenuGroup title={t("titlebar.menu.memory")}>
                     <MenuItem onClick={() => openConfig("memory")} testid="titlebar-open-memory">{t("memory.title")}</MenuItem>
+                  </MenuGroup>
+                </Show>
+
+                <Show when={menu.id === "settings"}>
+                  <MenuGroup title={t("config.title")}>
+                    <For each={CONFIG_SECTIONS}>
+                      {(section) => (
+                        <MenuItem
+                          onClick={() => openConfig(section.id)}
+                          testid={`titlebar-settings-${section.id}`}
+                        >
+                          {t(section.labelKey)}
+                        </MenuItem>
+                      )}
+                    </For>
                   </MenuGroup>
                 </Show>
 
