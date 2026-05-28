@@ -3,12 +3,12 @@ import path from "node:path"
 
 import type { GeneratedFile } from "../ir/scaffold"
 
-const GENERATED_SOURCE_SUBDIR = "generated-source"
+const GENERATED_VIEW_SOURCE_SUBDIR = "generated-view-source"
 
 export async function writeGeneratedSourceFiles(
   outputDir: string,
   files: GeneratedFile[],
-  subdir = GENERATED_SOURCE_SUBDIR,
+  subdir = GENERATED_VIEW_SOURCE_SUBDIR,
 ): Promise<string[]> {
   validateArtifactSubdir(subdir)
   const root = path.resolve(outputDir, subdir)
