@@ -193,6 +193,8 @@ export function panelRequestBody(
 // directly at the source instead of triggering silent 400-request floods.
 const TASK_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
 const TASK_DECISION_COUNTDOWN_SECONDS = 8;
+const TERMINAL_TASK_STATUSES = new Set(["completed", "failed", "cancelled"]);
+const TERMINAL_TASK_INITIAL_TAIL_LIMIT = 8;
 
 function isAbortError(error: unknown): boolean {
   return error instanceof DOMException && error.name === "AbortError";
@@ -227,6 +229,8 @@ export async function selectTask(
     return;
   }
 
+  const epoch = boardStore.selectEpoch + 1;
+
   // ── Synchronous phase ────────────────────────────────────────────────
   // Everything the UI needs to feel "switched instantly" happens here:
   // cancel in-flight work, wipe task-scoped stores, flip the selected ID,
@@ -248,6 +252,7 @@ export async function selectTask(
   resetWriter({ scrollIntent: "bottom", cause: "task-switch" });
   setSelectedTaskID(nextTaskID);
   setBoardStore("selectedSource", nextTaskID ? { kind: "task", id: nextTaskID } : null);
+  setBoardStore("selectEpoch", epoch);
 
   if (!nextTaskID) {
     // Deselection has no async work; make sure any lingering progress UI
@@ -261,8 +266,6 @@ export async function selectTask(
     return;
   }
 
-  const epoch = boardStore.selectEpoch + 1;
-  setBoardStore("selectEpoch", epoch);
   setBoardStore("taskSwitching", true);
 
   // ── Async phase ──────────────────────────────────────────────────────
@@ -283,6 +286,7 @@ export async function selectTask(
     const lastSequence = await hydrateTaskConversation(nextTaskID, {
       scrollIntent: "bottom",
       resetCause: "task-switch-hydrate",
+      tailLimit: initialConversationTailLimit(taskItem),
     });
     if (stale()) return;
 
@@ -310,6 +314,11 @@ export async function selectTask(
   }
 }
 
+function initialConversationTailLimit(taskItem: any): number | undefined {
+  const status = String(taskItem?.task?.status || "");
+  return TERMINAL_TASK_STATUSES.has(status) ? TERMINAL_TASK_INITIAL_TAIL_LIMIT : undefined;
+}
+
 // ── Public: deleteTask ──
 
 /**
@@ -319,17 +328,22 @@ export async function selectTask(
  */
 export async function deleteTask(taskID: string): Promise<boolean> {
   if (!taskID) return false;
+  const wasActive = activeTaskID() === taskID;
+  if (wasActive) {
+    await selectTask("");
+  }
   try {
     await apiJson(taskPath(taskID), {
       method: "DELETE",
     });
-    if (activeTaskID() === taskID) {
-      await selectTask("");
-    }
     await loadTasks();
     return true;
   } catch (e) {
     console.error("[deleteTask] failed", { error: String(e), taskID });
+    if (wasActive && e instanceof ApiError && e.status === 404) {
+      await loadTasks().catch(() => undefined);
+      return true;
+    }
     return false;
   }
 }
