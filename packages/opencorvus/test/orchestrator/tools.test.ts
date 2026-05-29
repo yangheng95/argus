@@ -7,7 +7,6 @@ import { Instance } from "../../src/project/instance"
 import { ProjectTable } from "../../src/project/project.sql"
 import {
   EngineArtifactTable,
-  EngineExecutorSessionTable,
   EngineGoalTable,
   EnginePlanNodeTable,
   EnginePlanVersionTable,
@@ -41,7 +40,6 @@ import {
   findDeliveryByRun,
   findActiveSpecForTask,
   findEvaluationByRun,
-  findExecutorSession,
   findGoal,
   findGoalRun,
   findGoalLatestWorkspace,
@@ -1346,26 +1344,6 @@ describe("orchestrator tools", () => {
         const goalRun = findGoalRun(goalRunID)
         expect(goalRun).toBeDefined()
 
-        const executorSessionID = `exec_cancel_subagent_${stamp}`
-        Database.use((db) =>
-          db
-            .insert(EngineExecutorSessionTable)
-            .values({
-              id: executorSessionID,
-              task_id: taskID,
-              run_id: runID,
-              goal_run_id: goalRunID,
-              provider: "opencorvus",
-              protocol: "session-prompt",
-              protocol_version: "v1",
-              transport: "inproc",
-              status: "active",
-              time_created: now,
-              time_updated: now,
-            })
-            .run(),
-        )
-
         const { tools } = createOrchestratorTools({
           taskID,
           agentSessionID: parent.id,
@@ -1382,10 +1360,8 @@ describe("orchestrator tools", () => {
 
         expect(findGoalRun(goalRunID)?.status).toBe("aborted")
         expect(findGoalRun(goalRunID)?.error).toContain("cancel_subagent:")
-        expect(findExecutorSession(executorSessionID)?.status).toBe("aborted")
         expect(result).toContain(`Cancelled sub-agent session ${child.id}`)
         expect(result).toContain(`goal_run ${goalRunID} aborted`)
-        expect(result).toContain(`executor_session ${executorSessionID} aborted`)
       },
     })
   })
@@ -1432,25 +1408,6 @@ describe("orchestrator tools", () => {
           runID,
           sessionID: child.id,
         })
-        const executorSessionID = `exec_cancel_subagent_goal_${stamp}`
-        Database.use((db) =>
-          db
-            .insert(EngineExecutorSessionTable)
-            .values({
-              id: executorSessionID,
-              task_id: taskID,
-              run_id: runID,
-              goal_run_id: goalRunID,
-              provider: "opencorvus",
-              protocol: "session-prompt",
-              protocol_version: "v1",
-              transport: "inproc",
-              status: "active",
-              time_created: now,
-              time_updated: now,
-            })
-            .run(),
-        )
 
         const { tools } = createOrchestratorTools({
           taskID,
@@ -1467,7 +1424,6 @@ describe("orchestrator tools", () => {
         )
 
         expect(findGoalRun(goalRunID)?.status).toBe("aborted")
-        expect(findExecutorSession(executorSessionID)?.status).toBe("aborted")
         expect(result).toContain(`Cancelled sub-agent session ${child.id}`)
         expect(result).toContain(`source=${goalID} -> goal_run ${goalRunID} -> session ${child.id}`)
       },
@@ -1615,26 +1571,6 @@ describe("orchestrator tools", () => {
           runID,
           sessionID: child.id,
         })
-        const executorSessionID = `exec_cancel_subagent_recover_stale_${stamp}`
-        Database.use((db) =>
-          db
-            .insert(EngineExecutorSessionTable)
-            .values({
-              id: executorSessionID,
-              task_id: taskID,
-              run_id: runID,
-              goal_run_id: goalRunID,
-              provider: "opencorvus",
-              protocol: "session-prompt",
-              protocol_version: "v1",
-              transport: "inproc",
-              status: "active",
-              time_created: now,
-              time_updated: now,
-            })
-            .run(),
-        )
-
         const orchestratorMessageID = `msg_cancel_subagent_recover_stale_${stamp}`
         const toolPartID = `prt_cancel_subagent_recover_stale_${stamp}`
         const toolCallID = `cal_cancel_subagent_recover_stale_${stamp}`
@@ -1711,7 +1647,6 @@ describe("orchestrator tools", () => {
         expect(result).toContain(`goal_run ${goalRunID} aborted`)
         expect(findGoalRun(goalRunID)?.status).toBe("aborted")
         expect(findGoalRun(goalRunID)?.error).toContain("cancel_subagent:")
-        expect(findExecutorSession(executorSessionID)?.status).toBe("aborted")
         expect(listLiveOrchestratorToolOwnership(taskID)).toHaveLength(0)
 
         const messages = await Session.messages({ sessionID: parent.id })

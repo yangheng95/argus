@@ -558,8 +558,8 @@ CREATE INDEX IF NOT EXISTS engine_plan_node_goal_idx ON engine_plan_node (goal_i
 -- latestPerRun) for the read-model. Append-only — status transitions are new
 -- rows per logical run_id; findRun takes the newest via time_created desc +
 -- id desc tiebreak. Other tables (engine_artifact.run_id NOT NULL,
--- engine_interaction_request.run_id, engine_executor_session.run_id NOT NULL,
--- protocol_event.run_id, workbench_task_note.run_id, workbench_brief_snapshot.run_id)
+-- engine_interaction_request.run_id, protocol_event.run_id,
+-- workbench_task_note.run_id, workbench_brief_snapshot.run_id)
 -- are plain text pointers now (no FK).
 
 -- Phase-6-d: engine_goal_run was removed in favour of engine_artifact rows
@@ -570,8 +570,8 @@ CREATE INDEX IF NOT EXISTS engine_plan_node_goal_idx ON engine_plan_node (goal_i
 -- read-model. Append-only — status transitions + supersede marks are new
 -- rows per logical goal_run_id; queries take the newest via
 -- time_created desc. Other tables (engine_artifact.goal_run_id,
--- engine_executor_session.goal_run_id, engine_metric_result.goal_run_id,
--- protocol_event.goal_run_id) are plain text pointers now (no FK).
+-- engine_metric_result.goal_run_id, protocol_event.goal_run_id) are plain
+-- text pointers now (no FK).
 
 CREATE TABLE IF NOT EXISTS engine_interaction_request (
   id            text PRIMARY KEY,
@@ -640,32 +640,6 @@ CREATE TABLE IF NOT EXISTS engine_progress_snapshot (
   FOREIGN KEY (task_id) REFERENCES engine_task(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS engine_progress_task_idx ON engine_progress_snapshot (task_id);
-
-CREATE TABLE IF NOT EXISTS engine_executor_session (
-  id               text PRIMARY KEY,
-  task_id          text NOT NULL,
-  run_id           text NOT NULL,
-  goal_run_id      text,
-  provider         text NOT NULL,
-  protocol         text NOT NULL,
-  protocol_version text NOT NULL,
-  transport        text NOT NULL,
-  status           text NOT NULL DEFAULT 'active',
-  refs             text,
-  capabilities     text,
-  settings         text,
-  lease_owner      text,
-  lease_until      integer,
-  time_started     integer,
-  time_completed   integer,
-  time_created     integer NOT NULL,
-  time_updated     integer NOT NULL,
-  FOREIGN KEY (task_id) REFERENCES engine_task(id) ON DELETE CASCADE
-);
-CREATE INDEX IF NOT EXISTS engine_executor_session_task_idx     ON engine_executor_session (task_id);
-CREATE INDEX IF NOT EXISTS engine_executor_session_run_idx ON engine_executor_session (run_id);
-CREATE INDEX IF NOT EXISTS engine_executor_session_goal_run_idx ON engine_executor_session (goal_run_id);
-CREATE INDEX IF NOT EXISTS engine_executor_session_status_idx   ON engine_executor_session (status);
 
 CREATE TABLE IF NOT EXISTS engine_channel_binding (
   id           text PRIMARY KEY,

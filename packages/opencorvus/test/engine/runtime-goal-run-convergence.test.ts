@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
 import {
   EngineArtifactTable,
-  EngineExecutorSessionTable,
   EngineInteractionRequestTable,
   EngineTaskTable,
 } from "../../src/engine/engine.sql"
@@ -121,34 +120,6 @@ describe("EngineRuntime goal-run convergence", () => {
     })
   })
 
-  test("live executor sessions prevent goal batch dispatch", async () => {
-    await using tmp = await tmpdir({ git: true })
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
-        const taskID = `task_goal_live_executor_${Date.now()}`
-        const runID = `run_goal_live_executor_${Date.now()}`
-        const now = Date.now()
-        seedTaskRun(taskID, runID, now, {
-          status: "blocked",
-          blocking_reason: "integrity verdict needs_correction",
-          error: "Integrity needs correction",
-        })
-        seedGoalRun(taskID, runID, "grun_completed", "completed", now + 1)
-        seedExecutorSession(taskID, runID, "grun_completed", now + 2)
-
-        await EngineRuntime.syncRun(runID, hooks())
-        await new Promise((resolve) => setTimeout(resolve, 0))
-
-        const run = findRun(runID)
-        expect(run?.status).toBe("blocked")
-        expect(run?.blocking_reason).toBe("integrity verdict needs_correction")
-        expect(runTaskLoop).not.toHaveBeenCalled()
-      },
-    })
-  })
-
   test("pending interactions preserve the parent run blocker", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
@@ -241,33 +212,6 @@ function seedTaskRun(
       })
       .run()
   })
-}
-
-function seedExecutorSession(taskID: string, runID: string, goalRunID: string, now: number) {
-  Database.use((db) =>
-    db.insert(EngineExecutorSessionTable)
-      .values({
-        id: `executor_session_${now}`,
-        task_id: taskID,
-        run_id: runID,
-        goal_run_id: goalRunID,
-        provider: "opencorvus",
-        protocol: "test-protocol",
-        protocol_version: "1",
-        transport: "inproc",
-        status: "active",
-        refs: null,
-        capabilities: null,
-        settings: null,
-        lease_owner: null,
-        lease_until: null,
-        time_started: now,
-        time_completed: null,
-        time_created: now,
-        time_updated: now,
-      } as any)
-      .run(),
-  )
 }
 
 function seedGoalRun(taskID: string, runID: string, goalRunID: string, status: string, now: number) {

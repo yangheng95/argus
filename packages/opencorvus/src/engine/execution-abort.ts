@@ -5,15 +5,11 @@ import { SessionStatus } from "@/session/status"
 import { Log } from "@/util/log"
 import { withTimeout } from "@/util/await-with-timeout"
 import { isLiveGoalRunStatus } from "./catalog"
-import { updateGoalRun, updateGoalRunExecutorSessionStatus } from "./persist"
+import { updateGoalRun } from "./persist"
 import {
   findActiveRunForTask,
   findGoalRun,
-  goalRunQueueTaskID,
   listGoalRunsForTask,
-  listLiveExecutorSessionsForTask,
-  type ExecutorSessionRow,
-  type GoalRunRow,
 } from "./store"
 
 const log = Log.create({ service: "engine.execution-abort" })
@@ -23,7 +19,6 @@ export type AbortChildExecutionResult = {
   promptCancelled: boolean
   activityGateAborted: boolean
   goalRunAborted: boolean
-  executorSessionAborted: boolean
   executorAbortAttempted: boolean
   executorAbortSucceeded: boolean
 }
@@ -96,36 +91,12 @@ export async function abortGoalRunExecution(input: {
     result.goalRunAborted = true
   }
 
-  const executorSession = findLiveExecutorSessionForGoalRun(input.taskID, goalRun)
-  if (executorSession) {
-    updateGoalRunExecutorSessionStatus(goalRun.id, "aborted")
-    result.executorSessionAborted = true
-  }
-
-  const provider = executorSession?.provider
-  if (provider) {
-    const aborted = await abortExecutor({
-      provider,
-      sessionID: executorSession.refs?.provider_session_id ?? goalRun.session_id ?? undefined,
-      queueTaskID: executorSession.refs?.queue_task_id ?? goalRunQueueTaskID(goalRun),
-      label: `goal_run ${goalRun.id}`,
-      timeoutMs: input.abortTimeoutMs,
-    })
-    result.executorAbortAttempted = aborted.attempted
-    result.executorAbortSucceeded = aborted.succeeded
-  }
-
   result.cancelled =
     result.promptCancelled ||
     result.activityGateAborted ||
     result.goalRunAborted ||
-    result.executorSessionAborted ||
     result.executorAbortAttempted
   return result
-}
-
-function findLiveExecutorSessionForGoalRun(taskID: string, goalRun: GoalRunRow): ExecutorSessionRow | undefined {
-  return listLiveExecutorSessionsForTask(taskID).find((row) => row.goal_run_id === goalRun.id)
 }
 
 async function abortExecutor(input: {
@@ -165,7 +136,6 @@ function emptyResult(): AbortChildExecutionResult {
     promptCancelled: false,
     activityGateAborted: false,
     goalRunAborted: false,
-    executorSessionAborted: false,
     executorAbortAttempted: false,
     executorAbortSucceeded: false,
   }
@@ -176,7 +146,6 @@ function mergeResult(target: AbortChildExecutionResult, source: AbortChildExecut
   target.promptCancelled ||= source.promptCancelled
   target.activityGateAborted ||= source.activityGateAborted
   target.goalRunAborted ||= source.goalRunAborted
-  target.executorSessionAborted ||= source.executorSessionAborted
   target.executorAbortAttempted ||= source.executorAbortAttempted
   target.executorAbortSucceeded ||= source.executorAbortSucceeded
 }

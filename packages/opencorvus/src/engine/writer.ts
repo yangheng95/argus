@@ -2,18 +2,16 @@
  * Writer/invariant primitives for terminating live execution state.
  *
  * Both process-restart recovery and operator-driven restart_from_stage need
- * to abort the same kinds of rows — live goal_runs, live executor_sessions,
- * live runs — while preserving per-goal workspaces. Historically
- * each call site had its own copy of the "loop + abort" logic, which
- * drifted: executor session aborts in some paths went through the writer
- * layer and in others didn't, error messages formatted differently, and new rows
- * were created with raw `db.insert` side-stepping the state-machine writers.
+ * to abort the same kinds of rows — live goal_runs and live runs — while
+ * preserving per-goal workspaces. Historically each call site had its own
+ * copy of the "loop + abort" logic, which drifted: error messages formatted
+ * differently, and new rows were created with raw `db.insert` side-stepping
+ * the state-machine writers.
  *
  * This module keeps the primitives in one place so callers only choose the
  * scope filter (project vs task) and the cleanup policy. Cleanup itself is
  * success-only: a workspace can be deleted only when the latest goal_run is
- * completed. All status writes
- * go through `updateGoalRun` / `updateExecutorSessionStatus*` / `updateRun`,
+ * completed. All status writes go through `updateGoalRun` / `updateRun`,
  * which enforce CAS + state-machine transitions + event emission (for
  * task/run).
  */
@@ -29,8 +27,6 @@ import { Session } from "@/session"
 import { SessionPrompt } from "@/session/prompt"
 import { toolFailureCauseFromUnknown } from "@/session/tool-failure-cause"
 import {
-  updateExecutorSessionStatus,
-  updateExecutorSessionStatusByID,
   updateGoalRun,
 } from "./persist"
 import {
@@ -41,11 +37,8 @@ import {
   listGoals,
   listGoalWorkspacesForProject,
   listGoalRunsForTask,
-  listLiveExecutorSessionsForProject,
-  listLiveExecutorSessionsForTask,
   listLiveGoalRunsForProject,
   listLiveRunsForProject,
-  type ExecutorSessionRow,
   type GoalRunRow,
   type RunRow,
   type TaskRow,
@@ -226,14 +219,6 @@ export async function abortGoalRuns(rows: GoalRunRow[], options: AbortOptions): 
   return aborted
 }
 
-/** Abort a batch of executor_session rows. */
-export function abortExecutorSessions(rows: ExecutorSessionRow[]): number {
-  for (const row of rows) {
-    updateExecutorSessionStatusByID(row.id, "aborted")
-  }
-  return rows.length
-}
-
 /** Abort a batch of run rows via the state.ts writer (CAS + event emission). */
 export async function abortRuns(rows: RunRow[], reason: string): Promise<number> {
   let aborted = 0
@@ -249,11 +234,6 @@ export async function abortRuns(rows: RunRow[], reason: string): Promise<number>
   return aborted
 }
 
-/** Convenience: abort the executor_session attached to a specific run. */
-export function abortExecutorSessionForRun(runID: string) {
-  updateExecutorSessionStatus(runID, "aborted")
-}
-
 // ---------------------------------------------------------------------------
 // Scoped composites
 // ---------------------------------------------------------------------------
@@ -261,7 +241,6 @@ export function abortExecutorSessionForRun(runID: string) {
 export interface AbortLiveResult {
   goalRuns: number
   runs: number
-  executorSessions: number
 }
 
 export interface AbortActiveTasksResult {
@@ -324,7 +303,7 @@ function listActiveTasksForProject(projectID: string): TaskRow[] {
 
 /**
  * Terminate task-owned session trees for every active task in a project.
- * Run / goal_run / executor_session rows are aborted by the existing writers;
+ * Run / goal_run rows are aborted by the existing writers;
  * this closes the task-owned layer that direct in-process builds rely on.
  * Without it, shutdown can leave a stale `active` task with a pending tool
  * part even though the process that owned the session is gone.
@@ -362,7 +341,6 @@ export async function abortActiveTasksForProject(input: {
  * implementation used:
  *   - goal_runs with a resettable status (skips completed/aborted/failed)
  *   - runs in any live status (LIVE_RUN_STATUSES)
- *   - executor_sessions attached to the task
  *
  * Goal workspaces are goal-scoped, not goal_run-scoped. Task-level aborts
  * preserve workspaces by default. Physical deletion is success-only and is
@@ -383,15 +361,13 @@ export async function abortLiveExecutionForTask(input: {
   const runRows = input.includeRuns === false
     ? []
     : findRuns(input.taskID).filter((row) => LIVE_RUN_STATUSES.includes(row.status))
-  const sessionRows = listLiveExecutorSessionsForTask(input.taskID)
-  const executorSessions = abortExecutorSessions(sessionRows)
   const goalRuns = await abortGoalRuns(goalRunRows, { reason: input.reason })
   const cleanupGoals = input.cleanupGoalWorkspaces === true
     ? listGoals(input.taskID).map((goal) => goal.id)
     : []
   await cleanupGoalWorkspaces(cleanupGoals)
   const runs = await abortRuns(runRows, input.reason)
-  return { goalRuns, runs, executorSessions }
+  return { goalRuns, runs }
 }
 
 /**
@@ -409,16 +385,14 @@ export async function abortLiveExecutionForProject(input: {
   reason: string
   cleanupGoalWorkspaces?: boolean
 }): Promise<AbortLiveResult> {
-  const sessionRows = listLiveExecutorSessionsForProject(input.projectID)
   const goalRunRows = listLiveGoalRunsForProject(input.projectID)
     .filter((goalRun) => goalRun.status !== "queued")
-  const executorSessions = abortExecutorSessions(sessionRows)
   const goalRuns = await abortGoalRuns(goalRunRows, { reason: input.reason })
   const cleanupGoals = input.cleanupGoalWorkspaces === true
     ? listGoalWorkspacesForProject(input.projectID).map((entry) => entry.goal.id)
     : []
   await cleanupGoalWorkspaces(cleanupGoals)
-  return { goalRuns, runs: 0, executorSessions }
+  return { goalRuns, runs: 0 }
 }
 
 export { listLiveRunsForProject }

@@ -24,7 +24,6 @@ import { specSnapshotIDsForLineage, type SpecSnapshotLineage } from "@/integrity
 import { EvaluationCheck } from "./model"
 import {
   EngineArtifactTable,
-  EngineExecutorSessionTable,
   EngineGoalTable,
   EngineInteractionRequestTable,
   EngineMilestoneTable,
@@ -49,7 +48,6 @@ import {
 import {
   ACTIVE_GOAL_RUN_STATUSES,
   DISPATCHABLE_RUN_STATUSES,
-  LIVE_EXECUTOR_SESSION_STATUSES,
   LIVE_GOAL_RUN_STATUSES,
   LIVE_RUN_STATUSES,
 } from "./catalog"
@@ -120,7 +118,6 @@ export type EvaluationRow = {
   time_updated: number
 }
 export type ProgressRow = typeof EngineProgressSnapshotTable.$inferSelect
-export type ExecutorSessionRow = typeof EngineExecutorSessionTable.$inferSelect
 export type RequirementRow = typeof EngineRequirementTable.$inferSelect
 /** Phase-6-d artifact-backed goal_run shape. Was `typeof EngineGoalRunTable.$inferSelect`
  *  until `engine_goal_run` was deleted in favour of `engine_artifact` rows with
@@ -667,18 +664,6 @@ export function findEvaluationByRun(runID: string): EvaluationRow | undefined {
   return row ? artifactRowToEvaluationRow(row) : undefined
 }
 
-export function findExecutorSessionByRun(runID: string) {
-  return Database.use((db) =>
-    db.select().from(EngineExecutorSessionTable).where(eq(EngineExecutorSessionTable.run_id, runID)).get(),
-  )
-}
-
-export function findExecutorSession(executorSessionID: string) {
-  return Database.use((db) =>
-    db.select().from(EngineExecutorSessionTable).where(eq(EngineExecutorSessionTable.id, executorSessionID)).get(),
-  )
-}
-
 export function findGoal(goalID: string) {
   return Database.use((db) => db.select().from(EngineGoalTable).where(eq(EngineGoalTable.id, goalID)).get())
 }
@@ -1204,40 +1189,6 @@ function isSessionActiveInCurrentProcess(sessionID: string) {
   return status.type === "streaming" || status.type === "retry"
 }
 
-export function listLiveExecutorSessionsForProject(projectID: string) {
-  return Database.use((db) =>
-    db
-      .select({ session: EngineExecutorSessionTable })
-      .from(EngineExecutorSessionTable)
-      .innerJoin(EngineTaskTable, eq(EngineExecutorSessionTable.task_id, EngineTaskTable.id))
-      .where(
-        and(
-          eq(EngineTaskTable.project_id, projectID),
-          inArray(EngineExecutorSessionTable.status, LIVE_EXECUTOR_SESSION_STATUSES),
-        ),
-      )
-      .orderBy(desc(EngineExecutorSessionTable.time_created))
-      .all()
-      .map((row) => row.session),
-  )
-}
-
-export function listLiveExecutorSessionsForTask(taskID: string) {
-  return Database.use((db) =>
-    db
-      .select()
-      .from(EngineExecutorSessionTable)
-      .where(
-        and(
-          eq(EngineExecutorSessionTable.task_id, taskID),
-          inArray(EngineExecutorSessionTable.status, LIVE_EXECUTOR_SESSION_STATUSES),
-        ),
-      )
-      .orderBy(desc(EngineExecutorSessionTable.time_created))
-      .all(),
-  )
-}
-
 function taskRows(rows: TaskRow[]) {
   const sessionIDs = [...new Set(rows.map((row) => row.session_id).filter((item): item is string => !!item))]
   const projectIDs = [...new Set(rows.map((row) => row.project_id))]
@@ -1722,28 +1673,6 @@ export function viewSnapshot(row: ProgressRow) {
     time: {
       created: row.time_created,
       updated: row.time_updated,
-    },
-  }
-}
-
-export function viewExecutorSession(row: ExecutorSessionRow) {
-  return {
-    id: row.id,
-    taskID: row.task_id,
-    runID: row.run_id,
-    provider: row.provider,
-    protocol: row.protocol,
-    protocolVersion: row.protocol_version,
-    transport: row.transport,
-    status: row.status,
-    refs: row.refs ?? undefined,
-    capabilities: row.capabilities ?? undefined,
-    settings: row.settings ?? undefined,
-    time: {
-      created: row.time_created,
-      updated: row.time_updated,
-      started: row.time_started ?? undefined,
-      completed: row.time_completed ?? undefined,
     },
   }
 }

@@ -2,7 +2,6 @@ import { integer, sqliteTable, text, index, uniqueIndex } from "drizzle-orm/sqli
 import { ProjectTable } from "@/project/project.sql"
 import { SessionTable } from "@/session/session.sql"
 import { Timestamps } from "@/storage/schema.sql"
-import type { ProtocolCapabilitiesInfo, ProtocolRefsInfo, ProtocolSettingsInfo } from "@/executor/protocol"
 
 export type EngineBudget = {
   max_executor_groups?: number
@@ -119,8 +118,6 @@ export type EngineDeliveryStatus = "candidate" | "publishing" | "delivered" | "f
 export type EngineEvaluationStatus = "pending" | "passed" | "failed" | "inconclusive"
 export type EngineEvaluationVerdict = "accepted" | "rejected" | "inconclusive"
 export type EngineProgressStatus = "created" | "active" | "completed" | "failed" | "cancelled"
-export type EngineExecutorTransport = "inproc" | "stdio" | "ws" | "http"
-export type EngineExecutorSessionStatus = "active" | "completed" | "failed" | "aborted"
 
 /** Kind tag on an EngineEvaluationCheck row. Drill-down only; not a gate. */
 export type EngineEvaluationCheckScorerKind =
@@ -160,10 +157,6 @@ export type EngineExecutorRef = {
   session_id?: string
   queue_task_id?: string
 }
-
-export type EngineExecutorProtocolRef = ProtocolRefsInfo
-export type EngineExecutorCapability = ProtocolCapabilitiesInfo
-export type EngineExecutorSettings = ProtocolSettingsInfo
 
 export const EngineTaskTable = sqliteTable(
   "engine_task",
@@ -592,39 +585,6 @@ export const EngineProgressSnapshotTable = sqliteTable(
     ...Timestamps,
   },
   (table) => [index("engine_progress_task_idx").on(table.task_id)],
-)
-
-export const EngineExecutorSessionTable = sqliteTable(
-  "engine_executor_session",
-  {
-    id: text().primaryKey(),
-    task_id: text()
-      .notNull()
-      .references(() => EngineTaskTable.id, { onDelete: "cascade" }),
-    /** Phase-6-e: plain text pointer to logical run id (was FK). */
-    run_id: text().notNull(),
-    /** Phase-6-d: plain text pointer to logical goal_run id (was FK). */
-    goal_run_id: text(),
-    provider: text().notNull().$type<EngineExecutor>(),
-    protocol: text().notNull(),
-    protocol_version: text().notNull(),
-    transport: text().notNull().$type<EngineExecutorTransport>(),
-    status: text().notNull().$type<EngineExecutorSessionStatus>().default("active"),
-    refs: text({ mode: "json" }).$type<EngineExecutorProtocolRef>(),
-    capabilities: text({ mode: "json" }).$type<EngineExecutorCapability>(),
-    settings: text({ mode: "json" }).$type<EngineExecutorSettings>(),
-    lease_owner: text(),
-    lease_until: integer(),
-    time_started: integer(),
-    time_completed: integer(),
-    ...Timestamps,
-  },
-  (table) => [
-    index("engine_executor_session_task_idx").on(table.task_id),
-    index("engine_executor_session_run_idx").on(table.run_id),
-    index("engine_executor_session_goal_run_idx").on(table.goal_run_id),
-    index("engine_executor_session_status_idx").on(table.status),
-  ],
 )
 
 export const EngineChannelBindingTable = sqliteTable(

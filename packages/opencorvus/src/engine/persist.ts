@@ -1,5 +1,5 @@
 import { Identifier } from "@/id/id"
-import { executorLeaseAvailable, executorLeaseHeldByOther, executorLeaseOwner, executorLeaseUntil, processOwner } from "./lease"
+import { processOwner } from "./lease"
 
 /** Input shape for persisting a requirement extracted by the Requirements agent into
  *  engine_requirement. Mirrors the table columns plus an optional
@@ -15,20 +15,12 @@ export interface Requirement {
   check_selector?: string[]
   metadata?: Record<string, unknown>
 }
-import {
-  protocolInfo,
-  type ProtocolCapabilitiesInfo,
-  type ProtocolRefsInfo,
-  type ProtocolSettingsInfo,
-  ProtocolTransport,
-} from "@/executor/protocol"
 import { writeEvaluationSnapshot } from "@/engine/docs"
-import { Database, and, desc, eq, inArray, isNull, lte, or } from "@/storage/db"
+import { Database, and, desc, eq, inArray } from "@/storage/db"
 import { Log } from "@/util/log"
 import { Event } from "./model"
 import {
   EngineArtifactTable,
-  EngineExecutorSessionTable,
   EngineGoalTable,
   EnginePlanNodeTable,
   EnginePlanVersionTable,
@@ -1381,182 +1373,6 @@ export function persistFailedRunEvaluation(input: {
   })
 }
 
-function claimExecutorSessionLeaseWhere(id: string, now: number) {
-  const owner = executorLeaseOwner()
-  return and(
-    eq(EngineExecutorSessionTable.id, id),
-    eq(EngineExecutorSessionTable.status, "active"),
-    or(
-      eq(EngineExecutorSessionTable.lease_owner, owner),
-      isNull(EngineExecutorSessionTable.lease_owner),
-      lte(EngineExecutorSessionTable.lease_until, now),
-    ),
-  )
-}
-
-function leaseWindow(now: number) {
-  return {
-    lease_owner: executorLeaseOwner(),
-    lease_until: executorLeaseUntil(now),
-    time_updated: now,
-  }
-}
-
-function executorLeaseConflict(row: typeof EngineExecutorSessionTable.$inferSelect | undefined, now: number) {
-  if (!row) return ""
-  if (executorLeaseHeldByOther(row, now)) {
-    return `executor session ${row.id} is leased by ${row.lease_owner} until ${row.lease_until}`
-  }
-  if (row.status !== "active") {
-    return `executor session ${row.id} is not active (${row.status})`
-  }
-  if (!executorLeaseAvailable(row, now) && row.lease_owner !== executorLeaseOwner()) {
-    return `executor session ${row.id} lease is unavailable`
-  }
-  return `executor session ${row.id} could not be claimed`
-}
-
-export function ensureExecutorSession(input: {
-  taskID: string
-  runID: string
-  goalRunID?: string
-  provider: RunRow["executor"]
-  refs?: ProtocolRefsInfo
-  capabilities?: ProtocolCapabilitiesInfo
-  settings?: ProtocolSettingsInfo
-  started?: number
-}) {
-  const existing = Database.use((db) =>
-    db
-      .select()
-      .from(EngineExecutorSessionTable)
-      .where(
-        input.goalRunID
-          ? eq(EngineExecutorSessionTable.goal_run_id, input.goalRunID)
-          : and(eq(EngineExecutorSessionTable.run_id, input.runID), isNull(EngineExecutorSessionTable.goal_run_id)),
-      )
-      .orderBy(desc(EngineExecutorSessionTable.time_created))
-      .get(),
-  )
-  const info = protocolInfo(input.provider)
-  const now = Date.now()
-  const refs = mergeRefs(existing?.refs ?? undefined, input.refs)
-  const capabilities = input.capabilities ?? info.capabilities
-  const settings = {
-    ...(existing?.settings ?? {}),
-    ...(input.settings ?? {}),
-  }
-  if (existing) {
-    const updated = Database.use((db) =>
-      db
-        .update(EngineExecutorSessionTable)
-        .set({
-          provider: input.provider,
-          protocol: info.protocol,
-          protocol_version: info.version,
-          transport: ProtocolTransport.parse(info.transport).kind,
-          status: "active",
-          refs,
-          capabilities,
-          settings,
-          lease_owner: executorLeaseOwner(),
-          lease_until: executorLeaseUntil(now),
-          time_started: existing.time_started ?? input.started ?? now,
-          time_updated: now,
-        })
-        .where(claimExecutorSessionLeaseWhere(existing.id, now))
-        .returning()
-        .get(),
-    )
-    if (updated) return updated
-    const blocked = Database.use((db) =>
-      db.select().from(EngineExecutorSessionTable).where(eq(EngineExecutorSessionTable.id, existing.id)).get(),
-    )
-    throw new Error(`ensureExecutorSession: ${executorLeaseConflict(blocked, now)}`)
-  }
-  const id = Identifier.ascending("executor_session")
-  Database.use((db) =>
-    db
-      .insert(EngineExecutorSessionTable)
-      .values({
-        id,
-        task_id: input.taskID,
-        run_id: input.runID,
-        goal_run_id: input.goalRunID,
-        provider: input.provider,
-        protocol: info.protocol,
-        protocol_version: info.version,
-        transport: ProtocolTransport.parse(info.transport).kind,
-        status: "active",
-        refs,
-        capabilities,
-        settings,
-        lease_owner: executorLeaseOwner(),
-        lease_until: executorLeaseUntil(now),
-        time_started: input.started ?? now,
-        time_created: now,
-        time_updated: now,
-      })
-      .run(),
-  )
-  const inserted = Database.use((db) =>
-    db.select().from(EngineExecutorSessionTable).where(eq(EngineExecutorSessionTable.id, id)).get(),
-  )
-  if (!inserted) throw new Error(`ensureExecutorSession: executor session ${id} not found after insert`)
-  return inserted
-}
-
-export function updateExecutorSessionStatus(
-  runID: string,
-  status: typeof EngineExecutorSessionTable.$inferInsert.status,
-) {
-  const row = Database.use((db) =>
-    db
-      .select()
-      .from(EngineExecutorSessionTable)
-      .where(eq(EngineExecutorSessionTable.run_id, runID))
-      .orderBy(desc(EngineExecutorSessionTable.time_created))
-      .get(),
-  )
-  if (!row) return
-  return updateExecutorSessionStatusByID(row.id, status)
-}
-
-export function updateExecutorSessionStatusByID(
-  executorSessionID: string,
-  status: typeof EngineExecutorSessionTable.$inferInsert.status,
-) {
-  Database.use((db) =>
-    db
-      .update(EngineExecutorSessionTable)
-      .set({
-        status,
-        lease_owner: null,
-        lease_until: 0,
-        time_completed: Date.now(),
-        time_updated: Date.now(),
-      })
-      .where(eq(EngineExecutorSessionTable.id, executorSessionID))
-      .run(),
-  )
-}
-
-export function updateGoalRunExecutorSessionStatus(
-  goalRunID: string,
-  status: typeof EngineExecutorSessionTable.$inferInsert.status,
-) {
-  const row = Database.use((db) =>
-    db
-      .select()
-      .from(EngineExecutorSessionTable)
-      .where(eq(EngineExecutorSessionTable.goal_run_id, goalRunID))
-      .orderBy(desc(EngineExecutorSessionTable.time_created))
-      .get(),
-  )
-  if (!row) return
-  return updateExecutorSessionStatusByID(row.id, status)
-}
-
 /** Phase-6-c: delivery rows are append-only `engine_artifact` rows with
  *  kind="delivery". `markDeliveryPublishing` / `finalizeDeliveryResult` now
  *  insert a new artifact row carrying the updated payload; queries pick the
@@ -1663,15 +1479,6 @@ function findLatestDeliveryArtifact(deliveryId: string) {
       .orderBy(desc(EngineArtifactTable.time_created))
       .get(),
   )
-}
-
-function mergeRefs(current?: ProtocolRefsInfo, next?: ProtocolRefsInfo) {
-  if (!current && !next) return undefined
-  const result = {
-    ...(current ?? {}),
-    ...(next ?? {}),
-  }
-  return Object.keys(result).length > 0 ? result : undefined
 }
 
 // ---------------------------------------------------------------------------

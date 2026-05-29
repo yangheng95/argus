@@ -22,7 +22,6 @@ export {
   EngineInteractionRequestTable,
   EngineArtifactTable,
   EngineProgressSnapshotTable,
-  EngineExecutorSessionTable,
   EngineChannelBindingTable,
 } from "../engine/engine.sql"
 export {

@@ -13,7 +13,6 @@ import {
   Budget,
   CreateTaskInput,
   Delivery,
-  ExecutorSession,
   Evaluation,
   GlobalTaskBoard,
   InjectMessageInput,
@@ -1231,28 +1230,6 @@ export const EngineRoutes = lazy(() =>
       validator("param", z.object({ runID: Run.shape.id })),
       async (c) => {
         return c.json(await EngineService.getRun(c.req.valid("param").runID))
-      },
-    )
-    .get(
-      "/run/:runID/executor",
-      describeRoute({
-        summary: "Get run executor session",
-        operationId: "run.executorSession",
-        responses: {
-          200: {
-            description: "Executor session",
-            content: {
-              "application/json": {
-                schema: resolver(ExecutorSession),
-              },
-            },
-          },
-          ...errors(404),
-        },
-      }),
-      validator("param", z.object({ runID: Run.shape.id })),
-      async (c) => {
-        return c.json(await EngineService.getExecutorSession(c.req.valid("param").runID))
       },
     )
     .get(
