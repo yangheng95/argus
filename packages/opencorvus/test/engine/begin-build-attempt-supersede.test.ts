@@ -8,6 +8,7 @@ import {
 } from "../../src/engine/engine.sql"
 import { beginBuildAttempt, createGoalRun, startNewAttempt } from "../../src/engine/persist"
 import { goalStatusByID } from "../../src/engine/describe"
+import { processOwner } from "../../src/engine/lease"
 import { findLatestTipGoalRun, findGoalRun, listGoalRunsByGoal } from "../../src/engine/store"
 import { resetDatabase } from "../fixture/db"
 
@@ -104,6 +105,7 @@ function insertGoalRun(input: {
   id: string
   status: "running" | "failed" | "completed" | "aborted"
   supersedeOf?: string
+  owner?: string | null
 }) {
   const now = Date.now()
   const terminal = input.status === "failed" || input.status === "completed" || input.status === "aborted"
@@ -130,6 +132,7 @@ function insertGoalRun(input: {
         superseded_reason: null,
         superseded_at: null,
         metadata: null,
+        owner: input.owner ?? null,
         time_started: null,
         time_completed: terminal ? now : null,
       },
@@ -244,6 +247,39 @@ describe("beginBuildAttempt — supersede_of population", () => {
     expect(rows).toHaveLength(1)
     expect(rows[0]?.id).toBe(liveRunID)
     expect(findGoalRun(liveRunID)?.supersede_of).toBeNull()
+    expect(goalStatusByID(goalID)).toBe("running")
+  })
+
+  test("owner-orphaned live tip → beginBuildAttempt retires the orphan and re-dispatches instead of throwing", () => {
+    // A prior process drove this attempt live, then the process restarted.
+    // The tip status is still `running` but its owner is a foreign (dead)
+    // process. The half-streamed turn cannot resume; describeGoal reports it as
+    // orphaned + dispatchable, so the orchestrator calls build({goalID}) →
+    // beginBuildAttempt. This must NOT throw "second live attempt"; it must
+    // retire the orphan and open a fresh attempt. Regression for the
+    // independent-review MAJOR (2026-05-29): the live-guard was not
+    // owner-orphan-aware, so re-dispatch of a restart orphan threw.
+    const orphanID = `grun_orphan_${Date.now()}`
+    insertGoalRun({ id: orphanID, status: "running", owner: "999999:dead:beef00" })
+    // The overlay/board projection no longer shows it running (owner-aware).
+    expect(goalStatusByID(goalID)).toBe("failed")
+
+    const newRunID = beginBuildAttempt({
+      taskID,
+      goalID,
+      runID,
+      sessionID: "ses_bba_orphan",
+    })
+
+    // Orphan tip was retired to aborted, with an explanatory reason.
+    expect(findGoalRun(orphanID)?.status).toBe("aborted")
+    expect(findGoalRun(orphanID)?.error).toContain("orphaned")
+    // Fresh attempt is the live tip, owned by THIS process, superseding the orphan.
+    const newRow = findGoalRun(newRunID)
+    expect(newRow?.status).toBe("running")
+    expect(newRow?.supersede_of).toBe(orphanID)
+    expect(newRow?.owner).toBe(processOwner())
+    expect(findLatestTipGoalRun(goalID)?.id).toBe(newRunID)
     expect(goalStatusByID(goalID)).toBe("running")
   })
 

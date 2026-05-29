@@ -1,6 +1,18 @@
 # Goal-run owner-stamp orphan liveness（断流自动退出）— 2026-05-29
 
-状态：实施中
+状态：已交付（commit 1 feature ad43774ad / commit 2 cleanup 4dff9a45b 已 push；commit 3 review-fix 见下，本地已提交，push 待用户在途的 GoalWorkloadResult 工作编译通过）
+
+## 6. 独立复核修订（2026-05-29，commit 3）
+
+独立 adversarial review 找到 1 个 MAJOR；自审又发现一处更深的多源 liveness 缺口。两者都修：
+
+1. **MAJOR — 孤儿在 describe 里可派，但 `beginBuildAttempt` 守卫拒派**：`persist.ts` 的"已有 live goal_run 就拒绝"守卫只看 `status`，孤儿（live+外来owner）会触发 throw，重派被堵。修复：守卫改为 owner-孤儿感知——孤儿则先 `updateGoalRun(aborted)` 退役（调度层 liveness 恢复，rule 13.1/6.1a），再走正常 supersede 开新 attempt（与 failed→retry 同路径）。
+
+2. **自审 — overlay 症状未真正修好（rule-8 多源 liveness）**：commit 1 只让 `describeGoal.is_running`（编排器视角）owner-aware；但 overlay 板走 `goalStatusByID`(`deriveGoalStatus`) + `projectGoalSteps`(`mapGoalRunToStepStatus`)，两者仍 owner-unaware → 孤儿仍显示 running、卡片仍转圈。修复：`deriveGoalStatus` 孤儿 head → "failed"；`projectGoalSteps` 孤儿 tip → step/phases "failed"。共用 `isGoalRunOrphaned` 单一同源。
+
+3. **清理残留（review minor）**：overlay `main.tsx` 的 `engine_executor_session` SQL 探针 + 过时 note、`script/inspect-task.ts` 查询、`packages/web` 两份 api.mdx 的已删路由行、`id.ts` 死 id-kind `executor_session`、`model.ts` 过时注释——一并清掉。
+
+测试：`begin-build-attempt-supersede.test.ts` 加"孤儿经 beginBuildAttempt 退役+重派、非孤儿 live tip 仍拒绝"；`goal-run-owner-orphan.test.ts` 加 `goalStatusByID` owner-aware 断言。8 套件 43 pass / 0 fail，typecheck 我的改动零错误（仅余用户在途 GoalWorkloadResult 的预存错误）。
 作者：HengYang + assistant
 相关前作：
 - `2026-05-21-build-orchestrator-interruption-stabilization.md`

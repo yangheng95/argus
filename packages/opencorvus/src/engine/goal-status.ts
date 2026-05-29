@@ -28,6 +28,7 @@ import { Database } from "@/storage/db"
 import { EngineProtocol } from "./protocol"
 import { Event } from "./model"
 import { listGoalRunsByGoal, findGoal } from "./store"
+import { isGoalRunOrphaned } from "./orphan"
 import { Log } from "@/util/log"
 
 const log = Log.create({ service: "goal-status" })
@@ -112,6 +113,18 @@ export function deriveGoalStatus(goalID: string): EngineGoalStatus | undefined {
     head.superseded_reason
   ) {
     return "pending"
+  }
+  // Owner-orphan: the head tip is in a live status but was driven live by a
+  // process that has since restarted (its owner stamp ≠ the current process).
+  // The half-streamed goal turn is physically dead and cannot resume, so it
+  // must NOT keep projecting `running` — that is what kept the overlay goal
+  // card spinning forever after a restart. Project `failed` so every reader of
+  // goalStatusByID (overlay board, workflow step projection) shows a dead
+  // attempt; re-dispatch is driven by describeGoal.is_orphaned + the
+  // beginBuildAttempt retire-on-redispatch path, not by this label. Spec
+  // 2026-05-29-goal-run-owner-orphan-liveness §2.2.
+  if (isGoalRunOrphaned(head)) {
+    return "failed"
   }
   return mapRunStatus(head.status as EngineGoalRunStatus)
 }

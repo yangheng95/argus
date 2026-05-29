@@ -34,6 +34,7 @@ import { persistEvidence } from "@/verification/persist"
 import type { ToolFailureCause } from "@/session/tool-failure-cause"
 import type { SpecSnapshotLineage } from "@/integrity/replay-lineage"
 import { LIVE_GOAL_RUN_STATUSES } from "./catalog"
+import { isGoalRunOrphaned } from "./orphan"
 import { EngineProtocol } from "./protocol"
 import {
   findGoal,
@@ -1580,12 +1581,33 @@ export function beginBuildAttempt(input: {
   if (!goal) {
     throw new Error(`beginBuildAttempt: goal ${input.goalID} not found`)
   }
-  const priorTip = findLatestTipGoalRun(input.goalID)
+  let priorTip = findLatestTipGoalRun(input.goalID)
   if (priorTip && (LIVE_GOAL_RUN_STATUSES as readonly string[]).includes(priorTip.status)) {
-    throw new Error(
-      `beginBuildAttempt: goal ${input.goalID} already has live goal_run ${priorTip.id} ` +
-        `with status=${priorTip.status}; refusing to open a second live build attempt.`,
-    )
+    if (!isGoalRunOrphaned(priorTip)) {
+      throw new Error(
+        `beginBuildAttempt: goal ${input.goalID} already has live goal_run ${priorTip.id} ` +
+          `with status=${priorTip.status}; refusing to open a second live build attempt.`,
+      )
+    }
+    // Owner-orphaned live tip: the process that drove it live has restarted, so
+    // the half-streamed goal turn is physically dead and cannot resume (spec
+    // 2026-05-29 §0). Retire it to `aborted` here, at the re-dispatch choke
+    // point, so the supersede chain below projects the fresh attempt as the
+    // tip instead of throwing "second live attempt". This is scheduling-layer
+    // liveness recovery on a proven physical death fact (CLAUDE.md rule 13.1 /
+    // 6.1a), NOT LLM routing — the orchestrator already chose to re-dispatch
+    // (describeGoal reports is_orphaned + mayDispatch). Without this the
+    // overlay stops spinning but `build({goalID})` would throw, leaving the
+    // goal stuck in a build-error loop (independent review 2026-05-29).
+    updateGoalRun(priorTip.id, {
+      status: "aborted",
+      error:
+        `owner process restarted mid-stream; goal_run ${priorTip.id} orphaned and ` +
+        `cannot resume — retired on re-dispatch`,
+      blocking_reason: null,
+      time_completed: now,
+    })
+    priorTip = findLatestTipGoalRun(input.goalID)
   }
   if (priorTip) {
     appendBuildRetryFeedbackForPriorRun({

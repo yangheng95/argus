@@ -30,7 +30,6 @@ export namespace Identifier {
     note: "nte",
     brief: "brf",
     milestone: "mst",
-    executor_session: "exs",
     executor_event: "exe",
     spec: "spc",
     specitem: "spi",

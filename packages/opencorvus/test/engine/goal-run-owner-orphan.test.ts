@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { EngineArtifactTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import { isGoalRunOrphaned, isRunOrphan, observeOrphanRuns } from "../../src/engine/orphan"
-import { describeGoal, renderTaskDescription } from "../../src/engine/describe"
+import { describeGoal, goalStatusByID, renderTaskDescription } from "../../src/engine/describe"
 import { processOwner } from "../../src/engine/lease"
 import type { GoalRunRow } from "../../src/engine/store"
 import { Instance } from "../../src/project/instance"
@@ -181,6 +181,10 @@ describe("owner-orphan derivation across describe / orphan (restart scenario)", 
         expect(desc.is_running).toBe(false)
         expect(desc.is_orphaned).toBe(true)
 
+        // Overlay/board path: goalStatusByID (deriveGoalStatus) must also be
+        // owner-aware so the goal card stops spinning after a restart.
+        expect(goalStatusByID("gol_orphan")).toBe("failed")
+
         // run-level orphan: the run's only "live" goal_run is owner-orphaned,
         // so the run itself reads as orphan (lost its executor context).
         expect(isRunOrphan(Instance.project.id, runID)).toBe(true)
@@ -216,6 +220,7 @@ describe("owner-orphan derivation across describe / orphan (restart scenario)", 
         const desc = describeGoal(fakeGoal("gol_live"))
         expect(desc.is_running).toBe(true)
         expect(desc.is_orphaned).toBe(false)
+        expect(goalStatusByID("gol_live")).toBe("running")
 
         expect(isRunOrphan(Instance.project.id, runID)).toBe(false)
         expect(observeOrphanRuns(Instance.project.id).map((r) => r.id)).not.toContain(runID)
