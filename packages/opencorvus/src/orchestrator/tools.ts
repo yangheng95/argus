@@ -701,10 +701,9 @@ async function cancelLiveOwnedBuild(input: {
       reason: cancelReason,
     })
     const goalRun = findGoalRun(goalRunID)
-    if (goalRun && (aborted.goalRunAborted || aborted.executorSessionAborted || aborted.executorAbortAttempted)) {
+    if (goalRun && (aborted.goalRunAborted || aborted.executorAbortAttempted)) {
       goalFact =
         ` goal_run ${goalRun.id} aborted` +
-        `${aborted.executorSessionAborted ? "; executor_session aborted" : ""}` +
         `${aborted.executorAbortAttempted ? `; executor_abort=${aborted.executorAbortSucceeded ? "ok" : "failed"}` : ""}.`
     } else if (goalRun) {
       goalFact = ` goal_run ${goalRun.id} was already terminal (${goalRun.status}); ownership closed.`
@@ -4563,10 +4562,9 @@ export function createOrchestratorTools(input: {
             sessionID: target.sessionID,
             reason: `cancel_subagent: ${reason}`,
           })
-        const abortedFact = aborted.goalRunAborted || aborted.executorSessionAborted || aborted.executorAbortAttempted
+        const abortedFact = aborted.goalRunAborted || aborted.executorAbortAttempted
           ? (
             ` goal_run=${aborted.goalRunAborted ? "aborted" : "unchanged"}` +
-            `${aborted.executorSessionAborted ? "; executor_session aborted" : ""}` +
             `${aborted.executorAbortAttempted ? `; executor_abort=${aborted.executorAbortSucceeded ? "ok" : "failed"}` : ""}.`
           )
           : ""

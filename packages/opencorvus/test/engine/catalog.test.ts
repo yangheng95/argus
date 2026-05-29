@@ -3,7 +3,6 @@ import {
   DISPATCHABLE_RUN_STATUSES,
   EXECUTOR_ACTIVE_RUN_STATUSES,
   GOAL_RUN_RESETTABLE_STATUSES,
-  LIVE_EXECUTOR_SESSION_STATUSES,
   LIVE_GOAL_RUN_STATUSES,
   LIVE_RUN_STATUSES,
   RUNTIME_MONITORED_RUN_STATUSES,
@@ -56,11 +55,5 @@ describe("engine status catalog", () => {
     expect(isDispatchableRunStatus("queued")).toBe(false)
     expect(isDispatchableRunStatus("running")).toBe(true)
     expect(isLiveRunStatus("completed")).toBe(false)
-  })
-
-  test("executor-session liveness has a single live state", () => {
-    // Phase-6-f-prep: isLiveExecutorSessionStatus was unused externally and
-    // removed. LIVE_EXECUTOR_SESSION_STATUSES is still exported for direct use.
-    expect(LIVE_EXECUTOR_SESSION_STATUSES).toEqual(["active"])
   })
 })

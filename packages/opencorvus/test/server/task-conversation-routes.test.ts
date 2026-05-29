@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, mock, test } from "bun:test"
-import { EngineExecutorSessionTable, EngineTaskTable } from "../../src/engine/engine.sql"
+import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { Event } from "../../src/engine/model"
 import { EngineProtocol } from "../../src/engine/protocol"
 import { Identifier } from "../../src/id/id"
@@ -11,7 +11,7 @@ import { MessageTable, PartTable } from "../../src/session/session.sql"
 import { SessionStatus } from "../../src/session/status"
 import { SessionPrompt } from "../../src/session/prompt"
 import { Message } from "../../src/session/message"
-import { Database, eq } from "../../src/storage/db"
+import { Database } from "../../src/storage/db"
 import { Log } from "../../src/util/log"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
@@ -883,7 +883,7 @@ describe("task conversation routes", () => {
     })
   })
 
-  test("POST /task/:taskID/cancel aborts the task session tree and live executor sessions", async () => {
+  test("POST /task/:taskID/cancel aborts the task session tree", async () => {
     await using tmp = await tmpdir({ git: true })
 
     await Instance.provide({
@@ -891,8 +891,6 @@ describe("task conversation routes", () => {
       fn: async () => {
         const app = Server.App()
         const taskID = Identifier.ascending("task")
-        const runID = Identifier.ascending("run")
-        const executorSessionID = Identifier.ascending("exec")
         const now = Date.now()
         const root = await Session.create({
           kind: "root",
@@ -922,18 +920,6 @@ describe("task conversation routes", () => {
             time_updated: now,
             time_started: now,
           }).run()
-          db.insert(EngineExecutorSessionTable).values({
-            id: executorSessionID,
-            task_id: taskID,
-            run_id: runID,
-            provider: "opencorvus",
-            protocol: "session-prompt",
-            protocol_version: "v1",
-            transport: "inproc",
-            status: "active",
-            time_created: now,
-            time_updated: now,
-          }).run()
         })
         SessionStatus.set(root.id, { type: "streaming" })
         SessionStatus.set(requirements.id, { type: "streaming" })
@@ -951,14 +937,6 @@ describe("task conversation routes", () => {
         expect(SessionStatus.get(root.id)).toEqual({ type: "terminal", reason: "aborted" })
         expect(SessionStatus.get(requirements.id)).toEqual({ type: "terminal", reason: "aborted" })
         expect(SessionStatus.get(build.id)).toEqual({ type: "terminal", reason: "aborted" })
-
-        const executorSession = Database.use((db) =>
-          db.select().from(EngineExecutorSessionTable)
-            .where(eq(EngineExecutorSessionTable.id, executorSessionID))
-            .get(),
-        )
-        expect(executorSession?.status).toBe("aborted")
-        expect(executorSession?.time_completed).toBeNumber()
       },
     })
   })

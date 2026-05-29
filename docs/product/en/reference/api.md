@@ -70,7 +70,6 @@ All endpoints are protected by `OPENCORVUS_SERVER_PASSWORD`. When set, clients m
 | GET | `/run/{runID}/brief` | Get run brief | `run.brief` |
 | GET | `/run/{runID}/delivery` | Get run delivery | `run.delivery` |
 | GET | `/run/{runID}/evaluations` | List run evaluations | `run.evaluations` |
-| GET | `/run/{runID}/executor` | Get run executor session | `run.executorSession` |
 | POST | `/task` | Create task | `task.create` |
 | PATCH | `/task-queue/reorder` | Reorder queued tasks in a directory | `task.queue.reorder` |
 | GET | `/task/events` | Subscribe to global task-list change notifications | `task.list.events` |

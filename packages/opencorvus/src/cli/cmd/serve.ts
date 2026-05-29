@@ -158,7 +158,7 @@ export const ServeCommand = cmd({
         try {
           const aborted = await abortLiveExecutionOnShutdown(shutdownDirectory, reason)
           console.log(
-            `[serve] aborted live execution project=${aborted.projectID} runs=${aborted.abortedRuns} goalRuns=${aborted.goalRuns} executorSessions=${aborted.executorSessions} tasks=${aborted.abortedTasks.tasks} sessions=${aborted.abortedTasks.sessions} toolParts=${aborted.abortedTasks.toolParts}`,
+            `[serve] aborted live execution project=${aborted.projectID} runs=${aborted.abortedRuns} goalRuns=${aborted.goalRuns} tasks=${aborted.abortedTasks.tasks} sessions=${aborted.abortedTasks.sessions} toolParts=${aborted.abortedTasks.toolParts}`,
           )
         } catch (error) {
           console.error("[serve] graceful shutdown abort failed:", error)

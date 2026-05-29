@@ -95,7 +95,6 @@ import {
   findDeliveryByRun,
   findGoalRun,
   findLatestDeliveryForRun,
-  findExecutorSessionByRun,
   findActivePlanForTask,
   findActiveRunForTask,
   findEvaluationByRun,
@@ -125,7 +124,6 @@ import {
   requireTask,
   viewArtifact,
   viewDelivery,
-  viewExecutorSession,
   viewEvaluation,
   viewGoal,
   viewInteraction,
@@ -1231,14 +1229,6 @@ export namespace EngineService {
     return findEvaluations(runID).map(viewEvaluation)
   }
 
-  export async function getExecutorSession(runID: string) {
-    // Read-only — poll loop handles state advancement asynchronously.
-    requireRun(runID)
-    const row = findExecutorSessionByRun(runID)
-    if (!row) throw new NotFoundError({ message: `Executor session not found for run ${runID}` })
-    return viewExecutorSession(row)
-  }
-
   export async function listProtocolEvents(taskID: string) {
     // Read-only — protocol_event is the persisted task event source.
     requireTask(taskID)
@@ -1827,8 +1817,6 @@ export namespace EngineService {
       },
       "Run aborted",
     )
-    const { abortExecutorSessionForRun } = await import("@/engine/writer")
-    abortExecutorSessionForRun(runID)
     const task = requireTask(run.task_id)
     if (findActiveRunForTask(task.id)?.id === run.id) {
       await updateTask(task, { status: "failed", error: "run aborted", time_completed: Date.now() }, "Run aborted")

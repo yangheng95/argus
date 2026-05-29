@@ -13,9 +13,7 @@ import { EngineProtocol } from "./protocol"
 import { orchestratorState } from "./orchestrator-state"
 import {
   persistFailedRunEvaluation,
-  updateExecutorSessionStatus,
   updateGoalRun,
-  updateGoalRunExecutorSessionStatus,
 } from "./persist"
 
 import {
@@ -28,7 +26,6 @@ import {
   findTask,
   listActiveGoalRunsForRun,
   listGoalRunsForRun,
-  listLiveExecutorSessionsForTask,
   listLiveRunsForProject,
   requireTask,
   type RunRow,
@@ -114,8 +111,6 @@ export namespace EngineRuntime {
       }
       return
     }
-
-    if (listLiveExecutorSessionsForTask(run.task_id).length > 0) return
 
     if (run.status === "blocked") {
       await hooks.updateRun(run, { status: "running", blocking_reason: null, error: null }, "Goal runs settled")
@@ -295,7 +290,6 @@ export namespace EngineRuntime {
       // Single-executor path: mark run completed and trigger task loop.
       if (PerRunState.claimAgentNotification(run.id)) {
         stopEventBridge(run.id)
-        updateExecutorSessionStatus(run.id, "completed")
         // updateRun → engine/state.ts detects the terminal transition and
         // calls PerRunState.finalize(run.id), so no manual cleanup here.
         await hooks.updateRun(run, { status: "completed", blocking_reason: null, error: null, time_completed: Date.now() }, "Run completed")
@@ -320,11 +314,8 @@ async function failRun(run: RunRow, error: string, hooks: RuntimeHooks) {
   for (const gr of goalRuns) {
     stopEventBridge(gr.id) // aborts the controller → consumeExecutorEvents loop breaks → executor.abort() called
     updateGoalRun(gr.id, { status: "failed", error: `Parent run failed: ${error}`, time_completed: Date.now() })
-    updateGoalRunExecutorSessionStatus(gr.id, "failed")
   }
-  // PerRunState.finalize is driven by updateRun's terminal transition below;
-  // executor_session is the only extra cleanup this path owns.
-  updateExecutorSessionStatus(run.id, "failed")
+  // PerRunState.finalize is driven by updateRun's terminal transition below.
   const task = requireTask(run.task_id)
   const now = Date.now()
   if (!findEvaluationByRun(run.id)) {

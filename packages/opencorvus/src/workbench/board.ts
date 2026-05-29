@@ -25,7 +25,6 @@ import {
   viewSpecSnapshot,
   EngineArtifactTable,
   EngineChannelBindingTable,
-  EngineExecutorSessionTable,
   EngineGoalTable,
   EngineInteractionRequestTable,
   EnginePlanNodeTable,
@@ -393,16 +392,6 @@ function boardTagForTask(task: typeof EngineTaskTable.$inferSelect) {
       )
       .get(),
   )
-  const executorSessions = Database.use((db) =>
-    db
-      .select({
-        count: sql<number>`count(*)`,
-        updated: sql<number>`coalesce(max(${EngineExecutorSessionTable.time_updated}), 0)`,
-      })
-      .from(EngineExecutorSessionTable)
-      .where(eq(EngineExecutorSessionTable.task_id, task.id))
-      .get(),
-  )
   const interactions = Database.use((db) =>
     db
       .select({
@@ -491,8 +480,6 @@ function boardTagForTask(task: typeof EngineTaskTable.$inferSelect) {
     goals?.updated ?? 0,
     goalRuns?.count ?? 0,
     goalRuns?.updated ?? 0,
-    executorSessions?.count ?? 0,
-    executorSessions?.updated ?? 0,
     noteStats?.count ?? 0,
     noteStats?.updated ?? 0,
     interactions?.count ?? 0,

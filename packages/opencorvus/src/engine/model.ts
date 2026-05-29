@@ -1,7 +1,6 @@
 import z from "zod"
 import { BusEvent } from "@/bus/bus-event"
 import { ExecutorName } from "@/executor/contract"
-import { ProtocolCapabilities, ProtocolRefs, ProtocolSettings } from "@/executor/protocol"
 import { Identifier } from "@/id/id"
 import { Reply as PermissionReply } from "@/permission/types"
 import { Answer as QuestionAnswer } from "@/question/types"
@@ -381,25 +380,6 @@ export const Run = z.object({
   }),
 })
 
-export const ExecutorSession = z.object({
-  id: z.string(),
-  taskID: Identifier.schema("task"),
-  runID: Identifier.schema("run"),
-  provider: ExecutorName,
-  protocol: z.string(),
-  protocolVersion: z.string(),
-  transport: z.enum(["inproc", "stdio", "ws", "http"]),
-  status: z.enum(["active", "completed", "failed", "aborted"]),
-  refs: ProtocolRefs.optional(),
-  capabilities: ProtocolCapabilities.optional(),
-  settings: ProtocolSettings.optional(),
-  time: z.object({
-    created: z.number(),
-    updated: z.number(),
-    started: z.number().optional(),
-    completed: z.number().optional(),
-  }),
-})
 
 export const Interaction = z.object({
   id: Identifier.schema("interaction"),
