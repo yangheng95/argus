@@ -17,6 +17,7 @@
 import { createDecisionLog } from "@/decision-log"
 import { EngineConfig } from "./config"
 import { goalStatusByID } from "./describe"
+import { isGoalRunOrphaned } from "./orphan"
 import {
   findActiveSpecForTask,
   findLatestIntegrityAttemptArtifact,
@@ -171,7 +172,7 @@ const PIPELINE: MiniWorkflow = {
       id: "design_analysis",
       tool: "design_analysis",
       label: "Design",
-      hint: "视觉/网页/图片/Figma 参考任务的第一阶段。独占 mirror 工具，产出完整 PRD/SPEC、visual_consistency_spec、evidence_source_manifest；网页复刻还要产出视觉框架 handoff（View/slot manifest 先落地，功能容器后填充）。",
+      hint: "视觉/网页/图片/Figma 参考任务的第一阶段。独占 mirror 工具，产出完整 PRD/SPEC、visual_consistency_spec、evidence_source_manifest；网页复刻还要产出视觉框架 handoff（高还原 visual shell 先落地，View/slot manifest 对齐，功能容器后填充）。",
       scope: "task",
       skippable: true,
       after: [],
@@ -412,7 +413,14 @@ export function projectGoalSteps(
   for (const goal of goals) {
     const runs = goalRuns.filter((r) => r.goal_id === goal.id)
     const tip = runs.find((r) => !supersededIDs.has(r.id)) // runs are desc by time_created
-    const stepStatus = mapGoalRunToStepStatus(tip?.status)
+    // Owner-orphan: a live-status tip driven live by a restarted process is
+    // physically dead (cannot resume). Project the step/phases as `failed`
+    // instead of `running` so the overlay card stops spinning after a restart;
+    // re-dispatch is driven by describeGoal.is_orphaned + beginBuildAttempt.
+    // Spec 2026-05-29-goal-run-owner-orphan-liveness §3.2.
+    const orphaned = tip ? isGoalRunOrphaned(tip) : false
+    const effectiveStatus = orphaned ? "failed" : tip?.status
+    const stepStatus = orphaned ? "failed" : mapGoalRunToStepStatus(tip?.status)
     const startedAt = tip?.time_started ?? undefined
     const completedAt = tip?.time_completed ?? undefined
     const steps: Record<string, GoalStepStatus> = {}
@@ -420,7 +428,7 @@ export function projectGoalSteps(
     for (const step of goalScopeSteps) {
       steps[step.id] = { status: stepStatus, startedAt, completedAt }
       if (step.phases && step.phases.length > 0) {
-        stepPhases[step.id] = projectPhases(step.phases, tip?.status, startedAt, completedAt)
+        stepPhases[step.id] = projectPhases(step.phases, effectiveStatus, startedAt, completedAt)
       }
     }
     result[goal.id] = {
