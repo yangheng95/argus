@@ -1,5 +1,5 @@
 import { Identifier } from "@/id/id"
-import { executorLeaseAvailable, executorLeaseHeldByOther, executorLeaseOwner, executorLeaseUntil } from "./lease"
+import { executorLeaseAvailable, executorLeaseHeldByOther, executorLeaseOwner, executorLeaseUntil, processOwner } from "./lease"
 
 /** Input shape for persisting a requirement extracted by the Requirements agent into
  *  engine_requirement. Mirrors the table columns plus an optional
@@ -869,6 +869,13 @@ function appendGoalRunArtifact(input: {
     superseded_reason: merged.superseded_reason,
     superseded_at: merged.superseded_at,
     metadata: merged.metadata,
+    // Owner-stamp orphan liveness: preserve the existing owner; if this append
+    // moves a previously owner-less row into a live status, stamp the current
+    // process owner (the process driving it live owns it). Terminal/queued rows
+    // without an owner stay null. Spec 2026-05-29-goal-run-owner-orphan-liveness.
+    owner:
+      merged.owner ??
+      ((LIVE_GOAL_RUN_STATUSES as readonly string[]).includes(merged.status) ? processOwner() : null),
     time_started: merged.time_started,
     time_completed: merged.time_completed,
   }
@@ -1830,6 +1837,10 @@ export function beginBuildAttempt(input: {
     superseded_reason: null,
     superseded_at: null,
     metadata: null,
+    // Owner-stamp: this process owns the freshly-dispatched (status=running)
+    // attempt. After a restart, a different processOwner() reveals the row as
+    // orphaned. Spec 2026-05-29-goal-run-owner-orphan-liveness.
+    owner: processOwner(),
     time_started: now,
     time_completed: null,
   }
