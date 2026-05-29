@@ -156,6 +156,12 @@ export type GoalRunRow = {
   superseded_reason: string | null
   superseded_at: number | null
   metadata: EngineMetadata | null
+  /** Process owner that drove this goal_run into a live status (processOwner()
+   *  at dispatch). A live goal_run whose owner ≠ the current process owner is
+   *  physically orphaned — the owning process restarted and the mid-stream turn
+   *  cannot resume. Null for never-dispatched/queued rows. Spec:
+   *  specs/new-arch/2026-05-29-goal-run-owner-orphan-liveness.md */
+  owner: string | null
   time_started: number | null
   time_completed: number | null
   time_created: number
@@ -1875,6 +1881,7 @@ function artifactRowToGoalRunRow(row: typeof EngineArtifactTable.$inferSelect): 
     superseded_reason?: string | null
     superseded_at?: number | null
     metadata?: EngineMetadata | null
+    owner?: string | null
     time_started?: number | null
     time_completed?: number | null
   }
@@ -1899,6 +1906,7 @@ function artifactRowToGoalRunRow(row: typeof EngineArtifactTable.$inferSelect): 
     superseded_reason: payload.superseded_reason ?? null,
     superseded_at: payload.superseded_at ?? null,
     metadata: payload.metadata ?? null,
+    owner: payload.owner ?? null,
     time_started: payload.time_started ?? null,
     time_completed: payload.time_completed ?? null,
     time_created: row.time_created,

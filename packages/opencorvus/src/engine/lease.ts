@@ -19,6 +19,19 @@ export function executorLeaseOwner() {
   return OWNER
 }
 
+/**
+ * Process-unique owner stamp for goal-run liveness (owner-stamp orphan
+ * detection). Stamped onto a goal_run when this process drives it into a
+ * live status; a live goal_run whose owner ≠ this value belongs to a dead
+ * (restarted) process and is physically orphaned. `OWNER` embeds pid + boot
+ * timestamp + random, so it changes on every restart (PID reuse safe).
+ * Load-bearing invariant: one opencorvus process per project (single owner).
+ * Spec: specs/new-arch/2026-05-29-goal-run-owner-orphan-liveness.md
+ */
+export function processOwner() {
+  return OWNER
+}
+
 export function executorLeaseUntil(now = Date.now()) {
   return now + EXECUTOR_LEASE_MS
 }

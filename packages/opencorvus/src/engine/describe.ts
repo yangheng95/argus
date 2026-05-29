@@ -25,7 +25,7 @@ import { createDecisionLog } from "@/decision-log"
 import { renderUserRequestSection } from "@/intent/request-prompt"
 import { readIterationHistory as readHistory } from "@/metrics/store"
 import { deriveGoalStatus } from "./goal-status"
-import { isRunOrphan } from "./orphan"
+import { isGoalRunOrphaned, isRunOrphan } from "./orphan"
 import { deriveTaskStatus } from "./task-status"
 import { ToolFailureCause, renderToolFailureCause } from "@/session/tool-failure-cause"
 
@@ -114,6 +114,11 @@ export interface GoalDesc {
   needs_redispatch: boolean
   /** True when the goal has never had a goal_run. */
   never_dispatched: boolean
+  /** True when the tip goal_run is in a live status but its `owner` stamp is a
+   *  foreign (restarted) process — physically orphaned, mid-stream turn cannot
+   *  resume. The orchestrator should treat it as a dead attempt and re-dispatch.
+   *  Spec: specs/new-arch/2026-05-29-goal-run-owner-orphan-liveness.md */
+  is_orphaned: boolean
 }
 
 export interface StreamFailureDesc {
@@ -261,7 +266,11 @@ export function describeGoal(goal: GoalRow, rewindCursor?: number | null): GoalD
   const attempts = [...rows].reverse().map(describeAttempt)
   const latest = tip ? describeAttempt(tip) : undefined
 
-  const tipIsLive = !!tip && LIVE_STATES.has(tip.status)
+  // Owner-stamp orphan: a live-status tip whose owner is a foreign (restarted)
+  // process is physically dead — render it as not-running so the overlay stops
+  // spinning and the orchestrator re-dispatches it. Spec 2026-05-29.
+  const tipIsOrphaned = !!tip && isGoalRunOrphaned(tip)
+  const tipIsLive = !!tip && LIVE_STATES.has(tip.status) && !tipIsOrphaned
   const tipIsOk = !!tip && TERMINAL_OK_STATES.has(tip.status)
   const tipIsFail = !!tip && TERMINAL_FAIL_STATES.has(tip.status)
   const tipIsAborted = !!tip && TERMINAL_ABORTED_STATES.has(tip.status)
@@ -287,6 +296,7 @@ export function describeGoal(goal: GoalRow, rewindCursor?: number | null): GoalD
     is_aborted: tipIsAborted && !tipHasRedispatchIntent,
     needs_redispatch: isTerminal && tipHasRedispatchIntent,
     never_dispatched: rows.length === 0,
+    is_orphaned: tipIsOrphaned,
   }
 }
 
@@ -317,7 +327,9 @@ function buildCollaborationClosure(goals: GoalDesc[]): CollaborationClosureDesc 
   const blockedGoals: CollaborationClosureDesc["blocked_goals"] = []
 
   for (const goal of goals) {
-    const mayDispatch = goal.never_dispatched || goal.needs_redispatch
+    // Owner-orphaned goals are dead attempts whose owning process restarted;
+    // they need re-dispatch the same as a redispatch-intent terminal tip.
+    const mayDispatch = goal.never_dispatched || goal.needs_redispatch || goal.is_orphaned
     if (!mayDispatch) continue
 
     const blockers = goal.depends_on
@@ -523,6 +535,7 @@ async function describeTaskFromRow(task: TaskRow): Promise<TaskDesc> {
 function describeDerivedState(g: GoalDesc): string {
   const flags: string[] = []
   if (g.never_dispatched) flags.push("never_dispatched")
+  if (g.is_orphaned) flags.push("ORPHANED(owner process restarted — mid-stream goal cannot resume; re-dispatch)")
   if (g.is_running) flags.push("running")
   if (g.is_terminal_ok) flags.push("terminal_ok")
   if (g.is_terminal_fail) flags.push("terminal_fail")

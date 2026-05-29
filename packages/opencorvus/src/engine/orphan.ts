@@ -10,8 +10,30 @@
 import {
   listLiveGoalRunsForProject,
   listLiveRunsForProject,
+  type GoalRunRow,
   type RunRow,
 } from "./store"
+import { isLiveGoalRunStatus } from "./catalog"
+import { processOwner } from "./lease"
+
+/**
+ * Owner-stamp orphan probe: a goal_run is **physically orphaned** when it is
+ * in a live status but was driven live by a *different* process (its `owner`
+ * stamp ≠ the current process owner). Under the single-owner-per-project
+ * invariant a foreign owner on a live row means that process restarted and
+ * the in-flight, mid-stream goal turn is unrecoverable (a half-streamed LLM
+ * turn has no resume checkpoint — see spec §0). The status column still reads
+ * `running`/`planning`/`blocked` because the dead process never got to write a
+ * terminal row; this derivation is what makes the row read as dead without
+ * mutating it (rule 13 — derived, not an FSM write).
+ *
+ * Never-dispatched / queued rows carry no owner and are not orphaned.
+ *
+ * Spec: specs/new-arch/2026-05-29-goal-run-owner-orphan-liveness.md
+ */
+export function isGoalRunOrphaned(row: GoalRunRow, owner: string = processOwner()): boolean {
+  return isLiveGoalRunStatus(row.status) && !!row.owner && row.owner !== owner
+}
 
 /**
  * A live run (queued / accepted / running / blocked) is **orphan** if:
@@ -22,8 +44,14 @@ import {
  *     yet — they're not orphan, just unstarted).
  */
 export function observeOrphanRuns(projectID: string): RunRow[] {
+  // Owner-orphaned goal_runs (live status but foreign owner) do NOT count as a
+  // live executor context for their parent run — the owning process is gone.
+  // Excluding them lets a run whose only "live" goal_run is owner-orphaned fall
+  // through to orphan, matching physical reality.
   const liveGoalRunIDs = new Set(
-    listLiveGoalRunsForProject(projectID).map((goalRun) => goalRun.coordinator_run_id),
+    listLiveGoalRunsForProject(projectID)
+      .filter((goalRun) => !isGoalRunOrphaned(goalRun))
+      .map((goalRun) => goalRun.coordinator_run_id),
   )
   return listLiveRunsForProject(projectID).filter((run) => {
     if (run.status === "queued") return false
