@@ -17,9 +17,11 @@ mock.module("../src/services/sse", () => ({
   startSSE: (source: { kind: string; id: string }, sequence: number) => {
     startedStreams.push({ ...source, sequence });
   },
+  startTaskListSSE: () => undefined,
   stopSSE: () => {
     stoppedStreams += 1;
   },
+  stopTaskListSSE: () => undefined,
 }));
 
 const { deleteTask, selectTask } = await import("../src/services/task");
@@ -39,8 +41,8 @@ beforeEach(() => {
   __setHostTransportForTest(undefined);
 });
 
-describe("task selection for dead tasks", () => {
-  test("terminal tasks hydrate with a small initial tail", async () => {
+describe("task selection initial hydrate", () => {
+  test("task selection hydrates with a small initial tail", async () => {
     setBoardStore("tasks", [
       { task: { id: "tsk_dead", status: "cancelled", directory: "" }, pending_interactions: 0 },
     ]);
@@ -53,7 +55,7 @@ describe("task selection for dead tasks", () => {
     expect(activeTaskID()).toBe("tsk_dead");
   });
 
-  test("active tasks keep the normal conversation hydrate contract", async () => {
+  test("active tasks use the same bounded initial hydrate and still start SSE", async () => {
     setBoardStore("tasks", [
       { task: { id: "tsk_live", status: "active", directory: "" }, pending_interactions: 0 },
     ]);
@@ -61,7 +63,7 @@ describe("task selection for dead tasks", () => {
     await selectTask("tsk_live");
 
     expect(hydrateCalls).toHaveLength(1);
-    expect(hydrateCalls[0].options.tailLimit).toBeUndefined();
+    expect(hydrateCalls[0].options.tailLimit).toBe(8);
     expect(startedStreams).toEqual([{ kind: "task", id: "tsk_live", sequence: 0 }]);
   });
 

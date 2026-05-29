@@ -193,8 +193,7 @@ export function panelRequestBody(
 // directly at the source instead of triggering silent 400-request floods.
 const TASK_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
 const TASK_DECISION_COUNTDOWN_SECONDS = 8;
-const TERMINAL_TASK_STATUSES = new Set(["completed", "failed", "cancelled"]);
-const TERMINAL_TASK_INITIAL_TAIL_LIMIT = 8;
+const TASK_SELECTION_INITIAL_TAIL_LIMIT = 8;
 
 function isAbortError(error: unknown): boolean {
   return error instanceof DOMException && error.name === "AbortError";
@@ -286,7 +285,7 @@ export async function selectTask(
     const lastSequence = await hydrateTaskConversation(nextTaskID, {
       scrollIntent: "bottom",
       resetCause: "task-switch-hydrate",
-      tailLimit: initialConversationTailLimit(taskItem),
+      tailLimit: TASK_SELECTION_INITIAL_TAIL_LIMIT,
     });
     if (stale()) return;
 
@@ -312,11 +311,6 @@ export async function selectTask(
       setBoardStore("taskSwitching", false);
     }
   }
-}
-
-function initialConversationTailLimit(taskItem: any): number | undefined {
-  const status = String(taskItem?.task?.status || "");
-  return TERMINAL_TASK_STATUSES.has(status) ? TERMINAL_TASK_INITIAL_TAIL_LIMIT : undefined;
 }
 
 // ── Public: deleteTask ──
