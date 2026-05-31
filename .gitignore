@@ -112,7 +112,7 @@ lpt9
 # Auto-added by OpenCorvus
 .opencorvus/runtime/
 .opencorvus/intent/
-.opencorvus/design-analysis/
+.opencorvus/frontend-design/
 .opencorvus/decision-log.md
 .opencorvus/worktrees/
 .opencorvus/ownership/
