@@ -32,8 +32,8 @@ Frontmatter 字段（`src/skill/skill.ts:23-63`）：
 
 | Skill | 用途 |
 |---|---|
-| `webpage-generate` | 针对 live webpage reference 产出带 mirror 证据的 PRD/SPEC |
-| `image-generate` | 针对纯截图视觉参考产出带 mirror 证据的 PRD/SPEC |
+| `webpage-generate` | 针对 live webpage reference 产出带 mirror 证据的 frontend template |
+| `image-generate` | 针对纯截图视觉参考产出带 mirror 证据的 frontend template |
 | `research-report` | 用 `websearch` 和按需 `webfetch` 产出带来源的 Markdown 调研报告 |
 
 > 其他 skill 需要通过 `skills.paths` / `skills.urls` 显式加载。

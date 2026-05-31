@@ -14,6 +14,7 @@ import { TodoListPart, extractTodos } from "./TodoListPart"
 import { StaticTextPart } from "./TextPart"
 import { toolFileChangesFromState, type ToolFileChange } from "../utils/file-change-summary"
 import { STREAMING_ACTIVE_TEXT_LIMIT, visibleStreamingText } from "./text-part-model"
+import { resolveResourceUrl } from "../services/api"
 
 // Same tool-kind sets used to drive code rendering below.
 const FILE_WRITE_TOOLS = new Set(["write", "writefile"])
@@ -23,6 +24,10 @@ const FILE_READ_TOOLS = new Set(["read", "readfile"])
 // raw JSON — the output is JSON.stringify of the todos array, which is
 // unreadable and floods the card body. updateplan uses the same shape.
 const TODO_TOOLS = new Set(["todowrite", "todoread", "todoupdate", "updateplan"])
+
+function isRecord(value: unknown): value is Record<string, any> {
+  return !!value && typeof value === "object" && !Array.isArray(value)
+}
 const READ_NOTE_RE = /^\((?:Showing|End of file|Output capped at)/
 
 interface ParsedReadOutput {
@@ -210,8 +215,36 @@ export function InlineToolPart(props: { part: any; mode?: "inline" | "block" | "
     return changes.length > 0 ? changes : null
   })
   const showStructuredOutput = createMemo(() => (toolDiffs()?.length ?? 0) > 0)
+  const browserEvidence = createMemo(() => {
+    if (status() !== "completed") return null
+    const metadata = isRecord(state().metadata) ? state().metadata : {}
+    const browser = isRecord(metadata.browser) ? metadata.browser : null
+    if (!browser) return null
+    const viewport = isRecord(browser.viewport) ? browser.viewport : {}
+    const screenshot = isRecord(browser.screenshot) ? browser.screenshot : {}
+    const diagnostics = isRecord(browser.diagnostics) ? browser.diagnostics : {}
+    const diagnosticText = [
+      ["console", diagnostics.consoleErrors],
+      ["page", diagnostics.pageErrors],
+      ["network", diagnostics.failedRequests],
+      ["http", diagnostics.httpErrors],
+    ].flatMap(([label, value]) =>
+      typeof value === "number" && value > 0 ? [`${label} ${value}`] : [],
+    ).join(" · ")
+    return {
+      url: typeof browser.url === "string" ? browser.url : "",
+      title: typeof browser.title === "string" ? browser.title : "",
+      viewport:
+        typeof viewport.width === "number" && typeof viewport.height === "number"
+          ? `${viewport.width}x${viewport.height}`
+          : "",
+      screenshotUrl: typeof screenshot.attachmentUrl === "string" ? screenshot.attachmentUrl : "",
+      diagnosticText,
+    }
+  })
   const showPlainOutput = createMemo(() => {
     if (status() !== "completed" || !output() || readView()) return false
+    if (browserEvidence()) return false
     if (showStructuredOutput()) return /<diagnostics\b/i.test(output())
     return !codeResult()
   })
@@ -257,6 +290,32 @@ export function InlineToolPart(props: { part: any; mode?: "inline" | "block" | "
                     <StaticTextPart text={readView()!.reminder!} />
                   </div>
                 </section>
+              </Show>
+              <Show when={browserEvidence()}>
+                {(evidence) => (
+                  <section class="msg-browser-evidence">
+                    <Show when={evidence().screenshotUrl}>
+                      <img
+                        class="msg-browser-evidence__image"
+                        src={resolveResourceUrl(evidence().screenshotUrl)}
+                        alt="Browser observation"
+                      />
+                    </Show>
+                    <div class="msg-browser-evidence__meta">
+                      <Show when={evidence().title || evidence().url}>
+                        <div class="msg-browser-evidence__title">{evidence().title || evidence().url}</div>
+                      </Show>
+                      <Show when={evidence().url}>
+                        <div class="msg-browser-evidence__url">{evidence().url}</div>
+                      </Show>
+                      <Show when={evidence().viewport || evidence().diagnosticText}>
+                        <div class="msg-browser-evidence__facts">
+                          {[evidence().viewport, evidence().diagnosticText].filter(Boolean).join(" · ")}
+                        </div>
+                      </Show>
+                    </div>
+                  </section>
+                )}
               </Show>
               <Show when={showPlainOutput()}>
                 {(_) => {

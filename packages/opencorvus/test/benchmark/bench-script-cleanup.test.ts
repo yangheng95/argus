@@ -93,12 +93,23 @@ test("resume mode attaches read-only unless an explicit message is provided", ()
   expect(src).not.toContain("resume message inject failed")
 })
 
-test("benchmark timeout is based on real inactivity, not process start time", () => {
+test("benchmark timeout mechanism stays disabled instead of using stale inactivity heuristics", () => {
   expect(src).toContain("--idle-timeout-ms")
-  expect(src).toContain("function assertRecentBenchmarkActivity")
-  expect(src).toContain("Date.now() - lastActivityLogAt")
-  expect(src).toContain("had no benchmark activity")
-  expect(src).not.toContain("(no benchmark-side timeouts)")
+  expect(src).toContain("idle_timeout_ms=disabled")
+  expect(src).not.toContain("function assertRecentBenchmarkActivity")
+  expect(src).not.toContain("had no benchmark activity")
+  expect(src).not.toContain("Date.now() - lastActivityLogAt")
+})
+
+test("benchmark trace override uses current runtime root instead of legacy trace path", () => {
+  expect(src).toContain(`".opencorvus", "runtime", "trace"`)
+  expect(src).not.toContain(`".opencorvus", "trace"`)
+})
+
+test("benchmark model config does not shadow built-in providers with empty overrides", () => {
+  expect(src).toContain("Do not write an empty provider override")
+  expect(src).not.toContain("const providerID = model.split")
+  expect(src).not.toContain("[providerID]:")
 })
 
 test("benchmark report preserves missing evidence instead of substituting empty API data", () => {
@@ -113,4 +124,19 @@ test("benchmark git changed-file evidence fails loudly", () => {
   expect(src).not.toMatch(/catch\(\(\) => \[\] as string\[\]\)/)
   expect(src).toContain("Git is a parallel evidence")
   expect(src).toContain("failed with exit")
+})
+
+test("benchmark local visual verification waits for completed tasks", () => {
+  expect(src).toContain("skippedLocalVerify")
+  expect(src).toContain("currentTaskStatus !== \"completed\"")
+  expect(src).toContain("skipped because task status is")
+  expect(src).toContain("skipped because benchmark ended before task completion")
+})
+
+test("benchmark auto visual-diff uses webpage replica thresholds", () => {
+  expect(src).toContain("WEB_CLONE_VISUAL_THRESHOLD")
+  expect(src).toContain("WEB_CLONE_VISUAL_WORST_THRESHOLD")
+  expect(src).toContain("--threshold=${WEB_CLONE_VISUAL_THRESHOLD}")
+  expect(src).toContain("--worst-threshold=${WEB_CLONE_VISUAL_WORST_THRESHOLD}")
+  expect(src).not.toContain("Fig2code SSIM thresholds (mean 0.85")
 })

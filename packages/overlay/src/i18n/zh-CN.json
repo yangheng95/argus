@@ -252,7 +252,7 @@
   "chat.large_input_warning": "输入超过 50 KB 可能造成性能损失；建议使用 1M 上下文模型。",
   "chat.placeholder_disabled": "请先选择工作区并连接模型。",
   "chat.placeholder_projects": [
-    "我有一份 PRD，请按文档搭一个可运行的 MVP",
+    "我有一份 template，请按文档搭一个可运行的 MVP",
     "我有一份 Figma 设计稿，请拆成组件并接入现有工程",
     "我有一个竞品 URL，请参考它做一个我们的版本",
     "我有一批 PDF，请做成可检索的文档助手",
@@ -291,7 +291,7 @@
   "chat.role.assistant": "助手",
   "chat.role.build": "构建",
   "chat.role.delivery": "交付",
-  "chat.role.design-analyst": "设计分析师",
+  "chat.role.frontend-design": "前端设计",
   "chat.role.evaluator": "评审",
   "chat.role.executor": "执行器",
   "chat.role.explore": "探索",

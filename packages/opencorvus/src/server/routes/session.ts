@@ -773,7 +773,7 @@ export const SessionRoutes = lazy(() =>
           auto: body.auto,
           focus: body.focus,
         })
-        const result = await SessionContext.provide(session, () => SessionPrompt.loop({ sessionID }))
+        const result = await SessionContext.provide(session, () => SessionPrompt.loop({ sessionID, result_mode: "summary" }))
         return c.json(result.info.role === "assistant" && CompactionHandoff.isValidSummaryMessage(result.info))
       },
     )

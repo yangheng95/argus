@@ -18,7 +18,7 @@ The registry currently ships with the agents below. `mode` controls how the agen
 | `orchestrator` | primary (hidden) | Orchestrator agent. Owns task lifecycle decisions and dispatches explicit workflow tools (`requirements`, `architect`, `build`, `deliver`, etc.). |
 | `requirements` | primary (hidden) | Requirements stage. Extracts user requirements and foundational technical decisions; it does not produce goals. |
 
-Other registered agents (`architect`, `design-analyst`, `intent-analysis`, `integrity`, `prosecutor`, `summary`, `title`, `compaction`) are stage / utility slots invoked internally by the orchestrator or session loop. They surface in config (model + prompt overrides) but are not user-selectable.
+Other registered agents (`architect`, `frontend-design`, `intent-analysis`, `integrity`, `prosecutor`, `summary`, `title`, `compaction`) are stage / utility slots invoked internally by the orchestrator or session loop. They surface in config (model + prompt overrides) but are not user-selectable.
 
 See `packages/opencorvus/src/agent/agent.ts:144-463` for the canonical definitions.
 
@@ -36,12 +36,12 @@ Each agent's model is set under `agent.<name>.model` — see `packages/opencorvu
 {
   "agent": {
     "build":        { "model": "anthropic/claude-sonnet-4-6" },
-    "design-analyst": { "model": "anthropic/claude-sonnet-4-6" }
+    "frontend-design": { "model": "anthropic/claude-sonnet-4-6" }
   }
 }
 ```
 
-For agent names containing a hyphen (`design-analyst`, `intent-analysis`) the JSON key must be quoted: `"design-analyst"`.
+For agent names containing a hyphen (`frontend-design`, `intent-analysis`) the JSON key must be quoted: `"frontend-design"`.
 
 ## Defining a custom agent
 
@@ -76,7 +76,7 @@ Per-agent step budgets and skill paths live under `assistant.<name>` (config.ts:
     "requirements":   { "max_steps": 20 },
     "architect":      { "max_steps": 40 },
     "delivery":       { "max_steps": 160, "max_retries": 3 },
-    "design_analyst": { "max_steps": 30 },
+    "frontend_design": { "max_steps": 30 },
     "intent_analysis": { "max_steps": 10 },
     "build":          { "max_steps": 80 }
   }

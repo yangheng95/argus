@@ -35,6 +35,7 @@ test("returns default native agents when no config", async () => {
       expect(names).toContain("visual-qa")
       expect(names).toContain("general")
       expect(names).toContain("explore")
+      expect(names).toContain("research")
       expect(names).toContain("compaction")
       expect(names).toContain("title")
       expect(names).toContain("summary")
@@ -72,9 +73,17 @@ test("build agent has correct default properties", async () => {
       expect(evalPerm(build, "todoread")).toBe("allow")
       expect(evalPerm(build, "todowrite")).toBe("allow")
       expect(build?.tools?.exclude).not.toContain("skill")
+      expect(build?.tools?.exclude).toContain("web_clone_prepare_context")
+      expect(build?.tools?.exclude).toContain("web_clone_generate_source_project")
+
+      const tools = await ToolRegistry.tools({ providerID: "", modelID: "" }, build)
+      const ids = new Set(tools.map((tool) => tool.id))
+      expect(ids.has("web_clone_prepare_context")).toBe(false)
+      expect(ids.has("web_clone_source_audit")).toBe(true)
+      expect(ids.has("web_clone_generate_source_project")).toBe(false)
     },
   })
-})
+}, 30_000)
 
 test("visual-qa agent is full-function build-grade with visual delivery tools", async () => {
   await using tmp = await tmpdir()
@@ -374,19 +383,97 @@ test("native stage agent registry tool surfaces match role boundaries", async ()
         expect(intent?.tools?.include).not.toContain(tool)
       }
 
-      // design-analyst owns mirror extraction (URL/Figma/pixels); generic
+      // frontend-design owns mirror extraction (URL/Figma/pixels); generic
       // websearch is redundant with that chain and risks score loops.
-      const design = await Agent.get("design-analyst")
+      const design = await Agent.get("frontend-design")
       expect(design?.tools?.include).toContain("url_screenshot")
       expect(design?.tools?.include).toContain("skill")
       expect(design?.tools?.include).not.toContain("websearch")
       expect(design?.tools?.include).not.toContain("webpage_render")
       expect(design?.tools?.include).not.toContain("task")
 
+      const research = await Agent.get("research")
+      expect(research).toBeDefined()
+      expect(research?.tools?.include?.sort()).toEqual([
+        "external_code_search",
+        "find_files",
+        "list_directory",
+        "memory_get",
+        "memory_search",
+        "read_file",
+        "search_code",
+        "todoread",
+        "todowrite",
+        "webfetch",
+        "websearch",
+      ].sort())
+      for (const tool of [
+        "bash",
+        "edit",
+        "write",
+        "apply_patch",
+        "task",
+        "panel",
+        "deliver",
+        "build",
+        "propose_task",
+        "skill",
+      ]) {
+        expect(research?.tools?.include).not.toContain(tool)
+      }
+
       const integrity = await Agent.get("integrity")
       expect(integrity).toBeDefined()
       expect(integrity?.tools?.include).toEqual([])
       expect(await Agent.get("delivery")).toBeUndefined()
+    },
+  })
+})
+
+test("research agent tool config cannot reopen executor surfaces", async () => {
+  await using tmp = await tmpdir({
+    config: {
+      agent: {
+        research: {
+          tools: { include: ["bash"] },
+        },
+      },
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await expect(Agent.get("research")).rejects.toThrow("config.agent.research.tools is not supported")
+    },
+  })
+})
+
+test("fixed read-only evidence agents cannot be disabled or tool-overridden", async () => {
+  await using researchTmp = await tmpdir({
+    config: {
+      agent: {
+        research: { disable: true },
+      },
+    },
+  })
+  await Instance.provide({
+    directory: researchTmp.path,
+    fn: async () => {
+      await expect(Agent.get("research")).rejects.toThrow("config.agent.research.disable is not supported")
+    },
+  })
+
+  await using factCheckTmp = await tmpdir({
+    config: {
+      agent: {
+        "fact-check": { tools: { include: ["bash"] } },
+      },
+    },
+  })
+  await Instance.provide({
+    directory: factCheckTmp.path,
+    fn: async () => {
+      await expect(Agent.get("fact-check")).rejects.toThrow("config.agent.fact-check.tools is not supported")
     },
   })
 })
@@ -411,6 +498,7 @@ test("orchestrator registry exposes lifecycle tools it teaches in prompt", async
         expect(include).toContain(tool)
       }
       expect(include).toContain("integrity")
+      expect(include).toContain("research")
       expect(include).not.toContain("deliver")
       expect(include).not.toContain("publish_delivery")
       expect(orchestrator?.prompt).toContain("propose_task")
@@ -817,31 +905,31 @@ test("webfetch is allowed by default", async () => {
   })
 })
 
-test("design-analyst advertises url_screenshot and omits webfetch", async () => {
+test("frontend-design advertises url_screenshot and omits webfetch", async () => {
   await using tmp = await tmpdir()
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      const designAnalyst = await Agent.get("design-analyst")
-      expect(designAnalyst?.tools?.include).toContain("url_screenshot")
-      expect(designAnalyst?.tools?.include).not.toContain("webfetch")
-      expect(designAnalyst?.tools?.include).not.toContain("todoread")
-      expect(designAnalyst?.tools?.include).not.toContain("todowrite")
+      const frontendDesign = await Agent.get("frontend-design")
+      expect(frontendDesign?.tools?.include).toContain("url_screenshot")
+      expect(frontendDesign?.tools?.include).not.toContain("webfetch")
+      expect(frontendDesign?.tools?.include).not.toContain("todoread")
+      expect(frontendDesign?.tools?.include).not.toContain("todowrite")
 
-      const { createUrlScreenshotTool } = await import("../../src/design-analyst/url-screenshot-tool")
+      const { createUrlScreenshotTool } = await import("../../src/frontend-design/url-screenshot-tool")
       expect(Object.keys(createUrlScreenshotTool())).toEqual(["url_screenshot"])
     },
   })
 })
 
-test("only design-analyst receives mirror analysis tools from the registry", async () => {
+test("only frontend-design receives mirror analysis tools from the registry", async () => {
   await using tmp = await tmpdir()
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      const designAnalyst = await Agent.get("design-analyst")
-      expect(designAnalyst).toBeDefined()
-      const designTools = await ToolRegistry.tools({ providerID: "", modelID: "" }, designAnalyst)
+      const frontendDesign = await Agent.get("frontend-design")
+      expect(frontendDesign).toBeDefined()
+      const designTools = await ToolRegistry.tools({ providerID: "", modelID: "" }, frontendDesign)
       const designToolIds = new Set(designTools.map((tool) => tool.id))
       for (const id of MIRROR_ANALYSIS_TOOL_IDS) {
         expect(designToolIds.has(id)).toBe(true)
@@ -857,6 +945,11 @@ test("only design-analyst receives mirror analysis tools from the registry", asy
         const toolIds = new Set(tools.map((tool) => tool.id))
         for (const id of MIRROR_TOOL_IDS) {
           expect(toolIds.has(id)).toBe(false)
+        }
+        if (name === "build") {
+          expect(toolIds.has("web_clone_prepare_context")).toBe(false)
+          expect(toolIds.has("web_clone_generate_source_project")).toBe(false)
+          expect(toolIds.has("web_clone_source_audit")).toBe(true)
         }
       }
 

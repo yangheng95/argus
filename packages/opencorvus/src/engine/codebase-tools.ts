@@ -18,6 +18,8 @@ function rawMirrorArtifactReason(relPath: string): string | null {
   if (
     normalized.endsWith("/mirror/extracted-page.json") ||
     normalized === "mirror/extracted-page.json" ||
+    normalized.endsWith("/mirror/capture.html") ||
+    normalized === "mirror/capture.html" ||
     normalized.endsWith("/mirror/image-analysis.json") ||
     normalized === "mirror/image-analysis.json" ||
     normalized.endsWith("/mirror/figma-design.json") ||
@@ -41,16 +43,49 @@ function isMirrorPromptExcerpt(relPath: string): boolean {
   return (
     normalized.endsWith("/mirror/page-ir.xml") ||
     normalized === "mirror/page-ir.xml" ||
+    normalized.endsWith("/mirror/page.ir.json") ||
+    normalized === "mirror/page.ir.json" ||
+    normalized.endsWith("/mirror/assets/manifest.json") ||
+    normalized === "mirror/assets/manifest.json" ||
+    normalized.endsWith("/mirror/segments.json") ||
+    normalized === "mirror/segments.json" ||
+    normalized.endsWith("/mirror/codegen-context.json") ||
+    normalized === "mirror/codegen-context.json" ||
     normalized.endsWith("/mirror/shared-context.md") ||
-    normalized === "mirror/shared-context.md"
+    normalized === "mirror/shared-context.md" ||
+    normalized.endsWith("/mirror/prd-evidence-summary.md") ||
+    normalized === "mirror/prd-evidence-summary.md" ||
+    normalized.includes("/mirror/source-ir/") ||
+    normalized.startsWith("mirror/source-ir/") ||
+    normalized.includes("/mirror/source-skeleton/") ||
+    normalized.startsWith("mirror/source-skeleton/") ||
+    normalized.includes("/web-clone-source/") ||
+    normalized.startsWith("web-clone-source/")
   )
+}
+
+function mirrorPromptWorkingSurface(): string {
+  return [
+    "web-clone-source/README.md",
+    "web-clone-source/implementation-blueprint.md",
+    "web-clone-source/web-clone-context.md",
+    "web-clone-source/source-ir/*.json",
+    "web-clone-source/source-skeleton/critical.css",
+    "web-clone-source/reference.png",
+    "mirror/prd-evidence-summary.md",
+    "mirror/source-ir/*.json",
+    "mirror/source-skeleton/critical.css",
+    "mirror/source-skeleton/index.html as raw evidence only",
+    "mirror/page.ir.json",
+    "mirror/assets/manifest.json",
+  ].join(", ")
 }
 
 function renderMirrorArtifactBoundary(filePath: string): string {
   return (
     `Error: ${filePath} is a bounded mirror artifact. ` +
     "Do not page dense mirror artifacts through read_file. " +
-    "Use the returned excerpt, mirror/shared-context.md, mirror/page-ir.xml, mirror tool summaries, and the evidence manifest to finalize the PRD/SPEC."
+    `Use the returned excerpt plus ${mirrorPromptWorkingSurface()}, mirror tool summaries, and the evidence manifest to finalize the frontend design/replica contract.`
   )
 }
 
@@ -73,10 +108,11 @@ export function createCodebaseTools(projectDir?: string) {
   const dir = projectDir ?? Instance.directory
 
   function safePath(relPath: string): string | null {
-    const abs = path.resolve(dir, relPath)
-    const normalized = path.normalize(abs)
-    if (!normalized.startsWith(path.normalize(dir))) return null
-    return normalized
+    const root = path.resolve(dir)
+    const normalized = path.resolve(root, relPath)
+    const relative = path.relative(root, normalized)
+    if (relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative))) return normalized
+    return null
   }
 
   return {
@@ -108,7 +144,7 @@ export function createCodebaseTools(projectDir?: string) {
           return (
             `Error: ${filePath} is ${rawMirrorArtifact}. ` +
             "It is a tool input and evidence-manifest source, not a prompt-readable artifact. " +
-            "Use mirror/page-ir.xml, mirror/shared-context.md, bounded mirror/scaffold.json reads, and mirror tool summaries instead."
+            `Use ${mirrorPromptWorkingSurface()}, bounded targeted scaffold reads, and mirror tool summaries instead.`
           )
         }
         const denseMirrorArtifact = denseMirrorArtifactReason(filePath)
@@ -118,8 +154,8 @@ export function createCodebaseTools(projectDir?: string) {
         if (denseMirrorArtifact && (max_lines ?? 300) > DENSE_MIRROR_ARTIFACT_MAX_LINES) {
           return (
             `Error: ${filePath} is ${denseMirrorArtifact}. ` +
-            `Use mirror/page-ir.xml, mirror/shared-context.md, and mirror tool summaries as the PRD/SPEC working surface. ` +
-            `Do not retry this read for general page discovery. Finalize the PRD/SPEC unless you can name a specific unresolved scaffold gap; ` +
+            `Use ${mirrorPromptWorkingSurface()} and mirror tool summaries as the frontend design/replica working surface. ` +
+            `Do not retry this read for general page discovery. Finalize the frontend template unless you can name a specific unresolved scaffold gap; ` +
             `for that one gap only, read a single excerpt from line 1 with max_lines <= ${DENSE_MIRROR_ARTIFACT_MAX_LINES}.`
           )
         }
@@ -154,7 +190,7 @@ export function createCodebaseTools(projectDir?: string) {
               return (
                 numbered +
                 `\n... (${remaining} more lines, total ${lines.length}; bounded mirror artifact excerpt returned. ` +
-                "Do not page this artifact repeatedly. Use this excerpt with mirror summaries and finalize the PRD/SPEC.)"
+                "Do not page this artifact repeatedly. Use this excerpt with web-clone-source/source-ir evidence, mirror summaries, and finalize the frontend design/replica contract.)"
               )
             }
             return (

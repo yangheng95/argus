@@ -275,9 +275,9 @@ describe("RequirementsAgent prompt precedence", () => {
 
 test("submit_requirements schema requires explicit final confirmation", () => {
   expect(RequirementsSubmitSchema.safeParse({}).success).toBe(false)
-  // fact_check_items is now a required field on the submit contract
-  // (specs/fact-check-agent-2026-05-25.md §3.1).
-  expect(RequirementsSubmitSchema.safeParse({ final: true }).success).toBe(false)
+  const parsed = RequirementsSubmitSchema.safeParse({ final: true })
+  expect(parsed.success).toBe(true)
+  if (parsed.success) expect(parsed.data.fact_check_items).toEqual([])
   expect(RequirementsSubmitSchema.safeParse({ final: true, fact_check_items: [] }).success).toBe(true)
 })
 
@@ -313,7 +313,19 @@ test("submit_requirements requires the minimum downstream decision contract", as
     }, {} as any)
   }
 
-  const passed = await kit.tools.submit_requirements.execute({ final: true, fact_check_items: [] }, {} as any)
+  const passed = await kit.tools.submit_requirements.execute({ final: true }, {} as any)
   expect(passed).toContain("PASS: Requirements finalized")
+  expect(passed).toContain("0 fact-check item(s) registered")
   expect(kit.getCollector().finalized).toBe(true)
+  expect(kit.getCollector().fact_check_items).toEqual([])
+
+  const duplicate = await kit.tools.submit_requirements.execute({ final: true }, {} as any)
+  expect(duplicate).toContain("already finalized")
+  const lateDecision = await kit.tools.register_decision.execute({
+    key: "late",
+    value: "mutation",
+    reason: "test fixture",
+  }, {} as any)
+  expect(lateDecision).toContain("already finalized")
+  expect(kit.getCollector().decisions.some((decision) => decision.key === "late")).toBe(false)
 })

@@ -82,9 +82,9 @@ describe("SessionLoop terminal tool recovery", () => {
   })
 
   test("adds an explicit terminal tool system prompt for reasoning models", () => {
-    const prompt = terminalToolSystemPrompt("submit_design_prd_spec")
+    const prompt = terminalToolSystemPrompt("submit_frontend_template")
 
-    expect(prompt).toContain("MUST call the submit_design_prd_spec tool")
+    expect(prompt).toContain("MUST call the submit_frontend_template tool")
     expect(prompt).toContain("prompt-visible original user request")
     expect(prompt).toContain("upstream contracts")
     expect(prompt).toContain("Do NOT respond with plain text")

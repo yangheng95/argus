@@ -1,0 +1,684 @@
+import fs from "node:fs/promises"
+import path from "node:path"
+import {
+  listMissingMirrorArtifacts,
+  readPassedAudit,
+  readPngEvidence,
+  sha256File,
+  WEB_CLONE_REQUIRED_MIRROR_ARTIFACTS,
+} from "./evidence-integrity"
+
+export interface PrepareWebCloneContextInput {
+  mirrorDir: string
+  outputDir?: string
+}
+
+export interface PrepareWebCloneContextOutput {
+  mirrorDir: string
+  sourcePackageDir: string
+  sourceReadmePath: string
+  contextPath: string
+  contractPath: string
+  materializedFiles: string[]
+  stats: {
+    components: number
+    tables: number
+    lists: number
+    cards: number
+    repeatedGroups: number
+    styleTokens: number
+    interactionHints: number
+    assets: number
+    sourceSkeletonAuditPassed: boolean | undefined
+    sourceQualityAuditPassed: boolean | undefined
+  }
+}
+
+interface ContextSummary {
+  components: Array<{ name: string; kind?: string; tag?: string; textPreview: string[] }>
+  tables: Array<{ title?: string; headers: string[]; sampleRows: string[][] }>
+  lists: Array<{ title?: string; items: string[] }>
+  cards: Array<{ title?: string; text: string[] }>
+  repeatedGroups: Array<{ title?: string; sampleTexts: string[] }>
+  styleTokens: string[]
+  interactionHints: string[]
+  assets: Array<{ id: string; kind: string; path: string; semanticRole?: string }>
+  textSignals: string[]
+}
+
+const REQUIRED_READS = [
+  "README.md",
+  "implementation-blueprint.md",
+  "web-clone-context.md",
+  "web-clone-implementation-contract.json",
+  "singlefile.html",
+  "source-ir/component-tree.json",
+  "source-ir/content-model.json",
+  "source-ir/layout-map.json",
+  "source-ir/style-tokens.json",
+  "source-ir/interaction-hints.json",
+  "source-skeleton/critical.css",
+  "source-skeleton/index.html (raw evidence only; do not mechanically convert this file into app source)",
+]
+
+export async function prepareWebCloneContext(input: PrepareWebCloneContextInput): Promise<PrepareWebCloneContextOutput> {
+  const mirrorDir = path.resolve(input.mirrorDir)
+  const outputDir = path.resolve(input.outputDir ?? path.join(path.dirname(mirrorDir), "web-clone-source"))
+  await assertContextInputs(mirrorDir)
+  if (isSameOrInside(outputDir, mirrorDir) || isSameOrInside(mirrorDir, outputDir)) {
+    throw new Error(`Web clone context outputDir must not overlap mirrorDir: ${outputDir}`)
+  }
+
+  const [componentTree, contentModel, styleTokens, interactionHints, assetManifest, skeletonAudit, sourceQualityAudit, sourceSkeleton] = await Promise.all([
+    readJsonOptional(path.join(mirrorDir, "source-ir", "component-tree.json")),
+    readJsonOptional(path.join(mirrorDir, "source-ir", "content-model.json")),
+    readJsonOptional(path.join(mirrorDir, "source-ir", "style-tokens.json")),
+    readJsonOptional(path.join(mirrorDir, "source-ir", "interaction-hints.json")),
+    readJsonOptional(path.join(mirrorDir, "assets", "manifest.json")),
+    readJsonOptional(path.join(mirrorDir, "source-skeleton", "source-skeleton-audit.json")),
+    readJsonOptional(path.join(mirrorDir, "source-ir", "source-quality-audit.json")),
+    readOptionalText(path.join(mirrorDir, "source-skeleton", "index.html")),
+  ])
+  const summary = buildContextSummary({
+    componentTree,
+    contentModel,
+    styleTokens,
+    interactionHints,
+    assetManifest,
+    sourceSkeleton,
+  })
+  const stats = {
+    components: summary.components.length,
+    tables: summary.tables.length,
+    lists: summary.lists.length,
+    cards: summary.cards.length,
+    repeatedGroups: summary.repeatedGroups.length,
+    styleTokens: summary.styleTokens.length,
+    interactionHints: summary.interactionHints.length,
+    assets: summary.assets.length,
+    sourceSkeletonAuditPassed: readPassed(skeletonAudit),
+    sourceQualityAuditPassed: readPassed(sourceQualityAudit),
+  }
+
+  const contextPath = path.join(outputDir, "web-clone-context.md")
+  const contractPath = path.join(outputDir, "web-clone-implementation-contract.json")
+  await fs.rm(outputDir, { recursive: true, force: true })
+  await fs.mkdir(outputDir, { recursive: true })
+  await fs.writeFile(contextPath, renderContextMarkdown(mirrorDir, summary, stats), "utf8")
+  await fs.writeFile(contractPath, `${JSON.stringify(renderContract(mirrorDir, summary, stats), null, 2)}\n`, "utf8")
+  const materializedFiles = await materializeVisibleSourcePackage({
+    mirrorDir,
+    outputDir,
+    contextPath,
+    contractPath,
+    summary,
+    stats,
+  })
+  const sourceReadmePath = path.join(outputDir, "README.md")
+
+  return { mirrorDir, sourcePackageDir: outputDir, sourceReadmePath, contextPath, contractPath, materializedFiles, stats }
+}
+
+function buildContextSummary(input: {
+  componentTree: unknown
+  contentModel: unknown
+  styleTokens: unknown
+  interactionHints: unknown
+  assetManifest: unknown
+  sourceSkeleton: string
+}): ContextSummary {
+  return {
+    components: readComponents(input.componentTree),
+    tables: readTables(input.contentModel),
+    lists: readLists(input.contentModel),
+    cards: readCards(input.contentModel),
+    repeatedGroups: readRepeatedGroups(input.contentModel),
+    styleTokens: collectNamedStrings(input.styleTokens, ["name", "token", "property", "value"]).slice(0, 80),
+    interactionHints: collectNamedStrings(input.interactionHints, ["type", "role", "label", "text", "href"]).slice(0, 80),
+    assets: readAssets(input.assetManifest),
+    textSignals: rankTextSignals([
+      ...collectNamedStrings(input.contentModel, ["headers", "rows", "items", "sampleTexts", "text", "value", "label", "title"]),
+      ...collectSkeletonText(input.sourceSkeleton),
+    ]).slice(0, 80),
+  }
+}
+
+function renderContextMarkdown(
+  mirrorDir: string,
+  summary: ContextSummary,
+  stats: PrepareWebCloneContextOutput["stats"],
+): string {
+  return [
+    "# Web Clone Context",
+    "",
+    `Mirror: ${mirrorDir}`,
+    "",
+    "## Required Reads",
+    ...REQUIRED_READS.map((file) => `- ${file}`),
+    "",
+    "## Audit Status",
+    `- source-skeleton audit passed: ${stats.sourceSkeletonAuditPassed ?? "unknown"}`,
+    `- source-ir quality audit passed: ${stats.sourceQualityAuditPassed ?? "unknown"}`,
+    "",
+    "## Implementation Rules",
+    "- Treat this project-root `web-clone-source/` package as the mandatory implementation source before writing app code.",
+    "- Start from `implementation-blueprint.md`, `source-ir/*`, and data/component contracts; use `source-skeleton/index.html` only to resolve ambiguous DOM order or missing text.",
+    "- Do not run an HTML-to-JSX/Vue converter over `source-skeleton/index.html`; that produces a brittle replay component and will fail source audit.",
+    "- Write or repair normal target app source in the project tree; do not create a separate generated app as the default deliverable.",
+    "- Implement normal framework components, data arrays, adapters, states, and interactions.",
+    "- Repeated rows/cards/items must be data plus render loops, not duplicated JSX literals.",
+    "- For full-stack/database work, derive schema, seed/reset data, and read APIs from `source-ir/content-model.json` and visible skeleton text.",
+    "- Do not render `reference.png`, screenshots, base64/data URI payloads, or hidden semantic layers as the page. The frontend-design skeleton project may temporarily render extracted SingleFile/source DOM and CSS as the visual baseline; replace regions with maintainable components only after screenshot parity holds.",
+    "- Acceptance requires `web_clone_source_audit` plus runtime visual evaluation against `reference.png`; use `finalDeliveryMode: \"maintainable_replacement_required\"` and a frontend-design `baseline_replacement_plan` when the user asked for maintainable/real/component-reuse replacement, and do not claim 96 without measured evidence.",
+    "",
+    "## Components",
+    ...summary.components.slice(0, 24).map((component) =>
+      `- ${component.name}${component.kind ? ` (${component.kind})` : ""}${component.textPreview.length ? `: ${component.textPreview.join(" | ")}` : ""}`
+    ),
+    "",
+    "## Structured Content",
+    `- tables: ${stats.tables}`,
+    `- lists: ${stats.lists}`,
+    `- cards: ${stats.cards}`,
+    `- repeated groups: ${stats.repeatedGroups}`,
+    ...summary.tables.slice(0, 8).map((table) =>
+      `- table ${table.title ?? ""}: ${table.headers.join(" | ")}${table.sampleRows[0] ? ` / sample ${table.sampleRows[0].join(" | ")}` : ""}`.trim()
+    ),
+    "",
+    "## Text Signals",
+    ...summary.textSignals.slice(0, 40).map((text) => `- ${text}`),
+    "",
+    "## Interaction Hints",
+    ...summary.interactionHints.slice(0, 40).map((hint) => `- ${hint}`),
+    "",
+    "## Asset References",
+    ...summary.assets.slice(0, 40).map((asset) => `- ${asset.id} ${asset.kind} ${asset.path}${asset.semanticRole ? ` (${asset.semanticRole})` : ""}`),
+    "",
+  ].join("\n")
+}
+
+function renderContract(
+  mirrorDir: string,
+  summary: ContextSummary,
+  stats: PrepareWebCloneContextOutput["stats"],
+): unknown {
+  return {
+    version: 1,
+    purpose: "web-clone-implementation-context",
+    mirrorDir,
+    requiredReads: REQUIRED_READS,
+    rules: {
+      visibleSourcePackage: "web-clone-source",
+      primaryImplementationInput: "implementation-blueprint.md",
+      rawSkeletonPolicy: "source-skeleton/index.html is raw evidence for DOM order and missing text; it is not an app-source template.",
+      sourceAuditTool: "web_clone_source_audit",
+      visualTruth: "web-clone-source/reference.png",
+      passThreshold: 96,
+      forbidden: [
+        "reference screenshot replay",
+        "unverified SingleFile HTML replay outside the frontend-design skeleton baseline",
+        "large HTML strings outside generated baseline files",
+        "dangerouslySetInnerHTML outside generated baseline files",
+        "innerHTML/insertAdjacentHTML/DOMParser page construction outside generated baseline files",
+        "base64/data URI payloads in project-owned source",
+        "hidden semantic coverage layers",
+        "mechanical conversion of source-skeleton/index.html into one giant framework component",
+        "runtime loading of third-party stylesheet bundles instead of project-owned CSS",
+      ],
+    },
+    stats,
+    components: summary.components,
+    content: {
+      tables: summary.tables,
+      lists: summary.lists,
+      cards: summary.cards,
+      repeatedGroups: summary.repeatedGroups,
+      textSignals: summary.textSignals,
+    },
+    styleTokens: summary.styleTokens,
+    interactionHints: summary.interactionHints,
+    assets: summary.assets,
+  }
+}
+
+async function materializeVisibleSourcePackage(input: {
+  mirrorDir: string
+  outputDir: string
+  contextPath: string
+  contractPath: string
+  summary: ContextSummary
+  stats: PrepareWebCloneContextOutput["stats"]
+}): Promise<string[]> {
+  const written = new Set<string>([
+    input.contextPath,
+    input.contractPath,
+  ])
+  await fs.mkdir(input.outputDir, { recursive: true })
+  const readmePath = path.join(input.outputDir, "README.md")
+  await fs.writeFile(readmePath, renderSourcePackageReadme(input.mirrorDir, input.stats), "utf8")
+  written.add(readmePath)
+
+  const blueprintPath = path.join(input.outputDir, "implementation-blueprint.md")
+  await fs.writeFile(blueprintPath, renderImplementationBlueprint(input.summary, input.stats), "utf8")
+  written.add(blueprintPath)
+
+  await copyFileIfExists(path.join(input.mirrorDir, "reference.png"), path.join(input.outputDir, "reference.png"), written)
+  await copyDirIfExists(path.join(input.mirrorDir, "source-skeleton"), path.join(input.outputDir, "source-skeleton"), written)
+  await copyDirIfExists(path.join(input.mirrorDir, "source-ir"), path.join(input.outputDir, "source-ir"), written)
+  await copyFileIfExists(path.join(input.mirrorDir, "assets", "manifest.json"), path.join(input.outputDir, "assets", "manifest.json"), written)
+  await copyDirIfExists(path.join(input.mirrorDir, "assets", "svg"), path.join(input.outputDir, "assets", "svg"), written)
+  await copyDirIfExists(path.join(input.mirrorDir, "assets", "images"), path.join(input.outputDir, "assets", "images"), written)
+  for (const diagnostic of ["singlefile.html", "page.ir.json", "segments.json", "codegen-context.json", "shared-context.md", "prd-evidence-summary.md", "visual-surface-candidates.json", "visual-surface-scaffold.json"]) {
+    await copyFileIfExists(path.join(input.mirrorDir, diagnostic), path.join(input.outputDir, diagnostic), written)
+  }
+
+  const manifestPath = path.join(input.outputDir, "web-clone-source-manifest.json")
+  const referenceEvidence = await readPngEvidence(path.join(input.outputDir, "reference.png"))
+  const manifestEntries = await buildSourceManifestEntries(input.outputDir, input.mirrorDir, written)
+  await fs.writeFile(manifestPath, `${JSON.stringify({
+    version: 1,
+    purpose: "web-clone-visible-source-package",
+    mirrorDir: input.mirrorDir,
+    provenance: {
+      source: "mirror",
+      mirrorDir: input.mirrorDir,
+      requiredMirrorArtifacts: WEB_CLONE_REQUIRED_MIRROR_ARTIFACTS,
+      reference: referenceEvidence.valid
+        ? {
+            path: "reference.png",
+            sha256: referenceEvidence.sha256,
+            width: referenceEvidence.width,
+            height: referenceEvidence.height,
+            bytes: referenceEvidence.bytes,
+          }
+        : undefined,
+    },
+    files: manifestEntries,
+    entrypoints: [
+      "README.md",
+      "implementation-blueprint.md",
+      "web-clone-context.md",
+      "web-clone-implementation-contract.json",
+      "source-ir/component-tree.json",
+      "source-ir/content-model.json",
+      "source-ir/layout-map.json",
+      "source-ir/style-tokens.json",
+      "source-ir/interaction-hints.json",
+      "singlefile.html",
+      "visual-surface-candidates.json",
+      "visual-surface-scaffold.json",
+      "source-skeleton/critical.css",
+      "source-skeleton/index.html",
+      "assets/manifest.json",
+      "reference.png",
+    ],
+    rules: [
+      "Build agents must read this project-root source package before implementation.",
+      "implementation-blueprint.md and source-ir/* are the primary app-source inputs.",
+      "source-skeleton/index.html is raw evidence only; do not mechanically convert it into one giant framework component.",
+      "Implementation code belongs in the target app source tree; this package is the reusable source handoff, not a generated app.",
+      "Use sidecar assets by file reference instead of inlining dense SVG/base64 payloads.",
+      "Do not runtime-load third-party CSS bundles; copy or author project-owned CSS from the extracted critical styles and tokens.",
+      "Runtime acceptance still compares the target app against reference.png.",
+    ],
+  }, null, 2)}\n`, "utf8")
+  written.add(manifestPath)
+  return Array.from(written).sort((a, b) => a.localeCompare(b))
+}
+
+function renderSourcePackageReadme(mirrorDir: string, stats: PrepareWebCloneContextOutput["stats"]): string {
+  return [
+    "# Web Clone Source",
+    "",
+    "This directory is the visible source package for the webpage replica. Build agents must start here before writing or changing app code.",
+    "",
+    "Read in this order:",
+    "1. `implementation-blueprint.md`",
+    "2. `web-clone-context.md`",
+    "3. `web-clone-implementation-contract.json`",
+    "4. `source-ir/component-tree.json`",
+    "5. `source-ir/content-model.json`",
+    "6. `source-ir/layout-map.json`, `source-ir/style-tokens.json`, and `source-ir/interaction-hints.json`",
+    "7. `visual-surface-candidates.json` when present",
+    "8. `singlefile.html` as the visual DOM/CSS baseline input for frontend-design skeleton generation",
+    "9. `source-skeleton/critical.css`",
+    "10. `source-skeleton/index.html` only as raw evidence for ambiguous DOM order or missing text",
+    "",
+    "Use `assets/manifest.json`, `assets/svg/`, and `assets/images/` as reusable sidecars for dense geometry and extracted resources. Reference those files from normal React/Vue/etc. source instead of pasting the payloads inline.",
+    "",
+    "Do not mechanically convert `source-skeleton/index.html` into one giant React/Vue/Svelte component. That is a replay artifact, not maintainable source, and source audit will reject it.",
+    "",
+    "Do not runtime-load TradingView or other third-party CSS bundles. The target project must own the CSS it needs, derived from `source-skeleton/critical.css`, `source-ir/style-tokens.json`, and explicit component styling.",
+    "",
+    "Do not treat this package as the deliverable app. The deliverable is the project-owned app source that consumes this package's structure, content, styles, and assets.",
+    "",
+    "Acceptance requires a source consumption audit plus runtime visual comparison against `reference.png`.",
+    "",
+    `Mirror source: ${mirrorDir}`,
+    "",
+    "Source package stats:",
+    `- components: ${stats.components}`,
+    `- tables: ${stats.tables}`,
+    `- lists: ${stats.lists}`,
+    `- cards: ${stats.cards}`,
+    `- repeated groups: ${stats.repeatedGroups}`,
+    `- asset refs: ${stats.assets}`,
+    "",
+  ].join("\n")
+}
+
+function renderImplementationBlueprint(summary: ContextSummary, stats: PrepareWebCloneContextOutput["stats"]): string {
+  return [
+    "# Implementation Blueprint",
+    "",
+    "This is the first file to read when building the webpage replica. It turns the extracted evidence into an app-source work plan.",
+    "",
+    "## Non-Negotiable Build Shape",
+    "- Build semantic components and project-owned CSS; do not generate one huge component from `source-skeleton/index.html`.",
+    "- Repeated tables, lists, cards, country chips, news rows, calendar events, footer columns, and FAQ rows must be data arrays rendered with framework loops.",
+    "- Complex visual surfaces such as maps, charts, heatmaps, and idea thumbnails must be implemented as named components that either use extracted sidecar assets or authored SVG/CSS/Canvas primitives. They must not disappear as empty `<canvas>` tags.",
+    "- Use `source-skeleton/critical.css` as style evidence, but consolidate it into maintainable app styles instead of depending on raw node-id rules alone.",
+    "- Keep `source-skeleton/index.html` available for audit and DOM-order lookup only.",
+    "",
+    "## Expected Component Slices",
+    ...summary.components.slice(0, 24).map((component) =>
+      `- ${component.name}${component.kind ? ` (${component.kind})` : ""}${component.textPreview.length ? `: ${component.textPreview.join(" | ")}` : ""}`
+    ),
+    "",
+    "## Data Models To Create",
+    `- Tables: ${stats.tables}`,
+    `- Lists: ${stats.lists}`,
+    `- Cards: ${stats.cards}`,
+    `- Repeated groups: ${stats.repeatedGroups}`,
+    ...summary.tables.slice(0, 8).map((table) =>
+      `- Table ${table.title ?? ""}: headers ${table.headers.join(" | ")}${table.sampleRows[0] ? `; sample ${table.sampleRows[0].join(" | ")}` : ""}`.trim()
+    ),
+    ...summary.lists.slice(0, 12).map((list) =>
+      `- List ${list.title ?? ""}: ${list.items.slice(0, 8).join(" | ")}`.trim()
+    ),
+    "",
+    "## Required Text Coverage Samples",
+    ...summary.textSignals.slice(0, 40).map((text) => `- ${text}`),
+    "",
+    "## Visual/Asset Handoff",
+    "- Check `visual-surface-candidates.json` for high-impact visual surfaces and bounds when present.",
+    "- Check `assets/manifest.json`, `assets/svg/`, and `assets/images/` before authoring dense geometry by hand.",
+    "- If the raw skeleton contains `<canvas src=\"images/canvas/...\">`, implement it as an actual visible chart/image component; browsers do not render a `src` attribute on `<canvas>`.",
+    "",
+    "## Acceptance Gates",
+    "- `web_clone_source_audit` must pass against this source package.",
+    "- Runtime overlay/visual diff against `reference.png` must reach 0.96 mean SSIM and 0.75 p5/worst threshold.",
+    "",
+  ].join("\n")
+}
+
+async function copyFileIfExists(source: string, target: string, written: Set<string>): Promise<void> {
+  if (!await exists(source)) return
+  await fs.mkdir(path.dirname(target), { recursive: true })
+  await fs.copyFile(source, target)
+  written.add(target)
+}
+
+async function copyDirIfExists(source: string, target: string, written: Set<string>): Promise<void> {
+  if (!await exists(source)) return
+  await fs.rm(target, { recursive: true, force: true })
+  await fs.cp(source, target, { recursive: true })
+  for (const file of await listFiles(target)) written.add(file)
+}
+
+async function buildSourceManifestEntries(
+  outputDir: string,
+  mirrorDir: string,
+  written: Set<string>,
+): Promise<Array<{ path: string; sha256?: string; bytes?: number; source?: string }>> {
+  const entries: Array<{ path: string; sha256?: string; bytes?: number; source?: string }> = []
+  for (const file of Array.from(written).sort((a, b) => a.localeCompare(b))) {
+    const relative = normalizePath(path.relative(outputDir, file))
+    if (!relative || relative.startsWith("..")) continue
+    const stat = await fs.stat(file).catch(() => undefined)
+    entries.push({
+      path: relative,
+      sha256: await sha256File(file),
+      bytes: stat?.isFile() ? stat.size : undefined,
+      source: await exists(path.join(mirrorDir, relative)) ? normalizePath(path.join("mirror", relative)) : "generated",
+    })
+  }
+  return entries
+}
+
+async function listFiles(root: string): Promise<string[]> {
+  const files: string[] = []
+  async function walk(dir: string): Promise<void> {
+    const entries = await fs.readdir(dir, { withFileTypes: true })
+    for (const entry of entries) {
+      const full = path.join(dir, entry.name)
+      if (entry.isDirectory()) {
+        await walk(full)
+      } else if (entry.isFile()) {
+        files.push(full)
+      }
+    }
+  }
+  await walk(root)
+  return files
+}
+
+function readComponents(componentTree: unknown): ContextSummary["components"] {
+  return readArray(componentTree, "components")
+    .map((item, index) => {
+      const row = asRecord(item)
+      return {
+        name: readString(row.name) ?? `Component${index + 1}`,
+        kind: readString(row.kind),
+        tag: readString(row.tag),
+        textPreview: readStringArray(row.textPreview).slice(0, 8),
+      }
+    })
+    .slice(0, 80)
+}
+
+function readTables(contentModel: unknown): ContextSummary["tables"] {
+  return readArray(contentModel, "tables")
+    .map((item, index) => {
+      const row = asRecord(item)
+      return {
+        title: readString(row.title) ?? `Table ${index + 1}`,
+        headers: readStringArray(row.headers).slice(0, 32),
+        sampleRows: readTableRows(row.rows).slice(0, 4),
+      }
+    })
+    .filter((table) => table.headers.length > 0 || table.sampleRows.length > 0)
+    .slice(0, 24)
+}
+
+function readLists(contentModel: unknown): ContextSummary["lists"] {
+  return readArray(contentModel, "lists")
+    .map((item, index) => {
+      const row = asRecord(item)
+      return {
+        title: readString(row.title) ?? `List ${index + 1}`,
+        items: readStringArray(row.items).slice(0, 12),
+      }
+    })
+    .filter((list) => list.items.length > 0)
+    .slice(0, 24)
+}
+
+function readCards(contentModel: unknown): ContextSummary["cards"] {
+  return readArray(contentModel, "cards")
+    .map((item, index) => {
+      const row = asRecord(item)
+      return {
+        title: readString(row.title) ?? `Card ${index + 1}`,
+        text: collectNamedStrings(row, ["title", "text", "label", "value"]).slice(0, 12),
+      }
+    })
+    .filter((card) => card.text.length > 0)
+    .slice(0, 48)
+}
+
+function readRepeatedGroups(contentModel: unknown): ContextSummary["repeatedGroups"] {
+  return readArray(contentModel, "repeatedGroups")
+    .map((item, index) => {
+      const row = asRecord(item)
+      return {
+        title: readString(row.title) ?? `Repeated group ${index + 1}`,
+        sampleTexts: readStringArray(row.sampleTexts).slice(0, 10),
+      }
+    })
+    .filter((group) => group.sampleTexts.length > 0)
+    .slice(0, 48)
+}
+
+function readAssets(assetManifest: unknown): ContextSummary["assets"] {
+  const root = asRecord(assetManifest)
+  const assets = Array.isArray(root.assets) ? root.assets : []
+  return assets
+    .map((item) => {
+      const row = asRecord(item)
+      const id = readString(row.id)
+      const kind = readString(row.kind)
+      const assetPath = readString(row.path)
+      if (!id || !kind || !assetPath) return undefined
+      const semanticRole = readString(row.semanticRole)
+      return semanticRole ? { id, kind, path: assetPath, semanticRole } : { id, kind, path: assetPath }
+    })
+    .filter((asset): asset is { id: string; kind: string; path: string; semanticRole?: string } => Boolean(asset))
+    .slice(0, 240)
+}
+
+function collectNamedStrings(value: unknown, keys: string[], key = ""): string[] {
+  if (typeof value === "string") return keys.includes(key) ? [value] : []
+  if (Array.isArray(value)) return value.flatMap((item) => collectNamedStrings(item, keys, key))
+  if (!value || typeof value !== "object") return []
+  return Object.entries(value as Record<string, unknown>).flatMap(([childKey, child]) => collectNamedStrings(child, keys, childKey))
+}
+
+function collectSkeletonText(html: string): string[] {
+  const withoutScripts = html.replace(/<script[\s\S]*?<\/script>/gi, " ").replace(/<style[\s\S]*?<\/style>/gi, " ")
+  return Array.from(withoutScripts.matchAll(/>([^<>]{2,180})</g), (match) => decodeEntities(match[1] ?? ""))
+}
+
+function rankTextSignals(values: string[]): string[] {
+  const unique = Array.from(new Set(values.map(canonicalText).filter((value): value is string => Boolean(value))))
+  return unique
+    .filter((value) => value.length >= 3 && value.length <= 120)
+    .filter((value) => !/^https?:\/\//i.test(value))
+    .map((value) => ({ value, score: textSignalScore(value) }))
+    .sort((a, b) => b.score - a.score || a.value.length - b.value.length)
+    .map((item) => item.value)
+}
+
+function textSignalScore(value: string): number {
+  let score = Math.min(value.length, 40)
+  if (/\d/.test(value)) score += 40
+  if (/[A-Za-z]\s+[A-Za-z]/.test(value)) score += 20
+  if (/[.%$€¥£]/.test(value)) score += 12
+  if (value.length <= 24) score += 8
+  return score
+}
+
+function canonicalText(value: string): string | undefined {
+  const normalized = decodeEntities(value).replace(/\s+/g, " ").trim()
+  if (!normalized) return undefined
+  if (/^__WEB_CLONE_[A-Z_]+_\d+__$/.test(normalized)) return undefined
+  if (/^[{}[\],:;./\\|_-]+$/.test(normalized)) return undefined
+  if (/data:/i.test(normalized)) return undefined
+  return normalized
+}
+
+function readPassed(value: unknown): boolean | undefined {
+  const row = asRecord(value)
+  return typeof row.passed === "boolean" ? row.passed : undefined
+}
+
+function readStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  return value.map((item) => readString(item)).filter((item): item is string => Boolean(item))
+}
+
+function readTableRows(value: unknown): string[][] {
+  if (!Array.isArray(value)) return []
+  return value
+    .map((row) => Array.isArray(row) ? row.map((cell) => readString(cell) ?? "") : [])
+    .filter((row) => row.some((cell) => cell.length > 0))
+}
+
+function readArray(value: unknown, key: string): unknown[] {
+  const row = asRecord(value)
+  return Array.isArray(row[key]) ? row[key] as unknown[] : []
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" ? value as Record<string, unknown> : {}
+}
+
+function readString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim().length > 0 ? decodeEntities(value).replace(/\s+/g, " ").trim() : undefined
+}
+
+function decodeEntities(value: string): string {
+  return value
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, "\"")
+    .replace(/&#39;/g, "'")
+}
+
+function isSameOrInside(child: string, parent: string): boolean {
+  const relative = path.relative(parent, child)
+  return relative === "" || (!!relative && !relative.startsWith("..") && !path.isAbsolute(relative))
+}
+
+async function assertContextInputs(mirrorDir: string): Promise<void> {
+  const referenceEvidence = await readPngEvidence(path.join(mirrorDir, "reference.png"))
+  const required = [
+    path.join(mirrorDir, "source-skeleton", "index.html"),
+    path.join(mirrorDir, "source-ir", "component-tree.json"),
+    path.join(mirrorDir, "source-ir", "content-model.json"),
+  ]
+  const missing: string[] = []
+  if (!referenceEvidence.valid) missing.push(`${referenceEvidence.path} (${referenceEvidence.error ?? "invalid PNG"})`)
+  for (const file of required) {
+    if (!await exists(file)) missing.push(file)
+  }
+  missing.push(...(await listMissingMirrorArtifacts(mirrorDir)).map((relative) => path.join(mirrorDir, relative)))
+  if (await readPassedAudit(path.join(mirrorDir, "source-skeleton", "source-skeleton-audit.json")) !== true) {
+    missing.push(path.join(mirrorDir, "source-skeleton", "source-skeleton-audit.json") + " (passed=true required)")
+  }
+  if (await readPassedAudit(path.join(mirrorDir, "source-ir", "source-quality-audit.json")) !== true) {
+    missing.push(path.join(mirrorDir, "source-ir", "source-quality-audit.json") + " (passed=true required)")
+  }
+  if (missing.length > 0) throw new Error(`Web clone context inputs are missing: ${missing.join(", ")}`)
+}
+
+async function readJsonOptional(filePath: string): Promise<unknown> {
+  try {
+    return JSON.parse(await fs.readFile(filePath, "utf8"))
+  } catch {
+    return undefined
+  }
+}
+
+async function readOptionalText(filePath: string): Promise<string> {
+  try {
+    return await fs.readFile(filePath, "utf8")
+  } catch {
+    return ""
+  }
+}
+
+async function exists(filePath: string): Promise<boolean> {
+  try {
+    await fs.access(filePath)
+    return true
+  } catch {
+    return false
+  }
+}
+
+function normalizePath(value: string): string {
+  return value.replaceAll(path.sep, "/")
+}

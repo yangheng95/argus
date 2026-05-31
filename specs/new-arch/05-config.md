@@ -25,7 +25,7 @@
            username · locale
 
 assistant: requirements{} · architect{} · delivery{} · delivery_visual{} ·
-           design_analyst{} · intent_analysis{} · build{} · activity{} · debug{} ·
+           frontend_design{} · intent_analysis{} · build{} · activity{} · debug{} ·
            default_workflow · workflows[] · max_executor_groups
            每个 agent 子项的形状是 agent 特化的（例如 build 只有 max_steps + skills；
            delivery 多一个 max_retries；delivery_visual 全是数值硬门槛阈值）——

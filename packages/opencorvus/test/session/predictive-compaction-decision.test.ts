@@ -3,6 +3,7 @@ import fs from "fs/promises"
 import "../../src/session/prompt"
 import { ContextBudget } from "../../src/session/context-budget"
 import { SessionLoop } from "../../src/session/loop"
+import type { Message } from "../../src/session/message"
 import type { Config } from "../../src/config/config"
 import type { Provider } from "../../src/provider/provider"
 
@@ -28,6 +29,45 @@ function model(input: Partial<Provider.Model["limit"]> = {}): Provider.Model {
     api: { npm: "@ai-sdk/anthropic" },
     options: {},
   } as Provider.Model
+}
+
+function assistantMessage(id: string, input: Partial<Message.Assistant> = {}): Message.WithParts {
+  return {
+    info: {
+      id,
+      sessionID: "session",
+      role: "assistant",
+      time: { created: 0 },
+      parentID: input.parentID ?? "user",
+      modelID: input.modelID ?? "test-model",
+      providerID: input.providerID ?? "test",
+      agent: input.agent ?? "build",
+      path: { cwd: "/", root: "/" },
+      cost: 0,
+      tokens: {
+        input: 0,
+        output: 0,
+        reasoning: 0,
+        cache: { read: 0, write: 0 },
+      },
+      ...input,
+    } as Message.Assistant,
+    parts: [],
+  }
+}
+
+function userMessage(id: string): Message.WithParts {
+  return {
+    info: {
+      id,
+      sessionID: "session",
+      role: "user",
+      time: { created: 0 },
+      agent: "build",
+      model: { providerID: "test", modelID: "test-model" },
+    } as Message.User,
+    parts: [],
+  }
 }
 
 /**
@@ -158,6 +198,76 @@ describe("SessionLoop.predictiveCompactionDecision", () => {
       toolSchemaBudgetRatio: 0.5,
     })
     expect(out.kind).toBe("compact")
+  })
+})
+
+describe("SessionLoop prompt final message selection", () => {
+  test("loop input defaults to reply mode but accepts explicit summary mode", () => {
+    expect(SessionLoop.LoopInput.parse({ sessionID: "ses_test" }).result_mode).toBeUndefined()
+    expect(SessionLoop.LoopInput.parse({ sessionID: "ses_test", result_mode: "summary" }).result_mode).toBe("summary")
+  })
+
+  test("returns the newest non-summary assistant", () => {
+    const current = assistantMessage("assistant-current")
+    const summary = assistantMessage("assistant-summary", {
+      agent: "compaction",
+      summary: true,
+      finish: "stop",
+      structured: {},
+    } as Partial<Message.Assistant>)
+
+    const selected = SessionLoop.selectPromptFinalMessageFromNewest([
+      current,
+      summary,
+      userMessage("user-root"),
+    ])
+
+    expect(selected.type).toBe("message")
+    if (selected.type === "message") expect(selected.message.info.id).toBe("assistant-current")
+  })
+
+  test("classifies a latest compaction summary as maintenance, not a prompt result", () => {
+    const selected = SessionLoop.selectPromptFinalMessageFromNewest([
+      assistantMessage("assistant-summary", {
+        agent: "compaction",
+        summary: true,
+        finish: "stop",
+        structured: {},
+      } as Partial<Message.Assistant>),
+      assistantMessage("assistant-old", { finish: "tool-calls" }),
+      userMessage("user-root"),
+    ])
+
+    expect(selected.type).toBe("maintenance-summary")
+    if (selected.type === "maintenance-summary") expect(selected.message.info.id).toBe("assistant-summary")
+  })
+
+  test("preserves maintenance summary error details in reply-mode failures", () => {
+    const message = assistantMessage("assistant-summary", {
+      agent: "compaction",
+      summary: true,
+      finish: "error",
+      error: {
+        name: "StructuredOutputPayloadError",
+        data: { message: "Compaction handoff omitted required evidence fields: files" },
+      },
+    } as Partial<Message.Assistant>)
+
+    const text = SessionLoop.maintenanceSummaryFailureMessage(message)
+
+    expect(text).toContain("internal compaction summary checkpoint")
+    expect(text).toContain("StructuredOutputPayloadError")
+    expect(text).toContain("omitted required evidence fields")
+  })
+
+  test("does not fall back to an older assistant before the newest user message", () => {
+    const selected = SessionLoop.selectPromptFinalMessageFromNewest([
+      userMessage("user-latest"),
+      assistantMessage("assistant-old", { finish: "stop" }),
+      userMessage("user-root"),
+    ])
+
+    expect(selected).toEqual({ type: "none" })
   })
 })
 

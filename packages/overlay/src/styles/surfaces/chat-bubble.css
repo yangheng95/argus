@@ -270,6 +270,11 @@
   gap: calc(8px * var(--ui-scale));
 }
 
+.chat-bubble__child {
+  min-width: 0;
+  scroll-margin-block: calc(18px * var(--ui-scale));
+}
+
 .agent-file-changes {
   min-width: 0;
   padding: calc(8px * var(--ui-scale));

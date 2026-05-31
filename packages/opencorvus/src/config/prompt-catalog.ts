@@ -125,7 +125,9 @@ export namespace PromptCatalog {
       if (UNEDITABLE_AGENTS.has(agent.name)) continue
       const agentCfg = (cfg.agent ?? {})[agent.name]
       const contract = AgentRoleContract.all[agent.name as AgentRoleID]
-      const promptMode = contract?.promptConfigMode === "append" ? "append" : "override"
+      if (!contract?.promptEditable) continue
+      const promptMode = AgentRoleContract.promptMode(agent.name as AgentRoleID)
+      if (promptMode === "none") continue
       const configuredPrompt = promptMode === "append"
         ? (agentCfg?.prompt_append ?? null)
         : (agentCfg?.prompt ?? null)

@@ -4,9 +4,9 @@ import * as path from "node:path"
 import { createDecisionLog } from "../../src/decision-log"
 import { DecisionLogBundle } from "../../src/decision-log/bundle"
 import {
-  renderDesignAnalysisHandoffReference,
-  designAnalysisArtifactPaths,
-} from "../../src/design-analyst/handoff"
+  renderFrontendDesignHandoffReference,
+  frontendDesignArtifactPaths,
+} from "../../src/frontend-design/handoff"
 import { Database } from "../../src/storage/db"
 import { Instance } from "../../src/project/instance"
 import { ProjectTable } from "../../src/project/project.sql"
@@ -83,7 +83,7 @@ describe("DecisionLog.toFullDocument()", () => {
         // A value far beyond the 600-char prompt cap — the full document
         // must NOT truncate it (that cap governs prompt bytes only).
         const bigValue = "X".repeat(1500)
-        log.append({ phase: "requirements", key: "runtime", value: "Bun", reason: "PRD pins Bun" })
+        log.append({ phase: "requirements", key: "runtime", value: "Bun", reason: "template pins Bun" })
         log.append({ phase: "architect", key: "api_contract", value: bigValue, reason: "interface" })
         log.append({ goalID: "gol_a", phase: "architect", key: "blueprint", value: "dirs", reason: "layout" })
 
@@ -97,7 +97,7 @@ describe("DecisionLog.toFullDocument()", () => {
         expect(doc).not.toContain("chars truncated")
         // All fields: key, reason (WHY), goal scoping, timestamp
         expect(doc).toContain("### runtime")
-        expect(doc).toContain("_Why: PRD pins Bun_")
+        expect(doc).toContain("_Why: template pins Bun_")
         expect(doc).toContain("goal:gol_a")
         expect(doc).toMatch(/\d{4}-\d{2}-\d{2}T/) // ISO timestamp present
         // Source-of-truth framing (codex D1 — projection, not canonical)
@@ -144,7 +144,7 @@ describe("DecisionLogBundle", () => {
       directory: tmp.path,
       fn: async () => {
         createDecisionLog(taskID).append({
-          phase: "requirements", key: "runtime", value: "Bun", reason: "PRD",
+          phase: "requirements", key: "runtime", value: "Bun", reason: "template",
         })
         const abs = await DecisionLogBundle.write(tmp.path, taskID)
         expect(abs).toBe(ProjectRuntimePaths.decisionLogPaths(tmp.path, taskID).absolute)
@@ -180,34 +180,34 @@ describe("DecisionLogBundle", () => {
   })
 })
 
-describe("renderDesignAnalysisHandoffReference pathMode (systemic absolute-path fix)", () => {
+describe("renderFrontendDesignHandoffReference pathMode (systemic absolute-path fix)", () => {
   test("default (no pathMode) keeps the relative path — in-process unchanged", () => {
-    const out = renderDesignAnalysisHandoffReference("tsk_x", { includeExcerpts: false })
-    expect(out).toContain(".opencorvus/runtime/tasks/tsk_x/design-analysis/prd-spec.md")
+    const out = renderFrontendDesignHandoffReference("tsk_x", { includeExcerpts: false })
+    expect(out).toContain(".opencorvus/runtime/tasks/tsk_x/frontend-design/frontend-template.md")
     expect(out).not.toContain("/abs/")
   })
 
   test("pathMode 'absolute' without projectDir HARD FAILS (rule 7 — no silent relative fallback)", () => {
     expect(() =>
-      renderDesignAnalysisHandoffReference("tsk_x", { includeExcerpts: false, pathMode: "absolute" }),
+      renderFrontendDesignHandoffReference("tsk_x", { includeExcerpts: false, pathMode: "absolute" }),
     ).toThrow(/projectDir/)
   })
 
   test("pathMode 'absolute' emits the project-rooted absolute path for external executors", () => {
-    const out = renderDesignAnalysisHandoffReference("tsk_x", {
+    const out = renderFrontendDesignHandoffReference("tsk_x", {
       includeExcerpts: false,
       pathMode: "absolute",
       projectDir: "/abs/proj",
     })
-    const expected = designAnalysisArtifactPaths("/abs/proj", "tsk_x").prdAbsolute
+    const expected = frontendDesignArtifactPaths("/abs/proj", "tsk_x").templateAbsolute
     expect(out).toContain(expected)
-    expect(out).toContain(path.join("/abs/proj", ".opencorvus", "runtime", "tasks", "tsk_x", "design-analysis", "prd-spec.md"))
+    expect(out).toContain(path.join("/abs/proj", ".opencorvus", "runtime", "tasks", "tsk_x", "frontend-design", "frontend-template.md"))
   })
 
-  test("designAnalysisArtifactPaths is single-source: relative consts feed the helper", () => {
-    const p = designAnalysisArtifactPaths("/x", "tsk_x")
-    expect(p.prdRelative).toBe(".opencorvus/runtime/tasks/tsk_x/design-analysis/prd-spec.md")
-    expect(p.manifestRelative).toBe(".opencorvus/runtime/tasks/tsk_x/design-analysis/evidence-source-manifest.md")
-    expect(p.prdAbsolute).toBe(path.join("/x", ".opencorvus", "runtime", "tasks", "tsk_x", "design-analysis", "prd-spec.md"))
+  test("frontendDesignArtifactPaths is single-source: relative consts feed the helper", () => {
+    const p = frontendDesignArtifactPaths("/x", "tsk_x")
+    expect(p.templateRelative).toBe(".opencorvus/runtime/tasks/tsk_x/frontend-design/frontend-template.md")
+    expect(p.manifestRelative).toBe(".opencorvus/runtime/tasks/tsk_x/frontend-design/evidence-source-manifest.md")
+    expect(p.templateAbsolute).toBe(path.join("/x", ".opencorvus", "runtime", "tasks", "tsk_x", "frontend-design", "frontend-template.md"))
   })
 })

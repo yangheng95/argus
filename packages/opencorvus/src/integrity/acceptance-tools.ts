@@ -54,6 +54,7 @@ export type IntegrityEvidenceToolContext = {
       }
     }>
   }
+  frontendDesign?: string
   attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>
   signal?: AbortSignal
 }
@@ -91,6 +92,7 @@ export function createIntegrityAcceptanceTools(input?: IntegrityEvidenceToolCont
           "goal_summary",
           "goal_detail",
           "executor_reports",
+          "frontend_design_contract",
           "attachments",
         ]),
         directory: z.string().optional(),
@@ -166,6 +168,7 @@ function renderIntegrityEvidenceSection(
     | "goal_summary"
     | "goal_detail"
     | "executor_reports"
+    | "frontend_design_contract"
     | "attachments",
   directory?: string,
   filePath?: string,
@@ -246,6 +249,9 @@ function renderIntegrityEvidenceSection(
 
     case "executor_reports":
       return renderExecutorReportEvidence(evidence?.goalReports ?? [])
+
+    case "frontend_design_contract":
+      return "# Frontend Design Contract\n\n" + (input?.frontendDesign?.trim() || "(none)")
 
     case "attachments":
       return [

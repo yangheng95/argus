@@ -767,6 +767,32 @@ export namespace Message {
       return { type: "json", value: output as never }
     }
 
+    function appendCompactionHandoffToLastUser(text: string) {
+      const handoff = ["<compaction-handoff>", text, "</compaction-handoff>"].join("\n")
+      for (let i = result.length - 1; i >= 0; i--) {
+        const msg = result[i]
+        if (msg.role !== "user") continue
+        const firstText = msg.parts.find(
+          (part): part is { type: "text"; text: string } =>
+            typeof part === "object" &&
+            part !== null &&
+            (part as { type?: unknown }).type === "text" &&
+            typeof (part as { text?: unknown }).text === "string",
+        )
+        if (firstText) {
+          firstText.text = `${firstText.text}\n\n${handoff}`
+        } else {
+          msg.parts.unshift({ type: "text", text: handoff })
+        }
+        return
+      }
+      result.push({
+        id: Identifier.ascending("message"),
+        role: "user",
+        parts: [{ type: "text", text: handoff }],
+      })
+    }
+
     for (const msg of input) {
       if (msg.parts.length === 0) continue
 
@@ -810,23 +836,16 @@ export namespace Message {
             }
           }
 
-          if (part.type === "compaction") {
-            userMessage.parts.push({
-              type: "text",
-              text:
-                "Context compaction checkpoint. This is not a new user request; continue the same task from the validated handoff summary that follows.",
-            })
-          }
-          if (part.type === "subtask") {
-            userMessage.parts.push({
-              type: "text",
-              text: "The following tool was executed by the user",
-            })
-          }
+          if (part.type === "compaction" || part.type === "subtask") continue
         }
       }
 
       if (msg.info.role === "assistant") {
+        if (CompactionHandoff.isValidSummaryMessage(msg.info)) {
+          appendCompactionHandoffToLastUser(CompactionHandoff.renderMarkdown(msg.info.structured))
+          continue
+        }
+
         const differentModel = `${model.providerID}/${model.id}` !== `${msg.info.providerID}/${msg.info.modelID}`
         const media: Array<{ mime: string; url: string }> = []
 
@@ -1115,7 +1134,7 @@ export namespace Message {
         if (!retain.tailSatisfied) {
           result.push(msg)
           if (msg.info.id === retain.tailID) {
-            if (msg.info.role !== "user" && !retain.anchorID) {
+            if (msg.info.role !== "user") {
               result.splice(retain.afterCompactionIndex)
               retain = undefined
               break

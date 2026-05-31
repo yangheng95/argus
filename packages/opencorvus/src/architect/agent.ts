@@ -30,12 +30,14 @@ import { withFactCheckRegistration } from "@/prompt/fragments/fact-check-registr
 import { createAgentContextTools } from "@/agent/context-tools"
 import { filterAgentTools } from "@/agent/filter-tools"
 import { Log } from "@/util/log"
-import type { VisualSpec } from "@/design-analyst/types"
-import { renderVisualContractPromptSection } from "@/design-analyst/prompt-section"
+import type { VisualSpec } from "@/frontend-design/types"
+import { renderVisualContractPromptSection } from "@/frontend-design/prompt-section"
+import { renderResearchBriefPromptSection, researchEvidenceIDsForTask } from "@/research/prompt-section"
 import type { GoalContractFields } from "@/pipeline/types"
 import type { DecisionLog } from "@/decision-log"
 import { renderSpecsAsText } from "@/acceptance/types"
 import type { ArchitectResult, ArchitectRetryContext, ParsedRequirement, RequirementsDecision } from "./types"
+import type { WorkloadBrief } from "@/goal-workload-analyst/types"
 import { createArchitectOutputTools, type RegisteredGoal } from "./output-tools"
 import { AttachmentStore } from "@/storage/attachment-store"
 import { renderUserRequestSection } from "@/intent/request-prompt"
@@ -67,12 +69,18 @@ export namespace ArchitectAgent {
     requirements?: ParsedRequirement[]
     /** Runtime / framework / test decisions produced by Requirements. */
     requirementDecisions?: RequirementsDecision[]
-    /** Optional visual anchors produced by design_analysis. */
+    /** Optional visual anchors produced by frontend_design. */
     designSpecs?: VisualSpec[]
-    /** Authoritative PRD/SPEC entries produced by design_analysis. */
-    designAnalysis?: string
+    /** Authoritative frontend template entries produced by frontend_design. */
+    frontendDesign?: string
     /** Delivery feedback that triggered this re-run. Absent on first pass. */
     retryContext?: ArchitectRetryContext
+    /** Goal Workload Analyst briefs for the active snapshot, passed when the
+     *  orchestrator re-dispatches architect to act on sizing feedback. Advisory:
+     *  briefs flagged with `decomposition_concern` are external evidence that a
+     *  goal is too large / under-specified for one autonomous build. Absent on
+     *  the first pass (no analyst has run yet). */
+    workloadBriefs?: WorkloadBrief[]
     /** Multimodal attachments the user uploaded with the task (images, PDFs,
      *  reference files). Surfaced into both the user-message text section
      *  and — for image / pdf / audio / video MIMEs — as inline file parts so
@@ -101,12 +109,16 @@ export namespace ArchitectAgent {
     const outputToolKit = createArchitectOutputTools({
       existingGoals: seedGoals,
       designSpecs: input.designSpecs,
-      requireReferenceCoverage: (input.designSpecs?.length ?? 0) > 0 || Boolean(input.designAnalysis?.trim()),
+      requireReferenceCoverage: (input.designSpecs?.length ?? 0) > 0 || Boolean(input.frontendDesign?.trim()),
       referenceCoverageReasons: [
         ...((input.designSpecs?.length ?? 0) > 0 ? ["designSpecs are present"] : []),
-        ...(input.designAnalysis?.trim() ? ["designAnalysis handoff is present"] : []),
+        ...(input.frontendDesign?.trim() ? ["frontendDesign handoff is present"] : []),
       ],
       knownRequirementIDs: input.requirements?.map((requirement) => requirement.id),
+      knownResearchEvidenceIDs: researchEvidenceIDsForTask({
+        taskID: input.taskID,
+        request: input.taskRequest,
+      }),
     })
     const contextTools = await filterAgentTools(createAgentContextTools(), "architect", {
       taskID: input.taskID,
@@ -261,22 +273,29 @@ function buildUserPrompt(input: ArchitectAgent.CoordinateInput): string {
       renderVisualContractPromptSection({
         specs: input.designSpecs,
         instructions: [
-          "The following visual constraints came from design_analysis and are authoritative for the referenced surface.",
+          "The following visual constraints came from frontend_design and are authoritative for the referenced surface.",
           "Use them when decomposing frontend goals, source/reference coverage, owned paths, interaction work, and integrity coverage.",
         ],
       }),
     )
   }
 
-  if (input.designAnalysis && input.designAnalysis.trim().length > 0) {
-    sections.push(input.designAnalysis)
+  if (input.frontendDesign && input.frontendDesign.trim().length > 0) {
+    sections.push(input.frontendDesign)
   }
+
+  const researchBrief = renderResearchBriefPromptSection({
+    taskID: input.taskID,
+    request: input.taskRequest,
+  })
+  if (researchBrief) sections.push(researchBrief)
 
   if (input.requirements && input.requirements.length > 0) {
     const reqText = input.requirements.map((r) => {
       const lines = [`- **${r.id}** (${r.type}): ${r.description}`]
       if (r.acceptance.trim().length > 0) lines.push(`  Acceptance: ${r.acceptance}`)
       if (r.non_goals.trim().length > 0) lines.push(`  Non-goals: ${r.non_goals}`)
+      if (r.evidence_refs.length > 0) lines.push(`  Evidence refs: ${r.evidence_refs.join(", ")}`)
       return lines.join("\n")
     }).join("\n")
     sections.push(`# Requirements (${input.requirements.length})\n\n${reqText}`)
@@ -308,6 +327,24 @@ function buildUserPrompt(input: ArchitectAgent.CoordinateInput): string {
         "",
         "## Previous Goals",
         ...ctx.previousGoals.map((g) => `- **${g.id}** (${g.title}): ${g.status} — ${g.evidence}`),
+      ].join("\n"),
+    )
+  }
+
+  const flaggedBriefs = (input.workloadBriefs ?? []).filter((b) => b.decomposition_concern?.trim())
+  if (flaggedBriefs.length > 0) {
+    const briefLines = flaggedBriefs.map((b) => {
+      const inv = b.execution_inventory
+      const counts = `${inv.surfaces} surfaces / ${inv.states} states / ${inv.data_contracts} data contracts / ${inv.verification_points} verification points`
+      return `- **${b.goal_id}**: ${b.decomposition_concern!.trim()} (${counts})`
+    })
+    sections.push(
+      [
+        "# Workload Review — goals flagged for re-sizing",
+        "",
+        "The Goal Workload Analyst (an independent read-only reviewer with no implementation bias) judged these goals too large or under-specified for one autonomous build. This is external evidence for your goal-sizing duty: split or rebalance each one, or justify in decomposition_analysis why it is irreducible.",
+        "",
+        ...briefLines,
       ].join("\n"),
     )
   }

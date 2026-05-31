@@ -180,9 +180,9 @@ rg -n "decisionLog.append|phase=\"retry\"|phase=\"review\"" packages\opencorvus\
 
 | Location | Current behavior | Required change |
 | -------- | ---------------- | --------------- |
-| `packages/opencorvus/src/build/agent.ts:103` `BuildContext` interface | Carries `requirements`, `designAnalysis`, `contractGraph`, `dependencies`, `retryGuidance`, `retryFeedback`, `deliveryFeedback`, `fidelity`, `collaborationGoals`, `retryAttachments`. No integrity field. | Add `integrityFeedback?: string` typed as pre-rendered markdown. |
-| `packages/opencorvus/src/build/agent.ts:2206` `buildUserPrompt` (goal target) | Renders sections from context in order: requirements → contractGraph → collaborationGoals → dependencies → designAnalysis → designSpecs → fidelity → retryGuidance → retryFeedback → deliveryFeedback → goal contract. | Add `integrityFeedback` rendering BEFORE `retryGuidance` so it ranks above the orchestrator's hand-typed request. Placement is deliberate: integrity is the workflow gate; its findings outrank the orchestrator's just-now turn. |
-| `packages/opencorvus/src/build/agent.ts:2388` `buildUserPrompt` (request target) | Renders `retryGuidance` (skipped on this branch), `retryFeedback`, `deliveryFeedback`, `designAnalysis`, `designSpecs`, then `# Delegation` + `# Request` excerpt. | Add `integrityFeedback` rendering BEFORE the existing `retryFeedback` block on this branch as well. |
+| `packages/opencorvus/src/build/agent.ts:103` `BuildContext` interface | Carries `requirements`, `frontendDesign`, `contractGraph`, `dependencies`, `retryGuidance`, `retryFeedback`, `deliveryFeedback`, `fidelity`, `collaborationGoals`, `retryAttachments`. No integrity field. | Add `integrityFeedback?: string` typed as pre-rendered markdown. |
+| `packages/opencorvus/src/build/agent.ts:2206` `buildUserPrompt` (goal target) | Renders sections from context in order: requirements → contractGraph → collaborationGoals → dependencies → frontendDesign → designSpecs → fidelity → retryGuidance → retryFeedback → deliveryFeedback → goal contract. | Add `integrityFeedback` rendering BEFORE `retryGuidance` so it ranks above the orchestrator's hand-typed request. Placement is deliberate: integrity is the workflow gate; its findings outrank the orchestrator's just-now turn. |
+| `packages/opencorvus/src/build/agent.ts:2388` `buildUserPrompt` (request target) | Renders `retryGuidance` (skipped on this branch), `retryFeedback`, `deliveryFeedback`, `frontendDesign`, `designSpecs`, then `# Delegation` + `# Request` excerpt. | Add `integrityFeedback` rendering BEFORE the existing `retryFeedback` block on this branch as well. |
 | `packages/opencorvus/src/build/agent.ts:2440` `buildRetryFeedbackPrompt` (continue-session path) | Used when `existingSessionID` is set; renders `## Current Orchestrator Feedback`, `## Prior Attempt Failure Facts`, `## Delivery Rejection Feedback`. | Add `## Persistent Integrity Findings` from `integrityFeedback`. |
 | `packages/opencorvus/src/orchestrator/tools.ts:4904-4998` (goal build context composition) | Builds `context.requirements`, `context.retryFeedback`, `context.deliveryFeedback`, `context.retryGuidance`. | Compose `context.integrityFeedback` from `listIntegrityAttemptArtifacts` plus the shared root-history helper. Pass spec snapshot lineage and render every latest blocking finding as bounded complete text or a build-readable runtime markdown path. |
 | `packages/opencorvus/src/orchestrator/tools.ts:5000-5021` (task-level direct build context composition) | Builds `context.deliveryFeedback` only. | Compose `context.integrityFeedback` the same way. This branch is the one all 9 correction-round builds in the bug case go through. |
@@ -199,7 +199,7 @@ rg -n "decisionLog.append|phase=\"retry\"|phase=\"review\"" packages\opencorvus\
 
 ### Existing decision_log phases (rule 8 audit)
 
-Listed all `phase=` writers in source. Current phases written: `design_analysis`,
+Listed all `phase=` writers in source. Current phases written: `frontend_design`,
 `build`, `review`, `retry`, `delivery`, `verification`, `decision`,
 `exploration`, etc. The integrity verdict already lands in `phase="review"`
 (orchestrator/tools.ts:1782). This spec does NOT introduce a new phase or

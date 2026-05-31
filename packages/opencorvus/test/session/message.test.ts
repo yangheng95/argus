@@ -296,7 +296,7 @@ describe("session.message.toModelMessage", () => {
     })
   })
 
-  test("converts user text/file parts and injects compaction/subtask prompts", async () => {
+  test("converts user text/file parts without injecting control parts into provider replay", async () => {
     const messageID = "m-user"
 
     const input: Message.WithParts[] = [
@@ -362,15 +362,54 @@ describe("session.message.toModelMessage", () => {
             filename: "img.png",
             data: "https://example.com/img.png",
           },
-          {
-            type: "text",
-            text:
-              "Context compaction checkpoint. This is not a new user request; continue the same task from the validated handoff summary that follows.",
-          },
-          { type: "text", text: "The following tool was executed by the user" },
         ],
       },
     ])
+  })
+
+  test("injects compaction handoff as explicit runtime context instead of assistant replay", async () => {
+    const userID = "m-source"
+    const assistantID = "m-summary"
+    const summary = {
+      ...assistantInfo(assistantID, userID),
+      summary: true,
+      finish: "stop",
+      structured: handoffFixture(),
+    } satisfies Message.Assistant
+
+    const result = await Message.toModelMessages(
+      [
+        {
+          info: userInfo(userID),
+          parts: [
+            {
+              ...basePart(userID, "p-user"),
+              type: "text",
+              text: "continue the build",
+            },
+          ] as Message.Part[],
+        },
+        {
+          info: summary,
+          parts: [
+            {
+              ...basePart(assistantID, "p-summary"),
+              type: "text",
+              text: "This internal summary should not replay as assistant content.",
+            },
+          ] as Message.Part[],
+        },
+      ],
+      model,
+    )
+
+    expect(result).toHaveLength(1)
+    expect(result[0].role).toBe("user")
+    const wire = JSON.stringify(result)
+    expect(wire).toContain("<compaction-handoff>")
+    expect(wire).toContain("Harden compaction handoff so sessions resume with requirements intact")
+    expect(wire).not.toContain("\"role\":\"assistant\"")
+    expect(wire).not.toContain("This internal summary should not replay as assistant content.")
   })
 
   test("hydrates persisted AttachmentStore refs for provider-bound user file parts", async () => {

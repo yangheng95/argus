@@ -107,8 +107,10 @@ export type EngineArtifactKind =
   | "goal_run_attempt"
   | "integrity_attempt"
   | "fact_check_attempt"
+  | "research_brief"
   | "run"
   | "architect_contract_graph"
+  | "goal_workload"
   | "build_session_contract"
   | "orchestrator_tool_ownership"
   | "exploration"
@@ -182,7 +184,7 @@ export const EngineTaskTable = sqliteTable(
      *  Carries what the USER explicitly attached as part of the task contract:
      *    `source: "user-upload"` — files the user uploaded with the request
      *    `source: "figma"`       — frames fetched from a user-provided Figma URL
-     *  Read by requirements / design-analyst as the user's intent (multimodal
+     *  Read by requirements / frontend-design as the user's intent (multimodal
      *  prompt content). Read by delivery alongside system_artifacts for visual
      *  comparison. Shown in the overlay as user-attached files.
      *  System-generated visual evidence (URL screenshots, rendered.png, local
@@ -205,11 +207,11 @@ export const EngineTaskTable = sqliteTable(
     /** SYSTEM-GENERATED artifacts. Same shape as `attachments` but covers
      *  things the orchestrator/agents created (or read off disk) on the
      *  user's behalf — never part of the user's contract:
-     *    `source: "url-screenshot"`  — design_analysis URL captures
-     *    `source: "material"`        — design_analysis local file reads
+     *    `source: "url-screenshot"`  — frontend_design URL captures
+     *    `source: "material"`        — frontend_design local file reads
      *    `source: "puppeteer"`       — delivery rendered.png captures
      *  Read ONLY by delivery (visual diff against user attachments). Never
-     *  fed to requirements/design-analyst as user intent. Losing one of these
+     *  fed to requirements/frontend-design as user intent. Losing one of these
      *  on disk is a soft failure: the consuming agent skips it; it does NOT
      *  kill the whole task the way a user-contract attachment loss would. */
     system_artifacts: text({ mode: "json" })
@@ -226,12 +228,12 @@ export const EngineTaskTable = sqliteTable(
       >()
       .notNull()
       .default([]),
-    /** Design-analyst visual constraints (advisory only — delivery reads them as
+    /** Frontend-design visual constraints (advisory only — delivery reads them as
      *  checklist guidance for its own visual review, they are NOT auto-scored
-     *  and do NOT gate any phase). See `src/design-analyst/types.ts` for the
-     *  shape. Written by the orchestrator `design_analysis` tool, consumed by
+     *  and do NOT gate any phase). See `src/frontend-design/types.ts` for the
+     *  shape. Written by the orchestrator `frontend_design` tool, consumed by
      *  delivery prompt rendering. */
-    design_specs: text({ mode: "json" }).$type<import("@/design-analyst/types").VisualSpec[]>().notNull().default([]),
+    design_specs: text({ mode: "json" }).$type<import("@/frontend-design/types").VisualSpec[]>().notNull().default([]),
     /** Executor that runs this task's goal runs — "opencorvus" / "codex" /
      *  "claude-code". Promoted from task.metadata._pipeline.executor (which
      *  carried several other fields that turned out to be dead). Read by the

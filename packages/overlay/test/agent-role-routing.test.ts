@@ -18,7 +18,7 @@ const SESSION_CARD_STAGES = [
   "mission",
   "intent-analysis",
   "requirements",
-  "design-analyst",
+  "frontend-design",
   "goal",
   "architect",
   "integrity",

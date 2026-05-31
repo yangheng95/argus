@@ -6,7 +6,7 @@
 > `src/agent/sub-agent-protocol.ts`（共享 sub-agent 协议） ·
 > `src/delivery/agent.ts` · `src/tool/task.ts` · `src/agent/agent.ts` ·
 > `src/intent-analysis/agent.ts` · `src/integrity/agent.ts` · `src/prosecutor/agent.ts` ·
-> `src/requirements/agent.ts` · `src/architect/agent.ts` · `src/design-analyst/agent.ts` ·
+> `src/requirements/agent.ts` · `src/architect/agent.ts` · `src/frontend-design/agent.ts` ·
 > `src/control/message.ts` · `src/channel/ingress.ts`
 >
 > 用途：把"规范里允许谁对谁发消息"和"当前代码里谁真正能触发/接收/间接拿到上下文"并列出来，便于排查通信问题。
@@ -28,7 +28,7 @@
 | `SYS` | `system_entry` | 未来协议里的虚拟外部入口 |
 | `O` | `orchestrator` | 任务唯一决策者 |
 | `R` | `requirements` | 需求分解 |
-| `X` | `design-analysis` | 视觉分析；代码里的 tool 名是 `design_analysis` |
+| `X` | `frontend-design` | 视觉分析；代码里的 tool 名是 `frontend_design` |
 | `A` | `architect` | 跨目标契约 |
 | `B` | `build` | 实际写代码的执行 agent（自己读 contract，不再有外置 planner agent） |
 | `D` | `delivery` | 交付验收；代码里的 tool 名是 `deliver` |
@@ -80,7 +80,7 @@ flowchart LR
   SYS([system_entry])
   O[orchestrator]
   R[requirements]
-  X[design-analysis]
+  X[frontend-design]
   A[architect]
   B[build]
   D[delivery]
@@ -181,7 +181,7 @@ flowchart LR
 flowchart LR
   O[orchestrator]
   R[requirements]
-  X[design_analysis]
+  X[frontend_design]
   A[architect]
   B[build]
   D[deliver]
@@ -237,7 +237,7 @@ flowchart LR
 
 1. 看不到独立 "planner" session / agent 时，结论应该是 **"planner 已下线"**，而不是 "在 pipeline 里隐式起着"。`src/planner/` 目录、`engine/goal-pool.ts`、`planGoal()` 全部不存在；旧文档里的 "O -> GP -> P -> B" 链路已失效。
 2. `intent-analysis` 没有任何消息时，先查 orchestrator 是否调了 `analyze_intent` tool（`engine_artifact` kind=`intent-analysis`），再查 `IntentAnalysisAgent.analyze` 的 session 是否成功建出。**不要**再援引"not wired yet"。
-3. `design-analysis` 的结果如果 `build` 看得到、`delivery` 看不到，先查 `task.design_specs` 和 `system_artifacts` 是否都已写入，而不是查 agent prompt。
+3. `frontend-design` 的结果如果 `build` 看得到、`delivery` 看不到，先查 `task.design_specs` 和 `system_artifacts` 是否都已写入，而不是查 agent prompt。
 4. `delivery` 拒绝后没有进入回修时，先查 `deliver` 是否写出了 `affected_goal_ids`，以及 reopen attempt 后下一轮 Orchestrator 是否真的再次调了 `build`。
 5. integrity / prosecute 结果没出现时，确认 orchestrator 是否真的调了对应 tool 而不是直接 deliver；这两个 tool 是 review 路径，不会被 build 自动触发。
 6. 如果未来切到 [11-agent-oop-protocol.md](11-agent-oop-protocol.md) 的 mailbox 协议，`general -> explore` 这条当前真实可用的链路会先卡在 whitelist 定义不闭合的问题上。
@@ -246,7 +246,7 @@ flowchart LR
 
 - `src/channel/ingress.ts`：外部入站是否直接回填 interaction，还是委托 control 层
 - `src/control/message.ts`：panel/control 入口，任务真正创建前的 LLM 路由
-- `src/orchestrator/tools.ts`：22 个 orchestrator tools（含 `requirements / design_analysis / architect / build / deliver / analyze_intent / integrity / prosecute / propose_task / steer_subagent / cancel_subagent / refine` 等）
+- `src/orchestrator/tools.ts`：22 个 orchestrator tools（含 `requirements / frontend_design / architect / build / deliver / analyze_intent / integrity / prosecute / propose_task / steer_subagent / cancel_subagent / refine` 等）
 - `src/orchestrator/loop.ts`：`runTaskLoop` 决策入口
 - `src/goal/runner.ts`：build tool 落到 worktree + executor 的执行体
 - `src/build/agent.ts`：build agent 入口（`build/` 独立包共 4 个文件：`agent.ts` / `index.ts` / `report.ts` / `types.ts`）

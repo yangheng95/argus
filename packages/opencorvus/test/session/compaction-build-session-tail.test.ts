@@ -157,7 +157,7 @@ describe("build-session compaction tail selection", () => {
     expect(selected.head.map((message) => message.info.id)).toEqual(["m-a0", "m-u1", "m-a1"])
   })
 
-  test("filterCompacted accepts anchored assistant tail_start_id markers", async () => {
+  test("filterCompacted rejects anchored assistant tail_start_id markers", async () => {
     const compactionUser = "m-compaction-user"
     const compactionSummary = "m-compaction-summary"
     const anchor = "m-dispatch"
@@ -222,11 +222,8 @@ describe("build-session compaction tail selection", () => {
     const result = await Message.filterCompacted(stream(newestFirst))
 
     expect(result.map((message) => message.info.id)).toEqual([
-      anchor,
       compactionUser,
       compactionSummary,
-      tailStart,
-      tailEnd,
     ])
   })
 })

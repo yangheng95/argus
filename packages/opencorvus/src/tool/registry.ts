@@ -34,6 +34,9 @@ import { PanelTool } from "./panel"
 import { MissionStateTool } from "./mission-state"
 import { TaskReportTool } from "./task-report"
 import { GoalReportTool } from "./goal-report"
+import { WebCloneGenerateSourceProjectTool } from "./web-clone-generate-source-project"
+import { WebClonePrepareContextTool } from "./web-clone-prepare-context"
+import { WebCloneSourceAuditTool } from "./web-clone-source-audit"
 import {
   WebpageExtractTool,
   WebpageCompileTool,
@@ -146,6 +149,9 @@ export namespace ToolRegistry {
       MissionStateTool,
       TaskReportTool,
       GoalReportTool,
+      WebClonePrepareContextTool,
+      WebCloneGenerateSourceProjectTool,
+      WebCloneSourceAuditTool,
       AnalyticsTool,
       WebpageExtractTool,
       WebpageCompileTool,
@@ -177,13 +183,13 @@ export namespace ToolRegistry {
   ) {
     let items = await all(config)
 
-    // Agent tool adapter: filter by agent's declared tool set
-    // Design-analysis is the single owner of mirror extraction. Other agents
-    // consume decision-log PRD/SPEC entries and optional task.design_specs
+    // Agent tool adapter: filter by agent's declared tool set.
+    // frontend_design is the single owner of mirror extraction. Other agents
+    // consume decision-log frontend template entries and optional task.design_specs
     // anchors instead of reopening URL/Figma/image extraction through registry tools.
     if (agent?.name === "visual-qa") {
       items = items.filter((t) => !isMirrorAnalysisToolId(t.id))
-    } else if (agent?.name !== "design-analyst") {
+    } else if (agent?.name !== "frontend-design") {
       items = items.filter((t) => !isMirrorToolId(t.id))
     }
 

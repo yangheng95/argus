@@ -33,9 +33,9 @@ import { Timestamps } from "@/storage/schema.sql"
  *                  surface (remote/mobile transport), which does not create
  *                  sessions of this kind. See specs/gateway-mission-split-2026-05-28.md.
  *   requirements   requirements sub-agent (goal decomposition)
- *   design-analyst design-analyst sub-agent (vision → layout/style/component spec)
+ *   frontend-design sub-agent (vision -> template/modules/components/materials)
  *   goal           legacy catch-all for sub-agents that predate the dedicated
- *                  `requirements` / `design-analyst` kinds — still accepted so
+ *                  `requirements` / `frontend-design` kinds — still accepted so
  *                  historical task rows render, but new code must use the
  *                  specific kind above.
  *   architect      architect sub-agent
@@ -56,6 +56,9 @@ import { Timestamps } from "@/storage/schema.sql"
  *                  the orchestrator `explore` tool. Distinct from "assistant"
  *                  so the overlay splits each explore call into its own agent
  *                  card instead of collapsing them into the generic lane.
+ *   research       read-only advisory evidence-gathering subagent for external
+ *                  facts and PRD/SPEC input bundles. It emits durable
+ *                  research_brief artifacts; it is not a workflow step.
  *   evaluator      LLM judge / evaluator sessions
  *   system         internal maintenance (compaction, summary, title generation)
  */
@@ -69,15 +72,17 @@ export const SESSION_KINDS = [
   "mission",
   "intent-analysis",
   "requirements",
-  "design-analyst",
+  "frontend-design",
   "goal",
   "architect",
+  "goal-workload-analyst",
   "integrity",
   "fact-check",
   "delivery",
   "executor",
   "build",
   "explore",
+  "research",
   "evaluator",
   "system",
 ] as const
@@ -103,7 +108,7 @@ export const SessionTable = sqliteTable(
     kind: text().notNull().$type<SessionKind>(),
     /** Optional goal this session belongs to (kind="executor"|"build"|"evaluator"
      *  when goal-scoped). Used by overlay to nest the session's messages under
-     *  the goal card. Null for root/assistant/requirements/design-analyst/goal/
+     *  the goal card. Null for root/assistant/requirements/frontend-design/goal/
      *  architect/delivery/system sessions. */
     goal_id: text(),
     share_url: text(),
@@ -159,6 +164,53 @@ export const PartTable = sqliteTable(
     uniqueIndex("part_message_tool_call_idx")
       .on(table.message_id, sql<string>`json_extract(${table.data}, '$.callID')`)
       .where(sql`json_extract(${table.data}, '$.type') = 'tool'`),
+  ],
+)
+
+export type SessionControlKind =
+  | "manual_summarize"
+  | "compaction_request"
+  | "subtask_request"
+  | "wake_reason"
+
+export type SessionControlStatus = "pending" | "consumed" | "failed"
+
+export const SessionControlRecordTable = sqliteTable(
+  "session_control_record",
+  {
+    id: text().primaryKey(),
+    session_id: text()
+      .notNull()
+      .references(() => SessionTable.id, { onDelete: "cascade" }),
+    kind: text().notNull().$type<SessionControlKind>(),
+    status: text().notNull().$type<SessionControlStatus>(),
+    owner: text(),
+    payload: text({ mode: "json" }).notNull().$type<Record<string, unknown>>(),
+    ...Timestamps,
+    time_consumed: integer(),
+  },
+  (table) => [
+    index("session_control_session_idx").on(table.session_id),
+    index("session_control_session_status_idx").on(table.session_id, table.status),
+    index("session_control_kind_idx").on(table.kind),
+  ],
+)
+
+export const WorkerTurnDescriptorTable = sqliteTable(
+  "worker_turn_descriptor",
+  {
+    id: text().primaryKey(),
+    session_id: text()
+      .notNull()
+      .references(() => SessionTable.id, { onDelete: "cascade" }),
+    hash: text().notNull(),
+    agent: text().notNull(),
+    payload: text({ mode: "json" }).notNull().$type<Record<string, unknown>>(),
+    ...Timestamps,
+  },
+  (table) => [
+    index("worker_turn_descriptor_session_idx").on(table.session_id),
+    index("worker_turn_descriptor_hash_idx").on(table.hash),
   ],
 )
 

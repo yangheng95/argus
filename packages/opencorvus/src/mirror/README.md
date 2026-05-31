@@ -7,7 +7,7 @@
 
 ## 核心原则
 
-1. **工具组件 + skill 组合，不是 e2e 算法**：每个模块暴露一个原子算法函数（Zod 严格约束输入输出），模块之间**不互相调用**、**不共享 ctx**、**不做 stage 传参**。像 `url-to-code.ts` 这种"把阶段串起来的 composite service"在本仓库里**不存在**——组合工作由 skill markdown + orchestrator 完成，不由代码固化。Figma 产品入口不再使用 mirror/REST，统一由 design_analysis 通过 Figma MCP materialize。
+1. **工具组件 + skill 组合，不是 e2e 算法**：每个模块暴露一个原子算法函数（Zod 严格约束输入输出），模块之间**不互相调用**、**不共享 ctx**、**不做 stage 传参**。像 `url-to-code.ts` 这种"把阶段串起来的 composite service"在本仓库里**不存在**——组合工作由 skill markdown + orchestrator 完成，不由代码固化。Figma 产品入口不再使用 mirror/REST，统一由 frontend_design 通过 Figma MCP materialize。
 2. **算法移植，基建复用**：mirror 只带算法本体，LLM / 事件 / 配置 / Worktree / Puppeteer 全部接 opencorvus 现有设施。
 3. **隔离落地**：`src/mirror/` 独立模块树。不动 `tool/registry.ts`、`agent/agent.ts`、`config.ts`、`permission/defaults.ts`、`prompt-catalog`。
 4. **Zod 在边界**：每个 export 的算法函数必须有 Zod 输入/输出 schema；内部辅助用 TS 类型。
@@ -38,7 +38,7 @@ export const CompileOutput = XmlIRSchema
 export async function compileDesignToXML(input: z.infer<typeof CompileInput>): Promise<z.infer<typeof CompileOutput>> { ... }
 ```
 
-历史 Figma mirror/REST 序列已下线；不要新增 `figma_extract` / `figma_compile` / `figma_analyze` 工具或 skill。Figma 参考由 design_analysis 调 Figma MCP 获取截图和文本证据后交给 PRD/SPEC 合成。
+历史 Figma mirror/REST 序列已下线；不要新增 `figma_extract` / `figma_compile` / `figma_analyze` 工具或 skill。Figma 参考由 frontend_design 调 Figma MCP 获取截图和文本证据后交给 frontend template 合成。
 
 ```markdown
 ---
@@ -48,7 +48,7 @@ name: webpage-generate
 1. `webpage_extract` → 拿 ExtractedPage
 2. `webpage_compile` → 拿 XML IR
 3. `webpage_analyze` → 拿 scaffold/shared-context
-4. PRD/SPEC 合成；build agent 不直接调用 mirror extraction
+4. frontend template 合成；build agent 不直接调用 mirror extraction
 ```
 
 ---
@@ -111,7 +111,7 @@ mirror/* 禁止依赖:
 
 mirror/* 允许依赖:
   src/util, src/llm, src/engine/protocol, src/worktree,
-  src/design-analyst/url-screenshot,
+  src/frontend-design/url-screenshot,
   src/delivery/checks/visual (findBrowserExecutable)
 ```
 
@@ -214,7 +214,7 @@ Bun 1.3.13 实测验证：`PNG.sync.read/write`、`pixelmatch`、`ssim.default` 
 | **A. shared utilities** | `shared/*` 8 个文件 + 单测 | 4 | `bun test src/mirror/shared/**` 100% 通过；零网络/磁盘 side effect |
 | **B. IR schemas** | `types.ts` + `ir/*` Zod + fixture 校验 | 1.5 | 3 份 fixture JSON 解析通过 |
 | **C. visual QA** | `visual/render.ts` + `visual/evaluate.ts` | 1.5 | 固定双 PNG 分数误差 ±0.5 |
-| **D. figma 链路** | isolated legacy algorithms only；不注册工具、不进 design_analysis 产品路径 | 4.5 | 单元测试可保留，产品验收以 Figma MCP 为准 |
+| **D. figma 链路** | isolated legacy algorithms only；不注册工具、不进 frontend_design 产品路径 | 4.5 | 单元测试可保留，产品验收以 Figma MCP 为准 |
 | **E. url 链路 - extract** | `url/extract.ts` | 1.5 | 离线 fixture + 真实 puppeteer，ExtractedPage 通过 schema 校验 |
 | **F. url 链路 - compile + pattern** | `url/compile.ts` + `url/pattern/*` | 3 | fixture 驱动，输出与 mirror 字节级一致 |
 | **G. 冒烟脚本 + 文档** | `script/mirror-smoke.ts` | 1 | 本地一把跑通三条链路 |
@@ -267,6 +267,6 @@ Bun 1.3.13 实测验证：`PNG.sync.read/write`、`pixelmatch`、`ssim.default` 
 - `tool/registry.ts` 注册
 - `permission/defaults.ts` 新增 deny（出站请求：Figma API / 任意 URL 抓取）
 - `agent/agent.ts` build agent allow list
-- **skill markdown** 承载组合逻辑：`src/skill/builtin/url-to-code.md` — skill 用自然语言描述调用顺序、中间产物如何交给 design_analysis、何时做 visual 验收。skill 是唯一把原子工具串成流程的位置。Figma 不再有 mirror skill。
+- **skill markdown** 承载组合逻辑：`src/skill/builtin/url-to-code.md` — skill 用自然语言描述调用顺序、中间产物如何交给 frontend_design、何时做 visual 验收。skill 是唯一把原子工具串成流程的位置。Figma 不再有 mirror skill。
 
 前提：phase 1 的 `script/mirror-smoke.ts` 稳定 pass 两周以上。

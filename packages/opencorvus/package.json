@@ -7,7 +7,7 @@
   "private": true,
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "bun test --timeout 60000 test/acp test/agent test/bus test/cli test/coding-cli test/config test/workspace test/env test/file test/flag test/format test/id test/ide test/lsp test/mcp test/memory test/mirror test/patch test/permission test/plugin test/project test/provider test/question test/scheduler test/server test/session test/skill test/snapshot test/storage test/system-terminal test/tool test/tui test/util test/bun.test.ts test/keybind.test.ts test/permission-task.test.ts test/scheduler.test.ts",
+    "test": "bun test --timeout 60000 test/acp test/agent test/browser test/build-agent test/bus test/cli test/coding-cli test/config test/workspace test/env test/fact-check test/file test/flag test/format test/frontend-design test/goal-workload-analyst test/id test/ide test/integrity test/lsp test/mcp test/memory test/mirror test/patch test/permission test/plugin test/project test/prompt test/provider test/question test/research test/scheduler test/server test/session test/skill test/snapshot test/storage test/system-terminal test/tool test/tui test/util test/bun.test.ts test/keybind.test.ts test/permission-task.test.ts test/scheduler.test.ts",
     "build": "bun run script/build.ts",
     "dev": "bun --preload @opentui/solid/preload --conditions=browser ./src/index.ts"
   },
@@ -113,8 +113,10 @@
     "open": "10.1.2",
     "opentui-spinner": "0.0.6",
     "pixelmatch": "^6.0.0",
+    "playwright": "1.59.1",
     "puppeteer-core": "24.38.0",
     "remeda": "catalog:",
+    "single-file-cli": "^2.0.83",
     "solid-js": "catalog:",
     "strip-ansi": "7.1.2",
     "turndown": "7.2.0",

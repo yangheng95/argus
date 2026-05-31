@@ -22,7 +22,7 @@ describe("agent context tools", () => {
   // matrix locked 2026-05-19 after intent-analysis abused websearch ×8 at the
   // classification stage:
   //   requirements / architect  → keep  (durable greenfield tech decisions)
-  //   design-analyst            → drop  (owns mirror extraction; redundant)
+  //   frontend-design            → drop  (owns mirror extraction; redundant)
   //   intent-analysis           → drop  (first cheap classifier; must not research)
   for (const agentName of ["requirements", "architect"] as const) {
     test(`${agentName} resolves websearch through its include whitelist`, async () => {
@@ -37,7 +37,7 @@ describe("agent context tools", () => {
     })
   }
 
-  for (const agentName of ["design-analyst", "intent-analysis"] as const) {
+  for (const agentName of ["frontend-design", "intent-analysis"] as const) {
     test(`${agentName} does NOT resolve websearch (research is not its job)`, async () => {
       await Instance.provide({
         directory: process.cwd(),

@@ -31,6 +31,7 @@ import { Avatar } from "./Avatar"
 import { CardParts } from "./CardParts"
 import { IntegrityBody } from "./IntegrityCard"
 import { Icon } from "./Icon"
+import { ReviewStreamSection } from "./ReviewStreamSection"
 import { storeCardNode } from "./StoreCardNode"
 import { TracePanel } from "./TracePanel"
 
@@ -47,21 +48,57 @@ function UnsupportedChatBubbleChild(props: { child: CardNode; parentID: string }
   throw new Error(`ChatBubble: unsupported child kind "${props.child.kind}" for ${props.parentID}`)
 }
 
+function ChatBubbleAgentChildBody(props: { child: CardNode; depth: number }) {
+  const visibleChildIDs = createMemo(() => visibleChildIDsForCard(props.child))
+
+  return (
+    <>
+      <Show when={props.child.integrity}>
+        <IntegrityBody integrity={props.child.integrity!} />
+      </Show>
+      <Show when={props.child.reviewStream}>
+        <ReviewStreamSection reviewStream={props.child.reviewStream!} />
+      </Show>
+      <Show when={props.child.parts.length > 0}>
+        <CardParts parts={props.child.parts} depth={props.depth + 1} streaming={props.child.status === "running"} />
+      </Show>
+      <Show when={visibleChildIDs().length > 0}>
+        <div class="chat-bubble__children">
+          <For each={visibleChildIDs()}>
+            {(childID) => (
+              <ChatBubbleChild childID={childID} depth={props.depth + 1} parentID={props.child.id} />
+            )}
+          </For>
+        </div>
+      </Show>
+    </>
+  )
+}
+
 function ChatBubbleChild(props: { childID: string; depth: number; parentID: string }) {
   const child = () => storeCardNode(props.childID, props.parentID)
 
   return (
-    <Switch fallback={<UnsupportedChatBubbleChild child={child()} parentID={props.parentID} />}>
-      <Match when={child().kind === "message"}>
-        <CardParts parts={child().parts} depth={props.depth + 1} streaming={child().status === "running"} />
-      </Match>
-      <Match when={child().kind === "agent" && child().integrity}>
-        <IntegrityBody integrity={child().integrity!} />
-      </Match>
-      <Match when={child().kind === "integrity" && child().integrity}>
-        <IntegrityBody integrity={child().integrity!} />
-      </Match>
-    </Switch>
+    <div
+      class="chat-bubble__child"
+      data-card-id={child().id}
+      data-kind={child().kind}
+      data-stage={child().stage || child().role || ""}
+      data-status={child().status || "none"}
+      data-depth={props.depth + 1}
+    >
+      <Switch fallback={<UnsupportedChatBubbleChild child={child()} parentID={props.parentID} />}>
+        <Match when={child().kind === "message"}>
+          <CardParts parts={child().parts} depth={props.depth + 1} streaming={child().status === "running"} />
+        </Match>
+        <Match when={child().kind === "integrity" && child().integrity}>
+          <IntegrityBody integrity={child().integrity!} />
+        </Match>
+        <Match when={child().kind === "agent"}>
+          <ChatBubbleAgentChildBody child={child()} depth={props.depth} />
+        </Match>
+      </Switch>
+    </div>
   )
 }
 
@@ -457,6 +494,9 @@ export function ChatBubble(props: { node: CardNode; depth: number }) {
                 </Show>
                 <Show when={props.node.integrity}>
                   <IntegrityBody integrity={props.node.integrity!} />
+                </Show>
+                <Show when={props.node.reviewStream}>
+                  <ReviewStreamSection reviewStream={props.node.reviewStream!} />
                 </Show>
                 <Show when={visibleChildIDs().length > 0}>
                   <div class="chat-bubble__children">

@@ -13,19 +13,6 @@ import {
 } from "../../../src/mirror/figma/graph-analyze"
 import type { CompressedDesign, CompressedNode } from "../../../src/mirror/ir/compressed-design"
 
-// Golden parity — mirror originals
-import {
-  analyzeGraph as mirrorAnalyze,
-  createSubDesign as mirrorCreateSubDesign,
-  collectReuseRefs as mirrorCollectReuseRefs,
-  collectTextSpecs as mirrorCollectTextSpecs,
-  toSlug as mirrorToSlug,
-  toStubName as mirrorToStubName,
-  CONNECTION_RE as mirrorConnRe,
-  ANNOTATION_RE as mirrorAnnRe,
-  REUSE_RE as mirrorReuseRe,
-} from "D:/myhexin-local/opencode-private/packages/mirror/src/service/figma-graph-analyze.ts"
-
 function emptyDesign(): CompressedDesign {
   return {
     fileName: "Test",
@@ -49,40 +36,22 @@ function textNode(id: string, content: string): CompressedNode {
   return { id, name: id, type: "TEXT", text: { content } }
 }
 
-// ─── Regex parity ─────────────────────────────────────────────────────────
-
-describe("regex parity with mirror", () => {
-  test("CONNECTION_RE source matches mirror", () => {
-    expect(CONNECTION_RE.source).toBe(mirrorConnRe.source)
-  })
-  test("ANNOTATION_RE source matches mirror", () => {
-    expect(ANNOTATION_RE.source).toBe(mirrorAnnRe.source)
-  })
-  test("REUSE_RE source matches mirror", () => {
-    expect(REUSE_RE.source).toBe(mirrorReuseRe.source)
+describe("graph marker regexes", () => {
+  test("match connection, annotation, and reuse markers", () => {
+    expect(CONNECTION_RE.test("连接线组-1/Tab/1:10 -> Content/1:20")).toBe(true)
+    expect(ANNOTATION_RE.test("基础标注组-1/target/1:99")).toBe(true)
+    expect(REUSE_RE.test("@reuse@ui/button:primary")).toBe(true)
   })
 })
 
-// ─── Pure helper parity ───────────────────────────────────────────────────
-
-describe("pure helpers — GOLDEN PARITY", () => {
-  const slugs = ["Home Tab", "用户中心", "Mixed 混合 123", "-leading-trailing-", "!!!", ""]
-  test.each(slugs)("toSlug(%p) matches mirror", (s) => {
-    expect(toSlug(s)).toBe(mirrorToSlug(s))
+describe("graph helper functions", () => {
+  test("normalizes slugs and stub names", () => {
+    expect(toSlug("Home Tab")).toBe("home-tab")
+    expect(toSlug("-leading-trailing-")).toBe("leading-trailing")
+    expect(toStubName("my-lib", "Data Grid")).toBe("MyLibDataGrid")
   })
 
-  const stubCases: Array<[string, string]> = [
-    ["ainvest", "table"],
-    ["my-lib", "Data Grid"],
-    ["股票库", "列表"], // pure Chinese — both sides strip to ""
-    ["", ""],
-    ["a-b-c", "some.thing"],
-  ]
-  test.each(stubCases)("toStubName(%p, %p) matches mirror", (lib, comp) => {
-    expect(toStubName(lib, comp)).toBe(mirrorToStubName(lib, comp))
-  })
-
-  test("collectTextSpecs matches mirror", () => {
+  test("collects text specs recursively", () => {
     const tree: CompressedNode = {
       id: "1",
       name: "root",
@@ -93,79 +62,71 @@ describe("pure helpers — GOLDEN PARITY", () => {
         { id: "3", name: "n", type: "FRAME", children: [textNode("4", "nested")] },
       ],
     }
-    expect(collectTextSpecs(tree)).toEqual(mirrorCollectTextSpecs(tree))
+    expect(collectTextSpecs(tree)).toEqual(["hello", "world", "nested"])
   })
 
-  test("collectReuseRefs matches mirror", () => {
+  test("collects reuse references recursively", () => {
     const tree: CompressedNode = {
       id: "1",
-      name: "@reuse@ainvest/table:股票-默认",
+      name: "@reuse@ainvest/table:default",
       type: "FRAME",
       children: [
         { id: "2", name: "@reuse@ui/button:primary", type: "INSTANCE" },
         { id: "3", name: "plain-group", type: "GROUP" },
       ],
     }
-    expect(collectReuseRefs(tree)).toEqual(mirrorCollectReuseRefs(tree))
+    expect(collectReuseRefs(tree).map((ref) => toStubName(ref.library, ref.component))).toEqual(["AinvestTable", "UiButton"])
   })
 })
 
-// ─── analyzeGraphStructure — shape validation ─────────────────────────────
-
-describe("analyzeGraphStructure — shape", () => {
-  test("empty design → passthrough, no graph structure", () => {
-    const d = emptyDesign()
-    const r = analyzeGraphStructure(d)
-    expect(r.pageGraph.hasGraphStructure).toBe(false)
-    expect(r.pageGraph.pages).toEqual([])
-    expect(r.design).toBe(d) // passthrough identity when no markers
+describe("analyzeGraphStructure", () => {
+  test("empty design passes through without graph structure", () => {
+    const design = emptyDesign()
+    const result = analyzeGraphStructure(design)
+    expect(result.pageGraph.hasGraphStructure).toBe(false)
+    expect(result.pageGraph.pages).toEqual([])
+    expect(result.design).toBe(design)
   })
 
-  test("design with only @reuse@ refs → hasGraphStructure:false, reuseRefs populated", () => {
-    const d = emptyDesign()
-    d.pages[0].frames = [node("1", "@reuse@ainvest/table:v1")]
-    const r = analyzeGraphStructure(d)
-    expect(r.pageGraph.hasGraphStructure).toBe(false) // no connections
-    expect(r.pageGraph.reuseRefs).toHaveLength(1)
-    expect(r.pageGraph.externalComponents).toHaveLength(1)
-    expect(r.pageGraph.externalComponents[0].stubName).toBe("AinvestTable")
+  test("reuse refs populate external component metadata", () => {
+    const design = emptyDesign()
+    design.pages[0].frames = [node("1", "@reuse@ainvest/table:v1")]
+    const result = analyzeGraphStructure(design)
+    expect(result.pageGraph.hasGraphStructure).toBe(false)
+    expect(result.pageGraph.reuseRefs).toHaveLength(1)
+    expect(result.pageGraph.externalComponents[0].stubName).toBe("AinvestTable")
   })
 
   test("connection group triggers tab page with slug", () => {
-    const d = emptyDesign()
-    d.pages[0].frames = [
-      {
-        id: "g1",
-        name: "连接线组-1/Tab1/1:10 -> Content1/1:20",
-        type: "GROUP",
-      },
+    const design = emptyDesign()
+    design.pages[0].frames = [
+      { id: "g1", name: "连接线组-1/Tab1/1:10 -> Content1/1:20", type: "GROUP" },
       node("1:10", "Tab1", [textNode("t", "Home Tab")]),
       node("1:20", "Content1"),
     ]
-    const r = analyzeGraphStructure(d)
-    expect(r.pageGraph.hasGraphStructure).toBe(true)
-    expect(r.pageGraph.connections).toHaveLength(1)
-    expect(r.pageGraph.pages).toHaveLength(1)
-    expect(r.pageGraph.pages[0].label).toBe("Home Tab") // from source text
-    expect(r.pageGraph.pages[0].id).toBe("home-tab")
-    expect(r.pageGraph.pages[0].isDefault).toBe(true) // min groupId
+    const result = analyzeGraphStructure(design)
+    expect(result.pageGraph.hasGraphStructure).toBe(true)
+    expect(result.pageGraph.connections).toHaveLength(1)
+    expect(result.pageGraph.pages[0].label).toBe("Home Tab")
+    expect(result.pageGraph.pages[0].id).toBe("home-tab")
+    expect(result.pageGraph.pages[0].isDefault).toBe(true)
   })
 
   test("removes graph-marker frames from cleaned design", () => {
-    const d = emptyDesign()
-    d.pages[0].frames = [
+    const design = emptyDesign()
+    design.pages[0].frames = [
       { id: "g1", name: "连接线组-1/a/1:1 -> b/1:2", type: "GROUP" },
       node("1:1", "a"),
       node("1:2", "b"),
       node("1:3", "plain"),
     ]
-    const r = analyzeGraphStructure(d)
-    expect(r.design.pages[0].frames.map((f) => f.name)).toEqual(["a", "b", "plain"])
+    const result = analyzeGraphStructure(design)
+    expect(result.design.pages[0].frames.map((frame) => frame.name)).toEqual(["a", "b", "plain"])
   })
 
-  test("injects [interaction: …] annotation into target node", () => {
-    const d = emptyDesign()
-    d.pages[0].frames = [
+  test("injects interaction annotation into target node", () => {
+    const design = emptyDesign()
+    design.pages[0].frames = [
       {
         id: "ann",
         name: "基础标注组-1/target/1:99",
@@ -174,122 +135,36 @@ describe("analyzeGraphStructure — shape", () => {
       },
       node("1:99", "target"),
     ]
-    const r = analyzeGraphStructure(d)
-    const target = r.design.pages[0].frames.find((f) => f.id === "1:99")
-    expect(target?.annotations).toBeDefined()
+    const result = analyzeGraphStructure(design)
+    const target = result.design.pages[0].frames.find((frame) => frame.id === "1:99")
     expect(target?.annotations?.[0]).toContain("[interaction:")
     expect(target?.annotations?.[0]).toContain("click to open")
   })
 })
 
-// ─── GOLDEN PARITY on analyzeGraphStructure ───────────────────────────────
-
-describe("analyzeGraphStructure — GOLDEN PARITY byte-level", () => {
-  const cases: Array<{ name: string; design: CompressedDesign }> = [
-    {
-      name: "empty",
-      design: emptyDesign(),
-    },
-    {
-      name: "plain frames only",
-      design: (() => {
-        const d = emptyDesign()
-        d.pages[0].frames = [node("1:1", "Header"), node("1:2", "Footer")]
-        return d
-      })(),
-    },
-    {
-      name: "single @reuse@ ref",
-      design: (() => {
-        const d = emptyDesign()
-        d.pages[0].frames = [node("1:1", "@reuse@lib/table:v1")]
-        return d
-      })(),
-    },
-    {
-      name: "multiple @reuse@ variants sharing component",
-      design: (() => {
-        const d = emptyDesign()
-        d.pages[0].frames = [
-          node("1:1", "@reuse@lib/table:v1"),
-          node("1:2", "@reuse@lib/table:v2"),
-          node("1:3", "@reuse@lib/button:primary"),
-        ]
-        return d
-      })(),
-    },
-    {
-      name: "full tab graph (connection + annotation + reuse)",
-      design: (() => {
-        const d = emptyDesign()
-        d.pages[0].frames = [
-          { id: "g1", name: "连接线组-1/Tab1/1:10 -> Content1/1:20", type: "GROUP" },
-          { id: "g2", name: "连接线组-2/Tab2/1:11 -> Content2/1:21", type: "GROUP" },
-          {
-            id: "a1",
-            name: "基础标注组-1/target/1:20",
-            type: "GROUP",
-            children: [textNode("at1", "hover state")],
-          },
-          {
-            id: "1:10",
-            name: "Tab1",
-            type: "FRAME",
-            children: [textNode("tx1", "首页")],
-          },
-          {
-            id: "1:11",
-            name: "Tab2",
-            type: "FRAME",
-            children: [textNode("tx2", "Settings")],
-          },
-          node("1:20", "Content1", [node("r1", "@reuse@lib/card:default")]),
-          node("1:21", "Content2"),
-          node("1:30", "Header"), // shared node
-        ]
-        return d
-      })(),
-    },
-  ]
-
-  for (const c of cases) {
-    test(c.name, () => {
-      // mirror mutates input indirectly (cleanDesign clones first); still, clone each side to be safe.
-      const oursIn: CompressedDesign = JSON.parse(JSON.stringify(c.design))
-      const theirsIn: CompressedDesign = JSON.parse(JSON.stringify(c.design))
-      const ours = analyzeGraphStructure(oursIn)
-      const theirs = mirrorAnalyze(theirsIn)
-      expect(ours).toEqual(theirs)
-    })
-  }
-})
-
-// ─── createSubDesign parity ───────────────────────────────────────────────
-
-describe("createSubDesign — GOLDEN PARITY", () => {
-  test("strips @reuse@ from names and components", () => {
+describe("createSubDesign", () => {
+  test("strips reuse annotations and deep-clones nodes", () => {
     const source = emptyDesign()
     source.components = { x: { name: "@reuse@lib/table:v1", description: "", key: "x" } }
-    source.componentSets = { y: { name: "@reuse@lib/grid:主表", description: "" } }
+    source.componentSets = { y: { name: "@reuse@lib/grid:main", description: "" } }
     const nodes: CompressedNode[] = [
       {
         id: "1:1",
-        name: "@reuse@lib/card:默认",
+        name: "@reuse@lib/card:default",
         type: "INSTANCE",
-        componentName: "@reuse@lib/card:默认",
-        annotations: ["[external-component: lib/card:默认]", "keep-me"],
+        componentName: "@reuse@lib/card:default",
+        annotations: ["[external-component: lib/card:default]", "keep-me"],
       },
     ]
-    const ours = createSubDesign(source, nodes, "SubPage")
-    const theirs = mirrorCreateSubDesign(source, nodes, "SubPage")
-    expect(ours).toEqual(theirs)
-  })
 
-  test("deep-clones nodes (mutation on sub does not leak to source)", () => {
-    const source = emptyDesign()
-    const nodes: CompressedNode[] = [node("1:1", "A"), node("1:2", "B")]
-    const sub = createSubDesign(source, nodes)
+    const sub = createSubDesign(source, nodes, "SubPage")
     sub.pages[0].frames[0].name = "MUTATED"
-    expect(nodes[0].name).toBe("A")
+
+    expect(nodes[0].name).toBe("@reuse@lib/card:default")
+    expect(sub.fileName).toBe("Test")
+    expect(sub.pages[0].name).toBe("SubPage")
+    expect(sub.pages[0].frames[0].annotations).toEqual(["keep-me"])
+    expect(sub.components.x.name).toBe("table")
+    expect(sub.componentSets.y.name).toBe("grid")
   })
 })

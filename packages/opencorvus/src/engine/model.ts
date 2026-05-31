@@ -194,7 +194,7 @@ const TaskAttachmentInput = z.object({
 /**
  * Persisted attachment reference. Once the bytes live in AttachmentStore
  * (`<projectDir>/.opencorvus/runtime/blobs/attachments/<sha>.<ext>`), every downstream layer
- * — queue table row, task loop, orchestrator, design-analyst, requirements — only
+ * — queue table row, task loop, orchestrator, frontend-design, requirements — only
  * carries this small, URL-addressable reference. Agents that need the raw
  * bytes for multimodal LLM input read them back through AttachmentStore.
  *
@@ -202,7 +202,7 @@ const TaskAttachmentInput = z.object({
  * attachment store with different semantics. Today three intents are wired:
  *   - "visual_reference" — picked up by the deliver-time visual SSIM gate
  *     (user-uploaded screenshots, Figma frames, URL screenshots).
- *   - "design_token"     — design-analyst input only, not a verification gate.
+ *   - "design_token"     — frontend-design input only, not a verification gate.
  *   - "spec_artifact"    — generic supporting material (request docs etc).
  * Other intents may appear later (api_contract, test_fixture, …); leaving
  * the field free-form keeps that extension cheap. Missing intent defaults
@@ -479,7 +479,7 @@ const ProgressSnapshot = z.object({
 
 /**
  * Live session activity for a task — surfaces pre-plan agent work (requirements /
- * architect / integrity-review / design-analyst) that would otherwise be invisible
+ * architect / integrity-review / frontend-design) that would otherwise be invisible
  * because `goals` and `run` are empty until the architect finishes decomposing.
  * Derived from protocol_event + session.kind; no FSM column involved.
  */

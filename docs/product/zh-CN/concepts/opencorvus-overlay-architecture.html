@@ -613,9 +613,9 @@
             <rect x="620" y="322" width="400" height="68" rx="9" fill="#ffffff" stroke="#9bb6c4" stroke-width="1.3"/>
             <circle cx="640" cy="342" r="12" fill="#ffffff" stroke="#1a5f78" stroke-width="1.3"/>
             <text x="640" y="346" font-size="11.5" font-weight="700" text-anchor="middle" fill="#1a5f78">5</text>
-            <text x="660" y="346" font-size="15.5" font-weight="700" fill="#14201a">design-analyst</text>
+            <text x="660" y="346" font-size="15.5" font-weight="700" fill="#14201a">frontend-design</text>
             <text x="780" y="346" font-size="10.5" fill="#5d6f78" font-style="italic">primary · hidden</text>
-            <text x="660" y="368" font-size="11.5" fill="#3b4a41">视觉 / 参考 → PRD + visual_consistency_spec</text>
+            <text x="660" y="368" font-size="11.5" fill="#3b4a41">视觉 / 参考 → frontend template + visual_consistency_contract</text>
             <text x="660" y="383" font-size="11" fill="#5b6962">独占 mirror 抽取工具链；下游消费 SPEC</text>
 
             <rect x="620" y="398" width="400" height="68" rx="9" fill="#ffffff" stroke="#9bb6c4" stroke-width="1.3"/>
@@ -723,7 +723,7 @@
         </div>
 
         <div class="legend">
-          <div class="group"><span class="swatch" style="background:#eef4f8;border-color:#9bb6c4"></span>控制平面 / 分析 (control, intent-analysis, requirements, design-analyst, architect)</div>
+          <div class="group"><span class="swatch" style="background:#eef4f8;border-color:#9bb6c4"></span>控制平面 / 分析 (control, intent-analysis, requirements, frontend-design, architect)</div>
           <div class="group"><span class="swatch" style="background:#edf6f0;border-color:#7faa8a"></span>编排者 (orchestrator)</div>
           <div class="group"><span class="swatch" style="background:#f4f0fa;border-color:#b5afd8"></span>read-only / 验收 (explore, integrity, prosecutor)</div>
           <div class="group"><span class="swatch" style="background:#fbf6e9;border-color:#c2a55e"></span>执行 + 外部执行后端 (build, External Executors)</div>
@@ -739,7 +739,7 @@
           <ol>
             <li><strong>Direct build</strong>（<code>task.kind = "build"</code> / 单文件改动）：<code>control</code> → <code>orchestrator</code> → <code>build</code> → External Executor。不展开 requirements / architect / integrity。</li>
             <li><strong>Standard pipeline</strong>（多文件 / 跨模块）：<code>control</code> → <code>orchestrator</code> → <code>intent-analysis</code> → <code>requirements</code> → <code>architect</code> → per-goal <code>build</code> → External Executor → <code>integrity</code> → verdict 回流 → <code>orchestrator</code> 决策（modify_goal / build / architect / deliver / fail_task）。</li>
-            <li><strong>Visual / reference pipeline</strong>（UI 复刻 / 视觉参考）：<code>control</code> → <code>orchestrator</code> → <code>design-analyst</code>（独占 mirror）→ <code>intent-analysis</code> → <code>requirements</code> → <code>architect</code> → per-goal <code>build</code> → <code>integrity</code> → 回流。</li>
+            <li><strong>Visual / reference pipeline</strong>（UI 复刻 / 视觉参考）：<code>control</code> → <code>orchestrator</code> → <code>frontend-design</code>（独占 mirror）→ <code>intent-analysis</code> → <code>requirements</code> → <code>architect</code> → per-goal <code>build</code> → <code>integrity</code> → 回流。</li>
             <li><strong>Adversarial review</strong>（怀疑 verdict 不够严）：在 integrity pass 之后，<code>orchestrator</code> → <code>prosecutor</code>，产出 counterexample 触发再次 <code>build</code> / <code>architect</code>。</li>
             <li><strong>Investigation</strong>（任意时刻需要事实）：<code>orchestrator</code> → <code>explore</code>（read-only），结果回填 decision_log，不进入实施链。</li>
           </ol>
@@ -1123,7 +1123,7 @@
               <code>packages/opencorvus/src/intent-analysis/</code><br>
               <code>packages/opencorvus/src/requirements/</code><br>
               <code>packages/opencorvus/src/architect/</code><br>
-              <code>packages/opencorvus/src/design-analyst/</code><br>
+              <code>packages/opencorvus/src/frontend-design/</code><br>
               <code>packages/opencorvus/src/integrity/</code><br>
               <code>packages/opencorvus/src/prosecutor/</code><br>
               <code>packages/opencorvus/src/delivery/</code>

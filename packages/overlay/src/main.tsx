@@ -390,7 +390,7 @@ function buildTaskDebugBlob(board: any): string {
     `FROM part p JOIN session_tree st ON p.session_id = st.id`,
     `ORDER BY p.time_created DESC LIMIT 120;`,
     ``,
-    `-- Workflow step transitions (architect / requirements / design_analysis / planner)`,
+    `-- Workflow step transitions (architect / requirements / frontend_design / planner)`,
     `SELECT type, source, emitted_at, run_id, goal_run_id,`,
     `       json_extract(payload, '$.stepID') AS step_id,`,
     `       json_extract(payload, '$.status') AS step_status,`,
@@ -570,7 +570,7 @@ document.addEventListener(
 // The Mission page mode lives next to the default panel. The CSS
 // (`body[data-page-mode="mission"]`) flips visibility between Panel
 // and Mission without unmounting either side, so returning to Panel
-// preserves selected task / conversation state (PRD §6.3).
+// preserves selected task / conversation state (template §6.3).
 const missionMountEl = document.getElementById("solidMissionMount")
 if (missionMountEl) {
   missionMountEl.innerHTML = ""
@@ -1429,10 +1429,19 @@ function ensureAppDialogHost(): void {
   render(() => <AppDialogHost />, appDialogHost)
 }
 
+function ensureConfigDialogHost(): void {
+  if (document.getElementById("configDialogHost")) return
+  const configDialogHost = document.createElement("div")
+  configDialogHost.id = "configDialogHost"
+  document.body.appendChild(configDialogHost)
+  render(() => <ConfigDialogHost />, configDialogHost)
+}
+
 ;(window as any).__overlayInitSettled = false
 void (async () => {
   try {
     ensureAppDialogHost()
+    ensureConfigDialogHost()
     await initApp({
       onSettingsLoaded: () => {
         setSettingsHydrated(true)
@@ -1460,10 +1469,7 @@ void (async () => {
     goalDialogHost.id = "goalDialogHost"
     document.body.appendChild(goalDialogHost)
     render(() => <GoalDialogHost />, goalDialogHost)
-    const configDialogHost = document.createElement("div")
-    configDialogHost.id = "configDialogHost"
-    document.body.appendChild(configDialogHost)
-    render(() => <ConfigDialogHost />, configDialogHost)
+    ensureConfigDialogHost()
     const onboardingHost = document.createElement("div")
     onboardingHost.id = "workspaceOnboardingHost"
     document.body.appendChild(onboardingHost)

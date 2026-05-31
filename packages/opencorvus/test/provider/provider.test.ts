@@ -2491,6 +2491,33 @@ test("config.provider overrides a built-in test provider of the same name", asyn
   })
 })
 
+test("config.provider options override preserves built-in test provider models", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await Bun.write(
+        path.join(dir, "opencorvus.json"),
+        JSON.stringify({
+          $schema: "https://opencorvus.ai/config.json",
+          provider: {
+            glm51: {
+              options: {},
+            },
+          },
+        }),
+      )
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const providers = await Provider.list()
+      expect(providers["glm51"].models["glm51"]).toBeDefined()
+      const glm = await Provider.getModel("glm51", "glm51")
+      expect(glm.api.url).toBe("http://117.50.195.92:8080/gpt-oss-120b/glm5.1/v1")
+    },
+  })
+})
+
 test("disabled_providers can disable a built-in test provider", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {

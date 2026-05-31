@@ -1,5 +1,9 @@
 #!/usr/bin/env bun
 /**
+ * LEGACY benchmark prototype. Do not use as current webpage-clone policy:
+ * active flows produce `web-clone-source/` evidence and require maintainable
+ * project-owned React/Vue/etc. source plus Build/Integrity visual gates.
+ *
  * Mirror tools → build-agent benchmark: clone https://www.baidu.com/.
  *
  * Acts as the "baidu-clone skill" prototype: the mirror tools are NOT

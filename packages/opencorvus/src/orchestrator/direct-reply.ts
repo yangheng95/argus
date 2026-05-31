@@ -5,7 +5,7 @@ const DIRECT_REPLY_AGENT_KIND_VALUES = [
   "assistant",
   "intent-analysis",
   "requirements",
-  "design-analyst",
+  "frontend-design",
   "goal",
   "architect",
   "integrity",

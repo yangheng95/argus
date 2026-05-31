@@ -114,6 +114,40 @@ export namespace SessionProcessor {
       }
     }
 
+    const completeOpenToolPartsWithReflection = async (input: {
+      toolName: string
+      exceptToolCallID: string
+      output: string
+      title: string
+      metadata: Record<string, unknown>
+      attachments?: Message.FilePart[]
+    }): Promise<void> => {
+      const parts = await openToolParts()
+      for (const part of parts) {
+        if (part.callID === input.exceptToolCallID || part.tool !== input.toolName) continue
+        await withToolPartLock(part.callID, async () => {
+          const latest = await priorToolPart(part.callID)
+          if (!latest || (latest.state.status !== "running" && latest.state.status !== "pending")) return
+          await Session.updatePart({
+            ...latest,
+            state: {
+              status: "completed",
+              input: latest.state.input,
+              output: input.output,
+              title: input.title,
+              metadata: input.metadata,
+              attachments: input.attachments,
+              time: {
+                start: latest.state.status === "running" ? latest.state.time.start : Date.now(),
+                end: Date.now(),
+              },
+            },
+          })
+          delete toolcalls[part.callID]
+        })
+      }
+    }
+
     let snapshot: string | undefined
     let blocked = false
     let needsCompaction = false
@@ -447,6 +481,7 @@ export namespace SessionProcessor {
                   // matching tool-call after a recovery), so this is safe to
                   // run unconditionally before the match check.
                   run.resume("tool-call")
+                  const metadata = value.output.metadata
                   await withToolPartLock(value.toolCallId, async () => {
                     const match = toolcalls[value.toolCallId] ?? await priorToolPart(value.toolCallId)
                     if (match && (match.state.status === "running" || match.state.status === "pending")) {
@@ -457,7 +492,7 @@ export namespace SessionProcessor {
                           status: "completed",
                           input: resolvedInput,
                           output: value.output.output,
-                          metadata: value.output.metadata,
+                          metadata,
                           title: value.output.title,
                           time: {
                             start: match.state.status === "running" ? match.state.time.start : Date.now(),
@@ -469,6 +504,18 @@ export namespace SessionProcessor {
                       delete toolcalls[value.toolCallId]
                     }
                   })
+                  if (metadata?.preTerminalReflection === true) {
+                    await completeOpenToolPartsWithReflection({
+                      toolName: value.toolName,
+                      exceptToolCallID: value.toolCallId,
+                      output: value.output.output,
+                      title: value.output.title,
+                      metadata,
+                      attachments: value.output.attachments,
+                    })
+                    input.assistantMessage.finish = "tool-calls"
+                    preTerminalInterrupted = true
+                  }
                   break
                 }
 

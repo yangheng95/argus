@@ -19,6 +19,14 @@ function parseNonGoals(raw: RequirementRow["non_goals"]): string[] {
   return raw.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
 }
 
+function parseEvidenceRefs(raw: RequirementRow["evidence_refs"]): string[] {
+  if (raw == null) return []
+  if (!Array.isArray(raw)) {
+    throw new Error("engine_requirement.evidence_refs must be a string array when present")
+  }
+  return raw.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+}
+
 export function parsedRequirementFromRow(row: RequirementRow): ParsedRequirement {
   const meta = row.metadata && typeof row.metadata === "object" ? (row.metadata as Record<string, unknown>) : {}
   const sourceID = typeof meta.source_requirement_id === "string" ? meta.source_requirement_id : row.id
@@ -28,5 +36,6 @@ export function parsedRequirementFromRow(row: RequirementRow): ParsedRequirement
     description: row.description,
     acceptance: parseAcceptance(row.acceptance).join("; "),
     non_goals: parseNonGoals(row.non_goals).join("; "),
+    evidence_refs: parseEvidenceRefs(row.evidence_refs),
   }
 }

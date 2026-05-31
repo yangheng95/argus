@@ -147,6 +147,28 @@ test("coding override and build append catalog entries stay distinct", async () 
   })
 })
 
+test("compaction prompt is host-owned and not configurable", async () => {
+  expect(AgentRoleContract.get("compaction").promptEditable).toBe(false)
+  expect(AgentRoleContract.promptMode("compaction")).toBe("none")
+
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const entries = await PromptCatalog.list()
+      expect(entries.find((entry) => entry.scope === "agent" && entry.key === "compaction")).toBeUndefined()
+    },
+  })
+
+  expect(() =>
+    Config.Info.parse({
+      agent: {
+        compaction: { prompt: "replace host handoff" },
+      },
+    }),
+  ).toThrow("prompt configuration is not editable")
+})
+
 test("public docs and live prompt do not describe deleted planner or requirements-owned goals", async () => {
   const root = process.cwd()
   const files = [

@@ -3,9 +3,9 @@
  * + the shared scaffold-helpers emitters.
  *
  * Image2code's analogue of `webpage_analyze`. Reads `image-analysis.json`,
- * synthesises a `ProjectScaffold`, and writes the same mirror facts and
- * scaffold artifacts the URL flow's `webpage_analyze` writes. Design-analysis
- * reads those artifacts and persists one downstream PRD/SPEC contract.
+ * synthesises a `ProjectScaffold`, and writes prompt-readable mirror facts.
+ * Any generated-view-source files are legacy visual evidence only; Build must
+ * write maintainable project source from the frontend design/replica contract.
  */
 
 import fs from "node:fs/promises"
@@ -29,9 +29,9 @@ export const WebpageImageAnalyzeTool = Tool.define("webpage_image_analyze", {
 Reads \`<outputDir>/image-analysis.json\` (from webpage_image_extract). Writes the same mirror facts and scaffold artifacts the URL analyze step writes:
   - visual-surface-scaffold.json semantic ProjectScaffold
   - shared-context.md       compact token + surface summary for prompts
-  - generated-view-source/* slot-based View source artifacts
+  - generated-view-source/* legacy slot-based visual evidence only, not project source
 
-Returns a summary: surface list and token counts. Once these artifacts exist, use \`shared-context.md\` and \`page-ir.xml\` for PRD/SPEC synthesis; bounded targeted scaffold reads are only for specific gaps.
+Returns a summary: surface list and token counts. Once these artifacts exist, use \`shared-context.md\` and \`page-ir.xml\` for frontend design/replica frontend template synthesis; bounded targeted scaffold reads are only for specific gaps.
 
 This tool is artifact-dependent: do NOT call it until \`image-analysis.json\` exists in the output directory. Never batch it with the image extraction call that creates that file.
 
@@ -99,9 +99,9 @@ Use this only when scaffold artifacts are missing. Do not rerun it once \`shared
         `**Artifacts written:**`,
         `- \`${scaffoldPath}\` — semantic visual surface ProjectScaffold`,
         `- \`${contextPath}\` — compact prompt-ready summary`,
-        `- Generated View artifacts: ${viewSourcePaths.length}`,
+        `- Legacy generated-view-source evidence artifacts: ${viewSourcePaths.length}`,
         "",
-        "Image scaffold artifacts written. Do not rerun analysis for this evidence package unless the source extraction changed. Use compact artifacts for PRD/SPEC synthesis; generated View artifacts are the visual framework handoff, not the business implementation.",
+        "Image scaffold artifacts written. Do not rerun analysis for this evidence package unless the source extraction changed. Use compact artifacts for frontend design/replica frontend template synthesis; generated View artifacts are visual evidence, not business implementation source.",
       ].join("\n"),
       metadata: {
         scaffoldPath,

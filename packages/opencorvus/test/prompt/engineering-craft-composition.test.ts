@@ -71,7 +71,7 @@ describe("engineering-craft shared fragment", () => {
     expect(buildAgentSrc).toContain(
       'import ENGINEERING_CRAFT from "@/prompt/core/engineering-craft.txt"',
     )
-    expect(buildAgentSrc).toMatch(/core:\s*composeBuildCore\(autoIteration\)/)
+    expect(buildAgentSrc).toMatch(/core:\s*withFactCheckRegistration\(composeBuildCore\(autoIteration\)\)/)
   })
 
   test("read-only Integrity team reviewer never carries the craft fragment", () => {

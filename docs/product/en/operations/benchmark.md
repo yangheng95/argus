@@ -26,7 +26,7 @@ bun run script/benchmark/overlay-web-benchmark.ts \
 
 | flag | purpose |
 |---|---|
-| `--request-file=PATH` | task description file (PRD) |
+| `--request-file=PATH` | task description file (template) |
 | `--request-attachment=PATH` | attach a file instead of using `--request-file`; the two are mutually exclusive |
 | `--reference-images=PATH` | visual comparison reference image |
 | `--figma-url=URL` | Figma design URL |

@@ -20,7 +20,7 @@
  * 本轮只实装计算 API，不修 goal 验收入口（那属于 check registry 重构，独立工单）。
  */
 import fs from "node:fs/promises"
-import { CaptureManifest, type CaptureManifestType, type CaptureBboxType } from "@/design-analyst/capture-gate"
+import { CaptureManifest, type CaptureManifestType, type CaptureBboxType } from "@/frontend-design/capture-gate"
 
 /** 从 manifest.json 路径加载 + zod 校验；格式错直接抛，禁 fallback。 */
 export async function loadContentAnchors(manifestPath: string): Promise<CaptureManifestType> {
@@ -77,7 +77,7 @@ export function computePaletteJaccard(
  * layout 重叠率：对 manifest.layout 里的每个命名区域（chart/sidebar/...），
  * 看 rendered DOM 里同名区域的 bbox 是否与 reference bbox IoU ≥ threshold。
  *
- * rendered bbox 由调用方从页面 `getBoundingClientRect` 抓好（puppeteer 注入）；
+ * rendered bbox 由调用方从页面 `getBoundingClientRect` 抓好（browser 注入）；
  * 本模块不自己跑浏览器——保持单一职责（rule 22）。
  *
  * 返回 per-region IoU + 总平均；缺失的 region 记 IoU=0 并计入 denominator，

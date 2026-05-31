@@ -885,3 +885,41 @@ test("session.updated invalidates session config resources", () => {
   })).toBe(true);
   expect(sessionConfigRefreshToken()).toBe(beforeSession + 1);
 });
+
+test("session.diff SSE is consumed without card or board refresh", () => {
+  resetWriter();
+  setBoardStore("selectedTaskID", "tsk_session_diff");
+  setBoardStore("selectedSource", { kind: "task", id: "tsk_session_diff" });
+  setBoardStore("board", {
+    snapshotVersion: "board:session-diff",
+    task: {
+      id: "tsk_session_diff",
+      sessionID: "ses_session_diff",
+      status: "active",
+      request: "session diff",
+      time: { created: 1_776_000_100_000 },
+      attachments: [],
+    },
+  });
+  const beforeOrder = [...cardTreeStore.order];
+  const beforeCards = Object.keys(cardTreeStore.cards);
+
+  expect(routeSSEEvent({
+    event_id: "ephemeral-session-diff",
+    session_id: "ses_session_diff",
+    type: "session.diff",
+    emittedAt: 1_780_163_309_731,
+    timestamp: 1_780_163_309_731,
+    sequence: 0,
+    summary: "session.diff",
+    payload: {
+      sessionID: "ses_session_diff",
+      diff: [],
+      summary: "session.diff",
+    },
+  })).toBe(true);
+
+  expect(cardTreeStore.order).toEqual(beforeOrder);
+  expect(Object.keys(cardTreeStore.cards)).toEqual(beforeCards);
+  expect(boardStore.boardSyncPending).toBe(false);
+});

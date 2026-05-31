@@ -44,6 +44,6 @@ test("bubbleAlign uses the normalized effective role instead of kind or stage he
     id: "normalized-stage",
     kind: "agent",
     title: "Design",
-    stage: "design_analysis",
+    stage: "frontend_design",
   }))).toBe("left")
 })

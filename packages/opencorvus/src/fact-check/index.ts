@@ -12,26 +12,15 @@
  *     module is the agent runtime.
  */
 
-import { tool } from "ai"
-import z from "zod"
 import { Log } from "@/util/log"
 import { runAgentSession } from "@/agent/runner"
-import { createAgentContextTools } from "@/agent/context-tools"
 import { filterAgentTools } from "@/agent/filter-tools"
-import { exaMcpCall } from "@/tool/exa-mcp"
-import TurndownService from "turndown"
-import { abortAfterAny } from "@/util/abort"
+import { createReadonlyRetrievalTools } from "@/agent/retrieval-tools"
 import FACT_CHECK_CORE from "@/prompt/core/fact-check-core.txt"
 import { createFactCheckOutputTools, type FactCheckCollector } from "./tools"
 import type { FactCheckItem, FactCheckReport } from "./schema"
 
 const log = Log.create({ service: "fact-check-agent" })
-
-const TURNDOWN = new TurndownService({ headingStyle: "atx" })
-
-const WEBFETCH_MAX_BYTES = 5 * 1024 * 1024
-const WEBFETCH_DEFAULT_TIMEOUT_MS = 30 * 1000
-const WEBFETCH_MAX_TIMEOUT_MS = 120 * 1000
 
 /** Maximum number of characters of target-message text injected into the
  *  fact-check user prompt.  Bounded because the message can be large
@@ -45,106 +34,6 @@ const WEBFETCH_MAX_TIMEOUT_MS = 120 * 1000
  *  namespace, producing TS2552 against the local `targetMessageText`. */
 const TARGET_MESSAGE_TEXT_CAP = 8000
 
-/**
- * fact-check uses a read-only retrieval surface. The codebase / memory /
- * websearch tools come from createAgentContextTools (single source); we
- * add webfetch + external_code_search inline as AI SDK tool wrappers
- * over the same exaMcpCall + fetch pipeline the global registry uses,
- * so the agent runtime stays self-contained without re-routing through
- * Tool.define adapters.
- */
-function buildFactCheckRetrievalTools() {
-  return {
-    webfetch: tool({
-      description:
-        "Fetch a URL and return its content as markdown. Use for direct verification of API " +
-        "docs, changelogs, GitHub readmes, RFCs, etc. Returns up to ~5MB.",
-      inputSchema: z.object({
-        url: z.string().describe("HTTP(S) URL to fetch"),
-        format: z.enum(["text", "markdown", "html"]).default("markdown"),
-        timeout: z.number().optional().describe("Timeout in seconds (max 120)"),
-      }),
-      execute: async ({ url, format, timeout }, options) => {
-        if (!url.startsWith("http://") && !url.startsWith("https://")) {
-          throw new Error("URL must start with http:// or https://")
-        }
-        const timeoutMs = Math.min(
-          (timeout ?? WEBFETCH_DEFAULT_TIMEOUT_MS / 1000) * 1000,
-          WEBFETCH_MAX_TIMEOUT_MS,
-        )
-        const extraSignals = options?.abortSignal ? [options.abortSignal] : []
-        const { signal, clearTimeout: clearTo } = abortAfterAny(timeoutMs, ...extraSignals)
-        try {
-          const resp = await fetch(url, {
-            signal,
-            headers: {
-              "User-Agent":
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0 Safari/537.36",
-              Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            },
-          })
-          if (!resp.ok) {
-            throw new Error(`webfetch ${url} → HTTP ${resp.status}`)
-          }
-          const reader = resp.body?.getReader()
-          if (!reader) throw new Error(`webfetch ${url} → empty body`)
-          const chunks: Uint8Array[] = []
-          let received = 0
-          while (true) {
-            const { done, value } = await reader.read()
-            if (done) break
-            if (!value) continue
-            received += value.byteLength
-            if (received > WEBFETCH_MAX_BYTES) {
-              try {
-                reader.cancel()
-              } catch {}
-              throw new Error(`webfetch ${url} → response exceeds ${WEBFETCH_MAX_BYTES} bytes`)
-            }
-            chunks.push(value)
-          }
-          const buf = new Uint8Array(received)
-          let offset = 0
-          for (const c of chunks) {
-            buf.set(c, offset)
-            offset += c.byteLength
-          }
-          const decoded = new TextDecoder("utf-8").decode(buf)
-          if (format === "html") return decoded
-          if (format === "text") {
-            return decoded.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim()
-          }
-          return TURNDOWN.turndown(decoded)
-        } finally {
-          clearTo()
-        }
-      },
-    }),
-    external_code_search: tool({
-      description:
-        "Search external libraries / SDKs / framework docs via Exa code search. Returns code " +
-        "snippets and explanations to verify factual claims about third-party APIs (React, " +
-        "pandas, Next.js, etc.).",
-      inputSchema: z.object({
-        query: z.string().describe("Search query — name the library + concept clearly"),
-        tokensNum: z.number().min(1000).max(50000).default(5000),
-      }),
-      execute: async ({ query, tokensNum }, options) => {
-        const text = await exaMcpCall({
-          name: "get_code_context_exa",
-          arguments: { query, tokensNum },
-          timeoutMs: 30_000,
-          signal: options?.abortSignal,
-          label: "fact-check external code search",
-        })
-        return (
-          text ??
-          "No code snippets or documentation found. Try a different query — be more specific about the library or programming concept."
-        )
-      },
-    }),
-  }
-}
 
 function renderFactCheckItems(items: FactCheckItem[]): string {
   if (items.length === 0) {
@@ -291,11 +180,10 @@ export namespace FactCheckAgent {
       items: input.factCheckItems.length,
     })
 
-    const contextTools = await filterAgentTools(createAgentContextTools(), "fact-check", {
+    const retrievalTools = await filterAgentTools(createReadonlyRetrievalTools(undefined, { websearch: false }), "fact-check", {
       taskID: input.taskID,
       sessionID: input.orchestratorSessionID,
     })
-    const retrievalTools = buildFactCheckRetrievalTools()
     const outputToolKit = createFactCheckOutputTools()
     // Load target message text up-front so the prompt builder has it.
     const targetMessageText = await loadTargetMessageText(input.targetSessionID, input.targetMessageID)
@@ -316,7 +204,7 @@ export namespace FactCheckAgent {
             }
           : undefined,
         toolKit: {
-          tools: { ...contextTools, ...retrievalTools, ...outputToolKit.tools },
+          tools: { ...retrievalTools, ...outputToolKit.tools },
           getCollector: outputToolKit.getCollector,
           buildReport: outputToolKit.buildReport,
         },

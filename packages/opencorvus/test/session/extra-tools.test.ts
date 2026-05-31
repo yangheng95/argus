@@ -8,6 +8,7 @@ import z from "zod"
 // destructure sees an empty stub.
 import { SessionPrompt } from "../../src/session/prompt"
 import { SessionLoop } from "../../src/session/loop"
+import { Session } from "../../src/session"
 import { SessionStatus } from "../../src/session/status"
 import { withStreamActivity } from "../../src/util/stream-activity"
 import { BuildResultSchema } from "../../src/build/types"
@@ -15,6 +16,7 @@ import { Instance } from "../../src/project/instance"
 import { AttachmentStore } from "../../src/storage/attachment-store"
 import { tmpdir } from "../fixture/fixture"
 import { Agent } from "../../src/agent/agent"
+import { WorkerTurnDescriptor } from "../../src/agent/worker-turn-descriptor"
 
 const dummyTool = () =>
   tool({
@@ -127,6 +129,23 @@ describe("SessionLoop session runtime contract", () => {
     ).toThrow("missing")
   })
 
+  test("validation rejects runtime-required contracts without worker descriptors", () => {
+    const sessionID = `ses_runtime_${Date.now()}_missing_descriptor`
+    SessionLoop.setSessionRuntimeContract(sessionID, runtimeContract(sessionID, {
+      tools: { persistent: dummyTool() },
+    }))
+    expect(() =>
+      SessionLoop.validateSessionRuntimeContractForContinuation({
+        sessionID,
+        sessionKind: "build",
+        expectedAgentKind: "build",
+        requireRuntimeContract: true,
+        requireWorkerTurnDescriptor: true,
+      }),
+    ).toThrow("worker descriptor missing")
+    SessionLoop.clearSessionRuntimeContract(sessionID)
+  })
+
   test("validation rejects stale agent, goal, goal_run, attempt, and satisfied terminal collector", () => {
     const sessionID = `ses_runtime_${Date.now()}_stale`
     SessionLoop.setSessionRuntimeContract(sessionID, runtimeContract(sessionID, {
@@ -176,6 +195,63 @@ describe("SessionLoop session runtime contract", () => {
       }),
     ).toThrow("already satisfied")
     SessionLoop.clearSessionRuntimeContract(sessionID)
+  })
+
+  test("validation binds continuation to the persisted worker turn descriptor", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ title: "descriptor validation", kind: "build" })
+        const sessionID = session.id
+        const descriptor = WorkerTurnDescriptor.create({
+          sessionID,
+          payload: {
+            agent: "build",
+            roleContractID: "build",
+            model: { providerID: "test", modelID: "model-api" },
+            prompt: { systemMode: "complete", rawSystemPrompt: false },
+            tools: { enabled: ["persistent"], terminal: "report_build_result" },
+            output: { format: "text", resultMode: "reply" },
+            workflow: {
+              goalID: "gol_runtime_test",
+              goalRunID: "grun_runtime_test",
+              attemptID: "attempt_runtime_test",
+              sessionKind: "build",
+            },
+          },
+        })
+        SessionLoop.setSessionRuntimeContract(sessionID, runtimeContract(sessionID, {
+          identity: {
+            workerTurnDescriptorID: descriptor.id,
+            workerTurnDescriptorHash: descriptor.hash,
+          },
+          tools: { persistent: dummyTool() },
+        }))
+        expect(
+          SessionLoop.validateSessionRuntimeContractForContinuation({
+            sessionID,
+            sessionKind: "build",
+            expectedAgentKind: "build",
+            expectedGoalID: "gol_runtime_test",
+            expectedGoalRunID: "grun_runtime_test",
+            expectedAttemptID: "attempt_runtime_test",
+            expectedWorkerTurnDescriptor: { id: descriptor.id, hash: descriptor.hash },
+            expectedModel: { providerID: "test", modelID: "model-api" },
+            expectedResultMode: "reply",
+          })?.identity.workerTurnDescriptorID,
+        ).toBe(descriptor.id)
+        expect(() =>
+          SessionLoop.validateSessionRuntimeContractForContinuation({
+            sessionID,
+            sessionKind: "build",
+            expectedAgentKind: "build",
+            expectedWorkerTurnDescriptor: { id: descriptor.id, hash: "bad-hash" },
+          }),
+        ).toThrow("descriptor hash mismatch")
+        SessionLoop.clearSessionRuntimeContract(sessionID)
+      },
+    })
   })
 })
 
@@ -241,6 +317,29 @@ describe("extras execute-return normalisation (integration via resolveTools)", (
     expect(SessionLoop.usesExactRuntimeContractTools("orchestrator", contract)).toBe(true)
     expect(SessionLoop.usesExactRuntimeContractTools("orchestrator", undefined)).toBe(false)
     expect(SessionLoop.usesExactRuntimeContractTools("build", contract)).toBe(false)
+  })
+
+  test("orchestrator-wake runtime contract does not require a worker descriptor", () => {
+    const sessionID = `ses_runtime_${Date.now()}_orchestrator_descriptor_exempt`
+    SessionLoop.setSessionRuntimeContract(sessionID, runtimeContract(sessionID, {
+      identity: {
+        sessionID,
+        agentKind: "orchestrator",
+        contractKind: "orchestrator-wake",
+      },
+      tools: { requirements: dummyTool() },
+    }))
+    expect(
+      SessionLoop.validateSessionRuntimeContractForContinuation({
+        sessionID,
+        sessionKind: "orchestrator",
+        expectedAgentKind: "orchestrator",
+        expectedContractKind: "orchestrator-wake",
+        requireRuntimeContract: true,
+        requireWorkerTurnDescriptor: true,
+      })?.identity.contractKind,
+    ).toBe("orchestrator-wake")
+    SessionLoop.clearSessionRuntimeContract(sessionID)
   })
 
   test("tool switches remove disabled tools and support all-tools disable", () => {

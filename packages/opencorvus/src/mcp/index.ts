@@ -19,6 +19,7 @@ import { withTimeout } from "@/util/timeout"
 import { McpOAuthProvider } from "./oauth-provider"
 import { McpOAuthCallback } from "./oauth-callback"
 import { McpAuth } from "./auth"
+import { BrowserMCPBuiltin } from "./browser/builtin"
 import { BusEvent } from "../bus/bus-event"
 import { Bus } from "@/bus"
 import { TuiEvent } from "@/cli/cmd/tui/event"
@@ -160,6 +161,18 @@ export namespace MCP {
   function isMcpConfigured(entry: McpEntry): entry is Config.Mcp {
     return typeof entry === "object" && entry !== null && "type" in entry
   }
+  function isMcpDisabledOverride(entry: McpEntry) {
+    return (
+      typeof entry === "object" &&
+      entry !== null &&
+      !("type" in entry) &&
+      (entry as { enabled?: unknown }).enabled === false
+    )
+  }
+  function builtinConfigForDisabledOverride(name: string, entry: McpEntry): Config.Mcp | undefined {
+    if (!isMcpDisabledOverride(entry)) return
+    if (name === BrowserMCPBuiltin.ServerName) return BrowserMCPBuiltin.localConfig()
+  }
 
   const state = lazyInstanceState(
     async () => {
@@ -170,6 +183,10 @@ export namespace MCP {
 
       await Promise.all(
         entries(config).map(async ([key, mcp]) => {
+          if (isMcpDisabledOverride(mcp)) {
+            status[key] = { status: "disabled" }
+            return
+          }
           if (!isMcpConfigured(mcp)) {
             log.error("Ignoring MCP config entry without type", { key })
             return
@@ -420,8 +437,11 @@ export namespace MCP {
           ...mcp.environment,
         },
       })
+      let stderrText = ""
       transport.stderr?.on("data", (chunk: Buffer) => {
-        log.info(`mcp stderr: ${chunk.toString()}`, { key })
+        const text = chunk.toString()
+        stderrText = (stderrText + text).slice(-4_000)
+        log.info(`mcp stderr: ${text}`, { key })
       })
 
       const connectTimeout = mcp.timeout ?? DEFAULT_TIMEOUT
@@ -442,10 +462,13 @@ export namespace MCP {
           command: mcp.command,
           cwd,
           error: error instanceof Error ? error.message : String(error),
+          stderr: stderrText,
         })
+        const message = error instanceof Error ? error.message : String(error)
+        const detail = stderrText.trim()
         status = {
           status: "failed" as const,
-          error: error instanceof Error ? error.message : String(error),
+          error: detail ? `${message}\n${detail}` : message,
         }
       }
     }
@@ -502,6 +525,10 @@ export namespace MCP {
 
     // Include all configured MCPs from config, not just connected ones
     for (const [key, mcp] of entries(config)) {
+      if (isMcpDisabledOverride(mcp)) {
+        result[key] = { status: "disabled" }
+        continue
+      }
       if (!isMcpConfigured(mcp)) continue
       result[key] = s.status[key] ?? { status: "disabled" }
     }
@@ -522,12 +549,13 @@ export namespace MCP {
       return
     }
 
-    if (!isMcpConfigured(mcp)) {
+    const mcpToConnect = isMcpConfigured(mcp) ? mcp : builtinConfigForDisabledOverride(name, mcp)
+    if (!mcpToConnect) {
       log.error("Ignoring MCP connect request for config without type", { name })
       return
     }
 
-    const result = await create(name, { ...mcp, enabled: true })
+    const result = await create(name, { ...mcpToConnect, enabled: true })
 
     if (!result) {
       const s = await state()

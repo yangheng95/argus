@@ -13,7 +13,7 @@
  * resolution, child-session creation, system-prompt composition, abort /
  * stream-error handling. Agent-specific code is the user prompt builder
  * (with prefetched repo context + clarification transcript + design
- * PRD/SPEC + optional visual anchors + multimodal attachments) and the output
+ * frontend template + optional visual anchors + multimodal attachments) and the output
  * tool kit.
  */
 import { runAgentSession } from "@/agent/runner"
@@ -24,8 +24,9 @@ import { Log } from "@/util/log"
 import { clarificationTranscriptSection, operatorNotesSection } from "@/engine"
 import { AttachmentStore } from "@/storage/attachment-store"
 import { renderUserRequestSection } from "@/intent/request-prompt"
-import type { VisualSpec } from "@/design-analyst/types"
-import { renderVisualContractPromptSection } from "@/design-analyst/prompt-section"
+import type { VisualSpec } from "@/frontend-design/types"
+import { renderVisualContractPromptSection } from "@/frontend-design/prompt-section"
+import { renderResearchBriefPromptSection, researchEvidenceIDsForTask } from "@/research/prompt-section"
 import type {
   ParsedRequirement,
   RequirementsDecision,
@@ -64,10 +65,10 @@ export namespace RequirementsAgent {
     request: string
     /** Base64 image attachments — injected as vision content alongside the request text. */
     attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>
-    /** Advisory visual contract produced by design_analysis. */
+    /** Advisory visual contract produced by frontend_design. */
     designSpecs?: VisualSpec[]
-    /** Authoritative PRD/SPEC entries produced by design_analysis. */
-    designAnalysis?: string
+    /** Authoritative frontend template entries produced by frontend_design. */
+    frontendDesign?: string
     taskID?: string
     parentSessionID?: string
     model?: { providerID: string; modelID: string }
@@ -94,7 +95,13 @@ export namespace RequirementsAgent {
       taskID: input.taskID,
       sessionID: input.parentSessionID,
     })
-    const outputToolKit = createRequirementsOutputTools({ decisionLog: input.decisionLog })
+    const outputToolKit = createRequirementsOutputTools({
+      decisionLog: input.decisionLog,
+      allowedResearchEvidenceIDs: researchEvidenceIDsForTask({
+        taskID: input.taskID,
+        request: input.request,
+      }),
+    })
 
     const context = prefetchContext(input.title, input.request)
 
@@ -179,6 +186,7 @@ function collectorToOutput(
       description: r.description,
       acceptance: r.acceptance,
       non_goals: r.non_goals,
+      evidence_refs: r.evidence_refs,
     })),
     decisions: collector.decisions.map((d) => ({
       key: d.key,
@@ -206,7 +214,7 @@ function buildUserPrompt(
     title: string
     request: string
     designSpecs?: VisualSpec[]
-    designAnalysis?: string
+    frontendDesign?: string
     taskID?: string
   },
   prefetched: string,
@@ -238,9 +246,15 @@ function buildUserPrompt(
     sections.push(renderVisualContractPromptSection({ specs: input.designSpecs }))
   }
 
-  if (input.designAnalysis && input.designAnalysis.trim().length > 0) {
-    sections.push(input.designAnalysis)
+  if (input.frontendDesign && input.frontendDesign.trim().length > 0) {
+    sections.push(input.frontendDesign)
   }
+
+  const researchBrief = renderResearchBriefPromptSection({
+    taskID: input.taskID,
+    request: input.request,
+  })
+  if (researchBrief) sections.push(researchBrief)
 
   if (prefetched?.trim()) {
     sections.push(prefetched)

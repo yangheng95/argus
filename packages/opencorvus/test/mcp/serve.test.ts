@@ -2,6 +2,7 @@ import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
 import { Instance } from "../../src/project/instance"
 import { MCP } from "../../src/mcp"
 import { MCPServe } from "../../src/mcp/serve"
+import { BrowserMCPBuiltin } from "../../src/mcp/browser/builtin"
 import { tmpdir } from "../fixture/fixture"
 
 describe("mcp.serve", () => {
@@ -45,6 +46,24 @@ describe("mcp.serve", () => {
     expect("env" in config).toBe(false)
   })
 
+  test("builds a Bun source stdio command for the built-in browser MCP", () => {
+    const command = BrowserMCPBuiltin.command({
+      execPath: "C:\\tools\\bun.exe",
+      moduleDir: "D:\\repo\\packages\\opencorvus\\src\\mcp\\browser",
+    })
+    expect(command[0]).toBe("C:\\tools\\bun.exe")
+    expect(command[1]).toEndWith("node-stdio.ts")
+  })
+
+  test("builds a packaged command for the built-in browser MCP", () => {
+    const command = BrowserMCPBuiltin.command({
+      execPath: "C:\\Users\\me\\AppData\\Local\\OpenCorvus\\opencorvus.exe",
+      moduleDir: "B:\\~BUN\\root\\src\\mcp\\browser",
+    })
+    expect(command).toEqual(["C:\\Users\\me\\AppData\\Local\\OpenCorvus\\opencorvus.exe", "mcp", "browser"])
+    expect(command.join(" ")).not.toContain("B:\\~BUN")
+  })
+
   test("exposes the executor MCP toolset", async () => {
     expect(MCPServe.executorToolNames().sort()).toEqual(["skill", "memory", "task_report"].sort())
   })
@@ -80,7 +99,7 @@ describe("mcp.serve", () => {
     expect(prompt).toContain("task_report => mcp__opencorvus__task_report")
     expect(prompt).not.toContain("webpage_extract =>")
     expect(prompt).not.toContain("figma_extract =>")
-    expect(prompt).toContain("Mirror extraction artifacts are produced by the upstream design_analysis stage")
+    expect(prompt).toContain("Mirror extraction artifacts are produced by the upstream frontend_design stage")
   })
 
   test("includes proxied external MCP tools in definitions", async () => {
@@ -107,6 +126,52 @@ describe("mcp.serve", () => {
         const match = defs.find((item) => item.name === "docs_lookup")
         expect(match?.metadata?.proxied_client).toBe("docs")
         expect(match?.metadata?.proxied_tool).toBe("lookup")
+      },
+    })
+  })
+
+  test("filters webpage clone and mirror tools from executor proxied definitions", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const proxiedTools = [
+      {
+        key: "docs_lookup",
+        client: "docs",
+        name: "lookup",
+        description: "Lookup docs",
+        inputSchema: { type: "object", properties: { query: { type: "string" } } },
+      },
+      {
+        key: "opencorvus_webpage_extract",
+        client: "opencorvus",
+        name: "webpage_extract",
+        description: "Extract webpage",
+        inputSchema: { type: "object", properties: {} },
+      },
+      {
+        key: "opencorvus_web_clone_prepare_context",
+        client: "opencorvus",
+        name: "web_clone_prepare_context",
+        description: "Prepare clone context",
+        inputSchema: { type: "object", properties: {} },
+      },
+      {
+        key: "opencorvus_web_clone_generate_source_project",
+        client: "opencorvus",
+        name: "web_clone_generate_source_project",
+        description: "Generate clone source project",
+        inputSchema: { type: "object", properties: {} },
+      },
+    ]
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const defs = await MCPServe.toolDefinitions("executor", { includeRuntime: false, proxiedTools })
+        const names = defs.map((item) => item.name)
+        expect(names).toContain("docs_lookup")
+        expect(names).not.toContain("opencorvus_webpage_extract")
+        expect(names).not.toContain("opencorvus_web_clone_prepare_context")
+        expect(names).not.toContain("opencorvus_web_clone_generate_source_project")
       },
     })
   })

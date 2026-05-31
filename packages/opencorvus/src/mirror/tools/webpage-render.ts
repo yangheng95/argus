@@ -17,7 +17,7 @@ import { resolveMirrorOutputDir, DEFAULT_MIRROR_SUBDIR } from "./output-dir"
 export const WebpageRenderTool = Tool.define("webpage_render", {
   description: `Render an explicit webpage URL in a visible browser and write a PNG screenshot.
 
-Returns the screenshot path + render time. Use as step 5 of the webpage-generate workflow. Follow with \`webpage_evaluate\` for the 85/100 numeric threshold and \`webpage_vision_judge\` for qualitative differences.`,
+Returns the screenshot path + render time. This is a Build/Integrity runtime evidence tool for already-running apps; frontend_design should not use it for frontend template drafting. For webpage replicas, compare the rendered target against the reference viewport matrix and the 96/100 visual-fidelity threshold required by the active handoff.`,
   parameters: z.object({
     url: z
       .string()

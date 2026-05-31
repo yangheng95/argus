@@ -57,10 +57,18 @@ import { updateTask } from "./state"
 import { isTaskTerminal } from "./task-status"
 import { syncGoalStatus } from "./goal-status"
 import { createDecisionLog } from "@/decision-log"
+import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import {
   ArchitectContractGraphSchema,
   type ArchitectContractGraph,
 } from "@/architect/contract-graph"
+import type { WorkloadBrief } from "@/goal-workload-analyst/types"
+import {
+  ResearchBriefSchema,
+  validateResearchBriefIntegrity,
+  validateResearchBriefTaskBoundary,
+  type ResearchBrief,
+} from "@/research/schema"
 
 const log = Log.create({ service: "engine-transition" })
 
@@ -424,6 +432,96 @@ export function persistArchitectContractGraph(
     })
     .run()
   return id
+}
+
+/**
+ * Persist a Goal Workload Analyst run as a single task-level `goal_workload`
+ * artifact (latest-wins; mirrors `persistArchitectContractGraph`). The payload
+ * is a `GoalWorkloadResult` whose `spec_snapshot_id` binds the briefs to the
+ * architect snapshot they were computed against — readers (architect re-run
+ * input / build injection / describe) only accept briefs matching the active
+ * snapshot, so a newer architect snapshot auto-stales old briefs without a
+ * delete (spec 2026-05-29-goal-workload-analyst §5).
+ */
+export function persistGoalWorkload(
+  db: Database.TxOrDb,
+  input: {
+    taskID: string
+    specSnapshotID: string
+    briefs: WorkloadBrief[]
+    summary: string
+    now: number
+  },
+) {
+  const id = Identifier.ascending("artifact")
+  db.insert(EngineArtifactTable)
+    .values({
+      id,
+      task_id: input.taskID,
+      run_id: null,
+      goal_run_id: null,
+      delivery_id: null,
+      kind: "goal_workload",
+      label: "active",
+      payload: {
+        briefs: input.briefs,
+        spec_snapshot_id: input.specSnapshotID,
+        summary: input.summary,
+      },
+      time_created: input.now,
+      time_updated: input.now,
+    })
+    .run()
+  return id
+}
+
+export function persistResearchBrief(
+  db: Database.TxOrDb,
+  input: {
+    taskID: string
+    brief: ResearchBrief
+    now: number
+  },
+) {
+  const brief = ResearchBriefSchema.parse(input.brief)
+  const integrityError = validateResearchBriefIntegrity(brief)
+  if (integrityError) {
+    throw new Error(`persistResearchBrief: ${integrityError}`)
+  }
+  const boundaryError = validateResearchBriefTaskBoundary(brief, input.taskID)
+  if (boundaryError) {
+    throw new Error(`persistResearchBrief: ${boundaryError}`)
+  }
+  const id = Identifier.ascending("artifact")
+  db.insert(EngineArtifactTable)
+    .values({
+      id,
+      task_id: input.taskID,
+      run_id: null,
+      goal_run_id: null,
+      delivery_id: null,
+      kind: "research_brief",
+      label: "active",
+      payload: brief,
+      time_created: input.now,
+      time_updated: input.now,
+    })
+    .run()
+  return id
+}
+
+export function persistTaskResearchBrief(input: {
+  taskID: string
+  brief: ResearchBrief
+  now?: number
+}) {
+  return Database.use((db) =>
+    persistResearchBrief(db, {
+      taskID: input.taskID,
+      brief: input.brief,
+      now: input.now ?? Date.now(),
+    }),
+  )
 }
 
 export function persistTaskArchitectContractGraph(input: {
@@ -1766,20 +1864,9 @@ export function finalizeBuildAttempt(input: {
   if (input.workspaceBranch !== undefined) patch.workspace_branch = input.workspaceBranch
   if (input.workspaceBaseRef !== undefined) patch.workspace_base_ref = input.workspaceBaseRef
   updateGoalRun(input.goalRunID, patch)
-  const deliveryDiffs =
-    Array.isArray(input.diffs) && input.diffs.length > 0
-      ? input.diffs
-      : (input.fileChanges ?? []).map((item) => ({
-          file: item.path,
-          before: "",
-          after: "",
-          additions: 0,
-          deletions: 0,
-          status: "modified",
-          summary: item.summary,
-          reason: item.reason,
-          source: "build_report_files_changed",
-        }))
+  const deliveryDiffs = (Array.isArray(input.diffs) ? input.diffs : []).filter(
+    (item) => !ProjectRuntimePaths.isInternalRuntimeRelativePath(item.file),
+  )
   const includeDelivery = input.status === "completed" && !!input.commitRef && deliveryDiffs.length > 0
   if (!includeDelivery) return
   const stats = deliveryDiffs.reduce(

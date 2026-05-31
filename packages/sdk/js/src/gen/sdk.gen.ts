@@ -166,8 +166,6 @@ import type {
   RunDeliveryResponses,
   RunEvaluationsErrors,
   RunEvaluationsResponses,
-  RunExecutorSessionErrors,
-  RunExecutorSessionResponses,
   RunGetErrors,
   RunGetResponses,
   ServerRestartResponses,
@@ -1877,15 +1875,17 @@ export class Session extends HeyApiClient {
         | "mission"
         | "intent-analysis"
         | "requirements"
-        | "design-analyst"
+        | "frontend-design"
         | "goal"
         | "architect"
+        | "goal-workload-analyst"
         | "integrity"
         | "fact-check"
         | "delivery"
         | "executor"
         | "build"
         | "explore"
+        | "research"
         | "evaluator"
         | "system"
       goalID?: string
@@ -6352,34 +6352,6 @@ export class Run extends HeyApiClient {
     )
     return (options?.client ?? this.client).get<RunGetResponses, RunGetErrors, ThrowOnError>({
       url: "/run/{runID}",
-      ...options,
-      ...params,
-    })
-  }
-
-  /**
-   * Get run executor session
-   */
-  public executorSession<ThrowOnError extends boolean = false>(
-    parameters: {
-      runID: string
-      directory?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "path", key: "runID" },
-            { in: "query", key: "directory" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).get<RunExecutorSessionResponses, RunExecutorSessionErrors, ThrowOnError>({
-      url: "/run/{runID}/executor",
       ...options,
       ...params,
     })

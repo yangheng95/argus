@@ -24,6 +24,7 @@ import { InlineToolPart } from "./InlineToolPart";
 import { StaticTextPart } from "./TextPart";
 import { StepPayloadBody } from "./StepPayloadBody";
 import { IntegrityBody } from "./IntegrityCard";
+import { ReviewStreamSection } from "./ReviewStreamSection";
 import { TracePanel } from "./TracePanel";
 import { t } from "../utils/i18n";
 import { StoreCardNode } from "./StoreCardNode";
@@ -365,16 +366,7 @@ export function Card(props: { node: CardNode; depth: number }) {
             <IntegrityBody integrity={props.node.integrity!} />
           </Show>
           <Show when={props.node.reviewStream}>
-            <section class="integrity__section review-stream">
-              <h4 class="integrity__section-title">
-                {props.node.reviewStream?.currentStep
-                  ? t(`review.stream.step.${props.node.reviewStream.currentStep}`)
-                  : t("integrity.review.title")}
-              </h4>
-              <Show when={props.node.reviewStream?.summary}>
-                <p class="integrity__summary">{props.node.reviewStream!.summary}</p>
-              </Show>
-            </section>
+            <ReviewStreamSection reviewStream={props.node.reviewStream!} />
           </Show>
 
           {/* Generic parts */}

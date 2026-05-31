@@ -11,8 +11,8 @@ Several runtime materials are written to project-level fixed paths, so concurren
 tasks and sessions can overwrite each other:
 
 - `.opencorvus/intent/request.md`
-- `.opencorvus/design-analysis/prd-spec.md`
-- `.opencorvus/design-analysis/evidence-source-manifest.md`
+- `.opencorvus/frontend-design/frontend-template.md`
+- `.opencorvus/frontend-design/evidence-source-manifest.md`
 - `.opencorvus/decision-log.md`
 - `.opencorvus/worktrees/<name>`
 - `.opencorvus/ownership/*`
@@ -120,8 +120,8 @@ runtime namespace. Static config remains user-authored control-plane input.
         intent/
           request.md
         decision-log.md
-        design-analysis/
-          prd-spec.md
+        frontend-design/
+          frontend-template.md
           evidence-source-manifest.md
         docs/
           prds/
@@ -197,7 +197,7 @@ Add `packages/opencorvus/src/project/runtime-paths.ts` with at least:
 - `toolOutputDir(projectDir, taskID, sessionID)`
 - `intentPaths(projectDir, taskID)`
 - `decisionLogPaths(projectDir, taskID)`
-- `designAnalysisPaths(projectDir, taskID)`
+- `frontendDesignPaths(projectDir, taskID)`
 - `deliveryPaths(projectDir, taskID)`
 - `docsPaths(projectDir, taskID)`
 - `eventLogPath(projectDir, taskID)`
@@ -218,14 +218,14 @@ Change these projections to task-scoped paths:
 
 - `IntentBundle`: `.opencorvus/runtime/tasks/<taskID>/intent/request.md`
 - `DecisionLogBundle`: `.opencorvus/runtime/tasks/<taskID>/decision-log.md`
-- `designAnalysisArtifactPaths`: `.opencorvus/runtime/tasks/<taskID>/design-analysis/*`
+- `frontendDesignArtifactPaths`: `.opencorvus/runtime/tasks/<taskID>/frontend-design/*`
 - `engine/docs`: `.opencorvus/runtime/tasks/<taskID>/docs/*`
 - `engine/event-log`: `.opencorvus/runtime/tasks/<taskID>/logs/events.ndjson`
 - `AgentTrace`: session trace goes under
   `.opencorvus/runtime/tasks/<taskID>/sessions/<sessionID>/trace.jsonl`
 
 All prompt references must come from these modules. No literal
-`.opencorvus/intent/request.md`, `.opencorvus/design-analysis`, or
+`.opencorvus/intent/request.md`, `.opencorvus/frontend-design`, or
 `.opencorvus/decision-log.md` should remain in business code.
 
 ### Relative and Absolute Path Contract
@@ -240,7 +240,7 @@ There are two valid path forms:
   relative paths against the goal worktree cwd.
 
 No caller may infer this rule ad hoc. `IntentBundle.reference`,
-`DecisionLogBundle.reference`, and `renderDesignAnalysisHandoffReference` select
+`DecisionLogBundle.reference`, and `renderFrontendDesignHandoffReference` select
 the path mode at the boundary.
 
 ### Worktrees and Branches
@@ -358,14 +358,14 @@ internal state is too broad after this split.
 Before implementation, grep these symbols and update every call site:
 
 - `.opencorvus/intent/request.md`
-- `.opencorvus/design-analysis`
+- `.opencorvus/frontend-design`
 - `.opencorvus/decision-log.md`
 - `.opencorvus/worktrees`
 - `.opencorvus/ownership`
 - `.opencorvus/trace`
 - `IntentBundle.RELATIVE_PATH`
 - `DecisionLogBundle.RELATIVE_PATH`
-- `designAnalysisArtifactPaths`
+- `frontendDesignArtifactPaths`
 - `Worktree.worktreesRoot`
 - `gitCeilingEnvForWorktree`
 - `Ownership.Worktree.record`
@@ -401,7 +401,7 @@ that migrates old runtime material. If stale legacy runtime directories are
 detected after the cut, the reset path removes them as obsolete scratch:
 
 - `.opencorvus/intent`
-- `.opencorvus/design-analysis`
+- `.opencorvus/frontend-design`
 - `.opencorvus/decision-log.md`
 - `.opencorvus/worktrees`
 - `.opencorvus/ownership`
@@ -417,7 +417,7 @@ Required focused tests:
 
 1. Two concurrent `createTask()` calls write separate intent bundles under
    different task roots.
-2. Two concurrent design-analysis runs write separate PRD/SPEC and manifest
+2. Two concurrent frontend-design runs write separate frontend template and manifest
    files.
 3. Two tasks materialize decision logs concurrently without overwriting.
 4. Two direct builds with the same target label produce different worktree

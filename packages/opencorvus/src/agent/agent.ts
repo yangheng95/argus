@@ -14,11 +14,13 @@ import BUILD_CORE from "@/prompt/core/build-core.txt"
 import VISUAL_QA_CORE from "@/prompt/core/visual-qa-core.txt"
 import MISSION_CORE from "@/prompt/core/mission-core.txt"
 import REQUIREMENTS_CORE from "@/prompt/core/requirements-core.txt"
-import DESIGN_ANALYST_CORE from "@/prompt/core/design-analyst-core.txt"
+import FRONTEND_DESIGN_CORE from "@/prompt/core/frontend-design-core.txt"
 import INTEGRITY_CORE from "@/prompt/core/integrity-core.txt"
 import ACCEPTANCE_REVIEW_CORE from "@/prompt/core/acceptance-review-core.txt"
 import INTENT_ANALYSIS_CORE from "@/prompt/core/intent-analysis-core.txt"
 import FACT_CHECK_CORE from "@/prompt/core/fact-check-core.txt"
+import RESEARCH_CORE from "@/prompt/core/research-core.txt"
+import GOAL_WORKLOAD_ANALYST_CORE from "@/prompt/core/goal-workload-analyst-core.txt"
 import PROMPT_CODING from "./prompt/coding.txt"
 import PROMPT_COMPACTION from "./prompt/compaction.txt"
 import PROMPT_EXPLORE from "./prompt/explore.txt"
@@ -33,7 +35,7 @@ import { MIRROR_ANALYSIS_TOOL_IDS, MIRROR_TOOL_IDS } from "@/mirror/tools/ids"
 const ORCHESTRATOR_RUNTIME_PROMPT = [
   "You are the OpenCorvus Orchestrator.",
   "Follow the per-wake orchestrator instructions and task context supplied by the orchestrator runtime.",
-  "Use only the tools exposed in the current turn. The generic `task` tool is not an orchestrator tool; dispatch work through the explicit workflow tools such as `requirements`, `design_analysis`, `architect`, `build`, `integrity`, and `refine`. You are the only agent-side owner of engine task lifecycle decisions. If you need to offer a separate follow-up engine task, use `propose_task`; never call `task` or control-plane `panel`.",
+  "Use only the tools exposed in the current turn. The generic `task` tool is not an orchestrator tool; dispatch work through the explicit workflow tools such as `requirements`, `frontend_design`, `architect`, `build`, `integrity`, and `refine`. You are the only agent-side owner of engine task lifecycle decisions. If you need to offer a separate follow-up engine task, use `propose_task`; never call `task` or control-plane `panel`.",
 ].join("\n")
 
 const CONTROL_RUNTIME_PROMPT = [
@@ -58,7 +60,7 @@ export namespace Agent {
       // Permission ruleset — consumed only by SessionProcessor / SessionPrompt
       // flow (build / spec / plan / general / explore / compaction / title).
       // Stage agents dispatched through SessionPrompt (orchestrator / requirements /
-      // architect / design-analyst / summary) do NOT consult
+      // architect / frontend-design / summary) do NOT consult
       // permission; they may omit this field. Code that iterates Agent.Info
       // permission must therefore handle `undefined`.
       permission: PermissionNext.Ruleset.optional(),
@@ -143,7 +145,16 @@ export namespace Agent {
       build: {
         name: "build",
         description: AgentRoleContract.description("build"),
-        tools: { exclude: ["panel", "task_report", "analytics", ...MIRROR_TOOL_IDS] },
+        tools: {
+          exclude: [
+            "panel",
+            "task_report",
+            "analytics",
+            "web_clone_prepare_context",
+            "web_clone_generate_source_project",
+            ...MIRROR_TOOL_IDS,
+          ],
+        },
         options: {},
         prompt: BUILD_CORE,
         permission: nonDesignPermissions(
@@ -292,7 +303,7 @@ export namespace Agent {
         // Deliberately EXCLUDED (each on purpose): bash / edit / write /
         // apply_patch (it is not a coding executor — would let it bypass the
         // orchestrator, rule 11); url_screenshot / webpage_* (crawling/visual
-        // capture belong to design-analyst inside a dispatched task); task
+        // capture belong to frontend-design inside a dispatched task); task
         // (the generic sub-agent dispatch is the orchestrator's, not mission's).
         //
         // panel is allowed but action-filtered to the coordination set by
@@ -385,8 +396,10 @@ export namespace Agent {
             // dispatch
             "build",
             "requirements",
-            "design_analysis",
+            "research",
+            "frontend_design",
             "architect",
+            "workload_analysis",
             "integrity",
             "fact_check",
             "propose_task",
@@ -469,16 +482,16 @@ export namespace Agent {
         native: true,
         hidden: true,
       },
-      "design-analyst": {
-        name: "design-analyst",
-        description: AgentRoleContract.description("design-analyst"),
-        prompt: DESIGN_ANALYST_CORE,
-        // design-analyst is the only stage that owns mirror extraction.
-        // Requirements / architect / build consume the persisted SPEC and
-        // visual specs rather than calling mirror tools themselves.
+      "frontend-design": {
+        name: "frontend-design",
+        description: AgentRoleContract.description("frontend-design"),
+        prompt: FRONTEND_DESIGN_CORE,
+        // frontend-design is the only stage that owns mirror extraction.
+        // Requirements / architect / build consume the persisted frontend
+        // template and optional visual anchors rather than calling mirror tools themselves.
         // Render/evaluate/diff/judge mirror tools are acceptance quality
-        // surfaces, not PRD/SPEC extraction surfaces, so they stay out of
-        // design-analysis to prevent implementation-style score loops.
+        // surfaces, not frontend template extraction surfaces, so they stay out of
+        // frontend-design to prevent implementation-style score loops.
         tools: {
           include: [
             "read_file",
@@ -558,9 +571,72 @@ export namespace Agent {
         native: true,
         hidden: true,
       },
+      research: {
+        name: "research",
+        description: AgentRoleContract.description("research"),
+        prompt: RESEARCH_CORE,
+        tools: {
+          include: [
+            "read_file",
+            "find_files",
+            "search_code",
+            "list_directory",
+            "memory_search",
+            "memory_get",
+            "websearch",
+            "webfetch",
+            "external_code_search",
+            "todoread",
+            "todowrite",
+          ],
+        },
+        steps: 1000,
+        options: {},
+        mode: "primary",
+        native: true,
+        hidden: true,
+      },
+      "goal-workload-analyst": {
+        name: "goal-workload-analyst",
+        description: AgentRoleContract.description("goal-workload-analyst"),
+        prompt: GOAL_WORKLOAD_ANALYST_CORE,
+        // Read-only goal-sizing reviewer + execution-inventory producer. Same
+        // read-only surface as architect; no write/edit/bash — no implementation
+        // pressure by construction (spec §0). Structured-output tools come from
+        // createGoalWorkloadOutputTools() and bypass this include filter.
+        tools: {
+          include: [
+            "read_file",
+            "find_files",
+            "search_code",
+            "list_directory",
+            "memory_search",
+            "memory_get",
+            "todoread",
+            "todowrite",
+          ],
+        },
+        steps: 1000,
+        options: {},
+        mode: "primary",
+        native: true,
+        hidden: true,
+      },
     }
 
+    const fixedReadonlyAgents = new Set(["fact-check", "research"])
     for (const [key, value] of entries((cfg.agent ?? {}) as NonNullable<Config.Info["agent"]>)) {
+      if (fixedReadonlyAgents.has(key) && value.disable) {
+        throw new Error(
+          `config.agent.${key}.disable is not supported: ${key} is a fixed read-only evidence agent used by runtime contracts.`,
+        )
+      }
+      if (fixedReadonlyAgents.has(key) && value.tools !== undefined) {
+        throw new Error(
+          `config.agent.${key}.tools is not supported: ${key} is a fixed read-only evidence agent. ` +
+            "Do not add or remove tools through config.",
+        )
+      }
       if (value.disable) {
         delete result[key]
         continue
@@ -584,8 +660,8 @@ export namespace Agent {
       if (promptConfigMode === "append" && value.prompt !== undefined) {
         throw new Error(`config.agent.${key}.prompt is invalid for append-mode agents; use prompt_append`)
       }
-      if (promptConfigMode !== "append") item.prompt = value.prompt ?? item.prompt
-      item.promptAppend = value.prompt_append ?? item.promptAppend
+      if (promptConfigMode === "override") item.prompt = value.prompt ?? item.prompt
+      if (promptConfigMode === "append") item.promptAppend = value.prompt_append ?? item.promptAppend
       item.description = value.description ?? item.description
       item.temperature = value.temperature ?? item.temperature
       item.topP = value.top_p ?? item.topP
@@ -641,10 +717,12 @@ export namespace Agent {
     title: PROMPT_TITLE,
     architect: ARCHITECT_CORE,
     requirements: REQUIREMENTS_CORE,
-    "design-analyst": DESIGN_ANALYST_CORE,
+    "frontend-design": FRONTEND_DESIGN_CORE,
     "intent-analysis": INTENT_ANALYSIS_CORE,
     integrity: INTEGRITY_RUNTIME_PROMPT,
     "fact-check": FACT_CHECK_CORE,
+    research: RESEARCH_CORE,
+    "goal-workload-analyst": GOAL_WORKLOAD_ANALYST_CORE,
     mission: MISSION_CORE,
   }
 

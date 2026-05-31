@@ -1,8 +1,8 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN" data-theme="dark">
 <head>
   <meta charset="UTF-8">
-  <title>Overlay Redesign — Visual Verification</title>
+  <title>Overlay Redesign â€” Visual Verification</title>
   <link rel="stylesheet" href="../src/styles.css">
   <link rel="stylesheet" href="../src/styles/surfaces/card.css">
   <style>
@@ -35,107 +35,107 @@
 </head>
 <body data-theme="dark">
 
-<div class="label-banner">After: 4 fixes — sticky progress bar · status disambiguation · goal preview · StructuredOutput suppressed</div>
+<div class="label-banner">After: 4 fixes â€” sticky progress bar Â· status disambiguation Â· goal preview Â· StructuredOutput suppressed</div>
 
 <div class="scenario">
-  <!-- ── Sticky progress strip — Fix C ── -->
+  <!-- â”€â”€ Sticky progress strip â€” Fix C â”€â”€ -->
   <div class="task-progress" role="region" aria-label="Goals" data-running="true" style="--card-bg-1: #1a1a22; --card-bg-0: #131318; --card-border: rgba(255,255,255,0.1); --card-border-strong: rgba(255,255,255,0.16); --card-bg-hover: rgba(255,255,255,0.08); --text-soft: #b8b8c0; --text-muted: #8b8b95; --text-strong: #e8e8ee; --good: #69b578; --bad: #d56262; --warn: #c28b55;">
     <div class="task-progress__header">
       <span class="task-progress__heading">Goals</span>
-      <span class="task-progress__summary" title="0/6 passed · 2 failed · 1 running">0/6</span>
+      <span class="task-progress__summary" title="0/6 passed Â· 2 failed Â· 1 running">0/6</span>
     </div>
     <div class="task-progress__bar" aria-hidden="true">
       <div class="task-progress__bar-fill" style="width: 0%"></div>
       <div class="task-progress__bar-fail" style="width: 33%"></div>
     </div>
     <div class="task-progress__pills">
-      <button type="button" class="task-progress__pill" data-state="failed" title="Extract reference webpage — failed">
+      <button type="button" class="task-progress__pill" data-state="failed" title="Extract reference webpage â€” failed">
         <span class="task-progress__pill-id">#G1V4</span>
         <span class="task-progress__pill-title">Extract reference webpage</span>
       </button>
-      <button type="button" class="task-progress__pill" data-state="running" title="Backend API — running">
+      <button type="button" class="task-progress__pill" data-state="running" title="Backend API â€” running">
         <span class="task-progress__pill-id">#G2V1</span>
         <span class="task-progress__pill-title">Backend API and virtual data engine</span>
       </button>
-      <button type="button" class="task-progress__pill" data-state="failed" title="UI shell — failed">
+      <button type="button" class="task-progress__pill" data-state="failed" title="UI shell â€” failed">
         <span class="task-progress__pill-id">#G3V4</span>
         <span class="task-progress__pill-title">UI shell and routing</span>
       </button>
-      <button type="button" class="task-progress__pill" data-state="pending" title="Charts module — pending">
+      <button type="button" class="task-progress__pill" data-state="pending" title="Charts module â€” pending">
         <span class="task-progress__pill-id">#G4V1</span>
         <span class="task-progress__pill-title">Charts module</span>
       </button>
-      <button type="button" class="task-progress__pill" data-state="pending" title="News feed — pending">
+      <button type="button" class="task-progress__pill" data-state="pending" title="News feed â€” pending">
         <span class="task-progress__pill-id">#G5V1</span>
         <span class="task-progress__pill-title">News feed integration</span>
       </button>
-      <button type="button" class="task-progress__pill" data-state="pending" title="Search and watchlist — pending">
+      <button type="button" class="task-progress__pill" data-state="pending" title="Search and watchlist â€” pending">
         <span class="task-progress__pill-id">#G6V1</span>
         <span class="task-progress__pill-title">Search and watchlist</span>
       </button>
     </div>
   </div>
 
-  <!-- 编排器 (running) -->
+  <!-- ç¼–æŽ’å™¨ (running) -->
   <article class="card card--collapsed" data-kind="agent" data-stage="orchestrator" data-status="running" data-depth="0" style="--card-stage: var(--card-stage-orchestrator);">
     <div class="card__head" role="button" tabindex="0" aria-expanded="false">
       <span class="card__badge card__badge--running" title="running"><span class="card__spinner"></span></span>
       <div class="card__main">
         <div class="card__title-row">
-          <span class="card__title">编排器</span>
+          <span class="card__title">ç¼–æŽ’å™¨</span>
           <span class="card__subtitle">deliver phase</span>
           <span class="card__title-spacer" aria-hidden="true"></span>
-          <div class="card__activity-stats" title="messages 29 · tools 15 · skills 1">
-            <span class="card__stat" data-kind="messages"><span class="card__stat-icon">💬</span><span class="card__stat-value">29</span></span>
-            <span class="card__stat" data-kind="tools"><span class="card__stat-icon">🛠</span><span class="card__stat-value">15</span></span>
-            <span class="card__stat" data-kind="skills"><span class="card__stat-icon">🎯</span><span class="card__stat-value">1</span></span>
+          <div class="card__activity-stats" title="messages 29 Â· tools 15 Â· skills 1">
+            <span class="card__stat" data-kind="messages"><span class="card__stat-icon">ðŸ’¬</span><span class="card__stat-value">29</span></span>
+            <span class="card__stat" data-kind="tools"><span class="card__stat-icon">ðŸ› </span><span class="card__stat-value">15</span></span>
+            <span class="card__stat" data-kind="skills"><span class="card__stat-icon">ðŸŽ¯</span><span class="card__stat-value">1</span></span>
           </div>
         </div>
       </div>
       <div class="card__actions">
-        <span class="card__chevron">▼</span>
+        <span class="card__chevron">â–¼</span>
       </div>
     </div>
   </article>
 
-  <!-- 助手 (cancelled — Fix B: outline ⊘ instead of red ✗) -->
+  <!-- åŠ©æ‰‹ (cancelled â€” Fix B: outline âŠ˜ instead of red âœ—) -->
   <article class="card card--collapsed" data-kind="agent" data-stage="assistant" data-status="error" data-depth="0" style="--card-stage: var(--card-stage-assistant);">
     <div class="card__head card__head--with-meta" role="button" tabindex="0" aria-expanded="false">
-      <span class="card__badge card__badge--cancelled" title="cancelled">⊘</span>
+      <span class="card__badge card__badge--cancelled" title="cancelled">âŠ˜</span>
       <div class="card__main">
         <div class="card__title-row">
-          <span class="card__title">助手</span>
+          <span class="card__title">åŠ©æ‰‹</span>
           <span class="card__subtitle">superseded by replan</span>
           <span class="card__title-spacer" aria-hidden="true"></span>
-          <div class="card__activity-stats" title="messages 8 · tools 15">
-            <span class="card__stat" data-kind="messages"><span class="card__stat-icon">💬</span><span class="card__stat-value">8</span></span>
-            <span class="card__stat" data-kind="tools"><span class="card__stat-icon">🛠</span><span class="card__stat-value">15</span></span>
+          <div class="card__activity-stats" title="messages 8 Â· tools 15">
+            <span class="card__stat" data-kind="messages"><span class="card__stat-icon">ðŸ’¬</span><span class="card__stat-value">8</span></span>
+            <span class="card__stat" data-kind="tools"><span class="card__stat-icon">ðŸ› </span><span class="card__stat-value">15</span></span>
           </div>
         </div>
         <div class="card__preview-row">
           <!-- Fix A: StructuredOutput tool no longer surfaces as preview text;
                showing the actual reasoning text the operator wrote. -->
-          <span class="card__collapsed-preview">Intent classified as build-from-reference; deferring to design analyst.</span>
+          <span class="card__collapsed-preview">Intent classified as build-from-reference; deferring to frontend design.</span>
         </div>
       </div>
       <div class="card__actions">
-        <span class="card__chevron">▼</span>
+        <span class="card__chevron">â–¼</span>
       </div>
     </div>
   </article>
 
-  <!-- 设计分析师 (completed clean) -->
-  <article class="card card--collapsed" data-kind="agent" data-stage="design-analyst" data-status="completed" data-depth="0" style="--card-stage: var(--card-stage-design-analyst);">
+  <!-- è®¾è®¡åˆ†æžå¸ˆ (completed clean) -->
+  <article class="card card--collapsed" data-kind="agent" data-stage="frontend-design" data-status="completed" data-depth="0" style="--card-stage: var(--card-stage-frontend-design);">
     <div class="card__head card__head--with-meta" role="button" tabindex="0" aria-expanded="false">
-      <span class="card__badge card__badge--done" title="completed">✓</span>
+      <span class="card__badge card__badge--done" title="completed">âœ“</span>
       <div class="card__main">
         <div class="card__title-row">
-          <span class="card__title">设计分析师</span>
-          <span class="card__subtitle">4 sections · 12 components</span>
+          <span class="card__title">è®¾è®¡åˆ†æžå¸ˆ</span>
+          <span class="card__subtitle">4 sections Â· 12 components</span>
           <span class="card__title-spacer" aria-hidden="true"></span>
           <div class="card__activity-stats">
-            <span class="card__stat" data-kind="messages"><span class="card__stat-icon">💬</span><span class="card__stat-value">4</span></span>
-            <span class="card__stat" data-kind="tools"><span class="card__stat-icon">🛠</span><span class="card__stat-value">39</span></span>
+            <span class="card__stat" data-kind="messages"><span class="card__stat-icon">ðŸ’¬</span><span class="card__stat-value">4</span></span>
+            <span class="card__stat" data-kind="tools"><span class="card__stat-icon">ðŸ› </span><span class="card__stat-value">39</span></span>
           </div>
         </div>
         <div class="card__preview-row">
@@ -143,23 +143,23 @@
         </div>
       </div>
       <div class="card__actions">
-        <span class="card__chevron">▼</span>
+        <span class="card__chevron">â–¼</span>
       </div>
     </div>
   </article>
 
-  <!-- 需求 (completed clean) -->
+  <!-- éœ€æ±‚ (completed clean) -->
   <article class="card card--collapsed" data-kind="agent" data-stage="requirements" data-status="completed" data-depth="0" style="--card-stage: var(--card-stage-requirements);">
     <div class="card__head card__head--with-meta" role="button" tabindex="0" aria-expanded="false">
-      <span class="card__badge card__badge--done" title="completed">✓</span>
+      <span class="card__badge card__badge--done" title="completed">âœ“</span>
       <div class="card__main">
         <div class="card__title-row">
-          <span class="card__title">需求</span>
-          <span class="card__subtitle">22 reqs · 10 decisions</span>
+          <span class="card__title">éœ€æ±‚</span>
+          <span class="card__subtitle">22 reqs Â· 10 decisions</span>
           <span class="card__title-spacer" aria-hidden="true"></span>
           <div class="card__activity-stats">
-            <span class="card__stat" data-kind="messages"><span class="card__stat-icon">💬</span><span class="card__stat-value">11</span></span>
-            <span class="card__stat" data-kind="tools"><span class="card__stat-icon">🛠</span><span class="card__stat-value">39</span></span>
+            <span class="card__stat" data-kind="messages"><span class="card__stat-icon">ðŸ’¬</span><span class="card__stat-value">11</span></span>
+            <span class="card__stat" data-kind="tools"><span class="card__stat-icon">ðŸ› </span><span class="card__stat-value">39</span></span>
           </div>
         </div>
         <div class="card__preview-row">
@@ -167,23 +167,23 @@
         </div>
       </div>
       <div class="card__actions">
-        <span class="card__chevron">▼</span>
+        <span class="card__chevron">â–¼</span>
       </div>
     </div>
   </article>
 
-  <!-- 架构师 (completed clean — emits 6 goals) -->
+  <!-- æž¶æž„å¸ˆ (completed clean â€” emits 6 goals) -->
   <article class="card card--collapsed" data-kind="agent" data-stage="architect" data-status="completed" data-depth="0" style="--card-stage: var(--card-stage-architect);">
     <div class="card__head card__head--with-meta" role="button" tabindex="0" aria-expanded="false">
-      <span class="card__badge card__badge--done" title="completed">✓</span>
+      <span class="card__badge card__badge--done" title="completed">âœ“</span>
       <div class="card__main">
         <div class="card__title-row">
-          <span class="card__title">架构师</span>
+          <span class="card__title">æž¶æž„å¸ˆ</span>
           <span class="card__subtitle">6 goals</span>
           <span class="card__title-spacer" aria-hidden="true"></span>
           <div class="card__activity-stats">
-            <span class="card__stat" data-kind="messages"><span class="card__stat-icon">💬</span><span class="card__stat-value">18</span></span>
-            <span class="card__stat" data-kind="tools"><span class="card__stat-icon">🛠</span><span class="card__stat-value">71</span></span>
+            <span class="card__stat" data-kind="messages"><span class="card__stat-icon">ðŸ’¬</span><span class="card__stat-value">18</span></span>
+            <span class="card__stat" data-kind="tools"><span class="card__stat-icon">ðŸ› </span><span class="card__stat-value">71</span></span>
           </div>
         </div>
         <div class="card__preview-row">
@@ -191,31 +191,31 @@
         </div>
       </div>
       <div class="card__actions">
-        <span class="card__chevron">▼</span>
+        <span class="card__chevron">â–¼</span>
       </div>
     </div>
   </article>
 
-  <!-- 完整性审查 (Fix B: concerns ⚠ amber) -->
+  <!-- å®Œæ•´æ€§å®¡æŸ¥ (Fix B: concerns âš  amber) -->
   <article class="card card--collapsed" data-kind="integrity" data-stage="integrity" data-status="completed" data-depth="0" style="--card-stage: var(--card-stage-architect);">
     <div class="card__head card__head--with-meta" role="button" tabindex="0" aria-expanded="false">
-      <span class="card__badge card__badge--concerns" title="completed with concerns">⚠</span>
+      <span class="card__badge card__badge--concerns" title="completed with concerns">âš </span>
       <div class="card__main">
         <div class="card__title-row">
-          <span class="card__title">完整性审查</span>
+          <span class="card__title">å®Œæ•´æ€§å®¡æŸ¥</span>
           <span class="card__subtitle">verdict: concerns</span>
           <span class="card__title-spacer" aria-hidden="true"></span>
           <div class="card__activity-stats">
-            <span class="card__stat" data-kind="messages"><span class="card__stat-icon">💬</span><span class="card__stat-value">6</span></span>
-            <span class="card__stat" data-kind="tools"><span class="card__stat-icon">🛠</span><span class="card__stat-value">5</span></span>
+            <span class="card__stat" data-kind="messages"><span class="card__stat-icon">ðŸ’¬</span><span class="card__stat-value">6</span></span>
+            <span class="card__stat" data-kind="tools"><span class="card__stat-icon">ðŸ› </span><span class="card__stat-value">5</span></span>
           </div>
         </div>
         <div class="card__preview-row">
-          <span class="card__collapsed-preview">Aggregate Verdict: concerns. 2 dimensions flagged — requirement_fidelity has 1 missing scenario, technical_feasibility raised an authentication gap.</span>
+          <span class="card__collapsed-preview">Aggregate Verdict: concerns. 2 dimensions flagged â€” requirement_fidelity has 1 missing scenario, technical_feasibility raised an authentication gap.</span>
         </div>
       </div>
       <div class="card__actions">
-        <span class="card__chevron">▼</span>
+        <span class="card__chevron">â–¼</span>
       </div>
     </div>
   </article>
@@ -223,15 +223,15 @@
   <!-- #G1V4 (Fix A: shows goal title in preview, not "Bash: rg --files") -->
   <article class="card card--collapsed" data-kind="step" data-stage="executor" data-status="error" data-depth="0" style="--card-stage: var(--card-stage-executor);">
     <div class="card__head card__head--with-meta" role="button" tabindex="0" aria-expanded="false">
-      <span class="card__badge card__badge--error" title="failed">✗</span>
+      <span class="card__badge card__badge--error" title="failed">âœ—</span>
       <div class="card__main">
         <div class="card__title-row">
           <span class="card__round card__round--lead">#G1V4</span>
           <span class="card__title">Extract and analyze reference webpage</span>
           <span class="card__title-spacer" aria-hidden="true"></span>
           <div class="card__activity-stats">
-            <span class="card__stat" data-kind="messages"><span class="card__stat-icon">💬</span><span class="card__stat-value">48</span></span>
-            <span class="card__stat" data-kind="tools"><span class="card__stat-icon">🛠</span><span class="card__stat-value">7</span></span>
+            <span class="card__stat" data-kind="messages"><span class="card__stat-icon">ðŸ’¬</span><span class="card__stat-value">48</span></span>
+            <span class="card__stat" data-kind="tools"><span class="card__stat-icon">ðŸ› </span><span class="card__stat-value">7</span></span>
           </div>
         </div>
         <div class="card__preview-row">
@@ -240,7 +240,7 @@
         </div>
       </div>
       <div class="card__actions">
-        <span class="card__chevron">▼</span>
+        <span class="card__chevron">â–¼</span>
       </div>
     </div>
   </article>
@@ -248,15 +248,15 @@
   <!-- #G3V4 (Fix A: shows goal title in preview, not "Bash: rg --files") -->
   <article class="card card--collapsed" data-kind="step" data-stage="executor" data-status="error" data-depth="0" style="--card-stage: var(--card-stage-executor);">
     <div class="card__head card__head--with-meta" role="button" tabindex="0" aria-expanded="false">
-      <span class="card__badge card__badge--error" title="failed">✗</span>
+      <span class="card__badge card__badge--error" title="failed">âœ—</span>
       <div class="card__main">
         <div class="card__title-row">
           <span class="card__round card__round--lead">#G3V4</span>
           <span class="card__title">Backend API and virtual data engine</span>
           <span class="card__title-spacer" aria-hidden="true"></span>
           <div class="card__activity-stats">
-            <span class="card__stat" data-kind="messages"><span class="card__stat-icon">💬</span><span class="card__stat-value">16</span></span>
-            <span class="card__stat" data-kind="tools"><span class="card__stat-icon">🛠</span><span class="card__stat-value">3</span></span>
+            <span class="card__stat" data-kind="messages"><span class="card__stat-icon">ðŸ’¬</span><span class="card__stat-value">16</span></span>
+            <span class="card__stat" data-kind="tools"><span class="card__stat-icon">ðŸ› </span><span class="card__stat-value">3</span></span>
           </div>
         </div>
         <div class="card__preview-row">
@@ -265,7 +265,7 @@
         </div>
       </div>
       <div class="card__actions">
-        <span class="card__chevron">▼</span>
+        <span class="card__chevron">â–¼</span>
       </div>
     </div>
   </article>

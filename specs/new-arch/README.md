@@ -117,7 +117,7 @@
     sub-agent 协议在 `src/agent/sub-agent-protocol.ts`，build/ 下没有 `runner.ts` /
     `sub-agent-protocol.ts` / `prompt/`）
   - `orchestrator/tools.ts` 当前导出 **21 个 tool**（按文件顺序）：
-    `requirements` · `design_analysis` · `architect` · `integrity` · `prosecute` ·
+    `requirements` · `frontend_design` · `architect` · `integrity` · `prosecute` ·
     `analyze_intent` · `modify_goal` · `query_failed_goals` · `read_context` ·
     `fail_task` · `cancel_task` · `retry_task` · `inject_operator_message` ·
     `steer_subagent` · `restart_from_stage` · `deliver` · `publish_delivery` ·
@@ -127,7 +127,7 @@
   - `panel/capability.ts` 当前注册 **20 个 action**（详见 03-control.md）
   - **SessionKind 实际是 15 种**（02-data.md 写"16 种"且把 `planner` 列入是错的）：
     `root` · `orchestrator` · `assistant` · `gateway` · `intent-analysis` ·
-    `requirements` · `design-analyst` · `goal` · `architect` · `integrity` ·
+    `requirements` · `frontend-design` · `goal` · `architect` · `integrity` ·
     `delivery` · `executor` · `build` · `evaluator` · `system`
   - SSE 端点真源是 `src/server/routes/orchestrator.ts`（task / task event 双 SSE 主线）+
     `routes/panel.ts` / `routes/global.ts` / `routes/app.ts` / `routes/coding.ts` 5 个文件；
@@ -145,12 +145,12 @@
     补全 `plugin/isolate.ts`（`runHookIsolated`）与 `mcp/materialize.ts`
   - **05-config.md** — 删除已不存在的 `assistant.spec / goal / planner / evaluator / adaptive`
     字段；删除 `experimental.unattended / auto_permission`（仅余 `auto_question`）；
-    补齐当前 `assistant` 子项（`architect / delivery / delivery_visual / design_analyst /
+    补齐当前 `assistant` 子项（`architect / delivery / delivery_visual / frontend_design /
     intent_analysis / build / activity / debug / default_workflow / workflows`）
   - **06-provider.md** — 数量改为 **20 bundled provider**（`provider/bundled.ts:27-48`）；
     Agent ↔ Model 示例替换 `planner / evaluator` 为 `orchestrator / requirements /
     architect / build / delivery`
-  - **07-panel.md** — Config Panel agent 列删除 `Planner / Evaluator`，补 `Design-Analyst /
+  - **07-panel.md** — Config Panel agent 列删除 `Planner / Evaluator`，补 `Frontend Design /
     Intent-Analysis / Build`；Behavior 区只保留 `auto_question`；SSE 事件改为实际注册的
     `workflow.selected / workflow.step.updated / goal.workflow.progress`
   - **07-panel-reactivity.md** — 顶部加 **P0-P2 已落地、P3 清理未完成** 状态条；列出
@@ -159,7 +159,7 @@
   - **08-agent-tool-adapter.md** — 顶部加 **8 条关键修正**：`tools` schema 是
     `{ include?, exclude? }` 同对象而非 union；`spec_enter / spec_exit / plan_enter /
     plan_exit` 这些 tool **从未存在**；build / general / explore / delivery 真实工具集已对齐
-    `agent.ts:125/140/157/233`；`requirements / architect / design-analyst / intent-analysis`
+    `agent.ts:125/140/157/233`；`requirements / architect / frontend-design / intent-analysis`
     实际走 ToolRegistry（之前列为"不走"是错的）；`src/session/tool-resolver.ts` 不存在，
     `resolveTools` 在 `session/loop.ts:1732`
   - **09-verification-evidence.md** — 头部状态条更新：arbiter 真源是 `delivery/arbiter.ts`，
@@ -184,7 +184,7 @@
     边界注释目标改指 `engine/rewind.ts`；明确 `engine/runtime.ts:123,182,193` 与
     `goal-status.ts:40-62` 两处 FSM-shaped residue 仍未收口
   - **99-principles.md** — Principle 2 sub-agent 列表删除 `Planner`，补
-    `Design-Analyst / Intent-Analysis / Integrity / Prosecutor`
+    `Frontend Design / Intent-Analysis / Integrity / Prosecutor`
   - **README + 01 + 13** — 修正 build 包描述：`build/` 实际只有 `agent.ts / index.ts /
     report.ts / types.ts` 4 个文件，没有 `runner.ts` / `sub-agent-protocol.ts` / `prompt/`；
     runner 在 `goal/runner.ts`，sub-agent 协议在 `agent/sub-agent-protocol.ts`
@@ -233,7 +233,7 @@
     ToolRegistry agent（`agent.ts:379-405`），`include: []` 因为 verdict / counter-example
     tools 是 per-call 由 SessionLoop extra tools 注入；新增 #9（orchestrator 本身走
     ToolRegistry，include 在 `agent.ts:276-310`）和 #10（mirror tool gating 在
-    `tool/registry.ts:181-183`，仅 `design-analyst` 保留 mirror tools）
+    `tool/registry.ts:181-183`，仅 `frontend-design` 保留 mirror tools）
   - **09-verification-evidence.md** — 头部加 `engine_evaluation` 表已删除（`engine.sql.ts:552-556`）
     的注释；保留 `EngineEvaluation*` 类型仍存活（`engine.sql.ts:120-160`）；补 2026-05-10
     后的事实：`AcceptanceSpec.scenario`（`acceptance/types.ts:24,119`）、

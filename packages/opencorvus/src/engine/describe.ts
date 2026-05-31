@@ -39,6 +39,8 @@ import {
   findActiveRunForTask,
   findActiveSpecForTask,
   findLatestDeliveryVerdictArtifact,
+  findLatestGoalWorkloadArtifact,
+  findLatestResearchBriefArtifact,
   findRuns,
   findTask,
   listGoalRunsByGoal,
@@ -49,6 +51,7 @@ import {
   type GoalRunRow,
   type TaskRow,
 } from "./store"
+import { researchBriefIsStale, researchRequestHashInput } from "@/research/staleness"
 
 /** Cap recent stream-failure entries surfaced into the orchestrator prompt.
  *  A chronically failing provider can write an artifact every wake; older
@@ -172,6 +175,15 @@ export interface TaskDesc {
   error?: string
   spec_summary?: string
   plan_summary?: string
+  /** True when a Goal Workload Analyst artifact exists for this task. Pure
+   *  fact (rule 23): no gate — the orchestrator LLM decides whether to run /
+   *  re-run workload_analysis. */
+  workload_analyzed?: boolean
+  /** True when a workload artifact exists but was computed against a superseded
+   *  architect snapshot (its spec_snapshot_id != the active snapshot). Stale
+   *  briefs are not injected downstream; the LLM may re-run workload_analysis. */
+  workload_stale?: boolean
+  research?: ResearchBriefDesc
   active_run_id?: string
   active_run_status?: string
   /** True when `active_run_id` refers to a run that currently has no live
@@ -214,6 +226,18 @@ export interface TaskDesc {
    *  errors that would otherwise live only in User Interface (UI) / log status. */
   recent_agent_failures?: AgentFailureDesc[]
   iterations_count: number
+}
+
+export interface ResearchBriefDesc {
+  artifact_id: string
+  session_id: string
+  stale: boolean
+  stale_reasons: string[]
+  source_count: number
+  fact_count: number
+  blocking_open_question_count: number
+  bundle_paths: string[]
+  summary: string
 }
 
 export interface CollaborationClosureDesc {
@@ -411,6 +435,44 @@ async function describeTaskFromRow(task: TaskRow): Promise<TaskDesc> {
     specSummary = activeSpec.summary
   }
 
+  // Goal Workload Analyst facts (rule 23: facts only, no gate). The artifact is
+  // task-level latest-wins; it is "stale" when it targets a superseded architect
+  // snapshot, in which case downstream injection ignores it.
+  const workloadArtifact = findLatestGoalWorkloadArtifact(task.id)
+  const workloadAnalyzed = workloadArtifact ? true : undefined
+  const workloadStale =
+    workloadArtifact && activeSpec ? workloadArtifact.spec_snapshot_id !== activeSpec.id || undefined : undefined
+
+  const researchArtifact = findLatestResearchBriefArtifact(task.id)
+  const researchStaleness = researchArtifact
+    ? researchBriefIsStale({
+        request: task.request,
+        requestHashInput: researchRequestHashInput({
+          request: task.request,
+          clarificationTranscript: clarificationTranscriptSection(task.id),
+          operatorNotes: operatorNotesSection(task.id),
+        }),
+        brief: researchArtifact.payload,
+      })
+    : undefined
+  const research = researchArtifact
+    ? {
+        artifact_id: researchArtifact.id,
+        session_id: researchArtifact.payload.metadata.research_session_id,
+        stale: researchStaleness?.stale ?? false,
+        stale_reasons: researchStaleness?.reasons ?? [],
+        source_count: researchArtifact.payload.evidence_index.length,
+        fact_count: researchArtifact.payload.facts.length,
+        blocking_open_question_count: researchArtifact.payload.open_questions.filter((item) => item.blocking).length,
+        bundle_paths: [
+          researchArtifact.payload.bundle.full_markdown_path,
+          researchArtifact.payload.bundle.evidence_json_path,
+          researchArtifact.payload.bundle.citation_map_path,
+        ],
+        summary: researchArtifact.payload.summary,
+      }
+    : undefined
+
   let planSummary: string | undefined
   const activePlan = findActivePlanForTask(task.id)
   if (activePlan) {
@@ -507,6 +569,9 @@ async function describeTaskFromRow(task: TaskRow): Promise<TaskDesc> {
     error: task.error ?? undefined,
     spec_summary: specSummary,
     plan_summary: planSummary,
+    workload_analyzed: workloadAnalyzed,
+    workload_stale: workloadStale,
+    research,
     active_run_id: activeRunForTask?.id,
     active_run_status: activeRunStatus,
     run_orphan: runOrphan,
@@ -662,6 +727,24 @@ export function renderTaskDescription(desc: TaskDesc, options: { autoIteration?:
   lines.push(renderUserRequestSection({ heading: "## Request", request: desc.request, taskID: desc.id }))
   if (desc.spec_summary) lines.push(`Spec: ${desc.spec_summary}`)
   if (desc.plan_summary) lines.push(`Plan: ${desc.plan_summary}`)
+  if (desc.research) {
+    lines.push("")
+    lines.push("## Research Brief")
+    lines.push(`- artifact_id: ${desc.research.artifact_id}`)
+    lines.push(`- session_id: ${desc.research.session_id}`)
+    lines.push(`- stale: ${desc.research.stale ? "true" : "false"}`)
+    if (desc.research.stale_reasons.length > 0) {
+      lines.push(`- stale_reasons: ${desc.research.stale_reasons.join(", ")}`)
+    }
+    lines.push(
+      `- coverage: sources=${desc.research.source_count}, facts=${desc.research.fact_count}, blocking_open_questions=${desc.research.blocking_open_question_count}`,
+    )
+    lines.push(`- bundle_paths: ${desc.research.bundle_paths.join(", ")}`)
+    lines.push(`- summary_json: ${JSON.stringify(truncate(desc.research.summary, 800))}`)
+    lines.push(
+      "Research is advisory evidence only. It is not a workflow step or route selector; choose the next tool from full task context.",
+    )
+  }
   if (desc.active_run_id) {
     const orphanTag = desc.run_orphan ? " ORPHAN" : ""
     lines.push(

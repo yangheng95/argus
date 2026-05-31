@@ -23,7 +23,7 @@ import {
   normalizeGoalContractFields,
 } from "@/pipeline/goal-contract.schema"
 import type { AcceptanceSpec } from "@/acceptance/types"
-import type { VisualSpec } from "@/design-analyst/types"
+import type { VisualSpec } from "@/frontend-design/types"
 import type { TraceabilityEntry } from "./types"
 import {
   architectFidelityIssues,
@@ -81,6 +81,7 @@ type ArchitectValidationInput = {
   requireReferenceCoverage?: boolean
   referenceCoverageReasons?: string[]
   knownRequirementIDs?: string[]
+  knownResearchEvidenceIDs?: string[]
 }
 
 function toRegisteredGoal(input: unknown): RegisteredGoal {
@@ -392,6 +393,21 @@ export function architectValidationFindings(
     }),
   )
 
+  if (input?.knownResearchEvidenceIDs) {
+    const knownEvidenceIDs = new Set(input.knownResearchEvidenceIDs)
+    for (const contract of collector.contract_graph.contracts) {
+      const unknownEvidenceRefs = contract.evidence_refs.filter((id) => !knownEvidenceIDs.has(id))
+      if (unknownEvidenceRefs.length > 0) {
+        blocker(
+          "contract_unknown_research_evidence",
+          `Contract ${contract.id} evidence_refs reference unknown or stale research evidence id(s): ${[...new Set(unknownEvidenceRefs)].join(", ")}.`,
+          { contract_ids: [contract.id] },
+          ["register_contract"],
+        )
+      }
+    }
+  }
+
   findings.push(
     ...architectFidelityIssues({
       goals: collector.goals.map((goal) => ({ id: goal.id, owned_paths: goal.owned_paths })),
@@ -448,7 +464,7 @@ function formatReferenceCoverageReason(input?: ArchitectValidationInput): string
   const reasons = input?.referenceCoverageReasons?.filter((reason) => reason.trim().length > 0) ?? []
   if (reasons.length > 0) return `requireReferenceCoverage=true because ${reasons.join(", ")}.`
   if ((input?.designSpecs?.length ?? 0) > 0) return "requireReferenceCoverage=true because designSpecs are present."
-  return "requireReferenceCoverage=true because designAnalysis handoff or caller flag is present."
+  return "requireReferenceCoverage=true because frontendDesign handoff or caller flag is present."
 }
 
 function formatGoalCandidateList(goals: RegisteredGoal[]): string {
@@ -533,9 +549,12 @@ export function createArchitectOutputTools(input: {
   requireReferenceCoverage?: boolean
   referenceCoverageReasons?: string[]
   knownRequirementIDs?: string[]
+  knownResearchEvidenceIDs?: string[]
 }) {
   let collector = emptyCollector()
   const dir = input.workDir ?? Instance.directory
+  const knownResearchEvidenceIDs =
+    input.knownResearchEvidenceIDs !== undefined ? new Set(input.knownResearchEvidenceIDs) : undefined
 
   // Single source of truth for "is the architect output complete?". Both the
   // terminal-tool-scoping predicate (`isReadyToFinalize` below) and the
@@ -550,6 +569,7 @@ export function createArchitectOutputTools(input: {
       requireReferenceCoverage: input.requireReferenceCoverage,
       referenceCoverageReasons: input.referenceCoverageReasons,
       knownRequirementIDs: input.knownRequirementIDs,
+      knownResearchEvidenceIDs: input.knownResearchEvidenceIDs,
     })
 
   // Seed the collector with existing goals so modify_goal / remove_goal work
@@ -567,6 +587,7 @@ export function createArchitectOutputTools(input: {
         "objective MUST be self-contained (executor sees only this goal). All " +
         "fields are schema-validated. On re-runs, use an existing id only for " +
         "the same logical goal; use a new id only for a genuinely new goal. " +
+        "For webpage replicas, prefer phase outcome goals over component-sized goals. " +
         "Persistence preserves existing G numbers and assigns new goals the " +
         "next unused G number.",
       inputSchema: GoalContractFieldsSchema,
@@ -850,6 +871,12 @@ export function createArchitectOutputTools(input: {
         if (unknownGoals.length > 0) {
           return `Error: contract "${contract.id}" references unknown goal id(s): ${[...new Set(unknownGoals)].join(", ")}. Register the goals first; collector unchanged.`
         }
+        if (knownResearchEvidenceIDs && contract.evidence_refs.length > 0) {
+          const unknownEvidenceRefs = contract.evidence_refs.filter((id) => !knownResearchEvidenceIDs.has(id))
+          if (unknownEvidenceRefs.length > 0) {
+            return `Error: contract "${contract.id}" evidence_refs contain unknown or stale research evidence id(s): ${[...new Set(unknownEvidenceRefs)].join(", ")}; collector unchanged.`
+          }
+        }
         const existingIdx = collector.contract_graph.contracts.findIndex((row) => row.id === contract.id)
         if (existingIdx < 0) {
           const duplicate = duplicateContractSurface(collector, contract)
@@ -948,16 +975,17 @@ export function createArchitectOutputTools(input: {
           .describe(
             "Required analysis explaining goal boundaries, why no goal is too large, final verification ownership, and dependency necessity.",
           ),
-        // Required per specs/fact-check-agent-2026-05-25.md §3.1.
-        fact_check_items: FactCheckItemListSchema.describe(
+        // Optional fact-check registration: missing means no items registered.
+        fact_check_items: FactCheckItemListSchema.default([]).describe(
           "Every factual claim (API behaviour, library version, third-party protocol, number, path, history) you have NOT verified via tool calls in this session. Empty when only opinions, design choices, or in-session-verified statements.",
         ),
       }),
       execute: async ({ summary, decomposition_analysis, fact_check_items }) => {
+        const items = fact_check_items ?? []
         collector.summary = summary
         collector.decomposition_analysis =
           typeof decomposition_analysis === "string" ? decomposition_analysis.trim() : ""
-        collector.fact_check_items = fact_check_items
+        collector.fact_check_items = items
         const findings = architectValidationFindings(collector, {
           workDir: dir,
           designSpecs: input.designSpecs,

@@ -6,7 +6,7 @@ const repoRoot = path.resolve(import.meta.dir, "../../../..")
 const workerAgentFiles = [
   "packages/opencorvus/src/intent-analysis/agent.ts",
   "packages/opencorvus/src/requirements/agent.ts",
-  "packages/opencorvus/src/design-analyst/agent.ts",
+  "packages/opencorvus/src/frontend-design/agent.ts",
   "packages/opencorvus/src/build/agent.ts",
   "packages/opencorvus/src/integrity/team-agent.ts",
 ]

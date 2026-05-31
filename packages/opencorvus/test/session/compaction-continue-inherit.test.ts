@@ -3,6 +3,7 @@ import { Identifier } from "../../src/id/id"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
 import { SessionCompaction } from "../../src/session/compaction"
+import { SessionControl } from "../../src/session/control"
 import { tmpdir } from "../fixture/fixture"
 
 describe("SessionCompaction continuation", () => {
@@ -10,7 +11,7 @@ describe("SessionCompaction continuation", () => {
     expect("buildContinueUserMessage" in SessionCompaction).toBe(false)
   })
 
-  test("creates compaction continuation from the source user prompt contract", async () => {
+  test("creates compaction request as a session control record without copying the user prompt contract", async () => {
     await using tmp = await tmpdir()
     await Instance.provide({
       directory: tmp.path,
@@ -50,22 +51,22 @@ describe("SessionCompaction continuation", () => {
 
         const messages = await Session.messages({ sessionID: session.id })
         const compaction = messages.find((msg) => msg.parts.some((part) => part.type === "compaction"))
-        expect(compaction?.info.role).toBe("user")
-        if (compaction?.info.role !== "user") return
+        expect(compaction).toBeUndefined()
 
-        expect(compaction.info.agent).toBe("build")
-        expect(compaction.info.model).toEqual({ providerID: "provider-a", modelID: "model-a" })
-        expect(compaction.info.format?.type).toBe("json_schema")
-        expect(compaction.info.system).toBe("stage system prompt")
-        expect(compaction.info.systemMode).toBe("complete")
-        expect(compaction.info.tools).toEqual({ edit: true, bash: false })
-        expect(compaction.info.variant).toBe("xhigh")
-        expect(compaction.info.extra).toEqual({ goalID: "gol_compaction_contract" })
+        const controls = SessionControl.pending(session.id)
+        expect(controls).toHaveLength(1)
+        expect(controls[0].kind).toBe("compaction_request")
+        expect(controls[0].payload).toEqual({
+          source_user_message_id: source.id,
+          model: undefined,
+          overflow: false,
+          focus: undefined,
+        })
       },
     })
   })
 
-  test("persists an explicit compaction model override on the compaction message", async () => {
+  test("persists an explicit compaction model override on the control record only", async () => {
     await using tmp = await tmpdir()
     await Instance.provide({
       directory: tmp.path,
@@ -92,10 +93,43 @@ describe("SessionCompaction continuation", () => {
 
         const messages = await Session.messages({ sessionID: session.id })
         const compaction = messages.find((msg) => msg.parts.some((part) => part.type === "compaction"))
-        expect(compaction?.info.role).toBe("user")
-        if (compaction?.info.role !== "user") return
+        expect(compaction).toBeUndefined()
 
-        expect(compaction.info.model).toEqual({ providerID: "provider-b", modelID: "model-b" })
+        const controls = SessionControl.pending(session.id)
+        expect(controls).toHaveLength(1)
+        expect(controls[0].kind).toBe("manual_summarize")
+        expect(controls[0].payload.model).toEqual({ providerID: "provider-b", modelID: "model-b" })
+      },
+    })
+  })
+
+  test("rejects queued automatic compaction for workflow sessions", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ kind: "build", title: "workflow auto compaction" })
+        const source = await Session.updateMessage({
+          id: Identifier.ascending("message"),
+          sessionID: session.id,
+          role: "user",
+          time: { created: Date.now() },
+          agent: "build",
+          model: { providerID: "provider-a", modelID: "model-a" },
+        })
+        expect(source.role).toBe("user")
+        if (source.role !== "user") return
+
+        await expect(
+          SessionCompaction.create({
+            sessionID: session.id,
+            source,
+            auto: true,
+            overflow: true,
+          }),
+        ).rejects.toThrow("Automatic compaction is disabled")
+
+        expect(SessionControl.pending(session.id)).toEqual([])
       },
     })
   })

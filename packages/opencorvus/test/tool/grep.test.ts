@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import path from "path"
+import fs from "node:fs/promises"
 import { SearchCodeTool } from "../../src/tool/grep"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
@@ -33,6 +34,23 @@ describe("tool.search_code", () => {
 
     expect(searchCode.description).toContain('{"pattern":"<regex>"}')
     expect(searchCode.description).toContain('do not use "query"')
+  })
+
+  test("workflow codebase tools reject sibling-prefix path escapes", async () => {
+    await using tmp = await tmpdir()
+    const root = path.join(tmp.path, "repo")
+    const sibling = path.join(tmp.path, "repo2")
+    await fs.mkdir(root, { recursive: true })
+    await fs.mkdir(sibling, { recursive: true })
+    await Bun.write(path.join(sibling, "secret.txt"), "outside")
+
+    const readFile = createCodebaseTools(root).read_file
+    const result = await readFile.execute!(
+      { path: "../repo2/secret.txt" },
+      {} as any,
+    )
+
+    expect(result).toBe("Error: path is outside the project boundary.")
   })
 
   test("basic search", async () => {

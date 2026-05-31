@@ -23,7 +23,7 @@
 >    ——下文里写的 `grep` / `codesearch` 都已重命名为 `search_code` / `external_code_search`。
 > 6. 实际 delivery agent（`agent.ts:233`）用 `tools: { include: [] }` 空白名单，
 >    review/output tools 由 `DeliveryAgent.verify` 通过 SessionLoop extra tools 在运行时注入。
-> 7. `requirements` / `architect` / `design-analyst` / `intent-analysis` / `integrity`
+> 7. `requirements` / `architect` / `frontend-design` / `intent-analysis` / `integrity`
 >    / `prosecutor` 等 stage agent **走** ToolRegistry（在 `agent.ts:316+` 注册，全部是
 >    `mode: "primary" + hidden: true` 的 native），不属于"不走 ToolRegistry"那一类。
 >    `integrity` / `prosecutor` 的 verdict / counter-example 工具是运行时通过 SessionLoop
@@ -34,10 +34,10 @@
 >    `planner` agent 已随 `src/planner/` 删除。
 > 9. `orchestrator` 自己也走 ToolRegistry（`agent.ts:243`，`tools.include` 列出 dispatch /
 >    observation / bookkeeping 三类约 30 个 tool id；见 §6 通信白名单与 11 spec 第五章）。
-> 10. design-analyst 是 mirror 工具的**唯一**消费者（`tool/registry.ts:181` 显式跳过
+> 10. frontend-design 是 mirror 工具的**唯一**消费者（`tool/registry.ts:181` 显式跳过
 >     `isMirrorToolId` 过滤）；其他 agent 的 registry 视图先剔除 `MIRROR_TOOL_IDS` 再做
 >     include/exclude。本文 §各 native agent 工具声明表里 `MIRROR_TOOL_IDS` 没显式列出，
->     默认所有非 design-analyst agent 都看不到 mirror tools，与表格行为一致。
+>     默认所有非 frontend-design agent 都看不到 mirror tools，与表格行为一致。
 
 ## 问题
 
@@ -104,12 +104,12 @@ export async function tools(model, agent?) {
 | orchestrator | include | dispatch/observation/interaction/bookkeeping 共一组（含 `cancel_subagent`，见 `agent.ts:299-332`） | **走** ToolRegistry（`agent.ts:267+`） |
 | requirements | include | `["read_file", "find_files", "search_code", "list_directory", "memory_search", "memory_get", "todoread", "todowrite"]` | **走** ToolRegistry（`agent.ts:340+`，`mode:"primary"` + `hidden` native） |
 | architect | include | `["read_file", "find_files", "search_code", "list_directory", "memory_search", "memory_get", "todoread", "todowrite"]` | **走** ToolRegistry（`agent.ts:355+`） |
-| design-analyst | include | `["read_file", "find_files", "search_code", "list_directory", "memory_search", "memory_get", "url_screenshot", ...MIRROR_ANALYSIS_TOOL_IDS]` | **走** ToolRegistry（`agent.ts:366+`） |
+| frontend-design | include | `["read_file", "find_files", "search_code", "list_directory", "memory_search", "memory_get", "url_screenshot", ...MIRROR_ANALYSIS_TOOL_IDS]` | **走** ToolRegistry（`agent.ts:366+`） |
 | intent-analysis | include | `["read_file", "find_files", "search_code", "list_directory", "memory_search", "memory_get", "todoread", "todowrite"]` | **走** ToolRegistry（`agent.ts:393+`） |
 | integrity | include | `[]` | **走** ToolRegistry（`agent.ts:403+`）；工具集经 session 注入 |
 | prosecutor | include | `[]` | **走** ToolRegistry（`agent.ts:414+`）；工具集经 session 注入 |
 
-> 已删除的 agent 行（`spec` / `plan` / `planner` / `task` / `evaluator`）已从上表移除——这些 native agent 已在历次重构中删除，`agent.ts` 不再注册。`requirements` / `architect` / `design-analyst` / `intent-analysis` / `integrity` / `prosecutor` **均走 ToolRegistry**（与本文件头部「校准注」一致，旧版「不走 ToolRegistry」表述已纠正）。
+> 已删除的 agent 行（`spec` / `plan` / `planner` / `task` / `evaluator`）已从上表移除——这些 native agent 已在历次重构中删除，`agent.ts` 不再注册。`requirements` / `architect` / `frontend-design` / `intent-analysis` / `integrity` / `prosecutor` **均走 ToolRegistry**（与本文件头部「校准注」一致，旧版「不走 ToolRegistry」表述已纠正）。
 
 ### Build 快速通道（orchestrator build tool）
 
@@ -187,7 +187,7 @@ tools: z.union([
 
 ## 不动的
 
-- `orchestrator/tools.ts` 的 orchestrator **自建工具**（`build` / `deliver` / `prosecute` / `publish_delivery` 等 dispatch/observation tool）—— 这些不走 ToolRegistry，由 orchestrator tool 工厂独立构建。注意：`requirements` / `architect` / `design-analyst` / `intent-analysis` / `integrity` / `prosecutor` 是 **native agent，走 ToolRegistry**（见上表），不属于此类；`planner` agent 已删除
+- `orchestrator/tools.ts` 的 orchestrator **自建工具**（`build` / `deliver` / `prosecute` / `publish_delivery` 等 dispatch/observation tool）—— 这些不走 ToolRegistry，由 orchestrator tool 工厂独立构建。注意：`requirements` / `architect` / `frontend-design` / `intent-analysis` / `integrity` / `prosecutor` 是 **native agent，走 ToolRegistry**（见上表），不属于此类；`planner` agent 已删除
 - `PermissionNext` 基础设施 —— 复用现有 deny/allow/ask 语义
 - agent prompt 内容 —— 工具不可见后，prompt 中 "use the Task tool" 之类的指示自然失效，无需改 prompt
 

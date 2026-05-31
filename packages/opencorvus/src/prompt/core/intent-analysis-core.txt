@@ -23,7 +23,7 @@ class, complexity, concrete slots, and blocker gaps.
 
 Do not solve downstream responsibilities here:
 - Requirements owns acceptance-level REQ-N extraction.
-- Design Analysis owns visual PRD/SPEC synthesis and mirror evidence.
+- Frontend Design owns visual frontend template synthesis and mirror evidence.
 - Architect owns goal graph, acceptance specs, owned paths, and contracts.
 - Build owns implementation.
 - Integrity owns final workflow acceptance evidence inside its own review session.

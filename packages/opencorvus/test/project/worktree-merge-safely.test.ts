@@ -93,6 +93,55 @@ describe("Worktree.mergeSafely", () => {
     expect(outcome.dirtyPaths).toEqual(["M tracked.txt", "?? new.txt"])
   })
 
+  test("ignores untracked evidence input views during publication", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await $`git ${gitEnv} branch -M master`.cwd(tmp.path).quiet()
+
+    const info = await Instance.provide({
+      directory: tmp.path,
+      fn: () => Worktree.create({ name: `safe-evidence-view-${Date.now().toString(36)}` }),
+    })
+    await fs.mkdir(path.join(info.directory, "web-clone-source"), { recursive: true })
+    await fs.writeFile(path.join(info.directory, "web-clone-source", "README.md"), "evidence\n")
+    await fs.writeFile(path.join(info.directory, "feature.ts"), "feature\n")
+    await $`git add feature.ts`.cwd(info.directory).quiet()
+    await $`git ${gitEnv} commit -m "goal feature"`.cwd(info.directory).quiet()
+
+    const outcome = await Instance.provide({
+      directory: tmp.path,
+      fn: () => Worktree.mergeSafely({ branch: info.branch, worktreeDir: info.directory }),
+    })
+
+    expect(outcome.status).toBe("merged")
+    expect((await fs.readFile(path.join(tmp.path, "feature.ts"), "utf8")).replace(/\r\n/g, "\n")).toBe("feature\n")
+    await expect(fs.stat(path.join(tmp.path, "web-clone-source", "README.md"))).rejects.toThrow()
+  })
+
+  test("blocks committed evidence input files from merge_back", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await $`git ${gitEnv} branch -M master`.cwd(tmp.path).quiet()
+
+    const info = await Instance.provide({
+      directory: tmp.path,
+      fn: () => Worktree.create({ name: `safe-evidence-committed-${Date.now().toString(36)}` }),
+    })
+    await fs.mkdir(path.join(info.directory, "web-clone-source"), { recursive: true })
+    await fs.writeFile(path.join(info.directory, "web-clone-source", "README.md"), "must remain input\n")
+    await $`git add web-clone-source/README.md`.cwd(info.directory).quiet()
+    await $`git ${gitEnv} commit -m "bad evidence commit"`.cwd(info.directory).quiet()
+
+    const outcome = await Instance.provide({
+      directory: tmp.path,
+      fn: () => Worktree.mergeSafely({ branch: info.branch, worktreeDir: info.directory }),
+    })
+
+    expect(outcome.status).toBe("blocked")
+    if (outcome.status !== "blocked") throw new Error(`unexpected outcome ${outcome.status}`)
+    expect(outcome.reason).toContain("refusing to merge committed frontend evidence input files")
+    expect(outcome.reason).toContain("web-clone-source/README.md")
+    await expect(fs.stat(path.join(tmp.path, "web-clone-source", "README.md"))).rejects.toThrow()
+  })
+
   test("preserves dirty primary worktree changes before publishing goal branch", async () => {
     await using tmp = await tmpdir({ git: true })
     await $`git ${gitEnv} branch -M master`.cwd(tmp.path).quiet()
@@ -126,6 +175,41 @@ describe("Worktree.mergeSafely", () => {
     expect(status).toBe("")
     const recoveryMessage = (await $`git log --format=%s -1 ${outcome.primaryRecoveryCommit}`.cwd(tmp.path).text()).trim()
     expect(recoveryMessage).toBe("chore(opencorvus): preserve primary worktree changes before merge_back")
+  })
+
+  test("preserves dirty primary worktree without staging ignored evidence directories", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await $`git ${gitEnv} branch -M master`.cwd(tmp.path).quiet()
+
+    await fs.writeFile(path.join(tmp.path, ".gitignore"), "mirror/\n")
+    await fs.writeFile(path.join(tmp.path, "kept.txt"), "base\n")
+    await $`git add .gitignore kept.txt`.cwd(tmp.path).quiet()
+    await $`git ${gitEnv} commit -m "seed"`.cwd(tmp.path).quiet()
+
+    const info = await Instance.provide({
+      directory: tmp.path,
+      fn: () => Worktree.create({ name: `safe-primary-ignored-evidence-${Date.now().toString(36)}` }),
+    })
+    await fs.writeFile(path.join(info.directory, "feature.ts"), "feature\n")
+    await $`git add feature.ts`.cwd(info.directory).quiet()
+    await $`git ${gitEnv} commit -m "goal feature"`.cwd(info.directory).quiet()
+
+    await fs.writeFile(path.join(tmp.path, "kept.txt"), "primary dirty\n")
+    await fs.mkdir(path.join(tmp.path, "mirror"), { recursive: true })
+    await fs.writeFile(path.join(tmp.path, "mirror", "source.html"), "<html></html>\n")
+
+    const outcome = await Instance.provide({
+      directory: tmp.path,
+      fn: () => Worktree.mergeSafely({ branch: info.branch, worktreeDir: info.directory }),
+    })
+
+    expect(outcome.status).toBe("merged")
+    if (outcome.status !== "merged") throw new Error(`unexpected outcome ${outcome.status}`)
+    expect((await fs.readFile(path.join(tmp.path, "feature.ts"), "utf8")).replace(/\r\n/g, "\n")).toBe("feature\n")
+    expect((await fs.readFile(path.join(tmp.path, "kept.txt"), "utf8")).replace(/\r\n/g, "\n")).toBe("primary dirty\n")
+    expect((await fs.readFile(path.join(tmp.path, "mirror", "source.html"), "utf8")).replace(/\r\n/g, "\n")).toBe("<html></html>\n")
+    const tracked = await $`git ls-files mirror`.cwd(tmp.path).text()
+    expect(tracked.trim()).toBe("")
   })
 
   test("blocks host merge when goal worktree git linkage is missing", async () => {

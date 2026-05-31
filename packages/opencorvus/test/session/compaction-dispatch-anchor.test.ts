@@ -5,6 +5,7 @@ import { Session } from "../../src/session"
 import { SessionCompaction } from "../../src/session/compaction"
 import { CompactionHandoff } from "../../src/session/compaction-handoff"
 import { Message } from "../../src/session/message"
+import { SessionControl } from "../../src/session/control"
 import type { Config } from "../../src/config/config"
 import type { Provider } from "../../src/provider/provider"
 import { tmpdir } from "../fixture/fixture"
@@ -248,7 +249,7 @@ describe("session compaction dispatch anchor", () => {
     ])
   })
 
-  test("created compaction marker preserves dispatch text when filtered after successful handoff", async () => {
+  test("created compaction request is control-only and leaves dispatch text in transcript", async () => {
     await using tmp = await tmpdir()
     await Instance.provide({
       directory: tmp.path,
@@ -295,44 +296,12 @@ describe("session compaction dispatch anchor", () => {
         })
         const messages = await Session.messages({ sessionID: session.id })
         const marker = messages.find((message) => message.parts.some((part) => part.type === "compaction"))
-        const markerPart = marker?.parts.find((part): part is Message.CompactionPart => part.type === "compaction")
-        expect(marker?.info.role).toBe("user")
-        expect(markerPart).toBeDefined()
-        if (!marker || marker.info.role !== "user" || !markerPart) return
-        await Session.updatePart({
-          ...markerPart,
-          anchor_id: dispatch.id,
-          tail_start_id: source.id,
-        })
-        const summary = await Session.updateMessage({
-          id: Identifier.ascending("message"),
-          sessionID: session.id,
-          role: "assistant",
-          parentID: marker.info.id,
-          time: { created: Date.now() + 2 },
-          agent: "compaction",
-          modelID: "test-model",
-          providerID: "test",
-          path: { cwd: tmp.path, root: tmp.path },
-          cost: 0,
-          tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-          summary: true,
-          finish: "stop",
-          structured: handoffFixture(source.id),
-        })
-        await Session.updatePart({
-          id: Identifier.ascending("part"),
-          messageID: summary.id,
-          sessionID: session.id,
-          type: "text",
-          text: "summary",
-        })
-
-        const stored = await Session.messages({ sessionID: session.id })
-        const filtered = await Message.filterCompacted(stream([...stored].reverse()))
-
-        expect(filtered.map((message) => message.info.id)).toEqual([dispatch.id, marker.info.id, summary.id, source.id])
-        expect(JSON.stringify(filtered)).toContain("DISPATCH TEXT MUST SURVIVE")
+        expect(marker).toBeUndefined()
+        expect(JSON.stringify(messages)).toContain("DISPATCH TEXT MUST SURVIVE")
+        const controls = SessionControl.pending(session.id)
+        expect(controls).toHaveLength(1)
+        expect(controls[0].kind).toBe("compaction_request")
+        expect(controls[0].payload.source_user_message_id).toBe(source.id)
       },
     })
   })

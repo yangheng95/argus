@@ -107,7 +107,8 @@ function fakePage(input?: { selectors?: Set<string>; bodyText?: string; navigati
       press: async (key: string) => { events.push(`key:press:${key}`) },
     },
     $: async (selector: string) => input?.selectors?.has(selector) ? { selector } : null,
-    evaluate: async <T>(_fn: (...args: never[]) => T, ...args: unknown[]) => (input?.bodyText ?? "").includes(String(args[0] ?? "")) as T,
+    evaluate: async <R, Arg = unknown>(_fn: string | ((arg: Arg) => R), arg?: Arg) =>
+      (input?.bodyText ?? "").includes(String(arg ?? "")) as R,
     url: () => url,
     on: () => undefined,
   }

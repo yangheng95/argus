@@ -13,7 +13,12 @@ import path from "node:path"
 import z from "zod"
 
 import { Tool } from "../../tool/tool"
-import { WEBPAGE_EVALUATE_PASS_SCORE, evaluateVisual, isEvaluationReportPassing } from "../visual/evaluate"
+import {
+  WEBPAGE_EVALUATE_PASS_SCORE,
+  WEBPAGE_HIGH_FIDELITY_PASS_SCORE,
+  evaluateVisual,
+  isEvaluationReportPassing,
+} from "../visual/evaluate"
 import { resolveMirrorOutputDir, DEFAULT_MIRROR_SUBDIR } from "./output-dir"
 
 export const WebpageEvaluateTool = Tool.define("webpage_evaluate", {
@@ -24,7 +29,7 @@ Formula: \`round(ssim * 50 + (100 - pixelDiff%) * 0.5)\`.
   - pixelmatch: pixel-level diff at threshold 0.1 (captures colour precision)
   - dimension-mismatch penalty proportional to area ratio when the two images differ in size
 
-Returns score, SSIM, pixelDiff%, and whether the numeric visual threshold passed. The configured threshold is 85/100. Do not invent a higher target. Use \`webpage_vision_judge\` for qualitative differences because the score alone cannot tell you whether structural elements are correct.`,
+Returns score, SSIM, pixelDiff%, and whether the numeric visual threshold passed. The default threshold is 85/100 for iterative repair. For high-fidelity webpage clone acceptance, pass \`passThreshold: 96\` so the integer score proves similarity >95%. Use \`webpage_vision_judge\` for qualitative differences because the score alone cannot tell you whether structural elements are correct.`,
   parameters: z.object({
     reference: z
       .string()
@@ -38,6 +43,13 @@ Returns score, SSIM, pixelDiff%, and whether the numeric visual threshold passed
       .string()
       .describe(`Directory used to resolve relative paths and to write \`eval-result.json\`. Defaults to task-scoped \`${DEFAULT_MIRROR_SUBDIR}\` (matching webpage_extract's default). Do not set this during task sessions; overrides are for benchmarks/tests and task-session overrides must stay under \`${DEFAULT_MIRROR_SUBDIR}\`.`)
       .optional(),
+    passThreshold: z
+      .number()
+      .int()
+      .min(0)
+      .max(100)
+      .describe(`Numeric pass threshold. Default ${WEBPAGE_EVALUATE_PASS_SCORE}; use ${WEBPAGE_HIGH_FIDELITY_PASS_SCORE} for similarity >95% acceptance.`)
+      .optional(),
   }),
   async execute(params, ctx) {
     const outputDir = await resolveMirrorOutputDir({ override: params.outputDir, sessionID: ctx.sessionID })
@@ -50,7 +62,8 @@ Returns score, SSIM, pixelDiff%, and whether the numeric visual threshold passed
       originalImage: referencePath,
       renderedImage: renderedPath,
     })
-    const passed = isEvaluationReportPassing(report)
+    const passThreshold = params.passThreshold ?? WEBPAGE_EVALUATE_PASS_SCORE
+    const passed = isEvaluationReportPassing(report, passThreshold)
 
     const evalResultPath = path.join(outputDir, "eval-result.json")
     const evalResult = {
@@ -58,7 +71,7 @@ Returns score, SSIM, pixelDiff%, and whether the numeric visual threshold passed
       referencePath,
       renderedPath,
       overallScore: report.overallScore,
-      passThreshold: WEBPAGE_EVALUATE_PASS_SCORE,
+      passThreshold,
       passed,
       ssimScore: report.ssimScore,
       pixelDiffPercent: report.pixelDiffPercent,
@@ -70,7 +83,7 @@ Returns score, SSIM, pixelDiff%, and whether the numeric visual threshold passed
     await fs.writeFile(evalResultPath, JSON.stringify(evalResult, null, 2), "utf8")
 
     return {
-      title: `Score ${report.overallScore}/100 ${passed ? "passed" : "below"} threshold ${WEBPAGE_EVALUATE_PASS_SCORE}/100 (ssim=${report.ssimScore.toFixed(3)} pixelDiff=${report.pixelDiffPercent.toFixed(2)}%)`,
+      title: `Score ${report.overallScore}/100 ${passed ? "passed" : "below"} threshold ${passThreshold}/100 (ssim=${report.ssimScore.toFixed(3)} pixelDiff=${report.pixelDiffPercent.toFixed(2)}%)`,
       output: [
         `# Visual evaluation`,
         "",
@@ -79,17 +92,17 @@ Returns score, SSIM, pixelDiff%, and whether the numeric visual threshold passed
         `- Result:    \`${evalResultPath}\``,
         "",
         `## Score: **${report.overallScore}/100**`,
-        `- Numeric threshold: ${WEBPAGE_EVALUATE_PASS_SCORE}/100`,
+        `- Numeric threshold: ${passThreshold}/100`,
         `- Numeric result: ${passed ? "passed" : "failed"}`,
         `- SSIM structural: ${report.ssimScore.toFixed(4)}`,
         `- Pixel diff: ${report.pixelDiffPercent.toFixed(2)}% (${report.mismatchedPixels} / ${report.totalPixels} px)`,
         `- Dimensions match: ${report.dimensionsMatch} (compared at ${report.comparisonDimensions.width}×${report.comparisonDimensions.height})`,
         "",
-        "The numeric visual threshold is 85/100. Do not invent a higher score target. For qualitative differences, call `webpage_vision_judge` — it reads the two PNGs and returns a structured diff list.",
+        `For high-fidelity webpage clone acceptance, use ${WEBPAGE_HIGH_FIDELITY_PASS_SCORE}/100 (strictly greater than 95) plus qualitative review evidence. For qualitative differences, call \`webpage_vision_judge\` — it reads the two PNGs and returns a structured diff list.`,
       ].join("\n"),
       metadata: {
         overallScore: report.overallScore,
-        passThreshold: WEBPAGE_EVALUATE_PASS_SCORE,
+        passThreshold,
         passed,
         ssimScore: report.ssimScore,
         pixelDiffPercent: report.pixelDiffPercent,

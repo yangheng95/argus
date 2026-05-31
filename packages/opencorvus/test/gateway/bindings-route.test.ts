@@ -10,7 +10,7 @@ import { Log } from "../../src/util/log"
 
 Log.init({ print: false })
 
-describe("ChannelIngress.bindingsByTaskID (Gateway PRD §10)", () => {
+describe("ChannelIngress.bindingsByTaskID (Gateway template §10)", () => {
   test("returns the rows bound to a task id (and only those rows)", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({

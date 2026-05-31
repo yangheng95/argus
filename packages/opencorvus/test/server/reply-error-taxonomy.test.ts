@@ -20,10 +20,41 @@ import { Session } from "../../src/session"
 import { SessionPrompt } from "../../src/session/prompt"
 import { Database } from "../../src/storage/db"
 import { Log } from "../../src/util/log"
+import { WorkerTurnDescriptor } from "../../src/agent/worker-turn-descriptor"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
 Log.init({ print: false })
+
+function installArchitectRuntimeContract(
+  sessionID: string,
+  model: { providerID: string; modelID: string } = { providerID: "overlay", modelID: "architect" },
+) {
+  const descriptor = WorkerTurnDescriptor.create({
+    sessionID,
+    payload: {
+      agent: "architect",
+      roleContractID: "architect",
+      model,
+      prompt: { systemMode: "complete", rawSystemPrompt: false },
+      tools: { enabled: [] },
+      output: { format: "text", resultMode: "reply" },
+      workflow: { sessionKind: "architect" },
+    },
+  })
+  SessionPrompt.setSessionRuntimeContract(sessionID, {
+    identity: {
+      sessionID,
+      agentKind: "architect",
+      contractKind: "stage-attempt",
+      workerTurnDescriptorID: descriptor.id,
+      workerTurnDescriptorHash: descriptor.hash,
+      installedAt: Date.now(),
+    },
+    tools: {},
+    structuredOutputGuard: () => undefined,
+  })
+}
 
 describe("AgentSessionReplyBox error taxonomy", () => {
   afterEach(async () => {
@@ -371,16 +402,7 @@ describe("AgentSessionReplyBox error taxonomy", () => {
         // Contract installed → validator passes → resolveAgentModelRef
         // is the next step. No overlay config means architect has no
         // resolvable model.
-        SessionPrompt.setSessionRuntimeContract(architect.id, {
-          identity: {
-            sessionID: architect.id,
-            agentKind: "architect",
-            contractKind: "stage-attempt",
-            installedAt: Date.now(),
-          },
-          tools: {},
-          structuredOutputGuard: () => undefined,
-        })
+        installArchitectRuntimeContract(architect.id)
 
         const response = await app.request(`/task/${taskID}/session/${architect.id}/reply`, {
           method: "POST",
@@ -451,6 +473,61 @@ describe("AgentSessionReplyBox error taxonomy", () => {
           model: { providerID: "test-provider", modelID: "test-model" },
         })
 
+        installArchitectRuntimeContract(architect.id, { providerID: "overlay", modelID: "architect" })
+
+        const response = await app.request(`/task/${taskID}/session/${architect.id}/reply`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({ message: "continue" }),
+        })
+
+        expect(response.status).toBe(202)
+      },
+    })
+  })
+
+  test("worker kind with contract but no descriptor -> 410 before persisting reply", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const taskID = Identifier.ascending("task")
+        const now = Date.now()
+        const root = await Session.create({ kind: "root", title: "root" })
+        const architect = await Session.create({
+          kind: "architect",
+          parentID: root.id,
+          title: "architect",
+        })
+
+        Database.use((db) =>
+          db.insert(EngineTaskTable).values({
+            id: taskID,
+            project_id: Instance.project.id,
+            session_id: root.id,
+            source: "panel",
+            title: "descriptor missing",
+            request: "descriptor missing",
+            priority: "normal",
+            time_created: now,
+            time_updated: now,
+            time_started: now,
+          }).run(),
+        )
+
+        await Session.updateMessage({
+          id: Identifier.ascending("message"),
+          sessionID: architect.id,
+          role: "user",
+          time: { created: now + 1 },
+          agent: "architect",
+          model: { providerID: "test-provider", modelID: "test-model" },
+        })
+
         SessionPrompt.setSessionRuntimeContract(architect.id, {
           identity: {
             sessionID: architect.id,
@@ -471,7 +548,12 @@ describe("AgentSessionReplyBox error taxonomy", () => {
           body: JSON.stringify({ message: "continue" }),
         })
 
-        expect(response.status).toBe(202)
+        expect(response.status).toBe(410)
+        const body = await response.json() as { name?: string; data?: { agentKind?: string } }
+        expect(body.name).toBe("SessionRuntimeContractMissingError")
+        expect(body.data?.agentKind).toBe("architect")
+        const messages = await Session.messages({ sessionID: architect.id })
+        expect(messages.filter((message) => message.info.role === "user")).toHaveLength(1)
       },
     })
   })

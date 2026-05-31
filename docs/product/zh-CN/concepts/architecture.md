@@ -43,7 +43,7 @@ orchestrator/loop.ts — runTaskLoop()  (line 117)
     ┌─────────────────────────────────────┐
     │ sub-agent（按需调用）                │
     │  requirements / architect /         │
-    │  design_analysis / build /          │
+    │  frontend_design / build /          │
     │  integrity / prosecute /            │
     │  analyze_intent / deliver / …       │
     └────────────┬────────────────────────┘
@@ -76,7 +76,7 @@ orchestrator/loop.ts — runTaskLoop()  (line 117)
 | ID | 适合 | 推荐步骤 |
 |---|---|---|
 | `direct` | 单文件 / bugfix / 配置 / 短调试 | `build` → `deliver` |
-| `pipeline` | 多文件功能 / UI 复刻 / 跨模块重构 | `design_analysis?` → `requirements` → `architect` → per-goal `build` → `deliver` |
+| `pipeline` | 多文件功能 / UI 复刻 / 跨模块重构 | `frontend_design?` → `requirements` → `architect` → per-goal `build` → `deliver` |
 
 定义在 `engine/workflow.ts`，用户可在 `opencorvus.jsonc` 自定义；Orchestrator 通过 `WorkflowRegistry.resolve(id)` 取模板，仍可根据推理偏离。
 
@@ -88,7 +88,7 @@ orchestrator/loop.ts — runTaskLoop()  (line 117)
 | **Intent Analysis** | `intent-analysis/agent.ts` | 解读简短 / 模糊请求，输出 intent class / complexity / clarifications |
 | **Requirements** | `requirements/agent.ts` | Zod tool 输出 REQ-N + foundational decisions；不产出 goals |
 | **Architect** | `architect/agent.ts` | 先分析边界，再产出至少 2 个小型、可独立执行/验收的 goals；禁止单个大型 all-in-one goal；同时负责接口契约、追溯与 fidelity |
-| **Design Analyst** | `design-analyst/agent.ts` | 视觉参考（Figma / 图片 / URL）→ 布局 / 样式 / 组件清单 |
+| **Frontend Design** | `frontend-design/agent.ts` | 视觉参考（Figma / 图片 / URL）→ 前端模板 / 待填充模块 / 视觉一致性契约 |
 | **Build** | `build/agent.ts` + `build/index.ts` + `build/report.ts` + `build/types.ts` + `goal/runner.ts` + `agent/sub-agent-protocol.ts` | 在 worktree 中实际写代码；由 Orchestrator 通过 `build` tool 调起 |
 | **Integrity Reviewer** | `integrity/agent.ts` | 多维 integrity review（requirement_fidelity / technical_feasibility / hallucination / solution_quality） |
 | **Prosecutor** | `prosecutor/agent.ts` | 对交付候选发起对抗性复核 |

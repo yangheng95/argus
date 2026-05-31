@@ -3,12 +3,12 @@
  * deterministic file generators.
  *
  * Reads `extracted-page.json`, runs pattern detection + token extraction, and
- * writes mirror facts plus deterministic scaffold artifacts that design-analysis consumes:
+ * writes mirror facts plus deterministic scaffold artifacts that frontend-design consumes:
  *   - `<outputDir>/visual-surface-scaffold.json` semantic ProjectScaffold
  *   - `<outputDir>/visual-surface-candidates.json` deterministic surface candidates
- *   - `<outputDir>/binding-manifest.json` visual View slot contract
  *   - `<outputDir>/shared-context.md`     compact token + pattern summary
- *   - `<outputDir>/generated-view-source/*` slot-based View artifacts
+ *   - `<outputDir>/segments.json` canonical web-clone segment contract
+ *   - `<outputDir>/codegen-context.json` prompt-facing framework codegen handoff
  *
  * Returns only the summary so the tool output stays small.
  */
@@ -24,22 +24,30 @@ import {
   detectPatterns,
   generateSurfaceCandidates,
 } from "../url/pattern"
-import {
-  generateVisualBindingArtifacts,
-  generateViewSourceFiles,
-  materializeScaffoldForReactSource,
-} from "../shared/scaffold-helpers"
+import { materializeScaffoldForReactSource } from "../shared/scaffold-helpers"
+import { materializeInlineExtractedPageAssets } from "../url/extract"
 import { ExtractedPageSchema } from "../ir/extracted-page"
 import type { ProjectScaffold } from "../ir/scaffold"
 import { resolveMirrorOutputDir, DEFAULT_MIRROR_SUBDIR } from "./output-dir"
-import { writeGeneratedSourceFiles } from "./generated-source"
+import {
+  buildWebCloneHandoff,
+  WebCloneAssetGraphSchema,
+  WebClonePageIrSchema,
+  writeWebCloneHandoff,
+  writeWebCloneSourceSkeleton,
+} from "../../web-clone"
 
 function renderPrdEvidenceSummary(input: {
   page: { url: string; title: string; viewport: { width: number; height: number } }
   scaffold: ProjectScaffold
   scaffoldPath: string
   candidatePath: string
-  bindingManifestPath: string
+  assetManifestPath: string
+  segmentsPath: string
+  codegenContextPath: string
+  sourceSkeletonPath: string
+  sourceSkeletonAuditPath: string
+  sourceIrPath: string
   contextPath: string
   irPath: string
   referencePath: string
@@ -57,7 +65,7 @@ function renderPrdEvidenceSummary(input: {
     .map((s) => `${s.px}px`)
     .join(", ")
   const surfaces = scaffold.surfaces
-    .map((s) => `- ${s.name}: kind=${s.kind}, role=${s.role ?? "unknown"}, bounds=${s.bounds.x},${s.bounds.y},${s.bounds.w}x${s.bounds.h}, view=${s.view.filePath}`)
+    .map((s) => `- ${s.name}: kind=${s.kind}, role=${s.role ?? "unknown"}, bounds=${s.bounds.x},${s.bounds.y},${s.bounds.w}x${s.bounds.h}`)
     .join("\n")
   const patterns = scaffold.catalog.patterns
     .slice(0, 12)
@@ -68,7 +76,7 @@ function renderPrdEvidenceSummary(input: {
     .join("\n")
 
   return [
-    "# Mirror PRD/SPEC Evidence Summary",
+    "# Mirror frontend template Evidence Summary",
     "",
     `Source URL: ${page.url}`,
     `Title: ${page.title}`,
@@ -76,14 +84,19 @@ function renderPrdEvidenceSummary(input: {
     "",
     "## Canonical Evidence Files",
     `- Pixel reference: ${input.referencePath}`,
-    `- Page hierarchy and text IR: ${input.irPath}`,
+    `- Canonical structure IR: ${input.irPath}`,
+    `- Asset graph: ${input.assetManifestPath}`,
+    `- Visual reconstruction segments: ${input.segmentsPath}`,
+    `- Source-package diagnostic context: ${input.codegenContextPath}`,
+    `- Source skeleton hierarchy evidence: ${input.sourceSkeletonPath}`,
+    `- Source skeleton audit: ${input.sourceSkeletonAuditPath}`,
+    `- Semantic source IR: ${input.sourceIrPath}`,
     `- Compact token/pattern summary: ${input.contextPath}`,
     `- Visual surface candidates: ${input.candidatePath}`,
     `- Semantic visual surface scaffold: ${input.scaffoldPath}`,
-    `- Visual slot binding manifest: ${input.bindingManifestPath}`,
     "",
-    "## PRD/SPEC Draft Surface",
-    "Use this as the first draft surface, then perform the PRD/SPEC review pass(es) required by assistant.auto_iteration before submit_design_prd_spec.",
+    "## frontend template Draft Surface",
+    "Use this as the first draft surface, then perform the frontend template review pass(es) required by assistant.auto_iteration before submit_frontend_template.",
     "",
     "### Page Inventory",
     surfaces || "- No visual surfaces detected; mark inventory gaps explicitly.",
@@ -103,35 +116,47 @@ function renderPrdEvidenceSummary(input: {
     "### Visual Consistency Emphasis",
     "- Preserve the reference viewport geometry and major region proportions before decorative detail.",
     "- Bind charts, tables, toolbars, sidebars, overlays, and repeated data surfaces as grouped components.",
-    "- Backend/API details must be marked unknown unless observable from text, controls, or data surfaces.",
+    "- UI data/API details must be marked unknown unless observable from text, controls, or data surfaces.",
     "",
     "### Required Review Passes",
     "- Pass 1 inventory: confirm each visible region/text/control/chart/table/media surface is represented or marked unknown.",
-    "- Pass 2 implementation handoff: confirm frontend/backend specs are implementable without mirror tools.",
+    "- Pass 2 implementation handoff: confirm web-clone-source/implementation-blueprint.md, source-ir/*.json, source-skeleton/critical.css, source-skeleton/index.html, and source-skeleton/full-source.css provide enough evidence for downstream maintainable framework implementation.",
   ].join("\n")
 }
 
 export const WebpageAnalyzeTool = Tool.define("webpage_analyze", {
-  description: `Analyze an ExtractedPage into deterministic surface candidates and a semantic ProjectScaffold (visual surface list, component-pattern catalog, design-token system, View contracts). Zero LLM.
+  description: `Analyze an ExtractedPage into deterministic surface candidates and semantic source evidence (visual surface list, component-pattern catalog, design-token system). Zero LLM.
 
 Reads \`<outputDir>/extracted-page.json\` (from webpage_extract). Writes mirror facts plus scaffold artifacts:
-  - visual-surface-candidates.json deterministic surface evidence for design-analysis review
+  - visual-surface-candidates.json deterministic surface evidence for frontend-design review
   - visual-surface-scaffold.json   semantic ProjectScaffold with surfaces
-  - binding-manifest.json   slot contract for generated presentational View components
   - shared-context.md       compact token + pattern summary for prompts
-  - prd-evidence-summary.md direct PRD/SPEC drafting surface
-  - generated-view-source/* presentational View source with fillable slots
+  - segments.json           canonical visual reconstruction segment evidence
+  - codegen-context.json    diagnostic source-package context, not a project-source generator
+  - source-skeleton/index.html raw semantic HTML evidence for hierarchy/source ids; not a direct code-generation template
+  - source-skeleton/critical.css reachable CSS handoff plus computed-style fallback rules
+  - source-skeleton/full-source.css complete CSS evidence sidecar
+  - source-skeleton/used-selectors.json selector reachability evidence
+  - source-skeleton/skeleton-manifest.json source coverage and component hints
+  - source-skeleton/source-skeleton-audit.json source-only skeleton quality audit
+  - source-ir/component-tree.json semantic component boundaries
+  - source-ir/content-model.json tables/lists/cards/controls/repeated groups
+  - source-ir/layout-map.json source-node bounds and key styles
+  - source-ir/style-tokens.json visual token candidates
+  - source-ir/interaction-hints.json interaction candidates
+  - source-ir/source-quality-audit.json source/IR quality audit
+  - prd-evidence-summary.md direct frontend template drafting surface
 
-Returns a summary: visual surface list, pattern list, token counts, and the PRD/SPEC evidence summary path. Once these artifacts exist, use them for PRD/SPEC synthesis; bounded targeted scaffold reads are only for specific gaps.
+Returns a summary: visual surface list, web-clone segment list, pattern list, token counts, and the frontend template evidence summary path. Once these artifacts exist, use them for frontend template synthesis; bounded targeted scaffold reads are only for specific gaps.
 
 This tool is artifact-dependent: do NOT call it until \`extracted-page.json\` exists in the output directory. Never batch it with the URL extraction call that creates that file.
 
-Use this only when scaffold and PRD evidence artifacts are missing. Do not rerun it once \`shared-context.md\` and \`prd-evidence-summary.md\` exist for the current evidence package. Pure function, no network.`,
+Use this only when scaffold and template evidence artifacts are missing. Do not rerun it once \`shared-context.md\` and \`prd-evidence-summary.md\` exist for the current evidence package. Pure function, no network.`,
   parameters: z.object({
     outputDir: z
       .string()
       .describe(
-        `Directory containing extracted-page.json. Writes visual-surface-candidates.json, visual-surface-scaffold.json, binding-manifest.json, shared-context.md, and generated-view-source/ here. Defaults to task-scoped \`${DEFAULT_MIRROR_SUBDIR}\` (matching webpage_extract's default). Do not set this during task sessions; overrides are for benchmarks/tests and task-session overrides must stay under \`${DEFAULT_MIRROR_SUBDIR}\`.`,
+        `Directory containing extracted-page.json, page.ir.json, and assets/manifest.json. Writes segments.json, codegen-context.json, visual-surface-candidates.json, visual-surface-scaffold.json, source-skeleton/, source-ir/, shared-context.md, and prd-evidence-summary.md here. Defaults to task-scoped \`${DEFAULT_MIRROR_SUBDIR}\` (matching webpage_extract's default). Do not set this during task sessions; overrides are for benchmarks/tests and task-session overrides must stay under \`${DEFAULT_MIRROR_SUBDIR}\`.`,
       )
       .optional(),
   }),
@@ -153,12 +178,43 @@ Use this only when scaffold and PRD evidence artifacts are missing. Do not rerun
     }
 
     const raw = JSON.parse(extractedText)
-    const page = ExtractedPageSchema.parse(raw)
+    const page = materializeInlineExtractedPageAssets(ExtractedPageSchema.parse(raw), outputDir)
+    await fs.writeFile(extractedPath, JSON.stringify(page, null, 2), "utf8")
+
+    const pageIrPath = path.join(outputDir, "page.ir.json")
+    const assetManifestPath = path.join(outputDir, "assets", "manifest.json")
+    let pageIrText: string
+    let assetManifestText: string
+    try {
+      ;[pageIrText, assetManifestText] = await Promise.all([
+        fs.readFile(pageIrPath, "utf8"),
+        fs.readFile(assetManifestPath, "utf8"),
+      ])
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        throw new Error(
+          `Missing canonical mirror IR artifacts. \`webpage_analyze\` requires \`${pageIrPath}\` and ` +
+          `\`${assetManifestPath}\`; run \`webpage_compile\` after extraction before analysis.`,
+        )
+      }
+      throw error
+    }
+    const webCloneHandoff = buildWebCloneHandoff(
+      WebClonePageIrSchema.parse(JSON.parse(pageIrText)),
+      WebCloneAssetGraphSchema.parse(JSON.parse(assetManifestText)),
+    )
+    await writeWebCloneHandoff(outputDir, webCloneHandoff)
+    const pageIr = WebClonePageIrSchema.parse(JSON.parse(pageIrText))
+    const assetGraph = WebCloneAssetGraphSchema.parse(JSON.parse(assetManifestText))
+    const sourceSkeleton = await writeWebCloneSourceSkeleton({
+      outputDir,
+      pageIr,
+      assetGraph,
+      segments: webCloneHandoff.segments,
+    })
 
     const scaffold = materializeScaffoldForReactSource(analyzePage(page))
     const candidates = generateSurfaceCandidates(page, detectPatterns(page))
-    const sourceFiles = generateViewSourceFiles(scaffold)
-    const visualBinding = generateVisualBindingArtifacts(scaffold)
     const sharedContext = buildSharedContext(scaffold, {
       url: page.url,
       title: page.title,
@@ -167,18 +223,26 @@ Use this only when scaffold and PRD evidence artifacts are missing. Do not rerun
 
     const scaffoldPath = path.join(outputDir, "visual-surface-scaffold.json")
     const candidatePath = path.join(outputDir, "visual-surface-candidates.json")
-    const bindingManifestPath = path.join(outputDir, "binding-manifest.json")
+    const segmentsPath = path.join(outputDir, "segments.json")
+    const codegenContextPath = path.join(outputDir, "codegen-context.json")
+    const sourceSkeletonPath = path.join(outputDir, "source-skeleton")
+    const sourceSkeletonAuditPath = path.join(outputDir, "source-skeleton", "source-skeleton-audit.json")
+    const sourceIrPath = path.join(outputDir, "source-ir")
     const contextPath = path.join(outputDir, "shared-context.md")
     const prdEvidencePath = path.join(outputDir, "prd-evidence-summary.md")
-    const irPath = path.join(outputDir, "page-ir.xml")
+    const irPath = pageIrPath
     const referencePath = path.join(outputDir, "reference.png")
-    const viewSourcePaths = await writeGeneratedSourceFiles(outputDir, sourceFiles)
     const prdEvidenceSummary = renderPrdEvidenceSummary({
       page,
       scaffold,
       scaffoldPath,
       candidatePath,
-      bindingManifestPath,
+      assetManifestPath,
+      segmentsPath,
+      codegenContextPath,
+      sourceSkeletonPath,
+      sourceSkeletonAuditPath,
+      sourceIrPath,
       contextPath,
       irPath,
       referencePath,
@@ -187,7 +251,6 @@ Use this only when scaffold and PRD evidence artifacts are missing. Do not rerun
     await Promise.all([
       fs.writeFile(scaffoldPath, JSON.stringify(scaffold, null, 2), "utf8"),
       fs.writeFile(candidatePath, JSON.stringify(candidates, null, 2), "utf8"),
-      fs.writeFile(bindingManifestPath, JSON.stringify(visualBinding.manifest, null, 2), "utf8"),
       fs.writeFile(contextPath, sharedContext, "utf8"),
       fs.writeFile(prdEvidencePath, prdEvidenceSummary, "utf8"),
     ])
@@ -228,21 +291,32 @@ Use this only when scaffold and PRD evidence artifacts are missing. Do not rerun
         "",
         `**Artifacts written:**`,
         `- \`${candidatePath}\` - deterministic visual surface candidates`,
-        `- \`${bindingManifestPath}\` - visual View slot binding manifest`,
+        `- \`${segmentsPath}\` - canonical web-clone segment contract`,
+        `- \`${codegenContextPath}\` - prompt-facing framework codegen context`,
+        `- \`${sourceSkeletonPath}\` - source-only HTML/CSS skeleton for downstream implementation`,
+        `- \`${sourceSkeletonAuditPath}\` - source skeleton audit (${sourceSkeleton.audit.passed ? "passed" : "failed"})`,
+        `- \`${sourceIrPath}\` - semantic source IR for component/data/style/interaction reconstruction`,
         `- \`${scaffoldPath}\` — semantic visual surface ProjectScaffold`,
         `- \`${contextPath}\` — compact prompt-ready summary`,
-        `- \`${prdEvidencePath}\` — direct PRD/SPEC evidence summary`,
-        `- Generated View artifacts: ${viewSourcePaths.length}`,
+        `- \`${prdEvidencePath}\` — direct frontend template evidence summary`,
+        `- Web-clone segments: ${webCloneHandoff.segments.segments.length}`,
         "",
-        "PRD/SPEC evidence artifacts written. Do not rerun analysis for this evidence package unless the source extraction changed. Use `prd-evidence-summary.md`, `shared-context.md`, `visual-surface-candidates.json`, and `page-ir.xml` as the working surface; generated View artifacts are the visual framework handoff, not the business implementation.",
+        "frontend template evidence artifacts written. Do not rerun analysis for this evidence package unless the source extraction changed. Use `prd-evidence-summary.md`, `reference.png`, `source-skeleton/README.md`, `source-ir/component-tree.json`, `source-ir/content-model.json`, `source-ir/style-tokens.json`, `source-ir/interaction-hints.json`, `source-skeleton/critical.css`, `source-skeleton/index.html`, `source-skeleton/full-source.css`, `source-skeleton/used-selectors.json`, `source-skeleton/skeleton-manifest.json`, `page.ir.json`, `assets/manifest.json`, `segments.json`, `codegen-context.json`, `shared-context.md`, and `visual-surface-candidates.json` as the working surface. The source skeleton and semantic source IR are the development handoff.",
       ].join("\n"),
       metadata: {
         scaffoldPath,
         candidatePath,
+        segmentsPath,
+        codegenContextPath,
+        sourceSkeletonPath,
+        sourceSkeletonAuditPath,
+        sourceIrPath,
+        assetManifestPath,
         contextPath,
         prdEvidencePath,
-        bindingManifestPath,
-        viewSourcePaths,
+        sourceSkeleton,
+        webCloneSegments: webCloneHandoff.segments,
+        webCloneCodegenContext: webCloneHandoff.codegenContext,
         surfaceCount: scaffold.surfaces.length,
         patternCount: scaffold.catalog.patterns.length,
         patternCoverage: coverage,

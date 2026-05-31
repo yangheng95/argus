@@ -23,8 +23,8 @@ flowchart TD
 ```
 
 Rules own deterministic extraction, token/pattern/slot evidence, schema
-validation, path projection, and View materialization. The design-analysis agent
-owns the PRD/SPEC interpretation of those semantic surfaces and the business
+validation, path projection, and View materialization. The frontend-design agent
+owns the frontend template interpretation of those semantic surfaces and the business
 container handoff.
 
 ## Implemented Contract

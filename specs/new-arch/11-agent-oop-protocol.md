@@ -12,7 +12,7 @@
 > `id`、`description`、`promptEditable`、`defaultPromptRequired`、`promptConfigMode` 等字段）
 > 与 `AgentRoleID` 联合类型（覆盖全部 16 个 native agent 角色：`coding` · `build` · `general` ·
 > `explore` · `compaction` · `title` · `summary` · `control` · `delivery` · `orchestrator` ·
-> `requirements` · `architect` · `design-analyst` · `intent-analysis` · `integrity` · `prosecutor`）。
+> `requirements` · `architect` · `frontend-design` · `intent-analysis` · `integrity` · `prosecutor`）。
 > OOP 继承体系（`BaseAgent` / `AgentMailbox` / `AgentRegistry`）及 mailbox 数据库表仍**待实现**。
 >
 > 抽象修正：本文把未来 agent 家族拆成 `PipelineAgent` / `SessionAgent`，这是对当前
@@ -238,7 +238,7 @@ BaseAgent<TInbox, TOutbox>          (抽象基类)
 ├── PipelineAgent<TInbox, TOutbox>  (抽象，使用 AgentRuntime.run)
 │   ├── RequirementsAgent           inbox: RequirementsInput   outbox: RequirementsResult
 │   ├── ArchitectAgent              inbox: ArchitectInput      outbox: ArchitectResult
-│   ├── DesignAnalystAgent          inbox: DesignAnalystInput  outbox: DesignAnalystResult
+│   ├── FrontendDesignAgent          inbox: FrontendDesignInput  outbox: FrontendDesignResult
 │   ├── DeliveryAgent               inbox: DeliveryInput       outbox: DeliveryVerdictType
 │   ├── IntentAnalysisAgent         inbox: IntentInput         outbox: IntentAnalysisResult
 │   ├── IntegrityAgent              inbox: IntegrityInput      outbox: IntegrityResult
@@ -302,7 +302,7 @@ abstract class SessionAgent<TIn extends z.ZodType, TOut extends z.ZodType>
 | 目录 | 存放内容 |
 |---|---|
 | `src/agent/prompt/` | SessionAgent 的 prompt（实际盘上：`coding.txt` / `general.txt` / `explore.txt` / `compaction.txt` / `title.txt` / `judge.txt`，**无** `summary.txt`） |
-| `src/prompt/core/` | PipelineAgent 的 prompt（实际盘上：`requirements-core.txt` / `architect-core.txt` / `delivery-core.txt` / `design-analyst-core.txt` / `intent-analysis-core.txt` / `orchestrator-core.txt` / `integrity-core.txt` / `prosecutor-core.txt` / `build-core.txt`——`build-core.txt` 服务于 `build/agent.ts` 这条 pipeline-agent 路径；direct interactive SessionAgent 路径使用 `agent/prompt/coding.txt`） |
+| `src/prompt/core/` | PipelineAgent 的 prompt（实际盘上：`requirements-core.txt` / `architect-core.txt` / `delivery-core.txt` / `frontend-design-core.txt` / `intent-analysis-core.txt` / `orchestrator-core.txt` / `integrity-core.txt` / `prosecutor-core.txt` / `build-core.txt`——`build-core.txt` 服务于 `build/agent.ts` 这条 pipeline-agent 路径；direct interactive SessionAgent 路径使用 `agent/prompt/coding.txt`） |
 
 **迁移状态（2026-05-12）**：
 - ✅ `orchestrator/agent.ts:ORCHESTRATOR_INSTRUCTIONS` 已迁移：`= ORCHESTRATOR_CORE`（来自 `src/prompt/core/orchestrator-core.txt`，常量在 `orchestrator/agent.ts:642`）
@@ -406,7 +406,7 @@ private loadPromptFile(): string {
 agent              receiveWhitelist              sendWhitelist
 ──────────────────────────────────────────────────────────────
 orchestrator       [system_entry]                [requirements, architect,
-                                                  design-analyst, delivery,
+                                                  frontend-design, delivery,
                                                   build, intent-analysis,
                                                   integrity, prosecutor,
                                                   cancel_subagent（task-control tool，
@@ -414,7 +414,7 @@ orchestrator       [system_entry]                [requirements, architect,
 
 requirements       [orchestrator]                [orchestrator]
 architect          [orchestrator]                [orchestrator]
-design-analyst     [orchestrator]                [orchestrator]
+frontend-design     [orchestrator]                [orchestrator]
 delivery           [orchestrator]                [orchestrator]
 intent-analysis    [orchestrator]                [orchestrator]
 integrity          [orchestrator]                [orchestrator]
@@ -491,7 +491,7 @@ Orchestrator system prompt 中明确指引：
 |---|---|---|---|---|
 | `RequirementsAgent.run()` | `PipelineAgent` | `RequirementsInputSchema` | `RequirementsResultSchema` | 已在 `.txt`，无需迁移 |
 | `ArchitectAgent.coordinate()` | `PipelineAgent` | `ArchitectInputSchema` | `ArchitectResultSchema` | 已在 `.txt`，无需迁移 |
-| `DesignAnalystAgent.analyze()` | `PipelineAgent` | `DesignAnalystInputSchema` | `DesignAnalystResultSchema` | 已在 `.txt`，无需迁移 |
+| `FrontendDesignAgent.analyze()` | `PipelineAgent` | `FrontendDesignInputSchema` | `FrontendDesignResultSchema` | 已在 `.txt`，无需迁移 |
 | ~~`planGoal()` 函数~~ | — | — | — | **已删除**：`src/planner/` 整目录下线，build agent 直接读 architect contract 推进 |
 | `DeliveryAgent.verify()` | `PipelineAgent` | `DeliveryInputSchema` | `DeliveryVerdictSchema` | ✅ 已迁移：`DELIVERY_AGENT_SYSTEM = DELIVERY_CORE` |
 | `Orchestrator.runTaskLoop()` | `PipelineAgent` | `OrchestratorTriggerSchema` | `z.void()` | ✅ 已迁移：`ORCHESTRATOR_INSTRUCTIONS = ORCHESTRATOR_CORE` |

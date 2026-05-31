@@ -391,6 +391,204 @@ test("session processor pauses terminal payload generation at tool-input-start f
   expect((toolParts[0]!.state as Message.ToolStateCompleted).input).toEqual({})
 })
 
+test("session processor stops after execute-fallback pre-submit reflection tool result", async () => {
+  spyOn(Config, "get").mockResolvedValue({ experimental: {} } as Awaited<ReturnType<typeof Config.get>>)
+  spyOn(EngineConfig, "get").mockResolvedValue({
+    activity: { session_llm_idle_ms: 60 },
+  } as Awaited<ReturnType<typeof EngineConfig.get>>)
+  spyOn(SessionStatus, "set").mockImplementation(() => {})
+  spyOn(Bus, "publish").mockResolvedValue(undefined as never)
+  spyOn(Session, "updateMessage").mockResolvedValue(undefined as never)
+  spyOn(PermissionNext, "ask").mockResolvedValue(undefined as never)
+
+  const store = new Map<string, Message.Part>()
+  spyOn(Session, "updatePart").mockImplementation(async (part) => {
+    store.set(part.id, part as Message.Part)
+    return part as never
+  })
+  spyOn(Session, "updatePartDelta").mockImplementation(async () => undefined as never)
+  spyOn(Message, "parts").mockImplementation(
+    (async (messageID: string) =>
+      [...store.values()].filter((p) => p.messageID === messageID)) as typeof Message.parts,
+  )
+
+  let secondTerminalConsumed = false
+  let streamClosed = false
+  const fallbackReflectionStream: AsyncIterable<any> = {
+    [Symbol.asyncIterator]() {
+      let index = 0
+      return {
+        async next() {
+          index += 1
+          if (index === 1) return { done: false, value: { type: "start" } }
+          if (index === 2) {
+            return {
+              done: false,
+              value: {
+                type: "tool-call",
+                toolCallId: "call_reflect",
+                toolName: "report_build_result",
+                input: { status: "passed" },
+              },
+            }
+          }
+          if (index === 3) {
+            return {
+              done: false,
+              value: {
+                type: "tool-result",
+                toolCallId: "call_reflect",
+                toolName: "report_build_result",
+                input: { status: "passed" },
+                output: {
+                  output: "reflect first",
+                  title: "Pre-terminal Reflection Required",
+                  metadata: { preTerminalReflection: true },
+                },
+              },
+            }
+          }
+          secondTerminalConsumed = true
+          return {
+            done: false,
+            value: {
+              type: "tool-call",
+              toolCallId: "call_second",
+              toolName: "report_build_result",
+              input: { status: "passed" },
+            },
+          }
+        },
+        async return() {
+          streamClosed = true
+          return { done: true, value: undefined }
+        },
+      }
+    },
+  }
+
+  spyOn(LLM, "stream").mockResolvedValue({
+    fullStream: fallbackReflectionStream,
+  } as Awaited<ReturnType<typeof LLM.stream>>)
+
+  const processor = SessionProcessor.create({
+    assistantMessage: {
+      id: "msg_execute_fallback_reflection",
+      sessionID: "ses_execute_fallback_reflection",
+      role: "assistant",
+      agent: "build",
+      parentID: "msg_parent",
+      cost: 0,
+      tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+      time: { created: Date.now() },
+    } as Message.Assistant,
+    sessionID: "ses_execute_fallback_reflection",
+    model: { providerID: "test-provider", id: "test-model" } as Provider.Model,
+    abort: new AbortController().signal,
+  })
+
+  const result = await processor.process({} as LLM.StreamInput)
+
+  expect(result).toBe("continue")
+  expect(secondTerminalConsumed).toBe(false)
+  expect(streamClosed).toBe(true)
+  const toolParts = [...store.values()].filter((p): p is Message.ToolPart => p.type === "tool")
+  expect(toolParts).toHaveLength(1)
+  expect(toolParts[0]!.tool).toBe("report_build_result")
+  expect(toolParts[0]!.state.status).toBe("completed")
+  expect((toolParts[0]!.state as Message.ToolStateCompleted).output).toBe("reflect first")
+})
+
+test("session processor closes same-tool open parts when pre-submit reflection interrupts", async () => {
+  spyOn(Config, "get").mockResolvedValue({ experimental: {} } as Awaited<ReturnType<typeof Config.get>>)
+  spyOn(EngineConfig, "get").mockResolvedValue({
+    activity: { session_llm_idle_ms: 60 },
+  } as Awaited<ReturnType<typeof EngineConfig.get>>)
+  spyOn(SessionStatus, "set").mockImplementation(() => {})
+  spyOn(Bus, "publish").mockResolvedValue(undefined as never)
+  spyOn(Session, "updateMessage").mockResolvedValue(undefined as never)
+  spyOn(PermissionNext, "ask").mockResolvedValue(undefined as never)
+
+  const store = new Map<string, Message.Part>()
+  spyOn(Session, "updatePart").mockImplementation(async (part) => {
+    store.set(part.id, part as Message.Part)
+    return part as never
+  })
+  spyOn(Message, "parts").mockImplementation(
+    (async (messageID: string) =>
+      [...store.values()].filter((p) => p.messageID === messageID)) as typeof Message.parts,
+  )
+
+  spyOn(LLM, "stream").mockResolvedValue({
+    fullStream: streamOf([
+      { type: "start" },
+      {
+        type: "tool-call",
+        toolCallId: "call_reflect",
+        toolName: "report_build_result",
+        input: { status: "passed" },
+      },
+      {
+        type: "tool-call",
+        toolCallId: "call_second",
+        toolName: "report_build_result",
+        input: { status: "passed" },
+      },
+      {
+        type: "tool-result",
+        toolCallId: "call_reflect",
+        toolName: "report_build_result",
+        input: { status: "passed" },
+        output: {
+          output: "reflect first",
+          title: "Pre-terminal Reflection Required",
+          metadata: { preTerminalReflection: true },
+        },
+      },
+      {
+        type: "tool-result",
+        toolCallId: "call_second",
+        toolName: "report_build_result",
+        input: { status: "passed" },
+        output: {
+          output: "reflect first",
+          title: "Pre-terminal Reflection Required",
+          metadata: { preTerminalReflection: true },
+        },
+      },
+    ]),
+  } as Awaited<ReturnType<typeof LLM.stream>>)
+
+  const processor = SessionProcessor.create({
+    assistantMessage: {
+      id: "msg_reflection_open_parts",
+      sessionID: "ses_reflection_open_parts",
+      role: "assistant",
+      agent: "build",
+      parentID: "msg_parent",
+      cost: 0,
+      tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+      time: { created: Date.now() },
+    } as Message.Assistant,
+    sessionID: "ses_reflection_open_parts",
+    model: { providerID: "test-provider", id: "test-model" } as Provider.Model,
+    abort: new AbortController().signal,
+  })
+
+  const result = await processor.process({} as LLM.StreamInput)
+
+  expect(result).toBe("continue")
+  const toolParts = [...store.values()].filter((p): p is Message.ToolPart => p.type === "tool")
+  expect(toolParts).toHaveLength(2)
+  expect(toolParts.every((p) => p.state.status === "completed")).toBe(true)
+  expect(toolParts.map((p) => p.callID).sort()).toEqual(["call_reflect", "call_second"])
+  expect(
+    toolParts.every(
+      (p) => p.state.status === "completed" && p.state.output === "reflect first",
+    ),
+  ).toBe(true)
+})
+
 test("session processor closes a persisted running tool part when only the result event is in memory", async () => {
   spyOn(Config, "get").mockResolvedValue({ experimental: {} } as Awaited<ReturnType<typeof Config.get>>)
   spyOn(EngineConfig, "get").mockResolvedValue({

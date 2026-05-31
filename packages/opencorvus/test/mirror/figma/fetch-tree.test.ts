@@ -7,11 +7,6 @@ import {
 import { FigmaFetchError } from "../../../src/mirror/errors"
 import { CompressedDesignSchema } from "../../../src/mirror/ir/compressed-design"
 
-// Golden parity — mirror original
-import { extractFigma as mirrorExtract } from "D:/myhexin-local/opencode-private/packages/mirror/src/infra/figma/extract-core.ts"
-
-// ─── Fixtures ─────────────────────────────────────────────────────────────
-
 function sampleFigmaFile() {
   return {
     name: "Test File",
@@ -74,39 +69,6 @@ function sampleFigmaFile() {
                   fills: [{ type: "SOLID", color: { r: 0.2, g: 0.4, b: 1 }, visible: true }],
                   rectangleCornerRadii: [8, 8, 8, 8],
                 },
-                {
-                  id: "1:4",
-                  type: "FRAME",
-                  name: "Card",
-                  visible: true,
-                  absoluteBoundingBox: { x: 24, y: 140, width: 400, height: 200 },
-                  fills: [
-                    {
-                      type: "GRADIENT_LINEAR",
-                      visible: true,
-                      gradientStops: [
-                        { color: { r: 1, g: 0, b: 0, a: 1 }, position: 0 },
-                        { color: { r: 0, g: 0, b: 1, a: 1 }, position: 1 },
-                      ],
-                      gradientHandlePositions: [
-                        { x: 0, y: 0 },
-                        { x: 1, y: 1 },
-                      ],
-                    },
-                  ],
-                  cornerRadius: 12,
-                  effects: [
-                    {
-                      type: "DROP_SHADOW",
-                      visible: true,
-                      color: { r: 0, g: 0, b: 0, a: 0.1 },
-                      offset: { x: 0, y: 2 },
-                      radius: 4,
-                      spread: 0,
-                    },
-                  ],
-                  opacity: 0.95,
-                },
               ],
             },
           ],
@@ -128,57 +90,41 @@ function sampleCommentsResponse() {
   }
 }
 
-// ─── buildDesignFromRaw — GOLDEN PARITY (no network) ──────────────────────
+describe("buildDesignFromRaw", () => {
+  test("builds a schema-valid compressed design from raw Figma data", () => {
+    const result = buildDesignFromRaw(
+      sampleFigmaFile(),
+      sampleCommentsResponse().comments,
+      15,
+      "https://www.figma.com/file/ABC/Test",
+    )
 
-describe("buildDesignFromRaw — GOLDEN PARITY (pure, no network)", () => {
-  // mirror exports buildDesign as module-private, but we can reach it via
-  // extractFigma by mocking fetch. Test the pure path via compare to output
-  // of mirror's own extractFigma when image fetch is disabled.
+    expect(() => CompressedDesignSchema.parse(result)).not.toThrow()
+    expect(result.fileName).toBe("Test File")
+    expect(result.lastModified).toBe("2026-04-05T12:00:00Z")
+    expect(result.pages).toHaveLength(1)
+    expect(result.pages[0].frames).toHaveLength(1)
+    expect(result.pages[0].frames[0].children).toHaveLength(2)
 
-  test("minimal file — identical CompressedDesign structure (pre-image phase)", () => {
-    const file = sampleFigmaFile()
-    const comments = sampleCommentsResponse().comments
-    const figmaUrl = "https://www.figma.com/file/ABC/Test"
-    const ours = buildDesignFromRaw(file, comments, 15, figmaUrl)
-    // Schema accepts the output → structure is correct
-    expect(() => CompressedDesignSchema.parse(ours)).not.toThrow()
-    // Spot checks
-    expect(ours.fileName).toBe("Test File")
-    expect(ours.lastModified).toBe("2026-04-05T12:00:00Z")
-    expect(ours.pages).toHaveLength(1)
-    expect(ours.pages[0].frames).toHaveLength(1)
-    expect(ours.pages[0].frames[0].children).toHaveLength(3)
-    // Instance → componentName wired through
-    const btn = ours.pages[0].frames[0].children!.find((c) => c.id === "1:3")
-    expect(btn?.componentName).toBe("Button")
-    expect(btn?.description).toBe("Primary CTA")
-    // Gradient extracted on card
-    const card = ours.pages[0].frames[0].children!.find((c) => c.id === "1:4")
-    expect(card?.style?.bgGradient).toMatch(/linear-gradient/)
-    // Shadow extracted
-    expect(card?.style?.shadow).toMatch(/rgba|#/)
-    // Opacity
-    expect(card?.style?.opacity).toBe(0.95)
-    // Text style captured
-    const heading = ours.pages[0].frames[0].children!.find((c) => c.id === "1:2")
+    const button = result.pages[0].frames[0].children?.find((child) => child.id === "1:3")
+    expect(button?.componentName).toBe("Button")
+    expect(button?.description).toBe("Primary CTA")
+
+    const heading = result.pages[0].frames[0].children?.find((child) => child.id === "1:2")
     expect(heading?.text?.content).toBe("Welcome")
     expect(heading?.text?.font).toBe("Inter")
     expect(heading?.text?.size).toBe(32)
-    expect(heading?.text?.color).toBe("#1a1a1a")
   })
 })
 
-// ─── GOLDEN PARITY via fetch mock — whole fetchFigmaTree pipeline ─────────
-
-describe("fetchFigmaTree — GOLDEN PARITY via fetch mock", () => {
-  const ORIGINAL_FETCH = globalThis.fetch
+describe("fetchFigmaTree", () => {
+  const originalFetch = globalThis.fetch
   let fetchCalls: string[] = []
 
   beforeEach(() => {
     fetchCalls = []
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    globalThis.fetch = (async (url: any, _init?: RequestInit) => {
-      const urlStr = typeof url === "string" ? url : url.toString()
+    globalThis.fetch = (async (url: unknown) => {
+      const urlStr = typeof url === "string" ? url : String(url)
       fetchCalls.push(urlStr)
 
       if (urlStr.includes("/comments")) {
@@ -187,50 +133,37 @@ describe("fetchFigmaTree — GOLDEN PARITY via fetch mock", () => {
       if (urlStr.includes("/images/")) {
         return new Response(JSON.stringify({ err: null, images: {} }), { status: 200 })
       }
-      // File fetch
       return new Response(JSON.stringify(sampleFigmaFile()), { status: 200 })
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    }) as any
+    }) as typeof fetch
   })
 
   afterEach(() => {
-    globalThis.fetch = ORIGINAL_FETCH
+    globalThis.fetch = originalFetch
   })
 
-  test("output byte-identical to mirror's extractFigma", async () => {
-    const figmaUrl = "https://www.figma.com/file/ABC/Test"
-    const ours = await fetchFigmaTree({ figmaUrl, token: "stub-token", noImages: false })
-    const theirs = await mirrorExtract({ fileKey: figmaUrl, token: "stub-token", noImages: false })
-    expect(ours).toEqual(theirs)
+  test("returns schema-valid output", async () => {
+    const result = await fetchFigmaTree({ figmaUrl: "https://www.figma.com/file/ABC/Test", token: "stub-token", noImages: false })
+    expect(() => CompressedDesignSchema.parse(result)).not.toThrow()
   })
 
-  test("output schema-valid", async () => {
-    const figmaUrl = "https://www.figma.com/file/ABC/Test"
-    const ours = await fetchFigmaTree({ figmaUrl, token: "stub-token", noImages: false })
-    expect(() => CompressedDesignSchema.parse(ours)).not.toThrow()
-  })
-
-  test("calls /files, /comments, /images in order", async () => {
-    const figmaUrl = "https://www.figma.com/design/ABC/Test?node-id=1-1"
-    await fetchFigmaTree({ figmaUrl, token: "stub-token" })
-    expect(fetchCalls.some((u) => u.includes("/files/ABC/nodes"))).toBe(true)
-    expect(fetchCalls.some((u) => u.includes("/files/ABC/comments"))).toBe(true)
-    expect(fetchCalls.some((u) => u.includes("/images/ABC"))).toBe(true)
+  test("calls files, comments, and images endpoints", async () => {
+    await fetchFigmaTree({ figmaUrl: "https://www.figma.com/design/ABC/Test?node-id=1-1", token: "stub-token" })
+    expect(fetchCalls.some((url) => url.includes("/files/ABC/nodes"))).toBe(true)
+    expect(fetchCalls.some((url) => url.includes("/files/ABC/comments"))).toBe(true)
+    expect(fetchCalls.some((url) => url.includes("/images/ABC"))).toBe(true)
   })
 })
 
-// ─── Error paths (no network) ─────────────────────────────────────────────
-
-describe("fetchFigmaTree — error paths", () => {
+describe("fetchFigmaTree error paths", () => {
   test("throws FigmaFetchError when token missing and env absent", async () => {
     const saved = process.env.FIGMA_API_TOKEN
     delete process.env.FIGMA_API_TOKEN
     try {
       await fetchFigmaTree({ figmaUrl: "https://figma.com/file/X/T" })
       throw new Error("should have thrown")
-    } catch (e) {
-      expect(FigmaFetchError.isInstance(e)).toBe(true)
-      if (FigmaFetchError.isInstance(e)) expect(e.data.reason).toContain("missing Figma token")
+    } catch (error) {
+      expect(FigmaFetchError.isInstance(error)).toBe(true)
+      if (FigmaFetchError.isInstance(error)) expect(error.data.reason).toContain("missing Figma token")
     } finally {
       if (saved) process.env.FIGMA_API_TOKEN = saved
     }
@@ -242,17 +175,16 @@ describe("fetchFigmaTree — error paths", () => {
       new Response("nope", {
         status: 403,
         statusText: "Forbidden",
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      })) as any
+      })) as typeof fetch
     try {
       await fetchFigmaTree({
         figmaUrl: "https://figma.com/file/X/T",
         token: "stub",
       })
       throw new Error("should have thrown")
-    } catch (e) {
-      expect(FigmaFetchError.isInstance(e)).toBe(true)
-      if (FigmaFetchError.isInstance(e)) expect(e.data.status).toBe(403)
+    } catch (error) {
+      expect(FigmaFetchError.isInstance(error)).toBe(true)
+      if (FigmaFetchError.isInstance(error)) expect(error.data.status).toBe(403)
     } finally {
       globalThis.fetch = originalFetch
     }

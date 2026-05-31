@@ -1,6 +1,6 @@
 /**
  * `webpage_text_diff` tool — re-extracts the agent's current rendered URL
- * via puppeteer, compares its text catalog to the reference, and returns a
+ * via Browser Runtime, compares its text catalog to the reference, and returns a
  * specific list of missing phrases. This is a diagnostic feedback signal for
  * text coverage, not an acceptance source.
  *
@@ -22,7 +22,7 @@ import { resolveMirrorOutputDir, DEFAULT_MIRROR_SUBDIR } from "./output-dir"
 export const WebpageTextDiffTool = Tool.define("webpage_text_diff", {
   description: `Diff the text content between a reference ExtractedPage and the agent's current rendered URL.
 
-Re-extracts the rendered page via puppeteer and tokenises both catalogues. Returns a concrete list of reference tokens that the current clone is missing — feed this list back to the agent so it can add the specific phrases rather than guess from the diff heatmap.
+Re-extracts the rendered page via Browser Runtime and tokenises both catalogues. Returns a concrete list of reference tokens that the current clone is missing — feed this list back to the agent so it can add the specific phrases rather than guess from the diff heatmap.
 
 Use this tool when \`webpage_vision_judge\` flags missing or incorrect text. It pinpoints *which strings* are missing, where SSIM+pixel diff only says *where*.
 
@@ -102,11 +102,11 @@ Reads extracted-page.json (from webpage_extract) and the explicit current render
         "",
         missing.length > 0
           ? [
-              "## Missing strings (add these to the generated source — keep wording verbatim)",
+              "## Missing strings (add these to the maintainable project source — keep wording verbatim)",
               "",
               ...missing.map((t) => `- \`${t}\``),
               "",
-              "Locate the right parent section for each using `page-ir.xml`'s `Section Text` catalog, then edit the deliverable to insert them. Re-run `webpage_render url=<explicit URL>` + `webpage_vision_judge` after.",
+              "Locate the right parent section for each using the source IR / page-ir text catalog, then update the target app's semantic components or data arrays. Re-run `webpage_render url=<explicit URL>` + `webpage_vision_judge` after.",
             ].join("\n")
           : "✅ All reference tokens are present in your render. Remaining score gap is pure visual (colour, spacing, layout).",
       ].join("\n"),

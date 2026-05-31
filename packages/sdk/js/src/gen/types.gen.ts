@@ -600,7 +600,7 @@ export type EventIntegrityReviewCompleted = {
     /**
      * Every factual claim (API behaviour, library version, third-party protocol, number, path, history) the integrity team has NOT verified via tool calls in this session. Empty when only review judgments or in-session-verified statements.
      */
-    fact_check_items: Array<FactCheckItem>
+    fact_check_items?: Array<FactCheckItem>
     taskID: string
     sessionID: string
     attempts: number
@@ -1588,15 +1588,17 @@ export type Session = {
     | "mission"
     | "intent-analysis"
     | "requirements"
-    | "design-analyst"
+    | "frontend-design"
     | "goal"
     | "architect"
+    | "goal-workload-analyst"
     | "integrity"
     | "fact-check"
     | "delivery"
     | "executor"
     | "build"
     | "explore"
+    | "research"
     | "evaluator"
     | "system"
   goalID?: string
@@ -2548,7 +2550,7 @@ export type Config = {
       | McpLocalConfig
       | McpRemoteConfig
       | {
-          enabled: boolean
+          enabled: false
         }
   }
   formatter?:
@@ -2632,7 +2634,7 @@ export type Config = {
     preserve_recent_tokens?: number
   }
   /**
-   * Assistant agent configuration — controls orchestration policy, requirements, architect, build, design-analysis, intent-analysis, and integrity review behavior
+   * Assistant agent configuration — controls orchestration policy, requirements, architect, build, frontend-design, intent-analysis, and integrity review behavior
    */
   assistant?: {
     /**
@@ -2692,11 +2694,11 @@ export type Config = {
       }
     }
     /**
-     * Design analyst agent configuration — analyzes visual references (images, URLs). Model is configured via agent."design-analyst".model.
+     * Frontend design/replica agent configuration - analyzes visual references (images, URLs) into a frontend template, fillable modules, component/material inventories, and visual/data contracts. Model is configured via agent."frontend-design".model.
      */
-    design_analyst?: {
+    frontend_design?: {
       /**
-       * Maximum agentic steps for design analyst agent
+       * Maximum agentic steps for frontend design agent
        */
       max_steps?: number
     }
@@ -2749,7 +2751,7 @@ export type Config = {
      */
     max_executor_groups?: number
     /**
-     * Default workflow for new tasks: 'direct' (build), 'pipeline' (design_analysis → requirements → architect → per-goal build → integrity), or custom ID
+     * Default workflow for new tasks: 'direct' (build), 'pipeline' (frontend_design → requirements → architect → per-goal build → integrity), or custom ID
      */
     default_workflow?: string
     /**
@@ -3103,15 +3105,17 @@ export type GlobalSession = {
     | "mission"
     | "intent-analysis"
     | "requirements"
-    | "design-analyst"
+    | "frontend-design"
     | "goal"
     | "architect"
+    | "goal-workload-analyst"
     | "integrity"
     | "fact-check"
     | "delivery"
     | "executor"
     | "build"
     | "explore"
+    | "research"
     | "evaluator"
     | "system"
   goalID?: string
@@ -4679,15 +4683,17 @@ export type SessionCreateData = {
       | "mission"
       | "intent-analysis"
       | "requirements"
-      | "design-analyst"
+      | "frontend-design"
       | "goal"
       | "architect"
+      | "goal-workload-analyst"
       | "integrity"
       | "fact-check"
       | "delivery"
       | "executor"
       | "build"
       | "explore"
+      | "research"
       | "evaluator"
       | "system"
     goalID?: string

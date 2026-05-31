@@ -1,4 +1,4 @@
-# Gateway Task Management PRD (Product Requirements Document)
+# Gateway Task Management Implementation Brief
 
 > Date: 2026-05-14
 > Status: Product requirements draft
@@ -8,7 +8,7 @@
 
 ## Glossary
 
-- PRD: Product Requirements Document, the product requirements source for implementation and acceptance.
+- brief: product requirements source for implementation and acceptance.
 - API: Application Programming Interface, the server contract consumed by Overlay and external clients.
 - UI: User Interface, the rendered operator-facing page and controls.
 - UX: User Experience, the intended interaction flow and usability behavior.
@@ -27,7 +27,7 @@ OpenCorvus already has three separate capabilities:
 
 The current Overlay default experience is still a conversation panel: left recent chats, center conversation, right inspector/preview. This is useful for one task, but it is not a Gateway control surface. Users need a separate entry point where they can manage work from the task perspective: decompose large requirements into smaller tasks, inspect task queues and bindings, and connect or supervise channels.
 
-This PRD defines Gateway as an Overlay page and product surface. Gateway is not a second task runtime. It is a task-first management page over the existing OpenCorvus task, goal, channel, and control APIs.
+This template defines Gateway as an Overlay page and product surface. Gateway is not a second task runtime. It is a task-first management page over the existing OpenCorvus task, goal, channel, and control APIs.
 
 ## 2. Product Goal
 
@@ -458,9 +458,9 @@ Visual checks must use visible rendering or screenshots, not headless-only asser
 
 ## 19. Implementation Phases
 
-### Phase 1: PRD And Page Shell
+### Phase 1: template And Page Shell
 
-- Add Gateway PRD.
+- Add Gateway template.
 - Add Overlay page mode: `panel | gateway`.
 - Add Gateway entry and return action.
 - Add empty Gateway page shell with task-ledger/workbench/channel regions.
@@ -493,7 +493,7 @@ Visual checks must use visible rendering or screenshots, not headless-only asser
 - Add tests.
 - Run typecheck/API/docs checks.
 - Visible UI review.
-- Re-read PRD against implementation and remove any accidental double-source state.
+- Re-read template against implementation and remove any accidental double-source state.
 
 ## 20. Open Questions
 

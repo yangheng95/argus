@@ -1,0 +1,242 @@
+import fs from "node:fs/promises"
+import path from "node:path"
+
+import { WebpageAnalyzeTool } from "@/mirror/tools/webpage-analyze"
+import { WebpageCompileTool } from "@/mirror/tools/webpage-compile"
+import { WebpageExtractTool } from "@/mirror/tools/webpage-extract"
+import { ProjectRuntimePaths } from "@/project/runtime-paths"
+import { TaskRuntimeMaterializer } from "@/project/task-runtime-materializer"
+import type { Tool } from "@/tool/tool"
+import { prepareWebCloneContext } from "@/web-clone/context"
+import { readPngEvidence } from "@/web-clone/evidence-integrity"
+
+export type LiveWebpageEvidenceStatus = "skipped" | "reused" | "generated"
+
+export interface LiveWebpageEvidenceResult {
+  status: LiveWebpageEvidenceStatus
+  url?: string
+  mirrorDir?: string
+  artifacts: string[]
+}
+
+export interface LiveWebpageEvidencePipeline {
+  extract(input: { url: string; outputDir: string; signal?: AbortSignal; taskID: string }): Promise<void>
+  compile(input: { outputDir: string; signal?: AbortSignal; taskID: string }): Promise<void>
+  analyze(input: { outputDir: string; signal?: AbortSignal; taskID: string }): Promise<void>
+}
+
+const PRIMARY_WEBPAGE_EVIDENCE_FILES = [
+  "reference.png",
+  "capture.html",
+  "singlefile.html",
+  "extracted-page.json",
+  "page.ir.json",
+  "assets/manifest.json",
+  "segments.json",
+  "codegen-context.json",
+  "shared-context.md",
+  "prd-evidence-summary.md",
+  "visual-surface-candidates.json",
+  "visual-surface-scaffold.json",
+  "source-skeleton/index.html",
+  "source-skeleton/critical.css",
+  "source-skeleton/full-source.css",
+  "source-skeleton/README.md",
+  "source-skeleton/used-selectors.json",
+  "source-skeleton/skeleton-manifest.json",
+  "source-skeleton/source-skeleton-audit.json",
+  "source-ir/component-tree.json",
+  "source-ir/content-model.json",
+  "source-ir/layout-map.json",
+  "source-ir/style-tokens.json",
+  "source-ir/interaction-hints.json",
+  "source-ir/source-quality-audit.json",
+] as const
+
+export function primaryWebpageEvidenceArtifacts(): string[] {
+  return PRIMARY_WEBPAGE_EVIDENCE_FILES.map((file) => path.posix.join("mirror", file))
+}
+
+const PRIMARY_WEBPAGE_SOURCE_PACKAGE_FILES = [
+  "README.md",
+  "implementation-blueprint.md",
+  "web-clone-context.md",
+  "web-clone-implementation-contract.json",
+  "web-clone-source-manifest.json",
+  "reference.png",
+  "singlefile.html",
+  "visual-surface-candidates.json",
+  "visual-surface-scaffold.json",
+  "assets/manifest.json",
+  "source-skeleton/index.html",
+  "source-skeleton/critical.css",
+  "source-skeleton/full-source.css",
+  "source-skeleton/used-selectors.json",
+  "source-skeleton/skeleton-manifest.json",
+  "source-skeleton/source-skeleton-audit.json",
+  "source-ir/component-tree.json",
+  "source-ir/content-model.json",
+  "source-ir/layout-map.json",
+  "source-ir/style-tokens.json",
+  "source-ir/interaction-hints.json",
+  "source-ir/source-quality-audit.json",
+] as const
+
+export function primaryWebpageSourcePackageArtifacts(): string[] {
+  return PRIMARY_WEBPAGE_SOURCE_PACKAGE_FILES.map((file) => path.posix.join("web-clone-source", file))
+}
+
+export async function ensureLiveWebpageEvidence(input: {
+  projectDir: string
+  worktreeDir: string
+  taskID: string
+  urls: readonly string[]
+  signal?: AbortSignal
+  pipeline?: LiveWebpageEvidencePipeline
+}): Promise<LiveWebpageEvidenceResult> {
+  const url = input.urls.find((item) => item.startsWith("http://") || item.startsWith("https://"))
+  if (!url) return { status: "skipped", artifacts: [] }
+
+  await TaskRuntimeMaterializer.materializeFrontendDesign({
+    projectDir: input.projectDir,
+    taskID: input.taskID,
+    worktreeDir: input.worktreeDir,
+  })
+
+  const mirrorDir = ProjectRuntimePaths.frontendDesignPaths(input.projectDir, input.taskID).mirrorAbsolute
+  if (await hasCompletePrimaryEvidence(mirrorDir, url)) {
+    await ensureVisibleSourcePackage(input.projectDir, input.worktreeDir, input.taskID)
+    return {
+      status: "reused",
+      url,
+      mirrorDir,
+      artifacts: [...primaryWebpageEvidenceArtifacts(), ...primaryWebpageSourcePackageArtifacts()],
+    }
+  }
+
+  const pipeline = input.pipeline ?? defaultLiveWebpageEvidencePipeline()
+  await pipeline.extract({ url, outputDir: mirrorDir, signal: input.signal, taskID: input.taskID })
+  await pipeline.compile({ outputDir: mirrorDir, signal: input.signal, taskID: input.taskID })
+  await pipeline.analyze({ outputDir: mirrorDir, signal: input.signal, taskID: input.taskID })
+  if (!(await hasCompletePrimaryEvidence(mirrorDir, url))) {
+    throw new Error(`Live webpage evidence pipeline finished but did not produce the complete primary mirror artifact set in ${mirrorDir}`)
+  }
+  await ensureVisibleSourcePackage(input.projectDir, input.worktreeDir, input.taskID)
+
+  return {
+    status: "generated",
+    url,
+    mirrorDir,
+    artifacts: [...primaryWebpageEvidenceArtifacts(), ...primaryWebpageSourcePackageArtifacts()],
+  }
+}
+
+async function ensureVisibleSourcePackage(projectDir: string, worktreeDir: string, taskID: string): Promise<void> {
+  const paths = ProjectRuntimePaths.frontendDesignPaths(projectDir, taskID)
+  await prepareWebCloneContext({
+    mirrorDir: paths.mirrorAbsolute,
+    outputDir: paths.sourcePackageAbsolute,
+  })
+  if (!(await hasCompleteSourcePackage(paths.sourcePackageAbsolute))) {
+    throw new Error(`Live webpage evidence pipeline produced an incomplete web-clone-source package in ${paths.sourcePackageAbsolute}`)
+  }
+  await TaskRuntimeMaterializer.materializeFrontendDesign({ projectDir, taskID, worktreeDir })
+}
+
+export async function hasCompletePrimaryEvidence(mirrorDir: string, url?: string): Promise<boolean> {
+  if (!(await hasValidPngFile(path.join(mirrorDir, "reference.png")))) return false
+  for (const relative of PRIMARY_WEBPAGE_EVIDENCE_FILES) {
+    if (relative === "reference.png") continue
+    if (!(await hasNonEmptyFile(path.join(mirrorDir, relative)))) return false
+  }
+  if (!url) return true
+  const extractedUrl = await readExtractedPageUrl(path.join(mirrorDir, "extracted-page.json"))
+  return normalizeUrlForEvidence(extractedUrl) === normalizeUrlForEvidence(url)
+}
+
+async function hasCompleteSourcePackage(sourcePackageDir: string): Promise<boolean> {
+  for (const relative of PRIMARY_WEBPAGE_SOURCE_PACKAGE_FILES) {
+    const file = path.join(sourcePackageDir, relative)
+    if (relative === "reference.png") {
+      if (!(await hasValidPngFile(file))) return false
+      continue
+    }
+    if (!(await hasNonEmptyFile(file))) return false
+  }
+  return true
+}
+
+function defaultLiveWebpageEvidencePipeline(): LiveWebpageEvidencePipeline {
+  return {
+    extract: async ({ url, outputDir, signal, taskID }) => {
+      await runTool(WebpageExtractTool, {
+        url,
+        outputDir,
+        viewport_width: 1440,
+        viewport_height: 900,
+        keep_images: true,
+      }, signal, taskID)
+    },
+    compile: async ({ outputDir, signal, taskID }) => {
+      await runTool(WebpageCompileTool, { outputDir }, signal, taskID)
+    },
+    analyze: async ({ outputDir, signal, taskID }) => {
+      await runTool(WebpageAnalyzeTool, { outputDir }, signal, taskID)
+    },
+  }
+}
+
+async function runTool(
+  tool: Tool.Info,
+  args: Record<string, unknown>,
+  signal: AbortSignal | undefined,
+  taskID: string,
+): Promise<void> {
+  const initialized = await tool.init()
+  const controller = new AbortController()
+  if (signal?.aborted) controller.abort(signal.reason)
+  signal?.addEventListener("abort", () => controller.abort(signal.reason), { once: true })
+  await initialized.execute(args, {
+    sessionID: "",
+    messageID: `host-webpage-evidence-${taskID}`,
+    agent: "orchestrator",
+    abort: signal ?? controller.signal,
+    messages: [],
+    extra: { taskID },
+    metadata: () => {},
+    ask: async () => {},
+  })
+}
+
+async function hasNonEmptyFile(file: string): Promise<boolean> {
+  try {
+    const stat = await fs.stat(file)
+    return stat.isFile() && stat.size > 0
+  } catch {
+    return false
+  }
+}
+
+async function hasValidPngFile(file: string): Promise<boolean> {
+  return (await readPngEvidence(file)).valid
+}
+
+async function readExtractedPageUrl(file: string): Promise<string | undefined> {
+  try {
+    const json = JSON.parse(await fs.readFile(file, "utf8"))
+    return typeof json?.url === "string" ? json.url : undefined
+  } catch {
+    return undefined
+  }
+}
+
+function normalizeUrlForEvidence(input: string | undefined): string {
+  if (!input) return ""
+  try {
+    const parsed = new URL(input)
+    parsed.hash = ""
+    return parsed.toString().replace(/\/$/, "")
+  } catch {
+    return input.trim().replace(/\/$/, "")
+  }
+}

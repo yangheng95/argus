@@ -23,7 +23,7 @@ export type WalkthroughPage = {
     press: (key: string) => Promise<unknown>
   }
   $: (selector: string) => Promise<unknown>
-  evaluate: <T>(fn: (...args: never[]) => T, ...args: unknown[]) => Promise<T>
+  evaluate: <R, Arg = unknown>(fn: ((arg: Arg) => R) | string, arg?: Arg) => Promise<R>
   url: () => string
   on?: (event: string, handler: (...args: unknown[]) => void) => unknown
 }
@@ -42,7 +42,7 @@ const NAVIGATION_WAIT_MS = 5_000
 
 const stepHandlers: { [K in WalkthroughStep["action"]]: StepHandler } = {
   goto: async ({ page, baseUrl, step }) => {
-    if (step.action === "goto") await page.goto(new URL(step.path, baseUrl).toString(), { waitUntil: "networkidle0" })
+    if (step.action === "goto") await page.goto(new URL(step.path, baseUrl).toString(), { waitUntil: "networkidle" })
   },
   fill: async ({ page, step }) => {
     if (step.action !== "fill") return

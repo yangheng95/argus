@@ -265,7 +265,7 @@ payload: {
   contract_graph_artifact_id: string
   contract_graph_digest: string
   design_specs_snapshot: unknown[]
-  design_analysis_sources: Array<{ phase: string; key: string; digest: string }>
+  frontend_design_sources: Array<{ phase: string; key: string; digest: string }>
   fidelity_source: {
     task_metadata_key: "architect_fidelity"
     digest: string

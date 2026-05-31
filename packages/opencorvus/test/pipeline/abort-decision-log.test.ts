@@ -12,21 +12,21 @@ import { tmpdir } from "../fixture/fixture"
  * Regression for specs/scheduler-fix-plan-2026-04-30.md P4 (commit
  * e87333dbb) + audit §11.3 / L3 + L7. Bench tsk_dde13a67c001sbz6y2Qe0at8Fc:
  *   line 1082  intent-analysis session aborted (reason=aborted)
- *   line 1729  design_analysis no visual input materialized — aborting
+ *   line 1729  frontend_design no visual input materialized — aborting
  *
  * Both abort paths in orchestrator/tools.ts pre-fix only logged a stderr
  * WARN; downstream stage agents (architect / build / requirements) saw
  * `task.design_specs=undefined` and an empty intent classification with
  * NO explanation. P4 adds decision_log writers on three abort paths:
  *
- *   1. design_analysis pre-agent guard (no visual input provided)
- *   2. design_analysis post-materialization guard (all sources failed)
+ *   1. frontend_design pre-agent guard (no visual input provided)
+ *   2. frontend_design post-materialization guard (all sources failed)
  *   3. analyze_intent catch (IntentAnalysisAgent threw)
  *
  * The success paths already write decision_log; this test exercises the
  * read/write contract — that the abort entries SHOWS UP in:
  *   - TaskContext.snapshot (orchestrator wake context)
- *   - phasePromptSection("design_analysis" / "intent_analysis")
+ *   - phasePromptSection("frontend_design" / "intent_analysis")
  *     (used by upstream-context.ts when building prompts for architect /
  *     build / delivery sub-agents).
  *
@@ -81,45 +81,45 @@ describe("P4 abort decision-log writers — read/write contract", () => {
     await tmp?.[Symbol.asyncDispose]?.()
   })
 
-  test("design_analysis abort_no_visual_input entry surfaces in TaskContext + phase section", async () => {
+  test("frontend_design abort_no_visual_input entry surfaces in TaskContext + phase section", async () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         const log = createDecisionLog(taskID)
         // Mirrors orchestrator/tools.ts pre-agent guard write.
         log.append({
-          phase: "design_analysis",
+          phase: "frontend_design",
           key: "abort_no_visual_input",
-          value: "Design analysis aborted before agent call: caller provided no visual reference (no attachments, no url, no figma_url, no materials).",
+          value: "frontend_design aborted before agent call: caller provided no visual reference (no attachments, no url, no figma_url, no materials).",
           reason: "no_visual_input_provided",
         })
 
         // Read side 1: TaskContext.snapshot (orchestrator wake context).
         const snapshot = TaskContext.snapshot(taskID)
-        expect(snapshot).toContain("design_analysis")
+        expect(snapshot).toContain("frontend_design")
         expect(snapshot).toContain("abort_no_visual_input")
         expect(snapshot).toContain("no visual reference")
 
         // Read side 2: phasePromptSection (upstream-context.ts injects
         // this into architect / build / delivery prompts).
-        const section = log.phasePromptSection("design_analysis", "Design Analysis Summary")
-        expect(section).toContain("Design Analysis Summary")
+        const section = log.phasePromptSection("frontend_design", "Frontend Design Summary")
+        expect(section).toContain("Frontend Design Summary")
         expect(section).toContain("abort_no_visual_input")
         expect(section).toContain("no visual reference")
       },
     })
   })
 
-  test("design_analysis abort_materialization_failed entry surfaces in TaskContext + phase section", async () => {
+  test("frontend_design abort_materialization_failed entry surfaces in TaskContext + phase section", async () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         const log = createDecisionLog(taskID)
         // Mirrors orchestrator/tools.ts post-materialization abort write.
         log.append({
-          phase: "design_analysis",
+          phase: "frontend_design",
           key: "abort_materialization_failed",
-          value: "Design analysis aborted before agent call: all 1 provided visual source(s) (live=1, figma=0, materials=0) failed to materialize.",
+          value: "frontend_design aborted before agent call: all 1 provided visual source(s) (live=1, figma=0, materials=0) failed to materialize.",
           reason: "materialization_failed_all_sources",
         })
 
@@ -127,7 +127,7 @@ describe("P4 abort decision-log writers — read/write contract", () => {
         expect(snapshot).toContain("abort_materialization_failed")
         expect(snapshot).toContain("failed to materialize")
 
-        const section = log.phasePromptSection("design_analysis", "Design Analysis Summary")
+        const section = log.phasePromptSection("frontend_design", "Frontend Design Summary")
         expect(section).toContain("abort_materialization_failed")
         expect(section).toContain("materialize")
       },

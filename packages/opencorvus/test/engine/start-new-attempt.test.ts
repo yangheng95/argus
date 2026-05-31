@@ -395,7 +395,7 @@ describe("Goal.startNewAttempt — options", () => {
     expect(row?.workspace_base_ref).toBe("abc123")
   })
 
-  test("finalizeBuildAttempt writes goal delivery from published commit and reported files when host diff is empty", () => {
+  test("finalizeBuildAttempt does not write goal delivery from reported files when host commit diff is empty", () => {
     const nextRunID = beginBuildAttempt({
       taskID,
       goalID,
@@ -428,13 +428,54 @@ describe("Goal.startNewAttempt — options", () => {
     })
 
     const delivery = findDeliveryByGoalRun(nextRunID)
-    expect(delivery?.result?.commit_ref).toBe("abc1234")
+    expect(delivery).toBeUndefined()
+  })
+
+  test("finalizeBuildAttempt filters runtime worktree paths from goal delivery diffs", () => {
+    const nextRunID = beginBuildAttempt({
+      taskID,
+      goalID,
+      runID,
+      sessionID: "ses_start_new_runtime_diff_filter",
+      workspaceDir: "C:/tmp/ws-runtime-filter",
+      workspaceBranch: "opencorvus/ws-runtime-filter",
+      workspaceBaseRef: "base123",
+    })
+
+    finalizeBuildAttempt({
+      goalRunID: nextRunID,
+      taskID,
+      goalID,
+      runID,
+      status: "completed",
+      commitRef: "def5678",
+      workspaceDir: "C:/tmp/ws-runtime-filter",
+      workspaceBranch: "opencorvus/ws-runtime-filter",
+      workspaceBaseRef: "base123",
+      summary: "Build changed one source file and one runtime scratch file.",
+      diffs: [
+        {
+          file: ".opencorvus/runtime/tasks/tsk/sessions/ses/worktree/package.json",
+          before: "{}",
+          after: "{\"private\":true}",
+          additions: 1,
+          deletions: 1,
+          status: "modified",
+        },
+        {
+          file: "src/index.ts",
+          before: "export const value = 1\n",
+          after: "export const value = 2\n",
+          additions: 1,
+          deletions: 1,
+          status: "modified",
+        },
+      ],
+    })
+
+    const delivery = findDeliveryByGoalRun(nextRunID)
+    expect(delivery?.result?.commit_ref).toBe("def5678")
     expect(delivery?.result?.changed_files).toEqual(["src/index.ts"])
-    expect(delivery?.result?.diffs).toMatchObject([
-      {
-        file: "src/index.ts",
-        source: "build_report_files_changed",
-      },
-    ])
+    expect(delivery?.result?.diffs).toMatchObject([{ file: "src/index.ts" }])
   })
 })

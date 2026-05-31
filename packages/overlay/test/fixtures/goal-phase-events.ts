@@ -221,17 +221,17 @@ export const EVENTS: FixtureEvent[] = [
       text: "Collected product requirements.",
     
   }), 2650),
-  e("message.updated", messageInfo("design-analyst", {
+  e("message.updated", messageInfo("frontend-design", {
       id: "msg_design_1",
       sessionID: DESIGN_SID,
       role: "assistant",
-      resolvedRole: "design-analyst",
-      agent: "design-analyst",
+      resolvedRole: "frontend-design",
+      agent: "frontend-design",
       parentSessionID: ROOT_SID,
       time: { created: T0 + 2700 },
     
   }), 2700),
-  e("message.part.updated", messagePart("design-analyst", {
+  e("message.part.updated", messagePart("frontend-design", {
       id: "part_design_text",
       messageID: "msg_design_1",
       sessionID: DESIGN_SID,
@@ -426,7 +426,7 @@ export const INITIAL_BOARD = {
     name: "Pipeline",
     goalLoopStepIDs: ["build"],
     steps: [
-      { id: "design_analysis", label: "Design", tool: "design_analysis", scope: "task", skippable: true, status: "pending" },
+      { id: "frontend_design", label: "Design", tool: "frontend_design", scope: "task", skippable: true, status: "pending" },
       { id: "requirements",    label: "Requirements", tool: "requirements", scope: "task", skippable: false, status: "pending" },
       { id: "architect",       label: "Architect", tool: "architect", scope: "task", skippable: true, status: "pending" },
       {

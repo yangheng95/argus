@@ -18,12 +18,12 @@ state-machine), rule 35 (grep all call sites), rule 36 (tests on every change).
 | AF | Advisory finding emitted by integrity reviewers. |
 | DB | OpenCorvus persistent SQLite store (`engine_task`, `engine_requirement`, `engine_goal`, `engine_artifact`). |
 | LLM | Large Language Model. |
-| PRD | Product Requirements Document. |
+| brief | Source brief for implementation and acceptance. |
 
 ## User Concern
 
 Task `tsk_e54c2d091001t145QP2P6xwoqi` ("写一个成熟的输入 deepseek key 即可聊天
-的 ai chat 页面，你自己写 PRD") ran 8 integrity rounds in a row, each
+的 ai chat 页面，你自己写 template") ran 8 integrity rounds in a row, each
 `needs_correction`, each surfacing fresh advisories promoted to blocking
 findings (concurrent-send race, QuotaExceededError, NaN validation, bundle
 size, dead code, unused param ...). The user asks whether the acceptance

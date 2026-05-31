@@ -6,10 +6,8 @@ import {
   validateBuildIntegrityRepairReport,
 } from "../../src/build/types"
 
-// All BuildResult fixtures registered fact_check_items: []
-// (specs/fact-check-agent-2026-05-25.md §3.1: required field on every
-// terminal report). Empty array is the honest default for tests where
-// no factual claims are being asserted.
+// Most fixtures register fact_check_items: [] explicitly so assertions stay
+// close to the terminal payload shape workers are encouraged to emit.
 const FCI: { fact_check_items: [] } = { fact_check_items: [] }
 
 describe("BuildResultSchema", () => {
@@ -129,20 +127,15 @@ describe("BuildResultSchema", () => {
     }
   })
 
-  test("explains missing fact_check_items without terminal-shape noise", () => {
+  test("defaults missing fact_check_items to empty array", () => {
     const parsed = BuildResultSchema.safeParse({
       status: "passed",
       summary: "implemented",
       files_changed: [],
       tests: [],
     })
-    expect(parsed.success).toBe(false)
-    if (!parsed.success) {
-      const message = formatBuildResultSchemaError(parsed.error)
-      expect(message).toContain("Missing required fact_check_items")
-      expect(message).toContain("fact_check_items: []")
-      expect(message).not.toContain("Choose exactly one terminal shape")
-    }
+    expect(parsed.success).toBe(true)
+    if (parsed.success) expect(parsed.data.fact_check_items).toEqual([])
   })
 
   test("accepts passed result with empty files_changed (B1: 0-edit reuse legal)", () => {

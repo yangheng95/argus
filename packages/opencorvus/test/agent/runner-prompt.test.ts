@@ -10,6 +10,7 @@ import { tool } from "ai"
 import z from "zod"
 import { Database } from "../../src/storage/db"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
+import { WorkerTurnDescriptor } from "../../src/agent/worker-turn-descriptor"
 
 afterEach(async () => {
   mock.restore()
@@ -85,6 +86,24 @@ test("runAgentSession appends config.agent.build.prompt_append after build core"
   expect(promptCalls[0].agent).toBe("build")
   expect(promptCalls[0].systemMode).toBe("complete")
   expect(promptCalls[0].system).toBe(`${BUILD_CORE}\n\nAdditional build instruction`)
+  expect(promptCalls[0].extra?.runtimeContract).toBeUndefined()
+  expect(promptCalls[0].extra?.workerTurnDescriptor).toBeDefined()
+  const descriptor = WorkerTurnDescriptor.latestForSession(promptCalls[0].sessionID)
+  expect(descriptor?.agent).toBe("build")
+  expect(descriptor?.payload.model).toEqual({ providerID: "test", modelID: "mock" })
+  expect(descriptor?.payload.workflow.sessionKind).toBe("build")
+  expect(descriptor?.payload.tools.enabled).toEqual([])
+  expect(descriptor?.payload.tools.switches).toMatchObject({
+    skill: true,
+    task: false,
+    webfetch: false,
+    websearch: false,
+    external_code_search: false,
+    memory: false,
+    planner: false,
+    goal_report: false,
+  })
+  expect((promptCalls[0].extra?.workerTurnDescriptor as { id: string }).id).toBe(descriptor?.id)
 })
 
 test("runAgentSession rejects completion when terminal collector is still unsatisfied", async () => {

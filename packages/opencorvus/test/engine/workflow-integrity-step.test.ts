@@ -26,15 +26,15 @@ describe("pipeline workflow architecture review step", () => {
     expect(pipeline).toBeDefined()
     const stepIDs = pipeline!.steps.map((step) => step.id)
     expect(stepIDs).toEqual([
-      "design_analysis",
+      "frontend_design",
       "analyze_intent",
       "requirements",
       "architect",
       "build",
       "integrity",
     ])
-    expect(pipeline!.steps.find((step) => step.id === "design_analysis")?.after).toEqual([])
-    expect(pipeline!.steps.find((step) => step.id === "analyze_intent")?.after).toEqual(["design_analysis"])
+    expect(pipeline!.steps.find((step) => step.id === "frontend_design")?.after).toEqual([])
+    expect(pipeline!.steps.find((step) => step.id === "analyze_intent")?.after).toEqual(["frontend_design"])
     expect(pipeline!.steps.find((step) => step.id === "build")?.after).toEqual(["architect"])
     expect(pipeline!.steps.find((step) => step.id === "integrity")?.after).toEqual(["build"])
   })
@@ -58,7 +58,7 @@ describe("pipeline workflow architecture review step", () => {
     expect(text).toContain("最终系统完整性 gate")
   })
 
-  test("projects design_analysis as completed from PRD/SPEC decision log without visual rows", () => {
+  test("projects frontend_design as completed from frontend template decision log without visual rows", () => {
     const now = Date.now()
     const stamp = now.toString(16)
     const projectID = `proj_workflow_design_${stamp}`
@@ -90,16 +90,18 @@ describe("pipeline workflow architecture review step", () => {
 
     const log = createDecisionLog(taskID)
     for (const key of [
-      "product_spec",
-      "frontend_spec",
-      "visual_consistency_spec",
-      "backend_spec",
-      "prd_iteration_notes",
+      "frontend_template",
+      "fillable_modules",
+      "component_inventory",
+      "material_inventory",
+      "visual_consistency_contract",
+      "ui_data_contract",
+      "template_iteration_notes",
       "completeness_review",
       "evidence_source_manifest",
     ]) {
       log.append({
-        phase: "design_analysis",
+        phase: "frontend_design",
         key,
         value: `${key} value`,
         reason: "test",
@@ -108,7 +110,7 @@ describe("pipeline workflow architecture review step", () => {
 
     const pipeline = WorkflowRegistry.resolveSync("pipeline")!
     const taskSteps = projectTaskSteps(taskID, pipeline)
-    expect(taskSteps.design_analysis?.status).toBe("completed")
+    expect(taskSteps.frontend_design?.status).toBe("completed")
   })
 
   test("projects integrity as completed when top-level pass has advisory concerns evidence", () => {

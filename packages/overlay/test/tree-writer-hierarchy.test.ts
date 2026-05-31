@@ -55,7 +55,7 @@ test("phase cards absorb goal-scoped session parts — no nested session cards",
   //     owns the session's parts. This eliminates the "Build (phase) / 构建
   //     (session)" label mirror that existed when phases had nested agent
   //     children.
-  //   - Non-goal sub-agents (requirements / design-analyst / architect)
+  //   - Non-goal sub-agents (requirements / frontend-design / architect)
   //     surface as top-level siblings of the root assistant card.
   const snapshot = await replay(EVENTS, INITIAL_BOARD);
 
@@ -73,7 +73,7 @@ test("phase cards absorb goal-scoped session parts — no nested session cards",
   const buildWorkerCardID = `build:session:${BUILD_SID}:message:msg_build_1`;
   const plannerCardID = `planner:session:${PLANNER_SID}:message:msg_planner_1`;
   const requirementsCardID = `requirements:session:${REQUIREMENTS_SID}:message:msg_requirements_1`;
-  const designCardID = `design-analyst:session:${DESIGN_SID}:message:msg_design_1`;
+  const designCardID = `frontend-design:session:${DESIGN_SID}:message:msg_design_1`;
   const architectCardID = `architect:session:${ARCHITECT_SID}:message:msg_architect_1`;
   const rootCardID = `assistant:session:${ROOT_SID}:message:msg_orch_1`;
 
@@ -909,6 +909,10 @@ test("tree-writer explicitly accepts non-projected protocol events", () => {
     { type: "milestone.failed", properties: { taskID: TASK_ID, milestoneID: "ms_2", summary: "failed" } },
     { type: "message.injected", properties: { taskID: TASK_ID, runID: "run_1", text: "continue", summary: "injected" } },
     { type: "agent.updated", properties: { taskID: TASK_ID, stage: "executor", summary: "heartbeat" } },
+    { type: "session.created", properties: { info: { id: "ses_created" } } },
+    { type: "session.updated", properties: { info: { id: "ses_updated" } } },
+    { type: "session.deleted", properties: { info: { id: "ses_deleted" } } },
+    { type: "session.diff", properties: { sessionID: "ses_diff", diff: [] } },
   ];
 
   for (const event of events) applyEvent(event);
@@ -954,7 +958,7 @@ test("session.error marks the session card with the original stream error", () =
   applyEvent({
     type: "message.updated",
     properties: {
-      info: stampedInfo("design-analyst", {
+      info: stampedInfo("frontend-design", {
         id: "msg_stream_error",
         sessionID: "ses_stream_error",
         role: "assistant",
@@ -984,7 +988,7 @@ test("session.error marks the session card with the original stream error", () =
     },
   });
 
-  const card = cardTreeStore.cards["design-analyst:session:ses_stream_error:message:msg_stream_error"]!;
+  const card = cardTreeStore.cards["frontend-design:session:ses_stream_error:message:msg_stream_error"]!;
   expect(card.status).toBe("error");
   expect(card.terminalReason).toBe("error");
   expect(card.errorReason).toBe("upstream closed while starting tool call");

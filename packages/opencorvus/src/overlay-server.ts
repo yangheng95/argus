@@ -5,6 +5,7 @@ installProcessShims()
 import yargs from "yargs"
 import { hideBin } from "yargs/helpers"
 import { ServeCommand } from "./cli/cmd/serve"
+import { McpCommand } from "./cli/cmd/mcp"
 import { Log } from "./util/log"
 import { Installation } from "./installation"
 import { NamedError } from "@opencorvus-ai/util/error"
@@ -56,6 +57,7 @@ const cli = yargs(hideBin(process.argv))
     })
   })
   .command(ServeCommand)
+  .command(McpCommand)
   .fail((msg, err) => {
     if (
       msg?.startsWith("Unknown argument") ||

@@ -31,7 +31,7 @@ describe("DecisionLog type & interface", () => {
       phase: "requirements",
       key: "runtime",
       value: "Bun",
-      reason: "PRD specifies Bun as runtime",
+      reason: "template specifies Bun as runtime",
       timeCreated: Date.now(),
     }
     expect(entry.key).toBe("runtime")
@@ -125,7 +125,7 @@ describe("DecisionLog.toPromptSection truncation", () => {
       directory: tmp.path,
       fn: async () => {
         const log = createDecisionLog(taskID)
-        log.append({ phase: "requirements", key: "runtime", value: "Bun", reason: "PRD" })
+        log.append({ phase: "requirements", key: "runtime", value: "Bun", reason: "template" })
         const section = log.toPromptSection({ limit: 10 })
         expect(section).toContain("1 entries")
         expect(section).not.toContain("omitted")

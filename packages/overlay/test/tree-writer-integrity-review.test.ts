@@ -259,6 +259,9 @@ test("multiple reviewers with independent reviewIDs do not cross-contaminate a s
   expect(supervisorCard).toBeDefined();
   expect(reviewerACard).toBeDefined();
   expect(reviewerBCard).toBeDefined();
+  expect(reviewerACard?.kind).toBe("agent");
+  expect(reviewerACard?.stage).toBe("integrity");
+  expect(reviewerACard?.integrity).toBeUndefined();
 
   expect(supervisorCard?.parts[0]).toMatchObject({
     partID: "review:integrity:ses_super:reasoning:1",

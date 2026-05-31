@@ -92,3 +92,36 @@ test("isSatisfied=true short-circuits regardless of reasoning", () => {
   expect(choiceA).toBeUndefined()
   expect(choiceB).toBeUndefined()
 })
+
+test("planner stage agents use exact runtime tools to avoid registry and browser tool bloat", () => {
+  for (const agentName of [
+    "architect",
+    "frontend-design",
+    "goal-workload-analyst",
+    "intent-analysis",
+    "requirements",
+  ]) {
+    expect(SessionLoop.usesExactRuntimeContractTools(agentName, {
+      identity: {
+        agentKind: agentName,
+        contractKind: "stage-attempt",
+      },
+    } as any)).toBe(true)
+  }
+
+  for (const agentName of ["build", "research", "fact-check"]) {
+    expect(SessionLoop.usesExactRuntimeContractTools(agentName, {
+      identity: {
+        agentKind: agentName,
+        contractKind: "stage-attempt",
+      },
+    } as any)).toBe(false)
+  }
+
+  expect(SessionLoop.usesExactRuntimeContractTools("requirements", {
+    identity: {
+      agentKind: "architect",
+      contractKind: "stage-attempt",
+    },
+  } as any)).toBe(false)
+})

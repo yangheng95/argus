@@ -62,7 +62,7 @@ export const RejectionDetail = z.object({
   file: z.string().optional().describe("Affected file path, if applicable"),
   error: z.string().min(8).describe("Description of the error or issue. Minimum 8 chars."),
   suggestion: z.string().optional().describe("Suggested fix approach for the next build/replan step"),
-  visual_spec_id: z.string().optional().describe("Design-analyst spec id this rejection violates."),
+  visual_spec_id: z.string().optional().describe("Frontend-design spec id this rejection violates."),
 })
 export type RejectionDetailType = z.infer<typeof RejectionDetail>
 

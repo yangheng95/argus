@@ -138,7 +138,7 @@ function save(task: TaskRow, patch: Record<string, unknown>, time = Date.now()) 
 }
 
 async function commit(input: { task: TaskRow; plan?: PlanRow; delivery?: DeliveryRow; mode: "baseline" | "result"; allowEmpty: boolean }) {
-  const added = await git(["add", "-A"], { cwd: Instance.directory })
+  const added = await git(evidenceExcludedAddAllArgs(), { cwd: Instance.directory })
   if (added.exitCode !== 0) {
     return {
       error: added.stderr.toString().trim() || added.stdout.toString().trim() || "git add failed",
@@ -190,7 +190,7 @@ coverage/
 Thumbs.db
 .opencorvus/runtime/
 .opencorvus/intent/
-.opencorvus/design-analysis/
+.opencorvus/frontend-design/
 .opencorvus/decision-log.md
 .opencorvus/worktrees/
 .opencorvus/ownership/
@@ -425,7 +425,7 @@ async function commitDeliveryRound(input: {
   log.info("commitDeliveryRound: ensureGitignore start", { cwd, iteration: input.iteration })
   await ensureGitignore()
   log.info("commitDeliveryRound: ensureGitignore done; git add -A start", { cwd })
-  const added = await git(["add", "-A"], { cwd })
+  const added = await git(evidenceExcludedAddAllArgs(), { cwd })
   log.info("commitDeliveryRound: git add -A done", { exitCode: added.exitCode })
   if (added.exitCode !== 0) {
     const err = added.stderr.toString().trim() || added.stdout.toString().trim() || "git add -A failed"
@@ -482,9 +482,23 @@ function normalizeDeliveryPath(file: string) {
   if (!trimmed || path.isAbsolute(trimmed)) return undefined
   const normalized = path.normalize(trimmed).replaceAll("\\", "/")
   if (!normalized || normalized === "." || normalized.startsWith("../") || normalized === "..") return undefined
+  if (ProjectRuntimePaths.isEvidenceInputRelativePath(normalized)) return undefined
   const parts = normalized.split("/")
   if (parts.includes(".git") || parts.includes(".opencorvus")) return undefined
   return normalized
+}
+
+function evidenceExcludedAddAllArgs(): string[] {
+  return [
+    "add",
+    "-A",
+    "--",
+    ".",
+    ":(exclude)web-clone-source",
+    ":(exclude)web-clone-source/**",
+    ":(exclude)mirror",
+    ":(exclude)mirror/**",
+  ]
 }
 
 /**

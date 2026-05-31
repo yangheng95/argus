@@ -53,7 +53,7 @@ async function waitForTaskStatus(taskID: string, status: string) {
 
 // ── 1. Channel ingress: routing semantics ────────────────────────────
 
-describe("Gateway e2e — channel ingress routing (PRD §10)", () => {
+describe("Gateway e2e — channel ingress routing (template §10)", () => {
   test("bound thread routes the message to the existing task without creating a new one", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
@@ -176,7 +176,7 @@ describe("Gateway e2e — channel ingress routing (PRD §10)", () => {
 
         expect(result.kind).toBe("interaction")
         expect(replySpy).toHaveBeenCalledTimes(1)
-        // Critical PRD §10 invariant — the channel command "allow" resolves
+        // Critical template §10 invariant — the channel command "allow" resolves
         // the pending permission deterministically, never falling through to
         // the LLM control plane.
         expect(handleSpy).not.toHaveBeenCalled()
@@ -236,7 +236,7 @@ describe("Gateway e2e — channel ingress routing (PRD §10)", () => {
 
 // ── 2. Task lifecycle via the same APIs Gateway calls ────────────────
 
-describe("Gateway e2e — task lifecycle through EngineService (PRD §9)", () => {
+describe("Gateway e2e — task lifecycle through EngineService (template §9)", () => {
   test("create → message → cancel → delete writes match expected statuses", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
@@ -346,7 +346,7 @@ describe("Gateway e2e — task lifecycle through EngineService (PRD §9)", () =>
 
 // ── 3. Channel binding round-trip + reverse lookup ──────────────────
 
-describe("Gateway e2e — channel bindings + reverse lookup (PRD §17.14)", () => {
+describe("Gateway e2e — channel bindings + reverse lookup (template §17.14)", () => {
   test("bindThread + bindingsByTaskID round-trip returns the same rows", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
@@ -430,7 +430,7 @@ describe("Gateway e2e — channel bindings + reverse lookup (PRD §17.14)", () =
 
 // ── 4. HTTP transport coverage for gateway routes ───────────────────
 
-describe("Gateway e2e — HTTP routes via Server.App().request (PRD §11)", () => {
+describe("Gateway e2e — HTTP routes via Server.App().request (template §11)", () => {
   test("POST /channel/message with bound thread reaches ControlMessage.handle through the route", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({

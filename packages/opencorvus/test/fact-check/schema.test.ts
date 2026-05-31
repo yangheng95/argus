@@ -46,8 +46,9 @@ describe("FactCheckItemSchema", () => {
 })
 
 describe("FactCheckItemListSchema", () => {
-  test("is required (no .default([]) — workers must populate explicitly)", () => {
-    // Passing `undefined` must fail; passing `[]` must succeed.
+  test("stays a strict list primitive; terminal schemas opt into their own defaults", () => {
+    // Passing `undefined` to the primitive list must fail; terminal report
+    // schemas choose whether to wrap it with .default([]).
     expect(FactCheckItemListSchema.safeParse(undefined).success).toBe(false)
     expect(FactCheckItemListSchema.safeParse([]).success).toBe(true)
   })

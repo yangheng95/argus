@@ -123,7 +123,7 @@ External channel (platform / channel / thread) ↔ task binding; `ChannelIngress
 
 ```
 root · orchestrator · assistant · mission · intent-analysis ·
-requirements · design-analyst · goal · architect · integrity ·
+requirements · frontend-design · goal · architect · integrity ·
 delivery · executor · build · evaluator · system
 ```
 

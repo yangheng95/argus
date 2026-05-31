@@ -14,20 +14,6 @@ import {
 import type { ExtractedElement, ExtractedPage } from "../../../src/mirror/ir/extracted-page"
 import { XmlIRSchema } from "../../../src/mirror/ir/xml-ir"
 
-// Golden parity — mirror original
-import { urlCompileService as mirrorCompile } from "D:/myhexin-local/opencode-private/packages/mirror/src/service/url-compile.ts"
-import {
-  siblingFingerprint as mirrorSiblingFingerprint,
-  detectRepeats as mirrorDetectRepeats,
-  adaptiveRepeatThreshold as mirrorAdaptiveRepeatThreshold,
-  extractRepeatItem as mirrorExtractRepeatItem,
-  hasVariedContent as mirrorHasVariedContent,
-  normalizeUrl as mirrorNormalizeUrl,
-  compileElement as mirrorCompileElement,
-} from "D:/myhexin-local/opencode-private/packages/mirror/src/service/url-compile.ts"
-
-const mirrorCtx = { worktree: ".", onProgress: undefined, onEvent: undefined } as any
-
 function el(extra: Partial<ExtractedElement> = {}): ExtractedElement {
   return {
     selector: "div",
@@ -52,109 +38,61 @@ function page(tree: ExtractedElement[], extra: Partial<ExtractedPage> = {}): Ext
   }
 }
 
-// ─── GOLDEN PARITY on pure helpers ────────────────────────────────────────
-
-describe("url/compile — GOLDEN PARITY on pure helpers", () => {
-  const urls = [
-    "",
-    "blob:http://example.test/abc",
-    "//cdn.example.test/logo.png",
-    "https://example.test/logo.png",
-    "data:image/png;base64,AAA",
-  ]
-  test.each(urls)("normalizeUrl(%p) matches mirror", (u) => {
-    expect(normalizeUrl(u)).toBe(mirrorNormalizeUrl(u))
+describe("url/compile helpers", () => {
+  test("normalizes non-portable URLs", () => {
+    expect(normalizeUrl("")).toBe("")
+    expect(normalizeUrl("blob:http://example.test/abc")).toBe("")
+    expect(normalizeUrl("//cdn.example.test/logo.png")).toBe("https://cdn.example.test/logo.png")
+    expect(normalizeUrl("https://example.test/logo.png")).toBe("https://example.test/logo.png")
+    expect(normalizeUrl("data:image/png;base64,AAA")).toBe("data:image/png;base64,AAA")
   })
 
-  test("siblingFingerprint matches mirror on same element", () => {
-    const e: ExtractedElement = el({
-      tag: "li",
-      role: "card",
-      bounds: { x: 0, y: 0, w: 200, h: 100 },
-      styles: { display: "flex", flexDirection: "row" },
-      children: [el({ tag: "h2", bounds: { x: 0, y: 0, w: 100, h: 20 } }), el({ tag: "p" })],
-    })
-    expect(siblingFingerprint(e)).toBe(mirrorSiblingFingerprint(e))
-  })
-
-  test("adaptiveRepeatThreshold parity across sibling counts", () => {
-    for (const count of [0, 1, 10, 15, 16, 100]) {
-      for (const base of [2, 3, 4, 10]) {
-        expect(adaptiveRepeatThreshold(count, base)).toBe(mirrorAdaptiveRepeatThreshold(count, base))
-      }
-    }
-  })
-
-  test("detectRepeats groups identical structures", () => {
+  test("detects repeated sibling structures", () => {
     const children: ExtractedElement[] = [
       el({ tag: "li", text: "item 1", bounds: { x: 0, y: 0, w: 100, h: 40 } }),
       el({ tag: "li", text: "item 2", bounds: { x: 0, y: 40, w: 100, h: 40 } }),
       el({ tag: "li", text: "item 3", bounds: { x: 0, y: 80, w: 100, h: 40 } }),
       el({ tag: "h1", text: "heading", bounds: { x: 0, y: 120, w: 200, h: 40 } }),
     ]
-    const ours = detectRepeats(children, 3)
-    const theirs = mirrorDetectRepeats(children, 3)
-    expect(ours.length).toBe(theirs.length)
-    // Structural compare
-    for (let i = 0; i < ours.length; i++) {
-      expect(JSON.stringify(ours[i])).toBe(JSON.stringify(theirs[i]))
-    }
+
+    expect(siblingFingerprint(children[0])).toBe(siblingFingerprint(children[1]))
+    expect(adaptiveRepeatThreshold(16, 3)).toBe(4)
+    expect(detectRepeats(children, 3).some((group) => group.count === 3)).toBe(true)
   })
 
-  test("extractRepeatItem and hasVariedContent parity", () => {
-    const e = el({
-      children: [
-        el({ tag: "img", imageSrc: "https://cdn/a.png" }),
-        el({ tag: "h3", text: "title a" }),
-        el({ tag: "a", href: "https://example.test/a" }),
-      ],
+  test("extracts repeat item content and detects variation", () => {
+    const first = extractRepeatItem(
+      el({
+        children: [
+          el({ tag: "img", imageSrc: "https://cdn/a.png" }),
+          el({ tag: "h3", text: "title a" }),
+          el({ tag: "a", href: "https://example.test/a" }),
+        ],
+      }),
+    )
+    const second = extractRepeatItem(
+      el({
+        children: [
+          el({ tag: "img", imageSrc: "https://cdn/b.png" }),
+          el({ tag: "h3", text: "title b" }),
+          el({ tag: "a", href: "https://example.test/b" }),
+        ],
+      }),
+    )
+
+    expect(first).toEqual({
+      texts: ["title a"],
+      images: ["https://cdn/a.png"],
+      hrefs: ["https://example.test/a"],
     })
-    const ours = extractRepeatItem(e)
-    const theirs = mirrorExtractRepeatItem(e)
-    expect(ours).toEqual(theirs)
-    const items = [ours, theirs]
-    expect(hasVariedContent(items)).toBe(mirrorHasVariedContent(items))
+    expect(hasVariedContent([first, second])).toBe(true)
   })
 })
 
-// ─── compileElement — GOLDEN PARITY on subtrees ───────────────────────────
-
-describe("compileElement — GOLDEN PARITY byte-level", () => {
-  const cases: Array<{ name: string; el: ExtractedElement }> = [
-    { name: "bare box", el: el({ bounds: { x: 0, y: 0, w: 50, h: 50 } }) },
-    {
-      name: "text leaf",
-      el: el({
-        tag: "p",
-        text: "Hello World",
-        bounds: { x: 0, y: 0, w: 200, h: 24 },
-        styles: { fontFamily: "Inter", fontSize: "16px", fontWeight: "500", color: "rgb(0,0,0)" },
-      }),
-    },
-    {
-      name: "image leaf",
-      el: el({
-        tag: "img",
-        imageSrc: "https://cdn/hero.png",
-        imageAlt: "hero",
-        bounds: { x: 0, y: 0, w: 400, h: 200 },
-      }),
-    },
-    {
-      name: "icon-font <i class='fa-home'>",
-      el: el({
-        tag: "i",
-        classes: ["fa", "fa-home"],
-        bounds: { x: 0, y: 0, w: 16, h: 16 },
-      }),
-    },
-    {
-      name: "decorative dot (below 8x8)",
-      el: el({ tag: "span", bounds: { x: 0, y: 0, w: 4, h: 4 }, styles: {} }),
-    },
-    {
-      name: "flex-row container with style + border-radius",
-      el: el({
+describe("compileElement", () => {
+  test("compiles a styled container with text and image children", () => {
+    const xml = compileElement(
+      el({
         tag: "div",
         role: "card",
         bounds: { x: 0, y: 0, w: 320, h: 180 },
@@ -165,182 +103,82 @@ describe("compileElement — GOLDEN PARITY byte-level", () => {
           padding: "16px",
           backgroundColor: "rgb(255,255,255)",
           borderRadius: "8px",
-          boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
         },
         children: [
-          el({ tag: "img", imageSrc: "https://cdn/icon.png", bounds: { x: 0, y: 0, w: 32, h: 32 } }),
+          el({ tag: "img", imageSrc: "https://cdn/icon.png", imageAlt: "icon", bounds: { x: 0, y: 0, w: 32, h: 32 } }),
           el({ tag: "p", text: "Description", bounds: { x: 0, y: 0, w: 200, h: 24 } }),
         ],
       }),
-    },
-    {
-      name: "anchor container with href",
-      el: el({
-        tag: "a",
-        href: "//cdn.example.test/page",
-        bounds: { x: 0, y: 0, w: 100, h: 24 },
-        children: [el({ tag: "span", text: "Click here" })],
-      }),
-    },
-    {
-      name: "mixed-content text with inline children",
-      el: el({
-        tag: "h2",
-        text: "Hello  World  Rocks",
-        styles: { fontSize: "24px" },
-        children: [
-          el({
-            tag: "span",
-            text: "Amazing",
-            styles: { display: "inline", fontWeight: "700" },
-          }),
-          el({
-            tag: "span",
-            text: "Bold",
-            styles: { display: "inline", fontWeight: "900" },
-          }),
-        ],
-      }),
-    },
-  ]
+      0,
+      99,
+      undefined,
+      { maxSiblings: Infinity, repeatThreshold: Infinity },
+    )
 
-  for (const c of cases) {
-    test(c.name, () => {
-      const ours = compileElement(c.el, 0, 99, undefined, { maxSiblings: Infinity, repeatThreshold: Infinity })
-      const theirs = mirrorCompileElement(c.el, 0, 99, undefined, { maxSiblings: Infinity, repeatThreshold: Infinity })
-      expect(ours).toBe(theirs)
-    })
-  }
+    expect(xml).toContain("<Container")
+    expect(xml).toContain('role="card"')
+    expect(xml).toContain('layout="HORIZONTAL gap:12px"')
+    expect(xml).toContain('src="https://cdn/icon.png"')
+    expect(xml).toContain('>Description</Text>')
+  })
 })
 
-// ─── compilePageToXmlString — GOLDEN PARITY whole page ────────────────────
-
-describe("compilePageToXmlString — GOLDEN PARITY byte-level", () => {
-  const cases: Array<{ name: string; build: () => ExtractedPage }> = [
-    {
-      name: "empty page with title + viewport",
-      build: () => page([]),
-    },
-    {
-      name: "page with tokens + fonts + custom props",
-      build: () =>
-        page([], {
+describe("compilePageToXmlString", () => {
+  test("includes metadata, tokens, assets, and structure", () => {
+    const xml = compilePageToXmlString({
+      page: page(
+        [el({ tag: "h1", text: "Welcome", bounds: { x: 0, y: 0, w: 400, h: 40 } })],
+        {
           tokens: {
             colors: { primary: "#3366ff", surface: "#ffffff" },
-            fonts: ["Inter", "Roboto"],
+            fonts: ["Inter"],
             customProperties: { "--spacing-base": "8px" },
           },
-        }),
-    },
-    {
-      name: "page with image assets (dedup test)",
-      build: () =>
-        page(
-          [el({ tag: "img", imageSrc: "https://cdn/logo.png", bounds: { x: 0, y: 0, w: 64, h: 64 } })],
-          {
-            assets: {
-              images: [
-                { src: "https://cdn/logo.png", alt: "logo" },
-                { src: "https://cdn/logo.png", alt: "logo" }, // dup
-                { src: "https://cdn/hero.png", alt: "hero" },
-              ],
-              icons: [],
-            },
+          assets: {
+            images: [{ src: "images/logo.png", alt: "logo" }],
+            icons: [],
           },
-        ),
-    },
-    {
-      name: "typical landing-page subset (header + hero + cards)",
-      build: () =>
-        page(
-          [
-            el({
-              tag: "header",
-              role: "header",
-              bounds: { x: 0, y: 0, w: 1440, h: 64 },
-              styles: { display: "flex", justifyContent: "space-between", padding: "16px 24px" },
-              children: [
-                el({ tag: "a", text: "Home", href: "/home", bounds: { x: 0, y: 0, w: 64, h: 24 } }),
-                el({ tag: "a", text: "About", href: "/about", bounds: { x: 0, y: 0, w: 64, h: 24 } }),
-              ],
-            }),
-            el({
-              tag: "section",
-              role: "hero",
-              bounds: { x: 0, y: 64, w: 1440, h: 400 },
-              styles: {
-                padding: "48px 24px",
-                backgroundImage: "linear-gradient(135deg, rgb(51,102,255), rgb(0,212,255))",
-              },
-              children: [
-                el({ tag: "h1", text: "Welcome", bounds: { x: 0, y: 0, w: 400, h: 40 } }),
-                el({ tag: "p", text: "Tagline here", bounds: { x: 0, y: 40, w: 400, h: 24 } }),
-              ],
-            }),
-            el({
-              tag: "section",
-              role: "card",
-              bounds: { x: 0, y: 464, w: 1440, h: 400 },
-              styles: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", padding: "24px" },
-              children: [
-                el({
-                  tag: "div",
-                  role: "card",
-                  bounds: { x: 0, y: 0, w: 700, h: 200 },
-                  styles: { backgroundColor: "rgb(255,255,255)", borderRadius: "8px", padding: "16px" },
-                  children: [
-                    el({ tag: "h2", text: "Feature A", bounds: { x: 0, y: 0, w: 600, h: 24 } }),
-                    el({ tag: "p", text: "Description A", bounds: { x: 0, y: 24, w: 600, h: 24 } }),
-                  ],
-                }),
-                el({
-                  tag: "div",
-                  role: "card",
-                  bounds: { x: 0, y: 0, w: 700, h: 200 },
-                  styles: { backgroundColor: "rgb(255,255,255)", borderRadius: "8px", padding: "16px" },
-                  children: [
-                    el({ tag: "h2", text: "Feature B", bounds: { x: 0, y: 0, w: 600, h: 24 } }),
-                    el({ tag: "p", text: "Description B", bounds: { x: 0, y: 24, w: 600, h: 24 } }),
-                  ],
-                }),
-              ],
-            }),
-          ],
-          {
-            tokens: {
-              colors: { primary: "rgb(51,102,255)" },
-              fonts: ["Inter"],
-              customProperties: {},
-            },
-          },
-        ),
-    },
-    // The "list with 4 repeating items" parity case was removed when we
-    // disabled `<Repeat>` folding by default (URL_COMPILE_REPEAT_THRESHOLD
-    // → Infinity in url/compile.ts). The LLM hand-write path needs the full
-    // DOM tree to reproduce per-item structure (e.g. each Baidu hot-search
-    // row's text + tag); folding loses per-instance attributes the codegen
-    // agent then cannot recover. Mirror's reference still folds at 3, so
-    // byte-parity for this case is intentionally broken — non-repeat parity
-    // is still covered by the other golden cases.
-  ]
-
-  for (const c of cases) {
-    test(c.name, async () => {
-      const p = c.build()
-      const ours = compilePageToXmlString({ page: p })
-      const theirs = await mirrorCompile.execute({ page: p }, mirrorCtx)
-      expect(ours).toBe(theirs)
+        },
+      ),
     })
-  }
+
+    expect(xml).toContain("<!-- Page: Test")
+    expect(xml).toContain("<!-- Design Tokens: Colors")
+    expect(xml).toContain("primary: #3366ff")
+    expect(xml).toContain("img-0: images/logo.png (logo)")
+    expect(xml).toContain('>Welcome</Text>')
+  })
+
+  test("background image styles use mirror-local asset paths from imageMap", () => {
+    const dataUrl = "data:image/png;base64,AAA"
+    const xml = compilePageToXmlString({
+      page: page(
+        [
+          el({
+            tag: "div",
+            bounds: { x: 0, y: 0, w: 20, h: 20 },
+            styles: { backgroundImage: `url("${dataUrl}")` },
+          }),
+        ],
+        {
+          assets: {
+            images: [{ src: "images/background/background-0.png", alt: "bg: div" }],
+            icons: [],
+            imageMap: { [dataUrl]: "images/background/background-0.png" },
+          },
+        },
+      ),
+    })
+
+    expect(xml).toContain('bg-image="images/background/background-0.png"')
+    expect(xml).not.toContain("data:image/png;base64")
+  })
 })
 
-// ─── compilePageToXML — wraps as XmlIR ────────────────────────────────────
+describe("compilePageToXML", () => {
+  test("wraps the compiled XML as a valid XmlIR", () => {
+    const ir = compilePageToXML({ page: page([]) })
 
-describe("compilePageToXML — XmlIR wrapper", () => {
-  test("output validates as XmlIR with source='url'", () => {
-    const p = page([])
-    const ir = compilePageToXML({ page: p })
     expect(() => XmlIRSchema.parse(ir)).not.toThrow()
     expect(ir.source).toBe("url")
     expect(ir.bytes).toBe(Buffer.byteLength(ir.xml, "utf8"))

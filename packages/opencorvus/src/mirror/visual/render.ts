@@ -3,7 +3,7 @@
  *
  * Ported from `mirror/src/service/render.ts`. Adaptations vs. upstream:
  *   - `findChromePath` → opencorvus `findBrowserExecutable` (shared with
- *     `delivery/checks/visual.ts` and `design-analyst/url-screenshot.ts`
+ *     `delivery/checks/visual.ts` and `frontend-design/url-screenshot.ts`
  *     so a single browser-lifecycle policy stays in sync).
  *   - Silent `catch` blocks → `Log.create({ service: "mirror.render" })`
  *     with structured context.
@@ -15,9 +15,9 @@
  */
 
 import z from "zod"
-import puppeteer, { type Browser } from "puppeteer-core"
+import { type Browser } from "playwright"
 
-import { findBrowserExecutable } from "@/delivery/checks/visual"
+import { BrowserRuntime } from "@/browser/runtime"
 import { Log } from "@/util/log"
 import { RenderError } from "../errors"
 
@@ -56,6 +56,8 @@ export const RenderOutputSchema = z.object({
   screenshotBuffer: z.instanceof(Buffer),
   viewport: z.object({ width: z.number(), height: z.number() }),
   renderTimeMs: z.number(),
+  bodyText: z.string().optional(),
+  visibleText: z.string().optional(),
   consoleErrors: z.array(z.string()).optional(),
 })
 export type RenderOutput = z.infer<typeof RenderOutputSchema>
@@ -84,12 +86,9 @@ export async function renderFiles(input: RenderInput, ctx?: RenderFilesCtx): Pro
   try {
     ctx?.emit?.({ phase: "launch-browser" })
 
-    const execPath = await findBrowserExecutable()
     try {
-      browser = await puppeteer.launch({
-        executablePath: execPath,
-        headless: false,
-        timeout: 15_000,
+      browser = await BrowserRuntime.launchPlaywrightBrowser({
+        headless: true,
         args: [
           "--no-sandbox",
           "--disable-gpu",
@@ -109,8 +108,8 @@ export async function renderFiles(input: RenderInput, ctx?: RenderFilesCtx): Pro
         { cause: err },
       )
     }
-    const page = await browser.newPage()
-    await page.setViewport(viewport)
+    const context = await browser.newContext({ viewport })
+    const page = await context.newPage()
 
     const consoleErrors: string[] = []
     page.on("console", (msg) => {
@@ -122,7 +121,7 @@ export async function renderFiles(input: RenderInput, ctx?: RenderFilesCtx): Pro
 
     ctx?.emit?.({ phase: "load-page" })
     try {
-      await page.goto(url, { waitUntil: "networkidle0", timeout })
+      await page.goto(url, { waitUntil: "networkidle", timeout })
     } catch (err) {
       const baseReason = err instanceof Error ? err.message : String(err)
       throw new RenderError(
@@ -137,30 +136,82 @@ export async function renderFiles(input: RenderInput, ctx?: RenderFilesCtx): Pro
 
     // Fonts + images settle.
     try {
-      await page.evaluate(() => (document as any).fonts?.ready)
+      await Promise.race([
+        page.evaluate(() => (document as any).fonts?.ready),
+        new Promise((resolve) => setTimeout(resolve, 5_000)),
+      ])
     } catch {
       // older browsers may not expose document.fonts
     }
     try {
-      await page.evaluate(() => {
-        const imgs = Array.from(document.querySelectorAll("img"))
-        return Promise.all(
-          imgs.map((img) =>
-            img.complete
-              ? Promise.resolve()
-              : new Promise((r) => {
-                  img.onload = r
-                  img.onerror = r
-                }),
-          ),
-        )
-      })
+      await Promise.race([
+        page.evaluate(() => {
+          const imgs = Array.from(document.querySelectorAll("img"))
+          return Promise.all(
+            imgs.map((img) =>
+              img.complete
+                ? Promise.resolve()
+                : new Promise((r) => {
+                    img.onload = r
+                    img.onerror = r
+                  }),
+            ),
+          )
+        }),
+        new Promise((resolve) => setTimeout(resolve, 5_000)),
+      ])
     } catch {
       // DOM may be empty — nothing to wait for.
     }
 
     await page.addStyleTag({ content: SCREENSHOT_STABILIZATION_CSS })
     await new Promise((r) => setTimeout(r, 3_000))
+    const textSignals = await page.evaluate(() => {
+      function isElementVisible(element: Element): boolean {
+        const style = window.getComputedStyle(element)
+        if (style.display === "none" || style.visibility === "hidden" || Number(style.opacity) === 0) return false
+        if (style.display === "contents") return true
+        const rect = element.getBoundingClientRect()
+        if (rect.width <= 0 || rect.height <= 0) return false
+        if (rect.bottom <= 0 || rect.right <= 0 || rect.top >= window.innerHeight || rect.left >= window.innerWidth) {
+          return false
+        }
+        return true
+      }
+
+      function isTextNodeVisible(node: Text): boolean {
+        const parent = node.parentElement
+        if (!parent || !node.textContent?.trim()) return false
+        let element: Element | null = parent
+        while (element) {
+          if (!isElementVisible(element)) return false
+          element = element.parentElement
+        }
+        const range = document.createRange()
+        range.selectNodeContents(node)
+        const visible = Array.from(range.getClientRects()).some((rect) =>
+          rect.width > 0 &&
+          rect.height > 0 &&
+          rect.bottom > 0 &&
+          rect.right > 0 &&
+          rect.top < window.innerHeight &&
+          rect.left < window.innerWidth,
+        )
+        range.detach()
+        return visible
+      }
+
+      const walker = document.createTreeWalker(document.body ?? document.documentElement, NodeFilter.SHOW_TEXT)
+      const visible: string[] = []
+      while (walker.nextNode()) {
+        const node = walker.currentNode
+        if (node instanceof Text && isTextNodeVisible(node)) visible.push(node.textContent ?? "")
+      }
+      return {
+        bodyText: document.body?.innerText ?? "",
+        visibleText: visible.join(" "),
+      }
+    }).catch(() => ({ bodyText: "", visibleText: "" }))
 
     ctx?.emit?.({ phase: "screenshot" })
     let screenshotBuffer: Buffer
@@ -186,6 +237,8 @@ export async function renderFiles(input: RenderInput, ctx?: RenderFilesCtx): Pro
       screenshotBuffer,
       viewport,
       renderTimeMs,
+      bodyText: textSignals.bodyText,
+      visibleText: textSignals.visibleText,
       consoleErrors: consoleErrors.length > 0 ? consoleErrors : undefined,
     }
   } finally {

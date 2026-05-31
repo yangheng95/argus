@@ -3,13 +3,8 @@ import { createServer, type Server } from "node:http"
 import { AddressInfo } from "node:net"
 
 import { extractPage } from "../../../src/mirror/url/extract"
-import { ExtractedPageSchema, type ExtractedPage } from "../../../src/mirror/ir/extracted-page"
+import { ExtractedPageSchema } from "../../../src/mirror/ir/extracted-page"
 import { UrlExtractError } from "../../../src/mirror/errors"
-
-// Golden parity — mirror original
-import { extractUrl as mirrorExtract } from "D:/myhexin-local/opencode-private/packages/mirror/src/infra/browser/url-extract-core.ts"
-
-// ─── In-process HTML fixture server ──────────────────────────────────────
 
 const FIXTURE_HTML = `<!DOCTYPE html>
 <html>
@@ -57,7 +52,7 @@ footer { padding: 24px; text-align: center; color: #666; font-size: 14px; }
     </div>
   </div>
   <footer>
-    <small>© 2026 Mirror Test</small>
+    <small>Copyright 2026 Mirror Test</small>
   </footer>
 </body>
 </html>`
@@ -81,31 +76,21 @@ async function serveFixture(): Promise<{ url: string; server: Server }> {
   })
 }
 
-// Helpers for comparing outputs minus non-deterministic fields.
-function stripVolatile(page: ExtractedPage): Record<string, unknown> {
-  const { screenshotUrl, screenshotAboveFold, stats, ...rest } = page
-  const { extractionTimeMs, ...restStats } = stats
-  return { ...rest, stats: restStats }
-}
-
-// ─── GOLDEN PARITY via live puppeteer ─────────────────────────────────────
-
-describe("extractPage — GOLDEN PARITY via live puppeteer", () => {
+describe("extractPage", () => {
   test(
-    "extracted DOM + tokens + assets match mirror byte-for-byte (noScreenshots)",
+    "extracts DOM, tokens, assets, and validates schema",
     async () => {
       const { url, server } = await serveFixture()
       try {
-        const [ours, theirs] = await Promise.all([
-          extractPage({ url, noScreenshots: true, waitMs: 0 }),
-          mirrorExtract({ url, noScreenshots: true, waitMs: 0 }),
-        ])
+        const result = await extractPage({ url, noScreenshots: true, waitMs: 0 })
 
-        // Schema validates ours
-        expect(() => ExtractedPageSchema.parse(ours)).not.toThrow()
-
-        // Strip non-deterministic fields on both sides
-        expect(stripVolatile(ours)).toEqual(stripVolatile(theirs as ExtractedPage))
+        expect(() => ExtractedPageSchema.parse(result)).not.toThrow()
+        expect(result.url).toBe(url)
+        expect(result.title).toBe("Extract Fixture")
+        expect(result.viewport.width).toBeGreaterThan(0)
+        expect(result.tree.length).toBeGreaterThan(0)
+        expect(result.tokens.customProperties["--color-primary"]).toBe("#3366ff")
+        expect(result.stats.totalElements).toBeGreaterThanOrEqual(result.stats.extractedElements)
       } finally {
         server.close()
       }
@@ -125,9 +110,7 @@ describe("extractPage — GOLDEN PARITY via live puppeteer", () => {
           scopeSelector: ".hero",
         })
         expect(result.tree.length).toBeGreaterThan(0)
-        // The hero has h1/p/button as direct children
-        const tags = result.tree.map((el) => el.tag).sort()
-        expect(tags).toEqual(["button", "h1", "p"])
+        expect(result.tree.map((element) => element.tag).sort()).toEqual(["button", "h1", "p"])
       } finally {
         server.close()
       }
@@ -136,13 +119,10 @@ describe("extractPage — GOLDEN PARITY via live puppeteer", () => {
   )
 })
 
-// ─── Error paths (no network) ─────────────────────────────────────────────
-
-describe("extractPage — error paths", () => {
+describe("extractPage error paths", () => {
   test(
     "throws UrlExtractError on navigation failure",
     async () => {
-      // Port 1 is almost always closed locally; attempt connection fails fast.
       try {
         await extractPage({
           url: "http://127.0.0.1:1/does-not-exist",
@@ -150,10 +130,10 @@ describe("extractPage — error paths", () => {
           waitMs: 0,
         })
         throw new Error("should have thrown")
-      } catch (e) {
-        expect(UrlExtractError.isInstance(e)).toBe(true)
-        if (UrlExtractError.isInstance(e)) {
-          expect(["navigate", "launch"]).toContain(e.data.phase)
+      } catch (error) {
+        expect(UrlExtractError.isInstance(error)).toBe(true)
+        if (UrlExtractError.isInstance(error)) {
+          expect(["navigate", "launch"]).toContain(error.data.phase)
         }
       }
     },
@@ -176,11 +156,11 @@ describe("extractPage — error paths", () => {
           waitMs: 0,
         })
         throw new Error("should have thrown")
-      } catch (e) {
-        expect(UrlExtractError.isInstance(e)).toBe(true)
-        if (UrlExtractError.isInstance(e)) {
-          // @ts-expect-error — status present at runtime (z.never cast in impl)
-          expect(e.data.status).toBe(403)
+      } catch (error) {
+        expect(UrlExtractError.isInstance(error)).toBe(true)
+        if (UrlExtractError.isInstance(error)) {
+          // @ts-expect-error status is attached by the runtime error payload.
+          expect(error.data.status).toBe(403)
         }
       } finally {
         server.close()

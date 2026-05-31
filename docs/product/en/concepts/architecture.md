@@ -45,7 +45,7 @@ orchestrator/loop.ts — runTaskLoop()  (line 117)
     ┌─────────────────────────────────────┐
     │ sub-agent (invoked on demand)        │
     │  requirements / architect /         │
-    │  design_analysis / build /          │
+    │  frontend_design / build /          │
     │  integrity / prosecute /            │
     │  analyze_intent / deliver / …       │
     └────────────┬────────────────────────┘
@@ -80,7 +80,7 @@ orchestrator/loop.ts — runTaskLoop()  (line 117)
 | ID | Suited for | Recommended steps |
 |---|---|---|
 | `direct` | Single-file / bugfix / config / short debug | `build` → `deliver` |
-| `pipeline` | Multi-file features / UI replication / cross-module refactors | `design_analysis?` → `requirements` → `architect` → per-goal `build` → `deliver` |
+| `pipeline` | Multi-file features / UI replication / cross-module refactors | `frontend_design?` → `requirements` → `architect` → per-goal `build` → `deliver` |
 
 Defined in `engine/workflow.ts`; users can customize via `opencorvus.jsonc`. The Orchestrator retrieves a template via `WorkflowRegistry.resolve(id)` but may still deviate based on its own reasoning.
 
@@ -92,7 +92,7 @@ Defined in `engine/workflow.ts`; users can customize via `opencorvus.jsonc`. The
 | **Intent Analysis** | `intent-analysis/agent.ts` | Interprets short / ambiguous requests; outputs intent class / complexity / clarifications |
 | **Requirements** | `requirements/agent.ts` | Writes REQ-N + foundational decisions via Zod tool output; does not produce goals |
 | **Architect** | `architect/agent.ts` | Analyzes boundaries first, then produces at least 2 small, independently executable/verifiable goals; single all-in-one goals are disallowed; also owns interface contracts, traceability, and fidelity |
-| **Design Analyst** | `design-analyst/agent.ts` | Visual references (Figma / images / URL) → layout / style / component inventory |
+| **Frontend Design** | `frontend-design/agent.ts` | Visual references (Figma / images / URL) → frontend template / fillable modules / component and material inventories |
 | **Build** | `build/agent.ts` + `build/index.ts` + `build/report.ts` + `build/types.ts` + `goal/runner.ts` + `agent/sub-agent-protocol.ts` | Actually writes code in the worktree; invoked by the Orchestrator via the `build` tool |
 | **Integrity Reviewer** | `integrity/agent.ts` | Multi-dimension integrity review (requirement_fidelity / technical_feasibility / hallucination / solution_quality) |
 | **Prosecutor** | `prosecutor/agent.ts` | Adversarial review of delivery candidates |

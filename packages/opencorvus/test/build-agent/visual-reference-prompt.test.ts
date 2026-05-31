@@ -57,12 +57,12 @@ describe("renderVisualContractPreamble", () => {
   test("filters out non-visual attachments while keeping visual ones", () => {
     const out = renderVisualContractPreamble([
       { mime: "image/png", filename: "ui.png", size: 1, sha: "v1" },
-      { mime: "text/markdown", filename: "PRD.md", size: 2, sha: "t1" },
+      { mime: "text/markdown", filename: "template.md", size: 2, sha: "t1" },
     ])
     expect(out).toContain("ui.png")
     // Markdown is read via read_attachment / inline-into-request, not a
     // visual contract — must not be promoted to "binding visual target".
-    expect(out).not.toContain("PRD.md")
+    expect(out).not.toContain("template.md")
   })
 
   test("falls back to sha when filename is missing", () => {

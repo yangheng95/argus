@@ -58,13 +58,13 @@
 
 **SessionKind**（固定在 creation time，见 `session.sql.ts:50-65`，按代码出现顺序）：
 `root` · `orchestrator` · `assistant` · `gateway` · `intent-analysis` · `requirements` ·
-`design-analyst` · `goal` · `architect` · `integrity` · `delivery` · `executor` · `build` ·
+`frontend-design` · `goal` · `architect` · `integrity` · `delivery` · `executor` · `build` ·
 `evaluator` · `system` —— **共 15 种**。
 
 > 历史版本本文档曾写"16 种"且把 `planner` 列入，那是抄旧 `planner/` 包时代的草稿。
 > Planner agent 已随 `src/planner/` 整目录删除（见 [01-agents.md](01-agents.md)），
 > `planner` 不再是合法的 SessionKind。`goal` kind 仍保留——用于 historical task rows
-> 与早于 `requirements` / `design-analyst` 拆分前的 catch-all。
+> 与早于 `requirements` / `frontend-design` 拆分前的 catch-all。
 
 **去掉的字段 / 索引**（旧文档还在提，代码已清理）：
 - ~~`session.channel_key`~~ — Gateway 单例概念删除

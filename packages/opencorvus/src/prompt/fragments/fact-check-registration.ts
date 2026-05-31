@@ -6,7 +6,7 @@
  * appends. Six worker agent.ts files import `withFactCheckRegistration`
  * and call it at their `runAgentSession({ core: ... })` site:
  *
- *   build / requirements / architect / design-analyst / intent-analysis /
+ *   build / requirements / architect / frontend-design / intent-analysis /
  *   integrity (CONSENSUS phase only — team-agent.ts:265)
  *
  * Plan and reviewer phases (team-agent.ts:197 / :404) do NOT inject this
@@ -19,9 +19,9 @@
 
 export const FACT_CHECK_REGISTRATION_FRAGMENT = `## Fact-check item registration
 
-Before calling your terminal report tool, populate \`fact_check_items[]\` with EVERY factual
-claim in your output that you have NOT directly verified via tool calls in this session, AND
-EVERY placeholder for information you do not have.
+Before calling your terminal report tool, register EVERY factual claim in your output that
+you have NOT directly verified via tool calls in this session, AND EVERY placeholder for
+information you do not have. Use \`fact_check_items[]\` when your terminal schema exposes it.
 
 Each item:
 - \`claim\`: full standalone assertion (≥20 chars, ≤280 chars). Avoid generic words like
@@ -37,7 +37,7 @@ Placeholders: \`claim="<待填充：...>"\` + confidence="low" + source="assumed
 DO NOT register: opinions, preferences, plans, your own decisions, tool-call results you
 observed in this session, contents of files you read in this session.
 
-Empty list (\`fact_check_items: []\`) is fine when you genuinely have no unverified claims.
+Omit \`fact_check_items\` or use \`fact_check_items: []\` when you genuinely have no unverified claims.
 Over-claiming verified-ness will be flagged as a violation in fact-check.`
 
 /**
@@ -48,7 +48,7 @@ Over-claiming verified-ness will be flagged as a violation in fact-check.`
  * Usage:
  *   core: withFactCheckRegistration(BUILD_CORE)
  *   core: withFactCheckRegistration(composeBuildCore(autoIteration))
- *   core: withFactCheckRegistration([DESIGN_ANALYST_CORE, renderAutoIterationMode(autoIteration)].join("\\n\\n"))
+ *   core: withFactCheckRegistration([FRONTEND_DESIGN_CORE, renderAutoIterationMode(autoIteration)].join("\\n\\n"))
  */
 export function withFactCheckRegistration(core: string): string {
   return [core, FACT_CHECK_REGISTRATION_FRAGMENT].join("\n\n")

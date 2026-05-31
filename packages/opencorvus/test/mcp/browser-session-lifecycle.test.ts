@@ -1,0 +1,188 @@
+import { afterEach, describe, expect, test } from "bun:test"
+import { BrowserRuntime } from "../../src/browser/runtime"
+import { createSession, destroySession, getSession, getSessionStats, getSessions, getSessionStatus } from "../../src/mcp/browser/sessions"
+
+type Handler = (...args: unknown[]) => void
+
+class FakePage {
+  private handlers = new Map<string, Handler[]>()
+
+  async addInitScript() {}
+
+  on(event: string, handler: Handler) {
+    const existing = this.handlers.get(event) ?? []
+    existing.push(handler)
+    this.handlers.set(event, existing)
+    return this
+  }
+
+  async close() {
+    for (const handler of this.handlers.get("close") ?? []) handler()
+  }
+
+  url() {
+    return "about:blank"
+  }
+
+  async title() {
+    return ""
+  }
+}
+
+class FakeContext {
+  readonly pagesList: FakePage[] = []
+  newPageDelayMs = 0
+  closed = false
+  private handlers = new Map<string, Handler[]>()
+
+  constructor(private readonly failNewPage = false) {}
+
+  async newPage() {
+    if (this.closed) throw new Error("context closed")
+    if (this.newPageDelayMs > 0) await new Promise((resolve) => setTimeout(resolve, this.newPageDelayMs))
+    if (this.closed) throw new Error("context closed")
+    if (this.failNewPage) throw new Error("new page failed")
+    const page = new FakePage()
+    this.pagesList.push(page)
+    return page
+  }
+
+  async route() {}
+
+  on(event: string, handler: Handler) {
+    const existing = this.handlers.get(event) ?? []
+    existing.push(handler)
+    this.handlers.set(event, existing)
+    return this
+  }
+
+  pages() {
+    return this.pagesList
+  }
+
+  async close() {
+    this.closed = true
+    for (const handler of this.handlers.get("close") ?? []) handler()
+  }
+}
+
+class FakeBrowser {
+  readonly contexts: FakeContext[] = []
+  private disconnectedHandlers: Handler[] = []
+  private closed = false
+
+  constructor(private readonly contextFactory: () => FakeContext) {}
+
+  isConnected() {
+    return !this.closed
+  }
+
+  async newContext() {
+    const context = this.contextFactory()
+    this.contexts.push(context)
+    return context
+  }
+
+  on(event: string, handler: Handler) {
+    if (event === "disconnected") this.disconnectedHandlers.push(handler)
+    return this
+  }
+
+  async close() {
+    this.closed = true
+    for (const handler of this.disconnectedHandlers) handler()
+  }
+}
+
+describe("browser MCP session lifecycle", () => {
+  const originalLaunch = BrowserRuntime.launchPlaywrightBrowser
+  const launchedBrowsers: FakeBrowser[] = []
+
+  afterEach(async () => {
+    for (const session of getSessions()) {
+      await destroySession(session.id).catch(() => undefined)
+    }
+    for (const browser of launchedBrowsers.splice(0)) {
+      await browser.close()
+    }
+    ;(BrowserRuntime as { launchPlaywrightBrowser: typeof originalLaunch }).launchPlaywrightBrowser = originalLaunch
+  })
+
+  test("coalesces concurrent browser launch requests", async () => {
+    let launchCount = 0
+    const browser = new FakeBrowser(() => new FakeContext())
+    launchedBrowsers.push(browser)
+    ;(BrowserRuntime as { launchPlaywrightBrowser: typeof originalLaunch }).launchPlaywrightBrowser = async () => {
+      launchCount++
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      return browser as never
+    }
+
+    const [first, second] = await Promise.all([
+      createSession({ virtualCursor: false }),
+      createSession({ virtualCursor: false }),
+    ])
+
+    expect(first.sessionId).not.toBe(second.sessionId)
+    expect(launchCount).toBe(1)
+    expect(browser.contexts.length).toBe(2)
+  })
+
+  test("closes a newly created profile when page creation fails", async () => {
+    const context = new FakeContext(true)
+    const browser = new FakeBrowser(() => context)
+    launchedBrowsers.push(browser)
+    ;(BrowserRuntime as { launchPlaywrightBrowser: typeof originalLaunch }).launchPlaywrightBrowser = async () =>
+      browser as never
+
+    await expect(createSession({ virtualCursor: false })).rejects.toThrow("new page failed")
+    expect(context.closed).toBe(true)
+    expect(getSessionStats().active).toBe(0)
+    expect(getSessionStats().profiles).toBe(0)
+  })
+
+  test("serializes profile reuse against destroying the previous session", async () => {
+    const context = new FakeContext()
+    const browser = new FakeBrowser(() => context)
+    launchedBrowsers.push(browser)
+    ;(BrowserRuntime as { launchPlaywrightBrowser: typeof originalLaunch }).launchPlaywrightBrowser = async () =>
+      browser as never
+
+    const first = await createSession({ virtualCursor: false })
+    context.newPageDelayMs = 20
+
+    const [second, destroyed] = await Promise.all([
+      createSession({ profileId: first.profileId, virtualCursor: false }),
+      destroySession(first.sessionId),
+    ])
+
+    expect(second.profileId).toBe(first.profileId)
+    expect(second.sessionId).not.toBe(first.sessionId)
+    expect(destroyed.profilePreserved).toBe(true)
+    expect(context.closed).toBe(false)
+    expect(getSessionStats().active).toBe(1)
+    expect(getSessionStats().profiles).toBe(1)
+  })
+
+  test("records a clear unavailable status when a page closes unexpectedly", async () => {
+    const context = new FakeContext()
+    const browser = new FakeBrowser(() => context)
+    launchedBrowsers.push(browser)
+    ;(BrowserRuntime as { launchPlaywrightBrowser: typeof originalLaunch }).launchPlaywrightBrowser = async () =>
+      browser as never
+
+    const created = await createSession({ virtualCursor: false })
+    await context.pagesList[0].close()
+
+    expect(() => getSession(created.sessionId)).toThrow(/Session unavailable: .*page_closed/)
+    expect(getSessionStatus(created.sessionId)).toMatchObject({
+      sessionId: created.sessionId,
+      profileId: created.profileId,
+      status: "unavailable",
+      reason: "page_closed",
+      message: "Page closed unexpectedly",
+    })
+    expect(getSessionStats().active).toBe(0)
+    expect(getSessionStats().profiles).toBe(0)
+  })
+})

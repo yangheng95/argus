@@ -833,7 +833,7 @@ test(
           ".task-dir-shell",
           ".task-cwd-dropdown",
           ".btn.mini",
-          '[data-ui="executor-chip"]',
+          '[data-ui^="executor-chip-"]',
           ".chat-input",
           ".chat-send",
           ".board-intro__cta-action",
@@ -865,7 +865,7 @@ test(
           { selector: ".task-dir-shell", props: ["columnGap", "paddingLeft", "paddingRight"], max: 4 },
           { selector: ".task-cwd-dropdown", props: ["columnGap", "paddingLeft", "paddingRight"], max: 8 },
           { selector: ".btn.mini", props: ["paddingLeft", "paddingRight"], max: 8 },
-          { selector: '[data-ui="executor-chip"]', props: ["columnGap", "paddingLeft", "paddingRight"], max: 9 },
+          { selector: '[data-ui^="executor-chip-"]', props: ["columnGap", "paddingLeft", "paddingRight"], max: 9 },
           {
             selector: ".chat-input",
             props: ["columnGap", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft"],

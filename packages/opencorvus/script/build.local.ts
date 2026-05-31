@@ -16,6 +16,7 @@ import { Script } from "@opencorvus-ai/script"
 import pkg from "../package.json"
 import {
   artifactEntrypoints,
+  artifactExternalModules,
   artifactPackageBaseName,
   artifactSourcemap,
   parseBuildFlavor,
@@ -278,6 +279,7 @@ for (const item of targets) {
     tsconfig: "./tsconfig.json",
     plugins: [solidPlugin],
     sourcemap: artifactSourcemap(),
+    external: artifactExternalModules(),
     compile: compile as any,
     entrypoints: artifactEntrypoints(buildFlavor, parserWorker, workerPath),
     define: {

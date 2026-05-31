@@ -63,7 +63,7 @@ describe("terminal seam materializes the complete decision-log bundle", () => {
       directory: tmp.path,
       fn: async () => {
         createDecisionLog(taskID).append({
-          phase: "requirements", key: "runtime", value: "Bun", reason: "PRD pins Bun",
+          phase: "requirements", key: "runtime", value: "Bun", reason: "template pins Bun",
         })
         await updateTask(findTask(taskID)!, { status: "completed", time_completed: now + 10 }, "done")
       },
@@ -72,7 +72,7 @@ describe("terminal seam materializes the complete decision-log bundle", () => {
     expect(findRun(runID)?.status).toBe("completed")
     const doc = await fs.readFile(ProjectRuntimePaths.decisionLogPaths(tmp.path, taskID).absolute, "utf8")
     expect(doc).toContain("### runtime")
-    expect(doc).toContain("_Why: PRD pins Bun_")
+    expect(doc).toContain("_Why: template pins Bun_")
   })
 
   test("REPLAYED terminal update on an already-terminal row re-materializes (no-op guard branch)", async () => {

@@ -29,7 +29,7 @@ import { Log } from "@/util/log"
 import type { RuntimeHooks } from "@/engine/runtime-hooks"
 import { Orchestrator, type OrchestratorEvent } from "@/orchestrator/agent"
 import { findTask } from "@/engine"
-import { isTaskQueued } from "@/engine/task-status"
+import { deriveTaskStatus, isTaskQueued, isTaskTerminal } from "@/engine/task-status"
 
 const log = Log.create({ service: "orchestrator-loop" })
 
@@ -170,6 +170,10 @@ async function runTaskLoopInner(input: {
   {
     const { updateTask } = await import("@/engine/state")
     const task = findTask(taskID)
+    if (task && isTaskTerminal(task)) {
+      log.info("terminal task loop wake ignored", { taskID, status: deriveTaskStatus(task), note: event?.note })
+      return
+    }
     if (task && isTaskQueued(task)) {
       await updateTask(task, { status: "active" }, "Task loop started — marking active for serial queue")
     }
@@ -182,6 +186,10 @@ async function runTaskLoopInner(input: {
   const task = findTask(taskID)
   if (!task) {
     log.error("task not found, exiting loop", { taskID })
+    return
+  }
+  if (isTaskTerminal(task)) {
+    log.info("terminal task loop wake ignored", { taskID, status: deriveTaskStatus(task), note: event?.note })
     return
   }
 

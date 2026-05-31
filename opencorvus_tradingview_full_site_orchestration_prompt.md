@@ -1,8 +1,8 @@
-# OpenCorvus 总调度任务：TradingView 全站研究复刻 DFS 采集、PRD 生成与工程实现
+# OpenCorvus 总调度任务：TradingView 全站研究复刻 DFS 采集、template 生成与工程实现
 
 ## 0. 任务一句话
 
-从 `https://www.tradingview.com/` 根节点开始，以 DFS 方式采集 TradingView 公开匿名态全站结构，解析从全站到子模块的页面信息，生成站点级 PRD、模块级 PRD、共享架构 PRD、数据/API/前端实现 PRD，并由 OpenCorvus 编排多 Agent 长周期迭代完成一个研究用途的 TradingView 风格完整网站复刻系统。
+从 `https://www.tradingview.com/` 根节点开始，以 DFS 方式采集 TradingView 公开匿名态全站结构，解析从全站到子模块的页面信息，生成站点级 template、模块级 template、共享架构 template、数据/API/前端实现 template，并由 OpenCorvus 编排多 Agent 长周期迭代完成一个研究用途的 TradingView 风格完整网站复刻系统。
 
 ---
 
@@ -21,8 +21,8 @@
 2. 识别全站顶级模块。
 3. 以 DFS 方式进入模块与子模块。
 4. 采集公开页面结构、URL、导航、内容区、数据模型线索。
-5. 生成站点级和模块级 PRD。
-6. 基于 PRD 生成工程任务。
+5. 生成站点级和模块级 template。
+6. 基于 template 生成工程任务。
 7. 由 OpenCorvus 编排器派发给不同 Agent 完成：
    - 数据库
    - 合成行情引擎
@@ -42,7 +42,7 @@
 
 ### 2.1 证据优先
 
-所有 PRD 必须基于实际采集证据，不允许凭主观印象编造。
+所有 template 必须基于实际采集证据，不允许凭主观印象编造。
 
 每个需求条目必须标注来源类型：
 
@@ -58,7 +58,7 @@ legacy_deep_evidence
 unsupported_due_to_missing_evidence
 ```
 
-PRD 中禁止出现“TradingView 应该有”、“一般这种网站会有”、“我猜测”等无证据描述。
+template 中禁止出现“TradingView 应该有”、“一般这种网站会有”、“我猜测”等无证据描述。
 
 如果某个 SPA 页面公开 HTML 不暴露内部结构，则只能写：
 
@@ -88,7 +88,7 @@ DFS 规则：
 4. 分类链接。
 5. 按站点层级进入子节点。
 6. 每个节点输出页面快照和路由信息。
-7. 每个模块只深挖到足以写模块 PRD 的层级。
+7. 每个模块只深挖到足以写模块 template 的层级。
 8. 不要求操作每个按钮和每个交互。
 9. 不登录。
 10. 不绕过付费或反爬。
@@ -121,7 +121,7 @@ DFS 不是暴力爬全网。需要做模块边界识别和限深。
 5. 识别跨模块跳转关系。
 6. 识别 auth / paid / route / unsupported 边界。
 7. 对复杂模块列出后续深采任务。
-8. 对每个主要模块生成准确 PRD。
+8. 对每个主要模块生成准确 template。
 
 ---
 
@@ -164,7 +164,7 @@ DFS 不是暴力爬全网。需要做模块边界识别和限深。
 
 允许：
 
-1. 采集公开页面结构和可见文本用于 PRD。
+1. 采集公开页面结构和可见文本用于 template。
 2. 使用截图作为视觉参考。
 3. 自研 UI。
 4. 使用开源图表库或自研图表。
@@ -180,11 +180,11 @@ DFS 不是暴力爬全网。需要做模块边界识别和限深。
 
 1. 控制 DFS 采集顺序。
 2. 管理证据库。
-3. 生成和审查 PRD。
+3. 生成和审查 template。
 4. 拆解 OpenCorvus 任务。
 5. 分配模块 Agent。
 6. 管理依赖关系。
-7. 合并 PRD 与实现。
+7. 合并 template 与实现。
 8. 监督测试和回归。
 9. 防止幻觉和重复造轮子。
 10. 保证最终系统可运行。
@@ -242,13 +242,13 @@ docs/site/cross-module-routing.md
 
 ---
 
-### 4.3 PRD Writer Agent
+### 4.3 template Writer Agent
 
 职责：
 
-1. 为站点写全站 PRD。
-2. 为每个模块写 module PRD。
-3. 为复杂模块拆 feature PRD。
+1. 为站点写全站 template。
+2. 为每个模块写 module template。
+3. 为复杂模块拆 feature template。
 4. 每条需求绑定 evidence anchor。
 5. 标记 evidence gaps。
 6. 不编造交互。
@@ -270,7 +270,7 @@ docs/prd/evidence-gaps.md
 
 职责：
 
-1. 基于 PRD 设计系统架构。
+1. 基于 template 设计系统架构。
 2. 规划数据库。
 3. 规划后端 API。
 4. 规划前端模块。
@@ -593,9 +593,9 @@ education-program
 
 ---
 
-## 7. PRD 生成规范
+## 7. template 生成规范
 
-### 7.1 全站 PRD 必须包含
+### 7.1 全站 template 必须包含
 
 ```text
 1. 产品定位
@@ -614,7 +614,7 @@ education-program
 14. Evidence gaps
 ```
 
-### 7.2 每个模块 PRD 必须包含
+### 7.2 每个模块 template 必须包含
 
 ```text
 1. 模块定位
@@ -634,9 +634,9 @@ education-program
 15. Evidence gaps
 ```
 
-### 7.3 Feature PRD 触发条件
+### 7.3 Feature template 触发条件
 
-以下情况必须拆 feature PRD：
+以下情况必须拆 feature template：
 
 1. 模块有复杂工作台交互。
 2. 模块包含表格筛选排序。
@@ -647,7 +647,7 @@ education-program
 7. 模块包含跨模块数据流。
 8. 模块包含 paid/auth/private boundary。
 
-必须拆 feature PRD 的模块：
+必须拆 feature template 的模块：
 
 ```text
 chart
@@ -1194,7 +1194,7 @@ DataTable
 
 ### 14.4 Stock Screener
 
-必须接入已有深度 PRD，并全站化：
+必须接入已有深度 template，并全站化：
 
 1. 使用 shared instrument domain。
 2. 使用 shared API client。
@@ -1207,7 +1207,7 @@ DataTable
 
 ### 14.5 Chart / Supercharts
 
-必须接入已有深度 PRD，并全站化：
+必须接入已有深度 template，并全站化：
 
 1. `/chart/`。
 2. `/chart/?symbol=NASDAQ:NVDA`。
@@ -1520,7 +1520,7 @@ site | shared | home | markets | symbol | screener | chart | news | ideas | scri
 ```text
 T0 root crawl
   -> T1 site graph
-    -> T2 site PRD
+    -> T2 site template
       -> T3 shared architecture
         -> T4 database + synthetic engine
         -> T5 shared API
@@ -1563,7 +1563,7 @@ docs/evidence/crawl-summary.md
 
 ---
 
-### T1：全站模块索引 PRD
+### T1：全站模块索引 template
 
 目标：
 
@@ -1587,7 +1587,7 @@ docs/prd/cross-module-routing.md
 
 ---
 
-### T2：共享 Shell / Route / Boundary PRD
+### T2：共享 Shell / Route / Boundary template
 
 输出：
 
@@ -1606,7 +1606,7 @@ docs/prd/boundary-system-prd.md
 
 ---
 
-### T3：共享数据和 API PRD
+### T3：共享数据和 API template
 
 输出：
 
@@ -1625,7 +1625,7 @@ docs/architecture/api-contracts.md
 
 ---
 
-### T4：模块 PRD 批量生成
+### T4：模块 template 批量生成
 
 对每个模块生成：
 
@@ -1655,11 +1655,11 @@ about
 
 验收：
 
-1. 每个 PRD 有 evidence anchors。
-2. 每个 PRD 有 in/out scope。
-3. 每个 PRD 有数据/API/组件/测试要求。
-4. 每个 PRD 有 evidence gaps。
-5. PRD 之间不矛盾。
+1. 每个 template 有 evidence anchors。
+2. 每个 template 有 in/out scope。
+3. 每个 template 有数据/API/组件/测试要求。
+4. 每个 template 有 evidence gaps。
+5. template 之间不矛盾。
 
 ---
 
@@ -1885,7 +1885,7 @@ tests/data/*.spec.ts
 
 每个模块必须满足：
 
-1. PRD 已完成。
+1. template 已完成。
 2. Evidence anchors 已标注。
 3. MVP 已实现。
 4. API 已实现。
@@ -2008,4 +2008,7 @@ P2 必须记录并有修复计划
 
 ## 24. 给 OpenCorvus 的执行口令
 
-从根节点开始。先爬、再写 PRD、再设计架构、再实现。不要把两个已有模块当成独立页面继续堆代码。先建立全站路线图和证据库，再把 Screener 和 Chart 迁入统一站点。所有模块必须有 PRD，所有 PRD 必须有证据，所有实现必须来自 PRD，所有重要交互必须有测试。任何登录、付费、真实行情、真实交易、真实告警、云端保存、私有 API 都必须明确降级，不能伪装完成。模块级完整度和正确性优先于局部按钮穷举。DFS 从 `/` 开始，按站点结构进入子模块，逐步扩展到完整复刻系统。
+从根节点开始。先爬、再写 template、再设计架构、再实现。不要把两个已有模块当成独立页面继续堆代码。先建立全站路线图和证据库，再把 Screener 和 Chart 迁入统一站点。所有模块必须有 template，所有 template 必须有证据，所有实现必须来自 template，所有重要交互必须有测试。任何登录、付费、真实行情、真实交易、真实告警、云端保存、私有 API 都必须明确降级，不能伪装完成。模块级完整度和正确性优先于局部按钮穷举。DFS 从 `/` 开始，按站点结构进入子模块，逐步扩展到完整复刻系统。
+# LEGACY / DO NOT USE FOR CURRENT WEBPAGE-CLONE FLOWS
+
+This historical prompt predates the current `frontend_design` frontend replica contract and `web-clone-source/` handoff. It must not be used as active orchestration guidance, prompt context, or retrieval source for current OpenCorvus webpage-clone tasks.

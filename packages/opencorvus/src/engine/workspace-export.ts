@@ -1,3 +1,5 @@
+import { ProjectRuntimePaths } from "@/project/runtime-paths"
+
 export function readBaselineCommitFromMetadata(metadata: unknown): string | undefined {
   if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return
   const git = (metadata as Record<string, unknown>).git
@@ -26,7 +28,8 @@ export async function collectMainWorktreeDiff(
     .split("\n")
     .map((line) => line.trim())
     .filter(Boolean)
-  const patchResult = await $`git -c core.quotepath=false diff --no-ext-diff ${range}`
+    .filter((file) => !ProjectRuntimePaths.isEvidenceInputRelativePath(file))
+  const patchResult = await $`git -c core.quotepath=false diff --no-ext-diff ${range} -- . ":(exclude)web-clone-source" ":(exclude)web-clone-source/**" ":(exclude)mirror" ":(exclude)mirror/**"`
     .cwd(cwd)
     .quiet()
     .nothrow()

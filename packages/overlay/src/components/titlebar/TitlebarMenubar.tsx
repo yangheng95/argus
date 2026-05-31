@@ -280,7 +280,8 @@ export function TitlebarMenubar(props: TitlebarMenubarProps) {
 
   function focusExecutorSelector() {
     closeMenu();
-    const button = document.querySelector<HTMLButtonElement>('[data-ui="executor-chip"]');
+    const activeExecutor = settingsStore.executor === "opencorvus" ? "mirror" : "external";
+    const button = document.querySelector<HTMLButtonElement>(`[data-ui="executor-chip-${activeExecutor}"]`);
     button?.focus();
   }
 

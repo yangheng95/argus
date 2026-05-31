@@ -374,7 +374,7 @@ CC 的唯一 goal 仅 own `src/shared/components/CandlestickChart/` + C# 源目�
 
 ## 10. 实地交付物核查 —— 三项目真实完成度评估（rule 3 / 24 复核）
 
-> 方法：去 `C:\Users\chuan\myhexin-local\demos\VibeCodingClient-dev` 实地查文件、读源码、对照 PRD（`Doc/business-requirement/opus-extract/prd/KeyStatisticsMT.md`、`Doc/components/HQComponent (debugged)/CandlestickChart.md`、`.../TrendChart.md`）。不信 DB 状态、不信 architect/integrity 的 `verdict`、不信 Codex 的 commit message。
+> 方法：去 `C:\Users\chuan\myhexin-local\demos\VibeCodingClient-dev` 实地查文件、读源码、对照 template（`Doc/business-requirement/opus-extract/prd/KeyStatisticsMT.md`、`Doc/components/HQComponent (debugged)/CandlestickChart.md`、`.../TrendChart.md`）。不信 DB 状态、不信 architect/integrity 的 `verdict`、不信 Codex 的 commit message。
 
 ### 总体判断
 
@@ -390,7 +390,7 @@ CC 的唯一 goal 仅 own `src/shared/components/CandlestickChart/` + C# 源目�
 
 **功能逐项核对**：
 
-| PRD 章节 | 要求 | 实现情况 |
+| template 章节 | 要求 | 实现情况 |
 |---|---|---|
 | §3.1 主视图 | AcrossKeyValue 网格 + 动态列布局 | ✅ `KeyStatisticsMTts.tsx` 引用 `AcrossKeyValue`，`displayLines` 计算正确 |
 | §3.2 标题栏 | FlexibleTitleBar + 折叠按钮 | ✅ `FlexibleTitleBar` + `UpFoldDoubleArrow`/`DownFoldDoubleArrow` |
@@ -432,9 +432,9 @@ if (market === 'USHA' || market === 'USZA') {  // ← 死代码：规则 1 已 r
 
 **致命系统漏洞 —— 整个 CC 任务全程没有任何 `integrity_attempt` 行**：
 
-`SELECT * FROM engine_artifact WHERE task_id='tsk_e21cff31a001KYZ7u8h27S0tKo' AND kind='integrity_attempt'` 返回 0 行。workflow.step.updated 也没有 `integrity` 步。即 CC 跳过了架构与需求保真度审查直接进 deliver。后续 4 次 deliver-fail 全部是 runtime 类失败（packageManager / lockfile / TrendView / CDN），从未审核组件是否真正满足 PRD。
+`SELECT * FROM engine_artifact WHERE task_id='tsk_e21cff31a001KYZ7u8h27S0tKo' AND kind='integrity_attempt'` 返回 0 行。workflow.step.updated 也没有 `integrity` 步。即 CC 跳过了架构与需求保真度审查直接进 deliver。后续 4 次 deliver-fail 全部是 runtime 类失败（packageManager / lockfile / TrendView / CDN），从未审核组件是否真正满足 template。
 
-**功能逐项核对**（PRD `Doc/components/HQComponent (debugged)/CandlestickChart.md`）：
+**功能逐项核对**（template `Doc/components/HQComponent (debugged)/CandlestickChart.md`）：
 
 | 要求 | 实现 |
 |---|---|
@@ -445,7 +445,7 @@ if (market === 'USHA' || market === 'USZA') {  // ← 死代码：规则 1 已 r
 | 前复权/后复权/不复权 | ✅ |
 | 十字光标 / 缩放 / 拖拽 / hover | ✅ subscribeAction('crosshair') |
 | 右键菜单（周期切换 / 复权切换 / 指标切换） | ✅ |
-| 实时数据接入（subscribe streaming） | **❌** —— `api.ts` 只有 `requestCandleData`，无 subscribe；PRD 明确"支持实时数据接入" |
+| 实时数据接入（subscribe streaming） | **❌** —— `api.ts` 只有 `requestCandleData`，无 subscribe；template 明确"支持实时数据接入" |
 | 画线工具 | **❌** 未实现 |
 | 视觉验证（/test/ 页面） | **❌** —— deliver round 3 verdict 自陈"测试页 /test/ 缺少 HXKlineChart 运行时依赖，图表画布无法渲染" |
 | MCP 协议周期别名（1h→60m, 4h→120m） | 未检 |
@@ -461,9 +461,9 @@ if (market === 'USHA' || market === 'USZA') {  // ← 死代码：规则 1 已 r
 - `f17cac4 feat TrendChart 数据层`（goal contract 声明的数据层）
 - `447494e feat TrendChart 分时图 UI 层与集成层实现`（**481 行 TrendChart.tsx + 220 行 utils.ts + 集成到 src/web/src/components/index.ts**）—— 这部分**不在任何 goal contract 内**，是 integrity 之后的 scope drift。
 
-**功能逐项核对**（PRD `Doc/components/HQComponent (debugged)/TrendChart.md` + integrity 列举的 15 项 uncovered）：
+**功能逐项核对**（template `Doc/components/HQComponent (debugged)/TrendChart.md` + integrity 列举的 15 项 uncovered）：
 
-| 要求（来自 PRD + integrity findings） | 实现状态 |
+| 要求（来自 template + integrity findings） | 实现状态 |
 |---|---|
 | HXKlineChart line 模式渲染 | ✅ |
 | 价格左轴 | ✅（HXKlineChart 内置） |
@@ -485,7 +485,7 @@ if (market === 'USHA' || market === 'USZA') {  // ← 死代码：规则 1 已 r
 | 空数据 / 加载 / 错误边界态 | ✅ 三态都有 |
 | 实时数据推送 (SubscribeTrend) | **❌** —— `useTrendData` 有 `subscribe` 模式开关但实际未接 SubscribeTrend 接口 |
 
-**结论**：TC 大约 **55-60%** 的 PRD 要求在磁盘上有对应实现，但：
+**结论**：TC 大约 **55-60%** 的 template 要求在磁盘上有对应实现，但：
 - 关键缺失：渐变填充、昨收基准线、键盘导航、hi-DPI、SubscribeTrend 接入；
 - DB 状态完全失真：goal=pending 表示"还没做"，但 `TrendChart.tsx 481 行`已在 master；
 - 这部分工作是 integrity 标记 11 missing goals 之后由 executor "私自"做的，未被 architect 物化为新 goal，未走 integrity 二审，未进 delivery 验收范围。

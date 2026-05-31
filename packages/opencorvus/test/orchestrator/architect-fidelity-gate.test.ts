@@ -13,7 +13,7 @@ const essentialDeliveryVisualSpec: AcceptanceSpec = {
   scorers: [{
     type: "llm_judge",
     name: "rendered-reference-fidelity",
-    criteria: "Compare final rendered_output against the authoritative references and PRD/SPEC visual_consistency_spec.",
+    criteria: "Compare final rendered_output against the authoritative references and frontend template visual_consistency_contract.",
   }],
 }
 
@@ -34,7 +34,7 @@ function collectorForReferenceTask(specs: AcceptanceSpec[]): ArchitectCollector 
       {
         id: "goal_verify",
         title: "Verification",
-        objective: "Verify the final reference-driven page against the PRD/SPEC and rendered browser output.",
+        objective: "Verify the final reference-driven page against the frontend template and rendered browser output.",
         acceptance_specs: specs,
         owned_paths: ["tests/e2e/visual.test.ts"],
         depends_on: [],

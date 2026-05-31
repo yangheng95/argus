@@ -135,7 +135,7 @@ goalWorkflows: Array<GoalWorkflowGroup>    // per-goal 工作流状态
 ▼ Agent Config                            ← 新增
   ├ Requirements    max_steps  skills[]
   ├ Architect       max_steps  skills[]
-  ├ Design-Analyst  max_steps  skills[]
+  ├ Frontend Design  max_steps  skills[]
   ├ Intent-Analysis max_steps  skills[]
   ├ Build           max_steps  skills[]
   └ Delivery        max_steps  max_retries  skills[]

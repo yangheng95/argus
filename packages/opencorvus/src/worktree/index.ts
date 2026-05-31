@@ -316,14 +316,25 @@ export namespace Worktree {
             branch: input.branch,
           })
         }
-        const status = await runGit(["status", "--porcelain"], {
+        const status = await runGit(["-c", "core.quotepath=false", "status", "--porcelain"], {
           cwd: input.worktreeDir, timeoutProfile: "default",
         })
-        if (outputText(status.stdout).trim().length > 0) {
+        const dirty = statusLinesBlockingMerge(outputText(status.stdout))
+        if (dirty.length > 0) {
           throw new MergeFailedError({
             message:
               `mergeWithMerge(${input.branch}): worktree is dirty. Commit or revert ` +
-              `before retrying merge_back.`,
+              `before retrying merge_back.\n${dirty.join("\n")}`,
+            branch: input.branch,
+          })
+        }
+        const evidenceDiffs = await committedEvidenceInputDiffs(input.worktreeDir, primaryBranch, input.branch)
+        if (evidenceDiffs.length > 0) {
+          throw new MergeFailedError({
+            message:
+              `mergeWithMerge(${input.branch}): refusing to merge committed frontend evidence input files. ` +
+              `The task source package is an input contract, not implementation output. Remove these paths ` +
+              `from the branch commit before retrying merge_back:\n${evidenceDiffs.join("\n")}`,
             branch: input.branch,
           })
         }
@@ -673,6 +684,41 @@ export namespace Worktree {
     return [outputText(result.stderr), outputText(result.stdout)].filter(Boolean).join("\n")
   }
 
+  function statusLinesBlockingMerge(statusText: string): string[] {
+    return statusText
+      .split("\n")
+      .map((line) => line.trimEnd())
+      .filter(Boolean)
+      .filter((line) => !isUntrackedEvidenceInputStatusLine(line))
+  }
+
+  function isUntrackedEvidenceInputStatusLine(line: string): boolean {
+    if (!line.startsWith("?? ")) return false
+    const file = line.slice(3).trim()
+    return ProjectRuntimePaths.isEvidenceInputRelativePath(file)
+  }
+
+  async function committedEvidenceInputDiffs(worktreeDir: string, primaryBranch: string, branch: string): Promise<string[]> {
+    const result = await runGit([
+      "-c",
+      "core.quotepath=false",
+      "diff",
+      "--name-only",
+      "--no-renames",
+      primaryBranch,
+      branch,
+      "--",
+      "web-clone-source",
+      "mirror",
+    ], { cwd: worktreeDir, timeoutProfile: "default" }).catch(() => undefined)
+    if (!result || result.exitCode !== 0) return []
+    return outputText(result.stdout)
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .filter((file) => ProjectRuntimePaths.isEvidenceInputRelativePath(file))
+  }
+
   async function inspectBlockedMergeWorktree(directory: string) {
     const mergeHeadResult = await runGit(["rev-parse", "--verify", "--quiet", "MERGE_HEAD"], {
       cwd: directory, timeoutProfile: "fast",
@@ -681,25 +727,34 @@ export namespace Worktree {
     const dirtyResult = await runGit(["-c", "core.quotepath=false", "status", "--porcelain"], {
       cwd: directory, timeoutProfile: "default",
     }).catch(() => undefined)
-    const dirtyPaths = dirtyResult
-      ? outputText(dirtyResult.stdout)
-          .split("\n")
-          .map((line) => line.trim())
-          .filter(Boolean)
-      : []
+    const dirtyPaths = dirtyResult ? statusLinesBlockingMerge(outputText(dirtyResult.stdout)) : []
     return { mergeHead, dirtyPaths }
   }
 
   async function commitPrimaryDirtyWorktree(input: { branch: string; primaryDir: string; dirtyPaths: string[] }) {
-    const add = await runGit(["add", "-A"], { cwd: input.primaryDir, timeoutProfile: "default" })
-    if (add.exitCode !== 0) {
+    await runGit(["reset", "--", "web-clone-source", "mirror"], { cwd: input.primaryDir, timeoutProfile: "fast" })
+    const trackedAdd = await runGit(["add", "-u", "--", "."], { cwd: input.primaryDir, timeoutProfile: "default" })
+    if (trackedAdd.exitCode !== 0) {
       throw new MergeFailedError({
         message:
           `mergeWithMerge(${input.branch}): primary worktree is dirty but could not be staged ` +
-          `for merge_back recovery: ${errorText(add)}`,
+          `for merge_back recovery: ${errorText(trackedAdd)}`,
         branch: input.branch,
-        stderr: errorText(add),
+        stderr: errorText(trackedAdd),
       })
+    }
+    const untracked = untrackedStatusPaths(input.dirtyPaths)
+    for (const chunk of chunks(untracked, 50)) {
+      const add = await runGit(["add", "--", ...chunk], { cwd: input.primaryDir, timeoutProfile: "default" })
+      if (add.exitCode !== 0) {
+        throw new MergeFailedError({
+          message:
+            `mergeWithMerge(${input.branch}): primary worktree is dirty but could not be staged ` +
+            `for merge_back recovery: ${errorText(add)}`,
+          branch: input.branch,
+          stderr: errorText(add),
+        })
+      }
     }
     const commit = await runGit(
       [
@@ -731,6 +786,33 @@ export namespace Worktree {
       })
     }
     return outputText(head.stdout)
+  }
+
+  function untrackedStatusPaths(lines: string[]): string[] {
+    return uniqueStrings(lines
+      .filter((line) => line.startsWith("?? "))
+      .flatMap((line) => statusLinePaths(line))
+      .filter((file) => !ProjectRuntimePaths.isEvidenceInputRelativePath(file)))
+  }
+
+  function statusLinePaths(line: string): string[] {
+    const file = line.slice(3).trim()
+    if (!file) return []
+    const renameArrow = " -> "
+    if (!file.includes(renameArrow)) return [file]
+    return file.split(renameArrow).map((part) => part.trim()).filter(Boolean)
+  }
+
+  function uniqueStrings(input: string[]): string[] {
+    return [...new Set(input)]
+  }
+
+  function chunks<T>(input: T[], size: number): T[][] {
+    const out: T[][] = []
+    for (let index = 0; index < input.length; index += size) {
+      out.push(input.slice(index, index + size))
+    }
+    return out
   }
 
   function failed(result: { stdout?: Uint8Array; stderr?: Uint8Array }) {
@@ -1235,7 +1317,7 @@ export namespace Worktree {
     const materializeScopedRuntime = async (directory: string) => {
       if (!input?.taskID) return
       try {
-        await TaskRuntimeMaterializer.materializeDesignAnalysis({
+        await TaskRuntimeMaterializer.materializeFrontendDesign({
           projectDir: primaryDir,
           taskID: input.taskID,
           worktreeDir: directory,
@@ -1459,7 +1541,7 @@ export namespace Worktree {
     if (!taskID) return undefined
 
     try {
-      await TaskRuntimeMaterializer.materializeDesignAnalysis({
+      await TaskRuntimeMaterializer.materializeFrontendDesign({
         projectDir: primary.directory,
         taskID,
         worktreeDir: directory,
@@ -1708,7 +1790,7 @@ export namespace Worktree {
 
       const taskID = taskIDFromRuntimeWorktree(primaryInfo.directory, worktreePath)
       if (taskID) {
-        await TaskRuntimeMaterializer.materializeDesignAnalysis({
+        await TaskRuntimeMaterializer.materializeFrontendDesign({
           projectDir: primaryInfo.directory,
           taskID,
           worktreeDir: worktreePath,
@@ -1724,9 +1806,9 @@ export namespace Worktree {
         throw new ResetFailedError({ message: errorText(status) || "Failed to read git status" })
       }
 
-      const dirty = outputText(status.stdout)
-      if (dirty) {
-        throw new ResetFailedError({ message: `Worktree reset left local changes:\n${dirty}` })
+      const dirty = statusLinesBlockingMerge(outputText(status.stdout))
+      if (dirty.length > 0) {
+        throw new ResetFailedError({ message: `Worktree reset left local changes:\n${dirty.join("\n")}` })
       }
 
       return worktreePath

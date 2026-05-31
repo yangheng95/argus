@@ -3,7 +3,7 @@
  *
  * Ported from mirror/src/infra/design-language-extract.ts. Produces an
  * abstract design spec (colour system, typography scale, spacing, layout,
- * component styling) suitable for PRD/plan context injection — WITHOUT
+ * component styling) suitable for template/plan context injection — WITHOUT
  * copying the source page's DOM or content layout.
  *
  * This module is structurally typed: any object shaped like
@@ -302,7 +302,7 @@ export function extractDesignLanguage(page: PageLike): DesignLanguage {
 
 // ─── Markdown rendering ───────────────────────────────────────────────────
 
-/** Render a DesignLanguage as a Markdown spec for PRD injection. */
+/** Render a DesignLanguage as a Markdown spec for template injection. */
 export function renderDesignLanguageMarkdown(dl: DesignLanguage): string {
   const lines: string[] = []
 
