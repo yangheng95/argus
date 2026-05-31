@@ -131,3 +131,7 @@ _codex_*.prompt.md
 
 # SDK regen transient error logs
 packages/sdk/js/openapi-ts-error-*.log
+
+# Benchmark / scratch artifacts at repo root
+/overlay-web-benchmark-*.png
+/.tmp_g12_board.json
