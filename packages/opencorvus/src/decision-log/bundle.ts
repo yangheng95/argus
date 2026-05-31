@@ -15,8 +15,8 @@
 //
 // Single source of truth: the `decision_log` table. This file is a
 // regenerated, read-only PROJECTION — never authored by an agent, never read
-// back by host code as authority. (Mirrors the design-analysis materialized
-// PRD/SPEC and the intent bundle: same "materialize a DB/context surface to
+// back by host code as authority. (Mirrors the frontend-design materialized
+// frontend template and the intent bundle: same "materialize a DB/context surface to
 // `.opencorvus/` for agent consumption" pattern.)
 //
 // Path resolution invariant (see artifacts/2026-05-18-decision-log-

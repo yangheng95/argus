@@ -11,7 +11,7 @@
  *
  * The orchestrator is the only task-level decision maker. It reads the
  * describe/artifact snapshot on every wake and chooses which specialist tool
- * to invoke next: intent analysis, design analysis, requirements, architect,
+ * to invoke next: intent analysis, frontend design, requirements, architect,
  * build, integrity, delivery, or lifecycle controls. MiniWorkflow
  * renders an advisory path; it is not a fixed pipeline or hidden state
  * machine. Specialist agents own their structured artifacts, but task
@@ -22,7 +22,7 @@
  * The orchestrator is the HOST of the worker-session pattern that
  * `src/agent/runner.ts` abstracts — not a user of that pattern. Worker
  * agents (build, delivery, integrity, requirements, architect,
- * design-analyst, intent-analysis) collapse into the runner's shape because
+ * frontend-design, intent-analysis) collapse into the runner's shape because
  * they all share: single composed system prompt, terminal collector contract,
  * thrown AgentRunError on stream / abort failure, no step-level coordination.
  *
@@ -85,6 +85,7 @@ import {
 import { EngineProtocol } from "@/engine/protocol"
 import { Event as EngineEvent } from "@/engine/model"
 import { describeTask, renderTaskDescription } from "@/engine/describe"
+import { deriveTaskStatus, isTaskTerminal } from "@/engine/task-status"
 import type { TaskRow, WorkflowState, MiniWorkflow } from "@/engine"
 import { AgentTrace } from "@/trace"
 import { paragraphSummary } from "@/agent/report"
@@ -268,6 +269,12 @@ export namespace Orchestrator {
   }
 
   export async function processTask(taskID: string, event?: OrchestratorEvent): Promise<void> {
+    const task = requireTask(taskID)
+    if (isTaskTerminal(task)) {
+      log.info("terminal task process ignored", { taskID, status: deriveTaskStatus(task), note: event?.note })
+      return
+    }
+
     abort(taskID)
     const ctrl = new AbortController()
     running.set(taskID, ctrl)
@@ -275,7 +282,6 @@ export namespace Orchestrator {
     let agentSessionID: string | undefined
     let promptInFlight = false
     try {
-      const task = requireTask(taskID)
       if (!task.session_id) {
         log.error("orchestrator: no session_id on task", { taskID })
         return
@@ -396,7 +402,7 @@ export namespace Orchestrator {
       })
       // Orchestrator does NOT own a `read` tool. Attachments are forwarded
       // automatically to every sub-agent it dispatches (requirements /
-      // design_analysis / architect / build / refine — see orchestrator/tools.ts
+      // frontend_design / architect / build / refine — see orchestrator/tools.ts
       // dispatch sites that pass `attachments: task.attachments`). The
       // inventory below tells the orchestrator what is available when
       // deciding which sub-agent to invoke; the trailing instruction is a
@@ -415,7 +421,7 @@ export namespace Orchestrator {
         ? "Multimodal items (image / pdf / audio / video) below are inlined as file parts in this wake's user message — you can see and reason about them directly."
         : visionCapable
           ? "No multimodal items are inlined in this wake (the task carries no image / pdf / audio / video attachments, or none was inlinable)."
-          : "Your current model does NOT accept image / pdf / audio / video input — multimodal items below are listed by filename ONLY; you cannot see their pixels. Do NOT pretend you saw them; describe them only via the textual context the user provided in prose, and rely on `design_analysis` / sub-agents whose models DO support vision for visual reasoning."
+          : "Your current model does NOT accept image / pdf / audio / video input — multimodal items below are listed by filename ONLY; you cannot see their pixels. Do NOT pretend you saw them; describe them only via the textual context the user provided in prose, and rely on `frontend_design` / sub-agents whose models DO support vision for visual reasoning."
       const inventoryText = AttachmentStore.renderAttachmentInventory(allAttachments, {
         header: "## Task Attachments (forwarded to sub-agents automatically)",
         hint:
@@ -423,7 +429,7 @@ export namespace Orchestrator {
           inlinedNote + " " +
           "Reference-only items (text / json) are not inlined; sub-agents read them via their `read` tool. " +
           "You do NOT have a `read` tool yourself — do not attempt to fetch reference content. " +
-          "When you call `requirements` / `design_analysis` / `architect` / `build` / `refine`, the engine forwards every attachment to the sub-agent automatically — but the sub-agent's prompt only cites them when YOU mention them by filename in your dispatch instructions. ALWAYS cite the relevant attachments by EXACT filename and explain their relevance. NEVER reference an attachment that is not listed below — if this section is empty, the user attached nothing in this wake and any phrase implying you saw a file is a hallucination.",
+          "When you call `requirements` / `frontend_design` / `architect` / `build` / `refine`, the engine forwards every attachment to the sub-agent automatically — but the sub-agent's prompt only cites them when YOU mention them by filename in your dispatch instructions. ALWAYS cite the relevant attachments by EXACT filename and explain their relevance. NEVER reference an attachment that is not listed below — if this section is empty, the user attached nothing in this wake and any phrase implying you saw a file is a hallucination.",
       })
       const enrichedUserText = userText + inventoryText
       // Build PromptInput.parts. Text first, then any multimodal attachments
@@ -447,7 +453,7 @@ export namespace Orchestrator {
       // Abort hooks translate external interrupts to SessionPrompt.cancel on
       // the child session so the loop releases its processor cleanly. We
       // ALSO cascade the cancel to every descendant session: orchestrator
-      // tools (`explore`, `requirements`, `design_analysis`, `architect`,
+      // tools (`explore`, `requirements`, `frontend_design`, `architect`,
       // `build`, ...) spawn their own SessionPrompt loops, and the
       // orchestrator's ctrl signal is not threaded into them — without
       // cascading here, an `interruptTaskLoop` (or a hard abort) returns

@@ -74,8 +74,8 @@ export const IntentFinalSchema = z.object({
     .string()
     .min(1)
     .describe("One-line statement of what the user wants."),
-  // Required per specs/fact-check-agent-2026-05-25.md §3.1.
-  fact_check_items: FactCheckItemListSchema.describe(
+  // Optional fact-check registration: missing means no items registered.
+  fact_check_items: FactCheckItemListSchema.default([]).describe(
     "Every factual claim (API behaviour, library version, file path you did not read this session) you have NOT verified via tool calls. Empty when only intent inference or in-session-verified statements.",
   ),
 })

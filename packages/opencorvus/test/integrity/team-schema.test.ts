@@ -167,6 +167,12 @@ test("integrity schemas carry dynamic audit strategy and coverage evidence", () 
     fact_check_items: [],
   })
   expect(team.coverageAudit[0]?.promise).toBe("wire real API")
+
+  const teamWithoutFactCheckItems = IntegrityTeamReportSchema.parse({
+    ...team,
+    fact_check_items: undefined,
+  })
+  expect(teamWithoutFactCheckItems.fact_check_items).toEqual([])
 })
 
 test("integrity coverage audit status rejects verdict enums such as concerns", () => {

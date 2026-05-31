@@ -198,7 +198,7 @@ export namespace AttachmentStore {
   }
 
   // ── LLM-side packaging ─────────────────────────────────────────────────
-  // Producer-agent code (orchestrator / requirements / design-analyst /
+  // Producer-agent code (orchestrator / requirements / frontend-design /
   // delivery) historically had three near-identical copies of the
   // "split attachments by mime, inline the multimodal ones, list the
   // text/* ones by URL" routine. The duplication kept drifting (e.g. one
@@ -334,7 +334,7 @@ export namespace AttachmentStore {
    * `PromptInput.parts` / `RunAgentSessionInput.buildUserParts` array.
    *
    * Single source of truth (rule 22): every producer-agent (orchestrator /
-   * design-analyst / requirements / delivery) used to roll its own
+   * frontend-design / requirements / delivery) used to roll its own
    * partition+read+base64 pipeline AND mis-decoded the prior `loadFileParts`
    * result shape (`"image" in fp` / `"file" in fp` checks that never matched
    * the actual return value), silently dropping every multimodal attachment

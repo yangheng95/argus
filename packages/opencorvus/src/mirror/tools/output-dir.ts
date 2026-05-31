@@ -6,7 +6,7 @@
  * rendered.png, diff.png, and images/.
  *
  * The default lives in the task runtime:
- *   `<project>/.opencorvus/runtime/tasks/<task>/design-analysis/mirror/`
+ *   `<project>/.opencorvus/runtime/tasks/<task>/frontend-design/mirror/`
  * Each task session/worktree gets a `mirror/` view onto that single directory,
  * so downstream agents read one source of truth instead of primary-worktree
  * scratch files.
@@ -32,7 +32,7 @@ export interface ResolveMirrorOutputDirInput {
 /**
  * Resolve the effective output directory for a mirror tool.
  *
- * - No override -> task-scoped design-analysis mirror directory.
+ * - No override -> task-scoped frontend-design mirror directory.
  * - Override without a session -> explicit benchmark/test directory.
  * - Override inside a task session -> must resolve under `mirror/`.
  *
@@ -65,12 +65,12 @@ async function resolveSessionDefault(sessionID: string): Promise<string> {
   }
 
   const projectDir = Instance.project.worktree
-  await TaskRuntimeMaterializer.materializeDesignAnalysis({
+  await TaskRuntimeMaterializer.materializeFrontendDesign({
     projectDir,
     taskID,
     worktreeDir: Instance.directory,
   })
-  const paths = ProjectRuntimePaths.designAnalysisPaths(projectDir, taskID)
+  const paths = ProjectRuntimePaths.frontendDesignPaths(projectDir, taskID)
   await fs.mkdir(paths.mirrorAbsolute, { recursive: true })
   return paths.mirrorAbsolute
 }

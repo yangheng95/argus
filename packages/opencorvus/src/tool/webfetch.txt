@@ -1,5 +1,5 @@
-DEPRECATED for visual / clone / layout work. Dispatch `design_analysis` for
-webpage reference extraction and PRD/SPEC synthesis. `webfetch` returns flat
+DEPRECATED for visual / clone / layout work. Dispatch `frontend_design` for
+webpage reference extraction and frontend template synthesis. `webfetch` returns flat
 text/markdown/html and throws away visual and structural signals such as DOM
 tree, per-element computed styles, reference screenshots, and asset manifests.
 
@@ -7,11 +7,11 @@ Use `webfetch` only for pure-text content where no visual or structural
 analysis is needed: API documentation, README files, plain JSON / XML
 endpoints, or text scraping. If you find yourself about to `webfetch` a URL
 you then intend to clone, render, or style-match, stop and route the task
-through `design_analysis` instead.
+through `frontend_design` instead.
 
 Usage notes:
-  - Visual reference extraction is owned by design-analysis. Do not use
-    `webfetch` as a fallback for missing design-analysis evidence.
+  - Visual reference extraction is owned by frontend-design. Do not use
+    `webfetch` as a fallback for missing frontend-design evidence.
   - The URL must be a fully-formed valid URL (http/https).
   - Format options: "markdown" (default), "text", or "html".
   - This tool is read-only and does not modify any files.

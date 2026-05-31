@@ -1,25 +1,25 @@
 // ── Mission ──
 //
 // Operator control room for the user's long-running goals. A separate page
-// (PRD §6.2) sitting beside the default conversation panel — switching modes
+// (template §6.2) sitting beside the default conversation panel — switching modes
 // uses the shared `pageMode` store (store/page-mode.ts) and does NOT clear or
 // rewrite the panel's selected task.
 //
-// Layout (PRD §7):
+// Layout (template §7):
 //   header    : workspace, system health, channel runtime, counts, actions
 //   ledger    : task list (project + global, filterable, queue-aware)
 //   workbench : shared task/session conversation panel, OR mission launcher
 //   channels  : channel catalog, runtime status, restart, selected-task
 //               bindings (kept mission/channel infrastructure)
 //
-// Data sources (PRD §5 — single source of truth):
+// Data sources (template §5 — single source of truth):
 //   • boardStore.tasks          — task list from existing /global/tasks
 //   • boardStore.board          — selected task detail
 //   • MissionStats              — mission/stats infra endpoint (counts + project)
 //   • Channel runtime + list    — existing channel infra routes
 //   • /mission/wake             — start or resume the Mission agent session
 //
-// Errors are surfaced explicitly (PRD §14): no silent fallback, no
+// Errors are surfaced explicitly (template §14): no silent fallback, no
 // degraded state. Each error block names the operation and the server
 // message and offers a retry where retrying is meaningful.
 
@@ -80,7 +80,7 @@ import { TaskList } from "./TaskList"
 
 // ── Status taxonomies ──
 //
-// PRD §9 distinguishes six operator-facing categories:
+// template §9 distinguishes six operator-facing categories:
 //   queued · active running · waiting for user input · failed ·
 //   cancelled · completed
 //
@@ -314,7 +314,7 @@ export function Mission() {
       // Pass `item` so filterMatches can read pending_interactions — without
       // it, the "waiting" filter never matches and the "active" filter
       // wrongly includes tasks that have pending operator interactions
-      // (PRD §9 strict status taxonomy). The helper unit test in
+      // (template §9 strict status taxonomy). The helper unit test in
       // mission-helpers.test.ts already exercises this signature; the bug
       // here was that the product-code call site dropped the third arg.
       if (!filterMatches(status, f, item)) return false
@@ -715,7 +715,7 @@ function MissionTaskLedger(props: {
   onDeleteTask: (id: string) => void
   onRetryLoad: () => void
 }) {
-  // Filter order matches PRD §9: queued → active → waiting → failed →
+  // Filter order matches template §9: queued → active → waiting → failed →
   // completed → cancelled → all. "All" lives at the end as the escape
   // hatch when the operator wants to see everything regardless of state.
   const FILTERS: LedgerFilter[] = ["queued", "active", "waiting", "failed", "completed", "cancelled", "all"]

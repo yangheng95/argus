@@ -40,8 +40,8 @@ import { t } from "../utils/i18n";
 import { normalizeToolPartRecord } from "../utils/tool";
 
 /** Raw i18n key for a role/stage, normalized so that backend variants
- *  ("design_analysis", "design_analyst", "design-analysis") all resolve
- *  to the same canonical key (`chat.role.design-analyst`). The key is
+ *  ("frontend_design", "frontend_design", "frontend-design") all resolve
+ *  to the same canonical key (`chat.role.frontend-design`). The key is
  *  stored on the card; CardHeader calls `t()` at render time, keeping
  *  titles reactive to locale switches. */
 function roleTitleKey(name: string): string {
@@ -391,6 +391,26 @@ export function applyEvent(event: any): void {
   const type: string = String(event?.type || "");
   if (!type) throw new Error("tree-writer: event missing type");
   if (type === "message.part.delta") return queuePartDelta(event);
+
+  // Exact board/interaction events must be handled before prefix pass-through
+  // checks. Prefixes such as `task.`, `goal.`, and `interaction.` cover many
+  // router-level events, but these concrete event types mutate the visible
+  // tree and would otherwise be swallowed.
+  if (type === "task.created" || type === "task.updated" || type === "task.completed") {
+    flushBufferedPartDeltas();
+    return handleTaskChanged(event);
+  }
+  if (type === "goal.created") {
+    flushBufferedPartDeltas();
+    const gid = String(event?.properties?.goalID || event?.payload?.goalID || "");
+    if (gid) knownGoalIDs.add(gid);
+    return;
+  }
+  if (type === "interaction.requested" || type === "interaction.resolved") {
+    flushBufferedPartDeltas();
+    return handleInteraction(event);
+  }
+
   if (
     type === "session.idle" ||
     type === "approval.request" ||
@@ -411,23 +431,6 @@ export function applyEvent(event: any): void {
   if (type === "message.removed") return applyVisibleCardTreeEvent(() => handleMessageRemoved(event));
   if (type === "message.part.removed") return applyVisibleCardTreeEvent(() => handlePartRemoved(event));
 
-  // ── Task / board ──
-  if (type === "task.created" || type === "task.updated" || type === "task.completed") {
-    return handleTaskChanged(event);
-  }
-
-  // ── Goal lifecycle ──
-  if (type === "goal.created") {
-    const gid = String(event?.properties?.goalID || event?.payload?.goalID || "");
-    if (gid) knownGoalIDs.add(gid);
-    return;
-  }
-
-  // ── Interactions ──
-  if (type === "interaction.requested" || type === "interaction.resolved") {
-    return handleInteraction(event);
-  }
-
   if (type === "review.stream.started") {
     return applyVisibleCardTreeEvent(() => handleReviewStreamStarted(event));
   }
@@ -446,7 +449,7 @@ export function applyEvent(event: any): void {
   // only signal that flips a session card out of `running`. Carries
   // `{sessionID, status:{type:"streaming"|"idle"|"retry"|"terminal", ...}}`.
   // Applies to every session — orchestrator root, requirements / architect /
-  // design-analyst / integrity / build / deliver / refine /
+  // frontend-design / integrity / build / deliver / refine /
   // analyze_intent / modify_goal / publish_delivery, future phases. See
   // specs/new-arch/07-panel-reactivity.md §session 终态信号源.
   if (type === "session.status") {

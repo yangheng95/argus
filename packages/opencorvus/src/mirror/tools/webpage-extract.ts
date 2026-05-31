@@ -2,8 +2,10 @@
  * `webpage_extract` tool — wraps `mirror/url/extract::extractPage`.
  *
  * Launches a headless browser, pulls the DOM tree + computed styles + full-
- * page screenshot, and writes four artifacts to the worktree:
+ * page screenshot, and writes five primary artifacts to the worktree:
  *   - `<outputDir>/reference.png`          reference screenshot (binary)
+ *   - `<outputDir>/capture.html`           post-load archive HTML snapshot
+ *   - `<outputDir>/singlefile.html`        archived HTML/CSS visual baseline
  *   - `<outputDir>/extracted-page.json`    full ExtractedPage (tree + tokens + assets)
  *   - `<outputDir>/images/*`               downloaded image assets (when keep_images=true)
  *
@@ -21,6 +23,7 @@ import { Tool } from "../../tool/tool"
 import { Log } from "../../util/log"
 import { extractPage } from "../url/extract"
 import { resolveMirrorOutputDir, DEFAULT_MIRROR_SUBDIR } from "./output-dir"
+import { captureSingleFileHtml } from "@/web-clone/singlefile-capture"
 
 const log = Log.create({ service: "mirror.tool.webpage_extract" })
 
@@ -30,6 +33,7 @@ export const WebpageExtractTool = Tool.define("webpage_extract", {
 
 Writes to the output directory (defaults to the worktree):
   - reference.png                the reference screenshot — visual target for later scoring
+  - capture.html                 post-load archive HTML snapshot for canonical structure IR + asset graph compilation
   - extracted-page.json          the full ExtractedPage object (DOM + tokens + assets)
   - images/*                     downloaded image assets (so the clone can reference local paths)
 
@@ -76,6 +80,7 @@ Use this only when URL evidence is missing for the requested output directory. D
     const keepImages = params.keep_images ?? true
 
     log.info("extracting webpage", { url: params.url, outputDir })
+    const captureHtmlPath = path.join(outputDir, "capture.html")
 
     const page = await extractPage({
       url: params.url,
@@ -83,25 +88,42 @@ Use this only when URL evidence is missing for the requested output directory. D
       scopeSelector: params.scope_selector ?? null,
       waitMs: 3000,
       noScreenshots: false,
-      outputDir: keepImages ? outputDir : undefined,
+      outputDir,
+      captureHtmlPath,
+      downloadImages: keepImages,
       signal: ctx.abort,
       onProgress: (msg) => log.info(msg),
     })
 
     // Save reference screenshot as a real PNG (binary, not base64).
     const referencePath = path.join(outputDir, "reference.png")
-    const refBase64 = page.screenshotUrl.replace(/^data:image\/png;base64,/, "")
-    await fs.writeFile(referencePath, Buffer.from(refBase64, "base64"))
+    if (page.screenshotUrl.startsWith("data:image/png;base64,")) {
+      const refBase64 = page.screenshotUrl.replace(/^data:image\/png;base64,/, "")
+      await fs.writeFile(referencePath, Buffer.from(refBase64, "base64"))
+    } else {
+      await fs.copyFile(path.join(outputDir, page.screenshotUrl), referencePath)
+    }
 
     const jsonPath = path.join(outputDir, "extracted-page.json")
     await fs.writeFile(jsonPath, JSON.stringify(page, null, 2), "utf8")
+
+    const singleFilePath = path.join(outputDir, "singlefile.html")
+    const singleFile = await captureSingleFileHtml({
+      url: params.url,
+      outputPath: singleFilePath,
+      viewport,
+      waitDelayMs: 10_000,
+      signal: ctx.abort,
+    })
 
     const summary = {
       url: params.url,
       title: page.title,
       viewport: page.viewport,
       referencePath,
+      captureHtmlPath,
       extractedPagePath: jsonPath,
+      singleFilePath: singleFile.outputPath,
       stats: page.stats,
       tokens: {
         colors: Object.keys(page.tokens.colors).length,
@@ -128,9 +150,11 @@ Use this only when URL evidence is missing for the requested output directory. D
           (summary.assets.imagesDownloaded > 0 ? `, ${summary.assets.imagesDownloaded} downloaded` : ""),
         "",
         `**Reference screenshot:** \`${referencePath}\``,
+        `**HTML capture:** \`${captureHtmlPath}\``,
         `**Full extracted page JSON:** \`${jsonPath}\``,
+        `**SingleFile HTML:** \`${singleFile.outputPath}\` (${Math.round(singleFile.bytes / 1024)}KB)`,
         "",
-        "Evidence acquired. Do not rerun extraction for this URL/outputDir unless the source changed. Use compact mirror artifacts for PRD/SPEC synthesis; do not read `extracted-page.json` wholesale.",
+        "Evidence acquired. Do not rerun extraction for this URL/outputDir unless the source changed. Use compact mirror artifacts for frontend template synthesis; do not read `extracted-page.json` wholesale.",
       ].join("\n"),
       metadata: summary,
     }

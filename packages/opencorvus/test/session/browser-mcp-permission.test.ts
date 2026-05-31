@@ -1,0 +1,69 @@
+import { describe, expect, test } from "bun:test"
+import { mcpPermissionPlan } from "../../src/mcp/browser/permission-plan"
+
+describe("mcpPermissionPlan", () => {
+  test("allows localhost navigation by origin", () => {
+    expect(mcpPermissionPlan("browser_navigate", { url: "http://127.0.0.1:3000/app" })).toMatchObject({
+      permission: "browser.navigate.localhost",
+      patterns: ["http://127.0.0.1:3000"],
+      always: ["http://127.0.0.1:3000"],
+    })
+  })
+
+  test("asks for external navigation by origin", () => {
+    expect(mcpPermissionPlan("browser_navigate", { url: "https://example.com/path?q=1" })).toMatchObject({
+      permission: "browser.navigate.external",
+      patterns: ["https://example.com"],
+      always: ["https://example.com"],
+    })
+  })
+
+  test("asks for evaluate without storing the full expression in metadata", () => {
+    const expression = "localStorage.setItem('token', 'secret');".repeat(10)
+    const plan = mcpPermissionPlan("browser_evaluate", { expression })
+    expect(plan.permission).toBe("browser.evaluate")
+    expect(plan.patterns).toEqual(["*"])
+    expect(String(plan.metadata.expressionPreview).length).toBeLessThanOrEqual(120)
+    expect(plan.metadata.expressionChars).toBe(expression.length)
+    expect(JSON.stringify(plan.metadata)).not.toContain(expression)
+  })
+
+  test("asks for upload by local file path", () => {
+    expect(mcpPermissionPlan("browser_upload_file", { filePath: "C:/tmp/secret.txt", selector: "input" })).toMatchObject({
+      permission: "browser.upload_file",
+      patterns: ["C:/tmp/secret.txt"],
+      always: ["C:/tmp/secret.txt"],
+      metadata: { selector: "input" },
+    })
+  })
+
+  test("asks before importing or exporting browser storage state", () => {
+    expect(mcpPermissionPlan("browser_storage_state_export", { sessionId: "sess_123" })).toMatchObject({
+      permission: "browser.storage.export",
+      patterns: ["sess_123"],
+    })
+    expect(mcpPermissionPlan("browser_storage_state_import", { storageState: { cookies: [], origins: [] } })).toMatchObject({
+      permission: "browser.storage.import",
+      patterns: ["*"],
+    })
+  })
+
+  test("asks before downloading browser files", () => {
+    expect(mcpPermissionPlan("browser_download", { selector: "#export" })).toMatchObject({
+      permission: "browser.download",
+      patterns: ["#export"],
+      metadata: { tool: "browser_download", selector: "#export" },
+    })
+  })
+
+  test("asks before preserving or reusing browser profiles", () => {
+    expect(mcpPermissionPlan("browser_session_create", { profileId: "prof_123" })).toMatchObject({
+      permission: "browser.profile.reuse",
+      patterns: ["prof_123"],
+    })
+    expect(mcpPermissionPlan("browser_session_destroy", { preserveProfile: "1d" })).toMatchObject({
+      permission: "browser.profile.persist",
+      patterns: ["1d"],
+    })
+  })
+})

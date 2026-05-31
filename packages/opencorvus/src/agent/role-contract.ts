@@ -12,10 +12,12 @@ export type AgentRoleID =
   | "mission"
   | "requirements"
   | "architect"
-  | "design-analyst"
+  | "frontend-design"
   | "intent-analysis"
   | "integrity"
   | "fact-check"
+  | "research"
+  | "goal-workload-analyst"
 
 export interface AgentRoleContract {
   id: AgentRoleID
@@ -66,9 +68,9 @@ export namespace AgentRoleContract {
     compaction: {
       id: "compaction",
       description: "Internal summary agent for transcript checkpoint compaction.",
-      promptEditable: true,
-      defaultPromptRequired: true,
-      promptConfigMode: "override",
+      promptEditable: false,
+      defaultPromptRequired: false,
+      promptConfigMode: "none",
     },
     title: {
       id: "title",
@@ -120,9 +122,9 @@ export namespace AgentRoleContract {
       defaultPromptRequired: true,
       promptConfigMode: "append",
     },
-    "design-analyst": {
-      id: "design-analyst",
-      description: "Design analyst agent. Converts visual/reference evidence into PRD and implementation constraints.",
+    "frontend-design": {
+      id: "frontend-design",
+      description: "Frontend design and webpage-replica agent. Converts visual/reference evidence into the authoritative frontend template, fillable modules, component inventory, material inventory, source handoff, and visual/data contracts.",
       promptEditable: true,
       defaultPromptRequired: true,
       promptConfigMode: "append",
@@ -148,10 +150,30 @@ export namespace AgentRoleContract {
       defaultPromptRequired: true,
       promptConfigMode: "append",
     },
+    research: {
+      id: "research",
+      description:
+        "Research agent. Read-only advisory evidence gatherer for external facts, source maps, PRD/SPEC input material, constraints, document outlines, and open questions. It emits research_brief artifacts and never chooses routes or delivers final documents.",
+      promptEditable: true,
+      defaultPromptRequired: true,
+      promptConfigMode: "append",
+    },
+    "goal-workload-analyst": {
+      id: "goal-workload-analyst",
+      description:
+        "Goal workload analyst. Read-only reviewer that deeply reads the full template and the architect goal graph, flags goals too large or under-specified for one autonomous build (decomposition_concern), and emits a per-goal execution inventory plus an anti-underestimation brief. References existing contract/coverage ids rather than restating them, and never creates or modifies goals.",
+      promptEditable: true,
+      defaultPromptRequired: true,
+      promptConfigMode: "append",
+    },
   }
 
   export function get(id: AgentRoleID): AgentRoleContract {
     return all[id]
+  }
+
+  export function promptMode(id: AgentRoleID): AgentRoleContract["promptConfigMode"] {
+    return all[id].promptConfigMode
   }
 
   export function description(id: AgentRoleID): string {

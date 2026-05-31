@@ -40,6 +40,8 @@ export namespace Identifier {
     call: "cal",
     protocol_event: "pev",
     protocol_inbox: "pib",
+    session_control: "sctl",
+    worker_turn_descriptor: "wtd",
     goal_group: "glg",
     decision_log: "dlog",
     metric_spec: "mts",

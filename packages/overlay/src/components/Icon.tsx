@@ -53,7 +53,7 @@ export type IconName =
   | "avatar-intent-analysis"
   | "avatar-spec"
   | "avatar-requirements"
-  | "avatar-design-analyst"
+  | "avatar-frontend-design"
   | "avatar-architect"
   | "avatar-planner"
   | "avatar-goal"
@@ -554,7 +554,7 @@ const ICON_PATHS: Record<IconName, IconRecord> = {
       </>
     ),
   },
-  "avatar-design-analyst": {
+  "avatar-frontend-design": {
     body: () => (
       <>
         <circle cx="6.7" cy="6.7" r="2.5" />

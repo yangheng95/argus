@@ -219,6 +219,13 @@ export function evaluateQualityGates(input: {
       evidence: `command=${input.localVerify.command || ""}, exitCode=${input.localVerify.exitCode}`,
     })
   }
+  if (input.localVerify?.command && input.localVerify.status !== "completed") {
+    failures.push({
+      category: "verification_gap",
+      message: "Configured local verification command was not executed",
+      evidence: `command=${input.localVerify.command}, status=${input.localVerify.status || "unknown"}`,
+    })
+  }
   if (
     input.artifactAudit.out_of_scope_file_count > 0 ||
     input.runMetrics.scope_drift_score >= 0.25 ||

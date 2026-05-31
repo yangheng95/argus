@@ -1,7 +1,7 @@
 /**
  * Image → `ImageAnalysis` — vision-LLM structural inference.
  *
- * Image2code analogue of `mirror/url/extract.ts` (puppeteer DOM extraction)
+ * Image2code analogue of `mirror/url/extract.ts` (Browser Runtime DOM extraction)
  * and `mirror/figma/fetch-tree.ts` (REST API fetch). Pure function + Zod
  * boundary; no filesystem I/O beyond reading the input image bytes (caller
  * may pass either a path or a pre-loaded Buffer).

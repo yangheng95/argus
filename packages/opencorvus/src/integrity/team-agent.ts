@@ -161,6 +161,7 @@ export type ReviewPromptInput = {
   requirementStatus?: RequirementStatusRow[]
   attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>
   acceptance?: IntegrityAcceptanceContext
+  frontendDesign?: string
   replayContext: IntegrityReplayContext
   signal?: AbortSignal
   taskID?: string
@@ -198,6 +199,7 @@ export async function reviewIntegrity(input: {
   requirementStatus?: RequirementStatusRow[]
   attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>
   acceptance?: IntegrityAcceptanceContext
+  frontendDesign?: string
   replayContext?: IntegrityReplayContext
   signal?: AbortSignal
   taskID?: string
@@ -363,6 +365,7 @@ function createReviewerToolKit(input: {
   taskID?: string
   goals: GoalContractFields[]
   acceptance?: IntegrityAcceptanceContext
+  frontendDesign?: string
   attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>
   signal?: AbortSignal
 }) {
@@ -371,6 +374,7 @@ function createReviewerToolKit(input: {
         taskID: input.taskID,
         goals: input.goals.map(goalToIntegrityEvidenceGoalInfo),
         buildEvidence: input.acceptance,
+        frontendDesign: input.frontendDesign,
         attachments: input.attachments,
         signal: input.signal,
       })
@@ -454,6 +458,7 @@ async function runReviewerSession(input: {
       taskID: input.input.taskID,
       goals: input.input.goals,
       acceptance: input.input.acceptance,
+      frontendDesign: input.input.frontendDesign,
       attachments: input.input.attachments,
       signal: input.input.signal,
     }),
@@ -554,7 +559,7 @@ export function buildReviewerPrompt(input: ReviewPromptInput, scope: IntegrityRe
     [
       "Before deep evidence reads, form an investigation plan for your scope: request promise, risk hypothesis, evidence plan, and pass/finding criteria. Include it in `investigationPlan` in submit_reviewer_report.",
       "Record scoped tool work in `drilldowns[]`, and record request/REQ/spec coverage in `coverage[]`. A pass report still needs coverage evidence.",
-      "Use scoped drilldown. Prefer `inspect_integrity_evidence` sections such as overview, changed_directories, changed_files_in_directory, diff_for_file, goal_summary, and goal_detail. Do not request full upstream context, contract graph, visual specs, decision log, or broad full-diff dumps.",
+      "Use scoped drilldown. Prefer `inspect_integrity_evidence` sections such as overview, changed_directories, changed_files_in_directory, diff_for_file, goal_summary, goal_detail, and frontend_design_contract when visual/reference fidelity matters. Do not request full upstream context, full contract graph, raw decision log, or broad full-diff dumps.",
       "Explore independently, gather evidence, and call submit_reviewer_report once.",
       "When no prior integrity attempt exists for this task/spec, review your assigned surface independently using evidence from files, diffs, commands, runtime checks, requirements, goals, and the original request.",
       "When prior attempts exist, you are reviewing the current attempt, not starting from zero. Prior findings and required repairs are evidence. First check whether prior blockers relevant to your scope were repaired in the files/evidence changed since the latest review. If the same blocker remains, report it as persistent and cite both the prior finding id and current evidence. Then inspect new risk introduced by the repair. Do not relabel an unchanged prior blocker as a brand-new discovery.",
@@ -615,12 +620,25 @@ export function buildIntegrityEvidencePrompt(input: ReviewPromptInput): string {
   if (input.acceptance) {
     sections.push(renderBuildEvidenceSummary(input.acceptance))
   }
+  if (input.frontendDesign?.trim()) {
+    sections.push(renderFrontendDesignSummary(input.frontendDesign))
+  }
   sections.push(renderGoalContractSummary(input.goals))
   sections.push(renderScopeBoundedMaturityEvidenceSection(input))
   return clipIntegrityEvidenceText(
     sections.filter((section) => section.trim().length > 0).join("\n\n"),
     INTEGRITY_EVIDENCE_PROMPT_MAX_CHARS,
   )
+}
+
+function renderFrontendDesignSummary(frontendDesign: string): string {
+  return [
+    "# Frontend Design Contract",
+    sanitizePromptBlock(frontendDesign, 2_400),
+    "",
+    "Reviewers must verify that reference-driven UI work follows this frontend replica contract, source manifest, web-clone-source handoff, source audit expectations, and visual reference requirements.",
+    "Use `inspect_integrity_evidence({ section: \"frontend_design_contract\" })` for the bounded full contract excerpt when this matters to your scope.",
+  ].join("\n")
 }
 
 function renderRequirementsSummary(requirements: ParsedRequirement[]): string {
@@ -1192,13 +1210,10 @@ function emitIntegrityEvent(
     rounds: result.rounds,
     requiredRepairs: result.requiredRepairs,
     unresolvedDisagreements: result.unresolvedDisagreements,
-    // Pass through the consensus-stage registration list. `result` is
-    // normalizeTeamReport's IntegrityResult, which spreads the validated
-    // IntegrityTeamReport — `fact_check_items` is a required, no-default
-    // field on the consensus schema (rule 7: no host-side fallback).
-    // If this throws at runtime, the upstream contract has been broken
-    // and we want the loud failure rather than a silently empty list.
-    fact_check_items: result.fact_check_items,
+    // Pass through the consensus-stage registration list. The consensus
+    // schema defaults a missing list to [], so absence means no fact-check
+    // items were registered.
+    fact_check_items: result.fact_check_items ?? [],
     attempts,
   }
   void EngineProtocol.emit(EngineEvent.IntegrityReviewCompleted, IntegrityReviewCompletedPayloadSchema.parse(payload), {

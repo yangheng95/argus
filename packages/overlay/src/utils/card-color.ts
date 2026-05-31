@@ -13,7 +13,7 @@ const KNOWN_STAGES = new Set([
   "intent-analysis",
   "spec",
   "requirements",
-  "design-analyst",
+  "frontend-design",
   "architect",
   "planner",
   "goal",

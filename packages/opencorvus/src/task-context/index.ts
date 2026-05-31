@@ -1,7 +1,7 @@
 /**
  * TaskContext — single live snapshot of "what the task knows so far".
  *
- * Stage agents (intent-analysis / requirements / design-analyst / architect /
+ * Stage agents (intent-analysis / requirements / frontend-design / architect /
  * integrity / build / delivery) used to start with a static system prompt
  * (`prompt/core/<kind>-core.txt`) that knew nothing about prior phases. The
  * benchmark caught the consequence: each agent's first move was a 14-48s

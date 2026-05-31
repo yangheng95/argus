@@ -51,7 +51,7 @@ The phase boundary is not a retry counter or a hidden state machine. It is deriv
 
 Build had two terminal tools, which made named pin unsafe. The replacement is a single `report_build_result` tool with `status: "passed" | "failed"`. The pass branch keeps the existing merge gate. The failed branch records the concrete blocker.
 
-Structured output is not changed into unconditional named pin in this pass. Intent analysis and design analyst may need work tools before final schema output, and there is no collector readiness predicate for those agents yet. The dead `forceStructuredOutput` parameter is removed so there is no pretend hard-pin path.
+Structured output is not changed into unconditional named pin in this pass. Intent analysis and frontend design may need work tools before final schema output, and there is no collector readiness predicate for those agents yet. The dead `forceStructuredOutput` parameter is removed so there is no pretend hard-pin path.
 
 ## Verification
 

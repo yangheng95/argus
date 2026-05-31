@@ -14,7 +14,7 @@ Log.init({ print: false })
  * Spec: overlay-image-ingestion-fidelity-2026-05-07.md §Fix C.
  *
  * panel.create_task previously decoded only `isDecodableText` attachments
- * (PRD .txt, .md) and inlined them into the request prose, then called
+ * (template .txt, .md) and inlined them into the request prose, then called
  * EngineService.createTask WITHOUT passing the binary attachments. Image
  * uploads dropped through panel/message/stream — the overlay control-plane
  * path AND every channel-runtime IM ingress (slack/feishu/...) — silently
@@ -170,7 +170,7 @@ describe("panel.create_task attachment forwarding", () => {
             extra: {
               surface: "panel",
               attachments: [
-                { mime: "text/markdown", url: prdUrl, filename: "PRD.md" },
+                { mime: "text/markdown", url: prdUrl, filename: "template.md" },
                 { mime: "image/png", url: pngUrl, filename: "design.png" },
               ],
             },
@@ -182,7 +182,7 @@ describe("panel.create_task attachment forwarding", () => {
           attachments?: Array<{ mime: string; data: string; filename?: string }>
         }
         // Text gets inlined into the request prose so the executor session
-        // sees PRD content directly.
+        // sees template content directly.
         expect(args.request).toContain("## Spec")
         expect(args.request).toContain("Apple-style stocks")
         // Binary attachments only — text must NOT be duplicated as base64

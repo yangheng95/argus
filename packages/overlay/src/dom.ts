@@ -50,7 +50,7 @@ export interface DomRefs {
   promptBadge: HTMLElement | null;
   taskActionsBar: HTMLElement | null;
 
- // PRD sections
+ // template sections
   specSection: HTMLElement | null;
   planSection: HTMLElement | null;
   goalsSection: HTMLElement | null;
@@ -195,7 +195,7 @@ export function getDomRefs(): DomRefs {
     promptBadge: $<HTMLElement>("#promptBadge"),
     taskActionsBar: $<HTMLElement>("#taskActionsBar"),
 
- // PRD sections
+ // template sections
     specSection: $<HTMLElement>("#specSection"),
     planSection: $<HTMLElement>("#planSection"),
     goalsSection: $<HTMLElement>("#goalsSection"),

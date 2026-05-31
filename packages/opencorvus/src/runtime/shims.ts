@@ -121,18 +121,7 @@ function readWinProxyRegistry(): WinProxySettings | undefined {
   const out = child_process
     .execFileSync(
       "reg.exe",
-      [
-        "query",
-        "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings",
-        "/v",
-        "ProxyEnable",
-        "/v",
-        "ProxyServer",
-        "/v",
-        "ProxyOverride",
-        "/v",
-        "AutoConfigURL",
-      ],
+      ["query", "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings"],
       { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], timeout: 2000 },
     )
     .toString()

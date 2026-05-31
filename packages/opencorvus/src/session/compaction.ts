@@ -26,9 +26,10 @@ import { Snapshot } from "@/snapshot"
 import { Database, and, desc, eq, sql } from "@/storage/db"
 import { EngineArtifactTable } from "@/engine/engine.sql"
 import type { ModelMessage } from "ai"
-import { stepCountIs } from "ai"
+import { hasToolCall } from "ai"
 import { SessionLoop } from "./loop"
 import { Todo } from "./todo"
+import { SessionControl } from "./control"
 
 export namespace SessionCompaction {
   const log = Log.create({ service: "session.compaction" })
@@ -589,6 +590,12 @@ export namespace SessionCompaction {
     sessionID: string
     abort: AbortSignal
     auto: boolean
+    overflow?: boolean
+    focus?: string
+    model?: {
+      providerID: string
+      modelID: string
+    }
   }) {
     const parent = input.messages.findLast((m) => m.info.id === input.parentID)
     if (!parent || parent.info.role !== "user") {
@@ -598,7 +605,9 @@ export namespace SessionCompaction {
     const compactionPart = parent.parts.find((part): part is Message.CompactionPart => part.type === "compaction")
     const config = await EffectiveConfig.effective({ sessionID: input.sessionID })
     const agent = await Agent.get("compaction", { config })
-    const model = await resolveAgentModel(agent.name, { sessionID: input.sessionID })
+    const model = input.model
+      ? await Provider.getModel(input.model.providerID, input.model.modelID, { config })
+      : await resolveAgentModel(agent.name, { sessionID: input.sessionID })
     const history =
       compactionPart && input.messages.at(-1)?.info.id === input.parentID ? input.messages.slice(0, -1) : input.messages
     const prior = completedCompactions(history)
@@ -612,10 +621,6 @@ export namespace SessionCompaction {
       log.info("skipping compaction because no post-anchor head is compactable", {
         sessionID: input.sessionID,
         parentID: input.parentID,
-      })
-      await Session.removeMessage({
-        sessionID: input.sessionID,
-        messageID: input.parentID,
       })
       return "stop"
     }
@@ -665,7 +670,7 @@ export namespace SessionCompaction {
       sessionID: input.sessionID,
       userMessage,
       selectedHead: selected.head,
-      focus: compactionPart?.focus,
+      focus: input.focus ?? compactionPart?.focus,
     })
     const promptText = buildPrompt({
       previousSummary: prior.at(-1)?.summary,
@@ -725,7 +730,7 @@ export namespace SessionCompaction {
       messages: providerMessages,
       model,
       toolChoice: SessionLoop.structuredOutputToolChoice(format, model),
-      stopWhen: stepCountIs(format.retryCount + 1),
+      stopWhen: hasToolCall("StructuredOutput"),
     })
 
     if (result === "compact") {
@@ -785,15 +790,27 @@ export namespace SessionCompaction {
       } satisfies Message.TextPart)
     }
 
-    if (
-      compactionPart &&
-      (compactionPart.tail_start_id !== selected.tail_start_id || compactionPart.anchor_id !== selected.anchor_id)
-    ) {
+    if (compactionPart) {
       await Session.updatePart({
         ...compactionPart,
+        auto: input.auto,
+        overflow: input.overflow ?? compactionPart.overflow,
+        focus: input.focus ?? compactionPart.focus,
         tail_start_id: selected.tail_start_id,
         anchor_id: selected.anchor_id,
       })
+    } else {
+      await Session.updatePart({
+        id: Identifier.ascending("part"),
+        messageID: userMessage.id,
+        sessionID: input.sessionID,
+        type: "compaction",
+        auto: input.auto,
+        overflow: input.overflow,
+        focus: input.focus,
+        tail_start_id: selected.tail_start_id,
+        anchor_id: selected.anchor_id,
+      } satisfies Message.CompactionPart)
     }
 
     Bus.publish(Event.Compacted, { sessionID: input.sessionID })
@@ -803,7 +820,7 @@ export namespace SessionCompaction {
       log.warn("memory flush after compaction failed", { sessionID: input.sessionID, err }),
     )
 
-    return "continue"
+    return input.auto ? "continue" : "stop"
   }
 
   export const create = fn(
@@ -826,30 +843,19 @@ export namespace SessionCompaction {
           `Compaction source message ${input.source.id} belongs to session ${input.source.sessionID}, not ${input.sessionID}`,
         )
       }
-      const msg = await Session.updateMessage({
-        id: Identifier.ascending("message"),
-        role: "user",
-        model: input.model ?? input.source.model,
+      const session = await Session.get(input.sessionID)
+      if (input.auto && disablesAutomaticCompactionKind(session.kind)) {
+        throw new Error(`Automatic compaction is disabled for workflow session kind ${session.kind}`)
+      }
+      SessionControl.create({
         sessionID: input.sessionID,
-        agent: input.source.agent,
-        format: input.source.format,
-        system: input.source.system,
-        systemMode: input.source.systemMode,
-        tools: input.source.tools,
-        variant: input.source.variant,
-        extra: input.source.extra,
-        time: {
-          created: Date.now(),
+        kind: input.auto ? "compaction_request" : "manual_summarize",
+        payload: {
+          source_user_message_id: input.source.id,
+          model: input.model,
+          overflow: input.overflow === true,
+          focus: input.focus,
         },
-      })
-      await Session.updatePart({
-        id: Identifier.ascending("part"),
-        messageID: msg.id,
-        sessionID: msg.sessionID,
-        type: "compaction",
-        auto: input.auto,
-        overflow: input.overflow,
-        focus: input.focus,
       })
     },
   )
@@ -859,5 +865,22 @@ export namespace SessionCompaction {
     selectedHeadEvidenceRequirements,
     runtimeContext,
     compactionTranscriptMessages,
+  }
+
+  const workflowAutoCompactionDisabledSessionKinds = new Set([
+    "architect",
+    "build",
+    "delivery",
+    "fact-check",
+    "goal-workload-analyst",
+    "integrity",
+    "intent-analysis",
+    "orchestrator",
+    "research",
+    "requirements",
+  ])
+
+  function disablesAutomaticCompactionKind(kind: string): boolean {
+    return workflowAutoCompactionDisabledSessionKinds.has(kind)
   }
 }

@@ -5,7 +5,7 @@ import { tmpdir } from "node:os"
 import { createArchitectOutputTools } from "../src/architect/output-tools"
 import { createRequirementsOutputTools } from "../src/requirements/output-tools"
 import { createIntentOutputTools } from "../src/intent-analysis/output-tools"
-import { createDesignOutputTools } from "../src/design-analyst/output-tools"
+import { createFrontendTemplateOutputTools } from "../src/frontend-design/output-tools"
 import { buildBuildAgentReport } from "../src/build/report"
 import { buildGoalReport } from "../src/tool/goal-report"
 import { AgentTrace } from "../src/trace"
@@ -53,6 +53,7 @@ test("agent output toolkits build explicit non-empty reports", async () => {
     description: "Show readable agent summaries.",
     acceptance: "Agent summaries are readable in the generated report.",
     non_goals: "This requirement does not cover visual styling of the report shell.",
+    evidence_refs: [],
   }, {} as any)
   await requirements.tools.register_decision.execute({ key: "ui_surface", value: "overlay", reason: "The user reads reports there." }, {} as any)
   await requirements.tools.submit_requirements.execute({ final: true }, {} as any)
@@ -68,15 +69,31 @@ test("agent output toolkits build explicit non-empty reports", async () => {
     },
   }))
 
-  const design = createDesignOutputTools()
-  await design.tools.submit_design_prd_spec.execute({
+  const design = createFrontendTemplateOutputTools()
+  await design.tools.submit_frontend_template.execute({
     design_system: "OpenCorvus overlay",
     tech_stack: ["Solid"],
-    product_spec: "# Agent workflow report\nReadable cards and reports.",
-    frontend_spec: "Render report payloads directly.",
-    visual_consistency_spec: "Keep cards compact and readable.",
-    backend_spec: "Consume trace report payloads.",
-    prd_iteration_notes: ["Checked report cards.", "Checked popover scroll."],
+    frontend_template: "# Agent workflow report\nReadable cards and reports.",
+    fillable_modules: "Render report payloads directly.",
+    component_inventory: "Report card and popover components.",
+    component_reuse_plan: [
+      {
+        family_id: "comp-report-card",
+        name: "Report card",
+        observed_surface: "Overlay report card",
+        source_refs: ["packages/overlay/src/components/Card.tsx"],
+        implementation_strategy: "existing_project_component",
+        reuse_source: "packages/overlay/src/components/Card.tsx",
+        mature_library_candidates: [],
+        props_states: "summary, detail, expanded state",
+        replacement_boundary: "report card body",
+        parity_guard: "overlay report card remains compact and readable",
+      },
+    ],
+    material_inventory: "Trace report payload samples.",
+    visual_consistency_contract: "Keep cards compact and readable.",
+    ui_data_contract: "Consume trace report payloads.",
+    template_iteration_notes: ["Checked report cards.", "Checked popover scroll."],
     completeness_review: "Complete for downstream implementation.",
     reference_artifacts: [],
     open_questions: [],

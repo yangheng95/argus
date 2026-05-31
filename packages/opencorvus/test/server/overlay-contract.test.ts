@@ -60,7 +60,7 @@ describe("overlay contract", () => {
           "orchestrator",
           "requirements",
           "architect",
-          "design-analyst",
+          "frontend-design",
         ]) {
           expect(names).toContain(expected)
         }
@@ -71,7 +71,7 @@ describe("overlay contract", () => {
   test("Agent.list surfaces stage agents and user-facing agents", async () => {
     // audit-2026-04-29 W2-V34 — pre-fix asserted stage agents
     // (delivery, orchestrator, requirements, architect,
-    // design-analyst, summary) have UNDEFINED permission and
+    // frontend-design, summary) have UNDEFINED permission and
     // user-facing agents (build, spec, plan, general, explore,
     // compaction, title) have ARRAY permission. Two pieces of
     // drift:
@@ -96,7 +96,7 @@ describe("overlay contract", () => {
           "orchestrator",
           "requirements",
           "architect",
-          "design-analyst",
+          "frontend-design",
           "summary",
         ]) {
           const a = agents.find((x) => x.name === stageName)

@@ -40,6 +40,7 @@ export const ArchitectContractRefSchema = z
     route: RouteContractSchema.optional(),
     component: ComponentContractSchema.optional(),
     artifact_paths: z.array(z.string().min(1)).default([]),
+    evidence_refs: z.array(z.string().min(1)).default([]),
   })
   .superRefine((value, ctx) => {
     const typed = value.kind === "type" || value.kind === "function" || value.kind === "enum"
@@ -438,7 +439,8 @@ export function renderContractGraphForPrompt(graph: ArchitectContractGraph, goal
       if (contract.ir) lines.push(indent(renderContractIR(contract.ir), "  "))
       if (contract.route) lines.push(`  route ${contract.route.method} ${contract.route.path}`)
       if (contract.component) lines.push(`  component props=${contract.component.props ?? "(unspecified)"}`)
-      if (contract.artifact_paths.length > 0) lines.push(`  artifacts=${contract.artifact_paths.join(", ")}`)
+      if ((contract.artifact_paths ?? []).length > 0) lines.push(`  artifacts=${(contract.artifact_paths ?? []).join(", ")}`)
+      if ((contract.evidence_refs ?? []).length > 0) lines.push(`  evidence_refs=${(contract.evidence_refs ?? []).join(", ")}`)
     }
   }
   lines.push("")

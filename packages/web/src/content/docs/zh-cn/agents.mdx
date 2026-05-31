@@ -18,7 +18,7 @@ OpenCorvus 的编排围绕 **agent** 构建。代理注册表（名称、模式�
 | `orchestrator` | primary（hidden） | 编排 agent。拥有任务生命周期决策权，并调用 `requirements` / `architect` / `build` / `deliver` 等显式工作流工具。 |
 | `requirements` | primary（hidden） | 需求阶段。抽取用户需求和基础技术决策；不产出 goals。 |
 
-其他注册的代理（`architect`、`design-analyst`、`intent-analysis`、`integrity`、`prosecutor`、`summary`、`title`、`compaction`）是由 orchestrator 或 session loop 内部调用的 stage / 工具槽。它们在 config 中可见（可覆盖 model、prompt），但不可用户选择。
+其他注册的代理（`architect`、`frontend-design`、`intent-analysis`、`integrity`、`prosecutor`、`summary`、`title`、`compaction`）是由 orchestrator 或 session loop 内部调用的 stage / 工具槽。它们在 config 中可见（可覆盖 model、prompt），但不可用户选择。
 
 权威定义见 `packages/opencorvus/src/agent/agent.ts:144-463`。
 
@@ -36,12 +36,12 @@ orchestrator 跑 `pipeline` 工作流时，每个 goal 在独立的 Goal worktre
 {
   "agent": {
     "build":          { "model": "anthropic/claude-sonnet-4-6" },
-    "design-analyst": { "model": "anthropic/claude-sonnet-4-6" }
+    "frontend-design": { "model": "anthropic/claude-sonnet-4-6" }
   }
 }
 ```
 
-带连字符的 agent 名（`design-analyst`、`intent-analysis`）必须加引号。
+带连字符的 agent 名（`frontend-design`、`intent-analysis`）必须加引号。
 
 ## 自定义 Agent
 
@@ -76,7 +76,7 @@ orchestrator 跑 `pipeline` 工作流时，每个 goal 在独立的 Goal worktre
     "requirements":    { "max_steps": 20 },
     "architect":       { "max_steps": 40 },
     "delivery":        { "max_steps": 160, "max_retries": 3 },
-    "design_analyst":  { "max_steps": 30 },
+    "frontend_design":  { "max_steps": 30 },
     "intent_analysis": { "max_steps": 10 },
     "build":           { "max_steps": 80 }
   }

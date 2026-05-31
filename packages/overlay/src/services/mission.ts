@@ -4,7 +4,7 @@
 // Mission agent wake, plus the gateway/channel infrastructure data sources
 // it surfaces (stats, channel runtime, task bindings). Every helper returns
 // the parsed JSON body and lets failures propagate as ApiError; the page
-// renders explicit error states (PRD §14 — no silent fallbacks).
+// renders explicit error states (template §14 — no silent fallbacks).
 //
 // The Mission page reads the same task sources as the panel — boardStore for
 // tasks, settingsStore for the active directory — so this service does not
@@ -116,7 +116,7 @@ export async function loadChannelList(signal?: AbortSignal): Promise<ChannelInfo
   const data = await apiJson(`channel`, { signal })
   // Server route declares the response as `ChannelRegistry.Info.array()`.
   // A non-array body means contract drift — surface it so the Mission page's
-  // channel-list error block fires (PRD §14, rule 7) instead of silently
+  // channel-list error block fires (template §14, rule 7) instead of silently
   // rendering an empty channel list.
   if (!Array.isArray(data)) {
     throw new Error(

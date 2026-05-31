@@ -10,6 +10,10 @@ const TREE_WRITER_NOOP_TYPES = new Set([
   "server.heartbeat",
   "server.connected",
   "config.changed",
+  "session.created",
+  "session.updated",
+  "session.deleted",
+  "session.diff",
   "task.replay_expired",
   "task.live_replay_expired",
   "task.messages.changed",
@@ -64,7 +68,7 @@ const BOARD_INVALIDATING_PREFIXES = [
 
 const BOARD_INVALIDATING_EXACT_DELIVERY_TYPES = new Set(["delivery.ready", "delivery.evidence.updated"])
 
-const ROUTER_CONSUMED_NOOP_TYPES = new Set(["agent.updated", "message.injected"])
+const ROUTER_CONSUMED_NOOP_TYPES = new Set(["agent.updated", "message.injected", "session.diff"])
 
 export function isTreeWriterNoopEventType(type: string): boolean {
   return TREE_WRITER_NOOP_TYPES.has(type)

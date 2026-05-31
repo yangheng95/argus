@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:test"
+import { createHash } from "node:crypto"
 import fs from "node:fs/promises"
 import path from "node:path"
 import z from "zod"
@@ -17,6 +18,7 @@ import {
 import { createDecisionLog } from "../../src/decision-log"
 import { createWorkflowState, WorkflowRegistry } from "../../src/engine/workflow"
 import { createOrchestratorTools } from "../../src/orchestrator/tools"
+import * as TaskLoop from "../../src/orchestrator/loop"
 import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 import { SessionPrompt } from "../../src/session/prompt"
 import { goalStatusByID } from "../../src/engine/describe"
@@ -43,6 +45,7 @@ import {
   findGoal,
   findGoalRun,
   findGoalLatestWorkspace,
+  findTask,
   findLatestIntegrityArtifactMissingStatus,
   findLatestIntegrityAttemptArtifact,
   findRequirements,
@@ -67,6 +70,7 @@ import { Ownership } from "../../src/engine/ownership"
 import { buildIntegrityReplayContext, buildSpecSnapshotLineage } from "../../src/integrity/replay-context"
 import { buildIntegrityRootHistory, persistentRootSummary, renderIntegrityRootHistoryBlock } from "../../src/integrity/root-history"
 import { Config } from "../../src/config/config"
+import { ProtocolEventTable } from "../../src/protocol/protocol.sql"
 
 let buildAgentRunImpl: ((input: any) => Promise<any>) | undefined
 let reviewIntegrityImpl: ((input: any) => Promise<any>) | undefined
@@ -237,10 +241,10 @@ mock.module("@/architect/agent", () => ({
   },
 }))
 
-mock.module("@/design-analyst", () => ({
-  DesignAnalystAgent: {
+mock.module("@/frontend-design", () => ({
+  FrontendDesignAgent: {
     analyze: (input: any) => {
-      if (!designAnalyzeImpl) throw new Error("DesignAnalystAgent.analyze mock not configured")
+      if (!designAnalyzeImpl) throw new Error("FrontendDesignAgent.analyze mock not configured")
       return designAnalyzeImpl(input)
     },
   },
@@ -445,6 +449,77 @@ function insertArchitectContractGraphArtifact(input: {
   })
 }
 
+async function writePassingSourceSkeletonHandoff(projectDir: string) {
+  const sourcePackageDir = path.join(projectDir, "web-clone-source")
+  const skeletonDir = path.join(sourcePackageDir, "source-skeleton")
+  const sourceIrDir = path.join(sourcePackageDir, "source-ir")
+  await fs.mkdir(skeletonDir, { recursive: true })
+  await fs.mkdir(sourceIrDir, { recursive: true })
+  await fs.writeFile(path.join(sourcePackageDir, "reference.png"), minimalPngBytes())
+  await fs.writeFile(
+    path.join(skeletonDir, "index.html"),
+    '<!doctype html><body data-reference-image="../reference.png"><main data-source-node-id="main"><h1>Economic calendar</h1></main></body>',
+    "utf8",
+  )
+  await fs.writeFile(path.join(skeletonDir, "styles.css"), "@import url('./critical.css');\n", "utf8")
+  await fs.writeFile(path.join(skeletonDir, "critical.css"), "main { display: block; }\n", "utf8")
+  await fs.writeFile(path.join(skeletonDir, "full-source.css"), "main { display: block; }\n", "utf8")
+  await fs.writeFile(path.join(skeletonDir, "used-selectors.json"), JSON.stringify({ rules: [], stats: {} }), "utf8")
+  await fs.writeFile(path.join(skeletonDir, "README.md"), "Use ../reference.png as visual truth.\n", "utf8")
+  await fs.writeFile(path.join(skeletonDir, "source-skeleton-audit.json"), JSON.stringify({
+    version: 1,
+    purpose: "web-clone-source-skeleton-audit",
+    passed: true,
+    hasHtml: true,
+    hasCss: true,
+    hasCriticalCss: true,
+    hasFullSourceCss: true,
+    hasUsedSelectors: true,
+    hasReadme: true,
+    hasSourceIr: true,
+    frameworkAgnostic: true,
+    referencesScreenshot: true,
+    cssAssetBytes: 24,
+    criticalCssBytes: 24,
+    computedStyleRuleCount: 0,
+    replayFactoryDetected: false,
+    generatedProjectDetected: false,
+    findings: [],
+  }), "utf8")
+  for (const file of ["component-tree.json", "content-model.json", "layout-map.json", "style-tokens.json", "interaction-hints.json", "source-quality-audit.json"]) {
+    await fs.writeFile(path.join(sourceIrDir, file), JSON.stringify({ version: 1, passed: true }), "utf8")
+  }
+  await writeMinimalSourceManifest(sourcePackageDir)
+}
+
+function minimalPngBytes(): Uint8Array {
+  return Uint8Array.from([
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+    0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
+    0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+    0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4,
+    0x89, 0x00, 0x00, 0x00, 0x0a, 0x49, 0x44, 0x41,
+    0x54, 0x78, 0x9c, 0x63, 0x00, 0x01, 0x00, 0x00,
+    0x05, 0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4, 0x00,
+    0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae,
+    0x42, 0x60, 0x82,
+  ])
+}
+
+async function writeMinimalSourceManifest(sourcePackageDir: string): Promise<void> {
+  const referenceSha256 = createHash("sha256").update(Buffer.from(minimalPngBytes())).digest("hex")
+  await fs.writeFile(path.join(sourcePackageDir, "web-clone-source-manifest.json"), JSON.stringify({
+    version: 1,
+    purpose: "web-clone-visible-source-package",
+    provenance: {
+      source: "mirror",
+      mirrorDir: sourcePackageDir,
+      reference: { path: "reference.png", sha256: referenceSha256, width: 1, height: 1, bytes: minimalPngBytes().length },
+    },
+    files: [{ path: "reference.png", sha256: referenceSha256, bytes: minimalPngBytes().length, source: "mirror/reference.png" }],
+  }, null, 2), "utf8")
+}
+
 function seedTerminalFailedBuildRun(input: {
   taskID: string
   goalID: string
@@ -554,6 +629,69 @@ describe("orchestrator tools", () => {
     mock.restore()
     await resetDatabase()
     await tmp?.[Symbol.asyncDispose]?.()
+  })
+
+  test("fail_task marks the task terminal and interrupts its task loop", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_fail_task_${stamp}`
+    const taskID = `tsk_fail_task_${stamp}`
+    const interruptTaskLoop = spyOn(TaskLoop, "interruptTaskLoop")
+    const pipeline = WorkflowRegistry.resolveSync("pipeline")!
+
+    Database.use((db) => {
+      db.insert(ProjectTable)
+        .values({
+          id: projectID,
+          worktree: tmp.path,
+          name: "Fail task project",
+          sandboxes: "[]",
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+      db.insert(EngineTaskTable)
+        .values({
+          id: taskID,
+          project_id: projectID,
+          source: "test",
+          title: "Fail task",
+          request: "prove fail_task is terminal",
+          kind: "workflow",
+          priority: "normal",
+          time_created: now,
+          time_updated: now,
+          time_started: now,
+        })
+        .run()
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "fail_task parent" })
+        Database.use((db) =>
+          db
+            .update(EngineTaskTable)
+            .set({ session_id: parent.id, time_updated: Date.now() })
+            .where(eq(EngineTaskTable.id, taskID))
+            .run(),
+        )
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+          workflow: pipeline,
+          workflowState: createWorkflowState(pipeline),
+        })
+
+        const result = await tools.fail_task.execute({ error: "persistent integrity failure" }, buildToolOptions("fail_task"))
+
+        expect(result).toContain(`Task ${taskID} failed`)
+        expect(deriveTaskStatus(findTask(taskID)!)).toBe("failed")
+        expect(interruptTaskLoop).toHaveBeenCalledWith(taskID, "task failed")
+      },
+    })
   })
 
   test("explore dispatches registered explore subagent and persists findings for orchestrator", async () => {
@@ -2731,7 +2869,7 @@ describe("orchestrator tools", () => {
       return {
         result: {
           status: "passed",
-          summary: "Visual URL did not force a design_analysis host gate.",
+          summary: "Visual URL did not force a frontend_design host gate.",
           files_changed: [],
           tests: [],
         },
@@ -2764,12 +2902,12 @@ describe("orchestrator tools", () => {
         )
         expect(buildCalled).toBe(true)
         expect(buildResult).toContain("Build agent finished")
-        expect(buildResult).toContain("Visual URL did not force a design_analysis host gate")
+        expect(buildResult).toContain("Visual URL did not force a frontend_design host gate")
       },
     })
   }, 30_000)
 
-  test("design_analysis materializes PRD/SPEC and source manifest files", async () => {
+  test("frontend_design materializes frontend template and source manifest files", async () => {
     const now = Date.now()
     const stamp = now.toString(16)
     const projectID = `project_design_files_${stamp}`
@@ -2815,15 +2953,77 @@ describe("orchestrator tools", () => {
       specs: [],
       designSystem: "Reference design system",
       techStack: ["React", "Bun"],
-      productSpec: "Product Requirements Document body",
-      frontendSpec: "Frontend specification body",
-      visualConsistencySpec: "Match reference layout, typography, colors, and spacing exactly.",
-      backendSpec: "Backend API mock contract",
-      prdIterationNotes: ["First pass covered layout.", "Second pass covered visual consistency."],
+      frontendTemplate: "Frontend replica scope body",
+      fillableModules:
+        "Frontend fillable modules body. Use web-clone-source/README.md, web-clone-source/implementation-blueprint.md, web-clone-source/source-ir/component-tree.json, web-clone-source/source-ir/content-model.json, web-clone-source/source-skeleton/critical.css, and web-clone-source/reference.png as the development handoff; use raw mirror only as diagnostics for named gaps.",
+      componentInventory: "Component inventory body.",
+      qualityProjectContract:
+        "High-quality target project body. Build semantic React source from component modules, data modules, style modules, and verification commands; do not deliver the raw extracted skeleton.",
+      componentReusePlan: [
+        {
+          family_id: "comp-page-shell",
+          name: "Page shell",
+          observed_surface: "Reference page shell",
+          source_refs: ["web-clone-source/reference.png"],
+          implementation_strategy: "extracted_baseline_defer",
+          reuse_source: "frontend-design-skeleton/src/generated/singlefile-body.html",
+          mature_library_candidates: [],
+          props_states: "static extracted baseline until parity-safe replacement",
+          replacement_boundary: "page root subtree",
+          parity_guard: "96+ visual score against reference.png",
+        },
+      ],
+      materialInventory: "Material inventory body.",
+      frontendProject: {
+        status: "created",
+        role: "visual_baseline_input",
+        project_root: "frontend-design-skeleton",
+        source_package: "web-clone-source",
+        entrypoints: ["README.md", "src/App.jsx"],
+        generation_tool: "test",
+        notes: [],
+      },
+      visualConsistencyContract:
+        "Match reference layout, typography, colors, and spacing exactly. Verify 1440x900, 1024x768, and 390x844 with passThreshold=96 plus source-quality review.",
+      uiDataContract:
+        "UI data contract derived from source-skeleton table/list/control structure; unknown backend details remain unknown.",
+      templateIterationNotes: ["First pass covered layout.", "Second pass covered visual consistency."],
       completenessReview: "Complete enough for downstream implementation.",
-      referenceArtifacts: ["mirror/reference.png", "mirror/page-ir.xml"],
+      referenceArtifacts: [
+        "web-clone-source/README.md",
+        "web-clone-source/implementation-blueprint.md",
+        "web-clone-source/web-clone-context.md",
+        "web-clone-source/web-clone-implementation-contract.json",
+        "web-clone-source/source-ir/component-tree.json",
+        "web-clone-source/source-ir/content-model.json",
+        "web-clone-source/source-ir/layout-map.json",
+        "web-clone-source/source-ir/style-tokens.json",
+        "web-clone-source/source-ir/interaction-hints.json",
+        "web-clone-source/source-skeleton/critical.css",
+        "web-clone-source/visual-surface-candidates.json",
+        "web-clone-source/reference.png",
+        "mirror/reference.png",
+        "mirror/page.ir.json",
+        "mirror/assets/manifest.json",
+        "mirror/segments.json",
+        "mirror/codegen-context.json",
+        "mirror/source-skeleton/",
+        "mirror/source-skeleton/README.md",
+        "mirror/source-skeleton/index.html",
+        "mirror/source-skeleton/critical.css",
+        "mirror/source-skeleton/full-source.css",
+        "mirror/source-skeleton/used-selectors.json",
+        "mirror/source-skeleton/skeleton-manifest.json",
+        "mirror/source-skeleton/source-skeleton-audit.json",
+        "mirror/source-ir/component-tree.json",
+        "mirror/source-ir/content-model.json",
+        "mirror/source-ir/layout-map.json",
+        "mirror/source-ir/style-tokens.json",
+        "mirror/source-ir/interaction-hints.json",
+        "mirror/source-ir/source-quality-audit.json",
+      ],
       openQuestions: ["Live feed authentication is unknown."],
-      sessionID: "ses_design_analysis_mock",
+      sessionID: "ses_frontend_design_mock",
     })
 
     await Instance.provide({
@@ -2838,26 +3038,363 @@ describe("orchestrator tools", () => {
           workflowState,
         })
 
-        const result = await tools.design_analysis.execute({ reason: "visual replica requires source PRD" }, {} as any)
-        expect(result).toContain("prd_spec_file")
+        const result = await tools.frontend_design.execute({ reason: "visual replica requires source template" }, {} as any)
+        expect(result).toContain("frontend_template_file")
         expect(result).toContain(".opencorvus")
 
-        const paths = ProjectRuntimePaths.designAnalysisPaths(tmp.path, taskID)
-        const prdPath = paths.prdAbsolute
+        const paths = ProjectRuntimePaths.frontendDesignPaths(tmp.path, taskID)
+        const templatePath = paths.templateAbsolute
         const manifestPath = paths.manifestAbsolute
-        const prd = await fs.readFile(prdPath, "utf8")
+        const template = await fs.readFile(templatePath, "utf8")
         const manifest = await fs.readFile(manifestPath, "utf8")
-        expect(prd).toContain("## Visual Consistency Spec")
-        expect(prd).toContain("Match reference layout, typography, colors, and spacing exactly.")
-        expect(prd).toContain(paths.manifestRelative)
-        expect(manifest).toContain(`Canonical PRD/SPEC file: ${paths.prdRelative}`)
+        expect(template).toContain("## Visual Consistency Contract")
+        expect(template).toContain("## Component Inventory")
+        expect(template).toContain("## Component Reuse Plan")
+        expect(template).toContain("## Quality Project Contract")
+        expect(template).toContain("## Material Inventory")
+        expect(template).toContain("High-quality target project body")
+        expect(template).toContain("do not deliver the raw extracted skeleton")
+        expect(template).toContain("role: visual_baseline_input")
+        expect(template).toContain("Match reference layout, typography, colors, and spacing exactly.")
+        expect(template).toContain(paths.manifestRelative)
+        expect(template).toContain("web-clone-source/implementation-blueprint.md")
+        expect(template).toContain("web-clone-source/source-skeleton/critical.css")
+        expect(template).toContain("web-clone-source/source-ir/component-tree.json")
+        expect(template).toContain("passThreshold=96")
+        expect(manifest).toContain(`Canonical frontend template file: ${paths.templateRelative}`)
         expect(manifest).toContain("design-reference.png")
         expect(manifest).toContain("mirror/reference.png")
+        expect(manifest).toContain("mirror/page.ir.json")
+        expect(manifest).toContain("mirror/assets/manifest.json")
+        expect(manifest).toContain("mirror/segments.json")
+        expect(manifest).toContain("mirror/codegen-context.json")
+        expect(manifest).toContain("web-clone-source/implementation-blueprint.md")
+        expect(manifest).toContain("web-clone-source/source-skeleton/critical.css")
+        expect(manifest).toContain("web-clone-source/source-ir/content-model.json")
+        expect(manifest).toContain("web-clone-source/reference.png")
+      },
+    })
+  }, 60_000)
+
+  test("post-build integrity blocks source-skeleton handoff when audit evidence is missing", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_integrity_source_skeleton_gate_${stamp}`
+    const taskID = `tsk_integrity_source_skeleton_gate_${stamp}`
+    const goalID = `gol_integrity_source_skeleton_gate_${stamp}`
+    const specID = `spec_${goalID}`
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "source skeleton integrity gate test" })
+        insertWorkflowTaskWithGoal({
+          projectID,
+          taskID,
+          goalID,
+          sessionID: parent.id,
+          worktree: tmp.path,
+          projectName: "Source skeleton integrity gate project",
+          taskTitle: "Source skeleton integrity gate task",
+          request: "Clone a web page from source skeleton artifacts",
+          goalTitle: "Implement source skeleton",
+          goalSlug: "implement-source-skeleton",
+          objective: "Use source skeleton artifacts.",
+          now,
+          specID,
+          requirementIDs: ["REQ-1"],
+        })
+        Database.use((db) => {
+          insertRequirements(db, {
+            taskID,
+            specSnapshotID: specID,
+            now,
+            requirements: [
+              {
+                id: "REQ-1",
+                title: "Source skeleton",
+                description: "Implement from source skeleton.",
+                acceptance: ["post-build integrity must validate source skeleton artifacts"],
+                evidence_refs: ["frontend_design"],
+                non_goals: [],
+                priority: "blocking",
+              },
+            ],
+          })
+          db.update(EngineGoalTable)
+            .set({
+              acceptance_specs: [
+                {
+                  id: "acc-source-skeleton",
+                  source_requirement_id: "REQ-1",
+                  goal_id: goalID,
+                  title: "post-build integrity must validate source skeleton artifacts",
+                  scorers: [{ type: "llm_judge", name: "artifact gate", criteria: "Validate source skeleton artifacts." }],
+                  severity: "essential",
+                },
+              ],
+              requirement_ids: ["REQ-1"],
+            })
+            .where(eq(EngineGoalTable.id, goalID))
+            .run()
+        })
+        const runID = beginBuildAttempt({
+          taskID,
+          goalID,
+          sessionID: parent.id,
+          workspaceDir: tmp.path,
+          workspaceBranch: "opencorvus/source-skeleton-gate",
+          workspaceBaseRef: null,
+          now: now + 1,
+        })
+        updateGoalRun(runID, { status: "completed", time_completed: now + 2 })
+        computeRequirementStatusSnapshotImpl = () => [
+          {
+            requirementID: "REQ-1",
+            title: "Source skeleton",
+            status: "claimed",
+            claimingGoals: [{ goalID, runStatus: "completed" }],
+          },
+        ]
+        createDecisionLog(taskID).append({
+          phase: "frontend_design",
+          key: "reference_artifacts",
+          value:
+            "web-clone-source/reference.png\n" +
+            "web-clone-source/source-skeleton/README.md\n" +
+            "web-clone-source/source-skeleton/index.html\n" +
+            "web-clone-source/source-skeleton/critical.css\n" +
+            "web-clone-source/source-skeleton/source-skeleton-audit.json\n" +
+            "web-clone-source/source-ir/component-tree.json\n" +
+            "web-clone-source/source-ir/source-quality-audit.json",
+          reason: "web_clone_source_skeleton",
+        })
+
+        let reviewCalled = false
+        reviewIntegrityImpl = async () => {
+          reviewCalled = true
+          return integrityTeamResult({ sessionID: "ses_should_not_run" })
+        }
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const result = await tools.integrity.execute({ reason: "post-build review" }, {} as any)
+
+        expect(result).toContain("source skeleton gate failed")
+        expect(result).toContain("invalid web-clone-source/reference.png")
+        expect(reviewCalled).toBe(false)
       },
     })
   })
 
-  test("design_analysis exposes materialization failure details", async () => {
+  test("post-build integrity blocks source-skeleton implementation when consumption audit is missing", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_integrity_source_consumption_gate_${stamp}`
+    const taskID = `tsk_integrity_source_consumption_gate_${stamp}`
+    const goalID = `gol_integrity_source_consumption_gate_${stamp}`
+    const specID = `spec_${goalID}`
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await writePassingSourceSkeletonHandoff(tmp.path)
+        const parent = await Session.create({ kind: "root", title: "source skeleton consumption gate test" })
+        insertWorkflowTaskWithGoal({
+          projectID,
+          taskID,
+          goalID,
+          sessionID: parent.id,
+          worktree: tmp.path,
+          projectName: "Source skeleton consumption gate project",
+          taskTitle: "Source skeleton consumption gate task",
+          request: "Clone a web page from source skeleton artifacts",
+          goalTitle: "Implement source skeleton app",
+          goalSlug: "implement-source-skeleton-app",
+          objective: "Implement normal React/Vue source from source skeleton artifacts.",
+          now,
+          specID,
+          requirementIDs: ["REQ-1"],
+        })
+        Database.use((db) => {
+          insertRequirements(db, {
+            taskID,
+            specSnapshotID: specID,
+            now,
+            requirements: [
+              {
+                id: "REQ-1",
+                title: "Source skeleton implementation",
+                description: "Implement from source skeleton and prove the skeleton was consumed.",
+                acceptance: ["post-build integrity must validate source skeleton consumption audit"],
+                evidence_refs: ["frontend_design"],
+                non_goals: [],
+                priority: "blocking",
+              },
+            ],
+          })
+          db.update(EngineGoalTable)
+            .set({
+              acceptance_specs: [
+                {
+                  id: "acc-source-skeleton-consumption",
+                  source_requirement_id: "REQ-1",
+                  goal_id: goalID,
+                  title: "post-build integrity must validate source skeleton consumption audit",
+                  scorers: [{ type: "llm_judge", name: "artifact gate", criteria: "Validate source skeleton consumption audit." }],
+                  severity: "essential",
+                },
+              ],
+              requirement_ids: ["REQ-1"],
+            })
+            .where(eq(EngineGoalTable.id, goalID))
+            .run()
+        })
+        const runID = beginBuildAttempt({
+          taskID,
+          goalID,
+          sessionID: parent.id,
+          workspaceDir: tmp.path,
+          workspaceBranch: "opencorvus/source-skeleton-consumption-gate",
+          workspaceBaseRef: null,
+          now: now + 1,
+        })
+        updateGoalRun(runID, { status: "completed", time_completed: now + 2 })
+        computeRequirementStatusSnapshotImpl = () => [
+          {
+            requirementID: "REQ-1",
+            title: "Source skeleton implementation",
+            status: "claimed",
+            claimingGoals: [{ goalID, runStatus: "completed" }],
+          },
+        ]
+        createDecisionLog(taskID).append({
+          phase: "frontend_design",
+          key: "reference_artifacts",
+          value:
+            "mirror/reference.png\n" +
+            "mirror/source-skeleton/README.md\n" +
+            "mirror/source-skeleton/index.html\n" +
+            "mirror/source-skeleton/styles.css\n" +
+            "mirror/source-skeleton/critical.css\n" +
+            "mirror/source-skeleton/full-source.css\n" +
+            "mirror/source-skeleton/used-selectors.json\n" +
+            "mirror/source-skeleton/source-skeleton-audit.json\n" +
+            "mirror/source-ir/component-tree.json\n" +
+            "mirror/source-ir/content-model.json\n" +
+            "mirror/source-ir/layout-map.json\n" +
+            "mirror/source-ir/style-tokens.json\n" +
+            "mirror/source-ir/interaction-hints.json\n" +
+            "mirror/source-ir/source-quality-audit.json",
+          reason: "web_clone_source_skeleton",
+        })
+
+        let reviewCalled = false
+        reviewIntegrityImpl = async () => {
+          reviewCalled = true
+          return integrityTeamResult({ sessionID: "ses_should_not_run" })
+        }
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const result = await tools.integrity.execute({ reason: "post-build review" }, {} as any)
+
+        expect(result).toContain("source skeleton consumption gate failed")
+        expect(result).toContain("missing web-clone-source-skeleton-consumption-audit.json")
+        expect(reviewCalled).toBe(false)
+      },
+    })
+  })
+
+  test("post-build integrity requires web-clone gates when the visible source package exists even without frontend-design citations", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_integrity_visible_source_gate_${stamp}`
+    const taskID = `tsk_integrity_visible_source_gate_${stamp}`
+    const goalID = `gol_integrity_visible_source_gate_${stamp}`
+    const specID = `spec_${goalID}`
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await writePassingSourceSkeletonHandoff(tmp.path)
+        const parent = await Session.create({ kind: "root", title: "visible source gate test" })
+        insertWorkflowTaskWithGoal({
+          projectID,
+          taskID,
+          goalID,
+          sessionID: parent.id,
+          worktree: tmp.path,
+          projectName: "Visible source gate project",
+          taskTitle: "Visible source gate task",
+          request: "Clone a web page from prepared web-clone-source artifacts",
+          goalTitle: "Implement source skeleton app",
+          goalSlug: "implement-source-skeleton-app",
+          objective: "Implement normal React/Vue source from source skeleton artifacts.",
+          now,
+          specID,
+          requirementIDs: ["REQ-1"],
+        })
+        Database.use((db) => {
+          insertRequirements(db, {
+            taskID,
+            specSnapshotID: specID,
+            now,
+            requirements: [{
+              id: "REQ-1",
+              title: "Source skeleton implementation",
+              description: "Implement from visible web-clone-source artifacts.",
+              acceptance: ["post-build integrity must validate source skeleton consumption audit"],
+              evidence_refs: [],
+              non_goals: [],
+              priority: "blocking",
+            }],
+          })
+        })
+        const runID = beginBuildAttempt({
+          taskID,
+          goalID,
+          sessionID: parent.id,
+          workspaceDir: tmp.path,
+          workspaceBranch: "opencorvus/visible-source-gate",
+          workspaceBaseRef: null,
+          now: now + 1,
+        })
+        updateGoalRun(runID, { status: "completed", time_completed: now + 2 })
+        computeRequirementStatusSnapshotImpl = () => [{
+          requirementID: "REQ-1",
+          title: "Source skeleton implementation",
+          status: "claimed",
+          claimingGoals: [{ goalID, runStatus: "completed" }],
+        }]
+
+        let reviewCalled = false
+        reviewIntegrityImpl = async () => {
+          reviewCalled = true
+          return integrityTeamResult({ sessionID: "ses_should_not_run" })
+        }
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const result = await tools.integrity.execute({ reason: "post-build review" }, {} as any)
+
+        expect(result).toContain("source skeleton consumption gate failed")
+        expect(result).toContain("missing web-clone-source-skeleton-consumption-audit.json")
+        expect(reviewCalled).toBe(false)
+      },
+    })
+  })
+
+  test("frontend_design exposes materialization failure details", async () => {
     const now = Date.now()
     const stamp = now.toString(16)
     const projectID = `project_design_material_fail_${stamp}`
@@ -2895,7 +3432,7 @@ describe("orchestrator tools", () => {
         })
 
         await expect(
-          tools.design_analysis.execute(
+          tools.frontend_design.execute(
             { reason: "material should be inspected", materials: [missingMaterial] },
             {} as any,
           ),
@@ -2904,11 +3441,19 @@ describe("orchestrator tools", () => {
         const entry = createDecisionLog(taskID).readByKey("abort_materialization_failed")
         expect(entry?.value).toContain(missingMaterial)
         expect(entry?.value).toContain("Materialization errors")
+        const stepEvents = Database.use((db) =>
+          db
+            .select({ payload: ProtocolEventTable.payload })
+            .from(ProtocolEventTable)
+            .where(and(eq(ProtocolEventTable.task_id, taskID), eq(ProtocolEventTable.type, "workflow.step.updated")))
+            .all(),
+        )
+        expect(stepEvents.some((event) => event.payload?.stepID === "frontend_design" && event.payload?.status === "failed")).toBe(true)
       },
     })
   })
 
-  test("design_analysis materializes Figma references through MCP before analysis", async () => {
+  test("frontend_design materializes Figma references through MCP before analysis", async () => {
     const now = Date.now()
     const stamp = now.toString(16)
     const projectID = `project_figma_mcp_${stamp}`
@@ -2979,15 +3524,42 @@ describe("orchestrator tools", () => {
         specs: [],
         designSystem: "Figma MCP design system",
         techStack: ["React"],
-        productSpec: "Product spec from Figma MCP evidence",
-        frontendSpec: "Frontend spec from Figma MCP evidence",
-        visualConsistencySpec: "Match the Figma MCP screenshot and metadata.",
-        backendSpec: "Mock API only; unknown backend details remain unknown.",
-        prdIterationNotes: ["Checked Figma node inventory.", "Checked implementability from MCP metadata."],
+        frontendTemplate: "Frontend replica scope from Figma MCP evidence",
+        fillableModules: "Frontend fillable modules from Figma MCP evidence",
+        componentInventory: "Figma component inventory.",
+        qualityProjectContract:
+          "High-quality Figma target project: readable semantic React components, project-owned styles, asset references, and screenshot verification.",
+        componentReusePlan: [
+          {
+            family_id: "comp-figma-window",
+            name: "Figma window",
+            observed_surface: "Figma MCP screenshot window",
+            source_refs: ["figma-mcp screenshot"],
+            implementation_strategy: "existing_project_component",
+            reuse_source: "src/components/window",
+            mature_library_candidates: [],
+            props_states: "window title, content slots, focus state",
+            replacement_boundary: "window component subtree",
+            parity_guard: "match Figma MCP screenshot",
+          },
+        ],
+        materialInventory: "Figma material inventory.",
+        frontendProject: {
+          status: "not_created",
+          role: "visual_baseline_input",
+          project_root: "",
+          source_package: "",
+          entrypoints: [],
+          generation_tool: "",
+          notes: [],
+        },
+        visualConsistencyContract: "Match the Figma MCP screenshot and metadata.",
+        uiDataContract: "Mock API only; unknown backend details remain unknown.",
+        templateIterationNotes: ["Checked Figma node inventory.", "Checked implementability from MCP metadata."],
         completenessReview: "Figma MCP evidence is complete enough for handoff.",
         referenceArtifacts: ["figma-mcp screenshot", "figma-mcp metadata"],
         openQuestions: [],
-        sessionID: "ses_design_analysis_figma_mcp_mock",
+        sessionID: "ses_frontend_design_figma_mcp_mock",
       }
     }
 
@@ -3003,9 +3575,9 @@ describe("orchestrator tools", () => {
           workflowState,
         })
 
-        const result = await tools.design_analysis.execute(
+        const result = await tools.frontend_design.execute(
           {
-            reason: "Figma MCP visual reference requires PRD/SPEC",
+            reason: "Figma MCP visual reference requires frontend template",
             figma_url: figmaUrl,
           },
           buildToolOptions(),
@@ -3670,14 +4242,10 @@ describe("orchestrator tools", () => {
         expect(capturedContext?.contractGraph?.dependency_contracts?.map((c: any) => c.from_goal_id)).toContain(
           siblingGoalID,
         )
-        expect(capturedContext?.collaborationGoals?.find((g: any) => g.id === siblingGoalID)?.objective).toContain(
-          "shared shell",
-        )
+        expect(capturedContext?.collaborationGoals?.find((g: any) => g.id === siblingGoalID)?.objective).toBeUndefined()
         expect(
-          capturedContext?.collaborationGoals
-            ?.find((g: any) => g.id === siblingGoalID)
-            ?.acceptance_specs?.some((spec: string) => spec.includes("shell exports AppShell")),
-        ).toBe(true)
+          capturedContext?.collaborationGoals?.find((g: any) => g.id === siblingGoalID)?.acceptance_specs,
+        ).toBeUndefined()
         expect(capturedContext?.fidelity?.sourceCoverage?.map((row: any) => row.id)).toContain("sibling-source")
         expect(capturedContext?.fidelity?.referenceCoverage?.map((row: any) => row.id)).toContain("sibling-reference")
         expect(capturedContext?.fidelity?.assemblyOwners?.map((row: any) => row.goal_id)).toContain(siblingGoalID)
@@ -5873,19 +6441,21 @@ describe("orchestrator tools", () => {
           reason: "Delivery rejected visual fidelity.",
         })
         for (const key of [
-          "product_spec",
-          "frontend_spec",
-          "visual_consistency_spec",
-          "backend_spec",
-          "prd_iteration_notes",
+          "frontend_template",
+          "fillable_modules",
+          "component_inventory",
+          "material_inventory",
+          "visual_consistency_contract",
+          "ui_data_contract",
+          "template_iteration_notes",
           "completeness_review",
           "evidence_source_manifest",
         ]) {
           createDecisionLog(taskID).append({
-            phase: "design_analysis",
+            phase: "frontend_design",
             key,
             value: `${key} complete for retry attachment regression.`,
-            reason: "Visual build gate requires complete design-analysis PRD/SPEC first.",
+            reason: "Visual build gate requires complete frontend-design template first.",
           })
         }
 

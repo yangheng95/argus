@@ -9,6 +9,8 @@ import fs from "fs/promises"
 import { existsSync } from "fs"
 import { pathToFileURL } from "url"
 import { Filesystem } from "../../src/util/filesystem"
+import { BrowserMCPBuiltin } from "../../src/mcp/browser/builtin"
+import { MCP } from "../../src/mcp"
 
 // Get managed config directory from environment (set in preload.ts)
 const managedConfigDir = process.env.OPENCORVUS_TEST_MANAGED_CONFIG_DIR!
@@ -52,6 +54,7 @@ test("no project config files: does NOT auto-write a project config and does NOT
       expect(config.username).toBeDefined()
       expect(config.experimental?.auto_question).toBe(true)
       expect(config.experimental?.confirm_proposed_tasks).toBe(false)
+      expect(config.mcp?.browser).toEqual(BrowserMCPBuiltin.localConfig())
     },
   })
 })
@@ -1264,6 +1267,51 @@ test("local .opencorvus config can override MCP from project config", async () =
     fn: async () => {
       const config = await Config.get()
       expect(config.mcp?.docs?.enabled).toBe(true)
+    },
+  })
+})
+
+test("can disable the built-in browser MCP with a config override", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await writeConfig(dir, {
+        $schema: "https://opencorvus.ai/config.json",
+        mcp: {
+          browser: {
+            enabled: false,
+          },
+        },
+      })
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const config = await Config.get()
+      expect(config.mcp?.browser).toEqual({ enabled: false })
+      const status = await MCP.status()
+      expect(status.browser).toEqual({ status: "disabled" })
+    },
+  })
+})
+
+test("rejects enabled-only MCP entries that are not explicit disables", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await writeConfig(dir, {
+        $schema: "https://opencorvus.ai/config.json",
+        mcp: {
+          browser: {
+            enabled: true,
+          },
+        },
+      })
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await expect(Config.get()).rejects.toThrow()
     },
   })
 })

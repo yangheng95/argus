@@ -39,6 +39,7 @@ import { buildChannelSchema } from "@/channel/catalog"
 import { withKeyedLock } from "@/util/lock"
 import { AgentRoleContract, type AgentRoleID } from "@/agent/role-contract"
 import { isModelReference } from "@/provider/model-ref"
+import { BrowserMCPBuiltin } from "@/mcp/browser/builtin"
 
 export namespace Config {
   const ModelId = z
@@ -256,6 +257,7 @@ export namespace Config {
 
     result.plugin = deduplicatePlugins(result.plugin ?? [])
     result = materializeNativeAgentModels(result)
+    result = materializeBuiltinMcp(result)
 
     // NOTE: first-load auto-write of resolved config to the project directory
     // was removed (spec §6-2, rule 7/8). It wrote `result.model ??= DEFAULT_MODEL`
@@ -379,6 +381,18 @@ export namespace Config {
   function trim(file: string) {
     const ext = path.extname(file)
     return ext.length ? file.slice(0, -ext.length) : file
+  }
+
+  function materializeBuiltinMcp(config: Info): Info {
+    const existing = config.mcp?.[BrowserMCPBuiltin.ServerName]
+    if (existing) return config
+    return {
+      ...config,
+      mcp: {
+        ...(config.mcp ?? {}),
+        [BrowserMCPBuiltin.ServerName]: BrowserMCPBuiltin.localConfig(),
+      },
+    }
   }
 
   async function loadCommand(dir: string) {
@@ -1183,7 +1197,7 @@ export namespace Config {
             Mcp,
             z
               .object({
-                enabled: z.boolean(),
+                enabled: z.literal(false),
               })
               .strict(),
           ]),
@@ -1362,13 +1376,13 @@ export namespace Config {
             })
             .optional()
             .describe("P0-B visual numeric evidence thresholds."),
-          design_analyst: z
+          frontend_design: z
             .object({
-              max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for design analyst agent"),
+              max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for frontend design agent"),
             })
             .optional()
             .describe(
-              'Design analyst agent configuration — analyzes visual references (images, URLs). Model is configured via agent."design-analyst".model.',
+              'Frontend design/replica agent configuration - analyzes visual references (images, URLs) into a frontend template, fillable modules, component/material inventories, and visual/data contracts. Model is configured via agent."frontend-design".model.',
             ),
           intent_analysis: z
             .object({
@@ -1434,7 +1448,7 @@ export namespace Config {
             .string()
             .optional()
             .describe(
-              "Default workflow for new tasks: 'direct' (build), 'pipeline' (design_analysis → requirements → architect → per-goal build → integrity), or custom ID",
+              "Default workflow for new tasks: 'direct' (build), 'pipeline' (frontend_design → requirements → architect → per-goal build → integrity), or custom ID",
             ),
           workflows: z
             .array(
@@ -1464,7 +1478,7 @@ export namespace Config {
         })
         .optional()
         .describe(
-          "Assistant agent configuration — controls orchestration policy, requirements, architect, build, design-analysis, intent-analysis, and integrity review behavior",
+          "Assistant agent configuration — controls orchestration policy, requirements, architect, build, frontend-design, intent-analysis, and integrity review behavior",
         ),
       experimental: z
         .object({
@@ -1534,6 +1548,13 @@ export namespace Config {
             code: "custom",
             path: ["agent", agentID, "prompt"],
             message: `config.agent.${agentID}.prompt is invalid for append-mode agents; use prompt_append.`,
+          })
+        }
+        if (role?.promptConfigMode === "none" && (agentConfig.prompt !== undefined || agentConfig.prompt_append !== undefined)) {
+          ctx.addIssue({
+            code: "custom",
+            path: ["agent", agentID],
+            message: `config.agent.${agentID} prompt configuration is not editable.`,
           })
         }
       }

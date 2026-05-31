@@ -32,7 +32,7 @@ function seedTask(input: { projectID: string; taskID: string; sessionID: string 
 }
 
 describe("mirror output directory", () => {
-  test("default resolves to task-scoped design-analysis mirror", async () => {
+  test("default resolves to task-scoped frontend-design mirror", async () => {
     await using tmp = await tmpdir({ git: true })
 
     await Instance.provide({
@@ -43,7 +43,7 @@ describe("mirror output directory", () => {
         seedTask({ projectID: Instance.project.id, taskID, sessionID: session.id })
 
         const outputDir = await resolveMirrorOutputDir({ sessionID: session.id })
-        const paths = ProjectRuntimePaths.designAnalysisPaths(tmp.path, taskID)
+        const paths = ProjectRuntimePaths.frontendDesignPaths(tmp.path, taskID)
         expect(outputDir).toBe(paths.mirrorAbsolute)
 
         await fs.writeFile(path.join(outputDir, "reference.txt"), "reference", "utf8")
@@ -97,7 +97,7 @@ describe("mirror output directory", () => {
         const taskID = `tsk_mirror_view_${Date.now().toString(36)}`
         seedTask({ projectID: Instance.project.id, taskID, sessionID: session.id })
 
-        const paths = ProjectRuntimePaths.designAnalysisPaths(tmp.path, taskID)
+        const paths = ProjectRuntimePaths.frontendDesignPaths(tmp.path, taskID)
         const outputDir = await resolveMirrorOutputDir({ override: "mirror", sessionID: session.id })
         expect(outputDir).toBe(paths.mirrorAbsolute)
 

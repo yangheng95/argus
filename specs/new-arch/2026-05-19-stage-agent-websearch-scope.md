@@ -18,11 +18,11 @@ orchestrator（agent.ts diff: include 新增 `explore`）现在会主动派 expl
 ### BUG② — 4 个 stage agent web 搜索被双闸锁死
 - **闸 A**: `context-tools.ts:104` `web_search` 仅当 `process.env.OPENCORVUS_ENABLE_WEB_SEARCH === "1"` 才产出。
   全仓 grep 该 env: 只有 gating 代码 + `test/agent/context-tools.test.ts` 引用，**无任何地方设置**（.env / server / benchmark 均无）→ 实际永远关闭 = 死开关（rule 7/10）。
-- **闸 B（pull 新增）**: `agent.ts` requirements(322-331)/architect(343-352)/design-analyst(371-380)/intent-analysis(392-401)
+- **闸 B（pull 新增）**: `agent.ts` requirements(322-331)/architect(343-352)/frontend-design(371-380)/intent-analysis(392-401)
   新增显式 `tools.include` 白名单，**均不含 `web_search`/`websearch`**。`filter-tools.ts:31-34`
   `if (include && include.length>0 && !include.includes(name)) return false` → 即使解开闸 A 仍被剔除。
 - 叠加: 这 4 个 agent 连 `webfetch` 都没有；名称分叉 `web_search`(context-tools) vs `websearch`(registry)（rule 8）；
-  4 个 core prompt（requirements/architect/design-analyst/intent-analysis-core.txt）全不提 web 搜索（rule 36 prompt↔能力失配）。
+  4 个 core prompt（requirements/architect/frontend-design/intent-analysis-core.txt）全不提 web 搜索（rule 36 prompt↔能力失配）。
 
 ## 2. 全仓调用点枚举（rule 35）
 
@@ -34,9 +34,9 @@ orchestrator（agent.ts diff: include 新增 `explore`）现在会主动派 expl
 | `src/agent/agent.ts` explore:176 | include 无 websearch | include 加 `"websearch"` |
 | `src/agent/agent.ts` requirements:322 | include 无 websearch | include 加 `"websearch"` |
 | `src/agent/agent.ts` architect:343 | include 无 websearch | include 加 `"websearch"` |
-| `src/agent/agent.ts` design-analyst:371 | include 无 websearch | include 加 `"websearch"`（用户 2026-05-19 拍板：也加） |
+| `src/agent/agent.ts` frontend-design:371 | include 无 websearch | include 加 `"websearch"`（用户 2026-05-19 拍板：也加） |
 | `src/agent/agent.ts` intent-analysis:392 | include 无 websearch | include 加 `"websearch"` |
-| `src/prompt/core/{requirements,architect,design-analyst,intent-analysis}-core.txt` | 不提 web 搜索 | 各补一段 websearch 调研指引 |
+| `src/prompt/core/{requirements,architect,frontend-design,intent-analysis}-core.txt` | 不提 web 搜索 | 各补一段 websearch 调研指引 |
 | `src/agent/prompt/explore.txt:25` | 只提 webfetch | 补 websearch 优先于 webfetch 的指引 |
 | `test/agent/context-tools.test.ts:6-26` | 测 env-gate | 改为断言默认产出 `websearch`；删 env-gate 用例 |
 | `test/agent/runner-tool-scope.test.ts` | 现有 tool-scope 断言 | 扩：explore + 4 stage agent 解析后工具集含 `websearch` |
@@ -60,7 +60,7 @@ orchestrator（agent.ts diff: include 新增 `explore`）现在会主动派 expl
 
 - `bun run typecheck`
 - `bun test test/agent/runner-tool-scope.test.ts test/agent/context-tools.test.ts test/tool/schema-snapshot.test.ts`
-- 断言: explore/requirements/architect/design-analyst/intent-analysis 解析后工具集均含 `websearch`；
+- 断言: explore/requirements/architect/frontend-design/intent-analysis 解析后工具集均含 `websearch`；
   context-tools 默认（无 env）即产出 `websearch`；`web_search` 名不再存在（防双源回归）。
 - 复测原失败任务形态: explore 调研类任务能调 websearch，不再退化 webfetch 撞反爬。
 
@@ -73,8 +73,8 @@ orchestrator（agent.ts diff: include 新增 `explore`）现在会主动派 expl
   （deepseek-v4-flash）面对非代码任务时 `skill(research-report)` + `todowrite` +
   `websearch` 亲自下场。host 守门正确拦截（agent.ts:278-296 故意不给编排器 websearch）。
 - 真根因是编排器**角色纪律**（rule 6.1：host 守门已正确工作，修 prompt 不修 host）。
-- 原方案给 intent-analysis / design-analyst 加 websearch 属**过度扩张**（rule 5）：
-  intent-analysis 实测在分类阶段 `websearch ×8` = 反模式；design-analyst 本职 mirror
+- 原方案给 intent-analysis / frontend-design 加 websearch 属**过度扩张**（rule 5）：
+  intent-analysis 实测在分类阶段 `websearch ×8` = 反模式；frontend-design 本职 mirror
   提取，通用 web 搜索与其证据链冗余且诱发 score loop。
 
 修订（保留 §1-4 的单源收敛 + exa-mcp + explore/requirements/architect websearch）：
@@ -84,7 +84,7 @@ orchestrator（agent.ts diff: include 新增 `explore`）现在会主动派 expl
 | explore | 加 websearch | **保留** | 名副其实调研子 agent，webfetch 被反爬不够 |
 | requirements / architect | 加 websearch | **保留** | 产出持久技术决策，greenfield 核实选型是本职 |
 | intent-analysis | 加 websearch | **回退** | 首个廉价分类步，研究违背职责（×8 实证） |
-| design-analyst | 加 websearch | **回退** | 本职 mirror 提取，通用 web 搜索冗余 |
+| frontend-design | 加 websearch | **回退** | 本职 mirror 提取，通用 web 搜索冗余 |
 | orchestrator | 未涉及 | **新增 prompt 纪律** | `orchestrator-core.txt` Mission 段：deliverable-shape-agnostic 禁止自产；显式禁 skill/websearch/webfetch/todowrite 自干，一律 dispatch |
 
 context-tools.ts / exa-mcp.ts 单源收敛与 explore/requirements/architect websearch **不回退**

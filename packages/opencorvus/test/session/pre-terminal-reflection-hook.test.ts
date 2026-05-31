@@ -58,14 +58,36 @@ describe("pre-terminal reflection hook", () => {
 
     const first = await tool.execute({ summary: "done" })
     const second = await tool.execute({ summary: "done" })
+    const malformedAfterReflection = await tool.execute({})
+    expect(captured).toEqual([])
+    const nextTurnTool = SessionLoop.createStructuredOutputTool({
+      schema: {
+        type: "object",
+        properties: { summary: { type: "string" } },
+        required: ["summary"],
+      },
+      preTerminalReflection: () =>
+        SessionLoop.takePreTerminalReflection({
+          sessionID: "ses_reflection_structured",
+          agentName: "intent-analysis",
+          finalizerName: "StructuredOutput",
+          markerID: "msg-1",
+        }),
+      onSuccess: (output) => {
+        captured.push(output)
+      },
+    }) as any
+    const third = await nextTurnTool.execute({ summary: "done" })
 
     expect(first.title).toBe("Pre-terminal Reflection Required")
     expect(first.output).toContain("StructuredOutput")
+    expect(second.title).toBe("Pre-terminal Reflection Required")
+    expect(malformedAfterReflection.title).toBe("Pre-terminal Reflection Required")
     expect(captured).toEqual([{ summary: "done" }])
-    expect(second.title).toBe("Structured Output")
+    expect(third.title).toBe("Structured Output")
   })
 
-  test("runtime terminal extra tool first call triggers reflection before executing", async () => {
+  test("runtime terminal extra tool executes directly without pre-submit reflection", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,
@@ -116,12 +138,9 @@ describe("pre-terminal reflection hook", () => {
 
         const terminal = resolved.report_build_result as any
         const first = await terminal.execute({ status: "passed" }, { toolCallId: "call_1" })
-        const second = await terminal.execute({ status: "passed" }, { toolCallId: "call_2" })
 
-        expect(first.title).toBe("Pre-terminal Reflection Required")
-        expect(first.output).toContain("report_build_result")
+        expect(first.output).toBe("RECORDED: passed")
         expect(executed).toBe(1)
-        expect(second.output).toBe("RECORDED: passed")
         SessionLoop.clearSessionRuntimeContract(sessionID)
       },
     })

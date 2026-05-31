@@ -58,7 +58,7 @@ curl ... -d '{... "image_url":{"url":"data:image/png;base64,iVBOR..."} ...}'
 | `packages/opencorvus/src/session/message.ts` | 749 | tool output → assistant attachments |
 | `packages/opencorvus/src/agent/runner.ts` | 193, 588 | user prompt parts contract |
 | `packages/opencorvus/src/acp/agent.ts` | 1306-1331 | ACP-to-internal file part conversion |
-| 其余 builder：`session/prompt/parts.ts`、`build/agent.ts`、`design-analyst/agent.ts` | (需 codex 二次穷举) | agent 各自的 buildUserParts |
+| 其余 builder：`session/prompt/parts.ts`、`build/agent.ts`、`frontend-design/agent.ts` | (需 codex 二次穷举) | agent 各自的 buildUserParts |
 
 汇聚点：`provider/transform.ts:170 ProviderTransform.message()` ——所有 outbound 消息 100% 经过这里（在 `applyCaching` / `unsupportedParts` 之后调到 AI SDK 之前）。**这是唯一应当承担 inline-base64 的位置**——往上游分散到每个 builder 会重复 N 份、走回老的双源 trap（rule 8）。
 

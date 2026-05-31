@@ -401,6 +401,7 @@ export async function restoreInitialWorkspace(): Promise<boolean> {
   if (moved) {
  // Reflect directory change so reactive components see the updated value.
     setSettingsStore("directory", directory);
+    syncApiConfig();
     bumpDirectoryEpoch();
   }
 
@@ -422,6 +423,7 @@ export async function restoreInitialWorkspace(): Promise<boolean> {
   if (moved) {
  // Could not find the task — roll back the directory change.
     setSettingsStore("directory", base);
+    syncApiConfig();
     bumpDirectoryEpoch();
   }
 

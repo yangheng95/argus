@@ -46,7 +46,7 @@ opencorvus 长出 5 张状态表 + AgentRuntime + Orchestrator trigger 枚举 + 
 │   system prompt = 全部调度逻辑（workflow / agent 协作 /       │
 │                  失败处理 / 何时问用户）                       │
 │   tools = [requirements, architect, build, deliver,         │
-│            design_analysis, question, write_artifact, ...]  │
+│            frontend_design, question, write_artifact, ...]  │
 │                                                             │
 │   每个 tool 内部都是开一个子 session 跑同一个 SessionLoop       │
 │   （不同 kind），结果以 tool_result 回到父 session            │
@@ -62,7 +62,7 @@ opencorvus 长出 5 张状态表 + AgentRuntime + Orchestrator trigger 枚举 + 
 - **没有** Orchestrator 的 `OrchestratorTrigger` 枚举（`batch_complete / delivery_rejected / operator_message`）；触发方式就是"往 orchestrator session 追加一条消息"
 - **没有** `recoverOrphanRuns / abortRuns`；进程死了就是 session 结尾，下一次 orchestrator 读对话自己决定重跑/放弃
 - **唯一入口 agent 只有 orchestrator**；用户请求、operator message、恢复信号都先进入 orchestrator session
-- **其余 agent 全部工具化**；`requirements / design_analysis / architect / build / deliver / question` 都只能作为 orchestrator 的 tool 调用存在
+- **其余 agent 全部工具化**；`requirements / frontend_design / architect / build / deliver / question` 都只能作为 orchestrator 的 tool 调用存在
 - **新定义的 stage agent 必须复用 session agent 基建**；统一走 `SessionLoop / SessionPrompt / resolveTools / StructuredOutput / session persistence / interaction hooks`，禁止再长第二套 runtime / loop / trigger
 
 ## 1.5. 现状校准（按当前代码）
@@ -117,7 +117,7 @@ opencorvus 长出 5 张状态表 + AgentRuntime + Orchestrator trigger 枚举 + 
 ## 多 agent 协作系统
 
 - 你是唯一入口 agent。所有用户请求、operator message、恢复信号都先进入你。
-- `requirements / design_analysis / architect / build / deliver / question / write_artifact` 都是你的工具，不是独立入口 agent。
+- `requirements / frontend_design / architect / build / deliver / question / write_artifact` 都是你的工具，不是独立入口 agent。
 - 只有你负责全局调度：决定是否调用哪个 stage agent、调用顺序、并行度、何时重试、何时问用户、何时结束。
 - 被你调用的 stage agent 只完成自己的 tool contract，不拥有全局调度权，不自行继续推进整个任务。
 - 未来新增 stage agent 也必须沿用同一模式：作为 tool 打开 child session，并复用 session agent 基建，不得自带第二套 runtime / loop / trigger。
@@ -130,7 +130,7 @@ opencorvus 长出 5 张状态表 + AgentRuntime + Orchestrator trigger 枚举 + 
 
 ## 可用工具（全部同步返回结构化结果，失败也是结果不是异常）
 
-- design_analysis(image_urls)  → 视觉规格
+- frontend_design(image_urls)  → 视觉规格
 - requirements(request)        → REQ-N + 技术决策
 - architect(requirements)      → Goal[]
 - build(goal | request, cwd)   → { patch, commit_ref, tests, error? }
@@ -304,7 +304,7 @@ await SessionPrompt.prompt({
 - **阶段 3-a-1**（✅ 2026-04-24，commit `20b49373e`）：`SessionLoop.setExtraTools / getExtraTools / withExtraTools` 落地；`resolveTools` 末尾合并 extras（shadow 允许）；`SessionPrompt` 透明再导出同一 function reference；8 条单测覆盖 round-trip / 空清除 / session 隔离 / wholesale replace / withExtraTools ok+throw / 再导出身份一致
 - **阶段 3-a-2**（✅ 2026-04-24）：补 `createStructuredOutputTool` 的单测覆盖 shape / id / description / execute→onSuccess 信道 / toModelOutput / validator 接受+拒绝 / 拒绝时 onSuccess 不被触发 / 多实例隔离；`$schema` 字段剥离透明。完整契约被单元测试锁死，3-b 迁移可安全依赖。
 - 固化规则：**所有新定义的 stage agent 都必须复用 session agent 基建**，不得再引入独立 runtime、独立 stream hook 栈、独立 tool resolve 路径或独立 session 持久化逻辑。
-- **阶段 3-b**：普通 stage agent 迁移：`intent-analysis → design-analyst → requirements → planner → deliver → orchestrator`。每个 agent 独立 PR：
+- **阶段 3-b**：普通 stage agent 迁移：`intent-analysis → frontend-design → requirements → planner → deliver → orchestrator`。每个 agent 独立 PR：
   - `AgentRuntime.run(...)` → `SessionPrompt.prompt(child, { extraTools, format, system, parts })`
   - `finalize_*` 删除；结果从 `child` 会话最新 assistant message 的 `.info.structured` 取。
   - 保持 incremental 工具（extract_slot 等）不变；它们通过 `extraTools` 注入。返回值必须按 `{ output: string, title: string, metadata: object }` 形态——SessionLoop 持久化 Message.ToolPart 时强校验。
@@ -313,7 +313,7 @@ await SessionPrompt.prompt({
 
   **完成状态**：
   - [x] `intent-analysis`（2026-04-24 commit `a971b475b`）：`SessionPrompt.withExtraTools + SessionPrompt.prompt({ format: json_schema, schema: IntentFinalSchema })`，smoke test 通过 `alibaba-coding-plan-cn/kimi-k2.5` 验证 intent_class=bug_fix / complexity=trivial / 4 slots / structuredMissing=false
-  - [x] `design-analyst`（2026-04-24）：删 `finalize_design_requirements` + 跨字段校验（从工具层移走，LLM 自判），新增 `DesignFinalSchema`（design_system + tech_stack）；multimodal parts 走 `SessionPrompt.prompt.parts`；orchestrator/tools.ts DesignAnalystAgent.analyze 的 `sessionID` 参数改名为 `parentSessionID`；prompt core 更新提示 StructuredOutput 替代 finalize；smoke test 通过 kimi-k2.5 验证 16 specs 提取 + structuredMissing=false
+  - [x] `frontend-design`（2026-04-24）：删 `finalize_design_requirements` + 跨字段校验（从工具层移走，LLM 自判），新增 `FrontendTemplateFinalSchema`（design_system + tech_stack）；multimodal parts 走 `SessionPrompt.prompt.parts`；orchestrator/tools.ts FrontendDesignAgent.analyze 的 `sessionID` 参数改名为 `parentSessionID`；prompt core 更新提示 StructuredOutput 替代 finalize；smoke test 通过 kimi-k2.5 验证 16 specs 提取 + structuredMissing=false
   - [x] `requirements`（2026-04-24）：删 `finalize_requirements` + 其嵌入校验（≥1 requirement、≥2 decisions 下放到调用方检查），新增 `RequirementsFinalSchema`（summary）；RequirementsService + orchestrator/tools.ts `sessionID` → `parentSessionID`；prompt core 替换 finalize_requirements 引用；smoke test 通过 kimi-k2.5 验证 7 requirements / 5 decisions / structuredMissing=false
   - [x] `planner`（2026-04-24）：删 `submit_plan` tool + PlannerCollector（已删 submit_plan.execute 内的 re-emit 校验）；PlannerReportSchema 直接驱动 StructuredOutput，新增 `plannerReportFromStructured` 替代 collector 通道；agent.ts 用 SessionPrompt + child session(kind=planner) + withExtraTools；engine/goal-pool.ts `sessionID` → `parentSessionID`；prompt core `submit_plan` → `StructuredOutput`；typecheck + 85 engine 测试通过。smoke test 跳过（planner 需要真 GoalContract 构造，模式已由前 3 agent 验证）
   - [x] **deliver**（2026-04-24 commit 待定）：保留 `submit_verdict` 作为 extraTool（其 180 行跨字段 self-correction 契约值得保留，且 tool 名不含 `finalize_` 子串 → grep deliverable 满足）。agent.ts 把 `AgentRuntime.run` 换成 `SessionPrompt.withExtraTools(guard.tools) + SessionPrompt.prompt({ system, parts, tools: enableMap })`，**不用 json_schema**（终态通过 submit_verdict.execute 写 collector）。MAX_RETRIES 循环围在外层重试 SessionPrompt.prompt，每次 attempt 开 child session(kind=delivery)，通过 `Bus.subscribe(Session.Event.Error)` 过滤 sessionID 做 stream-error 检测。`agent.delivery.steps = 160` 写入 agent config 以替代 `stopWhen=stepCountIs(max_steps)`。typecheck + 216 tests 通过。DeliveryVerdictSchema 的 .refine 迁移**不需要** —— submit_verdict 的 execute 内部保持全部跨字段校验，比拆到 zod 更易维护。
@@ -326,7 +326,7 @@ await SessionPrompt.prompt({
     - 多模态 userContent → `PromptInput.parts[]`（FilePart data URL）
     - orchestrator 不需 json_schema：终态通过工具调用发出
     - typecheck 通过；216 session+engine 测试通过（5 failures 预存）
-- orchestrator 仍是唯一入口 agent；迁移后的 `requirements / architect / design_analysis / build / deliver` 只允许作为 tool-opened child session 存在。
+- orchestrator 仍是唯一入口 agent；迁移后的 `requirements / architect / frontend_design / build / deliver` 只允许作为 tool-opened child session 存在。
 - **阶段 3-c**：`architect` 与 **fidelity reviewer** 单独迁移；`submit_fidelity_verdict` 及其 session/event 语义必须在新运行时下逐项复核，禁止和普通 `finalize_*` 一锅端。
 - **阶段 3-d**（✅ 2026-04-24）：`packages/opencorvus/src/agent/runtime/` 目录整体删除
   - orchestrator/tools.ts 去掉 requirements/design/architect/delivery 四处 dead sessionStreamHooks 调用（对应 agent 已不消费 stream 参数）

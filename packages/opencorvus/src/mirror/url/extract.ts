@@ -1,12 +1,12 @@
 /**
- * URL → `ExtractedPage` — puppeteer-core DOM traversal + ~33 CSS computed
+ * URL → `ExtractedPage` — Browser Runtime DOM traversal + ~33 CSS computed
  * style fields + optional screenshot + optional image download.
  *
  * Ported from `mirror/src/infra/browser/url-extract-core.ts` (741 lines).
  * Adaptations:
  *   - `findChromePath()` → opencorvus `findBrowserExecutable` (single
  *     browser-lifecycle policy shared with `visual/render.ts`,
- *     `design-analyst/url-screenshot.ts`, `delivery/checks/visual.ts`).
+ *     `frontend-design/url-screenshot.ts`, `delivery/checks/visual.ts`).
  *   - Silent `catch` → `Log.create({ service: "mirror.url.extract" })`
  *     with structured fields.
  *   - Throws `UrlExtractError` (typed) on 401/403/429 + infra/asset failures.
@@ -17,10 +17,10 @@
  */
 
 import { mkdirSync, writeFileSync } from "node:fs"
-import { resolve } from "node:path"
+import { dirname, resolve } from "node:path"
 import puppeteer, { type Browser, type HTTPResponse } from "puppeteer-core"
 
-import { findBrowserExecutable } from "@/delivery/checks/visual"
+import { BrowserRuntime } from "@/browser/runtime"
 import { Log } from "@/util/log"
 import {
   ExtractedPageSchema,
@@ -39,6 +39,8 @@ const IMAGE_DOWNLOAD_MAX_SIZE_BYTES = 2 * 1024 * 1024
 const IMAGE_DOWNLOAD_MAX_TOTAL_BYTES = 20 * 1024 * 1024
 const IMAGE_DOWNLOAD_CONCURRENCY = 6
 const IMAGE_DOWNLOAD_TIMEOUT_MS = 10_000
+const INLINE_IMAGE_DATA_URL_RE = /^data:(image\/[a-zA-Z0-9.+-]+);base64,([A-Za-z0-9+/=]+)$/i
+const CSS_URL_RE = /url\(["']?(data:image\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=]+)["']?\)/
 
 // ─── Extraction constants ────────────────────────────────────────────────
 
@@ -246,6 +248,22 @@ function browserExtract(args: {
       if (videoSrc) imageList.push({ src: videoSrc, alt: imageAlt })
       if (videoPoster && videoPoster !== videoSrc)
         imageList.push({ src: videoPoster, alt: `poster: ${videoPoster}` })
+    }
+
+    if (tag === "canvas") {
+      const canvas = el as HTMLCanvasElement
+      if (canvas.width > 0 && canvas.height > 0) {
+        try {
+          const canvasUrl = canvas.toDataURL("image/png")
+          if (canvasUrl && canvasUrl !== "data:,") {
+            imageSrc = canvasUrl
+            imageAlt = "canvas capture"
+            imageList.push({ src: canvasUrl, alt: imageAlt })
+          }
+        } catch {
+          // Tainted canvas: keep the measured canvas element in the tree.
+        }
+      }
     }
 
     if (!imageSrc) {
@@ -468,6 +486,166 @@ async function nodeDownloadImages(
 
 // ─── Public API ──────────────────────────────────────────────────────────
 
+function decodeInlineImageDataUrl(dataUrl: string): { mime: string; bytes: Buffer } | undefined {
+  const match = INLINE_IMAGE_DATA_URL_RE.exec(dataUrl)
+  if (!match) return undefined
+  return { mime: match[1]!, bytes: Buffer.from(match[2]!, "base64") }
+}
+
+function writeCategorizedInlineImage(input: {
+  outputDir: string
+  category: "canvas" | "background" | "inline"
+  source: string
+  index: number
+}): string | undefined {
+  const decoded = decodeInlineImageDataUrl(input.source)
+  if (!decoded || decoded.bytes.length === 0) return undefined
+  if (decoded.bytes.length > IMAGE_DOWNLOAD_MAX_SIZE_BYTES) {
+    throw new UrlExtractError({
+      url: "inline-image",
+      reason: `inline image size ${decoded.bytes.length} exceeds ${IMAGE_DOWNLOAD_MAX_SIZE_BYTES}`,
+      phase: "asset",
+    })
+  }
+  const ext = mimeToExt(decoded.mime)
+  const dir = resolve(input.outputDir, "images", input.category)
+  mkdirSync(dir, { recursive: true })
+  const fileName = `${input.category}-${input.index}.${ext}`
+  writeFileSync(resolve(dir, fileName), decoded.bytes)
+  return `images/${input.category}/${fileName}`
+}
+
+function classifyInlineImage(alt?: string): "canvas" | "background" | "inline" {
+  if (alt === "canvas capture") return "canvas"
+  if (alt?.startsWith("bg:")) return "background"
+  return "inline"
+}
+
+function mapInlineImage(input: {
+  source: string
+  alt?: string
+  outputDir: string
+  imageMap: Record<string, string>
+  counters: Record<"canvas" | "background" | "inline", number>
+}): string | undefined {
+  if (!INLINE_IMAGE_DATA_URL_RE.test(input.source)) return undefined
+  const category = classifyInlineImage(input.alt)
+  const key = `${category}:${input.source}`
+  if (input.imageMap[key]) return input.imageMap[key]
+  const rel = writeCategorizedInlineImage({
+    outputDir: input.outputDir,
+    category,
+    source: input.source,
+    index: input.counters[category]++,
+  })
+  if (rel) input.imageMap[key] = rel
+  return rel
+}
+
+function materializeScreenshot(input: {
+  outputDir: string
+  dataUrl: string | undefined
+  relPath: string
+}): string | undefined {
+  if (!input.dataUrl) return undefined
+  const decoded = decodeInlineImageDataUrl(input.dataUrl)
+  if (!decoded) return input.dataUrl
+  const abs = resolve(input.outputDir, input.relPath)
+  mkdirSync(dirname(abs), { recursive: true })
+  writeFileSync(abs, decoded.bytes)
+  return input.relPath.replace(/\\/g, "/")
+}
+
+function localizeElementInlineImages(
+  element: ExtractedElement,
+  outputDir: string,
+  imageMap: Record<string, string>,
+  counters: Record<"canvas" | "background" | "inline", number>,
+): ExtractedElement {
+  const next: ExtractedElement = {
+    ...element,
+    styles: { ...element.styles },
+    attrs: element.attrs ? { ...element.attrs } : undefined,
+    aria: element.aria ? { ...element.aria } : undefined,
+    classes: element.classes ? [...element.classes] : undefined,
+  }
+
+  if (next.imageSrc) {
+    const rel = mapInlineImage({
+      source: next.imageSrc,
+      alt: next.imageAlt,
+      outputDir,
+      imageMap,
+      counters,
+    })
+    if (rel) next.imageSrc = rel
+  }
+
+  const bgMatch = next.styles.backgroundImage ? CSS_URL_RE.exec(next.styles.backgroundImage) : undefined
+  if (bgMatch) {
+    const source = bgMatch[1]!
+    const rel = mapInlineImage({
+      source,
+      alt: `bg: ${next.tag}`,
+      outputDir,
+      imageMap,
+      counters,
+    })
+    if (rel) next.styles.backgroundImage = next.styles.backgroundImage!.replace(source, rel)
+  }
+
+  if (next.children) {
+    next.children = next.children.map((child) => localizeElementInlineImages(child, outputDir, imageMap, counters))
+  }
+  return next
+}
+
+export function materializeInlineExtractedPageAssets(page: ExtractedPage, outputDir: string): ExtractedPage {
+  const imageMap: Record<string, string> = { ...(page.assets.imageMap ?? {}) }
+  const counters = { canvas: 0, background: 0, inline: 0 }
+
+  for (const image of page.assets.images) {
+    mapInlineImage({
+      source: image.src,
+      alt: image.alt,
+      outputDir,
+      imageMap,
+      counters,
+    })
+  }
+
+  const tree = page.tree.map((element) => localizeElementInlineImages(element, outputDir, imageMap, counters))
+  const images = page.assets.images.map((image) => ({
+    ...image,
+    src: imageMap[`${classifyInlineImage(image.alt)}:${image.src}`] ?? imageMap[image.src] ?? image.src,
+  }))
+  const persistedImageMap = Object.fromEntries(
+    Object.entries(imageMap).filter(([source, target]) =>
+      !source.includes("data:image/") && !target.includes("data:image/"),
+    ),
+  )
+
+  return ExtractedPageSchema.parse({
+    ...page,
+    screenshotUrl: materializeScreenshot({
+      outputDir,
+      dataUrl: page.screenshotUrl,
+      relPath: "screenshots/full.png",
+    }) ?? page.screenshotUrl,
+    screenshotAboveFold: materializeScreenshot({
+      outputDir,
+      dataUrl: page.screenshotAboveFold,
+      relPath: "screenshots/above-fold.png",
+    }) ?? page.screenshotAboveFold,
+    tree,
+    assets: {
+      ...page.assets,
+      images,
+      imageMap: persistedImageMap,
+    },
+  })
+}
+
 export interface ExtractPageInput {
   url: string
   viewport?: { width: number; height: number }
@@ -479,6 +657,10 @@ export interface ExtractPageInput {
   noScreenshots?: boolean
   /** When provided, downloads referenced images into `<dir>/images/` and populates `assets.imageMap`. */
   outputDir?: string
+  /** When provided, writes the post-load archive HTML snapshot for canonical structure IR compilation. */
+  captureHtmlPath?: string
+  /** When false, only screenshots and inline images are materialized under outputDir. */
+  downloadImages?: boolean
   onProgress?: (msg: string) => void
   signal?: AbortSignal
 }
@@ -499,6 +681,8 @@ export async function extractPage(input: ExtractPageInput): Promise<ExtractedPag
     waitMs = 2000,
     noScreenshots = false,
     outputDir,
+    captureHtmlPath,
+    downloadImages = true,
     onProgress,
     signal,
   } = input
@@ -509,7 +693,7 @@ export async function extractPage(input: ExtractPageInput): Promise<ExtractedPag
 
   const startTime = Date.now()
 
-  const chromePath = await findBrowserExecutable()
+  const chromePath = await BrowserRuntime.findBrowserExecutable()
   onProgress?.(`Browser: ${chromePath}`)
 
   let browser: Browser
@@ -518,7 +702,7 @@ export async function extractPage(input: ExtractPageInput): Promise<ExtractedPag
       executablePath: chromePath,
       headless: true,
       args: ["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage"],
-      timeout: 30_000,
+      timeout: BrowserRuntime.resolveBrowserLaunchTimeoutMs(),
     })
   } catch (err) {
     throw new UrlExtractError(
@@ -530,16 +714,14 @@ export async function extractPage(input: ExtractPageInput): Promise<ExtractedPag
   try {
     const page = await browser.newPage()
     await page.setViewport({ width: viewport.width, height: viewport.height })
-    await page.setUserAgent(
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-    )
+    await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
     await page.setExtraHTTPHeaders({ "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8" })
 
     onProgress?.("Loading page...")
 
     let response: HTTPResponse | null = null
     try {
-      response = await page.goto(url, { waitUntil: "networkidle0", timeout: 60_000 })
+      response = await page.goto(url, { waitUntil: "networkidle2", timeout: 60_000 })
     } catch (err) {
       throw new UrlExtractError(
         { url, reason: err instanceof Error ? err.message : String(err), phase: "navigate" },
@@ -606,16 +788,30 @@ export async function extractPage(input: ExtractPageInput): Promise<ExtractedPag
     }
     await new Promise((r) => setTimeout(r, 800))
 
+    if (captureHtmlPath) {
+      try {
+        const html = await page.content()
+        mkdirSync(dirname(captureHtmlPath), { recursive: true })
+        writeFileSync(captureHtmlPath, html, "utf8")
+        onProgress?.(`Captured HTML snapshot (${(Buffer.byteLength(html, "utf8") / 1024).toFixed(0)}KB)`)
+      } catch (err) {
+        throw new UrlExtractError(
+          { url, reason: err instanceof Error ? err.message : String(err), phase: "evaluate" },
+          { cause: err },
+        )
+      }
+    }
+
     let screenshotUrl = ""
     let screenshotAboveFold: string | undefined
 
     if (!noScreenshots) {
       onProgress?.("Capturing screenshots...")
       try {
-        const fullScreenshot = (await page.screenshot({ fullPage: true, type: "png", encoding: "binary" })) as Buffer
+        const fullScreenshot = Buffer.from(await page.screenshot({ fullPage: true, type: "png" }))
         screenshotUrl = `data:image/png;base64,${Buffer.from(fullScreenshot).toString("base64")}`
 
-        const foldScreenshot = (await page.screenshot({ type: "png", encoding: "binary" })) as Buffer
+        const foldScreenshot = Buffer.from(await page.screenshot({ type: "png" }))
         screenshotAboveFold = `data:image/png;base64,${Buffer.from(foldScreenshot).toString("base64")}`
         onProgress?.(
           `Screenshots captured (full: ${(fullScreenshot.length / 1024).toFixed(0)}KB, fold: ${(foldScreenshot.length / 1024).toFixed(0)}KB)`,
@@ -655,7 +851,7 @@ export async function extractPage(input: ExtractPageInput): Promise<ExtractedPag
     for (const [color, count] of colorEntries) colors[color] = `${count}x`
 
     let imageMap: Record<string, string> | undefined
-    if (outputDir) {
+    if (outputDir && downloadImages) {
       const allImages = result.images
       const seen = new Set<string>()
       const downloadUrls: string[] = []
@@ -711,12 +907,16 @@ export async function extractPage(input: ExtractPageInput): Promise<ExtractedPag
       },
     }
 
+    const materializedPage = outputDir
+      ? materializeInlineExtractedPageAssets(extractedPage, outputDir)
+      : extractedPage
+
     onProgress?.(`Extracted: ${result.extractedElements}/${result.totalElements} elements`)
     onProgress?.(`Colors: ${colorEntries.length}, Fonts: ${result.fonts.length}`)
     onProgress?.(`Images: ${result.images.length}, Icons: ${result.icons.length}`)
     onProgress?.(`Time: ${extractionTimeMs}ms`)
 
-    return ExtractedPageSchema.parse(extractedPage)
+    return ExtractedPageSchema.parse(materializedPage)
   } finally {
     try {
       await browser.close()

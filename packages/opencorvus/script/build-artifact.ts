@@ -14,6 +14,15 @@ export function artifactEntrypoints(flavor: BuildFlavor, parserWorker: string, w
   return ["./src/index.ts", parserWorker, workerPath]
 }
 
+export function artifactExternalModules(): string[] {
+  return [
+    // Playwright exposes Electron support as an optional runtime path. The
+    // packaged server uses Chromium only, so the compiler must not require
+    // Electron to be installed just because Playwright's package graph names it.
+    "electron",
+  ]
+}
+
 export function artifactSourcemap(): "none" {
   return "none"
 }

@@ -20,6 +20,10 @@ const SRC = readFileSync(
   path.resolve(import.meta.dir, "..", "src", "components", "ExecutorSelector.tsx"),
   "utf8",
 )
+const TITLEBAR_SRC = readFileSync(
+  path.resolve(import.meta.dir, "..", "src", "components", "titlebar", "TitlebarMenubar.tsx"),
+  "utf8",
+)
 const CSS = readFileSync(
   path.resolve(import.meta.dir, "..", "src", "styles", "surfaces", "composer.css"),
   "utf8",
@@ -31,6 +35,12 @@ describe("ExecutorSelector dual chip bar", () => {
     expect(SRC).toMatch(/side="mirror"/)
     expect(SRC).toMatch(/side="external"/)
     expect(SRC).not.toMatch(/data-ui="executor-chip"/)
+  })
+
+  test("titlebar run menu targets the current dual-chip selectors", () => {
+    expect(TITLEBAR_SRC).toContain('`[data-ui="executor-chip-${activeExecutor}"]`')
+    expect(TITLEBAR_SRC).toContain('settingsStore.executor === "opencorvus" ? "mirror" : "external"')
+    expect(TITLEBAR_SRC).not.toContain('[data-ui="executor-chip"]')
   })
 
   test("each chip has its own disclosure that closes the other on open", () => {

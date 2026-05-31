@@ -22,6 +22,7 @@ async function waitForTaskStatus(id: string, status: string) {
 }
 import { Instance } from "../../src/project/instance"
 import * as TaskLoop from "../../src/orchestrator/loop"
+import { Orchestrator } from "../../src/orchestrator/agent"
 import { Database, eq } from "../../src/storage/db"
 import { Log } from "../../src/util/log"
 import { resetDatabase } from "../fixture/db"
@@ -173,6 +174,44 @@ describe("engine queue", () => {
     })
   })
 
+  test("internal event to a terminal task is ignored instead of reopening it", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
+        const now = Date.now()
+        const terminalID = `task_queue_terminal_internal_${now}`
+
+        Database.use((db) =>
+          db.insert(EngineTaskTable).values({
+            id: terminalID,
+            project_id: Instance.project.id,
+            source: "test",
+            title: "failed task",
+            request: "must stay failed",
+            priority: "normal",
+            time_started: now - 10_000,
+            time_completed: now - 1_000,
+            error: "terminal failure",
+            time_created: now - 10_000,
+            time_updated: now - 1_000,
+          }).run(),
+        )
+
+        await dispatchTaskLoop({ taskID: terminalID, event: { note: "internal batch settled" } })
+        await new Promise((resolve) => setTimeout(resolve, 0))
+
+        const task = findTask(terminalID)!
+        expect(taskStatus(terminalID)).toBe("failed")
+        expect(task.time_completed).not.toBeNull()
+        expect(task.error).toBe("terminal failure")
+        expect(runTaskLoop).not.toHaveBeenCalled()
+      },
+    })
+  })
+
   test("operator message revival cannot bypass an active same-cwd task", async () => {
     await using tmp = await tmpdir({ git: true })
 
@@ -210,7 +249,13 @@ describe("engine queue", () => {
           }).run()
         })
 
-        await dispatchTaskLoop({ taskID: terminalID, event: { note: "operator follow-up" } })
+        await dispatchTaskLoop({
+          taskID: terminalID,
+          event: {
+            note: "operator follow-up",
+            operatorMessage: { text: "continue after failure" },
+          },
+        })
         await new Promise((resolve) => setTimeout(resolve, 0))
 
         expect(taskStatus(activeID)).toBe("active")
@@ -219,6 +264,44 @@ describe("engine queue", () => {
       },
     })
   }, { timeout: 10_000 })
+
+  test("runTaskLoop ignores terminal tasks before orchestrator processing", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const processTask = spyOn(Orchestrator, "processTask").mockResolvedValue(undefined)
+        const now = Date.now()
+        const taskID = `task_loop_terminal_${now}`
+
+        Database.use((db) =>
+          db.insert(EngineTaskTable).values({
+            id: taskID,
+            project_id: Instance.project.id,
+            source: "test",
+            title: "failed task",
+            request: "must not run",
+            priority: "normal",
+            time_started: now - 10_000,
+            time_completed: now - 1_000,
+            error: "terminal failure",
+            time_created: now - 10_000,
+            time_updated: now - 1_000,
+          }).run(),
+        )
+
+        await TaskLoop.runTaskLoop({
+          taskID,
+          event: { note: "stale wake" },
+          hooks: {} as any,
+        })
+
+        expect(taskStatus(taskID)).toBe("failed")
+        expect(processTask).not.toHaveBeenCalled()
+      },
+    })
+  })
 
   test("interrupting a live-owned active task starts a replacement orchestrator wake", async () => {
     await using tmp = await tmpdir({ git: true })

@@ -25,6 +25,7 @@ import { MCP } from "@/mcp"
 import { Bus } from "@/bus"
 import path from "path"
 import z from "zod"
+import { MIRROR_TOOL_IDS } from "@/mirror/tools/ids"
 
 const log = Log.create({ service: "mcp.serve" })
 
@@ -37,8 +38,8 @@ const DEFAULT_SERVER_NAME = "opencorvus"
 // those over MCP creates a double-source surface (CLAUDE.md rule 22) and
 // confuses the LLM about which one to call. Only expose the OpenCorvus
 // toolset that the host environment doesn't provide natively. Mirror tools are
-// intentionally absent here: design-analysis owns mirror extraction, and
-// external coding executors implement the persisted SPEC rather than calling
+// intentionally absent here: frontend-design owns mirror extraction, and
+// external coding executors implement the persisted frontend template rather than calling
 // webpage_* / figma_* through MCP.
 const EXECUTOR_TOOLS = {
   skill: {
@@ -63,6 +64,12 @@ const EXECUTOR_TOOL_IMPLS: Record<ExecutorToolID, Tool.Info> = {
   memory: MemoryTool,
   task_report: TaskReportTool,
 }
+
+const EXECUTOR_PROXIED_TOOL_DENY_IDS = new Set([
+  ...MIRROR_TOOL_IDS,
+  "web_clone_prepare_context",
+  "web_clone_generate_source_project",
+])
 
 export namespace MCPServe {
   export const Toolset = TOOLSET
@@ -112,7 +119,7 @@ export namespace MCPServe {
       "",
       aliases,
       "",
-      "Mirror extraction artifacts are produced by the upstream design_analysis stage. If the build prompt needs facts that are absent from the persisted PRD/SPEC, report the missing design-analysis evidence instead of fabricating mirror artifacts.",
+      "Mirror extraction artifacts are produced by the upstream frontend_design stage. If the build prompt needs facts that are absent from the persisted frontend template, report the missing frontend-design evidence instead of fabricating mirror artifacts.",
     ].join("\n")
   }
 
@@ -125,7 +132,9 @@ export namespace MCPServe {
     } = {},
   ) {
     const tools = options.includeRuntime === false ? [] : await runtimeTools(toolset)
-    const proxiedTools = options.proxiedTools ?? (options.includeProxied === false ? [] : await MCP.serverTools())
+    const proxiedTools = filterExecutorProxiedTools(
+      options.proxiedTools ?? (options.includeProxied === false ? [] : await MCP.serverTools()),
+    )
     return [
       ...tools.map((item) => ({
         name: item.name,
@@ -192,7 +201,7 @@ export namespace MCPServe {
                 original_tool_id: item.id,
               },
             })),
-            ...(await MCP.serverTools()).map((item) => ({
+            ...filterExecutorProxiedTools(await MCP.serverTools()).map((item) => ({
               name: item.key,
               description: item.description,
               inputSchema: inputObjectSchema(item.inputSchema),
@@ -214,7 +223,9 @@ export namespace MCPServe {
               : {}
           const local = byName.get(request.params.name)
           if (local) return executeLocal(server, local, session.id, approved, args)
-          const proxy = await MCP.serverTools().then((items) => items.find((item) => item.key === request.params.name))
+          const proxy = await MCP.serverTools().then((items) =>
+            filterExecutorProxiedTools(items).find((item) => item.key === request.params.name)
+          )
           if (proxy) return MCP.callTool({ key: proxy.key, args }) as any
           throw new McpError(ErrorCode.InvalidParams, `Tool ${request.params.name} not found`)
         })
@@ -294,6 +305,18 @@ export namespace MCPServe {
       },
     })
   }
+}
+
+function filterExecutorProxiedTools<T extends { key: string; name: string }>(tools: T[]): T[] {
+  return tools.filter((tool) => !isExecutorDeniedProxiedTool(tool))
+}
+
+function isExecutorDeniedProxiedTool(tool: { key: string; name: string }): boolean {
+  for (const id of EXECUTOR_PROXIED_TOOL_DENY_IDS) {
+    if (tool.key === id || tool.name === id) return true
+    if (tool.key.endsWith(`_${id}`) || tool.name.endsWith(`_${id}`)) return true
+  }
+  return false
 }
 
 function isBunRuntime(execPath: string) {

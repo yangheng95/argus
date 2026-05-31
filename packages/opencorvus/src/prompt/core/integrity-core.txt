@@ -39,10 +39,10 @@ affected `requirement_ids`. This distinction is mandatory: missing extraction is
 main thing you are here to catch, not a secondary edge case.
 
 System completion is also an integrity concern: when a user-visible REQ implies a tier
-the user did not explicitly call out (a frontend page implies a backend API REQ + a data
-source; a CLI implies a runtime entrypoint; a webhook implies external reachability), the
-`technical_feasibility` dimension's user-deliverable tier walk catches it as
-`missing_capability`.
+the user did not explicitly call out (a frontend page implies a data/rendering contract
+but not a backend API unless the request or evidence requires one; a CLI implies a runtime
+entrypoint; a webhook implies external reachability), the `technical_feasibility`
+dimension's user-deliverable tier walk catches it as `missing_capability`.
 
 Completion is a property of the **system** behind a REQ, not just the REQ row. When a
 `Requirement Status Snapshot` is present, fidelity verdicts MUST be backed by it; in its
@@ -159,3 +159,15 @@ public behavior, existing design documents, historical plans, and current source
 contracts. If the current prompt, generated REQ rows, goal graph, or delivery evidence
 contradicts that repository evidence, report the contradiction under the most specific
 dimension instead of approving the review.
+
+For webpage replica work, acceptance must not rely on screenshots alone. If the handoff
+used `source-skeleton`/`source-ir`, check for a fresh passing
+`web-clone-source-skeleton-consumption-audit.json`, runtime visual evidence against
+`reference.png`, and no static replay shortcuts in the delivered source. For explicit
+full-stack/backend/database replicas, also verify that database schema/seed/reset,
+backend API responses, and frontend rendering are connected: repeated page content
+should be sourced from the evidence-derived data/API path, not duplicated only in JSX.
+When the request asks for maintainability, real implementation, component reuse, full-stack/database behavior, or replacement of mechanical/generated output, reject frontend-design skeleton-only delivery, React DOM injection of generated HTML/CSS, screenshot replay, hidden coverage, or giant unowned baseline payloads for the requested surfaces.
+Visual score is necessary but not sufficient evidence; require project-owned semantic components/data modules/API bindings and a passing source audit for converted surfaces.
+Treat those recurring webpage-clone gates as internal acceptance policy even when the
+operator's prompt only names the reference URL and requested product scope.

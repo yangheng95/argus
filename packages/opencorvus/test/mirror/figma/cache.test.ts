@@ -197,15 +197,8 @@ describe("eviction", () => {
   })
 })
 
-// ─── GOLDEN PARITY — key derivation ───────────────────────────────────────
-
-describe("buildFigmaCacheKey — GOLDEN PARITY with mirror", () => {
-  // Note: mirror exports `buildKey` as a module-private function, so the
-  // only public parity surface is the resulting cache filename. However,
-  // the *algorithm* (sha256 of normalised URL + '#' + nodeId, first 16
-  // hex) is documented in the mirror source at lines 32-37. We replicate
-  // mirror's buildKey inline here and assert equality.
-  function mirrorBuildKey(figmaUrl: string, nodeId?: string): string {
+describe("buildFigmaCacheKey", () => {
+  function expectedBuildKey(figmaUrl: string, nodeId?: string): string {
     const normalised = figmaUrl.replace(/[?&]t=[^&]+/g, "").replace(/\?$/, "")
     const raw = nodeId ? `${normalised}#${nodeId}` : normalised
     return require("node:crypto").createHash("sha256").update(raw).digest("hex").slice(0, 16)
@@ -220,7 +213,7 @@ describe("buildFigmaCacheKey — GOLDEN PARITY with mirror", () => {
     ["https://figma.com/file/abc?t=S1", undefined],
   ]
 
-  test.each(cases)("buildFigmaCacheKey(%p, %p) byte-identical to mirror algorithm", (url, node) => {
-    expect(buildFigmaCacheKey(url, node)).toBe(mirrorBuildKey(url, node))
+  test.each(cases)("buildFigmaCacheKey(%p, %p) derives a stable normalized hash", (url, node) => {
+    expect(buildFigmaCacheKey(url, node)).toBe(expectedBuildKey(url, node))
   })
 })

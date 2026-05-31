@@ -20,7 +20,7 @@ import { Log } from "@/util/log"
 import { EngineProgressSnapshotTable, EngineTaskTable } from "./engine.sql"
 import { findTask, type TaskRow } from "./store"
 import { openTaskForOperatorMessage } from "./task-message-open"
-import { isTaskActive, isTaskQueued } from "./task-status"
+import { deriveTaskStatus, isTaskActive, isTaskQueued, isTaskTerminal } from "./task-status"
 import type { OrchestratorEvent } from "@/orchestrator/agent"
 import { Identifier } from "@/id/id"
 import { Event } from "./model"
@@ -191,7 +191,11 @@ function attachLoopCompletion(taskID: string, cwd: string, loopPromise: Promise<
     // `.finally` re-entry doesn't stack synchronously.
     queueMicrotask(() => {
       const queuedEvent = queuedTaskEvents.get(taskID)
-      if (queuedEvent && findTask(taskID) && listLiveOrchestratorToolOwnership(taskID).length === 0) {
+      const task = findTask(taskID)
+      if (queuedEvent && task && isTaskTerminal(task)) {
+        queuedTaskEvents.delete(taskID)
+      }
+      if (queuedEvent && task && !isTaskTerminal(task) && listLiveOrchestratorToolOwnership(taskID).length === 0) {
         queuedTaskEvents.delete(taskID)
         attachLoopCompletion(taskID, cwd, launchTaskLoop(taskID, queuedEvent))
         return
@@ -454,8 +458,18 @@ export async function dispatchTaskLoop(input: {
     log.warn("dispatchTaskLoop: task has no cwd", { taskID: task.id, note: input.event?.note })
     return
   }
-  if (input.event) {
+  const operatorWake = Boolean(input.event?.operatorMessage)
+  if (operatorWake) {
     task = await openTaskForOperatorMessage(task)
+  }
+
+  if (isTaskTerminal(task)) {
+    log.info("dispatchTaskLoop: terminal task ignored", {
+      taskID: task.id,
+      status: deriveTaskStatus(task),
+      note: input.event?.note,
+    })
+    return
   }
 
   if (isTaskQueued(task)) {

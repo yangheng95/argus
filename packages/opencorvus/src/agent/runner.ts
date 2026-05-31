@@ -3,7 +3,7 @@
  *
  * Position in the architecture: agents have one shape. Each agent module
  * (architect / requirements / build / integrity / intent-analysis /
- * design-analyst / orchestrator-children…) contributes only what is
+ * frontend-design / orchestrator-children…) contributes only what is
  * genuinely agent-specific:
  *
  *   - `kind`: session.kind for routing/persistence/overlay attribution.
@@ -74,6 +74,7 @@ import { appendInformationMissingFallback } from "@/prompt/information-missing"
 import { Instance } from "@/project/instance"
 import { Session } from "@/session"
 import { SessionPrompt } from "@/session/prompt"
+import { WorkerTurnDescriptor } from "./worker-turn-descriptor"
 import { SessionStatus } from "@/session/status"
 import { Bus } from "@/bus"
 import { Identifier } from "@/id/id"
@@ -521,7 +522,7 @@ export function buildUnsatisfiedTerminalToolError(input: {
 }): AgentRunError {
   const message =
     `Agent ${input.agentName} ended without satisfying terminal tool ${input.toolName}. ` +
-    `A pre-submit reflection hook result is not a terminal submission; the agent must call ${input.toolName} again with the final payload.`
+    `The agent must call ${input.toolName} exactly once with the final payload before finishing.`
   const terminalError = new Message.TerminalToolMissingError({
     message,
     toolName: input.toolName,
@@ -686,7 +687,7 @@ export async function runAgentSession<C>(
   // Capability gate — drop multimodal file parts the resolved model cannot
   // accept on input. Without this, every agent that calls
   // AttachmentStore.inlineFileParts (build / delivery / architect /
-  // intent-analysis / integrity / requirements / design-analyst) would
+  // intent-analysis / integrity / requirements / frontend-design) would
   // forward image / pdf / audio / video bytes to a
   // text-only coding endpoint (e.g. dashscope coding) where the provider
   // wrapper either silently strips them OR replaces them with an inline
@@ -848,10 +849,40 @@ export async function runAgentSession<C>(
           input.terminalTool!.shouldExposeOnlyTerminalTool(input.toolKit.getCollector()),
       }
     : undefined
+  const descriptor = WorkerTurnDescriptor.create({
+    sessionID: session.id,
+    payload: {
+      agent: agentName,
+      roleContractID: agentName,
+      model: { providerID: model.providerID, modelID: model.api.id },
+      prompt: {
+        systemMode: "complete",
+        rawSystemPrompt: input.rawSystemPrompt === true,
+      },
+      tools: {
+        enabled: Object.keys(input.toolKit.tools).sort(),
+        switches: enableMap,
+        terminal: input.terminalTool?.toolName,
+      },
+      output: {
+        format: input.format ? "json_schema" : "text",
+        resultMode: "reply",
+      },
+      workflow: {
+        taskID: input.taskID,
+        goalID: input.goalID,
+        goalRunID: input.runtimeContract?.goalRunID,
+        attemptID: input.runtimeContract?.attemptID,
+        sessionKind: kind,
+      },
+    },
+  })
   SessionPrompt.setSessionRuntimeContract(session.id, {
     identity: {
       sessionID: session.id,
       agentKind: agentName,
+      workerTurnDescriptorID: descriptor.id,
+      workerTurnDescriptorHash: descriptor.hash,
       goalID: input.goalID,
       goalRunID: input.runtimeContract?.goalRunID,
       attemptID: input.runtimeContract?.attemptID,
@@ -875,15 +906,12 @@ export async function runAgentSession<C>(
           system: systemPrompt,
           systemMode: "complete",
           tools: enableMap,
-          extra: input.runtimeContract
-            ? {
-              runtimeContract: {
-                goalRunID: input.runtimeContract.goalRunID,
-                attemptID: input.runtimeContract.attemptID,
-                contractKind: input.runtimeContract.contractKind ?? "stage-attempt",
-              },
-            }
-            : undefined,
+          extra: {
+            workerTurnDescriptor: {
+              id: descriptor.id,
+              hash: descriptor.hash,
+            },
+          },
           parts: promptParts as Parameters<typeof SessionPrompt.prompt>[0]["parts"],
         }
         if (input.format) {
@@ -1008,7 +1036,7 @@ export async function runAgentSession<C>(
     // Subagent dispatch boundary: surface terminal to the overlay the moment
     // the runner finishes (success or failure), independent of when the
     // session's actor eventually closes. Without this, every orchestrator-
-    // dispatched subagent (requirements / architect / design-analyst /
+    // dispatched subagent (requirements / architect / frontend-design /
     // integrity / build / deliver / refine / ...) stays at `idle` (no
     // checkmark) once it enters standby, even though its single dispatch
     // is unambiguously done from the caller's perspective.
@@ -1075,7 +1103,7 @@ export async function runAgentSession<C>(
 // duplicating that loop verbatim.
 //
 // Single-shot agents (architect, requirements, integrity,
-// design-analyst, intent-analysis, build) keep calling `runAgentSession`
+// frontend-design, intent-analysis, build) keep calling `runAgentSession`
 // directly — no retry is needed for any of them at this time, and forcing
 // them through this wrapper would just add a useless `maxRetries: 1`
 // boilerplate (rule 26 — no over-engineering).

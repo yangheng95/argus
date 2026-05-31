@@ -13,7 +13,7 @@
  *   - webpage_text_diff       reference DOM vs rendered DOM → missing tokens
  *   - webpage_vision_judge    (reference, rendered) → acceptance verdict + ranked diffs
  *
- * Figma references are materialized by design_analysis through the connected
+ * Figma references are materialized by frontend_design through the connected
  * Figma MCP server. This package does not expose Figma REST mirror tools.
  *
  * Two skills compose them for the build agent:

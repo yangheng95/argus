@@ -117,6 +117,48 @@
   overflow-x: auto;
 }
 
+.msg-browser-evidence {
+  margin: calc(6px * var(--ui-scale)) 0 var(--ui-gap-md) 0;
+  display: grid;
+  grid-template-columns: minmax(calc(120px * var(--ui-scale)), calc(220px * var(--ui-scale))) minmax(0, 1fr);
+  gap: calc(10px * var(--ui-scale));
+  align-items: start;
+}
+
+.msg-browser-evidence__image {
+  width: 100%;
+  max-height: calc(160px * var(--ui-scale));
+  object-fit: contain;
+  border-radius: var(--oc-radius-soft);
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--text-muted) 18%, transparent);
+  background: var(--surface-inset);
+}
+
+.msg-browser-evidence__meta {
+  min-width: 0;
+  display: grid;
+  gap: calc(4px * var(--ui-scale));
+  color: var(--text);
+  font-size: var(--ui-font-control);
+  line-height: 1.4;
+}
+
+.msg-browser-evidence__title {
+  font-weight: 600;
+}
+
+.msg-browser-evidence__url,
+.msg-browser-evidence__facts {
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 520px) { /* breakpoint: --ui-breakpoint-sm */
+  .msg-browser-evidence {
+    grid-template-columns: 1fr;
+  }
+}
+
 .msg-tool-input {
   margin: calc(6px * var(--ui-scale)) 0 var(--ui-gap-md) 0;
   padding: calc(8px * var(--ui-scale)) calc(10px * var(--ui-scale));

@@ -376,8 +376,10 @@ describe("build agent prompt context", () => {
     expect(prompt).toContain("## Collaboration State")
     expect(prompt).toContain("gol_shell")
     expect(prompt).toContain("status=passed")
-    expect(prompt).toContain("objective: Provide the reusable application shell.")
-    expect(prompt).toContain("shell renders")
+    expect(prompt).toContain("Full sibling objectives and acceptance specs are intentionally not inlined here")
+    expect(prompt).not.toContain("objective: Provide the reusable application shell.")
+    expect(prompt).not.toContain("shell renders")
+    expect(prompt).not.toContain("acceptance_specs_summary")
     expect(prompt).toContain("responsibility_paths: src/App.tsx, src/main.tsx")
     expect(prompt).toContain("owned_paths` are responsibility paths, not a file sandbox")
     expect(prompt).toContain("explained in `files_changed[]`")
@@ -406,24 +408,34 @@ describe("build agent prompt context", () => {
     expect(prompt).toContain("Build is the wrong stage")
   })
 
-  test("request-path build receives design-analysis PRD/SPEC source manifest", () => {
+  test("request-path build receives frontend-design template source manifest", () => {
     const prompt = buildUserPrompt(
       {
         kind: "request",
         text: "Clone the AMD page.",
       },
       {
-        designAnalysis:
-          "# Design Analysis PRD/SPEC Source\n\n" +
-          "- key=product_spec value=AMD dashboard\n" +
-          "- key=visual_consistency_spec value=Match AMD page geometry and chart/table styling\n" +
-          "- key=evidence_source_manifest value=references/url-amd.png",
+        frontendDesign:
+          "# Frontend Design Template Source\n\n" +
+          "- key=frontend_template value=AMD dashboard\n" +
+          "- key=quality_project_contract value=Build readable React source from semantic components/data/style modules; raw frontend_project is visual baseline only\n" +
+          "- key=frontend_project value=status: created\nrole: visual_baseline_input\nproject_root: frontend-design-skeleton\n" +
+          "- key=visual_consistency_contract value=Match AMD page geometry and chart/table styling\n" +
+          "- key=evidence_source_manifest value=references/url-amd.png\n" +
+          "- key=fillable_modules value=Use web-clone-source/README.md, web-clone-source/implementation-blueprint.md, web-clone-source/source-ir/component-tree.json, web-clone-source/source-ir/content-model.json, web-clone-source/source-skeleton/critical.css, and source-skeleton evidence only for targeted gaps; web-clone-source-skeleton-consumption-audit.json passed",
       },
     )
 
-    expect(prompt).toContain("Design Analysis PRD/SPEC Source")
-    expect(prompt).toContain("visual_consistency_spec")
+    expect(prompt).toContain("Frontend Design Template Source")
+    expect(prompt).toContain("quality_project_contract")
+    expect(prompt).toContain("role: visual_baseline_input")
+    expect(prompt).toContain("raw frontend_project is visual baseline only")
+    expect(prompt).toContain("visual_consistency_contract")
     expect(prompt).toContain("evidence_source_manifest")
     expect(prompt).toContain("references/url-amd.png")
+    expect(prompt).toContain("web-clone-source/implementation-blueprint.md")
+    expect(prompt).toContain("web-clone-source/source-ir/component-tree.json")
+    expect(prompt).toContain("web-clone-source/source-skeleton/critical.css")
+    expect(prompt).toContain("web-clone-source-skeleton-consumption-audit.json passed")
   })
 })

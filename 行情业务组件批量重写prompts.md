@@ -4,11 +4,11 @@
 
 ## 1. CandlestickChart K线图
 
-> 已剔除：Hithink.PrefabLibrary 仓库无 K 线图业务组件，只有 `Prefab/BasePrefab/Chart/CandleStick/HevoCandleStickChartViewModel.cs` 基础图表层 + Oxyplot 第三方图形库（`Oxyplot/OxyPlot/Series/FinancialSeries/CandleStickSeries.cs` 等），需自行组合或基于设计稿/PRD 重写。
+> 已剔除：Hithink.PrefabLibrary 仓库无 K 线图业务组件，只有 `Prefab/BasePrefab/Chart/CandleStick/HevoCandleStickChartViewModel.cs` 基础图表层 + Oxyplot 第三方图形库（`Oxyplot/OxyPlot/Series/FinancialSeries/CandleStickSeries.cs` 等），需自行组合或基于设计稿/template 重写。
 
 ## 2. TrendChart 分时图
 
-> 已剔除：Hithink.PrefabLibrary 仓库内**完全没有**分时图相关代码（无 TrendChart / MinuteChart / IntraDay / 分时 等任何匹配），需基于设计稿/PRD 从零实现。
+> 已剔除：Hithink.PrefabLibrary 仓库内**完全没有**分时图相关代码（无 TrendChart / MinuteChart / IntraDay / 分时 等任何匹配），需基于设计稿/template 从零实现。
 
 ## 3. KeyStatisticsMTts 关键数据
 
@@ -18,7 +18,7 @@
 
 ## 4. QuotationTable 行情表格
 
-> 已剔除：`QuotationTableControl` / `QuotationTableViewModel` 来自外部 assembly `Hevo.Table`（不在 Hithink.PrefabLibrary 仓库内）。仓库里只有 `UIDemoPlugin/Example/Business/QuotaTable/QuotationTableExample.cs` 用法示例，需依赖外部 assembly 文档或基于示例代码 + PRD 重写。
+> 已剔除：`QuotationTableControl` / `QuotationTableViewModel` 来自外部 assembly `Hevo.Table`（不在 Hithink.PrefabLibrary 仓库内）。仓库里只有 `UIDemoPlugin/Example/Business/QuotaTable/QuotationTableExample.cs` 用法示例，需依赖外部 assembly 文档或基于示例代码 + template 重写。
 
 ## 5. AuctionDataMTts 竞价数据柱状图
 

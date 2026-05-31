@@ -1,6 +1,6 @@
 import { createDecisionLog } from "@/decision-log"
 import { DecisionLogBundle } from "@/decision-log/bundle"
-import { renderDesignAnalysisHandoffReference } from "@/design-analyst/handoff"
+import { renderFrontendDesignHandoffReference } from "@/frontend-design/handoff"
 import { findActiveSpecForTask, findLatestArchitectContractGraph, findRequirements, listGoals } from "@/engine/store"
 import { renderContractGraphForPrompt } from "@/architect/contract-graph"
 import { Instance } from "@/project/instance"
@@ -20,7 +20,7 @@ export function buildGoalUpstreamAgentContextSections(taskID: string, goalID: st
   const decisionLog = createDecisionLog(taskID)
   return [
     decisionLog.phasePromptSectionForGoal("requirements", goalID, "Requirements Decisions"),
-    renderDesignAnalysisHandoffReference(taskID, { valueCap: 300 }),
+    renderFrontendDesignHandoffReference(taskID, { valueCap: 300 }),
     decisionLog.phasePromptSectionForGoal("architect", goalID, "Architect Consensus", {
       valueCap: ARCHITECT_CONTRACT_VALUE_CAP,
     }),
@@ -30,7 +30,7 @@ export function buildGoalUpstreamAgentContextSections(taskID: string, goalID: st
 /**
  * Task-level upstream surfaces for the **delivery** agent — the final acceptance
  * gate. Two ground-truth catalogs (rendered from canonical DB tables, not
- * decision-log summaries) plus a narrative design-analysis section.
+ * decision-log summaries) plus a narrative frontend-design section.
  *
  * Rationale: acceptance verdicts must trace every accept/reject to a concrete
  * contract. Decision-log phase summaries are LLM-written narrative — they drift,
@@ -43,9 +43,9 @@ export function buildTaskUpstreamAgentContextSections(taskID: string): string[] 
   return [
     buildRequirementsCatalogSection(taskID),
     buildArchitectureContractCatalogSection(taskID),
-    // Design-analysis is authoritative, but hot-path prompts should carry the
-    // materialized PRD/SPEC source location instead of cloning the full spec.
-    renderDesignAnalysisHandoffReference(taskID, { valueCap: 500 }),
+    // frontend_design is authoritative, but hot-path prompts should carry the
+    // materialized frontend template source location instead of cloning the full template.
+    renderFrontendDesignHandoffReference(taskID, { valueCap: 500 }),
     // Delivery runs in-process with sessionDirectory = Instance.directory and
     // reads via the OpenCorvus `read` tool (resolves relative paths against
     // Instance.directory — tool/read.ts), so the RELATIVE bundle path is

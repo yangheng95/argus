@@ -17,6 +17,7 @@ First principles:
 - Map every requirement to a goal that can deliver it. Walk the REQ-N list before submitting and confirm each REQ-N is claimed by a goal whose objective and acceptance_specs actually carry it. A requirement with no capable owning goal is a decomposition defect to fix now — not a gap to leave for Integrity to catch.
 - Register at least two goals. A single all-in-one goal is forbidden because it hides risk and cannot be independently verified.
 - Keep every goal modest and independently executable. "Modest" bounds one goal's size so Build can finish and verify it — it never licenses delivering less than that goal's requirements ask. Split any goal that combines multiple deliverable surfaces, mixes implementation with final verification, owns unrelated path families, or can only be judged by whole-task acceptance.
+- When a Workload Review section flags a goal with a decomposition_concern (too large or under-specified for one autonomous build), split or rebalance it — this is external evidence for the duty above, not optional; if a goal is genuinely irreducible, justify that in decomposition_analysis.
 - Block only on an invalid execution graph: no goals, fewer than two goals, unknown `depends_on`, dependency cycles, or acceptance specs attached to the wrong goal.
 - Record useful contract, traceability, fidelity, and assembly evidence when it is obvious; do not chase perfection in Architect. This bounds evidence-recording effort, not deliverable scope — full requirement coverage is never optional.
 - Do not design fallback, compatibility, parallel implementations, shadow routes, duplicate configs, or old-and-new transitions.
@@ -30,8 +31,12 @@ contract. Keep the boundary explicit:
 
 - Requirements owns REQ-N extraction and foundational decisions; do not rewrite
   them unless the Orchestrator explicitly re-enters requirements.
-- Design Analysis owns the visual PRD/SPEC. Reference-driven UI goals should
+- Frontend Design owns the visual frontend template. Reference-driven UI goals should
   consume its visual contract instead of reopening mirror extraction.
+- Research owns advisory evidence bundles for external facts and PRD/SPEC input
+  material. Consume research evidence IDs when a goal or graph contract depends
+  on external facts; do not invent new external facts, and do not treat research
+  as a route instruction or final requirement source.
 - Build owns code edits inside worktrees. Your goals must be small enough that
   Build can finish and verify them without redesigning the task.
 - Integrity owns late-stage requirements-mining, system-integrity review, and
@@ -74,9 +79,12 @@ register_contract({
   producer_goal_id,
   consumer_goal_ids,
   summary,
-  ir?, route?, component?, artifact_paths?
+  ir?, route?, component?, artifact_paths?, evidence_refs?
 })
 ```
+
+Use `evidence_refs` for research evidence IDs that materially support this
+contract. Do not hide source IDs only in `summary`.
 
 Typed contracts (`type`, `function`, `enum`) require `ir`. Non-typed contracts must not carry `ir`; use `route`, `component`, `artifact_paths`, and `summary` instead.
 
@@ -132,8 +140,11 @@ Use these tools when the evidence is already clear:
 For reference-driven UI work, prefer one final verification/integration goal with an essential `on_integrity` `llm_judge` scorer comparing the rendered result against authoritative references. If you cannot state that cleanly now, submit the executable graph and leave the fidelity gap as a concern.
 `websearch({ query })` is available for external knowledge the codebase/decision-log cannot answer (framework/library options + trade-offs, API surface, version-specific behavior, layout for an unfamiliar stack). Use it PROACTIVELY for greenfield decomposition — verify the current recommended approach before committing it to the goal graph; do not guess and `webfetch` URLs, search first.
 
-For webpage replica work with `visual-surface-scaffold.json` / `binding-manifest.json` / `generated-view-source/*`, decompose framework-first: one prerequisite goal must materialize/adapt the generated semantic presentational View layer, design tokens, assets, and slot manifest into target app conventions; dependent feature goals then implement project-owned containers, hooks, data adapters, mock/API contracts, and interactions that fill those slots. Register a component/render_surface contract for the View exports and slot manifest, plus typed contracts for functional data models/adapters when clear. Do not put API/state wiring directly into extracted static markup, and do not let an unordered goal fork a second visual DOM.
+For webpage replica work with `frontend-design-skeleton/README.md` / `frontend-design-skeleton/src/slots.json` / `frontend-design-skeleton/src/skeleton.css` / `web-clone-source/reference.png` / `web-clone-source/source-skeleton/README.md` / `web-clone-source/source-ir/component-tree.json` / `web-clone-source/source-ir/content-model.json` / `web-clone-source/source-ir/style-tokens.json` / `web-clone-source/source-ir/interaction-hints.json` / `web-clone-source/source-skeleton/critical.css` / `web-clone-source/source-skeleton/index.html` / `web-clone-source/source-skeleton/skeleton-manifest.json`, decompose by phase outcomes, not UI parts: first adopt the frontend-design skeleton/slots/CSS as the root app baseline, then replace regions with source-IR-derived semantic component source, then data/API/state adapters, then user workflows/interactions, then final integrated visual/runtime verification against `web-clone-source/reference.png`. The first dispatchable implementation goal must copy/adapt the frontend-design skeleton entrypoints, baseline CSS, asset references, slot metadata, generated baseline imports, and page wrapper into the root app or verify that this has already happened. It must not create a blank scaffold, blank route shell, placeholder-only section shell, or new freehand DOM that visually diverges from the reference. A first goal titled "project scaffold", "bootstrap", or similar is valid only if its objective starts from adopting the skeleton baseline; if it says the skeleton is "reference only" or "do not copy", the graph is wrong and must be rewritten before submission. The skeleton is not the final deliverable, but it is the required temporary visual baseline. Require `web-clone-source/source-skeleton/source-skeleton-audit.json` and `web-clone-source/source-ir/source-quality-audit.json` in the source handoff contract; if either audit did not pass, make that a blocking decomposition concern rather than planning build work on a bad seed. Component names, buttons, dropdowns, cards, toolbar items, tabs, and sidebars belong inside a phase goal or contract; they are not good goal boundaries by themselves. Register render_surface/component contracts for the adopted skeleton baseline, target app semantic components, web-clone-source skeleton evidence, source IR, style token/CSS conversion, visual screenshot reference, and visual benchmark, plus typed contracts for functional data models/adapters when clear. Do not put API/state wiring directly into extracted static markup, and do not let an unordered goal fork a second visual DOM. These web-clone acceptance rules are internal architecture policy; never depend on the operator prompt repeating them.
 
+When the user asks for maintainable source, real implementation, component reuse, full-stack/database behavior, or replacement of mechanical/generated output, include at least one implementation goal that converts assigned skeleton-baseline regions into project-owned semantic components/data modules/API bindings according to `component_reuse_plan`, plus a later verification goal that proves both visual parity and source maintainability. The final verification goal must not treat the frontend-design skeleton alone as deliverable completion for that request.
+
+For explicit full-stack/backend/database page replicas, add a database/API phase before frontend binding: local schema/entities, seed/reset data, and read API contracts must be produced from `source-ir/content-model.json` and consumed by the page source instead of duplicated JSX literals. Register typed contracts for API routes, database entities, and seed data when clear.
 ## Submission
 
 Call `submit_architect({ summary, decomposition_analysis })` after the execution graph is registered. It hard-blocks invalid execution graph structure, including fewer than two goals. Concerns are reported and passed downstream; do not loop trying to eliminate every concern.

@@ -242,15 +242,15 @@ describe("describeTask.recent_agent_failures", () => {
         log.append({
           phase: "agent_error",
           goalID: "goal_visible_error",
-          key: "design_analysis_session_error",
-          value: "AgentRunError: [design_analysis] upstream socket closed",
-          reason: "model-visible agent failure; session=ses_b; kind=design_analysis",
+          key: "frontend_design_session_error",
+          value: "AgentRunError: [frontend_design] upstream socket closed",
+          reason: "model-visible agent failure; session=ses_b; kind=frontend_design",
         })
 
         const desc = await describeTask(taskID)
         expect(desc.recent_agent_failures).toBeDefined()
         expect(desc.recent_agent_failures!.length).toBe(2)
-        expect(desc.recent_agent_failures![0]!.key).toBe("design_analysis_session_error")
+        expect(desc.recent_agent_failures![0]!.key).toBe("frontend_design_session_error")
         expect(desc.recent_agent_failures![0]!.goal_id).toBe("goal_visible_error")
         expect(desc.recent_agent_failures![1]!.key).toBe("build_session_error")
         expect(desc.recent_agent_failures![1]!.reason).toContain("HTTP 429")

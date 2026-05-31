@@ -129,8 +129,8 @@
   <text class="body" x="900" y="540">接口契约 + 目录</text>
 
   <rect class="sub" x="980" y="490" width="140" height="60"/>
-  <text class="h3" x="1050" y="510">Design Analyst</text>
-  <text class="code" x="1050" y="524">design-analyst/</text>
+  <text class="h3" x="1050" y="510">Frontend Design</text>
+  <text class="code" x="1050" y="524">frontend-design/</text>
   <text class="body" x="1050" y="540">Figma → 设计意图</text>
 
   <rect class="sub" x="680" y="560" width="140" height="60"/>

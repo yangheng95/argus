@@ -1,8 +1,8 @@
 import fs from "node:fs/promises"
 import path from "node:path"
-import puppeteer from "puppeteer-core"
+import type { Browser } from "playwright"
 import type { AcceptanceSpec } from "@/acceptance/types"
-import { findBrowserExecutable } from "../visual"
+import { BrowserRuntime } from "@/browser/runtime"
 import { executeWalkthrough, type WalkthroughExecutionResult, type WalkthroughPage } from "./dsl"
 import { translateScenarioToSteps } from "./translate"
 
@@ -13,28 +13,23 @@ export type WalkthroughResult = WalkthroughExecutionResult & {
   evidence: string[]
 }
 
-type PuppeteerLike = {
+type BrowserRuntimeLike = {
   launch: (input: {
-    executablePath: string
     headless: true
     args: string[]
-    defaultViewport: { width: number; height: number }
-  }) => Promise<{
-    newPage: () => Promise<WalkthroughPage & { screenshot: (input: { path: string; type: "png" }) => Promise<unknown> }>
-    close: () => Promise<unknown>
-  }>
+  }) => Promise<Browser>
 }
 
 export type RunWalkthroughDependencies = {
   translate: typeof translateScenarioToSteps
-  findBrowserExecutable: typeof findBrowserExecutable
-  puppeteer: PuppeteerLike
+  browserRuntime: BrowserRuntimeLike
 }
 
 const defaultDependencies: RunWalkthroughDependencies = {
   translate: translateScenarioToSteps,
-  findBrowserExecutable,
-  puppeteer: puppeteer as unknown as PuppeteerLike,
+  browserRuntime: {
+    launch: (input) => BrowserRuntime.launchPlaywrightBrowser(input),
+  },
 }
 
 export async function runWalkthrough(input: {
@@ -53,15 +48,14 @@ export async function runWalkthroughWithDependencies(
 ): Promise<WalkthroughResult> {
   const steps = await dependencies.translate({ spec: input.spec, taskID: input.taskID, sessionID: input.sessionID })
   await fs.mkdir(input.outDir, { recursive: true })
-  const browser = await dependencies.puppeteer.launch({
-    executablePath: await dependencies.findBrowserExecutable(),
+  const browser = await dependencies.browserRuntime.launch({
     headless: true,
     args: ["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage"],
-    defaultViewport: { width: 1440, height: 900 },
   })
   try {
-    const page = await browser.newPage()
-    const execution = await executeWalkthrough({ page, baseUrl: input.baseUrl, steps })
+    const context = await browser.newContext({ viewport: { width: 1440, height: 900 } })
+    const page = await context.newPage()
+    const execution = await executeWalkthrough({ page: page as unknown as WalkthroughPage, baseUrl: input.baseUrl, steps })
     const screenshotPath = path.join(input.outDir, `${sanitize(input.spec.id)}.png`)
     await page.screenshot({ path: screenshotPath, type: "png" })
     return {

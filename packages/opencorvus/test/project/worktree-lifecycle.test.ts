@@ -103,15 +103,18 @@ describe("Worktree lifecycle", () => {
     expect(await Filesystem.exists(path.join(info.directory, "node_modules"))).toBe(false)
   })
 
-  test("create materializes task design-analysis mirror into scoped worktree", async () => {
+  test("create materializes task frontend-design mirror into scoped worktree", async () => {
     await using tmp = await tmpdir({ git: true })
     const projectID = await projectIDFor(tmp.path)
     const taskID = `tsk_wt_mirror_${Date.now().toString(36)}`
     seedTask(projectID, taskID)
 
-    const paths = ProjectRuntimePaths.designAnalysisPaths(tmp.path, taskID)
+    const paths = ProjectRuntimePaths.frontendDesignPaths(tmp.path, taskID)
     await fs.mkdir(paths.mirrorAbsolute, { recursive: true })
+    await fs.mkdir(paths.sourcePackageAbsolute, { recursive: true })
     await fs.writeFile(path.join(paths.mirrorAbsolute, "reference.txt"), "reference", "utf8")
+    await fs.writeFile(path.join(paths.sourcePackageAbsolute, "README.md"), "source package", "utf8")
+    await fs.writeFile(path.join(tmp.path, ".git", "info", "exclude"), "/web-clone-source\n/web-clone-source/\n", "utf8")
 
     const info = await Instance.provide({
       directory: tmp.path,
@@ -125,9 +128,15 @@ describe("Worktree lifecycle", () => {
     })
 
     expect(await Filesystem.readText(path.join(info.directory, "mirror", "reference.txt"))).toBe("reference")
+    expect(await Filesystem.readText(path.join(info.directory, "web-clone-source", "README.md"))).toBe("source package")
+    expect(await Filesystem.readText(path.join(info.directory, paths.sourcePackageRelative, "README.md"))).toBe("source package")
     expect(await Filesystem.readText(path.join(info.directory, paths.mirrorRelative, "reference.txt"))).toBe("reference")
     const status = await $`git status --porcelain=v1`.cwd(info.directory).quiet()
-    expect(status.stdout.toString().trim()).toBe("")
+    expect(status.stdout.toString().trim()).toBe("?? web-clone-source/")
+    const exclude = await Filesystem.readText(path.join(tmp.path, ".git", "info", "exclude"))
+    expect(exclude.split(/\r?\n/).map((line) => line.trim())).not.toContain("/web-clone-source")
+    expect(exclude.split(/\r?\n/).map((line) => line.trim())).not.toContain("/web-clone-source/")
+    expect(exclude).toContain("/mirror")
   })
 
   test("reuseIfValid rematerializes missing task mirror view", async () => {
@@ -136,9 +145,11 @@ describe("Worktree lifecycle", () => {
     const taskID = `tsk_wt_mirror_reuse_${Date.now().toString(36)}`
     seedTask(projectID, taskID)
 
-    const paths = ProjectRuntimePaths.designAnalysisPaths(tmp.path, taskID)
+    const paths = ProjectRuntimePaths.frontendDesignPaths(tmp.path, taskID)
     await fs.mkdir(paths.mirrorAbsolute, { recursive: true })
+    await fs.mkdir(paths.sourcePackageAbsolute, { recursive: true })
     await fs.writeFile(path.join(paths.mirrorAbsolute, "reference.txt"), "reference", "utf8")
+    await fs.writeFile(path.join(paths.sourcePackageAbsolute, "README.md"), "source package", "utf8")
 
     const name = `mirror-reuse-${Date.now().toString(36)}`
     const createInput = {
@@ -153,7 +164,9 @@ describe("Worktree lifecycle", () => {
     })
 
     await fs.rm(path.join(info.directory, "mirror"), { recursive: true, force: true })
+    await fs.writeFile(path.join(info.directory, "web-clone-source", "stale.txt"), "stale", "utf8")
     expect(await Filesystem.exists(path.join(info.directory, "mirror", "reference.txt"))).toBe(false)
+    expect(await Filesystem.exists(path.join(info.directory, "web-clone-source", "stale.txt"))).toBe(true)
 
     const reused = await Instance.provide({
       directory: tmp.path,
@@ -162,8 +175,11 @@ describe("Worktree lifecycle", () => {
 
     expect(reused.directory).toBe(info.directory)
     expect(await Filesystem.readText(path.join(reused.directory, "mirror", "reference.txt"))).toBe("reference")
+    expect(await Filesystem.readText(path.join(reused.directory, "web-clone-source", "README.md"))).toBe("source package")
+    expect(await Filesystem.exists(path.join(reused.directory, "web-clone-source", "stale.txt"))).toBe(false)
+    expect(await Filesystem.readText(path.join(reused.directory, paths.sourcePackageRelative, "README.md"))).toBe("source package")
     const status = await $`git status --porcelain=v1`.cwd(reused.directory).quiet()
-    expect(status.stdout.toString().trim()).toBe("")
+    expect(status.stdout.toString().trim()).toBe("?? web-clone-source/")
   })
 
   test("recoverRecorded rematerializes valid task mirror view", async () => {
@@ -173,9 +189,11 @@ describe("Worktree lifecycle", () => {
     const sessionID = `ses_wt_mirror_recover_${Date.now().toString(36)}`
     seedTask(projectID, taskID)
 
-    const paths = ProjectRuntimePaths.designAnalysisPaths(tmp.path, taskID)
+    const paths = ProjectRuntimePaths.frontendDesignPaths(tmp.path, taskID)
     await fs.mkdir(paths.mirrorAbsolute, { recursive: true })
+    await fs.mkdir(paths.sourcePackageAbsolute, { recursive: true })
     await fs.writeFile(path.join(paths.mirrorAbsolute, "reference.txt"), "reference", "utf8")
+    await fs.writeFile(path.join(paths.sourcePackageAbsolute, "README.md"), "source package", "utf8")
 
     const info = await Instance.provide({
       directory: tmp.path,
@@ -188,6 +206,7 @@ describe("Worktree lifecycle", () => {
     })
 
     await fs.rm(path.join(info.directory, "mirror"), { recursive: true, force: true })
+    await fs.rm(path.join(info.directory, "web-clone-source"), { recursive: true, force: true })
 
     const recovered = await Instance.provide({
       directory: tmp.path,
@@ -196,8 +215,10 @@ describe("Worktree lifecycle", () => {
 
     expect(recovered).toMatchObject({ status: "recovered", directory: info.directory, branch: info.branch })
     expect(await Filesystem.readText(path.join(info.directory, "mirror", "reference.txt"))).toBe("reference")
+    expect(await Filesystem.readText(path.join(info.directory, "web-clone-source", "README.md"))).toBe("source package")
+    expect(await Filesystem.readText(path.join(info.directory, paths.sourcePackageRelative, "README.md"))).toBe("source package")
     const status = await $`git status --porcelain=v1`.cwd(info.directory).quiet()
-    expect(status.stdout.toString().trim()).toBe("")
+    expect(status.stdout.toString().trim()).toBe("?? web-clone-source/")
   })
 
   test("reset rematerializes task mirror view after git clean", async () => {
@@ -206,9 +227,11 @@ describe("Worktree lifecycle", () => {
     const taskID = `tsk_wt_mirror_reset_${Date.now().toString(36)}`
     seedTask(projectID, taskID)
 
-    const paths = ProjectRuntimePaths.designAnalysisPaths(tmp.path, taskID)
+    const paths = ProjectRuntimePaths.frontendDesignPaths(tmp.path, taskID)
     await fs.mkdir(paths.mirrorAbsolute, { recursive: true })
+    await fs.mkdir(paths.sourcePackageAbsolute, { recursive: true })
     await fs.writeFile(path.join(paths.mirrorAbsolute, "reference.txt"), "reference", "utf8")
+    await fs.writeFile(path.join(paths.sourcePackageAbsolute, "README.md"), "source package", "utf8")
 
     const info = await Instance.provide({
       directory: tmp.path,
@@ -229,8 +252,10 @@ describe("Worktree lifecycle", () => {
 
     expect(await Filesystem.exists(path.join(info.directory, "scratch.txt"))).toBe(false)
     expect(await Filesystem.readText(path.join(info.directory, "mirror", "reference.txt"))).toBe("reference")
+    expect(await Filesystem.readText(path.join(info.directory, "web-clone-source", "README.md"))).toBe("source package")
+    expect(await Filesystem.readText(path.join(info.directory, paths.sourcePackageRelative, "README.md"))).toBe("source package")
     const status = await $`git status --porcelain=v1`.cwd(info.directory).quiet()
-    expect(status.stdout.toString().trim()).toBe("")
+    expect(status.stdout.toString().trim()).toBe("?? web-clone-source/")
   }, 30_000)
 
   test("reset fails when startup scripts fail", async () => {

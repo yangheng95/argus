@@ -63,7 +63,7 @@ All tool `output` fields are **JSON strings** (not objects). Consumers must `JSO
 
 ### 5. Build agent shares the sub-agent protocol
 
-build / intent-analysis / requirements / architect / design-analyst / integrity / prosecutor / delivery all share the structured output contract in `agent/sub-agent-protocol.ts` (Zod tool calls); results are written to `engine_artifact`.
+build / intent-analysis / requirements / architect / frontend-design / integrity / prosecutor / delivery all share the structured output contract in `agent/sub-agent-protocol.ts` (Zod tool calls); results are written to `engine_artifact`.
 
 ## Doom-loop detection
 

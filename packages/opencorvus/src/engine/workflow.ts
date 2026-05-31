@@ -4,7 +4,7 @@
  * 系统只内置两条路径：
  *   1. **direct**   — build
  *      用于显式 kind=build 的单文件改动 / bugfix / 配置调整 / 短篇调试。无需 requirements / architect / goals。
- *   2. **pipeline** — (design_analysis) → analyze_intent → requirements → architect → per-goal[build] → integrity
+ *   2. **pipeline** — (frontend_design) → analyze_intent → requirements → architect → per-goal[build] → integrity
  *      用于多文件功能、UI 复刻、跨模块重构、需要验收标准的任务。
  *
  * Pipeline 以 build 做实现、以 integrity 做 session-bound final gate。deliver
@@ -160,19 +160,19 @@ const DIRECT: MiniWorkflow = {
 /** pipeline — 完整开发流程。
  *
  *  适合：多文件功能 / UI 复刻 / 跨模块重构 / 需要明确验收标准的任务。
- *  流程：(design_analysis 可选) → analyze_intent → requirements → architect → per-goal[build] → integrity；
+ *  流程：(frontend_design 可选) → analyze_intent → requirements → architect → per-goal[build] → integrity；
  *  integrity 是 session-bound final gate：pass 完成任务；非 pass 返回证据后由编排器决定下一步。
  */
 const PIPELINE: MiniWorkflow = {
   id: "pipeline",
   name: "Pipeline",
-  description: "(design_analysis) → analyze_intent → requirements → architect → per-goal[build] → integrity。多文件功能 / UI 复刻 / 跨模块重构。",
+  description: "(frontend_design) → analyze_intent → requirements → architect → per-goal[build] → integrity。多文件功能 / UI 复刻 / 跨模块重构。",
   steps: [
     {
-      id: "design_analysis",
-      tool: "design_analysis",
+      id: "frontend_design",
+      tool: "frontend_design",
       label: "Design",
-      hint: "视觉/网页/图片/Figma 参考任务的第一阶段。独占 mirror 工具，产出完整 PRD/SPEC、visual_consistency_spec、evidence_source_manifest；网页复刻还要产出视觉框架 handoff（高还原 visual shell 先落地，View/slot manifest 对齐，功能容器后填充）。",
+      hint: "视觉/网页/图片/Figma 参考任务的前端设计/复刻专职阶段。独占 mirror 工具，产出前端实现级 frontend template、visual_consistency_contract、evidence_source_manifest；网页复刻还要产出 reference.png + web-clone-source/implementation-blueprint.md + source-ir/component-tree.json + source-ir/content-model.json + source-ir/layout-map.json + source-ir/style-tokens.json + source-ir/interaction-hints.json + source-skeleton/critical.css + visual-surface-candidates.json 作为 build 开发入口（截图是视觉真值，web-clone-source blueprint/source IR/assets 是 LLM 写 React/Vue 等源码的主入口，frontend-design skeleton/slots/CSS 必须先成为实现基底，不能被当成旁路参考后从空白页手搓）。",
       scope: "task",
       skippable: true,
       after: [],
@@ -181,10 +181,10 @@ const PIPELINE: MiniWorkflow = {
       id: "analyze_intent",
       tool: "analyze_intent",
       label: "Intent",
-      hint: "解读用户真实意图：意图分类、复杂度、缺失槽位、阻断澄清。按需调用 —— request 模糊或 scope 不清时跑。视觉/参考任务必须等 design_analysis PRD/SPEC 完成后再跑。",
+      hint: "解读用户真实意图：意图分类、复杂度、缺失槽位、阻断澄清。按需调用 —— request 模糊或 scope 不清时跑。视觉/参考任务必须等 frontend_design frontend template 完成后再跑。",
       scope: "task",
       skippable: true,
-      after: ["design_analysis"],
+      after: ["frontend_design"],
     },
     {
       id: "requirements",
@@ -193,13 +193,13 @@ const PIPELINE: MiniWorkflow = {
       hint: "分析输入并分解为 REQ-N + 基础决策。多文件 / 需要显式验收标准时按需调用；trivial direct edit 可跳过。",
       scope: "task",
       skippable: true,
-      after: ["design_analysis"],
+      after: ["frontend_design"],
     },
     {
       id: "architect",
       tool: "architect",
       label: "Architect",
-      hint: "权威分解者：读 REQ-N + 决策，产出 goals / acceptance_specs / traceability / source-reference coverage / cross-goal contracts。网页复刻必须按 visual framework -> functional fill 拆出有序 goal；trivial 单文件改动可跳过。integrity 非 pass 后仅在结构性证据成立时 re-run 精修 goal 集合。",
+      hint: "权威分解者：读 REQ-N + 决策，产出 goals / acceptance_specs / traceability / source-reference coverage / cross-goal contracts。网页复刻必须按 web-clone-source/source IR 派生组件源 -> data/API/state adapters -> interactions -> visual/runtime verification 拆出有序 goal；trivial 单文件改动可跳过。integrity 非 pass 后仅在结构性证据成立时 re-run 精修 goal 集合。",
       scope: "task",
       skippable: true,
       after: ["requirements"],
@@ -340,14 +340,16 @@ function taskStepStatusByTool(
       return createDecisionLog(taskID).read().some((e) => e.phase === "intent_analysis")
         ? "completed"
         : "pending"
-    case "design_analysis": {
-      const keys = new Set(createDecisionLog(taskID).readByPhase("design_analysis").map((entry) => entry.key))
+    case "frontend_design": {
+      const keys = new Set(createDecisionLog(taskID).readByPhase("frontend_design").map((entry) => entry.key))
       return [
-        "product_spec",
-        "frontend_spec",
-        "visual_consistency_spec",
-        "backend_spec",
-        "prd_iteration_notes",
+        "frontend_template",
+        "fillable_modules",
+        "component_inventory",
+        "material_inventory",
+        "visual_consistency_contract",
+        "ui_data_contract",
+        "template_iteration_notes",
         "completeness_review",
         "evidence_source_manifest",
       ].every((key) => keys.has(key)) ? "completed" : "pending"

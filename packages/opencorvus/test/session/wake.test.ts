@@ -75,7 +75,7 @@ test("wake resolves the session agent model through the single resolver", async 
     config: {
       model: "base/default",
       agent: {
-        build: { model: "base/build" },
+        explore: { model: "base/explore" },
       },
     },
   })
@@ -89,15 +89,15 @@ test("wake resolves the session agent model through the single resolver", async 
         patch: {
           model: "overlay/default",
           agent: {
-            build: { model: "overlay/build" },
+            explore: { model: "overlay/explore" },
           },
         },
       })
 
       await SessionWake.wake({
         sessionID: session.id,
-        agent: "build",
-        prompt: "resume build",
+        agent: "explore",
+        prompt: "resume explore",
       })
 
       expect(loop).toHaveBeenCalled()
@@ -107,9 +107,38 @@ test("wake resolves the session agent model through the single resolver", async 
       if (last?.info.role !== "user") throw new Error("expected user message")
       expect(last.info.model).toEqual({
         providerID: "overlay",
-        modelID: "build",
+        modelID: "explore",
       })
-      expect(last.info.agent).toBe("build")
+      expect(last.info.agent).toBe("explore")
+    },
+  })
+})
+
+test("wake rejects runtime-required agents before writing an unresumable message", async () => {
+  await using tmp = await tmpdir({
+    config: {
+      model: "base/default",
+      agent: {
+        build: { model: "base/build" },
+      },
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const loop = spyOn(SessionPrompt, "loop").mockResolvedValue(undefined as never)
+      const session = await Session.create({ kind: "assistant", title: "wake stage reject" })
+
+      await expect(
+        SessionWake.wake({
+          sessionID: session.id,
+          agent: "build",
+          prompt: "resume build",
+        }),
+      ).rejects.toThrow("runtime-required agent/session")
+
+      expect(loop).not.toHaveBeenCalled()
+      expect(await Session.messages({ sessionID: session.id })).toHaveLength(0)
     },
   })
 })

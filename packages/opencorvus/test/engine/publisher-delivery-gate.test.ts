@@ -73,6 +73,72 @@ describe("Publisher delivery export", () => {
     }
   })
 
+  test("delivery round does not stage host evidence input directories", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "oc-publisher-evidence-"))
+    try {
+      await fs.writeFile(path.join(dir, "file.txt"), "initial\n")
+      await $`git init`.cwd(dir).quiet()
+      await $`git add file.txt`.cwd(dir).quiet()
+      await $`git -c user.name=test -c user.email=test@example.com commit -m init`.cwd(dir).quiet()
+      const baseline = (await $`git rev-parse HEAD`.cwd(dir).quiet().text()).trim()
+      await fs.mkdir(path.join(dir, "web-clone-source"), { recursive: true })
+      await fs.writeFile(path.join(dir, "web-clone-source", "README.md"), "evidence\n")
+      await fs.writeFile(path.join(dir, "app.ts"), "export const value = 1\n")
+
+      const result = await Instance.provide({
+        directory: dir,
+        fn: () =>
+          EngineGit.commitDeliveryRound({
+            task: taskRow({ baseline }),
+            iteration: 0,
+            verdict: { verdict: "accepted", summary: "accepted", rejection_count: 0 },
+            declaredChangedFiles: ["app.ts", "web-clone-source/README.md"],
+          }),
+      })
+
+      expect(result.mode).toBe("created_commit")
+      const tracked = (await $`git ls-files`.cwd(dir).text()).trim().split(/\r?\n/).filter(Boolean)
+      expect(tracked).toContain("app.ts")
+      expect(tracked).not.toContain("web-clone-source/README.md")
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  test("delivery export filters committed host evidence input directories", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "oc-publisher-evidence-export-"))
+    try {
+      await fs.writeFile(path.join(dir, "file.txt"), "initial\n")
+      await $`git init`.cwd(dir).quiet()
+      await $`git add file.txt`.cwd(dir).quiet()
+      await $`git -c user.name=test -c user.email=test@example.com commit -m init`.cwd(dir).quiet()
+      const baseline = (await $`git rev-parse HEAD`.cwd(dir).quiet().text()).trim()
+      await fs.mkdir(path.join(dir, "web-clone-source"), { recursive: true })
+      await fs.writeFile(path.join(dir, "web-clone-source", "README.md"), "evidence\n")
+      await fs.writeFile(path.join(dir, "app.ts"), "export const value = 1\n")
+      await $`git add app.ts web-clone-source/README.md`.cwd(dir).quiet()
+      await $`git -c user.name=test -c user.email=test@example.com commit -m "manual mixed commit"`.cwd(dir).quiet()
+
+      const result = await Instance.provide({
+        directory: dir,
+        fn: () => Publisher.deliver({
+          task: taskRow({ baseline }),
+          run: runRow(),
+          delivery: deliveryRow({ changedFiles: ["app.ts", "web-clone-source/README.md"] }),
+        }),
+      })
+
+      expect(result.status).toBe("delivered")
+      const patchArtifact = result.artifacts.find((item) => item.label === "delivery.patch")
+      expect(patchArtifact?.payload.changed_files).toContain("app.ts")
+      expect(patchArtifact?.payload.changed_files).not.toContain("web-clone-source/README.md")
+      expect(String(patchArtifact?.payload.patch)).toContain("app.ts")
+      expect(String(patchArtifact?.payload.patch)).not.toContain("web-clone-source/README.md")
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true })
+    }
+  })
+
   test("fails publish when baseline commit is missing", async () => {
     const dir = await mkdtemp(path.join(os.tmpdir(), "oc-publisher-no-baseline-"))
     try {

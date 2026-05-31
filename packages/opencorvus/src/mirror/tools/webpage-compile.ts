@@ -1,8 +1,9 @@
 /**
  * `webpage_compile` tool — wraps `mirror/url/compile::compilePageToXML`.
  *
- * Reads a previously-extracted `extracted-page.json` and emits a compact XML
- * IR that design-analysis can read directly. Writes to `<outputDir>/page-ir.xml`.
+ * Reads a previously-extracted `capture.html` + `extracted-page.json` and emits
+ * the canonical structure IR + asset graph. `page-ir.xml` is still written as a
+ * compatibility view during algorithm migration.
  */
 
 import fs from "node:fs/promises"
@@ -11,24 +12,26 @@ import z from "zod"
 
 import { Tool } from "../../tool/tool"
 import { compilePageToXML } from "../url/compile"
+import { materializeInlineExtractedPageAssets } from "../url/extract"
 import { ExtractedPageSchema } from "../ir/extracted-page"
 import { resolveMirrorOutputDir, DEFAULT_MIRROR_SUBDIR } from "./output-dir"
+import { extractArchiveHtml, mergeExtractedLayoutIntoPageIr, writeWebCloneArchiveExtraction } from "../../web-clone"
 
 export const WebpageCompileTool = Tool.define("webpage_compile", {
-  description: `Compile an ExtractedPage JSON into a compact XML IR (zero LLM, byte-identical deterministic).
+  description: `Compile captured webpage evidence into canonical structure IR + asset graph (zero LLM).
 
-The XML IR captures every DOM section as <Container>, <Text>, <Image>, <Icon> tags with inlined layout and style attributes. Repeated siblings are collapsed into <Repeat count=N>. Fits ~5-15KB for typical pages versus ~50-200KB raw DOM.
+The canonical outputs are \`page.ir.json\` and \`assets/manifest.json\`. Dense CSS, SVG path data, data URIs, scripts, and long attribute/text values are preserved as content-addressed sidecar assets instead of being inlined into prompt context.
 
-Reads \`<outputDir>/extracted-page.json\` (from webpage_extract). Writes \`<outputDir>/page-ir.xml\`. Returns a preview of the first 2KB and total byte size.
+Reads \`<outputDir>/capture.html\` and \`<outputDir>/extracted-page.json\` (from webpage_extract). Writes \`<outputDir>/page.ir.json\`, \`<outputDir>/assets/manifest.json\`, sidecar assets, and compatibility \`<outputDir>/page-ir.xml\`. Returns compact artifact stats.
 
 This tool is artifact-dependent: do NOT call it until \`extracted-page.json\` exists in the output directory. Never batch it with the URL extraction call that creates that file.
 
-Use this only when the compact page IR is missing. Do not rerun it once \`page-ir.xml\` exists for the current evidence package. Pure function, no network or browser.`,
+Use this only when the canonical structure IR or asset graph is missing. Do not rerun it once \`page.ir.json\` and \`assets/manifest.json\` exist for the current evidence package. Pure function, no network or browser.`,
   parameters: z.object({
     outputDir: z
       .string()
       .describe(
-        `Directory containing extracted-page.json. Writes page-ir.xml here. Defaults to task-scoped \`${DEFAULT_MIRROR_SUBDIR}\` (matching webpage_extract's default). Do not set this during task sessions; overrides are for benchmarks/tests and task-session overrides must stay under \`${DEFAULT_MIRROR_SUBDIR}\`.`,
+        `Directory containing capture.html and extracted-page.json. Writes page.ir.json, assets/manifest.json, sidecar assets, and compatibility page-ir.xml here. Defaults to task-scoped \`${DEFAULT_MIRROR_SUBDIR}\` (matching webpage_extract's default). Do not set this during task sessions; overrides are for benchmarks/tests and task-session overrides must stay under \`${DEFAULT_MIRROR_SUBDIR}\`.`,
       )
       .optional(),
     max_depth: z
@@ -41,6 +44,7 @@ Use this only when the compact page IR is missing. Do not rerun it once \`page-i
   async execute(params, ctx) {
     const outputDir = await resolveMirrorOutputDir({ override: params.outputDir, sessionID: ctx.sessionID })
     const extractedPath = path.join(outputDir, "extracted-page.json")
+    const captureHtmlPath = path.join(outputDir, "capture.html")
 
     let extractedText: string
     try {
@@ -55,8 +59,30 @@ Use this only when the compact page IR is missing. Do not rerun it once \`page-i
       throw error
     }
 
+    let captureHtml: string
+    try {
+      captureHtml = await fs.readFile(captureHtmlPath, "utf8")
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        throw new Error(
+          `Missing ${captureHtmlPath}. \`webpage_compile\` now compiles canonical mirror IR from ` +
+          `the HTML capture produced by \`webpage_extract\`. Re-run extraction for this evidence package first.`,
+        )
+      }
+      throw error
+    }
+
     const raw = JSON.parse(extractedText)
-    const page = ExtractedPageSchema.parse(raw)
+    const page = materializeInlineExtractedPageAssets(ExtractedPageSchema.parse(raw), outputDir)
+    await fs.writeFile(extractedPath, JSON.stringify(page, null, 2), "utf8")
+
+    const structure = extractArchiveHtml({
+      html: captureHtml,
+      url: page.url,
+      title: page.title,
+    })
+    structure.pageIr = mergeExtractedLayoutIntoPageIr(structure.pageIr, page)
+    await writeWebCloneArchiveExtraction(outputDir, structure)
 
     const ir = compilePageToXML({ page, maxDepth: params.max_depth ?? 4 })
 
@@ -70,8 +96,13 @@ Use this only when the compact page IR is missing. Do not rerun it once \`page-i
         `# Compiled XML IR`,
         "",
         `- Source: ${extractedPath}`,
-        `- Output: ${irPath}`,
-        `- Size: ${ir.bytes} bytes (~${ir.estimatedTokens} tokens)`,
+        `- HTML capture: ${captureHtmlPath}`,
+        `- Canonical structure IR: ${path.join(outputDir, "page.ir.json")}`,
+        `- Browser layout/style merge: ${structure.pageIr.stats.layoutMatchedElements ?? 0}/${structure.pageIr.stats.layoutElements ?? 0} elements`,
+        `- Asset graph: ${path.join(outputDir, "assets", "manifest.json")}`,
+        `- Sidecar assets: ${structure.assetGraph.assets.length}`,
+        `- Compatibility XML view: ${irPath}`,
+        `- XML size: ${ir.bytes} bytes (~${ir.estimatedTokens} tokens)`,
         "",
         `## First 2KB preview`,
         "",
@@ -80,9 +111,12 @@ Use this only when the compact page IR is missing. Do not rerun it once \`page-i
         ir.xml.length > preview.length ? "<!-- truncated -->" : "",
         "```",
         "",
-        "Compact page IR written. Do not rerun compilation for this evidence package unless the source extraction changed.",
+        "Canonical mirror structure IR and asset graph written. Treat `page.ir.json` + `assets/manifest.json` as the source of truth; `page-ir.xml` is a compatibility view during algorithm migration.",
       ].join("\n"),
       metadata: {
+        pageIrPath: path.join(outputDir, "page.ir.json"),
+        assetManifestPath: path.join(outputDir, "assets", "manifest.json"),
+        sidecarAssetCount: structure.assetGraph.assets.length,
         irPath,
         bytes: ir.bytes,
         estimatedTokens: ir.estimatedTokens,

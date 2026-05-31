@@ -49,7 +49,7 @@ export function normalizeUrl(url: string): string {
 
 // ─── Style → attribute helpers ───────────────────────────────────────────
 
-function cssToStyleAttrs(styles: ExtractedStyles): string {
+function cssToStyleAttrs(styles: ExtractedStyles, imageMap?: Record<string, string>): string {
   const parts: string[] = []
   if (
     styles.backgroundColor &&
@@ -62,7 +62,8 @@ function cssToStyleAttrs(styles: ExtractedStyles): string {
     const bgVal = styles.backgroundImage
     const urlMatch = bgVal.match(/url\(["']?(.*?)["']?\)/)
     if (urlMatch && !/gradient\(/.test(bgVal)) {
-      const resolved = normalizeUrl(urlMatch[1])
+      const raw = urlMatch[1] ?? ""
+      const resolved = normalizeUrl((imageMap && imageMap[raw]) || raw)
       if (resolved) parts.push(`bg-image="${escapeXmlAttr(resolved)}"`)
     } else if (/gradient\(/.test(bgVal)) {
       parts.push(`gradient="${escapeXmlAttr(bgVal)}"`)
@@ -446,7 +447,7 @@ export function compileElement(
       compileSizeAttr(el.bounds),
       srcAttr,
       el.imageAlt ? `alt="${escapeXmlAttr(el.imageAlt)}"` : "",
-      cssToStyleAttrs(el.styles),
+      cssToStyleAttrs(el.styles, imageMap),
       htmlAttrs,
     )
     const output = `${indent}<Image ${attrs} />`
@@ -460,13 +461,13 @@ export function compileElement(
     if (iconClass) {
       return `${indent}<Icon name="${escapeXmlAttr(iconClass)}" ${compileSizeAttr(el.bounds)} />`
     }
-    const attrs = joinAttrs(`name="${eName}"`, compileSizeAttr(el.bounds), cssToStyleAttrs(el.styles))
+    const attrs = joinAttrs(`name="${eName}"`, compileSizeAttr(el.bounds), cssToStyleAttrs(el.styles, imageMap))
     return `${indent}<Box ${attrs} />`
   }
 
   // Leaf
   if (!el.children || el.children.length === 0) {
-    const attrs = joinAttrs(`name="${eName}"`, compileSizeAttr(el.bounds), cssToStyleAttrs(el.styles), htmlAttrs)
+    const attrs = joinAttrs(`name="${eName}"`, compileSizeAttr(el.bounds), cssToStyleAttrs(el.styles, imageMap), htmlAttrs)
     return `${indent}<Box ${attrs} />`
   }
 
@@ -478,7 +479,7 @@ export function compileElement(
     `name="${eName}"`,
     compileSizeAttr(el.bounds),
     effectiveLayout,
-    cssToStyleAttrs(el.styles),
+    cssToStyleAttrs(el.styles, imageMap),
     htmlAttrs,
   )
 

@@ -79,19 +79,19 @@ describe("config prompt routes", () => {
         expect(intent?.default_prompt && intent.default_prompt.length > 0).toBe(true)
         expect(intent?.effective_prompt).toContain(intent!.default_prompt!)
         expect(intent?.effective_prompt).toContain("Custom intent append")
-        // Previously-masked native agents (architect / requirements / design-analyst)
+        // Previously-masked native agents (architect / requirements / frontend-design)
         // now each have a distinct default prompt — none collapse to empty.
         const architect = body.find((item) => item.key === "architect" && item.scope === "agent")
         const requirements = body.find((item) => item.key === "requirements" && item.scope === "agent")
-        const designAnalyst = body.find((item) => item.key === "design-analyst" && item.scope === "agent")
+        const frontendDesign = body.find((item) => item.key === "frontend-design" && item.scope === "agent")
         expect(architect && architect.default_prompt && architect.default_prompt.length > 0).toBe(true)
         expect(requirements && requirements.default_prompt && requirements.default_prompt.length > 0).toBe(true)
-        expect(designAnalyst && designAnalyst.default_prompt && designAnalyst.default_prompt.length > 0).toBe(true)
+        expect(frontendDesign && frontendDesign.default_prompt && frontendDesign.default_prompt.length > 0).toBe(true)
         // Distinct defaults — the pre-fix bug made several agents collapse to
         // the same empty/inherits_core placeholder.
         expect(architect!.default_prompt).not.toBe(requirements!.default_prompt)
-        expect(architect!.default_prompt).not.toBe(designAnalyst!.default_prompt)
-        expect(requirements!.default_prompt).not.toBe(designAnalyst!.default_prompt)
+        expect(architect!.default_prompt).not.toBe(frontendDesign!.default_prompt)
+        expect(requirements!.default_prompt).not.toBe(frontendDesign!.default_prompt)
       },
     })
   })

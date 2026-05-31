@@ -10,12 +10,12 @@ gateway-master-core (wake protocol, mission-state files, task granularity, scope
 honesty). This brief only seeds WHAT to dispatch and in WHAT ORDER. You do not
 execute — every artifact comes from an engine_task you dispatch with
 `executor=opencorvus`, which internally runs
-design_analysis → requirements → architect → build → integrity.
+frontend_design → requirements → architect → build → integrity.
 
 ## The per-module closed loop
 
 Each opencorvus task already does, inside one shared workspace:
-1. design_analysis — investigate the module's live reference URL → mirror-grounded PRD/SPEC
+1. frontend_design — investigate the module's live reference URL → mirror-grounded frontend template
 2. build — write the code
 3. integrity — OpenCorvus checks the project (the acceptance gate)
 
@@ -70,10 +70,13 @@ cannot "crawl the whole site" in one task. Discover modules from the seed order
 above plus the site's own navigation (you MAY `webfetch` the root page yourself to
 read the nav for planning — that is research for your dispatch decision, not the
 work). Each module is captured by giving its own URL to its own task's
-design_analysis. If a module needs login/paid state or blocks automation, mark it
+frontend_design. If a module needs login/paid state or blocks automation, mark it
 blocked in `frontier.md` and raise a `question` — do not churn redispatches.
 
 ## Done
 
 Mission is done when every seeded module reached integrity=pass and the
 integration/regression task passed. Write the final state into `handoff.md`.
+# LEGACY / DO NOT USE
+
+This draft references the removed `/gateway/master/wake` route and old Gateway Master orchestration. Keep it only as historical research material; it is not current OpenCorvus workflow guidance.

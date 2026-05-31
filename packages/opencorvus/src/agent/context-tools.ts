@@ -4,7 +4,7 @@
  * Extends basic codebase tools (read_file, find_files, search_code, list_directory)
  * with project knowledge tools (memory) and external research (web search).
  *
- * This gives requirements / architect / design-analysis style agents access to:
+ * This gives requirements / architect / frontend-design style agents access to:
  * - Prior work and known patterns via memory
  * - External documentation via web search
  * - Full codebase exploration via codebase tools

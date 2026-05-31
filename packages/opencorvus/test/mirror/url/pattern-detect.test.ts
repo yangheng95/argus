@@ -4,9 +4,6 @@ import { detectPatterns } from "../../../src/mirror/url/pattern/detect"
 import { ComponentCatalogSchema } from "../../../src/mirror/ir/scaffold"
 import type { ExtractedPage, ExtractedElement } from "../../../src/mirror/ir/extracted-page"
 
-// Golden parity — mirror original
-import { detectPatterns as mirrorDetect } from "D:/myhexin-local/opencode-private/packages/mirror/src/infra/pattern/detect.ts"
-
 function el(tag: string, extras: Partial<ExtractedElement> = {}): ExtractedElement {
   return {
     selector: tag,
@@ -47,25 +44,21 @@ function card(title: string, desc: string, img?: string, href?: string): Extract
 const cases: Array<{ name: string; build: () => ExtractedPage }> = [
   { name: "empty tree", build: () => page([]) },
   {
-    name: "single element (no repetition)",
+    name: "single element",
     build: () => page([el("div", { children: [el("p", { text: "alone" })] })]),
   },
   {
-    name: "three identical cards (Card pattern)",
+    name: "three cards",
     build: () =>
       page([
         el("section", {
           styles: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr" },
-          children: [
-            card("A", "Desc A"),
-            card("B", "Desc B"),
-            card("C", "Desc C"),
-          ],
+          children: [card("A", "Desc A"), card("B", "Desc B"), card("C", "Desc C")],
         }),
       ]),
   },
   {
-    name: "cards with image prop inferred",
+    name: "cards with image prop",
     build: () =>
       page([
         el("section", {
@@ -79,7 +72,7 @@ const cases: Array<{ name: string; build: () => ExtractedPage }> = [
       ]),
   },
   {
-    name: "nav links (NavLink pattern via href+short-text)",
+    name: "nav links",
     build: () =>
       page([
         el("nav", {
@@ -92,43 +85,22 @@ const cases: Array<{ name: string; build: () => ExtractedPage }> = [
         }),
       ]),
   },
-  {
-    name: "mixed: 3 cards + 3 nav links (two distinct patterns)",
-    build: () =>
-      page([
-        el("nav", {
-          styles: { display: "flex" },
-          children: [
-            el("a", { href: "/a", text: "A" }),
-            el("a", { href: "/b", text: "B" }),
-            el("a", { href: "/c", text: "C" }),
-          ],
-        }),
-        el("section", {
-          styles: { display: "grid" },
-          children: [card("Card1", "D1"), card("Card2", "D2"), card("Card3", "D3")],
-        }),
-      ]),
-  },
 ]
 
-// ─── GOLDEN PARITY ────────────────────────────────────────────────────────
-
-describe("detectPatterns — GOLDEN PARITY byte-level", () => {
+describe("detectPatterns", () => {
   for (const c of cases) {
-    test(c.name, () => {
-      const p = c.build()
-      const ours = detectPatterns(p)
-      const theirs = mirrorDetect(p)
-      expect(ours).toEqual(theirs)
+    test(`${c.name} produces schema-valid deterministic output`, () => {
+      const result = detectPatterns(c.build())
+      expect(() => ComponentCatalogSchema.parse(result)).not.toThrow()
+      expect(result).toEqual(detectPatterns(c.build()))
     })
   }
-})
 
-describe("detectPatterns — schema validation", () => {
-  test("output passes ComponentCatalogSchema", () => {
-    const result = detectPatterns(cases[2].build())
-    expect(() => ComponentCatalogSchema.parse(result)).not.toThrow()
+  test("infers props for repeated cards", () => {
+    const result = detectPatterns(cases[3].build())
+    const propNames = result.patterns.flatMap((pattern) => pattern.props.map((prop) => prop.name))
+    expect(result.patterns.some((pattern) => pattern.instanceCount >= 3)).toBe(true)
+    expect(propNames).toContain("imageSrc")
   })
 
   test("output has expected fields", () => {

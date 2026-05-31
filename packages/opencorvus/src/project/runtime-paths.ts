@@ -43,6 +43,26 @@ export namespace ProjectRuntimePaths {
     return path.posix.join(".opencorvus", "runtime")
   }
 
+  export function isInternalRuntimeRelativePath(input: string): boolean {
+    const normalized = input.replaceAll("\\", "/").replace(/^\.\//, "")
+    return (
+      normalized === ".opencorvus-meta.json" ||
+      normalized.startsWith(".opencorvus/runtime/") ||
+      normalized.startsWith(".opencorvus/worktrees/") ||
+      normalized.startsWith(".opencorvus-worktrees/")
+    )
+  }
+
+  export function isEvidenceInputRelativePath(input: string): boolean {
+    const normalized = input.replaceAll("\\", "/").replace(/^\.\//, "").replace(/\/+$/, "")
+    return (
+      normalized === "web-clone-source" ||
+      normalized.startsWith("web-clone-source/") ||
+      normalized === "mirror" ||
+      normalized.startsWith("mirror/")
+    )
+  }
+
   export function taskRoot(projectDir: string, taskID: string): string {
     return path.join(projectRuntimeRoot(projectDir), "tasks", idSegment(taskID))
   }
@@ -117,23 +137,45 @@ export namespace ProjectRuntimePaths {
     }
   }
 
-  export function designAnalysisPaths(projectDir: string, taskID: string): {
+  export function frontendDesignPaths(projectDir: string, taskID: string): {
     relativeDir: string
     mirrorRelative: string
-    prdRelative: string
+    sourcePackageRelative: string
+    templateRelative: string
     manifestRelative: string
     mirrorAbsolute: string
-    prdAbsolute: string
+    sourcePackageAbsolute: string
+    templateAbsolute: string
     manifestAbsolute: string
   } {
     return {
-      relativeDir: taskRelative(taskID, "design-analysis"),
-      mirrorRelative: taskRelative(taskID, "design-analysis", "mirror"),
-      prdRelative: taskRelative(taskID, "design-analysis", "prd-spec.md"),
-      manifestRelative: taskRelative(taskID, "design-analysis", "evidence-source-manifest.md"),
-      mirrorAbsolute: taskAbsolute(projectDir, taskID, "design-analysis", "mirror"),
-      prdAbsolute: taskAbsolute(projectDir, taskID, "design-analysis", "prd-spec.md"),
-      manifestAbsolute: taskAbsolute(projectDir, taskID, "design-analysis", "evidence-source-manifest.md"),
+      relativeDir: taskRelative(taskID, "frontend-design"),
+      mirrorRelative: taskRelative(taskID, "frontend-design", "mirror"),
+      sourcePackageRelative: taskRelative(taskID, "frontend-design", "web-clone-source"),
+      templateRelative: taskRelative(taskID, "frontend-design", "frontend-template.md"),
+      manifestRelative: taskRelative(taskID, "frontend-design", "evidence-source-manifest.md"),
+      mirrorAbsolute: taskAbsolute(projectDir, taskID, "frontend-design", "mirror"),
+      sourcePackageAbsolute: taskAbsolute(projectDir, taskID, "frontend-design", "web-clone-source"),
+      templateAbsolute: taskAbsolute(projectDir, taskID, "frontend-design", "frontend-template.md"),
+      manifestAbsolute: taskAbsolute(projectDir, taskID, "frontend-design", "evidence-source-manifest.md"),
+    }
+  }
+
+  export function researchPaths(projectDir: string, taskID: string, sessionID: string): {
+    relativeDir: string
+    absoluteDir: string
+    fullMarkdownAbsolute: string
+    evidenceJsonAbsolute: string
+    citationMapAbsolute: string
+  } {
+    const relativeDir = taskRelative(taskID, "research", idSegment(sessionID))
+    const absoluteDir = taskAbsolute(projectDir, taskID, "research", idSegment(sessionID))
+    return {
+      relativeDir,
+      absoluteDir,
+      fullMarkdownAbsolute: path.join(absoluteDir, "research-bundle.md"),
+      evidenceJsonAbsolute: path.join(absoluteDir, "evidence.json"),
+      citationMapAbsolute: path.join(absoluteDir, "citation-map.json"),
     }
   }
 
@@ -249,7 +291,7 @@ export namespace ProjectRuntimePaths {
 
   export const legacyRuntimeRelativePaths = [
     path.posix.join(".opencorvus", "intent"),
-    path.posix.join(".opencorvus", "design-analysis"),
+    path.posix.join(".opencorvus", "frontend-design"),
     path.posix.join(".opencorvus", "decision-log.md"),
     path.posix.join(".opencorvus", "worktrees"),
     path.posix.join(".opencorvus", "ownership"),

@@ -20,7 +20,7 @@ DASHSCOPE_API_URL=https://coding.dashscope.aliyuncs.com/v1 \
 bun run script/benchmark/overlay-web-benchmark.ts --executor=opencorvus
 ```
 
-跑自定义 PRD：
+跑自定义 template：
 
 ```bash
 bun run script/benchmark/overlay-web-benchmark.ts \
@@ -38,7 +38,7 @@ bun run script/benchmark/overlay-web-benchmark.ts \
 | flag | 说明 |
 |---|---|
 | `--executor=opencorvus\|codex\|claude-code` | 执行器；**默认 `opencorvus`** |
-| `--request-file=PATH` | 任务描述文件（PRD）；不传则跑内置 case |
+| `--request-file=PATH` | 任务描述文件（template）；不传则跑内置 case |
 | `--request-attachment=PATH` | 附件（图片 / 文件），不能与 `--request-file` 同时传 |
 | `--reference-images=GLOB` | 视觉对比参考图路径（含空格请加引号） |
 | `--figma-url=URL` | Figma 设计稿 URL |

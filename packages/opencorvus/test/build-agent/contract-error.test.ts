@@ -216,7 +216,7 @@ describe("evaluateBuildReportSubmission", () => {
     const evaluated = evaluateBuildReportSubmission({
       result: {
         status: "passed",
-        summary: "Implemented the goal",
+        summary: "",
         files_changed: [],
         tests: [],
       },
@@ -226,8 +226,24 @@ describe("evaluateBuildReportSubmission", () => {
 
     expect(evaluated.accepted).toBe(false)
     expect(evaluated.output).toContain("REJECTED: build report did not match BuildResultSchema")
-    expect(evaluated.output).toContain("fact_check_items")
+    expect(evaluated.output).toContain("summary")
     expect(evaluated.output).toContain("call report_build_result again")
+  })
+
+  test("accepts missing fact_check_items as an empty registration list", () => {
+    const evaluated = evaluateBuildReportSubmission({
+      result: {
+        status: "passed",
+        summary: "Implemented the goal",
+        files_changed: [],
+        tests: [],
+      },
+      ownsWorktree: true,
+      worktreeBranch: "opencorvus/task/t/goal/g/run/r",
+    })
+
+    expect(evaluated.accepted).toBe(true)
+    if (evaluated.accepted) expect(evaluated.result.fact_check_items).toEqual([])
   })
 
   test("accepts valid build terminal payload and normalizes managed worktree commit_ref", () => {

@@ -3,6 +3,7 @@ import path from "path"
 import { pathToFileURL } from "url"
 import type { PermissionNext } from "../../src/permission/next"
 import type { Tool } from "../../src/tool/tool"
+import { Agent } from "../../src/agent/agent"
 import { Instance } from "../../src/project/instance"
 import { SkillTool } from "../../src/tool/skill"
 import { tmpdir } from "../fixture/fixture"
@@ -123,6 +124,38 @@ Use this skill.
           expect(result.output).toContain(`<skill_content name="tool-skill">`)
           expect(result.output).toContain(`Base directory for this skill: ${pathToFileURL(dir).href}`)
           expect(result.output).toContain(`<file>${file}</file>`)
+        },
+      })
+    } finally {
+      process.env.OPENCORVUS_TEST_HOME = home
+    }
+  })
+
+  test("mirror extraction skills are visible only to frontend-design", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const home = process.env.OPENCORVUS_TEST_HOME
+    process.env.OPENCORVUS_TEST_HOME = tmp.path
+
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const build = await Agent.get("build")
+          const frontendDesign = await Agent.get("frontend-design")
+          expect(build).toBeDefined()
+          expect(frontendDesign).toBeDefined()
+
+          const buildSkill = await SkillTool.init({ agent: build })
+          const frontendDesignSkill = await SkillTool.init({ agent: frontendDesign })
+
+          const buildResult = await buildSkill.execute({ query: "webpage" }, { ...baseCtx, ask: async () => {} })
+          const frontendDesignResult = await frontendDesignSkill.execute(
+            { query: "webpage" },
+            { ...baseCtx, agent: "frontend-design", ask: async () => {} },
+          )
+
+          expect(buildResult.output).not.toContain("<name>webpage-generate</name>")
+          expect(frontendDesignResult.output).toContain("<name>webpage-generate</name>")
         },
       })
     } finally {

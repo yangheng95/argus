@@ -10,7 +10,7 @@
  *
  * Only shared tools (e.g. everything returned by `createAgentContextTools()`)
  * should pass through this filter. Structured-output tools created by the
- * sub-agent's own factory (register_contract, register_design_analysis, …)
+ * sub-agent's own factory (register_contract, register_frontend_design, …)
  * bypass it — they are the agent's contract with the orchestrator and must
  * not be disabled by user config.
  */

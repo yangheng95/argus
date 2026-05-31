@@ -105,7 +105,7 @@ export function operatorNotesSection(taskID: string): string {
 /**
  * Query answered clarification interactions for a task and format as a prompt section.
  * Single source of truth for all clarification Q&A: every agent (Orchestrator, Requirements,
- * Architect, Design Analyst, Delivery) reads the same transcript so
+ * Architect, frontend_design, Delivery) reads the same transcript so
  * downstream agents never duplicate questions already answered upstream.
  *
  * Returns "" when no answered question interactions exist.

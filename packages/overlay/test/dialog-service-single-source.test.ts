@@ -48,6 +48,14 @@ describe("app/session dialog single source", () => {
     expect(main).not.toContain('document.getElementById("configSidebar")?.addEventListener("click"');
   });
 
+  test("config dialog host is mounted before async init can block settings menus", () => {
+    const ensureIndex = main.indexOf("ensureConfigDialogHost()");
+    const initIndex = main.indexOf("await initApp({");
+    expect(ensureIndex).toBeGreaterThanOrEqual(0);
+    expect(initIndex).toBeGreaterThanOrEqual(0);
+    expect(ensureIndex).toBeLessThan(initIndex);
+  });
+
   test("index html no longer contains static app/session/goal/config dialog shells", () => {
     expect(indexHtml).not.toContain('id="appDialog"');
     expect(indexHtml).not.toContain('id="btnAppDialogOk"');

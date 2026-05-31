@@ -41,6 +41,7 @@ import { Session } from "@/session"
 import { SessionStatus } from "@/session/status"
 import { toolFailureCauseFromUnknown } from "@/session/tool-failure-cause"
 import { Worktree } from "@/worktree"
+import { gitCeilingEnvForWorktree } from "@/worktree/git-ceiling"
 import { AgentSemaphore } from "@/engine/agent-semaphore"
 import { Ownership } from "@/engine/ownership"
 import { findActiveRunForTask, type TaskRow } from "@/engine/store"
@@ -62,8 +63,9 @@ import {
 import { Identifier } from "@/id/id"
 import { Message } from "@/session/message"
 import { MCPServe } from "@/mcp/serve"
-import type { VisualSpec } from "@/design-analyst/types"
-import { renderVisualContractPromptSection } from "@/design-analyst/prompt-section"
+import type { VisualSpec } from "@/frontend-design/types"
+import type { WorkloadBrief } from "@/goal-workload-analyst/types"
+import { renderVisualContractPromptSection } from "@/frontend-design/prompt-section"
 import type { AssemblyOwnerEntry, ReferenceCoverageEntry, SourceCoverageEntry } from "@/architect/fidelity"
 import type { FileDiff } from "@/snapshot/types"
 import {
@@ -168,28 +170,27 @@ export namespace BuildAgent {
       description: string
       acceptance: string
       non_goals: string
+      evidence_refs?: string[]
     }>
-    /** Optional visual anchors from design_analysis. The PRD/SPEC is the
+    /** Optional visual anchors from frontend_design. The frontend template is the
      *  authoritative contract; these rows only provide compact ids when present. */
     designSpecs?: VisualSpec[]
-    /** Full design-analysis PRD/SPEC and source manifest from the decision log.
-     *  This names product_spec, frontend_spec, visual_consistency_spec,
-     *  backend_spec, review notes, completeness audit, reference artifacts, and
-     *  evidence_source_manifest. */
-    designAnalysis?: string
+    /** Full frontend-design frontend template and source manifest from the decision log.
+     *  This names frontend_template, fillable_modules, visual_consistency_contract,
+     *  ui_data_contract, review notes, completeness audit, reference artifacts,
+     *  and evidence_source_manifest. */
+    frontendDesign?: string
     /** Task-scoped Architect Contract Graph. Build receives graph contracts
      *  and dependency reasons by id; it must not infer dependency meaning from
      *  removed prose contract fields. */
     contractGraph?: BuildContractGraphContext
-    /** Sibling goals listed in `target.depends_on`. The orchestrator gates
+    /** Dependency goals listed in `target.depends_on`. The orchestrator gates
      *  dispatch on these having passed and merged, so their files SHOULD be
-     *  in the worktree base — surfacing titles + objectives lets the build
-     *  agent recognise what is already provided and verify it before
-     *  consuming. */
+     *  in the worktree base. Keep this as a compact index; details live in
+     *  the Architect Contract Graph and workload brief. */
     dependencies?: Array<{
       id: string
       title: string
-      objective: string
       commit_ref?: string
     }>
     /** Pre-rendered "Persistent Integrity Findings" section composed by
@@ -222,17 +223,14 @@ export namespace BuildAgent {
       referenceCoverage?: ReferenceCoverageEntry[]
       assemblyOwners?: AssemblyOwnerEntry[]
     }
-    /** Full sibling-goal collaboration snapshot composed by the orchestrator
-     *  from the describe layer. Build agents may edit shared files, but they
-     *  must understand the current milestone and explain how each file change
-     *  preserves the other goals' declared contracts. */
+    /** Compact sibling-goal collaboration index composed by the orchestrator.
+     *  This intentionally excludes sibling objectives and acceptance specs so
+     *  build prompts and context snapshots do not inline every goal contract. */
     collaborationGoals?: Array<{
       id: string
       title: string
-      objective: string
       kind: string
       status: string
-      acceptance_specs: string[]
       owned_paths: string[]
       depends_on: string[]
     }>
@@ -244,6 +242,13 @@ export namespace BuildAgent {
      *  source that reads bytes and splices them into the user message after
      *  `task.attachments`. */
     retryAttachments?: Array<{ url: string; mime: string; filename?: string }>
+    /** This goal's Goal Workload Analyst brief, injected only when it matches
+     *  the active architect snapshot. Scopes the goal BEFORE implementation
+     *  (anti premature-minimization): countable work surface, underestimation
+     *  traps, verification inventory, and id/section pointers to read deeper.
+     *  Cites references by id only — it never restates surfaces in prose
+     *  (spec 2026-05-29-goal-workload-analyst §6B). */
+    workloadBrief?: WorkloadBrief
   }
 
   export interface RunInput {
@@ -457,7 +462,7 @@ export namespace BuildAgent {
       }
 
       if (ownsWorktree) {
-        await TaskRuntimeMaterializer.materializeDesignAnalysis({
+        await TaskRuntimeMaterializer.materializeFrontendDesign({
           projectDir: Instance.project.worktree,
           taskID: input.task.id,
           worktreeDir,
@@ -546,9 +551,9 @@ export namespace BuildAgent {
           : buildUserPrompt(input.target, input.context, input.task.id)
       const requiredIntegrityFingerprints = integrityBlockingFingerprintsFromFeedback(input.context?.integrityFeedback)
       // Forward the same authoritative references named in the
-      // design-analysis evidence manifest as multimodal user-message parts so
+      // frontend-design evidence manifest as multimodal user-message parts so
       // the build LLM physically sees what to clone. This includes user
-      // attachments and design-analysis materialized visual artifacts
+      // attachments and frontend-design materialized visual artifacts
       // (system_artifacts intent=visual_reference), not delivery retry renders.
       const taskAttachments = buildReferenceAttachments
       const retryAttachments = (input.context?.retryAttachments ?? []).filter(
@@ -1035,6 +1040,9 @@ function externalBuildSystemContract(executor: Exclude<TaskRow["executor"], "ope
     "- If required source evidence is absent or incomplete, finish with a concise failure summary naming the missing evidence instead of inventing behavior or substituting guesses.",
     "- Keep reasoning, plans, prompt/rule details, and progress narration out of assistant text. Use tools to act.",
     "- When the prompt or staged references define a screenshot, mockup, or webpage target, those references are authoritative. Match them 1:1 as closely as the stack allows; do not substitute your own design or silently drop referenced assets.",
+    "- For webpage clone builds, the current worktree's project-root `web-clone-source/` package is the only implementation evidence entrypoint. Read its compact README, implementation blueprint, source-ir, source-skeleton/critical.css, and reference.png before writing code.",
+    "- If `web-clone-source/` is missing, empty, corrupt, or incomplete in the current worktree, report that the source package was not materialized. Do not search sibling worktrees, primary project directories, absolute external paths, or raw `mirror/` to repair it yourself.",
+    "- Do not generate a separate source project for webpage clone delivery. Implement the target project directly from the visible source package, using data arrays/components/CSS adapters rather than raw HTML/base64/CSS replay.",
     "- Run the acceptance commands from the prompt before claiming success.",
     "- Write shell commands for the actual platform and shell; on Windows/PowerShell use PowerShell-native commands instead of unverified Unix-only helpers such as head, sed, or grep.",
     "- Commit changes with a concrete commit message before finishing.",
@@ -2162,8 +2170,10 @@ export async function collectGoalContributionDiffs(worktreeDir: string, baseRef:
 }
 
 export async function resolveGoalContributionBaseRef(worktreeDir: string, baseRef: string): Promise<string> {
+  const env = gitCeilingEnvForWorktree(worktreeDir)
   const parentsResult = await runGit(["show", "--no-patch", "--pretty=%P", "HEAD"], {
     cwd: worktreeDir,
+    env,
     timeoutProfile: "fast",
   })
   const parentsRaw = parentsResult.exitCode === 0 ? parentsResult.text().trim() : ""
@@ -2183,7 +2193,8 @@ export async function resolveGoalContributionBaseRef(worktreeDir: string, baseRe
  * worktree-internal files like ownership markers.
  */
 async function collectGoalDiffs(worktreeDir: string, baseRef: string): Promise<FileDiff[]> {
-  const headResult = await runGit(["rev-parse", "HEAD"], { cwd: worktreeDir, timeoutProfile: "fast" })
+  const env = gitCeilingEnvForWorktree(worktreeDir)
+  const headResult = await runGit(["rev-parse", "HEAD"], { cwd: worktreeDir, env, timeoutProfile: "fast" })
   const headRaw = headResult.exitCode === 0 ? headResult.text().trim() : ""
   if (!headRaw || headRaw === baseRef) return []
 
@@ -2201,7 +2212,7 @@ async function collectGoalDiffs(worktreeDir: string, baseRef: string): Promise<F
       "--",
       ".",
     ],
-    { cwd: worktreeDir, timeoutProfile: "default" },
+    { cwd: worktreeDir, env, timeoutProfile: "default" },
   )
   const statusOut = statusResult.exitCode === 0 ? statusResult.text().trim() : ""
   for (const line of statusOut.split("\n")) {
@@ -2214,7 +2225,7 @@ async function collectGoalDiffs(worktreeDir: string, baseRef: string): Promise<F
 
   const numstatResult = await runGit(
     ["-c", "core.quotepath=false", "diff", "--no-ext-diff", "--no-renames", "--numstat", baseRef, headRaw, "--", "."],
-    { cwd: worktreeDir, timeoutProfile: "default" },
+    { cwd: worktreeDir, env, timeoutProfile: "default" },
   )
   const numstatOut = numstatResult.exitCode === 0 ? numstatResult.text().trim() : ""
 
@@ -2223,14 +2234,15 @@ async function collectGoalDiffs(worktreeDir: string, baseRef: string): Promise<F
     if (!line) continue
     const [additions, deletions, file] = line.split("\t")
     if (!file) continue
-    if (file.startsWith(".opencorvus/") || file === ".opencorvus-meta.json") continue
+    if (ProjectRuntimePaths.isInternalRuntimeRelativePath(file)) continue
+    if (ProjectRuntimePaths.isEvidenceInputRelativePath(file)) continue
     const isBinary = additions === "-" && deletions === "-"
     const before = isBinary
       ? ""
-      : (await runGit(["show", `${baseRef}:${file}`], { cwd: worktreeDir, timeoutProfile: "default" })).text()
+      : (await runGit(["show", `${baseRef}:${file}`], { cwd: worktreeDir, env, timeoutProfile: "default" })).text()
     const after = isBinary
       ? ""
-      : (await runGit(["show", `${headRaw}:${file}`], { cwd: worktreeDir, timeoutProfile: "default" })).text()
+      : (await runGit(["show", `${headRaw}:${file}`], { cwd: worktreeDir, env, timeoutProfile: "default" })).text()
     const added = isBinary ? 0 : parseInt(additions, 10)
     const removed = isBinary ? 0 : parseInt(deletions, 10)
     result.push({
@@ -2276,6 +2288,47 @@ function compactLine(value: string, max = 320): string {
   const normalized = value.replace(/\s+/g, " ").trim()
   if (normalized.length <= max) return normalized
   return `${normalized.slice(0, max)}…`
+}
+
+function renderGoalWorkloadBriefSection(wlBrief: WorkloadBrief | undefined): string {
+  if (!wlBrief) return ""
+  const inv = wlBrief.execution_inventory
+  const lines: string[] = []
+  lines.push("## Goal Workload Brief — scope this BEFORE you implement")
+  lines.push("")
+  lines.push(
+    "Read this first. It is the goal-local workload inventory; do not bury it under the full upstream spec or stop at the obvious components.",
+  )
+  if (wlBrief.why_not_smaller.length > 0) {
+    lines.push("")
+    lines.push("Why it is not smaller:")
+    for (const w of wlBrief.why_not_smaller) lines.push(`- ${w}`)
+  }
+  if (wlBrief.underestimation_traps.length > 0) {
+    lines.push("")
+    lines.push("Underestimation traps:")
+    for (const t of wlBrief.underestimation_traps) lines.push(`- ${t}`)
+  }
+  lines.push("")
+  lines.push(
+    `Work surface (all required): ${inv.surfaces} surfaces / ${inv.states} states / ${inv.data_contracts} data contracts / ${inv.verification_points} verification points`,
+  )
+  if (wlBrief.verification_inventory.length > 0) {
+    lines.push("")
+    lines.push("Verify before reporting pass:")
+    for (const v of wlBrief.verification_inventory) lines.push(`- ${v}`)
+  }
+  const refs = wlBrief.references
+  const readDeeper: string[] = []
+  if (refs.contract_ids.length > 0) readDeeper.push(`architect contracts ${refs.contract_ids.join(", ")}`)
+  if (refs.reference_coverage_ids.length > 0)
+    readDeeper.push(`reference coverage ${refs.reference_coverage_ids.join(", ")}`)
+  if (refs.prd_sections.length > 0) readDeeper.push(`frontend-template.md sections ${refs.prd_sections.join(", ")}`)
+  if (readDeeper.length > 0) {
+    lines.push("")
+    lines.push(`Read deeper (do not skim): ${readDeeper.join(" · ")}`)
+  }
+  return lines.join("\n")
 }
 
 type BuildReferenceAttachment = {
@@ -2386,6 +2439,12 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
     const lines: string[] = []
     const dependencyIDs = new Set(target.depends_on)
 
+    const workloadSection = renderGoalWorkloadBriefSection(context?.workloadBrief)
+    if (workloadSection.trim().length > 0) {
+      lines.push(workloadSection)
+      lines.push("")
+    }
+
     // ── Upstream context (rule 23): the goal contract is a compressed view;
     //    the build agent benefits from the original Requirements list and
     //    architect cross-goal contracts when implementing the goal. Each
@@ -2402,6 +2461,8 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
         lines.push(`- **${r.id}** [${r.type}]: ${r.description}`)
         if (r.acceptance.trim().length > 0) lines.push(`  Acceptance: ${r.acceptance}`)
         if (r.non_goals.trim().length > 0) lines.push(`  Non-goals: ${r.non_goals}`)
+        const evidenceRefs = r.evidence_refs ?? []
+        if (evidenceRefs.length > 0) lines.push(`  Evidence refs: ${evidenceRefs.join(", ")}`)
       }
       lines.push("")
     }
@@ -2416,22 +2477,12 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
       lines.push("## Collaboration State")
       lines.push("")
       lines.push(
-        "These are the sibling goals in the shared milestone. `owned_paths` are responsibility paths, not a file sandbox: shared-file edits are allowed when they are necessary for the integrated deliverable, preserve the Architect Contract Graph, and are explained in `files_changed[]`.",
+        "Sibling-goal overview only. Full sibling objectives and acceptance specs are intentionally not inlined here; use the Contract Graph, dependency section, and workload brief to stay scoped. `owned_paths` are responsibility paths, not a file sandbox: shared-file edits are allowed when necessary for the integrated deliverable, preserve the Architect Contract Graph, and are explained in `files_changed[]`.",
       )
       lines.push("")
       for (const goal of collaborationGoals) {
         const marker = goal.id === target.id ? " (this goal)" : ""
-        const relevant = goal.id === target.id || dependencyIDs.has(goal.id)
         lines.push(`- **${goal.id}**${marker} [${goal.kind}, status=${goal.status}]: ${goal.title}`)
-        if (goal.objective) lines.push(`  - objective: ${goal.objective}`)
-        if (goal.acceptance_specs.length > 0 && relevant) {
-          lines.push("  - acceptance_specs:")
-          for (const spec of goal.acceptance_specs) lines.push(`    - ${spec}`)
-        } else if (goal.acceptance_specs.length > 0) {
-          lines.push(
-            `  - acceptance_specs_summary: ${goal.acceptance_specs.map((spec) => compactLine(spec, 140)).join(" | ")}`,
-          )
-        }
         if (goal.owned_paths.length > 0) lines.push(`  - responsibility_paths: ${goal.owned_paths.join(", ")}`)
         if (goal.depends_on.length > 0) lines.push(`  - depends_on: ${goal.depends_on.join(", ")}`)
       }
@@ -2449,13 +2500,12 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
       for (const d of deps) {
         const sha = d.commit_ref ? ` @ ${d.commit_ref}` : ""
         lines.push(`- **${d.id}** ${d.title}${sha}`)
-        if (d.objective) lines.push(`  - Objective: ${d.objective}`)
       }
       lines.push("")
     }
 
-    if (context?.designAnalysis && context.designAnalysis.trim().length > 0) {
-      lines.push(context.designAnalysis.trim())
+    if (context?.frontendDesign && context.frontendDesign.trim().length > 0) {
+      lines.push(context.frontendDesign.trim())
       lines.push("")
     }
 
@@ -2464,7 +2514,7 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
         renderVisualContractPromptSection({
           specs: context.designSpecs,
           instructions: [
-            "The optional visual anchors below came from design_analysis. The PRD/SPEC above remains authoritative for the referenced UI/web target: restore the relevant subset 1:1 as closely as the stack allows.",
+            "The optional visual anchors below came from frontend_design. The frontend template above remains authoritative for the referenced UI/web target: restore the relevant subset 1:1 as closely as the stack allows.",
             "Use the subset relevant to this goal's responsibility paths, UI surface, and interactions; ignore anchors targeting unrelated regions.",
           ],
         }),
@@ -2536,7 +2586,7 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
       lines.push("")
     }
 
-    // ── Goal contract ────────────────────────────────────────────────────
+    // Goal contract.
     lines.push(`# Goal: ${target.title}`)
     lines.push("")
     lines.push(`**Objective**: ${target.objective}`)
@@ -2592,8 +2642,8 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
     contextLines.push(context.deliveryFeedback.trim())
     contextLines.push("")
   }
-  if (context?.designAnalysis && context.designAnalysis.trim().length > 0) {
-    contextLines.push(context.designAnalysis.trim())
+  if (context?.frontendDesign && context.frontendDesign.trim().length > 0) {
+    contextLines.push(context.frontendDesign.trim())
     contextLines.push("")
   }
   if (context?.designSpecs && context.designSpecs.length > 0) {
@@ -2601,8 +2651,8 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
       renderVisualContractPromptSection({
         specs: context.designSpecs,
         instructions: [
-          "The visual contract below came from design_analysis. It is authoritative for this direct build request.",
-          "Use the decision-log evidence_source_manifest and staged references for any source file/image named by the PRD/SPEC.",
+          "The visual contract below came from frontend_design. It is authoritative for this direct build request.",
+          "Use the decision-log evidence_source_manifest and staged references for any source file/image named by the frontend template.",
         ],
       }),
     )

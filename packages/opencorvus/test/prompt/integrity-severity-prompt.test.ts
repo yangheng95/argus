@@ -170,6 +170,18 @@ test("evidence prompt renders scope-bounded maturity read-through without local 
   expect(prompt).not.toContain("production")
 })
 
+test("evidence prompt includes bounded frontend-design contract", () => {
+  const input = promptInput()
+  input.frontendDesign =
+    "## visual_consistency_contract\nMatch web-clone-source/reference.png at 96/100.\n\n## evidence_source_manifest\nweb-clone-source/implementation-blueprint.md"
+
+  const prompt = buildIntegrityEvidencePrompt(input)
+
+  expect(prompt).toContain("# Frontend Design Contract")
+  expect(prompt).toContain("web-clone-source/reference.png")
+  expect(prompt).toContain("inspect_integrity_evidence({ section: \"frontend_design_contract\" })")
+})
+
 test("large integrity initial prompts stay compact and omit retired context surfaces", () => {
   const hiddenUserTail = "USER_REQUEST_HIDDEN_TAIL_SHOULD_NOT_RENDER"
   const oversizedScorer = "SCORER_BODY_SHOULD_NOT_RENDER " + "x".repeat(4_000)

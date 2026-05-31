@@ -519,7 +519,7 @@ export function Board(props: BoardProps) {
   // Step ID → right-pane section. Pipeline workflow has exactly ONE goal-scope
   // step now: `build`.
   const STEP_TO_SECTION: Record<string, string> = {
-    design_analysis: "requirements",
+    frontend_design: "requirements",
     requirements: "requirements",
     architect: "architect",
     build: "goalWorkflows",

@@ -1,4 +1,5 @@
 import { Instance } from "@/project/instance"
+import type { GoalWorkloadResult } from "@/goal-workload-analyst/types"
 import { ProjectTable } from "@/project/project.sql"
 import { SessionTable } from "@/session/session.sql"
 import { SessionStatus } from "@/session/status"
@@ -53,6 +54,12 @@ import {
 } from "./catalog"
 import { deriveTaskStatus } from "./task-status"
 import { ArchitectContractGraphSchema, type ArchitectContractGraph } from "@/architect/contract-graph"
+import {
+  ResearchBriefSchema,
+  validateResearchBriefIntegrity,
+  validateResearchBriefTaskBoundary,
+  type ResearchBrief,
+} from "@/research/schema"
 
 export type TaskRow = typeof EngineTaskTable.$inferSelect
 export type PlanRow = typeof EnginePlanVersionTable.$inferSelect
@@ -98,6 +105,7 @@ export type DeliveryRow = {
   time_updated: number
 }
 export type ArtifactRow = typeof EngineArtifactTable.$inferSelect
+export type ResearchBriefArtifactRow = ArtifactRow & { payload: ResearchBrief }
 /** Phase-6 artifact-backed evaluation shape. Was `typeof EngineEvaluationTable.$inferSelect`
  *  until `engine_evaluation` was deleted in favour of `engine_artifact` rows with
  *  kind="verification-evidence". Field names stay snake_case so old consumers do
@@ -267,6 +275,30 @@ export function findLatestArchitectContractGraphArtifact(taskID: string): Artifa
       .get(),
   )
   return row
+}
+
+export function findLatestResearchBriefArtifact(taskID: string): ResearchBriefArtifactRow | undefined {
+  const row = Database.use((db) =>
+    db
+      .select()
+      .from(EngineArtifactTable)
+      .where(
+        and(
+          eq(EngineArtifactTable.task_id, taskID),
+          eq(EngineArtifactTable.kind, "research_brief"),
+          eq(EngineArtifactTable.label, "active"),
+        ),
+      )
+      .orderBy(desc(EngineArtifactTable.time_created), desc(EngineArtifactTable.id))
+      .limit(1)
+      .get(),
+  )
+  if (!row) return undefined
+  const parsed = ResearchBriefSchema.safeParse(row.payload)
+  if (!parsed.success) return undefined
+  if (validateResearchBriefIntegrity(parsed.data)) return undefined
+  if (validateResearchBriefTaskBoundary(parsed.data, taskID)) return undefined
+  return { ...row, payload: parsed.data }
 }
 
 export function findPlan(planID: string) {
@@ -971,6 +1003,31 @@ export const listActiveGoalRunsByCoordinator = listActiveGoalRunsForRun
 /** @deprecated Use listGoalRunsForRun. */
 export const listGoalRunsByCoordinator = listGoalRunsForRun
 
+/**
+ * Latest active `goal_workload` artifact for a task (Goal Workload Analyst
+ * output). Latest-wins by time_created; undefined when the analyst has not run.
+ * Readers compare `spec_snapshot_id` against the active architect snapshot to
+ * detect staleness (spec 2026-05-29-goal-workload-analyst §5).
+ */
+export function findLatestGoalWorkloadArtifact(taskID: string): GoalWorkloadResult | undefined {
+  const row = Database.use((db) =>
+    db
+      .select()
+      .from(EngineArtifactTable)
+      .where(
+        and(
+          eq(EngineArtifactTable.task_id, taskID),
+          eq(EngineArtifactTable.kind, "goal_workload"),
+          eq(EngineArtifactTable.label, "active"),
+        ),
+      )
+      .orderBy(desc(EngineArtifactTable.time_created))
+      .limit(1)
+      .all(),
+  )[0]
+  return row?.payload as GoalWorkloadResult | undefined
+}
+
 export function listGoals(taskID: string) {
   return Database.use((db) =>
     db
@@ -1125,7 +1182,7 @@ export function listGoalWorkspacesForProject(projectID: string): Array<{ goal: G
  * whose current process-owned SessionStatus latch is still active.
  * This is the describe-layer view of "what agents are currently working" —
  * it covers pre-plan sessions (requirements / architect / integrity /
- * design-analyst) which `goals` and `run` miss entirely because they're
+ * frontend-design) which `goals` and `run` miss entirely because they're
  * gated on `active_plan_version_id`.
  *
  * Source: durable `session.status` supplies task/goal attribution and the

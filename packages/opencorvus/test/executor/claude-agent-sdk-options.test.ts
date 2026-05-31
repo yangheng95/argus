@@ -100,7 +100,7 @@ describe("claude agent sdk options", () => {
     expect(systemPrompt?.append).toContain("task_report => mcp__opencorvus__task_report")
     expect(systemPrompt?.append).not.toContain("webpage_extract => mcp__opencorvus__webpage_extract")
     expect(systemPrompt?.append).not.toContain("figma_extract => mcp__opencorvus__figma_extract")
-    expect(systemPrompt?.append).toContain("Mirror extraction artifacts are produced by the upstream design_analysis stage")
+    expect(systemPrompt?.append).toContain("Mirror extraction artifacts are produced by the upstream frontend_design stage")
   })
 
   test("omits options.resume on a fresh run so Claude starts a new session", async () => {

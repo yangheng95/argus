@@ -194,7 +194,7 @@ export const PanelTool = Tool.define("panel", {
         const originalText = typeof ctx.extra?.originalText === "string" ? ctx.extra.originalText : undefined
         // Two semantically different attachment outlets — both must run, this
         // is NOT a double-source situation:
-        //   1. Text attachments (PRD .txt / .md / .json) → inlined into the
+        //   1. Text attachments (template .txt / .md / .json) → inlined into the
         //      request prose so the executor session reads them as user
         //      intent without needing a separate `read` round-trip.
         //   2. Binary attachments (images, PDF, audio, …) → forwarded as

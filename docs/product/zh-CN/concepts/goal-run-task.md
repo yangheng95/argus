@@ -123,7 +123,7 @@ orchestrator-stream-error
 
 ```
 root · orchestrator · assistant · mission · intent-analysis ·
-requirements · design-analyst · goal · architect · integrity ·
+requirements · frontend-design · goal · architect · integrity ·
 delivery · executor · build · evaluator · system
 ```
 

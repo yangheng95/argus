@@ -201,7 +201,7 @@ describe("buildHardErrorFromFinalMessage", () => {
     expect(result.nonRetryable).toBe(true)
     expect(result.message).toContain("TerminalToolMissingError")
     expect(result.message).toContain("report_build_result")
-    expect(result.message).toContain("pre-submit reflection hook result is not a terminal submission")
+    expect(result.message).toContain("must call report_build_result exactly once")
     expect(Message.TerminalToolMissingError.isInstance(result.cause as Error)).toBe(true)
     expect((result.cause as { data?: { toolName?: string } }).data?.toolName).toBe("report_build_result")
   })

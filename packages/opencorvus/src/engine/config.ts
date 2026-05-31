@@ -26,7 +26,7 @@ interface ArchitectConfig {
   max_steps: number
 }
 
-interface DesignAnalystConfig {
+interface FrontendDesignConfig {
   max_steps: number
 }
 
@@ -118,7 +118,7 @@ export interface EngineConfigType {
   requirements: RequirementsConfig
   architect: ArchitectConfig
   delivery_visual: DeliveryVisualConfig
-  design_analyst: DesignAnalystConfig
+  frontend_design: FrontendDesignConfig
   intent_analysis: IntentAnalysisConfig
   build: BuildConfig
   activity: ActivityConfig
@@ -138,12 +138,12 @@ const DEFAULTS: EngineConfigType = {
   // Default off: failed waves are visible endpoints unless an operator
   // explicitly enables OpenCorvus' host-side algorithmic rework loop.
   auto_iteration: false,
-  // Step budgets sized for sonnet-tier sub-agents on large PRDs.
+  // Step budgets sized for sonnet-tier sub-agents on large templates.
   // Sonnet deliberates more per step than haiku (deeper exploration, more
   // reasoning text) and large attachments push step counts into the dozens
   // before structured output begins. The previous budgets were sized for
   // haiku and starved sonnet — observed: requirements stopped at 60 steps
-  // for a 30-requirement PRD with only 2 register_goal emitted.
+  // for a 30-requirement template with only 2 register_goal emitted.
   requirements: {
     max_steps: 1000,
   },
@@ -165,7 +165,7 @@ const DEFAULTS: EngineConfigType = {
       text_hit: 0.15,
     },
   },
-  design_analyst: {
+  frontend_design: {
     max_steps: 1000,
   },
   intent_analysis: {
@@ -269,8 +269,8 @@ function merge(user?: Config.Info["assistant"]): EngineConfigType {
           DEFAULTS.delivery_visual.score_weights.text_hit,
       },
     },
-    design_analyst: {
-      max_steps: user?.design_analyst?.max_steps ?? DEFAULTS.design_analyst.max_steps,
+    frontend_design: {
+      max_steps: user?.frontend_design?.max_steps ?? DEFAULTS.frontend_design.max_steps,
     },
     intent_analysis: {
       max_steps: user?.intent_analysis?.max_steps ?? DEFAULTS.intent_analysis.max_steps,

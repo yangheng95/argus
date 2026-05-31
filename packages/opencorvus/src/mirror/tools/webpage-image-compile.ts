@@ -4,7 +4,7 @@
  * Image2code analogue of `webpage_compile`. Reads a previously-written
  * `image-analysis.json` and emits the same compact XML IR dialect used by
  * the URL flow. Writes to `<outputDir>/page-ir.xml` (same filename so
- * design-analysis consumes one artifact contract).
+ * frontend-design consumes one artifact contract).
  */
 
 import fs from "node:fs/promises"
@@ -19,7 +19,7 @@ import { resolveMirrorOutputDir, DEFAULT_MIRROR_SUBDIR } from "./output-dir"
 export const WebpageImageCompileTool = Tool.define("webpage_image_compile", {
   description: `Compile an ImageAnalysis JSON into a compact XML IR (zero LLM, deterministic).
 
-Same XML dialect that \`webpage_compile\` (URL) produces — design-analysis consumes one artifact contract across sources. Containers, text leaves, image leaves, and repeated children all serialise identically.
+Same XML dialect that \`webpage_compile\` (URL) produces — frontend-design consumes one artifact contract across sources. Containers, text leaves, image leaves, and repeated children all serialise identically.
 
 Reads \`<outputDir>/image-analysis.json\` (from webpage_image_extract). Writes \`<outputDir>/page-ir.xml\`. Returns a preview of the first 2KB and total byte size.
 

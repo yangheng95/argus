@@ -29,7 +29,7 @@ import { installControlModel } from "../workspace/mock-control-model"
  *  Bug 3 — orphan child sessions.
  *    The orchestrator's `abortPrompt` listener only cancelled the
  *    orchestrator session itself; in-flight tool-spawned subagents
- *    (explore / requirements / design_analysis / architect / build) kept
+ *    (explore / requirements / frontend_design / architect / build) kept
  *    running, burning tokens on results no one was awaiting. Confirmed
  *    in production: a single `explore` ran 29+ minutes / 148k tokens /
  *    142 tool calls after its parent orchestrator had been aborted.

@@ -113,6 +113,39 @@ CREATE INDEX IF NOT EXISTS part_message_idx ON part (message_id);
 CREATE INDEX IF NOT EXISTS part_session_idx ON part (session_id);
 CREATE INDEX IF NOT EXISTS part_session_time_idx ON part (session_id, time_created);
 
+-- ===== session control record =====
+
+CREATE TABLE IF NOT EXISTS session_control_record (
+  id            text PRIMARY KEY,
+  session_id    text NOT NULL,
+  kind          text NOT NULL,
+  status        text NOT NULL,
+  owner         text,
+  payload       text NOT NULL,
+  time_created  integer NOT NULL,
+  time_updated  integer NOT NULL,
+  time_consumed integer,
+  FOREIGN KEY (session_id) REFERENCES session(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS session_control_session_idx ON session_control_record (session_id);
+CREATE INDEX IF NOT EXISTS session_control_session_status_idx ON session_control_record (session_id, status);
+CREATE INDEX IF NOT EXISTS session_control_kind_idx ON session_control_record (kind);
+
+-- ===== worker turn descriptor =====
+
+CREATE TABLE IF NOT EXISTS worker_turn_descriptor (
+  id           text PRIMARY KEY,
+  session_id   text NOT NULL,
+  hash         text NOT NULL,
+  agent        text NOT NULL,
+  payload      text NOT NULL,
+  time_created integer NOT NULL,
+  time_updated integer NOT NULL,
+  FOREIGN KEY (session_id) REFERENCES session(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS worker_turn_descriptor_session_idx ON worker_turn_descriptor (session_id);
+CREATE INDEX IF NOT EXISTS worker_turn_descriptor_hash_idx ON worker_turn_descriptor (hash);
+
 -- ===== permission =====
 
 CREATE TABLE IF NOT EXISTS permission (

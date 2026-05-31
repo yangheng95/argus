@@ -13,7 +13,7 @@
 
 ### 2. Sub-agents 是 agent，不是 tool
 
-- Requirements / Architect / Design-Analyst / Intent-Analysis / Integrity / Prosecutor / Delivery 各有自己的 LLM + tools + 推理循环（旧 `Planner` 已下线，相关推理并入 orchestrator 与 build agent）
+- Requirements / Architect / Frontend Design / Intent-Analysis / Integrity / Prosecutor / Delivery 各有自己的 LLM + tools + 推理循环（旧 `Planner` 已下线，相关推理并入 orchestrator 与 build agent）
 - 它们返回结构化结果，Orchestrator 据此推理下一步
 - 禁止把 sub-agent 降级为 tool function
 
@@ -34,7 +34,7 @@
 - 逐行解析用户输入，提取全部 explicit + implicit 需求，编号为 `REQ-N`
 - 每个 `REQ-N` 必须出现在至少一个 goal 的 `requirement_ids` 中
 - 输出追溯矩阵（`REQ-N → goal_X`），Fidelity Review 验证完整覆盖
-- **10000 行 PRD 和 1 行 bug report 要求同样的严谨度**
+- **10000 行 template 和 1 行 bug report 要求同样的严谨度**
 
 ### 6. 保留的好设计
 

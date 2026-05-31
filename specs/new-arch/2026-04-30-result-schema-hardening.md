@@ -26,7 +26,7 @@ also narrow the tool surface once the collector is ready to finalize.
 Commands run before design:
 
 - `rg -n "submit_requirements|submit_integrity_review|report_build_result|BuildResultSchema|BuildTestResult|terminalTool|isReadyToFinalize|inputSchema: z\\.object\\(\\{\\}\\)|z\\.object\\(\\{\\}\\)" packages/opencorvus/src packages/opencorvus/test specs -g "*.ts" -g "*.md" -g "*.txt"`
-- `rg -n "create.*OutputTools|terminalTool|inputSchema: z\\.object|status: z\\.enum|z\\.discriminatedUnion|safeParse\\(|collector\\.|finalized" packages/opencorvus/src/requirements packages/opencorvus/src/architect packages/opencorvus/src/integrity packages/opencorvus/src/build packages/opencorvus/src/intent-analysis packages/opencorvus/src/design-analyst packages/opencorvus/src/delivery packages/opencorvus/src/prosecutor packages/opencorvus/src/orchestrator packages/opencorvus/src/session -g "*.ts"`
+- `rg -n "create.*OutputTools|terminalTool|inputSchema: z\\.object|status: z\\.enum|z\\.discriminatedUnion|safeParse\\(|collector\\.|finalized" packages/opencorvus/src/requirements packages/opencorvus/src/architect packages/opencorvus/src/integrity packages/opencorvus/src/build packages/opencorvus/src/intent-analysis packages/opencorvus/src/frontend-design packages/opencorvus/src/delivery packages/opencorvus/src/prosecutor packages/opencorvus/src/orchestrator packages/opencorvus/src/session -g "*.ts"`
 
 | Call point | Finding | Decision |
 | --- | --- | --- |

@@ -18,7 +18,7 @@ const KNOWN_STAGES = [
   "intent-analysis",
   "spec",
   "requirements",
-  "design-analyst",
+  "frontend-design",
   "architect",
   "planner",
   "goal",

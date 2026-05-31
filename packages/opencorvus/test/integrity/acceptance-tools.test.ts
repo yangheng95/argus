@@ -39,6 +39,8 @@ test("integrity evidence tools expose scoped drilldown without upstream full-con
           ],
           goalReports: [],
         },
+        frontendDesign:
+          "## visual_consistency_contract\nMatch web-clone-source/reference.png at 96/100.\n\n## evidence_source_manifest\nweb-clone-source/implementation-blueprint.md",
         attachments: [],
       })
 
@@ -73,6 +75,13 @@ test("integrity evidence tools expose scoped drilldown without upstream full-con
       )
       expect(String(diff)).toContain("realApi")
       expect(String(diff)).not.toContain("upstream_context")
+
+      const design = await tools.inspect_integrity_evidence.execute!(
+        { section: "frontend_design_contract", max_chars: 2_000 },
+        {} as any,
+      )
+      expect(String(design)).toContain("visual_consistency_contract")
+      expect(String(design)).toContain("web-clone-source/implementation-blueprint.md")
 
       const command = await tools.run_command.execute!(
         { command: "printf guard > integrity-mutation.txt", timeout_ms: 10_000 },

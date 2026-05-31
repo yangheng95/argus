@@ -5,10 +5,13 @@ import { Identifier } from "../id/id"
 import { Message } from "./message"
 import { Session } from "."
 import { Agent } from "../agent/agent"
+import { WorkerTurnDescriptor } from "@/agent/worker-turn-descriptor"
 import { Provider } from "../provider/provider"
 import { type Tool as AITool, tool, jsonSchema, type ToolExecutionOptions, asSchema, type ModelMessage } from "ai"
 import type { TextHooks } from "@/llm/api"
 import { SessionCompaction } from "./compaction"
+import { CompactionHandoff } from "./compaction-handoff"
+import { SessionControl } from "./control"
 import { ContextBudget } from "./context-budget"
 import { Instance } from "../project/instance"
 import { AttachmentStore } from "@/storage/attachment-store"
@@ -25,6 +28,7 @@ import { defer } from "../util/defer"
 import { ToolRegistry } from "../tool/registry"
 import { Env } from "../env"
 import { MCP } from "../mcp"
+import { BROWSER_MCP_PERMISSION_BASELINE, mcpPermissionPlan } from "@/mcp/browser/permission-plan"
 import { ulid } from "ulid"
 import { NamedError } from "@opencorvus-ai/util/error"
 import { fn } from "@/util/fn"
@@ -90,6 +94,8 @@ export namespace SessionLoop {
     sessionID: string
     agentKind: string
     contractKind: SessionRuntimeContractKind
+    workerTurnDescriptorID?: string
+    workerTurnDescriptorHash?: string
     goalID?: string
     goalRunID?: string
     attemptID?: string
@@ -214,12 +220,35 @@ export namespace SessionLoop {
     "architect",
     "build",
     "delivery",
-    "design-analyst",
+    "fact-check",
+    "frontend-design",
     "integrity",
     "intent-analysis",
     "orchestrator",
+    "research",
     "requirements",
   ])
+
+  const workflowAutoCompactionDisabledSessionKinds = new Set([
+    "architect",
+    "build",
+    "delivery",
+    "fact-check",
+    "goal-workload-analyst",
+    "integrity",
+    "intent-analysis",
+    "orchestrator",
+    "research",
+    "requirements",
+  ])
+
+  function disablesAutomaticCompaction(session: Session.Info): boolean {
+    return workflowAutoCompactionDisabledSessionKinds.has(session.kind)
+  }
+
+  function isActionableSessionControl(control: SessionControl.Record): boolean {
+    return control.kind === "compaction_request" || control.kind === "manual_summarize"
+  }
 
   export function agentKindRequiresRuntimeContract(agentKind: string | undefined): boolean {
     return !!agentKind && runtimeContractRequiredAgentKinds.has(agentKind)
@@ -233,6 +262,16 @@ export namespace SessionLoop {
     expectedGoalID?: string
     expectedGoalRunID?: string
     expectedAttemptID?: string
+    expectedWorkerTurnDescriptor?: {
+      id: string
+      hash: string
+    }
+    expectedModel?: {
+      providerID: string
+      modelID: string
+    }
+    expectedResultMode?: "reply" | "summary"
+    requireWorkerTurnDescriptor?: boolean
     requireRuntimeContract?: boolean
     rejectSatisfiedTerminal?: boolean
   }): SessionRuntimeContract | undefined {
@@ -283,6 +322,100 @@ export namespace SessionLoop {
         `SessionRuntimeContract attempt mismatch for ${input.sessionID}: expected ${input.expectedAttemptID}, found ${identity.attemptID ?? "<unset>"}`,
       )
     }
+    const expectedWorkerTurnDescriptor =
+      input.expectedWorkerTurnDescriptor ??
+      (identity.workerTurnDescriptorID && identity.workerTurnDescriptorHash
+        ? { id: identity.workerTurnDescriptorID, hash: identity.workerTurnDescriptorHash }
+        : undefined)
+    if (
+      input.requireWorkerTurnDescriptor &&
+      identity.contractKind !== "orchestrator-wake" &&
+      !expectedWorkerTurnDescriptor
+    ) {
+      const agentKind = input.expectedAgentKind ?? input.sessionKind
+      throw new SessionRuntimeContractMissingError({
+        message: `SessionRuntimeContract worker descriptor missing for ${input.sessionID}: runtime-required continuations must carry descriptor id/hash`,
+        sessionID: input.sessionID,
+        ...(agentKind ? { agentKind } : {}),
+        reason: "missing",
+      })
+    }
+    if (expectedWorkerTurnDescriptor) {
+      if (identity.workerTurnDescriptorID !== expectedWorkerTurnDescriptor.id) {
+        throw new Error(
+          `SessionRuntimeContract worker descriptor mismatch for ${input.sessionID}: expected ${expectedWorkerTurnDescriptor.id}, found ${identity.workerTurnDescriptorID ?? "<unset>"}`,
+        )
+      }
+      if (identity.workerTurnDescriptorHash !== expectedWorkerTurnDescriptor.hash) {
+        throw new Error(
+          `SessionRuntimeContract worker descriptor hash mismatch for ${input.sessionID}: expected ${expectedWorkerTurnDescriptor.hash}, found ${identity.workerTurnDescriptorHash ?? "<unset>"}`,
+        )
+      }
+      const descriptor = WorkerTurnDescriptor.get({
+        id: expectedWorkerTurnDescriptor.id,
+        sessionID: input.sessionID,
+      })
+      if (!descriptor) {
+        const agentKind = input.expectedAgentKind ?? input.sessionKind
+        throw new SessionRuntimeContractMissingError({
+          message: `SessionRuntimeContract worker descriptor missing for ${input.sessionID}: ${expectedWorkerTurnDescriptor.id}`,
+          sessionID: input.sessionID,
+          ...(agentKind ? { agentKind } : {}),
+          reason: "missing",
+        })
+      }
+      if (descriptor.hash !== expectedWorkerTurnDescriptor.hash) {
+        throw new Error(
+          `SessionRuntimeContract worker descriptor stored hash mismatch for ${input.sessionID}: expected ${expectedWorkerTurnDescriptor.hash}, found ${descriptor.hash}`,
+        )
+      }
+      if (descriptor.payload.agent !== identity.agentKind) {
+        throw new Error(
+          `SessionRuntimeContract worker descriptor agent mismatch for ${input.sessionID}: expected ${identity.agentKind}, found ${descriptor.payload.agent}`,
+        )
+      }
+      if (descriptor.payload.workflow.goalID !== identity.goalID) {
+        throw new Error(
+          `SessionRuntimeContract worker descriptor goal mismatch for ${input.sessionID}: expected ${identity.goalID ?? "<unset>"}, found ${descriptor.payload.workflow.goalID ?? "<unset>"}`,
+        )
+      }
+      if (descriptor.payload.workflow.goalRunID !== identity.goalRunID) {
+        throw new Error(
+          `SessionRuntimeContract worker descriptor goal_run mismatch for ${input.sessionID}: expected ${identity.goalRunID ?? "<unset>"}, found ${descriptor.payload.workflow.goalRunID ?? "<unset>"}`,
+        )
+      }
+      if (descriptor.payload.workflow.attemptID !== identity.attemptID) {
+        throw new Error(
+          `SessionRuntimeContract worker descriptor attempt mismatch for ${input.sessionID}: expected ${identity.attemptID ?? "<unset>"}, found ${descriptor.payload.workflow.attemptID ?? "<unset>"}`,
+        )
+      }
+      if (descriptor.payload.workflow.sessionKind !== input.sessionKind) {
+        throw new Error(
+          `SessionRuntimeContract worker descriptor session kind mismatch for ${input.sessionID}: expected ${input.sessionKind ?? "<unset>"}, found ${descriptor.payload.workflow.sessionKind}`,
+        )
+      }
+      if (
+        input.expectedModel &&
+        (descriptor.payload.model.providerID !== input.expectedModel.providerID ||
+          descriptor.payload.model.modelID !== input.expectedModel.modelID)
+      ) {
+        throw new Error(
+          `SessionRuntimeContract worker descriptor model mismatch for ${input.sessionID}: expected ${input.expectedModel.providerID}/${input.expectedModel.modelID}, found ${descriptor.payload.model.providerID}/${descriptor.payload.model.modelID}`,
+        )
+      }
+      if (input.expectedResultMode && descriptor.payload.output.resultMode !== input.expectedResultMode) {
+        throw new Error(
+          `SessionRuntimeContract worker descriptor result mode mismatch for ${input.sessionID}: expected ${input.expectedResultMode}, found ${descriptor.payload.output.resultMode}`,
+        )
+      }
+      const descriptorTools = [...descriptor.payload.tools.enabled].sort()
+      const contractTools = Object.keys(contract.tools ?? {}).sort()
+      if (JSON.stringify(descriptorTools) !== JSON.stringify(contractTools)) {
+        throw new Error(
+          `SessionRuntimeContract worker descriptor tools mismatch for ${input.sessionID}: expected ${descriptorTools.join(",") || "<none>"}, found ${contractTools.join(",") || "<none>"}`,
+        )
+      }
+    }
     if (input.rejectSatisfiedTerminal !== false && contract.terminalToolContract?.isSatisfied()) {
       const agentKind = input.expectedAgentKind ?? input.sessionKind
       throw new SessionRuntimeContractMissingError({
@@ -295,24 +428,21 @@ export namespace SessionLoop {
     return contract
   }
 
-  function runtimeContractExpectationFromExtra(
-    extra: Record<string, any> | undefined,
-  ): {
-    expectedContractKind?: SessionRuntimeContractKind
-    expectedGoalRunID?: string
-    expectedAttemptID?: string
-  } {
-    const runtime = extra?.runtimeContract
-    if (!runtime || typeof runtime !== "object") return {}
-    const contractKind = runtime.contractKind
-    return {
-      expectedContractKind:
-        contractKind === "stage-attempt" || contractKind === "orchestrator-wake"
-          ? contractKind
-          : undefined,
-      expectedGoalRunID: typeof runtime.goalRunID === "string" ? runtime.goalRunID : undefined,
-      expectedAttemptID: typeof runtime.attemptID === "string" ? runtime.attemptID : undefined,
-    }
+  function workerTurnDescriptorPayloadForRuntimeContract(
+    contract: SessionRuntimeContract | undefined,
+    sessionID: string,
+  ): WorkerTurnDescriptor.Payload | undefined {
+    const descriptorID = contract?.identity.workerTurnDescriptorID
+    if (!descriptorID) return undefined
+    return WorkerTurnDescriptor.get({ id: descriptorID, sessionID })?.payload
+  }
+
+  function toolSwitchesFromWorkerTurnDescriptor(
+    descriptor: WorkerTurnDescriptor.Payload | undefined,
+  ): Record<string, boolean> | undefined {
+    if (!descriptor) return undefined
+    if (descriptor.tools.switches) return descriptor.tools.switches
+    return Object.fromEntries(descriptor.tools.enabled.map((name) => [name, true]))
   }
 
   // ---------------------------------------------------------------------------
@@ -1042,6 +1172,22 @@ export namespace SessionLoop {
     )
   }
 
+  function hasCompletedCompactionForSource(messages: Message.WithParts[], sourceUserMessageID: string): boolean {
+    const source = messages.find(
+      (msg) =>
+        msg.info.id === sourceUserMessageID &&
+        msg.info.role === "user" &&
+        msg.parts.some((part) => part.type === "compaction"),
+    )
+    if (!source) return false
+    return messages.some(
+      (msg) =>
+        msg.info.role === "assistant" &&
+        msg.info.parentID === sourceUserMessageID &&
+        CompactionHandoff.isValidSummaryMessage(msg.info),
+    )
+  }
+
   async function enterStandby(input: { sessionID: string; abort: AbortSignal; afterID: string }) {
     SessionCompaction.prune({ sessionID: input.sessionID })
     log.info("entering standby", { sessionID: input.sessionID })
@@ -1223,26 +1369,6 @@ export namespace SessionLoop {
       } satisfies Message.ToolPart)
     }
 
-    if (input.task.command) {
-      const summaryUserMsg: Message.User = {
-        id: Identifier.ascending("message"),
-        sessionID: input.sessionID,
-        role: "user",
-        time: {
-          created: Date.now(),
-        },
-        agent: input.lastUser.agent,
-        model: input.lastUser.model,
-      }
-      await Session.updateMessage(summaryUserMsg)
-      await Session.updatePart({
-        id: Identifier.ascending("part"),
-        messageID: summaryUserMsg.id,
-        sessionID: input.sessionID,
-        type: "text",
-        text: "Summarize the task tool output above and continue with your task.",
-      } satisfies Message.TextPart)
-    }
   }
 
   async function processTurn(input: {
@@ -1260,17 +1386,27 @@ export namespace SessionLoop {
     const agent = await Agent.get(input.lastUser.agent, { config })
     const maxSteps = agent.steps ?? Infinity
     const isLastStep = input.step >= maxSteps
-    const runtimeExpectation = runtimeContractExpectationFromExtra(input.lastUser.extra)
+    const requiresRuntimeContract =
+      agentKindRequiresRuntimeContract(input.lastUser.agent) ||
+      agentKindRequiresRuntimeContract(input.session.kind)
+    const requiresWorkerTurnDescriptor =
+      requiresRuntimeContract &&
+      input.lastUser.agent !== "orchestrator" &&
+      input.session.kind !== "orchestrator"
     const runtimeContract = validateSessionRuntimeContractForContinuation({
       sessionID: input.sessionID,
       sessionKind: input.session.kind,
       expectedAgentKind: input.lastUser.agent,
       expectedGoalID: input.session.goalID,
-      ...runtimeExpectation,
-      requireRuntimeContract:
-        agentKindRequiresRuntimeContract(input.lastUser.agent) ||
-        agentKindRequiresRuntimeContract(input.session.kind),
+      expectedModel: {
+        providerID: input.model.providerID,
+        modelID: input.model.api.id,
+      },
+      expectedResultMode: "reply",
+      requireWorkerTurnDescriptor: requiresWorkerTurnDescriptor,
+      requireRuntimeContract: requiresRuntimeContract,
     })
+    const workerTurnDescriptor = workerTurnDescriptorPayloadForRuntimeContract(runtimeContract, input.sessionID)
     const processor = SessionProcessor.create({
       assistantMessage: (await Session.updateMessage({
         id: Identifier.ascending("message"),
@@ -1310,7 +1446,7 @@ export namespace SessionLoop {
       agent,
       session: input.session,
       model: input.model,
-      tools: input.lastUser.tools,
+      tools: toolSwitchesFromWorkerTurnDescriptor(workerTurnDescriptor) ?? input.lastUser.tools,
       processor,
       bypassAgentCheck,
       extra: input.lastUser.extra,
@@ -1325,13 +1461,6 @@ export namespace SessionLoop {
         tool: createStructuredOutputTool({
           schema: input.lastUser.format.schema,
           validate: getStructuredOutputGuard(input.sessionID),
-          preTerminalReflection: () =>
-            takePreTerminalReflection({
-              sessionID: input.sessionID,
-              agentName: input.lastUser.agent,
-              finalizerName: "StructuredOutput",
-              markerID: input.lastUser.id,
-            }),
           onSuccess(output) {
             structured = output
           },
@@ -1618,17 +1747,37 @@ export namespace SessionLoop {
           messagePayloadChars,
           topPayloadParts,
         })
-        await Session.removeMessage({
-          sessionID: input.sessionID,
-          messageID: processor.message.id,
-        })
-        await SessionCompaction.create({
-          sessionID: input.sessionID,
-          source: input.lastUser,
-          auto: true,
-          overflow: false,
-        })
-        return "continue" as const
+        if (disablesAutomaticCompaction(input.session)) {
+          return stopTurnWithPredictiveBudgetError({
+            processor,
+            sessionID: input.sessionID,
+            error: new Message.PromptBudgetOverflowError({
+              message:
+                `Automatic compaction is disabled for workflow session kind=${input.session.kind}; ` +
+                `the prompt is estimated at ${totalTokensEst} tokens over limit=${predictiveBudget.limit}.`,
+              systemTokensEst,
+              messagePayloadChars,
+              toolSchemaChars,
+              compressibleMessageChars: messagePayloadChars,
+              nonCompressiblePromptChars: systemChars + toolSchemaChars,
+              usableBudget: predictiveBudget.usableBudget,
+              limit: predictiveBudget.limit,
+              toolNames,
+            }).toObject(),
+          })
+        } else {
+          await Session.removeMessage({
+            sessionID: input.sessionID,
+            messageID: processor.message.id,
+          })
+          await SessionCompaction.create({
+            sessionID: input.sessionID,
+            source: input.lastUser,
+            auto: true,
+            overflow: false,
+          })
+          return "continue" as const
+        }
       }
     }
 
@@ -1647,25 +1796,6 @@ export namespace SessionLoop {
       model: input.model,
       toolChoice: turnToolChoice,
       stream: runtimeContract?.stream,
-      preTerminalToolInputStart: ({ toolName }) => {
-        if (format.type === "json_schema" && toolName === "StructuredOutput") {
-          return takePreTerminalReflection({
-            sessionID: input.sessionID,
-            agentName: input.lastUser.agent,
-            finalizerName: "StructuredOutput",
-            markerID: input.lastUser.id,
-          })
-        }
-        if (terminalToolContract && terminalToolContract.toolName === toolName) {
-          return takePreTerminalReflection({
-            sessionID: input.sessionID,
-            agentName: input.lastUser.agent,
-            finalizerName: toolName,
-            markerID: runtimeContract?.identity.installedAt,
-          })
-        }
-        return undefined
-      },
     })
 
     if (structured !== undefined) {
@@ -1725,6 +1855,21 @@ export namespace SessionLoop {
 
     if (result === "stop") return "stop" as const
     if (result === "compact") {
+      if (disablesAutomaticCompaction(input.session)) {
+        processor.message.error = new Message.ContextOverflowError({
+          message:
+            `Automatic compaction is disabled for workflow session kind=${input.session.kind}; ` +
+            `the provider reported context overflow for this turn.`,
+        }).toObject()
+        processor.message.finish = "error"
+        processor.message.time.completed = Date.now()
+        await Session.updateMessage(processor.message)
+        Bus.publish(Session.Event.Error, {
+          sessionID: input.sessionID,
+          error: processor.message.error,
+        })
+        return "stop" as const
+      }
       await SessionCompaction.create({
         sessionID: input.sessionID,
         source: input.lastUser,
@@ -1738,6 +1883,7 @@ export namespace SessionLoop {
   export const LoopInput = z.object({
     sessionID: Identifier.schema("session"),
     resume_existing: z.boolean().optional(),
+    result_mode: z.enum(["reply", "summary"]).optional(),
   })
 
   /**
@@ -1782,8 +1928,69 @@ export namespace SessionLoop {
     if (contract.shouldExposeOnlyTerminalTool()) return { type: "tool", toolName: contract.toolName }
     return "required"
   }
+
+  export type PromptFinalMessageSelection =
+    | { type: "message"; message: Message.WithParts }
+    | { type: "maintenance-summary"; message: Message.WithParts }
+    | { type: "none" }
+
+  export function selectPromptFinalMessageFromNewest(messages: Iterable<Message.WithParts>): PromptFinalMessageSelection {
+    for (const item of messages) {
+      if (item.info.role === "user") return { type: "none" }
+      if (item.info.role !== "assistant") continue
+      if (item.info.summary === true) return { type: "maintenance-summary", message: item }
+      return { type: "message", message: item }
+    }
+    return { type: "none" }
+  }
+
+  export function maintenanceSummaryFailureMessage(message: Message.WithParts) {
+    const agent = message.info.role === "assistant" ? message.info.agent : "unknown"
+    const error = message.info.role === "assistant" ? message.info.error : undefined
+    if (error && typeof error === "object") {
+      const record = error as { name?: unknown; message?: unknown; data?: { message?: unknown } }
+      const name = typeof record.name === "string" ? record.name : "MaintenanceError"
+      const detail =
+        typeof record.data?.message === "string"
+          ? record.data.message
+          : typeof record.message === "string"
+            ? record.message
+            : JSON.stringify(error)
+      return `Session prompt loop ended after internal ${agent} summary checkpoint with ${name}${detail ? `: ${detail}` : ""}`
+    }
+    return `Session prompt loop ended after internal ${agent} summary checkpoint before continuation`
+  }
+
+  async function flushPromptFinalMessage(input: {
+    sessionID: string
+    abort: AbortSignal
+    resultMode: "reply" | "summary"
+  }) {
+    const candidates: Message.WithParts[] = []
+    for await (const item of Message.stream(input.sessionID)) {
+      candidates.push(item)
+      if (item.info.role === "user" || item.info.role === "assistant") break
+    }
+
+    const selected = selectPromptFinalMessageFromNewest(candidates)
+    if (selected.type === "message") {
+      flushCallbacks(input.sessionID, selected.message)
+      return
+    }
+
+    if (selected.type === "maintenance-summary" && input.resultMode === "summary") {
+      flushCallbacks(input.sessionID, selected.message)
+      return
+    }
+
+    if (selected.type === "maintenance-summary" && !input.abort.aborted) {
+      throw new Error(maintenanceSummaryFailureMessage(selected.message))
+    }
+  }
+
   export const loop = fn(LoopInput, async (input) => {
     const { sessionID, resume_existing } = input
+    const resultMode = input.result_mode ?? "reply"
 
     const abort = resume_existing ? resume(sessionID) : start(sessionID)
     if (!abort) {
@@ -1806,7 +2013,17 @@ export namespace SessionLoop {
           if (abort.aborted) break
           const msgs = await Message.filterCompacted(Message.stream(sessionID))
           const { lastUser, lastAssistant, lastFinished, tasks } = collectLoopState(msgs)
-          if (shouldEnterStandby({ lastUser, lastAssistant })) {
+          const pendingControls = SessionControl.pending(sessionID)
+          for (const control of pendingControls) {
+            if (isActionableSessionControl(control)) continue
+            SessionControl.fail({
+              id: control.id,
+              sessionID,
+              error: `Unsupported pending session control kind: ${control.kind}`,
+            })
+          }
+          const controls = pendingControls.filter(isActionableSessionControl)
+          if (controls.length === 0 && shouldEnterStandby({ lastUser, lastAssistant })) {
             if (!lastAssistant) break
             const lastResult = msgs.find((m) => m.info.id === lastAssistant.id)
             if (lastResult) flushCallbacks(sessionID, lastResult)
@@ -1829,7 +2046,10 @@ export namespace SessionLoop {
               history: msgs,
             }).catch((err) => log.error("failed to ensure session title", { error: String(err) }))
 
-          const model = await resolveAgentModel(lastUser.agent, { sessionID }).catch((e) => {
+          const model = await resolveAgentModel(lastUser.agent, {
+            sessionID,
+            explicitModel: lastUser.model,
+          }).catch((e) => {
             if (Provider.ModelNotFoundError.isInstance(e)) {
               const hint = e.data.suggestions?.length ? ` Did you mean: ${e.data.suggestions.join(", ")}?` : ""
               Bus.publish(Session.Event.Error, {
@@ -1841,6 +2061,9 @@ export namespace SessionLoop {
             }
             throw e
           })
+          const compactionControl = controls.find(
+            (item) => item.kind === "compaction_request" || item.kind === "manual_summarize",
+          )
           const task = tasks.pop()
 
           if (task?.type === "subtask") {
@@ -1848,13 +2071,70 @@ export namespace SessionLoop {
             continue
           }
 
+          if (compactionControl) {
+            if (compactionControl.kind === "compaction_request" && disablesAutomaticCompaction(session)) {
+              SessionControl.fail({
+                id: compactionControl.id,
+                sessionID,
+                error: `Automatic compaction is disabled for workflow session kind ${session.kind}`,
+              })
+              continue
+            }
+            const sourceUserMessageID = compactionControl.payload.source_user_message_id
+            if (typeof sourceUserMessageID !== "string") {
+              SessionControl.fail({
+                id: compactionControl.id,
+                sessionID,
+                error: "compaction control missing source_user_message_id",
+              })
+              continue
+            }
+            if (hasCompletedCompactionForSource(msgs, sourceUserMessageID)) {
+              SessionControl.consume({ id: compactionControl.id, sessionID })
+              continue
+            }
+            const result = await SessionCompaction.process({
+              messages: msgs,
+              parentID: sourceUserMessageID,
+              abort,
+              sessionID,
+              auto: compactionControl.kind === "compaction_request",
+              overflow: compactionControl.payload.overflow === true,
+              focus: typeof compactionControl.payload.focus === "string" ? compactionControl.payload.focus : undefined,
+              model:
+                compactionControl.payload.model &&
+                typeof compactionControl.payload.model === "object" &&
+                !Array.isArray(compactionControl.payload.model) &&
+                typeof (compactionControl.payload.model as { providerID?: unknown }).providerID === "string" &&
+                typeof (compactionControl.payload.model as { modelID?: unknown }).modelID === "string"
+                  ? {
+                      providerID: (compactionControl.payload.model as { providerID: string }).providerID,
+                      modelID: (compactionControl.payload.model as { modelID: string }).modelID,
+                    }
+                  : undefined,
+            })
+            SessionControl.consume({ id: compactionControl.id, sessionID })
+            if (result === "stop") break
+            continue
+          }
+
           if (task?.type === "compaction") {
+            if (task.auto && disablesAutomaticCompaction(session)) {
+              await Session.removePart({
+                sessionID,
+                messageID: task.messageID,
+                partID: task.id,
+              })
+              continue
+            }
             const result = await SessionCompaction.process({
               messages: msgs,
               parentID: lastUser.id,
               abort,
               sessionID,
               auto: task.auto,
+              overflow: task.overflow,
+              focus: task.focus,
             })
             if (result === "stop") break
             continue
@@ -1865,6 +2145,51 @@ export namespace SessionLoop {
             lastFinished.summary !== true &&
             (await SessionCompaction.isOverflow({ tokens: lastFinished.tokens, model, sessionID }))
           ) {
+            if (disablesAutomaticCompaction(session)) {
+              const assistantMessage = (await Session.updateMessage({
+                id: Identifier.ascending("message"),
+                parentID: lastUser.id,
+                role: "assistant",
+                agent: lastUser.agent,
+                variant: lastUser.variant,
+                path: {
+                  cwd: Instance.directory,
+                  root: Instance.worktree,
+                },
+                cost: 0,
+                tokens: {
+                  input: 0,
+                  output: 0,
+                  reasoning: 0,
+                  cache: { read: 0, write: 0 },
+                },
+                modelID: model.id,
+                providerID: model.providerID,
+                error: new Message.ContextOverflowError({
+                  message:
+                    `Automatic compaction is disabled for workflow session kind=${session.kind}; ` +
+                    `the previous turn exceeded the configured context budget.`,
+                }).toObject(),
+                finish: "error",
+                time: {
+                  created: Date.now(),
+                  completed: Date.now(),
+                },
+                sessionID,
+              })) as Message.Assistant
+              await Session.updatePart({
+                id: Identifier.ascending("part"),
+                sessionID,
+                messageID: assistantMessage.id,
+                type: "text",
+                text: assistantMessage.error?.data?.message ?? "Automatic compaction is disabled for this workflow session.",
+                time: {
+                  start: Date.now(),
+                  end: Date.now(),
+                },
+              } satisfies Message.TextPart)
+              break
+            }
             await SessionCompaction.create({
               sessionID,
               source: lastUser,
@@ -1893,11 +2218,7 @@ export namespace SessionLoop {
           continue
         }
         SessionCompaction.prune({ sessionID })
-        for await (const item of Message.stream(sessionID)) {
-          if (item.info.role === "user") continue
-          flushCallbacks(sessionID, item)
-          break
-        }
+        await flushPromptFinalMessage({ sessionID, abort, resultMode })
       } catch (e) {
         const s = state()[sessionID]
         if (s) {
@@ -2086,12 +2407,21 @@ export namespace SessionLoop {
             },
           )
 
-          await ctx.ask({
-            permission: key,
-            metadata: {},
-            patterns: ["*"],
-            always: ["*"],
-          })
+          const permission = mcpPermissionPlan(key, args)
+          if (key.startsWith("browser_")) {
+            await PermissionNext.ask({
+              ...permission,
+              sessionID: input.session.id,
+              tool: { messageID: input.processor.message.id, callID: opts.toolCallId },
+              ruleset: PermissionNext.merge(
+                BROWSER_MCP_PERMISSION_BASELINE,
+                input.agent.permission,
+                input.session.permission ?? [],
+              ),
+            })
+          } else {
+            await ctx.ask(permission)
+          }
 
           const result = await execute(args, opts)
 
@@ -2170,16 +2500,6 @@ export namespace SessionLoop {
         partFromToolCall: (toolCallID) => input.processor.partFromToolCall(toolCallID),
         ensureToolPart: (toolCallID, toolName, toolInput) =>
           input.processor.ensureToolPart(toolCallID, toolName, toolInput),
-        preTerminalReflection:
-          runtimeContract?.terminalToolContract?.toolName === name
-            ? () =>
-                takePreTerminalReflection({
-                  sessionID: input.session.id,
-                  agentName: runtimeContract.identity.agentKind,
-                  finalizerName: name,
-                  markerID: runtimeContract.identity.installedAt,
-                })
-            : undefined,
       })
       tools[name] = prepareProviderTool({
         name,
@@ -2195,7 +2515,18 @@ export namespace SessionLoop {
   }
 
   export function usesExactRuntimeContractTools(agentName: string, contract: SessionRuntimeContract | undefined): boolean {
-    return agentName === "orchestrator" && contract?.identity.agentKind === "orchestrator" && contract.identity.contractKind === "orchestrator-wake"
+    if (!contract) return false
+    if (agentName === "orchestrator" && contract.identity.agentKind === "orchestrator" && contract.identity.contractKind === "orchestrator-wake") {
+      return true
+    }
+    const exactStageAgents = new Set([
+      "architect",
+      "frontend-design",
+      "goal-workload-analyst",
+      "intent-analysis",
+      "requirements",
+    ])
+    return exactStageAgents.has(agentName) && contract.identity.agentKind === agentName
   }
 
   export function applyToolSwitches(tools: Record<string, AITool>, switches: Record<string, boolean> | undefined): void {
@@ -2233,6 +2564,7 @@ export namespace SessionLoop {
     const original = raw as AITool & { execute?: (...args: any[]) => any }
     if (!original.execute) return raw
     const execute = original.execute
+    let reflectedThisAssistantMessage: { output: string; title: string; metadata: object } | undefined
     // Mirror the attachment stamping the registry-tools wrapper applies
     // (loop.ts:967-987). Extras (e.g. screenshot,
     // verify_page_integrity) build attachments via buildMultimodalToolResult
@@ -2259,6 +2591,12 @@ export namespace SessionLoop {
         const toolCallID = typeof (options as any)?.toolCallId === "string" ? (options as any).toolCallId : undefined
         const normalizedInput = normalizeToolInput(args)
         const toolInput = normalizedInput.ok ? normalizedInput.value : {}
+        const reflection = ctx.preTerminalReflection?.()
+        if (reflection) {
+          reflectedThisAssistantMessage = reflection
+          return reflection
+        }
+        if (reflectedThisAssistantMessage) return reflectedThisAssistantMessage
         const toolPart = toolCallID
           ? (ctx.partFromToolCall(toolCallID) ?? await ctx.ensureToolPart(toolCallID, name, toolInput))
           : undefined
@@ -2271,8 +2609,6 @@ export namespace SessionLoop {
             toolPartID: toolPart?.id,
           },
         }
-        const reflection = ctx.preTerminalReflection?.()
-        if (reflection) return reflection
         const result = await execute(args, enrichedOptions)
         const normalized = normalizeExtraToolResult(result)
         const materializedAttachments = await materializeToolResultAttachments(normalized.attachments)
@@ -2295,12 +2631,14 @@ export namespace SessionLoop {
     const { $schema, ...toolSchema } = input.schema
     const inputSchema = jsonSchema(toolSchema as any)
     const payloadValidator = compileStructuredOutputPayloadValidator(toolSchema)
+    let reflectedThisAssistantMessage: { output: string; title: string; metadata: object } | undefined
 
     return strictTool(tool({
       id: "StructuredOutput" as any,
       description: STRUCTURED_OUTPUT_DESCRIPTION,
       inputSchema,
       async execute(args) {
+        if (reflectedThisAssistantMessage) return reflectedThisAssistantMessage
         const payload = validateStructuredOutputPayload(args, payloadValidator)
         if (!payload.ok) {
           throw new Message.StructuredOutputPayloadError({
@@ -2309,7 +2647,10 @@ export namespace SessionLoop {
           })
         }
         const reflection = input.preTerminalReflection?.()
-        if (reflection) return reflection
+        if (reflection) {
+          reflectedThisAssistantMessage = reflection
+          return reflection
+        }
         const rejection = await input.validate?.(payload.value)
         if (rejection) throw new Error(rejection)
         input.onSuccess(payload.value)

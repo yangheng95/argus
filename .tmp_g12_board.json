@@ -6,9 +6,9 @@
                      "name":  "Pipeline",
                      "steps":  [
                                    {
-                                       "id":  "design_analysis",
+                                       "id":  "frontend_design",
                                        "label":  "Design",
-                                       "tool":  "design_analysis",
+                                       "tool":  "frontend_design",
                                        "scope":  "task",
                                        "skippable":  true,
                                        "status":  "pending"
@@ -1057,7 +1057,7 @@
                                                                                              {
                                                                                                  "score":  2,
                                                                                                  "label":  "fully met",
-                                                                                                 "anchor":  "All 5 tools render correctly with proper geometry per PRD spec",
+                                                                                                 "anchor":  "All 5 tools render correctly with proper geometry per source contract",
                                                                                                  "passes":  true
                                                                                              },
                                                                                              {
@@ -1201,7 +1201,7 @@
                                                                                              {
                                                                                                  "score":  2,
                                                                                                  "label":  "fully met",
-                                                                                                 "anchor":  "All 7 tools render correctly per PRD spec",
+                                                                                                 "anchor":  "All 7 tools render correctly per source contract",
                                                                                                  "passes":  true
                                                                                              },
                                                                                              {

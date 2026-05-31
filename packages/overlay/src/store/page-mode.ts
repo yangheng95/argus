@@ -7,7 +7,7 @@
 // Changing modes does NOT clear or rewrite shared task state — boardStore
 // continues to hold the selected task, the panel mounts stay alive but
 // hidden, and returning to Panel restores the user's previous view
-// without a reload (PRD §6.3).
+// without a reload (template §6.3).
 //
 // Why a dedicated store instead of a signal living inside main.tsx:
 // Mission (and any future page) needs to dispatch the toggle from its

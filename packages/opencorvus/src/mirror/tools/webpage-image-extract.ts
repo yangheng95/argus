@@ -33,7 +33,7 @@ export const WebpageImageExtractTool = Tool.define("webpage_image_extract", {
 
 Reads each image from disk, sends it to a vision-capable model, and infers the page's structure (recursive element tree with bounds + roles), tokens (palette / fonts / text styles), and overall description. Multiple images are analyzed in parallel and merged into a single ImageAnalysis (palettes union, trees stacked under per-image wrapper containers).
 
-Writes \`<outputDir>/image-analysis.json\` (the full ImageAnalysis) and a copy of the first reference image as \`<outputDir>/reference.png\` so design-analysis has the same artifact path layout url2code uses. \`image-analysis.json\` is the raw source artifact for compile/analyze and the evidence manifest; use the compiled IR and shared context as the prompt-facing evidence.
+Writes \`<outputDir>/image-analysis.json\` (the full ImageAnalysis) and a copy of the first reference image as \`<outputDir>/reference.png\` so frontend-design has the same artifact path layout url2code uses. \`image-analysis.json\` is the raw source artifact for compile/analyze and the evidence manifest; use the compiled IR and shared context as the prompt-facing evidence.
 
 Use this only when image-reference evidence is missing for the requested output directory. Do not rerun it for the same image set/outputDir once \`reference.png\` and \`image-analysis.json\` exist. Requires a vision-capable model — fails loudly if the configured model has \`capabilities.input.image=false\`.`,
   parameters: z.object({
@@ -102,7 +102,7 @@ Use this only when image-reference evidence is missing for the requested output 
     const analysisPath = path.join(outputDir, "image-analysis.json")
     await fs.writeFile(analysisPath, JSON.stringify(analysis, null, 2), "utf8")
 
-    // Copy the FIRST reference image to `<outputDir>/reference.png` so design-analysis
+    // Copy the FIRST reference image to `<outputDir>/reference.png` so frontend-design
     // sees the same artifact layout the URL flow produces. Only the first image
     // becomes the canonical reference — multi-image inputs still merge in
     // analysis but visual evaluation needs one ground-truth pixel target.
@@ -142,7 +142,7 @@ Use this only when image-reference evidence is missing for the requested output 
         `**Analysis JSON:** \`${analysisPath}\``,
         `**Reference image:** \`${referencePath}\``,
         "",
-        "Image evidence acquired. Do not rerun extraction for this image set/outputDir unless the source changed. Use compact mirror artifacts for PRD/SPEC synthesis; do not read `image-analysis.json` wholesale.",
+        "Image evidence acquired. Do not rerun extraction for this image set/outputDir unless the source changed. Use compact mirror artifacts for frontend template synthesis; do not read `image-analysis.json` wholesale.",
       ].join("\n"),
       metadata: summary,
     }

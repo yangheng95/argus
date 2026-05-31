@@ -11,11 +11,10 @@ describe("runWalkthrough", () => {
       outDir: "tmp/walkthrough",
     }, {
       translate: async () => [{ action: "goto", path: "/" }, { action: "assertSelector", selector: "#app" }],
-      findBrowserExecutable: async () => "chrome",
-      puppeteer: {
+      browserRuntime: {
         launch: async (input) => {
           launchInputs.push(input)
-          return { newPage: async () => fakePage({ selectors: new Set(["#app"]) }), close: async () => undefined }
+          return fakeBrowser(fakePage({ selectors: new Set(["#app"]) }))
         },
       },
     })
@@ -31,8 +30,7 @@ describe("runWalkthrough", () => {
       outDir: "tmp/walkthrough",
     }, {
       translate: async () => [{ action: "assertSelector", selector: "#missing" }],
-      findBrowserExecutable: async () => "chrome",
-      puppeteer: { launch: async () => ({ newPage: async () => fakePage(), close: async () => undefined }) },
+      browserRuntime: { launch: async () => fakeBrowser(fakePage()) },
     })
     expect(result.passed).toBe(false)
     expect(result.evidence.join("\n")).toContain("first_failure=0")
@@ -51,8 +49,7 @@ describe("runWalkthrough", () => {
         scopes.push({ taskID: input.taskID, sessionID: input.sessionID })
         return [{ action: "assertSelector", selector: "#app" }]
       },
-      findBrowserExecutable: async () => "chrome",
-      puppeteer: { launch: async () => ({ newPage: async () => fakePage({ selectors: new Set(["#app"]) }), close: async () => undefined }) },
+      browserRuntime: { launch: async () => fakeBrowser(fakePage({ selectors: new Set(["#app"]) })) },
     })
     expect(scopes).toEqual([{ taskID: "task-a", sessionID: "session-a" }])
   })
@@ -78,6 +75,15 @@ function fakePage(input?: { selectors?: Set<string> }): WalkthroughPage & {
     on: () => undefined,
     screenshot: async () => undefined,
   }
+}
+
+function fakeBrowser(page: ReturnType<typeof fakePage>) {
+  return {
+    newContext: async () => ({
+      newPage: async () => page,
+    }),
+    close: async () => undefined,
+  } as never
 }
 
 function scenarioSpec() {

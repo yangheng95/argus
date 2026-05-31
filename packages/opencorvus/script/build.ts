@@ -3,6 +3,7 @@
 import { $ } from "bun"
 import fs from "fs"
 import path from "path"
+import os from "os"
 import { fileURLToPath } from "url"
 import solidPlugin from "../node_modules/@opentui/solid/scripts/solid-plugin"
 
@@ -17,6 +18,7 @@ import pkg from "../package.json"
 import { selectBuildTargets, type BuildTarget } from "./build-targets"
 import {
   artifactEntrypoints,
+  artifactExternalModules,
   artifactPackageBaseName,
   artifactSourcemap,
   parseBuildFlavor,
@@ -180,6 +182,8 @@ if (!noCleanFlag) {
 
 const binaries: Record<string, string> = {}
 let windowsSupervisorHelper: string | undefined
+const browserMcpNodeBundleGenerated = path.join(dir, "src", "mcp", "browser", "node-bundle.generated.ts")
+const browserMcpNodeBundlePlaceholder = "export const BROWSER_MCP_NODE_BUNDLE: string | undefined = undefined\n"
 
 async function buildWindowsSupervisorHelper() {
   if (windowsSupervisorHelper) return windowsSupervisorHelper
@@ -194,6 +198,36 @@ async function buildWindowsSupervisorHelper() {
   }
   return windowsSupervisorHelper
 }
+
+async function buildBrowserMcpNodeBundle(outdir: string) {
+  await fs.promises.mkdir(outdir, { recursive: true })
+  const result = await Bun.build({
+    entrypoints: ["./src/mcp/browser/stdio.ts"],
+    outdir,
+    target: "node",
+    external: artifactExternalModules(),
+  })
+  if (!result.success) {
+    const detail = result.logs.map((item) => item.message).join("; ")
+    throw new Error(`Failed to build Browser MCP node bundle: ${detail}`)
+  }
+  await fs.promises.rename(path.join(outdir, "stdio.js"), path.join(outdir, "stdio.mjs"))
+}
+
+async function buildBrowserMcpNodeBundleForEmbedding() {
+  const outdir = path.join(os.tmpdir(), "opencorvus-browser-mcp-node-embed-build")
+  await fs.promises.rm(outdir, { recursive: true, force: true }).catch(() => undefined)
+  await buildBrowserMcpNodeBundle(outdir)
+  return fs.promises.readFile(path.join(outdir, "stdio.mjs"), "utf8")
+}
+
+const browserMcpNodeBundle = await buildBrowserMcpNodeBundleForEmbedding()
+
+try {
+  await fs.promises.writeFile(
+    browserMcpNodeBundleGenerated,
+    `export const BROWSER_MCP_NODE_BUNDLE: string | undefined = ${JSON.stringify(browserMcpNodeBundle)}\n`,
+  )
 
 for (const item of targets) {
   const compileTarget = [
@@ -248,6 +282,7 @@ for (const item of targets) {
     tsconfig: "./tsconfig.json",
     plugins: [solidPlugin],
     sourcemap: artifactSourcemap(),
+    external: artifactExternalModules(),
     compile: compile as any,
     entrypoints: artifactEntrypoints(buildFlavor, parserWorker, workerPath),
     define: {
@@ -259,6 +294,7 @@ for (const item of targets) {
       OPENCORVUS_EMBEDDED_ENV: embeddedEnvDefine,
     },
   })
+  await buildBrowserMcpNodeBundle(path.join(dir, "dist", name, "browser-mcp-node"))
 
   if (item.os === "win32") {
     const helper = await buildWindowsSupervisorHelper()
@@ -287,6 +323,9 @@ for (const item of targets) {
     ),
   )
   binaries[name] = Script.version
+}
+} finally {
+  await fs.promises.writeFile(browserMcpNodeBundleGenerated, browserMcpNodeBundlePlaceholder)
 }
 
 export { binaries }

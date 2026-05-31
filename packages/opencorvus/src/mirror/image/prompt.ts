@@ -18,7 +18,7 @@
  *     `messages[0].content` array.
  */
 
-export const IMAGE_EXTRACT_SYSTEM = `You are a UI design analyst. Infer a webpage's complete structure from one or more screenshots through visual analysis only — there is no DOM or computed style available.
+export const IMAGE_EXTRACT_SYSTEM = `You are a UI frontend design. Infer a webpage's complete structure from one or more screenshots through visual analysis only — there is no DOM or computed style available.
 
 Output a single ImageAnalysis JSON value (the host validates against a strict schema; missing or wrong-shape fields fail the call):
 

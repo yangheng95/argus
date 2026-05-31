@@ -231,12 +231,12 @@ export const IntegrityTeamReportSchema = z
     rounds: z.array(IntegrityReviewRoundSchema).default([]),
     requiredRepairs: z.array(IntegrityRequiredRepairSchema).default([]),
     unresolvedDisagreements: z.array(IntegrityUnresolvedDisagreementSchema).default([]),
-    // Required per specs/fact-check-agent-2026-05-25.md §3.1.
-    // CONSENSUS phase only — `submit_integrity_review_plan` and
+    // Optional fact-check registration. CONSENSUS phase only —
+    // `submit_integrity_review_plan` and
     // `submit_reviewer_report` schemas (the plan/reviewer stages) intentionally
     // do NOT carry fact_check_items; only the supervisor's consensus output
     // is downstream-consumed as IntegrityTeamReport.
-    fact_check_items: FactCheckItemListSchema.describe(
+    fact_check_items: FactCheckItemListSchema.default([]).describe(
       "Every factual claim (API behaviour, library version, third-party protocol, number, path, history) the integrity team has NOT verified via tool calls in this session. Empty when only review judgments or in-session-verified statements.",
     ),
   })

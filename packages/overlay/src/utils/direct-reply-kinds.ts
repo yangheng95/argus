@@ -22,7 +22,7 @@ export const DIRECT_REPLY_AGENT_KINDS: ReadonlySet<string> = new Set([
   "assistant",
   "intent-analysis",
   "requirements",
-  "design-analyst",
+  "frontend-design",
   "goal",
   "architect",
   "integrity",

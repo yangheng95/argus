@@ -21,6 +21,8 @@ required_tools:
   - webpage_evaluate
 ---
 
+> DRAFT / NOT INSTALLED / HISTORICAL. Do not use for current OpenCorvus webpage-clone tasks; active flows use frontend_design plus the project-visible web-clone-source handoff.
+
 # Frontend Module Fidelity Skill
 
 This skill loads inside a dispatched engine_task's build / design agents — not
@@ -30,15 +32,15 @@ exist. You do NOT own cross-module sequencing or task dispatch — that belongs 
 the mission supervisor (Gateway Master) and the orchestrator + architect. Your
 contract is: this module, built to the shared rules below, accepted by integrity.
 
-Glossary (spell out abbreviations once): PRD = Product Requirements Document;
+Glossary (spell out abbreviations once): template = frontend template;
 SPEC = implementation specification; DoD = Definition of Done; MVP = Minimum
 Viable Product; IA = Information Architecture; OHLC = Open/High/Low/Close bar;
 SSOT = Single Source Of Truth.
 
 ## Evidence is the only source of UI truth
 
-- Every visible string, layout, and visual value traces to the design-analysis
-  PRD/SPEC (and its `visual_consistency_spec`) or to extracted DOM facts for
+- Every visible string, layout, and visual value traces to the frontend-design
+  frontend template (and its `visual_consistency_contract`) or to extracted DOM facts for
   this module's reference. Do not invent UI that has no source.
 - When the reference does not reveal an interaction (SPA internal state, paid /
   logged-in surface), write it as a known gap and degrade honestly. Never
@@ -89,7 +91,7 @@ spec id you fail. Do not self-accept on taste; integrity owns the final gate.
 
 A module is done only when ALL hold:
 
-1. Its PRD requirements have evidence anchors (no unsourced assertions).
+1. Its template requirements have evidence anchors (no unsourced assertions).
 2. The MVP for this module is implemented and reachable through the shared shell.
 3. Backend endpoints exist behind the shared envelope and the UI reads from them.
 4. Shared domain / components / route registry / boundaries are reused, not

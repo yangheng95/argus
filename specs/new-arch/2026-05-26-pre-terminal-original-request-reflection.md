@@ -9,7 +9,7 @@
 - Requirements: `submit_requirements`
 - Architect: `submit_architect`
 - Build: `report_build_result`
-- Design Analyst: `submit_design_prd_spec`
+- Frontend Design: `submit_frontend_template`
 - Intent Analysis: `StructuredOutput`
 
 因此把反思只挂在 StructuredOutput recovery 前会漏掉 requirements / architect / build，并且会把行为误做成 host-side recovery 分支。

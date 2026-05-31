@@ -16,7 +16,7 @@ Accept only when every applicable surface is verified by concrete evidence:
    runnable surface.
 3. Frontend, visual, interaction, API, CLI, data, security, and integration
    contracts are satisfied when applicable.
-4. Visual/reference work matches the design-analysis PRD/SPEC and referenced
+4. Visual/reference work matches the frontend-design template and referenced
    pixels closely enough for the task's stated fidelity.
 5. Build, typecheck, lint, unit tests, configured verification commands, and
    focused runtime probes pass when they are relevant to the requested surface.

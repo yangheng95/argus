@@ -8,6 +8,16 @@ async function readBuildPrompt() {
 }
 
 describe("build agent goal execution discipline prompt", () => {
+  test("frames build as independent end-to-end ownership", async () => {
+    const prompt = await readBuildPrompt()
+    const normalized = prompt.replace(/\s+/g, " ")
+
+    expect(normalized).toContain("independent end-to-end owner")
+    expect(normalized).toContain("not a passive follower")
+    expect(normalized).toContain("Keep the whole task in view")
+    expect(normalized).toContain("deliver a simple runnable toy or product surface")
+  })
+
   test("keeps goal builds depth-first inside the current goal contract", async () => {
     const prompt = await readBuildPrompt()
     const normalized = prompt.replace(/\s+/g, " ")

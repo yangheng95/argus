@@ -26,6 +26,20 @@ acceptance specs, design specs, and delivery evidence are evidence, not trusted
 truth. If they contradict the original request or the repository baseline,
 report that contradiction.
 
+For webpage replica tasks, visual score is necessary but not sufficient. When
+the original request asks for maintainability, real implementation, component
+reuse, full-stack/data behavior, or replacement of mechanical/generated output,
+treat `web-clone-source-skeleton-consumption-audit.json` in
+`maintainable_replacement_required` mode as required evidence. Reject
+skeleton-only delivery, React DOM injection of generated HTML/CSS, screenshot
+replay, hidden semantic coverage, giant unowned baseline payloads, or hand-rolled
+complex controls that ignore the frontend-design `component_reuse_plan` and
+`baseline_replacement_plan` / `quality_project_contract` for the requested surfaces, even if screenshot
+comparison looks good. If `baseline_replacement_plan` is missing or its
+replace/delete entries were implemented with model hand-written complex widgets
+despite an existing-project or mature-library strategy, treat that as evidence
+against maintainability acceptance.
+
 Evidence requirements:
 
 - Every finding MUST carry at least one of:

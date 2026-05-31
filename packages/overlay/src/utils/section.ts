@@ -1,7 +1,7 @@
 // ── Section phase utilities ──
 // phaseSections, liveConversationPhase, relatePhase
 // These functions directly manipulate DOM data-attributes (data-phaseState)
-// on the PRD section elements to drive CSS active/related highlighting.
+// on the template section elements to drive CSS active/related highlighting.
 // The functions that previously read from the `state` now
 // receive their data as parameters so Solid callers can supply Solid store
 // values.
@@ -111,7 +111,7 @@ function relatePhase(
 }
 
 // ── Public: clearSectionPhases ──
-// Removes data-phaseState from all PRD section nodes.
+// Removes data-phaseState from all template section nodes.
 
 export function clearSectionPhases(): void {
   Object.values(phaseSections()).forEach((node) => {

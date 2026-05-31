@@ -1,8 +1,8 @@
 # Task brief — Stock Screener module (research clone)
 
 > Paste as a `kind=workflow` request AFTER the foundation task is accepted.
-> It carries a live reference URL, so `design_analysis` runs first
-> (mirror-grounded PRD/SPEC), then requirements → architect → build → integrity.
+> It carries a live reference URL, so `frontend_design` runs first
+> (mirror-grounded frontend template), then requirements → architect → build → integrity.
 > The architect decomposes; do not pre-write goals.
 
 ## Goal

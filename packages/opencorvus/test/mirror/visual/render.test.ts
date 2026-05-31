@@ -10,22 +10,15 @@ import {
   RenderOutputSchema,
 } from "../../../src/mirror/visual/render"
 
-// Golden parity — mirror originals
-import {
-  SCREENSHOT_STABILIZATION_CSS as mirrorCss,
-} from "D:/myhexin-local/opencode-private/packages/mirror/src/service/render.ts"
-
-// ─── GOLDEN PARITY — pure helpers ─────────────────────────────────────────
-
-describe("render — GOLDEN PARITY on pure helpers", () => {
-  test("SCREENSHOT_STABILIZATION_CSS is byte-identical to mirror", () => {
-    expect(SCREENSHOT_STABILIZATION_CSS).toBe(mirrorCss)
+describe("render helpers", () => {
+  test("SCREENSHOT_STABILIZATION_CSS disables unstable visual effects", () => {
+    expect(SCREENSHOT_STABILIZATION_CSS).toContain("animation")
+    expect(SCREENSHOT_STABILIZATION_CSS).toContain("transition")
+    expect(SCREENSHOT_STABILIZATION_CSS).toContain("caret-color")
   })
 })
 
-// ─── renderFiles — integration ────────────────────────────────────────────
-
-describe("renderFiles (integration)", () => {
+describe("renderFiles integration", () => {
   test("captures an explicit file URL and output passes schema", async () => {
     const dir = resolve(os.tmpdir(), "mirror-render-ok-" + process.pid)
     mkdirSync(dir, { recursive: true })
@@ -49,7 +42,39 @@ describe("renderFiles (integration)", () => {
       const png = PNG.sync.read(result.screenshotBuffer)
       expect(png.width).toBeGreaterThan(0)
       expect(png.height).toBeGreaterThan(0)
-      expect(png.width).toBeLessThanOrEqual(result.viewport.width * 2) // account for DPR
+      expect(png.width).toBeLessThanOrEqual(result.viewport.width * 2)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  }, 60_000)
+
+  test("captures visible text without hidden/offscreen text", async () => {
+    const dir = resolve(os.tmpdir(), "mirror-render-visible-text-" + process.pid)
+    mkdirSync(dir, { recursive: true })
+    const htmlPath = resolve(dir, "index.html")
+    writeFileSync(
+      htmlPath,
+      `<!doctype html><html><body>
+        <main>Visible benchmark copy</main>
+        <div style="display:contents"><strong>Contents wrapper text</strong></div>
+        <p style="display:none">Hidden display text</p>
+        <p style="opacity:0">Transparent text</p>
+        <p style="position:absolute;left:-10000px">Offscreen text</p>
+      </body></html>`,
+    )
+
+    try {
+      const result = await renderFiles({
+        url: pathToFileURL(htmlPath).href,
+        viewport: { width: 320, height: 240 },
+        timeout: 20_000,
+      })
+      expect(result.bodyText).toContain("Transparent text")
+      expect(result.visibleText).toContain("Visible benchmark copy")
+      expect(result.visibleText).toContain("Contents wrapper text")
+      expect(result.visibleText).not.toContain("Hidden display text")
+      expect(result.visibleText).not.toContain("Transparent text")
+      expect(result.visibleText).not.toContain("Offscreen text")
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }

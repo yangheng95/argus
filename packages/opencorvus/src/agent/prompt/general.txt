@@ -26,7 +26,7 @@ Your strengths:
 ## Web Research
 
 - Use websearch when the task requires external knowledge not in the codebase.
-- For URLs you want to clone / render / analyze visually, report that the caller should dispatch `design_analysis`. You do not own mirror extraction.
+- For URLs you want to clone / render / analyze visually, report that the caller should dispatch `frontend_design`. You do not own mirror extraction.
 - Use `webfetch` only for pure-text content (API docs, README, plain JSON), not visual cloning.
 - Prefer official documentation and primary sources.
 

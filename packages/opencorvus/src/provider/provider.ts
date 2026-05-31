@@ -374,13 +374,17 @@ export namespace Provider {
 
     log.info("init")
 
-    // Built-in test providers are固化在源码 (builtin-test-providers.ts) and拼到
-    // config provider 之前，走与用户配置完全相同的解析路径。用户 opencorvus.jsonc
-    // 里的同名 provider 条目在后，会整体覆盖内置默认值。
-    const configProviders = entries({
-      ...BUILTIN_TEST_PROVIDERS,
-      ...((config.provider ?? {}) as NonNullable<Config.Info["provider"]>),
-    } as NonNullable<Config.Info["provider"]>)
+    // Built-in test providers are fixed in source and then customized by
+    // same-name user config through the normal provider parsing path.
+    // Same-name user config customizes the built-in provider instead of
+    // replacing it wholesale; small options overrides must not erase models.
+    const userConfigProviders = (config.provider ?? {}) as NonNullable<Config.Info["provider"]>
+    const mergedConfigProviders: NonNullable<Config.Info["provider"]> = { ...BUILTIN_TEST_PROVIDERS }
+    for (const [providerID, provider] of entries(userConfigProviders)) {
+      const builtin = BUILTIN_TEST_PROVIDERS[providerID]
+      mergedConfigProviders[providerID] = builtin ? mergeDeep(builtin, provider) : provider
+    }
+    const configProviders = entries(mergedConfigProviders)
 
     // Built-in: Hexin OpenAI Gateway — models discovered dynamically from /v1/models.
     // discoverHexinModelsForStartup is fault-isolated by contract: a hexin

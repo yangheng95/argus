@@ -260,10 +260,10 @@ export interface CardNode {
    *  sessions intentionally use the terminal status channel while rendering
    *  differently from hard errors. */
   terminalReason?: "completed" | "error" | "aborted";
-  /** Structured integrity review payload — only populated for kind="integrity"
-   *  nodes. Mirrors `IntegrityReviewCompleted` event shape (see
-   *  opencorvus/engine/model.ts). Rendered natively by <IntegrityCard>; the
-   *  raw JSON that the integrity LLM produces never reaches the UI. */
+  /** Structured integrity review payload. Populated on the integrity
+   *  supervisor session card (`kind="agent"`, `stage="integrity"`) when
+   *  consensus completes; reviewer child session cards usually carry only
+   *  reviewStream/parts. Mirrors `IntegrityReviewCompleted` event shape. */
   integrity?: {
     verdict: "pass" | "concerns" | "needs_correction";
     summary: string;

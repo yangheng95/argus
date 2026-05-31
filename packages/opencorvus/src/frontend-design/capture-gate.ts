@@ -1,0 +1,672 @@
+/**
+ * P0-A · Reference 真实性闸。
+ *
+ * 采集 + 校验 reference 图的唯一入口。伪造 PNG（67 字节 / 空白 / 单色）在这里
+ * 被直接拒收，不允许走「静态文本 visual contract」那条退路（CLAUDE.md rule 1）。
+ *
+ * 消费者：
+ *  - P0-A 自身：frontend-design 抓图后调用 captureReferenceManifest + enforceCaptureGate
+ *  - P0-B (Stream C)：`chart_region_density` 硬门可消费 manifest.layout[] 的 bbox
+ *  - P1-B (Stream F)：content-fingerprint 消费 reference_strings / palette / layout
+ *
+ * 契约要点：
+ *  - 抓图失败 ⇒ 抛 `CaptureGateError`；调用方必须直接走 task=failed，禁 fallback
+ *  - SPA 必须等 content-paint（canvas 有像素 或 main bbox 非零）+ networkidle
+ *  - 像素统计与 visual-metric 共享 `util/pixel-stats`（rule 22：禁双源）
+ */
+import z from "zod"
+import path from "node:path"
+import fs from "node:fs/promises"
+import { createHash } from "node:crypto"
+import { spawn } from "node:child_process"
+import { createRequire } from "node:module"
+import { BrowserRuntime } from "@/browser/runtime"
+import {
+  decodePNGBuffer,
+  nonWhiteDensity,
+  uniqueColorBucketCount,
+  topKPalette,
+} from "@/util/pixel-stats"
+
+/** Chart / sidebar / toolbar 等关键区域的 bbox（CSS 像素）。 */
+export const CaptureBbox = z.object({
+  x: z.number().int().min(0),
+  y: z.number().int().min(0),
+  width: z.number().int().min(1),
+  height: z.number().int().min(1),
+})
+export type CaptureBboxType = z.infer<typeof CaptureBbox>
+
+/**
+ * Frontend-design 采集阶段产出的权威 manifest。
+ * 作为下游 goal / delivery / evaluator 的只读事实源（禁自造锚点，rule 11）。
+ */
+export const CaptureManifest = z.object({
+  url: z.string().url(),
+  viewport: z.object({
+    width: z.number().int().min(100).max(4096),
+    height: z.number().int().min(100).max(4096),
+    device_scale_factor: z.number().min(0.5).max(4).default(1),
+  }),
+  captured_at: z.number().int(),
+  duration_ms: z.number().int().min(0),
+
+  screenshot_sha256: z.string().length(64),
+  dom_sha256: z.string().length(64),
+
+  screenshot_byte_size: z.number().int().min(0),
+  har_byte_size: z.number().int().min(0),
+
+  non_white_pixel_ratio: z.number().min(0).max(1),
+  unique_color_count: z.number().int().min(0),
+  text_length: z.number().int().min(0),
+
+  reference_strings: z.array(z.string().min(1)),
+  palette: z.array(z.string().regex(/^#[0-9a-fA-F]{6}$/)),
+  layout: z.record(z.string(), CaptureBbox),
+
+  tool_version: z.object({
+    browserRuntime: z.string().optional(),
+    chrome: z.string().optional(),
+  }),
+})
+export type CaptureManifestType = z.infer<typeof CaptureManifest>
+
+/** Gate 阈值。数值严守 spec P0-A；调节须保持字段名恒定以不破坏下游 consumers。 */
+export const CAPTURE_GATE_THRESHOLDS = {
+  min_byte_size: 20_480,
+  min_non_white_pixel_ratio: 0.05,
+  min_unique_color_count: 16,
+  min_sparse_text_length: 20,
+} as const
+
+export interface CaptureGateViolation {
+  field: "screenshot_byte_size" | "non_white_pixel_ratio" | "unique_color_count"
+  threshold: number
+  observed: number
+}
+
+export class CaptureGateError extends Error {
+  override readonly cause?: unknown
+  constructor(
+    message: string,
+    readonly stage: "browser" | "navigate" | "content_paint" | "screenshot" | "stats" | "gate",
+    cause?: unknown,
+  ) {
+    super(message)
+    this.name = "CaptureGateError"
+    this.cause = cause
+  }
+}
+
+/**
+ * 校验 CaptureManifest 是否满足真实性闸。
+ * - 通过：返回 { ok: true, manifest }
+ * - 失败：返回 { ok: false, violations }；调用方必须把任务判 failed，禁 fallback。
+ */
+export function enforceCaptureGate(manifest: CaptureManifestType):
+  | { ok: true; manifest: CaptureManifestType }
+  | { ok: false; violations: CaptureGateViolation[] } {
+  const violations: CaptureGateViolation[] = []
+  const hasSparsePageEvidence =
+    manifest.text_length >= CAPTURE_GATE_THRESHOLDS.min_sparse_text_length ||
+    manifest.reference_strings.length >= 3 ||
+    Object.keys(manifest.layout).length > 0
+  if (manifest.screenshot_byte_size < CAPTURE_GATE_THRESHOLDS.min_byte_size) {
+    violations.push({
+      field: "screenshot_byte_size",
+      threshold: CAPTURE_GATE_THRESHOLDS.min_byte_size,
+      observed: manifest.screenshot_byte_size,
+    })
+  }
+  if (
+    manifest.non_white_pixel_ratio < CAPTURE_GATE_THRESHOLDS.min_non_white_pixel_ratio &&
+    !hasSparsePageEvidence
+  ) {
+    violations.push({
+      field: "non_white_pixel_ratio",
+      threshold: CAPTURE_GATE_THRESHOLDS.min_non_white_pixel_ratio,
+      observed: manifest.non_white_pixel_ratio,
+    })
+  }
+  if (manifest.unique_color_count < CAPTURE_GATE_THRESHOLDS.min_unique_color_count) {
+    violations.push({
+      field: "unique_color_count",
+      threshold: CAPTURE_GATE_THRESHOLDS.min_unique_color_count,
+      observed: manifest.unique_color_count,
+    })
+  }
+  if (violations.length > 0) return { ok: false, violations }
+  return { ok: true, manifest }
+}
+
+export function summarizeCaptureViolations(violations: readonly CaptureGateViolation[]): string {
+  return violations
+    .map((v) => `${v.field}=${typeof v.observed === "number" ? v.observed : String(v.observed)} < ${v.threshold}`)
+    .join("; ")
+}
+
+// ---------------------------------------------------------------------------
+// captureReferenceManifest — 实采实现
+// ---------------------------------------------------------------------------
+
+export interface CaptureResult {
+  manifest: CaptureManifestType
+  /** 当次采集的 PNG 字节；调用方可直接作为 attachment 不必再读盘。 */
+  screenshotPng: Buffer
+  /** 落盘位置（outDir/screenshot.png，outDir/manifest.json，outDir/dom.html）。 */
+  artifactPaths: {
+    manifestJson: string
+    screenshotPng: string
+    domHtml: string
+  }
+}
+
+type BrowserEvidence = {
+  screenshotPng: Buffer
+  domOuter: string
+  innerText: string
+  layoutRaw: Record<string, { x: number; y: number; width: number; height: number }>
+  harByteSize: number
+  chromeVersion?: string
+}
+
+export async function captureReferenceManifest(input: {
+  url: string
+  viewport?: { width: number; height: number; deviceScaleFactor?: number }
+  outDir: string
+  timeoutMs?: number
+  browserExecutable?: string
+}): Promise<CaptureResult> {
+  if (!/^https?:\/\//i.test(input.url)) {
+    throw new CaptureGateError(
+      `capture url must start with http(s)://: ${input.url}`,
+      "navigate",
+    )
+  }
+
+  const viewport = input.viewport ?? { width: 1440, height: 900 }
+  const deviceScaleFactor = input.viewport?.deviceScaleFactor ?? 1
+  const timeoutMs = input.timeoutMs ?? 90_000
+  const startedAt = Date.now()
+
+  const evidence = await captureBrowserEvidence({
+    url: input.url,
+    viewport: { width: viewport.width, height: viewport.height },
+    deviceScaleFactor,
+    timeoutMs,
+    browserExecutable: input.browserExecutable,
+  })
+
+  const pngBuf = evidence.screenshotPng
+  const domOuter = evidence.domOuter
+  const innerText = evidence.innerText
+  const layoutRaw = evidence.layoutRaw
+
+  // Pixel stats
+  const decoded = await decodePNGBuffer(pngBuf).catch((e) => {
+    throw new CaptureGateError("screenshot decode failed", "stats", e)
+  })
+  const nonWhiteRatio = nonWhiteDensity(decoded)
+  const uniqueColors = uniqueColorBucketCount(decoded)
+  const palette = topKPalette(decoded, 16)
+
+  // reference_strings：dedupe + 过滤过短段
+  const referenceStrings = Array.from(
+    new Set(
+      innerText
+        .split(/\r?\n/)
+        .map((s) => s.trim())
+        .filter((s) => s.length >= 2 && s.length <= 200),
+    ),
+  ).slice(0, 500)
+
+  const screenshotSha = sha256(pngBuf)
+  const domSha = sha256(Buffer.from(domOuter, "utf8"))
+
+  const browserRuntimePkg = await readBrowserRuntimeVersion()
+
+  const manifest: CaptureManifestType = CaptureManifest.parse({
+    url: input.url,
+    viewport: {
+      width: viewport.width,
+      height: viewport.height,
+      device_scale_factor: deviceScaleFactor,
+    },
+    captured_at: startedAt,
+    duration_ms: Date.now() - startedAt,
+    screenshot_sha256: screenshotSha,
+    dom_sha256: domSha,
+    screenshot_byte_size: pngBuf.length,
+    har_byte_size: evidence.harByteSize,
+    non_white_pixel_ratio: Number(nonWhiteRatio.toFixed(6)),
+    unique_color_count: uniqueColors,
+    text_length: innerText.length,
+    reference_strings: referenceStrings,
+    palette,
+    layout: layoutRaw,
+    tool_version: {
+      browserRuntime: browserRuntimePkg,
+      chrome: evidence.chromeVersion,
+    },
+  })
+
+  // 落盘
+  await fs.mkdir(input.outDir, { recursive: true })
+  const artifactPaths = {
+    manifestJson: path.join(input.outDir, "manifest.json"),
+    screenshotPng: path.join(input.outDir, "screenshot.png"),
+    domHtml: path.join(input.outDir, "dom.html"),
+  }
+  await Promise.all([
+    fs.writeFile(artifactPaths.manifestJson, JSON.stringify(manifest, null, 2)),
+    fs.writeFile(artifactPaths.screenshotPng, pngBuf),
+    fs.writeFile(artifactPaths.domHtml, domOuter, "utf8"),
+  ])
+
+  return { manifest, screenshotPng: pngBuf, artifactPaths }
+}
+
+export function shouldUseNodeCaptureSidecar(): boolean {
+  if (process.env.OPENCORVUS_CAPTURE_BROWSER_IN_PROCESS === "1") return false
+  return process.platform === "win32" && typeof Bun !== "undefined"
+}
+
+export function resolveNodeSidecarPlaywrightRequirePath(): string {
+  return createRequire(import.meta.url).resolve("playwright")
+}
+
+async function captureBrowserEvidence(input: {
+  url: string
+  viewport: { width: number; height: number }
+  deviceScaleFactor: number
+  timeoutMs: number
+  browserExecutable?: string
+}): Promise<BrowserEvidence> {
+  if (shouldUseNodeCaptureSidecar()) {
+    return captureBrowserEvidenceViaNode(input)
+  }
+  return captureBrowserEvidenceInProcess(input)
+}
+
+async function captureBrowserEvidenceInProcess(input: {
+  url: string
+  viewport: { width: number; height: number }
+  deviceScaleFactor: number
+  timeoutMs: number
+  browserExecutable?: string
+}): Promise<BrowserEvidence> {
+  const browser = await BrowserRuntime.launchPlaywrightBrowser({
+    executablePath: input.browserExecutable,
+    headless: true,
+    args: ["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage"],
+    timeoutMs: 15_000,
+  }).catch((e) => {
+    throw new CaptureGateError(`browser runtime launch failed: ${formatBrowserRuntimeError(e)}`, "browser", e)
+  })
+
+  try {
+    const context = await browser.newContext({
+      viewport: { width: input.viewport.width, height: input.viewport.height },
+      deviceScaleFactor: input.deviceScaleFactor,
+      userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+    })
+    const page = await context.newPage()
+
+    // HAR 大小近似：累加 content-length（抓图不追求完整 HAR 字节对齐，仅作真实性信号）。
+    let harByteSize = 0
+    page.on("response", (res) => {
+      const len = Number(res.headers()["content-length"])
+      if (Number.isFinite(len) && len > 0) harByteSize += len
+    })
+
+    try {
+      await page.goto(input.url, { waitUntil: "networkidle", timeout: input.timeoutMs })
+    } catch (e) {
+      throw new CaptureGateError(`navigation failed for ${input.url}`, "navigate", e)
+    }
+
+    // Render settle
+    try {
+      await Promise.race([
+        page.evaluateHandle(() => document.fonts?.ready),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("document.fonts.ready timeout")), input.timeoutMs),
+        ),
+      ])
+      await page.waitForFunction(() => document.readyState === "complete", { timeout: input.timeoutMs })
+    } catch (e) {
+      throw new CaptureGateError("render settle failed", "content_paint", e)
+    }
+
+    // Content-paint gate：SPA 必须出像素或主内容区有 bbox，否则判为空页
+    // （spec P0-A：`waitForFunction(() => canvas_has_pixels || main_content_bounds_nonzero)`）。
+    try {
+      await page.waitForFunction(
+        () => {
+          const canvases = Array.from(document.querySelectorAll("canvas")) as HTMLCanvasElement[]
+          for (const c of canvases) {
+            if (c.width > 0 && c.height > 0) return true
+          }
+          const mainCandidates = [
+            document.querySelector("main"),
+            document.querySelector('[role="main"]'),
+            document.querySelector("article"),
+            document.body.firstElementChild as Element | null,
+          ]
+          for (const el of mainCandidates) {
+            if (!el) continue
+            const r = (el as HTMLElement).getBoundingClientRect()
+            if (r.width > 200 && r.height > 200) return true
+          }
+          return false
+        },
+        { timeout: input.timeoutMs, polling: 250 },
+      )
+    } catch (e) {
+      throw new CaptureGateError(
+        "content-paint gate: no canvas pixels and no main-content bbox > 200×200 within timeout — page is empty or still loading",
+        "content_paint",
+        e,
+      )
+    }
+
+    // 额外的 tail buffer 给 hydration / 懒加载 / 动画首帧落位
+    await new Promise((r) => setTimeout(r, 2_000))
+
+    // 抓 fullpage screenshot
+    let pngBuf: Buffer
+    try {
+      const raw = await page.screenshot({ type: "png", fullPage: true })
+      pngBuf = Buffer.isBuffer(raw) ? raw : Buffer.from(raw as Uint8Array)
+    } catch (e) {
+      throw new CaptureGateError("screenshot failed", "screenshot", e)
+    }
+
+    // DOM + innerText
+    const domOuter = await page.evaluate(() => document.documentElement.outerHTML)
+    const innerText = await page.evaluate(() => (document.body?.innerText ?? "").normalize())
+
+    // Layout bbox（heuristic 命名区域）
+    const layoutRaw = await page.evaluate(() => {
+      const pick = (selector: string): { x: number; y: number; width: number; height: number } | null => {
+        const nodes = Array.from(document.querySelectorAll(selector)) as HTMLElement[]
+        let best: HTMLElement | null = null
+        let bestArea = 0
+        for (const n of nodes) {
+          const r = n.getBoundingClientRect()
+          const area = r.width * r.height
+          if (area > bestArea) {
+            bestArea = area
+            best = n
+          }
+        }
+        if (!best) return null
+        const r = best.getBoundingClientRect()
+        if (r.width <= 0 || r.height <= 0) return null
+        return {
+          x: Math.max(0, Math.round(r.left + window.scrollX)),
+          y: Math.max(0, Math.round(r.top + window.scrollY)),
+          width: Math.max(1, Math.round(r.width)),
+          height: Math.max(1, Math.round(r.height)),
+        }
+      }
+      const out: Record<string, { x: number; y: number; width: number; height: number }> = {}
+      const candidates: Array<[string, string]> = [
+        ["chart", "canvas, svg, [role='img'], .chart, .recharts-wrapper, .echarts"],
+        ["sidebar", "aside, nav, [role='navigation'], .sidebar"],
+        ["toolbar", "[role='toolbar'], header, .toolbar"],
+        ["header", "header, [role='banner']"],
+        ["footer", "footer, [role='contentinfo']"],
+        ["main", "main, [role='main'], article"],
+      ]
+      for (const [name, selector] of candidates) {
+        const r = pick(selector)
+        if (r) out[name] = r
+      }
+      return out
+    })
+
+    const chromeVersion = safeBrowserVersion(browser)
+    return { screenshotPng: pngBuf, domOuter, innerText, layoutRaw, harByteSize, chromeVersion }
+  } finally {
+    await browser.close().catch(() => undefined)
+  }
+}
+
+async function captureBrowserEvidenceViaNode(input: {
+  url: string
+  viewport: { width: number; height: number }
+  deviceScaleFactor: number
+  timeoutMs: number
+  browserExecutable?: string
+}): Promise<BrowserEvidence> {
+  const executablePath = await BrowserRuntime.findBrowserExecutable(input.browserExecutable)
+  const node = process.env.OPENCORVUS_BROWSER_MCP_NODE ?? "node.exe"
+  const payload = Buffer.from(JSON.stringify({ ...input, executablePath }), "utf8").toString("base64")
+  const playwrightRequirePath = resolveNodeSidecarPlaywrightRequirePath()
+  const child = spawn(node, ["-"], {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      OPENCORVUS_CAPTURE_INPUT: payload,
+      OPENCORVUS_PLAYWRIGHT_REQUIRE_PATH: playwrightRequirePath,
+    },
+    stdio: ["pipe", "pipe", "pipe"],
+    windowsHide: true,
+  })
+  child.stdin.end(NODE_CAPTURE_SCRIPT)
+
+  let stdout = ""
+  let stderr = ""
+  child.stdout.setEncoding("utf8")
+  child.stderr.setEncoding("utf8")
+  child.stdout.on("data", (chunk) => {
+    stdout += chunk
+  })
+  child.stderr.on("data", (chunk) => {
+    stderr += chunk
+  })
+
+  const hardTimeoutMs = input.timeoutMs + 30_000
+  const exit = await new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      child.kill()
+      reject(new Error(`Node browser capture timed out after ${hardTimeoutMs}ms. stderr=${stderr.slice(-2000)}`))
+    }, hardTimeoutMs)
+    child.once("error", (error) => {
+      clearTimeout(timer)
+      reject(error)
+    })
+    child.once("exit", (code, signal) => {
+      clearTimeout(timer)
+      resolve({ code, signal })
+    })
+  }).catch((e) => {
+    throw new CaptureGateError(`browser runtime launch failed via Node sidecar: ${formatBrowserRuntimeError(e)}`, "browser", e)
+  })
+
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(stdout)
+  } catch (e) {
+    if (exit.code !== 0) {
+      throw new CaptureGateError(
+        `browser runtime launch failed via Node sidecar: node exited with ${exit.signal ?? exit.code}. ${stderr.trim()}`,
+        "browser",
+      )
+    }
+    throw new CaptureGateError(
+      `browser runtime launch failed via Node sidecar: invalid JSON output. stderr=${stderr.trim()} stdout=${stdout.slice(0, 500)}`,
+      "browser",
+      e,
+    )
+  }
+
+  const result = parsed as
+    | { ok: true; screenshotBase64: string; domOuter: string; innerText: string; layoutRaw: BrowserEvidence["layoutRaw"]; harByteSize: number; chromeVersion?: string }
+    | { ok: false; message: string; stack?: string }
+  if (!result.ok) {
+    throw new CaptureGateError(
+      `browser runtime launch failed via Node sidecar: ${result.message}${result.stack ? `\n${result.stack}` : ""}`,
+      "browser",
+    )
+  }
+  return {
+    screenshotPng: Buffer.from(result.screenshotBase64, "base64"),
+    domOuter: result.domOuter,
+    innerText: result.innerText,
+    layoutRaw: result.layoutRaw ?? {},
+    harByteSize: result.harByteSize ?? 0,
+    chromeVersion: result.chromeVersion,
+  }
+}
+
+function formatBrowserRuntimeError(error: unknown): string {
+  if (error instanceof BrowserRuntime.RuntimeError) return error.diagnostic.message
+  return error instanceof Error ? error.message : String(error)
+}
+
+const NODE_CAPTURE_SCRIPT = String.raw`
+const { chromium } = require(process.env.OPENCORVUS_PLAYWRIGHT_REQUIRE_PATH || "playwright");
+
+async function main() {
+  const input = JSON.parse(Buffer.from(process.env.OPENCORVUS_CAPTURE_INPUT || "", "base64").toString("utf8"));
+  let browser;
+  try {
+    browser = await chromium.launch({
+      executablePath: input.executablePath,
+      headless: true,
+      timeout: 15000,
+      args: ["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage"],
+    });
+    const context = await browser.newContext({
+      viewport: { width: input.viewport.width, height: input.viewport.height },
+      deviceScaleFactor: input.deviceScaleFactor,
+      userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+    });
+    const page = await context.newPage();
+    let harByteSize = 0;
+    page.on("response", (res) => {
+      const len = Number(res.headers()["content-length"]);
+      if (Number.isFinite(len) && len > 0) harByteSize += len;
+    });
+    await page.goto(input.url, { waitUntil: "networkidle", timeout: input.timeoutMs });
+    await Promise.race([
+      page.evaluateHandle(() => document.fonts && document.fonts.ready),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("document.fonts.ready timeout")), input.timeoutMs)),
+    ]);
+    await page.waitForFunction(() => document.readyState === "complete", { timeout: input.timeoutMs });
+    await page.waitForFunction(
+      () => {
+        const canvases = Array.from(document.querySelectorAll("canvas"));
+        for (const c of canvases) {
+          if (c.width > 0 && c.height > 0) return true;
+        }
+        const mainCandidates = [
+          document.querySelector("main"),
+          document.querySelector("[role='main']"),
+          document.querySelector("article"),
+          document.body.firstElementChild,
+        ];
+        for (const el of mainCandidates) {
+          if (!el) continue;
+          const r = el.getBoundingClientRect();
+          if (r.width > 200 && r.height > 200) return true;
+        }
+        return false;
+      },
+      { timeout: input.timeoutMs, polling: 250 },
+    );
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    const screenshot = Buffer.from(await page.screenshot({ type: "png", fullPage: true }));
+    const domOuter = await page.evaluate(() => document.documentElement.outerHTML);
+    const innerText = await page.evaluate(() => (document.body && document.body.innerText ? document.body.innerText : "").normalize());
+    const layoutRaw = await page.evaluate(() => {
+      const pick = (selector) => {
+        const nodes = Array.from(document.querySelectorAll(selector));
+        let best = null;
+        let bestArea = 0;
+        for (const n of nodes) {
+          const r = n.getBoundingClientRect();
+          const area = r.width * r.height;
+          if (area > bestArea) {
+            bestArea = area;
+            best = n;
+          }
+        }
+        if (!best) return null;
+        const r = best.getBoundingClientRect();
+        if (r.width <= 0 || r.height <= 0) return null;
+        return {
+          x: Math.max(0, Math.round(r.left + window.scrollX)),
+          y: Math.max(0, Math.round(r.top + window.scrollY)),
+          width: Math.max(1, Math.round(r.width)),
+          height: Math.max(1, Math.round(r.height)),
+        };
+      };
+      const out = {};
+      const candidates = [
+        ["chart", "canvas, svg, [role='img'], .chart, .recharts-wrapper, .echarts"],
+        ["sidebar", "aside, nav, [role='navigation'], .sidebar"],
+        ["toolbar", "[role='toolbar'], header, .toolbar"],
+        ["header", "header, [role='banner']"],
+        ["footer", "footer, [role='contentinfo']"],
+        ["main", "main, [role='main'], article"],
+      ];
+      for (const [name, selector] of candidates) {
+        const r = pick(selector);
+        if (r) out[name] = r;
+      }
+      return out;
+    });
+    process.stdout.write(JSON.stringify({
+      ok: true,
+      screenshotBase64: screenshot.toString("base64"),
+      domOuter,
+      innerText,
+      layoutRaw,
+      harByteSize,
+      chromeVersion: browser.version(),
+    }));
+  } catch (error) {
+    process.stdout.write(JSON.stringify({
+      ok: false,
+      message: error && error.message ? error.message : String(error),
+      stack: error && error.stack ? error.stack : undefined,
+    }));
+    process.exitCode = 1;
+  } finally {
+    if (browser) await browser.close().catch(() => {});
+  }
+}
+
+main();
+`
+
+function sha256(buf: Buffer): string {
+  return createHash("sha256").update(buf).digest("hex")
+}
+
+function safeBrowserVersion(browser: { version: () => string }): string | undefined {
+  try {
+    return browser.version()
+  } catch {
+    return undefined
+  }
+}
+
+async function readBrowserRuntimeVersion(): Promise<string | undefined> {
+  try {
+    const pkgUrl = await import.meta.resolve?.("playwright/package.json")
+    if (!pkgUrl) return undefined
+    const pkgPath = pkgUrl.startsWith("file:") ? new URL(pkgUrl).pathname : pkgUrl
+    const raw = await fs.readFile(pkgPath.replace(/^\//, ""), "utf8").catch(() =>
+      fs.readFile(pkgPath, "utf8"),
+    )
+    const parsed = JSON.parse(raw) as { version?: string }
+    return parsed.version
+  } catch {
+    return undefined
+  }
+}

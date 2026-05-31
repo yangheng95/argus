@@ -47,7 +47,10 @@ import { abortChildExecutionForSession, abortGoalRunExecution } from "@/engine/e
 import { Message } from "@/session/message"
 import { toolFailureCauseFromUnknown } from "@/session/tool-failure-cause"
 import { PartTable } from "@/session/session.sql"
-import { renderDesignAnalysisHandoffReference, designAnalysisArtifactPaths } from "@/design-analyst/handoff"
+import { renderFrontendDesignHandoffReference, frontendDesignArtifactPaths } from "@/frontend-design/handoff"
+import { inspectWebCloneSourceSkeletonGate } from "@/web-clone/source-skeleton"
+import { inspectWebCloneSourceSkeletonConsumptionGate } from "@/web-clone/source-skeleton-consumption-audit"
+import { ensureLiveWebpageEvidence, primaryWebpageEvidenceArtifacts } from "./webpage-evidence"
 import { renderUserRequestSection } from "@/intent/request-prompt"
 import { materializeMcpToolResult } from "@/mcp/materialize"
 import {
@@ -59,6 +62,7 @@ import {
 import {
   supersedePriorActivePlansForTask,
   ensureBuildRetryFeedbackForGoal,
+  persistTaskResearchBrief,
   updateGoalWorkspace,
   updateGoalRun,
 } from "@/engine/persist"
@@ -73,6 +77,8 @@ import {
   findGoalRun,
   findLatestArchitectContractGraph,
   findLatestArchitectContractGraphArtifact,
+  findLatestGoalWorkloadArtifact,
+  findLatestResearchBriefArtifact,
   findLatestDeliveryVerdictArtifact,
   findLatestDeliveryVerdictArtifactForDelivery,
   findLatestIntegrityArtifactMissingStatus,
@@ -357,27 +363,47 @@ function readPersistedArchitectFidelity(task: TaskRow): ArchitectFidelityState {
   }
 }
 
+async function buildWebCloneGateCitedText(projectDir: string, frontendDesignCitedText: string): Promise<string> {
+  const sourcePackageDir = path.join(projectDir, "web-clone-source")
+  try {
+    const stat = await fs.stat(sourcePackageDir)
+    if (stat.isDirectory()) {
+      return [
+        frontendDesignCitedText,
+        "project-visible web-clone-source package exists",
+        "web-clone-source/source-skeleton",
+        "web-clone-source/source-ir",
+        "web_clone_source_audit",
+      ].join("\n")
+    }
+  } catch {
+    // No visible source package means the normal cited frontend-design evidence controls the gate.
+  }
+  return frontendDesignCitedText
+}
+
 function renderEvidenceSourceManifest(input: {
   task: TaskRow
   liveUrls: readonly string[]
   figmaUrls: readonly string[]
   materialPaths: readonly string[]
   referenceArtifacts: readonly string[]
+  mirrorArtifacts?: readonly string[]
   materializedFiles?: readonly string[]
 }): string {
   const lines: string[] = []
-  const paths = designAnalysisArtifactPaths(Instance.directory, input.task.id)
-  lines.push("## PRD/SPEC Source Manifest")
-  lines.push(`Canonical PRD/SPEC file: ${paths.prdRelative}`)
+  const paths = frontendDesignArtifactPaths(Instance.directory, input.task.id)
+  lines.push("## frontend template Source Manifest")
+  lines.push(`Canonical frontend template file: ${paths.templateRelative}`)
   lines.push(`Canonical source manifest file: ${paths.manifestRelative}`)
   lines.push(
-    "Canonical decision-log entries: phase=design_analysis keys product_spec, frontend_spec, visual_consistency_spec, backend_spec, prd_iteration_notes, completeness_review.",
+    "Canonical decision-log entries: phase=frontend_design keys frontend_template, final_delivery_mode, fillable_modules, component_inventory, component_reuse_plan, baseline_replacement_plan, quality_project_contract, frontend_project, material_inventory, visual_consistency_contract, ui_data_contract, template_iteration_notes, completeness_review.",
   )
-  lines.push("Optional visual anchors: task.design_specs, when present. They are secondary to visual_consistency_spec.")
+  lines.push("Optional visual anchors: task.design_specs, when present. They are secondary to visual_consistency_contract.")
 
   if (input.materializedFiles && input.materializedFiles.length > 0) {
     lines.push("")
-    lines.push("### Materialized PRD/SPEC files")
+    lines.push("### Materialized frontend template files")
     for (const item of [...new Set(input.materializedFiles)]) lines.push(`- ${item}`)
   }
 
@@ -423,28 +449,73 @@ function renderEvidenceSourceManifest(input: {
     Array.isArray(input.task.attachments) ? (input.task.attachments as unknown[]) : [],
   )
   renderArtifactRows(
-    "Design-analysis materialized artifacts",
+    "frontend_design materialized artifacts",
     Array.isArray(input.task.system_artifacts) ? (input.task.system_artifacts as unknown[]) : [],
   )
 
   if (input.referenceArtifacts.length > 0) {
     lines.push("")
-    lines.push("### Mirror artifacts cited by design-analysis")
+    lines.push("### Evidence artifacts cited by frontend_design")
     for (const item of input.referenceArtifacts) lines.push(`- ${item}`)
+  }
+
+  if (input.mirrorArtifacts && input.mirrorArtifacts.length > 0) {
+    lines.push("")
+    lines.push("### Host-prepared webpage clone artifacts")
+    for (const item of [...new Set(input.mirrorArtifacts)]) lines.push(`- ${item}`)
   }
 
   return lines.join("\n")
 }
 
-function renderDesignAnalysisPrdSpecDocument(input: {
+function renderFrontendDesignTemplateDocument(input: {
   analysis: {
     designSystem: string
     techStack: readonly string[]
-    productSpec: string
-    frontendSpec: string
-    visualConsistencySpec: string
-    backendSpec: string
-    prdIterationNotes: readonly string[]
+    frontendTemplate: string
+    finalDeliveryMode?: "visual_baseline_allowed" | "maintainable_replacement_required"
+    fillableModules: string
+    componentInventory: string
+    componentReusePlan?: readonly {
+      family_id: string
+      name: string
+      observed_surface: string
+      source_refs: readonly string[]
+      implementation_strategy: string
+      reuse_source: string
+      mature_library_candidates: readonly string[]
+      props_states: string
+      replacement_boundary: string
+      parity_guard: string
+      custom_fallback_reason?: string
+    }[]
+    baselineReplacementPlan?: readonly {
+      boundary_id: string
+      source_region: string
+      action: string
+      component_family_id: string
+      replacement_strategy: string
+      reuse_source: string
+      mature_library_candidates: readonly string[]
+      deletion_rule: string
+      source_refs: readonly string[]
+      parity_guard: string
+      custom_fallback_reason?: string
+    }[]
+    qualityProjectContract: string
+    materialInventory: string
+    frontendProject?: {
+      status: "created" | "not_created" | "blocked"
+      role?: "visual_baseline_input" | "implementation_target" | "blocked"
+      project_root: string
+      source_package: string
+      entrypoints: string[]
+      generation_tool: string
+      notes: string[]
+    }
+    visualConsistencyContract: string
+    uiDataContract: string
+    templateIterationNotes: readonly string[]
     completenessReview: string
     referenceArtifacts: readonly string[]
     openQuestions: readonly string[]
@@ -452,10 +523,10 @@ function renderDesignAnalysisPrdSpecDocument(input: {
   evidenceSourceManifest: string
 }): string {
   const lines: string[] = []
-  lines.push("# Design Analysis PRD/SPEC")
+  lines.push("# Frontend Template")
   lines.push("")
-  lines.push("This file is the materialized design-analysis source for downstream agents.")
-  lines.push("The decision log stores the same contract under phase=design_analysis.")
+  lines.push("This file is the materialized frontend-design source for downstream agents.")
+  lines.push("The decision log stores the same contract under phase=frontend_design.")
   lines.push("")
   lines.push("## Evidence Source Manifest")
   lines.push(input.evidenceSourceManifest.trim())
@@ -470,21 +541,56 @@ function renderDesignAnalysisPrdSpecDocument(input: {
     lines.push("(not specified)")
   }
   lines.push("")
-  lines.push("## Product Spec")
-  lines.push(input.analysis.productSpec.trim())
+  lines.push("## Frontend Template")
+  lines.push(input.analysis.frontendTemplate.trim())
   lines.push("")
-  lines.push("## Frontend Spec")
-  lines.push(input.analysis.frontendSpec.trim())
+  lines.push("## Final Delivery Mode")
+  lines.push(input.analysis.finalDeliveryMode ?? "visual_baseline_allowed")
   lines.push("")
-  lines.push("## Visual Consistency Spec")
-  lines.push(input.analysis.visualConsistencySpec.trim())
+  lines.push("## Fillable Modules")
+  lines.push(input.analysis.fillableModules.trim())
   lines.push("")
-  lines.push("## Backend Spec")
-  lines.push(input.analysis.backendSpec.trim())
+  lines.push("## Component Inventory")
+  lines.push(input.analysis.componentInventory.trim())
   lines.push("")
-  lines.push("## PRD Iteration Notes")
-  if (input.analysis.prdIterationNotes.length > 0) {
-    input.analysis.prdIterationNotes.forEach((item, index) => {
+  lines.push("## Component Reuse Plan")
+  lines.push(renderComponentReusePlanDocument(input.analysis.componentReusePlan ?? []))
+  lines.push("")
+  lines.push("## Generated Baseline Replacement Plan")
+  lines.push(renderBaselineReplacementPlanDocument(input.analysis.baselineReplacementPlan ?? []))
+  lines.push("")
+  lines.push("## Quality Project Contract")
+  lines.push(input.analysis.qualityProjectContract.trim())
+  lines.push("")
+  lines.push("## Material Inventory")
+  lines.push(input.analysis.materialInventory.trim())
+  lines.push("")
+  if (input.analysis.frontendProject) {
+    lines.push("## Frontend Project")
+    lines.push(`- status: ${input.analysis.frontendProject.status}`)
+    lines.push(`- role: ${input.analysis.frontendProject.role ?? "visual_baseline_input"}`)
+    lines.push(`- project_root: ${input.analysis.frontendProject.project_root || "(not created)"}`)
+    lines.push(`- source_package: ${input.analysis.frontendProject.source_package || "(not specified)"}`)
+    lines.push(`- generation_tool: ${input.analysis.frontendProject.generation_tool || "(not specified)"}`)
+    if (input.analysis.frontendProject.entrypoints.length > 0) {
+      lines.push("- entrypoints:")
+      for (const item of input.analysis.frontendProject.entrypoints) lines.push(`  - ${item}`)
+    }
+    if (input.analysis.frontendProject.notes.length > 0) {
+      lines.push("- notes:")
+      for (const item of input.analysis.frontendProject.notes) lines.push(`  - ${item}`)
+    }
+    lines.push("")
+  }
+  lines.push("## Visual Consistency Contract")
+  lines.push(input.analysis.visualConsistencyContract.trim())
+  lines.push("")
+  lines.push("## UI Data Contract")
+  lines.push(input.analysis.uiDataContract.trim())
+  lines.push("")
+  lines.push("## Template Iteration Notes")
+  if (input.analysis.templateIterationNotes.length > 0) {
+    input.analysis.templateIterationNotes.forEach((item, index) => {
       lines.push(`${index + 1}. ${item.trim()}`)
     })
   } else {
@@ -510,23 +616,89 @@ function renderDesignAnalysisPrdSpecDocument(input: {
   return lines.join("\n").trimEnd() + "\n"
 }
 
-async function writeDesignAnalysisArtifacts(input: {
+function renderComponentReusePlanDocument(items: readonly {
+  family_id: string
+  name: string
+  observed_surface: string
+  source_refs: readonly string[]
+  implementation_strategy: string
+  reuse_source: string
+  mature_library_candidates: readonly string[]
+  props_states: string
+  replacement_boundary: string
+  parity_guard: string
+  custom_fallback_reason?: string
+}[]): string {
+  if (items.length === 0) return "(not specified)"
+  return items.map((item) => {
+    const lines = [
+      `- ${item.family_id}: ${item.name}`,
+      `  - strategy: ${item.implementation_strategy}`,
+      `  - surface: ${item.observed_surface}`,
+      `  - reuse_source: ${item.reuse_source}`,
+      `  - props_states: ${item.props_states}`,
+      `  - replacement_boundary: ${item.replacement_boundary}`,
+      `  - parity_guard: ${item.parity_guard}`,
+    ]
+    if (item.mature_library_candidates.length > 0) {
+      lines.push(`  - mature_library_candidates: ${item.mature_library_candidates.join(", ")}`)
+    }
+    if (item.source_refs.length > 0) lines.push(`  - source_refs: ${item.source_refs.join(", ")}`)
+    if (item.custom_fallback_reason) lines.push(`  - custom_fallback_reason: ${item.custom_fallback_reason}`)
+    return lines.join("\n")
+  }).join("\n")
+}
+
+function renderBaselineReplacementPlanDocument(items: readonly {
+  boundary_id: string
+  source_region: string
+  action: string
+  component_family_id: string
+  replacement_strategy: string
+  reuse_source: string
+  mature_library_candidates: readonly string[]
+  deletion_rule: string
+  source_refs: readonly string[]
+  parity_guard: string
+  custom_fallback_reason?: string
+}[]): string {
+  if (items.length === 0) return "(not specified)"
+  return items.map((item) => {
+    const lines = [
+      `- ${item.boundary_id}: ${item.source_region}`,
+      `  - action: ${item.action}`,
+      `  - component_family_id: ${item.component_family_id}`,
+      `  - replacement_strategy: ${item.replacement_strategy}`,
+      `  - reuse_source: ${item.reuse_source}`,
+      `  - deletion_rule: ${item.deletion_rule}`,
+      `  - parity_guard: ${item.parity_guard}`,
+    ]
+    if (item.mature_library_candidates.length > 0) {
+      lines.push(`  - mature_library_candidates: ${item.mature_library_candidates.join(", ")}`)
+    }
+    if (item.source_refs.length > 0) lines.push(`  - source_refs: ${item.source_refs.join(", ")}`)
+    if (item.custom_fallback_reason) lines.push(`  - custom_fallback_reason: ${item.custom_fallback_reason}`)
+    return lines.join("\n")
+  }).join("\n")
+}
+
+async function writeFrontendDesignArtifacts(input: {
   projectDir: string
   taskID: string
-  analysis: Parameters<typeof renderDesignAnalysisPrdSpecDocument>[0]["analysis"]
+  analysis: Parameters<typeof renderFrontendDesignTemplateDocument>[0]["analysis"]
   evidenceSourceManifest: string
-}): Promise<{ prdRelative: string; manifestRelative: string }> {
-  const paths = designAnalysisArtifactPaths(input.projectDir, input.taskID)
+}): Promise<{ templateRelative: string; manifestRelative: string }> {
+  const paths = frontendDesignArtifactPaths(input.projectDir, input.taskID)
   await Filesystem.writeAtomic(paths.manifestAbsolute, input.evidenceSourceManifest.trimEnd() + "\n")
   await Filesystem.writeAtomic(
-    paths.prdAbsolute,
-    renderDesignAnalysisPrdSpecDocument({
+    paths.templateAbsolute,
+    renderFrontendDesignTemplateDocument({
       analysis: input.analysis,
       evidenceSourceManifest: input.evidenceSourceManifest,
     }),
   )
   return {
-    prdRelative: paths.prdRelative,
+    templateRelative: paths.templateRelative,
     manifestRelative: paths.manifestRelative,
   }
 }
@@ -967,14 +1139,14 @@ function parseFigmaMaterialUrl(value: string): { nodeID: string } {
   try {
     parsed = new URL(value)
   } catch (err) {
-    throw new Error(`invalid Figma URL for design_analysis MCP materialization: ${value}`, { cause: err })
+    throw new Error(`invalid Figma URL for frontend_design MCP materialization: ${value}`, { cause: err })
   }
   if (!/(^|\.)figma\.com$/i.test(parsed.hostname)) {
-    throw new Error(`design_analysis Figma MCP materialization expected a figma.com URL: ${value}`)
+    throw new Error(`frontend_design Figma MCP materialization expected a figma.com URL: ${value}`)
   }
   const node = parsed.searchParams.get("node-id")
   if (!node?.trim()) {
-    throw new Error(`design_analysis Figma MCP materialization requires a node-id query parameter: ${value}`)
+    throw new Error(`frontend_design Figma MCP materialization requires a node-id query parameter: ${value}`)
   }
   return { nodeID: node.replace(/-/g, ":") }
 }
@@ -1830,6 +2002,39 @@ export function createOrchestratorTools(input: {
     )
       ? "post_build"
       : "pre_build"
+    if (phase === "post_build") {
+      const frontendDesignCitedText = decisionLog.readByPhase("frontend_design")
+        .map((entry) => `${entry.key}\n${entry.value}\n${entry.reason}`)
+        .join("\n")
+      const citedText = await buildWebCloneGateCitedText(Instance.directory, frontendDesignCitedText)
+      const sourceSkeletonGate = await inspectWebCloneSourceSkeletonGate({
+        projectDir: Instance.directory,
+        citedText,
+      })
+      if (sourceSkeletonGate.required && !sourceSkeletonGate.passed) {
+        return {
+          status: "blocked",
+          headline:
+            `integrity: source skeleton gate failed — ${sourceSkeletonGate.error}. ` +
+            "Do not accept the task until reference.png and source-skeleton audit pass.",
+          pointer: sourceSkeletonGate.auditPath ?? sourceSkeletonGate.referencePath ?? `task ${taskID}`,
+        }
+      }
+      const sourceSkeletonConsumptionGate = await inspectWebCloneSourceSkeletonConsumptionGate({
+        projectDir: Instance.directory,
+        citedText,
+        originalRequest: task.request,
+      })
+      if (sourceSkeletonConsumptionGate.required && !sourceSkeletonConsumptionGate.passed) {
+        return {
+          status: "blocked",
+          headline:
+            `integrity: source skeleton consumption gate failed — ${sourceSkeletonConsumptionGate.error}. ` +
+            "Do not accept the task until web_clone_source_audit produces a fresh passing audit.",
+          pointer: sourceSkeletonConsumptionGate.auditPath ?? `task ${taskID}`,
+        }
+      }
+    }
     const lineage = buildSpecSnapshotLineage({
       taskID,
       activeSpecSnapshotID: activeSpec.id,
@@ -1843,6 +2048,9 @@ export function createOrchestratorTools(input: {
       buildRecords: deliveriesForAcceptance,
       goalRuns: listGoalRunsForTask(taskID),
     })
+    const frontendDesignContract = decisionLog.readByPhase("frontend_design")
+      .map((entry) => `## ${entry.key}\nreason: ${entry.reason}\n\n${entry.value}`)
+      .join("\n\n")
     const verdict = await reviewIntegrity({
       userRequest: task.request,
       taskTitle: task.title,
@@ -1856,6 +2064,7 @@ export function createOrchestratorTools(input: {
         changedFiles: acceptanceChangedFiles,
         diffs: acceptanceDiffs,
       },
+      frontendDesign: frontendDesignContract,
       replayContext,
       signal: input.signal,
       taskID,
@@ -2126,7 +2335,7 @@ export function createOrchestratorTools(input: {
       .filter(Boolean)
       .join(", ")
 
-    return `Task restarted from ${stage}. Reason: ${reason}. ${detail || "State cleared."} NEXT: ${plan.nextAction}${freshRunID ? `(${freshRunID})` : ""}.`
+    return `Task restarted from ${stage}. Reason: ${reason}. ${detail || "State cleared."} Candidate continuation fact: ${plan.nextAction}${freshRunID ? `(${freshRunID})` : ""}.`
   }
 
   // Agents that need to ask the user a question do so directly via
@@ -2152,7 +2361,7 @@ export function createOrchestratorTools(input: {
         "SKIP WHEN: trivial direct edit (single-file bug fix, typo / config tweak); " +
         "build agent can run against the user's text alone and `deliver` has enough " +
         "signal in the request to verify. When a visual/reference artifact is actually the task contract, " +
-        "prefer `design_analysis` first so requirements can consume its PRD/SPEC review entries.",
+        "prefer `frontend_design` first so requirements can consume its frontend template review entries.",
       inputSchema: z.object({
         reason: z.string().optional().describe("Why you decided to analyze requirements"),
       }),
@@ -2177,7 +2386,7 @@ export function createOrchestratorTools(input: {
         const maturityScopePendingBeforeID = decisionLog.readByKey("maturity_scope_pending")?.id
         try {
           const { RequirementsAgent } = await import("@/requirements")
-          const designAnalysis = renderDesignAnalysisHandoffReference(taskID)
+          const frontendDesign = renderFrontendDesignHandoffReference(taskID)
 
           // Stage-level retry was removed in step 5/7 (rule 8 — single
           // source). Transient LLM-call failures are now retried inside
@@ -2192,7 +2401,7 @@ export function createOrchestratorTools(input: {
             request: task.request,
             attachments: Array.isArray(task.attachments) ? (task.attachments as any) : undefined,
             designSpecs: Array.isArray(task.design_specs) ? (task.design_specs as any) : undefined,
-            designAnalysis: designAnalysis.trim().length > 0 ? designAnalysis : undefined,
+            frontendDesign: frontendDesign.trim().length > 0 ? frontendDesign : undefined,
             taskID,
             parentSessionID: input.agentSessionID,
             signal: input.signal,
@@ -2222,10 +2431,10 @@ export function createOrchestratorTools(input: {
             result.summary,
             "",
             "## Requirements",
-            ...result.requirements.map(
-              (r) =>
-                `- **${r.id}** [${r.type}]: ${r.description} Acceptance: ${r.acceptance} Non-goals: ${r.non_goals}`,
-            ),
+              ...result.requirements.map(
+                (r) =>
+                  `- **${r.id}** [${r.type}]: ${r.description} Acceptance: ${r.acceptance} Non-goals: ${r.non_goals} Evidence: ${r.evidence_refs.join(", ") || "(none)"}`,
+              ),
             "",
             "## Decisions",
             ...result.decisions.map((d) => `- **${d.key}** = ${d.value} — ${d.reason}`),
@@ -2270,7 +2479,7 @@ export function createOrchestratorTools(input: {
                     title: r.description,
                     description: r.description,
                     acceptance: [r.acceptance],
-                    evidence_refs: [] as string[],
+                    evidence_refs: r.evidence_refs,
                     non_goals: [r.non_goals],
                     priority: r.type === "explicit" ? ("blocking" as const) : ("advisory" as const),
                   })),
@@ -2307,7 +2516,7 @@ export function createOrchestratorTools(input: {
           // boardStore. No phase-completed bus event needed.
 
           return SubAgentProtocol.yieldResult({
-            headline: `SUCCESS: ${result.requirements.length} requirements, ${result.decisions.length} decisions parsed. NEXT: call architect to decompose into goals.`,
+            headline: `SUCCESS: ${result.requirements.length} requirements, ${result.decisions.length} decisions parsed. Architect decomposition is now available if the full task context still needs a goal graph.`,
             summary: result.summary,
             fields: [
               ["decisions", result.decisions.map((d) => `${d.key}=${d.value}`)],
@@ -2373,7 +2582,7 @@ export function createOrchestratorTools(input: {
               error: trackErr instanceof Error ? trackErr.message : String(trackErr),
             })
           }
-          // P4 (rule 4 — same systemic shape as analyze_intent / design_analysis
+          // P4 (rule 4 — same systemic shape as analyze_intent / frontend_design
           // catch paths): write decision_log so downstream agents see WHY
           // requirements failed instead of silently inheriting an empty
           // requirements set. Without this the abort surfaces only as a
@@ -2401,31 +2610,31 @@ export function createOrchestratorTools(input: {
     }),
 
     // -----------------------------------------------------------------------
-    // Design Analysis — visual reference analysis before decomposition
+    // Frontend Design — visual reference analysis before decomposition
     // -----------------------------------------------------------------------
 
-    design_analysis: tool({
+    frontend_design: tool({
       description: [
-        "Analyze visual/webpage references (images, URLs, Figma, materials) to produce a mirror-grounded PRD/SPEC with a visual-consistency contract.",
+        "Analyze visual/webpage references (images, URLs, Figma, materials) to produce a mirror-grounded frontend template with fillable modules, component/material inventories, and visual/data contracts.",
         "Call this BEFORE every other downstream agent when the task involves frontend/UI development AND:",
         "  - Image attachments are provided (screenshots, mockups, design files)",
         "  - The request mentions a URL to replicate or analyze",
-        "  - The request explicitly asks for layout/design analysis",
+        "  - The request explicitly asks for layout/frontend design",
         "",
-        "The design-analysis agent must follow assistant.auto_iteration: one bounded PRD/SPEC review pass when disabled, at least two review passes when enabled.",
-        "The full PRD/SPEC plus visual_consistency_spec and iteration/completeness review is persisted",
-        "into the decision log from the same design-analysis run. Optional task.design_specs rows may exist as anchors, but the",
-        "decision-log PRD/SPEC is authoritative. The decision log also includes evidence_source_manifest,",
-        "which names the source files, images, URLs, materialized artifacts, and mirror artifacts downstream stages can read so they",
+        "The frontend-design agent must follow assistant.auto_iteration: one bounded frontend template review pass when disabled, at least two review passes when enabled.",
+        "The full frontend template plus visual_consistency_contract and iteration/completeness review is persisted",
+        "into the decision log from the same frontend-design run. Optional task.design_specs rows may exist as anchors, but the",
+        "decision-log frontend template is authoritative. The decision log also includes evidence_source_manifest,",
+        "which names the source files, images, URLs, materialized artifacts, mirror artifacts, and visible web-clone-source package downstream stages can read so they",
         "consume one source of truth instead of re-running mirror extraction.",
         "",
         "SKIP this step when:",
         "  - No visual references are available",
         "  - The task is purely backend/API/infrastructure",
-        "  - The request already contains detailed design specifications",
+        "  - The request already contains detailed design specifications AND has no URL, screenshot/image, Figma/design-file, webpage-replica, or other visual reference that needs mirror/web-clone-source evidence",
       ].join("\n"),
       inputSchema: z.object({
-        reason: z.string().describe("Why design analysis is needed for this task"),
+        reason: z.string().describe("Why frontend design is needed for this task"),
         url: z.string().optional().describe("Deprecated — use `urls`. Single URL for back-compat; merged into `urls`."),
         urls: z
           .array(z.string())
@@ -2433,7 +2642,7 @@ export function createOrchestratorTools(input: {
           .describe(
             "Any number of design-reference URLs: live pages, design-tool share links " +
               "(Sketch Cloud / Adobe XD / Framer / InVision / Zeplin / Penpot), docs, etc. " +
-              "Non-Figma URLs are available to design-analyst for mirror extraction and may also be materialized " +
+              "Non-Figma URLs are available to frontend-design for mirror extraction and may also be materialized " +
               "as screenshot references. Figma URLs use the connected Figma MCP path. Do not route URL/page extraction to build.",
           ),
         figma_url: z
@@ -2483,26 +2692,32 @@ export function createOrchestratorTools(input: {
           try {
             const { createDecisionLog } = await import("@/decision-log")
             createDecisionLog(taskID).append({
-              phase: "design_analysis",
+              phase: "frontend_design",
               key: "abort_no_visual_input",
               value:
-                "Design analysis aborted before agent call: caller provided no visual reference (no attachments, no url, no figma_url, no materials).",
+                "frontend_design aborted before agent call: caller provided no visual reference (no attachments, no url, no figma_url, no materials).",
               reason: "no_visual_input_provided",
             })
           } catch (logErr) {
-            log.warn("design_analysis: decision_log write failed (non-fatal)", {
+            log.warn("frontend_design: decision_log write failed (non-fatal)", {
               taskID,
               error: logErr instanceof Error ? logErr.message : String(logErr),
             })
           }
           throw new Error(
-            "Design analysis requires at least one real visual reference: image attachment, URL, Figma URL, or local material path.",
+            "frontend_design requires at least one real visual reference: image attachment, URL, Figma URL, or local material path.",
           )
         }
 
-        await trackStepStart("design_analysis")
+        await trackStepStart("frontend_design")
+        let frontendDesignStepClosed = false
+        const closeFrontendDesignStep = async (failed = false) => {
+          if (frontendDesignStepClosed) return
+          frontendDesignStepClosed = true
+          await trackStepComplete("frontend_design", undefined, failed)
+        }
 
-        log.info("design_analysis: starting", {
+        log.info("frontend_design: starting", {
           taskID,
           hasAttachments,
           liveUrlCount: liveUrls.length,
@@ -2518,11 +2733,11 @@ export function createOrchestratorTools(input: {
         //   • Figma MCP references → attachments (figma URL is part of the
         //     user contract — the user pointed us at it).
         //   • URL screenshots / local materials → system_artifacts (we
-        //     captured them ourselves to feed design-analyst; not user
+        //     captured them ourselves to feed frontend-design; not user
         //     intent — keeping them out of attachments prevents requirements
         //     from treating system-generated PNGs as user input).
         //
-        // design-analyst combines both columns when assembling its visual
+        // frontend-design combines both columns when assembling its visual
         // input. The deliver-time visual diff also reads both. Requirements
         // reads only attachments — it must see user intent, not internal
         // captures.
@@ -2533,11 +2748,11 @@ export function createOrchestratorTools(input: {
         // Track how many external sources actually produced visual bytes. If
         // every URL screenshot and local material fails to
         // materialize AND the task had no pre-existing attachments, we must
-        // abort before calling design-analyst — otherwise the agent runs
+        // abort before calling frontend-design — otherwise the agent runs
         // blind, registers nothing, and the orchestrator hangs waiting for
-        // a design spec that cannot exist. See benchmark run on
+        // a frontend template that cannot exist. See benchmark run on
         // usage-replica-vague: assistant hallucinated ./image-N.png paths,
-        // all 3 ENOENT'd, design-analyst still ran for 45s producing
+        // all 3 ENOENT'd, frontend-design still ran for 45s producing
         // nothing, and the pipeline stalled on the empty verdict.
         let materializedCount = 0
         const materializationFailures: Array<{
@@ -2549,15 +2764,20 @@ export function createOrchestratorTools(input: {
 
         // --- Figma MCP references --------------------------------------------
         for (const figmaUrl of figmaUrls) {
-          materializedCount += await materializeFigmaMcpReference({
-            taskID,
-            projectID: Instance.project.id,
-            figmaUrl,
-          })
-          log.info("design_analysis: figma MCP reference materialized", {
-            taskID,
-            figmaUrl,
-          })
+          try {
+            materializedCount += await materializeFigmaMcpReference({
+              taskID,
+              projectID: Instance.project.id,
+              figmaUrl,
+            })
+            log.info("frontend_design: figma MCP reference materialized", {
+              taskID,
+              figmaUrl,
+            })
+          } catch (figmaErr) {
+            await closeFrontendDesignStep(true)
+            throw figmaErr
+          }
         }
 
         // --- Generic URL screenshots -----------------------------------------
@@ -2567,13 +2787,13 @@ export function createOrchestratorTools(input: {
         //
         // P0-A: 每张 reference PNG 都必须通过 captureReferenceManifest + gate。
         // 伪造 / 空白 / 阈值不达标的图直接抛 CaptureGateError，向上冒泡让
-        // design_analysis 失败——禁止"网页访问不到就退回 visual contract 文本"
+        // frontend_design 失败——禁止"网页访问不到就退回 visual contract 文本"
         // （spec rule 1）。浏览器/网络异常（非 gate violation）仍 warn+continue
         // 因为那是外部资源问题不是 reference 真实性问题。
         for (const liveUrl of liveUrls) {
           try {
             const { captureReferenceManifest, enforceCaptureGate, summarizeCaptureViolations, CaptureGateError } =
-              await import("@/design-analyst/capture-gate")
+              await import("@/frontend-design/capture-gate")
             const osMod = await import("node:os")
             const outDir = pathMod.join(
               osMod.tmpdir(),
@@ -2584,6 +2804,7 @@ export function createOrchestratorTools(input: {
             const gate = enforceCaptureGate(capture.manifest)
             if (!gate.ok) {
               // 真实性闸拒收 ⇒ task 级失败；调用方通过 CaptureGateError 区分于普通抓图错误。
+              await closeFrontendDesignStep(true)
               throw new CaptureGateError(
                 `reference authenticity gate rejected ${liveUrl}: ${summarizeCaptureViolations(gate.violations)}`,
                 "gate",
@@ -2608,7 +2829,7 @@ export function createOrchestratorTools(input: {
               intent: "visual_reference",
               source: "url-screenshot",
             })
-            log.info("design_analysis: url screenshot materialized (gate passed)", {
+            log.info("frontend_design: url screenshot materialized (gate passed)", {
               taskID,
               url: liveUrl,
               sha: ref.sha,
@@ -2618,9 +2839,10 @@ export function createOrchestratorTools(input: {
             })
             materializedCount++
           } catch (shotErr) {
-            const { CaptureGateError } = await import("@/design-analyst/capture-gate")
+            const { CaptureGateError } = await import("@/frontend-design/capture-gate")
             if (shotErr instanceof CaptureGateError && shotErr.stage === "gate") {
-              // 真实性闸拒收：向上抛，让 design_analysis 工具调用整体 fail。
+              // 真实性闸拒收：向上抛，让 frontend_design 工具调用整体 fail。
+              await closeFrontendDesignStep(true)
               throw shotErr
             }
             const stage = shotErr instanceof CaptureGateError ? shotErr.stage : "unknown"
@@ -2631,7 +2853,7 @@ export function createOrchestratorTools(input: {
               stage,
               error,
             })
-            log.warn("design_analysis: url screenshot failed (non-gate)", {
+            log.warn("frontend_design: url screenshot failed (non-gate)", {
               taskID,
               url: liveUrl,
               stage,
@@ -2656,7 +2878,7 @@ export function createOrchestratorTools(input: {
                 stage: "path",
                 error: `resolved path escapes project root: ${abs}`,
               })
-              log.warn("design_analysis: material path escapes project root — skipped", {
+              log.warn("frontend_design: material path escapes project root — skipped", {
                 taskID,
                 rawPath,
                 projectRoot,
@@ -2672,7 +2894,7 @@ export function createOrchestratorTools(input: {
               intent: "visual_reference",
               source: "material",
             })
-            log.info("design_analysis: material materialized", {
+            log.info("frontend_design: material materialized", {
               taskID,
               path: rawPath,
               sha: ref.sha,
@@ -2687,7 +2909,7 @@ export function createOrchestratorTools(input: {
               stage: "read",
               error: matErr instanceof Error ? matErr.message : String(matErr),
             })
-            log.warn("design_analysis: material materialization failed", {
+            log.warn("frontend_design: material materialization failed", {
               taskID,
               path: rawPath,
               error: matErr instanceof Error ? matErr.message : String(matErr),
@@ -2695,7 +2917,70 @@ export function createOrchestratorTools(input: {
           }
         }
 
-        // Refresh task to pick up any newly-attached references. design-analyst
+        let preparedWebpageEvidenceArtifacts: string[] = []
+        let preparedWebpageEvidenceStatus: string | undefined
+        if (liveUrls.length > 0) {
+          try {
+            const evidence = await ensureLiveWebpageEvidence({
+              projectDir: Instance.project.worktree,
+              worktreeDir: Instance.directory,
+              taskID,
+              urls: liveUrls,
+              signal: input.signal,
+            })
+            preparedWebpageEvidenceArtifacts = evidence.artifacts.length > 0
+              ? evidence.artifacts
+              : primaryWebpageEvidenceArtifacts()
+            preparedWebpageEvidenceStatus = evidence.status
+            log.info("frontend_design: live webpage mirror evidence prepared", {
+              taskID,
+              url: evidence.url,
+              status: evidence.status,
+              mirrorDir: evidence.mirrorDir,
+              artifacts: preparedWebpageEvidenceArtifacts.length,
+            })
+            if (evidence.status !== "skipped") {
+              try {
+                const { createDecisionLog } = await import("@/decision-log")
+                createDecisionLog(taskID).append({
+                  phase: "frontend_design",
+                  key: "webpage_mirror_evidence",
+                  value:
+                    `Host-prepared live webpage evidence for ${evidence.url} (${evidence.status}).\n` +
+                    preparedWebpageEvidenceArtifacts.map((item) => `- ${item}`).join("\n"),
+                  reason:
+                    "Live webpage clone evidence is prepared deterministically before frontend template synthesis so downstream agents consume source skeleton/IR instead of relying on screenshot-only prose.",
+                })
+              } catch (logErr) {
+                log.warn("frontend_design: decision_log write failed (non-fatal)", {
+                  taskID,
+                  error: logErr instanceof Error ? logErr.message : String(logErr),
+                })
+              }
+            }
+          } catch (evidenceErr) {
+            const error = evidenceErr instanceof Error ? evidenceErr.message : String(evidenceErr)
+            try {
+              const { createDecisionLog } = await import("@/decision-log")
+              createDecisionLog(taskID).append({
+                phase: "frontend_design",
+                key: "abort_webpage_mirror_evidence_failed",
+                value: `Live webpage mirror evidence generation failed before frontend template synthesis: ${error}`,
+                reason:
+                  "A live webpage clone task cannot be grounded by prose alone; extraction/compile/analyze must succeed or surface the real acquisition failure.",
+              })
+            } catch (logErr) {
+              log.warn("frontend_design: decision_log write failed (non-fatal)", {
+                taskID,
+                error: logErr instanceof Error ? logErr.message : String(logErr),
+              })
+            }
+            await closeFrontendDesignStep(true)
+            throw evidenceErr instanceof Error ? evidenceErr : new Error(error)
+          }
+        }
+
+        // Refresh task to pick up any newly-attached references. frontend-design
         // sees the union of user attachments (figma + user uploads) and
         // system_artifacts (URL screenshots + materials we just captured).
         const enrichedTask = requireTask(taskID)
@@ -2705,14 +2990,14 @@ export function createOrchestratorTools(input: {
         ]
         const enrichedHasAttachments = designVisuals.length > 0
 
-        // Fail-fast if design_analysis was invoked on the strength of URLs /
+        // Fail-fast if frontend_design was invoked on the strength of URLs /
         // materials but every source failed to materialize. Running
-        // design-analyst blind produces zero output tools, which the caller
-        // turns into "Design analysis failed" — we surface the real root
+        // frontend-design blind produces zero output tools, which the caller
+        // turns into "frontend_design failed" — we surface the real root
         // cause (no usable visual input) back to the orchestrator instead
         // of letting the downstream agent run for 45s and emit nothing.
-        if (!enrichedHasAttachments && materializedCount === 0) {
-          await trackStepComplete("design_analysis", undefined, true)
+        if (!enrichedHasAttachments && materializedCount === 0 && preparedWebpageEvidenceArtifacts.length === 0) {
+          await closeFrontendDesignStep(true)
           const providedCount = liveUrls.length + figmaUrls.length + materialPaths.length
           const failureDetail = materializationFailures.length > 0
             ? " Materialization errors: " + materializationFailures
@@ -2720,56 +3005,57 @@ export function createOrchestratorTools(input: {
               .join("; ")
             : ""
           const message =
-            `Design analysis aborted: all ${providedCount} provided visual source(s) ` +
+            `frontend_design aborted: all ${providedCount} provided visual source(s) ` +
             `failed to materialize (URLs unreachable, Figma fetch failed, or local material ` +
             `paths did not exist). Check that the paths/URLs in the 'materials' / 'url' / ` +
-            `'urls' / 'figma_url' arguments actually exist. If no real visual reference is ` +
-            `available, skip design_analysis and call requirements directly.` +
+            `'urls' / 'figma_url' arguments actually exist, then retry frontend_design ` +
+            `with real visual evidence or ask the user for usable reference material.` +
             failureDetail
-          log.warn("design_analysis: no visual input materialized — aborting before agent call", {
+          log.warn("frontend_design: no visual input materialized — aborting before agent call", {
             taskID,
             liveUrlCount: liveUrls.length,
             figmaUrlCount: figmaUrls.length,
             materialCount: materialPaths.length,
             materializationFailures,
           })
-          // P4: write decision_log so downstream agents see "design analysis
+          // P4: write decision_log so downstream agents see "frontend design
           // was attempted but produced no visual context" rather than
           // running blind on designSpecs=undefined (audit §11.3 / L3, bench
           // tsk_dde13a67c001sbz6y2Qe0at8Fc:1729).
           try {
             const { createDecisionLog } = await import("@/decision-log")
             createDecisionLog(taskID).append({
-              phase: "design_analysis",
+              phase: "frontend_design",
               key: "abort_materialization_failed",
               value:
-                `Design analysis aborted before agent call: all ${providedCount} provided visual ` +
+                `frontend_design aborted before agent call: all ${providedCount} provided visual ` +
                 `source(s) (live=${liveUrls.length}, figma=${figmaUrls.length}, materials=${materialPaths.length}) ` +
                 `failed to materialize.${failureDetail}`,
               reason: "materialization_failed_all_sources",
             })
           } catch (logErr) {
-            log.warn("design_analysis: decision_log write failed (non-fatal)", {
+            log.warn("frontend_design: decision_log write failed (non-fatal)", {
               taskID,
               error: logErr instanceof Error ? logErr.message : String(logErr),
             })
           }
+          await closeFrontendDesignStep(true)
           throw new Error(message)
         }
 
-        // Single session per sub-agent (rule 22). DesignAnalystAgent.analyze
+        // Single session per sub-agent (rule 22). FrontendDesignAgent.analyze
         // creates the runner session internally; the orchestrator captures
         // its id via onSessionCreated for downstream emit attribution.
         let runnerSessionID: string | undefined
         try {
-          const { DesignAnalystAgent } = await import("@/design-analyst")
+          const { FrontendDesignAgent } = await import("@/frontend-design")
 
-          const analysis = await DesignAnalystAgent.analyze({
+          const analysis = await FrontendDesignAgent.analyze({
             title: task.title,
             request: task.request,
             // Single-source visual input: every URL / Figma frame / local
             // material the orchestrator resolved has already been turned
-            // into a PNG in `designVisuals`. Prefer those pixels; design-analyst
+            // into a PNG in `designVisuals`. Prefer those pixels; frontend-design
             // does not use webfetch, though it may capture an additional live
             // webpage screenshot with its dedicated `url_screenshot` tool.
             attachments: enrichedHasAttachments ? designVisuals : undefined,
@@ -2783,42 +3069,52 @@ export function createOrchestratorTools(input: {
           })
 
           // Persist optional visual anchors on task.design_specs (dedicated
-          // JSON column, not metadata). The binding contract is the PRD/SPEC
+          // JSON column, not metadata). The binding contract is the frontend template
           // persisted into the Decision Log below; empty anchors are valid.
           const freshTask = requireTask(taskID)
           await updateTask(
             freshTask,
             { design_specs: analysis.specs },
-            `Design PRD/SPEC stored (optional visual anchors: ${analysis.specs.length})`,
+            preparedWebpageEvidenceArtifacts.length > 0
+              ? `Design frontend template stored (webpage clone artifacts: ${preparedWebpageEvidenceArtifacts.length}, optional visual anchors: ${analysis.specs.length})`
+              : `Design frontend template stored (optional visual anchors: ${analysis.specs.length})`,
           )
 
-          await trackStepComplete("design_analysis")
+          await closeFrontendDesignStep()
 
           const countByCategory = analysis.specs.reduce<Record<string, number>>((acc, s) => {
             acc[s.category] = (acc[s.category] ?? 0) + 1
             return acc
           }, {})
           const taskAfterDesignSpecs = requireTask(taskID)
-          const materializedDesignFiles = designAnalysisArtifactPaths(Instance.directory, taskID)
+          const materializedDesignFiles = frontendDesignArtifactPaths(Instance.directory, taskID)
           const evidenceSourceManifest = renderEvidenceSourceManifest({
             task: taskAfterDesignSpecs,
             liveUrls,
             figmaUrls,
             materialPaths,
             referenceArtifacts: analysis.referenceArtifacts,
-            materializedFiles: [materializedDesignFiles.prdRelative, materializedDesignFiles.manifestRelative],
+            mirrorArtifacts: preparedWebpageEvidenceArtifacts,
+            materializedFiles: [materializedDesignFiles.templateRelative, materializedDesignFiles.manifestRelative],
           })
-          const writtenDesignArtifacts = await writeDesignAnalysisArtifacts({
+          const writtenDesignArtifacts = await writeFrontendDesignArtifacts({
             projectDir: Instance.directory,
             taskID,
             analysis: {
               designSystem: analysis.designSystem,
               techStack: analysis.techStack,
-              productSpec: analysis.productSpec,
-              frontendSpec: analysis.frontendSpec,
-              visualConsistencySpec: analysis.visualConsistencySpec,
-              backendSpec: analysis.backendSpec,
-              prdIterationNotes: analysis.prdIterationNotes,
+              frontendTemplate: analysis.frontendTemplate,
+              finalDeliveryMode: analysis.finalDeliveryMode ?? "visual_baseline_allowed",
+              fillableModules: analysis.fillableModules,
+              componentInventory: analysis.componentInventory,
+              componentReusePlan: analysis.componentReusePlan ?? [],
+              baselineReplacementPlan: analysis.baselineReplacementPlan ?? [],
+              qualityProjectContract: analysis.qualityProjectContract,
+              materialInventory: analysis.materialInventory,
+              frontendProject: analysis.frontendProject,
+              visualConsistencyContract: analysis.visualConsistencyContract,
+              uiDataContract: analysis.uiDataContract,
+              templateIterationNotes: analysis.templateIterationNotes,
               completenessReview: analysis.completenessReview,
               referenceArtifacts: analysis.referenceArtifacts,
               openQuestions: analysis.openQuestions,
@@ -2829,7 +3125,7 @@ export function createOrchestratorTools(input: {
           const { createDecisionLog } = await import("@/decision-log")
           const decisionLog = createDecisionLog(taskID)
           decisionLog.append({
-            phase: "design_analysis",
+            phase: "frontend_design",
             key: "visual_contract_summary",
             value:
               `Optional visual anchors: ${analysis.specs.length}. ` +
@@ -2837,86 +3133,136 @@ export function createOrchestratorTools(input: {
               `spacing ${countByCategory.spacing ?? 0}, layout ${countByCategory.layout ?? 0}, ` +
               `component ${countByCategory.component ?? 0}, interaction ${countByCategory.interaction ?? 0}, ` +
               `responsive ${countByCategory.responsive ?? 0}.`,
-            reason: "Design-analyst optional anchor summary; the PRD/SPEC entries are authoritative.",
+            reason: "Frontend-design optional anchor summary; the frontend template entries are authoritative.",
           })
           if (analysis.designSystem.trim()) {
             decisionLog.append({
-              phase: "design_analysis",
+              phase: "frontend_design",
               key: "design_system",
               value: analysis.designSystem,
-              reason: "Design-analyst identified the dominant design system / visual language.",
+              reason: "Frontend-design identified the dominant design system / visual language.",
             })
           }
           if (analysis.techStack.length > 0) {
             decisionLog.append({
-              phase: "design_analysis",
+              phase: "frontend_design",
               key: "recommended_stack",
               value: analysis.techStack.join(", "),
               reason:
-                "Design-analyst's implementation stack hints grounded in the PRD/SPEC and observed reference behavior.",
+                "Frontend-design's implementation stack hints grounded in the frontend template and observed reference behavior.",
             })
           }
           decisionLog.append({
-            phase: "design_analysis",
-            key: "product_spec",
-            value: analysis.productSpec,
-            reason: "Mirror-grounded PRD/SPEC produced before requirements decomposition.",
+            phase: "frontend_design",
+            key: "frontend_template",
+            value: analysis.frontendTemplate,
+            reason: "Mirror-grounded frontend replica scope produced before requirements decomposition.",
           })
           decisionLog.append({
-            phase: "design_analysis",
-            key: "frontend_spec",
-            value: analysis.frontendSpec,
-            reason: "Frontend implementation specification derived from visual evidence and mirror artifacts.",
+            phase: "frontend_design",
+            key: "final_delivery_mode",
+            value: analysis.finalDeliveryMode ?? "visual_baseline_allowed",
+            reason: "Whether downstream Build may keep the visual baseline or must replace requested surfaces with maintainable semantic components/data/API bindings.",
           })
           decisionLog.append({
-            phase: "design_analysis",
-            key: "visual_consistency_spec",
-            value: analysis.visualConsistencySpec,
+            phase: "frontend_design",
+            key: "fillable_modules",
+            value: analysis.fillableModules,
+            reason: "Fillable module and slot plan derived from visual evidence, mirror artifacts, and the visible web-clone-source package.",
+          })
+          decisionLog.append({
+            phase: "frontend_design",
+            key: "component_inventory",
+            value: analysis.componentInventory,
+            reason: "Component inventory required to implement the frontend template without raw DOM replay.",
+          })
+          decisionLog.append({
+            phase: "frontend_design",
+            key: "component_reuse_plan",
+            value: JSON.stringify(analysis.componentReusePlan ?? [], null, 2),
+            reason: "Structured reuse/library/fallback plan for each component family in the frontend template.",
+          })
+          decisionLog.append({
+            phase: "frontend_design",
+            key: "baseline_replacement_plan",
+            value: JSON.stringify(analysis.baselineReplacementPlan ?? [], null, 2),
+            reason: "Generated-baseline deletion/replacement checklist that tells Build which skeleton regions must be replaced, deleted, or temporarily deferred and which existing/mature components own each boundary.",
+          })
+          decisionLog.append({
+            phase: "frontend_design",
+            key: "quality_project_contract",
+            value: analysis.qualityProjectContract,
+            reason: "High-quality maintainable frontend project contract; raw extracted baseline is not the delivered project.",
+          })
+          decisionLog.append({
+            phase: "frontend_design",
+            key: "material_inventory",
+            value: analysis.materialInventory,
+            reason: "Material and asset inventory required to fill the frontend template.",
+          })
+          decisionLog.append({
+            phase: "frontend_design",
+            key: "frontend_project",
+            value: [
+              `status: ${analysis.frontendProject.status}`,
+              `role: ${analysis.frontendProject.role}`,
+              `project_root: ${analysis.frontendProject.project_root}`,
+              `source_package: ${analysis.frontendProject.source_package}`,
+              `generation_tool: ${analysis.frontendProject.generation_tool}`,
+              `entrypoints: ${analysis.frontendProject.entrypoints.join(", ")}`,
+              ...analysis.frontendProject.notes.map((note) => `note: ${note}`),
+            ].join("\n"),
+            reason: "Concrete frontend-design skeleton/project baseline for downstream Build refinement.",
+          })
+          decisionLog.append({
+            phase: "frontend_design",
+            key: "visual_consistency_contract",
+            value: analysis.visualConsistencyContract,
             reason: "Primary visual-fidelity contract for downstream implementation and delivery review.",
           })
           decisionLog.append({
-            phase: "design_analysis",
-            key: "backend_spec",
-            value: analysis.backendSpec,
-            reason: "Backend/API contract needed to reproduce observed page behavior; unknowns remain explicit.",
+            phase: "frontend_design",
+            key: "ui_data_contract",
+            value: analysis.uiDataContract,
+            reason: "UI data contract needed to reproduce observed page behavior; unknowns remain explicit.",
           })
           decisionLog.append({
-            phase: "design_analysis",
-            key: "prd_iteration_notes",
-            value: analysis.prdIterationNotes.join("\n"),
-            reason: "Design-analysis review passes completed before downstream handoff.",
+            phase: "frontend_design",
+            key: "template_iteration_notes",
+            value: analysis.templateIterationNotes.join("\n"),
+            reason: "Frontend template review passes completed before downstream handoff.",
           })
           decisionLog.append({
-            phase: "design_analysis",
+            phase: "frontend_design",
             key: "completeness_review",
             value: analysis.completenessReview,
-            reason: "Final design-analysis completeness audit for requirements, architect, and build.",
+            reason: "Final frontend-design completeness audit for requirements, architect, and build.",
           })
           decisionLog.append({
-            phase: "design_analysis",
+            phase: "frontend_design",
             key: "evidence_source_manifest",
             value: evidenceSourceManifest,
             reason:
-              "Source manifest naming the PRD/SPEC origin, task files, materialized images, and mirror artifacts downstream agents can read.",
+              "Source manifest naming the frontend template origin, task files, materialized images, mirror artifacts, and visible web-clone-source package downstream agents can read.",
           })
           if (analysis.referenceArtifacts.length > 0) {
             decisionLog.append({
-              phase: "design_analysis",
+              phase: "frontend_design",
               key: "reference_artifacts",
               value: analysis.referenceArtifacts.join("\n"),
-              reason: "Evidence artifacts used by design-analysis.",
+              reason: "Evidence artifacts used by frontend-design.",
             })
           }
           if (analysis.openQuestions.length > 0) {
             decisionLog.append({
-              phase: "design_analysis",
+              phase: "frontend_design",
               key: "open_questions",
               value: analysis.openQuestions.join("\n"),
-              reason: "Facts design-analysis could not observe and downstream agents must not hallucinate.",
+              reason: "Facts frontend-design could not observe and downstream agents must not hallucinate.",
             })
           }
 
-          log.info("design_analysis: complete", {
+          log.info("frontend_design: complete", {
             taskID,
             total: analysis.specs.length,
             byCategory: countByCategory,
@@ -2927,8 +3273,8 @@ export function createOrchestratorTools(input: {
 
           return SubAgentProtocol.yieldResult({
             headline:
-              "SUCCESS: Mirror-grounded PRD/SPEC and visual_consistency_spec persisted in decision log. " +
-              "NEXT: call requirements for functional decomposition.",
+              "SUCCESS: Mirror-grounded frontend template and visual_consistency_contract persisted in decision log. " +
+              "Functional decomposition can now consume this visual template when the full task context calls for requirements.",
             fields: [
               ["optional_visual_anchors", String(analysis.specs.length)],
               ["color", String(countByCategory.color ?? 0)],
@@ -2940,19 +3286,23 @@ export function createOrchestratorTools(input: {
               ["responsive", String(countByCategory.responsive ?? 0)],
               ["design_system", analysis.designSystem],
               ["recommended_stack", analysis.techStack],
-              ["prd_review_passes", String(analysis.prdIterationNotes.length)],
+              ["template_review_passes", String(analysis.templateIterationNotes.length)],
               ["reference_artifacts", String(analysis.referenceArtifacts.length)],
-              ["source_manifest", "decision_log:design_analysis/evidence_source_manifest"],
-              ["prd_spec_file", writtenDesignArtifacts.prdRelative],
+              ["frontend_project_status", analysis.frontendProject.status],
+              ["frontend_project_root", analysis.frontendProject.project_root],
+              ["webpage_mirror_evidence", preparedWebpageEvidenceStatus ?? "none"],
+              ["webpage_clone_artifacts", String(preparedWebpageEvidenceArtifacts.length)],
+              ["source_manifest", "decision_log:frontend_design/evidence_source_manifest"],
+              ["frontend_template_file", writtenDesignArtifacts.templateRelative],
               ["source_manifest_file", writtenDesignArtifacts.manifestRelative],
               ["open_questions", String(analysis.openQuestions.length)],
             ],
-            pointer: "decision_log phase=design_analysis",
+            pointer: "decision_log phase=frontend_design",
           })
         } catch (err) {
-          await trackStepComplete("design_analysis", undefined, true)
+          await closeFrontendDesignStep(true)
           const msg = err instanceof Error ? err.message : String(err)
-          log.error("design_analysis: failed", { taskID, error: msg })
+          log.error("frontend_design: failed", { taskID, error: msg })
           throw err instanceof Error ? err : new Error(msg)
         }
       },
@@ -2981,7 +3331,7 @@ export function createOrchestratorTools(input: {
         "edits; build sessions may edit outside responsibility paths when needed " +
         "and must explain every touched file in files_changed[]. For contract-level " +
         "point fixes prefer `modify_goal`. When a visual/reference artifact is actually the task contract, " +
-        "prefer `design_analysis` before architect so the goal graph can consume its PRD/SPEC review entries.",
+        "prefer `frontend_design` before architect so the goal graph can consume its frontend template review entries.",
       inputSchema: z.object({
         reason: z.string().optional().describe("Why you decided to run architect"),
       }),
@@ -3021,7 +3371,13 @@ export function createOrchestratorTools(input: {
             value: d.value,
             reason: d.reason,
           }))
-          const designAnalysis = renderDesignAnalysisHandoffReference(taskID)
+          const frontendDesign = renderFrontendDesignHandoffReference(taskID)
+          // Goal Workload Analyst sizing feedback (advisory). On the first
+          // architect pass this is undefined (no analyst has run yet); on a
+          // re-dispatch it carries the analyst's per-goal briefs so architect
+          // can act on decomposition_concern. Architect re-decomposes, so all
+          // briefs are acceptable input — no snapshot filter here.
+          const workloadArtifact = findLatestGoalWorkloadArtifact(taskID)
 
           const { ArchitectAgent } = await import("@/architect/agent")
           const { copyRequirementsToSpecSnapshot, persistArchitectContractGraph, upsertGoalsFromArchitect } =
@@ -3056,7 +3412,8 @@ export function createOrchestratorTools(input: {
             requirements,
             requirementDecisions,
             designSpecs: Array.isArray(task.design_specs) ? (task.design_specs as any) : undefined,
-            designAnalysis: designAnalysis.trim().length > 0 ? designAnalysis : undefined,
+            frontendDesign: frontendDesign.trim().length > 0 ? frontendDesign : undefined,
+            workloadBriefs: workloadArtifact?.briefs,
             attachments: Array.isArray(task.attachments) ? (task.attachments as any) : undefined,
             signal: input.signal,
             parentSessionID: input.agentSessionID,
@@ -3072,7 +3429,8 @@ export function createOrchestratorTools(input: {
           const newSpecSnapshotID = Identifier.ascending("spec")
           const priorSpecSnapshotID = findActiveSpecForTask(task.id)?.id
           const reqLines = requirements.map(
-            (r) => `- **${r.id}** [${r.type}]: ${r.description} Acceptance: ${r.acceptance} Non-goals: ${r.non_goals}`,
+            (r) =>
+              `- **${r.id}** [${r.type}]: ${r.description} Acceptance: ${r.acceptance} Non-goals: ${r.non_goals} Evidence: ${r.evidence_refs.join(", ") || "(none)"}`,
           )
           const decisionLines = requirementDecisions.map((d) => `- **${d.key}** = ${d.value} — ${d.reason}`)
           const goalLines = result.goals.map((g) => `- **${g.id}** (${g.kind}, ${g.priority}): ${g.title}`)
@@ -3267,7 +3625,7 @@ export function createOrchestratorTools(input: {
             headline:
               `Architect decomposition complete: ${persisted.length} goals, ${result.contractGraph.contracts.length} contracts.` +
               (deletedIDs.length > 0 ? ` Removed ${deletedIDs.length} prior goal(s).` : "") +
-              ` NEXT: dispatch eligible per-goal \`build({ goalID })\`; read each build report and worktree facts, then decide modify_goal / build / architect / integrity / fail_task explicitly (no auto-routing).`,
+              ` Eligible per-goal builds are now visible; read each build report and worktree facts, then decide modify_goal / build / architect / integrity / fail_task explicitly from current evidence.`,
             summary: result.summary,
             fields: [
               ["goals", persisted.map((g) => `${g.id} ${g.title}`)],
@@ -3306,6 +3664,197 @@ export function createOrchestratorTools(input: {
             })
           } catch (logErr) {
             log.warn("architect: decision_log write failed (non-fatal)", {
+              taskID,
+              error: logErr instanceof Error ? logErr.message : String(logErr),
+            })
+          }
+          throw err
+        }
+      },
+    }),
+
+    // -----------------------------------------------------------------------
+    // Goal Workload Analyst — independent, read-only goal-sizing reviewer.
+    //
+    // Runs after architect, before per-goal build (advisory, not a gate). It
+    // deep-reads the full frontend template (inlined into its prompt) plus the architect
+    // goal graph and, per goal, produces a compact brief: countable work
+    // surface + why_not_smaller + underestimation_traps + verification_inventory
+    // + a decomposition_concern when a goal is too large / under-specified for
+    // one autonomous build. It only references existing surfaces/contracts by
+    // id — it never re-decomposes goals (that is architect's job). The brief is
+    // persisted as a single task-level `goal_workload` artifact (latest-wins,
+    // staleness-bound to the active spec snapshot). Concern findings feed an
+    // architect re-size; the brief feeds build against premature minimization.
+    // Failure surfacing mirrors the architect tool's catch.
+    // -----------------------------------------------------------------------
+
+    workload_analysis: tool({
+      description:
+        "OPTIONAL read-only stage agent. After architect, before per-goal build, the Goal Workload " +
+        "Analyst deep-reads the FULL frontend template + the architect goal graph and produces a per-goal " +
+        "workload brief: countable work surface, why-it-is-not-smaller, underestimation traps, a " +
+        "verification inventory, and a `decomposition_concern` when a goal is too large or " +
+        "under-specified for one autonomous build. It is an independent sizing reviewer with no " +
+        "implementation bias — it never writes code and never creates / modifies / splits goals.\n\n" +
+        "USE WHEN: architect just produced a multi-goal graph and you want an independent check that " +
+        "no goal is oversized before dispatching builds, OR you want each build to receive an " +
+        "anti-underestimation brief. Requires architect goals on the active spec snapshot.\n" +
+        "SKIP WHEN: the goal set is trivial (one obvious goal). Advisory — the workflow can proceed " +
+        "without it.\n" +
+        "AFTER it returns: goals flagged with `decomposition_concern` are evidence for an architect " +
+        "re-size — prefer `modify_goal` for single-field fixes, re-enter `architect` only for genuinely " +
+        "new structure (a split). Briefs feed the next per-goal `build` automatically.",
+      inputSchema: z.object({
+        reason: z.string().optional().describe("Why you decided to run workload analysis"),
+      }),
+      execute: async () => {
+        const task = requireTask(taskID)
+        const activeSpec = findActiveSpecForTask(task.id)
+        if (!activeSpec) {
+          return SubAgentProtocol.yieldResult({
+            headline: "workload_analysis: no active spec — call requirements/architect first.",
+            fields: [["next_action", "architect"]],
+            pointer: "read_context scope=decisions",
+          })
+        }
+        const goals = listGoals(taskID)
+        if (goals.length === 0) {
+          return SubAgentProtocol.yieldResult({
+            headline: "workload_analysis: no goals on the active spec — call architect first.",
+            summary:
+              "The Goal Workload Analyst sizes an existing goal graph. No architect goals exist yet, " +
+              "so there is nothing to analyze.",
+            fields: [["next_action", "architect"]],
+            pointer: "read_context scope=decisions",
+          })
+        }
+
+        await trackStepStart("workload_analysis")
+        let runnerSessionID: string | undefined
+        try {
+          const { findRequirements } = await import("@/engine/store")
+          const requirements = findRequirements(activeSpec.id).map(parsedRequirementFromRow)
+          const frontendDesign = renderFrontendDesignHandoffReference(taskID)
+          const contractGraph = findLatestArchitectContractGraph(taskID)
+
+          // referenceCoverage: architect persists `architect_fidelity` into task
+          // metadata with referenceCoverage rows {id, surface, visual_spec_ids,
+          // expectation, goal_ids}. Map to the analyst's input shape when present;
+          // it is optional, so a missing / malformed shape degrades to undefined
+          // rather than inventing rows.
+          let referenceCoverage:
+            | Array<{ id: string; surface: string; visual_spec_ids: string[]; expectation: string }>
+            | undefined
+          const taskMetadata =
+            task.metadata && typeof task.metadata === "object" && !Array.isArray(task.metadata)
+              ? (task.metadata as Record<string, unknown>)
+              : {}
+          const fidelity = taskMetadata.architect_fidelity as
+            | { referenceCoverage?: Array<Record<string, unknown>> }
+            | undefined
+          if (fidelity && Array.isArray(fidelity.referenceCoverage)) {
+            referenceCoverage = fidelity.referenceCoverage.map((row) => ({
+              id: String(row.id ?? ""),
+              surface: String(row.surface ?? ""),
+              visual_spec_ids: Array.isArray(row.visual_spec_ids) ? (row.visual_spec_ids as string[]) : [],
+              expectation: String(row.expectation ?? ""),
+            }))
+          }
+
+          // prdFullText: inline the materialized template when it exists (the analyst
+          // is the one agent whose whole job is to digest it). Optional —
+          // wrapped so a missing / unreadable file falls back to the handoff
+          // reference the prompt already renders.
+          let prdFullText: string | undefined
+          try {
+            const templatePath = frontendDesignArtifactPaths(Instance.directory, taskID).templateAbsolute
+            const nodeFs = await import("node:fs")
+            prdFullText = nodeFs.existsSync(templatePath) ? nodeFs.readFileSync(templatePath, "utf8") : undefined
+          } catch (prdErr) {
+            log.warn("workload_analysis: template inline read failed (non-fatal)", {
+              taskID,
+              error: prdErr instanceof Error ? prdErr.message : String(prdErr),
+            })
+          }
+
+          const { GoalWorkloadAnalystAgent } = await import("@/goal-workload-analyst")
+          const result = await GoalWorkloadAnalystAgent.analyze({
+            taskTitle: task.title,
+            goals: goals.map((g) => ({
+              id: g.id,
+              title: g.title,
+              objective: g.objective,
+              acceptance_specs: acceptanceSpecsToPromptLines(g.acceptance_specs),
+              owned_paths: Array.isArray(g.owned_paths) ? (g.owned_paths as string[]) : [],
+              depends_on: Array.isArray(g.depends_on) ? (g.depends_on as string[]) : [],
+              kind: g.kind,
+              requirement_ids: Array.isArray(g.requirement_ids) ? (g.requirement_ids as string[]) : [],
+            })),
+            contractGraph: contractGraph ?? undefined,
+            referenceCoverage,
+            requirements: requirements.length > 0 ? requirements : undefined,
+            prdFullText,
+            frontendDesign: frontendDesign.trim().length > 0 ? frontendDesign : undefined,
+            specSnapshotID: activeSpec.id,
+            taskID,
+            parentSessionID: input.agentSessionID,
+            signal: input.signal,
+            onSessionCreated: (id) => {
+              runnerSessionID = id
+            },
+          })
+
+          const { persistGoalWorkload } = await import("@/engine/persist")
+          Database.use((db) =>
+            persistGoalWorkload(db, {
+              taskID,
+              specSnapshotID: activeSpec.id,
+              briefs: result.briefs,
+              summary: result.summary,
+              now: Date.now(),
+            }),
+          )
+
+          await trackStepComplete("workload_analysis")
+
+          const flagged = result.briefs.filter((b) => b.decomposition_concern?.trim()).map((b) => b.goal_id)
+          return SubAgentProtocol.yieldResult({
+            headline:
+              `Workload analysis complete: ${result.briefs.length} goals analyzed, ${flagged.length} flagged with decomposition_concern. ` +
+              "For flagged goals consider Architect re-sizing (modify_goal for single-field fixes / architect for a split); " +
+              "otherwise dispatch per-goal build — each build now carries its workload brief.",
+            summary: result.summary,
+            fields: [
+              ["goals_flagged", flagged],
+              ["spec_snapshot_id", activeSpec.id],
+            ],
+            pointer: "read_context scope=decisions",
+          })
+        } catch (err) {
+          // Same shape as the architect tool's catch (rule 4 — failure
+          // surfacing is uniform across stage agents): mark the workflow step
+          // failed and record the abort in the decision log so the operator
+          // can see WHICH stage broke, then rethrow.
+          try {
+            await trackStepComplete("workload_analysis", undefined, true)
+          } catch (trackErr) {
+            log.warn("workload_analysis: trackStepComplete(failed) emit failed", {
+              taskID,
+              error: trackErr instanceof Error ? trackErr.message : String(trackErr),
+            })
+          }
+          try {
+            const { createDecisionLog } = await import("@/decision-log")
+            const reason = err instanceof Error ? err.message : String(err)
+            createDecisionLog(taskID).append({
+              phase: "architect",
+              key: "abort_workload_analysis_failed",
+              value: `Workload analysis stage aborted: ${reason.slice(0, 400)}`,
+              reason: "workload_analysis_threw",
+            })
+          } catch (logErr) {
+            log.warn("workload_analysis: decision_log write failed (non-fatal)", {
               taskID,
               error: logErr instanceof Error ? logErr.message : String(logErr),
             })
@@ -3428,7 +3977,7 @@ export function createOrchestratorTools(input: {
         target_agent: z
           .string()
           .describe(
-            "Worker agent name: build / requirements / architect / design-analyst / intent-analysis / integrity.",
+            "Worker agent name: build / requirements / architect / frontend-design / intent-analysis / integrity.",
           ),
         fact_check_items: FactCheckItemListSchema.describe(
           "Copy of the fact_check_items[] array from the worker's terminal report. " +
@@ -3614,7 +4163,7 @@ export function createOrchestratorTools(input: {
     // record (decision log + prior delivery feedback when re-entering a
     // task), and a read-only tour of the repository. When visual/reference
     // artifacts are actually the task contract, the orchestrator can run
-    // design_analysis first so intent analysis reads the same PRD/SPEC source
+    // frontend_design first so intent analysis reads the same frontend template source
     // as downstream stages.
     // -----------------------------------------------------------------------
 
@@ -3662,7 +4211,7 @@ export function createOrchestratorTools(input: {
         } catch (err) {
           await trackStepComplete("analyze_intent", undefined, true)
           // P4 (rule 4 systemic — bundles intent_analysis abort with
-          // design_analysis abort, both audit L7 + L3 same shape): write
+          // frontend_design abort, both audit L7 + L3 same shape): write
           // decision_log so downstream agents see "intent analysis was
           // attempted but failed" instead of silently inheriting an empty
           // intent classification. The success path already writes (lines
@@ -3693,7 +4242,7 @@ export function createOrchestratorTools(input: {
         // scope_boundary / complexity / slots / clarifications via the
         // TaskContext.snapshot block. Without this the agent runs but its
         // output never reaches any downstream prompt — pure token waste.
-        // Same pattern as design_analysis (rule 22, single source).
+        // Same pattern as frontend_design (rule 22, single source).
         const { createDecisionLog } = await import("@/decision-log")
         const decisionLog = createDecisionLog(taskID)
         decisionLog.append({
@@ -3746,7 +4295,7 @@ export function createOrchestratorTools(input: {
             `Intent: ${r.intent_class} / complexity=${r.complexity} / confidence=${r.confidence.toFixed(2)}. ` +
             (blockers.length > 0
               ? `${blockers.length} blocker clarification(s) — call \`question\` BEFORE \`requirements\`.`
-              : `NEXT: call \`requirements\` (or \`design_analysis\` first if visual references exist).`),
+              : `Requirements and frontend_design are available candidate tools when the full task context needs them.`),
           summary: r.summary,
           fields: [
             ["slots", r.extracted_slots.map((s) => `${s.key}=${s.value}`)],
@@ -3756,6 +4305,67 @@ export function createOrchestratorTools(input: {
           ],
           pointer: `intent session ${out.sessionID}; decision log keys: intent_summary${r.extracted_slots.length > 0 ? " + intent_slots" : ""}${r.missing_info.length > 0 ? " + intent_missing_info" : ""}${blockers.length > 0 ? " + intent_blocker_clarifications" : ""}${nices.length > 0 ? " + intent_nice_clarifications" : ""}`,
         })
+      },
+    }),
+
+    research: tool({
+      description:
+        "OPTIONAL advisory evidence side-tool agent. Use when the task depends on external facts, current documentation, competitor/industry/API research, or PRD/SPEC source material that should become a durable citation bundle. The result is a compact research_brief artifact plus bundle paths. It is NOT a workflow step, NOT a route selector, NOT requirements, NOT architect, NOT build, and NOT a delivery path.",
+      inputSchema: z.object({
+        reason: z.string().min(1).describe("Why evidence research is needed for this task."),
+        target_deliverable: z
+          .enum(["prd", "spec", "research_report", "implementation_input", "mixed"])
+          .optional()
+          .describe("The likely document/input shape being researched."),
+        focus: z.string().optional().describe("Optional narrow focus for the research agent."),
+      }),
+      execute: async ({ reason, target_deliverable, focus }) => {
+        const task = requireTask(taskID)
+        let runnerSessionID: string | undefined
+        try {
+          const { ResearchAgent } = await import("@/research")
+          const result = await ResearchAgent.run({
+            title: task.title,
+            request: task.request,
+            targetDeliverable: target_deliverable,
+            focus,
+            reason,
+            taskID,
+            parentSessionID: input.agentSessionID,
+            signal: input.signal,
+            onStatus: () => {},
+            onSessionCreated: (id) => {
+              runnerSessionID = id
+            },
+          })
+          const artifactID = persistTaskResearchBrief({
+            taskID,
+            brief: result.brief,
+          })
+          const blocking = result.brief.open_questions.filter((item) => item.blocking)
+          return SubAgentProtocol.yieldResult({
+            headline: "Research brief persisted as advisory evidence.",
+            summary: result.brief.summary,
+            fields: [
+              ["session", result.sessionID],
+              ["artifact_id", artifactID],
+              ["sources", String(result.brief.evidence_index.length)],
+              ["facts", String(result.brief.facts.length)],
+              ["blocking_open_questions", blocking.map((item) => `${item.id}: ${item.question}`)],
+              ["bundle_paths", Object.values(result.brief.bundle)],
+            ],
+            pointer:
+              `research_brief artifact ${artifactID}; read_context scope=all surfaces stale status and bundle paths. ` +
+              "This result is evidence only; choose the next tool from full task context.",
+          })
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err)
+          if (runnerSessionID) {
+            SessionStatus.set(runnerSessionID, { type: "terminal", reason: "error", error: msg })
+          }
+          log.error("research tool failed", { taskID, error: msg })
+          throw err
+        }
       },
     }),
 
@@ -4217,6 +4827,26 @@ export function createOrchestratorTools(input: {
         }
 
         if (scope === "all") {
+          const researchArtifact = findLatestResearchBriefArtifact(taskID)
+          if (researchArtifact) {
+            const { researchBriefIsStale } = await import("@/research")
+            const stale = researchBriefIsStale({ request: task.request, brief: researchArtifact.payload })
+            const brief = researchArtifact.payload
+            sections.push(
+              `\n## Research Brief`,
+              `- artifact: ${researchArtifact.id}`,
+              `- session: ${brief.metadata.research_session_id}`,
+              `- stale: ${stale.stale ? "true" : "false"}`,
+              stale.reasons.length > 0 ? `- stale_reasons: ${stale.reasons.join(", ")}` : "",
+              `- sources: ${brief.evidence_index.length}`,
+              `- facts: ${brief.facts.length}`,
+              `- blocking_open_questions: ${brief.open_questions.filter((item) => item.blocking).length}`,
+              `- bundle: ${brief.bundle.full_markdown_path}, ${brief.bundle.evidence_json_path}, ${brief.bundle.citation_map_path}`,
+              `- summary: ${brief.summary.slice(0, 800)}`,
+              `Research is advisory evidence only; it is not a workflow step or next-tool instruction.`,
+            )
+          }
+
           // Fact-check attempts (one-line per row) — specs/fact-check-agent-2026-05-25.md
           // §6.1.2 step 7. Integrity replay reads this same artifact stream
           // via listFactCheckAttempts; surfacing summaries in read_context
@@ -4304,6 +4934,8 @@ export function createOrchestratorTools(input: {
         // task-terminal sweep so disk usage drops at the moment of
         // decision (rule 22: orchestrator owns worktree lifecycle).
         const cleaned = await cleanupTerminalGoalWorkspaces("fail_task")
+        const { interruptTaskLoop } = await import("@/orchestrator/loop")
+        interruptTaskLoop(taskID, "task failed")
         return `Task ${taskID} failed: ${error}${cleaned > 0 ? ` (${cleaned} goal worktree(s) cleaned)` : ""}`
       },
     }),
@@ -4547,7 +5179,7 @@ export function createOrchestratorTools(input: {
             `${staleRecovery ? "Recovered stale live-owned build" : "Cancelled live-owned build session"} ${target.sessionID} (kind=${kind}). ` +
             `source=${target.source}. ownership=${liveOwner.ownershipID}. Reason: ${reason}.` +
             goalFact +
-            " NEXT: if you still need work from it, re-dispatch the same stage/goal under the same contract explicitly."
+            " If you still need work from it, re-dispatch the same stage/goal under the same contract explicitly."
           )
         }
 
@@ -4564,7 +5196,7 @@ export function createOrchestratorTools(input: {
           })
         const abortedFact = aborted.goalRunAborted || aborted.executorAbortAttempted
           ? (
-            ` goal_run=${aborted.goalRunAborted ? "aborted" : "unchanged"}` +
+            ` goal_run ${target.goalRunID ?? "(unknown)"} ${aborted.goalRunAborted ? "aborted" : "unchanged"}` +
             `${aborted.executorAbortAttempted ? `; executor_abort=${aborted.executorAbortSucceeded ? "ok" : "failed"}` : ""}.`
           )
           : ""
@@ -4572,7 +5204,7 @@ export function createOrchestratorTools(input: {
         return (
           `Cancelled sub-agent session ${target.sessionID} (kind=${kind}). ` +
           `source=${target.source}. Reason: ${reason}.` +
-          `${abortedFact} NEXT: if you still need work from it, re-dispatch the same stage/goal under the same contract explicitly.`
+          `${abortedFact} If you still need work from it, re-dispatch the same stage/goal under the same contract explicitly.`
         )
       },
     }),
@@ -4968,7 +5600,7 @@ export function createOrchestratorTools(input: {
         "DO NOT USE FOR: multi-file features, UI replication from designs, anything with explicit acceptance " +
         "criteria, cross-module refactors, new subsystems — those go through requirements → architect → " +
         "per-goal build → integrity (the pipeline workflow). When a visual/reference artifact is actually " +
-        "the task contract, prefer design_analysis before build so build can consume its PRD/SPEC review entries.",
+        "the task contract, prefer frontend_design before build so build can consume its frontend template review entries.",
       inputSchema: z.object({
         request: z
           .string()
@@ -5326,22 +5958,19 @@ export function createOrchestratorTools(input: {
                     .map((g) => ({
                       id: g.id,
                       title: g.title,
-                      objective: g.objective,
                     }))
                 : []
             const collaborationGoals = siblingGoals.map((g) => ({
               id: g.id,
               title: g.title,
-              objective: g.objective,
               kind: g.kind,
               status: goalStatusByID(g.id),
-              acceptance_specs: acceptanceSpecsToPromptLines(g.acceptance_specs),
               owned_paths: Array.isArray(g.owned_paths) ? (g.owned_paths as string[]) : [],
               depends_on: Array.isArray(g.depends_on) ? (g.depends_on as string[]) : [],
             }))
 
             const designSpecs = Array.isArray(task.design_specs) ? (task.design_specs as any) : undefined
-            const designAnalysis = renderDesignAnalysisHandoffReference(taskID)
+            const frontendDesign = renderFrontendDesignHandoffReference(taskID)
 
             // Retry feedback from decision log. Materialize the terminal
             // build-attempt facts before reading so this new session receives
@@ -5386,6 +6015,17 @@ export function createOrchestratorTools(input: {
               enabled: retryEntries.length > 0 || Boolean(deliveryFeedback),
             })
 
+            // Goal Workload Analyst brief for this goal (spec §6B). Injected
+            // only when the latest workload artifact targets the active
+            // architect snapshot — a stale brief (architect re-ran after the
+            // analysis) is dropped so build never scopes against superseded
+            // counts. Matched by g.id (the canonical post-persistence goal id).
+            const wlArtifact = findLatestGoalWorkloadArtifact(taskID)
+            const workloadBrief =
+              wlArtifact && activeSpecForContext && wlArtifact.spec_snapshot_id === activeSpecForContext.id
+                ? wlArtifact.briefs.find((b) => b.goal_id === goal.id)
+                : undefined
+
             // Phase B (2026-05-07): the orchestrator LLM's `request` text
             // now flows into context.retryGuidance instead of replacing
             // target.objective. Empty string means no current-turn
@@ -5397,13 +6037,14 @@ export function createOrchestratorTools(input: {
               dependencies: dependencies.length > 0 ? dependencies : undefined,
               collaborationGoals,
               designSpecs,
-              designAnalysis: designAnalysis.trim().length > 0 ? designAnalysis : undefined,
+              frontendDesign: frontendDesign.trim().length > 0 ? frontendDesign : undefined,
               fidelity: taskFidelity,
               retryGuidance: requestText.length > 0 ? requestText : undefined,
               integrityFeedback,
               retryFeedback,
               deliveryFeedback,
               retryAttachments,
+              workloadBrief,
             }
           } else {
             // Task-level direct build: target.text carries the request
@@ -5422,16 +6063,16 @@ export function createOrchestratorTools(input: {
               enabled: Boolean(deliveryFeedback),
             })
             const designSpecs = Array.isArray(task.design_specs) ? (task.design_specs as any) : undefined
-            const designAnalysis = renderDesignAnalysisHandoffReference(taskID)
+            const frontendDesign = renderFrontendDesignHandoffReference(taskID)
             context =
               integrityFeedback ||
               deliveryFeedback ||
               retryAttachments ||
               designSpecs ||
-              designAnalysis.trim().length > 0
+              frontendDesign.trim().length > 0
                 ? {
                     designSpecs,
-                    designAnalysis: designAnalysis.trim().length > 0 ? designAnalysis : undefined,
+                    frontendDesign: frontendDesign.trim().length > 0 ? frontendDesign : undefined,
                     integrityFeedback,
                     deliveryFeedback,
                     retryAttachments,

@@ -24,7 +24,7 @@ const COVERED_WORKERS: Array<{ name: string; file: string }> = [
   { name: "build", file: "build/agent.ts" },
   { name: "requirements", file: "requirements/agent.ts" },
   { name: "architect", file: "architect/agent.ts" },
-  { name: "design-analyst", file: "design-analyst/agent.ts" },
+  { name: "frontend-design", file: "frontend-design/agent.ts" },
   { name: "intent-analysis", file: "intent-analysis/agent.ts" },
   { name: "integrity (team-agent consensus stage)", file: "integrity/team-agent.ts" },
 ]

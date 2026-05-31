@@ -309,6 +309,11 @@ async function appendDirectAgentSessionReply(input: {
     sessionKind: target.session.kind,
     expectedAgentKind: target.prompt.agent,
     expectedGoalID: target.session.goalID,
+    requireWorkerTurnDescriptor:
+      (SessionPrompt.agentKindRequiresRuntimeContract(target.prompt.agent) ||
+        SessionPrompt.agentKindRequiresRuntimeContract(target.session.kind)) &&
+      target.prompt.agent !== "orchestrator" &&
+      target.session.kind !== "orchestrator",
     requireRuntimeContract:
       SessionPrompt.agentKindRequiresRuntimeContract(target.prompt.agent) ||
       SessionPrompt.agentKindRequiresRuntimeContract(target.session.kind),
@@ -917,7 +922,7 @@ export namespace EngineService {
    * Register a USER-CONTRACT attachment on a task. Use for files the user
    * explicitly attached (user-upload) or for assets the user pointed the
    * orchestrator at via a contract-level URL (figma frames). Read by
-   * requirements / design-analyst as user intent and by delivery for visual
+   * requirements / frontend-design as user intent and by delivery for visual
    * comparison.
    *
    * For orchestrator-generated evidence (URL screenshots, rendered.png,
@@ -940,7 +945,7 @@ export namespace EngineService {
    * Register a SYSTEM-GENERATED artifact on a task. Use for evidence the
    * orchestrator/agents produced on the user's behalf — URL screenshots,
    * local material reads. Read only by delivery for visual diff against the
-   * user contract; never fed to requirements or design-analyst as user
+   * user contract; never fed to requirements or frontend-design as user
    * intent. Idempotent on sha collision.
    */
   export async function appendTaskSystemArtifact(taskID: string, artifact: FileRef) {
@@ -1016,7 +1021,7 @@ export namespace EngineService {
       evaluation: evaluation ? viewEvaluation(evaluation) : undefined,
       snapshots: listSnapshots(taskID).map(viewSnapshot),
       // activeSessions surfaces pre-plan agent work (requirements / architect /
-      // integrity / design-analyst) that goals/run miss. Without this, overlay
+      // integrity / frontend-design) that goals/run miss. Without this, overlay
       // has nothing to render during the 30s–10min architect phase and the
       // benchmark progress signature stalls until goals materialise.
       activeSessions: listActiveSessionsForTask(taskID),
@@ -1978,4 +1983,3 @@ function markProtocolInteraction(
     }
   })
 }
-

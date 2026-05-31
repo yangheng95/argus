@@ -252,7 +252,7 @@
   "chat.large_input_warning": "Input over 50 KB may reduce performance; consider using a 1M-context model.",
   "chat.placeholder_disabled": "Choose a workspace and connect a model to start.",
   "chat.placeholder_projects": [
-    "I have a PRD — turn it into a working MVP",
+    "I have a template — turn it into a working MVP",
     "I have a Figma — turn it into components and wire it into our app",
     "I have a competitor URL — build our own version of it",
     "I have a pile of PDFs — turn them into a searchable doc assistant",
@@ -291,7 +291,7 @@
   "chat.role.assistant": "Assistant",
   "chat.role.build": "Build",
   "chat.role.delivery": "Delivery",
-  "chat.role.design-analyst": "Design Analyst",
+  "chat.role.frontend-design": "Frontend Design",
   "chat.role.evaluator": "Evaluator",
   "chat.role.executor": "Executor",
   "chat.role.explore": "Explore",

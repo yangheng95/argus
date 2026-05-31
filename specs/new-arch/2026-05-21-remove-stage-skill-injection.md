@@ -23,7 +23,7 @@ host-side routing mechanism.
 - Stage callers:
   - `packages/opencorvus/src/build/agent.ts`
   - `packages/opencorvus/src/architect/agent.ts`
-  - `packages/opencorvus/src/design-analyst/agent.ts`
+  - `packages/opencorvus/src/frontend-design/agent.ts`
   - `packages/opencorvus/src/intent-analysis/agent.ts`
   - `packages/opencorvus/src/requirements/agent.ts`
 - Skill metadata and rendering:

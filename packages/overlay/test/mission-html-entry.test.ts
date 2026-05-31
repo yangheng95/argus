@@ -5,7 +5,7 @@ import { join } from "node:path"
 const HTML = readFileSync(join(import.meta.dir, "../src/index.html"), "utf8")
 const MAIN = readFileSync(join(import.meta.dir, "../src/main.tsx"), "utf8")
 
-test("Sidebar exposes a Mission entry button (PRD §6.2)", () => {
+test("Sidebar exposes a Mission entry button (template §6.2)", () => {
   expect(HTML).toContain('id="btnMission"')
   expect(HTML).toContain('data-ui="sidebar-mission-button"')
   expect(HTML).toContain('data-i18n="mission.open"')
@@ -30,7 +30,7 @@ test("main.tsx reflects pageMode onto body[data-page-mode] (drives mission.css v
   expect(MAIN).toContain("document.body.dataset.pageMode = pageMode()")
 })
 
-test("New chat button switches back to panel mode before focusing the composer (PRD §6.3)", () => {
+test("New chat button switches back to panel mode before focusing the composer (template §6.3)", () => {
   // Operator clicking +New Chat from inside Mission should not get stuck on
   // an invisible composer — the page must flip back to panel first.
   expect(MAIN).toMatch(/btnCreateTask[\s\S]*setPageMode\("panel"\)[\s\S]*selectTask\(""\)/)

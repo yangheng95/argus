@@ -25,12 +25,12 @@ export {
   autoArtifact,
 } from "./discovery"
 export {
-  findBrowserExecutable,
   runVisualDiff,
   summarizeVisualReport,
   type VisualDiffOptions,
   type VisualDiffReport,
 } from "./visual"
+export { findBrowserExecutable } from "@/browser/runtime"
 export {
   buildDeliveryEvidenceManifest,
 } from "./project-gate"

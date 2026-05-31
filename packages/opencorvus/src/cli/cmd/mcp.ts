@@ -47,6 +47,11 @@ function isMcpConfigured(config: McpEntry): config is McpConfigured {
   return typeof config === "object" && config !== null && "type" in config
 }
 
+type McpDisabled = { enabled: false }
+function isMcpDisabledOverride(config: McpEntry): config is McpDisabled {
+  return typeof config === "object" && config !== null && !("type" in config) && config.enabled === false
+}
+
 type McpRemote = Extract<McpConfigured, { type: "remote" }>
 function isMcpRemote(config: McpEntry): config is McpRemote {
   return isMcpConfigured(config) && config.type === "remote"
@@ -58,6 +63,7 @@ export const McpCommand = cmd({
   builder: (yargs) =>
     yargs
       .command(McpServeCommand)
+      .command(McpBrowserCommand)
       .command(McpAddCommand)
       .command(McpListCommand)
       .command(McpAuthCommand)
@@ -90,6 +96,24 @@ export const McpServeCommand = cmd({
   },
 })
 
+export const McpBrowserCommand = cmd({
+  command: "browser",
+  describe: false,
+  async handler() {
+    if (process.env.MCP_TRANSPORT !== "http" && process.env.OPENCORVUS_BROWSER_MCP_DIRECT_BUN !== "1") {
+      const { BrowserMCPNodeLauncher } = await import("../../mcp/browser/node-launcher")
+      await BrowserMCPNodeLauncher.serveStdio()
+      return
+    }
+    const { BrowserMCP } = await import("../../mcp/browser")
+    if (process.env.MCP_TRANSPORT === "http") {
+      await BrowserMCP.serveHttp()
+      return
+    }
+    await BrowserMCP.serveStdio()
+  },
+})
+
 export const McpListCommand = cmd({
   command: "list",
   aliases: ["ls"],
@@ -105,8 +129,9 @@ export const McpListCommand = cmd({
         const mcpServers = config.mcp ?? {}
         const statuses = await MCP.status()
 
-        const servers = Object.entries(mcpServers).filter((entry): entry is [string, McpConfigured] =>
-          isMcpConfigured(entry[1]),
+        const servers = Object.entries(mcpServers).filter(
+          (entry): entry is [string, McpConfigured | McpDisabled] =>
+            isMcpConfigured(entry[1]) || isMcpDisabledOverride(entry[1]),
         )
 
         if (servers.length === 0) {
@@ -149,7 +174,11 @@ export const McpListCommand = cmd({
             hint = "\n    " + status.error
           }
 
-          const typeHint = serverConfig.type === "remote" ? serverConfig.url : serverConfig.command.join(" ")
+          const typeHint = isMcpDisabledOverride(serverConfig)
+            ? "disabled by config"
+            : serverConfig.type === "remote"
+              ? serverConfig.url
+              : serverConfig.command.join(" ")
           prompts.log.info(
             `${statusIcon} ${name} ${UI.Style.TEXT_DIM}${statusText}${hint}\n    ${UI.Style.TEXT_DIM}${typeHint}`,
           )

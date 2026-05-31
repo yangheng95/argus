@@ -163,12 +163,11 @@ const BuildResultBase = {
   repair_report: BuildRepairReport.optional().describe(
     "Integrity repair ledger for builds dispatched from integrity feedback. Every blocking integrity fingerprint must be listed exactly once as repaired or unrepaired.",
   ),
-  // Fact-check item registration (spec/fact-check-agent-2026-05-25.md §3.1).
-  // Required, no .default([]) — workers MUST populate this field explicitly,
-  // even with an empty array when they made no unverified claims. The
-  // downstream fact_check orchestrator tool reads this list to decide
-  // whether to dispatch verification.
-  fact_check_items: FactCheckItemListSchema.describe(
+  // Fact-check item registration. Optional at the BuildResult boundary:
+  // missing means "no items registered" and does not force a fact-check
+  // phase. The downstream fact_check orchestrator tool still reads this
+  // list when workers provide it.
+  fact_check_items: FactCheckItemListSchema.default([]).describe(
     "Every factual claim (API behaviour, library version, third-party protocol, number, path, history) you have NOT verified via tool calls in this session. Empty array when you have only opinions, plans, or in-session-verified statements.",
   ),
 }
@@ -260,7 +259,7 @@ export function formatBuildResultSchemaError(error: z.ZodError): string {
   const guidance = hasPassedWithError
     ? "status='passed' cannot include error. If any blocking verification failed, call report_build_result with status='failed' and put the reason in error; otherwise remove error and keep the caveat in summary."
     : hasFactCheckItemsIssue
-      ? "Missing required fact_check_items. Include fact_check_items: [] when you have no unverified factual claims."
+      ? "fact_check_items must be an array when provided. Use fact_check_items: [] when you have no unverified factual claims, or omit the field."
     : "Choose exactly one terminal shape: status='passed' without error, or status='failed' with a non-empty error."
   return `${guidance} Schema issues: ${issues.join("; ")}`
 }

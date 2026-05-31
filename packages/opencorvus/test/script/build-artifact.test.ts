@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import {
   artifactEntrypoints,
+  artifactExternalModules,
   artifactPackageBaseName,
   artifactSourcemap,
   parseBuildFlavor,
@@ -25,5 +26,9 @@ describe("build-artifact", () => {
 
   test("release artifacts never emit sourcemaps", () => {
     expect(artifactSourcemap()).toBe("none")
+  })
+
+  test("optional Playwright Electron module is externalized", () => {
+    expect(artifactExternalModules()).toContain("electron")
   })
 })

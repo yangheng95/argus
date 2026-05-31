@@ -19,7 +19,7 @@ const promptPath = path.join(
  * Trigger evidence: live tsk_e0033e523001flSn0onlHh4Urh — orchestrator
  * LLM hit `restart_from_stage(executor)` for a single goal's
  * missing_terminal failure (rung 2 work mis-routed to rung 4) and
- * `design_analysis` for a host-config no_live_preview rejection
+ * `frontend_design` for a host-config no_live_preview rejection
  * (rung 8's "→ restart" template fired on an infra obstacle).
  */
 describe("orchestrator-core grain ladder hardening", () => {

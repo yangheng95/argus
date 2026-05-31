@@ -53,6 +53,14 @@ export namespace SessionWake {
 
     const config = await EffectiveConfig.effective({ sessionID })
     const agent = input.agent ?? (await Agent.defaultAgent({ config }))
+    if (
+      SessionPrompt.agentKindRequiresRuntimeContract(agent) ||
+      SessionPrompt.agentKindRequiresRuntimeContract(session.kind)
+    ) {
+      throw new Error(
+        `SessionWake cannot wake runtime-required agent/session without an installed runtime contract: agent=${agent}, sessionKind=${session.kind}`,
+      )
+    }
 
     return SessionContext.provide(session, async () => {
       const model = await resolveModel(agent, sessionID, input.model)

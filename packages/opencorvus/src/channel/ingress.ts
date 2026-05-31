@@ -85,7 +85,7 @@ export namespace ChannelIngress {
   /**
    * Reverse lookup: every channel/thread binding pointing at the given
    * task. Powers the Gateway page's "selected task bindings" surface
-   * (PRD §10) and any future audit that needs the inbound-message
+   * (template §10) and any future audit that needs the inbound-message
    * provenance for a task. The `engine_channel_task_idx` index on
    * `task_id` keeps this O(matching rows) — typical tasks have 0-1
    * bindings so the query cost is negligible.

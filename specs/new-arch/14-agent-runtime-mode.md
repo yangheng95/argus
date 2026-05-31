@@ -200,7 +200,7 @@ interface AgentExecutionPlan {
 | `orchestrator` | `AgentSpec + episodic + derived-state + pre-run-reduction` |
 | `requirements` | `AgentSpec + episodic + derived-state + pre-run-reduction` |
 | `architect` | `AgentSpec + episodic + derived-state + pre-run-reduction` |
-| `design-analyst` | `AgentSpec + episodic + derived-state + pre-run-reduction` |
+| `frontend-design` | `AgentSpec + episodic + derived-state + pre-run-reduction` |
 | `intent-analysis` | `AgentSpec + episodic + derived-state + pre-run-reduction` |
 | `integrity` | `AgentSpec + episodic + derived-state + pre-run-reduction` |
 | `prosecutor` | `AgentSpec + episodic + derived-state + pre-run-reduction` |

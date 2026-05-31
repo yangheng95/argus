@@ -1,7 +1,7 @@
 import fs from "fs"
 import path from "path"
 import { z } from "zod"
-import type { VisualSpec } from "@/design-analyst/types"
+import type { VisualSpec } from "@/frontend-design/types"
 
 export const SourceCoverageActionSchema = z.enum(["reuse", "modify", "preserve", "replace"])
 export type SourceCoverageAction = z.infer<typeof SourceCoverageActionSchema>

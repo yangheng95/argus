@@ -12,6 +12,7 @@ export interface ParsedRequirement {
   description: string
   acceptance: string
   non_goals: string
+  evidence_refs: string[]
 }
 
 export interface RequirementsDecision {

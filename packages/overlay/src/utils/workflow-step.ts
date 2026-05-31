@@ -3,7 +3,7 @@
  *
  *  Returns `{ stepID, phaseID }` when the stage is a goal-scope phase
  *  session kind; returns `null` for task-scope stages (requirements /
- *  architect / design-analyst / assistant / delivery / ...) and for the
+ *  architect / frontend-design / assistant / delivery / ...) and for the
  *  `executor` container kind — the executor container does NOT render as
  *  its own card; the overlay's step card represents it visually, and the
  *  container's only role is to be a parentID anchor for the phase sessions.

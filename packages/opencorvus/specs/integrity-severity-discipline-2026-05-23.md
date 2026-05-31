@@ -27,7 +27,7 @@ CLAUDE.md rules that govern this spec:
 | BF   | blocking finding |
 | LLM  | Large Language Model — the model-backed reviewer agent |
 | MVP  | Minimum Viable Product (smallest delivery that satisfies the request) |
-| PRD  | Product Requirements Document |
+| brief     | Source brief for implementation and acceptance |
 | REQ  | Requirement row mined from the user request |
 | SSE  | Server-Sent Events (chat streaming protocol) |
 | UI   | User Interface surface |
@@ -69,7 +69,7 @@ replay-aware lineage, not an active-spec-snapshot-only artifact query.
 ## 1. Diagnosis — Severity Drift Is Systemic
 
 Task `tsk_e54c2d091001t145QP2P6xwoqi` ("写一个成熟的输入 deepseek key 即可聊天的
-ai chat 页面，你自己写 PRD") ran 8 completed integrity rounds without converging.
+ai chat 页面，你自己写 template") ran 8 completed integrity rounds without converging.
 The DB confirms a systemic pattern: **the same semantic problem is filed as
 `advisory` in one round and `blocking` in a later round, with no intervening
 build change to that surface.**
@@ -141,8 +141,8 @@ The severity drift has two interacting causes:
    "mature app should notify the user". Both are defensible under the current
    prompt; neither is the project's actual policy.
 2. **Missing scope-bounded maturity evidence.** The user said "成熟的 ai chat
-   页面" ("mature chat page"), then immediately added "你自己写 PRD" (you write
-   the PRD yourself). That phrasing must be resolved by the Requirements /
+   页面" ("mature chat page"), then immediately added "你自己写 template" (you write
+   the template yourself). That phrasing must be resolved by the Requirements /
    scope pipeline into bounded REQs or one requirements-extraction concern.
    Severity must not independently translate "mature" into a delivery class
    or a lower blocking threshold. Without bounded REQs, every reviewer defaults
