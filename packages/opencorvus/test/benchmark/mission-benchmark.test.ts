@@ -6,6 +6,7 @@ import {
   DEFAULT_MISSION_VERIFY_CMD,
   MISSION_BENCHMARK_STAGES,
   evaluateMissionBenchmarkReport,
+  missionStateMentionsTerminalTasks,
   missionTaskRows,
   terminalMissionTasks,
 } from "../../script/benchmark/mission-scenario"
@@ -89,7 +90,7 @@ describe("mission benchmark scenario", () => {
       missionState: {
         "frontier.md": "done",
         "tasks.md": "task_good | completed | benchmark",
-        "handoff.md": "mission complete",
+        "handoff.md": "task_good completed; mission complete",
         "notes.md": "investigation notes",
       },
       missionTasks: [
@@ -107,6 +108,42 @@ describe("mission benchmark scenario", () => {
     })
     expect(accepted).toEqual({ verdict: "accepted", failures: [] })
   })
+
+  test("report verdict rejects stale mission state that has not reconciled terminal tasks", () => {
+    const tasks = [
+      {
+        task: {
+          id: "task_good",
+          source: "mission",
+          status: "completed",
+          metadata: { actor: "mission", mission: { id: "m1", session_id: "ses_1" } },
+        },
+      },
+    ]
+    expect(missionStateMentionsTerminalTasks({
+      "frontier.md": "done",
+      "tasks.md": "task_good | in_progress | benchmark",
+      "handoff.md": "check again later",
+      "notes.md": "notes",
+    }, tasks)).toBe(false)
+
+    const rejected = evaluateMissionBenchmarkReport({
+      missionID: "m1",
+      sessionID: "ses_1",
+      firstWakeCreated: true,
+      secondWakeCreated: false,
+      missionState: {
+        "frontier.md": "done",
+        "tasks.md": "task_good | in_progress | benchmark",
+        "handoff.md": "check again later",
+        "notes.md": "notes",
+      },
+      missionTasks: tasks,
+      localVerify: { status: "completed", exitCode: 0 },
+    })
+    expect(rejected.verdict).toBe("rejected")
+    expect(rejected.failures).toContain("mission state does not reconcile the terminal mission task id and status")
+  })
 })
 
 describe("mission benchmark executable wiring", () => {
@@ -122,6 +159,7 @@ describe("mission benchmark executable wiring", () => {
     expect(src).toContain("secondWake")
     expect(src).toContain("second wake created a new mission")
     expect(src).toContain("panel.query_task")
+    expect(src).toContain("waitForMissionReconciliation")
   })
 
   test("threads the selected executor into the Mission dispatch prompt", () => {

@@ -98,6 +98,25 @@ export function terminalMissionTasks(tasks: MissionBenchmarkTask[]): MissionBenc
   })
 }
 
+export function missionStateMentionsTerminalTasks(
+  state: Record<string, string>,
+  tasks: MissionBenchmarkTask[],
+): boolean {
+  const terminal = terminalMissionTasks(tasks)
+  if (terminal.length === 0) return false
+  const tasksText = state["tasks.md"] ?? ""
+  const handoffText = state["handoff.md"] ?? ""
+  return terminal.every((item) => {
+    const id = item.task?.id
+    const status = item.task?.status
+    if (!id || !status) return false
+    return tasksText.includes(id) &&
+      tasksText.includes(status) &&
+      handoffText.includes(id) &&
+      handoffText.includes(status)
+  })
+}
+
 export function evaluateMissionBenchmarkReport(input: MissionBenchmarkReportInput): MissionBenchmarkVerdict {
   const failures: string[] = []
   if (!input.missionID) failures.push("missionID is missing")
@@ -124,6 +143,9 @@ export function evaluateMissionBenchmarkReport(input: MissionBenchmarkReportInpu
   }
   if (terminal.some((item) => item.evaluation?.verdict && item.evaluation.verdict !== "accepted")) {
     failures.push("at least one completed mission task was not accepted by evaluation")
+  }
+  if (!missionStateMentionsTerminalTasks(input.missionState, input.missionTasks)) {
+    failures.push("mission state does not reconcile the terminal mission task id and status")
   }
 
   if (input.localVerify?.status === "completed" && input.localVerify.exitCode !== 0) {
