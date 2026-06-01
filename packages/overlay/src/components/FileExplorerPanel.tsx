@@ -1,4 +1,4 @@
-import { createDeferred, createEffect, createMemo, createResource, createSignal, For, onMount, Show } from "solid-js"
+import { createDeferred, createEffect, createMemo, createResource, createSignal, For, onCleanup, Show, type Accessor } from "solid-js"
 import { Virtualizer, type CustomContainerComponentProps, type CustomItemComponentProps } from "virtua/solid"
 import { apiJson } from "../services/api"
 import { openFileEditor, selectedFilePath, type FileNode } from "../services/file-workbench"
@@ -8,10 +8,16 @@ import { Icon } from "./Icon"
 const VIRTUAL_EXPLORER_ROW_THRESHOLD = 120
 const EXPLORER_ROW_HEIGHT = 26
 const SEARCH_LIMIT = 80
+const INITIAL_DIRECTORY_LOAD_DELAY_MS = 250
+const ACTIVE_DIRECTORY_REFRESH_INTERVAL_MS = 15_000
 
 type ExplorerRow =
   | { kind: "node"; key: string; node: FileNode; depth: number; expanded: boolean; loading: boolean; error: string }
   | { kind: "search"; key: string; path: string; depth: number }
+
+export interface FileExplorerPanelProps {
+  active?: Accessor<boolean>
+}
 
 function ExplorerVirtualWindow(props: CustomContainerComponentProps) {
   const setRef = (node: HTMLDivElement) => {
@@ -63,16 +69,17 @@ async function searchFiles(query: string): Promise<string[]> {
   return await apiJson(`find/file?${params.toString()}`) as string[]
 }
 
-export function FileExplorerPanel() {
+export function FileExplorerPanel(props: FileExplorerPanelProps = {}) {
   const [query, setQuery] = createSignal("")
   const deferredQuery = createDeferred(() => query().trim())
   const [expandedPaths, setExpandedPaths] = createSignal(new Set<string>([""]))
   const [childrenByPath, setChildrenByPath] = createSignal(new Map<string, FileNode[]>())
   const [loadingPaths, setLoadingPaths] = createSignal(new Set<string>())
   const [directoryErrors, setDirectoryErrors] = createSignal(new Map<string, string>())
+  const active = createMemo(() => props.active?.() ?? true)
 
-  const loadDirectory = async (path: string) => {
-    if (childrenByPath().has(path) || loadingPaths().has(path)) return
+  const loadDirectory = async (path: string, opts?: { force?: boolean }) => {
+    if ((!opts?.force && childrenByPath().has(path)) || loadingPaths().has(path)) return
     setLoadingPaths((prev) => new Set(prev).add(path))
     setDirectoryErrors((prev) => {
       const next = new Map(prev)
@@ -102,8 +109,23 @@ export function FileExplorerPanel() {
     }
   }
 
-  onMount(() => {
-    void loadDirectory("")
+  createEffect(() => {
+    if (!active()) return
+    const timer = window.setTimeout(() => void loadDirectory(""), INITIAL_DIRECTORY_LOAD_DELAY_MS)
+    onCleanup(() => window.clearTimeout(timer))
+  })
+
+  createEffect(() => {
+    if (!active()) return
+    const interval = window.setInterval(() => {
+      const paths = new Set(["", ...expandedPaths()])
+      for (const path of paths) {
+        if (path === "" || childrenByPath().has(path) || directoryErrors().has(path)) {
+          void loadDirectory(path, { force: true })
+        }
+      }
+    }, ACTIVE_DIRECTORY_REFRESH_INTERVAL_MS)
+    onCleanup(() => window.clearInterval(interval))
   })
 
   createEffect(() => {
