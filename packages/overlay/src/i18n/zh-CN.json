@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "zh-CN",
-    "panel_revision": "06cf94d2db8e1579"
+    "panel_revision": "9db21399d1119614"
   },
   "about.author_name": "杨恒",
   "about.go_version": "Go 版本",
@@ -613,6 +613,10 @@
   "section.delivery": "交付",
   "section.criteria": "评估标准",
   "section.files": "文件变更",
+  "explorer.title": "资源管理器",
+  "explorer.search_placeholder": "搜索文件",
+  "explorer.empty": "当前目录没有文件",
+  "explorer.no_matches": "没有匹配的文件",
   "right_panel.close": "收起 Inspector",
   "right_panel.open": "展开 Inspector",
   "sections.title": "Inspector",
@@ -782,6 +786,12 @@
   "transcript.reasoning": "[推理]",
   "version.core_unknown": "Core 不可用",
   "version.overlay": "Overlay v{{version}}",
+  "file_editor.title": "编辑器",
+  "file_editor.empty": "从资源管理器打开文本文件",
+  "file_editor.binary": "此文件不能在 Overlay 中编辑",
+  "file_editor.show_messages": "显示消息",
+  "file_editor.toggle": "切换文件编辑器",
+  "file_editor.unsaved": "未保存的更改",
   "workspace.close": "关闭工作区",
   "workspace.diff": "差异",
   "workspace.editor_launchers": "IDE 快捷入口",

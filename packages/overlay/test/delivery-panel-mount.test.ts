@@ -42,15 +42,22 @@ function readAllSurfaceCss(): string {
 // delivery card at all. This suite locks both the structural wiring and the
 // redesigned panel's verdict-driven behavior in place.
 
-test("index.html declares top-level Inspector and Files tab bodies", async () => {
+test("index.html declares top-level Explorer, Files, and Inspector tab bodies plus the file editor sidecar", async () => {
   const html = await readSrc("src/index.html")
   expect(html).toContain('id="solidConversationAgentRailMount"')
+  expect(html).toContain('id="chatContentFrame"')
+  expect(html).toContain('id="chatMessagePane"')
+  expect(html).toContain('id="solidFileEditorMount"')
+  expect(html).toContain('id="solidFileEditorToggleMount"')
   expect(html).not.toContain('id="rightPanelWorkflow"')
   expect(html).not.toContain('id="solidAgentWorkflowMount"')
   expect(html).toContain('id="solidRightPanelTabs"')
+  expect(html).toContain('id="rightPanelExplorer"')
+  expect(html).toContain('id="solidFileExplorerMount"')
+  expect(html).toContain('data-panel-tab="explorer" data-active="true"')
   expect(html).toContain('id="rightPanelFiles"')
   expect(html).toContain('id="solidFilesSectionMount"')
-  expect(html).toContain('data-panel-tab="files" data-active="true"')
+  expect(html).toContain('data-panel-tab="changes" data-active="false"')
   expect(html).toContain('id="rightPanelInspector"')
   expect(html).toContain('data-panel-tab="inspector" data-active="false"')
   expect(html).toContain('id="solidBoardMount"')
@@ -83,6 +90,9 @@ test("Inspector workflow sections render as one contiguous stack", async () => {
 test("main.tsx mounts the top-level right-panel tabs and tab bodies", async () => {
   const main = await readSrc("src/main.tsx")
   expect(main).toContain('document.getElementById("solidConversationAgentRailMount")')
+  expect(main).toContain('document.getElementById("solidFileExplorerMount")')
+  expect(main).toContain('document.getElementById("solidFileEditorMount")')
+  expect(main).toContain('document.getElementById("solidFileEditorToggleMount")')
   expect(main).not.toContain('document.getElementById("solidAgentWorkflowMount")')
   expect(main).toContain('document.getElementById("solidRightPanelTabs")')
   expect(main).toContain('document.getElementById("solidFilesSectionMount")')
@@ -91,6 +101,9 @@ test("main.tsx mounts the top-level right-panel tabs and tab bodies", async () =
   expect(main).not.toContain('document.getElementById("solidFrontendPreviewMount")')
   expect(main).not.toContain("<FrontendPreviewPanel")
   expect(main).toContain("<RightPanelTabs")
+  expect(main).toContain("<FileExplorerPanel")
+  expect(main).toContain("<FileEditorPane")
+  expect(main).toContain("<FileEditorToggle")
   expect(main).toContain("<FilesSection")
   expect(main).toContain("<ConversationAgentRail")
   expect(main).not.toContain("nextTabForPreviewResolution")
@@ -200,9 +213,9 @@ test("`delivery:focus-changes` event contract — DeliveryPanel dispatches, Chan
   // Dispatch site (DeliveryPanel goal-pill / files-changed footer).
   expect(board).toContain('"delivery:focus-changes"')
   expect(board).toMatch(/window\.dispatchEvent\(\s*new CustomEvent\("delivery:focus-changes"/)
-  // Listener side: the right panel switches to Files; FileChangesView owns goal selection state.
+  // Listener side: the right panel switches to changed files; FileChangesView owns goal selection state.
   expect(rightPanelTabs).toContain('"delivery:focus-changes"')
-  expect(rightPanelTabs).toContain('props.onSelect("files")')
+  expect(rightPanelTabs).toContain('props.onSelect("changes")')
   expect(changes).toContain('"delivery:focus-changes"')
   expect(changes).toContain('focusEvent="delivery:focus-changes"')
   expect(fileChangesView).toContain("addEventListener")

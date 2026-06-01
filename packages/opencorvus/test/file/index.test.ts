@@ -116,6 +116,47 @@ describe("file/index Filesystem patterns", () => {
     })
   })
 
+  describe("File.writeText()", () => {
+    test("writes existing editable text files and returns the updated content", async () => {
+      await using tmp = await tmpdir()
+      const filepath = path.join(tmp.path, "notes.md")
+      await fs.writeFile(filepath, "before", "utf-8")
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const result = await File.writeText("notes.md", "after\nline")
+          expect(result.type).toBe("text")
+          expect(result.content).toBe("after\nline")
+          expect(await fs.readFile(filepath, "utf-8")).toBe("after\nline")
+        },
+      })
+    })
+
+    test("rejects path traversal writes outside the project", async () => {
+      await using tmp = await tmpdir()
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          await expect(File.writeText("../outside.txt", "nope")).rejects.toThrow("Access denied")
+        },
+      })
+    })
+
+    test("rejects binary extension writes from the project file editor route", async () => {
+      await using tmp = await tmpdir()
+      await fs.writeFile(path.join(tmp.path, "binary.so"), Buffer.from([0x7f, 0x45, 0x4c, 0x46]))
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          await expect(File.writeText("binary.so", "nope")).rejects.toThrow("Cannot edit binary file")
+        },
+      })
+    })
+  })
+
   describe("File.read() - Filesystem.mimeType()", () => {
     test("detects MIME type via Filesystem.mimeType()", async () => {
       await using tmp = await tmpdir()
@@ -197,6 +238,7 @@ describe("file/index Filesystem patterns", () => {
         directory: tmp.path,
         fn: async () => {
           const gitignorePath = path.join(tmp.path, ".gitignore")
+          await fs.rm(gitignorePath, { force: true })
           expect(await Filesystem.exists(gitignorePath)).toBe(false)
 
           // File.list() should still work

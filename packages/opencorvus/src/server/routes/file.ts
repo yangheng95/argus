@@ -172,6 +172,36 @@ export const FileRoutes = lazy(() =>
         return c.json(content)
       },
     )
+    .patch(
+      "/file/content",
+      describeRoute({
+        summary: "Write file",
+        description: "Write text content to an existing editable file in the project directory.",
+        operationId: "file.write",
+        responses: {
+          200: {
+            description: "Updated file content",
+            content: {
+              "application/json": {
+                schema: resolver(File.Content),
+              },
+            },
+          },
+        },
+      }),
+      validator(
+        "json",
+        z.object({
+          path: z.string(),
+          content: z.string(),
+        }),
+      ),
+      async (c) => {
+        const input = c.req.valid("json")
+        const content = await File.writeText(input.path, input.content)
+        return c.json(content)
+      },
+    )
     .get(
       "/file/status",
       describeRoute({

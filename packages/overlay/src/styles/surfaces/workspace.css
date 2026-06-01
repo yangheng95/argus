@@ -253,6 +253,212 @@ code .file-link:hover {
   overflow: hidden;
 }
 
+.chat-content-frame {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  overflow: hidden;
+  background: var(--chat-canvas);
+}
+
+.chat-message-pane {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.file-editor-mount {
+  flex: 0 0 clamp(calc(360px * var(--ui-scale)), 38%, calc(620px * var(--ui-scale)));
+  min-width: min(calc(360px * var(--ui-scale)), 100%);
+  max-width: 50%;
+  min-height: 0;
+  display: none;
+  border-left: var(--oc-border-width) solid color-mix(in srgb, var(--border) 80%, transparent);
+  background: var(--surface);
+}
+
+.chat-content-frame[data-editor-open="true"] .file-editor-mount {
+  display: flex;
+}
+
+.file-editor-pane {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+}
+
+.file-editor-header {
+  flex: 0 0 auto;
+  min-height: var(--ui-panel-header-height);
+  display: flex;
+  align-items: center;
+  gap: calc(6px * var(--ui-scale));
+  padding: 0 calc(8px * var(--ui-scale));
+  background: var(--surface-strong);
+}
+
+.file-editor-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: calc(4px * var(--ui-scale));
+  font-family: var(--mono);
+  font-size: var(--ui-font-code);
+  color: var(--text-strong);
+}
+
+.file-editor-title-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-editor-dirty {
+  color: var(--warn);
+  font-family: var(--font);
+}
+
+.file-editor-nav,
+.file-editor-close,
+.file-editor-save,
+.file-editor-toggle {
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.file-editor-nav,
+.file-editor-close {
+  width: var(--oc-density-icon-button);
+  height: var(--oc-density-icon-button);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.file-editor-nav:hover,
+.file-editor-close:hover,
+.file-editor-toggle:hover {
+  color: var(--text-strong);
+  background: var(--subtle-2);
+}
+
+.file-editor-save {
+  min-height: calc(24px * var(--ui-scale));
+  padding: 0 calc(8px * var(--ui-scale));
+  color: var(--text-soft);
+  font-size: var(--ui-font-control);
+}
+
+.file-editor-save[data-dirty="true"] {
+  color: var(--accent);
+}
+
+.file-editor-save:disabled {
+  opacity: var(--ui-opacity-dim);
+  cursor: default;
+}
+
+.file-editor-body {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.file-editor-textarea {
+  flex: 1 1 0;
+  min-height: 0;
+  width: 100%;
+  resize: none;
+  border: 0;
+  outline: 0;
+  padding: calc(10px * var(--ui-scale)) calc(12px * var(--ui-scale));
+  background: var(--surface-inset);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: var(--ui-font-code);
+  line-height: 1.55;
+  tab-size: 2;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.file-editor-empty {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: calc(8px * var(--ui-scale));
+  padding: calc(20px * var(--ui-scale));
+  color: var(--text-muted);
+  text-align: center;
+  background: var(--surface-inset);
+}
+
+.file-editor-error {
+  flex: 0 0 auto;
+  padding: calc(6px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  background: var(--bad-dim);
+  color: var(--bad);
+  font-size: var(--ui-font-control);
+}
+
+.file-editor-toggle-mount {
+  display: inline-flex;
+  min-width: 0;
+}
+
+.file-editor-toggle {
+  max-width: calc(220px * var(--ui-scale));
+  min-height: calc(24px * var(--ui-scale));
+  display: inline-flex;
+  align-items: center;
+  gap: calc(5px * var(--ui-scale));
+  padding: 0 calc(8px * var(--ui-scale));
+  font-size: var(--ui-font-control);
+  color: var(--text-soft);
+}
+
+.file-editor-toggle[data-active="true"] {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.file-editor-toggle span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 1280px) {
+  .chat-content-frame[data-editor-open="true"][data-editor-focus="editor"] .chat-message-pane {
+    display: none;
+  }
+
+  .chat-content-frame[data-editor-open="true"][data-editor-focus="messages"] .file-editor-mount {
+    display: none;
+  }
+
+  .chat-content-frame[data-editor-open="true"] .file-editor-mount {
+    flex: 1 1 auto;
+    max-width: none;
+    border-left: 0;
+  }
+}
+
 .pane-resizer {
   position: relative;
   flex: 0 0 var(--ui-resizer-width);
