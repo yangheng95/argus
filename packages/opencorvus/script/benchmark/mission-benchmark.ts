@@ -126,6 +126,7 @@ const missionPrompt = [
 
 const reportApiErrors: string[] = []
 let server: any
+let finalExitCode = 1
 
 function log(message: string): void {
   process.stdout.write(`[mission-benchmark] ${message}\n`)
@@ -261,13 +262,13 @@ try {
   await fs.writeFile(reportFile, JSON.stringify(out, null, 2))
   log(JSON.stringify(out, null, 2))
   log(`report: ${reportFile}`)
-  process.exitCode = verdict.verdict === "accepted" ? 0 : 1
+  finalExitCode = verdict.verdict === "accepted" ? 0 : 1
 } catch (error) {
   const out = failReport(error)
   await fs.writeFile(reportFile, JSON.stringify(out, null, 2)).catch(() => undefined)
   log(JSON.stringify(out, null, 2))
   log(`report: ${reportFile}`)
-  process.exitCode = 1
+  finalExitCode = 1
 } finally {
   const { Instance } = await import("../../src/project/instance")
   await Instance.disposeAll().catch(() => undefined)
@@ -276,6 +277,7 @@ try {
     await fs.rm(temp.home, { recursive: true, force: true }).catch(() => undefined)
     if (ownsProjectDir) await fs.rm(temp.dir, { recursive: true, force: true }).catch(() => undefined)
   }
+  process.exit(finalExitCode)
 }
 
 async function wakeMission(input: {

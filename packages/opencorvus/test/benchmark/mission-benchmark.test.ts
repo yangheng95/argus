@@ -180,4 +180,13 @@ describe("mission benchmark executable wiring", () => {
     expect(disposeIndex).toBeGreaterThan(0)
     expect(stopIndex).toBeGreaterThan(disposeIndex)
   })
+
+  test("exits explicitly only after cleanup has completed", () => {
+    const disposeIndex = src.indexOf("await Instance.disposeAll().catch")
+    const stopIndex = src.indexOf("await server.stop(true).catch")
+    const exitIndex = src.indexOf("process.exit(finalExitCode)")
+    expect(src).toContain("let finalExitCode = 1")
+    expect(exitIndex).toBeGreaterThan(stopIndex)
+    expect(exitIndex).toBeGreaterThan(disposeIndex)
+  })
 })

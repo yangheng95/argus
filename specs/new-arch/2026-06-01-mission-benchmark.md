@@ -49,3 +49,5 @@ The first live `glm51/glm51` run completed the generated project and produced an
 - The benchmark process kept running after writing the report because isolated project scheduler state was still alive during teardown.
 
 The second live `glm51/glm51` run proved the generated project and Mission state can reconcile to complete, but also exposed that the benchmark accepted the report before the second Mission wake finished updating `tasks.md` / `handoff.md`. The benchmark must wait for the terminal task ID and status to appear in Mission state before writing the final report.
+
+The third live `glm51/glm51` run produced an accepted report after Mission reconciliation and local verify, then stayed alive after `Instance.disposeAll()` completed. The benchmark executable must keep the final verdict exit code and call `process.exit(finalExitCode)` only after instance/server cleanup so unattended runs do not hang after a valid report.
