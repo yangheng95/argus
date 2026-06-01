@@ -14,7 +14,10 @@ import {
 import { activeDirectory } from "../services/workspace";
 import { t } from "../utils/i18n";
 import { Icon, type IconName } from "./Icon";
-import { WorkspaceSplitLauncher } from "./WorkspaceSplitLauncher";
+import {
+  WorkspaceSplitLauncher,
+  WorkspaceSplitLauncherItem,
+} from "./WorkspaceSplitLauncher";
 
 const TERMINAL_ICONS: Record<TerminalProfileIcon, IconName> = {
   terminal: "terminal",
@@ -118,12 +121,10 @@ export function WorkspaceLayoutControls() {
     >
       <For each={terminalProfiles()}>
         {(profile) => (
-          <button
-            type="button"
-            role="menuitem"
+          <WorkspaceSplitLauncherItem
             class="workspace-terminal-option"
-            data-terminal-profile={profile.id}
-            onClick={() => openProfile(profile.id)}
+            dataAttributes={{ "data-terminal-profile": profile.id }}
+            onSelect={() => openProfile(profile.id)}
           >
             <span
               class="workspace-terminal-option-icon"
@@ -135,7 +136,7 @@ export function WorkspaceLayoutControls() {
             <span class="workspace-terminal-option-label">
               {profile.label}{profile.id === defaultTerminalProfileID() ? ` ${t("terminal.default_profile_suffix")}` : ""}
             </span>
-          </button>
+          </WorkspaceSplitLauncherItem>
         )}
       </For>
     </WorkspaceSplitLauncher>

@@ -54,3 +54,32 @@ The overlay has several custom UI interaction implementations where mature Solid
 - Menubar / menus: migrate `TitlebarMenubar.tsx` to a mature menubar/menu primitive after a focused keyboard and visual QA pass.
 - Popovers / model picker: migrate `ExecutorSelector.tsx` and `WorkspaceSplitLauncher.tsx` to mature popover/menu primitives.
 - Icons: replace commodity entries in `Icon.tsx` with a mature icon library, keeping only product-specific custom shapes.
+
+## Phase 2A Workspace Split Launcher plan
+
+Evidence scan:
+
+| API / file | Current behavior | Replacement decision |
+| --- | --- | --- |
+| `WorkspaceSplitLauncher.tsx` | Manually stores trigger/menu refs, computes fixed `top/right`, portals menu content, tracks `document.pointerdown`, `window.resize`, and scroll listeners. | Replace with `@kobalte/core/dropdown-menu` root/trigger/portal/content so placement, dismissal, Escape handling, and menu roles are owned by Kobalte. |
+| `WorkspaceLayoutControls.tsx` | Uses `WorkspaceSplitLauncher` for terminal profile menu; items are raw `button role="menuitem"`. | Replace item buttons with exported `WorkspaceSplitLauncherItem` so Kobalte owns item selection semantics. |
+| `WorkspaceEditorLaunchers.tsx` | Uses the same split launcher for editor choices. | Same item replacement. |
+| `WorkspaceCodingCliLaunchers.tsx` | Uses the same split launcher for coding CLI choices. | Same item replacement. |
+| `pane-collapse-layout.test.ts` | Verifies portaled dropdown alignment and item click behavior for terminal/editor/coding CLI launchers. | Keep existing behavioral coverage and add a source-level primitive guard. |
+
+Constraints:
+
+- Preserve CSS class contracts: `.workspace-split-launcher-primary`, `.workspace-split-launcher-menu-button`, `.workspace-terminal-menu`, `.workspace-editor-menu`, `.workspace-coding-cli-menu`, and option classes.
+- Preserve `data-ui` and `data-*` attributes used by tests and launch actions.
+- Do not touch `ExecutorSelector` in this phase; it has separate dual-popover state and needs its own migration.
+
+Checklist:
+
+- [x] Grep `WorkspaceSplitLauncher` callsites and dropdown tests.
+- [x] Replace manual portal/position/outside-click with Kobalte `DropdownMenu.Root` / `Trigger` / `Portal` / `Content`.
+- [x] Replace raw menu item buttons in terminal/editor/coding CLI launchers with `WorkspaceSplitLauncherItem`.
+- [x] Add primitive guard rejecting the previous manual listener/geometry implementation.
+- [x] Run targeted tests, overlay typecheck, and i18n.
+- [x] Run browser smoke.
+  - Loaded `http://127.0.0.1:5173/` after restarting Vite dev server: title `OpenCorvus`, no Vite error overlay, and the three workspace split menu buttons rendered. The only console error was the pre-existing no-workspace `DirectoryRequiredError` from the file explorer.
+- [x] Commit and push only this phase's files.

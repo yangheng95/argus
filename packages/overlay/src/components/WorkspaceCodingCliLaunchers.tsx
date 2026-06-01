@@ -12,7 +12,10 @@ import {
 import { activeDirectory } from "../services/workspace";
 import { t } from "../utils/i18n";
 import { Icon, type IconName } from "./Icon";
-import { WorkspaceSplitLauncher } from "./WorkspaceSplitLauncher";
+import {
+  WorkspaceSplitLauncher,
+  WorkspaceSplitLauncherItem,
+} from "./WorkspaceSplitLauncher";
 
 const CLI_ICONS: Record<CodingCliIcon, IconName> = {
   "claude-code": "coding-claude-code",
@@ -129,12 +132,10 @@ export function WorkspaceCodingCliLaunchers() {
     >
       <For each={profiles()}>
         {(profile) => (
-          <button
-            type="button"
-            role="menuitem"
+          <WorkspaceSplitLauncherItem
             class="workspace-coding-cli-option"
-            data-coding-cli={profile.id}
-            onClick={() => void launch(profile)}
+            dataAttributes={{ "data-coding-cli": profile.id }}
+            onSelect={() => launch(profile)}
           >
             <span
               class="workspace-coding-cli-option-icon"
@@ -144,7 +145,7 @@ export function WorkspaceCodingCliLaunchers() {
               <Icon name={CLI_ICONS[profile.icon]} size={18} />
             </span>
             <span class="workspace-coding-cli-option-label">{profile.label}</span>
-          </button>
+          </WorkspaceSplitLauncherItem>
         )}
       </For>
     </WorkspaceSplitLauncher>
