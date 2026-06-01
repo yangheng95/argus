@@ -28,7 +28,7 @@ export function MessageWorkbenchPane(props: MessageWorkbenchPaneProps) {
   })
 
   createEffect(() => {
-    if (hasEditor() && !hasDiff()) {
+    if (hasEditor()) {
       setDetailMode("editor")
       setActiveView("detail")
     }
