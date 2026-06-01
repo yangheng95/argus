@@ -77,6 +77,8 @@ describe("tool.web_clone_generate_source_project", () => {
         const sourceDomIterationState = await Bun.file(path.join(outputDir, "src", "data", "sourceDomIterationState.ts")).text()
         const sourceSvgAssetGroups = await Bun.file(path.join(outputDir, "src", "data", "sourceSvgAssetGroups.ts")).text()
         const sourceFaqGroups = await Bun.file(path.join(outputDir, "src", "data", "sourceFaqGroups.ts")).text()
+        const sourceProjectManifest = JSON.parse(await Bun.file(path.join(outputDir, "src", "data", "sourceProjectManifest.json")).text())
+        const readme = await Bun.file(path.join(outputDir, "README.md")).text()
         expect(sourceClonePage).toContain("SourceDomPage")
         expect(sourceDomPage).toStartWith("// @ts-nocheck")
         expect(sourceDomPage).toContain('src={"/assets/images/asset_000002.webp"}')
@@ -89,6 +91,17 @@ describe("tool.web_clone_generate_source_project", () => {
         expect(sourceDomReplacementPlan).toContain("sourceDomReplacementPlan")
         expect(sourceDomIterationState).toContain("sourceDomIterationState")
         expect(sourceDomIterationState).toContain("nextSourceDomReplacement")
+        expect(sourceDomIterationState).toContain('"viewportMatrix"')
+        expect(sourceDomIterationState).toContain('"desktop-reference"')
+        expect(sourceDomIterationState).toContain('"mobile-review"')
+        expect(sourceDomIterationState).toContain('"wide-review"')
+        expect(sourceProjectManifest.visualIteration.comparisonTool).toBe("webpage_evaluate")
+        expect(sourceProjectManifest.visualIteration.viewportMatrix.map((item: { name: string }) => item.name)).toEqual([
+          "desktop-reference",
+          "mobile-review",
+          "wide-review",
+        ])
+        expect(readme).toContain("Visual iteration viewport matrix")
         expect(sourceSvgAssetGroups).toContain("sourceSvgAssetGroups")
         expect(sourceFaqGroups).toContain("sourceFaqGroups")
         expect(await Bun.file(path.join(outputDir, "public", "assets", "images", "asset_000002.webp")).exists()).toBe(true)
@@ -204,7 +217,11 @@ describe("tool.web_clone_generate_source_project", () => {
         expect(sourceDomReplacementPlan).toContain("parityGuard")
         expect(sourceDomIterationState).toContain('"remainingRegionCount"')
         expect(sourceDomIterationState).toContain("nextReplacement")
+        expect(sourceDomIterationState).toContain('"visualIteration"')
+        expect(sourceDomIterationState).toContain('"desktop-reference"')
         expect(sourceDomIterationState).toContain('"replacementKind": "map_or_chart_asset_component"')
+        expect(sourceProjectManifest.visualIteration.referenceImage).toBe("reference.png")
+        expect(sourceProjectManifest.visualIteration.viewportMatrix[0].name).toBe("desktop-reference")
         expect(sourceProjectManifest.sourceDomRegions.count).toBe(regionFiles.length)
         expect(sourceProjectManifest.sourceDomRegions.metricsModule).toBe("src/data/sourceDomRegions.ts")
         expect(sourceProjectManifest.sourceDomRegions.replacementPlanModule).toBe("src/data/sourceDomReplacementPlan.ts")

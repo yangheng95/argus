@@ -190,9 +190,12 @@ describe("frontend-design prompt assembly", () => {
     expect(kit.getCollector().final?.quality_project_contract).toContain("measured visual evidence")
     expect(kit.getCollector().final?.quality_project_contract).toContain("source audit has zero findings before claiming final maintainability")
     expect(kit.getCollector().final?.quality_project_contract).toContain("deferred source-dom region remains source debt")
+    expect(kit.getCollector().final?.quality_project_contract).toContain("desktop-reference 1440x900")
+    expect(kit.getCollector().final?.quality_project_contract).toContain("mobile-review 390x844")
     expect(kit.getCollector().final?.quality_project_contract).toContain("Current source audit supervision")
     expect(kit.getCollector().final?.quality_project_contract).toContain("maintainable_replacement_required: passed=false")
     expect(kit.getCollector().final?.visual_consistency_contract).toContain("measured webpage_evaluate evidence")
+    expect(kit.getCollector().final?.visual_consistency_contract).toContain("wide-review 1920x1080")
     expect(JSON.stringify(kit.getCollector().final)).not.toContain("100/100")
     expect(JSON.stringify(kit.getCollector().final)).not.toContain("overallScore >=80/100")
     expect(kit.getCollector().final?.component_inventory).toContain("Compatibility summary only")
@@ -389,6 +392,9 @@ describe("frontend-design prompt assembly", () => {
     expect(prompt).toContain("vertical-slice replacement with source data extraction")
     expect(prompt).toContain("scoped style ownership")
     expect(prompt).toContain("generated fixed-layout cleanup")
+    expect(prompt).toContain("desktop-reference 1440x900")
+    expect(prompt).toContain("mobile-review 390x844")
+    expect(prompt).toContain("wide-review 1920x1080")
     expect(prompt).toContain("source-region traceable refactoring")
     expect(prompt).toContain("rawproject source nodes/regions/assets/reference screenshots")
     expect(prompt).toContain("A region replacement is complete only after source data extraction")
@@ -450,6 +456,20 @@ describe("frontend-design prompt assembly", () => {
           iterationStateModule: "src/data/sourceDomIterationState.ts",
           components: ["ExistingNewsList"],
         },
+        visualIteration: {
+          referenceImage: "reference.png",
+          comparisonTool: "webpage_evaluate",
+          viewportMatrix: [
+            {
+              name: "desktop-reference",
+              width: 1440,
+              height: 900,
+              evidenceRole: "primary_reference",
+              comparison: "Run measured webpage_evaluate against web-clone-source/reference.png after each region replacement.",
+            },
+          ],
+          rule: "Use desktop-reference before claiming final parity.",
+        },
       }, null, 2))
       await fs.writeFile(path.join(dir, "src", "data", "sourceDomIterationState.ts"), [
         "export const sourceDomIterationState = " + JSON.stringify({
@@ -487,6 +507,9 @@ describe("frontend-design prompt assembly", () => {
       const summary = await FrontendDesignTestHooks.summarizeHostPreparedSourceProject(dir)
 
       expect(summary).toContain("Source-dom region stats")
+      expect(summary).toContain("Visual iteration matrix")
+      expect(summary).toContain("desktop-reference: 1440x900")
+      expect(summary).toContain("comparisonTool: webpage_evaluate")
       expect(summary).toContain("largestBytes: 44123")
       expect(summary).toContain("Maintainable iteration state")
       expect(summary).toContain("remainingRegionCount: 11")

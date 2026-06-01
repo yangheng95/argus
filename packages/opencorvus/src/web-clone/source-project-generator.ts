@@ -28,6 +28,44 @@ export interface GenerateWebCloneSourceProjectOutput {
   }
 }
 
+export interface SourceProjectVisualIterationViewport {
+  name: string
+  width: number
+  height: number
+  evidenceRole: "primary_reference" | "responsive_review"
+  comparison: string
+}
+
+export const SOURCE_PROJECT_VISUAL_ITERATION_VIEWPORTS: SourceProjectVisualIterationViewport[] = [
+  {
+    name: "desktop-reference",
+    width: 1440,
+    height: 900,
+    evidenceRole: "primary_reference",
+    comparison: "Run measured webpage_evaluate against web-clone-source/reference.png after each region replacement.",
+  },
+  {
+    name: "mobile-review",
+    width: 390,
+    height: 844,
+    evidenceRole: "responsive_review",
+    comparison: "Capture and inspect the root app at this viewport; use measured comparison when matching reference evidence exists, otherwise record the evidence gap.",
+  },
+  {
+    name: "wide-review",
+    width: 1920,
+    height: 1080,
+    evidenceRole: "responsive_review",
+    comparison: "Capture and inspect the root app at this viewport; use measured comparison when matching reference evidence exists, otherwise record the evidence gap.",
+  },
+]
+
+export function renderSourceProjectVisualIterationMatrix(): string {
+  return SOURCE_PROJECT_VISUAL_ITERATION_VIEWPORTS
+    .map((viewport) => `${viewport.name} ${viewport.width}x${viewport.height} (${viewport.evidenceRole}): ${viewport.comparison}`)
+    .join(" ")
+}
+
 interface SourceTable {
   title?: string
   headers: string[]
@@ -880,6 +918,12 @@ export async function generateWebCloneSourceProject(
       count: sourceDomProject.semanticReplacementMetrics.length,
       iterationStateModule: "src/data/sourceDomIterationState.ts",
       components: sourceDomProject.semanticReplacementMetrics.map((item) => item.componentName),
+    },
+    visualIteration: {
+      referenceImage: "reference.png",
+      comparisonTool: "webpage_evaluate",
+      viewportMatrix: SOURCE_PROJECT_VISUAL_ITERATION_VIEWPORTS,
+      rule: "Use the desktop-reference viewport as the primary measured comparison after each region replacement. Use responsive-review viewports for screenshot review and measured comparison when matching reference evidence exists; otherwise record the missing evidence instead of claiming responsive parity.",
     },
     rules: [
       "Use sourceData.ts and framework components as the editable implementation surface.",
@@ -5931,6 +5975,8 @@ function renderSourceDomIterationStateTs(
       }
     })
   const nextReplacement = remainingGeneratedRegions[0] ?? null
+  const viewportMatrix = SOURCE_PROJECT_VISUAL_ITERATION_VIEWPORTS
+  const viewportNames = viewportMatrix.map((viewport) => `${viewport.name} ${viewport.width}x${viewport.height}`).join(", ")
   const state = {
     version: 1,
     purpose: "source-dom-maintainable-iteration-state",
@@ -5940,8 +5986,14 @@ function renderSourceDomIterationStateTs(
     semanticReplacements,
     remainingGeneratedRegions,
     nextReplacement,
+    visualIteration: {
+      referenceImage: "web-clone-source/reference.png",
+      comparisonTool: "webpage_evaluate",
+      viewportMatrix,
+      evidenceRule: "Do not delete a source-dom region after replacement until desktop-reference has measured evidence and responsive-review captures have either matching evidence or an explicit source-evidence gap.",
+    },
     recommendedLoop: [
-      "Adopt the current source project as the visual baseline and compare the same viewport set against reference.png.",
+      `Adopt the current source project as the visual baseline and compare the viewport matrix (${viewportNames}) against reference.png or matching reference artifacts.`,
       "Replace nextReplacement.regionFilePath with nextReplacement.recommendedComponentName using source data, sidecar assets, and scoped styles.",
       "Delete the replaced source-dom region only after the screenshot comparison is stable for the unchanged surrounding surface.",
       "Run web_clone_source_audit with finalDeliveryMode=maintainable_replacement_required after each region replacement.",
@@ -5953,6 +6005,7 @@ function renderSourceDomIterationStateTs(
       maintainableAuditMode: "maintainable_replacement_required",
       requiresMaintainableAuditPassed: true,
       requiresMeasuredVisualParity: true,
+      visualIterationViewports: viewportMatrix.map((viewport) => viewport.name),
     },
   }
   return [
@@ -6048,6 +6101,7 @@ function renderReadme(mirrorDir: string): string {
     "- `src/data/sourceDomRegions.ts` for generated-region size, text preview, and replacement priority metrics",
     "- `src/data/sourceDomReplacementPlan.ts` for concrete semantic replacement steps, data sources, asset sources, and parity guards",
     "- `src/data/sourceDomIterationState.ts` for the current maintainable-refactor loop state, semantic replacements already produced, remaining source-dom debt, and the next region to replace",
+    "- `src/data/sourceProjectManifest.json` for the visual iteration viewport matrix and generated-source ownership rules",
     "- `src/data/sourceSvgAssetGroups.ts` for large SVG path runs that are data-driven through `SourceAssetPathGroup` instead of hand-maintained TSX repetition",
     "- `src/data/sourceFaqGroups.ts` for FAQ/disclosure content that is data-driven through `SourceFaqList` instead of repeated generated accordion JSX",
     "",
@@ -6057,6 +6111,7 @@ function renderReadme(mirrorDir: string): string {
     "- Keep `src/styles/source-critical.css`, `src/styles/source-full.css`, `src/data/svgPaths.ts`, `src/data/sourceSvgAssetGroups.ts`, `src/data/sourceFaqGroups.ts`, and `public/assets/` copied together with the React entrypoints; they are required for visual parity.",
     "- Use `src/data/sourceData.ts`, source IR, and component metadata as the maintainability/refactor material for replacing specific regions with semantic components or mature libraries.",
     "- Refine this baseline region by region while checking against `reference.png`.",
+    `- Visual iteration viewport matrix: ${renderSourceProjectVisualIterationMatrix()}`,
     "- Use `reference.png` only as visual validation evidence. Do not render it, replay screenshots, or add hidden semantic coverage layers.",
     "- Use `web_clone_source_audit` and overlay/visual comparison as diagnostics; fix the implementation when their findings describe a real user-visible or maintainability defect.",
     "",
