@@ -1,4 +1,5 @@
 import { Show } from "solid-js"
+import { activeTaskID } from "../store/board"
 import {
   fileEditorFocus,
   selectedFilePath,
@@ -10,17 +11,17 @@ import { Icon } from "./Icon"
 
 export function FileEditorToggle() {
   return (
-    <Show when={selectedFilePath()}>
+    <Show when={selectedFilePath() || activeTaskID()}>
       <button
         type="button"
         class="file-editor-toggle"
         data-active={fileEditorFocus() === "editor" ? "true" : "false"}
-        title={selectedFilePath()}
+        title={selectedFilePath() || t("section.files")}
         aria-label={t("file_editor.toggle")}
         onClick={toggleFileEditorFocus}
       >
         <Icon name="file-document" size={13} />
-        <span>{shortWorkbenchPath(selectedFilePath())}</span>
+        <span>{selectedFilePath() ? shortWorkbenchPath(selectedFilePath()) : t("section.files")}</span>
       </button>
     </Show>
   )

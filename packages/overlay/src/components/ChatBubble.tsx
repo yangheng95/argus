@@ -26,7 +26,6 @@ import { t } from "../utils/i18n"
 import { formatCostUSD, formatTokenCount } from "../utils/format-usage"
 import { useCardHeadActions } from "../hooks/use-card-head-actions"
 import { AgentSessionReplyBox } from "./AgentSessionReplyBox"
-import { AgentFileChanges } from "./AgentFileChanges"
 import { Avatar } from "./Avatar"
 import { CardParts } from "./CardParts"
 import { IntegrityBody } from "./IntegrityCard"
@@ -513,7 +512,6 @@ export function ChatBubble(props: { node: CardNode; depth: number }) {
               </div>
             </div>
           </Show>
-          <AgentFileChanges node={props.node} />
           <div class="chat-bubble__foot" title={footActivityTitle()}>
             <span class="chat-bubble__stamp" title={fullStampWithRelative(props.node.time)}>
               {stamp(props.node.time)}

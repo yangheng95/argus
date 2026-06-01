@@ -8,6 +8,7 @@ import { createMemo, createResource } from "solid-js";
 import { boardStore,
   activeTaskID,
 } from "../store/board";
+import { cardTreeStore, type CardNode } from "../store/card-tree";
 import {
   changeGroupsRevisionKey,
   currentChangeGroups,
@@ -16,6 +17,7 @@ import {
   type ChangeGroup,
   type DiffTarget,
 } from "../services/diff";
+import { collectAgentFileChangeGroupsFromNodes } from "../utils/file-change-summary";
 import type { FileChange } from "./DiffView";
 import { FileChangesView } from "./FileChangesView";
 
@@ -29,6 +31,18 @@ export interface ChangesPanelProps {
 }
 
 export function ChangesPanel(props: ChangesPanelProps) {
+  const agentGroups = createMemo<ChangeGroup[]>(() => {
+    const board = boardStore.board as any;
+    const roots = cardTreeStore.order
+      .map((id) => cardTreeStore.cards[id])
+      .filter((node): node is CardNode => !!node);
+    return collectAgentFileChangeGroupsFromNodes(
+      roots,
+      String(board?.task?.directory || ""),
+      board?.goalWorkflows,
+    );
+  });
+
   const sourceGroups = createMemo<ChangeGroup[]>(() => {
     if (props.changes === undefined) return currentChangeGroups();
     const changes = props.changes;
@@ -44,9 +58,10 @@ export function ChangesPanel(props: ChangesPanelProps) {
 
   const requestKey = createMemo(() => {
     const groups = sourceGroups();
+    const agentKey = changeGroupsRevisionKey(agentGroups());
     return props.changes !== undefined
       ? `props:${groups[0]?.changes.length ?? 0}`
-      : `${activeTaskID()}:${boardStore.snapshotVersion}:${changeGroupsRevisionKey(groups)}`;
+      : `${activeTaskID()}:${boardStore.snapshotVersion}:${cardTreeStore.visibleVersion}:${agentKey}:${changeGroupsRevisionKey(groups)}`;
   });
 
   const [resolvedGroups] = createResource(requestKey, async () => {
@@ -55,7 +70,9 @@ export function ChangesPanel(props: ChangesPanelProps) {
   });
 
   const groups = createMemo<ChangeGroup[]>(() =>
-    (resolvedGroups() || sourceGroups()).filter((group) => group.changes.length > 0),
+    (props.changes === undefined && agentGroups().length > 0
+      ? agentGroups()
+      : (resolvedGroups() || sourceGroups())).filter((group) => group.changes.length > 0),
   );
   const openWorkspaceDiff = (window as any).openWorkspaceDiff as
     | ((target: DiffTarget) => void)

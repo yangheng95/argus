@@ -275,24 +275,6 @@
   scroll-margin-block: calc(18px * var(--ui-scale));
 }
 
-.agent-file-changes {
-  min-width: 0;
-  padding: calc(8px * var(--ui-scale));
-  border-radius: var(--oc-radius-soft);
-  border: var(--oc-border-width) solid color-mix(in srgb, var(--text-muted) 14%, transparent);
-  background: color-mix(in srgb, var(--surface-inset) 64%, transparent);
-}
-
-.chat-bubble-row[data-kind="agent"] .agent-file-changes {
-  margin: calc(8px * var(--ui-scale)) calc(var(--card-pad-x) + calc(1px * var(--ui-scale)));
-}
-
-.agent-file-changes .changes-list[data-virtualized="true"] {
-  max-height: calc(260px * var(--ui-scale));
-  overflow-y: auto;
-  overscroll-behavior: contain;
-}
-
 .chat-bubble__foot {
   min-width: 0;
   display: flex;

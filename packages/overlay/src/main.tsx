@@ -26,9 +26,8 @@ import { ConnectionBadge } from "./components/ConnectionBadge"
 import { ConversationAgentRail } from "./components/ConversationAgentRail"
 import { LogViewer } from "./components/LogViewer"
 import { WorkspacePanel } from "./components/WorkspacePanel"
-import { FilesSection } from "./components/FilesSection"
 import { FileExplorerPanel } from "./components/FileExplorerPanel"
-import { FileEditorPane } from "./components/FileEditorPane"
+import { MessageWorkbenchPane } from "./components/MessageWorkbenchPane"
 import { FileEditorToggle } from "./components/FileEditorToggle"
 import { DEFAULT_RIGHT_PANEL_TAB, RightPanelTabs, type RightPanelTab } from "./components/RightPanelTabs"
 import { fileEditorFocus, selectedFilePath } from "./services/file-workbench"
@@ -611,7 +610,10 @@ if (conversationAgentRailMount) {
 const fileEditorMountEl = document.getElementById("solidFileEditorMount")
 if (fileEditorMountEl) {
   fileEditorMountEl.innerHTML = ""
-  render(() => <FileEditorPane />, fileEditorMountEl)
+  render(
+    () => <MessageWorkbenchPane diffOpen={workspaceOpen()} diffTarget={workspaceTarget()} onCloseDiff={closeWorkspace} />,
+    fileEditorMountEl,
+  )
 }
 
 const fileEditorToggleMountEl = document.getElementById("solidFileEditorToggleMount")
@@ -629,12 +631,6 @@ if (workspaceMountEl) {
     () => <WorkspacePanel target={workspaceTarget()} onClose={closeWorkspace} />,
     workspaceMountEl,
   )
-}
-
-const filesSectionMountEl = document.getElementById("solidFilesSectionMount")
-if (filesSectionMountEl) {
-  filesSectionMountEl.innerHTML = ""
-  render(() => <FilesSection />, filesSectionMountEl)
 }
 
 const fileExplorerMountEl = document.getElementById("solidFileExplorerMount")
@@ -1130,28 +1126,24 @@ disposers.push(
     // ── Workspace visibility ──
     // Drives the show/hide of the workspace mount + resizer.
     createEffect(() => {
-      const open = workspaceOpen()
-
       const mount = document.getElementById("solidWorkspaceMount")
       const resizer = document.getElementById("workspaceResizer")
-      if (mount) (mount as HTMLElement).hidden = !open
-      if (resizer) (resizer as HTMLElement).hidden = !open
+      if (mount) (mount as HTMLElement).hidden = true
+      if (resizer) (resizer as HTMLElement).hidden = true
     })
 
     createEffect(() => {
       const active = rightPanelTab()
       const explorer = document.getElementById("rightPanelExplorer")
       const inspector = document.getElementById("rightPanelInspector")
-      const files = document.getElementById("rightPanelFiles")
       if (explorer) explorer.dataset.active = String(active === "explorer")
       if (inspector) inspector.dataset.active = String(active === "inspector")
-      if (files) files.dataset.active = String(active === "changes")
     })
 
     createEffect(() => {
       const frame = document.getElementById("chatContentFrame")
       if (!frame) return
-      frame.dataset.editorOpen = selectedFilePath() ? "true" : "false"
+      frame.dataset.editorOpen = activeTaskID() || selectedFilePath() || workspaceOpen() ? "true" : "false"
       frame.dataset.editorFocus = fileEditorFocus()
     })
 

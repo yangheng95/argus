@@ -67,7 +67,7 @@ export function StatusBadge(props: StatusBadgeProps) {
 // vs. running-server vs. LLM judgement). The panel's left-edge accent comes
 // from `verdictTone` so verdict — not lifecycle status — drives the visual.
 // CCE = canonical click-through event; emits `delivery:focus-changes` on the
-// `window` so ChangesPanel can scope its tab without prop drilling.
+// `window` so the message-side Files workbench can focus the matching run.
 //
 // Visual primitive `.verdict-pill` is shared with IntegrityCard.
 
@@ -138,8 +138,7 @@ function rowVerdict(status: string): string {
 }
 
 function focusChangesPanel(goalRunID: string | undefined) {
-  // CCE — canonical click-through event. ChangesPanel listens and calls
-  // setSelectedGroupID(goalRunID) so the right tab opens. No prop drilling.
+  // CCE = canonical click-through event; the message-side workbench handles focus.
   if (typeof window === "undefined") return;
   window.dispatchEvent(
     new CustomEvent("delivery:focus-changes", { detail: { goalRunID } }),

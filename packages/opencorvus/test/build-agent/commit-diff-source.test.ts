@@ -39,4 +39,23 @@ describe("build agent commit diff source", () => {
     const diffs = await collectGoalContributionDiffs(tmp.path, baseRef)
     expect(diffs.map((diff) => diff.file)).toEqual(["app.ts"])
   })
+
+  test("captures full content for added goal files", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const baseRef = (await $`git rev-parse HEAD`.cwd(tmp.path).text()).trim()
+
+    await fs.writeFile(path.join(tmp.path, "new-added.ts"), "export const added = true\n")
+    await $`git add new-added.ts`.cwd(tmp.path).quiet()
+    await $`git commit -m "add goal file"`.cwd(tmp.path).quiet()
+
+    const diffs = await collectGoalContributionDiffs(tmp.path, baseRef)
+    expect(diffs).toContainEqual({
+      file: "new-added.ts",
+      before: "",
+      after: "export const added = true\n",
+      additions: 1,
+      deletions: 0,
+      status: "added",
+    })
+  })
 })
