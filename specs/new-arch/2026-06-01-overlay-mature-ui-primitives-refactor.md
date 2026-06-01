@@ -17,7 +17,7 @@ The overlay has several custom UI interaction implementations where mature Solid
 | Popovers / model picker | `ExecutorSelector.tsx` and `WorkspaceSplitLauncher.tsx` hand-roll outside click, portal positioning, and tab semantics. | Executor selector, workspace launchers. | Later migrate to Kobalte Popover/Tabs. | 2 |
 | File editor | `FileEditorPane.tsx` used raw `<textarea>` for file editing. | File workbench editor. | Replaced with a CodeMirror 6-backed `CodeEditor` primitive. | 3 |
 | Diff view | `DiffView.tsx` implemented an LCS dynamic-programming diff and guard. | Changes panel and workspace diff preview. | Replaced with `diffLines` from the existing `diff` package as the single diff engine. | 3 |
-| Logs | `LogViewer.tsx` duplicates log parsing also present in `utils/log.ts`. | Log viewer. | Later move parser to one module and virtualize visible rows. | 3 |
+| Logs | `LogViewer.tsx` duplicated log parsing also present in `utils/log.ts` and rendered every row directly. | Log viewer. | Moved parser/formatter usage to `utils/log.ts` and replaced direct row rendering with `virtua/solid` virtual list. | 3 |
 | Icons | `Icon.tsx` keeps a large local SVG registry. | Whole overlay. | Later replace commodity icons with a mature icon library; keep only product-specific icons. | 4 |
 
 ## Phase 1 constraints
@@ -45,4 +45,6 @@ The overlay has several custom UI interaction implementations where mature Solid
 - [x] Run targeted file explorer/editor test.
 - [x] Replace `DiffView` hand-written LCS with `diffLines` from `diff`.
 - [x] Add regression coverage rejecting the previous `diffMiddle` / `Uint32Array` implementation.
+- [x] Replace `LogViewer` duplicated parser helpers with imports from `utils/log.ts`.
+- [x] Replace direct log row rendering with `virtua/solid` `VList`.
 - [ ] Commit and push only this refactor's files.
