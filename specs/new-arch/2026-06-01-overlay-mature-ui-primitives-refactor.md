@@ -1,7 +1,7 @@
 # Overlay mature UI primitives refactor
 
 Date: 2026-06-01
-Status: phase 3 partial
+Status: phase 3 batch complete; phase 2 and phase 4 remain open
 
 ## Problem
 
@@ -47,4 +47,10 @@ The overlay has several custom UI interaction implementations where mature Solid
 - [x] Add regression coverage rejecting the previous `diffMiddle` / `Uint32Array` implementation.
 - [x] Replace `LogViewer` duplicated parser helpers with imports from `utils/log.ts`.
 - [x] Replace direct log row rendering with `virtua/solid` `VList`.
-- [ ] Commit and push only this refactor's files.
+- [x] Commit and push only this refactor's files.
+
+## Remaining follow-up
+
+- Menubar / menus: migrate `TitlebarMenubar.tsx` to a mature menubar/menu primitive after a focused keyboard and visual QA pass.
+- Popovers / model picker: migrate `ExecutorSelector.tsx` and `WorkspaceSplitLauncher.tsx` to mature popover/menu primitives.
+- Icons: replace commodity entries in `Icon.tsx` with a mature icon library, keeping only product-specific custom shapes.
