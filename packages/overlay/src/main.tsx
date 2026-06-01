@@ -26,6 +26,8 @@ import { ConnectionBadge } from "./components/ConnectionBadge"
 import { ConversationAgentRail } from "./components/ConversationAgentRail"
 import { LogViewer } from "./components/LogViewer"
 import { WorkspacePanel } from "./components/WorkspacePanel"
+import { FilesSection } from "./components/FilesSection"
+import { DEFAULT_RIGHT_PANEL_TAB, RightPanelTabs, type RightPanelTab } from "./components/RightPanelTabs"
 import type { DiffTarget } from "./services/diff"
 import { initApp } from "./services/init"
 import { loadTasks, boardStore, loadBoard,
@@ -113,6 +115,7 @@ const [logOpen, setLogOpen] = createSignal(false)
 // open/close cycles so reopening restores the last active diff target.
 const [workspaceOpen, setWorkspaceOpen] = createSignal(false)
 const [workspaceTarget, setWorkspaceTarget] = createSignal<DiffTarget>({ filePath: "" })
+const [rightPanelTab, setRightPanelTab] = createSignal<RightPanelTab>(DEFAULT_RIGHT_PANEL_TAB)
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value)
@@ -612,6 +615,12 @@ if (workspaceMountEl) {
   )
 }
 
+const filesSectionMountEl = document.getElementById("solidFilesSectionMount")
+if (filesSectionMountEl) {
+  filesSectionMountEl.innerHTML = ""
+  render(() => <FilesSection />, filesSectionMountEl)
+}
+
 // ── Sidebar title backdoor: double-click resets DB ──
 // Hidden operator escape hatch. Confirms before invoking POST /global/db/reset,
 // then reloads to repopulate from a clean schema.
@@ -810,6 +819,11 @@ if (leftPanelHeaderCollapseEl) {
 const rightPanelHeaderCollapseEl = document.getElementById("solidRightPanelHeaderCollapseControl")
 if (rightPanelHeaderCollapseEl) {
   render(() => <RightPanelHeaderCollapseControl />, rightPanelHeaderCollapseEl)
+}
+
+const rightPanelTabsEl = document.getElementById("solidRightPanelTabs")
+if (rightPanelTabsEl) {
+  render(() => <RightPanelTabs active={rightPanelTab} onSelect={setRightPanelTab} />, rightPanelTabsEl)
 }
 
 // ── Mount: ConnectionBadge ──
@@ -1100,6 +1114,14 @@ disposers.push(
       const resizer = document.getElementById("workspaceResizer")
       if (mount) (mount as HTMLElement).hidden = !open
       if (resizer) (resizer as HTMLElement).hidden = !open
+    })
+
+    createEffect(() => {
+      const active = rightPanelTab()
+      const inspector = document.getElementById("rightPanelInspector")
+      const files = document.getElementById("rightPanelFiles")
+      if (inspector) inspector.dataset.active = String(active === "inspector")
+      if (files) files.dataset.active = String(active === "files")
     })
 
     createEffect(() => {

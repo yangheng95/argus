@@ -42,17 +42,20 @@ function readAllSurfaceCss(): string {
 // delivery card at all. This suite locks both the structural wiring and the
 // redesigned panel's verdict-driven behavior in place.
 
-test("index.html declares one Inspector tab mount owned by Board", async () => {
+test("index.html declares top-level Inspector and Files tab bodies", async () => {
   const html = await readSrc("src/index.html")
   expect(html).toContain('id="solidConversationAgentRailMount"')
   expect(html).not.toContain('id="rightPanelWorkflow"')
   expect(html).not.toContain('id="solidAgentWorkflowMount"')
+  expect(html).toContain('id="solidRightPanelTabs"')
+  expect(html).toContain('id="rightPanelFiles"')
+  expect(html).toContain('id="solidFilesSectionMount"')
+  expect(html).toContain('data-panel-tab="files" data-active="true"')
   expect(html).toContain('id="rightPanelInspector"')
+  expect(html).toContain('data-panel-tab="inspector" data-active="false"')
   expect(html).toContain('id="solidBoardMount"')
   expect(html).not.toContain('id="solidInteractionMount"')
   expect(html).not.toContain('id="solidDeliveryMount"')
-  expect(html).not.toContain('id="solidFilesSectionMount"')
-  expect(html).not.toContain('id="solidRightPanelTabs"')
   expect(html).not.toContain('id="rightPanelPreview"')
   expect(html).not.toContain('id="solidFrontendPreviewMount"')
 })
@@ -62,14 +65,12 @@ test("index.html does not declare the rejected single InspectorPanel root", asyn
   expect(html).not.toContain('id="solidInspectorPanelMount"')
 })
 
-test("Board keeps delivery before files inside the unified Inspector stack", async () => {
+test("Board keeps delivery inside the unified Inspector stack and Files outside it", async () => {
   const board = await readSrc("src/components/Board.tsx")
   expect(board).toContain('class="workflow-section-stack"')
   const deliveryAt = board.indexOf("<DeliveryPanel")
-  const filesAt = board.indexOf("<FilesSection")
   expect(deliveryAt).toBeGreaterThan(-1)
-  expect(filesAt).toBeGreaterThan(-1)
-  expect(deliveryAt).toBeLessThan(filesAt)
+  expect(board).not.toContain("<FilesSection")
 })
 
 test("Inspector workflow sections render as one contiguous stack", async () => {
@@ -79,16 +80,18 @@ test("Inspector workflow sections render as one contiguous stack", async () => {
   expect(css).toContain('.workflow-section-stack .oc-section[data-phase-state="active"]')
 })
 
-test("main.tsx mounts the inspector workflow without the deleted right-panel tabs", async () => {
+test("main.tsx mounts the top-level right-panel tabs and tab bodies", async () => {
   const main = await readSrc("src/main.tsx")
   expect(main).toContain('document.getElementById("solidConversationAgentRailMount")')
   expect(main).not.toContain('document.getElementById("solidAgentWorkflowMount")')
+  expect(main).toContain('document.getElementById("solidRightPanelTabs")')
+  expect(main).toContain('document.getElementById("solidFilesSectionMount")')
   expect(main).toContain('document.getElementById("solidBoardMount")')
   expect(main).not.toContain('document.getElementById("solidDeliveryMount")')
-  expect(main).not.toContain('document.getElementById("solidFilesSectionMount")')
-  expect(main).not.toContain('document.getElementById("solidRightPanelTabs")')
   expect(main).not.toContain('document.getElementById("solidFrontendPreviewMount")')
   expect(main).not.toContain("<FrontendPreviewPanel")
+  expect(main).toContain("<RightPanelTabs")
+  expect(main).toContain("<FilesSection")
   expect(main).toContain("<ConversationAgentRail")
   expect(main).not.toContain("nextTabForPreviewResolution")
   expect(main).not.toContain("AgentWorkflowPanel")
@@ -100,7 +103,7 @@ test("ConversationAgentRail owns workflow navigation without high-energy effects
   const component = await readSrc("src/components/ConversationAgentRail.tsx")
   const css = await readSrc("src/styles/surfaces/conversation.css")
   expect(component).toContain("buildAgentWorkflow(")
-  expect(component).toContain("buildAgentWorkflowLanes")
+  expect(component).toContain("mergeAgentRecords")
   expect(component).not.toContain("AgentReportDialog")
   expect(component).not.toContain("conversation-agent-rail__resize")
   expect(css).toContain(".conversation-agent-rail")
@@ -122,15 +125,15 @@ test("DeliveryPanel has an in-flight projection while the run is in deliver befo
   expect(board).toContain('const LIVE_RUN_STATUSES = new Set(["queued", "accepted", "running", "blocked"])')
   expect(board).toContain("pending: true")
   expect(board).toContain('t("delivery.inflight.hint")')
-  expect(board).toContain('if (hasActiveDeliveryRun(board())) return "delivery";')
+  expect(board).toMatch(/if \(hasActiveDeliveryRun\(board\(\)\)\) return "delivery"/)
   expect(board).toContain("<DeliveryPanel delivery={delivery()}")
 })
 
 test("DeliveryPanel is not mounted for tasks without delivery content", async () => {
   const board = await readSrc("src/components/Board.tsx")
-  const filesAt = board.indexOf("<FilesSection")
-  const beforeFiles = board.slice(Math.max(0, filesAt - 220), filesAt)
-  expect(beforeFiles).toContain("<Show when={delivery()}>")
+  const deliveryAt = board.indexOf("<DeliveryPanel")
+  const beforeDelivery = board.slice(Math.max(0, deliveryAt - 220), deliveryAt)
+  expect(beforeDelivery).toContain("<Show when={delivery()}>")
   expect(board).not.toContain("delivery.empty.hint")
   expect(board).not.toContain('data-verdict="empty"')
 })
@@ -193,10 +196,13 @@ test("`delivery:focus-changes` event contract — DeliveryPanel dispatches, Chan
   const board = await readSrc("src/components/Board.tsx")
   const changes = await readSrc("src/components/ChangesPanel.tsx")
   const fileChangesView = await readSrc("src/components/FileChangesView.tsx")
+  const rightPanelTabs = await readSrc("src/components/RightPanelTabs.tsx")
   // Dispatch site (DeliveryPanel goal-pill / files-changed footer).
   expect(board).toContain('"delivery:focus-changes"')
   expect(board).toMatch(/window\.dispatchEvent\(\s*new CustomEvent\("delivery:focus-changes"/)
-  // Listener side (ChangesPanel wires the event into FileChangesView, which owns selection state).
+  // Listener side: the right panel switches to Files; FileChangesView owns goal selection state.
+  expect(rightPanelTabs).toContain('"delivery:focus-changes"')
+  expect(rightPanelTabs).toContain('props.onSelect("files")')
   expect(changes).toContain('"delivery:focus-changes"')
   expect(changes).toContain('focusEvent="delivery:focus-changes"')
   expect(fileChangesView).toContain("addEventListener")

@@ -213,23 +213,20 @@ describe("Section extended badge/body props", () => {
 
 // ── Step 9.E adoption guards ──────────────────────────────────────────
 
-describe("FilesSection.tsx — Section primitive adoption", () => {
+describe("FilesSection.tsx — top-level Files tab surface", () => {
   const tsx = readText(join(OVERLAY_ROOT, "src/components/FilesSection.tsx"))
 
-  test("imports Section primitive", () => {
-    expect(tsx).toContain("from \"./primitives/Section\"")
+  test("renders a top-level panel body instead of a nested Section", () => {
+    expect(tsx).toContain('class="files-tab-panel"')
+    expect(tsx).toContain('id="changesSection"')
+    expect(tsx).toContain("<ChangesPanel")
+    expect(tsx).not.toContain('from "./primitives/Section"')
+    expect(tsx).not.toMatch(/<Section\b/)
   })
 
-  test("uses <Section> element", () => {
-    expect(tsx).toMatch(/<Section\b/)
-  })
-
-  test("no bare <details class=\"section\"", () => {
+  test("no bare collapsible section chrome", () => {
     expect(tsx).not.toMatch(/class="section"/)
     expect(tsx).not.toMatch(/<details\b/)
-  })
-
-  test("no bare .section-head / .section-body class strings", () => {
     expect(tsx).not.toContain("section-head")
     expect(tsx).not.toContain("section-body")
   })
@@ -239,7 +236,7 @@ describe("Board.tsx — Section primitive adoption", () => {
   const tsx = readText(join(OVERLAY_ROOT, "src/components/Board.tsx"))
 
   test("imports Section primitive", () => {
-    expect(tsx).toContain("from \"./primitives/Section\"")
+    expect(tsx).toContain('from "./primitives/Section"')
   })
 
   test("uses <Section> in DeliveryPanel (deliverySection id)", () => {
@@ -250,7 +247,7 @@ describe("Board.tsx — Section primitive adoption", () => {
     expect(before).not.toContain("<details")
   })
 
-  test("SectionFrame uses <Section> not bare <details class=\"section\"", () => {
+  test('SectionFrame uses <Section> not bare <details class="section"', () => {
     // The bare <details class="section"> should be gone
     expect(tsx).not.toMatch(/<details[^>]*class="section"/)
   })
@@ -269,19 +266,19 @@ describe("DiffPreviewPanel.tsx — Panel primitive adoption", () => {
   const tsx = readText(join(OVERLAY_ROOT, "src/components/DiffPreviewPanel.tsx"))
 
   test("imports Panel primitive", () => {
-    expect(tsx).toContain("from \"./primitives/Panel\"")
+    expect(tsx).toContain('from "./primitives/Panel"')
   })
 
   test("uses <Panel> element", () => {
     expect(tsx).toMatch(/<Panel\b/)
   })
 
-  test("no bare <div class=\"diff-preview-panel\"", () => {
+  test('no bare <div class="diff-preview-panel"', () => {
     expect(tsx).not.toMatch(/<div[^>]*class="diff-preview-panel"/)
   })
 
-  test("no bare <header class=\"diff-preview-head\"", () => {
-    expect(tsx).not.toContain("class=\"diff-preview-head\"")
+  test('no bare <header class="diff-preview-head"', () => {
+    expect(tsx).not.toContain('class="diff-preview-head"')
   })
 })
 
@@ -296,19 +293,19 @@ describe("TracePanel.tsx — Panel primitive adoption", () => {
   const tsx = readText(join(OVERLAY_ROOT, "src/components/TracePanel.tsx"))
 
   test("imports Panel primitive", () => {
-    expect(tsx).toContain("from \"./primitives/Panel\"")
+    expect(tsx).toContain('from "./primitives/Panel"')
   })
 
   test("uses <Panel> element", () => {
     expect(tsx).toMatch(/<Panel\b/)
   })
 
-  test("no bare <div class=\"trace-panel\"", () => {
+  test('no bare <div class="trace-panel"', () => {
     expect(tsx).not.toMatch(/<div[^>]*class="trace-panel"/)
   })
 
-  test("no bare <div class=\"trace-panel-head\"", () => {
-    expect(tsx).not.toContain("class=\"trace-panel-head\"")
+  test('no bare <div class="trace-panel-head"', () => {
+    expect(tsx).not.toContain('class="trace-panel-head"')
   })
 })
 

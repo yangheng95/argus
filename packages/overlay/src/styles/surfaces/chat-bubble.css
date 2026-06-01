@@ -287,6 +287,12 @@
   margin: calc(8px * var(--ui-scale)) calc(var(--card-pad-x) + calc(1px * var(--ui-scale)));
 }
 
+.agent-file-changes .changes-list[data-virtualized="true"] {
+  max-height: calc(260px * var(--ui-scale));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
 .chat-bubble__foot {
   min-width: 0;
   display: flex;
