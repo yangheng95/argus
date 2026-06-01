@@ -636,12 +636,11 @@ export namespace File {
       throw new Error(`Access denied: path escapes project directory`)
     }
 
+    const entries = await fs.promises.readdir(resolved, {
+      withFileTypes: true,
+    })
     const nodes: Node[] = []
-    for (const entry of await fs.promises
-      .readdir(resolved, {
-        withFileTypes: true,
-      })
-      .catch(() => [])) {
+    for (const entry of entries) {
       if (exclude.includes(entry.name)) continue
       const fullPath = path.join(resolved, entry.name)
       const relativePath = path.relative(Instance.directory, fullPath)
