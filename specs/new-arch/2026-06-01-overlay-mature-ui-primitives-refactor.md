@@ -108,3 +108,29 @@ Checklist:
 - [x] Run targeted tests, overlay typecheck, i18n, browser smoke.
   - `executor-selector-dualbar.test.ts`, `executor-selector-redesign.test.ts`, overlay `typecheck`, and overlay i18n passed. Browser smoke loaded `http://127.0.0.1:5173/` with no Vite overlay and both executor chips rendered.
 - [x] Commit and push only this phase's files.
+
+## Phase 2C Titlebar Menubar plan
+
+Evidence scan:
+
+| API / file | Current behavior | Replacement decision |
+| --- | --- | --- |
+| `TitlebarMenubar.tsx` root | Manually renders `role="menubar"`, tracks `openMenu`, closes on `document.pointerdown`, and implements arrow/Enter/Space trigger handling. | Replace root/menu/trigger/content/item/group primitives with `@kobalte/core/menubar`; retain only project-specific Alt+access-key handling. |
+| `MenuItem` / `RecentDirectoryMenuItem` | Raw `button role="menuitem"` elements. | Replace with `Menubar.Item as="button"` while preserving class, `data-testid`, title, disabled state, and click side effects. |
+| `MenuGroup` | Raw `div role="group"` and title div. | Replace with `Menubar.Group` / `Menubar.GroupLabel` while preserving CSS classes. |
+| `titlebar-menubar.test.ts`, `pane-collapse-layout.test.ts`, titlebar source tests | Verify trigger classes, recent rows, settings/test ids, and menu layout. | Add a primitive guard and run targeted titlebar tests after migration. |
+
+Constraints:
+
+- Preserve `data-menu-trigger`, `data-testid="titlebar-menu-..."`, `data-active`, class names, and Alt+access-key behavior.
+- Do not rewrite titlebar command content in this phase.
+- Do not remove range/toggle controls from menus; Kobalte owns menu shell and item semantics, while embedded form controls remain native.
+
+Checklist:
+
+- [x] Grep titlebar menubar callsites and tests.
+- [ ] Replace root/menu/trigger/content/item/group with Kobalte Menubar primitives.
+  - Blocked and reverted. `@kobalte/core/menubar` 0.13.11 has the same declaration-file defect as Dialog: its `dist/index-9e11b9e4.d.ts` exports type-only names (`MenubarContextValue`, `MenubarMenuOptions`, `MenubarRootProps`, etc.) as values, causing `tsc --noEmit` `TS2693`. Do not bypass with `skipLibCheck`; revisit after upgrading/patching Kobalte or choosing a menubar primitive whose declarations pass strict typecheck.
+- [ ] Add primitive guard rejecting the previous document pointer listener.
+- [ ] Run targeted titlebar tests, overlay typecheck, i18n, browser smoke.
+- [ ] Commit and push only this phase's files.
