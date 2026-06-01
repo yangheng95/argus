@@ -189,12 +189,20 @@ describe("web-clone source skeleton consumption audit", () => {
       sourcePackageDir,
       outputDir: projectDir,
     })
+    await Bun.write(
+      path.join(projectDir, "src", "styles", "source-critical.css"),
+      Array.from(
+        { length: 2600 },
+        (_, index) => `.source-node-${index} { content: "data-source-node-id=node_${index}"; padding: ${index % 8}px; }`,
+      ).join("\n"),
+    )
 
     const audit = await auditWebCloneSourceSkeletonConsumption({ projectDir, sourcePackageDir })
 
     expect(audit.passed).toBe(true)
     expect(audit.risk.htmlReplayDetected).toBe(false)
     expect(audit.risk.manualDomMutationDetected).toBe(false)
+    expect(audit.risk.mechanicalSkeletonConversionDetected).toBe(false)
     expect(audit.sourceCoverage.matchedTextCount).toBeGreaterThanOrEqual(6)
   })
 
@@ -207,6 +215,12 @@ describe("web-clone source skeleton consumption audit", () => {
       sourcePackageDir,
       outputDir: projectDir,
     })
+    await Bun.write(path.join(projectDir, "src", "components", "source-dom", "TinyDebtRegion.tsx"), `
+      // @ts-nocheck
+      export function TinyDebtRegion() {
+        return <section>GDP Growth Rate</section>
+      }
+    `)
 
     const audit = await auditWebCloneSourceSkeletonConsumption({
       projectDir,
@@ -219,6 +233,8 @@ describe("web-clone source skeleton consumption audit", () => {
     expect(audit.risk.generatedBaselineDetected).toBe(true)
     expect(audit.risk.finalBaselineOnlyDetected).toBe(true)
     expect(audit.findings.join("\n")).toContain("generated DOM/CSS baseline")
+    expect(audit.findings.join("\n")).toContain("Largest remaining generated source-dom regions")
+    expect(audit.findings.join("\n")).toContain("TinyDebtRegion.tsx")
   })
 
   test("does not require the provenance mirror to be reachable after source package handoff", async () => {

@@ -186,7 +186,7 @@ function ensureMaintainableSourceRegionPlan(final: FrontendTemplateFinal): Front
           mature_library_candidates: [],
           props_states: "source regions, source data, source assets, responsive layout, interactions, and parity guards",
           replacement_boundary: "Whole captured source page until named regions are replaced with parity-preserving semantic components",
-          parity_guard: "Keep the adopted baseline while replacing source regions; compare against reference.png and run source audit before final maintainability claims.",
+          parity_guard: "Keep the adopted baseline only as an intermediate parity anchor while replacing source regions; compare against reference.png and run source audit before final maintainability claims.",
           custom_fallback_reason: "",
         },
       ]
@@ -203,7 +203,7 @@ function ensureMaintainableSourceRegionPlan(final: FrontendTemplateFinal): Front
         replacement_strategy: "extracted_baseline_defer",
         reuse_source: "frontend-design-skeleton entrypoints, source-dom regions, CSS sidecars, source data, source assets, and web-clone-source/reference.png",
         mature_library_candidates: [],
-        deletion_rule: "Do not delete the source baseline wholesale; replace named regions only after source data extraction, semantic component rendering, scoped CSS ownership, screenshot parity, and source audit evidence.",
+        deletion_rule: "Do not delete the source baseline wholesale; replace named regions only after source data extraction, semantic component rendering, scoped CSS ownership, screenshot parity, and source audit evidence. Any deferred region remains unfinished source debt.",
         source_refs: [
           "frontend-design-skeleton/README.md",
           "frontend-design-skeleton/src/App.tsx",
@@ -212,7 +212,7 @@ function ensureMaintainableSourceRegionPlan(final: FrontendTemplateFinal): Front
           "frontend-design-skeleton/src/styles.css",
           "web-clone-source/reference.png",
         ],
-        parity_guard: "Root visual comparison against reference.png plus zero-finding web_clone_source_audit evidence before claiming final maintainability.",
+        parity_guard: "Root visual comparison against reference.png plus zero-finding web_clone_source_audit evidence before claiming final maintainability; a deferred baseline keeps final maintainability unproven.",
         custom_fallback_reason: "",
       },
     ],

@@ -60,6 +60,15 @@ The frontend template should request downstream implementation evidence from `we
 
 Visual acceptance must be a viewport matrix, not a single screenshot. Name the required desktop, tablet, and narrow/mobile viewport sizes in `visual_consistency_contract`; each viewport must be rendered and evaluated with measured visual comparison evidence, and source review must reject screenshot replay, hidden coverage, inline base64, or unrelated freehand rebuilds.
 
+For maintainable rawproject/refinement requests, frontend_design must teach and supervise a baseline-first, region-by-region iteration loop rather than handing off a freehand rewrite:
+
+1. Adopt the traceable `frontend-design-skeleton/` source baseline into the delivery root and compare it with `web-clone-source/reference.png`.
+2. Pick the next region from `frontend-design-skeleton/src/data/sourceDomIterationState.ts` (`nextSourceDomReplacement`), then use the matching row in `frontend-design-skeleton/src/data/sourceDomReplacementPlan.ts`.
+3. Replace only that region through a vertical slice: source data extraction, semantic component boundary, scoped style ownership, generated fixed-layout cleanup, asset ownership, and interaction/state wiring.
+4. Re-render the same viewport matrix, run visual comparison, and run `web_clone_source_audit` in `maintainable_replacement_required` mode.
+5. If visual parity regresses or the source audit finds baseline-only/replay/freehand/default-scaffold defects, repair the changed region from source evidence before moving to another region.
+6. If any region is deferred, call it unfinished source debt. Do not describe the project as a final maintainable version until the maintainable audit passes and the measured visual evidence satisfies the requested similarity target.
+
 ## Frontend Template Requirements
 
 - Visible text must come from extracted DOM / IR facts.
