@@ -9,6 +9,7 @@ import {
 } from "../services/file-workbench"
 import { t } from "../utils/i18n"
 import { Icon } from "./Icon"
+import { CodeEditor } from "./primitives/CodeEditor"
 
 async function readFileContent(path: string): Promise<FileContent | null> {
   if (!path) return null
@@ -131,11 +132,10 @@ export function FileEditorPane() {
                 </div>
               }
             >
-              <textarea
-                class="file-editor-textarea"
+              <CodeEditor
                 value={draft()}
-                spellcheck={false}
-                onInput={(event) => setDraft(event.currentTarget.value)}
+                ariaLabel={t("file_editor.title")}
+                onValueChange={setDraft}
               />
             </Show>
           </Show>
