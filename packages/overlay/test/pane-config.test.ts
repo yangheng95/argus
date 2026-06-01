@@ -82,8 +82,10 @@ test("settings store persists the mission column widths independently", () => {
 
 test("Mission column headers reuse the shared .oc-surface-header primitive (no bespoke header chrome)", () => {
   const mission = readSrc("components/Mission.tsx")
-  // Each of the three column headers carries the shared primitive class.
-  expect(mission).toContain('class="mission-ledger-header oc-surface-header"')
+  const missionList = readSrc("components/MissionList.tsx")
+  // Each of the three column headers carries the shared primitive class. The
+  // ledger header belongs to MissionList, the single source for Mission rows.
+  expect(missionList).toContain('class="mission-ledger-header oc-surface-header"')
   expect(mission).toContain('class="mission-conversation-header oc-surface-header"')
   expect(mission).toContain('class="mission-channels-header oc-surface-header"')
   // The "Task context" kicker (mission.workbench.task_kicker) that duplicated
