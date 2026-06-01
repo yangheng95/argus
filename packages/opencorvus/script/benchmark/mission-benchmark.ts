@@ -10,6 +10,7 @@ import {
   evaluateMissionBenchmarkReport,
   missionTaskRows,
   terminalMissionTasks,
+  missionStateMentionsTerminalTasks,
   type MissionBenchmarkTask,
 } from "./mission-scenario"
 
@@ -209,7 +210,8 @@ try {
   if (secondWake.created) throw new Error(`second wake created a new mission instead of resuming ${missionID}`)
   log(`second wake resumed session=${secondWake.sessionID}`)
 
-  const missionState = await waitForMissionState(missionID)
+  const missionState = await waitForMissionReconciliation(missionID, terminal)
+  await waitForSessionSettled(secondWake.sessionID)
   const latestBoard = await apiJson("/tasks?limit=50")
   const missionTasks = missionTaskRows(latestBoard, missionID)
   const localVerify = skipLocalVerify
@@ -308,12 +310,27 @@ async function waitForMissionTerminalTasks(id: string): Promise<MissionBenchmark
   })
 }
 
-async function waitForMissionState(id: string): Promise<Record<string, string>> {
-  const files = ["frontier.md", "tasks.md", "handoff.md", "notes.md"]
-  return waitFor(`mission ${id} state files`, async () => {
-    const state = Object.fromEntries(await Promise.all(files.map(async (file) => [file, await readMissionFile(id, file)])))
-    return files.every((file) => state[file]?.trim()) ? state : undefined
+async function waitForMissionReconciliation(
+  id: string,
+  terminalTasks: MissionBenchmarkTask[],
+): Promise<Record<string, string>> {
+  return waitFor(`mission ${id} reconciliation state`, async () => {
+    const state = await readMissionState(id)
+    return missionStateMentionsTerminalTasks(state, terminalTasks) ? state : undefined
   })
+}
+
+async function waitForSessionSettled(sessionID: string): Promise<void> {
+  const { SessionStatus } = await import("../../src/session")
+  await waitFor(`mission session ${sessionID} to settle`, async () => {
+    const status = SessionStatus.get(sessionID)
+    return status.type === "streaming" || status.type === "retry" ? undefined : true
+  })
+}
+
+async function readMissionState(id: string): Promise<Record<string, string>> {
+  const files = ["frontier.md", "tasks.md", "handoff.md", "notes.md"]
+  return Object.fromEntries(await Promise.all(files.map(async (file) => [file, await readMissionFile(id, file)])))
 }
 
 async function waitFor<T>(label: string, fn: () => Promise<T | undefined>): Promise<T> {

@@ -47,3 +47,5 @@ The first live `glm51/glm51` run completed the generated project and produced an
 
 - `Trace session mismatch: context=<mission wake session> input=<orchestrator session>` while recording the orchestrator report after the Mission-dispatched task completed.
 - The benchmark process kept running after writing the report because isolated project scheduler state was still alive during teardown.
+
+The second live `glm51/glm51` run proved the generated project and Mission state can reconcile to complete, but also exposed that the benchmark accepted the report before the second Mission wake finished updating `tasks.md` / `handoff.md`. The benchmark must wait for the terminal task ID and status to appear in Mission state before writing the final report.
