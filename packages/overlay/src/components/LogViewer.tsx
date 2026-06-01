@@ -9,12 +9,10 @@ import {
   createEffect,
   createSignal,
   createMemo,
-  onCleanup,
   For,
-  Index,
   Show,
 } from "solid-js";
-import { setupAutoScroll, type AutoScrollController } from "../utils/dom-utils";
+import { VList, type VListHandle } from "virtua/solid";
 import { appStore, setAppStore, filteredLogEntries } from "../store/app";
 import type { LogEntry, LogLevel, LogSource } from "../store/app";
 import { t } from "../utils/i18n";
@@ -22,6 +20,12 @@ import { apiJson } from "../services/api";
 import { useAsyncAction } from "../solid/async-action";
 import { Dialog } from "./primitives/Dialog";
 import { Button } from "./ui/Button";
+import {
+  fmtElapsed,
+  logDetailFields,
+  parseServerLogLine,
+  stringifyLogValue,
+} from "../utils/log";
 
 // ── Re-export types so callers can use them without importing store/app ──
 export type { LogEntry, LogLevel, LogSource };
@@ -69,17 +73,6 @@ async function loadServerLogs(): Promise<void> {
   }
 }
 
-// ── Log value helpers ──
-
-function stringifyLogValue(value: unknown, space = 0): string {
-  if (typeof value === "string") return value;
-  try {
-    return JSON.stringify(value, null, space);
-  } catch {
-    return String(value ?? "");
-  }
-}
-
 function clipText(value: string, limit = 80): string {
   const text = String(value || "").replace(/\s+/g, " ").trim();
   if (!text) return "";
@@ -91,151 +84,10 @@ function logPreviewValue(value: unknown): string {
   return clipText(stringifyLogValue(value), 80);
 }
 
-function isRecord(v: unknown): v is Record<string, unknown> {
-  return !!v && typeof v === "object" && !Array.isArray(v);
-}
-
-function logDetailFields(fields: unknown): Record<string, unknown> {
-  if (!isRecord(fields)) return {};
-  return Object.fromEntries(
-    Object.entries(fields).filter(([key]) => key !== "service"),
-  );
-}
-
 function logSourceLabel(source: LogSource): string {
   if (source === "server") return "Server";
   if (source === "pipeline") return "Pipeline";
   return "Overlay";
-}
-
-// ── Server log line parser (
-
-function parseLogValue(raw: string): unknown {
-  const text = String(raw || "").trim();
-  if (!text) return "";
-  if (text === "true") return true;
-  if (text === "false") return false;
-  if (text === "null") return null;
-  if (/^-?\d+(?:\.\d+)?$/.test(text)) return Number(text);
-  if (/^[\[{"]/.test(text)) {
-    try {
-      return JSON.parse(text);
-    } catch {}
-  }
-  return text;
-}
-
-function scanBalancedLogValue(text: string, start: number): number {
-  if (text[start] === '"') {
-    let escaped = false;
-    for (let i = start + 1; i < text.length; i++) {
-      const ch = text[i];
-      if (escaped) { escaped = false; continue; }
-      if (ch === "\\") { escaped = true; continue; }
-      if (ch === '"') return i + 1;
-    }
-    return text.length;
-  }
-  const pairs: Record<string, string> = { "{": "}", "[": "]" };
-  const stack = [text[start]];
-  let quoted = false;
-  let escaped = false;
-  for (let i = start + 1; i < text.length; i++) {
-    const ch = text[i];
-    if (quoted) {
-      if (escaped) { escaped = false; continue; }
-      if (ch === "\\") { escaped = true; continue; }
-      if (ch === '"') quoted = false;
-      continue;
-    }
-    if (ch === '"') { quoted = true; continue; }
-    if (ch === "{" || ch === "[") { stack.push(ch); continue; }
-    if (ch === "}" || ch === "]") {
-      const open = stack[stack.length - 1];
-      if (pairs[open] === ch) {
-        stack.pop();
-        if (stack.length === 0) return i + 1;
-      }
-    }
-  }
-  return text.length;
-}
-
-function scanLogValueEnd(text: string, start: number): number {
-  if (!text[start]) return start;
-  const first = text[start];
-  if (first === '"' || first === "{" || first === "[") {
-    return scanBalancedLogValue(text, start);
-  }
-  let cursor = start;
-  while (cursor < text.length) {
-    const nextSpace = text.indexOf(" ", cursor);
-    if (nextSpace < 0) return text.length;
-    let probe = nextSpace;
-    while (probe < text.length && text[probe] === " ") probe++;
-    if (/^[A-Za-z0-9_.-]+=/.test(text.slice(probe))) return nextSpace;
-    cursor = probe;
-  }
-  return text.length;
-}
-
-function parseLeadingLogFields(text: string): {
-  fields: Record<string, unknown>;
-  end: number;
-} {
-  const fields: Record<string, unknown> = {};
-  let index = 0;
-  while (index < text.length) {
-    while (text[index] === " ") index++;
-    const match = /^([A-Za-z0-9_.-]+)=/.exec(text.slice(index));
-    if (!match) break;
-    const key = match[1];
-    index += match[0].length;
-    const end = scanLogValueEnd(text, index);
-    fields[key] = parseLogValue(text.slice(index, end));
-    index = end;
-  }
-  return { fields, end: index };
-}
-
-function parseServerLogLine(raw: string): LogEntry {
-  const match = raw.match(/^(DEBUG|INFO|WARN|ERROR)\s+(\S+)\s+(\+\d+ms)\s+(.*)$/);
-  if (!match) {
-    return {
-      level: "info",
-      ts: "",
-      delta: "",
-      service: "",
-      message: raw,
-      fields: {},
-      raw,
-      source: "server",
-    };
-  }
-  const [, levelRaw, ts, delta, rest] = match;
-  const parsed = parseLeadingLogFields(rest);
-  const service =
-    typeof parsed.fields.service === "string" ? parsed.fields.service : "";
-  const message = rest.slice(parsed.end).trim() || rest.trim();
-  return {
-    level: levelRaw.toLowerCase() as LogLevel,
-    ts,
-    delta,
-    service,
-    message,
-    fields: parsed.fields,
-    raw,
-    source: "server",
-  };
-}
-
-// ── Elapsed formatter ──
-
-function fmtElapsed(ms: number): string {
-  const s = ms / 1000;
-  if (s < 60) return s.toFixed(1) + "s";
-  const m = Math.floor(s / 60);
-  return m + "m" + (s - m * 60).toFixed(0) + "s";
 }
 
 // ── Merge all log sources (
@@ -255,7 +107,14 @@ function buildLogEntries(
 
  // Server log lines (parsed from raw strings)
   const serverLines: LogEntry[] = _serverLogLines
-    .map(parseServerLogLine)
+    .map((line): LogEntry => {
+      const entry = parseServerLogLine(line);
+      return {
+        ...entry,
+        level: entry.level as LogLevel,
+        source: "server",
+      };
+    })
     .filter((e) => (levelOrder[e.level] ?? 0) >= threshold);
 
  // Pipeline NDJSON events
@@ -416,7 +275,7 @@ export interface LogViewerProps {
 
 export function LogViewer(props: LogViewerProps) {
   const [serverLogsSeq, setServerLogsSeq] = createSignal(0);
-  let logScrollController: AutoScrollController | undefined;
+  let logList: VListHandle | undefined;
 
  // Merged & filtered log entries
   const entries = createMemo(() => {
@@ -459,8 +318,10 @@ export function LogViewer(props: LogViewerProps) {
 
   createEffect(() => {
     if (!props.open) return;
-    entries().length;
-    logScrollController?.contentChanged();
+    const count = entries().length;
+    if (count > 0) {
+      queueMicrotask(() => logList?.scrollToIndex(count - 1, { align: "end" }));
+    }
   });
 
   return (
@@ -540,44 +401,27 @@ export function LogViewer(props: LogViewerProps) {
         </>
       }
     >
-      <div
-        id="logViewerBody"
-        class="log-viewer"
-        ref={(el) => {
-          // setupAutoScroll requires an AutoScrollOptions object. The prior
-          // `setupAutoScroll(el)` call (missing opts) threw at first scroll:
-          // `Cannot read properties of undefined (reading 'isTracking')`
-          // which aborted the entire component tree render, leaving the
-          // overlay blank and the benchmark's puppeteer assertion
-          // (`Overlay did not render streamed task output within 120s`)
-          // failing. Log panels want always-follow behaviour; provide a
-          // constant tracker + no-op onUserScrollUp.
-          const ctrl = setupAutoScroll(el, {
-            isTracking: () => true,
-            onUserScrollUp: () => {},
-          });
-          logScrollController = ctrl;
-          onCleanup(() => {
-            ctrl.cleanup();
-            logScrollController = undefined;
-          });
-        }}
-      >
-        <Show
-          when={entries().length > 0}
-          fallback={
+      <Show
+        when={entries().length > 0}
+        fallback={
+          <div id="logViewerBody" class="log-viewer">
             <div class="empty-hint">{t("log.empty")}</div>
-          }
+          </div>
+        }
+      >
+        <VList
+          id="logViewerBody"
+          class="log-viewer"
+          data={entries()}
+          itemSize={88}
+          overscan={8}
+          ref={(handle) => {
+            logList = handle;
+          }}
         >
-          {/* Index over For: log entries are append-only after filter
-              regenerates the array; rows never reorder mid-list. Index
-              reuses DOM by position so growing the log doesn't re-key
-              every prior line. */}
-          <Index each={entries()} fallback={null}>
-            {(entry) => <LogLine entry={entry()} />}
-          </Index>
-        </Show>
-      </div>
+          {(entry) => <LogLine entry={entry} />}
+        </VList>
+      </Show>
     </Dialog>
   );
 }
