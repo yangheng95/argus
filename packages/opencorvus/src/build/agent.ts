@@ -88,6 +88,7 @@ import { PermissionNext } from "@/permission/next"
 import { Question } from "@/question"
 import { buildBuildAgentReport } from "./report"
 import { InstructionPrompt } from "@/session/instruction"
+import { renderBuildPromptOverlays } from "./prompt-context"
 
 import BUILD_CORE from "@/prompt/core/build-core.txt"
 import ENGINEERING_CRAFT from "@/prompt/core/engineering-craft.txt"
@@ -1039,10 +1040,7 @@ function externalBuildSystemContract(executor: Exclude<TaskRow["executor"], "ope
     "- Do not perform unrelated broad inventories or spawn exploratory subagents; keep investigation scoped to the source and target surfaces needed to implement the build contract.",
     "- If required source evidence is absent or incomplete, finish with a concise failure summary naming the missing evidence instead of inventing behavior or substituting guesses.",
     "- Keep reasoning, plans, prompt/rule details, and progress narration out of assistant text. Use tools to act.",
-    "- When the prompt or staged references define a screenshot, mockup, or webpage target, those references are authoritative. Match them 1:1 as closely as the stack allows; do not substitute your own design or silently drop referenced assets.",
-    "- For webpage clone builds, the current worktree's project-root `web-clone-source/` package is the only implementation evidence entrypoint. Read its compact README, implementation blueprint, source-ir, source-skeleton/critical.css, and reference.png before writing code.",
-    "- If `web-clone-source/` is missing, empty, corrupt, or incomplete in the current worktree, report that the source package was not materialized. Do not search sibling worktrees, primary project directories, absolute external paths, or raw `mirror/` to repair it yourself.",
-    "- Do not generate a separate source project for webpage clone delivery. Implement the target project directly from the visible source package, using data arrays/components/CSS adapters rather than raw HTML/base64/CSS replay.",
+    "- Follow task-specific overlays in the user prompt when they are present. They are rendered from decision-log context and handoff artifacts for this attempt.",
     "- Run the acceptance commands from the prompt before claiming success.",
     "- Write shell commands for the actual platform and shell; on Windows/PowerShell use PowerShell-native commands instead of unverified Unix-only helpers such as head, sed, or grep.",
     "- Commit changes with a concrete commit message before finishing.",
@@ -2504,8 +2502,13 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
       lines.push("")
     }
 
-    if (context?.frontendDesign && context.frontendDesign.trim().length > 0) {
-      lines.push(context.frontendDesign.trim())
+    const overlays = renderBuildPromptOverlays(context ? { ...context, deliveryFeedback: undefined } : undefined)
+    if (overlays.sections.length > 0) {
+      lines.push("## Task-Specific Build Overlays")
+      lines.push("")
+      lines.push(`Rendered overlays: ${overlays.ids.join(", ")}`)
+      lines.push("")
+      lines.push(overlays.sections.join("\n\n"))
       lines.push("")
     }
 
@@ -2565,10 +2568,6 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
       lines.push("")
     }
 
-    if (context?.integrityFeedback && context.integrityFeedback.trim().length > 0) {
-      lines.push(context.integrityFeedback.trim())
-      lines.push("")
-    }
     if (context?.retryGuidance && context.retryGuidance.trim().length > 0) {
       lines.push("## Retry Guidance From Orchestrator")
       lines.push("")
@@ -2579,13 +2578,11 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
       lines.push(context.retryFeedback)
       lines.push("")
     }
-    if (context?.deliveryFeedback && context.deliveryFeedback.trim().length > 0) {
-      lines.push("## Canonical Delivery Rejection Feedback")
-      lines.push("")
-      lines.push(context.deliveryFeedback.trim())
+    const acceptanceOverlay = renderBuildPromptOverlays({ deliveryFeedback: context?.deliveryFeedback })
+    if (acceptanceOverlay.sections.length > 0) {
+      lines.push(acceptanceOverlay.sections.join("\n\n"))
       lines.push("")
     }
-
     // Goal contract.
     lines.push(`# Goal: ${target.title}`)
     lines.push("")
@@ -2609,7 +2606,7 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
     }
     lines.push("")
     lines.push(
-      "**Reference Fidelity**: If this goal depends on screenshots, webpage captures, staged `references/` files, or visual contract specs, treat them as binding source material and reproduce the relevant surface 1:1. Do not approximate or redesign.",
+      "**Reference Fidelity**: If this goal depends on supplied reference artifacts or task-specific overlays, treat them as binding source material for the relevant surface. Do not approximate, redesign, or invent missing evidence.",
     )
     lines.push("")
     lines.push(
@@ -2620,8 +2617,13 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
     return lines.join("\n")
   }
   const contextLines: string[] = []
-  if (context?.integrityFeedback && context.integrityFeedback.trim().length > 0) {
-    contextLines.push(context.integrityFeedback.trim())
+  const overlays = renderBuildPromptOverlays(context ? { ...context, deliveryFeedback: undefined } : undefined)
+  if (overlays.sections.length > 0) {
+    contextLines.push("## Task-Specific Build Overlays")
+    contextLines.push("")
+    contextLines.push(`Rendered overlays: ${overlays.ids.join(", ")}`)
+    contextLines.push("")
+    contextLines.push(overlays.sections.join("\n\n"))
     contextLines.push("")
   }
   if (context?.retryGuidance && context.retryGuidance.trim().length > 0) {
@@ -2636,14 +2638,9 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
     contextLines.push(context.retryFeedback.trim())
     contextLines.push("")
   }
-  if (context?.deliveryFeedback && context.deliveryFeedback.trim().length > 0) {
-    contextLines.push("## Canonical Delivery Rejection Feedback")
-    contextLines.push("")
-    contextLines.push(context.deliveryFeedback.trim())
-    contextLines.push("")
-  }
-  if (context?.frontendDesign && context.frontendDesign.trim().length > 0) {
-    contextLines.push(context.frontendDesign.trim())
+  const acceptanceOverlay = renderBuildPromptOverlays({ deliveryFeedback: context?.deliveryFeedback })
+  if (acceptanceOverlay.sections.length > 0) {
+    contextLines.push(acceptanceOverlay.sections.join("\n\n"))
     contextLines.push("")
   }
   if (context?.designSpecs && context.designSpecs.length > 0) {
@@ -2662,7 +2659,7 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
     "# Delegation",
     "",
     "Orchestrator is asking build to implement this request, verify it, and report the result.",
-    "If the request depends on screenshots, webpage references, uploaded visuals, or staged `references/` files, those references are authoritative and the implementation must restore them 1:1 rather than treating them as inspiration.",
+    "Use task-specific build overlays and supplied artifacts when present; do not import scenario policy that this request did not supply.",
     "If the request is a port, migration, rewrite, clone, parity restoration, or component translation, complete investigation of the named source surface and existing target conventions is required implementation work before writing.",
     "This direct request path is for implementation/rework. If the prompt is only repository investigation and does not ask you to change project behavior, fail through the terminal build report with a concrete error that says Build is the wrong stage.",
     "",
@@ -2688,8 +2685,13 @@ export function buildRetryFeedbackPrompt(target: BuildTarget, context?: BuildAge
     lines.push("Target: direct build request")
   }
   lines.push("")
-  if (context?.integrityFeedback && context.integrityFeedback.trim().length > 0) {
-    lines.push(context.integrityFeedback.trim())
+  const overlays = renderBuildPromptOverlays(context ? { ...context, deliveryFeedback: undefined } : undefined)
+  if (overlays.sections.length > 0) {
+    lines.push("## Task-Specific Build Overlays")
+    lines.push("")
+    lines.push(`Rendered overlays: ${overlays.ids.join(", ")}`)
+    lines.push("")
+    lines.push(overlays.sections.join("\n\n"))
     lines.push("")
   }
   if (context?.retryGuidance && context.retryGuidance.trim().length > 0) {
@@ -2704,17 +2706,15 @@ export function buildRetryFeedbackPrompt(target: BuildTarget, context?: BuildAge
     lines.push(context.retryFeedback.trim())
     lines.push("")
   }
-  if (context?.deliveryFeedback && context.deliveryFeedback.trim().length > 0) {
-    lines.push("## Delivery Rejection Feedback")
-    lines.push("")
-    lines.push(context.deliveryFeedback.trim())
+  const acceptanceOverlay = renderBuildPromptOverlays({ deliveryFeedback: context?.deliveryFeedback })
+  if (acceptanceOverlay.sections.length > 0) {
+    lines.push(acceptanceOverlay.sections.join("\n\n"))
     lines.push("")
   }
   if (
-    (!context?.integrityFeedback || context.integrityFeedback.trim().length === 0) &&
+    overlays.sections.length === 0 &&
     (!context?.retryGuidance || context.retryGuidance.trim().length === 0) &&
-    (!context?.retryFeedback || context.retryFeedback.trim().length === 0) &&
-    (!context?.deliveryFeedback || context.deliveryFeedback.trim().length === 0)
+    (!context?.retryFeedback || context.retryFeedback.trim().length === 0)
   ) {
     lines.push("## Required Fix")
     lines.push("")

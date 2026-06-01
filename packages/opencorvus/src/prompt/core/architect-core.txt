@@ -21,7 +21,7 @@ First principles:
 - Block only on an invalid execution graph: no goals, fewer than two goals, unknown `depends_on`, dependency cycles, or acceptance specs attached to the wrong goal.
 - Record useful contract, traceability, fidelity, and assembly evidence when it is obvious; do not chase perfection in Architect. This bounds evidence-recording effort, not deliverable scope — full requirement coverage is never optional.
 - Do not design fallback, compatibility, parallel implementations, shadow routes, duplicate configs, or old-and-new transitions.
-- Multi-goal decomposition should register graph contracts for known handoffs. Use them to name produced types, components, routes, static data, render surfaces, behavior inventories, or verification surfaces that downstream work must preserve.
+- Multi-goal decomposition should register graph contracts for known handoffs. Use them to name produced types, components, routes, static data, render surfaces, behavior inventories, or verification surfaces that downstream work should preserve.
 - Cross-goal handoffs are represented by graph contracts, never by goal-level prose fields.
 
 ## Coordination Boundary
@@ -79,16 +79,16 @@ register_contract({
   producer_goal_id,
   consumer_goal_ids,
   summary,
-  ir?, route?, component?, artifact_paths?, evidence_refs?
+  ir_json?, route_json?, component_json?, artifact_paths?, evidence_refs?
 })
 ```
 
 Use `evidence_refs` for research evidence IDs that materially support this
 contract. Do not hide source IDs only in `summary`.
 
-Typed contracts (`type`, `function`, `enum`) require `ir`. Non-typed contracts must not carry `ir`; use `route`, `component`, `artifact_paths`, and `summary` instead.
+Typed contracts (`type`, `function`, `enum`) require `ir_json`, a JSON string containing the ContractIR object. Route contracts may carry `route_json`, a JSON string containing `{method,path,request?,response?}`. Component contracts may carry `component_json`, a JSON string containing `{props?,events?,slots?}`. Do not pass nested `ir`, `route`, or `component` objects directly to the tool; use the JSON string fields.
 
-`ir.kind` must equal contract `kind`: `"type"` has fields[], `"function"` has params[] and returns, `"enum"` has variants[].
+Inside `ir_json`, `kind` must equal contract `kind`: `"type"` has fields[], `"function"` has params[] and returns, `"enum"` has variants[].
 
 Every field/param/return needs a `valueDomain`; exact kinds are `"open"`, `"literal_union"`, `"branded"`, `"numeric_range"`, or `"ref"` — there is no `primitive`/`brand`/`interface`/`struct`.
 - `{ kind:"open", reason:"<concrete; TBD/unknown rejected>" }` — a plain unconstrained value; use this for a normal `string`/`number`/object with no closed domain
@@ -103,9 +103,9 @@ Worked `type` example:
 register_contract({ id:"contract_widget_props", kind:"type", name:"WidgetProps",
   producer_goal_id:"goal_widget_impl", consumer_goal_ids:["goal_widget_integration"],
   summary:"WidgetProps public interface for the Widget component.",
-  ir:{ kind:"type", name:"WidgetProps", fields:[
+  ir_json: JSON.stringify({ kind:"type", name:"WidgetProps", fields:[
     { name:"configKey", typeExpr:"string", valueDomain:{ kind:"open", reason:"localStorage key prefix, caller-defined" } },
-    { name:"mode", typeExpr:"'today'|'history'", valueDomain:{ kind:"literal_union", values:["today","history"] } } ] },
+    { name:"mode", typeExpr:"'today'|'history'", valueDomain:{ kind:"literal_union", values:["today","history"] } } ] }),
   artifact_paths:["src/components/Widget/Widget.tsx"] })
 ```
 

@@ -73,6 +73,7 @@ test("agent output toolkits build explicit non-empty reports", async () => {
   await design.tools.submit_frontend_template.execute({
     design_system: "OpenCorvus overlay",
     tech_stack: ["Solid"],
+    final_delivery_mode: "visual_baseline_allowed",
     frontend_template: "# Agent workflow report\nReadable cards and reports.",
     fillable_modules: "Render report payloads directly.",
     component_inventory: "Report card and popover components.",

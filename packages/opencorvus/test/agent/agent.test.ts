@@ -405,8 +405,8 @@ test("native stage agent registry tool surfaces match role boundaries", async ()
         "todoread",
         "todowrite",
         "webfetch",
-        "websearch",
       ].sort())
+      expect(research?.tools?.include).not.toContain("websearch")
       for (const tool of [
         "bash",
         "edit",

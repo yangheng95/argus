@@ -7,9 +7,8 @@
  *
  * The default lives in the task runtime:
  *   `<project>/.opencorvus/runtime/tasks/<task>/frontend-design/mirror/`
- * Each task session/worktree gets a `mirror/` view onto that single directory,
- * so downstream agents read one source of truth instead of primary-worktree
- * scratch files.
+ * Legacy `mirror/...` override strings are resolved as aliases into that
+ * runtime directory; no project-root mirror directory is created.
  *
  * Callers that want a different location, such as benchmark drivers and tests,
  * still override via the tool's outputDir parameter.

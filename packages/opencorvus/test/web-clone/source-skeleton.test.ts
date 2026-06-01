@@ -6,7 +6,7 @@ import {
   auditWebCloneSourceSkeleton,
   buildWebCloneHandoff,
   extractArchiveHtml,
-  inspectWebCloneSourceSkeletonGate,
+  inspectWebCloneSourceSkeletonEvidence,
   mergeExtractedLayoutIntoPageIr,
   WebCloneSourceSkeletonManifestSchema,
   writeWebCloneArchiveExtraction,
@@ -108,15 +108,15 @@ describe("web-clone source skeleton", () => {
 
     await Bun.write(path.join(sourcePackageDir, "reference.png"), minimalPngBytes())
     await writeMinimalSourceManifest(sourcePackageDir)
-    const gate = await inspectWebCloneSourceSkeletonGate({
+    const evidence = await inspectWebCloneSourceSkeletonEvidence({
       projectDir: tmp.path,
       citedText: "Use web-clone-source/source-skeleton/README.md, web-clone-source/source-ir/component-tree.json, web-clone-source/source-skeleton/critical.css, and web-clone-source/source-skeleton/index.html",
     })
-    expect(gate.required).toBe(true)
-    expect(gate.passed).toBe(true)
+    expect(evidence.referenced).toBe(true)
+    expect(evidence.ok).toBe(true)
   })
 
-  test("source skeleton gate rejects a PNG signature without an IHDR chunk", async () => {
+  test("source skeleton evidence reports a PNG signature without an IHDR chunk", async () => {
     await using tmp = await tmpdir()
     const sourcePackageDir = path.join(tmp.path, "web-clone-source")
     const skeletonDir = path.join(sourcePackageDir, "source-skeleton")
@@ -153,14 +153,14 @@ describe("web-clone source skeleton", () => {
     }
     await Bun.write(path.join(sourceIrDir, "source-quality-audit.json"), JSON.stringify({ passed: true }))
 
-    const gate = await inspectWebCloneSourceSkeletonGate({
+    const evidence = await inspectWebCloneSourceSkeletonEvidence({
       projectDir: tmp.path,
       citedText: "Use source-skeleton",
     })
 
-    expect(gate.required).toBe(true)
-    expect(gate.passed).toBe(false)
-    expect(gate.error).toContain("IHDR")
+    expect(evidence.referenced).toBe(true)
+    expect(evidence.ok).toBe(false)
+    expect(evidence.findings.join("\n")).toContain("IHDR")
   })
 
   test("audit rejects runtime replay and generated-project markers", async () => {

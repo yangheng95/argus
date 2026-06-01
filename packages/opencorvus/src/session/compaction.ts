@@ -869,11 +869,9 @@ export namespace SessionCompaction {
 
   const workflowAutoCompactionDisabledSessionKinds = new Set([
     "architect",
-    "build",
     "delivery",
     "fact-check",
     "goal-workload-analyst",
-    "integrity",
     "intent-analysis",
     "orchestrator",
     "research",

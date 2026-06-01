@@ -173,7 +173,7 @@ test("evidence prompt renders scope-bounded maturity read-through without local 
 test("evidence prompt includes bounded frontend-design contract", () => {
   const input = promptInput()
   input.frontendDesign =
-    "## visual_consistency_contract\nMatch web-clone-source/reference.png at 96/100.\n\n## evidence_source_manifest\nweb-clone-source/implementation-blueprint.md"
+    "## visual_consistency_contract\nMatch web-clone-source/reference.png with measured overlay evidence.\n\n## evidence_source_manifest\nweb-clone-source/implementation-blueprint.md"
 
   const prompt = buildIntegrityEvidencePrompt(input)
 

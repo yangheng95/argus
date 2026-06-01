@@ -10,6 +10,7 @@ import path from "node:path"
 import fs from "node:fs/promises"
 import { createHash } from "node:crypto"
 import { Session } from "@/session"
+import type { AgentReport } from "@/agent/report"
 import { FactCheckItemListSchema, type FactCheckReport } from "@/fact-check/schema"
 import { resolveAgentModel, resolveAgentModelRef } from "@/agent/model"
 import { SessionPrompt } from "@/session/prompt"
@@ -47,9 +48,10 @@ import { abortChildExecutionForSession, abortGoalRunExecution } from "@/engine/e
 import { Message } from "@/session/message"
 import { toolFailureCauseFromUnknown } from "@/session/tool-failure-cause"
 import { PartTable } from "@/session/session.sql"
-import { renderFrontendDesignHandoffReference, frontendDesignArtifactPaths } from "@/frontend-design/handoff"
-import { inspectWebCloneSourceSkeletonGate } from "@/web-clone/source-skeleton"
-import { inspectWebCloneSourceSkeletonConsumptionGate } from "@/web-clone/source-skeleton-consumption-audit"
+import {
+  renderFrontendDesignHandoffReference,
+  frontendDesignArtifactPaths,
+} from "@/frontend-design/handoff"
 import { ensureLiveWebpageEvidence, primaryWebpageEvidenceArtifacts } from "./webpage-evidence"
 import { renderUserRequestSection } from "@/intent/request-prompt"
 import { materializeMcpToolResult } from "@/mcp/materialize"
@@ -363,25 +365,6 @@ function readPersistedArchitectFidelity(task: TaskRow): ArchitectFidelityState {
   }
 }
 
-async function buildWebCloneGateCitedText(projectDir: string, frontendDesignCitedText: string): Promise<string> {
-  const sourcePackageDir = path.join(projectDir, "web-clone-source")
-  try {
-    const stat = await fs.stat(sourcePackageDir)
-    if (stat.isDirectory()) {
-      return [
-        frontendDesignCitedText,
-        "project-visible web-clone-source package exists",
-        "web-clone-source/source-skeleton",
-        "web-clone-source/source-ir",
-        "web_clone_source_audit",
-      ].join("\n")
-    }
-  } catch {
-    // No visible source package means the normal cited frontend-design evidence controls the gate.
-  }
-  return frontendDesignCitedText
-}
-
 function renderEvidenceSourceManifest(input: {
   task: TaskRow
   liveUrls: readonly string[]
@@ -393,17 +376,17 @@ function renderEvidenceSourceManifest(input: {
 }): string {
   const lines: string[] = []
   const paths = frontendDesignArtifactPaths(Instance.directory, input.task.id)
-  lines.push("## frontend template Source Manifest")
-  lines.push(`Canonical frontend template file: ${paths.templateRelative}`)
+  lines.push("## frontend_design Public Report Source Manifest")
+  lines.push(`Canonical frontend_design public report file: ${paths.templateRelative}`)
   lines.push(`Canonical source manifest file: ${paths.manifestRelative}`)
   lines.push(
-    "Canonical decision-log entries: phase=frontend_design keys frontend_template, final_delivery_mode, fillable_modules, component_inventory, component_reuse_plan, baseline_replacement_plan, quality_project_contract, frontend_project, material_inventory, visual_consistency_contract, ui_data_contract, template_iteration_notes, completeness_review.",
+    "Canonical decision-log entries: phase=frontend_design keys public_report, frontend_template, final_delivery_mode, fillable_modules, component_reuse_plan, baseline_replacement_plan, quality_project_contract, frontend_project, material_inventory, visual_consistency_contract, ui_data_contract, template_iteration_notes, completeness_review, open_questions.",
   )
   lines.push("Optional visual anchors: task.design_specs, when present. They are secondary to visual_consistency_contract.")
 
   if (input.materializedFiles && input.materializedFiles.length > 0) {
     lines.push("")
-    lines.push("### Materialized frontend template files")
+    lines.push("### Materialized frontend_design report files")
     for (const item of [...new Set(input.materializedFiles)]) lines.push(`- ${item}`)
   }
 
@@ -468,232 +451,35 @@ function renderEvidenceSourceManifest(input: {
   return lines.join("\n")
 }
 
-function renderFrontendDesignTemplateDocument(input: {
-  analysis: {
-    designSystem: string
-    techStack: readonly string[]
-    frontendTemplate: string
-    finalDeliveryMode?: "visual_baseline_allowed" | "maintainable_replacement_required"
-    fillableModules: string
-    componentInventory: string
-    componentReusePlan?: readonly {
-      family_id: string
-      name: string
-      observed_surface: string
-      source_refs: readonly string[]
-      implementation_strategy: string
-      reuse_source: string
-      mature_library_candidates: readonly string[]
-      props_states: string
-      replacement_boundary: string
-      parity_guard: string
-      custom_fallback_reason?: string
-    }[]
-    baselineReplacementPlan?: readonly {
-      boundary_id: string
-      source_region: string
-      action: string
-      component_family_id: string
-      replacement_strategy: string
-      reuse_source: string
-      mature_library_candidates: readonly string[]
-      deletion_rule: string
-      source_refs: readonly string[]
-      parity_guard: string
-      custom_fallback_reason?: string
-    }[]
-    qualityProjectContract: string
-    materialInventory: string
-    frontendProject?: {
-      status: "created" | "not_created" | "blocked"
-      role?: "visual_baseline_input" | "implementation_target" | "blocked"
-      project_root: string
-      source_package: string
-      entrypoints: string[]
-      generation_tool: string
-      notes: string[]
-    }
-    visualConsistencyContract: string
-    uiDataContract: string
-    templateIterationNotes: readonly string[]
-    completenessReview: string
-    referenceArtifacts: readonly string[]
-    openQuestions: readonly string[]
-  }
+function renderMaterializedFrontendDesignReport(input: {
+  report: AgentReport
   evidenceSourceManifest: string
 }): string {
-  const lines: string[] = []
-  lines.push("# Frontend Template")
-  lines.push("")
-  lines.push("This file is the materialized frontend-design source for downstream agents.")
-  lines.push("The decision log stores the same contract under phase=frontend_design.")
-  lines.push("")
-  lines.push("## Evidence Source Manifest")
-  lines.push(input.evidenceSourceManifest.trim())
-  lines.push("")
-  lines.push("## Design System")
-  lines.push(input.analysis.designSystem.trim() || "(not specified)")
-  lines.push("")
-  lines.push("## Recommended Stack")
-  if (input.analysis.techStack.length > 0) {
-    for (const item of input.analysis.techStack) lines.push(`- ${item}`)
-  } else {
-    lines.push("(not specified)")
-  }
-  lines.push("")
-  lines.push("## Frontend Template")
-  lines.push(input.analysis.frontendTemplate.trim())
-  lines.push("")
-  lines.push("## Final Delivery Mode")
-  lines.push(input.analysis.finalDeliveryMode ?? "visual_baseline_allowed")
-  lines.push("")
-  lines.push("## Fillable Modules")
-  lines.push(input.analysis.fillableModules.trim())
-  lines.push("")
-  lines.push("## Component Inventory")
-  lines.push(input.analysis.componentInventory.trim())
-  lines.push("")
-  lines.push("## Component Reuse Plan")
-  lines.push(renderComponentReusePlanDocument(input.analysis.componentReusePlan ?? []))
-  lines.push("")
-  lines.push("## Generated Baseline Replacement Plan")
-  lines.push(renderBaselineReplacementPlanDocument(input.analysis.baselineReplacementPlan ?? []))
-  lines.push("")
-  lines.push("## Quality Project Contract")
-  lines.push(input.analysis.qualityProjectContract.trim())
-  lines.push("")
-  lines.push("## Material Inventory")
-  lines.push(input.analysis.materialInventory.trim())
-  lines.push("")
-  if (input.analysis.frontendProject) {
-    lines.push("## Frontend Project")
-    lines.push(`- status: ${input.analysis.frontendProject.status}`)
-    lines.push(`- role: ${input.analysis.frontendProject.role ?? "visual_baseline_input"}`)
-    lines.push(`- project_root: ${input.analysis.frontendProject.project_root || "(not created)"}`)
-    lines.push(`- source_package: ${input.analysis.frontendProject.source_package || "(not specified)"}`)
-    lines.push(`- generation_tool: ${input.analysis.frontendProject.generation_tool || "(not specified)"}`)
-    if (input.analysis.frontendProject.entrypoints.length > 0) {
-      lines.push("- entrypoints:")
-      for (const item of input.analysis.frontendProject.entrypoints) lines.push(`  - ${item}`)
-    }
-    if (input.analysis.frontendProject.notes.length > 0) {
-      lines.push("- notes:")
-      for (const item of input.analysis.frontendProject.notes) lines.push(`  - ${item}`)
-    }
-    lines.push("")
-  }
-  lines.push("## Visual Consistency Contract")
-  lines.push(input.analysis.visualConsistencyContract.trim())
-  lines.push("")
-  lines.push("## UI Data Contract")
-  lines.push(input.analysis.uiDataContract.trim())
-  lines.push("")
-  lines.push("## Template Iteration Notes")
-  if (input.analysis.templateIterationNotes.length > 0) {
-    input.analysis.templateIterationNotes.forEach((item, index) => {
-      lines.push(`${index + 1}. ${item.trim()}`)
-    })
-  } else {
-    lines.push("(not specified)")
-  }
-  lines.push("")
-  lines.push("## Completeness Review")
-  lines.push(input.analysis.completenessReview.trim())
-  lines.push("")
-  lines.push("## Reference Artifacts")
-  if (input.analysis.referenceArtifacts.length > 0) {
-    for (const item of input.analysis.referenceArtifacts) lines.push(`- ${item}`)
-  } else {
-    lines.push("(not specified)")
-  }
-  lines.push("")
-  lines.push("## Open Questions")
-  if (input.analysis.openQuestions.length > 0) {
-    for (const item of input.analysis.openQuestions) lines.push(`- ${item}`)
-  } else {
-    lines.push("(none)")
-  }
-  return lines.join("\n").trimEnd() + "\n"
-}
-
-function renderComponentReusePlanDocument(items: readonly {
-  family_id: string
-  name: string
-  observed_surface: string
-  source_refs: readonly string[]
-  implementation_strategy: string
-  reuse_source: string
-  mature_library_candidates: readonly string[]
-  props_states: string
-  replacement_boundary: string
-  parity_guard: string
-  custom_fallback_reason?: string
-}[]): string {
-  if (items.length === 0) return "(not specified)"
-  return items.map((item) => {
-    const lines = [
-      `- ${item.family_id}: ${item.name}`,
-      `  - strategy: ${item.implementation_strategy}`,
-      `  - surface: ${item.observed_surface}`,
-      `  - reuse_source: ${item.reuse_source}`,
-      `  - props_states: ${item.props_states}`,
-      `  - replacement_boundary: ${item.replacement_boundary}`,
-      `  - parity_guard: ${item.parity_guard}`,
-    ]
-    if (item.mature_library_candidates.length > 0) {
-      lines.push(`  - mature_library_candidates: ${item.mature_library_candidates.join(", ")}`)
-    }
-    if (item.source_refs.length > 0) lines.push(`  - source_refs: ${item.source_refs.join(", ")}`)
-    if (item.custom_fallback_reason) lines.push(`  - custom_fallback_reason: ${item.custom_fallback_reason}`)
-    return lines.join("\n")
-  }).join("\n")
-}
-
-function renderBaselineReplacementPlanDocument(items: readonly {
-  boundary_id: string
-  source_region: string
-  action: string
-  component_family_id: string
-  replacement_strategy: string
-  reuse_source: string
-  mature_library_candidates: readonly string[]
-  deletion_rule: string
-  source_refs: readonly string[]
-  parity_guard: string
-  custom_fallback_reason?: string
-}[]): string {
-  if (items.length === 0) return "(not specified)"
-  return items.map((item) => {
-    const lines = [
-      `- ${item.boundary_id}: ${item.source_region}`,
-      `  - action: ${item.action}`,
-      `  - component_family_id: ${item.component_family_id}`,
-      `  - replacement_strategy: ${item.replacement_strategy}`,
-      `  - reuse_source: ${item.reuse_source}`,
-      `  - deletion_rule: ${item.deletion_rule}`,
-      `  - parity_guard: ${item.parity_guard}`,
-    ]
-    if (item.mature_library_candidates.length > 0) {
-      lines.push(`  - mature_library_candidates: ${item.mature_library_candidates.join(", ")}`)
-    }
-    if (item.source_refs.length > 0) lines.push(`  - source_refs: ${item.source_refs.join(", ")}`)
-    if (item.custom_fallback_reason) lines.push(`  - custom_fallback_reason: ${item.custom_fallback_reason}`)
-    return lines.join("\n")
-  }).join("\n")
+  return [
+    "# Frontend Design Public Report",
+    "",
+    "This file is the materialized frontend_design terminal report for downstream agents.",
+    "The report is the public readable handoff; the evidence manifest below names source files and images to read.",
+    "",
+    "## Evidence Source Manifest",
+    input.evidenceSourceManifest.trim(),
+    "",
+    input.report.detail.trim(),
+  ].join("\n").trimEnd() + "\n"
 }
 
 async function writeFrontendDesignArtifacts(input: {
   projectDir: string
   taskID: string
-  analysis: Parameters<typeof renderFrontendDesignTemplateDocument>[0]["analysis"]
+  report: AgentReport
   evidenceSourceManifest: string
 }): Promise<{ templateRelative: string; manifestRelative: string }> {
   const paths = frontendDesignArtifactPaths(input.projectDir, input.taskID)
   await Filesystem.writeAtomic(paths.manifestAbsolute, input.evidenceSourceManifest.trimEnd() + "\n")
   await Filesystem.writeAtomic(
     paths.templateAbsolute,
-    renderFrontendDesignTemplateDocument({
-      analysis: input.analysis,
+    renderMaterializedFrontendDesignReport({
+      report: input.report,
       evidenceSourceManifest: input.evidenceSourceManifest,
     }),
   )
@@ -2002,39 +1788,6 @@ export function createOrchestratorTools(input: {
     )
       ? "post_build"
       : "pre_build"
-    if (phase === "post_build") {
-      const frontendDesignCitedText = decisionLog.readByPhase("frontend_design")
-        .map((entry) => `${entry.key}\n${entry.value}\n${entry.reason}`)
-        .join("\n")
-      const citedText = await buildWebCloneGateCitedText(Instance.directory, frontendDesignCitedText)
-      const sourceSkeletonGate = await inspectWebCloneSourceSkeletonGate({
-        projectDir: Instance.directory,
-        citedText,
-      })
-      if (sourceSkeletonGate.required && !sourceSkeletonGate.passed) {
-        return {
-          status: "blocked",
-          headline:
-            `integrity: source skeleton gate failed — ${sourceSkeletonGate.error}. ` +
-            "Do not accept the task until reference.png and source-skeleton audit pass.",
-          pointer: sourceSkeletonGate.auditPath ?? sourceSkeletonGate.referencePath ?? `task ${taskID}`,
-        }
-      }
-      const sourceSkeletonConsumptionGate = await inspectWebCloneSourceSkeletonConsumptionGate({
-        projectDir: Instance.directory,
-        citedText,
-        originalRequest: task.request,
-      })
-      if (sourceSkeletonConsumptionGate.required && !sourceSkeletonConsumptionGate.passed) {
-        return {
-          status: "blocked",
-          headline:
-            `integrity: source skeleton consumption gate failed — ${sourceSkeletonConsumptionGate.error}. ` +
-            "Do not accept the task until web_clone_source_audit produces a fresh passing audit.",
-          pointer: sourceSkeletonConsumptionGate.auditPath ?? `task ${taskID}`,
-        }
-      }
-    }
     const lineage = buildSpecSnapshotLineage({
       taskID,
       activeSpecSnapshotID: activeSpec.id,
@@ -2244,8 +1997,9 @@ export function createOrchestratorTools(input: {
     const plan = restartStagePlan(stage, Boolean(activePlanAtStart))
     const now = Date.now()
     const runError = `restart_from_stage(${stage}): ${reason}`
-    const { EngineGoalTable, EnginePlanVersionTable, EngineSpecSnapshotTable } = await import("@/engine/engine.sql")
+    const { EnginePlanVersionTable, EngineSpecSnapshotTable } = await import("@/engine/engine.sql")
     const { abortLiveExecutionForTask, createRun } = await import("@/engine/writer")
+    const { deleteTaskGoals } = await import("@/engine/persist")
 
     const aborted = await abortLiveExecutionForTask({
       taskID,
@@ -2271,15 +2025,7 @@ export function createOrchestratorTools(input: {
 
     Database.transaction((db) => {
       if (plan.deleteGoals) {
-        const rows = db
-          .select({ id: EngineGoalTable.id })
-          .from(EngineGoalTable)
-          .where(eq(EngineGoalTable.task_id, taskID))
-          .all()
-        deletedGoals = rows.length
-        if (deletedGoals > 0) {
-          db.delete(EngineGoalTable).where(eq(EngineGoalTable.task_id, taskID)).run()
-        }
+        deletedGoals = deleteTaskGoals(db, taskID).deletedGoals
       }
 
       if (plan.clearPlan) {
@@ -2625,7 +2371,7 @@ export function createOrchestratorTools(input: {
         "The full frontend template plus visual_consistency_contract and iteration/completeness review is persisted",
         "into the decision log from the same frontend-design run. Optional task.design_specs rows may exist as anchors, but the",
         "decision-log frontend template is authoritative. The decision log also includes evidence_source_manifest,",
-        "which names the source files, images, URLs, materialized artifacts, mirror artifacts, and visible web-clone-source package downstream stages can read so they",
+        "which names the source files, images, URLs, materialized artifacts, mirror artifacts, and task-runtime web-clone-source package downstream stages can read so they",
         "consume one source of truth instead of re-running mirror extraction.",
         "",
         "SKIP this step when:",
@@ -2785,14 +2531,12 @@ export function createOrchestratorTools(input: {
         // share links (Sketch Cloud, Adobe XD, Framer, InVision, Zeplin, …)
         // and plain live pages contribute pixel references, not just markup.
         //
-        // P0-A: 每张 reference PNG 都必须通过 captureReferenceManifest + gate。
-        // 伪造 / 空白 / 阈值不达标的图直接抛 CaptureGateError，向上冒泡让
-        // frontend_design 失败——禁止"网页访问不到就退回 visual contract 文本"
-        // （spec rule 1）。浏览器/网络异常（非 gate violation）仍 warn+continue
-        // 因为那是外部资源问题不是 reference 真实性问题。
+        // URL captures are evidence materialization, not acceptance gates.
+        // Browser/navigation/screenshot failures are recorded; pixel-density
+        // heuristics are diagnostics attached to the materialized reference.
         for (const liveUrl of liveUrls) {
           try {
-            const { captureReferenceManifest, enforceCaptureGate, summarizeCaptureViolations, CaptureGateError } =
+            const { captureReferenceManifest, assessCaptureDiagnostics, summarizeCaptureDiagnostics, CaptureReferenceError } =
               await import("@/frontend-design/capture-gate")
             const osMod = await import("node:os")
             const outDir = pathMod.join(
@@ -2801,15 +2545,8 @@ export function createOrchestratorTools(input: {
               `${Identifier.shortPath(taskID)}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
             )
             const capture = await captureReferenceManifest({ url: liveUrl, outDir })
-            const gate = enforceCaptureGate(capture.manifest)
-            if (!gate.ok) {
-              // 真实性闸拒收 ⇒ task 级失败；调用方通过 CaptureGateError 区分于普通抓图错误。
-              await closeFrontendDesignStep(true)
-              throw new CaptureGateError(
-                `reference authenticity gate rejected ${liveUrl}: ${summarizeCaptureViolations(gate.violations)}`,
-                "gate",
-              )
-            }
+            const diagnostics = assessCaptureDiagnostics(capture.manifest)
+            const diagnosticSummary = diagnostics.length > 0 ? summarizeCaptureDiagnostics(diagnostics) : "none"
             const hostname = (() => {
               try {
                 return new URL(capture.manifest.url).hostname
@@ -2829,23 +2566,19 @@ export function createOrchestratorTools(input: {
               intent: "visual_reference",
               source: "url-screenshot",
             })
-            log.info("frontend_design: url screenshot materialized (gate passed)", {
+            log.info("frontend_design: url screenshot materialized", {
               taskID,
               url: liveUrl,
               sha: ref.sha,
               size: ref.size,
               non_white: capture.manifest.non_white_pixel_ratio,
               unique_colors: capture.manifest.unique_color_count,
+              diagnostics: diagnosticSummary,
             })
             materializedCount++
           } catch (shotErr) {
-            const { CaptureGateError } = await import("@/frontend-design/capture-gate")
-            if (shotErr instanceof CaptureGateError && shotErr.stage === "gate") {
-              // 真实性闸拒收：向上抛，让 frontend_design 工具调用整体 fail。
-              await closeFrontendDesignStep(true)
-              throw shotErr
-            }
-            const stage = shotErr instanceof CaptureGateError ? shotErr.stage : "unknown"
+            const { CaptureReferenceError } = await import("@/frontend-design/capture-gate")
+            const stage = shotErr instanceof CaptureReferenceError ? shotErr.stage : "unknown"
             const error = shotErr instanceof Error ? shotErr.message : String(shotErr)
             materializationFailures.push({
               source: "url",
@@ -2853,7 +2586,7 @@ export function createOrchestratorTools(input: {
               stage,
               error,
             })
-            log.warn("frontend_design: url screenshot failed (non-gate)", {
+            log.warn("frontend_design: url screenshot capture failed", {
               taskID,
               url: liveUrl,
               stage,
@@ -2930,7 +2663,7 @@ export function createOrchestratorTools(input: {
             })
             preparedWebpageEvidenceArtifacts = evidence.artifacts.length > 0
               ? evidence.artifacts
-              : primaryWebpageEvidenceArtifacts()
+              : primaryWebpageEvidenceArtifacts(taskID)
             preparedWebpageEvidenceStatus = evidence.status
             log.info("frontend_design: live webpage mirror evidence prepared", {
               taskID,
@@ -3100,30 +2833,18 @@ export function createOrchestratorTools(input: {
           const writtenDesignArtifacts = await writeFrontendDesignArtifacts({
             projectDir: Instance.directory,
             taskID,
-            analysis: {
-              designSystem: analysis.designSystem,
-              techStack: analysis.techStack,
-              frontendTemplate: analysis.frontendTemplate,
-              finalDeliveryMode: analysis.finalDeliveryMode ?? "visual_baseline_allowed",
-              fillableModules: analysis.fillableModules,
-              componentInventory: analysis.componentInventory,
-              componentReusePlan: analysis.componentReusePlan ?? [],
-              baselineReplacementPlan: analysis.baselineReplacementPlan ?? [],
-              qualityProjectContract: analysis.qualityProjectContract,
-              materialInventory: analysis.materialInventory,
-              frontendProject: analysis.frontendProject,
-              visualConsistencyContract: analysis.visualConsistencyContract,
-              uiDataContract: analysis.uiDataContract,
-              templateIterationNotes: analysis.templateIterationNotes,
-              completenessReview: analysis.completenessReview,
-              referenceArtifacts: analysis.referenceArtifacts,
-              openQuestions: analysis.openQuestions,
-            },
+            report: analysis.report,
             evidenceSourceManifest,
           })
 
           const { createDecisionLog } = await import("@/decision-log")
           const decisionLog = createDecisionLog(taskID)
+          decisionLog.append({
+            phase: "frontend_design",
+            key: "public_report",
+            value: analysis.report.detail,
+            reason: "Frontend-design terminal report; public readable handoff for Requirements, Architect, Build, and Delivery.",
+          })
           decisionLog.append({
             phase: "frontend_design",
             key: "visual_contract_summary",
@@ -3168,13 +2889,13 @@ export function createOrchestratorTools(input: {
             phase: "frontend_design",
             key: "fillable_modules",
             value: analysis.fillableModules,
-            reason: "Fillable module and slot plan derived from visual evidence, mirror artifacts, and the visible web-clone-source package.",
+            reason: "Fillable module and slot plan derived from visual evidence, mirror artifacts, and the task-runtime web-clone-source package.",
           })
           decisionLog.append({
             phase: "frontend_design",
             key: "component_inventory",
             value: analysis.componentInventory,
-            reason: "Component inventory required to implement the frontend template without raw DOM replay.",
+            reason: "Legacy compatibility field only; downstream agents should read public_report, reuse constraints, quality_project_contract, completeness_review, and source artifacts instead of treating this as a component checklist.",
           })
           decisionLog.append({
             phase: "frontend_design",
@@ -3243,7 +2964,7 @@ export function createOrchestratorTools(input: {
             key: "evidence_source_manifest",
             value: evidenceSourceManifest,
             reason:
-              "Source manifest naming the frontend template origin, task files, materialized images, mirror artifacts, and visible web-clone-source package downstream agents can read.",
+              "Source manifest naming the frontend template origin, task files, materialized images, mirror artifacts, and task-runtime web-clone-source package downstream agents can read.",
           })
           if (analysis.referenceArtifacts.length > 0) {
             decisionLog.append({
@@ -3273,8 +2994,8 @@ export function createOrchestratorTools(input: {
 
           return SubAgentProtocol.yieldResult({
             headline:
-              "SUCCESS: Mirror-grounded frontend template and visual_consistency_contract persisted in decision log. " +
-              "Functional decomposition can now consume this visual template when the full task context calls for requirements.",
+              "SUCCESS: frontend_design public report, visual_consistency_contract, and evidence manifest persisted. " +
+              "Downstream agents can now read the public report before requirements, architecture, build, or delivery work.",
             fields: [
               ["optional_visual_anchors", String(analysis.specs.length)],
               ["color", String(countByCategory.color ?? 0)],
@@ -4310,16 +4031,20 @@ export function createOrchestratorTools(input: {
 
     research: tool({
       description:
-        "OPTIONAL advisory evidence side-tool agent. Use when the task depends on external facts, current documentation, competitor/industry/API research, or PRD/SPEC source material that should become a durable citation bundle. The result is a compact research_brief artifact plus bundle paths. It is NOT a workflow step, NOT a route selector, NOT requirements, NOT architect, NOT build, and NOT a delivery path.",
+        "OPTIONAL advisory evidence side-tool agent. Use when the task depends on external facts, current documentation, competitor/industry/API research, or PRD/SPEC source material that should become a durable citation bundle. Pass known source_urls so research can webfetch those pages before broader discovery. The result is a compact research_brief artifact plus bundle paths and may include subpage_research_tasks for independent follow-up research. It is NOT a workflow step, NOT a route selector, NOT requirements, NOT architect, NOT build, and NOT a delivery path.",
       inputSchema: z.object({
         reason: z.string().min(1).describe("Why evidence research is needed for this task."),
         target_deliverable: z
           .enum(["prd", "spec", "research_report", "implementation_input", "mixed"])
           .optional()
           .describe("The likely document/input shape being researched."),
+        source_urls: z
+          .array(z.string().min(1))
+          .default([])
+          .describe("Known source URLs the research agent must webfetch before any broader discovery."),
         focus: z.string().optional().describe("Optional narrow focus for the research agent."),
       }),
-      execute: async ({ reason, target_deliverable, focus }) => {
+      execute: async ({ reason, target_deliverable, source_urls, focus }) => {
         const task = requireTask(taskID)
         let runnerSessionID: string | undefined
         try {
@@ -4328,6 +4053,7 @@ export function createOrchestratorTools(input: {
             title: task.title,
             request: task.request,
             targetDeliverable: target_deliverable,
+            sourceUrls: source_urls,
             focus,
             reason,
             taskID,
@@ -4343,6 +4069,7 @@ export function createOrchestratorTools(input: {
             brief: result.brief,
           })
           const blocking = result.brief.open_questions.filter((item) => item.blocking)
+          const subpageTasks = result.brief.subpage_research_tasks
           return SubAgentProtocol.yieldResult({
             headline: "Research brief persisted as advisory evidence.",
             summary: result.brief.summary,
@@ -4351,6 +4078,7 @@ export function createOrchestratorTools(input: {
               ["artifact_id", artifactID],
               ["sources", String(result.brief.evidence_index.length)],
               ["facts", String(result.brief.facts.length)],
+              ["subpage_research_tasks", subpageTasks.map((item) => `${item.id}: ${item.url} | ${item.suggested_focus}`)],
               ["blocking_open_questions", blocking.map((item) => `${item.id}: ${item.question}`)],
               ["bundle_paths", Object.values(result.brief.bundle)],
             ],
@@ -4832,6 +4560,7 @@ export function createOrchestratorTools(input: {
             const { researchBriefIsStale } = await import("@/research")
             const stale = researchBriefIsStale({ request: task.request, brief: researchArtifact.payload })
             const brief = researchArtifact.payload
+            const subpageResearchTasks = brief.subpage_research_tasks ?? []
             sections.push(
               `\n## Research Brief`,
               `- artifact: ${researchArtifact.id}`,
@@ -4840,6 +4569,13 @@ export function createOrchestratorTools(input: {
               stale.reasons.length > 0 ? `- stale_reasons: ${stale.reasons.join(", ")}` : "",
               `- sources: ${brief.evidence_index.length}`,
               `- facts: ${brief.facts.length}`,
+              `- subpage_research_tasks: ${subpageResearchTasks.length}`,
+              subpageResearchTasks.length > 0
+                ? `- subpage_research_task_refs: ${subpageResearchTasks
+                    .slice(0, 5)
+                    .map((item) => `${item.id}=${item.url}`)
+                    .join("; ")}`
+                : "",
               `- blocking_open_questions: ${brief.open_questions.filter((item) => item.blocking).length}`,
               `- bundle: ${brief.bundle.full_markdown_path}, ${brief.bundle.evidence_json_path}, ${brief.bundle.citation_map_path}`,
               `- summary: ${brief.summary.slice(0, 800)}`,

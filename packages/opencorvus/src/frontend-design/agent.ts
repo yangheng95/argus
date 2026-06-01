@@ -21,8 +21,6 @@
  * model / session / prompt-composition / abort / stream-error handling.
  */
 import { tool, type ToolSet } from "ai"
-import fs from "node:fs/promises"
-import path from "node:path"
 import { runAgentSession } from "@/agent/runner"
 import { withFactCheckRegistration } from "@/prompt/fragments/fact-check-registration"
 import { createAgentContextTools } from "@/agent/context-tools"
@@ -31,9 +29,11 @@ import { Log } from "@/util/log"
 import { AttachmentStore } from "@/storage/attachment-store"
 import { renderUserRequestSection } from "@/intent/request-prompt"
 import { Instance } from "@/project/instance"
+import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { deriveUrlSignals } from "@/engine/task-signals"
 import { EngineConfig } from "@/engine/config"
 import type { Tool } from "@/tool/tool"
+import type { AgentReport } from "@/agent/report"
 import {
   WebpageAnalyzeTool,
   WebpageCompileTool,
@@ -47,22 +47,19 @@ import { createFrontendTemplateOutputTools, type FrontendTemplateFinal, type Fro
 import { createReadAttachmentTool } from "./read-attachment-tool"
 import { createUrlScreenshotTool } from "./url-screenshot-tool"
 import { createFrontendSkeletonProjectTool } from "./skeleton-project-tool"
-import { generateWebCloneSkeletonProject, type GenerateWebCloneSkeletonProjectOutput } from "@/web-clone/skeleton-project-generator"
+import {
+  maybeCreateHostPreparedFrontendProject,
+  readHostPreparedCompactEvidence,
+  renderHostPreparedFrontendProjectSection,
+  selectFrontendTemplateSubmitTool,
+  summarizeHostPreparedSourceProject,
+  summarizeReferencePixels,
+  type HostPreparedFrontendProject,
+} from "./host-prepared-source-project"
 
 import FRONTEND_DESIGN_CORE from "@/prompt/core/frontend-design-core.txt"
 
 const log = Log.create({ service: "frontend-design" })
-
-const FRONTEND_SKELETON_ENTRYPOINTS = [
-  "README.md",
-  "index.html",
-  "public/source.html",
-  "src/App.jsx",
-  "src/generated/singlefile-body.html",
-  "src/generated/singlefile-head-styles.html",
-  "src/slots.json",
-  "reference.png",
-]
 
 export namespace FrontendDesignAgent {
   export interface Result {
@@ -79,7 +76,7 @@ export namespace FrontendDesignAgent {
     materialInventory: string
     frontendProject: {
       status: "created" | "not_created" | "blocked"
-      role: "visual_baseline_input" | "implementation_target" | "blocked"
+      role: "source_baseline_input" | "visual_baseline_input" | "implementation_target" | "blocked"
       project_root: string
       source_package: string
       entrypoints: string[]
@@ -92,6 +89,7 @@ export namespace FrontendDesignAgent {
     completenessReview: string
     referenceArtifacts: string[]
     openQuestions: string[]
+    report: AgentReport
   }
 
   export interface AnalyzeInput {
@@ -123,9 +121,19 @@ export namespace FrontendDesignAgent {
     })
     const mirrorAnalysisTools = await createMirrorAnalysisTools({ taskID: input.taskID, signal: input.signal })
     const screenshotToolKit = createUrlScreenshotTool()
-    const skeletonProjectToolKit = createFrontendSkeletonProjectTool()
+    const skeletonProjectToolKit = createFrontendSkeletonProjectTool({ taskID: input.taskID })
     const outputToolKit = createFrontendTemplateOutputTools({ autoIteration })
-    const submitFrontendTemplateTool = selectFrontendTemplateSubmitTool(outputToolKit)
+    const hostPreparedFrontendProject = await maybeCreateHostPreparedFrontendProject(input.taskID)
+    const textOnlyNoVisualSource = isTextOnlyNoVisualSource(input)
+    const submitFrontendTemplateTool = selectFrontendTemplateSubmitTool(
+      outputToolKit,
+      hostPreparedFrontendProject,
+      textOnlyNoVisualSource ? { textOnlyBrief: { title: input.title, request: input.request } } : {},
+    )
+    const terminalOnlySubmit = shouldScopeFrontendTemplateSubmitTool({
+      hostPrepared: !!hostPreparedFrontendProject,
+      textOnlyNoVisualSource,
+    })
     const projectID = (() => {
       try {
         return Instance.project.id
@@ -133,7 +141,6 @@ export namespace FrontendDesignAgent {
         return ""
       }
     })()
-    const hostPreparedFrontendProject = await maybeCreateHostPreparedFrontendProject()
     const acquisitionTools = hostPreparedFrontendProject
       ? {}
       : {
@@ -162,9 +169,9 @@ export namespace FrontendDesignAgent {
         : undefined,
       toolKit: {
         tools: {
-          ...(hostPreparedFrontendProject ? {} : contextTools),
-          ...acquisitionTools,
-          ...(hostPreparedFrontendProject ? {} : createReadAttachmentTool(projectID)),
+          ...(terminalOnlySubmit ? {} : hostPreparedFrontendProject ? {} : contextTools),
+          ...(terminalOnlySubmit ? {} : acquisitionTools),
+          ...(terminalOnlySubmit ? {} : hostPreparedFrontendProject ? {} : createReadAttachmentTool(projectID)),
           ...submitFrontendTemplateTool,
         },
         getCollector: () => outputToolKit.getCollector(),
@@ -175,7 +182,7 @@ export namespace FrontendDesignAgent {
       terminalTool: {
         toolName: "submit_frontend_template",
         isSatisfied: (collector: FrontendTemplateOutputCollector) => !!collector.final,
-        shouldExposeOnlyTerminalTool: () => shouldScopeFrontendTemplateSubmitTool(!!hostPreparedFrontendProject),
+        shouldExposeOnlyTerminalTool: () => terminalOnlySubmit,
       },
     })
 
@@ -194,6 +201,8 @@ export namespace FrontendDesignAgent {
         "Check the model's tool-calling behavior or the frontend-design prompt.",
       )
     }
+
+    const report = outputToolKit.buildReport()
 
     return {
       specs,
@@ -214,6 +223,7 @@ export namespace FrontendDesignAgent {
       completenessReview: structured.completeness_review,
       referenceArtifacts: structured.reference_artifacts,
       openQuestions: structured.open_questions,
+      report,
       sessionID: out.session.id,
     }
   }
@@ -254,11 +264,18 @@ export namespace FrontendDesignAgent {
   }
 }
 
-function shouldScopeFrontendTemplateSubmitTool(hostPrepared = false): boolean {
+function shouldScopeFrontendTemplateSubmitTool(input: {
+  hostPrepared?: boolean
+  textOnlyNoVisualSource?: boolean
+} = {}): boolean {
   // When the host has already materialized web-clone-source and created the
   // frontend-design skeleton, the model's job is contract synthesis. Keeping
   // acquisition/browser tools open has repeatedly led to tool-loop bloat.
-  return hostPrepared
+  if (input.hostPrepared) return true
+  // With no visual attachment and no live URL there is no reference evidence to
+  // acquire. The only durable output frontend_design can produce is the public
+  // report derived from the textual brief, so pin directly to the terminal tool.
+  return input.textOnlyNoVisualSource === true
 }
 
 // ---------------------------------------------------------------------------
@@ -292,10 +309,16 @@ function hasNonFigmaHttpUrl(text: string): boolean {
   return deriveUrlSignals(text).request_contains_url
 }
 
-function selectFrontendTemplateSubmitTool(outputToolKit: ReturnType<typeof createFrontendTemplateOutputTools>) {
-  return {
-    submit_frontend_template: outputToolKit.tools.submit_frontend_template,
-  }
+function isTextOnlyNoVisualSource(input: {
+  request: string
+  attachments?: Array<{ mime: string; intent?: string }>
+}): boolean {
+  if (hasNonFigmaHttpUrl(input.request)) return false
+  return !(input.attachments ?? []).some((attachment) =>
+    (attachment.intent ?? "") === "visual_reference" ||
+    attachment.mime.startsWith("image/") ||
+    attachment.mime === "application/pdf"
+  )
 }
 
 function renderAutoIterationMode(autoIteration: boolean): string {
@@ -314,8 +337,12 @@ function buildUserPrompt(input: {
   attachments?: Array<{ filename?: string; mime: string; intent?: string; source?: string }>
   taskID?: string
 }, autoIteration = false, hostPreparedFrontendProject?: HostPreparedFrontendProject): string {
+  const runtimePaths = input.taskID ? ProjectRuntimePaths.frontendDesignPaths("", input.taskID) : undefined
+  const mirrorRef = runtimePaths?.mirrorRelative ?? ".opencorvus/runtime/tasks/<taskID>/frontend-design/mirror"
+  const sourcePackageRef = runtimePaths?.sourcePackageRelative ?? ".opencorvus/runtime/tasks/<taskID>/frontend-design/web-clone-source"
+  const skeletonProjectRef = runtimePaths?.skeletonProjectRelative ?? ".opencorvus/runtime/tasks/<taskID>/frontend-design/frontend-design-skeleton"
   const sections = [
-    "# Delegation\n\nOrchestrator is asking frontend_design to produce the high-quality frontend project contract, frontend template, fillable modules, component inventory, material inventory, and visual/data contracts for this task. Raw extracted DOM/CSS can be materialized only as a visual baseline input; it is not the frontend_design deliverable project.",
+    "# Delegation\n\nOrchestrator is asking frontend_design to produce the high-quality frontend project contract, frontend template, fillable modules, material inventory, visual/data contracts, known implementation problems, and downstream agent handoff notes for this task. Web-clone source artifacts are implementation seeds and visual evidence; keep the handoff anchored to source-region traceability instead of a standalone component checklist.",
     renderUserRequestSection({ heading: "# Task", title: input.title, request: input.request, taskID: input.taskID }),
   ]
   // URL presence is a *structural* detection (syntactic protocol scheme),
@@ -345,7 +372,7 @@ function buildUserPrompt(input: {
     const allVisualsAreUrlScreenshots = visualAttachments.every((a) => a.source === "url-screenshot")
     const visualReferenceMode =
       hasLiveHttpUrl && allVisualsAreUrlScreenshots
-        ? "These URL screenshot captures are stored for provenance but are not inlined into this prompt. Use the matched webpage reference skill to acquire any missing evidence once, then read the compact artifacts and write the frontend template. "
+        ? "These URL screenshot captures are stored for provenance but are not inlined into this prompt. Use the matched webpage reference skill to acquire any missing evidence once, then read the named source artifacts and write the frontend template. "
         : "These files are attached to this message as multimodal content — read the pixels directly. Do NOT use webfetch. Prefer these attached screenshots over re-capturing the same page. " +
           (hasLiveHttpUrl
             ? "If the brief includes an additional live http(s) webpage URL that is not already represented here, use the matched webpage reference skill to acquire missing evidence once before writing specs. "
@@ -366,6 +393,15 @@ function buildUserPrompt(input: {
     )
   }
 
+  if (isTextOnlyNoVisualSource(input)) {
+    sections.push(
+      "# Text-only frontend_design turn\n\n" +
+      "No visual attachment, PDF, or live webpage URL is available in this delegation. " +
+      "Do not inspect repository files or call acquisition tools for this turn. " +
+      "Produce the public frontend_design report directly from the textual brief, and put uncertainty in `completeness_review` / `open_questions` instead of looping for missing evidence.",
+    )
+  }
+
   sections.push(
     "If textual references (design tokens JSON, style-guide markdown, " +
     "brand-voice docs) appear in the attachment manifest, read them with " +
@@ -374,17 +410,21 @@ function buildUserPrompt(input: {
 
   sections.push(
     "# Live URL Capture\n\n" +
-    "For visual webpage URLs, first check the host-prepared evidence at `mirror/prd-evidence-summary.md`, `mirror/source-ir/component-tree.json`, `mirror/source-ir/content-model.json`, `mirror/source-ir/layout-map.json`, `mirror/source-ir/style-tokens.json`, `mirror/source-ir/interaction-hints.json`, `mirror/source-skeleton/critical.css`, `mirror/visual-surface-candidates.json`, and the visible `web-clone-source/implementation-blueprint.md` package when present. Use `mirror/source-skeleton/index.html` only as raw evidence for exact hierarchy/source ids or missing text. " +
+    `For visual webpage URLs, first check the host-prepared task-runtime evidence at \`${mirrorRef}/prd-evidence-summary.md\`, \`${mirrorRef}/source-ir/component-tree.json\`, \`${mirrorRef}/source-ir/content-model.json\`, \`${mirrorRef}/source-ir/layout-map.json\`, \`${mirrorRef}/source-ir/style-tokens.json\`, \`${mirrorRef}/source-ir/interaction-hints.json\`, \`${mirrorRef}/source-skeleton/critical.css\`, \`${mirrorRef}/visual-surface-candidates.json\`, and the task-runtime source package \`${sourcePackageRef}/implementation-blueprint.md\` when present. Use \`${mirrorRef}/source-skeleton/index.html\` only as raw evidence for exact hierarchy/source ids or missing text. ` +
     "Use the matched webpage reference skill only if those files are missing or stale — not `webfetch` and not screenshot-only analysis. " +
-    "After evidence exists, stop acquiring and read the compact artifacts before finalizing; never inline raw extraction JSON or stored URL screenshot base64 into the frontend template prompt. " +
+    "After evidence exists, stop acquiring and read the named source artifacts before finalizing; never inline raw extraction JSON or stored URL screenshot base64 into the frontend template prompt. " +
     (autoIteration
         ? "Because assistant.auto_iteration=true, do at least two frontend template review passes before `submit_frontend_template`: first check page inventory and visual coverage, then check downstream frontend replica implementability. "
       : "Because assistant.auto_iteration=false, do one bounded frontend template review pass before `submit_frontend_template`; report remaining gaps in completeness_review/open_questions instead of looping automatically. ") +
-    "For webpage replicas, after the visible `web-clone-source/` package exists, call `create_frontend_skeleton_project` to create a project-owned visual baseline input before `submit_frontend_template`. " +
-    "Do not confuse that baseline with delivery: `frontend_project.role` must be `visual_baseline_input` when the project renders extracted DOM/CSS, and `quality_project_contract` must define the high-quality maintainable target project that downstream Build must produce. If SingleFile HTML is available in the source package, prefer it through the tool; otherwise create the baseline from source-skeleton and record the fidelity warning in `frontend_project.notes`. " +
-    "Set `submit_frontend_template.final_delivery_mode` to `maintainable_replacement_required` whenever the user asks for maintainability, real implementation, component reuse, or replacing generated/mechanical output. " +
-    "After the skeleton tool returns, do not read the generated `public/source.html`, `src/generated/singlefile-body.html`, or `src/generated/singlefile-head-styles.html` inside frontend_design; those large files are baseline inputs, not the maintainable delivery project. Record the paths and warnings from the tool output in `frontend_project` and finalize. " +
-    "The final `submit_frontend_template.frontend_project` field must name the created baseline root and entrypoints, mark role=visual_baseline_input, or mark an explicit blocker. " +
+    `For webpage replicas, after the task-runtime source package \`${sourcePackageRef}/\` exists, call \`create_frontend_skeleton_project\` to create the high-fidelity editable source project at \`${skeletonProjectRef}/\` before \`submit_frontend_template\`. ` +
+    "The source project is the implementation starting point: downstream Build should copy/adapt its React entrypoints, source-dom region files, generated DOM JSX, CSS sidecars, SVG path data, FAQ/replacement-plan sidecars, public assets, data arrays, and asset references, then refine named regions in place from `sourceDomReplacementPlan.ts`. If the generator cannot produce that high-fidelity source project, record the exact materialization defect in `frontend_project.notes`. " +
+    "Describe this as rawproject source-region refactoring: all new components, styles, and data modules must trace to rawproject source nodes/regions/assets/reference screenshots, and replacement work must happen source-region by source-region. " +
+    "When the target is an existing frontend project, inspect package manifests and obvious component/UI directories if tools are available, then tell downstream agents whether to add a route/page to the existing app, adopt the source baseline into the root app, or stop on a materialization blocker. " +
+    "In principle, downstream implementation must reuse existing project components/design-system primitives first and mature maintained libraries second; custom code is limited to simple page-specific glue or micro-adjust layout/spacing. Charts, maps, tables, calendars, popovers, dialogs, menus, forms, virtualized lists, drag/drop, editors, rich media, and complex layouts require reusable project or library options when available. " +
+    "Your final report should not be a component catalog. Put known problems, evidence gaps, extraction-vs-rewrite risk, source organization, debug commands, reuse decisions, PRD delta boundaries, and agent handoff notes into `quality_project_contract`, `completeness_review`, and `open_questions`; leave `component_inventory` empty unless the provider requires a legacy compatibility summary. " +
+    renderFinalDeliveryModeInstruction(Boolean(hostPreparedFrontendProject)) + " " +
+    "After the source project tool returns, record the project paths, replacement-plan sidecars, and warnings in `frontend_project`, and make the high-fidelity React project itself the frontend_design deliverable source seed. Downstream verification must include measured `webpage_evaluate` evidence and zero-finding `web_clone_source_audit` evidence before claiming final maintainability. Do not alter evaluators, other agent prompts, communication paths, or generated outputs to satisfy the report. " +
+    "The final `submit_frontend_template.frontend_project` field should name the created source project root and entrypoints, mark role=source_baseline_input because Build starts from it, or record the materialization defect. " +
     "Do not use todo or scratchpad tools for template review; write the review-pass findings directly into the final frontend template fields.",
   )
 
@@ -395,151 +435,15 @@ function buildUserPrompt(input: {
   return sections.join("\n\n")
 }
 
-interface HostPreparedFrontendProject {
-  status: "created" | "blocked"
-  projectRoot: string
-  sourcePackage: string
-  entrypoints: string[]
-  generationTool: string
-  warnings: string[]
-  error?: string
-  compactEvidence: string
-}
-
-async function maybeCreateHostPreparedFrontendProject(): Promise<HostPreparedFrontendProject | undefined> {
-  const sourcePackage = path.resolve(Instance.directory, "web-clone-source")
-  try {
-    const stat = await fs.stat(sourcePackage)
-    if (!stat.isDirectory()) return undefined
-  } catch {
-    return undefined
+function renderFinalDeliveryModeInstruction(hostPrepared: boolean): string {
+  if (hostPrepared) {
+    return [
+      "For host-prepared webpage clone turns, frame the work as source-region refactoring of the captured rawproject.",
+      "Set `submit_frontend_template.final_delivery_mode` to `maintainable_replacement_required` whenever the operator asks for maintainability, real implementation, component reuse, or replacement of generated/mechanical output.",
+      "Use `visual_baseline_allowed` only when the operator explicitly accepts the captured source project as the final documented source debt; even then, require traceable project-owned structure rather than screenshot, iframe, or invented component output.",
+    ].join(" ")
   }
-
-  const projectRoot = path.resolve(Instance.directory, "frontend-design-skeleton")
-  try {
-    const output = await generateWebCloneSkeletonProject({
-      sourcePackageDir: sourcePackage,
-      outputDir: projectRoot,
-      overwrite: false,
-    })
-    return {
-      ...hostPreparedProjectFromOutput(output),
-      compactEvidence: await readHostPreparedCompactEvidence({ sourcePackage, projectRoot }),
-    }
-  } catch (err) {
-    if (await hasExistingSkeletonProject(projectRoot)) {
-      return {
-        status: "created",
-        projectRoot,
-        sourcePackage,
-        entrypoints: FRONTEND_SKELETON_ENTRYPOINTS,
-        generationTool: "host-prepared:create_frontend_skeleton_project",
-        warnings: ["Existing frontend-design-skeleton directory was reused."],
-        compactEvidence: await readHostPreparedCompactEvidence({ sourcePackage, projectRoot }),
-      }
-    }
-    return {
-      status: "blocked",
-      projectRoot,
-      sourcePackage,
-      entrypoints: [],
-      generationTool: "host-prepared:create_frontend_skeleton_project",
-      warnings: [],
-      error: err instanceof Error ? err.message : String(err),
-      compactEvidence: await readHostPreparedCompactEvidence({ sourcePackage, projectRoot }),
-    }
-  }
-}
-
-function hostPreparedProjectFromOutput(output: GenerateWebCloneSkeletonProjectOutput): HostPreparedFrontendProject {
-  return {
-    status: "created",
-    projectRoot: output.outputDir,
-    sourcePackage: output.sourcePackageDir,
-    entrypoints: FRONTEND_SKELETON_ENTRYPOINTS,
-    generationTool: "host-prepared:create_frontend_skeleton_project",
-    warnings: output.warnings,
-    compactEvidence: "",
-  }
-}
-
-async function readHostPreparedCompactEvidence(input: { sourcePackage: string; projectRoot: string }): Promise<string> {
-  const files = [
-    { title: "implementation-blueprint.md", file: path.join(input.sourcePackage, "implementation-blueprint.md"), maxChars: 12_000 },
-    { title: "web-clone-context.md", file: path.join(input.sourcePackage, "web-clone-context.md"), maxChars: 12_000 },
-    { title: "web-clone-implementation-contract.json", file: path.join(input.sourcePackage, "web-clone-implementation-contract.json"), maxChars: 16_000 },
-    { title: "source-ir/component-tree.json", file: path.join(input.sourcePackage, "source-ir", "component-tree.json"), maxChars: 24_000 },
-    { title: "source-ir/content-model.json", file: path.join(input.sourcePackage, "source-ir", "content-model.json"), maxChars: 28_000 },
-    { title: "source-ir/style-tokens.json", file: path.join(input.sourcePackage, "source-ir", "style-tokens.json"), maxChars: 12_000 },
-    { title: "source-ir/interaction-hints.json", file: path.join(input.sourcePackage, "source-ir", "interaction-hints.json"), maxChars: 14_000 },
-    { title: "visual-surface-candidates.json", file: path.join(input.sourcePackage, "visual-surface-candidates.json"), maxChars: 18_000 },
-    { title: "source-ir/source-quality-audit.json", file: path.join(input.sourcePackage, "source-ir", "source-quality-audit.json"), maxChars: 4_000 },
-    { title: "source-skeleton/source-skeleton-audit.json", file: path.join(input.sourcePackage, "source-skeleton", "source-skeleton-audit.json"), maxChars: 4_000 },
-    { title: "frontend-design-skeleton/README.md", file: path.join(input.projectRoot, "README.md"), maxChars: 5_000 },
-    { title: "frontend-design-skeleton/src/slots.json", file: path.join(input.projectRoot, "src", "slots.json"), maxChars: 18_000 },
-  ]
-  const sections: string[] = []
-  for (const item of files) {
-    const text = await fs.readFile(item.file, "utf8").catch(() => "")
-    if (!text.trim()) continue
-    const clipped = text.length > item.maxChars
-      ? `${text.slice(0, item.maxChars).trimEnd()}\n\n[clipped: ${text.length - item.maxChars} chars omitted from ${item.title}]`
-      : text.trimEnd()
-    sections.push(`## ${item.title}\n${clipped}`)
-  }
-  return sections.join("\n\n")
-}
-
-async function hasExistingSkeletonProject(projectRoot: string): Promise<boolean> {
-  const required = [
-    "index.html",
-    path.join("public", "source.html"),
-    path.join("src", "App.jsx"),
-    path.join("src", "generated", "singlefile-body.html"),
-    path.join("src", "generated", "singlefile-head-styles.html"),
-    path.join("src", "slots.json"),
-  ]
-  for (const relative of required) {
-    try {
-      const stat = await fs.stat(path.join(projectRoot, relative))
-      if (!stat.isFile() || stat.size === 0) return false
-    } catch {
-      return false
-    }
-  }
-  return true
-}
-
-function renderHostPreparedFrontendProjectSection(project: HostPreparedFrontendProject): string {
-  const lines = [
-    "# Host-Prepared Frontend Project",
-    "",
-    "The host already prepared the frontend-design visual baseline project before this model turn. Do not call `create_frontend_skeleton_project` again unless status is blocked and you can name a different output path.",
-    "This is a terminal-only host-prepared turn: `read_file`, `list_files`, shell, browser, and mirror acquisition tools are intentionally unavailable. Use the compact evidence embedded below; attempting discovery tools is an error.",
-    "Do not read the generated `public/source.html`, `src/generated/singlefile-body.html`, or `src/generated/singlefile-head-styles.html` in frontend_design; they are large baseline inputs, not the maintainable delivery project. Register these facts in `submit_frontend_template.frontend_project` with role=visual_baseline_input, then define the high-quality project deliverable in `quality_project_contract` / `quality_project_items`.",
-    "",
-    `- status: ${project.status}`,
-    "- role: visual_baseline_input",
-    `- project_root: ${project.projectRoot}`,
-    `- source_package: ${project.sourcePackage}`,
-    `- generation_tool: ${project.generationTool}`,
-    `- entrypoints: ${project.entrypoints.join(", ") || "(none)"}`,
-  ]
-  if (project.warnings.length > 0) {
-    lines.push("- warnings:")
-    for (const warning of project.warnings) lines.push(`  - ${warning}`)
-  }
-  if (project.error) lines.push(`- error: ${project.error}`)
-  if (project.compactEvidence.trim()) {
-    lines.push("")
-    lines.push("# Host-Prepared Compact Evidence")
-    lines.push(project.compactEvidence.trim())
-  }
-  lines.push("")
-  lines.push("# Mandatory Finalization")
-  lines.push("Only `submit_frontend_template` is available in this host-prepared turn. Submit from the embedded compact evidence now; do not attempt more discovery.")
-  lines.push("Because this is a maintainable replacement task, set `final_delivery_mode` to `maintainable_replacement_required`, include non-empty `baseline_replacement_plan` entries for generated baseline regions, and include `quality_project_contract` / `quality_project_items` that describe the GPT-class maintainable target project: semantic component files, data modules, style modules, mature-library integrations, runtime entrypoints, and verification commands.")
-  return lines.join("\n")
+  return "Set `submit_frontend_template.final_delivery_mode` to `maintainable_replacement_required` whenever the user asks for maintainability, real implementation, component reuse, or replacing generated/mechanical output."
 }
 
 async function createMirrorAnalysisTools(input: { taskID?: string; signal?: AbortSignal }): Promise<ToolSet> {
@@ -580,6 +484,10 @@ export const FrontendDesignTestHooks = {
   buildPromptParts,
   buildUserPrompt,
   createMirrorAnalysisTools,
+  isTextOnlyNoVisualSource,
   selectFrontendTemplateSubmitTool,
   shouldScopeFrontendTemplateSubmitTool,
+  readHostPreparedCompactEvidence,
+  summarizeHostPreparedSourceProject,
+  summarizeReferencePixels,
 }

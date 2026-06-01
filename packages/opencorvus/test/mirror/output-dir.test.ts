@@ -47,7 +47,8 @@ describe("mirror output directory", () => {
         expect(outputDir).toBe(paths.mirrorAbsolute)
 
         await fs.writeFile(path.join(outputDir, "reference.txt"), "reference", "utf8")
-        expect(await Filesystem.readText(path.join(tmp.path, "mirror", "reference.txt"))).toBe("reference")
+        expect(await Filesystem.exists(path.join(tmp.path, "mirror", "reference.txt"))).toBe(false)
+        expect(await Filesystem.readText(path.join(paths.mirrorAbsolute, "reference.txt"))).toBe("reference")
 
         const status = await $`git status --porcelain=v1`.cwd(tmp.path).quiet()
         expect(status.stdout.toString().trim()).toBe("")
@@ -87,7 +88,7 @@ describe("mirror output directory", () => {
     })
   })
 
-  test("task session override maps mirror view to canonical runtime", async () => {
+  test("task session override maps mirror alias to canonical runtime", async () => {
     await using tmp = await tmpdir({ git: true })
 
     await Instance.provide({
@@ -106,7 +107,8 @@ describe("mirror output directory", () => {
         expect(await Filesystem.exists(nested)).toBe(true)
 
         await fs.writeFile(path.join(nested, "reference.txt"), "reference", "utf8")
-        expect(await Filesystem.readText(path.join(tmp.path, "mirror", "nested", "reference.txt"))).toBe("reference")
+        expect(await Filesystem.exists(path.join(tmp.path, "mirror", "nested", "reference.txt"))).toBe(false)
+        expect(await Filesystem.readText(path.join(paths.mirrorAbsolute, "nested", "reference.txt"))).toBe("reference")
 
         const status = await $`git status --porcelain=v1`.cwd(tmp.path).quiet()
         expect(status.stdout.toString().trim()).toBe("")

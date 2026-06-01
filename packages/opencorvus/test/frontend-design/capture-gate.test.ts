@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import {
-  enforceCaptureGate,
+  assessCaptureDiagnostics,
   resolveNodeSidecarPlaywrightRequirePath,
   shouldUseNodeCaptureSidecar,
   type CaptureManifestType,
@@ -27,9 +27,9 @@ function manifest(overrides: Partial<CaptureManifestType>): CaptureManifestType 
   }
 }
 
-describe("capture reference authenticity gate", () => {
-  test("accepts sparse but real homepage captures with visible text evidence", () => {
-    const result = enforceCaptureGate(
+describe("capture reference diagnostics", () => {
+  test("does not warn for sparse captures with visible text evidence", () => {
+    const warnings = assessCaptureDiagnostics(
       manifest({
         non_white_pixel_ratio: 0.031948,
         text_length: 80,
@@ -37,11 +37,11 @@ describe("capture reference authenticity gate", () => {
       }),
     )
 
-    expect(result.ok).toBe(true)
+    expect(warnings.some((v) => v.field === "non_white_pixel_ratio")).toBe(false)
   })
 
-  test("still rejects blank sparse captures without content evidence", () => {
-    const result = enforceCaptureGate(
+  test("reports blank sparse captures as diagnostics without rejecting", () => {
+    const warnings = assessCaptureDiagnostics(
       manifest({
         non_white_pixel_ratio: 0.031948,
         text_length: 0,
@@ -50,10 +50,7 @@ describe("capture reference authenticity gate", () => {
       }),
     )
 
-    expect(result.ok).toBe(false)
-    if (!result.ok) {
-      expect(result.violations.some((v) => v.field === "non_white_pixel_ratio")).toBe(true)
-    }
+    expect(warnings.some((v) => v.field === "non_white_pixel_ratio")).toBe(true)
   })
 
   test("allows forcing in-process browser capture for diagnostics", () => {

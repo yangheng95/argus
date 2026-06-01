@@ -101,6 +101,10 @@ type OverlayBenchmarkWindow = Window & {
     pendingTasks: any[]
     selectedTaskID: string
   }
+  cardTree?: {
+    order?: string[]
+    cards?: Record<string, any>
+  }
   settingsStore: {
     directory: string
     savedDirectory: string
@@ -317,8 +321,8 @@ if (requestAttachment) {
 }
 // Reference images are NOT injected as task attachments — the agent owns its
 // visual capture path (e.g. url_screenshot tool against the URL in the
-// request). When `--reference-images` is supplied, each file is copied into
-// the worktree's references/ dir and feeds the visual-diff gate below.
+// request). When `--reference-images` is supplied, each file stays at its
+// original absolute path and only feeds the visual-diff gate below.
 const TASK_TITLE = flag("--title")?.trim()
   || (requestFile ? path.parse(requestFile).name : undefined)
   || (requestAttachment ? path.parse(requestAttachment).name : undefined)
@@ -384,21 +388,6 @@ if (resumeTaskID && !projectDir) throw new Error("--resume-task-id requires --pr
 temp.dir = projectDir ? path.resolve(projectDir) : await fs.mkdtemp(path.join(os.tmpdir(), "opencorvus-overlay-benchmark-project-"))
 temp.config = path.join(temp.home, "config-override")
 process.env.OPENCORVUS_HOME = temp.home
-// Copy request file into the project directory so the Task Agent can reference it
-if (requestFile) {
-  const dest = path.join(temp.dir, path.basename(requestFile))
-  await fs.copyFile(path.resolve(requestFile), dest).catch(() => undefined)
-}
-// Copy reference images into the project directory under references/
-if (referenceImages.length > 0) {
-  const refDir = path.join(temp.dir, "references")
-  await fs.mkdir(refDir, { recursive: true })
-  for (const img of referenceImages) {
-    const src = path.resolve(img)
-    const dest = path.join(refDir, path.basename(src))
-    await fs.copyFile(src, dest).catch((e) => console.warn(`[overlay-benchmark] failed to copy reference image ${src}: ${e}`))
-  }
-}
 // Copy real auth.json into temp home so OAuth providers (e.g. github-copilot) work in isolated home
 {
   const appData = process.env.APPDATA || process.env.LOCALAPPDATA
@@ -465,11 +454,11 @@ if (resumeTaskID) {
     await fs.rm(path.join(temp.dir, ".opencorvus"), { recursive: true, force: true })
     await fs.mkdir(temp.config, { recursive: true })
     await fs.mkdir(path.join(temp.dir, ".opencorvus"), { recursive: true })
-    // Re-register the benchmark model. scaffoldProject does this for fresh
-    // projects; here we just write the model config (no scaffolding) so the
+    // Re-register the benchmark model in the isolated config override. Fresh
+    // scaffolds do the same; here we only write runtime config so the
     // existing source tree is preserved and the orchestrator boots with an
     // LLM available — without this it crashes with MissingModelConfigError.
-    await writeBenchmarkModelConfig(temp.dir, model)
+    await writeBenchmarkModelConfig(model)
   }
 }
 // Re-inject local provider configs after scaffoldProject (which overwrites config-override)
@@ -1146,8 +1135,8 @@ try {
   logLine(`events_ndjson: ${eventLogFile}`)
 
   const pass = stopAfterArchitect
-    ? out.assertions.planning_visible.pass && out.assertions.streaming_visible.pass && out.assertions.materialized.pass && out.assertions.architect_contract_graph.pass
-    : out.assertions.planning_visible.pass && out.assertions.streaming_visible.pass && out.assertions.materialized.pass && out.assertions.delivery.pass && out.failure_matrix.verdict === "accepted"
+    ? out.assertions.planning_visible.pass && out.assertions.streaming_visible.pass && out.assertions.materialized.pass && out.assertions.frontend_design_agent_card.pass && out.assertions.architect_contract_graph.pass
+    : out.assertions.planning_visible.pass && out.assertions.streaming_visible.pass && out.assertions.materialized.pass && out.assertions.frontend_design_agent_card.pass && out.assertions.delivery.pass && out.failure_matrix.verdict === "accepted"
   if (!pass) {
     process.exit(1)
   }
@@ -1292,10 +1281,10 @@ async function scaffoldProject(dir: string, model: string) {
       2,
     ),
   )
-  await writeBenchmarkModelConfig(dir, model)
+  await writeBenchmarkModelConfig(model)
 }
 
-async function writeBenchmarkModelConfig(dir: string, model: string) {
+async function writeBenchmarkModelConfig(model: string) {
   const config = JSON.stringify(
     {
       $schema: "https://opencorvus.ai/config.json",
@@ -1330,8 +1319,6 @@ async function writeBenchmarkModelConfig(dir: string, model: string) {
     null,
     2,
   )
-  await Bun.write(path.join(dir, "opencorvus.json"), config)
-  await Bun.write(path.join(dir, ".opencorvus", "opencorvus.json"), config)
   await Bun.write(path.join(temp.config, "opencorvus.json"), config)
 }
 
@@ -1536,8 +1523,13 @@ async function buildBenchmarkReport(error?: unknown) {
     evaluationVerdict: progress?.evaluation?.verdict || currentFinalBoard?.evaluation?.verdict || "",
     localVerify,
   }), reportError)
-  const screenshot = page ? await takeBenchmarkScreenshot(page) : null
-  const currentOverlay = page ? await overlaySnapshot(page).catch((cause) => ({ error: String(cause) })) : { error: "no-browser mode" }
+  const screenshot = page
+    ? await withTimeout(takeBenchmarkScreenshot(page), 15_000, "benchmark screenshot").catch(() => null)
+    : null
+  const currentOverlay = page
+    ? await withTimeout(overlaySnapshot(page), 8_000, "overlay snapshot").catch((cause) => ({ error: String(cause) }))
+    : { error: "no-browser mode" }
+  const expectsFrontendDesignCard = expectsFrontendDesignProjection(TASK_REQUEST)
 
   return {
     generated_at: new Date().toISOString(),
@@ -1644,6 +1636,14 @@ async function buildBenchmarkReport(error?: unknown) {
           boardLoaded: marks.boardAt > 0,
         },
       },
+      frontend_design_agent_card: {
+        pass: !expectsFrontendDesignCard || (
+          !!(currentOverlay as any)?.frontendDesignCard?.storePresent &&
+          !!(currentOverlay as any)?.frontendDesignCard?.renderedPresent
+        ),
+        expected: expectsFrontendDesignCard,
+        sample: (currentOverlay as any)?.frontendDesignCard ?? currentOverlay,
+      },
       architect_contract_graph: {
         pass: Array.isArray(currentFinalBoard?.goalWorkflows) &&
           currentFinalBoard.goalWorkflows.length >= 2 &&
@@ -1684,6 +1684,25 @@ async function buildBenchmarkReport(error?: unknown) {
       report_api_errors: reportApiErrors,
     },
   }
+}
+
+async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)
+      }),
+    ])
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
+}
+
+function expectsFrontendDesignProjection(request: string) {
+  return /\b(frontend|web\s*clone|webpage|visual|ui|page|screen|screenshot|browser)\b/i.test(request) ||
+    /网页|复刻|还原|前端|视觉|截图|页面/.test(request)
 }
 
 async function reportApiJson(pathname: string) {
@@ -2130,19 +2149,21 @@ async function syncDirectory(page: Page, directory: string) {
 async function overlaySnapshot(page: Page) {
   return page.evaluate(() => {
     const overlay = window as OverlayBenchmarkWindow
-    // Overlay conversation cards are rendered as `<article class="card" data-kind=...
-    // data-role=... data-stage=... data-depth="N">` via components/Card.tsx. Top-level
-    // items live at data-depth="0". Text for assistant/agent/goal/tool streams lives
-    // inside `.card__body` using `.msg-text` / `.reasoning-text` classes from CardParts
-    // and ReasoningPart. User-message cards carry data-role="user" and are excluded.
-    const visibleTurns = [...document.querySelectorAll<HTMLElement>('.card[data-depth="0"]')]
+    // Overlay conversation cards render through two shells:
+    // - `<article class="chat-bubble-row" ...>` for user and agent message cards.
+    // - `<article class="card" ...>` for structured step/tool/review cards.
+    // Keep benchmark visibility checks aligned with both render paths; otherwise
+    // task-scope agents such as frontend-design exist in cardTree but disappear
+    // from the benchmark's human-facing overlay sample.
+    const visibleTurns = [...document.querySelectorAll<HTMLElement>('.chat-bubble-row[data-depth="0"], .card[data-depth="0"]')]
       .map((element) => {
-        const role = element.dataset.role || element.dataset.kind || ""
-        const body = element.querySelector(".card__body")
+        const role = element.dataset.stage || element.dataset.role || element.dataset.kind || ""
+        const body = element.querySelector(".chat-bubble__body, .card__body")
         const text = body?.querySelector(".msg-text")?.textContent?.trim()
           || body?.querySelector(".reasoning-text")?.textContent?.trim()
           || element.querySelector(".card__goal-desc")?.textContent?.trim()
           || body?.textContent?.trim().slice(0, 200)
+          || element.querySelector(".chat-bubble__title")?.textContent?.trim()
           || element.querySelector(".card__title")?.textContent?.trim()
           || ""
         return { role, text }
@@ -2157,6 +2178,36 @@ async function overlaySnapshot(page: Page) {
     }
     const firstText = (sel: string) =>
       document.querySelector(sel)?.textContent?.trim() || ""
+    const cardTree = overlay.cardTree || (window as any).cardTree
+    const order = Array.isArray(cardTree?.order) ? cardTree.order : []
+    const cards = cardTree?.cards && typeof cardTree.cards === "object" ? cardTree.cards : {}
+    const frontendCardID = order.find((id: string) => {
+      const node = cards[id]
+      return String(id || "").startsWith("frontend-design:") ||
+        String(node?.stage || node?.role || "").replace(/_/g, "-") === "frontend-design"
+    }) || ""
+    const frontendNode = frontendCardID ? cards[frontendCardID] : undefined
+    const frontendElement = frontendCardID
+      ? document.querySelector<HTMLElement>(`[data-card-id="${CSS.escape(frontendCardID)}"]`)
+      : document.querySelector<HTMLElement>('.chat-bubble-row[data-stage="frontend-design"], .card[data-stage="frontend-design"]')
+    const frontendRect = frontendElement?.getBoundingClientRect()
+    const frontendBody = frontendElement?.querySelector(".chat-bubble__body, .card__body")
+    const frontendDesignCard = {
+      expected: true,
+      storePresent: !!frontendNode,
+      renderedPresent: !!frontendElement,
+      viewportVisible: !!frontendRect &&
+        frontendRect.bottom > 0 &&
+        frontendRect.top < window.innerHeight &&
+        frontendRect.right > 0 &&
+        frontendRect.left < window.innerWidth,
+      id: frontendCardID,
+      orderIndex: frontendCardID ? order.indexOf(frontendCardID) : -1,
+      status: String(frontendNode?.status || ""),
+      partCount: Array.isArray(frontendNode?.parts) ? frontendNode.parts.length : 0,
+      title: frontendElement?.querySelector(".chat-bubble__title, .card__title")?.textContent?.trim() || "",
+      text: frontendBody?.textContent?.trim().slice(0, 240) || "",
+    }
     return {
       directory: overlay.settingsStore.directory || "",
       savedDirectory: overlay.settingsStore.savedDirectory || "",
@@ -2179,6 +2230,7 @@ async function overlaySnapshot(page: Page) {
       liveRole: liveTurn.role,
       liveText: liveTurn.text,
       visibleTurns: visibleTurns.slice(-5),
+      frontendDesignCard,
       storage,
     }
   })
@@ -2208,8 +2260,24 @@ function summarizeEvents(events: Array<Record<string, unknown>>, taskID: string)
     map[type] = (map[type] ?? 0) + 1
     return map
   }, {})
-  // Include both legacy stage names (spec, planner) and new agent names (task, decompose, eval, architect)
-  const stages = ["spec", "planner", "evaluator", "task", "decompose", "eval", "architect"].flatMap((stage) => {
+  const stageNames = [
+    "orchestrator",
+    "explore",
+    "frontend-design",
+    "requirements",
+    "architect",
+    "planner",
+    "build",
+    "integrity",
+    "delivery",
+    // legacy stage names kept so old reports remain comparable
+    "spec",
+    "evaluator",
+    "task",
+    "decompose",
+    "eval",
+  ]
+  const stages = stageNames.flatMap((stage) => {
     const list = agents.filter((item) => item.stage === stage)
     if (list.length === 0) return []
     const toolCalls = list

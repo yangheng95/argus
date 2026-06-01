@@ -103,12 +103,12 @@ export interface WriteWebCloneSourceSkeletonOutput {
   audit: WebCloneSourceSkeletonAudit
 }
 
-export interface WebCloneSourceSkeletonGateResult {
-  required: boolean
-  passed: boolean
+export interface WebCloneSourceSkeletonEvidenceResult {
+  referenced: boolean
+  ok: boolean
   auditPath?: string
   referencePath?: string
-  error?: string
+  findings: string[]
 }
 
 const TRANSPARENT_TAGS = new Set(["html"])
@@ -329,11 +329,11 @@ export async function auditWebCloneSourceSkeleton(skeletonDir: string): Promise<
   })
 }
 
-export async function inspectWebCloneSourceSkeletonGate(input: {
+export async function inspectWebCloneSourceSkeletonEvidence(input: {
   projectDir: string
   citedText: string
-}): Promise<WebCloneSourceSkeletonGateResult> {
-  if (!input.citedText.includes("source-skeleton")) return { required: false, passed: true }
+}): Promise<WebCloneSourceSkeletonEvidenceResult> {
+  if (!input.citedText.includes("source-skeleton")) return { referenced: false, ok: true, findings: [] }
   const sourceRoot = path.join(input.projectDir, "web-clone-source")
   const sourceLabel = "web-clone-source"
   const skeletonDir = path.join(sourceRoot, "source-skeleton")
@@ -341,62 +341,62 @@ export async function inspectWebCloneSourceSkeletonGate(input: {
   const referencePath = path.join(sourceRoot, "reference.png")
   const referenceEvidence = await readPngEvidence(referencePath)
   if (!referenceEvidence.valid) {
-    return { required: true, passed: false, auditPath, referencePath, error: `source skeleton handoff has invalid ${sourceLabel}/reference.png: ${referenceEvidence.error ?? "invalid PNG"}` }
+    return { referenced: true, ok: false, auditPath, referencePath, findings: [`source skeleton handoff has invalid ${sourceLabel}/reference.png: ${referenceEvidence.error ?? "invalid PNG"}`] }
   }
   const manifestIntegrity = await inspectWebCloneSourceManifest(sourceRoot)
   if (!manifestIntegrity.passed) {
-    return { required: true, passed: false, auditPath, referencePath, error: `source skeleton handoff manifest failed: ${manifestIntegrity.findings.join("; ")}` }
+    return { referenced: true, ok: false, auditPath, referencePath, findings: [`source skeleton handoff manifest failed: ${manifestIntegrity.findings.join("; ")}`] }
   }
   if (!await exists(path.join(skeletonDir, "index.html"))) {
-    return { required: true, passed: false, auditPath, referencePath, error: `source skeleton handoff is missing ${sourceLabel}/source-skeleton/index.html` }
+    return { referenced: true, ok: false, auditPath, referencePath, findings: [`source skeleton handoff is missing ${sourceLabel}/source-skeleton/index.html`] }
   }
   if (!await exists(path.join(skeletonDir, "styles.css"))) {
-    return { required: true, passed: false, auditPath, referencePath, error: `source skeleton handoff is missing ${sourceLabel}/source-skeleton/styles.css` }
+    return { referenced: true, ok: false, auditPath, referencePath, findings: [`source skeleton handoff is missing ${sourceLabel}/source-skeleton/styles.css`] }
   }
   for (const file of ["critical.css", "full-source.css", "used-selectors.json"]) {
     if (!await exists(path.join(skeletonDir, file))) {
-      return { required: true, passed: false, auditPath, referencePath, error: `source skeleton handoff is missing ${sourceLabel}/source-skeleton/${file}` }
+      return { referenced: true, ok: false, auditPath, referencePath, findings: [`source skeleton handoff is missing ${sourceLabel}/source-skeleton/${file}`] }
     }
   }
   const sourceIrDir = path.join(sourceRoot, "source-ir")
   for (const file of ["component-tree.json", "content-model.json", "layout-map.json", "style-tokens.json", "interaction-hints.json", "source-quality-audit.json"]) {
     if (!await exists(path.join(sourceIrDir, file))) {
-      return { required: true, passed: false, auditPath, referencePath, error: `source skeleton handoff is missing ${sourceLabel}/source-ir/${file}` }
+      return { referenced: true, ok: false, auditPath, referencePath, findings: [`source skeleton handoff is missing ${sourceLabel}/source-ir/${file}`] }
     }
   }
   if (await readPassedAudit(path.join(sourceIrDir, "source-quality-audit.json")) !== true) {
-    return { required: true, passed: false, auditPath, referencePath, error: `source skeleton source-quality audit did not pass: ${sourceLabel}/source-ir/source-quality-audit.json` }
+    return { referenced: true, ok: false, auditPath, referencePath, findings: [`source skeleton source-quality audit did not pass: ${sourceLabel}/source-ir/source-quality-audit.json`] }
   }
   let auditJson: unknown
   try {
     auditJson = JSON.parse(await fs.readFile(auditPath, "utf8"))
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      return { required: true, passed: false, auditPath, referencePath, error: `source skeleton handoff is missing ${sourceLabel}/source-skeleton/source-skeleton-audit.json` }
+      return { referenced: true, ok: false, auditPath, referencePath, findings: [`source skeleton handoff is missing ${sourceLabel}/source-skeleton/source-skeleton-audit.json`] }
     }
-    return { required: true, passed: false, auditPath, referencePath, error: `source skeleton audit is not valid JSON: ${auditPath}` }
+    return { referenced: true, ok: false, auditPath, referencePath, findings: [`source skeleton audit is not valid JSON: ${auditPath}`] }
   }
   const audit = WebCloneSourceSkeletonAuditSchema.parse(auditJson)
   if (!audit.passed) {
     return {
-      required: true,
-      passed: false,
+      referenced: true,
+      ok: false,
       auditPath,
       referencePath,
-      error: `source skeleton audit did not pass: ${audit.findings.join("; ")}`,
+      findings: [`source skeleton audit did not pass: ${audit.findings.join("; ")}`],
     }
   }
   const liveAudit = await auditWebCloneSourceSkeleton(skeletonDir)
   if (!liveAudit.passed) {
     return {
-      required: true,
-      passed: false,
+      referenced: true,
+      ok: false,
       auditPath,
       referencePath,
-      error: `source skeleton live audit did not pass: ${liveAudit.findings.join("; ")}`,
+      findings: [`source skeleton live audit did not pass: ${liveAudit.findings.join("; ")}`],
     }
   }
-  return { required: true, passed: true, auditPath, referencePath }
+  return { referenced: true, ok: true, auditPath, referencePath, findings: [] }
 }
 
 function renderHtmlDocument(

@@ -175,7 +175,7 @@ export const WebCloneCodegenContextSchema = z.object({
   assetManifest: z.string(),
   segmentsPath: z.string(),
   rules: z.array(z.string()),
-  verificationGates: z.array(z.string()),
+  verificationChecks: z.array(z.string()),
   segments: z.array(WebCloneSegmentSchema),
 })
 

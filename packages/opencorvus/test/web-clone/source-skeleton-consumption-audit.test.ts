@@ -5,7 +5,8 @@ import { tmpdir } from "../fixture/fixture"
 import {
   auditWebCloneSourceSkeletonConsumption,
   generateWebCloneSkeletonProject,
-  inspectWebCloneSourceSkeletonConsumptionGate,
+  inferWebCloneFinalDeliveryMode,
+  inspectWebCloneSourceSkeletonConsumptionEvidence,
   writeWebCloneSourceSkeletonConsumptionAudit,
 } from "../../src/web-clone"
 
@@ -43,7 +44,7 @@ describe("web-clone source skeleton consumption audit", () => {
     expect(audit.findings.join("\n")).toContain("Default framework scaffold")
   })
 
-  test("does not count the visible web-clone-source handoff as implementation source", async () => {
+  test("does not count the web-clone-source handoff as implementation source", async () => {
     await using tmp = await tmpdir()
     const mirrorDir = await writeFixtureMirror(tmp.path)
     const projectDir = path.join(tmp.path, "app")
@@ -59,6 +60,62 @@ describe("web-clone source skeleton consumption audit", () => {
     expect(audit.passed).toBe(false)
     expect(audit.projectStats.sourceFileCount).toBe(0)
     expect(audit.findings.join("\n")).toContain("No project-owned source files")
+  })
+
+  test("does not count the frontend-design skeleton sidecar as implementation source", async () => {
+    await using tmp = await tmpdir()
+    const mirrorDir = await writeFixtureMirror(tmp.path)
+    const projectDir = path.join(tmp.path, "app")
+    await writePassingProject(projectDir)
+    await Bun.write(
+      path.join(projectDir, "frontend-design-skeleton", "src", "generated", "singlefile-head-styles.html"),
+      `<style>:root{--sf-img-1:url("data:image/png;base64,${"A".repeat(4000)}")}</style>`,
+    )
+    await Bun.write(
+      path.join(projectDir, "frontend-design-skeleton", "scripts", "extract-source-html.mjs"),
+      "document.createElement('template').innerHTML = '<main>raw baseline</main>'",
+    )
+
+    const audit = await auditWebCloneSourceSkeletonConsumption({ projectDir, sourcePackageDir: mirrorDir })
+
+    expect(audit.passed).toBe(true)
+    expect(audit.projectStats.base64DataUriCount).toBe(0)
+    expect(audit.risk.manualDomMutationDetected).toBe(false)
+    expect(audit.risk.mechanicalSkeletonConversionDetected).toBe(false)
+  })
+
+  test("counts source JSON data modules as skeleton coverage and data arrays", async () => {
+    await using tmp = await tmpdir()
+    const mirrorDir = await writeFixtureMirror(tmp.path)
+    const projectDir = path.join(tmp.path, "app")
+    await Bun.write(path.join(projectDir, "src", "data", "calendar.json"), JSON.stringify([
+      { time: "08:30", country: "US", event: "GDP Growth Rate", actual: "2.1%" },
+      { time: "09:45", country: "US", event: "Manufacturing PMI", actual: "51.3" },
+    ], null, 2))
+    await Bun.write(path.join(projectDir, "src", "components", "CalendarTable.tsx"), `
+      import calendarEvents from "../data/calendar.json"
+
+      export function CalendarTable() {
+        return (
+          <table className="economic-calendar__table">
+            <tbody>{calendarEvents.map((row) => <tr key={row.time + row.event}><td>{row.time}</td><td>{row.country}</td><td>{row.event}</td><td>{row.actual}</td></tr>)}</tbody>
+          </table>
+        )
+      }
+    `)
+    await Bun.write(path.join(projectDir, "src", "App.tsx"), `
+      import { CalendarTable } from "./components/CalendarTable"
+      export default function App() {
+        return <main><nav>Markets</nav><h1>Economic calendar</h1><CalendarTable /></main>
+      }
+    `)
+
+    const audit = await auditWebCloneSourceSkeletonConsumption({ projectDir, sourcePackageDir: mirrorDir })
+
+    expect(audit.projectStats.dataArrayCount).toBeGreaterThan(0)
+    expect(audit.sourceCoverage.matchedTextCount).toBeGreaterThanOrEqual(6)
+    expect(audit.risk.skeletonIgnored).toBe(false)
+    expect(audit.passed).toBe(true)
   })
 
   test("accepts a maintainable React implementation that consumes text, components, and repeated data", async () => {
@@ -337,40 +394,44 @@ describe("web-clone source skeleton consumption audit", () => {
     expect(audit.findings.join("\n")).toContain("not input-only")
   })
 
-  test("gate requires a fresh passing consumption audit when source-skeleton is cited", async () => {
+  test("infers maintainable replacement mode from Chinese maintainability requests", () => {
+    expect(inferWebCloneFinalDeliveryMode("需要一个可维护的真实实现，尽量复用现有组件或者成熟组件")).toBe("maintainable_replacement_required")
+  })
+
+  test("consumption evidence reports a missing or stale audit when source-skeleton is cited", async () => {
     await using tmp = await tmpdir()
     const mirrorDir = await writeFixtureMirror(tmp.path)
     const projectDir = tmp.path
     await writePassingProject(projectDir)
     const citedText = "Use web-clone-source/source-skeleton/README.md and web-clone-source/source-ir/content-model.json"
 
-    const missing = await inspectWebCloneSourceSkeletonConsumptionGate({ projectDir: tmp.path, citedText })
-    expect(missing.required).toBe(true)
-    expect(missing.passed).toBe(false)
-    expect(missing.error).toContain("missing web-clone-source-skeleton-consumption-audit.json")
+    const missing = await inspectWebCloneSourceSkeletonConsumptionEvidence({ projectDir: tmp.path, citedText })
+    expect(missing.referenced).toBe(true)
+    expect(missing.ok).toBe(false)
+    expect(missing.findings.join("\n")).toContain("missing web-clone-source-skeleton-consumption-audit.json")
 
     const { auditPath } = await writeWebCloneSourceSkeletonConsumptionAudit({ projectDir, sourcePackageDir: mirrorDir })
-    const passing = await inspectWebCloneSourceSkeletonConsumptionGate({ projectDir: tmp.path, citedText })
-    expect(passing.passed).toBe(true)
+    const passing = await inspectWebCloneSourceSkeletonConsumptionEvidence({ projectDir: tmp.path, citedText })
+    expect(passing.ok).toBe(true)
     expect(passing.auditPath).toBe(auditPath)
 
-    const wrongMode = await inspectWebCloneSourceSkeletonConsumptionGate({
+    const wrongMode = await inspectWebCloneSourceSkeletonConsumptionEvidence({
       projectDir: tmp.path,
       citedText,
       originalRequest: "需要一个可维护的真实实现，尽量复用现有组件或者成熟组件",
     })
-    expect(wrongMode.passed).toBe(false)
-    expect(wrongMode.error).toContain("finalDeliveryMode must be maintainable_replacement_required")
+    expect(wrongMode.ok).toBe(false)
+    expect(wrongMode.findings.join("\n")).toContain("finalDeliveryMode must be maintainable_replacement_required")
 
     const staleAudit = JSON.parse(await Bun.file(auditPath).text())
     staleAudit.projectStats.sourceFileCount = 999
     await Bun.write(auditPath, JSON.stringify(staleAudit, null, 2))
-    const stale = await inspectWebCloneSourceSkeletonConsumptionGate({ projectDir: tmp.path, citedText })
-    expect(stale.passed).toBe(false)
-    expect(stale.error).toContain("stale")
-  })
+    const stale = await inspectWebCloneSourceSkeletonConsumptionEvidence({ projectDir: tmp.path, citedText })
+    expect(stale.ok).toBe(false)
+    expect(stale.findings.join("\n")).toContain("stale")
+  }, 30_000)
 
-  test("gate also triggers for visible web-clone-source and source IR handoffs", async () => {
+  test("consumption evidence is produced for web-clone-source and source IR handoffs", async () => {
     await using tmp = await tmpdir()
     const projectDir = path.join(tmp.path, "app")
     await writePassingProject(projectDir)
@@ -381,14 +442,14 @@ describe("web-clone source skeleton consumption audit", () => {
       "Source IR drives the component tree",
       "Run web_clone_source_audit before pass",
     ]) {
-      const result = await inspectWebCloneSourceSkeletonConsumptionGate({ projectDir: tmp.path, citedText })
-      expect(result.required).toBe(true)
-      expect(result.passed).toBe(false)
-      expect(result.error).toContain("missing web-clone-source-skeleton-consumption-audit.json")
+      const result = await inspectWebCloneSourceSkeletonConsumptionEvidence({ projectDir: tmp.path, citedText })
+      expect(result.referenced).toBe(true)
+      expect(result.ok).toBe(false)
+      expect(result.findings.join("\n")).toContain("missing web-clone-source-skeleton-consumption-audit.json")
     }
   })
 
-  test("gate ignores unrelated passing audits outside the delivery root and still requires the canonical audit", async () => {
+  test("consumption evidence ignores unrelated passing audits outside the delivery root", async () => {
     await using tmp = await tmpdir()
     const sourcePackageDir = await writeFixtureMirror(tmp.path)
     await writePassingProject(path.join(tmp.path, "toy-app"))
@@ -397,17 +458,17 @@ describe("web-clone source skeleton consumption audit", () => {
       sourcePackageDir,
     })
 
-    const result = await inspectWebCloneSourceSkeletonConsumptionGate({
+    const result = await inspectWebCloneSourceSkeletonConsumptionEvidence({
       projectDir: tmp.path,
       citedText: "Build from web-clone-source/source-ir/content-model.json",
     })
 
-    expect(result.required).toBe(true)
-    expect(result.passed).toBe(false)
-    expect(result.error).toContain("missing web-clone-source-skeleton-consumption-audit.json")
-  })
+    expect(result.referenced).toBe(true)
+    expect(result.ok).toBe(false)
+    expect(result.findings.join("\n")).toContain("missing web-clone-source-skeleton-consumption-audit.json")
+  }, 30_000)
 
-  test("gate rejects a canonical audit that points at a different project", async () => {
+  test("consumption evidence reports a canonical audit that points at a different project", async () => {
     await using tmp = await tmpdir()
     const sourcePackageDir = await writeFixtureMirror(tmp.path)
     const toyProjectDir = path.join(tmp.path, "toy-app")
@@ -419,14 +480,14 @@ describe("web-clone source skeleton consumption audit", () => {
     })
     expect(audit.passed).toBe(true)
 
-    const result = await inspectWebCloneSourceSkeletonConsumptionGate({
+    const result = await inspectWebCloneSourceSkeletonConsumptionEvidence({
       projectDir: tmp.path,
       citedText: "Build from web-clone-source/source-ir/content-model.json",
     })
 
-    expect(result.required).toBe(true)
-    expect(result.passed).toBe(false)
-    expect(result.error).toContain("audit projectDir must be the current delivery root")
+    expect(result.referenced).toBe(true)
+    expect(result.ok).toBe(false)
+    expect(result.findings.join("\n")).toContain("audit projectDir must be the current delivery root")
   })
 })
 

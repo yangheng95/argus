@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test"
+import fs from "node:fs/promises"
 import path from "node:path"
 import { Instance } from "../../src/project/instance"
 import { WebClonePrepareContextTool } from "../../src/tool/web-clone-prepare-context"
@@ -67,12 +68,38 @@ describe("tool.web_clone_prepare_context", () => {
         expect(readme).toContain("Build agents must start here")
         const blueprint = await Bun.file(path.join(sourcePackageDir, "implementation-blueprint.md")).text()
         expect(blueprint).toContain("Expected Component Slices")
-        expect(blueprint).toContain("Acceptance Gates")
+        expect(blueprint).toContain("Verification Checks")
 
         const contract = JSON.parse(await Bun.file(result.metadata.contractPath).text())
-        expect(contract.rules.passThreshold).toBe(96)
+        expect(contract.rules.visualEvaluation.role).toBe("diagnostic_measurement")
+        expect(contract.rules.visualEvaluation.report).toContain("structural differences")
         expect(contract.rules.forbidden).toContain("reference screenshot replay")
         expect(contract.content.tables[0].headers).toContain("Event")
+      },
+    })
+  })
+
+  test("accepts a compiled source-skeleton handoff without raw extraction diagnostics", async () => {
+    await using tmp = await tmpdir()
+    const mirrorDir = await writeFixtureMirror(tmp.path)
+    for (const file of ["capture.html", "singlefile.html", "extracted-page.json", "segments.json", "codegen-context.json"]) {
+      await fs.rm(path.join(mirrorDir, file), { force: true })
+    }
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const tool = await WebClonePrepareContextTool.init()
+        const result = await tool.execute({ mirrorDir }, ctx)
+        const sourcePackageDir = path.join(tmp.path, "web-clone-source")
+
+        expect(result.title).toBe("Web clone context prepared")
+        expect(result.metadata.sourcePackageDir).toBe(sourcePackageDir)
+        expect(result.metadata.materializedFiles).toContain(path.join(sourcePackageDir, "source-skeleton", "index.html"))
+        expect(result.metadata.materializedFiles).toContain(path.join(sourcePackageDir, "source-ir", "component-tree.json"))
+        expect(result.metadata.materializedFiles).not.toContain(path.join(sourcePackageDir, "singlefile.html"))
+        expect(result.metadata.stats.sourceSkeletonAuditPassed).toBe(true)
+        expect(result.metadata.stats.sourceQualityAuditPassed).toBe(true)
       },
     })
   })

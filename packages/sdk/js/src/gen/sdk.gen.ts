@@ -4716,7 +4716,7 @@ export class Mission extends HeyApiClient {
   /**
    * List Missions
    *
-   * List Mission records for the current project. Each record is backed by exactly one kind="mission" session and can be opened through the session conversation/event routes.
+   * List Mission records across project directories. Each record is backed by exactly one kind="mission" session and can be opened through the session conversation/event routes.
    */
   public list<ThrowOnError extends boolean = false>(
     parameters?: {

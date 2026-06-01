@@ -1,7 +1,6 @@
 import fs from "node:fs/promises"
 import path from "node:path"
 import {
-  listMissingMirrorArtifacts,
   readPassedAudit,
   readPngEvidence,
   sha256File,
@@ -60,6 +59,13 @@ const REQUIRED_READS = [
   "source-skeleton/critical.css",
   "source-skeleton/index.html (raw evidence only; do not mechanically convert this file into app source)",
 ]
+
+const REQUIRED_SOURCE_HANDOFF_ARTIFACTS = [
+  "source-skeleton/index.html",
+  "source-skeleton/critical.css",
+  "source-ir/component-tree.json",
+  "source-ir/content-model.json",
+] as const
 
 export async function prepareWebCloneContext(input: PrepareWebCloneContextInput): Promise<PrepareWebCloneContextOutput> {
   const mirrorDir = path.resolve(input.mirrorDir)
@@ -161,15 +167,15 @@ function renderContextMarkdown(
     `- source-ir quality audit passed: ${stats.sourceQualityAuditPassed ?? "unknown"}`,
     "",
     "## Implementation Rules",
-    "- Treat this project-root `web-clone-source/` package as the mandatory implementation source before writing app code.",
+    "- Treat this task-runtime `web-clone-source/` package as the mandatory implementation source before writing app code.",
     "- Start from `implementation-blueprint.md`, `source-ir/*`, and data/component contracts; use `source-skeleton/index.html` only to resolve ambiguous DOM order or missing text.",
-    "- Do not run an HTML-to-JSX/Vue converter over `source-skeleton/index.html`; that produces a brittle replay component and will fail source audit.",
-    "- Write or repair normal target app source in the project tree; do not create a separate generated app as the default deliverable.",
+    "- Do not run an unstructured HTML-to-JSX/Vue converter over `source-skeleton/index.html`; preserve the generated source skeleton modules and CSS sidecars as the editable baseline instead.",
+    "- Write or repair normal target app source in the project tree; do not create a disconnected generated app as the default deliverable.",
     "- Implement normal framework components, data arrays, adapters, states, and interactions.",
     "- Repeated rows/cards/items must be data plus render loops, not duplicated JSX literals.",
     "- For full-stack/database work, derive schema, seed/reset data, and read APIs from `source-ir/content-model.json` and visible skeleton text.",
-    "- Do not render `reference.png`, screenshots, base64/data URI payloads, or hidden semantic layers as the page. The frontend-design skeleton project may temporarily render extracted SingleFile/source DOM and CSS as the visual baseline; replace regions with maintainable components only after screenshot parity holds.",
-    "- Acceptance requires `web_clone_source_audit` plus runtime visual evaluation against `reference.png`; use `finalDeliveryMode: \"maintainable_replacement_required\"` and a frontend-design `baseline_replacement_plan` when the user asked for maintainable/real/component-reuse replacement, and do not claim 96 without measured evidence.",
+    "- Do not render `reference.png`, screenshots, base64/data URI payloads, or hidden semantic layers as the page. The frontend-design source skeleton and CSS sidecars are the visual baseline implementation; refine regions only when parity can be maintained.",
+    "- Use `web_clone_source_audit` and runtime visual evaluation against `reference.png` as evidence; report measured results and concrete findings instead of inventing a score.",
     "",
     "## Components",
     ...summary.components.slice(0, 24).map((component) =>
@@ -213,7 +219,10 @@ function renderContract(
       rawSkeletonPolicy: "source-skeleton/index.html is raw evidence for DOM order and missing text; it is not an app-source template.",
       sourceAuditTool: "web_clone_source_audit",
       visualTruth: "web-clone-source/reference.png",
-      passThreshold: 96,
+      visualEvaluation: {
+        role: "diagnostic_measurement",
+        report: ["score", "ssim", "pixelDiffPercent", "structural differences"],
+      },
       forbidden: [
         "reference screenshot replay",
         "unverified SingleFile HTML replay outside the frontend-design skeleton baseline",
@@ -340,19 +349,19 @@ function renderSourcePackageReadme(mirrorDir: string, stats: PrepareWebCloneCont
     "5. `source-ir/content-model.json`",
     "6. `source-ir/layout-map.json`, `source-ir/style-tokens.json`, and `source-ir/interaction-hints.json`",
     "7. `visual-surface-candidates.json` when present",
-    "8. `singlefile.html` as the visual DOM/CSS baseline input for frontend-design skeleton generation",
+    "8. `singlefile.html` as optional visual DOM/CSS evidence for frontend-design skeleton generation",
     "9. `source-skeleton/critical.css`",
     "10. `source-skeleton/index.html` only as raw evidence for ambiguous DOM order or missing text",
     "",
     "Use `assets/manifest.json`, `assets/svg/`, and `assets/images/` as reusable sidecars for dense geometry and extracted resources. Reference those files from normal React/Vue/etc. source instead of pasting the payloads inline.",
     "",
-    "Do not mechanically convert `source-skeleton/index.html` into one giant React/Vue/Svelte component. That is a replay artifact, not maintainable source, and source audit will reject it.",
+    "Do not mechanically convert `source-skeleton/index.html` into one giant React/Vue/Svelte component. Preserve the structured source skeleton/CSS sidecars and refine modules in place.",
     "",
-    "Do not runtime-load TradingView or other third-party CSS bundles. The target project must own the CSS it needs, derived from `source-skeleton/critical.css`, `source-ir/style-tokens.json`, and explicit component styling.",
+    "Do not runtime-load source-site or other third-party CSS bundles. The target project must own the CSS it needs, derived from `source-skeleton/critical.css`, `source-ir/style-tokens.json`, and explicit component styling.",
     "",
-    "Do not treat this package as the deliverable app. The deliverable is the project-owned app source that consumes this package's structure, content, styles, and assets.",
+    "Do not treat this package as the deliverable app. The deliverable is the project-owned app source seeded from this package's structure, content, styles, and assets.",
     "",
-    "Acceptance requires a source consumption audit plus runtime visual comparison against `reference.png`.",
+    "Verification evidence should include source-consumption diagnostics plus runtime visual comparison against `reference.png` when those checks are available.",
     "",
     `Mirror source: ${mirrorDir}`,
     "",
@@ -405,9 +414,9 @@ function renderImplementationBlueprint(summary: ContextSummary, stats: PrepareWe
     "- Check `assets/manifest.json`, `assets/svg/`, and `assets/images/` before authoring dense geometry by hand.",
     "- If the raw skeleton contains `<canvas src=\"images/canvas/...\">`, implement it as an actual visible chart/image component; browsers do not render a `src` attribute on `<canvas>`.",
     "",
-    "## Acceptance Gates",
-    "- `web_clone_source_audit` must pass against this source package.",
-    "- Runtime overlay/visual diff against `reference.png` must reach 0.96 mean SSIM and 0.75 p5/worst threshold.",
+    "## Verification Checks",
+    "- Run `web_clone_source_audit` against this source package and use its findings as implementation evidence.",
+    "- Run runtime overlay/visual diff against `reference.png` and inspect the rendered output before claiming fidelity.",
     "",
   ].join("\n")
 }
@@ -634,17 +643,12 @@ function isSameOrInside(child: string, parent: string): boolean {
 
 async function assertContextInputs(mirrorDir: string): Promise<void> {
   const referenceEvidence = await readPngEvidence(path.join(mirrorDir, "reference.png"))
-  const required = [
-    path.join(mirrorDir, "source-skeleton", "index.html"),
-    path.join(mirrorDir, "source-ir", "component-tree.json"),
-    path.join(mirrorDir, "source-ir", "content-model.json"),
-  ]
   const missing: string[] = []
   if (!referenceEvidence.valid) missing.push(`${referenceEvidence.path} (${referenceEvidence.error ?? "invalid PNG"})`)
-  for (const file of required) {
+  for (const relative of REQUIRED_SOURCE_HANDOFF_ARTIFACTS) {
+    const file = path.join(mirrorDir, relative)
     if (!await exists(file)) missing.push(file)
   }
-  missing.push(...(await listMissingMirrorArtifacts(mirrorDir)).map((relative) => path.join(mirrorDir, relative)))
   if (await readPassedAudit(path.join(mirrorDir, "source-skeleton", "source-skeleton-audit.json")) !== true) {
     missing.push(path.join(mirrorDir, "source-skeleton", "source-skeleton-audit.json") + " (passed=true required)")
   }

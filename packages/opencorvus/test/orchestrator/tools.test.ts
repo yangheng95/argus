@@ -2622,11 +2622,19 @@ describe("orchestrator tools", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "propose task parent" })
+        Database.use((db) =>
+          db
+            .update(EngineTaskTable)
+            .set({ session_id: parent.id, time_updated: Date.now() })
+            .where(eq(EngineTaskTable.id, taskID))
+            .run(),
+        )
         spyOn(Config, "get").mockResolvedValue({ experimental: { confirm_proposed_tasks: true } } as any)
         const pipeline = WorkflowRegistry.resolveSync("pipeline")!
         const { tools } = createOrchestratorTools({
           taskID,
-          agentSessionID: "ses_orchestrator_propose",
+          agentSessionID: parent.id,
           workflow: pipeline,
           workflowState: createWorkflowState(pipeline),
         })
@@ -2714,10 +2722,18 @@ describe("orchestrator tools", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "completed propose task parent" })
+        Database.use((db) =>
+          db
+            .update(EngineTaskTable)
+            .set({ session_id: parent.id, time_updated: Date.now() })
+            .where(eq(EngineTaskTable.id, taskID))
+            .run(),
+        )
         const pipeline = WorkflowRegistry.resolveSync("pipeline")!
         const { tools } = createOrchestratorTools({
           taskID,
-          agentSessionID: "ses_orchestrator_completed_propose",
+          agentSessionID: parent.id,
           workflow: pipeline,
           workflowState: createWorkflowState(pipeline),
         })
@@ -2799,11 +2815,19 @@ describe("orchestrator tools", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "decline proposed task parent" })
+        Database.use((db) =>
+          db
+            .update(EngineTaskTable)
+            .set({ session_id: parent.id, time_updated: Date.now() })
+            .where(eq(EngineTaskTable.id, taskID))
+            .run(),
+        )
         spyOn(Config, "get").mockResolvedValue({ experimental: { confirm_proposed_tasks: true } } as any)
         const pipeline = WorkflowRegistry.resolveSync("pipeline")!
         const { tools } = createOrchestratorTools({
           taskID,
-          agentSessionID: "ses_orchestrator_decline",
+          agentSessionID: parent.id,
           workflow: pipeline,
           workflowState: createWorkflowState(pipeline),
         })
@@ -2853,8 +2877,8 @@ describe("orchestrator tools", () => {
       goalID,
       sessionID: null,
       worktree: tmp.path,
-      projectName: "Visual gate project",
-      taskTitle: "Visual gate task",
+      projectName: "Visual reference project",
+      taskTitle: "Visual reference task",
       request: "复刻 https://example.com/dashboard 的完整前后端页面",
       goalTitle: "Implement visual page",
       goalSlug: "implement-visual-page",
@@ -2869,11 +2893,11 @@ describe("orchestrator tools", () => {
       return {
         result: {
           status: "passed",
-          summary: "Visual URL did not force a frontend_design host gate.",
+          summary: "Visual URL did not host-block the build.",
           files_changed: [],
           tests: [],
         },
-        sessionID: "ses_visual_no_host_gate_build",
+        sessionID: "ses_visual_no_host_block_build",
         worktreeDir: input.managedWorktree.directory,
         worktreeBranch: input.managedWorktree.branch,
         worktreeBaseRef: input.managedWorktree.baseRef,
@@ -2884,7 +2908,7 @@ describe("orchestrator tools", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const parent = await Session.create({ kind: "root", title: "visual gate test" })
+        const parent = await Session.create({ kind: "root", title: "visual reference test" })
         const { tools } = createOrchestratorTools({
           taskID,
           agentSessionID: parent.id,
@@ -2902,7 +2926,7 @@ describe("orchestrator tools", () => {
         )
         expect(buildCalled).toBe(true)
         expect(buildResult).toContain("Build agent finished")
-        expect(buildResult).toContain("Visual URL did not force a frontend_design host gate")
+        expect(buildResult).toContain("Visual URL did not host-block the build")
       },
     })
   }, 30_000)
@@ -2954,11 +2978,12 @@ describe("orchestrator tools", () => {
       designSystem: "Reference design system",
       techStack: ["React", "Bun"],
       frontendTemplate: "Frontend replica scope body",
+      finalDeliveryMode: "maintainable_replacement_required",
       fillableModules:
         "Frontend fillable modules body. Use web-clone-source/README.md, web-clone-source/implementation-blueprint.md, web-clone-source/source-ir/component-tree.json, web-clone-source/source-ir/content-model.json, web-clone-source/source-skeleton/critical.css, and web-clone-source/reference.png as the development handoff; use raw mirror only as diagnostics for named gaps.",
       componentInventory: "Component inventory body.",
       qualityProjectContract:
-        "High-quality target project body. Build semantic React source from component modules, data modules, style modules, and verification commands; do not deliver the raw extracted skeleton.",
+        "High-quality target project body. Build semantic React source from the source skeleton, component modules, data modules, style modules, CSS sidecars, and verification commands.",
       componentReusePlan: [
         {
           family_id: "comp-page-shell",
@@ -2966,25 +2991,25 @@ describe("orchestrator tools", () => {
           observed_surface: "Reference page shell",
           source_refs: ["web-clone-source/reference.png"],
           implementation_strategy: "extracted_baseline_defer",
-          reuse_source: "frontend-design-skeleton/src/generated/singlefile-body.html",
+          reuse_source: "frontend-design-skeleton/src/components/SourceClonePage.tsx",
           mature_library_candidates: [],
           props_states: "static extracted baseline until parity-safe replacement",
           replacement_boundary: "page root subtree",
-          parity_guard: "96+ visual score against reference.png",
+          parity_guard: "measured visual comparison against reference.png",
         },
       ],
       materialInventory: "Material inventory body.",
       frontendProject: {
         status: "created",
-        role: "visual_baseline_input",
-        project_root: "frontend-design-skeleton",
+        role: "source_baseline_input",
+        project_root: "C:\\tmp\\frontend-design-skeleton",
         source_package: "web-clone-source",
-        entrypoints: ["README.md", "src/App.jsx"],
+        entrypoints: ["README.md", "src/App.tsx", "src/styles.css"],
         generation_tool: "test",
         notes: [],
       },
       visualConsistencyContract:
-        "Match reference layout, typography, colors, and spacing exactly. Verify 1440x900, 1024x768, and 390x844 with passThreshold=96 plus source-quality review.",
+        "Match reference layout, typography, colors, and spacing exactly. Verify 1440x900, 1024x768, and 390x844 with measured visual comparison plus source-quality review.",
       uiDataContract:
         "UI data contract derived from source-skeleton table/list/control structure; unknown backend details remain unknown.",
       templateIterationNotes: ["First pass covered layout.", "Second pass covered visual consistency."],
@@ -3023,6 +3048,56 @@ describe("orchestrator tools", () => {
         "mirror/source-ir/source-quality-audit.json",
       ],
       openQuestions: ["Live feed authentication is unknown."],
+      report: {
+        summary: "Frontend replica scope body",
+        detail: [
+          "## Frontend Template",
+          "Frontend replica scope body",
+          "",
+          "## Final Delivery Mode",
+          "maintainable_replacement_required",
+          "",
+          "## Fillable Modules",
+          "Frontend fillable modules body. Use web-clone-source/README.md, web-clone-source/implementation-blueprint.md, web-clone-source/source-ir/component-tree.json, web-clone-source/source-ir/content-model.json, web-clone-source/source-skeleton/critical.css, and web-clone-source/reference.png as the development handoff; use raw mirror only as diagnostics for named gaps.",
+          "",
+          "## Implementation Problems And Agent Handoff",
+          "Complete enough for downstream implementation.",
+          "",
+          "## Reuse Constraints",
+          "- comp-page-shell - Page shell",
+          "  - strategy: extracted_baseline_defer",
+          "  - parity_guard: measured visual comparison against reference.png",
+          "",
+          "## Source Region Evolution Plan",
+          "- no source-region evolution plan submitted",
+          "",
+          "## Quality Project Contract",
+          "High-quality target project body. Build semantic React source from the source skeleton, component modules, data modules, style modules, CSS sidecars, and verification commands.",
+          "",
+          "## Material Inventory",
+          "Material inventory body.",
+          "",
+          "## Frontend Project",
+          "- status: created",
+          "- role: source_baseline_input",
+          "- project_root: C:\\tmp\\frontend-design-skeleton",
+          "- delivery_root: .",
+          "- source_package: web-clone-source",
+          "- generation_tool: test",
+          "- adoption_rule: frontend-design-skeleton is a source baseline excluded from final delivery",
+          "",
+          "## Visual Consistency Contract",
+          "Match reference layout, typography, colors, and spacing exactly. Verify 1440x900, 1024x768, and 390x844 with measured visual comparison plus source-quality review.",
+          "",
+          "## UI Data Contract",
+          "UI data contract derived from source-skeleton table/list/control structure; unknown backend details remain unknown.",
+          "",
+          "## Reference Artifacts",
+          "- web-clone-source/implementation-blueprint.md",
+          "- web-clone-source/source-skeleton/critical.css",
+          "- web-clone-source/source-ir/component-tree.json",
+        ].join("\n"),
+      },
       sessionID: "ses_frontend_design_mock",
     })
 
@@ -3048,20 +3123,23 @@ describe("orchestrator tools", () => {
         const template = await fs.readFile(templatePath, "utf8")
         const manifest = await fs.readFile(manifestPath, "utf8")
         expect(template).toContain("## Visual Consistency Contract")
-        expect(template).toContain("## Component Inventory")
-        expect(template).toContain("## Component Reuse Plan")
+        expect(template).toContain("## Implementation Problems And Agent Handoff")
+        expect(template).not.toContain("## Component Inventory")
+        expect(template).toContain("## Reuse Constraints")
         expect(template).toContain("## Quality Project Contract")
         expect(template).toContain("## Material Inventory")
         expect(template).toContain("High-quality target project body")
-        expect(template).toContain("do not deliver the raw extracted skeleton")
-        expect(template).toContain("role: visual_baseline_input")
+        expect(template).toContain("source skeleton")
+        expect(template).toContain("role: source_baseline_input")
+        expect(template).toContain("delivery_root: .")
+        expect(template).toContain("frontend-design-skeleton is a source baseline excluded from final delivery")
         expect(template).toContain("Match reference layout, typography, colors, and spacing exactly.")
         expect(template).toContain(paths.manifestRelative)
         expect(template).toContain("web-clone-source/implementation-blueprint.md")
         expect(template).toContain("web-clone-source/source-skeleton/critical.css")
         expect(template).toContain("web-clone-source/source-ir/component-tree.json")
-        expect(template).toContain("passThreshold=96")
-        expect(manifest).toContain(`Canonical frontend template file: ${paths.templateRelative}`)
+        expect(template).toContain("measured visual comparison")
+        expect(manifest).toContain(`Canonical frontend_design public report file: ${paths.templateRelative}`)
         expect(manifest).toContain("design-reference.png")
         expect(manifest).toContain("mirror/reference.png")
         expect(manifest).toContain("mirror/page.ir.json")
@@ -3076,26 +3154,26 @@ describe("orchestrator tools", () => {
     })
   }, 60_000)
 
-  test("post-build integrity blocks source-skeleton handoff when audit evidence is missing", async () => {
+  test("post-build integrity reviews source-skeleton handoff diagnostics without host-blocking missing audit evidence", async () => {
     const now = Date.now()
     const stamp = now.toString(16)
-    const projectID = `project_integrity_source_skeleton_gate_${stamp}`
-    const taskID = `tsk_integrity_source_skeleton_gate_${stamp}`
-    const goalID = `gol_integrity_source_skeleton_gate_${stamp}`
+    const projectID = `project_integrity_source_skeleton_diag_${stamp}`
+    const taskID = `tsk_integrity_source_skeleton_diag_${stamp}`
+    const goalID = `gol_integrity_source_skeleton_diag_${stamp}`
     const specID = `spec_${goalID}`
 
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const parent = await Session.create({ kind: "root", title: "source skeleton integrity gate test" })
+        const parent = await Session.create({ kind: "root", title: "source skeleton integrity diagnostic test" })
         insertWorkflowTaskWithGoal({
           projectID,
           taskID,
           goalID,
           sessionID: parent.id,
           worktree: tmp.path,
-          projectName: "Source skeleton integrity gate project",
-          taskTitle: "Source skeleton integrity gate task",
+          projectName: "Source skeleton integrity diagnostic project",
+          taskTitle: "Source skeleton integrity diagnostic task",
           request: "Clone a web page from source skeleton artifacts",
           goalTitle: "Implement source skeleton",
           goalSlug: "implement-source-skeleton",
@@ -3114,7 +3192,7 @@ describe("orchestrator tools", () => {
                 id: "REQ-1",
                 title: "Source skeleton",
                 description: "Implement from source skeleton.",
-                acceptance: ["post-build integrity must validate source skeleton artifacts"],
+                acceptance: ["post-build integrity reviews source skeleton diagnostic evidence"],
                 evidence_refs: ["frontend_design"],
                 non_goals: [],
                 priority: "blocking",
@@ -3128,8 +3206,8 @@ describe("orchestrator tools", () => {
                   id: "acc-source-skeleton",
                   source_requirement_id: "REQ-1",
                   goal_id: goalID,
-                  title: "post-build integrity must validate source skeleton artifacts",
-                  scorers: [{ type: "llm_judge", name: "artifact gate", criteria: "Validate source skeleton artifacts." }],
+                  title: "post-build integrity reviews source skeleton diagnostic evidence",
+                  scorers: [{ type: "llm_judge", name: "diagnostic review", criteria: "Review source skeleton artifacts." }],
                   severity: "essential",
                 },
               ],
@@ -3143,7 +3221,7 @@ describe("orchestrator tools", () => {
           goalID,
           sessionID: parent.id,
           workspaceDir: tmp.path,
-          workspaceBranch: "opencorvus/source-skeleton-gate",
+          workspaceBranch: "opencorvus/source-skeleton-diagnostic",
           workspaceBaseRef: null,
           now: now + 1,
         })
@@ -3173,7 +3251,7 @@ describe("orchestrator tools", () => {
         let reviewCalled = false
         reviewIntegrityImpl = async () => {
           reviewCalled = true
-          return integrityTeamResult({ sessionID: "ses_should_not_run" })
+          return integrityTeamResult({ sessionID: "ses_source_skeleton_diagnostic" })
         }
         const { tools } = createOrchestratorTools({
           taskID,
@@ -3183,34 +3261,34 @@ describe("orchestrator tools", () => {
 
         const result = await tools.integrity.execute({ reason: "post-build review" }, {} as any)
 
-        expect(result).toContain("source skeleton gate failed")
-        expect(result).toContain("invalid web-clone-source/reference.png")
-        expect(reviewCalled).toBe(false)
+        expect(result).toContain("Integrity verdict: pass")
+        expect(result).not.toContain("invalid web-clone-source/reference.png")
+        expect(reviewCalled).toBe(true)
       },
     })
   })
 
-  test("post-build integrity blocks source-skeleton implementation when consumption audit is missing", async () => {
+  test("post-build integrity reviews source-skeleton implementation without host-blocking missing consumption audit", async () => {
     const now = Date.now()
     const stamp = now.toString(16)
-    const projectID = `project_integrity_source_consumption_gate_${stamp}`
-    const taskID = `tsk_integrity_source_consumption_gate_${stamp}`
-    const goalID = `gol_integrity_source_consumption_gate_${stamp}`
+    const projectID = `project_integrity_source_consumption_diag_${stamp}`
+    const taskID = `tsk_integrity_source_consumption_diag_${stamp}`
+    const goalID = `gol_integrity_source_consumption_diag_${stamp}`
     const specID = `spec_${goalID}`
 
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         await writePassingSourceSkeletonHandoff(tmp.path)
-        const parent = await Session.create({ kind: "root", title: "source skeleton consumption gate test" })
+        const parent = await Session.create({ kind: "root", title: "source skeleton consumption diagnostic test" })
         insertWorkflowTaskWithGoal({
           projectID,
           taskID,
           goalID,
           sessionID: parent.id,
           worktree: tmp.path,
-          projectName: "Source skeleton consumption gate project",
-          taskTitle: "Source skeleton consumption gate task",
+          projectName: "Source skeleton consumption diagnostic project",
+          taskTitle: "Source skeleton consumption diagnostic task",
           request: "Clone a web page from source skeleton artifacts",
           goalTitle: "Implement source skeleton app",
           goalSlug: "implement-source-skeleton-app",
@@ -3228,8 +3306,8 @@ describe("orchestrator tools", () => {
               {
                 id: "REQ-1",
                 title: "Source skeleton implementation",
-                description: "Implement from source skeleton and prove the skeleton was consumed.",
-                acceptance: ["post-build integrity must validate source skeleton consumption audit"],
+                description: "Implement from source skeleton and expose implementation evidence for reviewer analysis.",
+                acceptance: ["post-build integrity reviews source skeleton consumption evidence"],
                 evidence_refs: ["frontend_design"],
                 non_goals: [],
                 priority: "blocking",
@@ -3243,8 +3321,8 @@ describe("orchestrator tools", () => {
                   id: "acc-source-skeleton-consumption",
                   source_requirement_id: "REQ-1",
                   goal_id: goalID,
-                  title: "post-build integrity must validate source skeleton consumption audit",
-                  scorers: [{ type: "llm_judge", name: "artifact gate", criteria: "Validate source skeleton consumption audit." }],
+                  title: "post-build integrity reviews source skeleton consumption evidence",
+                  scorers: [{ type: "llm_judge", name: "diagnostic review", criteria: "Review source skeleton consumption evidence." }],
                   severity: "essential",
                 },
               ],
@@ -3258,7 +3336,7 @@ describe("orchestrator tools", () => {
           goalID,
           sessionID: parent.id,
           workspaceDir: tmp.path,
-          workspaceBranch: "opencorvus/source-skeleton-consumption-gate",
+          workspaceBranch: "opencorvus/source-skeleton-consumption-diagnostic",
           workspaceBaseRef: null,
           now: now + 1,
         })
@@ -3295,7 +3373,7 @@ describe("orchestrator tools", () => {
         let reviewCalled = false
         reviewIntegrityImpl = async () => {
           reviewCalled = true
-          return integrityTeamResult({ sessionID: "ses_should_not_run" })
+          return integrityTeamResult({ sessionID: "ses_source_skeleton_consumption_diagnostic" })
         }
         const { tools } = createOrchestratorTools({
           taskID,
@@ -3305,34 +3383,34 @@ describe("orchestrator tools", () => {
 
         const result = await tools.integrity.execute({ reason: "post-build review" }, {} as any)
 
-        expect(result).toContain("source skeleton consumption gate failed")
-        expect(result).toContain("missing web-clone-source-skeleton-consumption-audit.json")
-        expect(reviewCalled).toBe(false)
+        expect(result).toContain("Integrity verdict: pass")
+        expect(result).not.toContain("missing web-clone-source-skeleton-consumption-audit.json")
+        expect(reviewCalled).toBe(true)
       },
     })
   })
 
-  test("post-build integrity requires web-clone gates when the visible source package exists even without frontend-design citations", async () => {
+  test("post-build integrity treats web-clone-source package as reviewer evidence without host-blocking", async () => {
     const now = Date.now()
     const stamp = now.toString(16)
-    const projectID = `project_integrity_visible_source_gate_${stamp}`
-    const taskID = `tsk_integrity_visible_source_gate_${stamp}`
-    const goalID = `gol_integrity_visible_source_gate_${stamp}`
+    const projectID = `project_integrity_visible_source_diag_${stamp}`
+    const taskID = `tsk_integrity_visible_source_diag_${stamp}`
+    const goalID = `gol_integrity_visible_source_diag_${stamp}`
     const specID = `spec_${goalID}`
 
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         await writePassingSourceSkeletonHandoff(tmp.path)
-        const parent = await Session.create({ kind: "root", title: "visible source gate test" })
+        const parent = await Session.create({ kind: "root", title: "visible source diagnostic test" })
         insertWorkflowTaskWithGoal({
           projectID,
           taskID,
           goalID,
           sessionID: parent.id,
           worktree: tmp.path,
-          projectName: "Visible source gate project",
-          taskTitle: "Visible source gate task",
+          projectName: "Visible source diagnostic project",
+          taskTitle: "Visible source diagnostic task",
           request: "Clone a web page from prepared web-clone-source artifacts",
           goalTitle: "Implement source skeleton app",
           goalSlug: "implement-source-skeleton-app",
@@ -3349,8 +3427,8 @@ describe("orchestrator tools", () => {
             requirements: [{
               id: "REQ-1",
               title: "Source skeleton implementation",
-              description: "Implement from visible web-clone-source artifacts.",
-              acceptance: ["post-build integrity must validate source skeleton consumption audit"],
+              description: "Implement from web-clone-source artifacts.",
+              acceptance: ["post-build integrity reviews visible source package evidence"],
               evidence_refs: [],
               non_goals: [],
               priority: "blocking",
@@ -3362,7 +3440,7 @@ describe("orchestrator tools", () => {
           goalID,
           sessionID: parent.id,
           workspaceDir: tmp.path,
-          workspaceBranch: "opencorvus/visible-source-gate",
+          workspaceBranch: "opencorvus/visible-source-diagnostic",
           workspaceBaseRef: null,
           now: now + 1,
         })
@@ -3377,7 +3455,7 @@ describe("orchestrator tools", () => {
         let reviewCalled = false
         reviewIntegrityImpl = async () => {
           reviewCalled = true
-          return integrityTeamResult({ sessionID: "ses_should_not_run" })
+          return integrityTeamResult({ sessionID: "ses_visible_source_diagnostic" })
         }
         const { tools } = createOrchestratorTools({
           taskID,
@@ -3387,9 +3465,9 @@ describe("orchestrator tools", () => {
 
         const result = await tools.integrity.execute({ reason: "post-build review" }, {} as any)
 
-        expect(result).toContain("source skeleton consumption gate failed")
-        expect(result).toContain("missing web-clone-source-skeleton-consumption-audit.json")
-        expect(reviewCalled).toBe(false)
+        expect(result).toContain("Integrity verdict: pass")
+        expect(result).not.toContain("missing web-clone-source-skeleton-consumption-audit.json")
+        expect(reviewCalled).toBe(true)
       },
     })
   })
@@ -3525,6 +3603,7 @@ describe("orchestrator tools", () => {
         designSystem: "Figma MCP design system",
         techStack: ["React"],
         frontendTemplate: "Frontend replica scope from Figma MCP evidence",
+        finalDeliveryMode: "maintainable_replacement_required",
         fillableModules: "Frontend fillable modules from Figma MCP evidence",
         componentInventory: "Figma component inventory.",
         qualityProjectContract:
@@ -3546,7 +3625,7 @@ describe("orchestrator tools", () => {
         materialInventory: "Figma material inventory.",
         frontendProject: {
           status: "not_created",
-          role: "visual_baseline_input",
+          role: "source_baseline_input",
           project_root: "",
           source_package: "",
           entrypoints: [],
@@ -3559,6 +3638,25 @@ describe("orchestrator tools", () => {
         completenessReview: "Figma MCP evidence is complete enough for handoff.",
         referenceArtifacts: ["figma-mcp screenshot", "figma-mcp metadata"],
         openQuestions: [],
+        report: {
+          summary: "Frontend replica scope from Figma MCP evidence",
+          detail: [
+            "## Frontend Template",
+            "Frontend replica scope from Figma MCP evidence",
+            "",
+            "## Implementation Problems And Agent Handoff",
+            "Figma MCP evidence is complete enough for handoff.",
+            "",
+            "## Reuse Constraints",
+            "- comp-figma-window - Figma window",
+            "",
+            "## Quality Project Contract",
+            "High-quality Figma target project: readable semantic React components, project-owned styles, asset references, and screenshot verification.",
+            "",
+            "## Visual Consistency Contract",
+            "Match the Figma MCP screenshot and metadata.",
+          ].join("\n"),
+        },
         sessionID: "ses_frontend_design_figma_mcp_mock",
       }
     }
@@ -6441,9 +6539,9 @@ describe("orchestrator tools", () => {
           reason: "Delivery rejected visual fidelity.",
         })
         for (const key of [
+          "public_report",
           "frontend_template",
           "fillable_modules",
-          "component_inventory",
           "material_inventory",
           "visual_consistency_contract",
           "ui_data_contract",

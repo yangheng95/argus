@@ -222,6 +222,183 @@ interface GoalRowInput {
   metadata?: Record<string, unknown>
 }
 
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : []
+}
+
+function metadataWithDependsOnGoalIDs(metadata: unknown, dependsOn: string[]): Record<string, unknown> | null {
+  const base =
+    metadata && typeof metadata === "object" && !Array.isArray(metadata)
+      ? { ...(metadata as Record<string, unknown>) }
+      : {}
+  if (dependsOn.length > 0) {
+    base.depends_on_goal_ids = dependsOn
+  } else {
+    delete base.depends_on_goal_ids
+  }
+  return Object.keys(base).length > 0 ? base : null
+}
+
+function pruneGoalDependenciesForDeletedGoals(
+  db: Database.TxOrDb,
+  input: {
+    taskID: string
+    deletedGoalIDs: string[]
+  },
+): number {
+  const deleted = new Set(input.deletedGoalIDs)
+  if (deleted.size === 0) return 0
+
+  let refsPruned = 0
+  const rows = db
+    .select({
+      id: EngineGoalTable.id,
+      depends_on: EngineGoalTable.depends_on,
+      metadata: EngineGoalTable.metadata,
+    })
+    .from(EngineGoalTable)
+    .where(eq(EngineGoalTable.task_id, input.taskID))
+    .all()
+
+  for (const row of rows) {
+    if (deleted.has(row.id)) continue
+    const dependsOn = stringArray(row.depends_on)
+    const nextDependsOn = dependsOn.filter((depID) => !deleted.has(depID))
+    const pruned = dependsOn.length - nextDependsOn.length
+    const nextMetadata = metadataWithDependsOnGoalIDs(row.metadata, nextDependsOn)
+    const metadataChanged = JSON.stringify(row.metadata ?? null) !== JSON.stringify(nextMetadata)
+    if (pruned === 0 && !metadataChanged) continue
+    refsPruned += pruned
+    db.update(EngineGoalTable)
+      .set({
+        depends_on: nextDependsOn,
+        metadata: nextMetadata,
+        time_updated: Date.now(),
+      })
+      .where(eq(EngineGoalTable.id, row.id))
+      .run()
+  }
+
+  return refsPruned
+}
+
+function prunePlanNodeDependenciesForDeletedNodes(
+  db: Database.TxOrDb,
+  input: {
+    taskID: string
+    deletedPlanNodeIDs: string[]
+  },
+): number {
+  const deleted = new Set(input.deletedPlanNodeIDs)
+  if (deleted.size === 0) return 0
+
+  let refsPruned = 0
+  const rows = db
+    .select({
+      id: EnginePlanNodeTable.id,
+      depends_on_ids: EnginePlanNodeTable.depends_on_ids,
+    })
+    .from(EnginePlanNodeTable)
+    .where(eq(EnginePlanNodeTable.task_id, input.taskID))
+    .all()
+
+  for (const row of rows) {
+    if (deleted.has(row.id)) continue
+    const dependsOn = stringArray(row.depends_on_ids)
+    const nextDependsOn = dependsOn.filter((depID) => !deleted.has(depID))
+    const pruned = dependsOn.length - nextDependsOn.length
+    if (pruned === 0) continue
+    refsPruned += pruned
+    db.update(EnginePlanNodeTable)
+      .set({
+        depends_on_ids: nextDependsOn.length > 0 ? nextDependsOn : null,
+        time_updated: Date.now(),
+      })
+      .where(eq(EnginePlanNodeTable.id, row.id))
+      .run()
+  }
+
+  return refsPruned
+}
+
+export function deleteGoalRowsForTask(
+  db: Database.TxOrDb,
+  input: {
+    taskID: string
+    goalIDs: string[]
+  },
+): {
+  deletedGoals: number
+  deletedPlanNodes: number
+  prunedGoalDependencyRefs: number
+  prunedPlanNodeDependencyRefs: number
+} {
+  const goalIDs = [...new Set(input.goalIDs.filter(Boolean))]
+  if (goalIDs.length === 0) {
+    return {
+      deletedGoals: 0,
+      deletedPlanNodes: 0,
+      prunedGoalDependencyRefs: 0,
+      prunedPlanNodeDependencyRefs: 0,
+    }
+  }
+
+  const goalRows = db
+    .select({ id: EngineGoalTable.id })
+    .from(EngineGoalTable)
+    .where(and(eq(EngineGoalTable.task_id, input.taskID), inArray(EngineGoalTable.id, goalIDs)))
+    .all()
+  const existingGoalIDs = goalRows.map((row) => row.id)
+  if (existingGoalIDs.length === 0) {
+    return {
+      deletedGoals: 0,
+      deletedPlanNodes: 0,
+      prunedGoalDependencyRefs: 0,
+      prunedPlanNodeDependencyRefs: 0,
+    }
+  }
+
+  const planNodeRows = db
+    .select({ id: EnginePlanNodeTable.id })
+    .from(EnginePlanNodeTable)
+    .where(and(eq(EnginePlanNodeTable.task_id, input.taskID), inArray(EnginePlanNodeTable.goal_id, existingGoalIDs)))
+    .all()
+  const planNodeIDs = planNodeRows.map((row) => row.id)
+
+  const prunedGoalDependencyRefs = pruneGoalDependenciesForDeletedGoals(db, {
+    taskID: input.taskID,
+    deletedGoalIDs: existingGoalIDs,
+  })
+  const prunedPlanNodeDependencyRefs = prunePlanNodeDependenciesForDeletedNodes(db, {
+    taskID: input.taskID,
+    deletedPlanNodeIDs: planNodeIDs,
+  })
+
+  if (planNodeIDs.length > 0) {
+    db.delete(EnginePlanNodeTable).where(inArray(EnginePlanNodeTable.id, planNodeIDs)).run()
+  }
+  db.delete(EngineGoalTable).where(inArray(EngineGoalTable.id, existingGoalIDs)).run()
+
+  return {
+    deletedGoals: existingGoalIDs.length,
+    deletedPlanNodes: planNodeIDs.length,
+    prunedGoalDependencyRefs,
+    prunedPlanNodeDependencyRefs,
+  }
+}
+
+export function deleteTaskGoals(db: Database.TxOrDb, taskID: string) {
+  const rows = db
+    .select({ id: EngineGoalTable.id })
+    .from(EngineGoalTable)
+    .where(eq(EngineGoalTable.task_id, taskID))
+    .all()
+  return deleteGoalRowsForTask(db, {
+    taskID,
+    goalIDs: rows.map((row) => row.id),
+  })
+}
+
 export function insertGoalRows(
   db: Database.TxOrDb,
   input: {
@@ -327,23 +504,34 @@ export function upsertGoalsFromArchitect(
     }
   }
 
-  // DELETE: rows whose ids the Architect explicitly removed.
+  // DELETE: rows whose ids the Architect explicitly removed. Removing a goal
+  // also removes every dependent edge that points at it; otherwise a re-run
+  // that splits a goal can leave "depends_on not registered" blockers behind
+  // and trap Architect in a repair loop.
   const deletedIDs: string[] = []
+  const removedDepIDs = new Set(input.removedLLMIDs)
   for (const llmID of input.removedLLMIDs) {
     const dbID = llmToDBID.get(llmID) ?? (existingByID.has(llmID) ? llmID : undefined)
     if (!dbID) continue
-    db.delete(EngineGoalTable).where(eq(EngineGoalTable.id, dbID)).run()
+    removedDepIDs.add(dbID)
     deletedIDs.push(dbID)
+  }
+  if (deletedIDs.length > 0) {
+    deleteGoalRowsForTask(db, {
+      taskID: input.taskID,
+      goalIDs: deletedIDs,
+    })
   }
 
   const persisted: Array<{ id: string; title: string; llmID: string }> = []
   for (let index = 0; index < plan.length; index++) {
     const { llmID, dbID, isNew, goal } = plan[index]
     const orderIndex = isNew ? nextNewOrderIndex++ : (existingByID.get(dbID)?.order_index ?? index)
-    const deps = (goal.depends_on ?? []).map((dep) => {
+    const deps = (goal.depends_on ?? []).flatMap((dep) => {
+      if (removedDepIDs.has(dep)) return []
       const mapped = llmToDBID.get(dep)
-      if (mapped) return mapped
-      if (existingByID.has(dep)) return dep
+      if (mapped) return removedDepIDs.has(mapped) ? [] : [mapped]
+      if (existingByID.has(dep) && !removedDepIDs.has(dep)) return [dep]
       throw new Error(
         `upsertGoalsFromArchitect: goal ${dbID} depends_on references unknown id ${dep}`,
       )
@@ -1603,7 +1791,25 @@ export function updateGoal(input: {
 }
 
 export function deleteGoal(goalID: string) {
-  return Database.use((db) => db.delete(EngineGoalTable).where(eq(EngineGoalTable.id, goalID)).run())
+  return Database.transaction((db) => {
+    const row = db
+      .select({ task_id: EngineGoalTable.task_id })
+      .from(EngineGoalTable)
+      .where(eq(EngineGoalTable.id, goalID))
+      .get()
+    if (!row) {
+      return {
+        deletedGoals: 0,
+        deletedPlanNodes: 0,
+        prunedGoalDependencyRefs: 0,
+        prunedPlanNodeDependencyRefs: 0,
+      }
+    }
+    return deleteGoalRowsForTask(db, {
+      taskID: row.task_id,
+      goalIDs: [goalID],
+    })
+  })
 }
 
 /**

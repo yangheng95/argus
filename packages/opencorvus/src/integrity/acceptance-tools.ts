@@ -3,7 +3,7 @@ import z from "zod"
 import type { AcceptanceSpec } from "@/acceptance/types"
 import { createCodebaseTools } from "@/engine/codebase-tools"
 import { Instance } from "@/project/instance"
-import { Shell } from "@/shell/shell"
+import { runGuardedCommand } from "@/shell/guarded-command"
 import { DEFAULT_BASH_TIMEOUT_MS } from "@/shell/timeout"
 import { Filesystem } from "@/util/filesystem"
 
@@ -67,7 +67,8 @@ export function createIntegrityAcceptanceTools(input?: IntegrityEvidenceToolCont
       description:
         "Run a read-only shell command in the project directory and capture stdout/stderr/exit code. " +
         "Use for verification only: builds, tests, smoke checks, or short server startup checks. " +
-        "If the worktree changes during the command, the result includes a readonly_guard warning and must not be treated as a repair.",
+        "For dev/preview servers that browser tools must inspect, set background=true instead of shell-backgrounding with `&`; the result returns a PID and detected URL when available. " +
+        "If implementation files change during the command, the result includes a readonly_guard warning and must not be treated as a repair.",
       inputSchema: z.object({
         command: z.string().min(1).describe("Shell command to run in the project root"),
         timeout_ms: z
@@ -76,9 +77,27 @@ export function createIntegrityAcceptanceTools(input?: IntegrityEvidenceToolCont
           .positive()
           .max(120_000)
           .default(DEFAULT_BASH_TIMEOUT_MS)
-          .describe("Max execution time ms"),
+          .describe("Max execution time ms; for background=true this is the process lease"),
+        background: z
+          .boolean()
+          .default(false)
+          .describe("Keep a dev/preview/serve command running after this tool call so browser tools can inspect it."),
       }),
-      execute: async ({ command, timeout_ms }) => runReadOnlyCommand(command, timeout_ms, projectDir, input?.signal),
+      execute: async ({ command, timeout_ms, background }) => {
+        try {
+          return await runGuardedCommand({
+            command,
+            timeoutMs: timeout_ms,
+            background,
+            projectDir,
+            env: process.env,
+            signal: input?.signal,
+            readOnlyGuard: true,
+          })
+        } catch (err) {
+          return `Error running command: ${err instanceof Error ? err.message : String(err)}`
+        }
+      },
     }),
     inspect_integrity_evidence: tool({
       description:
@@ -106,55 +125,6 @@ export function createIntegrityAcceptanceTools(input?: IntegrityEvidenceToolCont
           max_chars,
         ),
     }),
-  }
-}
-
-async function runReadOnlyCommand(
-  command: string,
-  timeoutMs: number,
-  projectDir: string,
-  signal?: AbortSignal,
-): Promise<string> {
-  try {
-    const beforeStatus = await Shell.run("git status --short --untracked-files=all", {
-      cwd: projectDir,
-      env: process.env,
-      timeoutMs: 10_000,
-      abort: signal,
-    })
-    const result = await Shell.run(command, {
-      cwd: projectDir,
-      env: process.env,
-      timeoutMs,
-      abort: signal,
-    })
-    const afterStatus = await Shell.run("git status --short --untracked-files=all", {
-      cwd: projectDir,
-      env: process.env,
-      timeoutMs: 10_000,
-      abort: signal,
-    })
-    const parts = [`exit_code: ${result.exitCode}`]
-    if (typeof result.pid === "number") parts.push(`pid: ${result.pid}`)
-    if (result.timedOut) parts.push(`timeout_ms: ${timeoutMs}`)
-    if (result.idleTimedOut) parts.push("idle_timeout: true")
-    if (result.aborted) parts.push("aborted: true")
-    if (result.stdout.trim()) parts.push(`stdout:\n${result.stdout.slice(0, 8_000)}`)
-    if (result.stderr.trim()) parts.push(`stderr:\n${result.stderr.slice(0, 5_000)}`)
-    if (beforeStatus.stdout.trim() !== afterStatus.stdout.trim()) {
-      parts.push(
-        [
-          "readonly_guard: worktree changed during reviewer command; treat this as unsafe verification, not an implementation fix.",
-          "before_status:",
-          beforeStatus.stdout.trim() || "(clean)",
-          "after_status:",
-          afterStatus.stdout.trim() || "(clean)",
-        ].join("\n"),
-      )
-    }
-    return parts.join("\n") || `exit_code: ${result.exitCode} (no output)`
-  } catch (err) {
-    return `Error running command: ${err instanceof Error ? err.message : String(err)}`
   }
 }
 

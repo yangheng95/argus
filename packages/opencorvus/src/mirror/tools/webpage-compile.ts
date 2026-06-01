@@ -1,7 +1,8 @@
 /**
  * `webpage_compile` tool — wraps `mirror/url/compile::compilePageToXML`.
  *
- * Reads a previously-extracted `capture.html` + `extracted-page.json` and emits
+ * Reads a previously-extracted `singlefile.html` or `capture.html` plus
+ * `extracted-page.json` and emits
  * the canonical structure IR + asset graph. `page-ir.xml` is still written as a
  * compatibility view during algorithm migration.
  */
@@ -22,7 +23,7 @@ export const WebpageCompileTool = Tool.define("webpage_compile", {
 
 The canonical outputs are \`page.ir.json\` and \`assets/manifest.json\`. Dense CSS, SVG path data, data URIs, scripts, and long attribute/text values are preserved as content-addressed sidecar assets instead of being inlined into prompt context.
 
-Reads \`<outputDir>/capture.html\` and \`<outputDir>/extracted-page.json\` (from webpage_extract). Writes \`<outputDir>/page.ir.json\`, \`<outputDir>/assets/manifest.json\`, sidecar assets, and compatibility \`<outputDir>/page-ir.xml\`. Returns compact artifact stats.
+Reads \`<outputDir>/singlefile.html\` when present, otherwise \`<outputDir>/capture.html\`, plus \`<outputDir>/extracted-page.json\` (from webpage_extract). Writes \`<outputDir>/page.ir.json\`, \`<outputDir>/assets/manifest.json\`, sidecar assets, and compatibility \`<outputDir>/page-ir.xml\`. Returns compact artifact stats.
 
 This tool is artifact-dependent: do NOT call it until \`extracted-page.json\` exists in the output directory. Never batch it with the URL extraction call that creates that file.
 
@@ -31,7 +32,7 @@ Use this only when the canonical structure IR or asset graph is missing. Do not 
     outputDir: z
       .string()
       .describe(
-        `Directory containing capture.html and extracted-page.json. Writes page.ir.json, assets/manifest.json, sidecar assets, and compatibility page-ir.xml here. Defaults to task-scoped \`${DEFAULT_MIRROR_SUBDIR}\` (matching webpage_extract's default). Do not set this during task sessions; overrides are for benchmarks/tests and task-session overrides must stay under \`${DEFAULT_MIRROR_SUBDIR}\`.`,
+        `Directory containing singlefile.html or capture.html plus extracted-page.json. Writes page.ir.json, assets/manifest.json, sidecar assets, and compatibility page-ir.xml here. Defaults to task-scoped \`${DEFAULT_MIRROR_SUBDIR}\` (matching webpage_extract's default). Do not set this during task sessions; overrides are for benchmarks/tests and task-session overrides must stay under \`${DEFAULT_MIRROR_SUBDIR}\`.`,
       )
       .optional(),
     max_depth: z
@@ -45,6 +46,7 @@ Use this only when the canonical structure IR or asset graph is missing. Do not 
     const outputDir = await resolveMirrorOutputDir({ override: params.outputDir, sessionID: ctx.sessionID })
     const extractedPath = path.join(outputDir, "extracted-page.json")
     const captureHtmlPath = path.join(outputDir, "capture.html")
+    const singleFileHtmlPath = path.join(outputDir, "singlefile.html")
 
     let extractedText: string
     try {
@@ -59,25 +61,21 @@ Use this only when the canonical structure IR or asset graph is missing. Do not 
       throw error
     }
 
-    let captureHtml: string
-    try {
-      captureHtml = await fs.readFile(captureHtmlPath, "utf8")
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-        throw new Error(
-          `Missing ${captureHtmlPath}. \`webpage_compile\` now compiles canonical mirror IR from ` +
-          `the HTML capture produced by \`webpage_extract\`. Re-run extraction for this evidence package first.`,
-        )
-      }
-      throw error
+    const archiveHtmlPath = await existingArchiveHtmlPath(singleFileHtmlPath, captureHtmlPath)
+    if (!archiveHtmlPath) {
+      throw new Error(
+        `Missing ${singleFileHtmlPath} and ${captureHtmlPath}. \`webpage_compile\` compiles canonical mirror IR from ` +
+        `the HTML archive produced by \`webpage_extract\`. Re-run extraction for this evidence package first.`,
+      )
     }
+    const archiveHtml = await fs.readFile(archiveHtmlPath, "utf8")
 
     const raw = JSON.parse(extractedText)
     const page = materializeInlineExtractedPageAssets(ExtractedPageSchema.parse(raw), outputDir)
     await fs.writeFile(extractedPath, JSON.stringify(page, null, 2), "utf8")
 
     const structure = extractArchiveHtml({
-      html: captureHtml,
+      html: archiveHtml,
       url: page.url,
       title: page.title,
     })
@@ -96,7 +94,7 @@ Use this only when the canonical structure IR or asset graph is missing. Do not 
         `# Compiled XML IR`,
         "",
         `- Source: ${extractedPath}`,
-        `- HTML capture: ${captureHtmlPath}`,
+        `- HTML archive: ${archiveHtmlPath}`,
         `- Canonical structure IR: ${path.join(outputDir, "page.ir.json")}`,
         `- Browser layout/style merge: ${structure.pageIr.stats.layoutMatchedElements ?? 0}/${structure.pageIr.stats.layoutElements ?? 0} elements`,
         `- Asset graph: ${path.join(outputDir, "assets", "manifest.json")}`,
@@ -124,3 +122,19 @@ Use this only when the canonical structure IR or asset graph is missing. Do not 
     }
   },
 })
+
+async function existingArchiveHtmlPath(singleFileHtmlPath: string, captureHtmlPath: string): Promise<string | undefined> {
+  if (await exists(singleFileHtmlPath)) return singleFileHtmlPath
+  if (await exists(captureHtmlPath)) return captureHtmlPath
+  return undefined
+}
+
+async function exists(filePath: string): Promise<boolean> {
+  try {
+    const stat = await fs.stat(filePath)
+    return stat.isFile()
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return false
+    throw error
+  }
+}

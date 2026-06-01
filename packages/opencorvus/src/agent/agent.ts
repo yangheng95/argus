@@ -583,7 +583,6 @@ export namespace Agent {
             "list_directory",
             "memory_search",
             "memory_get",
-            "websearch",
             "webfetch",
             "external_code_search",
             "todoread",

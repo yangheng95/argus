@@ -11484,7 +11484,7 @@
           }
         ],
         "summary": "List Missions",
-        "description": "List Mission records for the current project. Each record is backed by exactly one kind=\"mission\" session and can be opened through the session conversation/event routes.",
+        "description": "List Mission records across project directories. Each record is backed by exactly one kind=\"mission\" session and can be opened through the session conversation/event routes.",
         "responses": {
           "200": {
             "description": "Mission records",

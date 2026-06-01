@@ -1,6 +1,7 @@
-import { afterEach, describe, expect, mock, test } from "bun:test"
+import { afterAll, afterEach, describe, expect, mock, spyOn, test } from "bun:test"
 import { AgentSemaphore } from "../../src/engine/agent-semaphore"
 import { Instance } from "../../src/project/instance"
+import { Session } from "@/session"
 import type { IntegrityReplayContext } from "../../src/integrity/replay-context"
 import { tmpdir } from "../fixture/fixture"
 
@@ -22,7 +23,11 @@ mock.module("@/agent/runner", () => ({
     const session = {
       id:
         input.existingSessionID ??
-        (input.sessionTitle.includes("Reviewer") ? `ses_reviewer_${runnerCalls.length}` : "ses_integrity_plan"),
+        (input.terminalTool.toolName === "submit_integrity_consensus"
+          ? "ses_integrity_consensus"
+          : input.sessionTitle.includes("Reviewer")
+            ? `ses_reviewer_${runnerCalls.length}`
+            : "ses_integrity_plan"),
     }
     const lifecycle = input.onSessionCreated?.(session)
     const collector = input.toolKit.getCollector()
@@ -123,14 +128,10 @@ mock.module("@/engine/protocol", () => ({
   },
 }))
 
-mock.module("@/session", () => ({
-  Session: {
-    createNext: async (input: any) => {
-      createdSessions.push(input)
-      return { id: "ses_soft_integrity" }
-    },
-  },
-}))
+spyOn(Session, "createNext").mockImplementation(async (input: any) => {
+  createdSessions.push(input)
+  return { id: "ses_soft_integrity" } as any
+})
 
 function replayContext(attemptNumber: number): IntegrityReplayContext {
   return {
@@ -237,6 +238,10 @@ describe("integrity team-agent replay attempts", () => {
   const originalSetInterval = globalThis.setInterval
   const originalClearInterval = globalThis.clearInterval
 
+  afterAll(() => {
+    mock.restore()
+  })
+
   afterEach(async () => {
     runnerCalls = []
     forwarders = []
@@ -332,6 +337,10 @@ describe("integrity team-agent replay attempts", () => {
     expect(progressEvents[0].attempt).toBe(2)
     expect(completedEvents).toHaveLength(1)
     expect(completedEvents[0].payload.attempts).toBe(2)
+    expect(completedEvents[0].payload.sessionID).toBe("ses_integrity_consensus")
+    const consensusCall = runnerCalls.find((call) => call.terminalTool.toolName === "submit_integrity_consensus")
+    expect(consensusCall.existingSessionID).toBeUndefined()
+    expect(consensusCall.parentSessionID).toBe("ses_parent")
     expect(userPrompts).toHaveLength(4)
     for (const prompt of userPrompts) {
       expect(prompt).toContain("# Integrity Replay Context")
@@ -499,6 +508,88 @@ describe("integrity team-agent replay attempts", () => {
     expect(prompt).toContain("`covered`, `missing`, `inconclusive`")
     expect(prompt).toContain("Do not use `concerns`")
     expect(prompt).toContain("Overall verdict values belong only in `verdict` / `verdictImpact`")
+  })
+
+  test("consensus prompt summarizes oversized reviewer reports instead of replaying full tool dumps", async () => {
+    const { buildSupervisorConsensusPrompt } = await import("../../src/integrity/team-agent")
+    const prompt = buildSupervisorConsensusPrompt(
+      {
+        userRequest: "Review a large implementation without overflowing consensus context.",
+        taskTitle: "Large review",
+        goals: [
+          {
+            id: "goal_large",
+            title: "Large review",
+            objective: "Verify large reviewer reports stay consumable.",
+            acceptance_specs: [],
+            owned_paths: ["src/large.ts"],
+            depends_on: [],
+            priority: "blocking",
+            kind: "verification",
+            requirement_ids: ["REQ-1"],
+          },
+        ],
+        replayContext: replayContext(2),
+      },
+      {
+        rationale: "Need a large report reviewer.",
+        riskHypotheses: [],
+        coveragePlan: [],
+        reviewers: [
+          {
+            reviewerID: "rev_large",
+            title: "Large report reviewer",
+            focus: "Large report",
+            riskHypothesisIDs: [],
+            drilldownPlan: [],
+            adversarialQuestions: ["Can consensus read this without raw dump overflow?"],
+          },
+        ],
+      },
+      [
+        {
+          reviewerID: "rev_large",
+          scope: "Large report",
+          verdict: "needs_correction",
+          summary: "Important finding survives while raw dumps are summarized.",
+          drilldowns: Array.from({ length: 40 }, (_value, index) => ({
+            kind: "command",
+            target: `target-${index}`,
+            purpose: `purpose-${index} ${"x".repeat(120)}`,
+            result: `result-${index} ${"y".repeat(120)}`,
+          })),
+          coverage: [],
+          evidence: Array.from({ length: 80 }, (_value, index) => `late-evidence-${index} ${"z".repeat(180)}`),
+          findings: [
+            {
+              id: "large-finding",
+              severity: "blocking",
+              verdictImpact: "needs_correction",
+              title: "Important finding",
+              description: "This finding must remain visible to consensus.",
+              evidence: ["finding evidence"],
+              targetIDs: ["goal_large"],
+              requirementIDs: ["REQ-1"],
+              specIDs: [],
+              filePaths: ["src/large.ts"],
+              affectedSymbols: ["LargeComponent"],
+              repair: "Fix the important defect.",
+              verify: ["Run focused verification."],
+              sourceFindingIDs: [],
+              priorAttemptRefs: [],
+              reviewers: ["rev_large"],
+              consensus: "agreed",
+            },
+          ],
+          openQuestions: [],
+        },
+      ],
+    )
+
+    expect(prompt).toContain("Important finding")
+    expect(prompt).toContain("omitted 28 drilldowns")
+    expect(prompt).toContain("omitted 62 evidence rows")
+    expect(prompt).not.toContain("late-evidence-79")
   })
 
   test("reviewer prompt separates coverage anchors from finding traceability arrays", async () => {

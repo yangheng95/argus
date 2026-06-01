@@ -70,7 +70,7 @@ describe("webpage-generate dependency guards", () => {
     expect(parsed.content).not.toMatch(/static mode|Live-server mode/i)
   })
 
-  test("reference generation skills are frontend-design only and never claim acceptance gates", () => {
+  test("reference generation skills are frontend-design only and never claim acceptance checks", () => {
     for (const md of [webpageGenerateMd, imageGenerateMd]) {
       const parsed = matter(md)
       expect(parsed.data.stage).toBeUndefined()
@@ -294,6 +294,71 @@ describe("webpage-generate dependency guards", () => {
         expect(pageIr.stats.layoutMatchedElements).toBe(3)
         expect(JSON.stringify(pageIr)).toContain('"selector":"section.hero"')
         expect(JSON.stringify(codegenContext)).toContain('"bounds":{"x":0,"y":0,"w":1440,"h":400}')
+      },
+    })
+  })
+
+  test("compile prefers SingleFile archive CSS before falling back to capture HTML", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const outputDir = path.join(tmp.path, "mirror")
+        await fs.mkdir(outputDir, { recursive: true })
+        await Bun.write(
+          path.join(outputDir, "capture.html"),
+          `<html><body><main class="runtimeGenerated"><h1>Capture fallback</h1></main></body></html>`,
+        )
+        await Bun.write(
+          path.join(outputDir, "singlefile.html"),
+          `<html><head><style>.runtimeGenerated{display:grid;grid-template-columns:1fr 320px}.runtimeGenerated h1{font-size:48px}</style></head><body><main class="runtimeGenerated"><h1>SingleFile source</h1></main></body></html>`,
+        )
+        await Bun.write(
+          path.join(outputDir, "extracted-page.json"),
+          JSON.stringify({
+            url: "https://example.test/",
+            title: "SingleFile CSS",
+            viewport: { width: 1440, height: 900 },
+            screenshotUrl: "",
+            tree: [
+              {
+                selector: "main.runtimeGenerated",
+                tag: "main",
+                bounds: { x: 0, y: 0, w: 1440, h: 400 },
+                styles: { display: "grid", gridTemplateColumns: "1fr 320px" },
+                text: "SingleFile source",
+                children: [
+                  {
+                    selector: "h1",
+                    tag: "h1",
+                    bounds: { x: 0, y: 0, w: 400, h: 64 },
+                    styles: { fontSize: "48px" },
+                    text: "SingleFile source",
+                  },
+                ],
+              },
+            ],
+            tokens: { colors: {}, fonts: [], customProperties: {} },
+            assets: { images: [], icons: [] },
+            stats: { totalElements: 2, extractedElements: 2, imageCount: 0, extractionTimeMs: 1 },
+          }),
+        )
+
+        const compile = await WebpageCompileTool.init()
+        const compileResult = await compile.execute({ outputDir }, {} as any)
+        const analyze = await WebpageAnalyzeTool.init()
+        await analyze.execute({ outputDir }, {} as any)
+
+        const pageIr = await Bun.file(path.join(outputDir, "page.ir.json")).text()
+        const criticalCss = await Bun.file(path.join(outputDir, "source-skeleton", "critical.css")).text()
+        const fullSourceCss = await Bun.file(path.join(outputDir, "source-skeleton", "full-source.css")).text()
+
+        expect(compileResult.output).toContain("singlefile.html")
+        expect(pageIr).toContain("SingleFile source")
+        expect(pageIr).not.toContain("Capture fallback")
+        expect(criticalCss).toContain(".runtimeGenerated")
+        expect(criticalCss).toContain("grid-template-columns: 1fr 320px")
+        expect(fullSourceCss).toContain("font-size:48px")
       },
     })
   })

@@ -90,9 +90,9 @@ describe("pipeline workflow architecture review step", () => {
 
     const log = createDecisionLog(taskID)
     for (const key of [
+      "public_report",
       "frontend_template",
       "fillable_modules",
-      "component_inventory",
       "material_inventory",
       "visual_consistency_contract",
       "ui_data_contract",

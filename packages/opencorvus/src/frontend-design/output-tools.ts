@@ -29,6 +29,16 @@ export interface FrontendTemplateOutputCollector {
 
 const VISUAL_ANCHOR_BUDGET = 80
 
+const FlexibleStringListSchema = z.preprocess((value) => {
+  if (value == null || value === "") return []
+  if (Array.isArray(value)) return value
+  if (typeof value !== "string") return [String(value)]
+  return value
+    .split(/\r?\n/)
+    .map((item) => item.replace(/^\s*[-*]\s*/, "").trim())
+    .filter(Boolean)
+}, z.array(z.string().min(1)).default([]))
+
 function emptyCollector(): FrontendTemplateOutputCollector {
   return { specs: [] }
 }
@@ -64,7 +74,7 @@ function renderComponentReusePlan(items: readonly FrontendTemplateFinal["compone
 }
 
 function renderBaselineReplacementPlan(items: readonly FrontendTemplateFinal["baseline_replacement_plan"][number][]): string {
-  if (items.length === 0) return "- no generated-baseline replacement plan submitted"
+  if (items.length === 0) return "- no source-region evolution plan submitted"
   return items.map((item) => {
     const lines = [
       `- ${item.boundary_id} — ${item.source_region}`,
@@ -107,31 +117,19 @@ function renderNamedItems(title: string, items: readonly {
 function renderComponentInventoryFromReusePlan(items: readonly FrontendTemplateFinal["component_reuse_plan"][number][]): string {
   if (items.length === 0) return ""
   return [
-    "## Component Families",
-    ...items.map((item) => {
-      const lines = [
-        `- ${item.family_id}: ${item.name}`,
-        `  - surface: ${item.observed_surface}`,
-        `  - strategy: ${item.implementation_strategy}`,
-        `  - reuse_source: ${item.reuse_source}`,
-        `  - props_states: ${item.props_states}`,
-        `  - acceptance: ${item.parity_guard}`,
-      ]
-      if (item.source_refs.length > 0) lines.push(`  - source_refs: ${item.source_refs.join(", ")}`)
-      if (item.mature_library_candidates.length > 0) lines.push(`  - mature_library_candidates: ${item.mature_library_candidates.join(", ")}`)
-      if (item.custom_fallback_reason) lines.push(`  - custom_fallback_reason: ${item.custom_fallback_reason}`)
-      return lines.join("\n")
-    }),
+    "Legacy compatibility summary only.",
+    "Do not treat this field as a standalone component checklist; use component_reuse_plan, quality_project_contract, completeness_review, open_questions, and named source artifacts for implementation decisions.",
+    `Reuse families captured: ${items.map((item) => item.family_id).join(", ")}`,
   ].join("\n")
 }
 
 function renderQualityProjectContract(final: FrontendTemplateFinal): string {
   const lines = [
     "## Maintainable Target Project",
-    "- Raw extracted DOM/CSS is visual baseline input only, not the deliverable project.",
-    "- Build must create readable project-owned source: semantic components, data modules, style modules, asset references, runtime entrypoints, and verification commands.",
+    "- The frontend-design high-fidelity source project is the implementation starting point, not a sidecar reference to ignore.",
+    "- Build should preserve readable source ownership: React/Vue components, data modules, CSS sidecars, asset references, runtime entrypoints, and verification commands.",
     "- Repeated rows/cards/items must be rendered from arrays and component loops.",
-    "- Complex controls must follow component_reuse_plan and baseline_replacement_plan instead of hand-rolled freehand code.",
+    "- Complex controls must follow component_reuse_plan; use baseline_replacement_plan only for specifically named raw/generated regions that need in-place evolution.",
   ]
   if (final.component_reuse_plan.length > 0) {
     lines.push("", "## Component Targets")
@@ -149,7 +147,10 @@ function renderQualityProjectContract(final: FrontendTemplateFinal): string {
 }
 
 function normalizeFrontendTemplateFinal(final: FrontendTemplateFinal): FrontendTemplateFinal {
-  const next = { ...final }
+  const next = ensureMaintainableSourceRegionPlan({
+    ...final,
+    frontend_project: normalizeFrontendProject(final.frontend_project),
+  })
   next.frontend_template = next.frontend_template.trim() || renderNamedItems("Frontend Template", next.frontend_template_sections)
   next.fillable_modules = next.fillable_modules.trim() || renderNamedItems("Fillable Modules", next.fillable_module_items)
   next.component_inventory = next.component_inventory.trim() || renderComponentInventoryFromReusePlan(next.component_reuse_plan)
@@ -158,6 +159,89 @@ function normalizeFrontendTemplateFinal(final: FrontendTemplateFinal): FrontendT
   next.visual_consistency_contract = next.visual_consistency_contract.trim() || renderNamedItems("Visual Consistency Contract", next.visual_consistency_items)
   next.ui_data_contract = next.ui_data_contract.trim() || renderNamedItems("UI Data Contract", next.ui_data_contract_items)
   return next
+}
+
+function ensureMaintainableSourceRegionPlan(final: FrontendTemplateFinal): FrontendTemplateFinal {
+  if (final.final_delivery_mode !== "maintainable_replacement_required") return final
+  if (final.baseline_replacement_plan.length > 0) return final
+  if (!isSourceBaselineFrontendProject(final.frontend_project)) return final
+
+  const familyID = "comp-source-page-baseline"
+  const componentReusePlan = final.component_reuse_plan.some((item) => item.family_id === familyID)
+    ? final.component_reuse_plan
+    : [
+        ...final.component_reuse_plan,
+        {
+          family_id: familyID,
+          name: "Source page baseline",
+          observed_surface: "Full captured webpage source baseline adopted from frontend-design output",
+          source_refs: [
+            "frontend-design-skeleton/src/components/SourceClonePage.tsx",
+            "frontend-design-skeleton/src/components/SourceDomPage.tsx",
+            "frontend-design-skeleton/src/styles.css",
+            "web-clone-source/reference.png",
+          ],
+          implementation_strategy: "extracted_baseline_defer" as const,
+          reuse_source: "frontend-design-skeleton source baseline plus sourceDomReplacementPlan.ts when available",
+          mature_library_candidates: [],
+          props_states: "source regions, source data, source assets, responsive layout, interactions, and parity guards",
+          replacement_boundary: "Whole captured source page until named regions are replaced with parity-preserving semantic components",
+          parity_guard: "Keep the adopted baseline while replacing source regions; compare against reference.png and run source audit before final maintainability claims.",
+          custom_fallback_reason: "",
+        },
+      ]
+
+  return {
+    ...final,
+    component_reuse_plan: componentReusePlan,
+    baseline_replacement_plan: [
+      {
+        boundary_id: "source-page-baseline",
+        source_region: "frontend-design-skeleton full source page baseline",
+        action: "defer_baseline_until_parity",
+        component_family_id: familyID,
+        replacement_strategy: "extracted_baseline_defer",
+        reuse_source: "frontend-design-skeleton entrypoints, source-dom regions, CSS sidecars, source data, source assets, and web-clone-source/reference.png",
+        mature_library_candidates: [],
+        deletion_rule: "Do not delete the source baseline wholesale; replace named regions only after source data extraction, semantic component rendering, scoped CSS ownership, screenshot parity, and source audit evidence.",
+        source_refs: [
+          "frontend-design-skeleton/README.md",
+          "frontend-design-skeleton/src/App.tsx",
+          "frontend-design-skeleton/src/components/SourceClonePage.tsx",
+          "frontend-design-skeleton/src/components/SourceDomPage.tsx",
+          "frontend-design-skeleton/src/styles.css",
+          "web-clone-source/reference.png",
+        ],
+        parity_guard: "Root visual comparison against reference.png plus zero-finding web_clone_source_audit evidence before claiming final maintainability.",
+        custom_fallback_reason: "",
+      },
+    ],
+  }
+}
+
+function isSourceBaselineFrontendProject(project: FrontendTemplateFinal["frontend_project"]): boolean {
+  const root = normalizeProjectRootForReport(project.project_root)
+  const sourcePackage = normalizeProjectRootForReport(project.source_package)
+  return (project.role === "source_baseline_input" && project.status === "created") ||
+    isFrontendDesignSkeletonRoot(root) ||
+    sourcePackage === "web-clone-source" ||
+    sourcePackage.endsWith("/web-clone-source")
+}
+
+function normalizeFrontendProject(project: FrontendTemplateFinal["frontend_project"]): FrontendTemplateFinal["frontend_project"] {
+  const root = normalizeProjectRootForReport(project.project_root)
+  if (isFrontendDesignSkeletonRoot(root) && project.role === "implementation_target") {
+    return { ...project, role: "source_baseline_input" }
+  }
+  return project
+}
+
+function normalizeProjectRootForReport(projectRoot: string): string {
+  return projectRoot.replaceAll("\\", "/").replace(/^\.\/+/, "").replace(/\/+$/, "")
+}
+
+function isFrontendDesignSkeletonRoot(normalizedProjectRoot: string): boolean {
+  return normalizedProjectRoot === "frontend-design-skeleton" || normalizedProjectRoot.endsWith("/frontend-design-skeleton")
 }
 
 function parseMaybeStringArray(value: unknown): unknown {
@@ -178,6 +262,18 @@ function normalizeFrontendTemplateInput(input: unknown): unknown {
   if (!input || typeof input !== "object" || Array.isArray(input)) return input
   const source = input as Record<string, unknown>
   const normalized: Record<string, unknown> = { ...source }
+
+  const normalizePlanItems = (value: unknown): unknown => {
+    if (!Array.isArray(value)) return value
+    return value.map((item) => {
+      if (!item || typeof item !== "object" || Array.isArray(item)) return item
+      const record = { ...(item as Record<string, unknown>) }
+      if (record.parity_guard === undefined && typeof record.replacement_guard === "string") {
+        record.parity_guard = record.replacement_guard
+      }
+      return record
+    })
+  }
 
   // Some providers flatten a nested tool object into keys like
   // `frontend_project<arg_key>status`; rebuild that object before Zod parsing.
@@ -200,6 +296,8 @@ function normalizeFrontendTemplateInput(input: unknown): unknown {
   if (sawFlattenedFrontendProject || source.frontend_project) {
     normalized.frontend_project = frontendProject
   }
+  normalized.component_reuse_plan = normalizePlanItems(source.component_reuse_plan)
+  normalized.baseline_replacement_plan = normalizePlanItems(source.baseline_replacement_plan)
 
   return normalized
 }
@@ -214,19 +312,22 @@ export function buildFrontendTemplateReport(collector: FrontendTemplateOutputCol
   return {
     summary: limitSummary(summary),
     detail: [
+      `## Design System\n${collector.final.design_system}`,
+      `## Recommended Stack\n${collector.final.tech_stack.length ? markdownList(collector.final.tech_stack) : "- not specified"}`,
       `## Frontend Template\n${requireReportString(collector.final.frontend_template, "frontend_template")}`,
       `## Final Delivery Mode\n${collector.final.final_delivery_mode}`,
       `## Fillable Modules\n${collector.final.fillable_modules}`,
-      `## Component Inventory\n${collector.final.component_inventory}`,
-      `## Component Reuse Plan\n${renderComponentReusePlan(collector.final.component_reuse_plan)}`,
-      `## Generated Baseline Replacement Plan\n${renderBaselineReplacementPlan(collector.final.baseline_replacement_plan)}`,
+      `## Implementation Problems And Agent Handoff\n${collector.final.completeness_review}`,
+      `## Reuse Constraints\n${renderComponentReusePlan(collector.final.component_reuse_plan)}`,
+      `## Source Region Evolution Plan\n${renderBaselineReplacementPlan(collector.final.baseline_replacement_plan)}`,
       `## Quality Project Contract\n${collector.final.quality_project_contract}`,
       `## Material Inventory\n${collector.final.material_inventory}`,
       `## Frontend Project\n${renderFrontendProjectReport(collector.final.frontend_project)}`,
       `## Visual Consistency Contract\n${collector.final.visual_consistency_contract}`,
       `## UI Data Contract\n${collector.final.ui_data_contract}`,
       `## Template Iteration Notes\n${markdownList(collector.final.template_iteration_notes)}`,
-      `## Completeness Review\n${collector.final.completeness_review}`,
+      `## Reference Artifacts\n${collector.final.reference_artifacts.length ? markdownList(collector.final.reference_artifacts) : "- no reference artifacts submitted"}`,
+      `## Open Questions\n${collector.final.open_questions.length ? markdownList(collector.final.open_questions) : "- none"}`,
       `## Visual Anchors\n${specLines.length ? markdownList(specLines) : "- no compact visual anchors submitted"}`,
     ].join("\n\n"),
   }
@@ -236,8 +337,7 @@ const ComponentReusePlanItemSchema = z.object({
   family_id: z
     .string()
     .min(1)
-    .regex(/^comp-[a-z0-9][a-z0-9-]*$/, "family_id must start with 'comp-' and contain only [a-z0-9-]")
-    .describe("Stable component-family id, e.g. comp-market-table, comp-toolbar-filter."),
+    .describe("Stable component-family id. Preserve model/source naming when useful; no host-specific prefix is required."),
   name: z.string().min(1).describe("Human-readable component family name."),
   observed_surface: z
     .string()
@@ -266,7 +366,7 @@ const ComponentReusePlanItemSchema = z.object({
   props_states: z
     .string()
     .min(1)
-    .describe("Props/data/state/variants/interactions Build must preserve when implementing this component family."),
+    .describe("Props/data/state/variants/interactions Build should preserve when implementing this component family."),
   replacement_boundary: z
     .string()
     .min(1)
@@ -277,46 +377,29 @@ const ComponentReusePlanItemSchema = z.object({
     .describe("How Build verifies replacement did not regress visual fidelity, including screenshot/reference or source anchors."),
   custom_fallback_reason: z
     .string()
-    .min(1)
-    .describe("Required explicit reason field. Use 'not applicable' unless implementation_strategy=custom_fallback; for custom_fallback, explain why existing components and mature libraries do not fit."),
-}).superRefine((item, ctx) => {
-  if (item.implementation_strategy === "custom_fallback" && (!item.custom_fallback_reason.trim() || /^not applicable$/i.test(item.custom_fallback_reason.trim()))) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["custom_fallback_reason"],
-      message: "custom_fallback requires custom_fallback_reason",
-    })
-  }
-  if (item.implementation_strategy === "mature_library" && item.mature_library_candidates.length === 0) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["mature_library_candidates"],
-      message: "mature_library strategy requires at least one mature_library_candidates entry",
-    })
-  }
+    .default("")
+    .describe("Optional reason when implementation_strategy=custom_fallback; explain why existing components and mature libraries do not fit when known."),
 })
 
 const BaselineReplacementPlanItemSchema = z.object({
   boundary_id: z
     .string()
     .min(1)
-    .regex(/^replace-[a-z0-9][a-z0-9-]*$/, "boundary_id must start with 'replace-' and contain only [a-z0-9-]")
-    .describe("Stable generated-baseline replacement boundary id, e.g. replace-market-table."),
+    .describe("Stable source-region evolution boundary id. Preserve model/source naming when useful; no host-specific prefix is required."),
   source_region: z
     .string()
     .min(1)
-    .describe("Exact generated skeleton/source region to remove, replace, or defer, with file/slot/source ids when available."),
+    .describe("Exact skeleton/source region to refine, replace, or defer, with file/source ids when available."),
   action: z
     .enum(["replace_generated_baseline", "delete_generated_region", "defer_baseline_until_parity"])
-    .describe("Whether Build must replace the baseline region, delete redundant generated coverage, or temporarily defer it until parity is safe."),
+    .describe("Whether Build should replace a region, delete genuinely redundant generated coverage, or temporarily defer it until parity is safe."),
   component_family_id: z
     .string()
     .min(1)
-    .regex(/^comp-[a-z0-9][a-z0-9-]*$/, "component_family_id must reference a comp-* component family")
     .describe("Component family from component_reuse_plan that owns the replacement/deletion boundary."),
   replacement_strategy: z
     .enum(["existing_project_component", "mature_library", "extracted_baseline_defer", "custom_fallback"])
-    .describe("Replacement route. Prefer existing_project_component, then mature_library; custom_fallback is last resort."),
+    .describe("Refinement route. Prefer existing_project_component, then mature_library; custom_fallback is last resort."),
   reuse_source: z
     .string()
     .min(1)
@@ -328,7 +411,7 @@ const BaselineReplacementPlanItemSchema = z.object({
   deletion_rule: z
     .string()
     .min(1)
-    .describe("What generated DOM/CSS/asset coverage must be removed from final source once the replacement passes, and what evidence may remain input-only."),
+    .describe("What redundant generated DOM/CSS/asset coverage, if any, can be removed once the replacement passes, and what evidence should remain input-only."),
   source_refs: z
     .array(z.string().min(1))
     .default([])
@@ -336,40 +419,11 @@ const BaselineReplacementPlanItemSchema = z.object({
   parity_guard: z
     .string()
     .min(1)
-    .describe("Concrete visual/source checks required before deleting or replacing the generated baseline region."),
+    .describe("Concrete visual/source checks to run before deleting or replacing a region."),
   custom_fallback_reason: z
     .string()
-    .min(1)
-    .describe("Required explicit reason field. Use 'not applicable' unless replacement_strategy=custom_fallback; for custom_fallback, explain why no project component or mature library fits."),
-}).superRefine((item, ctx) => {
-  if (item.action === "defer_baseline_until_parity" && item.replacement_strategy !== "extracted_baseline_defer") {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["replacement_strategy"],
-      message: "defer_baseline_until_parity requires replacement_strategy=extracted_baseline_defer",
-    })
-  }
-  if (item.action !== "defer_baseline_until_parity" && item.replacement_strategy === "extracted_baseline_defer") {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["replacement_strategy"],
-      message: "extracted_baseline_defer is only valid with defer_baseline_until_parity",
-    })
-  }
-  if (item.replacement_strategy === "custom_fallback" && (!item.custom_fallback_reason.trim() || /^not applicable$/i.test(item.custom_fallback_reason.trim()))) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["custom_fallback_reason"],
-      message: "custom_fallback requires custom_fallback_reason",
-    })
-  }
-  if (item.replacement_strategy === "mature_library" && item.mature_library_candidates.length === 0) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["mature_library_candidates"],
-      message: "mature_library replacement requires at least one mature_library_candidates entry",
-    })
-  }
+    .default("")
+    .describe("Optional reason when replacement_strategy=custom_fallback; explain why no project component or mature library fits when known."),
 })
 
 const CompactTemplateItemSchema = z.object({
@@ -412,7 +466,7 @@ export const FrontendTemplateFinalSchema = z.object({
   final_delivery_mode: z
     .enum(["visual_baseline_allowed", "maintainable_replacement_required"])
     .describe(
-      "Required explicit delivery mode. The generated visual baseline is always input/evidence, not the delivered project. Use maintainable_replacement_required whenever the user asks for maintainability, real implementation, component reuse, or replacement of generated/mechanical output; otherwise use visual_baseline_allowed.",
+      "Explicit delivery mode. Use maintainable_replacement_required whenever the user asks for maintainability, real implementation, component reuse, or replacement of mechanical output; otherwise use visual_baseline_allowed. This field selects implementation expectations; it is not a standalone pass/fail mechanism.",
     ),
   frontend_template: OptionalMarkdownField(
     "Authoritative frontend template for downstream implementation: routes, layout slots, source-package entrypoints, semantic containers, states, and acceptance anchors.",
@@ -422,29 +476,29 @@ export const FrontendTemplateFinalSchema = z.object({
     .default([])
     .describe("Preferred compact replacement for a long frontend_template string. Use one item per route, layout slot, viewport matrix, or acceptance anchor."),
   fillable_modules: OptionalMarkdownField(
-    "Modules/slots downstream Build must fill: page modules, data modules, interactions, state, adapters, and verification modules.",
+    "Modules/slots downstream Build should fill: page modules, data modules, interactions, state, adapters, and verification modules.",
   ),
   fillable_module_items: z
     .array(CompactTemplateItemSchema)
     .default([])
     .describe("Preferred compact replacement for a long fillable_modules string. Use one item per module or slot."),
   component_inventory: OptionalMarkdownField(
-    "Maintainability-oriented component inventory. Prefer existing project component/design-system primitive, then mature maintained library, then custom fallback with reason. Do not hand-roll complex charts, maps, tables, calendars, dialogs, menus, forms, virtualized lists, drag/drop, editors, or rich media when a project component or mature library fits. If omitted, it is rendered from component_reuse_plan.",
+    "Legacy compatibility summary only. Do not use this as a standalone component checklist; keep it concise and direct downstream agents to component_reuse_plan, quality_project_contract, completeness_review, open_questions, and named source artifacts. If omitted, it is rendered as a compact reuse-family summary from component_reuse_plan.",
   ),
   component_reuse_plan: z
     .array(ComponentReusePlanItemSchema)
     .min(1)
     .describe(
-      "Structured, auditable implementation plan for the component inventory. Each component family must say whether Build should reuse an existing project component/design-system primitive, use a mature maintained library, keep the extracted DOM/CSS baseline until replacement is safe, or use a custom fallback with an explicit reason. This prevents blank-page rewrites and hand-rolled complex controls.",
+      "Structured, auditable reuse plan for the implementation surface. Each reusable family must say whether Build should reuse an existing project component/design-system primitive, use a mature maintained library, keep the extracted DOM/CSS baseline until replacement is safe, or use a custom fallback with an explicit reason. This keeps complex controls tied to project/library ownership without turning the handoff into a component catalog.",
     ),
   baseline_replacement_plan: z
     .array(BaselineReplacementPlanItemSchema)
     .default([])
     .describe(
-      "Generated-baseline deletion/replacement checklist. In maintainable_replacement_required mode, each generated skeleton/DOM/CSS region that must stop being final code must be listed with its replacement component family, preferred reuse source or mature library, deletion rule, and parity guard. This is the Build execution checklist for removing unmaintainable generated surfaces.",
+      "Optional source-region evolution plan. Use it only when a specific raw/generated skeleton region should be replaced, deleted, or deferred during in-place refinement. It is diagnostic/planning evidence, not a schema requirement and not a requirement to delete the whole skeleton.",
     ),
   quality_project_contract: OptionalMarkdownField(
-    "The high-quality project contract that frontend_design is delivering downstream. This is not the raw extracted baseline. It must define the maintainable target app shape, source ownership, semantic component tree, data modules, styling system, library use, runtime entrypoints, and verification commands needed for Build to produce a GPT-class readable implementation.",
+      "The high-quality project contract that frontend_design is delivering downstream. It defines the maintainable target app shape, source ownership, semantic component tree, data modules, styling system, library use, runtime entrypoints, verification commands, measured webpage_evaluate visual evidence, and zero-finding web_clone_source_audit evidence needed before claiming final maintainability.",
   ),
   quality_project_items: z
     .array(CompactTemplateItemSchema)
@@ -460,7 +514,7 @@ export const FrontendTemplateFinalSchema = z.object({
   frontend_project: z
     .object({
       status: z.enum(["created", "not_created", "blocked"]).default("not_created"),
-      role: z.enum(["visual_baseline_input", "implementation_target", "blocked"]).default("visual_baseline_input"),
+      role: z.enum(["source_baseline_input", "implementation_target", "visual_baseline_input", "blocked"]).default("source_baseline_input"),
       project_root: z.string().default(""),
       source_package: z.string().default(""),
       entrypoints: z.array(z.string().min(1)).default([]),
@@ -469,7 +523,7 @@ export const FrontendTemplateFinalSchema = z.object({
     })
     .default({
       status: "not_created",
-      role: "visual_baseline_input",
+      role: "source_baseline_input",
       project_root: "",
       source_package: "",
       entrypoints: [],
@@ -478,7 +532,7 @@ export const FrontendTemplateFinalSchema = z.object({
     })
     .describe(
       "Concrete frontend-design project output. For webpage replicas, this should identify the skeleton/project root created from web-clone-source, " +
-      "its role, entrypoints, source package, generation tool, and any blockers. Raw extracted DOM/CSS projects must be marked role=visual_baseline_input, not implementation_target; the quality_project_contract is the maintainable project deliverable contract.",
+      "its role, entrypoints, source package, generation tool, and any materialization defects. Editable frontend-design-skeleton projects are source_baseline_input because Build starts from them in the delivery root. Use implementation_target only for the actual root app.",
     ),
   visual_consistency_contract: OptionalMarkdownField(
     "Binding visual-fidelity frontend template section: viewport inventory, pixel hierarchy, colors, typography, spacing, states, responsive rules, comparison criteria, and reference artifacts.",
@@ -498,8 +552,8 @@ export const FrontendTemplateFinalSchema = z.object({
     .array(z.string().min(1))
     .min(1)
     .default([
-      "Host accepted the submitted frontend template after the model completed its available review pass; downstream visual/source gates remain authoritative.",
-      "Host accepted the submitted maintainability contract after checking that the payload includes component reuse, baseline replacement, visual consistency, and UI data sections.",
+      "Host accepted the submitted frontend template after the model completed its available review pass; downstream visual/source review remains authoritative.",
+      "Host accepted the submitted maintainability contract after checking that the payload includes component reuse, source-region planning where needed, visual consistency, and UI data sections.",
     ])
     .describe(
       "frontend template review-pass notes completed before handoff. One note is enough when assistant.auto_iteration=false; " +
@@ -511,8 +565,7 @@ export const FrontendTemplateFinalSchema = z.object({
     .min(1)
     .default("Host accepted the submitted frontend template as structurally complete enough for downstream requirements, architecture, build, source audit, and visual diff validation.")
     .describe(
-      "Final completeness audit covering inventory, layout, components, interactions, fillable modules, UI data contract, " +
-      "reference artifacts, and remaining open questions. Do not finalize until this audit says the frontend template is complete enough to hand off.",
+      "Final completeness audit and primary human-readable problem/handoff section. Cover known implementation risks, visual/source gaps, extraction-vs-rewrite uncertainty, project source organization, component/library reuse constraints, reference artifacts, and remaining open questions. Do not finalize until this audit says the frontend template is complete enough to hand off.",
     ),
   reference_artifacts: z
     .array(z.string().min(1))
@@ -520,11 +573,10 @@ export const FrontendTemplateFinalSchema = z.object({
     .describe(
       "Compact artifact anchors used as evidence. Prefer small canonical entrypoints such as web-clone-source/README.md, " +
       "implementation-blueprint.md, web-clone-implementation-contract.json, reference.png, source-ir/*, source-skeleton/critical.css, " +
-      "frontend-design-skeleton/README.md, and frontend-design-skeleton/src/slots.json. Do not enumerate every dense raw/generated file; " +
+      "frontend-design-skeleton/README.md, frontend-design-skeleton/src/App.tsx, frontend-design-skeleton/src/components/SourceClonePage.tsx, frontend-design-skeleton/src/data/sourceData.ts, and frontend-design-skeleton/src/styles.css. Do not enumerate every dense raw/generated file; " +
       "group public/source.html, src/generated/*, source-skeleton/index.html, page.ir.json, assets/manifest.json, segments.json, and codegen-context.json as targeted-gap evidence when needed.",
     ),
-  open_questions: z
-    .array(z.string().min(1))
+  open_questions: FlexibleStringListSchema
     .default([])
     .describe("Only truly unobservable product/API facts that downstream agents must not hallucinate."),
   // Optional fact-check registration: missing means no items registered.
@@ -534,11 +586,86 @@ export const FrontendTemplateFinalSchema = z.object({
 })
 export type FrontendTemplateFinal = z.infer<typeof FrontendTemplateFinalSchema>
 
+const ToolCompactTemplateItemSchema = z.object({
+  title: z.string().min(1),
+  detail: z.string().min(1),
+  source_refs: z.array(z.string().min(1)).default([]),
+})
+
+const ToolComponentReusePlanItemSchema = z.object({
+  family_id: z.string().min(1),
+  name: z.string().min(1),
+  observed_surface: z.string().min(1),
+  source_refs: z.array(z.string().min(1)).default([]),
+  implementation_strategy: z.enum(["existing_project_component", "mature_library", "extracted_baseline_defer", "custom_fallback"]),
+  reuse_source: z.string().min(1),
+  mature_library_candidates: z.array(z.string().min(1)).default([]),
+  props_states: z.string().min(1),
+  replacement_boundary: z.string().min(1),
+  parity_guard: z.string().min(1),
+  custom_fallback_reason: z.string().default(""),
+})
+
+const ToolBaselineReplacementPlanItemSchema = z.object({
+  boundary_id: z.string().min(1),
+  source_region: z.string().min(1),
+  action: z.enum(["replace_generated_baseline", "delete_generated_region", "defer_baseline_until_parity"]),
+  component_family_id: z.string().min(1),
+  replacement_strategy: z.enum(["existing_project_component", "mature_library", "extracted_baseline_defer", "custom_fallback"]),
+  reuse_source: z.string().min(1),
+  mature_library_candidates: z.array(z.string().min(1)).default([]),
+  deletion_rule: z.string().min(1),
+  source_refs: z.array(z.string().min(1)).default([]),
+  parity_guard: z.string().min(1),
+  custom_fallback_reason: z.string().default(""),
+})
+
+const FrontendTemplateToolInputSchema = z.object({
+  design_system: z.string().min(1),
+  tech_stack: z.array(z.string().min(1)).min(1),
+  final_delivery_mode: z.enum(["visual_baseline_allowed", "maintainable_replacement_required"]),
+  frontend_template: z.string().default(""),
+  frontend_template_sections: z.array(ToolCompactTemplateItemSchema).default([]),
+  fillable_modules: z.string().default(""),
+  fillable_module_items: z.array(ToolCompactTemplateItemSchema).default([]),
+  component_inventory: z.string().default(""),
+  component_reuse_plan: z.array(ToolComponentReusePlanItemSchema).min(1),
+  baseline_replacement_plan: z.array(ToolBaselineReplacementPlanItemSchema).default([]),
+  quality_project_contract: z.string().default(""),
+  quality_project_items: z.array(ToolCompactTemplateItemSchema).default([]),
+  material_inventory: z.string().default(""),
+  material_inventory_items: z.array(ToolCompactTemplateItemSchema).default([]),
+  frontend_project: z.object({
+    status: z.enum(["created", "not_created", "blocked"]).default("not_created"),
+    role: z.enum(["source_baseline_input", "implementation_target", "visual_baseline_input", "blocked"]).default("source_baseline_input"),
+    project_root: z.string().default(""),
+    source_package: z.string().default(""),
+    entrypoints: z.array(z.string().min(1)).default([]),
+    generation_tool: z.string().default(""),
+    notes: z.array(z.string().min(1)).default([]),
+  }).default({
+    status: "not_created",
+    role: "source_baseline_input",
+    project_root: "",
+    source_package: "",
+    entrypoints: [],
+    generation_tool: "",
+    notes: [],
+  }),
+  visual_consistency_contract: z.string().default(""),
+  visual_consistency_items: z.array(ToolCompactTemplateItemSchema).default([]),
+  ui_data_contract: z.string().default(""),
+  ui_data_contract_items: z.array(ToolCompactTemplateItemSchema).default([]),
+  template_iteration_notes: z.array(z.string().min(1)).default([]),
+  completeness_review: z.string().default(""),
+  reference_artifacts: z.array(z.string().min(1)).default([]),
+  open_questions: FlexibleStringListSchema,
+})
+
 function assertFrontendTemplateFinal(final: FrontendTemplateFinal): void {
   const requiredRenderedFields = [
     ["frontend_template", final.frontend_template],
     ["fillable_modules", final.fillable_modules],
-    ["component_inventory", final.component_inventory],
     ["quality_project_contract", final.quality_project_contract],
     ["material_inventory", final.material_inventory],
     ["visual_consistency_contract", final.visual_consistency_contract],
@@ -547,19 +674,22 @@ function assertFrontendTemplateFinal(final: FrontendTemplateFinal): void {
   for (const [key, value] of requiredRenderedFields) {
     if (!value.trim()) throw new Error(`${key} is required; provide concise markdown or the matching structured *_items field`)
   }
-  if (final.final_delivery_mode === "maintainable_replacement_required" && final.baseline_replacement_plan.length === 0) {
-    throw new Error("maintainable_replacement_required requires baseline_replacement_plan entries")
-  }
 }
 
 function renderFrontendProjectReport(project: FrontendTemplateFinal["frontend_project"]): string {
+  const normalizedRoot = normalizeProjectRootForReport(project.project_root)
+  const isFrontendDesignSkeleton = isFrontendDesignSkeletonRoot(normalizedRoot)
   const lines = [
     `- status: ${project.status}`,
     `- role: ${project.role}`,
     `- project_root: ${project.project_root || "(not created)"}`,
+    `- delivery_root: ${isFrontendDesignSkeleton ? "." : project.role === "implementation_target" ? project.project_root || "." : "."}`,
     `- source_package: ${project.source_package || "(not specified)"}`,
     `- generation_tool: ${project.generation_tool || "(not specified)"}`,
   ]
+  if (isFrontendDesignSkeleton) {
+    lines.push("- adoption_rule: frontend-design-skeleton is a source baseline excluded from final delivery; copy/adapt its high-fidelity React DOM/CSS/data/assets entrypoints, package metadata, and Vite/TS config into the root app before reporting build success.")
+  }
   if (project.entrypoints.length > 0) {
     lines.push("- entrypoints:")
     for (const item of project.entrypoints) lines.push(`  - ${item}`)
@@ -758,7 +888,7 @@ export function createFrontendTemplateOutputTools(options: { autoIteration?: boo
     if (collector.specs.length >= VISUAL_ANCHOR_BUDGET) {
       return (
         `VISUAL_ANCHOR_BUDGET_REACHED: ${VISUAL_ANCHOR_BUDGET} visual anchors are already registered. ` +
-      "Stop registering per-item visual rows; consolidate remaining detail in frontend_template/fillable_modules/component_inventory/material_inventory/visual_consistency_contract/ui_data_contract, " +
+      "Stop registering per-item visual rows; consolidate remaining detail in frontend_template/fillable_modules/completeness_review/material_inventory/visual_consistency_contract/ui_data_contract, " +
         "complete the frontend template review pass(es) required by assistant.auto_iteration, then call submit_frontend_template."
       )
     }
@@ -882,7 +1012,7 @@ export function createFrontendTemplateOutputTools(options: { autoIteration?: boo
         "Submit the complete mirror-grounded frontend design/replica contract for downstream agents. " +
         "Use this as the final action after visual evidence review and the frontend template review pass(es) required by assistant.auto_iteration; " +
         "do not register rows or call more mirror tools once this terminal tool is exposed.",
-      inputSchema: FrontendTemplateFinalSchema,
+      inputSchema: FrontendTemplateToolInputSchema,
       execute: async (input) => {
         if (collector.final) return "Error: frontend template already submitted; duplicate submit_frontend_template ignored."
         const final = normalizeFrontendTemplateFinal(FrontendTemplateFinalSchema.parse(normalizeFrontendTemplateInput(input)))

@@ -837,7 +837,8 @@ test("session processor does not supersede different-callID duplicate merge_back
   const second = [...store.values()].find(
     (p): p is Message.ToolPart => p.type === "tool" && p.callID === "call_merge_second",
   )
-  expect(first?.state.status).toBe("running")
+  expect(first?.state.status).toBe("error")
+  expect(first?.state.status === "error" ? first.state.failure.kind : "").toBe("lost-open-tool-parts")
   expect(second?.state.status).toBe("completed")
 })
 
@@ -901,6 +902,11 @@ test("session processor throws when a clean finish leaves an open tool part", as
   })
 
   await expect(processor.process({} as LLM.StreamInput)).rejects.toThrow(SessionProcessor.ProcessorLostPartsError)
+  const part = [...store.values()].find((p): p is Message.ToolPart => p.type === "tool" && p.callID === "call_lost")
+  expect(part?.state.status).toBe("error")
+  expect(part?.state.status === "error" ? part.state.failure.originSite : "").toBe(
+    "session.processor.lost-open-tool-parts",
+  )
 })
 
 test("session processor stamps open tool parts with the real activity abort cause", async () => {

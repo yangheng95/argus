@@ -78,6 +78,12 @@ proof that a new operator message is already handled.
 on external facts, current documentation, competitor/industry/API research, or
 PRD/SPEC source material that needs a durable citation bundle.
 
+When the operator names one or more webpages, pass those exact URLs in
+`source_urls` and ask research to start by webfetching them. If a research brief
+returns `subpage_research_tasks`, treat them as candidate independent evidence
+work items: dispatch parallel `research` calls for the subpages that are still
+material to the task, but do not treat the list as a mandatory next-tool command.
+
 Research output is a `research_brief` artifact plus bundle paths. It is not
 REQ-N, not acceptance specs, not a goal graph, not an implementation plan, not a
 delivery path, and not a route selector. Do not treat a research result as a
@@ -232,7 +238,7 @@ UI replication from visual reference in `Kind: workflow` -> `frontend_design`
 (mandatory when an image or live page URL is the visual spec) -> `analyze_intent`
 only if scope still needs clarification.
 
-If `frontend_design` fails for capture-gate, screenshot, materialization, or
+If `frontend_design` fails for screenshot acquisition, materialization, or
 missing-reference reasons, that is a missing authoritative-source problem. Do
 not reinterpret it as permission to skip the visual contract and proceed to
 requirements / architect / build from memory. Retry `frontend_design` with a

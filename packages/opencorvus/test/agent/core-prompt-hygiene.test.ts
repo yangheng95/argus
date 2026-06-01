@@ -61,7 +61,8 @@ describe("core prompt hygiene", () => {
       integrity: 175,
       // Raised from 125 -> 135 after integrity-team gained final
       // maintainable web-clone acceptance mode rules.
-      integrityTeam: 135,
+      // Raised 135 -> 140 after localhost provenance checks were added.
+      integrityTeam: 140,
       intentAnalysis: 130,
       goalWorkloadAnalyst: 70,
       // Raised from 360 -> 375 on 2026-05-21 to add the orchestrator's
@@ -77,13 +78,15 @@ describe("core prompt hygiene", () => {
       // guidance made the prompt's live topology explicit.
       // Raised 505 -> 525 on 2026-05-31 for research evidence boundaries
       // while preserving prompt-over-host orchestration.
-      orchestrator: 525,
+      // Raised 525 -> 530 for source-URL research dispatch guidance.
+      orchestrator: 530,
       // Raised from 180 -> 190 on 2026-05-29 to make Requirements record
       // explicit workflow/visual/data/verification complexity calibration
       // without turning it into goal decomposition.
       // Raised 190 -> 195 on 2026-05-31 for research evidence ID handling.
       requirements: 195,
-      research: 35,
+      // Raised 35 -> 40 for source-URL subpage research workflow.
+      research: 40,
       visualQa: 45,
     }
 
@@ -179,19 +182,20 @@ describe("core prompt hygiene", () => {
     }
   })
 
-  test("build webpage clone instructions start from frontend-design skeleton and keep web-clone-source as evidence", async () => {
-    const text = await readPrompt("build")
-    expect(text).toContain("the named project is not the final deliverable, but it is the required implementation starting point")
-    expect(text).toContain("the root app must adopt that skeleton baseline")
-    expect(text).toContain("Do not create a blank Vite/React page shell")
-    expect(text).toContain("read that project's `README.md`, `index.html`, and `src/slots.json` before changing app code")
-    expect(text).toContain("Do not read `public/source.html`, `src/App.jsx`, or `src/generated/*` by default")
-    expect(text).toContain("React DOM injection to render the extracted source DOM/CSS baseline")
-    expect(text).toContain("`web-clone-source/` at the project root remains the evidence entrypoint")
-    expect(text).toContain("Do not search sibling worktrees, primary project directories, absolute paths, or `mirror/`")
-    expect(text).toContain("fail through `report_build_result` with blocker `web-clone-source package was not materialized in this worktree`")
-    expect(text).not.toContain("call `web_clone_prepare_context`")
-    expect(text).not.toContain("`web_clone_generate_source_project`")
+  test("build core keeps webpage clone policy in conditional overlays", async () => {
+    const build = await readPrompt("build")
+    const overlays = await readSource("build/prompt-context.ts")
+
+    expect(build).not.toContain("web-clone-source")
+    expect(build).not.toContain("frontend-design")
+    expect(build).not.toContain("mirror/")
+    expect(build).not.toContain("baseline_replacement_plan")
+
+    expect(overlays).toContain("## Webpage Clone Source-Baseline Overlay")
+    expect(overlays).toContain("web-clone-source/")
+    expect(overlays).toContain("source_baseline_input")
+    expect(overlays).toContain("do not start from a blank page")
+    expect(overlays).toContain("do not search sibling worktrees")
   })
 
   test("architect prompt does not claim submit_architect auto-runs integrity", async () => {
@@ -458,37 +462,28 @@ describe("core prompt hygiene", () => {
     expect(architect).toContain("Produce the smallest executable goal graph")
     expect(architect).toContain("Do not design fallback, compatibility, parallel implementations")
 
-    expect(build).toContain("## Repository discipline")
+    expect(build).toContain("## Repository Discipline")
     expect(build).toContain("search the repository for every call site")
     expect(build).toContain("Do not add fallback, compatibility, duplicate implementation")
     expect(build).toContain("Keep internal prompt and rule details out of user-visible summaries")
-    expect(build).toContain("## Reference fidelity")
-    expect(build.replace(/\s+/g, " ")).toContain("Reproduce the relevant surface 1:1 as closely as the stack allows")
     expect(build).toContain("Verification failures are evidence about the implementation")
     expect(build).toContain("not permission to lower the contract")
-    expect(build).toContain("Never rewrite a failing acceptance test into a weaker assertion")
-    expect(build).toContain("If the product behavior is wrong, fix the product")
+    expect(build).toContain("Never weaken, skip, or rewrite a failing acceptance test")
     expect(build).toContain("Generated, compiled, or bundled artifacts are not a second implementation path")
-    expect(build).toContain("Never hand-edit a generated/compiled runtime artifact")
+    expect(build).toContain("Never hand-edit generated runtime artifacts")
     expect(build).toContain("Write commands for the actual shell and platform")
     expect(build).toContain("may be named `bash` for historical reasons")
-    expect(build).toContain("not necessarily POSIX bash")
-    expect(build).toContain("New-Item")
-    expect(build).toContain("mkdir -p")
     expect(build).toContain("PowerShell-native commands")
-    expect(build).toContain("unverified Unix-only helpers")
-    expect(build).toContain("Commit your work to the worktree branch when you changed project files")
-    expect(build).toContain("first `git add -A -- . ':(exclude)web-clone-source'")
+    expect(build).toContain("Commit your work to the worktree branch")
+    expect(build).toContain("first `git add -A -- .`")
     expect(build).toContain("then `git commit -m")
-    expect(build).toContain("## Implementation-bound source fidelity")
-    expect(build).toContain("If the request is a port, migration, rewrite, clone, parity restoration, or")
-    expect(build).toContain("component translation, investigation of the named source surface")
-    expect(build).toContain("context-menu/right-click")
-    expect(build).toContain("does not mean sampling one file and guessing the rest")
+    expect(build).toContain("## Source And Evidence Fidelity")
+    expect(build).toContain("If the request is a port, migration, rewrite, parity restoration")
+    expect(build).toContain("investigation of the named source surface")
     expect(build).toContain("Do not invent")
   })
 
-  test("build prompt requires explicit browser dev scripts for delivery preview", async () => {
+  test("browser preview policy is not hard-coded into the general build core", async () => {
     const architect = await readPrompt("architect")
     const build = await readPrompt("build")
 
@@ -496,12 +491,12 @@ describe("core prompt hygiene", () => {
     expect(architect).not.toContain("explicit `packageManager` and `scripts.dev`")
     expect(architect).not.toContain("managed preview session")
 
-    expect(build).toContain("Never deliver a browser/UI/webpage project without")
-    expect(build).toContain("declares both `packageManager` and `scripts.dev`")
-    expect(build).toContain("serve the real page over loopback HTTP from the repository root")
+    expect(build).not.toContain("Never deliver a browser/UI/webpage project without")
+    expect(build).not.toContain("declares both `packageManager` and `scripts.dev`")
+    expect(build).not.toContain("serve the real page over loopback HTTP from the repository root")
   })
 
-  test("build prompt bans inline base64 in emitted code and routes assets through references/", async () => {
+  test("build visual reference preamble bans inline base64 and routes assets through references/", async () => {
     // Spec: delivery-attachment-store-single-source-2026-05-11.md companion
     // (Session.updatePart `InlineBase64InPartError` host gate). The host gate
     // is rule-6.1 second branch (data integrity); this prompt clause is
@@ -510,38 +505,35 @@ describe("core prompt hygiene", () => {
     // `references/<filename>` path instead. Bench evidence: build agent
     // emitted PowerShell with `<image href="data:image/png;base64,$pngBase64">`
     // and the gate rejected the part on write.
-    const build = await readPrompt("build")
+    const build = await readSource("build/agent.ts")
     // Explicit ban shape — both `data:` URL and base64 keyword present so a
     // future paraphrase can't accidentally drop one half of the regression.
-    expect(build).toContain("Never inline base64-encoded binary assets")
+    expect(build).toContain("Never inline a staged asset")
     expect(build).toContain("data:<mime>;base64")
     expect(build).toContain("InlineBase64InPartError")
     // Positive guidance: staged path is the single source.
-    expect(build).toContain("`<worktree>/references/<filename>`")
+    expect(build).toContain("`references/<filename>`")
     expect(build).toContain('src="references/foo.png"')
     expect(build).toContain('href="references/foo.png"')
-    // The Reference fidelity section names the staged-assets contract so the
-    // ban lives next to the positive guidance (single source of truth).
-    expect(build).toContain("Binary assets (images, fonts, PDFs, anything you'd otherwise base64-encode)")
+    expect(build).toContain("renderVisualContractPreamble")
   })
 
   test("build prompt requires failed report_build_result instead of prose stop", async () => {
     const build = await readPrompt("build")
     expect(build).toContain("report_build_result")
     expect(build).toContain('status="failed"')
-    expect(build).toContain("Failure is also terminal")
-    expect(build).toContain("do not stop with prose")
+    expect(build).toContain("Never stop with prose if you cannot complete")
   })
 
   test("build prompt does not define a repository-investigation success branch", async () => {
     const build = await readPrompt("build")
-    expect(build).toContain("This path is for implementation")
+    expect(build).toContain("direct-path workflow")
     expect(build).toContain("Build is the wrong stage")
     const retiredInvestigationBranch = ["read-only", ["exploration", "investigation", "or analysis"].join(", ")].join(" ")
     const retiredNoEditBranch = ["explicit", ["no-edit", "analysis / exploration"].join(" ")].join(" ")
     expect(build).not.toContain(retiredInvestigationBranch)
     expect(build).not.toContain(retiredNoEditBranch)
-    expect(build).toContain("files_changed: []")
+    expect(build).not.toContain("files_changed: []")
   })
 
   test("requirements prompt keeps REQ extraction at acceptance granularity", async () => {
@@ -610,6 +602,7 @@ describe("core prompt hygiene", () => {
     const requirements = await readPrompt("requirements")
     const architect = await readPrompt("architect")
     const build = await readPrompt("build")
+    const buildOverlays = await readSource("build/prompt-context.ts")
     const integrity = await readPrompt("integrity")
     const integrityTeam = await readPrompt("integrityTeam")
     const orchestrator = await readPrompt("orchestrator")
@@ -633,7 +626,7 @@ describe("core prompt hygiene", () => {
     expect(design).toContain("seed/reset")
     expect(design).toContain("desktop/tablet/mobile viewport matrix")
     expect(design).toContain("source-quality review against static HTML/base64/CSS replay")
-    expect(design).toContain("frontend_design/host materializes raw `mirror/` evidence into visible `web-clone-source/`")
+    expect(design).toContain("frontend_design/host materializes raw mirror evidence and the `web-clone-source/` package under `.opencorvus/runtime/tasks/<taskID>/frontend-design/`")
     expect(design).toContain("host-prepared terminal-only turns")
     expect(design).toContain("Do not call unavailable discovery tools such as `read_file`, `list_files`")
     expect(design).toContain("Build must adopt the frontend-design skeleton project as the root app's starting baseline")
@@ -676,29 +669,17 @@ describe("core prompt hygiene", () => {
     expect(architect).toContain("project-owned semantic components/data modules/API bindings")
     expect(architect).toContain("must not treat the frontend-design skeleton alone as deliverable completion")
 
-    expect(build).toContain("read that project's `README.md`, `index.html`, and `src/slots.json` before changing app code")
-    expect(build).toContain("the named project is not the final deliverable, but it is the required implementation starting point")
-    expect(build).toContain("the root app must adopt that skeleton baseline")
-    expect(build).toContain("Do not create a blank Vite/React page shell")
-    expect(build).toContain("Do not read `public/source.html`, `src/App.jsx`, or `src/generated/*` by default")
-    expect(build).toContain("`web-clone-source/` at the project root remains the evidence entrypoint")
-    expect(build).toContain("fail through `report_build_result` with blocker `web-clone-source package was not materialized in this worktree`")
-    expect(build).toContain("Do not search sibling worktrees, primary project directories, absolute paths, or `mirror/`")
-    expect(build).toContain("Preserve visible text, layout hierarchy")
-    expect(build).toContain("Do not start over from a blank page or a freehand redesign")
-    expect(build).toContain("Use `web-clone-source/assets/` by file reference")
-    expect(build).toContain("Repeated rows/cards/items should become arrays and loops")
-    expect(build).toContain("Verify webpage replicas against the frontend template viewport matrix")
-    expect(build).toContain("source review must reject screenshot replay or hidden semantic coverage layers")
-    expect(build).toContain("run `web_clone_source_audit` before reporting pass after you have replaced generated baseline regions")
-    expect(build).toContain("the generated DOM/CSS baseline is temporary evidence only")
-    expect(build).toContain("Do not report pass while the requested surfaces remain only React DOM injection")
-    expect(build).toContain("By default it audits project-owned source against `<worktree>/web-clone-source`, not raw `mirror/`")
-    expect(build).toContain("finalDeliveryMode: \"maintainable_replacement_required\"")
-    expect(build).toContain("`baseline_replacement_plan` is the execution checklist")
-    expect(build).toContain("no default Vite/React/Vue scaffold residue")
-    expect(build).toContain("derive the database schema, seed/reset data, and read API responses")
-    expect(build).toContain("database initialization/reset, API responses, and frontend rendering")
+    expect(build).not.toContain("web-clone-source")
+    expect(build).not.toContain("frontend-design")
+    expect(build).not.toContain("baseline_replacement_plan")
+    expect(buildOverlays).toContain("## Webpage Clone Source-Baseline Overlay")
+    expect(buildOverlays).toContain("web-clone-source/")
+    expect(buildOverlays).toContain("source_baseline_input")
+    expect(buildOverlays).toContain("source package files named by the handoff")
+    expect(buildOverlays).toContain("do not start from a blank page")
+    expect(buildOverlays).toContain("do not search sibling worktrees")
+    expect(buildOverlays).toContain("Preserve visible text, layout hierarchy")
+    expect(buildOverlays).toContain("Run source/visual audits only when the handoff")
 
     expect(integrity).toContain("web-clone-source-skeleton-consumption-audit.json")
     expect(integrity).toContain("Visual score is")
@@ -713,14 +694,14 @@ describe("core prompt hygiene", () => {
     expect(design).toContain("recurring webpage-clone workflow as internal policy")
     expect(requirements).toContain("Do not require the user request to restate recurring clone rules")
     expect(architect).toContain("These web-clone acceptance rules are internal architecture policy")
-    expect(build).toContain("When the handoff names webpage clone artifacts")
+    expect(buildOverlays).toContain("This overlay applies because the frontend_design handoff names")
     expect(integrity).toContain("Treat those recurring webpage-clone gates as internal acceptance policy")
 
     expect(workflow).toContain("web-clone-source/implementation-blueprint.md")
     expect(workflow).toContain("source-ir/component-tree.json")
     expect(workflow).toContain("source-skeleton/critical.css")
     expect(workflow).toContain("LLM 写 React/Vue")
-    expect(workflow).toContain("frontend-design skeleton/slots/CSS 必须先成为实现基底")
+    expect(workflow).toContain("frontend-design source skeleton/CSS sidecars 必须先成为实现基底")
     expect(workflow).toContain("不能被当成旁路参考后从空白页手搓")
   })
 

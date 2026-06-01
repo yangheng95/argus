@@ -24,10 +24,10 @@ export function frontendDesignArtifactPaths(projectDir: string, taskID: string) 
 }
 
 const HANDOFF_KEYS = [
+  "public_report",
   "frontend_template",
   "final_delivery_mode",
   "fillable_modules",
-  "component_inventory",
   "component_reuse_plan",
   "baseline_replacement_plan",
   "quality_project_contract",
@@ -53,6 +53,23 @@ function latestByKey(entries: DecisionEntry[]): Map<string, DecisionEntry> {
     if ((HANDOFF_KEYS as readonly string[]).includes(entry.key)) result.set(entry.key, entry)
   }
   return result
+}
+
+function renderSourceRegionRefactorGuidance(entries: Map<string, DecisionEntry>): string {
+  const frontendProject = entries.get("frontend_project")?.value ?? ""
+  const isSourceBaseline = /\brole:\s*source_baseline_input\b/i.test(frontendProject)
+  if (!isSourceBaseline) return ""
+
+  return [
+    "## Source-Region Refactor Guidance",
+    "",
+    "Dynamic interpretation from the frontend_design decision log: this webpage handoff starts from a source_baseline_input project. Treat that project as captured rawproject evidence and the traceable source seed for region-by-region refinement.",
+    "",
+    "- Requirements: express maintainability as source-region traceability. Every new component, data module, style rule, and boundary cleanup must map to source nodes/regions/assets/reference screenshots. Maintainable mode should report measured webpage_evaluate evidence and zero-finding web_clone_source_audit evidence before claiming final maintainability.",
+    "- Architect: keep ownership inside the frontend-design handoff and downstream implementation. Do not change other agent prompts or communication paths. Decompose work by named sourceDomReplacementPlan/source region only when that region is in scope.",
+    "- Build: copy/adapt only traceable source files into the delivery root, then replace regions vertically: source data extraction, semantic component, scoped CSS, generated fixed-layout cleanup, and screenshot comparison. Reuse project components or mature libraries for hard UI domains; do not hand-roll complex controls.",
+    "- Delivery/Integrity: verify source traceability, visual parity for unchanged reference surfaces, absence of screenshot/base64/iframe replay, and documented handling for every replaced/deferred source region.",
+  ].join("\n")
 }
 
 /**
@@ -94,12 +111,12 @@ export function renderFrontendDesignHandoffReference(taskID: string, options?: {
 
   const lines: string[] = []
 
-  lines.push("## Frontend Design Template Source")
+  lines.push("## Frontend Design Public Report")
   lines.push("")
-  lines.push(`Materialized frontend template file (read this): ${templatePath}`)
+  lines.push(`Materialized frontend_design public report (read this): ${templatePath}`)
   lines.push(`Materialized source manifest file (read this): ${manifestPath}`)
   lines.push("Canonical decision-log phase (source of truth): frontend_design")
-  lines.push("Read the frontend template and source manifest files before implementing or decomposing any visual/reference surface.")
+  lines.push("Read the public report and source manifest files before implementing or decomposing any visual/reference surface.")
   lines.push("Use file/image/source names from the manifest as readable evidence; do not run mirror tools outside frontend_design.")
 
   if (!includeExcerpts) return lines.join("\n")
@@ -108,9 +125,15 @@ export function renderFrontendDesignHandoffReference(taskID: string, options?: {
   const present = HANDOFF_KEYS.filter((key) => entries.has(key))
   if (present.length === 0) return lines.join("\n")
 
+  const sourceRegionGuidance = renderSourceRegionRefactorGuidance(entries)
+  if (sourceRegionGuidance) {
+    lines.push("")
+    lines.push(sourceRegionGuidance)
+  }
+
   lines.push("")
   lines.push("### Compact Decision-Log Excerpts")
-  lines.push("These excerpts orient the next agent only; read the materialized frontend template file for the complete source.")
+  lines.push("These excerpts orient the next agent only; read the materialized public report file for the complete source.")
   for (const key of present) {
     const entry = entries.get(key)
     if (!entry) continue

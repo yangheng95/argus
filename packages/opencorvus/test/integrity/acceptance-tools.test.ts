@@ -40,7 +40,7 @@ test("integrity evidence tools expose scoped drilldown without upstream full-con
           goalReports: [],
         },
         frontendDesign:
-          "## visual_consistency_contract\nMatch web-clone-source/reference.png at 96/100.\n\n## evidence_source_manifest\nweb-clone-source/implementation-blueprint.md",
+          "## visual_consistency_contract\nMatch web-clone-source/reference.png with measured overlay evidence.\n\n## evidence_source_manifest\nweb-clone-source/implementation-blueprint.md",
         attachments: [],
       })
 
@@ -89,6 +89,60 @@ test("integrity evidence tools expose scoped drilldown without upstream full-con
       )
       expect(String(command)).toContain("readonly_guard")
       expect(String(command)).toContain("integrity-mutation.txt")
+    },
+  })
+})
+
+test("integrity run_command filters evidence input views from readonly guard but keeps implementation mutations", async () => {
+  const { createIntegrityAcceptanceTools } = await import("../../src/integrity/acceptance-tools")
+  const dir = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: dir.path,
+    fn: async () => {
+      const tools = createIntegrityAcceptanceTools({ taskID: "tsk_integrity_guard_filter" })
+
+      const evidenceOnly = await tools.run_command.execute!(
+        {
+          command: "mkdir -p web-clone-source && printf evidence > web-clone-source/reference.txt",
+          timeout_ms: 10_000,
+        },
+        {} as any,
+      )
+      expect(String(evidenceOnly)).not.toContain("readonly_guard")
+
+      const implementationMutation = await tools.run_command.execute!(
+        {
+          command: "mkdir -p src && printf implementation > src/changed.txt",
+          timeout_ms: 10_000,
+        },
+        {} as any,
+      )
+      expect(String(implementationMutation)).toContain("readonly_guard")
+      expect(String(implementationMutation)).toContain("src/changed.txt")
+      expect(String(implementationMutation)).not.toContain("web-clone-source/reference.txt")
+    },
+  })
+})
+
+test("integrity run_command can launch a background preview command with a lease", async () => {
+  const { createIntegrityAcceptanceTools } = await import("../../src/integrity/acceptance-tools")
+  const dir = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: dir.path,
+    fn: async () => {
+      const tools = createIntegrityAcceptanceTools({ taskID: "tsk_integrity_background" })
+      const output = await tools.run_command.execute!(
+        {
+          command: `bun -e "console.log('http://127.0.0.1:32123'); setInterval(() => {}, 1000)"`,
+          timeout_ms: 3_000,
+          background: true,
+        },
+        {} as any,
+      )
+      expect(String(output)).toContain("background: true")
+      expect(String(output)).toContain("pid:")
+      expect(String(output)).toContain("url: http://127.0.0.1:32123")
+      expect(String(output)).toContain("lease_timeout_ms: 3000")
     },
   })
 })
