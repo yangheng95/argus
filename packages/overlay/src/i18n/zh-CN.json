@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "zh-CN",
-    "panel_revision": "eae9d6c51a4e04ef"
+    "panel_revision": "06cf94d2db8e1579"
   },
   "about.author_name": "杨恒",
   "about.go_version": "Go 版本",
@@ -457,6 +457,12 @@
     "other": "{{count}} 个文件"
   },
   "files.select_target": "选择任务查看文件变更",
+  "files.none": "当前任务没有文件变更",
+  "files.filter_placeholder": "筛选变更文件",
+  "files.clear_filter": "清除文件筛选",
+  "files.no_matches": "没有匹配的文件变更",
+  "files.status_filter_label": "按状态筛选变更文件",
+  "files.status.all": "全部",
   "files.status.added": "新增",
   "files.status.deleted": "已删除",
   "files.status.modified": "已修改",

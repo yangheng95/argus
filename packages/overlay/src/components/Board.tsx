@@ -18,7 +18,6 @@ import { activeTone, verdictTone } from "../utils/verdict-tone";
 import { GoalWorkflowList } from "./GoalWorkflowGroup";
 import { RequirementsPanel } from "./RequirementsPanel";
 import { ArchitectPanel } from "./ArchitectPanel";
-import { FilesSection } from "./FilesSection";
 import { EvaluationCriteriaPanel } from "./EvaluationCriteriaPanel";
 import { InteractionCardList, type InteractionData } from "./InteractionCard";
 import { taskScopeSectionVisibility } from "../utils/task-scope-sections";
@@ -706,7 +705,6 @@ export function Board(props: BoardProps) {
         <Show when={delivery()}>
           <DeliveryPanel delivery={delivery()} phaseState={phaseFor("delivery")} />
         </Show>
-        <FilesSection />
       </div>
 
       {/* TODO(2026-04-20): 评估指标 / 交付 / interactions 三个板块同步下线待重做。

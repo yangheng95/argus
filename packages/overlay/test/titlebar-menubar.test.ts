@@ -207,7 +207,18 @@ test(
           expect(geometry.badgeTitle).toContain(String(server.port))
           expect(geometry.badgeTitle).toContain("12345")
           expect(geometry.titlebarHeight).toBeGreaterThan(24)
-          for (const menu of ["workspace", "provider", "run", "tools", "skill", "mcp", "memory", "settings", "view", "help"]) {
+          for (const menu of [
+            "workspace",
+            "provider",
+            "run",
+            "tools",
+            "skill",
+            "mcp",
+            "memory",
+            "settings",
+            "view",
+            "help",
+          ]) {
             await page.click(`[data-menu-trigger="${menu}"]`)
             await page.waitForSelector(`[data-testid="titlebar-menu-${menu}"]`, { visible: true })
             const panelBounds = await page.$eval(`[data-testid="titlebar-menu-${menu}"]`, (node) => {
@@ -529,7 +540,10 @@ test(
         const title = document.querySelector<HTMLElement>(".workspace-onboarding-titleblock")
         const brandWordmark = document.querySelector<HTMLElement>(".brand-guide-wordmark")
         const brandLabel = document.querySelector<HTMLElement>(".brand-guide-label")
-        const sections = document.querySelector<HTMLElement>(".sections-title")
+        const rightTabs = Array.from(document.querySelectorAll<HTMLElement>('[data-ui="right-tab"]')).map((node) => ({
+          text: node.textContent || "",
+          active: node.dataset.active,
+        }))
         const startupInvokes = ((window as any).__startupInvokes || []) as string[]
         return {
           hasStartup: !!dialog,
@@ -538,7 +552,7 @@ test(
           title: title?.textContent || "",
           brandWordmark: brandWordmark?.textContent || "",
           brandLabel: brandLabel?.textContent || "",
-          sections: sections?.textContent || "",
+          rightTabs,
           pickDirInvokes: startupInvokes.filter((value) => value === "overlay_pick_dir").length,
         }
       })
@@ -549,7 +563,10 @@ test(
       expect(intro.title).toContain("Open a project directory")
       expect(intro.brandWordmark).toBe("OpenCorvus")
       expect(intro.brandLabel).toBe("Workspace")
-      expect(intro.sections).toBe("Inspector")
+      expect(intro.rightTabs).toEqual([
+        { text: "Files", active: "true" },
+        { text: "Inspector", active: "false" },
+      ])
       await page.close()
     } finally {
       await browser.close().catch(() => undefined)
@@ -663,7 +680,7 @@ test(
         return {
           directory: (window as any).settingsStore.directory,
           savedDirectory: (window as any).settingsStore.savedDirectory,
-          selectedTaskID: (window as any).boardStore.selectedTaskID,
+          selectedSource: (window as any).boardStore.selectedSource,
           tasks: (window as any).boardStore.tasks.length,
           pendingTasks: (window as any).boardStore.pendingTasks.length,
           path: (window as any).boardStore.path,
@@ -676,7 +693,7 @@ test(
 
       expect(state.directory).toBe("")
       expect(state.savedDirectory).toBe("")
-      expect(state.selectedTaskID).toBe("")
+      expect(state.selectedSource).toBeNull()
       expect(state.tasks).toBe(0)
       expect(state.pendingTasks).toBe(0)
       expect(state.path).toBeNull()
@@ -861,7 +878,11 @@ test(
           { selector: ".sections-header", props: ["columnGap", "paddingLeft", "paddingRight"], max: 8 },
           { selector: ".brand-guide", props: ["columnGap", "paddingLeft", "paddingRight"], max: 8 },
           { selector: '[data-ui="titlebar-menubar-trigger"]', props: ["paddingLeft", "paddingRight"], max: 8 },
-          { selector: '[data-ui="sidebar-new-task-button"]', props: ["columnGap", "paddingLeft", "paddingRight"], max: 11 },
+          {
+            selector: '[data-ui="sidebar-new-task-button"]',
+            props: ["columnGap", "paddingLeft", "paddingRight"],
+            max: 11,
+          },
           { selector: ".task-dir-shell", props: ["columnGap", "paddingLeft", "paddingRight"], max: 4 },
           { selector: ".task-cwd-dropdown", props: ["columnGap", "paddingLeft", "paddingRight"], max: 8 },
           { selector: ".btn.mini", props: ["paddingLeft", "paddingRight"], max: 8 },

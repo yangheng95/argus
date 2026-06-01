@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "en-US",
-    "panel_revision": "eae9d6c51a4e04ef"
+    "panel_revision": "06cf94d2db8e1579"
   },
   "about.author_name": "Yang, Heng",
   "about.go_version": "Go Version",
@@ -457,6 +457,12 @@
     "other": "{{count}} files"
   },
   "files.select_target": "Select a task to view file changes",
+  "files.none": "No file changes for this task",
+  "files.filter_placeholder": "Filter changed files",
+  "files.clear_filter": "Clear file filter",
+  "files.no_matches": "No matching file changes",
+  "files.status_filter_label": "Filter changed files by status",
+  "files.status.all": "All",
   "files.status.added": "Added",
   "files.status.deleted": "Deleted",
   "files.status.modified": "Modified",
