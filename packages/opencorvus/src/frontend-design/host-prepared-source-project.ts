@@ -6,7 +6,11 @@ import { Instance } from "@/project/instance"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { decodePNG, type DecodedPNG } from "@/util/pixel-stats"
 import { auditWebCloneSourceSkeletonConsumption } from "@/web-clone/source-skeleton-consumption-audit"
-import { generateWebCloneSourceProject, type GenerateWebCloneSourceProjectOutput } from "@/web-clone/source-project-generator"
+import {
+  generateWebCloneSourceProject,
+  renderSourceProjectVisualIterationMatrix,
+  type GenerateWebCloneSourceProjectOutput,
+} from "@/web-clone/source-project-generator"
 import type { createFrontendTemplateOutputTools, FrontendTemplateFinal } from "./output-tools"
 
 const FRONTEND_SKELETON_ENTRYPOINTS = [
@@ -318,7 +322,7 @@ function hostPreparedFrontendTemplatePayload(
       },
     ],
     baseline_replacement_plan: hostPreparedBaselineReplacementPlan(project),
-    quality_project_contract: `Target delivery is a root-level, runnable, human-maintainable webpage implementation. frontend-design-skeleton is captured rawproject evidence and a source seed, not the final deliverable directory. Downstream implementation maps every new component, data module, scoped style, and boundary cleanup back to source nodes/regions/assets/reference screenshots, then replaces requested generated/source-dom regions while preserving visual parity. In maintainable mode, run webpage_evaluate and web_clone_source_audit, then iterate until measured visual evidence preserves parity and the source audit has zero findings before claiming final maintainability. Any deferred source-dom region remains source debt and keeps final maintainability unproven until that region has a replacement decision, parity evidence, and audit evidence. Current source audit supervision: ${sourceAuditOutcome} If the next task provides a PRD, use the captured page as the evidence base and apply only named PRD deltas instead of weakening unchanged reference surfaces.`,
+    quality_project_contract: `Target delivery is a root-level, runnable, human-maintainable webpage implementation. frontend-design-skeleton is captured rawproject evidence and a source seed, not the final deliverable directory. Downstream implementation maps every new component, data module, scoped style, and boundary cleanup back to source nodes/regions/assets/reference screenshots, then replaces requested generated/source-dom regions while preserving visual parity. Visual iteration viewport matrix: ${renderSourceProjectVisualIterationMatrix()} In maintainable mode, run webpage_evaluate and web_clone_source_audit, then iterate until measured visual evidence preserves parity and the source audit has zero findings before claiming final maintainability. Any deferred source-dom region remains source debt and keeps final maintainability unproven until that region has a replacement decision, parity evidence, and audit evidence. Current source audit supervision: ${sourceAuditOutcome} If the next task provides a PRD, use the captured page as the evidence base and apply only named PRD deltas instead of weakening unchanged reference surfaces.`,
     quality_project_items: [
       { title: "Delivery root", detail: "Root package.json/index.html/src/public/data files are the implementation target; frontend-design-skeleton stays evidence input.", source_refs: ["frontend-design-skeleton/README.md"] },
       {
@@ -326,7 +330,7 @@ function hostPreparedFrontendTemplatePayload(
         detail: "sourceDomIterationState.ts is the source of truth for the current maintainability loop state; sourceDomReplacementPlan.ts provides each region's strategy, data/asset sources, and parity guard.",
         source_refs: ["frontend-design-skeleton/src/data/sourceDomIterationState.ts", "frontend-design-skeleton/src/data/sourceDomReplacementPlan.ts", "frontend-design-skeleton/src/data/sourceProjectManifest.json"],
       },
-      { title: "Verification", detail: "Run root build/dev checks, requested behavior checks, webpage_evaluate against web-clone-source/reference.png, and web_clone_source_audit with zero findings before claiming final maintainability.", source_refs: ["web-clone-source/reference.png"] },
+      { title: "Verification", detail: `Run root build/dev checks, requested behavior checks, webpage_evaluate against web-clone-source/reference.png, visual iteration captures for ${renderSourceProjectVisualIterationMatrix()}, and web_clone_source_audit with zero findings before claiming final maintainability.`, source_refs: ["web-clone-source/reference.png"] },
       { title: "Current source audit supervision", detail: sourceAuditOutcome, source_refs: ["frontend-design-skeleton/src/data/sourceProjectManifest.json", "frontend-design-skeleton/src/data/sourceDomIterationState.ts", "frontend-design-skeleton/src/data/sourceDomReplacementPlan.ts", "web-clone-source/reference.png"] },
     ],
     material_inventory:
@@ -350,7 +354,7 @@ function hostPreparedFrontendTemplatePayload(
     },
     visual_consistency_contract: nonEmptyOrDefault(
       input.visual_contract,
-      "Match the reference layout, hierarchy, typography, spacing, colors, imagery, repeated content density, controls, responsive behavior, and footer/support structure from web-clone-source/reference.png and source artifacts. Verify from the root app with measured webpage_evaluate evidence plus qualitative screenshot review for unchanged clone surfaces.",
+      `Match the reference layout, hierarchy, typography, spacing, colors, imagery, repeated content density, controls, responsive behavior, and footer/support structure from web-clone-source/reference.png and source artifacts. Visual iteration viewport matrix: ${renderSourceProjectVisualIterationMatrix()} Verify from the root app with measured webpage_evaluate evidence plus qualitative screenshot review for unchanged clone surfaces; record missing responsive reference evidence instead of claiming parity for a viewport without evidence.`,
     ),
     visual_consistency_items: [
       { title: "Root visual parity", detail: "Rendered root app should remain visually aligned with the high-fidelity frontend-design source project/reference while regions become semantic components.", source_refs: ["web-clone-source/reference.png", "frontend-design-skeleton/src/styles.css", "frontend-design-skeleton/src/components/SourceDomPage.tsx"] },
@@ -816,6 +820,18 @@ interface SourceProjectManifestForSummary {
     iterationStateModule?: string
     components?: string[]
   }
+  visualIteration?: {
+    referenceImage?: string
+    comparisonTool?: string
+    viewportMatrix?: Array<{
+      name?: string
+      width?: number
+      height?: number
+      evidenceRole?: string
+      comparison?: string
+    }>
+    rule?: string
+  }
 }
 
 interface SourceDomIterationStateForSummary {
@@ -850,6 +866,21 @@ export async function summarizeHostPreparedSourceProject(projectRoot: string): P
     "Host-prepared source project maintainability summary.",
     "Use this as the compact handoff map before reading large source-dom region files.",
   ]
+  const visualIteration = manifest?.visualIteration
+  if (visualIteration) {
+    lines.push("")
+    lines.push("Visual iteration matrix:")
+    lines.push(`- referenceImage: ${visualIteration.referenceImage ?? "unknown"}`)
+    lines.push(`- comparisonTool: ${visualIteration.comparisonTool ?? "unknown"}`)
+    for (const viewport of visualIteration.viewportMatrix ?? []) {
+      const size = typeof viewport.width === "number" && typeof viewport.height === "number"
+        ? `${viewport.width}x${viewport.height}`
+        : "unknown"
+      lines.push(`- ${viewport.name ?? "viewport"}: ${size} (${viewport.evidenceRole ?? "unknown"})`)
+      if (viewport.comparison) lines.push(`  comparison: ${viewport.comparison}`)
+    }
+    if (visualIteration.rule) lines.push(`- rule: ${visualIteration.rule}`)
+  }
   const regions = manifest?.sourceDomRegions
   if (regions) {
     lines.push("")
@@ -1222,7 +1253,8 @@ export function renderHostPreparedFrontendProjectSection(project: HostPreparedFr
     "This is a terminal-only host-prepared turn: `read_file`, `list_files`, shell, browser, and mirror acquisition tools are intentionally unavailable. Use the embedded compact summaries plus referenced task-runtime paths; attempting discovery tools is an error.",
     "Register this source project in `submit_frontend_template.frontend_project` with role=source_baseline_input. Downstream implementation starts by copying/adapting only traceable React DOM/CSS/data/assets entrypoints, source-dom region files, sourceDomIterationState.ts, sourceDomReplacementPlan.ts, sourceDomRegions.ts, sourceSvgAssetGroups.ts, and sourceFaqGroups.ts into the delivery root, preserving CSS sidecars as source evidence, and refining named regions in place.",
     "Use the maintainable rawproject refactor algorithm: source map, region map, one replacement decision per region, then vertical-slice replacement with source data extraction, semantic component boundary, scoped style ownership, generated fixed-layout cleanup, asset ownership, interaction wiring, screenshot comparison, and audit evidence.",
-    "For webpage clones, describe the downstream workflow as source-region traceable refactoring: every new component, data module, scoped style, and boundary cleanup must map back to rawproject source nodes/regions/assets/reference screenshots. A region replacement is complete only after source data extraction, semantic component rendering, scoped CSS, generated boundary cleanup, screenshot comparison for that region, measured webpage_evaluate evidence, and zero-finding web_clone_source_audit evidence before any final maintainability claim. If a region is deferred, frontend_design must label it as unfinished source debt.",
+    `Visual iteration viewport matrix: ${renderSourceProjectVisualIterationMatrix()}`,
+    "For webpage clones, describe the downstream workflow as source-region traceable refactoring: every new component, data module, scoped style, and boundary cleanup must map back to rawproject source nodes/regions/assets/reference screenshots. A region replacement is complete only after source data extraction, semantic component rendering, scoped CSS, generated boundary cleanup, screenshot comparison for that region, measured webpage_evaluate evidence for the visual iteration viewport matrix, and zero-finding web_clone_source_audit evidence before any final maintainability claim. If a region is deferred, frontend_design must label it as unfinished source debt.",
     "Do not alter evaluators, other agent prompts, communication paths, generated outputs, or runtime source packages to satisfy the report.",
     "Mirror/source evidence stays in task runtime paths. Do not instruct downstream agents to move or clean `web-clone-source/`, `frontend-design-skeleton/`, raw `mirror/`, `references/`, or `reference.png` into the delivery root as app-owned deliverables.",
     "Do not output a standalone component checklist. Use the optional `implementation_risks` and `agent_handoff_notes` submit fields, or the standard completeness/open-question fields, to populate the public frontend_design report with what downstream agents must focus on.",
