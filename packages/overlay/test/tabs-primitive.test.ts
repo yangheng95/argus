@@ -43,14 +43,24 @@ test("Tabs primitive exposes the canonical data-attribute contract", () => {
 
   expect(source).toContain('export const TABS_SIZES = ["sm", "md"] as const');
   expect(source).toContain('export const TABS_TONES = ["neutral"] as const');
-  expect(source).toContain('Omit<JSX.HTMLAttributes<HTMLDivElement>, "class" | "classList" | "role">');
-  expect(source).toContain('Omit<JSX.ButtonHTMLAttributes<HTMLButtonElement>, "class" | "classList" | "role">');
+  expect(source).toContain('import { Tabs as KobalteTabs } from "@kobalte/core/tabs"');
+  expect(source).toContain('Omit<JSX.HTMLAttributes<HTMLDivElement>, "class" | "classList" | "role" | "onChange">');
+  expect(source).toContain('Omit<JSX.ButtonHTMLAttributes<HTMLButtonElement>, "class" | "classList" | "role" | "type">');
   expect(source).toContain('class="oc-tabs"');
   expect(source).toContain('class="oc-tab"');
-  expect(source).toContain('role="tablist"');
-  expect(source).toContain('role="tab"');
+  expect(source).toContain("<KobalteTabs.List");
+  expect(source).toContain("<KobalteTabs.Trigger");
   expect(source).toContain('data-active={local.active ? "true" : "false"}');
   expect(source).not.toMatch(/\b(?:right-panel-tab|btn|workspace-toggle)\b/);
+});
+
+test("Tabs primitive delegates tab semantics to Kobalte", () => {
+  const source = readFileSync(TABS_SOURCE, "utf8");
+
+  expect(source).toContain("<KobalteTabs");
+  expect(source).toContain('activationMode="manual"');
+  expect(source).not.toContain('role="tablist"');
+  expect(source).not.toContain('role="tab"');
 });
 
 test("Tabs primitive TypeScript API and CSS data variants stay in lockstep", () => {

@@ -1,7 +1,7 @@
 # Overlay mature UI primitives refactor
 
 Date: 2026-06-01
-Status: in progress
+Status: phase 1 partial
 
 ## Problem
 
@@ -33,11 +33,12 @@ The overlay has several custom UI interaction implementations where mature Solid
 - [x] Grep Dialog callsites and tests.
 - [x] Grep Tabs callsites and tests.
 - [x] Check dependency availability.
-- [ ] Add overlay dependency on `@kobalte/core`.
-- [ ] Replace Tabs primitive internals with Kobalte Tabs root/list/trigger.
+- [x] Add overlay dependency on `@kobalte/core`.
+- [x] Replace Tabs primitive internals with Kobalte Tabs root/list/trigger.
 - [ ] Replace Dialog primitive root/title with Kobalte Dialog while preserving current CSS hooks.
-- [ ] Update primitive tests to reject the previous hand-only implementation.
-- [ ] Run targeted overlay tests for Dialog/Tabs.
-- [ ] Run overlay typecheck.
-- [ ] Review diff for unintended unrelated changes.
+  - Revised: blocked and reverted. `@kobalte/core/dialog` 0.13.11 dist declarations fail this repository's `tsc --noEmit` with `TS2693` because the package's `Dialog` namespace declaration treats type-only props as values. Importing only `Root`/`Content`/`Title` still loads the failing barrel; `@kobalte/core/src/dialog` is not resolvable by the current TypeScript resolver. Do not bypass with `skipLibCheck`; revisit by upgrading/patching Kobalte or choosing a dialog primitive whose declarations pass strict typecheck.
+- [x] Update primitive tests to reject the previous hand-only Tabs implementation.
+- [x] Run targeted overlay tests for Dialog/Tabs.
+- [x] Run overlay typecheck.
+- [x] Review diff for unintended unrelated changes.
 - [ ] Commit and push only this refactor's files.
