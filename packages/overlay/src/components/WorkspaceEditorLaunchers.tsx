@@ -4,7 +4,10 @@ import { activeDirectory, openDirectoryInEditor, PROJECT_EDITORS } from "../serv
 import { saveSettings, settingsStore, setSettingsStore } from "../store/settings";
 import { t } from "../utils/i18n";
 import { Icon, type IconName } from "./Icon";
-import { WorkspaceSplitLauncher } from "./WorkspaceSplitLauncher";
+import {
+  WorkspaceSplitLauncher,
+  WorkspaceSplitLauncherItem,
+} from "./WorkspaceSplitLauncher";
 
 const EDITOR_ICONS: Record<ProjectEditorID, IconName> = {
   vscode: "editor-vscode",
@@ -68,12 +71,10 @@ export function WorkspaceEditorLaunchers() {
     >
       <For each={PROJECT_EDITORS}>
         {(editor) => (
-          <button
-            type="button"
-            role="menuitem"
+          <WorkspaceSplitLauncherItem
             class="workspace-editor-option"
-            data-editor={editor.id}
-            onClick={() => void openEditor(editor.id)}
+            dataAttributes={{ "data-editor": editor.id }}
+            onSelect={() => openEditor(editor.id)}
           >
             <span class="workspace-editor-option-icon" aria-hidden="true">
               <Icon name={EDITOR_ICONS[editor.id]} size={EDITOR_ICON_SIZES[editor.id]} />
@@ -81,7 +82,7 @@ export function WorkspaceEditorLaunchers() {
             <span class="workspace-editor-option-label">
               {t("cwd.open_in_editor", { name: editor.label })}
             </span>
-          </button>
+          </WorkspaceSplitLauncherItem>
         )}
       </For>
     </WorkspaceSplitLauncher>
