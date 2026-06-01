@@ -231,11 +231,9 @@ export namespace SessionLoop {
 
   const workflowAutoCompactionDisabledSessionKinds = new Set([
     "architect",
-    "build",
     "delivery",
     "fact-check",
     "goal-workload-analyst",
-    "integrity",
     "intent-analysis",
     "orchestrator",
     "research",

@@ -17,7 +17,7 @@ const ctx = {
 }
 
 describe("tool.web_clone_source_audit", () => {
-  test("defaults to the visible web-clone-source package", async () => {
+  test("defaults to the legacy execution-directory web-clone-source package", async () => {
     await using tmp = await tmpdir()
     const sourcePackageDir = await writeFixtureMirror(tmp.path)
     const projectDir = path.join(tmp.path, "app")

@@ -25,7 +25,14 @@
  *     `session/llm.ts:170`.
  */
 import { wrapLanguageModel } from "ai"
-import type { LanguageModelV3 } from "@ai-sdk/provider"
+import type {
+  LanguageModelV3,
+  LanguageModelV3CallOptions,
+  LanguageModelV3Content,
+  LanguageModelV3GenerateResult,
+  LanguageModelV3StreamPart,
+  LanguageModelV3StreamResult,
+} from "@ai-sdk/provider"
 import { Provider } from "./provider"
 import { ProviderTransform } from "./transform"
 import { applyVendorHeaders } from "./vendor-headers"
@@ -57,6 +64,16 @@ export namespace ProviderLLM {
             }
             return args.params
           },
+          async wrapGenerate({ doGenerate, params }) {
+            return normalizeGeneratedLocalToolCalls(await doGenerate(), params)
+          },
+          async wrapStream({ doStream, params }) {
+            const result = await doStream()
+            return {
+              ...result,
+              stream: normalizeLocalToolCallStream(result.stream, params),
+            }
+          },
         },
       ],
     })
@@ -64,6 +81,47 @@ export namespace ProviderLLM {
 
   function isLanguageModelV3(language: Awaited<ReturnType<typeof Provider.getLanguage>>): language is LanguageModelV3 {
     return typeof language === "object" && language !== null && language.specificationVersion === "v3"
+  }
+
+  function localFunctionToolNames(params: LanguageModelV3CallOptions): Set<string> {
+    return new Set((params.tools ?? []).filter((tool) => tool.type === "function").map((tool) => tool.name))
+  }
+
+  function normalizeGeneratedLocalToolCalls(
+    result: LanguageModelV3GenerateResult,
+    params: LanguageModelV3CallOptions,
+  ): LanguageModelV3GenerateResult {
+    const localTools = localFunctionToolNames(params)
+    if (localTools.size === 0) return result
+    const content = result.content.map((part) => normalizeLocalToolCallPart(part, localTools))
+    if (content.every((part, index) => part === result.content[index])) return result
+    return { ...result, content }
+  }
+
+  function normalizeLocalToolCallStream(
+    stream: LanguageModelV3StreamResult["stream"],
+    params: LanguageModelV3CallOptions,
+  ): LanguageModelV3StreamResult["stream"] {
+    const localTools = localFunctionToolNames(params)
+    if (localTools.size === 0) return stream
+    return stream.pipeThrough(
+      new TransformStream<LanguageModelV3StreamPart, LanguageModelV3StreamPart>({
+        transform(chunk, controller) {
+          controller.enqueue(normalizeLocalToolCallPart(chunk, localTools))
+        },
+      }),
+    )
+  }
+
+  function normalizeLocalToolCallPart<T extends LanguageModelV3Content | LanguageModelV3StreamPart>(
+    part: T,
+    localTools: Set<string>,
+  ): T {
+    if (part.type !== "tool-call" && part.type !== "tool-input-start") return part
+    if (!localTools.has(part.toolName)) return part
+    if (part.providerExecuted !== true) return part
+    const { providerExecuted: _providerExecuted, ...normalized } = part
+    return normalized as T
   }
 
   /**

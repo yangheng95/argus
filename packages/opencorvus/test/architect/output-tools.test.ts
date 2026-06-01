@@ -72,6 +72,17 @@ function baseGraph(contractIDs: string[] = ["contract_order"]): ArchitectContrac
 }
 
 function contractRef(id: string = "contract_order", consumerGoalIDs: string[] = ["goal_ui"]) {
+  const ir = {
+    kind: "type" as const,
+    name: "Order",
+    fields: [
+      {
+        name: "status",
+        typeExpr: "string",
+        valueDomain: { kind: "literal_union" as const, values: ["new", "paid"] },
+      },
+    ],
+  }
   return {
     id,
     kind: "type" as const,
@@ -79,17 +90,7 @@ function contractRef(id: string = "contract_order", consumerGoalIDs: string[] = 
     producer_goal_id: "goal_model",
     consumer_goal_ids: consumerGoalIDs,
     summary: "Shared order status model for UI rendering.",
-    ir: {
-      kind: "type" as const,
-      name: "Order",
-      fields: [
-        {
-          name: "status",
-          typeExpr: "string",
-          valueDomain: { kind: "literal_union" as const, values: ["new", "paid"] },
-        },
-      ],
-    },
+    ir_json: JSON.stringify(ir),
   }
 }
 
@@ -183,6 +184,69 @@ test("architect registers graph contracts and finalizes without goal imports or 
   expect(kit.getCollector().fact_check_items).toEqual([])
   expect(kit.getCollector().goals[0]).not.toHaveProperty("exports")
   expect(kit.getCollector().goals[0]).not.toHaveProperty("imports")
+})
+
+test("remove_goal cascades depends_on references from remaining goals", async () => {
+  const kit = await registerTwoGoalGraph()
+  const { tools } = kit
+
+  await tools.register_contract.execute!(contractRef() as any, {} as any)
+  await tools.register_dependency_contract.execute!(
+    {
+      from_goal_id: "goal_model",
+      to_goal_id: "goal_ui",
+      reason: "contract",
+      contract_ids: ["contract_order"],
+    } as any,
+    {} as any,
+  )
+
+  const out = await tools.remove_goal.execute!(
+    {
+      id: "goal_model",
+      reason: "model surface was folded into the UI goal during re-sizing",
+    } as any,
+    {} as any,
+  )
+
+  expect(out).toContain("1 goal depends_on ref(s)")
+  expect(kit.getCollector().goals.find((goal) => goal.id === "goal_ui")?.depends_on).toEqual([])
+  expect(
+    architectValidationFindings(kit.getCollector(), { workDir: process.cwd() }).some(
+      (finding) => finding.code === "unknown_dependency_goal",
+    ),
+  ).toBe(false)
+})
+
+test("architect normalizes frontend-design source baseline owned paths to delivery root", async () => {
+  const kit = createArchitectOutputTools({ existingGoals: [], workDir: process.cwd() })
+
+  const result = await kit.tools.register_goal.execute!(
+    {
+      id: "goal_frontend_api",
+      title: "Frontend API",
+      objective:
+        "Adopt the frontend source baseline into the delivery root and implement API client code used by the app.",
+      acceptance_specs: [acceptance("goal_frontend_api")],
+      owned_paths: [
+        "frontend-design-skeleton/package.json",
+        "frontend-design-skeleton/src/types/api.ts",
+        "frontend-design-skeleton\\src\\hooks\\useApi.ts",
+      ],
+      depends_on: [],
+      priority: "blocking",
+      kind: "feature",
+      requirement_ids: ["REQ-1"],
+    } as any,
+    {} as any,
+  )
+
+  expect(result).toContain("normalized source-baseline owned_paths to delivery-root paths")
+  expect(kit.getCollector().goals[0]?.owned_paths).toEqual([
+    "package.json",
+    "src/types/api.ts",
+    "src/hooks/useApi.ts",
+  ])
 })
 
 test("architect rejects contract evidence_refs outside active research evidence ids", async () => {
@@ -780,7 +844,7 @@ test("register_dependency_contract rejects contract id that does not belong to t
       producer_goal_id: "goal_model",
       consumer_goal_ids: [],
       summary: "Shared order status model for UI rendering.",
-      ir: {
+      ir_json: JSON.stringify({
         kind: "type",
         name: "Order",
         fields: [
@@ -790,7 +854,7 @@ test("register_dependency_contract rejects contract id that does not belong to t
             valueDomain: { kind: "literal_union", values: ["new", "paid"] },
           },
         ],
-      },
+      }),
     } as any,
     {} as any,
   )

@@ -45,6 +45,12 @@ export interface WebCloneSourceSkeletonConsumptionAudit {
     dataArrayCount: number
     renderLoopCount: number
     base64DataUriCount: number
+    sourceDomRegionFileCount: number
+    largestSourceDomRegionBytes: number
+    oversizedSourceDomRegionCount: number
+    sourceDomReplacementPlanExists: boolean
+    sourceSvgAssetGroupExists: boolean
+    sourceFaqGroupExists: boolean
   }
   sourceCoverage: {
     requiredTextCount: number
@@ -74,18 +80,20 @@ export interface WebCloneSourceSkeletonConsumptionAudit {
     mechanicalSkeletonConversionDetected: boolean
     thirdPartyCssRuntimeLoaderDetected: boolean
     sourcePackageContaminated: boolean
+    oversizedGeneratedRegionDetected: boolean
   }
   findings: string[]
 }
 
-export interface WebCloneSourceSkeletonConsumptionGateResult {
-  required: boolean
-  passed: boolean
+export interface WebCloneSourceSkeletonConsumptionEvidenceResult {
+  referenced: boolean
+  ok: boolean
   auditPath?: string
-  error?: string
+  findings: string[]
 }
 
 const SOURCE_FILE_RE = /\.(?:js|jsx|mjs|cjs|ts|tsx|vue|svelte|html|css|scss|sass|less)$/i
+const DATA_SOURCE_FILE_RE = /^(?:src|app|pages|components|views|routes|lib|data)\/.*\.json$/i
 const COMPONENT_FILE_RE = /(?:^|\/)(?:src\/)?(?:components|pages|views|routes|app)\/.*\.(?:jsx|tsx|vue|svelte|ts|js)$|(?:^|\/)src\/[A-Z][\w.-]*\.(?:jsx|tsx|vue|svelte)$/i
 const EXCLUDED_DIRS = new Set([
   ".git",
@@ -95,12 +103,14 @@ const EXCLUDED_DIRS = new Set([
   ".tmp",
   "build",
   "coverage",
+  "frontend-design-skeleton",
   "dist",
   "mirror",
   "node_modules",
   "out",
   "source-ir",
   "source-skeleton",
+  "references",
   "web-clone-source",
 ])
 
@@ -116,6 +126,8 @@ const DEFAULT_SCAFFOLD_PATTERNS = [
   /\bvite\.dev\b/i,
   /\breact\.dev\b/i,
 ]
+
+const SOURCE_DOM_REGION_OVERSIZE_BYTES = 32_000
 
 export async function auditWebCloneSourceSkeletonConsumption(
   input: WebCloneSourceSkeletonConsumptionAuditInput,
@@ -172,7 +184,15 @@ export async function auditWebCloneSourceSkeletonConsumption(
     .reduce((sum, source) => sum + source.bytes, 0)
   const htmlStringStats = countHtmlStringStats(projectText)
   const base64DataUriCount = projectText.match(/data:[^"')\s]+;base64,/g)?.length ?? 0
-  const dataArrayCount = countDataArrays(projectText)
+  const sourceDomRegionSources = projectSources.filter((source) => /^src\/components\/source-dom\/.+\.tsx$/i.test(source.relative))
+  const sourceDomRegionBytes = sourceDomRegionSources.map((source) => source.bytes)
+  const largestSourceDomRegionBytes = Math.max(0, ...sourceDomRegionBytes)
+  const oversizedSourceDomRegionSources = sourceDomRegionSources.filter((source) => source.bytes >= SOURCE_DOM_REGION_OVERSIZE_BYTES)
+  const oversizedGeneratedRegionDetected = generatedBaselineDetected && oversizedSourceDomRegionSources.length > 0
+  const sourceDomReplacementPlanExists = projectSources.some((source) => source.relative === "src/data/sourceDomReplacementPlan.ts")
+  const sourceSvgAssetGroupExists = projectSources.some((source) => source.relative === "src/data/sourceSvgAssetGroups.ts")
+  const sourceFaqGroupExists = projectSources.some((source) => source.relative === "src/data/sourceFaqGroups.ts")
+  const dataArrayCount = countDataArrays(projectSources)
   const renderLoopCount = countRenderLoops(projectText)
   const componentNames = readComponentNames(componentTree)
   const componentNameHits = componentNames.filter((name) => sourceContains(projectText, name))
@@ -195,6 +215,52 @@ export async function auditWebCloneSourceSkeletonConsumption(
   const skeletonIgnored = !generatedBaselineDetected && textSignals.length > 0 && (matchedTexts.length < Math.min(3, textSignals.length) || textCoverageRatio < 0.25)
   const finalBaselineOnlyDetected = finalDeliveryMode === "maintainable_replacement_required" && generatedBaselineDetected
 
+  const projectStats = {
+    sourceFileCount: sourceFiles.length,
+    componentFileCount: componentFileCount(projectSources),
+    cssBytes,
+    htmlStringBytes: htmlStringStats.htmlStringBytes,
+    largestHtmlStringBytes: htmlStringStats.largestHtmlStringBytes,
+    dataArrayCount,
+    renderLoopCount,
+    base64DataUriCount,
+    sourceDomRegionFileCount: sourceDomRegionSources.length,
+    largestSourceDomRegionBytes,
+    oversizedSourceDomRegionCount: oversizedSourceDomRegionSources.length,
+    sourceDomReplacementPlanExists,
+    sourceSvgAssetGroupExists,
+    sourceFaqGroupExists,
+  }
+  const sourceCoverage = {
+    requiredTextCount: textSignals.length,
+    matchedTextCount: matchedTexts.length,
+    textCoverageRatio,
+    matchedTextSamples: matchedTexts.slice(0, 12),
+    missingTextSamples: missingTexts.slice(0, 12),
+    componentNameHits: componentNameHits.slice(0, 12),
+  }
+  const structureCoverage = {
+    sourceComponentCount,
+    repeatedStructureCount,
+    repeatedStructureRequiresDataLoops,
+    dataArrayDetected: dataArrayCount > 0,
+    renderLoopDetected: renderLoopCount > 0,
+  }
+  const risk = {
+    defaultScaffoldDetected,
+    htmlReplayDetected,
+    manualDomMutationDetected,
+    denseInlineAssetDetected,
+    referenceImageReplayDetected,
+    hiddenSemanticContentDetected,
+    skeletonIgnored,
+    generatedBaselineDetected,
+    finalBaselineOnlyDetected,
+    mechanicalSkeletonConversionDetected,
+    thirdPartyCssRuntimeLoaderDetected,
+    sourcePackageContaminated,
+    oversizedGeneratedRegionDetected,
+  }
   const findings: string[] = []
   if (!sourceEvidence.referenceImageValidPng) findings.push(`Missing or invalid ${sourceLabel}/reference.png visual truth (${referenceImage.error ?? "invalid PNG"}).`)
   if (!manifestIntegrity.passed) findings.push(`Source package manifest failed: ${manifestIntegrity.findings.join("; ")}`)
@@ -213,6 +279,15 @@ export async function auditWebCloneSourceSkeletonConsumption(
     findings.push(
       "Frontend-design generated DOM/CSS baseline is still present in maintainable replacement mode; replace requested surfaces with project-owned semantic components/data modules before final acceptance.",
     )
+    if (sourceDomRegionSources.length > 0) {
+      const priorityList = oversizedSourceDomRegionSources
+        .sort((a, b) => b.bytes - a.bytes)
+        .slice(0, 6)
+        .map((source) => `${source.relative} (${source.bytes} bytes)`)
+      if (priorityList.length > 0) {
+        findings.push(`Largest generated source-dom regions still need semantic replacement before final maintainable acceptance: ${priorityList.join(", ")}.`)
+      }
+    }
   }
   if (!generatedBaselineDetected && sourceComponentCount >= 2 && componentFileCount(projectSources) < 2) {
     findings.push(`Source IR exposes ${sourceComponentCount} component boundary hints, but fewer than 2 project-owned component files were found.`)
@@ -232,17 +307,6 @@ export async function auditWebCloneSourceSkeletonConsumption(
   if (thirdPartyCssRuntimeLoaderDetected) findings.push("Project-owned source runtime-loads third-party stylesheet bundles instead of owning the extracted CSS.")
   if (sourcePackageContaminated) findings.push(`Visible source package contains output/verification artifacts and is not input-only: ${contaminatedSourceArtifacts.join(", ")}.`)
 
-  const projectStats = {
-    sourceFileCount: sourceFiles.length,
-    componentFileCount: componentFileCount(projectSources),
-    cssBytes,
-    htmlStringBytes: htmlStringStats.htmlStringBytes,
-    largestHtmlStringBytes: htmlStringStats.largestHtmlStringBytes,
-    dataArrayCount,
-    renderLoopCount,
-    base64DataUriCount,
-  }
-
   return {
     version: 1,
     purpose: "web-clone-source-skeleton-consumption-audit",
@@ -252,35 +316,9 @@ export async function auditWebCloneSourceSkeletonConsumption(
     sourcePackageDir,
     sourceEvidence,
     projectStats,
-    sourceCoverage: {
-      requiredTextCount: textSignals.length,
-      matchedTextCount: matchedTexts.length,
-      textCoverageRatio,
-      matchedTextSamples: matchedTexts.slice(0, 12),
-      missingTextSamples: missingTexts.slice(0, 12),
-      componentNameHits: componentNameHits.slice(0, 12),
-    },
-    structureCoverage: {
-      sourceComponentCount,
-      repeatedStructureCount,
-      repeatedStructureRequiresDataLoops,
-      dataArrayDetected: dataArrayCount > 0,
-      renderLoopDetected: renderLoopCount > 0,
-    },
-    risk: {
-      defaultScaffoldDetected,
-      htmlReplayDetected,
-      manualDomMutationDetected,
-      denseInlineAssetDetected,
-      referenceImageReplayDetected,
-      hiddenSemanticContentDetected,
-      skeletonIgnored,
-      generatedBaselineDetected,
-      finalBaselineOnlyDetected,
-      mechanicalSkeletonConversionDetected,
-      thirdPartyCssRuntimeLoaderDetected,
-      sourcePackageContaminated,
-    },
+    sourceCoverage,
+    structureCoverage,
+    risk,
     findings,
   }
 }
@@ -297,56 +335,56 @@ export async function writeWebCloneSourceSkeletonConsumptionAudit(
   return { audit, auditPath }
 }
 
-export async function inspectWebCloneSourceSkeletonConsumptionGate(input: {
+export async function inspectWebCloneSourceSkeletonConsumptionEvidence(input: {
   projectDir: string
   citedText: string
   originalRequest?: string
   finalDeliveryMode?: WebCloneFinalDeliveryMode
-}): Promise<WebCloneSourceSkeletonConsumptionGateResult> {
-  if (!requiresWebCloneSourceConsumptionAudit(input.citedText)) return { required: false, passed: true }
+}): Promise<WebCloneSourceSkeletonConsumptionEvidenceResult> {
+  if (!referencesWebCloneSource(input.citedText)) return { referenced: false, ok: true, findings: [] }
   const projectDir = path.resolve(input.projectDir)
   const finalDeliveryMode = input.finalDeliveryMode ?? inferWebCloneFinalDeliveryMode(`${input.originalRequest ?? ""}\n${input.citedText}`)
   const expectedSourcePackageDir = path.join(projectDir, WEB_CLONE_SOURCE_PACKAGE_DIR)
   const canonicalAuditPath = path.join(projectDir, "web-clone-source-skeleton-consumption-audit.json")
   if (!await exists(canonicalAuditPath)) {
     return {
-      required: true,
-      passed: false,
+      referenced: true,
+      ok: false,
       auditPath: canonicalAuditPath,
-      error: `source-skeleton implementation is missing web-clone-source-skeleton-consumption-audit.json at canonical path ${canonicalAuditPath}`,
+      findings: [`source-skeleton implementation is missing web-clone-source-skeleton-consumption-audit.json at canonical path ${canonicalAuditPath}`],
     }
   }
 
   const parsed = await readJsonOptional(canonicalAuditPath)
   if (!isConsumptionAudit(parsed)) {
-    return { required: true, passed: false, auditPath: canonicalAuditPath, error: `${canonicalAuditPath}: invalid source-skeleton consumption audit JSON` }
+    return { referenced: true, ok: false, auditPath: canonicalAuditPath, findings: [`${canonicalAuditPath}: invalid source-skeleton consumption audit JSON`] }
   }
   if (!samePath(parsed.projectDir, projectDir)) {
     return {
-      required: true,
-      passed: false,
+      referenced: true,
+      ok: false,
       auditPath: canonicalAuditPath,
-      error: `${canonicalAuditPath}: audit projectDir must be the current delivery root (${projectDir}), got ${parsed.projectDir}`,
+      findings: [`${canonicalAuditPath}: audit projectDir must be the current delivery root (${projectDir}), got ${parsed.projectDir}`],
     }
   }
   if (!samePath(parsed.sourcePackageDir, expectedSourcePackageDir)) {
     return {
-      required: true,
-      passed: false,
+      referenced: true,
+      ok: false,
       auditPath: canonicalAuditPath,
-      error: `${canonicalAuditPath}: audit sourcePackageDir must be ${expectedSourcePackageDir}, got ${parsed.sourcePackageDir}`,
+      findings: [`${canonicalAuditPath}: audit sourcePackageDir must be ${expectedSourcePackageDir}, got ${parsed.sourcePackageDir}`],
     }
   }
   if ((parsed.finalDeliveryMode ?? "visual_baseline_allowed") !== finalDeliveryMode) {
     return {
-      required: true,
-      passed: false,
+      referenced: true,
+      ok: false,
       auditPath: canonicalAuditPath,
-      error: `${canonicalAuditPath}: audit finalDeliveryMode must be ${finalDeliveryMode}, got ${parsed.finalDeliveryMode ?? "visual_baseline_allowed"}`,
+      findings: [`${canonicalAuditPath}: audit finalDeliveryMode must be ${finalDeliveryMode}, got ${parsed.finalDeliveryMode ?? "visual_baseline_allowed"}`],
     }
   }
   if (!parsed.passed) {
-    return { required: true, passed: false, auditPath: canonicalAuditPath, error: `${canonicalAuditPath}: ${parsed.findings.join("; ")}` }
+    return { referenced: true, ok: false, auditPath: canonicalAuditPath, findings: [`${canonicalAuditPath}: ${parsed.findings.join("; ")}`] }
   }
 
   let liveAudit: WebCloneSourceSkeletonConsumptionAudit
@@ -357,18 +395,18 @@ export async function inspectWebCloneSourceSkeletonConsumptionGate(input: {
       finalDeliveryMode,
     })
   } catch (error) {
-    return { required: true, passed: false, auditPath: canonicalAuditPath, error: `${canonicalAuditPath}: live audit failed (${error instanceof Error ? error.message : String(error)})` }
+    return { referenced: true, ok: false, auditPath: canonicalAuditPath, findings: [`${canonicalAuditPath}: live audit failed (${error instanceof Error ? error.message : String(error)})`] }
   }
   if (!liveAudit.passed) {
-    return { required: true, passed: false, auditPath: canonicalAuditPath, error: `${canonicalAuditPath}: live audit failed (${liveAudit.findings.join("; ")})` }
+    return { referenced: true, ok: false, auditPath: canonicalAuditPath, findings: [`${canonicalAuditPath}: live audit failed (${liveAudit.findings.join("; ")})`] }
   }
   if (stableJson(liveAudit) !== stableJson(parsed)) {
-    return { required: true, passed: false, auditPath: canonicalAuditPath, error: `${canonicalAuditPath}: audit JSON is stale or does not match a live audit` }
+    return { referenced: true, ok: false, auditPath: canonicalAuditPath, findings: [`${canonicalAuditPath}: audit JSON is stale or does not match a live audit`] }
   }
-  return { required: true, passed: true, auditPath: canonicalAuditPath }
+  return { referenced: true, ok: true, auditPath: canonicalAuditPath, findings: [] }
 }
 
-function requiresWebCloneSourceConsumptionAudit(citedText: string): boolean {
+function referencesWebCloneSource(citedText: string): boolean {
   const normalized = citedText.toLowerCase()
   return [
     "source-skeleton",
@@ -419,27 +457,52 @@ async function listSourceFiles(root: string): Promise<string[]> {
       }
       if (!entry.isFile()) continue
       const full = path.join(dir, entry.name)
-      if (SOURCE_FILE_RE.test(full)) files.push(full)
+      const relative = normalizePath(path.relative(root, full))
+      if (isDiagnosticSourceFile(relative)) continue
+      if (SOURCE_FILE_RE.test(relative) || DATA_SOURCE_FILE_RE.test(relative)) files.push(full)
     }
   }
   await walk(root)
   return files
 }
 
+function isDiagnosticSourceFile(relative: string): boolean {
+  return relative === "src/data/sourceProjectManifest.json" ||
+    relative === "web-clone-source-skeleton-consumption-audit.json"
+}
+
 function detectFrontendDesignGeneratedBaseline(projectSources: Array<{ relative: string; text: string }>): boolean {
   const byPath = new Map(projectSources.map((source) => [source.relative, source.text]))
-  return byPath.has("scripts/extract-source-html.mjs") &&
+  const legacySinglefileBaseline = byPath.has("scripts/extract-source-html.mjs") &&
     byPath.has("src/generated/singlefile-body.html") &&
     byPath.has("src/generated/singlefile-head-styles.html") &&
     /singlefile-body\.html\?raw/.test(byPath.get("src/App.jsx") ?? "") &&
     /singlefile-head-styles\.html\?raw/.test(byPath.get("src/App.jsx") ?? "")
+  const sourceSkeletonBaseline = byPath.has("src/components/SourceDomPage.tsx") &&
+    byPath.has("src/components/SourceClonePage.tsx") &&
+    byPath.has("src/data/sourceData.ts") &&
+    /function SourceDomPage\b/.test(byPath.get("src/components/SourceDomPage.tsx") ?? "") &&
+    (
+      /data-source-node-id/.test(byPath.get("src/components/SourceDomPage.tsx") ?? "") ||
+      projectSources.some((source) => /^src\/components\/source-dom\/.+\.tsx$/i.test(source.relative) && /data-source-node-id/.test(source.text))
+    ) &&
+    /SourceDomPage/.test(byPath.get("src/components/SourceClonePage.tsx") ?? "")
+  return legacySinglefileBaseline || sourceSkeletonBaseline
 }
 
 function isFrontendDesignGeneratedBaselineFile(relative: string): boolean {
   return relative === "src/App.jsx" ||
     relative === "src/main.jsx" ||
     relative === "scripts/extract-source-html.mjs" ||
-    relative.startsWith("src/generated/")
+    relative.startsWith("src/generated/") ||
+    relative === "src/components/SourceDomPage.tsx" ||
+    relative === "src/components/SourceAssetPathGroup.tsx" ||
+    relative === "src/components/SourceFaqList.tsx" ||
+    relative === "src/data/sourceDomRegions.ts" ||
+    relative === "src/data/sourceDomReplacementPlan.ts" ||
+    relative === "src/data/sourceSvgAssetGroups.ts" ||
+    relative === "src/data/sourceFaqGroups.ts" ||
+    relative.startsWith("src/components/source-dom/")
 }
 
 function isConsumptionAudit(value: unknown): value is WebCloneSourceSkeletonConsumptionAudit {
@@ -574,8 +637,32 @@ function componentFileCount(sources: Array<{ relative: string }>): number {
   return sources.filter((source) => COMPONENT_FILE_RE.test(source.relative)).length
 }
 
-function countDataArrays(text: string): number {
-  return text.match(/\b(?:export\s+)?(?:const|let|var)\s+[A-Za-z_$][\w$]*\s*(?::[^=]+)?=\s*\[[\s\S]{0,3000}[\]}][\s,]*\]/g)?.length ?? 0
+function countDataArrays(sources: Array<{ relative: string; text: string }>): number {
+  let count = 0
+  for (const source of sources) {
+    if (/\.json$/i.test(source.relative)) {
+      count += countJsonArrays(source.text)
+      continue
+    }
+    count += source.text.match(/\b(?:export\s+)?(?:const|let|var)\s+[A-Za-z_$][\w$]*\s*(?::[^=]+)?=\s*\[[\s\S]{0,3000}[\]}][\s,]*\]/g)?.length ?? 0
+  }
+  return count
+}
+
+function countJsonArrays(text: string): number {
+  try {
+    return countArraysInJson(JSON.parse(text))
+  } catch {
+    return 0
+  }
+}
+
+function countArraysInJson(value: unknown): number {
+  if (Array.isArray(value)) {
+    return 1 + value.reduce<number>((sum, item) => sum + countArraysInJson(item), 0)
+  }
+  if (!value || typeof value !== "object") return 0
+  return Object.values(value as Record<string, unknown>).reduce<number>((sum, item) => sum + countArraysInJson(item), 0)
 }
 
 function countRenderLoops(text: string): number {

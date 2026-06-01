@@ -56,7 +56,7 @@ export function buildWebCloneHandoff(pageIr: WebClonePageIr, assetGraph: WebClon
       "Do not inline long CSS, SVG path data, base64, or copied asset payloads into React/Vue source; import or reference sidecar assets.",
       "Preserve text and link coverage before decorative refactors.",
     ],
-    verificationGates: [
+    verificationChecks: [
       "rendered screenshot comparison",
       "visible text coverage",
       "asset reference coverage",

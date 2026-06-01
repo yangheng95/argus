@@ -24,6 +24,7 @@ describe("agent context tools", () => {
   //   requirements / architect  → keep  (durable greenfield tech decisions)
   //   frontend-design            → drop  (owns mirror extraction; redundant)
   //   intent-analysis           → drop  (first cheap classifier; must not research)
+  //   research                  → drop  (starts from source URLs with webfetch; search costs are avoided)
   for (const agentName of ["requirements", "architect"] as const) {
     test(`${agentName} resolves websearch through its include whitelist`, async () => {
       await Instance.provide({
@@ -37,7 +38,7 @@ describe("agent context tools", () => {
     })
   }
 
-  for (const agentName of ["frontend-design", "intent-analysis"] as const) {
+  for (const agentName of ["frontend-design", "intent-analysis", "research"] as const) {
     test(`${agentName} does NOT resolve websearch (research is not its job)`, async () => {
       await Instance.provide({
         directory: process.cwd(),

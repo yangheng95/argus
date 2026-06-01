@@ -172,6 +172,7 @@ type ReviewerCollector = { report?: IntegrityReviewerReport }
 type ConsensusCollector = { report?: IntegrityTeamReport }
 
 const INTEGRITY_EVIDENCE_PROMPT_MAX_CHARS = 12_000
+const INTEGRITY_CONSENSUS_REVIEWER_REPORTS_MAX_CHARS = 18_000
 const INTEGRITY_EVIDENCE_LIMITS = {
   userRequestChars: 800,
   requirements: 8,
@@ -188,6 +189,18 @@ const INTEGRITY_EVIDENCE_LIMITS = {
   goalDirectories: 6,
   goalAcceptanceSpecs: 2,
   goalAcceptanceTitleChars: 80,
+} as const
+const INTEGRITY_CONSENSUS_REPORT_LIMITS = {
+  drilldowns: 12,
+  coverage: 18,
+  evidence: 18,
+  findingEvidence: 6,
+  findings: 24,
+  openQuestions: 8,
+  fieldChars: 260,
+  summaryChars: 360,
+  findingDescriptionChars: 420,
+  findingRepairChars: 320,
 } as const
 
 export async function reviewIntegrity(input: {
@@ -300,8 +313,7 @@ export async function reviewIntegrity(input: {
     // plan (:197) and reviewer (:404) phases use different terminal
     // schemas and intentionally do not register fact_check_items.
     core: withFactCheckRegistration(TEAM_CORE),
-    sessionTitle: `Integrity Supervisor: ${input.taskTitle}`,
-    existingSessionID: planOut.session.id,
+    sessionTitle: `Integrity Consensus: ${input.taskTitle}`,
     parentSessionID: input.parentSessionID,
     taskID: input.taskID,
     signal: input.signal,
@@ -330,8 +342,8 @@ export async function reviewIntegrity(input: {
     findings: normalized.findings.length,
     requiredRepairs: normalized.requiredRepairs.length,
   })
-  emitIntegrityEvent(input.taskID, planOut.session.id, normalized, attemptNumber)
-  return { ...normalized, sessionID: planOut.session.id }
+  emitIntegrityEvent(input.taskID, consensusOut.session.id, normalized, attemptNumber)
+  return { ...normalized, sessionID: consensusOut.session.id }
 }
 
 function createPlanToolKit(collector: PlanCollector) {
@@ -588,7 +600,7 @@ export function buildSupervisorConsensusPrompt(
     "Reviewer plan:",
     renderReviewerPlanMarkdown(plan),
     "Reviewer reports:",
-    reports.map(renderReviewerReportMarkdown).join("\n\n"),
+    renderReviewerReportsForConsensusPrompt(reports),
     "Original review context:",
     buildIntegrityEvidencePrompt(input),
     "Perform a coverage audit before final verdict: every critical request promise from the plan should be `covered`, `missing`, or explicitly `inconclusive`. Include `coverageAudit`; include `uninspectedRisks` for high-risk surfaces that no reviewer actually checked.",
@@ -1268,6 +1280,105 @@ function renderReviewerPlanMarkdown(plan: IntegrityReviewerPlan): string {
     )
   }
   return lines.join("\n\n")
+}
+
+function renderReviewerReportsForConsensusPrompt(reports: IntegrityReviewerReport[]): string {
+  return clipIntegrityEvidenceText(
+    reports.map(renderReviewerReportForConsensusPrompt).join("\n\n"),
+    INTEGRITY_CONSENSUS_REVIEWER_REPORTS_MAX_CHARS,
+  )
+}
+
+function renderReviewerReportForConsensusPrompt(report: IntegrityReviewerReport): string {
+  const limits = INTEGRITY_CONSENSUS_REPORT_LIMITS
+  const lines = [
+    `## Reviewer ${sanitizePromptLine(report.reviewerID, "generic")}: ${report.verdict}`,
+    `Scope: ${sanitizePromptBlock(report.scope, limits.fieldChars)}`,
+    `Summary: ${sanitizePromptBlock(report.summary, limits.summaryChars)}`,
+  ]
+  if (report.investigationPlan) {
+    lines.push(
+      [
+        "Investigation plan:",
+        `- request promise: ${sanitizePromptBlock(report.investigationPlan.requestPromise, limits.fieldChars)}`,
+        `- hypothesis: ${sanitizePromptBlock(report.investigationPlan.hypothesis, limits.fieldChars)}`,
+        `- evidence plan: ${boundedPromptList(report.investigationPlan.evidencePlan, 6, limits.fieldChars).join(" | ")}`,
+        `- pass criteria: ${boundedPromptList(report.investigationPlan.passCriteria, 6, limits.fieldChars).join(" | ")}`,
+      ].join("\n"),
+    )
+  }
+  if ((report.drilldowns ?? []).length > 0) {
+    const items = report.drilldowns.map(
+      (drilldown) =>
+        `${drilldown.kind}:${drilldown.target} - ${drilldown.purpose} => ${drilldown.result}`,
+    )
+    lines.push("Drilldowns:", markdownListWithOmissions(items, limits.drilldowns, limits.fieldChars, "drilldowns"))
+  }
+  if ((report.coverage ?? []).length > 0) {
+    const items = report.coverage.map((row) => {
+      const target = row.requirementID ?? row.specID ?? row.userRequestQuote ?? "(unanchored)"
+      return `${target}: ${row.status} - ${row.evidence}`
+    })
+    lines.push("Coverage:", markdownListWithOmissions(items, limits.coverage, limits.fieldChars, "coverage rows"))
+  }
+  if ((report.evidence ?? []).length > 0) {
+    lines.push("Evidence:", markdownListWithOmissions(report.evidence, limits.evidence, limits.fieldChars, "evidence rows"))
+  }
+  if ((report.findings ?? []).length > 0) {
+    lines.push("Findings:")
+    const visibleFindings = report.findings.slice(0, limits.findings)
+    for (const finding of visibleFindings) {
+      const metadata = [
+        finding.requirementIDs?.length ? `requirements=${finding.requirementIDs.join(",")}` : "",
+        finding.specIDs?.length ? `specs=${finding.specIDs.join(",")}` : "",
+        finding.filePaths?.length ? `paths=${promptPathDirectories(finding.filePaths).join(",")}` : "",
+        finding.affectedSymbols?.length ? `symbols=${finding.affectedSymbols.join(",")}` : "",
+        finding.userRequestQuotes?.length
+          ? `quotes=${boundedPromptList(finding.userRequestQuotes, 3, limits.fieldChars).join(" | ")}`
+          : "",
+      ]
+        .filter(Boolean)
+        .join("; ")
+      lines.push(
+        [
+          `- [${finding.severity}] ${sanitizePromptLine(finding.id, "generic")}: ${sanitizePromptBlock(
+            finding.title,
+            limits.fieldChars,
+          )}`,
+          `  description: ${sanitizePromptBlock(finding.description, limits.findingDescriptionChars)}`,
+          `  repair: ${sanitizePromptBlock(finding.repair, limits.findingRepairChars)}`,
+          metadata ? `  metadata: ${metadata}` : "",
+          `  evidence: ${boundedPromptList(finding.evidence, limits.findingEvidence, limits.fieldChars).join(" | ")}`,
+        ]
+          .filter(Boolean)
+          .join("\n"),
+      )
+    }
+    appendOmittedLine(lines, report.findings.length, visibleFindings.length, "findings")
+  }
+  if ((report.openQuestions ?? []).length > 0) {
+    lines.push(
+      "Open questions:",
+      markdownListWithOmissions(report.openQuestions, limits.openQuestions, limits.fieldChars, "open questions"),
+    )
+  }
+  return lines.join("\n")
+}
+
+function markdownListWithOmissions(
+  items: readonly string[],
+  visibleCount: number,
+  itemChars: number,
+  label: string,
+): string {
+  const visible = boundedPromptList(items, visibleCount, itemChars)
+  const lines = visible.map((item) => `- ${item}`)
+  appendOmittedLine(lines, items.length, visible.length, label)
+  return lines.join("\n")
+}
+
+function boundedPromptList(items: readonly string[], visibleCount: number, itemChars: number): string[] {
+  return items.slice(0, visibleCount).map((item) => sanitizePromptBlock(item, itemChars).replace(/\s+/g, " ").trim())
 }
 
 function renderReviewerReportMarkdown(report: IntegrityReviewerReport): string {

@@ -793,7 +793,17 @@ export namespace SessionProcessor {
           }
           const lostParts = await openToolParts()
           if (lostParts.length > 0) {
-            throw new ProcessorLostPartsError(lostParts.map((part) => part.id))
+            const error = new ProcessorLostPartsError(lostParts.map((part) => part.id))
+            await failOpenToolParts(toolFailureCauseFromUnknown({
+              error,
+              originSite: "session.processor.lost-open-tool-parts",
+              classification: "processor-contract",
+              kind: "lost-open-tool-parts",
+              data: {
+                partIDs: lostParts.map((part) => part.id),
+              },
+            }))
+            throw error
           }
           input.assistantMessage.time.completed = Date.now()
           await Session.updateMessage(input.assistantMessage)

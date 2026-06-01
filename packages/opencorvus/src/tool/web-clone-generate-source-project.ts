@@ -5,9 +5,9 @@ import { Tool } from "./tool"
 import { generateWebCloneSourceProject } from "../web-clone/source-project-generator"
 
 export const WebCloneGenerateSourceProjectTool = Tool.define("web_clone_generate_source_project", {
-  description: `Diagnostic-only generator for inspecting whether a web-clone-source handoff contains enough structure to synthesize editable React code.
+  description: `Generate an editable React source skeleton from a web-clone-source handoff.
 
-Do not use this as a normal Build deliverable path. Webpage replica delivery must implement the target project directly from the visible web-clone-source/ package. This tool is for operator-requested diagnostics and benchmarks only; it writes a separate React sample with framework components, sourceData arrays, and CSS sidecars from the skeleton/IR. It does not render reference.png, replay screenshots, inline base64, inject raw HTML, or re-extract webpages. Run web_clone_source_audit and visual screenshot evaluation after generation before interpreting diagnostic quality.`,
+It writes framework components, sourceData arrays, CSS sidecars, copied assets, and reference.png from source-skeleton/source-IR. It does not render reference.png, replay screenshots, inline base64, inject raw HTML, or re-extract webpages. Downstream agents should preserve the generated CSS sidecars and refine the generated React modules in place as traceable source-region evidence. Use web_clone_source_audit and visual screenshot evaluation as diagnostics after generation.`,
   parameters: z.object({
     mirrorDir: z
       .string()
@@ -52,7 +52,7 @@ Do not use this as a normal Build deliverable path. Webpage replica delivery mus
       `- Asset references: ${result.stats.assetRefCount}`,
       `- CSS sidecars: ${result.stats.copiedCssFiles}`,
       "",
-      "Next gates:",
+      "Next checks:",
       `- Run web_clone_source_audit with projectDir=${result.outputDir} and sourcePackageDir=${result.mirrorDir}.`,
       "- Build/run the project, render a screenshot, and compare against web-clone-source/reference.png with the visual evaluator.",
     ].join("\n")

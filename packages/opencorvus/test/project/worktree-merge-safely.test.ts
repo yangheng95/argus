@@ -142,6 +142,28 @@ describe("Worktree.mergeSafely", () => {
     await expect(fs.stat(path.join(tmp.path, "web-clone-source", "README.md"))).rejects.toThrow()
   })
 
+  test("committed reference files are normal project files, not frontend evidence gates", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await $`git ${gitEnv} branch -M master`.cwd(tmp.path).quiet()
+
+    const info = await Instance.provide({
+      directory: tmp.path,
+      fn: () => Worktree.create({ name: `safe-references-committed-${Date.now().toString(36)}` }),
+    })
+    await fs.mkdir(path.join(info.directory, "references"), { recursive: true })
+    await fs.writeFile(path.join(info.directory, "references", "screenshot.png"), "must remain input\n")
+    await $`git add -f references/screenshot.png`.cwd(info.directory).quiet()
+    await $`git ${gitEnv} commit -m "bad staged reference commit"`.cwd(info.directory).quiet()
+
+    const outcome = await Instance.provide({
+      directory: tmp.path,
+      fn: () => Worktree.mergeSafely({ branch: info.branch, worktreeDir: info.directory }),
+    })
+
+    expect(outcome.status).toBe("merged")
+    expect((await fs.readFile(path.join(tmp.path, "references", "screenshot.png"), "utf8")).replace(/\r\n/g, "\n")).toBe("must remain input\n")
+  })
+
   test("preserves dirty primary worktree changes before publishing goal branch", async () => {
     await using tmp = await tmpdir({ git: true })
     await $`git ${gitEnv} branch -M master`.cwd(tmp.path).quiet()

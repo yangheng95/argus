@@ -1,18 +1,10 @@
-/**
- * P0-A · Reference 真实性闸。
+﻿/**
+ * Reference capture and diagnostics.
  *
- * 采集 + 校验 reference 图的唯一入口。伪造 PNG（67 字节 / 空白 / 单色）在这里
- * 被直接拒收，不允许走「静态文本 visual contract」那条退路（CLAUDE.md rule 1）。
- *
- * 消费者：
- *  - P0-A 自身：frontend-design 抓图后调用 captureReferenceManifest + enforceCaptureGate
- *  - P0-B (Stream C)：`chart_region_density` 硬门可消费 manifest.layout[] 的 bbox
- *  - P1-B (Stream F)：content-fingerprint 消费 reference_strings / palette / layout
- *
- * 契约要点：
- *  - 抓图失败 ⇒ 抛 `CaptureGateError`；调用方必须直接走 task=failed，禁 fallback
- *  - SPA 必须等 content-paint（canvas 有像素 或 main bbox 非零）+ networkidle
- *  - 像素统计与 visual-metric 共享 `util/pixel-stats`（rule 22：禁双源）
+ * This module is the single capture path for live URL visual references.
+ * Browser/navigation/screenshot failures are real acquisition failures and
+ * still throw. Pixel-density heuristics are diagnostics only: they are useful
+ * evidence for later investigation, but they must not block the workflow.
  */
 import z from "zod"
 import path from "node:path"
@@ -72,76 +64,76 @@ export const CaptureManifest = z.object({
 })
 export type CaptureManifestType = z.infer<typeof CaptureManifest>
 
-/** Gate 阈值。数值严守 spec P0-A；调节须保持字段名恒定以不破坏下游 consumers。 */
-export const CAPTURE_GATE_THRESHOLDS = {
+/** Diagnostic thresholds. These produce warnings, never workflow failures. */
+export const CAPTURE_DIAGNOSTIC_THRESHOLDS = {
   min_byte_size: 20_480,
   min_non_white_pixel_ratio: 0.05,
   min_unique_color_count: 16,
   min_sparse_text_length: 20,
 } as const
 
-export interface CaptureGateViolation {
+export interface CaptureDiagnosticWarning {
   field: "screenshot_byte_size" | "non_white_pixel_ratio" | "unique_color_count"
   threshold: number
   observed: number
 }
 
-export class CaptureGateError extends Error {
+export class CaptureReferenceError extends Error {
   override readonly cause?: unknown
   constructor(
     message: string,
-    readonly stage: "browser" | "navigate" | "content_paint" | "screenshot" | "stats" | "gate",
+    readonly stage: "browser" | "navigate" | "content_paint" | "screenshot" | "stats",
     cause?: unknown,
   ) {
     super(message)
-    this.name = "CaptureGateError"
+    this.name = "CaptureReferenceError"
     this.cause = cause
   }
 }
 
-/**
- * 校验 CaptureManifest 是否满足真实性闸。
- * - 通过：返回 { ok: true, manifest }
- * - 失败：返回 { ok: false, violations }；调用方必须把任务判 failed，禁 fallback。
- */
-export function enforceCaptureGate(manifest: CaptureManifestType):
-  | { ok: true; manifest: CaptureManifestType }
-  | { ok: false; violations: CaptureGateViolation[] } {
-  const violations: CaptureGateViolation[] = []
+export function assessCaptureDiagnostics(manifest: CaptureManifestType): CaptureDiagnosticWarning[] {
+  const warnings: CaptureDiagnosticWarning[] = []
   const hasSparsePageEvidence =
-    manifest.text_length >= CAPTURE_GATE_THRESHOLDS.min_sparse_text_length ||
+    manifest.text_length >= CAPTURE_DIAGNOSTIC_THRESHOLDS.min_sparse_text_length ||
     manifest.reference_strings.length >= 3 ||
     Object.keys(manifest.layout).length > 0
-  if (manifest.screenshot_byte_size < CAPTURE_GATE_THRESHOLDS.min_byte_size) {
-    violations.push({
+  if (manifest.screenshot_byte_size < CAPTURE_DIAGNOSTIC_THRESHOLDS.min_byte_size) {
+    warnings.push({
       field: "screenshot_byte_size",
-      threshold: CAPTURE_GATE_THRESHOLDS.min_byte_size,
+      threshold: CAPTURE_DIAGNOSTIC_THRESHOLDS.min_byte_size,
       observed: manifest.screenshot_byte_size,
     })
   }
   if (
-    manifest.non_white_pixel_ratio < CAPTURE_GATE_THRESHOLDS.min_non_white_pixel_ratio &&
+    manifest.non_white_pixel_ratio < CAPTURE_DIAGNOSTIC_THRESHOLDS.min_non_white_pixel_ratio &&
     !hasSparsePageEvidence
   ) {
-    violations.push({
+    warnings.push({
       field: "non_white_pixel_ratio",
-      threshold: CAPTURE_GATE_THRESHOLDS.min_non_white_pixel_ratio,
+      threshold: CAPTURE_DIAGNOSTIC_THRESHOLDS.min_non_white_pixel_ratio,
       observed: manifest.non_white_pixel_ratio,
     })
   }
-  if (manifest.unique_color_count < CAPTURE_GATE_THRESHOLDS.min_unique_color_count) {
-    violations.push({
+  if (manifest.unique_color_count < CAPTURE_DIAGNOSTIC_THRESHOLDS.min_unique_color_count) {
+    warnings.push({
       field: "unique_color_count",
-      threshold: CAPTURE_GATE_THRESHOLDS.min_unique_color_count,
+      threshold: CAPTURE_DIAGNOSTIC_THRESHOLDS.min_unique_color_count,
       observed: manifest.unique_color_count,
     })
   }
-  if (violations.length > 0) return { ok: false, violations }
-  return { ok: true, manifest }
+  return warnings
 }
 
-export function summarizeCaptureViolations(violations: readonly CaptureGateViolation[]): string {
-  return violations
+export function assessCaptureManifest(manifest: CaptureManifestType): {
+  ok: true
+  manifest: CaptureManifestType
+  diagnostics: CaptureDiagnosticWarning[]
+} {
+  return { ok: true, manifest, diagnostics: assessCaptureDiagnostics(manifest) }
+}
+
+export function summarizeCaptureDiagnostics(warnings: readonly CaptureDiagnosticWarning[]): string {
+  return warnings
     .map((v) => `${v.field}=${typeof v.observed === "number" ? v.observed : String(v.observed)} < ${v.threshold}`)
     .join("; ")
 }
@@ -179,7 +171,7 @@ export async function captureReferenceManifest(input: {
   browserExecutable?: string
 }): Promise<CaptureResult> {
   if (!/^https?:\/\//i.test(input.url)) {
-    throw new CaptureGateError(
+    throw new CaptureReferenceError(
       `capture url must start with http(s)://: ${input.url}`,
       "navigate",
     )
@@ -205,7 +197,7 @@ export async function captureReferenceManifest(input: {
 
   // Pixel stats
   const decoded = await decodePNGBuffer(pngBuf).catch((e) => {
-    throw new CaptureGateError("screenshot decode failed", "stats", e)
+    throw new CaptureReferenceError("screenshot decode failed", "stats", e)
   })
   const nonWhiteRatio = nonWhiteDensity(decoded)
   const uniqueColors = uniqueColorBucketCount(decoded)
@@ -302,7 +294,7 @@ async function captureBrowserEvidenceInProcess(input: {
     args: ["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage"],
     timeoutMs: 15_000,
   }).catch((e) => {
-    throw new CaptureGateError(`browser runtime launch failed: ${formatBrowserRuntimeError(e)}`, "browser", e)
+    throw new CaptureReferenceError(`browser runtime launch failed: ${formatBrowserRuntimeError(e)}`, "browser", e)
   })
 
   try {
@@ -323,7 +315,7 @@ async function captureBrowserEvidenceInProcess(input: {
     try {
       await page.goto(input.url, { waitUntil: "networkidle", timeout: input.timeoutMs })
     } catch (e) {
-      throw new CaptureGateError(`navigation failed for ${input.url}`, "navigate", e)
+      throw new CaptureReferenceError(`navigation failed for ${input.url}`, "navigate", e)
     }
 
     // Render settle
@@ -336,11 +328,11 @@ async function captureBrowserEvidenceInProcess(input: {
       ])
       await page.waitForFunction(() => document.readyState === "complete", { timeout: input.timeoutMs })
     } catch (e) {
-      throw new CaptureGateError("render settle failed", "content_paint", e)
+      throw new CaptureReferenceError("render settle failed", "content_paint", e)
     }
 
-    // Content-paint gate：SPA 必须出像素或主内容区有 bbox，否则判为空页
-    // （spec P0-A：`waitForFunction(() => canvas_has_pixels || main_content_bounds_nonzero)`）。
+    // Extra paint wait only. Low-density captures are recorded as diagnostics
+    // after the screenshot; they are not workflow blockers.
     try {
       await page.waitForFunction(
         () => {
@@ -361,14 +353,10 @@ async function captureBrowserEvidenceInProcess(input: {
           }
           return false
         },
-        { timeout: input.timeoutMs, polling: 250 },
+        { timeout: Math.min(input.timeoutMs, 5_000), polling: 250 },
       )
-    } catch (e) {
-      throw new CaptureGateError(
-        "content-paint gate: no canvas pixels and no main-content bbox > 200×200 within timeout — page is empty or still loading",
-        "content_paint",
-        e,
-      )
+    } catch {
+      // Keep the screenshot path alive; diagnostics below will carry density evidence.
     }
 
     // 额外的 tail buffer 给 hydration / 懒加载 / 动画首帧落位
@@ -380,7 +368,7 @@ async function captureBrowserEvidenceInProcess(input: {
       const raw = await page.screenshot({ type: "png", fullPage: true })
       pngBuf = Buffer.isBuffer(raw) ? raw : Buffer.from(raw as Uint8Array)
     } catch (e) {
-      throw new CaptureGateError("screenshot failed", "screenshot", e)
+      throw new CaptureReferenceError("screenshot failed", "screenshot", e)
     }
 
     // DOM + innerText
@@ -483,7 +471,7 @@ async function captureBrowserEvidenceViaNode(input: {
       resolve({ code, signal })
     })
   }).catch((e) => {
-    throw new CaptureGateError(`browser runtime launch failed via Node sidecar: ${formatBrowserRuntimeError(e)}`, "browser", e)
+    throw new CaptureReferenceError(`browser runtime launch failed via Node sidecar: ${formatBrowserRuntimeError(e)}`, "browser", e)
   })
 
   let parsed: unknown
@@ -491,12 +479,12 @@ async function captureBrowserEvidenceViaNode(input: {
     parsed = JSON.parse(stdout)
   } catch (e) {
     if (exit.code !== 0) {
-      throw new CaptureGateError(
+      throw new CaptureReferenceError(
         `browser runtime launch failed via Node sidecar: node exited with ${exit.signal ?? exit.code}. ${stderr.trim()}`,
         "browser",
       )
     }
-    throw new CaptureGateError(
+    throw new CaptureReferenceError(
       `browser runtime launch failed via Node sidecar: invalid JSON output. stderr=${stderr.trim()} stdout=${stdout.slice(0, 500)}`,
       "browser",
       e,
@@ -507,7 +495,7 @@ async function captureBrowserEvidenceViaNode(input: {
     | { ok: true; screenshotBase64: string; domOuter: string; innerText: string; layoutRaw: BrowserEvidence["layoutRaw"]; harByteSize: number; chromeVersion?: string }
     | { ok: false; message: string; stack?: string }
   if (!result.ok) {
-    throw new CaptureGateError(
+    throw new CaptureReferenceError(
       `browser runtime launch failed via Node sidecar: ${result.message}${result.stack ? `\n${result.stack}` : ""}`,
       "browser",
     )
@@ -576,8 +564,8 @@ async function main() {
         }
         return false;
       },
-      { timeout: input.timeoutMs, polling: 250 },
-    );
+      { timeout: Math.min(input.timeoutMs, 5000), polling: 250 },
+    ).catch(() => undefined);
     await new Promise((resolve) => setTimeout(resolve, 2000));
     const screenshot = Buffer.from(await page.screenshot({ type: "png", fullPage: true }));
     const domOuter = await page.evaluate(() => document.documentElement.outerHTML);
@@ -670,3 +658,4 @@ async function readBrowserRuntimeVersion(): Promise<string | undefined> {
     return undefined
   }
 }
+

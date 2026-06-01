@@ -23,11 +23,8 @@ import { ContractIRSchema, ValueDomainSchema } from "@/architect/contract-ir"
 import { WalkthroughStepsSchema } from "@/delivery/checks/walkthrough/dsl"
 import { createToolCallRepair, discriminatorRepairHint, zodIssuesFromError } from "@/session/repair-hint"
 
-// The exact JSON Schema the AI SDK hands the repair callback at runtime
-// (`asSchema(tools[name].inputSchema).jsonSchema`).
 function registerContractJsonSchema(): Record<string, any> {
-  const architect = createArchitectOutputTools({ existingGoals: [], workDir: process.cwd() })
-  return asSchema(architect.tools.register_contract.inputSchema as never).jsonSchema as Record<string, any>
+  return z.toJSONSchema(ArchitectContractRefSchema as any) as Record<string, any>
 }
 
 const baseContract = {
@@ -104,6 +101,17 @@ describe("zodIssuesFromError — cause-chain tolerant (SDK minor-version drift)"
 })
 
 describe("schema describe is visible to the model (defense-in-depth, rule 6.1)", () => {
+  test("register_contract tool exposes provider-stable JSON fields instead of nested objects", () => {
+    const architect = createArchitectOutputTools({ existingGoals: [], workDir: process.cwd() })
+    const schema = asSchema(architect.tools.register_contract.inputSchema as never).jsonSchema as Record<string, any>
+    expect(schema.properties).toHaveProperty("ir_json")
+    expect(schema.properties).toHaveProperty("route_json")
+    expect(schema.properties).toHaveProperty("component_json")
+    expect(schema.properties).not.toHaveProperty("ir")
+    expect(schema.properties).not.toHaveProperty("route")
+    expect(schema.properties).not.toHaveProperty("component")
+  })
+
   test("every ContractIR / ValueDomain discriminator branch carries a description in JSON Schema", () => {
     const irJs: any = z.toJSONSchema(ContractIRSchema as any)
     expect(Array.isArray(irJs.anyOf)).toBe(true)

@@ -5,9 +5,9 @@ import { Tool } from "./tool"
 import { writeWebCloneSourceSkeletonConsumptionAudit } from "../web-clone/source-skeleton-consumption-audit"
 
 export const WebCloneSourceAuditTool = Tool.define("web_clone_source_audit", {
-  description: `Audit a downstream webpage clone implementation against the visible web-clone-source source package.
+  description: `Audit a downstream webpage clone implementation against the task-runtime or explicitly supplied web-clone-source source package.
 
-Use this after a Build agent has written React/Vue/etc. source from web-clone-source/source-skeleton and web-clone-source/source-ir. The tool reads project-owned source files plus the visible source package, writes web-clone-source-skeleton-consumption-audit.json, and fails the audit when the project ignored the skeleton/IR, kept default framework scaffold text/assets, missed repeated data arrays/loops, or used HTML/base64/manual-DOM replay shortcuts. Use finalDeliveryMode=maintainable_replacement_required when the original request asks for maintainability, real implementation, component reuse, or replacement of generated/mechanical output; in that mode the frontend-design generated DOM/CSS baseline cannot be the final deliverable. It does not re-extract webpages.`,
+Use this after a Build agent has written React/Vue/etc. source from web-clone-source/source-skeleton and web-clone-source/source-ir. Pass sourcePackageDir from the frontend_design public report when the source package lives under task runtime. The tool reads project-owned source files plus that source package, writes web-clone-source-skeleton-consumption-audit.json, and fails the audit when the project ignored the skeleton/IR, kept default framework scaffold text/assets, missed repeated data arrays/loops, or used HTML/base64/manual-DOM replay shortcuts. Use finalDeliveryMode=maintainable_replacement_required when the original request asks for maintainability, real implementation, component reuse, or replacement of generated/mechanical output; in that mode the frontend-design generated DOM/CSS baseline cannot be the final deliverable. It does not re-extract webpages.`,
   parameters: z.object({
     projectDir: z
       .string()
@@ -15,7 +15,7 @@ Use this after a Build agent has written React/Vue/etc. source from web-clone-so
       .optional(),
     sourcePackageDir: z
       .string()
-      .describe("Directory containing reference.png, source-skeleton/, and source-ir/. Defaults to <execution directory>/web-clone-source.")
+      .describe("Directory containing reference.png, source-skeleton/, and source-ir/. Use the task-runtime path from frontend_design; omitted keeps the legacy <execution directory>/web-clone-source default.")
       .optional(),
     outputPath: z
       .string()
@@ -50,10 +50,17 @@ Use this after a Build agent has written React/Vue/etc. source from web-clone-so
       `- Component files: ${audit.projectStats.componentFileCount}`,
       `- Data arrays: ${audit.projectStats.dataArrayCount}`,
       `- Render loops: ${audit.projectStats.renderLoopCount}`,
+      `- Generated source-dom regions: ${audit.projectStats.sourceDomRegionFileCount}`,
+      `- Largest source-dom region bytes: ${audit.projectStats.largestSourceDomRegionBytes}`,
+      `- Oversized source-dom regions: ${audit.projectStats.oversizedSourceDomRegionCount}`,
+      `- Source-dom replacement plan exists: ${audit.projectStats.sourceDomReplacementPlanExists}`,
+      `- Source SVG asset groups exist: ${audit.projectStats.sourceSvgAssetGroupExists}`,
+      `- Source FAQ groups exist: ${audit.projectStats.sourceFaqGroupExists}`,
       `- Default scaffold detected: ${audit.risk.defaultScaffoldDetected}`,
       `- Skeleton ignored: ${audit.risk.skeletonIgnored}`,
       `- Generated baseline detected: ${audit.risk.generatedBaselineDetected}`,
       `- Final baseline-only detected: ${audit.risk.finalBaselineOnlyDetected}`,
+      `- Oversized generated regions detected: ${audit.risk.oversizedGeneratedRegionDetected}`,
       "",
       audit.findings.length === 0 ? "No blocking findings." : "## Findings",
       ...audit.findings.map((finding) => `- ${finding}`),

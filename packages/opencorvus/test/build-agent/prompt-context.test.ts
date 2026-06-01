@@ -16,9 +16,9 @@ describe("build agent prompt context", () => {
       },
     )
 
-    expect(prompt).toContain("## Canonical Delivery Rejection Feedback")
+    expect(prompt).toContain("## Acceptance Repair Overlay")
     expect(prompt).toContain("review:contract_audit")
-    expect(prompt.indexOf("## Canonical Delivery Rejection Feedback")).toBeLessThan(prompt.indexOf("# Request"))
+    expect(prompt.indexOf("## Acceptance Repair Overlay")).toBeLessThan(prompt.indexOf("# Request"))
   })
 
   test("goal-path build receives canonical delivery feedback separately from retry summary", () => {
@@ -39,7 +39,7 @@ describe("build agent prompt context", () => {
     )
 
     expect(prompt).toContain("Old coordinator summary.")
-    expect(prompt).toContain("## Canonical Delivery Rejection Feedback")
+    expect(prompt).toContain("## Acceptance Repair Overlay")
     expect(prompt).toContain("contract_audit_failure")
     expect(prompt.indexOf("Raw verdict artifact JSON")).toBeLessThan(prompt.indexOf("# Goal: Calculator UI"))
   })
@@ -130,9 +130,9 @@ describe("build agent prompt context", () => {
     expect(prompt).toContain("## Retry Guidance From Orchestrator")
     expect(prompt).toContain("Re-run after fixing the missing terminal tool call.")
     expect(prompt.indexOf("## Retry Guidance From Orchestrator")).toBeLessThan(
-      prompt.indexOf("## Canonical Delivery Rejection Feedback"),
+      prompt.indexOf("## Acceptance Repair Overlay"),
     )
-    expect(prompt.indexOf("## Canonical Delivery Rejection Feedback")).toBeLessThan(prompt.indexOf("# Request"))
+    expect(prompt.indexOf("## Acceptance Repair Overlay")).toBeLessThan(prompt.indexOf("# Request"))
   })
 
   test("request-path renders persistent integrity findings before request delegation", () => {
@@ -178,7 +178,7 @@ describe("build agent prompt context", () => {
       prompt.indexOf("## Prior Attempt Failure Facts"),
     )
     expect(prompt.indexOf("## Prior Attempt Failure Facts")).toBeLessThan(
-      prompt.indexOf("## Delivery Rejection Feedback"),
+      prompt.indexOf("## Acceptance Repair Overlay"),
     )
   })
 
@@ -243,7 +243,7 @@ describe("build agent prompt context", () => {
 
     expect(prompt).toContain("restore the relevant subset 1:1 as closely as the stack allows")
     expect(prompt).toContain("**Reference Fidelity**")
-    expect(prompt).toContain("Do not approximate or redesign")
+    expect(prompt).toContain("Do not approximate, redesign, or invent missing evidence")
   })
 
   test("goal-path build receives source, reference, and assembly fidelity coverage", () => {
@@ -387,13 +387,33 @@ describe("build agent prompt context", () => {
   })
 
   test("request-path build warns that visual references are authoritative", () => {
+    const prompt = buildUserPrompt(
+      {
+        kind: "request",
+        text: "Clone the attached webpage reference.",
+      },
+      {
+        frontendDesign:
+          "# Frontend Design Public Report\n\n" +
+          "- key=visual_consistency_contract value=The supplied reference is authoritative.",
+      },
+    )
+
+    expect(prompt).toContain("## Visual Reference Overlay")
+    expect(prompt).toContain("Referenced images, captures, and visual specs are binding source material")
+  })
+
+  test("plain document deliverable prompt does not inherit webpage clone policy", () => {
     const prompt = buildUserPrompt({
       kind: "request",
-      text: "Clone the attached webpage reference.",
+      text: "Write a Product Requirements Document for the account settings project.",
     })
 
-    expect(prompt).toContain("those references are authoritative")
-    expect(prompt).toContain("must restore them 1:1")
+    expect(prompt).toContain("Product Requirements Document")
+    expect(prompt).not.toContain("web-clone-source")
+    expect(prompt).not.toContain("webpage references")
+    expect(prompt).not.toContain("frontend-design")
+    expect(prompt).not.toContain("Visual Reference Overlay")
   })
 
   test("request-path build requires source/target investigation for rewrite work", () => {
@@ -416,20 +436,21 @@ describe("build agent prompt context", () => {
       },
       {
         frontendDesign:
-          "# Frontend Design Template Source\n\n" +
+          "# Frontend Design Public Report\n\n" +
           "- key=frontend_template value=AMD dashboard\n" +
-          "- key=quality_project_contract value=Build readable React source from semantic components/data/style modules; raw frontend_project is visual baseline only\n" +
-          "- key=frontend_project value=status: created\nrole: visual_baseline_input\nproject_root: frontend-design-skeleton\n" +
+          "- key=quality_project_contract value=Build readable React source from the source skeleton, semantic components/data/style modules, and preserved CSS sidecars\n" +
+          "- key=frontend_project value=status: created\nrole: source_baseline_input\nproject_root: frontend-design-skeleton\ndelivery_root: .\nadoption_rule: copy/adapt into root app before build pass\n" +
           "- key=visual_consistency_contract value=Match AMD page geometry and chart/table styling\n" +
           "- key=evidence_source_manifest value=references/url-amd.png\n" +
           "- key=fillable_modules value=Use web-clone-source/README.md, web-clone-source/implementation-blueprint.md, web-clone-source/source-ir/component-tree.json, web-clone-source/source-ir/content-model.json, web-clone-source/source-skeleton/critical.css, and source-skeleton evidence only for targeted gaps; web-clone-source-skeleton-consumption-audit.json passed",
       },
     )
 
-    expect(prompt).toContain("Frontend Design Template Source")
+    expect(prompt).toContain("Frontend Design Public Report")
     expect(prompt).toContain("quality_project_contract")
-    expect(prompt).toContain("role: visual_baseline_input")
-    expect(prompt).toContain("raw frontend_project is visual baseline only")
+    expect(prompt).toContain("role: source_baseline_input")
+    expect(prompt).toContain("adoption_rule")
+    expect(prompt).toContain("source skeleton")
     expect(prompt).toContain("visual_consistency_contract")
     expect(prompt).toContain("evidence_source_manifest")
     expect(prompt).toContain("references/url-amd.png")
@@ -437,5 +458,11 @@ describe("build agent prompt context", () => {
     expect(prompt).toContain("web-clone-source/source-ir/component-tree.json")
     expect(prompt).toContain("web-clone-source/source-skeleton/critical.css")
     expect(prompt).toContain("web-clone-source-skeleton-consumption-audit.json passed")
+    expect(prompt).toContain("Treat `.opencorvus/runtime/tasks/<taskID>/frontend-design/` as read-only input")
+    expect(prompt).toContain("Do not copy `web-clone-source/`, `frontend-design-skeleton/`, `mirror/`, `references/`, or top-level `reference.png`")
+    expect(prompt).toContain("work visually before broad refactor")
+    expect(prompt).toContain("use the mismatch report to repair source-backed visual gaps first")
+    expect(prompt).toContain("CSS repair must be source-backed")
+    expect(prompt).toContain("Maintainable replacement is incremental")
   })
 })

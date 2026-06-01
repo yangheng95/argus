@@ -57,6 +57,12 @@ test("frontend-design handoff points to source files and keeps excerpts bounded"
       const log = createDecisionLog(taskID)
       log.append({
         phase: "frontend_design",
+        key: "public_report",
+        value: "## Quality Project Contract\nBuild semantic React source from the source skeleton and preserved CSS sidecars.",
+        reason: "public terminal report",
+      })
+      log.append({
+        phase: "frontend_design",
         key: "visual_consistency_contract",
         value: longSpec,
         reason: "mirror-derived visual contract",
@@ -64,14 +70,20 @@ test("frontend-design handoff points to source files and keeps excerpts bounded"
       log.append({
         phase: "frontend_design",
         key: "quality_project_contract",
-        value: "Build semantic React source; raw baseline is not deliverable.",
+        value: "Source-region traceable refactor: every component maps back to captured source nodes and screenshots.",
         reason: "maintainable target",
       })
       log.append({
         phase: "frontend_design",
+        key: "final_delivery_mode",
+        value: "maintainable_replacement_required",
+        reason: "maintainable mode",
+      })
+      log.append({
+        phase: "frontend_design",
         key: "frontend_project",
-        value: "status: created\nrole: visual_baseline_input\nproject_root: frontend-design-skeleton",
-        reason: "baseline role",
+        value: "status: created\nrole: source_baseline_input\nproject_root: frontend-design-skeleton\ndelivery_root: .",
+        reason: "source skeleton role",
       })
       log.append({
         phase: "frontend_design",
@@ -82,15 +94,28 @@ test("frontend-design handoff points to source files and keeps excerpts bounded"
 
       const handoff = renderFrontendDesignHandoffReference(taskID, { valueCap: 120 })
 
+      expect(handoff).toContain("Frontend Design Public Report")
+      expect(handoff).toContain("frontend_design public report")
       expect(handoff).toContain(`.opencorvus/runtime/tasks/${taskID}/frontend-design/frontend-template.md`)
       expect(handoff).toContain(`.opencorvus/runtime/tasks/${taskID}/frontend-design/evidence-source-manifest.md`)
       expect(handoff).toContain("do not run mirror tools outside frontend_design")
+      expect(handoff).toContain("public_report")
       expect(handoff).toContain("visual_consistency_contract")
       expect(handoff).toContain("quality_project_contract")
       expect(handoff).toContain("frontend_project")
-      expect(handoff).toContain("visual_baseline_input")
+      expect(handoff).toContain("source_baseline_input")
+      expect(handoff).toContain("Source-Region Refactor Guidance")
+      expect(handoff).toContain("rawproject evidence")
+      expect(handoff).toContain("source data extraction")
+      expect(handoff).toContain("measured webpage_evaluate evidence")
+      expect(handoff).toContain("zero-finding web_clone_source_audit evidence")
+      expect(handoff).toContain("Do not change other agent prompts or communication paths")
+      expect(handoff).not.toContain("freehand")
+      expect(handoff).not.toContain("greenfield")
+      expect(handoff).not.toContain("100/100")
+      expect(handoff).not.toContain("overallScore >=80/100")
       expect(handoff).toContain("[+")
-      expect(handoff.length).toBeLessThan(1_600)
+      expect(handoff.length).toBeLessThan(3_400)
     },
   })
 })

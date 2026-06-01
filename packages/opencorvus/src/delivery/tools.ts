@@ -14,7 +14,7 @@ import { createCodebaseTools } from "@/engine/codebase-tools"
 import { Memory } from "@/memory"
 import { Instance } from "@/project/instance"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
-import { Shell } from "@/shell/shell"
+import { runGuardedCommand } from "@/shell/guarded-command"
 import { DEFAULT_BASH_TIMEOUT_MS } from "@/shell/timeout"
 import { Filesystem } from "@/util/filesystem"
 import { Log } from "@/util/log"
@@ -566,58 +566,27 @@ export function createDeliveryTools(input?: DeliveryToolContext) {
       description:
         "Run a shell command in the project directory and capture stdout/stderr/exit code. " +
         "Use to build the project, start servers, run smoke tests, or verify the requested runtime/output surface. " +
-        "For server startup verification, use a short timeout (e.g., 10-15 seconds) to check if " +
-        "the server starts without crashing — do NOT keep servers running indefinitely.\n\n" +
-        "If you background a process (`cmd &`) and it keeps the port alive past this call, " +
-        "note the returned `pid` line for diagnostics. OpenCorvus owns shell cleanup through " +
-        "its process supervisor; do not use global process-name kills or PID-tree sweeps.",
+        "For dev/preview servers that browser tools must inspect, set background=true instead of shell-backgrounding with `&`; " +
+        "the result returns a PID and detected URL when available, and OpenCorvus ends the process after the timeout lease.",
       inputSchema: z.object({
         command: z.string().describe("Shell command to run (runs in project root)"),
-        timeout_ms: z.number().default(DEFAULT_BASH_TIMEOUT_MS).describe("Max execution time ms"),
+        timeout_ms: z.number().default(DEFAULT_BASH_TIMEOUT_MS).describe("Max execution time ms; for background=true this is the process lease"),
+        background: z
+          .boolean()
+          .default(false)
+          .describe("Keep a dev/preview/serve command running after this tool call so browser tools can inspect it."),
       }),
-      execute: async ({ command, timeout_ms }) => {
+      execute: async ({ command, timeout_ms, background }) => {
         try {
-          const beforeStatus = input?.readOnlyCommandGuard
-            ? await Shell.run("git status --short --untracked-files=all", {
-                cwd: projectDir,
-                env: process.env,
-                timeoutMs: 10_000,
-              })
-            : undefined
-          const result = await Shell.run(command, {
-            cwd: projectDir,
-            env: process.env,
+          return await runGuardedCommand({
+            command,
             timeoutMs: timeout_ms,
+            background,
+            projectDir,
+            env: process.env,
+            signal: input?.signal,
+            readOnlyGuard: input?.readOnlyCommandGuard === true,
           })
-          const afterStatus = input?.readOnlyCommandGuard
-            ? await Shell.run("git status --short --untracked-files=all", {
-                cwd: projectDir,
-                env: process.env,
-                timeoutMs: 10_000,
-              })
-            : undefined
-          const parts = [`exit_code: ${result.exitCode}`]
-          if (typeof result.pid === "number") parts.push(`pid: ${result.pid}`)
-          if (result.timedOut) parts.push(`timeout_ms: ${timeout_ms}`)
-          if (result.stdout.trim()) parts.push(`stdout:\n${result.stdout.slice(0, 8000)}`)
-          if (result.stderr.trim()) parts.push(`stderr:\n${result.stderr.slice(0, 5000)}`)
-          if (
-            input?.readOnlyCommandGuard &&
-            beforeStatus &&
-            afterStatus &&
-            beforeStatus.stdout.trim() !== afterStatus.stdout.trim()
-          ) {
-            parts.push(
-              [
-                "readonly_guard: worktree changed during reviewer command; treat this as unsafe verification, not an implementation fix.",
-                "before_status:",
-                beforeStatus.stdout.trim() || "(clean)",
-                "after_status:",
-                afterStatus.stdout.trim() || "(clean)",
-              ].join("\n"),
-            )
-          }
-          return parts.join("\n") || `exit_code: ${result.exitCode} (no output)`
         } catch (e) {
           log.warn("run_command failed in legacy delivery evidence tool", { command, err: e })
           return `Error running command: ${e instanceof Error ? e.message : String(e)}`

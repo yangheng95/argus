@@ -41,7 +41,64 @@ import {
   type ArchitectContractGraph,
   type ArchitectValidationFinding,
 } from "./contract-graph"
+import { ContractIRSchema } from "./contract-ir"
 import { FactCheckItemListSchema, type FactCheckItem } from "@/fact-check/schema"
+
+const RegisterContractToolInputSchema = ArchitectContractRefSchema.omit({
+  ir: true,
+  route: true,
+  component: true,
+}).extend({
+  ir_json: z.string().min(2)
+    .describe(
+      "For kind=type/function/enum only: JSON.stringify of the ContractIR object. Example: {\"kind\":\"type\",\"name\":\"WidgetProps\",\"fields\":[...]}",
+    )
+    .optional(),
+  route_json: z.string().min(2)
+    .describe("For kind=route only: JSON.stringify of {method,path,request?,response?}.")
+    .optional(),
+  component_json: z.string().min(2)
+    .describe("For kind=component only: JSON.stringify of {props?,events?,slots?}.")
+    .optional(),
+})
+
+function parseRegisterContractInput(input: unknown): ArchitectContractRef {
+  const parsed = RegisterContractToolInputSchema.parse(input)
+  const typed = parsed.kind === "type" || parsed.kind === "function" || parsed.kind === "enum"
+  const base = { ...parsed }
+  delete (base as { ir_json?: string }).ir_json
+  delete (base as { route_json?: string }).route_json
+  delete (base as { component_json?: string }).component_json
+  const route = parsed.route_json ? parseJSONToolField(parsed.route_json, "route_json") : undefined
+  const component = parsed.component_json ? parseJSONToolField(parsed.component_json, "component_json") : undefined
+  if (!typed) return ArchitectContractRefSchema.parse({ ...base, route, component })
+  if (!parsed.ir_json) {
+    throw new z.ZodError([
+      {
+        code: "custom",
+        path: ["ir_json"],
+        message: `${parsed.kind} contract requires ir_json containing a JSON ContractIR object`,
+      },
+    ])
+  }
+  const rawIR = parseJSONToolField(parsed.ir_json, "ir_json")
+  const ir = ContractIRSchema.parse(rawIR)
+  return ArchitectContractRefSchema.parse({ ...base, ir, route, component })
+}
+
+function parseJSONToolField(value: string, field: string): unknown {
+  try {
+    return JSON.parse(value)
+  } catch (error) {
+    throw new z.ZodError([
+      {
+        code: "custom",
+        path: [field],
+        message: `${field} must be valid JSON: ${error instanceof Error ? error.message : String(error)}`,
+      },
+    ])
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Collector — single buffer for the full Architect output
@@ -90,6 +147,48 @@ function toRegisteredGoal(input: unknown): RegisteredGoal {
     ...parsed,
     kind: parsed.kind,
   }
+}
+
+function normalizeSourceBaselineOwnedPaths(goal: RegisteredGoal): {
+  goal: RegisteredGoal
+  changes: Array<{ from: string; to: string }>
+} {
+  const changes: Array<{ from: string; to: string }> = []
+  const seen = new Set<string>()
+  const owned_paths: string[] = []
+
+  for (const ownedPath of goal.owned_paths) {
+    const normalized = ownedPath
+      .trim()
+      .replaceAll("\\", "/")
+      .replace(/^\.\//, "")
+      .replace(/\/+/g, "/")
+    let next = ownedPath
+    if (normalized === "frontend-design-skeleton") {
+      next = "."
+    } else if (normalized.startsWith("frontend-design-skeleton/")) {
+      next = normalized.slice("frontend-design-skeleton/".length) || "."
+    }
+    if (next !== ownedPath) changes.push({ from: ownedPath, to: next })
+    if (!seen.has(next)) {
+      seen.add(next)
+      owned_paths.push(next)
+    }
+  }
+
+  if (changes.length === 0 && owned_paths.length === goal.owned_paths.length) {
+    return { goal, changes }
+  }
+  return { goal: { ...goal, owned_paths }, changes }
+}
+
+function formatOwnedPathNormalizationNotice(changes: Array<{ from: string; to: string }>): string {
+  if (changes.length === 0) return ""
+  const pairs = changes.map((change) => `${change.from} -> ${change.to}`).join(", ")
+  return (
+    "\nNotice: normalized source-baseline owned_paths to delivery-root paths: " +
+    `${pairs}. frontend-design-skeleton remains a source input, not an implementation target.`
+  )
 }
 
 const MIN_ARCHITECT_GOAL_COUNT = 2
@@ -592,7 +691,8 @@ export function createArchitectOutputTools(input: {
         "next unused G number.",
       inputSchema: GoalContractFieldsSchema,
       execute: async (goal) => {
-        const parsedGoal = toRegisteredGoal(goal)
+        const normalized = normalizeSourceBaselineOwnedPaths(toRegisteredGoal(goal))
+        const parsedGoal = normalized.goal
         const unknownContractIDs = unknownContractAuditContractIDs(collector, parsedGoal.acceptance_specs)
         if (unknownContractIDs.length > 0) {
           return `Error: goal "${parsedGoal.id}" contract_audit references unknown contract id(s): ${unknownContractIDs.join(", ")}. Use contract ids returned by register_contract; collector unchanged.`
@@ -623,6 +723,7 @@ export function createArchitectOutputTools(input: {
         if (warnings.length > 0) {
           msg += `\nWarning: paths without an existing parent directory: ${warnings.join(", ")}. Verify these are intentional.`
         }
+        msg += formatOwnedPathNormalizationNotice(normalized.changes)
         return `${msg}\nCurrent: ${formatGoalSnapshot(parsedGoal)}`
       },
     }),
@@ -655,7 +756,8 @@ export function createArchitectOutputTools(input: {
             "\n",
           )
         }
-        const next = parsedNext.data
+        const normalized = normalizeSourceBaselineOwnedPaths(parsedNext.data)
+        const next = normalized.goal
         if (updates.acceptance_specs !== undefined) {
           const unknownContractIDs = unknownContractAuditContractIDs(collector, next.acceptance_specs)
           if (unknownContractIDs.length > 0) {
@@ -663,7 +765,7 @@ export function createArchitectOutputTools(input: {
           }
         }
         collector.goals[idx] = next
-        return `OK: goal "${id}" fields updated (${Object.keys(normalizedUpdates).length} change(s))\nCurrent: ${formatGoalSnapshot(next)}`
+        return `OK: goal "${id}" fields updated (${Object.keys(normalizedUpdates).length} change(s))${formatOwnedPathNormalizationNotice(normalized.changes)}\nCurrent: ${formatGoalSnapshot(next)}`
       },
     }),
 
@@ -698,8 +800,15 @@ export function createArchitectOutputTools(input: {
           reference_coverage_rows: 0,
           reference_coverage_refs: 0,
           assembly_owners: 0,
+          goal_depends_on_refs: 0,
           contracts: 0,
           dependency_contracts: 0,
+        }
+
+        for (const goal of collector.goals) {
+          const before = goal.depends_on.length
+          goal.depends_on = goal.depends_on.filter((depID) => depID !== id)
+          cascade.goal_depends_on_refs += before - goal.depends_on.length
         }
 
         const traceNext: TraceabilityEntry[] = []
@@ -785,6 +894,7 @@ export function createArchitectOutputTools(input: {
           )
         }
         if (cascade.assembly_owners) cascadeBits.push(`${cascade.assembly_owners} assembly owner row(s)`)
+        if (cascade.goal_depends_on_refs) cascadeBits.push(`${cascade.goal_depends_on_refs} goal depends_on ref(s)`)
         if (cascade.contracts) cascadeBits.push(`${cascade.contracts} contract(s) dropped`)
         if (cascade.dependency_contracts)
           cascadeBits.push(`${cascade.dependency_contracts} dependency contract edge(s) dropped`)
@@ -860,10 +970,10 @@ export function createArchitectOutputTools(input: {
 
     register_contract: tool({
       description:
-        "Register one Architect Contract Graph contract. producer_goal_id is the goal that creates the surface; every consumer_goal_id must depend on that producer. Use type/function/enum with ir for typed contracts; use route/component/static_data/render_surface/behavior_inventory for non-IR surfaces.",
-      inputSchema: ArchitectContractRefSchema,
+        "Register one Architect Contract Graph contract. producer_goal_id is the goal that creates the surface; every consumer_goal_id must depend on that producer. Use type/function/enum with ir_json for typed contracts; use route/component/static_data/render_surface/behavior_inventory for non-IR surfaces.",
+      inputSchema: RegisterContractToolInputSchema,
       execute: async (input) => {
-        const contract = ArchitectContractRefSchema.parse(input)
+        const contract = parseRegisterContractInput(input)
         const byID = collectorGoalByID(collector)
         const unknownGoals = [contract.producer_goal_id, ...contract.consumer_goal_ids].filter(
           (goalID) => !byID.has(goalID),

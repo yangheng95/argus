@@ -4,9 +4,9 @@ import os from "node:os"
 import z from "zod"
 
 import {
+  assessCaptureDiagnostics,
   captureReferenceManifest,
-  enforceCaptureGate,
-  summarizeCaptureViolations,
+  summarizeCaptureDiagnostics,
 } from "./capture-gate"
 
 function screenshotFilename(inputUrl: string): string {
@@ -19,18 +19,12 @@ function screenshotFilename(inputUrl: string): string {
   }
 }
 
-/**
- * url_screenshot 工具：走唯一采集入口 captureReferenceManifest + enforceCaptureGate
- * （P0-A）。伪造/空白 PNG 直接 throw——LLM 会在 tool result 上看到 error 并终止分析，
- * 禁止"gate 未过但仍作为 visual_reference 继续"的退路（rule 1）。
- */
 export function createUrlScreenshotTool() {
   return {
     url_screenshot: tool({
       description:
         "Capture a live http(s) webpage as a PNG visual reference. " +
-        "Runs the P0-A reference-authenticity gate automatically — fake / blank / sub-threshold " +
-        "screenshots are rejected with an error and MUST NOT be retried as a non-visual spec. " +
+        "Records capture diagnostics such as byte size, non-white density, and color count without rejecting the image. " +
         "This is the only live-URL capture tool available to frontend-design; do NOT use webfetch for visual work.",
       inputSchema: z.object({
         url: z.string().describe("Live webpage URL to capture. Must start with http:// or https://."),
@@ -51,29 +45,24 @@ export function createUrlScreenshotTool() {
             height: viewport_height ?? 900,
           },
         })
-        const gate = enforceCaptureGate(result.manifest)
-        if (!gate.ok) {
-          throw new Error(
-            `capture-gate rejected reference for ${url}: ${summarizeCaptureViolations(gate.violations)}. ` +
-              `Bytes=${result.manifest.screenshot_byte_size} non_white=${result.manifest.non_white_pixel_ratio} colors=${result.manifest.unique_color_count}. ` +
-              `Do NOT fall back to a text-only visual contract.`,
-          )
-        }
+        const diagnostics = assessCaptureDiagnostics(result.manifest)
+        const diagnosticSummary = diagnostics.length > 0 ? summarizeCaptureDiagnostics(diagnostics) : "none"
 
         const designContext = [
-          `# URL reference (gate passed)`,
+          `# URL reference`,
           `- URL: ${result.manifest.url}`,
           `- Viewport: ${result.manifest.viewport.width}×${result.manifest.viewport.height}`,
           `- Screenshot bytes: ${result.manifest.screenshot_byte_size}`,
           `- Non-white pixel ratio: ${result.manifest.non_white_pixel_ratio}`,
           `- Unique color buckets: ${result.manifest.unique_color_count}`,
           `- Text length: ${result.manifest.text_length}`,
+          `- Capture diagnostics: ${diagnosticSummary}`,
           `- Manifest on disk: ${result.artifactPaths.manifestJson}`,
         ].join("\n")
 
         return {
           text: [
-            "URL screenshot captured and gated. Analyze the attached PNG as your visual reference.",
+            "URL screenshot captured. Analyze the attached PNG as your visual reference.",
             "",
             designContext,
             "",

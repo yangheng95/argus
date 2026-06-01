@@ -38,7 +38,7 @@ export namespace AgentRoleContract {
     },
     build: {
       id: "build",
-      description: "Workflow build stage. Executes one scoped task or goal through the build-core terminal-report contract.",
+      description: "General workflow executor. Produces one scoped task or goal deliverable through the build-core terminal-report contract.",
       promptEditable: true,
       defaultPromptRequired: true,
       promptConfigMode: "append",
@@ -153,7 +153,7 @@ export namespace AgentRoleContract {
     research: {
       id: "research",
       description:
-        "Research agent. Read-only advisory evidence gatherer for external facts, source maps, PRD/SPEC input material, constraints, document outlines, and open questions. It emits research_brief artifacts and never chooses routes or delivers final documents.",
+        "Research agent. Read-only advisory evidence gatherer for external facts, source maps, PRD/SPEC input material, constraints, document outlines, and open questions. It starts from supplied webpages with webfetch, can emit subpage_research_tasks, and never chooses routes or delivers final documents.",
       promptEditable: true,
       defaultPromptRequired: true,
       promptConfigMode: "append",

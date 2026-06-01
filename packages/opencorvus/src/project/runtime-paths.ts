@@ -141,10 +141,12 @@ export namespace ProjectRuntimePaths {
     relativeDir: string
     mirrorRelative: string
     sourcePackageRelative: string
+    skeletonProjectRelative: string
     templateRelative: string
     manifestRelative: string
     mirrorAbsolute: string
     sourcePackageAbsolute: string
+    skeletonProjectAbsolute: string
     templateAbsolute: string
     manifestAbsolute: string
   } {
@@ -152,10 +154,12 @@ export namespace ProjectRuntimePaths {
       relativeDir: taskRelative(taskID, "frontend-design"),
       mirrorRelative: taskRelative(taskID, "frontend-design", "mirror"),
       sourcePackageRelative: taskRelative(taskID, "frontend-design", "web-clone-source"),
+      skeletonProjectRelative: taskRelative(taskID, "frontend-design", "frontend-design-skeleton"),
       templateRelative: taskRelative(taskID, "frontend-design", "frontend-template.md"),
       manifestRelative: taskRelative(taskID, "frontend-design", "evidence-source-manifest.md"),
       mirrorAbsolute: taskAbsolute(projectDir, taskID, "frontend-design", "mirror"),
       sourcePackageAbsolute: taskAbsolute(projectDir, taskID, "frontend-design", "web-clone-source"),
+      skeletonProjectAbsolute: taskAbsolute(projectDir, taskID, "frontend-design", "frontend-design-skeleton"),
       templateAbsolute: taskAbsolute(projectDir, taskID, "frontend-design", "frontend-template.md"),
       manifestAbsolute: taskAbsolute(projectDir, taskID, "frontend-design", "evidence-source-manifest.md"),
     }

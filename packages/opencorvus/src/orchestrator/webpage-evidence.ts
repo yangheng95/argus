@@ -53,8 +53,11 @@ const PRIMARY_WEBPAGE_EVIDENCE_FILES = [
   "source-ir/source-quality-audit.json",
 ] as const
 
-export function primaryWebpageEvidenceArtifacts(): string[] {
-  return PRIMARY_WEBPAGE_EVIDENCE_FILES.map((file) => path.posix.join("mirror", file))
+export function primaryWebpageEvidenceArtifacts(taskID?: string): string[] {
+  const root = taskID
+    ? ProjectRuntimePaths.frontendDesignPaths("", taskID).mirrorRelative
+    : "mirror"
+  return PRIMARY_WEBPAGE_EVIDENCE_FILES.map((file) => path.posix.join(root, file))
 }
 
 const PRIMARY_WEBPAGE_SOURCE_PACKAGE_FILES = [
@@ -82,8 +85,11 @@ const PRIMARY_WEBPAGE_SOURCE_PACKAGE_FILES = [
   "source-ir/source-quality-audit.json",
 ] as const
 
-export function primaryWebpageSourcePackageArtifacts(): string[] {
-  return PRIMARY_WEBPAGE_SOURCE_PACKAGE_FILES.map((file) => path.posix.join("web-clone-source", file))
+export function primaryWebpageSourcePackageArtifacts(taskID?: string): string[] {
+  const root = taskID
+    ? ProjectRuntimePaths.frontendDesignPaths("", taskID).sourcePackageRelative
+    : "web-clone-source"
+  return PRIMARY_WEBPAGE_SOURCE_PACKAGE_FILES.map((file) => path.posix.join(root, file))
 }
 
 export async function ensureLiveWebpageEvidence(input: {
@@ -110,7 +116,7 @@ export async function ensureLiveWebpageEvidence(input: {
       status: "reused",
       url,
       mirrorDir,
-      artifacts: [...primaryWebpageEvidenceArtifacts(), ...primaryWebpageSourcePackageArtifacts()],
+      artifacts: [...primaryWebpageEvidenceArtifacts(input.taskID), ...primaryWebpageSourcePackageArtifacts(input.taskID)],
     }
   }
 
@@ -127,7 +133,7 @@ export async function ensureLiveWebpageEvidence(input: {
     status: "generated",
     url,
     mirrorDir,
-    artifacts: [...primaryWebpageEvidenceArtifacts(), ...primaryWebpageSourcePackageArtifacts()],
+    artifacts: [...primaryWebpageEvidenceArtifacts(input.taskID), ...primaryWebpageSourcePackageArtifacts(input.taskID)],
   }
 }
 

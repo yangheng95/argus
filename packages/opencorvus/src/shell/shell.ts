@@ -169,9 +169,9 @@ export namespace Shell {
    */
   export async function launch(
     command: string,
-    opts: { cwd?: string; env?: NodeJS.ProcessEnv; outputSniffMs?: number } = {},
+    opts: { cwd?: string; env?: NodeJS.ProcessEnv; outputSniffMs?: number; leaseMs?: number } = {},
   ): Promise<LaunchResult> {
-    const { cwd, env, outputSniffMs = 8000 } = opts
+    const { cwd, env, outputSniffMs = 8000, leaseMs } = opts
     const shell = acceptable()
     const guardEnv = await PidGuard.env(shell)
     const supervisor = await ProcessSupervisor.spawnShell({
@@ -196,6 +196,15 @@ export namespace Shell {
       )
     }
 
+    const leaseTimer = typeof leaseMs === "number" && Number.isFinite(leaseMs) && leaseMs > 0
+      ? setTimeout(() => {
+          void supervisor.dispose()
+        }, leaseMs)
+      : undefined
+    leaseTimer?.unref?.()
+    supervisor.exited.finally(() => {
+      if (leaseTimer) clearTimeout(leaseTimer)
+    }).catch(() => undefined)
     supervisor.unref()
 
     const address = detectLaunchAddress(initialOutput)

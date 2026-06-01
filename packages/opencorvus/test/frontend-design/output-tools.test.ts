@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test"
 import { asSchema } from "ai"
-import { createFrontendTemplateOutputTools } from "../../src/frontend-design/output-tools"
+import { buildFrontendTemplateReport, createFrontendTemplateOutputTools } from "../../src/frontend-design/output-tools"
 
 test("submit_frontend_template defaults missing fact_check_items during direct execution", async () => {
   const kit = createFrontendTemplateOutputTools()
@@ -103,6 +103,55 @@ test("submit_frontend_template tolerates missing review fields from provider too
   expect(kit.getCollector().final?.completeness_review).toContain("structurally complete")
 })
 
+test("submit_frontend_template normalizes markdown open questions", async () => {
+  const kit = createFrontendTemplateOutputTools()
+  const submit = kit.tools.submit_frontend_template as any
+
+  await submit.execute({
+    design_system: "custom financial page",
+    tech_stack: ["React", "Vite"],
+    final_delivery_mode: "maintainable_replacement_required",
+    frontend_template: "frontend template",
+    fillable_modules: "fillable modules",
+    component_inventory: "component inventory",
+    component_reuse_plan: [
+      {
+        family_id: "comp-table",
+        name: "Market table",
+        observed_surface: "Country metrics table",
+        source_refs: [],
+        implementation_strategy: "mature_library",
+        reuse_source: "@tanstack/react-table",
+        mature_library_candidates: ["@tanstack/react-table"],
+        props_states: "rows and columns",
+        replacement_boundary: "table skeleton slot",
+        parity_guard: "visual diff",
+        custom_fallback_reason: "not applicable",
+      },
+    ],
+    material_inventory: "materials",
+    visual_consistency_contract: "visual contract",
+    ui_data_contract: "data contract",
+    frontend_project: {
+      status: "created",
+      role: "source_baseline_input",
+      project_root: "frontend-design-skeleton",
+      source_package: "web-clone-source",
+      entrypoints: ["README.md", "src/App.tsx", "src/styles.css"],
+      generation_tool: "host-prepared:create_frontend_skeleton_project",
+      notes: ["source baseline ready"],
+    },
+    template_iteration_notes: ["checked inventory"],
+    completeness_review: "complete enough",
+    open_questions: "- right toolbar capture ambiguity\n- exact 1600px max width",
+  }, {})
+
+  expect(kit.getCollector().final?.open_questions).toEqual([
+    "right toolbar capture ambiguity",
+    "exact 1600px max width",
+  ])
+})
+
 test("submit_frontend_template rebuilds flattened frontend_project provider args", async () => {
   const kit = createFrontendTemplateOutputTools()
   const submit = kit.tools.submit_frontend_template as any
@@ -136,44 +185,30 @@ test("submit_frontend_template rebuilds flattened frontend_project provider args
     template_iteration_notes: ["checked inventory"],
     completeness_review: "complete enough",
     "frontend_project<arg_key>status": "created",
-    "frontend_project<arg_key>role": "visual_baseline_input",
+    "frontend_project<arg_key>role": "source_baseline_input",
     "frontend_project<arg_key>project_root": "frontend-design-skeleton",
     "frontend_project<arg_key>source_package": "web-clone-source",
-    "frontend_project<arg_key>entrypoints": "[\"README.md\",\"src/App.jsx\"]",
+    "frontend_project<arg_key>entrypoints": "[\"README.md\",\"src/App.tsx\"]",
     "frontend_project<arg_key>generation_tool": "host-prepared:create_frontend_skeleton_project",
-    "frontend_project<arg_key>notes": "[\"baseline input only\"]",
+    "frontend_project<arg_key>notes": "[\"source skeleton ready\"]",
   }, {})
 
   const project = kit.getCollector().final?.frontend_project
   expect(project?.status).toBe("created")
   expect(project?.project_root).toBe("frontend-design-skeleton")
-  expect(project?.entrypoints).toEqual(["README.md", "src/App.jsx"])
-  expect(project?.notes).toEqual(["baseline input only"])
+  expect(project?.entrypoints).toEqual(["README.md", "src/App.tsx"])
+  expect(project?.notes).toEqual(["source skeleton ready"])
 })
 
-test("component inventory schema documents reuse-before-custom policy", () => {
-  const description = (createFrontendTemplateOutputTools().tools.submit_frontend_template as any).inputSchema.shape.component_inventory.description
+test("submit_frontend_template provider schema stays compact while preserving core fields", () => {
+  const schema = asSchema(createFrontendTemplateOutputTools().tools.submit_frontend_template.inputSchema).jsonSchema
+  const schemaText = JSON.stringify(schema)
 
-  expect(description).toContain("existing project component")
-  expect(description).toContain("mature maintained library")
-  expect(description).toContain("custom fallback")
-  expect(description).toContain("Do not hand-roll complex")
-})
-
-test("final delivery mode schema does not call raw baseline shippable", () => {
-  const description = (createFrontendTemplateOutputTools().tools.submit_frontend_template as any).inputSchema.shape.final_delivery_mode.description
-
-  expect(description).toContain("visual baseline is always input/evidence")
-  expect(description).toContain("Required explicit delivery mode")
-  expect(description).not.toContain("may ship the generated visual baseline")
-})
-
-test("reference artifacts schema discourages exhaustive raw file lists", () => {
-  const description = (createFrontendTemplateOutputTools().tools.submit_frontend_template as any).inputSchema.shape.reference_artifacts.description
-
-  expect(description).toContain("Compact artifact anchors")
-  expect(description).toContain("targeted-gap evidence")
-  expect(description).not.toContain("mirror/extracted-page.json")
+  expect(schemaText.length).toBeLessThan(12_000)
+  expect(schema.properties?.final_delivery_mode).toBeDefined()
+  expect(schema.properties?.component_reuse_plan).toBeDefined()
+  expect(schema.properties?.frontend_project).toBeDefined()
+  expect(schema.properties).not.toHaveProperty("fact_check_items")
 })
 
 test("submit_frontend_template renders compact structured fields into markdown handoff", async () => {
@@ -232,17 +267,17 @@ test("submit_frontend_template renders compact structured fields into markdown h
       { title: "Reference", detail: "Use reference.png as pixel truth.", source_refs: ["web-clone-source/reference.png"] },
     ],
     quality_project_items: [
-      { title: "Source layout", detail: "Build src/pages/MarketsPage.tsx from semantic components, not raw extracted DOM injection.", source_refs: ["frontend-design-skeleton/src/slots.json"] },
+      { title: "Source layout", detail: "Build src/pages/MarketsPage.tsx from the source skeleton, semantic components, and preserved CSS sidecars.", source_refs: ["frontend-design-skeleton/src/App.tsx"] },
       { title: "Verification", detail: "Run visual diff against reference.png and source audit before reporting pass.", source_refs: ["web-clone-source/reference.png"] },
     ],
     frontend_project: {
       status: "created",
-      role: "visual_baseline_input",
-      project_root: "frontend-design-skeleton",
+      role: "source_baseline_input",
+      project_root: "C:\\tmp\\frontend-design-skeleton",
       source_package: "web-clone-source",
-      entrypoints: ["README.md", "src/App.jsx"],
-      generation_tool: "singlefile-react-baseline",
-      notes: ["raw DOM/CSS baseline only"],
+      entrypoints: ["README.md", "src/App.tsx", "src/styles.css"],
+      generation_tool: "source-skeleton-react",
+      notes: ["editable source skeleton"],
     },
     visual_consistency_items: [
       { title: "Desktop", detail: "Desktop viewport must match reference.png at the configured threshold.", source_refs: ["web-clone-source/reference.png"] },
@@ -257,16 +292,24 @@ test("submit_frontend_template renders compact structured fields into markdown h
   const final = kit.getCollector().final
   expect(final?.frontend_template).toContain("Route")
   expect(final?.fillable_modules).toContain("Markets table")
+  expect(final?.component_inventory).toContain("Legacy compatibility summary only")
   expect(final?.component_inventory).toContain("comp-table")
   expect(final?.quality_project_contract).toContain("Source layout")
-  expect(final?.quality_project_contract).toContain("not raw extracted DOM injection")
-  expect(final?.frontend_project.role).toBe("visual_baseline_input")
+  expect(final?.quality_project_contract).toContain("source skeleton")
+  expect(final?.frontend_project.role).toBe("source_baseline_input")
   expect(final?.material_inventory).toContain("Reference")
   expect(final?.visual_consistency_contract).toContain("Desktop")
   expect(final?.ui_data_contract).toContain("Rows")
+
+  const report = buildFrontendTemplateReport(kit.getCollector()).detail
+  expect(report).toContain("## Implementation Problems And Agent Handoff")
+  expect(report).toContain("## Reuse Constraints")
+  expect(report).not.toContain("## Component Inventory")
+  expect(report).toContain("- delivery_root: .")
+  expect(report).toContain("frontend-design-skeleton is a source baseline excluded from final delivery")
 })
 
-test("component reuse plan enforces mature library and custom fallback detail", async () => {
+test("component reuse plan accepts provider naming and incomplete library hints without schema rejection", async () => {
   const submit = createFrontendTemplateOutputTools().tools.submit_frontend_template as any
   const base = {
     design_system: "custom dashboard",
@@ -278,17 +321,26 @@ test("component reuse plan enforces mature library and custom fallback detail", 
     material_inventory: "materials",
     visual_consistency_contract: "visual contract",
     ui_data_contract: "data contract",
+    frontend_project: {
+      status: "created",
+      role: "source_baseline_input",
+      project_root: "frontend-design-skeleton",
+      source_package: "web-clone-source",
+      entrypoints: ["README.md", "src/App.tsx", "src/styles.css"],
+      generation_tool: "host-prepared:create_frontend_skeleton_project",
+      notes: ["source baseline ready"],
+    },
     template_iteration_notes: ["checked inventory"],
     completeness_review: "complete enough",
     reference_artifacts: [],
     open_questions: [],
   }
 
-  await expect(submit.execute({
+  const okWithProviderIds = await submit.execute({
     ...base,
     component_reuse_plan: [
       {
-        family_id: "comp-table",
+        family_id: "MarketTable",
         name: "Table",
         observed_surface: "Data table",
         source_refs: [],
@@ -297,13 +349,30 @@ test("component reuse plan enforces mature library and custom fallback detail", 
         mature_library_candidates: [],
         props_states: "rows and sort state",
         replacement_boundary: "table region",
-        parity_guard: "visual diff",
+        replacement_guard: "visual diff",
         custom_fallback_reason: "not applicable",
       },
     ],
-  }, {})).rejects.toThrow("mature_library")
+    baseline_replacement_plan: [
+      {
+        boundary_id: "market-table-boundary",
+        source_region: "table region",
+        action: "defer_baseline_until_parity",
+        component_family_id: "MarketTable",
+        replacement_strategy: "mature_library",
+        reuse_source: "not specified",
+        mature_library_candidates: [],
+        deletion_rule: "Keep baseline until visual parity is proven.",
+        source_refs: [],
+        replacement_guard: "visual diff",
+      },
+    ],
+  }, {})
 
-  await expect(submit.execute({
+  expect(okWithProviderIds).toContain("OK")
+
+  const secondSubmit = createFrontendTemplateOutputTools().tools.submit_frontend_template as any
+  const ok = await submit.execute({
     ...base,
     component_reuse_plan: [
       {
@@ -317,14 +386,34 @@ test("component reuse plan enforces mature library and custom fallback detail", 
         props_states: "rows and sort state",
         replacement_boundary: "table region",
         parity_guard: "visual diff",
-        custom_fallback_reason: "not applicable",
       },
     ],
-  }, {})).rejects.toThrow("custom_fallback")
+  }, {})
+
+  expect(ok).toContain("already submitted")
+  const secondOk = await secondSubmit.execute({
+    ...base,
+    component_reuse_plan: [
+      {
+        family_id: "Table",
+        name: "Table",
+        observed_surface: "Data table",
+        source_refs: [],
+        implementation_strategy: "custom_fallback",
+        reuse_source: "not found after inspecting src/components",
+        mature_library_candidates: [],
+        props_states: "rows and sort state",
+        replacement_boundary: "table region",
+        parity_guard: "visual diff",
+      },
+    ],
+  }, {})
+  expect(secondOk).toContain("OK")
 })
 
-test("maintainable delivery requires generated baseline replacement plan", async () => {
-  const submit = createFrontendTemplateOutputTools().tools.submit_frontend_template as any
+test("maintainable delivery allows source skeleton without generated baseline replacement plan", async () => {
+  const kit = createFrontendTemplateOutputTools()
+  const submit = kit.tools.submit_frontend_template as any
   const base = {
     design_system: "custom dashboard",
     tech_stack: ["React"],
@@ -350,18 +439,34 @@ test("maintainable delivery requires generated baseline replacement plan", async
     material_inventory: "materials",
     visual_consistency_contract: "visual contract",
     ui_data_contract: "data contract",
+    frontend_project: {
+      status: "created",
+      role: "source_baseline_input",
+      project_root: "frontend-design-skeleton",
+      source_package: "web-clone-source",
+      entrypoints: ["README.md", "src/App.tsx", "src/styles.css"],
+      generation_tool: "host-prepared:create_frontend_skeleton_project",
+      notes: ["source baseline ready"],
+    },
     template_iteration_notes: ["checked inventory"],
     completeness_review: "complete enough",
     reference_artifacts: [],
     open_questions: [],
   }
 
-  await expect(submit.execute({
+  const okWithoutPlan = await submit.execute({
     ...base,
     baseline_replacement_plan: [],
-  }, {})).rejects.toThrow("baseline_replacement_plan")
+  }, {})
 
-  const ok = await submit.execute({
+  expect(okWithoutPlan).toContain("OK")
+  expect(kit.getCollector().final?.component_reuse_plan.map((item) => item.family_id)).toContain("comp-source-page-baseline")
+  expect(kit.getCollector().final?.baseline_replacement_plan).toHaveLength(1)
+  expect(kit.getCollector().final?.baseline_replacement_plan[0]?.boundary_id).toBe("source-page-baseline")
+  expect(kit.getCollector().final?.baseline_replacement_plan[0]?.replacement_strategy).toBe("extracted_baseline_defer")
+  expect(kit.getCollector().final?.quality_project_contract).toContain("source-page-baseline")
+
+  const secondSubmit = await submit.execute({
     ...base,
     baseline_replacement_plan: [
       {
@@ -378,6 +483,56 @@ test("maintainable delivery requires generated baseline replacement plan", async
         custom_fallback_reason: "not applicable",
       },
     ],
+  }, {})
+
+  expect(secondSubmit).toContain("already submitted")
+})
+
+test("baseline replacement custom fallback reason is optional provider detail", async () => {
+  const submit = createFrontendTemplateOutputTools().tools.submit_frontend_template as any
+
+  const ok = await submit.execute({
+    design_system: "custom dashboard",
+    tech_stack: ["React"],
+    final_delivery_mode: "maintainable_replacement_required",
+    frontend_template: "frontend template",
+    fillable_modules: "fillable modules",
+    component_inventory: "component inventory",
+    component_reuse_plan: [
+      {
+        family_id: "comp-table",
+        name: "Table",
+        observed_surface: "Data table",
+        source_refs: [],
+        implementation_strategy: "custom_fallback",
+        reuse_source: "not found after inspecting src/components",
+        mature_library_candidates: [],
+        props_states: "rows and sort state",
+        replacement_boundary: "table region",
+        parity_guard: "visual diff",
+      },
+    ],
+    baseline_replacement_plan: [
+      {
+        boundary_id: "replace-market-table",
+        source_region: "frontend-design-skeleton table DOM region",
+        action: "replace_generated_baseline",
+        component_family_id: "comp-table",
+        replacement_strategy: "custom_fallback",
+        reuse_source: "not found after inspecting src/components",
+        mature_library_candidates: [],
+        deletion_rule: "Remove generated table HTML after the replacement is visually equivalent.",
+        source_refs: ["web-clone-source/source-ir/content-model.json"],
+        parity_guard: "Run visual diff and source audit.",
+      },
+    ],
+    material_inventory: "materials",
+    visual_consistency_contract: "visual contract",
+    ui_data_contract: "data contract",
+    template_iteration_notes: ["checked inventory"],
+    completeness_review: "complete enough",
+    reference_artifacts: [],
+    open_questions: [],
   }, {})
 
   expect(ok).toContain("OK")
