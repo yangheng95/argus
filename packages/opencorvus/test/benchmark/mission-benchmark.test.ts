@@ -135,4 +135,11 @@ describe("mission benchmark executable wiring", () => {
     expect(src).toContain("source: item.task?.source")
     expect(src).toContain("metadata: item.task?.metadata")
   })
+
+  test("disposes isolated instance state before stopping the benchmark server", () => {
+    const disposeIndex = src.indexOf("await Instance.disposeAll().catch")
+    const stopIndex = src.indexOf("await server.stop(true).catch")
+    expect(disposeIndex).toBeGreaterThan(0)
+    expect(stopIndex).toBeGreaterThan(disposeIndex)
+  })
 })

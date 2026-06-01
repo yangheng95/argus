@@ -19,6 +19,8 @@ Add a benchmark focused on OpenCorvus Mission mode. The benchmark must exercise 
 | Dispatch surface | `packages/opencorvus/src/tool/panel.ts` permits Mission `create_task` and `query_task`, and stamps `source: "mission"` plus `metadata.actor` / `metadata.mission`. | Benchmark validates provenance from `/tasks`, not from free-text transcript guesses. |
 | Existing benchmark infra | `packages/opencorvus/script/benchmark/overlay-web-benchmark.ts` already starts `Server`, prepares config, uses `/task`, and writes JSON reports. | Add a separate `mission-benchmark.ts` because mission has a different root entity and completion loop. Reuse env/model helper module. |
 | Existing tests | `packages/opencorvus/test/mission/*`, `test/tool/mission-state.test.ts`, `test/panel/*` pin route/session/tool/provenance units. | Add benchmark contract tests only for the new benchmark scenario and script wiring. |
+| Trace report call sites | `rg "recordAgentReport" packages/opencorvus/src packages/opencorvus/test` shows worker agents already wrap reports through `SessionContext.provide`, while orchestrator reports call `AgentTrace.recordAgentReport` directly. | Reuse the worker pattern for orchestrator reports so mission wake context cannot be mistaken for the orchestrator child session. |
+| Benchmark teardown | `rg "Instance.disposeAll|Server.listen|server.stop|mission-benchmark" packages/opencorvus/script/benchmark packages/opencorvus/src/cli packages/opencorvus/test` shows other long-running scripts/tests dispose instance state when stopping isolated runtimes. | Dispose all instance state before stopping the benchmark server so scheduler intervals cannot keep the benchmark process alive after the report is written. |
 
 ## Files
 
@@ -27,6 +29,8 @@ Add a benchmark focused on OpenCorvus Mission mode. The benchmark must exercise 
 | `packages/opencorvus/script/benchmark/mission-scenario.ts` | Export the default mission benchmark prompt, expected stages, helper predicates, and report evaluation. |
 | `packages/opencorvus/script/benchmark/mission-benchmark.ts` | New executable benchmark. Starts an isolated server/project, wakes Mission, waits for Mission-dispatched tasks, re-wakes for reconciliation, runs local verification, writes report. |
 | `packages/opencorvus/test/benchmark/mission-benchmark.test.ts` | Static/contract tests for the benchmark scenario and route wiring. |
+| `packages/opencorvus/src/orchestrator/agent.ts` | Regression fix from live benchmark: record orchestrator trace reports inside the orchestrator session context. |
+| `packages/opencorvus/test/session/trace-task-rollup.test.ts` | Regression test proving a report can be written for a child session while an unrelated parent session context is ambient. |
 | `docs/product/zh-CN/operations/benchmark.md` and `docs/product/en/operations/benchmark.md` | Document the new mission benchmark entry point and its pass criteria. |
 
 ## Acceptance
@@ -36,3 +40,10 @@ Add a benchmark focused on OpenCorvus Mission mode. The benchmark must exercise 
 - The script rejects a run with no Mission-dispatched task carrying `source: "mission"` and `metadata.mission.id`.
 - The script wakes the same mission ID a second time for reconciliation.
 - Targeted tests pass with `bun test test/benchmark/mission-benchmark.test.ts`.
+
+## Live Benchmark Follow-up
+
+The first live `glm51/glm51` run completed the generated project and produced an accepted report, but the log exposed two Mission-mode support issues that must be fixed before final acceptance:
+
+- `Trace session mismatch: context=<mission wake session> input=<orchestrator session>` while recording the orchestrator report after the Mission-dispatched task completed.
+- The benchmark process kept running after writing the report because isolated project scheduler state was still alive during teardown.

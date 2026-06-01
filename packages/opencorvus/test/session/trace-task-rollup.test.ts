@@ -147,3 +147,67 @@ test("trace validates ambient SessionContext session bucket", async () => {
     },
   })
 })
+
+test("orchestrator trace report writes under child session while mission session is ambient", async () => {
+  tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "oc-trace-orchestrator-context-"))
+  process.env.OPENCORVUS_AGENT_TRACE_DIR = tempDir
+  const { AgentTrace } = await import("../../src/trace")
+  const { SessionContext } = await import("../../src/session/context")
+  const { recordOrchestratorTraceReportForSession } = await import("../../src/orchestrator/agent")
+  const parentSessionID = Identifier.create("session", false)
+  const childSessionID = Identifier.create("session", false)
+  const taskID = Identifier.create("task", false)
+  const parentSession = {
+    id: parentSessionID,
+    slug: "mission",
+    projectID: "project",
+    directory: tempDir,
+    title: "Mission",
+    version: "1.0.0",
+    kind: "mission",
+    time: { created: 1, updated: 1 },
+  } satisfies Session.Info
+  const childSession = {
+    id: childSessionID,
+    slug: "orchestrator",
+    projectID: "project",
+    directory: tempDir,
+    title: "Orchestrator",
+    version: "1.0.0",
+    kind: "orchestrator",
+    time: { created: 2, updated: 2 },
+  } satisfies Session.Info
+
+  await Instance.provide({
+    directory: tempDir,
+    fn: async () => {
+      SessionContext.provide(parentSession, () => {
+        expect(() =>
+          recordOrchestratorTraceReportForSession(childSession, {
+            sessionID: childSessionID,
+            parentSessionID,
+            taskID,
+            agentName: "orchestrator",
+            kind: "orchestrator_wake",
+            finishReason: "stop",
+            report: {
+              summary: "orchestrator completed",
+              detail: "orchestrator completed",
+            },
+          }),
+        ).not.toThrow()
+      })
+
+      const childEvents = AgentTrace.readSessionEvents(childSessionID)
+      expect(childEvents).toHaveLength(1)
+      expect(childEvents[0]).toMatchObject({
+        domain: "session",
+        sessionID: childSessionID,
+        parentSessionID,
+        taskID,
+        kind: "orchestrator_wake",
+      })
+      expect(AgentTrace.readTaskEvents(taskID).map((event) => event.sessionID)).toEqual([childSessionID])
+    },
+  })
+})
