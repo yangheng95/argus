@@ -240,9 +240,22 @@ export function collectAgentFileChangeGroups(
   base: string,
   goalWorkflows: unknown,
 ): ChangeGroup[] {
+  return collectAgentFileChangeGroupsFromNodes([node], base, goalWorkflows)
+}
+
+export function collectAgentFileChangeGroupsFromNodes(
+  nodes: CardNode[],
+  base: string,
+  goalWorkflows: unknown,
+): ChangeGroup[] {
   const metadata = goalMetadataByID(goalWorkflows)
   const grouped = new Map<string, AgentFileChange[]>()
-  for (const change of collectAgentFileChanges(node, base)) {
+  const changes = new Map<string, AgentFileChange>()
+  const seen = new Set<string>()
+  for (const node of nodes) {
+    collectFromNode(node, base, changes, seen)
+  }
+  for (const change of [...changes.values()].sort((a, b) => a.displayPath.localeCompare(b.displayPath))) {
     const groupID = change.goalID || "node"
     const bucket = grouped.get(groupID) ?? []
     bucket.push(change)
@@ -252,7 +265,7 @@ export function collectAgentFileChangeGroups(
     .map(([groupID, changes]) => {
       const meta = metadata.get(groupID)
       return {
-        id: meta ? `goal:${meta.goalID}:${meta.goalRunID ?? "active"}` : `node:${node.id}`,
+        id: meta ? `goal:${meta.goalID}:${meta.goalRunID ?? "active"}` : `agent:${groupID}`,
         goalID: meta?.goalID,
         goalRunID: meta?.goalRunID,
         goalOrderIndex: meta?.goalOrderIndex,

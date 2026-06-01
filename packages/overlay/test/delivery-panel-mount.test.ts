@@ -42,7 +42,7 @@ function readAllSurfaceCss(): string {
 // delivery card at all. This suite locks both the structural wiring and the
 // redesigned panel's verdict-driven behavior in place.
 
-test("index.html declares top-level Explorer, Files, and Inspector tab bodies plus the file editor sidecar", async () => {
+test("index.html declares right-panel Explorer/Inspector plus the message-side workbench mount", async () => {
   const html = await readSrc("src/index.html")
   expect(html).toContain('id="solidConversationAgentRailMount"')
   expect(html).toContain('id="chatContentFrame"')
@@ -55,9 +55,7 @@ test("index.html declares top-level Explorer, Files, and Inspector tab bodies pl
   expect(html).toContain('id="rightPanelExplorer"')
   expect(html).toContain('id="solidFileExplorerMount"')
   expect(html).toContain('data-panel-tab="explorer" data-active="true"')
-  expect(html).toContain('id="rightPanelFiles"')
-  expect(html).toContain('id="solidFilesSectionMount"')
-  expect(html).toContain('data-panel-tab="changes" data-active="false"')
+  expect(html).toContain('id="solidFileEditorMount"')
   expect(html).toContain('id="rightPanelInspector"')
   expect(html).toContain('data-panel-tab="inspector" data-active="false"')
   expect(html).toContain('id="solidBoardMount"')
@@ -72,7 +70,7 @@ test("index.html does not declare the rejected single InspectorPanel root", asyn
   expect(html).not.toContain('id="solidInspectorPanelMount"')
 })
 
-test("Board keeps delivery inside the unified Inspector stack and Files outside it", async () => {
+test("Board keeps delivery inside the unified Inspector stack and file changes outside it", async () => {
   const board = await readSrc("src/components/Board.tsx")
   expect(board).toContain('class="workflow-section-stack"')
   const deliveryAt = board.indexOf("<DeliveryPanel")
@@ -95,16 +93,16 @@ test("main.tsx mounts the top-level right-panel tabs and tab bodies", async () =
   expect(main).toContain('document.getElementById("solidFileEditorToggleMount")')
   expect(main).not.toContain('document.getElementById("solidAgentWorkflowMount")')
   expect(main).toContain('document.getElementById("solidRightPanelTabs")')
-  expect(main).toContain('document.getElementById("solidFilesSectionMount")')
+  expect(main).not.toContain('document.getElementById("solidFilesSectionMount")')
   expect(main).toContain('document.getElementById("solidBoardMount")')
   expect(main).not.toContain('document.getElementById("solidDeliveryMount")')
   expect(main).not.toContain('document.getElementById("solidFrontendPreviewMount")')
   expect(main).not.toContain("<FrontendPreviewPanel")
   expect(main).toContain("<RightPanelTabs")
   expect(main).toContain("<FileExplorerPanel")
-  expect(main).toContain("<FileEditorPane")
+  expect(main).toContain("<MessageWorkbenchPane")
   expect(main).toContain("<FileEditorToggle")
-  expect(main).toContain("<FilesSection")
+  expect(main).not.toContain("<FilesSection")
   expect(main).toContain("<ConversationAgentRail")
   expect(main).not.toContain("nextTabForPreviewResolution")
   expect(main).not.toContain("AgentWorkflowPanel")
@@ -209,17 +207,18 @@ test("`delivery:focus-changes` event contract — DeliveryPanel dispatches, Chan
   const board = await readSrc("src/components/Board.tsx")
   const changes = await readSrc("src/components/ChangesPanel.tsx")
   const fileChangesView = await readSrc("src/components/FileChangesView.tsx")
-  const rightPanelTabs = await readSrc("src/components/RightPanelTabs.tsx")
+  const workbench = await readSrc("src/components/MessageWorkbenchPane.tsx")
   // Dispatch site (DeliveryPanel goal-pill / files-changed footer).
   expect(board).toContain('"delivery:focus-changes"')
   expect(board).toMatch(/window\.dispatchEvent\(\s*new CustomEvent\("delivery:focus-changes"/)
-  // Listener side: the right panel switches to changed files; FileChangesView owns goal selection state.
-  expect(rightPanelTabs).toContain('"delivery:focus-changes"')
-  expect(rightPanelTabs).toContain('props.onSelect("changes")')
+  // Listener side: the message-side workbench switches to changed files; FileChangesView owns row selection state.
+  expect(workbench).toContain('"delivery:focus-changes"')
+  expect(workbench).toContain('setActiveView("changes")')
+  expect(workbench).toContain("showWorkbenchPane")
   expect(changes).toContain('"delivery:focus-changes"')
   expect(changes).toContain('focusEvent="delivery:focus-changes"')
   expect(fileChangesView).toContain("addEventListener")
-  expect(fileChangesView).toContain("setSelectedGroupID")
+  expect(fileChangesView).toContain("setSelectedRowKey")
 })
 
 test("redesign-required i18n keys exist in both locales; the legacy lifecycle keys are gone", async () => {

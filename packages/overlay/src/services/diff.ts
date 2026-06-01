@@ -203,7 +203,7 @@ async function fetchScopedDiffs(scope: { goalRunID?: string; runID?: string }): 
     ? await apiJson(`goal-run/${encodeURIComponent(scope.goalRunID)}/delivery`)
     : await apiJson(`run/${encodeURIComponent(String(scope.runID))}/delivery`);
   const diffs = normalizeDeliveryDiffs((data as any)?.result?.diffs);
-  diffCache.set(key, diffs);
+  if (diffs.length > 0) diffCache.set(key, diffs);
   return diffs;
 }
 

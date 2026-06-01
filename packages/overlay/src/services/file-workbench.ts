@@ -41,8 +41,11 @@ export function showMessagesPane(): void {
   setFileEditorFocus("messages")
 }
 
+export function showWorkbenchPane(): void {
+  setFileEditorFocus("editor")
+}
+
 export function toggleFileEditorFocus(): void {
-  if (!selectedFilePath()) return
   setFileEditorFocus(fileEditorFocus() === "editor" ? "messages" : "editor")
 }
 

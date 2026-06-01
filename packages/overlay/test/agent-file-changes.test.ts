@@ -1,7 +1,11 @@
 import { expect, test } from "bun:test"
 import { join } from "node:path"
 import { readFileSync } from "node:fs"
-import { collectAgentFileChangeGroups, collectAgentFileChanges } from "../src/utils/file-change-summary"
+import {
+  collectAgentFileChangeGroups,
+  collectAgentFileChangeGroupsFromNodes,
+  collectAgentFileChanges,
+} from "../src/utils/file-change-summary"
 import { setCardTreeStore, type CardNode } from "../src/store/card-tree"
 
 const ROOT = join(import.meta.dir, "..")
@@ -175,35 +179,85 @@ test("collectAgentFileChangeGroups scopes file rows by goal metadata", () => {
   expect(groups[0]?.changes.map((item) => item.file)).toEqual(["src/a.ts"])
 })
 
-test("agent file changes render only through the ChatBubble owner surface", () => {
+test("collectAgentFileChangeGroupsFromNodes aggregates all agent roots once", () => {
+  const child = card({
+    id: "shared-child",
+    kind: "agent",
+    title: "Shared child",
+    goalID: "goal-a",
+    parts: [
+      {
+        type: "tool",
+        goalID: "goal-a",
+        tool: "Edit",
+        state: {
+          status: "completed",
+          metadata: {
+            files: [{ file: "C:/repo/src/shared.ts", additions: 3, deletions: 0, type: "modified" }],
+          },
+        },
+      },
+    ],
+  })
+  const rootA = card({
+    id: "root-a",
+    kind: "agent",
+    title: "Root A",
+    goalID: "goal-a",
+    childIDs: ["shared-child"],
+    parts: [
+      {
+        type: "patch",
+        goalID: "goal-a",
+        files: ["C:/repo/src/a.ts"],
+      },
+    ],
+  })
+  const rootB = card({
+    id: "root-b",
+    kind: "agent",
+    title: "Root B",
+    goalID: "goal-b",
+    parts: [
+      {
+        type: "patch",
+        goalID: "goal-b",
+        files: ["C:/repo/src/b.ts"],
+      },
+    ],
+  })
+  setCardTreeStore("cards", { "shared-child": child, "root-a": rootA, "root-b": rootB })
+
+  const groups = collectAgentFileChangeGroupsFromNodes([rootA, rootB, child], "C:/repo", [
+    { goalID: "goal-a", goalRunID: "run-a", goalTitle: "Goal A", orderIndex: 0, retryCount: 0 },
+    { goalID: "goal-b", goalRunID: "run-b", goalTitle: "Goal B", orderIndex: 1, retryCount: 0 },
+  ])
+
+  expect(groups.map((group) => group.goalID)).toEqual(["goal-a", "goal-b"])
+  expect(groups[0]?.changes.map((item) => item.file)).toEqual(["src/a.ts", "src/shared.ts"])
+  expect(groups[1]?.changes.map((item) => item.file)).toEqual(["src/b.ts"])
+})
+
+test("agent file changes render only through the message-side workbench", () => {
   const chatBubble = readText(join(ROOT, "src", "components", "ChatBubble.tsx"))
-  const component = readText(join(ROOT, "src", "components", "AgentFileChanges.tsx"))
   const css = readText(join(ROOT, "src", "styles", "surfaces", "chat-bubble.css"))
   const changesCss = readText(join(ROOT, "src", "styles", "surfaces", "changes.css"))
   const sharedView = readText(join(ROOT, "src", "components", "FileChangesView.tsx"))
   const changesPanel = readText(join(ROOT, "src", "components", "ChangesPanel.tsx"))
 
-  expect(chatBubble).toContain("<AgentFileChanges node={props.node} />")
-  const bodyInnerStart = chatBubble.indexOf('<div class="chat-bubble__body-inner">')
-  const fileChangesMount = chatBubble.indexOf("<AgentFileChanges node={props.node} />")
-  const bubbleFoot = chatBubble.indexOf('class="chat-bubble__foot"')
-  const bodyCloseBeforeFileChanges = chatBubble.indexOf(
-    "</div>\n            </div>\n          </Show>\n          <AgentFileChanges",
-    bodyInnerStart,
-  )
-  expect(bodyInnerStart).toBeGreaterThan(0)
-  expect(bodyCloseBeforeFileChanges).toBeGreaterThan(bodyInnerStart)
-  expect(fileChangesMount).toBeGreaterThan(bodyCloseBeforeFileChanges)
-  expect(fileChangesMount).toBeLessThan(bubbleFoot)
-  expect(component).not.toContain('props.node.kind === "agent"')
-  expect(component).toContain("collectAgentFileChangeGroups(")
-  expect(component).toContain("<FileChangesView groups={groups()} showHeading />")
+  expect(chatBubble).not.toContain("AgentFileChanges")
+  expect(chatBubble).not.toContain("<FileChangesView")
+  expect(changesPanel).toContain("collectAgentFileChangeGroupsFromNodes(")
+  expect(changesPanel).toContain("cardTreeStore.order")
   expect(changesPanel).toContain("<FileChangesView")
   expect(changesPanel).toContain('focusEvent="delivery:focus-changes"')
   expect(sharedView).toContain("changes-summary")
   expect(sharedView).toContain("changes-commit")
-  expect(sharedView).toContain("changes-goal-picker")
-  expect(sharedView).toContain("changes-goal-picker-row-commit")
+  expect(sharedView).not.toContain("changes-goal-picker")
+  expect(sharedView).not.toContain("changes-tab")
+  expect(sharedView).toContain("changes-list-group")
+  expect(sharedView).toContain("changes-group-header")
+  expect(sharedView).toContain("change-scope")
   expect(sharedView).toContain("changes-filter-field")
   expect(sharedView).toContain("files.filter_placeholder")
   expect(sharedView).toContain("files.no_matches")
@@ -232,8 +286,7 @@ test("agent file changes render only through the ChatBubble owner surface", () =
   expect(sharedView).toContain("data-virtualized={shouldVirtualizeRows()")
   expect(sharedView).not.toContain("<For each={group.changes}>")
   expect(sharedView).toContain('Icon name="file-document"')
-  expect(css).toContain(".agent-file-changes")
-  expect(css).toContain(".agent-file-changes .changes-list[data-virtualized=\"true\"]")
+  expect(css).not.toContain(".agent-file-changes")
   expect(css).not.toContain(".agent-file-change-diff")
   expect(css).not.toContain(".agent-file-change-path")
   expect(changesCss).toContain(".file-changes-view__heading")
@@ -249,5 +302,10 @@ test("agent file changes render only through the ChatBubble owner surface", () =
   expect(changesCss).toContain(".changes-list[data-virtualized=\"true\"]")
   expect(changesCss).toContain(".changes-list-virtual-window")
   expect(changesCss).toContain(".changes-list-virtual-item")
+  expect(changesCss).toContain(".changes-list-group")
+  expect(changesCss).toContain(".changes-group-header")
+  expect(changesCss).toContain(".change-scope")
+  expect(changesCss).not.toContain(".changes-goal-picker")
+  expect(changesCss).not.toContain(".changes-tab")
   expect(changesCss).toContain("text-overflow: ellipsis")
 })
