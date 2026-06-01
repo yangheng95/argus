@@ -39,6 +39,46 @@ function findMissionSessionID(missionID: string) {
   )
 }
 
+function missionSessionConditions(input?: {
+  directory?: string
+  search?: string
+  cursorUpdated?: number
+  cursorSessionID?: string
+  archived?: boolean
+}, projectID?: string) {
+  const conditions = [
+    eq(SessionTable.kind, "mission"),
+    sql`json_extract(${SessionTable.metadata}, '$.mission.id') IS NOT NULL`,
+  ]
+
+  if (projectID) {
+    conditions.push(eq(SessionTable.project_id, projectID))
+  }
+  if (input?.directory) {
+    conditions.push(eq(SessionTable.directory, input.directory))
+  }
+  if (input?.search) {
+    const term = `%${input.search}%`
+    conditions.push(
+      or(
+        like(SessionTable.title, term),
+        sql`json_extract(${SessionTable.metadata}, '$.mission.id') LIKE ${term}`,
+        like(SessionTable.directory, term),
+      )!,
+    )
+  }
+  if (input?.cursorUpdated !== undefined && input.cursorSessionID) {
+    conditions.push(sql`(
+      ${SessionTable.time_updated} < ${input.cursorUpdated}
+      OR (${SessionTable.time_updated} = ${input.cursorUpdated} AND ${SessionTable.id} < ${input.cursorSessionID})
+    )`)
+  }
+  if (!input?.archived) {
+    conditions.push(isNull(SessionTable.time_archived))
+  }
+  return conditions
+}
+
 /**
  * Look up an existing mission session by missionID without creating one.
  *
@@ -59,34 +99,35 @@ export async function* listMissionSessions(input?: {
   cursorSessionID?: string
   archived?: boolean
 }) {
-  const conditions = [
-    eq(SessionTable.project_id, Instance.project.id),
-    eq(SessionTable.kind, "mission"),
-    sql`json_extract(${SessionTable.metadata}, '$.mission.id') IS NOT NULL`,
-  ]
+  const conditions = missionSessionConditions(input, Instance.project.id)
+  const limit = input?.limit ?? 100
+  const rows = Database.use((db) =>
+    db
+      .select({ id: SessionTable.id })
+      .from(SessionTable)
+      .where(and(...conditions))
+      .orderBy(desc(SessionTable.time_updated), desc(SessionTable.id))
+      .limit(limit)
+      .all(),
+  )
 
-  if (input?.directory) {
-    conditions.push(eq(SessionTable.directory, input.directory))
+  for (const row of rows) {
+    const session = await Session.get(row.id)
+    const missionID = missionIDFromInfo(session)
+    if (!missionID) continue
+    yield withMissionID(session, missionID)
   }
-  if (input?.search) {
-    const term = `%${input.search}%`
-    conditions.push(
-      or(
-        like(SessionTable.title, term),
-        sql`json_extract(${SessionTable.metadata}, '$.mission.id') LIKE ${term}`,
-      )!,
-    )
-  }
-  if (input?.cursorUpdated !== undefined && input.cursorSessionID) {
-    conditions.push(sql`(
-      ${SessionTable.time_updated} < ${input.cursorUpdated}
-      OR (${SessionTable.time_updated} = ${input.cursorUpdated} AND ${SessionTable.id} < ${input.cursorSessionID})
-    )`)
-  }
-  if (!input?.archived) {
-    conditions.push(isNull(SessionTable.time_archived))
-  }
+}
 
+export async function* listGlobalMissionSessions(input?: {
+  directory?: string
+  search?: string
+  limit?: number
+  cursorUpdated?: number
+  cursorSessionID?: string
+  archived?: boolean
+}) {
+  const conditions = missionSessionConditions(input)
   const limit = input?.limit ?? 100
   const rows = Database.use((db) =>
     db

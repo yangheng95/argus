@@ -3,7 +3,7 @@ import { describeRoute, resolver, validator } from "hono-openapi"
 import z from "zod"
 import { randomBytes } from "node:crypto"
 import { Instance } from "@/project/instance"
-import { ensureMissionSession, findExistingMissionSession, listMissionSessions } from "@/mission/session"
+import { ensureMissionSession, findExistingMissionSession, listGlobalMissionSessions } from "@/mission/session"
 import { MissionID } from "@/mission/schema"
 import { SessionWake } from "@/session/wake"
 
@@ -53,7 +53,7 @@ export function MissionRoutes() {
     describeRoute({
       summary: "List Missions",
       description:
-        "List Mission records for the current project. Each record is backed by " +
+        "List Mission records across project directories. Each record is backed by " +
         'exactly one kind="mission" session and can be opened through the session ' +
         "conversation/event routes.",
       operationId: "mission.list",
@@ -68,7 +68,7 @@ export function MissionRoutes() {
     async (c) => {
       const query = c.req.valid("query")
       const records: z.infer<typeof MissionRecord>[] = []
-      for await (const session of listMissionSessions({
+      for await (const session of listGlobalMissionSessions({
         directory: query.directory,
         search: query.search,
         limit: query.limit,

@@ -18,6 +18,7 @@ import { notifyError, notifySuccess, notifyWarning, taskHasUnreadNotification, f
 import { useArmedConfirm } from "../solid/armed-confirm";
 import { t } from "../utils/i18n";
 import { stamp, fullStampWithRelative } from "../utils/time";
+import { projectDirectoryKey, projectDirectoryLabel } from "../utils/project-directory";
 import { Icon } from "./Icon";
 import { Button } from "./ui/Button";
 
@@ -108,20 +109,6 @@ function projectDirectoryOf(item: any): string {
   // Pending tasks have no server-assigned directory yet; attribute them to the
   // currently active project so the user sees them grouped correctly.
   return settingsStore.directory || "";
-}
-
-function projectLabel(directory: string): { name: string; parent: string } {
-  const normalized = (directory || "").replace(/\\/g, "/").replace(/\/+$/, "");
-  if (!normalized) return { name: t("task.project.unknown"), parent: "" };
-  const parts = normalized.split("/").filter(Boolean);
-  const name = parts[parts.length - 1] || normalized;
-  const parent =
-    parts.length > 1
-      ? parts.length > 3
-        ? ".../" + parts.slice(-3, -1).join("/")
-        : parts.slice(0, -1).join("/")
-      : "";
-  return { name, parent };
 }
 
 function projectGroupTip(directory: string, count: number): string {
@@ -749,25 +736,21 @@ export function TaskList(props: TaskListProps) {
   // newly selected) instead of all N rows in the list. Wins scale with N.
   const isSelected = createSelector(() => activeTaskID());
 
-  function directoryGroupKey(directory: string): string {
-    return directory || "__opencorvus_unassigned_project__";
-  }
-
   function isDirectoryExpanded(directory: string): boolean {
-    return expandedDirectories()[directoryGroupKey(directory)] === true;
+    return expandedDirectories()[projectDirectoryKey(directory)] === true;
   }
 
   function expandDirectoryGroup(directory: string): void {
-    const key = directoryGroupKey(directory);
+    const key = projectDirectoryKey(directory);
     setExpandedDirectories((current) => ({ ...current, [key]: true }));
   }
 
   function isDirectoryCollapsed(directory: string): boolean {
-    return collapsedDirectories()[directoryGroupKey(directory)] === true;
+    return collapsedDirectories()[projectDirectoryKey(directory)] === true;
   }
 
   function toggleDirectoryGroup(directory: string): void {
-    const key = directoryGroupKey(directory);
+    const key = projectDirectoryKey(directory);
     setCollapsedDirectories((current) => {
       const next = { ...current };
       if (next[key]) delete next[key];
@@ -926,7 +909,7 @@ export function TaskList(props: TaskListProps) {
       >
         <For each={grouped()}>
           {(group) => {
-            const label = projectLabel(group.directory);
+            const label = projectDirectoryLabel(group.directory, t("task.project.unknown"));
             const expanded = () => isDirectoryExpanded(group.directory);
             const collapsed = () => isDirectoryCollapsed(group.directory);
             // Compact quota bounds the *top-level* row count of the

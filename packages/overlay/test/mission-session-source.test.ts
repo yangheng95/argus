@@ -15,6 +15,7 @@ import type {
 ;(globalThis as any).location = { protocol: "http:", host: "localhost", origin: "http://localhost", pathname: "/" }
 
 const MISSION_TSX = readFileSync(join(import.meta.dir, "../src/components/Mission.tsx"), "utf8")
+const MISSION_LIST_TSX = readFileSync(join(import.meta.dir, "../src/components/MissionList.tsx"), "utf8")
 const CONVERSATION_TSX = readFileSync(join(import.meta.dir, "../src/components/Conversation.tsx"), "utf8")
 
 function fakeTransport(
@@ -136,11 +137,21 @@ test("Mission ledger uses MissionList and not the task list projection", () => {
   expect(MISSION_TSX).toContain('import { MissionList } from "./MissionList"')
   expect(MISSION_TSX).toContain("<MissionList")
   expect(MISSION_TSX).toContain("loadMissions")
+  expect(MISSION_TSX).toContain("return { search: searchQuery().trim(), refresh: missionRefreshToken() }")
+  expect(MISSION_TSX).not.toContain("directory: input.directory")
   expect(MISSION_TSX).not.toContain('import { TaskList } from "./TaskList"')
   expect(MISSION_TSX).not.toContain("<TaskList")
   expect(MISSION_TSX).not.toContain("visibleTasks")
   expect(MISSION_TSX).not.toContain("function MissionTaskConversation")
   expect(MISSION_TSX).not.toContain('data-ui="mission-task-conversation"')
+})
+
+test("Mission ledger groups records by project directory", () => {
+  expect(MISSION_LIST_TSX).toContain("const groupedMissions = createMemo")
+  expect(MISSION_LIST_TSX).toContain("mission.directory")
+  expect(MISSION_LIST_TSX).toContain('class="project-group mission-project-group"')
+  expect(MISSION_LIST_TSX).toContain('data-ui="mission-project-group"')
+  expect(MISSION_LIST_TSX).toContain("<For each={group.items}>")
 })
 
 test("Mission page submits messages tagged with the mission source label", () => {

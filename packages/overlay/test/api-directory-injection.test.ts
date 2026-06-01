@@ -74,13 +74,14 @@ describe("apiUrl directory injection (W2-V31)", () => {
     test("restart", () => expectDoesNotInject("restart"));
   });
 
-  describe("GlobalRoutes (mounted before Instance middleware) — no-inject", () => {
+  describe("global and exact middleware bypass routes — no-inject", () => {
     test("global/health", () => expectDoesNotInject("global/health"));
     test("global/event", () => expectDoesNotInject("global/event"));
     test("global/config", () => expectDoesNotInject("global/config"));
     test("global/dispose", () => expectDoesNotInject("global/dispose"));
     test("global/db/reset", () => expectDoesNotInject("global/db/reset"));
     test("global/tasks", () => expectDoesNotInject("global/tasks"));
+    test("mission ledger", () => expectDoesNotInject("mission"));
   });
 
   describe("auth routes — no-inject (cross-project by design)", () => {
@@ -104,7 +105,6 @@ describe("apiUrl directory injection (W2-V31)", () => {
     test("config/prompt", () => expectInjects("config/prompt"));
     test("config/executor", () => expectInjects("config/executor"));
     test("provider", () => expectInjects("provider"));
-    test("mission", () => expectInjects("mission"));
     test("mission wake", () => expectInjects("mission/wake"));
     test("channel", () => expectInjects("channel"));
     test("agent", () => expectInjects("agent"));

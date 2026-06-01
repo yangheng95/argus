@@ -149,11 +149,12 @@ export function Mission() {
   // explicit `directory` parameter — belt-and-braces against any future
   // change to apiJson's auto-injection logic.
 
-  // Resources fire only when (a) the Mission page is the active mode AND
-  // (b) `settingsStore.directory` is populated. (a) avoids wasted
-  // server traffic from the always-mounted Mission component while the
-  // operator is using the Panel. (b) avoids DirectoryRequiredError on
-  // project-scoped routes during cold boot before settings rehydrate.
+  // Project-scoped Mission resources fire only when (a) the Mission page is
+  // the active mode AND (b) `settingsStore.directory` is populated. (a)
+  // avoids wasted server traffic from the always-mounted Mission component
+  // while the operator is using the Panel. (b) avoids DirectoryRequiredError
+  // on project-scoped routes during cold boot before settings rehydrate.
+  // The Mission ledger itself is all-project and is gated only by page mode.
   //
   // CRITICAL: read BOTH signals on every invocation so Solid tracks them
   // both, regardless of which branch produces the return value. A naive
@@ -180,14 +181,13 @@ export function Mission() {
 
   const [missionRecords, missionRecordsCtl] = createResource(
     () => {
-      const directory = missionDirectory()
-      if (!directory) return null
-      return { directory, search: searchQuery().trim(), refresh: missionRefreshToken() }
+      const onMissionPage = isMissionPage()
+      if (!onMissionPage) return null
+      return { search: searchQuery().trim(), refresh: missionRefreshToken() }
     },
     async (input) => {
       try {
         return await loadMissions({
-          directory: input.directory,
           search: input.search || undefined,
         })
       } catch (err) {

@@ -280,6 +280,14 @@ async function applyMocks(page: Page): Promise<void> {
           created: Date.now() - 3_600_000,
           updated: Date.now() - 120_000,
         },
+        {
+          missionID: "mission_visual_audit",
+          sessionID: "session_mission_audit",
+          title: "Audit Mission",
+          directory: "/workspace/mission-audit",
+          created: Date.now() - 7_200_000,
+          updated: Date.now() - 240_000,
+        },
       ])
     }
     // The Mission launcher POSTs /mission/wake (was the gateway decompose
@@ -445,7 +453,30 @@ async function captureStates(page: Page): Promise<StateResult[]> {
   })
 
   await step("02-ledger-loaded", async () => {
+    await page.waitForSelector('[data-ui="mission-project-group"]', { timeout: 5_000 })
     await page.waitForSelector('[data-ui="mission-row"]', { timeout: 5_000 })
+    await page.waitForFunction(
+      () => document.querySelectorAll('[data-ui="mission-project-group"]').length >= 2,
+      { timeout: 5_000 },
+    )
+    await page.evaluate(() => {
+      const headings = [...document.querySelectorAll<HTMLButtonElement>('[data-ui="mission-project-group"] .project-group-heading')]
+      if (headings.length < 2) throw new Error("expected at least two mission project group headings")
+      headings[0].click()
+    })
+    await page.waitForFunction(
+      () => document.querySelectorAll('[data-ui="mission-row"]').length === 1,
+      { timeout: 5_000 },
+    )
+    await page.evaluate(() => {
+      const heading = document.querySelector<HTMLButtonElement>('[data-ui="mission-project-group"] .project-group-heading')
+      if (!heading) throw new Error("mission project group heading missing after collapse")
+      heading.click()
+    })
+    await page.waitForFunction(
+      () => document.querySelectorAll('[data-ui="mission-row"]').length === 2,
+      { timeout: 5_000 },
+    )
     await new Promise((r) => setTimeout(r, 300))
   })
 

@@ -18,10 +18,16 @@ afterEach(async () => {
 async function getMissionList(query = "") {
   return Server.App().request(`/mission${query}`, {
     method: "GET",
-    headers: {
-      "x-opencorvus-directory": Instance.directory,
-    },
   })
+}
+
+function directoryQuery(directory: string, suffix = ""): string {
+  const params = new URLSearchParams({ directory })
+  if (suffix) {
+    const extra = new URLSearchParams(suffix.replace(/^\?/, ""))
+    extra.forEach((value, key) => params.set(key, value))
+  }
+  return `?${params.toString()}`
 }
 
 async function createMission(input: {
@@ -64,11 +70,12 @@ async function createMission(input: {
 }
 
 describe("GET /mission", () => {
-  test("lists only valid Mission sessions for the current project", async () => {
+  test("lists valid Mission sessions across project directories", async () => {
     await using tmpA = await tmpdir({ git: true })
     await using tmpB = await tmpdir({ git: true })
 
-    let expectedSessionID = ""
+    let projectASessionID = ""
+    let projectBSessionID = ""
     await Instance.provide({
       directory: tmpA.path,
       fn: async () => {
@@ -77,7 +84,7 @@ describe("GET /mission", () => {
           title: "Project A Mission",
           directory: tmpA.path,
         })
-        expectedSessionID = mission.id
+        projectASessionID = mission.id
         await Session.createNext({ kind: "assistant", title: "Assistant", directory: tmpA.path })
         await createMission({
           missionID: "BAD_ID",
@@ -90,26 +97,34 @@ describe("GET /mission", () => {
     await Instance.provide({
       directory: tmpB.path,
       fn: async () => {
-        await createMission({
+        const mission = await createMission({
           missionID: "project-b",
           title: "Project B Mission",
           directory: tmpB.path,
         })
+        projectBSessionID = mission.id
       },
     })
 
-    await Instance.provide({
+    const res = await getMissionList()
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as Array<{ missionID: string; sessionID: string; title: string; directory: string }>
+    expect(body.map((row) => row.missionID).sort()).toEqual(["project-a", "project-b"])
+    expect(body.find((row) => row.missionID === "project-a")).toMatchObject({
+      sessionID: projectASessionID,
+      title: "Project A Mission",
       directory: tmpA.path,
-      fn: async () => {
-        const res = await getMissionList()
-        expect(res.status).toBe(200)
-        const body = (await res.json()) as Array<{ missionID: string; sessionID: string; title: string }>
-        expect(body.length).toBe(1)
-        expect(body[0]?.missionID).toBe("project-a")
-        expect(body[0]?.sessionID).toBe(expectedSessionID)
-        expect(body[0]?.title).toBe("Project A Mission")
-      },
     })
+    expect(body.find((row) => row.missionID === "project-b")).toMatchObject({
+      sessionID: projectBSessionID,
+      title: "Project B Mission",
+      directory: tmpB.path,
+    })
+
+    const filtered = (await (
+      await getMissionList(`?directory=${encodeURIComponent(tmpA.path)}`)
+    ).json()) as Array<{ missionID: string }>
+    expect(filtered.map((row) => row.missionID)).toEqual(["project-a"])
   })
 
   test("hides archived Missions by default and includes them when requested", async () => {
@@ -120,16 +135,18 @@ describe("GET /mission", () => {
         await createMission({ missionID: "live", title: "Live", directory: tmp.path, updated: 300 })
         await createMission({ missionID: "old", title: "Old", directory: tmp.path, updated: 200, archived: 250 })
 
-        const visible = (await (await getMissionList()).json()) as Array<{ missionID: string }>
+        const visible = (await (await getMissionList(directoryQuery(tmp.path))).json()) as Array<{ missionID: string }>
         expect(visible.map((row) => row.missionID)).toEqual(["live"])
 
-        const withArchived = (await (await getMissionList("?archived=true")).json()) as Array<{ missionID: string }>
+        const withArchived = (await (
+          await getMissionList(directoryQuery(tmp.path, "archived=true"))
+        ).json()) as Array<{ missionID: string }>
         expect(withArchived.map((row) => row.missionID)).toEqual(["live", "old"])
       },
     })
   })
 
-  test("searches title and missionID", async () => {
+  test("searches title, missionID, and directory", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,
@@ -142,6 +159,11 @@ describe("GET /mission", () => {
 
         const byID = (await (await getMissionList("?search=beta-id")).json()) as Array<{ missionID: string }>
         expect(byID.map((row) => row.missionID)).toEqual(["beta-id"])
+
+        const byDirectory = (await (
+          await getMissionList(`?search=${encodeURIComponent(tmp.path)}`)
+        ).json()) as Array<{ missionID: string }>
+        expect(byDirectory.map((row) => row.missionID)).toEqual(["alpha-id", "beta-id"])
       },
     })
   })
@@ -154,7 +176,7 @@ describe("GET /mission", () => {
         await createMission({ id: "ses_z", missionID: "z", title: "Z", directory: tmp.path, updated: 100 })
         await createMission({ id: "ses_a", missionID: "a", title: "A", directory: tmp.path, updated: 100 })
 
-        const first = (await (await getMissionList("?limit=1")).json()) as Array<{
+        const first = (await (await getMissionList(directoryQuery(tmp.path, "limit=1"))).json()) as Array<{
           missionID: string
           sessionID: string
           updated: number
@@ -162,7 +184,10 @@ describe("GET /mission", () => {
         expect(first.map((row) => row.sessionID)).toEqual(["ses_z"])
 
         const next = (await (
-          await getMissionList(`?cursorUpdated=${first[0].updated}&cursorSessionID=${first[0].sessionID}`)
+          await getMissionList(directoryQuery(
+            tmp.path,
+            `cursorUpdated=${first[0].updated}&cursorSessionID=${first[0].sessionID}`,
+          ))
         ).json()) as Array<{ sessionID: string }>
         expect(next.map((row) => row.sessionID)).toEqual(["ses_a"])
       },
