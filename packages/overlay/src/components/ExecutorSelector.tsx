@@ -18,8 +18,8 @@
 //   - OpenCorvus model → current task root session config when bound,
 //     otherwise appStore.config.model via patchConfig
 
-import { createMemo, createResource, createSignal, For, onCleanup, Show } from "solid-js";
-import { useHotkey } from "../solid/hotkey";
+import * as Popover from "@kobalte/core/popover";
+import { createMemo, createResource, createSignal, For, Show } from "solid-js";
 import { appStore } from "../store/app";
 import { rootTaskSessionID, hasSelectedTask } from "../store/board";
 import { settingsStore, setSettingsStore, saveSettings, sanitizeExecutor } from "../store/settings";
@@ -250,33 +250,6 @@ export function ExecutorSelector() {
     }
   }
 
-  let mirrorRef: HTMLDivElement | undefined;
-  let externalRef: HTMLDivElement | undefined;
-
-  const onDocPointerDown = (event: PointerEvent | MouseEvent) => {
-    if (!mirror.open() && !external.open()) return;
-    const target = event.target as Node | null;
-    // Skip when the press lands inside either chip slot — the chip's own
-    // click handler routes the open/close transition. Only true outside
-    // clicks should dismiss every popover.
-    if (target && mirrorRef && mirrorRef.contains(target)) return;
-    if (target && externalRef && externalRef.contains(target)) return;
-    mirror.close();
-    external.close();
-  };
-  if (typeof document !== "undefined") {
-    document.addEventListener("pointerdown", onDocPointerDown);
-    onCleanup(() => document.removeEventListener("pointerdown", onDocPointerDown));
-  }
-  useHotkey({
-    key: "Escape",
-    when: () => mirror.open() || external.open(),
-    run: () => {
-      mirror.close();
-      external.close();
-    },
-  });
-
   async function pickMirrorModel(value: string) {
     if (value === openCorvusModel()) {
       mirror.close();
@@ -337,7 +310,6 @@ export function ExecutorSelector() {
     <div class="executor-dualbar" data-ui="executor-dualbar">
       <ExecutorChip
         side="mirror"
-        ref={(el) => (mirrorRef = el)}
         disclosure={mirror}
         onActivate={openMirror}
         label={executorLabel(INTERNAL_EXECUTOR_ID)}
@@ -351,7 +323,7 @@ export function ExecutorSelector() {
         })}
         disabled={mirrorWriteDisabled()}
       >
-        <div class="executor-popover" data-section="mirror">
+        <>
           <div class="executor-popover-header">
             <span class="executor-popover-title">
               {t("executor.mirror_popover_title")}
@@ -381,12 +353,11 @@ export function ExecutorSelector() {
               </For>
             </div>
           </Show>
-        </div>
+        </>
       </ExecutorChip>
 
       <ExecutorChip
         side="external"
-        ref={(el) => (externalRef = el)}
         disclosure={external}
         onActivate={openExternal}
         label={isExternalActive() ? executorLabel(activeID()) : t("executor.external_disabled")}
@@ -409,7 +380,7 @@ export function ExecutorSelector() {
             : t("executor.external_chip_aria_disabled")
         }
       >
-        <div class="executor-popover" data-section="external">
+        <>
           <div class="executor-popover-header">
             <span class="executor-popover-title">
               {t("executor.external_popover_title")}
@@ -419,12 +390,15 @@ export function ExecutorSelector() {
             </span>
           </div>
           <div class="executor-popover-tabs" role="tablist">
+            {/* Popover tabs switch the in-popover view; they should not take focus
+                away from Kobalte's dismissable layer and close the popover. */}
             <button
               type="button"
               role="tab"
               class="executor-popover-tab"
               data-active={!isExternalActive() ? "true" : "false"}
               aria-selected={!isExternalActive() ? "true" : "false"}
+              onMouseDown={(event) => event.preventDefault()}
               onClick={disableExternal}
             >
               {t("executor.external_disabled")}
@@ -439,6 +413,7 @@ export function ExecutorSelector() {
                   aria-selected={tab.id === focusedExternalID() ? "true" : "false"}
                   disabled={!tab.selectable}
                   title={tab.title}
+                  onMouseDown={(event) => event.preventDefault()}
                   onClick={() => focusExternal(tab.id)}
                 >
                   {tab.label}
@@ -475,7 +450,7 @@ export function ExecutorSelector() {
               </div>
             </Show>
           </Show>
-        </div>
+        </>
       </ExecutorChip>
     </div>
   );
@@ -483,7 +458,6 @@ export function ExecutorSelector() {
 
 interface ExecutorChipProps {
   side: "mirror" | "external";
-  ref?: (el: HTMLDivElement) => void;
   disclosure: Disclosure;
   onActivate: () => void;
   label: string;
@@ -497,37 +471,45 @@ interface ExecutorChipProps {
 
 function ExecutorChip(props: ExecutorChipProps) {
   return (
-    <div
-      class="executor-chip-slot"
-      data-side={props.side}
-      data-open={props.disclosure.open() ? "true" : "false"}
-      ref={(el) => props.ref?.(el)}
+    <Popover.Root
+      open={props.disclosure.open()}
+      onOpenChange={(open) => {
+        if (open) {
+          if (!props.disabled) props.onActivate();
+          return;
+        }
+        props.disclosure.close();
+      }}
+      placement="top-start"
+      gutter={6}
     >
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        tone="neutral"
-        data-ui={`executor-chip-${props.side}`}
-        aria-haspopup="dialog"
-        aria-expanded={props.disclosure.open() ? "true" : "false"}
-        title={props.title}
-        aria-label={props.ariaLabel}
-        disabled={props.disabled}
-        onClick={(event) => {
-          event.stopPropagation();
-          if (props.disabled) return;
-          props.onActivate();
-        }}
+      <div
+        class="executor-chip-slot"
+        data-side={props.side}
+        data-open={props.disclosure.open() ? "true" : "false"}
       >
-        <span class="executor-chip-identity">
-          <span class="executor-chip-label">{props.label}</span>
-        </span>
-        <ChipModel model={props.model} placeholder={props.modelPlaceholder} />
-        <ChevronCaret open={props.disclosure.open()} />
-      </Button>
-      <Show when={props.disclosure.open()}>{props.children}</Show>
-    </div>
+        <Popover.Trigger
+          as={Button}
+          type="button"
+          variant="outline"
+          size="sm"
+          tone="neutral"
+          data-ui={`executor-chip-${props.side}`}
+          title={props.title}
+          aria-label={props.ariaLabel}
+          disabled={props.disabled}
+        >
+          <span class="executor-chip-identity">
+            <span class="executor-chip-label">{props.label}</span>
+          </span>
+          <ChipModel model={props.model} placeholder={props.modelPlaceholder} />
+          <ChevronCaret open={props.disclosure.open()} />
+        </Popover.Trigger>
+        <Popover.Content class="executor-popover" data-section={props.side}>
+          {props.children}
+        </Popover.Content>
+      </div>
+    </Popover.Root>
   );
 }
 

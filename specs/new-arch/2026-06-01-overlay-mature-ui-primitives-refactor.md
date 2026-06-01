@@ -83,3 +83,28 @@ Checklist:
 - [x] Run browser smoke.
   - Loaded `http://127.0.0.1:5173/` after restarting Vite dev server: title `OpenCorvus`, no Vite error overlay, and the three workspace split menu buttons rendered. The only console error was the pre-existing no-workspace `DirectoryRequiredError` from the file explorer.
 - [x] Commit and push only this phase's files.
+
+## Phase 2B Executor Selector popover plan
+
+Evidence scan:
+
+| API / file | Current behavior | Replacement decision |
+| --- | --- | --- |
+| `ExecutorSelector.tsx` | Each chip uses `useDisclosure`, refs, `document.pointerdown`, and `useHotkey(Escape)` to dismiss popovers. | Keep the two-disclosure single source for mutual exclusion, but delegate trigger/content/dismissal/Escape behavior to `@kobalte/core/popover`. |
+| `executor-selector-dualbar.test.ts` | Guards dual-chip callsite behavior, provider filtering, and task/session write semantics. | Extend coverage with a primitive guard that rejects direct document pointer listeners and asserts Kobalte Popover usage. |
+| `composer.css` | `.executor-popover` is currently positioned above each chip from the slot's left edge. | Preserve class contracts and let Kobalte provide runtime positioning/dismissal. |
+
+Constraints:
+
+- Preserve `data-ui="executor-chip-mirror"` / `data-ui="executor-chip-external"`.
+- Preserve dual-disclosure mutual exclusion: opening mirror closes external and vice versa.
+- Preserve task-root session write rules and provider filtering.
+
+Checklist:
+
+- [x] Grep `ExecutorSelector` callsites and tests.
+- [x] Replace manual document pointer and Escape dismissal with Kobalte Popover root/trigger/content.
+- [x] Add primitive guard rejecting the previous manual listener.
+- [x] Run targeted tests, overlay typecheck, i18n, browser smoke.
+  - `executor-selector-dualbar.test.ts`, `executor-selector-redesign.test.ts`, overlay `typecheck`, and overlay i18n passed. Browser smoke loaded `http://127.0.0.1:5173/` with no Vite overlay and both executor chips rendered.
+- [x] Commit and push only this phase's files.

@@ -50,6 +50,15 @@ describe("ExecutorSelector dual chip bar", () => {
     expect(SRC).toMatch(/function openExternal\(\)[\s\S]*?mirror\.close\(\)/)
   })
 
+  test("chip popover behavior is delegated to Kobalte", () => {
+    expect(SRC).toContain('import * as Popover from "@kobalte/core/popover"')
+    expect(SRC).toContain("<Popover.Root")
+    expect(SRC).toContain("<Popover.Trigger")
+    expect(SRC).toContain("<Popover.Content")
+    expect(SRC).not.toContain("document.addEventListener(\"pointerdown\"")
+    expect(SRC).not.toContain("useHotkey({")
+  })
+
   test("mirror picker only surfaces models from connected providers", () => {
     expect(SRC).toMatch(/connectedProviderIDs/)
     expect(SRC).toMatch(
