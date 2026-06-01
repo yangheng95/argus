@@ -5,6 +5,7 @@ import z from "zod"
 import { Instance } from "@/project/instance"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { decodePNG, type DecodedPNG } from "@/util/pixel-stats"
+import { auditWebCloneSourceSkeletonConsumption } from "@/web-clone/source-skeleton-consumption-audit"
 import { generateWebCloneSourceProject, type GenerateWebCloneSourceProjectOutput } from "@/web-clone/source-project-generator"
 import type { createFrontendTemplateOutputTools, FrontendTemplateFinal } from "./output-tools"
 
@@ -25,6 +26,7 @@ const FRONTEND_SKELETON_ENTRYPOINTS = [
   "src/data/sourceData.ts",
   "src/data/sourceDomRegions.ts",
   "src/data/sourceDomReplacementPlan.ts",
+  "src/data/sourceDomIterationState.ts",
   "src/data/sourceSvgAssetGroups.ts",
   "src/data/sourceFaqGroups.ts",
   "src/data/svgPaths.ts",
@@ -41,6 +43,7 @@ const FRONTEND_SKELETON_DEEP_REFERENCE_FILES = [
   "src/components/SourceFaqList.tsx",
   "src/data/sourceDomRegions.ts",
   "src/data/sourceDomReplacementPlan.ts",
+  "src/data/sourceDomIterationState.ts",
   "src/data/sourceSvgAssetGroups.ts",
   "src/data/sourceFaqGroups.ts",
 ]
@@ -71,6 +74,7 @@ export interface HostPreparedFrontendProject {
   error?: string
   compactEvidence: string
   sourceReplacementPlan: SourceReplacementPlanForSummary[]
+  sourceAuditEvidence?: string
 }
 
 export interface TextOnlyFrontendTemplateBrief {
@@ -90,12 +94,6 @@ const FlexibleStringListSchema = z.preprocess((value) => {
 
 const HostPreparedSubmitSchema = z.object({
   summary: z.string().default(""),
-  final_delivery_mode: z
-    .enum(["visual_baseline_allowed", "maintainable_replacement_required"])
-    .default("maintainable_replacement_required")
-    .describe(
-      "Default to maintainable_replacement_required for host-prepared webpage rawproject refactoring. Use visual_baseline_allowed only when the operator explicitly accepts the captured source project as the final visual clone without semantic replacement.",
-    ),
   frontend_template: z.string().default(""),
   component_inventory: z.string().default(""),
   implementation_risks: FlexibleStringListSchema,
@@ -209,8 +207,7 @@ function hostPreparedFrontendTemplatePayload(
   project: HostPreparedFrontendProject,
   input: z.infer<typeof HostPreparedSubmitSchema>,
 ) {
-  const finalDeliveryMode = input.final_delivery_mode
-  const isMaintainableReplacementRequired = finalDeliveryMode === "maintainable_replacement_required"
+  const finalDeliveryMode = "maintainable_replacement_required" as const
   const sourceRefs = [
     "web-clone-source/README.md",
     "web-clone-source/implementation-blueprint.md",
@@ -224,6 +221,7 @@ function hostPreparedFrontendTemplatePayload(
     ...project.entrypoints.map((entry) => `frontend-design-skeleton/${entry}`),
   ]
   const deepSourceRefs = FRONTEND_SKELETON_DEEP_REFERENCE_FILES.map((entry) => `frontend-design-skeleton/${entry}`)
+  const sourceAuditOutcome = summarizeSourceAuditOutcomeForReport(project.sourceAuditEvidence)
   const summary = nonEmptyOrDefault(
     input.summary,
     "Refactor the captured rawproject/source project into a maintainable frontend by replacing named source regions with traceable semantic components, data modules, and scoped styles.",
@@ -240,25 +238,24 @@ function hostPreparedFrontendTemplatePayload(
         "The host-prepared frontend-design source project is captured rawproject evidence and a source seed, not a new design brief and not the final maintainable code by itself.",
         "Downstream implementation should copy/adapt only the traceable source entrypoints, source-dom region files, generated DOM component, CSS sidecars, SVG/FAQ/replacement-plan data modules, public assets, and source data modules needed to preserve provenance, then replace/refine named regions in place.",
         "Primary surfaces must be derived from the embedded source IR, content model, source skeleton, style tokens, and visible reference screenshot, not from a site-specific default inventory.",
-        "Use src/data/sourceDomReplacementPlan.ts as the source-region refactoring map: it names problem regions, reuse/data/asset sources, first replacement steps, and parity guards.",
+        "Use src/data/sourceDomIterationState.ts as the source-region iteration state: it names semantic replacements already produced, remaining source-dom debt, and the next region to replace; use sourceDomReplacementPlan.ts for the matching region's data/asset/parity details.",
         "For each replacement, follow a vertical slice: extract source data, render a semantic component, add scoped CSS, clear conflicting generated boundary constraints, then compare against reference.png before deleting generated coverage.",
+        "A deferred source-dom region is an explicitly unfinished replacement item, not evidence that the final maintainable delivery has passed.",
         "If a later PRD changes the cloned page, treat those as explicit delta surfaces: keep unchanged source/reference surfaces under the clone visual contract, and judge changed surfaces against the PRD plus local design consistency.",
       ].join("\n"),
     ),
     frontend_template_sections: [
       { title: "Captured rawproject seed", detail: "Use the frontend-design React source project as traceable evidence and source seed for region-by-region refinement.", source_refs: sourceRefs },
-      { title: "Source-region refactor", detail: "Preserve extracted hierarchy/source ids while replacing named regions with semantic React components, data modules, and scoped CSS.", source_refs: ["web-clone-source/source-ir/component-tree.json", "frontend-design-skeleton/src/data/sourceDomReplacementPlan.ts"] },
+      { title: "Source-region refactor", detail: "Preserve extracted hierarchy/source ids while replacing named regions with semantic React components, data modules, and scoped CSS.", source_refs: ["web-clone-source/source-ir/component-tree.json", "frontend-design-skeleton/src/data/sourceDomIterationState.ts", "frontend-design-skeleton/src/data/sourceDomReplacementPlan.ts"] },
     ],
     fillable_modules:
       "Root app entrypoints, semantic page/section components, source-dom region boundaries, source-derived data modules, replacement-plan sidecars, scoped CSS, retained CSS sidecars, asset references, interaction modules, and verification scripts are the fillable implementation modules.",
     fillable_module_items: [
       { title: "Root app adoption", detail: "Copy/adapt package metadata, index.html, high-fidelity src entrypoints, source-dom region files, generated DOM component, public assets, CSS sidecars, SVG/FAQ/replacement sidecar data, and TS config from frontend-design-skeleton into the delivery root.", source_refs: project.entrypoints.map((entry) => `frontend-design-skeleton/${entry}`) },
       {
-        title: isMaintainableReplacementRequired ? "Replacement plan" : "Known source issues",
-        detail: isMaintainableReplacementRequired
-          ? "Use sourceDomReplacementPlan.ts and sourceDomRegions.ts to prioritize source-region semantic replacement; keep the worklist tied to named source regions."
-          : "Use sourceDomReplacementPlan.ts and sourceDomRegions.ts to identify risky generated/source-dom regions; if visual_baseline_allowed is explicitly selected, generated regions remain traceable source debt.",
-        source_refs: ["frontend-design-skeleton/src/data/sourceDomReplacementPlan.ts", "frontend-design-skeleton/src/data/sourceDomRegions.ts"],
+        title: "Replacement plan",
+        detail: "Use sourceDomIterationState.ts for the next source-region replacement and sourceDomReplacementPlan.ts/sourceDomRegions.ts for the region boundary, strategy, and parity guard.",
+        source_refs: ["frontend-design-skeleton/src/data/sourceDomIterationState.ts", "frontend-design-skeleton/src/data/sourceDomReplacementPlan.ts", "frontend-design-skeleton/src/data/sourceDomRegions.ts"],
       },
       { title: "Source data wiring", detail: "Move repeated visible tables, cards, lists, navigation items, labels, media references, FAQ content, and interaction hints into source-derived data modules or APIs only when the user request requires that implementation depth.", source_refs: ["web-clone-source/source-ir/content-model.json", "frontend-design-skeleton/src/data/sourceData.ts", "frontend-design-skeleton/src/data/sourceFaqGroups.ts"] },
     ],
@@ -271,12 +268,12 @@ function hostPreparedFrontendTemplatePayload(
         family_id: "comp-source-region-replacements",
         name: "Source region replacement plan",
         observed_surface: "Named generated source-dom regions that should become semantic project-owned components/data modules when maintainable replacement is requested",
-        source_refs: ["frontend-design-skeleton/src/data/sourceDomReplacementPlan.ts", "frontend-design-skeleton/src/data/sourceDomRegions.ts", "frontend-design-skeleton/src/components/source-dom/*Region.tsx"],
+        source_refs: ["frontend-design-skeleton/src/data/sourceDomIterationState.ts", "frontend-design-skeleton/src/data/sourceDomReplacementPlan.ts", "frontend-design-skeleton/src/data/sourceDomRegions.ts", "frontend-design-skeleton/src/components/source-dom/*Region.tsx"],
         implementation_strategy: "extracted_baseline_defer" as const,
-        reuse_source: "frontend-design-skeleton/src/data/sourceDomReplacementPlan.ts plus existing project components/libraries selected by Build after inspecting the target app",
+        reuse_source: "frontend-design-skeleton/src/data/sourceDomIterationState.ts and sourceDomReplacementPlan.ts plus existing project components/libraries selected by Build after inspecting the target app",
         mature_library_candidates: ["@tanstack/react-table for dense tables when appropriate", "project chart/map library or mature map/chart package when already used by the app"],
-        props_states: "region boundary, source data modules, source assets, visible text coverage, responsive layout, interactions, and parity guards from sourceDomReplacementPlan",
-        replacement_boundary: "Only the named source-dom regions in sourceDomReplacementPlan; leave unrelated clone surfaces under the captured-source visual contract.",
+        props_states: "next replacement region, region boundary, source data modules, source assets, visible text coverage, responsive layout, interactions, and parity guards from sourceDomIterationState/sourceDomReplacementPlan",
+        replacement_boundary: "Only the named source-dom regions in sourceDomIterationState/sourceDomReplacementPlan; leave unrelated clone surfaces under the captured-source visual contract.",
         parity_guard: "For every region replacement, compare the root app against web-clone-source/reference.png and keep the source-dom baseline until measured visual evidence preserves parity.",
         custom_fallback_reason: "",
       },
@@ -320,20 +317,17 @@ function hostPreparedFrontendTemplatePayload(
         custom_fallback_reason: "",
       },
     ],
-    baseline_replacement_plan: isMaintainableReplacementRequired ? hostPreparedBaselineReplacementPlan(project) : [],
-    quality_project_contract: isMaintainableReplacementRequired
-      ? "Target delivery is a root-level, runnable, human-maintainable webpage implementation. frontend-design-skeleton is captured rawproject evidence and a source seed, not the final deliverable directory. Downstream implementation maps every new component, data module, scoped style, and boundary cleanup back to source nodes/regions/assets/reference screenshots, then replaces requested generated/source-dom regions while preserving visual parity. In maintainable mode, run webpage_evaluate and web_clone_source_audit, then iterate until measured visual evidence preserves parity and the source audit has zero findings before claiming final maintainability. If the next task provides a PRD, use the captured page as the evidence base and apply only named PRD deltas instead of weakening unchanged reference surfaces."
-      : "When visual_baseline_allowed is explicitly selected, delivery is still captured-source adoption. Remaining generated/source-dom regions must stay traceable to source artifacts and be documented as source debt; the mode still requires project-owned source structure and visual evidence.",
+    baseline_replacement_plan: hostPreparedBaselineReplacementPlan(project),
+    quality_project_contract: `Target delivery is a root-level, runnable, human-maintainable webpage implementation. frontend-design-skeleton is captured rawproject evidence and a source seed, not the final deliverable directory. Downstream implementation maps every new component, data module, scoped style, and boundary cleanup back to source nodes/regions/assets/reference screenshots, then replaces requested generated/source-dom regions while preserving visual parity. In maintainable mode, run webpage_evaluate and web_clone_source_audit, then iterate until measured visual evidence preserves parity and the source audit has zero findings before claiming final maintainability. Any deferred source-dom region remains source debt and keeps final maintainability unproven until that region has a replacement decision, parity evidence, and audit evidence. Current source audit supervision: ${sourceAuditOutcome} If the next task provides a PRD, use the captured page as the evidence base and apply only named PRD deltas instead of weakening unchanged reference surfaces.`,
     quality_project_items: [
       { title: "Delivery root", detail: "Root package.json/index.html/src/public/data files are the implementation target; frontend-design-skeleton stays evidence input.", source_refs: ["frontend-design-skeleton/README.md"] },
       {
-        title: isMaintainableReplacementRequired ? "Source-region replacement work" : "Traceable source debt",
-        detail: isMaintainableReplacementRequired
-          ? "sourceDomReplacementPlan.ts is the source of truth for maintainability problems, region boundaries, reuse/data/asset sources, and parity guards."
-          : "sourceDomReplacementPlan.ts names source debt and targeted refactor candidates; visual_baseline_allowed keeps the captured page traceable to source artifacts.",
-        source_refs: ["frontend-design-skeleton/src/data/sourceDomReplacementPlan.ts", "frontend-design-skeleton/src/data/sourceProjectManifest.json"],
+        title: "Source-region replacement work",
+        detail: "sourceDomIterationState.ts is the source of truth for the current maintainability loop state; sourceDomReplacementPlan.ts provides each region's strategy, data/asset sources, and parity guard.",
+        source_refs: ["frontend-design-skeleton/src/data/sourceDomIterationState.ts", "frontend-design-skeleton/src/data/sourceDomReplacementPlan.ts", "frontend-design-skeleton/src/data/sourceProjectManifest.json"],
       },
       { title: "Verification", detail: "Run root build/dev checks, requested behavior checks, webpage_evaluate against web-clone-source/reference.png, and web_clone_source_audit with zero findings before claiming final maintainability.", source_refs: ["web-clone-source/reference.png"] },
+      { title: "Current source audit supervision", detail: sourceAuditOutcome, source_refs: ["frontend-design-skeleton/src/data/sourceProjectManifest.json", "frontend-design-skeleton/src/data/sourceDomIterationState.ts", "frontend-design-skeleton/src/data/sourceDomReplacementPlan.ts", "web-clone-source/reference.png"] },
     ],
     material_inventory:
       "Reference screenshot, source IR, content model, layout map, style tokens, interaction hints, source skeleton CSS, generated React skeleton, sidecar SVG paths/assets, visible text, repeated content, links, media, navigation, controls, and footer/support content.",
@@ -374,11 +368,10 @@ function hostPreparedFrontendTemplatePayload(
     ],
     completeness_review: [
       "Public report handoff: the frontend_design terminal report is the shared readable surface for Requirements, Architect, and Build. It records the source package, generated skeleton, source-dom replacement plan, delivery-root adoption rule, reuse constraints, data contracts, and visual verification surfaces.",
-      isMaintainableReplacementRequired
-        ? "Delivery mode: maintainable_replacement_required means generated/source-dom regions named for replacement must become traceable semantic components/data/scoped styles or remain explicitly deferred with a parity guard and reason."
-        : "Delivery mode: visual_baseline_allowed was explicitly selected. It permits traceable captured-source regions to remain only as documented source debt while keeping project-owned source structure and visual evidence.",
+      "Delivery mode: maintainable_replacement_required means generated/source-dom regions named for replacement must become traceable semantic components/data/scoped styles. Deferred regions are unfinished source debt, not final acceptance.",
+      `Current source audit supervision: ${sourceAuditOutcome}`,
       "Known issue discipline: if a visible surface appears missing, first compare reference.png, live/browser state, source IR, and source skeleton before deciding whether it was absent from capture, hidden by auth/cookies/viewport, or dropped during rewrite.",
-      "Agent handoff: downstream agents must read the named source artifacts and sourceDomReplacementPlan.ts, inspect the existing project stack/components before coding, preserve source-region traceability, reuse project components or mature libraries for hard UI domains, verify measured visual evidence with webpage_evaluate, and clear all web_clone_source_audit findings before claiming final maintainability.",
+      "Agent handoff: downstream agents must read the named source artifacts, sourceDomIterationState.ts, and sourceDomReplacementPlan.ts, inspect the existing project stack/components before coding, preserve source-region traceability, reuse project components or mature libraries for hard UI domains, verify measured visual evidence with webpage_evaluate, and clear all web_clone_source_audit findings before claiming final maintainability.",
       "PRD delta handoff: future PRD work should preserve unchanged clone surfaces and scope visual-diff expectations to retained reference areas while PRD-changed areas are judged against the new requirements.",
       ...hostPreparedKnownProblemNotes(project),
       ...input.implementation_risks.map((item) => `Implementation risk: ${item}`),
@@ -387,6 +380,18 @@ function hostPreparedFrontendTemplatePayload(
     reference_artifacts: sourceRefs,
     open_questions: input.open_questions,
   })
+}
+
+function summarizeSourceAuditOutcomeForReport(sourceAuditEvidence?: string): string {
+  const lines = sourceAuditEvidence?.split(/\r?\n/).map((line) => line.trim()).filter(Boolean) ?? []
+  const modeLines = lines.filter((line) =>
+    line.startsWith("- visual_baseline_allowed:") ||
+    line.startsWith("- maintainable_replacement_required:"),
+  )
+  if (modeLines.length === 0) {
+    return "Current source audit evidence is unavailable in this host-prepared turn; downstream agents must run web_clone_source_audit before claiming final maintainability."
+  }
+  return `${modeLines.join(" ")} Maintainable final acceptance requires maintainable_replacement_required passed=true plus measured visual parity.`
 }
 
 function hostPreparedKnownProblemNotes(project: HostPreparedFrontendProject): string[] {
@@ -575,6 +580,7 @@ function hostPreparedBaselineReplacementPlan(
       const sourceRefs = Array.from(new Set([
         `frontend-design-skeleton/${regionPath}`,
         "frontend-design-skeleton/src/data/sourceDomReplacementPlan.ts",
+        "frontend-design-skeleton/src/data/sourceDomIterationState.ts",
         "frontend-design-skeleton/src/data/sourceDomRegions.ts",
         "web-clone-source/reference.png",
         ...(item.dataSources ?? []).map((source) => source.startsWith("src/") ? `frontend-design-skeleton/${source}` : source),
@@ -586,7 +592,7 @@ function hostPreparedBaselineReplacementPlan(
         action: item.replacementKind === "baseline_defer" ? "defer_baseline_until_parity" as const : "replace_generated_baseline" as const,
         component_family_id: "comp-source-region-replacements",
         replacement_strategy: "extracted_baseline_defer" as const,
-        reuse_source: "Inspect existing project components/design-system primitives and mature libraries first; use frontend-design-skeleton/src/data/sourceDomReplacementPlan.ts as the region boundary and parity source.",
+        reuse_source: "Inspect existing project components/design-system primitives and mature libraries first; use frontend-design-skeleton/src/data/sourceDomIterationState.ts as the next-region source and sourceDomReplacementPlan.ts as the region boundary/parity source.",
         mature_library_candidates: hostPreparedMatureLibraryCandidates(item.replacementKind),
         deletion_rule: `Keep ${regionName} as captured source evidence until the replacement preserves parity; after parity passes, remove the generated region import/render path from the delivery root and keep source artifacts as input evidence only.`,
         source_refs: sourceRefs,
@@ -634,13 +640,16 @@ export async function maybeCreateHostPreparedFrontendProject(taskID?: string): P
       overwrite: false,
     })
     const sourceReplacementPlan = await readHostPreparedSourceReplacementPlan(projectRoot)
+    const sourceAuditEvidence = await summarizeHostPreparedSourceAudit({ sourcePackage, projectRoot })
     return {
       ...hostPreparedProjectFromOutput(output, { projectRootRef, sourcePackageRef }),
       sourceReplacementPlan,
-      compactEvidence: await readHostPreparedCompactEvidence({ sourcePackage, projectRoot }),
+      sourceAuditEvidence,
+      compactEvidence: await readHostPreparedCompactEvidence({ sourcePackage, projectRoot, sourceAuditEvidence }),
     }
   } catch (err) {
     if (await hasExistingSkeletonProject(projectRoot)) {
+      const sourceAuditEvidence = await summarizeHostPreparedSourceAudit({ sourcePackage, projectRoot })
       return {
         status: "created",
         projectRoot,
@@ -651,7 +660,8 @@ export async function maybeCreateHostPreparedFrontendProject(taskID?: string): P
         generationTool: "host-prepared:create_frontend_skeleton_project",
         warnings: ["Existing frontend-design-skeleton source project was reused."],
         sourceReplacementPlan: await readHostPreparedSourceReplacementPlan(projectRoot),
-        compactEvidence: await readHostPreparedCompactEvidence({ sourcePackage, projectRoot }),
+        sourceAuditEvidence,
+        compactEvidence: await readHostPreparedCompactEvidence({ sourcePackage, projectRoot, sourceAuditEvidence }),
       }
     }
     return {
@@ -665,6 +675,7 @@ export async function maybeCreateHostPreparedFrontendProject(taskID?: string): P
       warnings: [],
       error: err instanceof Error ? err.message : String(err),
       sourceReplacementPlan: await readHostPreparedSourceReplacementPlan(projectRoot),
+      sourceAuditEvidence: "",
       compactEvidence: await readHostPreparedCompactEvidence({ sourcePackage, projectRoot }),
     }
   }
@@ -695,7 +706,7 @@ async function readHostPreparedSourceReplacementPlan(projectRoot: string): Promi
   )
 }
 
-export async function readHostPreparedCompactEvidence(input: { sourcePackage: string; projectRoot: string }): Promise<string> {
+export async function readHostPreparedCompactEvidence(input: { sourcePackage: string; projectRoot: string; sourceAuditEvidence?: string }): Promise<string> {
   const referencePixelSummary = await summarizeReferencePixels(path.join(input.sourcePackage, "reference.png"))
   const sourceProjectSummary = await summarizeHostPreparedSourceProject(input.projectRoot)
   const sections: string[] = []
@@ -705,8 +716,42 @@ export async function readHostPreparedCompactEvidence(input: { sourcePackage: st
   if (sourceProjectSummary.trim()) {
     sections.push(`## frontend-design-skeleton/source-project-handoff-summary.md\n${sourceProjectSummary.trim()}`)
   }
+  if (input.sourceAuditEvidence?.trim()) {
+    sections.push(`## source-audit-supervision.md\n${input.sourceAuditEvidence.trim()}`)
+  }
   sections.push(renderHostPreparedEvidenceIndex())
   return sections.join("\n\n")
+}
+
+export async function summarizeHostPreparedSourceAudit(input: { sourcePackage: string; projectRoot: string }): Promise<string> {
+  const lines = [
+    "Host-prepared source audit supervision.",
+    "This is current-state evidence for the captured source project, not a final acceptance decision.",
+  ]
+  for (const finalDeliveryMode of ["visual_baseline_allowed", "maintainable_replacement_required"] as const) {
+    try {
+      const audit = await auditWebCloneSourceSkeletonConsumption({
+        projectDir: input.projectRoot,
+        sourcePackageDir: input.sourcePackage,
+        finalDeliveryMode,
+      })
+      lines.push(
+        `- ${finalDeliveryMode}: passed=${audit.passed}; generatedBaseline=${audit.risk.generatedBaselineDetected}; ` +
+        `finalBaselineOnly=${audit.risk.finalBaselineOnlyDetected}; sourceDomRegions=${audit.projectStats.sourceDomRegionFileCount}; ` +
+        `largestSourceDomRegionBytes=${audit.projectStats.largestSourceDomRegionBytes}; oversizedGeneratedRegions=${audit.projectStats.oversizedSourceDomRegionCount}`,
+      )
+      for (const finding of audit.findings.slice(0, 4)) {
+        lines.push(`  finding: ${finding}`)
+      }
+    } catch (err) {
+      lines.push(`- ${finalDeliveryMode}: audit_error=${err instanceof Error ? err.message : String(err)}`)
+    }
+  }
+  lines.push(
+    "Supervision rule: a passing visual_baseline_allowed audit proves only traceable captured-source baseline adoption. " +
+    "A maintainable final remains unproven until maintainable_replacement_required passes with measured visual parity evidence.",
+  )
+  return lines.join("\n")
 }
 
 function renderHostPreparedEvidenceIndex(): string {
@@ -731,6 +776,7 @@ function renderHostPreparedEvidenceIndex(): string {
     ["frontend-design-skeleton/src/components/source-dom/*Region.tsx", "named generated source-dom regions"],
     ["frontend-design-skeleton/src/data/sourceProjectManifest.json", "source project manifest and region counts"],
     ["frontend-design-skeleton/src/data/sourceDomReplacementPlan.ts", "known-problem and region-replacement map"],
+    ["frontend-design-skeleton/src/data/sourceDomIterationState.ts", "maintainable-refactor loop state and next source region"],
     ["frontend-design-skeleton/src/data/sourceDomRegions.ts", "region registry"],
     ["frontend-design-skeleton/src/data/sourceData.ts", "source-derived repeated content data"],
     ["frontend-design-skeleton/src/data/sourceSvgAssetGroups.ts", "SVG asset grouping"],
@@ -756,6 +802,8 @@ interface SourceProjectManifestForSummary {
     largestBytes?: number
     highPriorityCount?: number
     replacementPlanCount?: number
+    iterationStateModule?: string
+    semanticReplacementCount?: number
     svgAssetGroupCount?: number
     faqGroupCount?: number
     metricsModule?: string
@@ -763,6 +811,26 @@ interface SourceProjectManifestForSummary {
     svgAssetGroupModule?: string
     faqGroupModule?: string
   }
+  semanticReplacements?: {
+    count?: number
+    iterationStateModule?: string
+    components?: string[]
+  }
+}
+
+interface SourceDomIterationStateForSummary {
+  generatedRegionCount?: number
+  semanticReplacementCount?: number
+  remainingRegionCount?: number
+  nextReplacement?: {
+    regionComponentName?: string
+    regionFilePath?: string
+    priority?: string
+    replacementKind?: string
+    recommendedComponentName?: string
+    firstReplacementStep?: string
+    parityGuard?: string
+  } | null
 }
 
 export async function summarizeHostPreparedSourceProject(projectRoot: string): Promise<string> {
@@ -771,8 +839,12 @@ export async function summarizeHostPreparedSourceProject(projectRoot: string): P
     path.join(projectRoot, "src", "data", "sourceDomReplacementPlan.ts"),
     "sourceDomReplacementPlan",
   )
+  const iterationState = await readGeneratedConstObject<SourceDomIterationStateForSummary>(
+    path.join(projectRoot, "src", "data", "sourceDomIterationState.ts"),
+    "sourceDomIterationState",
+  )
   const sidecars = await existingProjectSidecars(projectRoot)
-  if (!manifest && replacementPlan.length === 0 && sidecars.length === 0) return ""
+  if (!manifest && replacementPlan.length === 0 && !iterationState && sidecars.length === 0) return ""
 
   const lines: string[] = [
     "Host-prepared source project maintainability summary.",
@@ -786,8 +858,27 @@ export async function summarizeHostPreparedSourceProject(projectRoot: string): P
     lines.push(`- largestBytes: ${regions.largestBytes ?? "unknown"}`)
     lines.push(`- highPriorityCount: ${regions.highPriorityCount ?? "unknown"}`)
     lines.push(`- replacementPlanCount: ${regions.replacementPlanCount ?? "unknown"}`)
+    lines.push(`- iterationStateModule: ${regions.iterationStateModule ?? manifest?.semanticReplacements?.iterationStateModule ?? "unknown"}`)
+    lines.push(`- semanticReplacementCount: ${regions.semanticReplacementCount ?? manifest?.semanticReplacements?.count ?? "unknown"}`)
     lines.push(`- svgAssetGroupCount: ${regions.svgAssetGroupCount ?? "unknown"}`)
     lines.push(`- faqGroupCount: ${regions.faqGroupCount ?? "unknown"}`)
+  }
+
+  if (iterationState) {
+    lines.push("")
+    lines.push("Maintainable iteration state:")
+    lines.push(`- generatedRegionCount: ${iterationState.generatedRegionCount ?? "unknown"}`)
+    lines.push(`- semanticReplacementCount: ${iterationState.semanticReplacementCount ?? "unknown"}`)
+    lines.push(`- remainingRegionCount: ${iterationState.remainingRegionCount ?? "unknown"}`)
+    const nextReplacement = iterationState.nextReplacement
+    if (nextReplacement) {
+      lines.push(`- nextReplacement: ${nextReplacement.regionComponentName ?? nextReplacement.regionFilePath ?? "unknown region"} -> ${nextReplacement.recommendedComponentName ?? "unknown component"}`)
+      lines.push(`  priority: ${nextReplacement.priority ?? "unknown"}, kind: ${nextReplacement.replacementKind ?? "unknown"}`)
+      if (nextReplacement.firstReplacementStep) lines.push(`  firstReplacementStep: ${nextReplacement.firstReplacementStep}`)
+      if (nextReplacement.parityGuard) lines.push(`  parityGuard: ${nextReplacement.parityGuard}`)
+    } else {
+      lines.push("- nextReplacement: none; rerun the maintainable audit and visual comparison before claiming final acceptance.")
+    }
   }
 
   if (sidecars.length > 0) {
@@ -817,7 +908,7 @@ export async function summarizeHostPreparedSourceProject(projectRoot: string): P
   }
 
   lines.push("")
-  lines.push("Handoff rule: downstream agents should start from sourceDomReplacementPlan.ts, inspect existing project components/libraries before coding, and replace source-dom regions only when parity can be preserved.")
+  lines.push("Handoff rule: downstream agents should start from sourceDomIterationState.ts, then sourceDomReplacementPlan.ts, inspect existing project components/libraries before coding, and replace source-dom regions only when parity can be preserved.")
   return lines.join("\n")
 }
 
@@ -826,6 +917,7 @@ async function existingProjectSidecars(projectRoot: string): Promise<string[]> {
     "src/components/source-dom/*Region.tsx",
     "src/data/sourceDomRegions.ts",
     "src/data/sourceDomReplacementPlan.ts",
+    "src/data/sourceDomIterationState.ts",
     "src/data/sourceSvgAssetGroups.ts",
     "src/data/sourceFaqGroups.ts",
     "src/data/sourceData.ts",
@@ -865,6 +957,19 @@ async function readGeneratedConstArray<T>(file: string, constName: string): Prom
     return Array.isArray(parsed) ? parsed as T[] : []
   } catch {
     return []
+  }
+}
+
+async function readGeneratedConstObject<T>(file: string, constName: string): Promise<T | undefined> {
+  const text = await fs.readFile(file, "utf8").catch(() => "")
+  const escapedName = constName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+  const match = new RegExp(`export const ${escapedName} = (\\{[\\s\\S]*\\}) as const`).exec(text)
+  if (!match?.[1]) return undefined
+  try {
+    const parsed = JSON.parse(match[1])
+    return parsed && typeof parsed === "object" ? parsed as T : undefined
+  } catch {
+    return undefined
   }
 }
 
@@ -1115,13 +1220,13 @@ export function renderHostPreparedFrontendProjectSection(project: HostPreparedFr
     "",
     "The host already prepared the frontend-design high-fidelity editable source project before this model turn. Do not call `create_frontend_skeleton_project` again unless status is blocked and you can name a different output path.",
     "This is a terminal-only host-prepared turn: `read_file`, `list_files`, shell, browser, and mirror acquisition tools are intentionally unavailable. Use the embedded compact summaries plus referenced task-runtime paths; attempting discovery tools is an error.",
-    "Register this source project in `submit_frontend_template.frontend_project` with role=source_baseline_input. Downstream implementation starts by copying/adapting only traceable React DOM/CSS/data/assets entrypoints, source-dom region files, sourceDomReplacementPlan.ts, sourceDomRegions.ts, sourceSvgAssetGroups.ts, and sourceFaqGroups.ts into the delivery root, preserving CSS sidecars as source evidence, and refining named regions in place.",
+    "Register this source project in `submit_frontend_template.frontend_project` with role=source_baseline_input. Downstream implementation starts by copying/adapting only traceable React DOM/CSS/data/assets entrypoints, source-dom region files, sourceDomIterationState.ts, sourceDomReplacementPlan.ts, sourceDomRegions.ts, sourceSvgAssetGroups.ts, and sourceFaqGroups.ts into the delivery root, preserving CSS sidecars as source evidence, and refining named regions in place.",
     "Use the maintainable rawproject refactor algorithm: source map, region map, one replacement decision per region, then vertical-slice replacement with source data extraction, semantic component boundary, scoped style ownership, generated fixed-layout cleanup, asset ownership, interaction wiring, screenshot comparison, and audit evidence.",
-    "For webpage clones, describe the downstream workflow as source-region traceable refactoring: every new component, data module, scoped style, and boundary cleanup must map back to rawproject source nodes/regions/assets/reference screenshots. A region replacement is complete only after source data extraction, semantic component rendering, scoped CSS, generated boundary cleanup, screenshot comparison for that region, measured webpage_evaluate evidence, and zero-finding web_clone_source_audit evidence before any final maintainability claim.",
+    "For webpage clones, describe the downstream workflow as source-region traceable refactoring: every new component, data module, scoped style, and boundary cleanup must map back to rawproject source nodes/regions/assets/reference screenshots. A region replacement is complete only after source data extraction, semantic component rendering, scoped CSS, generated boundary cleanup, screenshot comparison for that region, measured webpage_evaluate evidence, and zero-finding web_clone_source_audit evidence before any final maintainability claim. If a region is deferred, frontend_design must label it as unfinished source debt.",
     "Do not alter evaluators, other agent prompts, communication paths, generated outputs, or runtime source packages to satisfy the report.",
     "Mirror/source evidence stays in task runtime paths. Do not instruct downstream agents to move or clean `web-clone-source/`, `frontend-design-skeleton/`, raw `mirror/`, `references/`, or `reference.png` into the delivery root as app-owned deliverables.",
     "Do not output a standalone component checklist. Use the optional `implementation_risks` and `agent_handoff_notes` submit fields, or the standard completeness/open-question fields, to populate the public frontend_design report with what downstream agents must focus on.",
-    "Principle for downstream work: inspect the target app structure first; reuse existing repository components/design-system primitives; use mature maintained libraries for hard UI domains; custom-code only simple glue and micro-adjustments needed for parity. Use the embedded source-project-handoff summary and the referenced sourceDomReplacementPlan.ts as the known-problem map.",
+    "Principle for downstream work: inspect the target app structure first; reuse existing repository components/design-system primitives; use mature maintained libraries for hard UI domains; custom-code only simple glue and micro-adjustments needed for parity. Use the embedded source-project-handoff summary and the referenced sourceDomIterationState.ts/sourceDomReplacementPlan.ts as the loop state and known-problem map.",
     "",
     `- status: ${project.status}`,
     "- role: source_baseline_input",
@@ -1146,6 +1251,6 @@ export function renderHostPreparedFrontendProjectSection(project: HostPreparedFr
   lines.push("")
   lines.push("# Finalization")
   lines.push("Only `submit_frontend_template` is available in this host-prepared turn. Its schema is intentionally lightweight here: provide concise report notes, or submit an empty object if the embedded evidence is sufficient. The normal frontend_design terminal report will carry the downstream handoff.")
-  lines.push("The report will preserve the source project as `source_baseline_input` and describe root-app adoption from traceable React DOM/CSS/data/assets entrypoints, source-dom regions, source-region replacement work, and source sidecars before refinement. Default to `final_delivery_mode=maintainable_replacement_required` for webpage rawproject refinement; use `visual_baseline_allowed` only when the operator explicitly accepts captured source regions as final documented source debt. Use optional fields only to sharpen the report; do not attempt more discovery.")
+  lines.push("The report will preserve the source project as `source_baseline_input` and describe root-app adoption from traceable React DOM/CSS/data/assets entrypoints, source-dom regions, source-region replacement work, and source sidecars before refinement. Host-prepared webpage rawproject refinement stays in `final_delivery_mode=maintainable_replacement_required`; deferred regions must be reported as unfinished source debt. Use optional fields only to sharpen the report; do not attempt more discovery.")
   return lines.join("\n")
 }

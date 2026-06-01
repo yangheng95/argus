@@ -49,6 +49,8 @@ export interface WebCloneSourceSkeletonConsumptionAudit {
     largestSourceDomRegionBytes: number
     oversizedSourceDomRegionCount: number
     sourceDomReplacementPlanExists: boolean
+    sourceDomIterationStateExists: boolean
+    semanticReplacementFileCount: number
     sourceSvgAssetGroupExists: boolean
     sourceFaqGroupExists: boolean
   }
@@ -190,6 +192,8 @@ export async function auditWebCloneSourceSkeletonConsumption(
   const oversizedSourceDomRegionSources = sourceDomRegionSources.filter((source) => source.bytes >= SOURCE_DOM_REGION_OVERSIZE_BYTES)
   const oversizedGeneratedRegionDetected = generatedBaselineDetected && oversizedSourceDomRegionSources.length > 0
   const sourceDomReplacementPlanExists = projectSources.some((source) => source.relative === "src/data/sourceDomReplacementPlan.ts")
+  const sourceDomIterationStateExists = projectSources.some((source) => source.relative === "src/data/sourceDomIterationState.ts")
+  const semanticReplacementSources = projectSources.filter((source) => /^src\/components\/semantic\/.+\.tsx$/i.test(source.relative))
   const sourceSvgAssetGroupExists = projectSources.some((source) => source.relative === "src/data/sourceSvgAssetGroups.ts")
   const sourceFaqGroupExists = projectSources.some((source) => source.relative === "src/data/sourceFaqGroups.ts")
   const dataArrayCount = countDataArrays(projectSources)
@@ -228,6 +232,8 @@ export async function auditWebCloneSourceSkeletonConsumption(
     largestSourceDomRegionBytes,
     oversizedSourceDomRegionCount: oversizedSourceDomRegionSources.length,
     sourceDomReplacementPlanExists,
+    sourceDomIterationStateExists,
+    semanticReplacementFileCount: semanticReplacementSources.length,
     sourceSvgAssetGroupExists,
     sourceFaqGroupExists,
   }
@@ -280,12 +286,13 @@ export async function auditWebCloneSourceSkeletonConsumption(
       "Frontend-design generated DOM/CSS baseline is still present in maintainable replacement mode; replace requested surfaces with project-owned semantic components/data modules before final acceptance.",
     )
     if (sourceDomRegionSources.length > 0) {
-      const priorityList = oversizedSourceDomRegionSources
+      const priorityList = sourceDomRegionSources
+        .slice()
         .sort((a, b) => b.bytes - a.bytes)
         .slice(0, 6)
         .map((source) => `${source.relative} (${source.bytes} bytes)`)
       if (priorityList.length > 0) {
-        findings.push(`Largest generated source-dom regions still need semantic replacement before final maintainable acceptance: ${priorityList.join(", ")}.`)
+        findings.push(`Largest remaining generated source-dom regions still need semantic replacement before final maintainable acceptance: ${priorityList.join(", ")}.`)
       }
     }
   }
@@ -478,13 +485,14 @@ function detectFrontendDesignGeneratedBaseline(projectSources: Array<{ relative:
     byPath.has("src/generated/singlefile-head-styles.html") &&
     /singlefile-body\.html\?raw/.test(byPath.get("src/App.jsx") ?? "") &&
     /singlefile-head-styles\.html\?raw/.test(byPath.get("src/App.jsx") ?? "")
+  const sourceDomRegionFileExists = projectSources.some((source) => /^src\/components\/source-dom\/.+\.tsx$/i.test(source.relative))
   const sourceSkeletonBaseline = byPath.has("src/components/SourceDomPage.tsx") &&
     byPath.has("src/components/SourceClonePage.tsx") &&
     byPath.has("src/data/sourceData.ts") &&
     /function SourceDomPage\b/.test(byPath.get("src/components/SourceDomPage.tsx") ?? "") &&
     (
       /data-source-node-id/.test(byPath.get("src/components/SourceDomPage.tsx") ?? "") ||
-      projectSources.some((source) => /^src\/components\/source-dom\/.+\.tsx$/i.test(source.relative) && /data-source-node-id/.test(source.text))
+      sourceDomRegionFileExists
     ) &&
     /SourceDomPage/.test(byPath.get("src/components/SourceClonePage.tsx") ?? "")
   return legacySinglefileBaseline || sourceSkeletonBaseline
@@ -495,11 +503,18 @@ function isFrontendDesignGeneratedBaselineFile(relative: string): boolean {
     relative === "src/main.jsx" ||
     relative === "scripts/extract-source-html.mjs" ||
     relative.startsWith("src/generated/") ||
+    relative === "src/styles.css" ||
+    relative === "src/styles/source-critical.css" ||
+    relative === "src/styles/source-full.css" ||
     relative === "src/components/SourceDomPage.tsx" ||
     relative === "src/components/SourceAssetPathGroup.tsx" ||
     relative === "src/components/SourceFaqList.tsx" ||
+    relative === "src/components/AssetPath.tsx" ||
+    relative === "src/components/ContentTable.tsx" ||
+    relative === "src/data/svgPaths.ts" ||
     relative === "src/data/sourceDomRegions.ts" ||
     relative === "src/data/sourceDomReplacementPlan.ts" ||
+    relative === "src/data/sourceDomIterationState.ts" ||
     relative === "src/data/sourceSvgAssetGroups.ts" ||
     relative === "src/data/sourceFaqGroups.ts" ||
     relative.startsWith("src/components/source-dom/")
@@ -713,8 +728,9 @@ function detectReferenceImageReplay(
   referenceImagePath: string,
 ): boolean {
   const implementationSources = sources.filter((source) =>
-    /^(?:src|app|pages|components|views|routes)\//i.test(source.relative) ||
-    /\.(?:css|scss|sass|less)$/i.test(source.relative)
+    !isReferenceReplayEvidenceSidecar(source.relative) &&
+    (/^(?:src|app|pages|components|views|routes)\//i.test(source.relative) ||
+      /\.(?:css|scss|sass|less)$/i.test(source.relative))
   )
   const projectText = implementationSources.map((source) => source.text).join("\n")
   const referenceName = normalizeForMatch(path.basename(referenceImagePath))
@@ -731,6 +747,13 @@ function detectReferenceImageReplay(
 
   return cssScreenshotReplay ||
     (namesReferenceImage && (fullPageImageDimensions || visualCanvasNames || normalizedProject.includes(referenceStem)))
+}
+
+function isReferenceReplayEvidenceSidecar(relative: string): boolean {
+  return relative === "src/data/sourceProjectManifest.json" ||
+    relative === "src/data/sourceDomRegions.ts" ||
+    relative === "src/data/sourceDomReplacementPlan.ts" ||
+    relative === "src/data/sourceDomIterationState.ts"
 }
 
 function detectHiddenSemanticContent(sources: Array<{ relative: string; text: string }>): boolean {

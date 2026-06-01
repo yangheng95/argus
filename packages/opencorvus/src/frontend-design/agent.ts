@@ -53,6 +53,7 @@ import {
   renderHostPreparedFrontendProjectSection,
   selectFrontendTemplateSubmitTool,
   summarizeHostPreparedSourceProject,
+  summarizeHostPreparedSourceAudit,
   summarizeReferencePixels,
   type HostPreparedFrontendProject,
 } from "./host-prepared-source-project"
@@ -440,7 +441,7 @@ function renderFinalDeliveryModeInstruction(hostPrepared: boolean): string {
     return [
       "For host-prepared webpage clone turns, frame the work as source-region refactoring of the captured rawproject.",
       "Set `submit_frontend_template.final_delivery_mode` to `maintainable_replacement_required` whenever the operator asks for maintainability, real implementation, component reuse, or replacement of generated/mechanical output.",
-      "Use `visual_baseline_allowed` only when the operator explicitly accepts the captured source project as the final documented source debt; even then, require traceable project-owned structure rather than screenshot, iframe, or invented component output.",
+      "The captured source project is evidence and a temporary seed; do not downgrade host-prepared rawproject refinement to visual-baseline delivery.",
     ].join(" ")
   }
   return "Set `submit_frontend_template.final_delivery_mode` to `maintainable_replacement_required` whenever the user asks for maintainability, real implementation, component reuse, or replacing generated/mechanical output."
@@ -488,6 +489,7 @@ export const FrontendDesignTestHooks = {
   selectFrontendTemplateSubmitTool,
   shouldScopeFrontendTemplateSubmitTool,
   readHostPreparedCompactEvidence,
+  summarizeHostPreparedSourceAudit,
   summarizeHostPreparedSourceProject,
   summarizeReferencePixels,
 }
