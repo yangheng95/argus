@@ -640,7 +640,7 @@ if (filesSectionMountEl) {
 const fileExplorerMountEl = document.getElementById("solidFileExplorerMount")
 if (fileExplorerMountEl) {
   fileExplorerMountEl.innerHTML = ""
-  render(() => <FileExplorerPanel active={() => rightPanelTab() === "explorer"} />, fileExplorerMountEl)
+  render(() => <FileExplorerPanel active={() => rightPanelTab() === "explorer"} directory={activeDirectory} />, fileExplorerMountEl)
 }
 
 // ── Sidebar title backdoor: double-click resets DB ──

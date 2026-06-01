@@ -247,6 +247,17 @@ describe("file/index Filesystem patterns", () => {
         },
       })
     })
+
+    test("does not report unreadable or missing directories as empty", async () => {
+      await using tmp = await tmpdir()
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          await expect(File.list("missing-directory")).rejects.toThrow()
+        },
+      })
+    })
   })
 
   describe("File.changed() - Filesystem.readText() for untracked files", () => {

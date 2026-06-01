@@ -17,6 +17,7 @@ type ExplorerRow =
 
 export interface FileExplorerPanelProps {
   active?: Accessor<boolean>
+  directory?: Accessor<string>
 }
 
 function ExplorerVirtualWindow(props: CustomContainerComponentProps) {
@@ -77,6 +78,7 @@ export function FileExplorerPanel(props: FileExplorerPanelProps = {}) {
   const [loadingPaths, setLoadingPaths] = createSignal(new Set<string>())
   const [directoryErrors, setDirectoryErrors] = createSignal(new Map<string, string>())
   const active = createMemo(() => props.active?.() ?? true)
+  const directory = createMemo(() => props.directory ? props.directory().trim() : "unscoped")
 
   const loadDirectory = async (path: string, opts?: { force?: boolean }) => {
     if ((!opts?.force && childrenByPath().has(path)) || loadingPaths().has(path)) return
@@ -110,13 +112,18 @@ export function FileExplorerPanel(props: FileExplorerPanelProps = {}) {
   }
 
   createEffect(() => {
-    if (!active()) return
+    const currentDirectory = directory()
+    if (!active() || !currentDirectory) return
+    setChildrenByPath(new Map())
+    setLoadingPaths(new Set<string>())
+    setDirectoryErrors(new Map())
     const timer = window.setTimeout(() => void loadDirectory(""), INITIAL_DIRECTORY_LOAD_DELAY_MS)
     onCleanup(() => window.clearTimeout(timer))
   })
 
   createEffect(() => {
-    if (!active()) return
+    const currentDirectory = directory()
+    if (!active() || !currentDirectory) return
     const interval = window.setInterval(() => {
       const paths = new Set(["", ...expandedPaths()])
       for (const path of paths) {
