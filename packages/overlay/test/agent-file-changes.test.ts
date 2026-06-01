@@ -5,6 +5,7 @@ import {
   collectAgentFileChangeGroups,
   collectAgentFileChangeGroupsFromNodes,
   collectAgentFileChanges,
+  mergeChangeGroups,
 } from "../src/utils/file-change-summary"
 import { setCardTreeStore, type CardNode } from "../src/store/card-tree"
 
@@ -238,6 +239,60 @@ test("collectAgentFileChangeGroupsFromNodes aggregates all agent roots once", ()
   expect(groups[1]?.changes.map((item) => item.file)).toEqual(["src/b.ts"])
 })
 
+test("mergeChangeGroups keeps agent rows and delivery diff rows in one scoped group", () => {
+  const groups = mergeChangeGroups([
+    {
+      id: "goal:goal-a:run-a",
+      goalID: "goal-a",
+      goalRunID: "run-a",
+      additions: 0,
+      deletions: 0,
+      changes: [
+        { file: "src/a.ts", status: "modified", additions: 0, deletions: 0 },
+        { file: "src/tool-only.ts", status: "modified", additions: 0, deletions: 0 },
+      ],
+    },
+    {
+      id: "goal:goal-a:run-a",
+      goalID: "goal-a",
+      goalRunID: "run-a",
+      goalLabel: "#G1V1",
+      goalTitle: "Delivery",
+      commitRef: "abc123def456",
+      additions: 7,
+      deletions: 1,
+      changes: [
+        { file: "src/a.ts", status: "added", additions: 5, deletions: 0, before: "", after: "export const a = 1" },
+        { file: "src/delivery-only.ts", status: "modified", additions: 2, deletions: 1 },
+      ],
+    },
+  ])
+
+  expect(groups).toHaveLength(1)
+  expect(groups[0]).toMatchObject({
+    id: "goal:goal-a:run-a",
+    goalID: "goal-a",
+    goalRunID: "run-a",
+    goalLabel: "#G1V1",
+    goalTitle: "Delivery",
+    commitRef: "abc123def456",
+    additions: 7,
+    deletions: 1,
+  })
+  expect(groups[0]?.changes.map((item) => item.file)).toEqual([
+    "src/a.ts",
+    "src/delivery-only.ts",
+    "src/tool-only.ts",
+  ])
+  expect(groups[0]?.changes.find((item) => item.file === "src/a.ts")).toMatchObject({
+    status: "added",
+    additions: 5,
+    deletions: 0,
+    before: "",
+    after: "export const a = 1",
+  })
+})
+
 test("agent file changes render only through the message-side workbench", () => {
   const chatBubble = readText(join(ROOT, "src", "components", "ChatBubble.tsx"))
   const css = readText(join(ROOT, "src", "styles", "surfaces", "chat-bubble.css"))
@@ -248,6 +303,7 @@ test("agent file changes render only through the message-side workbench", () => 
   expect(chatBubble).not.toContain("AgentFileChanges")
   expect(chatBubble).not.toContain("<FileChangesView")
   expect(changesPanel).toContain("collectAgentFileChangeGroupsFromNodes(")
+  expect(changesPanel).toContain("mergeChangeGroups(")
   expect(changesPanel).toContain("cardTreeStore.order")
   expect(changesPanel).toContain("<FileChangesView")
   expect(changesPanel).toContain('focusEvent="delivery:focus-changes"')
@@ -290,6 +346,7 @@ test("agent file changes render only through the message-side workbench", () => 
   expect(css).not.toContain(".agent-file-change-diff")
   expect(css).not.toContain(".agent-file-change-path")
   expect(changesCss).toContain(".file-changes-view__heading")
+  expect(changesCss).toContain("flex-direction: column")
   expect(changesCss).toContain(".changes-summary")
   expect(changesCss).toContain(".changes-toolbar")
   expect(changesCss).toContain(".changes-filter-input.field-input")

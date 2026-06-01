@@ -235,6 +235,58 @@ function groupSortKey(group: ChangeGroup): number {
   return Number.isFinite(group.goalOrderIndex) ? Number(group.goalOrderIndex) : Number.MAX_SAFE_INTEGER
 }
 
+function groupMergeKey(group: ChangeGroup): string {
+  if (group.goalRunID) return `goal-run:${group.goalRunID}`
+  if (group.goalID) return `goal:${group.goalID}`
+  if (group.runID) return `run:${group.runID}`
+  return group.id
+}
+
+function changeMergeKey(change: FileChange): string {
+  return change.file.replace(/\\/g, "/")
+}
+
+function mergeChange(left: FileChange, right: FileChange): FileChange {
+  return {
+    ...left,
+    ...right,
+    status: left.status === "modified" ? right.status : left.status,
+    additions: Math.max(left.additions ?? 0, right.additions ?? 0),
+    deletions: Math.max(left.deletions ?? 0, right.deletions ?? 0),
+    before: left.before !== undefined ? left.before : right.before,
+    after: left.after !== undefined ? left.after : right.after,
+  }
+}
+
+function mergeGroup(left: ChangeGroup, right: ChangeGroup): ChangeGroup {
+  const changes = new Map<string, FileChange>()
+  for (const change of [...left.changes, ...right.changes]) {
+    const key = changeMergeKey(change)
+    const current = changes.get(key)
+    changes.set(key, current ? mergeChange(current, change) : change)
+  }
+  const mergedChanges = [...changes.values()].sort((a, b) => a.file.localeCompare(b.file))
+  return {
+    ...left,
+    ...right,
+    additions: mergedChanges.reduce((sum, item) => sum + (item.additions ?? 0), 0),
+    deletions: mergedChanges.reduce((sum, item) => sum + (item.deletions ?? 0), 0),
+    changes: mergedChanges,
+  }
+}
+
+export function mergeChangeGroups(groups: ChangeGroup[]): ChangeGroup[] {
+  const merged = new Map<string, ChangeGroup>()
+  for (const group of groups) {
+    const key = groupMergeKey(group)
+    const current = merged.get(key)
+    merged.set(key, current ? mergeGroup(current, group) : group)
+  }
+  return [...merged.values()]
+    .filter((group) => group.changes.length > 0)
+    .sort((left, right) => groupSortKey(left) - groupSortKey(right) || left.id.localeCompare(right.id))
+}
+
 export function collectAgentFileChangeGroups(
   node: CardNode,
   base: string,

@@ -17,7 +17,7 @@ import {
   type ChangeGroup,
   type DiffTarget,
 } from "../services/diff";
-import { collectAgentFileChangeGroupsFromNodes } from "../utils/file-change-summary";
+import { collectAgentFileChangeGroupsFromNodes, mergeChangeGroups } from "../utils/file-change-summary";
 import type { FileChange } from "./DiffView";
 import { FileChangesView } from "./FileChangesView";
 
@@ -70,9 +70,9 @@ export function ChangesPanel(props: ChangesPanelProps) {
   });
 
   const groups = createMemo<ChangeGroup[]>(() =>
-    (props.changes === undefined && agentGroups().length > 0
-      ? agentGroups()
-      : (resolvedGroups() || sourceGroups())).filter((group) => group.changes.length > 0),
+    props.changes === undefined
+      ? mergeChangeGroups([...agentGroups(), ...(resolvedGroups() || sourceGroups())])
+      : sourceGroups().filter((group) => group.changes.length > 0),
   );
   const openWorkspaceDiff = (window as any).openWorkspaceDiff as
     | ((target: DiffTarget) => void)

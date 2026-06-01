@@ -78,6 +78,7 @@ test("file explorer and editor are wired as a VS Code-style split workbench", ()
   expect(workbench).toContain("<DiffPreviewPanel")
   expect(workbench).toContain('data-active-view={activeView()}')
   expect(workbench).toContain('setActiveView("detail")')
+  expect(workbench).not.toContain("hasEditor() && !hasDiff()")
 
   expect(inspectorCss).toContain(".file-explorer-panel")
   expect(inspectorCss).toContain(".file-explorer-list[data-virtualized=\"true\"]")
