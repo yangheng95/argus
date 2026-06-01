@@ -288,11 +288,32 @@ async function applyMocks(page: Page): Promise<void> {
     if (/\/session\/session_mission_visual\/conversation/.test(url) && method === "GET") {
       return void ok({
         board: { kind: "session", sessionID: "session_mission_visual", status: "active", title: "Mission Control", directory: "/workspace/mission-demo" },
-        transcript: [],
+        transcript: [
+          {
+            info: {
+              id: "msg_mission_visual_history",
+              sessionID: "session_mission_visual",
+              role: "assistant",
+              agent: "mission",
+              resolvedRole: "mission",
+              channel: "mission",
+              time: { created: Date.now() - 90_000 },
+            },
+            parts: [
+              {
+                id: "part_mission_visual_history",
+                messageID: "msg_mission_visual_history",
+                sessionID: "session_mission_visual",
+                type: "text",
+                text: "Mission history loaded from the selected record.",
+              },
+            ],
+          },
+        ],
         timeline: [],
         events: [],
-        view: { topLevelSessionIDs: [], sessions: [] },
-        agentView: { topLevelSessionIDs: [], sessions: [] },
+        view: { topLevelSessionIDs: ["session_mission_visual"], sessions: [{ sessionID: "session_mission_visual", kind: "mission" }] },
+        agentView: { topLevelSessionIDs: ["session_mission_visual"], sessions: [{ sessionID: "session_mission_visual", kind: "mission" }] },
         history: { oldestTimestamp: null, oldestMessageID: null, hasMore: false, limit: 0 },
       })
     }
@@ -433,6 +454,10 @@ async function captureStates(page: Page): Promise<StateResult[]> {
     if (!row) throw new Error("mission row missing")
     await row.click()
     await page.waitForSelector('[data-ui="mission-conversation"]', { timeout: 5_000 })
+    await page.waitForFunction(
+      () => document.body.textContent?.includes("Mission history loaded from the selected record."),
+      { timeout: 5_000 },
+    )
     await new Promise((r) => setTimeout(r, 500))
   })
 

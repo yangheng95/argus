@@ -52,11 +52,18 @@ afterEach(async () => {
 })
 
 test("session source hydrates conversation and submits to prompt_async", async () => {
-  const [{ loadConversation }, { submitMessage }, { __setHostTransportForTest }, { setBoardStore }] = await Promise.all([
+  const [
+    { loadConversation },
+    { submitMessage },
+    { __setHostTransportForTest },
+    { setBoardStore },
+    { cardTreeStore },
+  ] = await Promise.all([
     import("../src/services/conversation"),
     import("../src/services/task"),
     import("../src/services/host-transport"),
     import("../src/store/board"),
+    import("../src/store/card-tree"),
   ])
   const requests: Array<{ path: string; method?: string }> = []
   __setHostTransportForTest(fakeTransport((req) => {
@@ -68,11 +75,32 @@ test("session source hydrates conversation and submits to prompt_async", async (
         headers: {},
         body: {
           board: { kind: "session", sessionID: "X", status: "active", title: "Mission", directory: "D:/repo" },
-          transcript: [],
+          transcript: [
+            {
+              info: {
+                id: "msg_mission_history",
+                sessionID: "X",
+                role: "assistant",
+                agent: "mission",
+                resolvedRole: "mission",
+                channel: "mission",
+                time: { created: 1_780_000_000_000 },
+              },
+              parts: [
+                {
+                  id: "part_mission_history",
+                  messageID: "msg_mission_history",
+                  sessionID: "X",
+                  type: "text",
+                  text: "Mission remembered benchmark request.",
+                },
+              ],
+            },
+          ],
           timeline: [],
           events: [],
-          view: { topLevelSessionIDs: [], sessions: [] },
-          agentView: { topLevelSessionIDs: [], sessions: [] },
+          view: { topLevelSessionIDs: ["X"], sessions: [{ sessionID: "X", kind: "mission" }] },
+          agentView: { topLevelSessionIDs: ["X"], sessions: [{ sessionID: "X", kind: "mission" }] },
           history: { oldestTimestamp: null, oldestMessageID: null, hasMore: false, limit: 0 },
         },
       }
@@ -86,6 +114,9 @@ test("session source hydrates conversation and submits to prompt_async", async (
   setBoardStore("selectedSource", { kind: "session", id: "X" })
 
   await loadConversation({ kind: "session", id: "X" })
+  expect(Object.values(cardTreeStore.cards).some((card) =>
+    card.parts.some((part: any) => part.text === "Mission remembered benchmark request."),
+  )).toBe(true)
   await submitMessage("follow up")
 
   expect(requests).toEqual([
