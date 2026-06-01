@@ -573,7 +573,7 @@ export namespace File {
       return { type: "text", content, mimeType, encoding: "base64" }
     }
 
-    const content = (await Filesystem.readText(full).catch(() => "")).trim()
+    const content = await Filesystem.readText(full).catch(() => "")
 
     if (Project.isGitRepo(Instance.directory)) {
       let diff = await $`git -c core.fsmonitor=false diff ${file}`.cwd(Instance.directory).quiet().nothrow().text()

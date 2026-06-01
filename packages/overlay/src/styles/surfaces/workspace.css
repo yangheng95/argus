@@ -260,6 +260,7 @@ code .file-link:hover {
   display: flex;
   overflow: hidden;
   background: var(--chat-canvas);
+  container: chat-workbench / inline-size;
 }
 
 .chat-message-pane {
@@ -444,6 +445,22 @@ code .file-link:hover {
 }
 
 @media (max-width: 1280px) {
+  .chat-content-frame[data-editor-open="true"][data-editor-focus="editor"] .chat-message-pane {
+    display: none;
+  }
+
+  .chat-content-frame[data-editor-open="true"][data-editor-focus="messages"] .file-editor-mount {
+    display: none;
+  }
+
+  .chat-content-frame[data-editor-open="true"] .file-editor-mount {
+    flex: 1 1 auto;
+    max-width: none;
+    border-left: 0;
+  }
+}
+
+@container chat-workbench (max-width: 860px) {
   .chat-content-frame[data-editor-open="true"][data-editor-focus="editor"] .chat-message-pane {
     display: none;
   }
