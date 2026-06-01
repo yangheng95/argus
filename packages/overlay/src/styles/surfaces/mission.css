@@ -320,28 +320,6 @@ body[data-page-mode="mission"] > main.panel {
    sidebar/chat/sections headers use. Mission keeps only its own marker
    class as a hook (no chrome declarations of its own). */
 
-.mission-scope-toggle {
-  display: inline-flex;
-  border: var(--oc-border-width) solid var(--border);
-  border-radius: var(--oc-radius-soft);
-  overflow: hidden;
-}
-
-.mission-scope-button {
-  appearance: none;
-  border: 0;
-  background: transparent;
-  padding: var(--ui-gap-xs) var(--ui-gap-md);
-  font-size: var(--ui-font-tiny);
-  cursor: pointer;
-  color: var(--text-muted);
-}
-
-.mission-scope-button[data-active="true"] {
-  background: var(--accent-dim);
-  color: var(--accent);
-}
-
 .mission-ledger-search {
   position: relative;
   display: flex;
@@ -377,50 +355,111 @@ body[data-page-mode="mission"] > main.panel {
   color: var(--text-muted);
 }
 
-.mission-filter-bar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--ui-gap-xs);
-  padding: 0 var(--ui-gap-lg) var(--ui-gap-md);
+.mission-ledger-list {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 0 var(--ui-gap-sm) var(--ui-gap-md);
 }
 
-.mission-filter-button {
+.ledger-list {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-gap-xs);
+}
+
+.ledger-row {
   appearance: none;
-  border: var(--oc-border-width) solid var(--border);
+  border: 0;
+  border-radius: 0;
+  width: 100%;
+  min-height: calc(44px * var(--ui-scale));
+  display: grid;
+  grid-template-columns: calc(24px * var(--ui-scale)) minmax(0, 1fr) max-content;
+  align-items: center;
+  gap: var(--ui-gap-sm);
+  padding: var(--ui-gap-sm) var(--ui-gap-md);
   background: transparent;
-  border-radius: var(--oc-radius-soft);
-  padding: var(--ui-gap-xs) var(--ui-gap-md);
-  font-size: var(--ui-font-tiny);
-  color: var(--text-muted);
+  color: var(--text);
+  text-align: left;
   cursor: pointer;
   transition:
     background-color var(--ui-duration-base) var(--ui-timing-standard),
     color var(--ui-duration-base) var(--ui-timing-standard);
 }
 
-.mission-filter-button[data-active="true"] {
-  background: var(--accent-dim);
-  color: var(--accent);
-  border-color: var(--border-hover);
+.ledger-row:hover,
+.ledger-row:focus-within {
+  background: var(--surface-hover);
 }
 
-.mission-ledger-list {
-  flex: 1 1 auto;
-  overflow-y: auto;
-  padding: 0 var(--ui-gap-sm) var(--ui-gap-md);
+.ledger-row[data-active="true"] {
+  background: var(--accent-dim);
+  color: var(--text-strong);
+}
+
+.ledger-row-icon {
+  width: calc(24px * var(--ui-scale));
+  height: calc(24px * var(--ui-scale));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent);
+}
+
+.ledger-row-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(2px * var(--ui-scale));
+}
+
+.ledger-row-title,
+.ledger-row-meta {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ledger-row-title {
+  font-size: var(--ui-font-small);
+  color: var(--text-strong);
+}
+
+.ledger-row-meta {
+  display: flex;
+  gap: var(--ui-gap-sm);
+  font-size: var(--ui-font-tiny);
+  color: var(--text-muted);
+}
+
+.ledger-row-stamp {
+  font-size: var(--ui-font-tiny);
+  color: var(--text-muted);
+}
+
+.ledger-empty,
+.ledger-skeleton,
+.ledger-skeleton-row {
+  margin: var(--ui-gap-sm);
+}
+
+.ledger-empty {
+  font-size: var(--ui-font-small);
+  color: var(--text-muted);
+}
+
+.ledger-skeleton {
   display: flex;
   flex-direction: column;
   gap: var(--ui-gap-xs);
 }
 
-.mission-ledger-list .task-list-panel {
-  min-height: 100%;
-  display: flex;
-  flex-direction: column;
-}
-
-.mission-ledger-list .project-group-heading {
-  margin-inline: var(--ui-gap-xs);
+.ledger-skeleton-row {
+  height: calc(38px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
+  background: var(--surface-hover);
 }
 
 /* Workbench column --------------------------------------------------- */
@@ -842,8 +881,7 @@ body[data-page-mode="mission"] > main.panel {
    ignored `--ui-scale` so the ring stayed 2px at zoom 1.4 while every
    other surface scaled. Both bugs landed in round-2 P0-2. */
 
-.mission-filter-button:focus-visible,
-.mission-scope-button:focus-visible,
+.ledger-row:focus-visible,
 .mission-ledger-search-input:focus-visible,
 .mission-ledger-search-clear:focus-visible,
 .mission-composer-textarea:focus-visible,

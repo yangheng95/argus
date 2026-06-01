@@ -89,6 +89,16 @@ export interface MissionWakeResult {
   created: boolean
 }
 
+export interface MissionRecord {
+  missionID: string
+  sessionID: string
+  title: string
+  directory: string
+  created: number
+  updated: number
+  archived?: number
+}
+
 export interface ChannelBindingRow {
   id: string
   task_id: string
@@ -135,6 +145,32 @@ export async function restartChannelRuntime(signal?: AbortSignal): Promise<Chann
     method: "POST",
     signal,
   })) as ChannelRuntimeStatus
+}
+
+export async function loadMissions(opts: {
+  directory?: string
+  search?: string
+  limit?: number
+  cursorUpdated?: number
+  cursorSessionID?: string
+  archived?: boolean
+  signal?: AbortSignal
+} = {}): Promise<MissionRecord[]> {
+  const params = new URLSearchParams()
+  if (opts.directory) params.set("directory", opts.directory)
+  if (opts.search) params.set("search", opts.search)
+  if (typeof opts.limit === "number") params.set("limit", String(opts.limit))
+  if (typeof opts.cursorUpdated === "number") params.set("cursorUpdated", String(opts.cursorUpdated))
+  if (opts.cursorSessionID) params.set("cursorSessionID", opts.cursorSessionID)
+  if (typeof opts.archived === "boolean") params.set("archived", String(opts.archived))
+  const suffix = params.toString() ? `?${params.toString()}` : ""
+  const data = await apiJson(`mission${suffix}`, { signal: opts.signal })
+  if (!Array.isArray(data)) {
+    throw new Error(
+      `loadMissions: server returned non-array body (got ${typeof data}). Server contract has drifted from MissionRecord[].`,
+    )
+  }
+  return data as MissionRecord[]
 }
 
 export async function loadTaskBindings(taskID: string, signal?: AbortSignal): Promise<ChannelBindingRow[]> {

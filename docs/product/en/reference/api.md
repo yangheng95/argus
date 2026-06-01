@@ -321,6 +321,7 @@ All endpoints are protected by `OPENCORVUS_SERVER_PASSWORD`. When set, clients m
 
 | Method | Path | Summary | operationId |
 |---|---|---|---|
+| GET | `/mission` | List Missions | `mission.list` |
 | POST | `/mission/wake` | Wake the Mission agent | `mission.wake` |
 
 ### Terminal

@@ -7723,6 +7723,37 @@ export type GatewayChannelMessageResponses = {
 
 export type GatewayChannelMessageResponse = GatewayChannelMessageResponses[keyof GatewayChannelMessageResponses]
 
+export type MissionListData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    search?: string
+    limit?: number
+    cursorUpdated?: number
+    cursorSessionID?: string
+    archived?: boolean
+  }
+  url: "/mission"
+}
+
+export type MissionListResponses = {
+  /**
+   * Mission records
+   */
+  200: Array<{
+    missionID: string
+    sessionID: string
+    title: string
+    directory: string
+    created: number
+    updated: number
+    archived?: number
+  }>
+}
+
+export type MissionListResponse = MissionListResponses[keyof MissionListResponses]
+
 export type MissionWakeData = {
   body?: {
     missionID?: string

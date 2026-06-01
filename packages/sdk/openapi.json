@@ -11434,6 +11434,114 @@
         ]
       }
     },
+    "/mission": {
+      "get": {
+        "operationId": "mission.list",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursorUpdated",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursorSessionID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "archived",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "summary": "List Missions",
+        "description": "List Mission records for the current project. Each record is backed by exactly one kind=\"mission\" session and can be opened through the session conversation/event routes.",
+        "responses": {
+          "200": {
+            "description": "Mission records",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "missionID": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64,
+                        "pattern": "^[a-z0-9-]+$"
+                      },
+                      "sessionID": {
+                        "type": "string"
+                      },
+                      "title": {
+                        "type": "string"
+                      },
+                      "directory": {
+                        "type": "string"
+                      },
+                      "created": {
+                        "type": "number"
+                      },
+                      "updated": {
+                        "type": "number"
+                      },
+                      "archived": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "missionID",
+                      "sessionID",
+                      "title",
+                      "directory",
+                      "created",
+                      "updated"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.mission.list({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/mission/wake": {
       "post": {
         "operationId": "mission.wake",

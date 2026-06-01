@@ -232,8 +232,11 @@ export function Conversation(props: { container: HTMLElement }) {
 
   const [tracking, setTracking] = createSignal(true);
   const [historyAnchorPinID, setHistoryAnchorPinID] = createSignal<string | null>(null);
-  const currentTaskID = () => String(activeTaskID() || boardStore.board?.task?.id || "");
+  const isSessionSource = () => boardStore.selectedSource?.kind === "session";
+  const sessionBoard = () => (isSessionSource() ? (boardStore.board as any) : null);
+  const currentTaskID = () => isSessionSource() ? "" : String(activeTaskID() || boardStore.board?.task?.id || "");
   const taskContextItem = () => {
+    if (isSessionSource()) return null;
     const taskID = currentTaskID();
     const tasks = [...boardStore.tasks, ...boardStore.pendingTasks];
     if (taskID) {
@@ -256,6 +259,9 @@ export function Conversation(props: { container: HTMLElement }) {
   };
   const selectedBoardTask = () => boardStore.board?.task ?? null;
   const selectedTaskTitle = () => {
+    if (isSessionSource()) {
+      return clipText(sessionBoard()?.title || boardStore.selectedSource?.id || "");
+    }
     const item = selectedTaskItem() || taskContextItem();
     return clipText(
       item?.task?.title
@@ -265,11 +271,13 @@ export function Conversation(props: { container: HTMLElement }) {
     );
   };
   const selectedTaskStatus = () => {
+    if (isSessionSource()) return String(sessionBoard()?.status || "active");
     const item = selectedTaskItem() || taskContextItem();
     if (item?._pending) return "active";
     return String(item?.task?.status || selectedBoardTask()?.status || "idle");
   };
   const selectedTaskDirectoryText = () => {
+    if (isSessionSource()) return compactPath(sessionBoard()?.directory || "");
     const item = selectedTaskItem() || taskContextItem();
     return compactPath(item?.task?.directory || selectedBoardTask()?.directory || "");
   };
