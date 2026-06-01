@@ -21,8 +21,16 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
 
   return (
     <div class="sections-tabs">
-      <Tabs size="sm" tone="neutral" aria-label={`${t("explorer.title")} / ${t("section.files")} / ${t("sections.title")}`} data-ui="right-tabs">
+      <Tabs
+        size="sm"
+        tone="neutral"
+        value={props.active()}
+        onValueChange={(value) => props.onSelect(value as RightPanelTab)}
+        aria-label={`${t("explorer.title")} / ${t("section.files")} / ${t("sections.title")}`}
+        data-ui="right-tabs"
+      >
         <Tab
+          value="explorer"
           active={props.active() === "explorer"}
           size="sm"
           tone="neutral"
@@ -32,6 +40,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
           {t("explorer.title")}
         </Tab>
         <Tab
+          value="changes"
           active={props.active() === "changes"}
           size="sm"
           tone="neutral"
@@ -41,6 +50,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
           {t("section.files")}
         </Tab>
         <Tab
+          value="inspector"
           active={props.active() === "inspector"}
           size="sm"
           tone="neutral"

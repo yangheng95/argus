@@ -21,6 +21,7 @@
     "vite-plugin-solid": "^2"
   },
   "dependencies": {
+    "@kobalte/core": "catalog:",
     "@opencorvus-ai/plugin": "workspace:*",
     "@opencorvus-ai/transport-protocol": "workspace:*",
     "@tauri-apps/plugin-notification": "^2",
