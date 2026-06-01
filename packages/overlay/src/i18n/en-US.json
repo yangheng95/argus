@@ -616,6 +616,7 @@
   "explorer.title": "Explorer",
   "explorer.search_placeholder": "Search files",
   "explorer.empty": "No files in this directory",
+  "explorer.load_failed": "Unable to load files",
   "explorer.no_matches": "No matching files",
   "right_panel.close": "Collapse inspector",
   "right_panel.open": "Open inspector",
