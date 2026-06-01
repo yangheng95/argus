@@ -291,6 +291,23 @@
   padding: calc(18px * var(--ui-scale)) calc(8px * var(--ui-scale));
 }
 
+.file-explorer-retry {
+  margin-top: calc(8px * var(--ui-scale));
+  border: var(--oc-border-width) solid var(--border);
+  background: var(--surface);
+  color: var(--text-soft);
+  padding: calc(3px * var(--ui-scale)) calc(8px * var(--ui-scale));
+  font-size: var(--ui-font-control);
+  cursor: pointer;
+}
+
+.file-explorer-retry:hover,
+.file-explorer-retry:focus-visible {
+  color: var(--text-strong);
+  border-color: color-mix(in srgb, var(--accent) 58%, var(--border));
+  outline: 0;
+}
+
 .sections-tab-body[data-panel-tab="workflow"] {
   min-height: 0;
 }

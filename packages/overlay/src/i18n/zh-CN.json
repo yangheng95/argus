@@ -616,6 +616,7 @@
   "explorer.title": "资源管理器",
   "explorer.search_placeholder": "搜索文件",
   "explorer.empty": "当前目录没有文件",
+  "explorer.load_failed": "无法加载文件",
   "explorer.no_matches": "没有匹配的文件",
   "right_panel.close": "收起 Inspector",
   "right_panel.open": "展开 Inspector",

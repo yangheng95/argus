@@ -10,7 +10,7 @@ const EXPLORER_ROW_HEIGHT = 26
 const SEARCH_LIMIT = 80
 
 type ExplorerRow =
-  | { kind: "node"; key: string; node: FileNode; depth: number; expanded: boolean; loading: boolean }
+  | { kind: "node"; key: string; node: FileNode; depth: number; expanded: boolean; loading: boolean; error: string }
   | { kind: "search"; key: string; path: string; depth: number }
 
 function ExplorerVirtualWindow(props: CustomContainerComponentProps) {
@@ -69,10 +69,16 @@ export function FileExplorerPanel() {
   const [expandedPaths, setExpandedPaths] = createSignal(new Set<string>([""]))
   const [childrenByPath, setChildrenByPath] = createSignal(new Map<string, FileNode[]>())
   const [loadingPaths, setLoadingPaths] = createSignal(new Set<string>())
+  const [directoryErrors, setDirectoryErrors] = createSignal(new Map<string, string>())
 
   const loadDirectory = async (path: string) => {
     if (childrenByPath().has(path) || loadingPaths().has(path)) return
     setLoadingPaths((prev) => new Set(prev).add(path))
+    setDirectoryErrors((prev) => {
+      const next = new Map(prev)
+      next.delete(path)
+      return next
+    })
     try {
       const nodes = await listDirectory(path)
       setChildrenByPath((prev) => {
@@ -82,9 +88,9 @@ export function FileExplorerPanel() {
       })
     } catch (error) {
       console.error("[file-explorer] list failed", path, error)
-      setChildrenByPath((prev) => {
+      setDirectoryErrors((prev) => {
         const next = new Map(prev)
-        next.set(path, [])
+        next.set(path, error instanceof Error ? error.message : String(error))
         return next
       })
     } finally {
@@ -135,6 +141,7 @@ export function FileExplorerPanel() {
     const expanded = expandedPaths()
     const children = childrenByPath()
     const loading = loadingPaths()
+    const errors = directoryErrors()
     const output: ExplorerRow[] = []
     const pushChildren = (path: string, depth: number) => {
       for (const node of children.get(path) ?? []) {
@@ -146,6 +153,7 @@ export function FileExplorerPanel() {
           depth,
           expanded: nodeExpanded,
           loading: loading.has(node.path),
+          error: errors.get(node.path) ?? "",
         })
         if (nodeExpanded) pushChildren(node.path, depth + 1)
       }
@@ -155,6 +163,9 @@ export function FileExplorerPanel() {
   })
 
   const shouldVirtualize = createMemo(() => rows().length > VIRTUAL_EXPLORER_ROW_THRESHOLD)
+  const rootLoading = createMemo(() => !deferredQuery() && loadingPaths().has("") && !childrenByPath().has(""))
+  const searchLoading = createMemo(() => !!deferredQuery() && searchResults.loading)
+  const rootError = createMemo(() => !deferredQuery() ? directoryErrors().get("") ?? "" : "")
 
   const toggleDirectory = (path: string) => {
     setExpandedPaths((prev) => {
@@ -212,6 +223,9 @@ export function FileExplorerPanel() {
         <Show when={row.loading}>
           <span class="file-explorer-meta">{t("common.loading")}</span>
         </Show>
+        <Show when={!row.loading && row.error}>
+          <span class="file-explorer-meta">{t("common.error")}</span>
+        </Show>
       </button>
     )
   }
@@ -239,26 +253,43 @@ export function FileExplorerPanel() {
         aria-label={t("explorer.title")}
       >
         <Show
-          when={rows().length > 0}
-          fallback={
-            <p class="empty-hint file-explorer-empty">
-              {deferredQuery() ? t("explorer.no_matches") : t("explorer.empty")}
-            </p>
-          }
+          when={!rootLoading() && !searchLoading()}
+          fallback={<p class="empty-hint file-explorer-empty">{t("common.loading")}</p>}
         >
           <Show
-            when={shouldVirtualize()}
-            fallback={<For each={rows()}>{renderRow}</For>}
+            when={!rootError()}
+            fallback={
+              <div class="empty-hint file-explorer-empty">
+                <p>{t("explorer.load_failed")}</p>
+                <button type="button" class="file-explorer-retry" onClick={() => void loadDirectory("")}>
+                  {t("common.retry")}
+                </button>
+              </div>
+            }
           >
-            <Virtualizer
-              data={rows()}
-              itemSize={EXPLORER_ROW_HEIGHT}
-              overscan={12}
-              as={ExplorerVirtualWindow}
-              item={ExplorerVirtualItem}
+            <Show
+              when={rows().length > 0}
+              fallback={
+                <p class="empty-hint file-explorer-empty">
+                  {deferredQuery() ? t("explorer.no_matches") : t("explorer.empty")}
+                </p>
+              }
             >
-              {renderRow}
-            </Virtualizer>
+              <Show
+                when={shouldVirtualize()}
+                fallback={<For each={rows()}>{renderRow}</For>}
+              >
+                <Virtualizer
+                  data={rows()}
+                  itemSize={EXPLORER_ROW_HEIGHT}
+                  overscan={12}
+                  as={ExplorerVirtualWindow}
+                  item={ExplorerVirtualItem}
+                >
+                  {renderRow}
+                </Virtualizer>
+              </Show>
+            </Show>
           </Show>
         </Show>
       </div>
