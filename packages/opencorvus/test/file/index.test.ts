@@ -37,7 +37,7 @@ describe("file/index Filesystem patterns", () => {
       })
     })
 
-    test("trims whitespace from text content", async () => {
+    test("preserves leading and trailing whitespace from text content", async () => {
       await using tmp = await tmpdir()
       const filepath = path.join(tmp.path, "test.txt")
       await fs.writeFile(filepath, "  content with spaces  \n\n", "utf-8")
@@ -46,7 +46,7 @@ describe("file/index Filesystem patterns", () => {
         directory: tmp.path,
         fn: async () => {
           const result = await File.read("test.txt")
-          expect(result.content).toBe("content with spaces")
+          expect(result.content).toBe("  content with spaces  \n\n")
         },
       })
     })
@@ -125,10 +125,10 @@ describe("file/index Filesystem patterns", () => {
       await Instance.provide({
         directory: tmp.path,
         fn: async () => {
-          const result = await File.writeText("notes.md", "after\nline")
+          const result = await File.writeText("notes.md", "  after\nline\n")
           expect(result.type).toBe("text")
-          expect(result.content).toBe("after\nline")
-          expect(await fs.readFile(filepath, "utf-8")).toBe("after\nline")
+          expect(result.content).toBe("  after\nline\n")
+          expect(await fs.readFile(filepath, "utf-8")).toBe("  after\nline\n")
         },
       })
     })
