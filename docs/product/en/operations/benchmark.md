@@ -6,6 +6,11 @@ The benchmark harness provides **end-to-end quality regression**. It simulates a
 
 `packages/opencorvus/script/benchmark/overlay-web-benchmark.ts`
 
+Mission mode has a separate benchmark because the root entity is a Mission
+session rather than a direct task:
+
+`packages/opencorvus/script/benchmark/mission-benchmark.ts`
+
 ## Minimal run
 
 ```bash
@@ -21,6 +26,34 @@ bun run script/benchmark/overlay-web-benchmark.ts \
 ```
 
 **Note**: flags support either `--name=value` or `--name value`. Unknown flags exit with code 2.
+
+## Mission Mode
+
+The Mission benchmark wakes `POST /mission/wake`, waits for Mission to dispatch
+Squad work through `panel.create_task`, waits for the dispatched task to reach a
+terminal state, then wakes the same mission ID again so Mission reconciles with
+`panel.query_task`.
+
+Default flow:
+
+1. Simple investigation of the scratch project.
+2. Write a minimal TypeScript utility project.
+3. Run project tests with `bun test`.
+
+```bash
+cd packages/opencorvus
+
+OPENCORVUS_DISABLE_DEFAULT_PLUGINS=1 \
+CODING_DASHSCOPE_API_KEY=sk-sp-... \
+ALIBABA_CODING_PLAN_API_KEY=sk-sp-... \
+DASHSCOPE_API_URL=https://coding.dashscope.aliyuncs.com/v1 \
+bun run script/benchmark/mission-benchmark.ts \
+  "--report=.scratch/benchmark-runs/mission-report.json"
+```
+
+Pass criteria: populated mission state files, at least one task with
+`source=mission` and `metadata.mission.id`, terminal completed task status,
+accepted evaluation when present, and a passing local verification command.
 
 ## Key flags
 

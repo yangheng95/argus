@@ -6,6 +6,10 @@ Benchmark 体系用于**端到端质量回归**。它模拟一次真实任务请
 
 `packages/opencorvus/script/benchmark/overlay-web-benchmark.ts`
 
+Mission 模式使用独立 benchmark，因为根对象是 Mission session，不是直接创建的 task：
+
+`packages/opencorvus/script/benchmark/mission-benchmark.ts`
+
 ## 最小运行示例
 
 跑内置默认 case（chat-app 模板，不需 `--request-file`）：
@@ -30,6 +34,29 @@ bun run script/benchmark/overlay-web-benchmark.ts \
 ```
 
 **注意**：flag 必须用 `=` 连接值或在下一参数位（脚本自身的 `KNOWN_FLAGS` 白名单校验，未知 flag 直接 `exit 2`）。
+
+## Mission 模式
+
+Mission benchmark 会调用 `POST /mission/wake`，等待 Mission 通过 `panel.create_task` 派发 Squad 任务，等待被派发任务到达终态，然后用同一个 missionID 再次 wake，要求 Mission 通过 `panel.query_task` 复核并更新 mission state。
+
+默认流程是三段循环：
+
+1. 简单调查 scratch project。
+2. 写一个最小 TypeScript utility project。
+3. 用 `bun test` 运行项目测试。
+
+```bash
+cd packages/opencorvus
+
+OPENCORVUS_DISABLE_DEFAULT_PLUGINS=1 \
+CODING_DASHSCOPE_API_KEY=sk-sp-... \
+ALIBABA_CODING_PLAN_API_KEY=sk-sp-... \
+DASHSCOPE_API_URL=https://coding.dashscope.aliyuncs.com/v1 \
+bun run script/benchmark/mission-benchmark.ts \
+  "--report=.scratch/benchmark-runs/mission-report.json"
+```
+
+通过标准：mission state 四个文件有内容，至少一个 task 具有 `source=mission` 和 `metadata.mission.id`，被派发 task 终态为 completed，如有 evaluation 则必须 accepted，本地 verify 命令通过。
 
 ## 关键 flag
 
