@@ -60,10 +60,18 @@ test("Mission.tsx uses wakeMission from the mission service", () => {
 
 test("Mission wake result opens the shared mission conversation surface", () => {
   expect(MISSION_TSX).toContain("handleMissionAwake")
+  expect(MISSION_TSX).toContain("missionRecordsCtl.refetch()")
   expect(MISSION_TSX).toContain('setBoardStore("selectedSource", source)')
+  expect(MISSION_TSX).toContain('setBoardStore("board", null)')
   expect(MISSION_TSX).toContain("loadConversation(source")
   expect(MISSION_TSX).toContain("startSSE(source")
   expect(MISSION_TSX).toContain("MissionConversation")
+})
+
+test("Mission list refreshes after follow-up Mission messages", () => {
+  expect(MISSION_TSX).toContain("handleMissionMessageSubmitted")
+  expect(MISSION_TSX).toContain("setMissionRefreshToken")
+  expect(MISSION_TSX).toContain("onMissionMessageSubmitted")
 })
 
 test("services/mission.ts exports wakeMission pointed at /mission/wake", () => {
@@ -71,6 +79,13 @@ test("services/mission.ts exports wakeMission pointed at /mission/wake", () => {
   expect(SERVICES_MISSION).toContain("`mission/wake`")
   expect(SERVICES_MISSION).toContain("MissionWakeInput")
   expect(SERVICES_MISSION).toContain("MissionWakeResult")
+})
+
+test("services/mission.ts exports loadMissions pointed at /mission", () => {
+  expect(SERVICES_MISSION).toContain("export async function loadMissions")
+  expect(SERVICES_MISSION).toContain("MissionRecord")
+  expect(SERVICES_MISSION).toContain("apiJson(`mission${suffix}`")
+  expect(SERVICES_MISSION).toContain("server returned non-array body")
 })
 
 test("MissionComposer textarea respects the shared length cap", () => {

@@ -15,6 +15,7 @@ import type {
 ;(globalThis as any).location = { protocol: "http:", host: "localhost", origin: "http://localhost", pathname: "/" }
 
 const MISSION_TSX = readFileSync(join(import.meta.dir, "../src/components/Mission.tsx"), "utf8")
+const CONVERSATION_TSX = readFileSync(join(import.meta.dir, "../src/components/Conversation.tsx"), "utf8")
 
 function fakeTransport(
   responder: (req: TransportRequest) => Promise<TransportResponse<unknown>> | TransportResponse<unknown>,
@@ -100,13 +101,15 @@ test("Mission workbench mounts the shared Conversation and ChatComposer for miss
   expect(MISSION_TSX).toContain('data-ui="mission-conversation"')
 })
 
-test("Mission reuses the shared task list and task conversation surfaces", () => {
-  expect(MISSION_TSX).toContain('import { TaskList } from "./TaskList"')
-  expect(MISSION_TSX).toContain("<TaskList")
-  expect(MISSION_TSX).toContain("function MissionTaskConversation")
-  expect(MISSION_TSX).toContain('data-ui="mission-task-conversation"')
-  expect(MISSION_TSX).not.toContain("function MissionLedgerRow")
-  expect(MISSION_TSX).not.toContain("function MissionSelectedTask")
+test("Mission ledger uses MissionList and not the task list projection", () => {
+  expect(MISSION_TSX).toContain('import { MissionList } from "./MissionList"')
+  expect(MISSION_TSX).toContain("<MissionList")
+  expect(MISSION_TSX).toContain("loadMissions")
+  expect(MISSION_TSX).not.toContain('import { TaskList } from "./TaskList"')
+  expect(MISSION_TSX).not.toContain("<TaskList")
+  expect(MISSION_TSX).not.toContain("visibleTasks")
+  expect(MISSION_TSX).not.toContain("function MissionTaskConversation")
+  expect(MISSION_TSX).not.toContain('data-ui="mission-task-conversation"')
 })
 
 test("Mission page submits messages tagged with the mission source label", () => {
@@ -114,4 +117,12 @@ test("Mission page submits messages tagged with the mission source label", () =>
   // "gateway") — the squad/team task provenance keys off source==="mission"
   // (specs/gateway-mission-split-2026-05-28.md §4).
   expect(MISSION_TSX).toContain('source: "mission"')
+})
+
+test("session empty state does not borrow the first task as Mission context", () => {
+  expect(CONVERSATION_TSX).toContain('boardStore.selectedSource?.kind === "session"')
+  expect(CONVERSATION_TSX).toContain("const sessionBoard")
+  expect(CONVERSATION_TSX).toContain("if (isSessionSource()) return null")
+  expect(CONVERSATION_TSX).toContain("sessionBoard()?.title")
+  expect(CONVERSATION_TSX).toContain("sessionBoard()?.directory")
 })

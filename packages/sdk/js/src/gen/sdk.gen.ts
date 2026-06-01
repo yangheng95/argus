@@ -110,6 +110,7 @@ import type {
   McpLocalConfig,
   McpRemoteConfig,
   McpStatusResponses,
+  MissionListResponses,
   MissionWakeResponses,
   OutputFormat,
   PanelCapabilitiesResponses,
@@ -4711,6 +4712,44 @@ export class Gateway extends HeyApiClient {
 }
 
 export class Mission extends HeyApiClient {
+  /**
+   * List Missions
+   *
+   * List Mission records for the current project. Each record is backed by exactly one kind="mission" session and can be opened through the session conversation/event routes.
+   */
+  public list<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      search?: string
+      limit?: number
+      cursorUpdated?: number
+      cursorSessionID?: string
+      archived?: boolean
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "search" },
+            { in: "query", key: "limit" },
+            { in: "query", key: "cursorUpdated" },
+            { in: "query", key: "cursorSessionID" },
+            { in: "query", key: "archived" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<MissionListResponses, unknown, ThrowOnError>({
+      url: "/mission",
+      ...options,
+      ...params,
+    })
+  }
+
   /**
    * Wake the Mission agent
    *

@@ -321,6 +321,7 @@
 
 | Method | 路径 | 说明 | operationId |
 |---|---|---|---|
+| GET | `/mission` | List Missions | `mission.list` |
 | POST | `/mission/wake` | Wake the Mission agent | `mission.wake` |
 
 ### Terminal

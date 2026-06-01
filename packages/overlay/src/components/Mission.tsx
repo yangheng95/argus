@@ -1,23 +1,23 @@
-// ── Mission ──
+// Mission
 //
 // Operator control room for the user's long-running goals. A separate page
-// (template §6.2) sitting beside the default conversation panel — switching modes
-// uses the shared `pageMode` store (store/page-mode.ts) and does NOT clear or
-// rewrite the panel's selected task.
+// (template section 6.2) sitting beside the default conversation panel.
+// Switching modes uses the shared `pageMode` store (store/page-mode.ts);
+// opening a mission session hydrates the shared conversation store from that
+// session.
 //
-// Layout (template §7):
+// Layout (template section 7):
 //   header    : workspace, system health, channel runtime, counts, actions
-//   ledger    : task list (project + global, filterable, queue-aware)
-//   workbench : shared task/session conversation panel, OR mission launcher
-//   channels  : channel catalog, runtime status, restart, selected-task
-//               bindings (kept mission/channel infrastructure)
+//   ledger    : mission list (project-scoped, searchable)
+//   workbench : shared mission-session conversation panel, OR mission launcher
+//   channels  : channel catalog, runtime status, restart, selected-task bindings
 //
-// Data sources (template §5 — single source of truth):
-//   • boardStore.tasks          — task list from existing /global/tasks
-//   • boardStore.board          — selected task detail
-//   • MissionStats              — mission/stats infra endpoint (counts + project)
-//   • Channel runtime + list    — existing channel infra routes
-//   • /mission/wake             — start or resume the Mission agent session
+// Data sources (template section 5, single source of truth):
+//   - /mission                  : mission session ledger records
+//   - boardStore.board          : selected mission session detail
+//   - MissionStats              : mission/stats infra endpoint (counts + project)
+//   - Channel runtime + list    : existing channel infra routes
+//   - /mission/wake             : start or resume the Mission agent session
 //
 // Errors are surfaced explicitly (template §14): no silent fallback, no
 // degraded state. Each error block names the operation and the server
@@ -33,28 +33,23 @@ import {
   onCleanup,
   onMount,
 } from "solid-js"
-import { boardStore, setBoardStore, loadTasks, taskByID, visibleTasks,
-  activeTaskID,
-} from "../store/board"
+import { boardStore, setBoardStore, activeTaskID } from "../store/board"
 import { clearMessages, setChatAttachments } from "../store/messages"
 import { settingsStore, setSettingsStore, saveSettings } from "../store/settings"
 import { initPaneResizers, renderPaneLayout, MISSION_PANE_CONFIG } from "../services/pane"
-import { isMissionPage, setPageMode } from "../store/page-mode"
-import {
-  cancelTask,
-  deleteTask,
-  selectTask,
-  submitMessage,
-} from "../services/task"
+import { isMissionPage } from "../store/page-mode"
+import { submitMessage } from "../services/task"
 import {
   loadChannelList,
   loadChannelRuntime,
+  loadMissions,
   loadMissionStats,
   loadTaskBindings,
   restartChannelRuntime,
   wakeMission,
   type ChannelInfo,
   type ChannelRuntimeStatus,
+  type MissionRecord,
   type MissionStats,
 } from "../services/mission"
 import { ApiError } from "../services/api"
@@ -64,19 +59,16 @@ import { resetWriter } from "../services/tree-writer"
 import { t } from "../utils/i18n"
 import {
   compactDirectory,
-  filterMatches,
   MISSION_REQUIREMENT_MAX_CHARS,
   humanizeApiError,
-  pendingInteractions,
   runtimeLabel,
-  type LedgerFilter,
 } from "../utils/mission-helpers"
 import { Icon } from "./Icon"
 import { Button } from "./ui/Button"
 import { Conversation } from "./Conversation"
 import { ChatComposer } from "./ChatComposer"
 import { AutoGrowTextarea } from "./primitives/AutoGrowTextarea"
-import { TaskList } from "./TaskList"
+import { MissionList } from "./MissionList"
 
 // ── Status taxonomies ──
 //
@@ -132,9 +124,8 @@ function actionVerbLabel(actionKey: string): string {
 
 export function Mission() {
   // ── Per-page state ─────────────────────────────────────────────────
-  const [filter, setFilter] = createSignal<LedgerFilter>("all")
   const [searchQuery, setSearchQuery] = createSignal("")
-  const [scope, setScope] = createSignal<"project" | "global">("global")
+  const [missionRefreshToken, setMissionRefreshToken] = createSignal(0)
   const [composerOpen, setComposerOpen] = createSignal(false)
   const [actionBusy, setActionBusy] = createSignal<string>("")
   const [actionError, setActionError] = createSignal<{ action: string; error: string } | null>(null)
@@ -187,6 +178,25 @@ export function Mission() {
     },
   )
 
+  const [missionRecords, missionRecordsCtl] = createResource(
+    () => {
+      const directory = missionDirectory()
+      if (!directory) return null
+      return { directory, search: searchQuery().trim(), refresh: missionRefreshToken() }
+    },
+    async (input) => {
+      try {
+        return await loadMissions({
+          directory: input.directory,
+          search: input.search || undefined,
+        })
+      } catch (err) {
+        throw new Error(errorMessage(err))
+      }
+    },
+    { initialValue: [] },
+  )
+
   const [channels, channelsCtl] = createResource(
     missionDirectory,
     async () => {
@@ -229,15 +239,6 @@ export function Mission() {
     },
     { initialValue: [] },
   )
-
-  onMount(() => {
-    // Make sure the panel-driven /global/tasks call has actually
-    // happened — Mission can be the operator's first port of call after
-    // app launch, and they need to see tasks immediately.
-    if (!boardStore.tasksLoaded && !boardStore.tasksError) {
-      void loadTasks().catch(() => undefined)
-    }
-  })
 
   // ── Resizable three columns ────────────────────────────────────────
   //
@@ -298,86 +299,19 @@ export function Mission() {
     })
   })
 
-  // ── Derived task views ─────────────────────────────────────────────
+  // ── Derived mission views ──────────────────────────────────────────
 
   const activeDirectory = () => settingsStore.directory || ""
-  const missionTasks = createMemo(() => (isMissionPage() ? visibleTasks() : []))
-
-  const filteredTasks = createMemo(() => {
-    const list = missionTasks()
-    const q = searchQuery().trim().toLowerCase()
-    const f = filter()
-    const s = scope()
-    const dir = activeDirectory()
-    return list.filter((item: any) => {
-      const status = String(item?.task?.status ?? "idle")
-      // Pass `item` so filterMatches can read pending_interactions — without
-      // it, the "waiting" filter never matches and the "active" filter
-      // wrongly includes tasks that have pending operator interactions
-      // (template §9 strict status taxonomy). The helper unit test in
-      // mission-helpers.test.ts already exercises this signature; the bug
-      // here was that the product-code call site dropped the third arg.
-      if (!filterMatches(status, f, item)) return false
-      if (s === "project") {
-        const itemDir = String(item?.task?.directory ?? "")
-        if (dir && itemDir && itemDir !== dir) return false
-      }
-      if (q) {
-        const haystack = [
-          item?.task?.title,
-          item?.task?.id,
-          item?.task?.directory,
-          item?.task?.status,
-          item?.overview?.headline,
-        ]
-          .filter(Boolean)
-          .join(" ")
-          .toLowerCase()
-        if (!haystack.includes(q)) return false
-      }
-      return true
-    })
-  })
-
-  const counts = createMemo(() => {
-    const list = missionTasks()
-    let active = 0
-    let queued = 0
-    let waiting = 0
-    let failed = 0
-    let completed = 0
-    let cancelled = 0
-    for (const item of list) {
-      const status = String(item?.task?.status ?? "")
-      const pending = pendingInteractions(item)
-      if (pending > 0) waiting += 1
-      // Active count excludes tasks already counted as waiting so the
-      // header math doesn't double-count.
-      if ((status === "active" && pending === 0) || item?._pending) active += 1
-      if (status === "queued") queued += 1
-      if (status === "failed") failed += 1
-      if (status === "completed") completed += 1
-      if (status === "cancelled") cancelled += 1
-    }
-    return { active, queued, waiting, failed, completed, cancelled, total: list.length }
-  })
-
-  const selectedItem = () => taskByID(activeTaskID())
-  const selectedBoard = () => boardStore.board ?? null
-  // Workbench shows progressively: if the operator selects a task we have
-  // *any* data on (the ledger row from boardStore.tasks), render the
-  // detail surface immediately. The shared conversation panel hydrates when
-  // selectTask() completes, so Mission does not maintain a second task detail
-  // or message surface.
-  const hasSelection = () =>
-    !!activeTaskID() && (!!selectedItem() || !!selectedBoard())
+  const selectedMissionSessionID = () =>
+    boardStore.selectedSource?.kind === "session" ? boardStore.selectedSource.id : ""
+  const counts = createMemo(() => ({ total: missionRecords()?.length ?? 0 }))
 
   // ── Refresh / actions ──────────────────────────────────────────────
 
   async function refreshAll(): Promise<void> {
     setActionError(null)
     await Promise.allSettled([
-      loadTasks().catch(() => undefined),
+      missionRecordsCtl.refetch(),
       statsCtl.refetch(),
       channelsCtl.refetch(),
       runtimeCtl.refetch(),
@@ -403,35 +337,35 @@ export function Mission() {
     }
   }
 
-  async function handleCancelTask(taskID: string): Promise<void> {
-    await withBusy(`cancel:${taskID}`, async () => {
-      await cancelTask(taskID)
-      await loadTasks()
-    })
-  }
-  async function handleDeleteTask(taskID: string): Promise<void> {
-    await withBusy(`delete:${taskID}`, async () => {
-      const ok = await deleteTask(taskID)
-      if (!ok) throw new Error("delete task: server rejected the request")
-    })
-  }
-  function handleOpenInPanel(): void {
-    setPageMode("panel")
-  }
-
-  async function handleMissionAwake(result: { sessionID: string }): Promise<void> {
-    const source = { kind: "session" as const, id: result.sessionID }
+  async function openMissionSession(sessionID: string): Promise<void> {
+    const source = { kind: "session" as const, id: sessionID }
     stopSSE()
     clearMessages()
     setChatAttachments([])
     resetWriter({ scrollIntent: "bottom", cause: "mission-session-switch" })
     setBoardStore("selectedSource", source)
+    setBoardStore("board", null)
     await loadConversation(source, {
       scrollIntent: "bottom",
       resetCause: "mission-session-hydrate",
     })
     startSSE(source, 0)
+  }
+
+  async function handleMissionSelect(mission: MissionRecord): Promise<void> {
+    await withBusy(`mission:${mission.sessionID}`, async () => {
+      await openMissionSession(mission.sessionID)
+    })
+  }
+
+  async function handleMissionAwake(result: { missionID: string; sessionID: string; created: boolean }): Promise<void> {
+    await missionRecordsCtl.refetch()
+    await openMissionSession(result.sessionID)
     setComposerOpen(false)
+  }
+
+  function handleMissionMessageSubmitted(): void {
+    setMissionRefreshToken((value) => value + 1)
   }
 
   function handleCloseMission(): void {
@@ -443,6 +377,17 @@ export function Mission() {
     setBoardStore("selectedSource", null)
     setBoardStore("board", null)
   }
+
+  createEffect(() => {
+    if (!isMissionPage()) return
+    if (searchQuery().trim()) return
+    const selected = selectedMissionSessionID()
+    if (!selected || missionRecords.loading) return
+    const rows = missionRecords() ?? []
+    if (!rows.some((mission) => mission.sessionID === selected)) {
+      handleCloseMission()
+    }
+  })
 
   // ── Render ─────────────────────────────────────────────────────────
 
@@ -456,9 +401,9 @@ export function Mission() {
           runtimeError={runtime.error ? humanizeApiError(runtime.error) : ""}
           counts={counts()}
           directory={activeDirectory()}
-          refreshing={stats.loading || runtime.loading || channels.loading}
+          refreshing={missionRecords.loading || stats.loading || runtime.loading || channels.loading}
           composerOpen={composerOpen()}
-          showComposeButton={hasSelection() || boardStore.selectedSource?.kind === "session"}
+          showComposeButton={boardStore.selectedSource?.kind === "session"}
           onRefresh={() => void refreshAll()}
           onCompose={() => setComposerOpen(true)}
         />
@@ -485,21 +430,19 @@ export function Mission() {
 
       <div class="mission-body" id="missionBody">
         <Show when={isMissionPage()}>
-          <MissionTaskLedger
-            tasks={filteredTasks()}
-            filter={filter()}
-            onFilterChange={setFilter}
-            scope={scope()}
-            onScopeChange={setScope}
+          <MissionList
+            missions={missionRecords() ?? []}
+            selectedSessionID={selectedMissionSessionID()}
+            loading={missionRecords.loading}
+            error={
+              missionRecords.error
+                ? t("mission.ledger.error_load_failed", { error: humanizeApiError(missionRecords.error) })
+                : ""
+            }
             searchQuery={searchQuery()}
             onSearchChange={setSearchQuery}
-            tasksError={boardStore.tasksError}
-            onSelectTask={(id) => {
-              void selectTask(id)
-            }}
-            onCancelTask={(id) => void handleCancelTask(id)}
-            onDeleteTask={(id) => void handleDeleteTask(id)}
-            onRetryLoad={() => void loadTasks().catch(() => undefined)}
+            onSelectMission={(mission) => void handleMissionSelect(mission)}
+            onRetry={() => void missionRecordsCtl.refetch()}
           />
         </Show>
 
@@ -515,16 +458,15 @@ export function Mission() {
           aria-label={t("mission.ledger.title")}
         />
 
-        <MissionWorkbench
-          active={isMissionPage()}
-          composerOpen={composerOpen()}
-          onCloseComposer={() => setComposerOpen(false)}
-          hasSelection={hasSelection()}
-          selectedSource={boardStore.selectedSource}
-          onOpenInPanel={handleOpenInPanel}
-          onCloseMission={handleCloseMission}
-          onMissionAwake={(result) => void handleMissionAwake(result)}
-        />
+          <MissionWorkbench
+            active={isMissionPage()}
+            composerOpen={composerOpen()}
+            onCloseComposer={() => setComposerOpen(false)}
+            selectedSource={boardStore.selectedSource}
+            onCloseMission={handleCloseMission}
+            onMissionAwake={(result) => void handleMissionAwake(result)}
+            onMissionMessageSubmitted={handleMissionMessageSubmitted}
+          />
 
         <div
           class="pane-resizer pane-resizer-right"
@@ -536,14 +478,14 @@ export function Mission() {
 
         <Show when={isMissionPage()}>
           <MissionChannelPanel
-            channels={channels()}
+            channels={channels() ?? []}
             channelsError={channels.error ? humanizeApiError(channels.error) : ""}
             runtime={runtime()}
             runtimeError={runtime.error ? humanizeApiError(runtime.error) : ""}
             restartError={channelRestartError()}
-            bindings={bindings()}
+            bindings={bindings() ?? []}
             bindingsError={bindings.error ? humanizeApiError(bindings.error) : ""}
-            selectedTaskID={activeTaskID()}
+            selectedTaskID={boardStore.selectedSource?.kind === "task" ? activeTaskID() : ""}
             actionBusy={actionBusy()}
             onRestartRuntime={async () => {
               // Restart errors live in `channelRestartError` (rendered by
@@ -582,7 +524,7 @@ function MissionHeader(props: {
   statsError: string
   runtime: ChannelRuntimeStatus | null | undefined
   runtimeError: string
-  counts: { active: number; queued: number; waiting: number; failed: number; completed: number; cancelled: number; total: number }
+  counts: { total: number }
   directory: string
   refreshing: boolean
   composerOpen: boolean
@@ -631,27 +573,8 @@ function MissionHeader(props: {
           </span>
         </span>
         <span class="mission-stat" data-stat="counts">
-          <span class="mission-stat-label">{t("mission.counts.total", { count: String(props.counts.total) })}</span>
-          <span class="mission-stat-value">
-            <span class="mission-count" data-status="active">
-              {t("mission.counts.active", { count: String(props.counts.active) })}
-            </span>
-            <span class="mission-count" data-status="queued">
-              {t("mission.counts.queued", { count: String(props.counts.queued) })}
-            </span>
-            <span class="mission-count" data-status="waiting">
-              {t("mission.counts.waiting", { count: String(props.counts.waiting) })}
-            </span>
-            <span class="mission-count" data-status="failed">
-              {t("mission.counts.failed", { count: String(props.counts.failed) })}
-            </span>
-            <span class="mission-count" data-status="completed">
-              {t("mission.counts.completed", { count: String(props.counts.completed) })}
-            </span>
-            <span class="mission-count" data-status="cancelled">
-              {t("mission.counts.cancelled", { count: String(props.counts.cancelled) })}
-            </span>
-          </span>
+          <span class="mission-stat-label">{t("mission.counts.label")}</span>
+          <span class="mission-stat-value">{t("mission.counts.total", { count: String(props.counts.total) })}</span>
         </span>
         <div class="mission-header-actions" role="toolbar" aria-label={t("mission.title")}>
           <Show when={props.showComposeButton}>
@@ -699,134 +622,14 @@ function MissionHeader(props: {
   )
 }
 
-// ── Task ledger (left column) ─────────────────────────────────────────
-
-function MissionTaskLedger(props: {
-  tasks: any[]
-  filter: LedgerFilter
-  onFilterChange: (next: LedgerFilter) => void
-  scope: "project" | "global"
-  onScopeChange: (next: "project" | "global") => void
-  searchQuery: string
-  onSearchChange: (next: string) => void
-  tasksError: string
-  onSelectTask: (id: string) => void
-  onCancelTask: (id: string) => void
-  onDeleteTask: (id: string) => void
-  onRetryLoad: () => void
-}) {
-  // Filter order matches template §9: queued → active → waiting → failed →
-  // completed → cancelled → all. "All" lives at the end as the escape
-  // hatch when the operator wants to see everything regardless of state.
-  const FILTERS: LedgerFilter[] = ["queued", "active", "waiting", "failed", "completed", "cancelled", "all"]
-  return (
-    <aside class="mission-ledger" data-ui="mission-ledger">
-      <header class="mission-ledger-header oc-surface-header">
-        <span class="mission-ledger-title oc-surface-header__title">{t("mission.ledger.title")}</span>
-        <div class="oc-surface-header__actions">
-          <div class="mission-scope-toggle" role="tablist" aria-label={t("mission.ledger.title")}>
-            <button
-              type="button"
-              class="mission-scope-button"
-              role="tab"
-              aria-selected={props.scope === "project"}
-              data-active={props.scope === "project" ? "true" : undefined}
-              onClick={() => props.onScopeChange("project")}
-            >
-              {t("mission.ledger.scope.project")}
-            </button>
-            <button
-              type="button"
-              class="mission-scope-button"
-              role="tab"
-              aria-selected={props.scope === "global"}
-              data-active={props.scope === "global" ? "true" : undefined}
-              onClick={() => props.onScopeChange("global")}
-            >
-              {t("mission.ledger.scope.global")}
-            </button>
-          </div>
-        </div>
-      </header>
-
-      <div class="mission-ledger-search">
-        <Icon name="search" size={12} class="mission-ledger-search-icon" />
-        <input
-          type="search"
-          class="mission-ledger-search-input"
-          placeholder={t("mission.ledger.search_placeholder")}
-          value={props.searchQuery}
-          onInput={(e) => props.onSearchChange(e.currentTarget.value)}
-          aria-label={t("mission.ledger.search_placeholder")}
-          data-ui="mission-search"
-        />
-        <Show when={props.searchQuery}>
-          <button
-            type="button"
-            class="mission-ledger-search-clear"
-            aria-label={t("mission.ledger.search_clear")}
-            title={t("mission.ledger.search_clear")}
-            onClick={() => props.onSearchChange("")}
-          >
-            <Icon name="close" size={10} />
-          </button>
-        </Show>
-      </div>
-
-      <div class="mission-filter-bar" role="tablist" aria-label={t("mission.ledger.filter_label")}>
-        <For each={FILTERS}>
-          {(value) => (
-            <button
-              type="button"
-              role="tab"
-              class="mission-filter-button"
-              data-active={props.filter === value ? "true" : undefined}
-              aria-selected={props.filter === value}
-              onClick={() => props.onFilterChange(value)}
-            >
-              {t(`mission.ledger.filter.${value}`)}
-            </button>
-          )}
-        </For>
-      </div>
-
-      <Show when={props.tasksError}>
-        <div class="mission-error" role="alert" data-ui="mission-tasks-error">
-          <span>{t("mission.ledger.error_load_failed", { error: props.tasksError })}</span>
-          <Button type="button" variant="outline" size="sm" tone="danger" onClick={props.onRetryLoad}>
-            {t("mission.ledger.error_retry")}
-          </Button>
-        </div>
-      </Show>
-
-      <div class="mission-ledger-list">
-        <TaskList
-          items={props.tasks}
-          showSearch={false}
-          showError={false}
-          emptyLabel={
-            props.searchQuery || props.filter !== "all"
-              ? t("mission.ledger.empty_filtered")
-              : t("mission.ledger.empty")
-          }
-          onSelectTask={props.onSelectTask}
-          onCancelTask={props.onCancelTask}
-          onDeleteTask={props.onDeleteTask}
-        />
-      </div>
-    </aside>
-  )
-}
-
 function MissionWorkbench(props: {
   active: boolean
   composerOpen: boolean
   onCloseComposer: () => void
-  hasSelection: boolean
   selectedSource: { kind: "task" | "session"; id: string } | null
-  onOpenInPanel: () => void
   onCloseMission: () => void
-  onMissionAwake: (result: { sessionID: string }) => void
+  onMissionAwake: (result: { missionID: string; sessionID: string; created: boolean }) => void
+  onMissionMessageSubmitted: () => void
 }) {
   return (
     <section class="mission-workbench" id="missionWorkbench" data-ui="mission-workbench">
@@ -836,16 +639,9 @@ function MissionWorkbench(props: {
           <Show when={props.active}>
             <Show
               when={props.selectedSource?.kind === "session"}
-              fallback={
-                <Show
-                  when={props.hasSelection}
-                  fallback={<MissionComposer onClose={props.onCloseComposer} onAwake={props.onMissionAwake} />}
-                >
-                  <MissionTaskConversation onOpenInPanel={props.onOpenInPanel} />
-                </Show>
-              }
+              fallback={<MissionComposer onClose={props.onCloseComposer} onAwake={props.onMissionAwake} />}
             >
-              <MissionConversation onClose={props.onCloseMission} />
+              <MissionConversation onClose={props.onCloseMission} onSubmitted={props.onMissionMessageSubmitted} />
             </Show>
           </Show>
         }
@@ -856,47 +652,7 @@ function MissionWorkbench(props: {
   )
 }
 
-function MissionTaskConversation(props: { onOpenInPanel: () => void }) {
-  let conversationContainer!: HTMLDivElement
-  return (
-    <div class="mission-conversation" data-kind="task" data-ui="mission-task-conversation">
-      <header class="mission-conversation-header oc-surface-header">
-        <h2 class="mission-conversation-title oc-surface-header__title">{t("mission.workbench.task_conversation_title")}</h2>
-        <div class="oc-surface-header__actions">
-          <Button
-            type="button"
-            variant="ghost"
-            size="md"
-            tone="accent"
-            data-ui="mission-workbench-open-panel"
-            onClick={props.onOpenInPanel}
-          >
-            {t("mission.workbench.actions.open_in_panel")}
-          </Button>
-        </div>
-      </header>
-      <div class="mission-conversation-body chat-scroll" ref={conversationContainer}>
-        <Conversation container={conversationContainer} />
-      </div>
-      <div class="mission-conversation-composer">
-        <ChatComposer
-          enabled={!!activeTaskID()}
-          busy={false}
-          onSubmit={async (text, attachments, webSearch) => {
-            await submitMessage(text, attachments, {
-              metadata: {
-                source: "mission",
-                ...(webSearch ? { web_search: true } : {}),
-              },
-            })
-          }}
-        />
-      </div>
-    </div>
-  )
-}
-
-function MissionConversation(props: { onClose: () => void }) {
+function MissionConversation(props: { onClose: () => void; onSubmitted: () => void }) {
   let conversationContainer!: HTMLDivElement
   return (
     <div class="mission-conversation" data-kind="mission" data-ui="mission-conversation">
@@ -930,6 +686,7 @@ function MissionConversation(props: { onClose: () => void }) {
                 ...(webSearch ? { web_search: true } : {}),
               },
             })
+            props.onSubmitted()
           }}
         />
       </div>
@@ -1158,10 +915,10 @@ function MissionChannelPanel(props: {
                 <dd>{props.runtime!.detail}</dd>
               </div>
             </Show>
-            <Show when={props.runtime!.channels.length > 0}>
+            <Show when={(props.runtime!.channels ?? []).length > 0}>
               <div>
                 <dt>{t("mission.channels.runtime_channels")}</dt>
-                <dd>{props.runtime!.channels.join(", ")}</dd>
+                <dd>{(props.runtime!.channels ?? []).join(", ")}</dd>
               </div>
             </Show>
           </dl>

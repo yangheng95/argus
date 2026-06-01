@@ -1,8 +1,8 @@
-import { sql } from "drizzle-orm"
-import { Database, and, eq } from "@/storage/db"
+import { Database, and, desc, eq, isNull, like, or, sql } from "@/storage/db"
 import { Instance } from "@/project/instance"
 import { Session } from "@/session"
 import { SessionTable } from "@/session/session.sql"
+import { MissionID } from "./schema"
 
 export type MissionSession = Session.Info & { missionID: string }
 
@@ -16,6 +16,12 @@ function channelKeyForMission(missionID: string): string {
 
 function withMissionID(session: Session.Info, missionID: string): MissionSession {
   return { ...session, missionID }
+}
+
+function missionIDFromInfo(session: Session.Info): string | undefined {
+  const missionID = (session.metadata as { mission?: { id?: unknown } } | undefined)?.mission?.id
+  const parsed = MissionID.safeParse(missionID)
+  return parsed.success ? parsed.data : undefined
 }
 
 function findMissionSessionID(missionID: string) {
@@ -43,6 +49,61 @@ function findMissionSessionID(missionID: string) {
  */
 export function findExistingMissionSession(missionID: string): string | undefined {
   return findMissionSessionID(missionID)
+}
+
+export async function* listMissionSessions(input?: {
+  directory?: string
+  search?: string
+  limit?: number
+  cursorUpdated?: number
+  cursorSessionID?: string
+  archived?: boolean
+}) {
+  const conditions = [
+    eq(SessionTable.project_id, Instance.project.id),
+    eq(SessionTable.kind, "mission"),
+    sql`json_extract(${SessionTable.metadata}, '$.mission.id') IS NOT NULL`,
+  ]
+
+  if (input?.directory) {
+    conditions.push(eq(SessionTable.directory, input.directory))
+  }
+  if (input?.search) {
+    const term = `%${input.search}%`
+    conditions.push(
+      or(
+        like(SessionTable.title, term),
+        sql`json_extract(${SessionTable.metadata}, '$.mission.id') LIKE ${term}`,
+      )!,
+    )
+  }
+  if (input?.cursorUpdated !== undefined && input.cursorSessionID) {
+    conditions.push(sql`(
+      ${SessionTable.time_updated} < ${input.cursorUpdated}
+      OR (${SessionTable.time_updated} = ${input.cursorUpdated} AND ${SessionTable.id} < ${input.cursorSessionID})
+    )`)
+  }
+  if (!input?.archived) {
+    conditions.push(isNull(SessionTable.time_archived))
+  }
+
+  const limit = input?.limit ?? 100
+  const rows = Database.use((db) =>
+    db
+      .select({ id: SessionTable.id })
+      .from(SessionTable)
+      .where(and(...conditions))
+      .orderBy(desc(SessionTable.time_updated), desc(SessionTable.id))
+      .limit(limit)
+      .all(),
+  )
+
+  for (const row of rows) {
+    const session = await Session.get(row.id)
+    const missionID = missionIDFromInfo(session)
+    if (!missionID) continue
+    yield withMissionID(session, missionID)
+  }
 }
 
 async function ensureMissionSessionInner(input: { missionID: string; defaultCwd: string }) {

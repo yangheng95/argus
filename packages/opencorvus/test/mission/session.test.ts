@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import path from "path"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
-import { ensureMissionSession, findExistingMissionSession } from "../../src/mission/session"
+import { ensureMissionSession, findExistingMissionSession, listMissionSessions } from "../../src/mission/session"
 import { Log } from "../../src/util/log"
 
 const projectRoot = path.join(__dirname, "../..")
@@ -82,6 +82,24 @@ describe("Mission session helpers", () => {
         expect(a.id).not.toBe(b.id)
         await Session.remove(a.id)
         await Session.remove(b.id)
+      },
+    })
+  })
+
+  test("listMissionSessions returns Mission metadata rows only", async () => {
+    await Instance.provide({
+      directory: projectRoot,
+      fn: async () => {
+        const mission = await ensureMissionSession({ missionID: "m-list", defaultCwd: projectRoot })
+        const assistant = await Session.createNext({ kind: "assistant", title: "Assistant", directory: projectRoot })
+        const rows = []
+        for await (const row of listMissionSessions({ search: "m-list" })) rows.push(row)
+
+        expect(rows.map((row) => row.id)).toEqual([mission.id])
+        expect(rows[0]?.missionID).toBe("m-list")
+
+        await Session.remove(mission.id)
+        await Session.remove(assistant.id)
       },
     })
   })

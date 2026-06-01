@@ -28,7 +28,7 @@ import { mkdir, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import puppeteer, { type Browser, type HTTPRequest, type Page } from "puppeteer-core"
-import { findBrowserExecutable } from "../../opencorvus/src/delivery/checks/visual"
+import { findBrowserExecutable } from "../../opencorvus/src/browser/runtime"
 
 const OUT_DIR_ARG = process.argv[2]
 const OUT_DIR = path.resolve(OUT_DIR_ARG ?? path.join(tmpdir(), "mission-visual-loop"))
@@ -234,6 +234,16 @@ async function applyMocks(page: Page): Promise<void> {
         headers: corsHeaders,
         body: JSON.stringify({ error: message }),
       })
+    const eventStream = () =>
+      req.respond({
+        status: 200,
+        contentType: "text/event-stream",
+        headers: {
+          ...corsHeaders,
+          "Cache-Control": "no-cache",
+        },
+        body: "event: connected\ndata: {}\n\n",
+      })
 
     if (/\/global\/health/.test(url) && method === "GET") {
       // Connection probe — overlay's connection.ts:149 expects
@@ -249,6 +259,10 @@ async function applyMocks(page: Page): Promise<void> {
         },
       })
     }
+    if (/\/skill\/installed/.test(url) && method === "GET") return void ok([])
+    if (/\/skill\/market/.test(url) && method === "GET") return void ok([])
+    if (/\/mcp\b/.test(url) && method === "GET") return void ok({})
+    if (/\/task\/events/.test(url) && method === "GET") return void eventStream()
     if (/\/global\/tasks/.test(url) && method === "GET") return void ok({ tasks: GLOBAL_TASKS, summary: null })
     if (/\/gateway\/stats/.test(url) && method === "GET") {
       const force = await page.evaluate(() => (window as unknown as { __statsForceError?: string }).__statsForceError)
@@ -256,9 +270,33 @@ async function applyMocks(page: Page): Promise<void> {
       return void ok(STATS_OK)
     }
     if (/\/gateway\/capabilities/.test(url) && method === "GET") return void ok({ surface: "gateway", actions: [] })
+    if (/\/mission(?:\?|$)/.test(url) && method === "GET") {
+      return void ok([
+        {
+          missionID: "mission_visual_demo",
+          sessionID: "session_mission_visual",
+          title: "Mission Control",
+          directory: "/workspace/mission-demo",
+          created: Date.now() - 3_600_000,
+          updated: Date.now() - 120_000,
+        },
+      ])
+    }
     // The Mission launcher POSTs /mission/wake (was the gateway decompose
     // route). It returns the new/resumed mission + session ids.
     if (/\/mission\/wake/.test(url) && method === "POST") return void ok({ missionID: "mission_visual_demo", sessionID: "session_mission_visual", created: true })
+    if (/\/session\/session_mission_visual\/conversation/.test(url) && method === "GET") {
+      return void ok({
+        board: { kind: "session", sessionID: "session_mission_visual", status: "active", title: "Mission Control", directory: "/workspace/mission-demo" },
+        transcript: [],
+        timeline: [],
+        events: [],
+        view: { topLevelSessionIDs: [], sessions: [] },
+        agentView: { topLevelSessionIDs: [], sessions: [] },
+        history: { oldestTimestamp: null, oldestMessageID: null, hasMore: false, limit: 0 },
+      })
+    }
+    if (/\/session\/session_mission_visual\/events/.test(url) && method === "GET") return void eventStream()
     if (/\/channel\/runtime$/.test(url) && method === "GET") return void ok(CHANNEL_RUNTIME_OK)
     if (/\/channel\/runtime\/restart/.test(url) && method === "POST") return void ok(CHANNEL_RUNTIME_OK)
     if (/\/channel\b/.test(url) && method === "GET") return void ok(CHANNELS_OK)
@@ -308,7 +346,7 @@ async function bootstrapOverlay(page: Page): Promise<void> {
     }
   })
   page.on("pageerror", (err) => {
-    console.error(`[overlay/pageerror] ${err.message}`)
+    console.error(`[overlay/pageerror] ${err.stack || err.message}`)
   })
   page.on("requestfailed", (req) => {
     const failure = req.failure()?.errorText ?? "unknown"
@@ -386,20 +424,16 @@ async function captureStates(page: Page): Promise<StateResult[]> {
   })
 
   await step("02-ledger-loaded", async () => {
-    // Trigger loadTasks via window helper if available.
-    await page.evaluate(() => {
-      const w = window as unknown as { loadTasks?: () => Promise<void> | void }
-      try { void w.loadTasks?.() } catch {}
-    })
-    await new Promise((r) => setTimeout(r, 800))
+    await page.waitForSelector('[data-ui="mission-row"]', { timeout: 5_000 })
+    await new Promise((r) => setTimeout(r, 300))
   })
 
-  await step("03-selected-active-task", async () => {
-    await page.evaluate(() => {
-      const w = window as unknown as { selectTask?: (id: string) => Promise<void> | void }
-      try { void w.selectTask?.("task_active_payment") } catch {}
-    })
-    await new Promise((r) => setTimeout(r, 700))
+  await step("03-selected-mission", async () => {
+    const row = await page.$('[data-ui="mission-row"]')
+    if (!row) throw new Error("mission row missing")
+    await row.click()
+    await page.waitForSelector('[data-ui="mission-conversation"]', { timeout: 5_000 })
+    await new Promise((r) => setTimeout(r, 500))
   })
 
   await step("04-composer-open", async () => {
