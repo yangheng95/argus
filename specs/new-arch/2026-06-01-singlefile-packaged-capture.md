@@ -10,6 +10,12 @@ Bun-compiled release artifact only contains `opencorvus`, the Windows process
 supervisor, and the browser MCP node bundle. The packaged runtime therefore
 cannot resolve the external SingleFile executable.
 
+Follow-up evidence from the TradingView World Economy task showed a second
+failure mode after switching to the in-process API: SingleFile can time out
+waiting for `networkAlmostIdle` on live application pages, print `Load timeout`
+through its API internals, return without writing the output file, and leave the
+wrapper to throw a misleading `ENOENT` from `fs.stat(outputPath)`.
+
 ## Call sites
 
 | Symbol | Path | Decision |
@@ -29,10 +35,17 @@ API descriptor instead of an executable path.
 This avoids a parallel packaged helper and keeps SingleFile code in the
 compiled dependency graph.
 
+Use `DOMContentLoaded` as the capture load gate for dynamic application pages,
+with explicit load/capture deadlines. Write SingleFile errors/debug logs beside
+the attempted output and include those diagnostics when the output file is
+missing or empty, so the caller sees the real capture failure instead of a bare
+missing-file stat error.
+
 ## Verification
 
 - Unit test that the capture module no longer contains `node_modules/.bin` or
   `Bun.spawn` for SingleFile.
 - Unit test that `single-file-cli` exposes the API entrypoint used by the
   capture module.
+- Unit test that missing-output failures surface SingleFile diagnostics.
 - Typecheck the package.
