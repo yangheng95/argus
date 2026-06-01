@@ -93,6 +93,7 @@ const NO_DIRECTORY_PATHS = new Set<string>([
   "global/dispose",
   "global/db/reset",
   "global/tasks",
+  "mission",
 ]);
 const NO_DIRECTORY_PREFIXES = ["auth/"];
 
