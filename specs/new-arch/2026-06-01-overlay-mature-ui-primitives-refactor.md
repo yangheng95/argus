@@ -1,7 +1,7 @@
 # Overlay mature UI primitives refactor
 
 Date: 2026-06-01
-Status: phase 1 partial
+Status: phase 3 partial
 
 ## Problem
 
@@ -15,8 +15,8 @@ The overlay has several custom UI interaction implementations where mature Solid
 | Tabs | `src/components/ui/Tabs.tsx` only emits `role="tablist"` / `role="tab"` and data attributes. | `RightPanelTabs`, workspace/file editor toggles, tests under `tabs-primitive.test.ts`, `right-panel-tabs-flat.test.ts`, titlebar visual checks. | Replace primitive internals with `@kobalte/core/tabs`, preserving `.oc-tabs`, `.oc-tab`, and `data-*` styling contract. | 1 |
 | Menubar / menus | `TitlebarMenubar.tsx` hand-rolls Alt key handling, outside click, `role="menu"`, and focus movement. | Titlebar only, but high visibility. | Later migrate to Kobalte Menubar/Menu after Dialog/Tabs stabilize. | 2 |
 | Popovers / model picker | `ExecutorSelector.tsx` and `WorkspaceSplitLauncher.tsx` hand-roll outside click, portal positioning, and tab semantics. | Executor selector, workspace launchers. | Later migrate to Kobalte Popover/Tabs. | 2 |
-| File editor | `FileEditorPane.tsx` uses raw `<textarea>` for file editing. | File workbench editor. | Later replace with CodeMirror 6 for syntax-aware editing and large file behavior. | 3 |
-| Diff view | `DiffView.tsx` implements an LCS dynamic-programming diff and guard. | Changes panel and workspace diff preview. | Later use the existing `diff` package as the single diff engine. | 3 |
+| File editor | `FileEditorPane.tsx` used raw `<textarea>` for file editing. | File workbench editor. | Replaced with a CodeMirror 6-backed `CodeEditor` primitive. | 3 |
+| Diff view | `DiffView.tsx` implemented an LCS dynamic-programming diff and guard. | Changes panel and workspace diff preview. | Replaced with `diffLines` from the existing `diff` package as the single diff engine. | 3 |
 | Logs | `LogViewer.tsx` duplicates log parsing also present in `utils/log.ts`. | Log viewer. | Later move parser to one module and virtualize visible rows. | 3 |
 | Icons | `Icon.tsx` keeps a large local SVG registry. | Whole overlay. | Later replace commodity icons with a mature icon library; keep only product-specific icons. | 4 |
 
@@ -43,4 +43,6 @@ The overlay has several custom UI interaction implementations where mature Solid
 - [x] Review diff for unintended unrelated changes.
 - [x] Replace `FileEditorPane` raw `<textarea>` with a CodeMirror-backed `CodeEditor` primitive.
 - [x] Run targeted file explorer/editor test.
+- [x] Replace `DiffView` hand-written LCS with `diffLines` from `diff`.
+- [x] Add regression coverage rejecting the previous `diffMiddle` / `Uint32Array` implementation.
 - [ ] Commit and push only this refactor's files.
