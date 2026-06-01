@@ -266,6 +266,7 @@ All endpoints are protected by `OPENCORVUS_SERVER_PASSWORD`. When set, clients m
 |---|---|---|---|
 | GET | `/file` | List files | `file.list` |
 | GET | `/file/content` | Read file | `file.read` |
+| PATCH | `/file/content` | Write file | `file.write` |
 | GET | `/file/status` | Get file status | `file.status` |
 | GET | `/find` | Find text | `find.text` |
 | GET | `/find/file` | Find files | `find.files` |

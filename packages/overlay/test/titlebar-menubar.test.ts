@@ -564,7 +564,8 @@ test(
       expect(intro.brandWordmark).toBe("OpenCorvus")
       expect(intro.brandLabel).toBe("Workspace")
       expect(intro.rightTabs).toEqual([
-        { text: "Files", active: "true" },
+        { text: "Explorer", active: "true" },
+        { text: "Files", active: "false" },
         { text: "Inspector", active: "false" },
       ])
       await page.close()

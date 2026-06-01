@@ -213,6 +213,7 @@
           </div>
           <div class="chat-header-status" id="solidTaskStatusMount"></div>
           <div class="chat-header-meta oc-surface-header__actions">
+            <div id="solidFileEditorToggleMount" class="file-editor-toggle-mount"></div>
             <span
               class="chat-usage"
               id="chatUsage"
@@ -221,13 +222,18 @@
             ></span>
           </div>
         </header>
-        <div class="conversation-body" id="conversationBody">
-          <div class="conversation-scroll-shell">
-            <div class="chat-goals-strip" id="chatGoalsStrip"></div>
-            <div class="chat-scroll session-content" id="chatScroll"></div>
+        <div class="chat-content-frame" id="chatContentFrame" data-editor-open="false" data-editor-focus="messages">
+          <div class="chat-message-pane" id="chatMessagePane">
+            <div class="conversation-body" id="conversationBody">
+              <div class="conversation-scroll-shell">
+                <div class="chat-goals-strip" id="chatGoalsStrip"></div>
+                <div class="chat-scroll session-content" id="chatScroll"></div>
+              </div>
+            </div>
+            <div id="solidConversationAgentRailMount" class="conversation-agent-rail-host"></div>
           </div>
+          <div id="solidFileEditorMount" class="file-editor-mount"></div>
         </div>
-        <div id="solidConversationAgentRailMount" class="conversation-agent-rail-host"></div>
         <!-- Workspace resizer (row-resize, between chat-scroll and workspace) -->
         <div class="pane-resizer pane-resizer-workspace" id="workspaceResizer" role="separator" aria-orientation="horizontal" aria-label="Resize workspace panel" hidden></div>
         <!-- Workspace panel (Build + Diff) — stacked above composer, not a right column -->
@@ -244,7 +250,10 @@
             <div id="solidRightPanelHeaderCollapseControl" class="panel-header-collapse-mount"></div>
           </div>
         </header>
-        <div class="sections-tab-body" id="rightPanelFiles" data-panel-tab="files" data-active="true">
+        <div class="sections-tab-body" id="rightPanelExplorer" data-panel-tab="explorer" data-active="true">
+          <div id="solidFileExplorerMount" class="sections-explorer-tab"></div>
+        </div>
+        <div class="sections-tab-body" id="rightPanelFiles" data-panel-tab="changes" data-active="false">
           <div id="solidFilesSectionMount" class="sections-files-tab"></div>
         </div>
         <div class="sections-tab-body" id="rightPanelInspector" data-panel-tab="inspector" data-active="false">

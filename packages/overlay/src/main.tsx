@@ -27,7 +27,11 @@ import { ConversationAgentRail } from "./components/ConversationAgentRail"
 import { LogViewer } from "./components/LogViewer"
 import { WorkspacePanel } from "./components/WorkspacePanel"
 import { FilesSection } from "./components/FilesSection"
+import { FileExplorerPanel } from "./components/FileExplorerPanel"
+import { FileEditorPane } from "./components/FileEditorPane"
+import { FileEditorToggle } from "./components/FileEditorToggle"
 import { DEFAULT_RIGHT_PANEL_TAB, RightPanelTabs, type RightPanelTab } from "./components/RightPanelTabs"
+import { fileEditorFocus, selectedFilePath } from "./services/file-workbench"
 import type { DiffTarget } from "./services/diff"
 import { initApp } from "./services/init"
 import { loadTasks, boardStore, loadBoard,
@@ -604,6 +608,18 @@ if (conversationAgentRailMount) {
   render(() => <ConversationAgentRail />, conversationAgentRailMount)
 }
 
+const fileEditorMountEl = document.getElementById("solidFileEditorMount")
+if (fileEditorMountEl) {
+  fileEditorMountEl.innerHTML = ""
+  render(() => <FileEditorPane />, fileEditorMountEl)
+}
+
+const fileEditorToggleMountEl = document.getElementById("solidFileEditorToggleMount")
+if (fileEditorToggleMountEl) {
+  fileEditorToggleMountEl.innerHTML = ""
+  render(() => <FileEditorToggle />, fileEditorToggleMountEl)
+}
+
 // ── Mount: WorkspacePanel (Diff) ──
 
 const workspaceMountEl = document.getElementById("solidWorkspaceMount")
@@ -619,6 +635,12 @@ const filesSectionMountEl = document.getElementById("solidFilesSectionMount")
 if (filesSectionMountEl) {
   filesSectionMountEl.innerHTML = ""
   render(() => <FilesSection />, filesSectionMountEl)
+}
+
+const fileExplorerMountEl = document.getElementById("solidFileExplorerMount")
+if (fileExplorerMountEl) {
+  fileExplorerMountEl.innerHTML = ""
+  render(() => <FileExplorerPanel />, fileExplorerMountEl)
 }
 
 // ── Sidebar title backdoor: double-click resets DB ──
@@ -1118,10 +1140,19 @@ disposers.push(
 
     createEffect(() => {
       const active = rightPanelTab()
+      const explorer = document.getElementById("rightPanelExplorer")
       const inspector = document.getElementById("rightPanelInspector")
       const files = document.getElementById("rightPanelFiles")
+      if (explorer) explorer.dataset.active = String(active === "explorer")
       if (inspector) inspector.dataset.active = String(active === "inspector")
-      if (files) files.dataset.active = String(active === "files")
+      if (files) files.dataset.active = String(active === "changes")
+    })
+
+    createEffect(() => {
+      const frame = document.getElementById("chatContentFrame")
+      if (!frame) return
+      frame.dataset.editorOpen = selectedFilePath() ? "true" : "false"
+      frame.dataset.editorFocus = fileEditorFocus()
     })
 
     createEffect(() => {

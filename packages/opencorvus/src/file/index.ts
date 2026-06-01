@@ -1,3 +1,4 @@
+import { Bus } from "@/bus"
 import { BusEvent } from "@/bus/bus-event"
 import z from "zod"
 import { $ } from "bun"
@@ -589,6 +590,29 @@ export namespace File {
       }
     }
     return { type: "text", content }
+  }
+
+  export async function writeText(file: string, content: string): Promise<Content> {
+    using _ = log.time("writeText", { file })
+    const full = path.join(Instance.directory, file)
+
+    if (!(await isPathAllowed(full))) {
+      throw new Error(`Access denied: path escapes project directory`)
+    }
+
+    const text = isTextByExtension(file) || isTextByName(file)
+    if (isBinaryByExtension(file) && !text) {
+      throw new Error(`Cannot edit binary file: ${file}`)
+    }
+
+    const stat = await fs.promises.stat(full).catch(() => undefined)
+    if (!stat?.isFile()) {
+      throw new Error(`Cannot edit missing file: ${file}`)
+    }
+
+    await Filesystem.write(full, content)
+    await Bus.publish(Event.Edited, { file })
+    return read(file)
   }
 
   export async function list(dir?: string) {

@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "en-US",
-    "panel_revision": "06cf94d2db8e1579"
+    "panel_revision": "9db21399d1119614"
   },
   "about.author_name": "Yang, Heng",
   "about.go_version": "Go Version",
@@ -613,6 +613,10 @@
   "section.delivery": "Delivery",
   "section.criteria": "Evaluation Criteria",
   "section.files": "Files",
+  "explorer.title": "Explorer",
+  "explorer.search_placeholder": "Search files",
+  "explorer.empty": "No files in this directory",
+  "explorer.no_matches": "No matching files",
   "right_panel.close": "Collapse inspector",
   "right_panel.open": "Open inspector",
   "sections.title": "Inspector",
@@ -782,6 +786,12 @@
   "transcript.reasoning": "[Reasoning]",
   "version.core_unknown": "Core unavailable",
   "version.overlay": "Overlay v{{version}}",
+  "file_editor.title": "Editor",
+  "file_editor.empty": "Open a text file from Explorer",
+  "file_editor.binary": "This file is not editable in the overlay",
+  "file_editor.show_messages": "Show messages",
+  "file_editor.toggle": "Toggle file editor",
+  "file_editor.unsaved": "Unsaved changes",
   "workspace.close": "Close workspace",
   "workspace.diff": "Diff",
   "workspace.editor_launchers": "IDE launchers",
