@@ -267,6 +267,8 @@ try {
   log(`report: ${reportFile}`)
   process.exitCode = 1
 } finally {
+  const { Instance } = await import("../../src/project/instance")
+  await Instance.disposeAll().catch(() => undefined)
   if (server) await server.stop(true).catch(() => undefined)
   if (!keep) {
     await fs.rm(temp.home, { recursive: true, force: true }).catch(() => undefined)

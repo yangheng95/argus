@@ -58,6 +58,7 @@ import {
   toolErrorPartsFromFinalMessage,
 } from "@/agent/runner"
 import { Session } from "@/session"
+import { SessionContext } from "@/session/context"
 import { SessionPrompt } from "@/session/prompt"
 import type { Message } from "@/session/message"
 import { Bus } from "@/bus"
@@ -171,6 +172,15 @@ function hardErrorEnvelope(error: AgentRunError): OrchestratorTaskErrorEnvelope 
     : orchestratorErrorEnvelope(error.cause)
 }
 
+export function recordOrchestratorTraceReportForSession(
+  session: Session.Info,
+  input: Parameters<typeof AgentTrace.recordAgentReport>[0],
+): void {
+  SessionContext.provide(session, () => {
+    AgentTrace.recordAgentReport(input)
+  })
+}
+
 async function recordOrchestratorSessionHardError(input: {
   taskID: string
   sessionID: string
@@ -280,6 +290,7 @@ export namespace Orchestrator {
     running.set(taskID, ctrl)
 
     let agentSessionID: string | undefined
+    let agentSessionInfo: Session.Info | undefined
     let promptInFlight = false
     try {
       if (!task.session_id) {
@@ -341,6 +352,7 @@ export namespace Orchestrator {
       //    is the durable task-level conversation/audit surface for every wake.
       const agentSession = await orchestratorSessionForTask(task)
       agentSessionID = agentSession.id
+      agentSessionInfo = agentSession
 
 
       // 3. Create tools (agentSessionID passed so tool sessions become children)
@@ -614,7 +626,7 @@ export namespace Orchestrator {
           ?.filter((p) => p.type === "text")
           .map((p) => (p as { text: string }).text)
           .join("\n\n")
-        AgentTrace.recordAgentReport({
+        recordOrchestratorTraceReportForSession(agentSession, {
           sessionID: agentSession.id,
           parentSessionID: task.session_id ?? undefined,
           taskID,
@@ -723,9 +735,9 @@ export namespace Orchestrator {
         error: wasCtrlAborted ? abortReasonText : structured.message,
         data: wasCtrlAborted ? undefined : structured.envelope.data,
       })
-      if (AgentTrace.isEnabled() && agentSessionID) {
-        AgentTrace.recordAgentReport({
-          sessionID: agentSessionID,
+      if (AgentTrace.isEnabled() && agentSessionInfo) {
+        recordOrchestratorTraceReportForSession(agentSessionInfo, {
+          sessionID: agentSessionInfo.id,
           taskID,
           agentName: "orchestrator",
           kind: "orchestrator_wake_failure",
