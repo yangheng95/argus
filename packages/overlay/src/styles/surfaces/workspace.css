@@ -376,22 +376,57 @@ code .file-link:hover {
   flex-direction: column;
 }
 
-.file-editor-textarea {
+.file-editor-code {
   flex: 1 1 0;
   min-height: 0;
   width: 100%;
-  resize: none;
-  border: 0;
-  outline: 0;
-  padding: calc(10px * var(--ui-scale)) calc(12px * var(--ui-scale));
   background: var(--surface-inset);
   color: var(--text);
   font-family: var(--mono);
   font-size: var(--ui-font-code);
   line-height: 1.55;
-  tab-size: 2;
   user-select: text;
   -webkit-user-select: text;
+}
+
+.file-editor-code .cm-editor {
+  height: 100%;
+  min-height: 0;
+  background: var(--surface-inset);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: var(--ui-font-code);
+}
+
+.file-editor-code .cm-scroller {
+  font-family: var(--mono);
+  line-height: 1.55;
+}
+
+.file-editor-code .cm-content {
+  padding: calc(10px * var(--ui-scale)) calc(12px * var(--ui-scale));
+  min-height: 100%;
+  caret-color: var(--accent);
+}
+
+.file-editor-code .cm-gutters {
+  background: var(--surface-inset);
+  color: var(--text-muted);
+  border-right: var(--oc-border-width) solid var(--border);
+}
+
+.file-editor-code .cm-activeLine,
+.file-editor-code .cm-activeLineGutter {
+  background: var(--ui-highlight-tone);
+}
+
+.file-editor-code .cm-focused {
+  outline: none;
+}
+
+.file-editor-code .cm-selectionBackground,
+.file-editor-code .cm-focused .cm-selectionBackground {
+  background: color-mix(in srgb, var(--accent) 24%, transparent);
 }
 
 .file-editor-empty {

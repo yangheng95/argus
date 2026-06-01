@@ -41,4 +41,6 @@ The overlay has several custom UI interaction implementations where mature Solid
 - [x] Run targeted overlay tests for Dialog/Tabs.
 - [x] Run overlay typecheck.
 - [x] Review diff for unintended unrelated changes.
+- [x] Replace `FileEditorPane` raw `<textarea>` with a CodeMirror-backed `CodeEditor` primitive.
+- [x] Run targeted file explorer/editor test.
 - [ ] Commit and push only this refactor's files.
