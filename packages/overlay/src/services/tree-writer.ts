@@ -322,6 +322,24 @@ export function hasProjectedPart(sessionID: string, partID: string): boolean {
   return sessions.get(sessionID)?.partIndex.has(partID) === true;
 }
 
+function requireSessionProjection(sessionID: string, eventType: string): SessionInfo {
+  const session = sessions.get(sessionID);
+  if (!session) throw new Error(`${eventType}: unknown session ${sessionID}`);
+  return session;
+}
+
+function requirePartProjection(session: SessionInfo, partID: string, eventType: string): PartTarget {
+  const target = session.partIndex.get(partID);
+  if (!target) throw new Error(`${eventType}: unknown part ${partID} in session ${session.sessionID}`);
+  return target;
+}
+
+function requireMessageCardProjection(session: SessionInfo, messageID: string, eventType: string): string {
+  const cardID = session.messageCardIDs.get(messageID);
+  if (!cardID) throw new Error(`${eventType}: unknown message ${messageID} in session ${session.sessionID}`);
+  return cardID;
+}
+
 function validatePartDeltaTarget(event: any): {
   key: string;
   delta: string;
@@ -333,11 +351,8 @@ function validatePartDeltaTarget(event: any): {
   if (!partID || !sessionID || !field) {
     throw new Error("message.part.delta missing partID/sessionID/field");
   }
-  const session = sessions.get(sessionID);
-  if (!session) throw new Error(`message.part.delta: unknown session ${sessionID}`);
-  if (session.partIndex.get(partID) === undefined) {
-    throw new Error(`message.part.delta: unknown part ${partID} in session ${sessionID}`);
-  }
+  const session = requireSessionProjection(sessionID, "message.part.delta");
+  requirePartProjection(session, partID, "message.part.delta");
   return {
     key: `${sessionID}|${partID}|${field}`,
     delta: typeof p.delta === "string" ? p.delta : "",
@@ -666,10 +681,10 @@ function handleMessageUpdated(event: any): void {
     completed,
   });
 
-  const session = ensureSession(sessionID, { stage, parentSessionID, goalID });
+  const session = ensureSessionProjection(sessionID, { stage, parentSessionID, goalID });
   session.messageIDs.add(id);
 
-  const { cardID, isPhase } = ensureTurnCard(session, id, {
+  const { cardID, isPhase } = ensureMessageTurnProjection(session, id, {
     stage,
     goalID,
     role: displayRole,
@@ -706,8 +721,15 @@ function handleMessageUpdated(event: any): void {
   drainPendingIntegrity(sessionID);
 }
 
-function handlePartUpdated(event: any): void {
-  const part = propsOf(event).part;
+interface EnsuredPartProjection {
+  session: SessionInfo;
+  cardID: string;
+  partID: string;
+  messageID: string;
+  sessionID: string;
+}
+
+function ensurePartProjection(part: any, opts: { observationTime?: number } = {}): EnsuredPartProjection | null {
   if (!part || typeof part !== "object") throw new Error("message.part.updated missing part");
   const partID = String(part.id || "");
   const messageID = String(part.messageID || "");
@@ -728,8 +750,8 @@ function handlePartUpdated(event: any): void {
     // time. The later message.updated overwrites `time` with the
     // authoritative server timestamp; no synthetic stub / rename.
     const stage = deriveSessionStage(part);
-    if (stage === "filtered") return;
-    session = ensureSession(sessionID, {
+    if (stage === "filtered") return null;
+    session = ensureSessionProjection(sessionID, {
       stage,
       parentSessionID: String(part.parentSessionID || ""),
       goalID: String(part.goalID || ""),
@@ -737,12 +759,16 @@ function handlePartUpdated(event: any): void {
     cardID = session.messageCardIDs.get(messageID);
   }
 
+  if (!session) {
+    throw new Error(`message.part.updated could not ensure session ${sessionID}`);
+  }
   if (!cardID) {
-    const ensured = ensureTurnCard(session, messageID, {
+    const observationTime = opts.observationTime ?? Date.now();
+    const ensured = ensureMessageTurnProjection(session, messageID, {
       stage: session.stage,
       goalID: session.goalID,
       role: String(part.resolvedRole || session.stage),
-      time: Date.now(),
+      time: observationTime,
       stampServerTime: false,
     });
     cardID = ensured.cardID;
@@ -752,7 +778,7 @@ function handlePartUpdated(event: any): void {
         cardID,
         messageID,
         String(part.resolvedRole || session.stage),
-        Date.now(),
+        observationTime,
       );
     }
     drainPendingSessionStatus(sessionID);
@@ -760,6 +786,13 @@ function handlePartUpdated(event: any): void {
   }
 
   upsertPart(session, messageID, cardID, partID, { ...part });
+  return { session, cardID, partID, messageID, sessionID };
+}
+
+function handlePartUpdated(event: any): void {
+  const projection = ensurePartProjection(propsOf(event).part);
+  if (!projection) return;
+  const { session } = projection;
   syncExecutorTopLevelVisibility(session);
 }
 
@@ -773,12 +806,8 @@ function handlePartDelta(event: any): void {
     throw new Error("message.part.delta missing partID/sessionID/field");
   }
 
-  const session = sessions.get(sessionID);
-  if (!session) throw new Error(`message.part.delta: unknown session ${sessionID}`);
-  const target = session.partIndex.get(partID);
-  if (target === undefined) {
-    throw new Error(`message.part.delta: unknown part ${partID} in session ${sessionID}`);
-  }
+  const session = requireSessionProjection(sessionID, "message.part.delta");
+  const target = requirePartProjection(session, partID, "message.part.delta");
 
   // Resolve the EXACT card that owns this part. A late delta for an older
   // message turn must land on that turn's card, never on whatever turn is
@@ -877,10 +906,8 @@ function handleMessageRemoved(event: any): void {
   const messageID = String(p.messageID || "");
   if (!sessionID || !messageID) throw new Error("message.removed missing sessionID/messageID");
 
-  const session = sessions.get(sessionID);
-  if (!session) throw new Error(`message.removed: unknown session ${sessionID}`);
-  const cardID = session.messageCardIDs.get(messageID);
-  if (!cardID) throw new Error(`message.removed: unknown message ${messageID} in session ${sessionID}`);
+  const session = requireSessionProjection(sessionID, "message.removed");
+  const cardID = requireMessageCardProjection(session, messageID, "message.removed");
 
   session.messageIDs.delete(messageID);
   session.messageCardIDs.delete(messageID);
@@ -902,10 +929,8 @@ function handlePartRemoved(event: any): void {
   const partID = String(p.partID || "");
   if (!sessionID || !partID) throw new Error("message.part.removed missing sessionID/partID");
 
-  const session = sessions.get(sessionID);
-  if (!session) throw new Error(`message.part.removed: unknown session ${sessionID}`);
-  const target = session.partIndex.get(partID);
-  if (!target) throw new Error(`message.part.removed: unknown part ${partID} in session ${sessionID}`);
+  const session = requireSessionProjection(sessionID, "message.part.removed");
+  const target = requirePartProjection(session, partID, "message.part.removed");
 
   removeIndexedParts(session, target.cardID, (_part, index) => index === target.index);
   syncExecutorTopLevelVisibility(session);
@@ -1131,6 +1156,11 @@ function integritySessionIDFromReviewID(reviewID: string): string | undefined {
   return sessionID.startsWith("ses") ? sessionID : undefined;
 }
 
+function completedIntegrityCardForReviewID(reviewID: string): CardNode | undefined {
+  const sessionID = integritySessionIDFromReviewID(reviewID);
+  return sessionID ? cardTreeStore.cards[integrityCardID(sessionID)] : undefined;
+}
+
 function reconstructRunningIntegrityReview(input: {
   taskID: string
   reviewID: string
@@ -1155,6 +1185,17 @@ function reconstructRunningIntegrityReview(input: {
   runningReviews.set(input.reviewID, payload);
   materializeRunningReview(payload);
   return payload;
+}
+
+function ensureIntegrityReviewProjection(input: {
+  taskID: string
+  reviewID: string
+  phase: ReviewStreamPhase
+  event: any
+  attempt: number
+  elapsedMs?: number
+}): RunningReviewPayload | undefined {
+  return runningReviews.get(input.reviewID) ?? reconstructRunningIntegrityReview(input);
 }
 
 function handleReviewStreamStarted(event: any): void {
@@ -1189,7 +1230,8 @@ function handleReviewStreamProgress(event: any): void {
   if (!reviewID) throw new Error(`review.stream.progress missing reviewID (taskID=${taskID})`);
   const attempt = Number(props.attempt || 0);
   const elapsedMs = Number(props.elapsedMs || props.elapsed_ms || 0);
-  const existing = runningReviews.get(reviewID) ?? reconstructRunningIntegrityReview({
+  if (completedIntegrityCardForReviewID(reviewID)?.integrity) return;
+  const existing = ensureIntegrityReviewProjection({
     taskID,
     reviewID,
     phase,
@@ -1233,18 +1275,15 @@ function handleReviewStreamChunk(event: any): void {
   }
   if (!delta) return;
 
-  const running = runningReviews.get(reviewID) ?? reconstructRunningIntegrityReview({
+  const completedCard = completedIntegrityCardForReviewID(reviewID);
+  if (completedCard?.integrity) return;
+  const running = ensureIntegrityReviewProjection({
     taskID,
     reviewID,
     phase,
     event,
     attempt,
   });
-  const completedCardID = /^integrity:(.+)$/.test(reviewID)
-    ? integrityCardID(reviewID.replace(/^integrity:/, ""))
-    : "";
-  const completedCard = completedCardID ? cardTreeStore.cards[completedCardID] : undefined;
-  if (completedCard?.integrity) return;
   if (!running) {
     throw new Error(`review.stream.chunk arrived before started (taskID=${taskID}, reviewID=${reviewID})`);
   }
@@ -1281,7 +1320,7 @@ function handleReviewStreamChunk(event: any): void {
  *  a SessionInfo so session.status / usage routing (active turn card) works
  *  uniformly — `activeCardID` is pinned to the dedicated card. */
 function ensureIntegritySession(sessionID: string, time: number): { session: SessionInfo; cardID: string } {
-  const session = ensureSession(sessionID, { stage: "integrity", parentSessionID: "", goalID: "" });
+  const session = ensureSessionProjection(sessionID, { stage: "integrity", parentSessionID: "", goalID: "" });
   const cardID = sessionCardID("integrity", sessionID);
   const created = !cardTreeStore.cards[cardID];
   if (created) {
@@ -1617,8 +1656,8 @@ interface EnsureSessionOpts {
 
 /** Register / backfill the runtime session index. NEVER creates a display
  *  card — display identity is per message turn, not per session (spec
- *  §2.3). `ensureTurnCard` owns card creation. */
-function ensureSession(sessionID: string, opts: EnsureSessionOpts): SessionInfo {
+ *  §2.3). `ensureMessageTurnProjection` owns card creation. */
+function ensureSessionProjection(sessionID: string, opts: EnsureSessionOpts): SessionInfo {
   const existing = sessions.get(sessionID);
   if (existing) {
     if (!existing.stage && opts.stage) existing.stage = opts.stage;
@@ -1761,7 +1800,7 @@ function migrateTurnCard(
 /** Create or refresh the display card for one message turn and point the
  *  session's active pointers at it. Returns the resolved card id + whether
  *  it is a phase card. */
-function ensureTurnCard(
+function ensureMessageTurnProjection(
   session: SessionInfo,
   messageID: string,
   opts: EnsureTurnCardOpts,
@@ -2090,9 +2129,9 @@ export function hydrateConversationView(view: any, transcript: any[]): void {
       time: timeCreated,
       completed,
     });
-    const session = ensureSession(sessionID, { stage, parentSessionID, goalID });
+    const session = ensureSessionProjection(sessionID, { stage, parentSessionID, goalID });
     session.messageIDs.add(messageID);
-    const { cardID, isPhase } = ensureTurnCard(session, messageID, {
+    const { cardID, isPhase } = ensureMessageTurnProjection(session, messageID, {
       stage,
       goalID,
       role: displayRole,
@@ -2109,7 +2148,8 @@ export function hydrateConversationView(view: any, transcript: any[]): void {
       if (!partID) {
         throw new Error(`hydrateConversationView: message ${messageID} contains part without id`);
       }
-      upsertPart(session, messageID, cardID, partID, { ...part });
+      const projection = ensurePartProjection(part);
+      if (!projection) continue;
     }
     touched.add(sessionID);
   }

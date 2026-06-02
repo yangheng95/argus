@@ -19,7 +19,7 @@ if (typeof globalThis.requestAnimationFrame === "undefined") {
 }
 
 const { setBoardStore } = await import("../src/store/board");
-const { applyEvent, flushBufferedPartDeltas, resetWriter } = await import("../src/services/tree-writer");
+const { applyEvent, flushBufferedPartDeltas, resetWriter, hydrateConversationView } = await import("../src/services/tree-writer");
 const { cardTreeStore } = await import("../src/store/card-tree");
 
 const TASK_ID = "tsk_perf";
@@ -125,30 +125,33 @@ function bootstrapExecutorWithManyCards(extraCards: number): void {
   resetWriter();
 
   const baseTime = 1_776_000_000_000;
+  const transcript: any[] = [];
   for (let i = 0; i < extraCards; i++) {
-    seedAssistantSession(`noise_${i}`, `noise_msg_${i}`, baseTime + i);
-  }
-
-  applyEvent({
-    type: "message.updated",
-    properties: {
-      taskID: TASK_ID,
+    transcript.push({
       info: {
-        id: EXECUTOR_MSG_ID,
-        sessionID: EXECUTOR_SID,
+        id: `noise_msg_${i}`,
+        sessionID: `noise_${i}`,
         role: "assistant",
-        resolvedRole: "executor",
-        agent: "executor",
-        channel: "executor",
-        time: { created: baseTime + extraCards + 1 },
+        resolvedRole: "assistant",
+        agent: "assistant",
+        channel: "assistant",
+        time: { created: baseTime + i },
       },
+      parts: [],
+    });
+  }
+  transcript.push({
+    info: {
+      id: EXECUTOR_MSG_ID,
+      sessionID: EXECUTOR_SID,
+      role: "assistant",
+      resolvedRole: "executor",
+      agent: "executor",
+      channel: "executor",
+      time: { created: baseTime + extraCards + 1 },
     },
-  });
-  applyEvent({
-    type: "message.part.updated",
-    properties: {
-      taskID: TASK_ID,
-      part: {
+    parts: [
+      {
         id: EXECUTOR_PART_ID,
         messageID: EXECUTOR_MSG_ID,
         sessionID: EXECUTOR_SID,
@@ -157,8 +160,9 @@ function bootstrapExecutorWithManyCards(extraCards: number): void {
         type: "reasoning",
         text: "",
       },
-    },
+    ],
   });
+  hydrateConversationView({ sessions: [] }, transcript);
 }
 
 function runExecutorDeltaBurstWithManyCards(count: number, extraCards: number): { totalMs: number; perEventMs: number } {
