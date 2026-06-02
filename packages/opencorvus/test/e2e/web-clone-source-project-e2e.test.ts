@@ -82,7 +82,8 @@ describe("web clone source project E2E", () => {
     const audit = evaluateBenchmarkProcessTrace(trace)
 
     expect(audit.passed).toBe(false)
-    expect(audit.findings.join("\n")).toContain("web_clone_generate_source_project")
+    expect(audit.findings.join("\n")).toContain("create_frontend_skeleton_project")
+    expect(audit.findings.join("\n")).toContain("frontend_design_source_edit")
     expect(audit.findings.join("\n")).toContain("sourceDomReplacementPlan.ts")
     expect(audit.findings.join("\n")).toContain("maintainable_replacement_required")
   })
@@ -101,10 +102,19 @@ describe("web clone source project E2E", () => {
       sourceDomRegionFileCount: 0,
       semanticReplacementFileCount: 4,
     }
-    for (const name of ["web_clone_prepare_context", "web_clone_generate_source_project", "source-project-sidecars", "bun install", "bun run build"] as const) {
+    for (const name of [
+      "frontend_design_static_tool_surface",
+      "web_clone_prepare_context",
+      "create_frontend_skeleton_project",
+      "source-project-sidecars",
+      "frontend_design_region_selection",
+      "frontend_design_source_edit",
+      "bun install",
+      "bun run build",
+    ] as const) {
       recordTraceEvent(trace, {
         step: name,
-        kind: name === "source-project-sidecars" ? "inspection" : name.startsWith("bun") ? "command" : "tool",
+        kind: name === "source-project-sidecars" || name === "frontend_design_static_tool_surface" || name === "frontend_design_region_selection" ? "inspection" : name.startsWith("bun") ? "command" : "tool",
         name,
         status: "passed",
       })
@@ -134,6 +144,43 @@ describe("web clone source project E2E", () => {
     const audit = evaluateBenchmarkProcessTrace(trace)
 
     expect(audit.findings.join("\n")).not.toContain("Missing process event: visual-diff.")
+  })
+
+  test("process trace rejects host-only semantic replacements without frontend_design source edits", () => {
+    const trace = createBenchmarkProcessTrace({
+      sourcePackageDir: "web-clone-source",
+      outputDir: "frontend-design-skeleton",
+    })
+    trace.sourceProjectEvidence = {
+      sourceDomPageExists: true,
+      replacementPlanExists: true,
+      iterationStateExists: true,
+      sourceRegionsExists: true,
+      referenceImageExists: true,
+      sourceDomRegionFileCount: 0,
+      semanticReplacementFileCount: 3,
+    }
+    for (const name of ["web_clone_prepare_context", "web_clone_generate_source_project", "source-project-sidecars", "bun install", "bun run build", "visual-diff"] as const) {
+      recordTraceEvent(trace, {
+        step: name,
+        kind: name === "source-project-sidecars" ? "inspection" : name.startsWith("bun") || name === "visual-diff" ? "command" : "tool",
+        name,
+        status: "passed",
+      })
+    }
+    recordTraceEvent(trace, {
+      step: "audit-maintainable-replacement",
+      kind: "tool",
+      name: "web_clone_source_audit",
+      status: "passed",
+      details: { finalDeliveryMode: "maintainable_replacement_required", passed: true },
+    })
+
+    const audit = evaluateBenchmarkProcessTrace(trace)
+
+    expect(audit.passed).toBe(false)
+    expect(audit.findings.join("\n")).toContain("frontend_design_source_edit")
+    expect(audit.findings.join("\n")).toContain("create_frontend_skeleton_project")
   })
 
   e2eTest("runs the OpenCorvus tool chain and enforces the visual threshold", async () => {
@@ -303,9 +350,12 @@ function createBenchmarkProcessTrace(input: {
     sourcePackageDir: input.sourcePackageDir,
     outputDir: input.outputDir,
     expectedFlow: [
+      "frontend_design_static_tool_surface",
       "web_clone_prepare_context",
-      "web_clone_generate_source_project",
+      "create_frontend_skeleton_project",
       "source-project-sidecars",
+      "frontend_design_region_selection",
+      "frontend_design_source_edit",
       "bun install",
       "bun run build",
       "web_clone_source_audit:visual_baseline_allowed",
@@ -359,9 +409,12 @@ function evaluateBenchmarkProcessTrace(trace: BenchmarkProcessTrace): BenchmarkP
   const findings: string[] = []
   const eventNames = trace.events.map((event) => event.name)
   const requiredNames = [
+    "frontend_design_static_tool_surface",
     "web_clone_prepare_context",
-    "web_clone_generate_source_project",
+    "create_frontend_skeleton_project",
     "source-project-sidecars",
+    "frontend_design_region_selection",
+    "frontend_design_source_edit",
     "bun install",
     "bun run build",
     "visual-diff",
@@ -390,13 +443,21 @@ function evaluateBenchmarkProcessTrace(trace: BenchmarkProcessTrace): BenchmarkP
   if (!evidence?.sourceRegionsExists) findings.push("Generated source project is missing sourceDomRegions.ts.")
   if (!evidence?.referenceImageExists) findings.push("Generated source project is missing reference.png.")
   if ((evidence?.semanticReplacementFileCount ?? 0) <= 0) {
-    findings.push("Generated source project has no semantic replacement components; rawproject refinement did not start.")
+    findings.push("Frontend-design source project has no semantic replacement components; rawproject refinement did not start.")
+  }
+  if ((evidence?.sourceDomRegionFileCount ?? 0) > 0) {
+    findings.push("Frontend-design source project still contains generated source-dom regions; rawproject refinement is incomplete.")
   }
 
-  const generateIndex = eventNames.indexOf("web_clone_generate_source_project")
+  const generateIndex = eventNames.indexOf("create_frontend_skeleton_project")
   const buildIndex = eventNames.indexOf("bun run build")
   if (generateIndex >= 0 && buildIndex >= 0 && buildIndex < generateIndex) {
-    findings.push("Project build ran before web_clone_generate_source_project materialized the rawproject baseline.")
+    findings.push("Project build ran before create_frontend_skeleton_project materialized the rawproject baseline.")
+  }
+
+  const sourceEditIndex = eventNames.indexOf("frontend_design_source_edit")
+  if (generateIndex >= 0 && sourceEditIndex >= 0 && sourceEditIndex < generateIndex) {
+    findings.push("Frontend-design source edit ran before create_frontend_skeleton_project materialized the rawproject baseline.")
   }
 
   return {

@@ -5,7 +5,16 @@ import { Instance } from "@/project/instance"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { generateWebCloneSourceProject } from "@/web-clone/source-project-generator"
 
-export function createFrontendSkeletonProjectTool(options: { taskID?: string } = {}) {
+export interface FrontendSkeletonProjectToolEvent {
+  name: "create_frontend_skeleton_project"
+  status: "started" | "passed" | "failed"
+  details?: Record<string, unknown>
+}
+
+export function createFrontendSkeletonProjectTool(options: {
+  taskID?: string
+  onToolEvent?: (event: FrontendSkeletonProjectToolEvent) => void
+} = {}) {
   return {
     create_frontend_skeleton_project: tool({
       description:
@@ -29,14 +38,42 @@ export function createFrontendSkeletonProjectTool(options: { taskID?: string } =
         overwrite: z.boolean().optional().describe("Replace existing outputDir. Defaults to false."),
       }),
       execute: async (params) => {
+        options.onToolEvent?.({
+          name: "create_frontend_skeleton_project",
+          status: "started",
+          details: {
+            sourcePackageDir: params.sourcePackageDir,
+            outputDir: params.outputDir,
+          },
+        })
         const defaults = options.taskID ? ProjectRuntimePaths.frontendDesignPaths(Instance.directory, options.taskID) : undefined
         const sourcePackageDir = resolveProjectPath(params.sourcePackageDir ?? requireTaskRuntimeDefault(defaults?.sourcePackageAbsolute, "sourcePackageDir"))
         const outputDir = resolveProjectPath(params.outputDir ?? requireTaskRuntimeDefault(defaults?.skeletonProjectAbsolute, "outputDir"))
-        const result = await generateWebCloneSourceProject({
-          mirrorDir: sourcePackageDir,
-          outputDir,
-          packageName: params.packageName,
-          overwrite: params.overwrite === true,
+        let result: Awaited<ReturnType<typeof generateWebCloneSourceProject>>
+        try {
+          result = await generateWebCloneSourceProject({
+            mirrorDir: sourcePackageDir,
+            outputDir,
+            packageName: params.packageName,
+            overwrite: params.overwrite === true,
+          })
+        } catch (error) {
+          options.onToolEvent?.({
+            name: "create_frontend_skeleton_project",
+            status: "failed",
+            details: { error: error instanceof Error ? error.message : String(error) },
+          })
+          throw error
+        }
+        options.onToolEvent?.({
+          name: "create_frontend_skeleton_project",
+          status: "passed",
+          details: {
+            sourcePackageDir: result.mirrorDir,
+            outputDir: result.outputDir,
+            files: result.files.length,
+            stats: result.stats,
+          },
         })
         return {
           title: "Frontend source skeleton project created",
