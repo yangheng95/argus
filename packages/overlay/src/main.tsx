@@ -30,7 +30,7 @@ import { FileExplorerPanel } from "./components/FileExplorerPanel"
 import { MessageWorkbenchPane } from "./components/MessageWorkbenchPane"
 import { FileEditorToggle } from "./components/FileEditorToggle"
 import { DEFAULT_RIGHT_PANEL_TAB, RightPanelTabs, type RightPanelTab } from "./components/RightPanelTabs"
-import { fileEditorFocus, selectedFilePath } from "./services/file-workbench"
+import { fileEditorFocus, fileWorkbenchOpen } from "./services/file-workbench"
 import type { DiffTarget } from "./services/diff"
 import { initApp } from "./services/init"
 import { loadTasks, boardStore, loadBoard,
@@ -1143,7 +1143,7 @@ disposers.push(
     createEffect(() => {
       const frame = document.getElementById("chatContentFrame")
       if (!frame) return
-      frame.dataset.editorOpen = activeTaskID() || selectedFilePath() || workspaceOpen() ? "true" : "false"
+      frame.dataset.editorOpen = fileWorkbenchOpen() || workspaceOpen() ? "true" : "false"
       frame.dataset.editorFocus = fileEditorFocus()
     })
 
