@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "en-US",
-    "panel_revision": "09881caa2429dd0f"
+    "panel_revision": "481dc189f77f3296"
   },
   "about.author_name": "Yang, Heng",
   "about.go_version": "Go Version",
@@ -124,6 +124,9 @@
   "notify.hide_details": "Hide details",
   "notify.copy_details": "Copy details",
   "notify.copied": "Copied",
+  "notify.managed_server_failed_title": "OpenCorvus backend failed to start",
+  "notify.managed_server_restart_failed_title": "OpenCorvus backend restart failed",
+  "notify.managed_server_failed_body": "Overlay could not connect to the managed backend: {{error}}. Expand details for the launch log path and connection probe.",
   "notify.permission_unsupported_title": "Desktop notifications unavailable",
   "notify.permission_unsupported_body": "This environment does not expose the Notification API. OpenCorvus will keep showing in-app notifications.",
   "notify.permission_blocked_title": "Desktop notifications blocked",
@@ -458,6 +461,7 @@
   },
   "files.select_target": "Select a task to view file changes",
   "files.none": "No file changes for this task",
+  "files.changes": "Changes",
   "files.filter_placeholder": "Filter changed files",
   "files.clear_filter": "Clear file filter",
   "files.no_matches": "No matching file changes",

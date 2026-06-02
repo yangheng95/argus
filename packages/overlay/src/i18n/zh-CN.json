@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "zh-CN",
-    "panel_revision": "09881caa2429dd0f"
+    "panel_revision": "481dc189f77f3296"
   },
   "about.author_name": "杨恒",
   "about.go_version": "Go 版本",
@@ -124,6 +124,9 @@
   "notify.hide_details": "收起详情",
   "notify.copy_details": "复制详情",
   "notify.copied": "已复制",
+  "notify.managed_server_failed_title": "OpenCorvus 后端启动失败",
+  "notify.managed_server_restart_failed_title": "OpenCorvus 后端重启失败",
+  "notify.managed_server_failed_body": "Overlay 无法连接受管后端：{{error}}。展开详情查看启动日志路径和探活信息。",
   "notify.permission_unsupported_title": "桌面通知不可用",
   "notify.permission_unsupported_body": "当前环境没有提供 Notification API。OpenCorvus 会继续显示界面内通知。",
   "notify.permission_blocked_title": "桌面通知被阻止",
@@ -458,6 +461,7 @@
   },
   "files.select_target": "选择任务查看文件变更",
   "files.none": "当前任务没有文件变更",
+  "files.changes": "变更",
   "files.filter_placeholder": "筛选变更文件",
   "files.clear_filter": "清除文件筛选",
   "files.no_matches": "没有匹配的文件变更",

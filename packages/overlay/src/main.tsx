@@ -27,7 +27,8 @@ import { ConversationAgentRail } from "./components/ConversationAgentRail"
 import { LogViewer } from "./components/LogViewer"
 import { WorkspacePanel } from "./components/WorkspacePanel"
 import { FileExplorerPanel } from "./components/FileExplorerPanel"
-import { MessageWorkbenchPane } from "./components/MessageWorkbenchPane"
+import { FileEditorPane } from "./components/FileEditorPane"
+import { RightFilesPanel } from "./components/RightFilesPanel"
 import { DEFAULT_RIGHT_PANEL_TAB, RightPanelTabs, type RightPanelTab } from "./components/RightPanelTabs"
 import { fileWorkbenchOpen } from "./services/file-workbench"
 import type { DiffTarget } from "./services/diff"
@@ -518,6 +519,12 @@ document.addEventListener(
   listenerOpts,
 )
 
+window.addEventListener(
+  "delivery:focus-changes",
+  () => setRightPanelTab("files"),
+  listenerOpts,
+)
+
 function installGlobalBridges(): void {
   ;(window as any).renderMarkdown = renderMarkdown
   ;(window as any).persistOverlaySettings = async () => {
@@ -610,9 +617,15 @@ if (conversationAgentRailMount) {
 const fileEditorMountEl = document.getElementById("solidFileEditorMount")
 if (fileEditorMountEl) {
   fileEditorMountEl.innerHTML = ""
+  render(() => <FileEditorPane />, fileEditorMountEl)
+}
+
+const rightFilesMountEl = document.getElementById("solidRightFilesMount")
+if (rightFilesMountEl) {
+  rightFilesMountEl.innerHTML = ""
   render(
-    () => <MessageWorkbenchPane diffOpen={workspaceOpen()} diffTarget={workspaceTarget()} onCloseDiff={closeWorkspace} />,
-    fileEditorMountEl,
+    () => <RightFilesPanel diffOpen={workspaceOpen()} diffTarget={workspaceTarget()} onCloseDiff={closeWorkspace} />,
+    rightFilesMountEl,
   )
 }
 
@@ -1137,7 +1150,7 @@ disposers.push(
     })
 
     createEffect(() => {
-      if (fileWorkbenchOpen() || workspaceOpen()) setRightPanelTab("files")
+      if (fileEditorMountEl) (fileEditorMountEl as HTMLElement).hidden = !fileWorkbenchOpen()
     })
 
     createEffect(() => {
