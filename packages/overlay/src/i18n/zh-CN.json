@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "zh-CN",
-    "panel_revision": "3fafe7ad45d51092"
+    "panel_revision": "09881caa2429dd0f"
   },
   "about.author_name": "杨恒",
   "about.go_version": "Go 版本",
@@ -790,8 +790,6 @@
   "file_editor.title": "编辑器",
   "file_editor.empty": "从资源管理器打开文本文件",
   "file_editor.binary": "此文件不能在 Overlay 中编辑",
-  "file_editor.show_messages": "显示消息",
-  "file_editor.toggle": "切换文件编辑器",
   "file_editor.unsaved": "未保存的更改",
   "workspace.close": "关闭工作区",
   "workspace.diff": "差异",

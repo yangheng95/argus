@@ -293,7 +293,7 @@ test("mergeChangeGroups keeps agent rows and delivery diff rows in one scoped gr
   })
 })
 
-test("agent file changes render only through the message-side workbench", () => {
+test("agent file changes render only through the right-panel Files workbench", () => {
   const chatBubble = readText(join(ROOT, "src", "components", "ChatBubble.tsx"))
   const css = readText(join(ROOT, "src", "styles", "surfaces", "chat-bubble.css"))
   const changesCss = readText(join(ROOT, "src", "styles", "surfaces", "changes.css"))

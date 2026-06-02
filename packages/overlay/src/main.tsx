@@ -28,9 +28,8 @@ import { LogViewer } from "./components/LogViewer"
 import { WorkspacePanel } from "./components/WorkspacePanel"
 import { FileExplorerPanel } from "./components/FileExplorerPanel"
 import { MessageWorkbenchPane } from "./components/MessageWorkbenchPane"
-import { FileEditorToggle } from "./components/FileEditorToggle"
 import { DEFAULT_RIGHT_PANEL_TAB, RightPanelTabs, type RightPanelTab } from "./components/RightPanelTabs"
-import { fileEditorFocus, fileWorkbenchOpen } from "./services/file-workbench"
+import { fileWorkbenchOpen } from "./services/file-workbench"
 import type { DiffTarget } from "./services/diff"
 import { initApp } from "./services/init"
 import { loadTasks, boardStore, loadBoard,
@@ -430,6 +429,7 @@ function closeWorkspace(): void {
 /** Open (or switch to) a diff file in the workspace. */
 function openWorkspaceDiff(target: DiffTarget): void {
   setWorkspaceTarget(target)
+  setRightPanelTab("files")
   openWorkspace()
 }
 
@@ -614,12 +614,6 @@ if (fileEditorMountEl) {
     () => <MessageWorkbenchPane diffOpen={workspaceOpen()} diffTarget={workspaceTarget()} onCloseDiff={closeWorkspace} />,
     fileEditorMountEl,
   )
-}
-
-const fileEditorToggleMountEl = document.getElementById("solidFileEditorToggleMount")
-if (fileEditorToggleMountEl) {
-  fileEditorToggleMountEl.innerHTML = ""
-  render(() => <FileEditorToggle />, fileEditorToggleMountEl)
 }
 
 // ── Mount: WorkspacePanel (Diff) ──
@@ -1135,16 +1129,15 @@ disposers.push(
     createEffect(() => {
       const active = rightPanelTab()
       const explorer = document.getElementById("rightPanelExplorer")
+      const files = document.getElementById("rightPanelFiles")
       const inspector = document.getElementById("rightPanelInspector")
       if (explorer) explorer.dataset.active = String(active === "explorer")
+      if (files) files.dataset.active = String(active === "files")
       if (inspector) inspector.dataset.active = String(active === "inspector")
     })
 
     createEffect(() => {
-      const frame = document.getElementById("chatContentFrame")
-      if (!frame) return
-      frame.dataset.editorOpen = fileWorkbenchOpen() || workspaceOpen() ? "true" : "false"
-      frame.dataset.editorFocus = fileEditorFocus()
+      if (fileWorkbenchOpen() || workspaceOpen()) setRightPanelTab("files")
     })
 
     createEffect(() => {

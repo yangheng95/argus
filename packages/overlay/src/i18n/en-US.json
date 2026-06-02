@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "en-US",
-    "panel_revision": "3fafe7ad45d51092"
+    "panel_revision": "09881caa2429dd0f"
   },
   "about.author_name": "Yang, Heng",
   "about.go_version": "Go Version",
@@ -790,8 +790,6 @@
   "file_editor.title": "Editor",
   "file_editor.empty": "Open a text file from Explorer",
   "file_editor.binary": "This file is not editable in the overlay",
-  "file_editor.show_messages": "Show messages",
-  "file_editor.toggle": "Toggle file editor",
   "file_editor.unsaved": "Unsaved changes",
   "workspace.close": "Close workspace",
   "workspace.diff": "Diff",
