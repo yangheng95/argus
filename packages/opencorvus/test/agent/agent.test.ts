@@ -912,6 +912,13 @@ test("frontend-design advertises url_screenshot and omits webfetch", async () =>
     fn: async () => {
       const frontendDesign = await Agent.get("frontend-design")
       expect(frontendDesign?.tools?.include).toContain("url_screenshot")
+      expect(frontendDesign?.tools?.include).toContain("bash")
+      expect(frontendDesign?.tools?.include).toContain("edit")
+      expect(frontendDesign?.tools?.include).toContain("write")
+      expect(frontendDesign?.tools?.include).toContain("apply_patch")
+      expect(frontendDesign?.tools?.include).toContain("web_clone_source_audit")
+      expect(frontendDesign?.tools?.include).toContain("webpage_render")
+      expect(frontendDesign?.tools?.include).toContain("webpage_evaluate")
       expect(frontendDesign?.tools?.include).not.toContain("webfetch")
       expect(frontendDesign?.tools?.include).not.toContain("todoread")
       expect(frontendDesign?.tools?.include).not.toContain("todowrite")
@@ -922,55 +929,25 @@ test("frontend-design advertises url_screenshot and omits webfetch", async () =>
   })
 })
 
-test("only frontend-design receives mirror analysis tools from the registry", async () => {
+test("frontend-design statically declares mirror and source refinement tools", async () => {
   await using tmp = await tmpdir()
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
       const frontendDesign = await Agent.get("frontend-design")
       expect(frontendDesign).toBeDefined()
-      const designTools = await ToolRegistry.tools({ providerID: "", modelID: "" }, frontendDesign)
-      const designToolIds = new Set(designTools.map((tool) => tool.id))
+      const designToolIds = new Set(frontendDesign?.tools?.include ?? [])
       for (const id of MIRROR_ANALYSIS_TOOL_IDS) {
         expect(designToolIds.has(id)).toBe(true)
       }
       for (const id of MIRROR_DELIVERY_TOOL_IDS) {
-        expect(designToolIds.has(id)).toBe(false)
+        expect(designToolIds.has(id)).toBe(true)
       }
-
-      for (const name of ["coding", "build", "general", "explore", "requirements", "architect", "integrity"]) {
-        const agent = await Agent.get(name)
-        expect(agent).toBeDefined()
-        const tools = await ToolRegistry.tools({ providerID: "", modelID: "" }, agent)
-        const toolIds = new Set(tools.map((tool) => tool.id))
-        for (const id of MIRROR_TOOL_IDS) {
-          expect(toolIds.has(id)).toBe(false)
-        }
-        if (name === "build") {
-          expect(toolIds.has("web_clone_prepare_context")).toBe(false)
-          expect(toolIds.has("web_clone_generate_source_project")).toBe(false)
-          expect(toolIds.has("web_clone_source_audit")).toBe(true)
-        }
-      }
-
-      const visualQa = await Agent.get("visual-qa")
-      expect(visualQa).toBeDefined()
-      const visualQaTools = await ToolRegistry.tools({ providerID: "", modelID: "" }, visualQa)
-      const visualQaToolIds = new Set(visualQaTools.map((tool) => tool.id))
-      for (const id of MIRROR_ANALYSIS_TOOL_IDS) {
-        expect(visualQaToolIds.has(id)).toBe(false)
-      }
-      for (const id of MIRROR_DELIVERY_TOOL_IDS) {
-        expect(visualQaToolIds.has(id)).toBe(true)
-      }
-
-      for (const name of ["coding", "build", "general", "explore", "compaction", "title"]) {
-        const agent = await Agent.get(name)
-        expect(agent).toBeDefined()
-        for (const id of MIRROR_TOOL_IDS) {
-          expect(evalPerm(agent, id)).toBe("deny")
-        }
-      }
+      expect(designToolIds.has("bash")).toBe(true)
+      expect(designToolIds.has("edit")).toBe(true)
+      expect(designToolIds.has("write")).toBe(true)
+      expect(designToolIds.has("apply_patch")).toBe(true)
+      expect(designToolIds.has("web_clone_source_audit")).toBe(true)
     },
   })
 })

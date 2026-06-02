@@ -127,7 +127,7 @@ function renderQualityProjectContract(final: FrontendTemplateFinal): string {
   const lines = [
     "## Maintainable Target Project",
     "- The frontend-design high-fidelity source project is the implementation starting point, not a sidecar reference to ignore.",
-    "- Build should preserve readable source ownership: React/Vue components, data modules, CSS sidecars, asset references, runtime entrypoints, and verification commands.",
+    "- Build should preserve the readable source ownership frontend_design delivered: React/Vue components, data modules, CSS sidecars, asset references, runtime entrypoints, and verification commands.",
     "- Repeated rows/cards/items must be rendered from arrays and component loops.",
     "- Complex controls must follow component_reuse_plan; use baseline_replacement_plan only for specifically named raw/generated regions that need in-place evolution.",
   ]
@@ -366,7 +366,7 @@ const ComponentReusePlanItemSchema = z.object({
   props_states: z
     .string()
     .min(1)
-    .describe("Props/data/state/variants/interactions Build should preserve when implementing this component family."),
+    .describe("Props/data/state/variants/interactions frontend_design implemented or Build must preserve during fine-tuning."),
   replacement_boundary: z
     .string()
     .min(1)
@@ -374,7 +374,7 @@ const ComponentReusePlanItemSchema = z.object({
   parity_guard: z
     .string()
     .min(1)
-    .describe("How Build verifies replacement did not regress visual fidelity, including screenshot/reference or source anchors."),
+    .describe("How frontend_design verified replacement did not regress visual fidelity, plus any Build fine-tuning verification anchors."),
   custom_fallback_reason: z
     .string()
     .default("")
@@ -392,7 +392,7 @@ const BaselineReplacementPlanItemSchema = z.object({
     .describe("Exact skeleton/source region to refine, replace, or defer, with file/source ids when available."),
   action: z
     .enum(["replace_generated_baseline", "delete_generated_region", "defer_baseline_until_parity"])
-    .describe("Whether Build should replace a region, delete genuinely redundant generated coverage, or temporarily defer it until parity is safe."),
+    .describe("Whether frontend_design replaced a region, deleted genuinely redundant generated coverage, or temporarily deferred it until parity is safe."),
   component_family_id: z
     .string()
     .min(1)
@@ -469,14 +469,14 @@ export const FrontendTemplateFinalSchema = z.object({
       "Explicit delivery mode. Use maintainable_replacement_required whenever the user asks for maintainability, real implementation, component reuse, or replacement of mechanical output; otherwise use visual_baseline_allowed. This field selects implementation expectations; it is not a standalone pass/fail mechanism.",
     ),
   frontend_template: OptionalMarkdownField(
-    "Authoritative frontend template for downstream implementation: routes, layout slots, source-package entrypoints, semantic containers, states, and acceptance anchors.",
+    "Authoritative frontend template for the frontend_design-delivered source project and downstream fine-tuning: routes, layout slots, source-package entrypoints, semantic containers, states, and acceptance anchors.",
   ),
   frontend_template_sections: z
     .array(CompactTemplateItemSchema)
     .default([])
     .describe("Preferred compact replacement for a long frontend_template string. Use one item per route, layout slot, viewport matrix, or acceptance anchor."),
   fillable_modules: OptionalMarkdownField(
-    "Modules/slots downstream Build should fill: page modules, data modules, interactions, state, adapters, and verification modules.",
+    "Modules/slots frontend_design filled or left as explicit source debt: page modules, data modules, interactions, state, adapters, and verification modules.",
   ),
   fillable_module_items: z
     .array(CompactTemplateItemSchema)
@@ -489,7 +489,7 @@ export const FrontendTemplateFinalSchema = z.object({
     .array(ComponentReusePlanItemSchema)
     .min(1)
     .describe(
-      "Structured, auditable reuse plan for the implementation surface. Each reusable family must say whether Build should reuse an existing project component/design-system primitive, use a mature maintained library, keep the extracted DOM/CSS baseline until replacement is safe, or use a custom fallback with an explicit reason. This keeps complex controls tied to project/library ownership without turning the handoff into a component catalog.",
+      "Structured, auditable reuse plan for the implementation surface. Each reusable family must say whether frontend_design reused an existing project component/design-system primitive, used a mature maintained library, kept the extracted DOM/CSS baseline until replacement is safe, or used a custom fallback with an explicit reason. This keeps complex controls tied to project/library ownership without turning the handoff into a component catalog.",
     ),
   baseline_replacement_plan: z
     .array(BaselineReplacementPlanItemSchema)
@@ -498,7 +498,7 @@ export const FrontendTemplateFinalSchema = z.object({
       "Optional source-region evolution plan. Use it only when a specific raw/generated skeleton region should be replaced, deleted, or deferred during in-place refinement. It is diagnostic/planning evidence, not a schema requirement and not a requirement to delete the whole skeleton.",
     ),
   quality_project_contract: OptionalMarkdownField(
-      "The high-quality project contract that frontend_design is delivering downstream. It defines the maintainable target app shape, source ownership, semantic component tree, data modules, styling system, library use, runtime entrypoints, verification commands, measured webpage_evaluate visual evidence, and zero-finding web_clone_source_audit evidence needed before claiming final maintainability.",
+      "The high-quality project contract for the source project frontend_design is delivering before Build fine-tuning. It defines the maintainable target app shape, source ownership, semantic component tree, data modules, styling system, library use, runtime entrypoints, verification commands, measured webpage_evaluate visual evidence, and zero-finding web_clone_source_audit evidence needed before claiming final maintainability.",
   ),
   quality_project_items: z
     .array(CompactTemplateItemSchema)
@@ -532,7 +532,7 @@ export const FrontendTemplateFinalSchema = z.object({
     })
     .describe(
       "Concrete frontend-design project output. For webpage replicas, this should identify the skeleton/project root created from web-clone-source, " +
-      "its role, entrypoints, source package, generation tool, and any materialization defects. Editable frontend-design-skeleton projects are source_baseline_input because Build starts from them in the delivery root. Use implementation_target only for the actual root app.",
+      "its role, entrypoints, source package, generation tool, completed replacements, unfinished source debt, and any materialization defects. Editable frontend-design-skeleton projects start as source_baseline_input, but should become implementation_target when frontend_design has refined the requested surface into maintainable source. Build starts from that project for root-app adoption and precision fixes.",
     ),
   visual_consistency_contract: OptionalMarkdownField(
     "Binding visual-fidelity frontend template section: viewport inventory, pixel hierarchy, colors, typography, spacing, states, responsive rules, comparison criteria, and reference artifacts.",
@@ -688,7 +688,7 @@ function renderFrontendProjectReport(project: FrontendTemplateFinal["frontend_pr
     `- generation_tool: ${project.generation_tool || "(not specified)"}`,
   ]
   if (isFrontendDesignSkeleton) {
-    lines.push("- adoption_rule: frontend-design-skeleton is a source baseline excluded from final delivery; copy/adapt its high-fidelity React DOM/CSS/data/assets entrypoints, package metadata, and Vite/TS config into the root app before reporting build success.")
+    lines.push("- adoption_rule: frontend-design-skeleton is a frontend_design-owned source project. If its role is implementation_target, copy/adapt it into the root app and fine-tune; if it remains source_baseline_input, the named source debt is unfinished maintainability work.")
   }
   if (project.entrypoints.length > 0) {
     lines.push("- entrypoints:")

@@ -489,11 +489,15 @@ export namespace Agent {
         // frontend-design is the only stage that owns mirror extraction.
         // Requirements / architect / build consume the persisted frontend
         // template and optional visual anchors rather than calling mirror tools themselves.
-        // Render/evaluate/diff/judge mirror tools are acceptance quality
-        // surfaces, not frontend template extraction surfaces, so they stay out of
-        // frontend-design to prevent implementation-style score loops.
+        // Webpage rawproject work makes frontend-design the owner of the
+        // maintainable source project before Build handoff, so it also needs
+        // file-edit, command, source-audit, and visual verification tools.
         tools: {
           include: [
+            "bash",
+            "edit",
+            "write",
+            "apply_patch",
             "read_file",
             "find_files",
             "search_code",
@@ -502,7 +506,12 @@ export namespace Agent {
             "memory_get",
             "url_screenshot",
             "skill",
+            "web_clone_source_audit",
             ...MIRROR_ANALYSIS_TOOL_IDS,
+            "webpage_render",
+            "webpage_evaluate",
+            "webpage_text_diff",
+            "webpage_vision_judge",
           ],
         },
         options: {},

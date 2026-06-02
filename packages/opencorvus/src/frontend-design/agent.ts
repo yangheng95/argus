@@ -33,14 +33,23 @@ import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { deriveUrlSignals } from "@/engine/task-signals"
 import { EngineConfig } from "@/engine/config"
 import type { Tool } from "@/tool/tool"
+import { BashTool } from "@/tool/bash"
+import { EditTool } from "@/tool/edit"
+import { WriteTool } from "@/tool/write"
+import { ApplyPatchTool } from "@/tool/apply_patch"
+import { WebCloneSourceAuditTool } from "@/tool/web-clone-source-audit"
 import type { AgentReport } from "@/agent/report"
 import {
   WebpageAnalyzeTool,
   WebpageCompileTool,
+  WebpageEvaluateTool,
   WebpageExtractTool,
   WebpageImageAnalyzeTool,
   WebpageImageCompileTool,
   WebpageImageExtractTool,
+  WebpageRenderTool,
+  WebpageTextDiffTool,
+  WebpageVisionJudgeTool,
 } from "@/mirror/tools"
 import type { VisualSpec } from "./types"
 import { createFrontendTemplateOutputTools, type FrontendTemplateFinal, type FrontendTemplateOutputCollector } from "./output-tools"
@@ -50,7 +59,6 @@ import { createFrontendSkeletonProjectTool } from "./skeleton-project-tool"
 import {
   readHostPreparedCompactEvidence,
   renderHostPreparedFrontendProjectSection,
-  selectFrontendTemplateSubmitTool,
   summarizeHostPreparedSourceProject,
   summarizeHostPreparedSourceAudit,
   summarizeReferencePixels,
@@ -120,21 +128,12 @@ export namespace FrontendDesignAgent {
       sessionID: input.parentSessionID,
     })
     const mirrorAnalysisTools = await createMirrorAnalysisTools({ taskID: input.taskID, signal: input.signal })
+    const implementationTools = await createFrontendImplementationTools({ taskID: input.taskID, signal: input.signal })
     const screenshotToolKit = createUrlScreenshotTool()
     const skeletonProjectToolKit = createFrontendSkeletonProjectTool({ taskID: input.taskID })
     const outputToolKit = createFrontendTemplateOutputTools({ autoIteration })
+    const submitFrontendTemplateTool = createFrontendSubmitTools(outputToolKit)
     const hostPreparedFrontendProject = undefined
-    const textOnlyNoVisualSource = isTextOnlyNoVisualSource(input)
-    const submitFrontendTemplateTool = selectFrontendTemplateSubmitTool(
-      outputToolKit,
-      {
-        ...(hostPreparedFrontendProject ? { hostPrepared: true } : {}),
-        ...(textOnlyNoVisualSource ? { textOnlyBrief: { title: input.title, request: input.request } } : {}),
-      },
-    )
-    const terminalOnlySubmit = shouldScopeFrontendTemplateSubmitTool({
-      textOnlyNoVisualSource,
-    })
     const projectID = (() => {
       try {
         return Instance.project.id
@@ -142,14 +141,6 @@ export namespace FrontendDesignAgent {
         return ""
       }
     })()
-    const acquisitionTools = hostPreparedFrontendProject
-      ? {}
-      : {
-          ...mirrorAnalysisTools,
-          ...screenshotToolKit,
-          ...skeletonProjectToolKit,
-        }
-
     log.info("frontend design starting", {
       title: input.title,
       hasAttachments: !!input.attachments?.length,
@@ -170,9 +161,12 @@ export namespace FrontendDesignAgent {
         : undefined,
       toolKit: {
         tools: {
-          ...(terminalOnlySubmit ? {} : contextTools),
-          ...(terminalOnlySubmit ? {} : acquisitionTools),
-          ...(terminalOnlySubmit ? {} : createReadAttachmentTool(projectID)),
+          ...contextTools,
+          ...mirrorAnalysisTools,
+          ...screenshotToolKit,
+          ...skeletonProjectToolKit,
+          ...implementationTools,
+          ...createReadAttachmentTool(projectID),
           ...submitFrontendTemplateTool,
         },
         getCollector: () => outputToolKit.getCollector(),
@@ -183,7 +177,7 @@ export namespace FrontendDesignAgent {
       terminalTool: {
         toolName: "submit_frontend_template",
         isSatisfied: (collector: FrontendTemplateOutputCollector) => !!collector.final,
-        shouldExposeOnlyTerminalTool: () => terminalOnlySubmit,
+        shouldExposeOnlyTerminalTool: () => false,
       },
     })
 
@@ -263,15 +257,6 @@ export namespace FrontendDesignAgent {
     }
     return lines.join("\n")
   }
-}
-
-function shouldScopeFrontendTemplateSubmitTool(input: {
-  textOnlyNoVisualSource?: boolean
-} = {}): boolean {
-  // With no visual attachment and no live URL there is no reference evidence to
-  // acquire. The only durable output frontend_design can produce is the public
-  // report derived from the textual brief, so pin directly to the terminal tool.
-  return input.textOnlyNoVisualSource === true
 }
 
 // ---------------------------------------------------------------------------
@@ -413,14 +398,14 @@ function buildUserPrompt(input: {
         ? "Because assistant.auto_iteration=true, do at least two frontend template review passes before `submit_frontend_template`: first check page inventory and visual coverage, then check downstream frontend replica implementability. "
       : "Because assistant.auto_iteration=false, do one bounded frontend template review pass before `submit_frontend_template`; report remaining gaps in completeness_review/open_questions instead of looping automatically. ") +
     `For webpage replicas, after the task-runtime source package \`${sourcePackageRef}/\` exists, call \`create_frontend_skeleton_project\` to create the high-fidelity editable source project at \`${skeletonProjectRef}/\` before \`submit_frontend_template\`. ` +
-    "The source project is the implementation starting point: downstream Build should copy/adapt its React entrypoints, source-dom region files, generated DOM JSX, CSS sidecars, SVG path data, FAQ/replacement-plan sidecars, public assets, data arrays, and asset references, then refine named regions in place from `sourceDomReplacementPlan.ts`. If the generator cannot produce that high-fidelity source project, record the exact materialization defect in `frontend_project.notes`. " +
+    "The source project is the frontend_design implementation target before handoff: after creating it, inspect `sourceDomIterationState.ts`, `sourceDomReplacementPlan.ts`, `sourceDomRegions.ts`, source data/assets, and the target project component/package structure; then edit the created source project itself into project-owned semantic components/data modules/scoped styles. Build should receive this maintainable frontend_design project and only perform root-app adoption, integration, and precision fixes. If the generator cannot produce that high-fidelity source project, record the exact materialization defect in `frontend_project.notes`. " +
     "Describe this as rawproject source-region refactoring: all new components, styles, and data modules must trace to rawproject source nodes/regions/assets/reference screenshots, and replacement work must happen source-region by source-region. " +
     "When the target is an existing frontend project, inspect package manifests and obvious component/UI directories if tools are available, then tell downstream agents whether to add a route/page to the existing app, adopt the source baseline into the root app, or stop on a materialization blocker. " +
     "In principle, downstream implementation must reuse existing project components/design-system primitives first and mature maintained libraries second; custom code is limited to simple page-specific glue or micro-adjust layout/spacing. Charts, maps, tables, calendars, popovers, dialogs, menus, forms, virtualized lists, drag/drop, editors, rich media, and complex layouts require reusable project or library options when available. " +
     "Your final report should not be a component catalog. Put known problems, evidence gaps, extraction-vs-rewrite risk, source organization, debug commands, reuse decisions, PRD delta boundaries, and agent handoff notes into `quality_project_contract`, `completeness_review`, and `open_questions`; leave `component_inventory` empty unless the provider requires a legacy compatibility summary. " +
     renderFinalDeliveryModeInstruction(Boolean(hostPreparedFrontendProject)) + " " +
-    "After the source project tool returns, record the project paths, replacement-plan sidecars, and warnings in `frontend_project`, and make the high-fidelity React project itself the frontend_design deliverable source seed. Downstream verification must include measured `webpage_evaluate` evidence and zero-finding `web_clone_source_audit` evidence before claiming final maintainability. Do not alter evaluators, other agent prompts, communication paths, or generated outputs to satisfy the report. " +
-    "The final `submit_frontend_template.frontend_project` field should name the created source project root and entrypoints, mark role=source_baseline_input because Build starts from it, or record the materialization defect. " +
+    "After the source project tool returns, record the project paths, replacement-plan sidecars, and warnings in `frontend_project`, then use your normal file-edit and command tools to replace source-dom regions inside the created project until the delivered frontend_design source is maintainable. At minimum, a maintainable rawproject turn must attempt the current `nextSourceDomReplacement` vertical slice or explicitly report why that exact region is blocked. Verification must include project build evidence, measured `webpage_evaluate` evidence when renderable, and zero-finding `web_clone_source_audit` evidence before claiming final maintainability. Do not alter evaluators, other agent prompts, communication paths, raw mirror/source packages, or generated evidence outputs to satisfy the report. " +
+    "The final `submit_frontend_template.frontend_project` field should name the created/refined source project root and entrypoints, mark role=implementation_target only when the project no longer depends on generated source-dom debt for the requested surface, otherwise mark role=source_baseline_input and explain the unfinished source debt. " +
     "Do not use todo or scratchpad tools for template review; write the review-pass findings directly into the final frontend template fields.",
   )
 
@@ -442,47 +427,67 @@ function renderFinalDeliveryModeInstruction(hostPrepared: boolean): string {
   return "Set `submit_frontend_template.final_delivery_mode` to `maintainable_replacement_required` whenever the user asks for maintainability, real implementation, component reuse, or replacing generated/mechanical output."
 }
 
+async function createFrontendTool(info: Tool.Info, input: { taskID?: string; signal?: AbortSignal }) {
+  const initialized = await info.init()
+  return tool({
+    description: initialized.description,
+    inputSchema: initialized.parameters,
+    execute: async (args, options) => {
+      const meta = (options as { opencorvus?: { sessionID?: string; messageID?: string; toolCallID?: string } } | undefined)?.opencorvus
+      const abort = (options as { abortSignal?: AbortSignal } | undefined)?.abortSignal ?? input.signal ?? new AbortController().signal
+      return initialized.execute(args as never, {
+        sessionID: meta?.sessionID ?? "",
+        messageID: meta?.messageID ?? "",
+        callID: meta?.toolCallID,
+        agent: "frontend-design",
+        abort,
+        messages: [],
+        extra: { taskID: input.taskID },
+        metadata: () => {},
+        ask: async () => {},
+      })
+    },
+  })
+}
+
+function createFrontendSubmitTools(outputToolKit: ReturnType<typeof createFrontendTemplateOutputTools>): ToolSet {
+  return {
+    submit_frontend_template: outputToolKit.tools.submit_frontend_template,
+  }
+}
+
 async function createMirrorAnalysisTools(input: { taskID?: string; signal?: AbortSignal }): Promise<ToolSet> {
-  const infos: Tool.Info[] = [
-    WebpageExtractTool,
-    WebpageCompileTool,
-    WebpageAnalyzeTool,
-    WebpageImageExtractTool,
-    WebpageImageCompileTool,
-    WebpageImageAnalyzeTool,
-  ]
-  const entries = await Promise.all(infos.map(async (info) => {
-    const initialized = await info.init()
-    return [info.id, tool({
-      description: initialized.description,
-      inputSchema: initialized.parameters,
-      execute: async (args, options) => {
-        const meta = (options as { opencorvus?: { sessionID?: string; messageID?: string; toolCallID?: string } } | undefined)?.opencorvus
-        const abort = (options as { abortSignal?: AbortSignal } | undefined)?.abortSignal ?? input.signal ?? new AbortController().signal
-        return initialized.execute(args as never, {
-          sessionID: meta?.sessionID ?? "",
-          messageID: meta?.messageID ?? "",
-          callID: meta?.toolCallID,
-          agent: "frontend-design",
-          abort,
-          messages: [],
-          extra: { taskID: input.taskID },
-          metadata: () => {},
-          ask: async () => {},
-        })
-      },
-    })] as const
-  }))
-  return Object.fromEntries(entries)
+  return {
+    webpage_extract: await createFrontendTool(WebpageExtractTool, input),
+    webpage_compile: await createFrontendTool(WebpageCompileTool, input),
+    webpage_analyze: await createFrontendTool(WebpageAnalyzeTool, input),
+    webpage_image_extract: await createFrontendTool(WebpageImageExtractTool, input),
+    webpage_image_compile: await createFrontendTool(WebpageImageCompileTool, input),
+    webpage_image_analyze: await createFrontendTool(WebpageImageAnalyzeTool, input),
+  }
+}
+
+async function createFrontendImplementationTools(input: { taskID?: string; signal?: AbortSignal }): Promise<ToolSet> {
+  return {
+    bash: await createFrontendTool(BashTool, input),
+    edit: await createFrontendTool(EditTool, input),
+    write: await createFrontendTool(WriteTool, input),
+    apply_patch: await createFrontendTool(ApplyPatchTool, input),
+    web_clone_source_audit: await createFrontendTool(WebCloneSourceAuditTool, input),
+    webpage_render: await createFrontendTool(WebpageRenderTool, input),
+    webpage_evaluate: await createFrontendTool(WebpageEvaluateTool, input),
+    webpage_text_diff: await createFrontendTool(WebpageTextDiffTool, input),
+    webpage_vision_judge: await createFrontendTool(WebpageVisionJudgeTool, input),
+  }
 }
 
 export const FrontendDesignTestHooks = {
   buildPromptParts,
   buildUserPrompt,
+  createFrontendSubmitTools,
+  createFrontendImplementationTools,
   createMirrorAnalysisTools,
   isTextOnlyNoVisualSource,
-  selectFrontendTemplateSubmitTool,
-  shouldScopeFrontendTemplateSubmitTool,
   readHostPreparedCompactEvidence,
   summarizeHostPreparedSourceAudit,
   summarizeHostPreparedSourceProject,

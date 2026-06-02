@@ -1,16 +1,10 @@
-import { tool } from "ai"
 import fs from "node:fs/promises"
 import path from "node:path"
-import z from "zod"
 import { decodePNG, type DecodedPNG } from "@/util/pixel-stats"
 import { auditWebCloneSourceSkeletonConsumption } from "@/web-clone/source-skeleton-consumption-audit"
 import {
   renderSourceProjectVisualIterationMatrix,
 } from "@/web-clone/source-project-generator"
-import {
-  FrontendTemplateFinalSchema,
-  type createFrontendTemplateOutputTools,
-} from "./output-tools"
 
 const FRONTEND_SKELETON_DEEP_REFERENCE_FILES = [
   "src/components/ContentTable.tsx",
@@ -51,211 +45,8 @@ export interface HostPreparedFrontendProject {
   sourceAuditEvidence?: string
 }
 
-export interface TextOnlyFrontendTemplateBrief {
-  title: string
-  request: string
-}
-
-const FlexibleStringListSchema = z.preprocess((value) => {
-  if (value == null || value === "") return []
-  if (Array.isArray(value)) return value
-  if (typeof value !== "string") return [String(value)]
-  return value
-    .split(/\r?\n/)
-    .map((item) => item.replace(/^\s*[-*]\s*/, "").trim())
-    .filter(Boolean)
-}, z.array(z.string().min(1)).default([]))
-
-const TextOnlySubmitSchema = z.object({
-  summary: z.string().default(""),
-  final_delivery_mode: z.enum(["visual_baseline_allowed", "maintainable_replacement_required"]).default("visual_baseline_allowed"),
-  implementation_risks: FlexibleStringListSchema,
-  agent_handoff_notes: FlexibleStringListSchema,
-  visual_contract: z.string().default(""),
-  data_contract: z.string().default(""),
-  open_questions: FlexibleStringListSchema,
-})
-
-export function selectFrontendTemplateSubmitTool(
-  outputToolKit: ReturnType<typeof createFrontendTemplateOutputTools>,
-  options: { hostPrepared?: boolean; textOnlyBrief?: TextOnlyFrontendTemplateBrief } = {},
-) {
-  if (options.hostPrepared) {
-    return {
-      submit_frontend_template: tool({
-        description:
-          "Submit the full frontend_design public report for a host-prepared webpage rawproject. The host has already materialized source evidence; this turn must synthesize the maintainable source-region refactor contract, not downgrade to a visual-baseline-only delivery.",
-        inputSchema: FrontendTemplateFinalSchema,
-        execute: async (input, submitOptions) => {
-          const submit = outputToolKit.tools.submit_frontend_template
-          const parsed = FrontendTemplateFinalSchema.parse(input)
-          return submit.execute!({
-            ...parsed,
-            final_delivery_mode: "maintainable_replacement_required" as const,
-          }, submitOptions)
-        },
-      }),
-    }
-  }
-  if (options.textOnlyBrief) {
-    return {
-      submit_frontend_template: tool({
-        description:
-          "Submit the text-only frontend_design public report. No visual source is available in this turn; provide concise risks/handoff notes or leave fields empty, and the normal frontend_design terminal report will carry the downstream handoff.",
-        inputSchema: TextOnlySubmitSchema,
-        execute: async (input, submitOptions) => {
-          const submit = outputToolKit.tools.submit_frontend_template
-          return submit.execute!(
-            textOnlyFrontendTemplatePayload(options.textOnlyBrief!, TextOnlySubmitSchema.parse(input)),
-            submitOptions,
-          )
-        },
-      }),
-    }
-  }
-  return {
-    submit_frontend_template: outputToolKit.tools.submit_frontend_template,
-  }
-}
-
-function nonEmptyOrDefault(value: string | undefined, fallback: string): string {
-  return value?.trim() ? value.trim() : fallback
-}
-
 function hostPreparedVisualIterationMatrix(project: HostPreparedFrontendProject): string {
   return project.visualIterationMatrix?.trim() || renderSourceProjectVisualIterationMatrix()
-}
-
-function textOnlyFrontendTemplatePayload(
-  brief: TextOnlyFrontendTemplateBrief,
-  input: z.infer<typeof TextOnlySubmitSchema>,
-) {
-  const summary = nonEmptyOrDefault(
-    input.summary,
-    `Create the frontend described by the text-only brief "${brief.title}".`,
-  )
-  const briefRefs = ["operator textual brief"]
-  const openQuestions = [
-    ...input.open_questions,
-    "No visual screenshot, PDF, Figma frame, or live webpage URL was available to frontend_design; exact pixel-level fidelity cannot be asserted until Build or Integrity has visual evidence.",
-  ]
-  return {
-    design_system:
-      "Text-brief-derived frontend system. Treat explicit colors, typography, layout, content, and interaction details in the operator brief as binding; do not invent unprovided pixel-specific visual facts.",
-    tech_stack: ["React", "TypeScript"],
-    final_delivery_mode: input.final_delivery_mode,
-    frontend_template: [
-      summary,
-      "",
-      "Source brief:",
-      brief.request.trim(),
-      "",
-      "Because no visual source is available, downstream implementation should preserve every explicit textual requirement and record any visual assumptions as implementation notes rather than claiming screenshot parity.",
-    ].join("\n"),
-    frontend_template_sections: [
-      {
-        title: "Textual source",
-        detail: "Implement only the surfaces and visual constraints explicitly described in the operator brief.",
-        source_refs: briefRefs,
-      },
-    ],
-    fillable_modules:
-      "Root app/page entrypoint, reusable page sections, content/data constants for repeated copy, style tokens derived from explicit brief values, and verification commands.",
-    fillable_module_items: [
-      {
-        title: "Page implementation",
-        detail: "Create or update the page route/components named by the downstream task while preserving existing project organization.",
-        source_refs: briefRefs,
-      },
-    ],
-    component_inventory:
-      "Compatibility summary only: no visual component catalog was extracted. Build must inspect the target project and reuse existing components/design-system primitives before introducing page-specific code.",
-    component_reuse_plan: [
-      {
-        family_id: "comp-text-brief-page",
-        name: "Text brief page surfaces",
-        observed_surface: "Page sections, controls, and content explicitly described in the textual brief",
-        source_refs: briefRefs,
-        implementation_strategy: "existing_project_component" as const,
-        reuse_source: "Existing project components/design-system primitives selected by Build after inspecting the target app; if none fit, use the smallest page-specific glue and document the inspected paths.",
-        mature_library_candidates: [],
-        props_states: "Props, visible content, colors, typography, layout, CTA states, responsive behavior, and footer/content requirements explicitly named in the brief.",
-        replacement_boundary: "Only the page or route surface requested by the task; no generated visual baseline exists in text-only mode.",
-        parity_guard: "Verify implemented output against the textual brief and any later supplied visual/PRD evidence; do not claim pixel parity without a reference image.",
-        custom_fallback_reason: "",
-      },
-    ],
-    baseline_replacement_plan: [],
-    quality_project_contract:
-      "Build should implement the requested page in the existing project root, inspect existing components/styles before coding, reuse project primitives or mature libraries for complex UI, keep repeated content in data/constants, run the repository's normal verification commands, and report any assumptions caused by missing visual evidence.",
-    quality_project_items: [
-      {
-        title: "Reuse first",
-        detail: "Inspect package manifests and obvious component/style directories during Build, then reuse existing primitives before writing custom UI.",
-        source_refs: briefRefs,
-      },
-      {
-        title: "Missing visual evidence",
-        detail: "No pixel reference exists in frontend_design; unresolved visual specifics must remain explicit assumptions or open questions.",
-        source_refs: briefRefs,
-      },
-    ],
-    material_inventory:
-      "Only textual materials were available: operator brief, explicit colors/typography/layout/content/interaction requirements, and downstream project files to be inspected by Build.",
-    material_inventory_items: [
-      {
-        title: "Operator brief",
-        detail: "Primary material source for the requested page and constraints.",
-        source_refs: briefRefs,
-      },
-    ],
-    frontend_project: {
-      status: "not_created" as const,
-      role: "source_baseline_input" as const,
-      project_root: "",
-      source_package: "",
-      entrypoints: [],
-      generation_tool: "text-only:submit_frontend_template",
-      notes: [
-        "No frontend-design source project was created because no visual webpage/source package was available.",
-      ],
-    },
-    visual_consistency_contract: nonEmptyOrDefault(
-      input.visual_contract,
-      "Match the explicit visual constraints in the text brief. Pixel-level comparison is unavailable until a visual reference is supplied.",
-    ),
-    visual_consistency_items: [
-      {
-        title: "Textual visual constraints",
-        detail: "Use only explicit brief values for colors, typography, spacing, layout, and responsive behavior.",
-        source_refs: briefRefs,
-      },
-    ],
-    ui_data_contract: nonEmptyOrDefault(
-      input.data_contract,
-      "Keep repeated visible copy/content in local constants or source-derived data modules when repetition exists; no backend/API facts were provided by frontend_design.",
-    ),
-    ui_data_contract_items: [
-      {
-        title: "Textual content",
-        detail: "Represent repeated content from the brief as data instead of duplicating JSX literals.",
-        source_refs: briefRefs,
-      },
-    ],
-    template_iteration_notes: [
-      "Pass 1 converted the text-only brief into a frontend_design public report without claiming unavailable visual evidence.",
-      "Pass 2 checked downstream implementability, reuse constraints, missing visual evidence, and PRD/open-question handoff.",
-    ],
-    completeness_review: [
-      "Text-only public report handoff: the frontend_design terminal report is the shared readable surface for Build.",
-      "Known evidence gap: no screenshot, PDF, Figma frame, or live webpage URL was available, so exact visual fidelity and 80% pixel-threshold claims are not established by this frontend_design pass.",
-      "Agent handoff: Build must inspect the existing project stack/components before coding, reuse project primitives or mature libraries for complex UI, and document assumptions caused by missing visual evidence.",
-      ...input.implementation_risks.map((item) => `Implementation risk: ${item}`),
-      ...input.agent_handoff_notes.map((item) => `Handoff note: ${item}`),
-    ].join("\n"),
-    reference_artifacts: briefRefs,
-    open_questions: openQuestions,
-  }
 }
 
 async function readHostPreparedSourceReplacementPlan(projectRoot: string): Promise<SourceReplacementPlanForSummary[]> {
@@ -786,14 +577,14 @@ export function renderHostPreparedFrontendProjectSection(project: HostPreparedFr
     "",
     "The host already prepared the frontend-design high-fidelity editable source project before this model turn. Do not call `create_frontend_skeleton_project` again unless status is blocked and you can name a different output path.",
     "Host-prepared means source evidence exists; it does not mean the frontend template is already designed. Use `read_file`, `list_directory`, `find_files`, and `search_code` to inspect the bounded task-runtime evidence and obvious target project/package/component structure before finalizing. Do not call mirror acquisition tools again unless the host-prepared status is blocked and you can name the exact missing evidence.",
-    "Register this source project in `submit_frontend_template.frontend_project` with role=source_baseline_input. Downstream implementation starts by copying/adapting only traceable React DOM/CSS/data/assets entrypoints, source-dom region files, sourceDomIterationState.ts, sourceDomReplacementPlan.ts, sourceDomRegions.ts, sourceSvgAssetGroups.ts, and sourceFaqGroups.ts into the delivery root, preserving CSS sidecars as source evidence, and refining named regions in place.",
-    "Use the maintainable rawproject refactor algorithm inside the normal frontend-design and downstream implementation agent flow: source map, region map, one replacement decision per region, then vertical-slice replacement with source data extraction, semantic component boundary, scoped style ownership, generated fixed-layout cleanup, asset ownership, interaction wiring, screenshot comparison, and audit evidence. Do not replace this judgment with host-side deterministic selector/card/table/map extraction rules.",
+    "Register this source project in `submit_frontend_template.frontend_project` with role=implementation_target only after frontend_design has refined the requested surface into maintainable source; otherwise use role=source_baseline_input and name the unfinished source debt. Build receives the frontend_design project for root-app adoption, integration, and precision fixes, not for primary rawproject-to-maintainable conversion.",
+    "Use the maintainable rawproject refactor algorithm inside the normal frontend-design agent flow: source map, region map, one replacement decision per region, then vertical-slice replacement with source data extraction, semantic component boundary, scoped style ownership, generated fixed-layout cleanup, asset ownership, interaction wiring, screenshot comparison, and audit evidence. Do not replace this judgment with host-side deterministic selector/card/table/map extraction rules.",
     `Visual iteration viewport matrix: ${visualIterationMatrix}`,
-    "For webpage clones, describe the downstream workflow as source-region traceable refactoring: every new component, data module, scoped style, and boundary cleanup must map back to rawproject source nodes/regions/assets/reference screenshots. A region replacement is complete only after source data extraction, semantic component rendering, scoped CSS, generated boundary cleanup, screenshot comparison for that region, measured webpage_evaluate evidence for the visual iteration viewport matrix, and zero-finding web_clone_source_audit evidence before any final maintainability claim. If a region is deferred, frontend_design must label it as unfinished source debt.",
+    "For webpage clones, perform and describe source-region traceable refactoring: every new component, data module, scoped style, and boundary cleanup must map back to rawproject source nodes/regions/assets/reference screenshots. A region replacement is complete only after source data extraction, semantic component rendering, scoped CSS, generated boundary cleanup, screenshot comparison for that region, measured webpage_evaluate evidence for the visual iteration viewport matrix, and zero-finding web_clone_source_audit evidence before any final maintainability claim. If a region is deferred, frontend_design must label it as unfinished source debt.",
     "Do not alter evaluators, other agent prompts, communication paths, generated outputs, or runtime source packages to satisfy the report.",
     "Mirror/source evidence stays in task runtime paths. Do not instruct downstream agents to move or clean `web-clone-source/`, `frontend-design-skeleton/`, raw `mirror/`, `references/`, or `reference.png` into the delivery root as app-owned deliverables.",
     "Do not output a standalone component checklist or advice-only report. Use the full `submit_frontend_template` schema to identify the source baseline, replacement plan, quality project contract, visual/data contracts, completeness review, and open questions needed to produce the maintainable project source.",
-    "Principle for downstream work: inspect the target app structure first; reuse existing repository components/design-system primitives; use mature maintained libraries for hard UI domains; custom-code only simple glue and micro-adjustments needed for parity. Use the embedded source-project-handoff summary and the referenced sourceDomIterationState.ts/sourceDomReplacementPlan.ts as static progress metadata and the known-problem map.",
+    "Principle for frontend_design source work: inspect the target app structure first; reuse existing repository components/design-system primitives; use mature maintained libraries for hard UI domains; custom-code only simple glue and micro-adjustments needed for parity. Use the embedded source-project-handoff summary and the referenced sourceDomIterationState.ts/sourceDomReplacementPlan.ts as static progress metadata and the known-problem map.",
     "",
     `- status: ${project.status}`,
     "- role: source_baseline_input",
@@ -817,7 +608,7 @@ export function renderHostPreparedFrontendProjectSection(project: HostPreparedFr
   }
   lines.push("")
   lines.push("# Finalization")
-  lines.push("After a bounded evidence read/review pass, call `submit_frontend_template` with the full frontend-design contract. The report must preserve the source project as `source_baseline_input` and describe root-app adoption from traceable React DOM/CSS/data/assets entrypoints, source-dom regions, source-region replacement work, and source sidecars before refinement.")
+  lines.push("After bounded evidence read/review plus any source-region edits you can complete with the exposed tools, call `submit_frontend_template` with the full frontend-design contract. The report must identify whether the source project is now `implementation_target` or still `source_baseline_input`, describe completed source-region replacements, and name any unfinished source debt for Build precision/follow-up work.")
   lines.push("Host-prepared webpage rawproject refinement stays in `final_delivery_mode=maintainable_replacement_required`; deferred regions must be reported as unfinished source debt. If compact evidence leaves a named uncertainty, resolve it by reading the smallest relevant source file excerpt instead of replacing agent reasoning with a host-generated generic report.")
   return lines.join("\n")
 }
