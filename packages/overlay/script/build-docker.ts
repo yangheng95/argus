@@ -84,7 +84,8 @@ for (const target of targets) {
   console.log(`\n=== overlay ${target} (Docker) ===`)
 
   // Verify pre-built opencorvus binary exists
-  const serverBin = path.join(opencorvus, "dist", `opencorvus-linux-${arch}`, "opencorvus")
+  const serverDir = path.join(opencorvus, "dist", `opencorvus-linux-${arch}`)
+  const serverBin = path.join(serverDir, "opencorvus")
   if (!(await fileExists(serverBin))) {
     console.error(`ERROR: opencorvus binary not found: ${serverBin}`)
     console.error("Run first: cd packages/opencorvus && bun run build --all")
@@ -110,7 +111,7 @@ for (const target of targets) {
     --platform ${dockerPlatform}
     -v ${toDockerPath(path.join(dir, "src"))}:/overlay/src:ro
     -v ${toDockerPath(tauriDir)}:/overlay/src-tauri
-    -v ${toDockerPath(serverBin)}:/overlay/embedded/opencorvus:ro
+    -v ${toDockerPath(serverDir)}:/overlay/embedded/opencorvus:ro
     -v ${cargoVol}:/root/.cargo/registry
     -v ${targetVol}:/overlay/src-tauri/target
     -w /overlay/src-tauri

@@ -25,7 +25,8 @@ const packageName = [
   process.arch,
 ].join("-")
 
-const distServer = path.join(opencorvus, "dist", serverDistName, serverFile)
+const distServerDir = path.join(opencorvus, "dist", serverDistName)
+const distServer = path.join(distServerDir, serverFile)
 const distRoot = path.join(dir, "dist", packageName)
 const packagedOverlay = path.join(distRoot, overlayFile)
 const stagedResources = path.join(tauri, "resources")
@@ -138,7 +139,7 @@ function bundleTargets(): string[] {
 }
 await $`tauri build --bundles ${bundleTargets()} ${tauriArgs()}`.cwd(dir).env({
   CARGO_TARGET_DIR: target,
-  OPENCORVUS_EMBED_PATH: distServer,
+  OPENCORVUS_EMBED_PATH: distServerDir,
   PATH: await cargoPath(),
 })
 

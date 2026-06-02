@@ -70,7 +70,8 @@ const serverFile = isWindows ? "opencorvus.exe" : "opencorvus"
 const serverDistName = `opencorvus-overlay-server-${triplePlatform}-${tripleArch}`
 const packageName = `opencorvus-overlay-${triplePlatform}-${tripleArch}`
 
-const distServer = path.join(opencorvus, "dist", serverDistName, serverFile)
+const distServerDir = path.join(opencorvus, "dist", serverDistName)
+const distServer = path.join(distServerDir, serverFile)
 const distRoot = path.join(dir, "dist", packageName)
 const packagedOverlay = path.join(distRoot, overlayFile)
 
@@ -138,7 +139,7 @@ if (skipTauri) {
 
 // ── Step 3: Remove stale opencorvus binary ──
 //
-// The overlay embeds the opencorvus binary at build time via OPENCORVUS_EMBED_PATH.
+// The overlay embeds the opencorvus sidecar payload at build time via OPENCORVUS_EMBED_PATH.
 // If we skip this step, a stale binary from a previous build is reused — the Tauri
 // overlay compiles successfully but runs old orchestrator/executor code, silently
 // masking source changes. Always delete the binary first to force a fresh rebuild.
@@ -191,7 +192,7 @@ try {
 const tauriTargetArgs = useExplicitTarget ? ["--target", triple] : []
 await $`tauri build --no-bundle ${tauriTargetArgs} ${tauriArgs()}`.cwd(dir).env({
   CARGO_TARGET_DIR: target,
-  OPENCORVUS_EMBED_PATH: distServer,
+  OPENCORVUS_EMBED_PATH: distServerDir,
   PATH: await cargoPath(),
 })
 

@@ -6,8 +6,8 @@ import { BROWSER_MCP_NODE_BUNDLE } from "./node-bundle.generated"
 
 export namespace BrowserMCPNodeLauncher {
   export async function serveStdio() {
-    const bundle = await resolveBundle()
-    const node = process.env.OPENCORVUS_BROWSER_MCP_NODE ?? (process.platform === "win32" ? "node.exe" : "node")
+    const runtime = await resolveRuntime()
+    const { node, bundle } = runtime
     const child = spawn(node, [bundle], {
       cwd: process.cwd(),
       env: process.env,
@@ -18,7 +18,7 @@ export namespace BrowserMCPNodeLauncher {
       child.once("error", (error) => {
         const code = (error as NodeJS.ErrnoException).code
         if (code === "ENOENT") {
-          reject(new Error(`Browser MCP requires Node.js to run Playwright on Windows. Set OPENCORVUS_BROWSER_MCP_NODE to a node executable. Tried: ${node}`))
+          reject(new Error(`Browser MCP packaged Node runtime is missing. Tried: ${node}`))
           return
         }
         reject(error)
@@ -30,11 +30,50 @@ export namespace BrowserMCPNodeLauncher {
     })
   }
 
-  async function resolveBundle() {
-    const packaged = path.join(path.dirname(process.execPath), "browser-mcp-node", "stdio.mjs")
-    if (await exists(packaged)) return packaged
-    const legacyPackaged = path.join(path.dirname(process.execPath), "browser-mcp-node", "stdio.js")
-    if (await exists(legacyPackaged)) return legacyPackaged
+  export async function resolveRuntime(
+    runtime: {
+      execPath?: string
+      platform?: NodeJS.Platform
+    } = {},
+  ) {
+    const packaged = packagedRuntimePaths(runtime)
+    if ((await exists(packaged.node)) && (await exists(packaged.bundle))) return packaged
+    if (isBunRuntime(runtime.execPath ?? process.execPath)) {
+      return {
+        node: process.env.OPENCORVUS_BROWSER_MCP_NODE ?? nodeExecutableName(runtime.platform ?? process.platform),
+        bundle: await resolveSourceBundle(),
+      }
+    }
+    throw new Error(
+      `Browser MCP packaged runtime is missing. Expected ${packaged.node} and ${packaged.bundle} beside the opencorvus executable.`,
+    )
+  }
+
+  export function packagedRuntimePaths(
+    runtime: {
+      execPath?: string
+      platform?: NodeJS.Platform
+    } = {},
+  ) {
+    const execPath = runtime.execPath ?? process.execPath
+    const platform = runtime.platform ?? process.platform
+    const dir = path.join(path.dirname(execPath), "browser-mcp-node")
+    return {
+      node: path.join(dir, nodeExecutableName(platform)),
+      bundle: path.join(dir, "stdio.mjs"),
+    }
+  }
+
+  function nodeExecutableName(platform: NodeJS.Platform) {
+    return platform === "win32" ? "node.exe" : "node"
+  }
+
+  function isBunRuntime(execPath: string) {
+    const executable = path.basename(execPath).toLowerCase().replace(/\.exe$/, "")
+    return executable === "bun"
+  }
+
+  async function resolveSourceBundle() {
     if (typeof BROWSER_MCP_NODE_BUNDLE === "string" && BROWSER_MCP_NODE_BUNDLE.length > 0) {
       const embedded = path.join(os.tmpdir(), "opencorvus-browser-mcp-node-embedded", "stdio.mjs")
       await fs.mkdir(path.dirname(embedded), { recursive: true })

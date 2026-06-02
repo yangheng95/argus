@@ -146,7 +146,7 @@ jobs:
             -e GH_REPO="${GH_REPO}" \
             -e GH_TOKEN="${GH_TOKEN}" \
             oven/bun:alpine \
-            sh -c "bun install && bun run script/build.ts --single --baseline --musl-only --no-clean"
+            sh -c "apk add --no-cache nodejs && bun install && bun run script/build.ts --single --baseline --musl-only --no-clean"
 
       - name: Build overlay web bundle
         # The CLI ships its overlay UI as static assets under
@@ -432,4 +432,3 @@ jobs:
           git add -A
           git commit -m "release: v${VERSION}"
           git push origin release --force
-
