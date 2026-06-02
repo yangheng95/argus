@@ -31,6 +31,7 @@ describe("browser MCP node launcher", () => {
     ).resolves.toEqual({
       node: path.join(runtime, "node.exe"),
       bundle: path.join(runtime, "stdio.mjs"),
+      packaged: true,
     })
   })
 
@@ -46,4 +47,3 @@ describe("browser MCP node launcher", () => {
     ).rejects.toThrow("Browser MCP packaged runtime is missing")
   })
 })
-

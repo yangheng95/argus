@@ -7,9 +7,17 @@ export namespace BrowserMCPNodeLauncher {
   export async function serveStdio() {
     const runtime = await resolveRuntime()
     const { node, bundle } = runtime
+    const env = { ...process.env }
+    if (runtime.packaged) {
+      env.OPENCORVUS_BROWSER_MCP_PACKAGED = "1"
+      delete env.OPENCORVUS_BROWSER_MCP_SOURCE_PACKAGE_DIR
+    } else {
+      env.OPENCORVUS_BROWSER_MCP_SOURCE_PACKAGE_DIR = path.resolve(import.meta.dir, "../../..")
+      delete env.OPENCORVUS_BROWSER_MCP_PACKAGED
+    }
     const child = spawn(node, [bundle], {
       cwd: process.cwd(),
-      env: process.env,
+      env,
       stdio: "inherit",
       windowsHide: true,
     })
@@ -36,11 +44,12 @@ export namespace BrowserMCPNodeLauncher {
     } = {},
   ) {
     const packaged = packagedRuntimePaths(runtime)
-    if ((await exists(packaged.node)) && (await exists(packaged.bundle))) return packaged
+    if ((await exists(packaged.node)) && (await exists(packaged.bundle))) return { ...packaged, packaged: true }
     if (isBunRuntime(runtime.execPath ?? process.execPath)) {
       return {
         node: process.env.OPENCORVUS_BROWSER_MCP_NODE ?? nodeExecutableName(runtime.platform ?? process.platform),
         bundle: await resolveSourceBundle(),
+        packaged: false,
       }
     }
     throw new Error(

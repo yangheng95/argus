@@ -93,8 +93,9 @@ build-machine paths such as `D:\myhexin-local\opencorvus\node_modules\.bun\...`.
 The official build also embedded that bundle string into `overlay-server.js`,
 which is why failures on another machine were reported from `B:\~BUN\root`.
 
-Decision: packaged browser MCP has one runtime source, the sidecar payload. The
-compiled opencorvus executable must not embed a second copy of the browser MCP
-bundle. The sidecar `stdio.mjs` keeps `playwright` and `playwright-core`
-external, and the build copies those packages into
-`browser-mcp-node/node_modules`.
+Decision: packaged browser runtime has one module payload inside the artifact.
+The compiled opencorvus executable must not embed a second copy of the browser
+MCP bundle. Both the compiled executable and the sidecar `stdio.mjs` keep
+`playwright` and `playwright-core` external, and the build copies those packages
+into `node_modules` beside the executable and into
+`browser-mcp-node/node_modules` beside the MCP sidecar.

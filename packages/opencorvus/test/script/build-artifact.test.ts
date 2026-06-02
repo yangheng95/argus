@@ -35,9 +35,13 @@ describe("build-artifact", () => {
     expect(artifactExternalModules()).toContain("electron")
   })
 
-  test("browser MCP node sidecar keeps Playwright as packaged node modules", () => {
+  test("packaged browser runtime keeps Playwright as packaged node modules", () => {
+    expect(artifactExternalModules()).toContain("playwright")
+    expect(artifactExternalModules()).toContain("playwright-core")
+    expect(artifactExternalModules()).toContain("chromium-bidi")
     expect(artifactBrowserMcpNodeExternalModules()).toContain("playwright")
     expect(artifactBrowserMcpNodeExternalModules()).toContain("playwright-core")
+    expect(artifactBrowserMcpNodeExternalModules()).toContain("chromium-bidi")
   })
 
   test("browser MCP node runtime executable name is platform specific", () => {

@@ -1699,6 +1699,8 @@ mod tests {
             return;
         }
         for package_json in [
+            "node_modules/playwright/package.json",
+            "node_modules/playwright-core/package.json",
             "browser-mcp-node/node_modules/playwright/package.json",
             "browser-mcp-node/node_modules/playwright-core/package.json",
         ] {

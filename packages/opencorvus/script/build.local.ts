@@ -260,14 +260,16 @@ async function copyPackageDirectory(source: string, destination: string) {
   })
 }
 
-async function copyBrowserMcpNodeModules(outdir: string) {
+async function copyBrowserRuntimeNodeModules(outdir: string) {
   const playwrightPackageJson = requireFromPackage.resolve("playwright/package.json")
   const playwrightDir = path.dirname(playwrightPackageJson)
   const requireFromPlaywright = createRequire(path.join(playwrightDir, "index.js"))
   const playwrightCorePackageJson = requireFromPlaywright.resolve("playwright-core/package.json")
+  const chromiumBidiPackageJson = requireFromPackage.resolve("chromium-bidi/package.json")
   const packages = [
     ["playwright", playwrightDir],
     ["playwright-core", path.dirname(playwrightCorePackageJson)],
+    ["chromium-bidi", path.dirname(chromiumBidiPackageJson)],
   ] as const
   const nodeModules = path.join(outdir, "node_modules")
   await fs.promises.mkdir(nodeModules, { recursive: true })
@@ -373,7 +375,8 @@ for (const item of targets) {
   })
   const browserMcpRuntimeDir = path.join(dir, "dist", name, "bin", "browser-mcp-node")
   await buildBrowserMcpNodeBundle(browserMcpRuntimeDir)
-  await copyBrowserMcpNodeModules(browserMcpRuntimeDir)
+  await copyBrowserRuntimeNodeModules(path.join(dir, "dist", name, "bin"))
+  await copyBrowserRuntimeNodeModules(browserMcpRuntimeDir)
   await copyBrowserMcpNodeRuntime(item, browserMcpRuntimeDir)
 
   if (item.os === "win32") {

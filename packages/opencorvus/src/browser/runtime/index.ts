@@ -1,7 +1,11 @@
 import fs from "node:fs/promises"
-import { chromium, type Browser } from "playwright"
+import path from "node:path"
+import { pathToFileURL } from "node:url"
+import type { Browser } from "playwright"
 
 export namespace BrowserRuntime {
+  type PlaywrightModule = typeof import("playwright")
+
   export type ErrorCode = "browser_executable_not_found" | "browser_missing" | "browser_launch_failed"
 
   export type Diagnostic = {
@@ -82,6 +86,7 @@ export namespace BrowserRuntime {
   }): Promise<Browser> {
     const executablePath = await findBrowserExecutable(input.executablePath)
     try {
+      const { chromium } = await loadPlaywright()
       return await chromium.launch({
         executablePath,
         headless: input.headless,
@@ -104,6 +109,53 @@ export namespace BrowserRuntime {
 
   export function defaultLaunchArgs() {
     return ["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage", "--disable-remote-fonts"]
+  }
+
+  export async function resolvePlaywrightEntry(): Promise<string> {
+    const packaged = path.join(path.dirname(process.execPath), "node_modules", "playwright", "index.mjs")
+    if (await exists(packaged)) return packaged
+
+    if (isPackagedRuntime()) {
+      throw new Error(`Packaged Playwright runtime is missing. Expected ${packaged}`)
+    }
+
+    const packageRoot = await sourcePackageRoot()
+    const source = path.join(packageRoot, "node_modules", "playwright", "index.mjs")
+    if (await exists(source)) return source
+    throw new Error(`Source Playwright runtime is missing. Expected ${source}`)
+  }
+
+  async function loadPlaywright(): Promise<PlaywrightModule> {
+    const entry = await resolvePlaywrightEntry()
+    return import(pathToFileURL(entry).href) as Promise<PlaywrightModule>
+  }
+
+  async function sourcePackageRoot(): Promise<string> {
+    const explicit = process.env.OPENCORVUS_BROWSER_MCP_SOURCE_PACKAGE_DIR?.trim()
+    if (explicit) return explicit
+
+    let current = import.meta.dir
+    while (true) {
+      if (await exists(path.join(current, "package.json"))) return current
+      const parent = path.dirname(current)
+      if (parent === current) break
+      current = parent
+    }
+
+    throw new Error("Cannot resolve source package root for Playwright runtime")
+  }
+
+  function isPackagedRuntime() {
+    if (process.env.OPENCORVUS_BROWSER_MCP_PACKAGED === "1") return true
+    const executable = path.basename(process.execPath).toLowerCase().replace(/\.exe$/, "")
+    return executable !== "bun" && executable !== "node"
+  }
+
+  async function exists(file: string) {
+    return fs
+      .access(file)
+      .then(() => true)
+      .catch(() => false)
   }
 }
 

@@ -20,11 +20,17 @@ export function artifactExternalModules(): string[] {
     // packaged server uses Chromium only, so the compiler must not require
     // Electron to be installed just because Playwright's package graph names it.
     "electron",
+    // Playwright carries runtime package-relative resolution (browser registry,
+    // protocol helpers, and optional BiDi modules). Bun compile must leave it as
+    // a packaged node_modules dependency instead of flattening it into the exe.
+    "playwright",
+    "playwright-core",
+    "chromium-bidi",
   ]
 }
 
 export function artifactBrowserMcpNodeExternalModules(): string[] {
-  return [...artifactExternalModules(), "playwright", "playwright-core"]
+  return artifactExternalModules()
 }
 
 export function artifactSourcemap(): "none" {
