@@ -301,6 +301,8 @@ describe("frontend-design prompt assembly", () => {
     expect(prompt).toContain("maintainable project source")
     expect(prompt).toContain("Do not output a standalone component checklist or advice-only report")
     expect(prompt).toContain("maintainable rawproject refactor algorithm")
+    expect(prompt).toContain("normal frontend-design and downstream implementation agent flow")
+    expect(prompt).toContain("Do not replace this judgment with host-side deterministic selector/card/table/map extraction rules.")
     expect(prompt).toContain("source map, region map, one replacement decision per region")
     expect(prompt).toContain("vertical-slice replacement with source data extraction")
     expect(prompt).toContain("scoped style ownership")
