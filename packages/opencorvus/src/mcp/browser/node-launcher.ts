@@ -2,7 +2,6 @@ import { spawn } from "node:child_process"
 import fs from "node:fs/promises"
 import path from "node:path"
 import os from "node:os"
-import { BROWSER_MCP_NODE_BUNDLE } from "./node-bundle.generated"
 
 export namespace BrowserMCPNodeLauncher {
   export async function serveStdio() {
@@ -74,12 +73,6 @@ export namespace BrowserMCPNodeLauncher {
   }
 
   async function resolveSourceBundle() {
-    if (typeof BROWSER_MCP_NODE_BUNDLE === "string" && BROWSER_MCP_NODE_BUNDLE.length > 0) {
-      const embedded = path.join(os.tmpdir(), "opencorvus-browser-mcp-node-embedded", "stdio.mjs")
-      await fs.mkdir(path.dirname(embedded), { recursive: true })
-      await fs.writeFile(embedded, BROWSER_MCP_NODE_BUNDLE)
-      return embedded
-    }
     return buildSourceBundle()
   }
 

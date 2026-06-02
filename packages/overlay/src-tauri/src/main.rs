@@ -1694,6 +1694,22 @@ mod tests {
     }
 
     #[test]
+    fn embedded_payload_contains_browser_mcp_node_modules_when_present() {
+        if EMBEDDED_SERVER_FILES.is_empty() {
+            return;
+        }
+        for package_json in [
+            "browser-mcp-node/node_modules/playwright/package.json",
+            "browser-mcp-node/node_modules/playwright-core/package.json",
+        ] {
+            assert!(
+                EMBEDDED_SERVER_FILES.iter().any(|file| file.path == package_json),
+                "embedded sidecar payload must include {package_json}"
+            );
+        }
+    }
+
+    #[test]
     fn startup_failure_diagnostic_includes_error_and_log_path() {
         let path = PathBuf::from("C:/opencorvus/log/overlay-startup.log");
         let message = startup_failure_diagnostic_message("spawn failed", Some(&path));

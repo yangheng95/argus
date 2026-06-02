@@ -23,6 +23,10 @@ export function artifactExternalModules(): string[] {
   ]
 }
 
+export function artifactBrowserMcpNodeExternalModules(): string[] {
+  return [...artifactExternalModules(), "playwright", "playwright-core"]
+}
+
 export function artifactSourcemap(): "none" {
   return "none"
 }
