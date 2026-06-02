@@ -1,4 +1,8 @@
-research
+/research/
+!/src/research/
+!/src/research/**
+!/test/research/
+!/test/research/**
 dist
 gen
 app.log
