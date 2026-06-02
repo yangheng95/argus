@@ -25,8 +25,7 @@ import { Scratchpad } from "@/memory/scratchpad"
 import { Snapshot } from "@/snapshot"
 import { Database, and, desc, eq, sql } from "@/storage/db"
 import { EngineArtifactTable } from "@/engine/engine.sql"
-import type { ModelMessage } from "ai"
-import { hasToolCall } from "ai"
+import type { ModelMessage, StopCondition, ToolSet } from "ai"
 import { SessionLoop } from "./loop"
 import { Todo } from "./todo"
 import { SessionControl } from "./control"
@@ -440,6 +439,14 @@ export namespace SessionCompaction {
     }
   }
 
+  export function structuredHandoffStopCondition(input: {
+    isCaptured: () => boolean
+    retryCount: number
+  }): StopCondition<ToolSet> {
+    const maxAttempts = Math.max(1, input.retryCount + 1)
+    return ({ steps }) => input.isCaptured() || steps.length >= maxAttempts
+  }
+
   export function validateHandoffPayload(
     output: unknown,
     requirements: CompactionHandoff.EvidenceRequirements,
@@ -730,7 +737,10 @@ export namespace SessionCompaction {
       messages: providerMessages,
       model,
       toolChoice: SessionLoop.structuredOutputToolChoice(format, model),
-      stopWhen: hasToolCall("StructuredOutput"),
+      stopWhen: structuredHandoffStopCondition({
+        isCaptured: () => structured !== undefined,
+        retryCount: format.retryCount,
+      }),
     })
 
     if (result === "compact") {
@@ -865,6 +875,7 @@ export namespace SessionCompaction {
     selectedHeadEvidenceRequirements,
     runtimeContext,
     compactionTranscriptMessages,
+    structuredHandoffStopCondition,
   }
 
   const workflowAutoCompactionDisabledSessionKinds = new Set([

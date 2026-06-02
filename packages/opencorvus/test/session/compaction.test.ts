@@ -284,6 +284,24 @@ describe("CompactionHandoff", () => {
     expect(JSON.stringify(format.schema)).toContain("activeBuildContracts")
   })
 
+  test("compaction stop condition waits for captured handoff instead of first tool call", async () => {
+    let captured = false
+    const stop = SessionCompaction.TestHooks.structuredHandoffStopCondition({
+      isCaptured: () => captured,
+      retryCount: 2,
+    })
+    const structuredOutputStep = {
+      toolCalls: [{ toolName: "StructuredOutput" }],
+    } as any
+
+    expect(await stop({ steps: [structuredOutputStep] })).toBe(false)
+    expect(await stop({ steps: [structuredOutputStep, structuredOutputStep] })).toBe(false)
+    expect(await stop({ steps: [structuredOutputStep, structuredOutputStep, structuredOutputStep] })).toBe(true)
+
+    captured = true
+    expect(await stop({ steps: [structuredOutputStep] })).toBe(true)
+  })
+
   test("validates StructuredOutput payloads instead of accepting fenced JSON text", () => {
     const handoff = handoffFixture()
     const requirements: CompactionHandoff.EvidenceRequirements = {
