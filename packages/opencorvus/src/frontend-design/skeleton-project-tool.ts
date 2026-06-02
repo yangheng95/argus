@@ -20,7 +20,7 @@ export function createFrontendSkeletonProjectTool(options: {
       description:
         "Create the frontend-design editable source skeleton from the task-runtime web-clone-source package. " +
         "Use this for webpage replicas before submit_frontend_template: it writes a runnable React/Vite source project with JSX generated from source-skeleton, sourceData arrays, CSS sidecars, and asset references. " +
-        "The skeleton is evidence, not the target delivery project. Frontend-design should use its bounded manifest/iteration sidecars to extract named source regions into the target project.",
+        "The skeleton is evidence, not the target delivery project. Its outputDir must be the frontend-design-skeleton evidence directory, never the target app root such as web-clone-target. Frontend-design should use its bounded manifest/iteration sidecars to extract named source regions into the target project.",
       inputSchema: z.object({
         sourcePackageDir: z
           .string()
@@ -29,7 +29,7 @@ export function createFrontendSkeletonProjectTool(options: {
         outputDir: z
           .string()
           .optional()
-          .describe("Directory where the skeleton project is written. Defaults to the task runtime frontend-design-skeleton directory."),
+          .describe("Directory where the skeleton evidence project is written. Omit this when task runtime defaults exist, or pass the frontend-design-skeleton path only. Never pass web-clone-target or any target delivery app root."),
         singleFileHtmlPath: z
           .string()
           .optional()
@@ -94,6 +94,7 @@ export function createFrontendSkeletonProjectTool(options: {
             "## Bounded next action for frontend_design",
             "",
             "1. Treat this skeleton as read-only evidence. Do not install, build, render, or edit inside this output directory as the final project.",
+            "1b. Do not move, rename, or repurpose this skeleton output as the target delivery project. The target project remains a separate app populated with `write`/`edit` from selected source regions.",
             "2. Read these bounded entry files first: `src/data/sourceProjectManifest.json`, `src/data/sourceDomIterationState.ts`, and named rows in `src/data/sourceDomReplacementPlan.ts`.",
             "3. Use `src/data/sourceDomReplacementPlan.ts` as the region queue, but locate rows by region/component name. Do not spend the next turns reading dense data sidecars wholesale.",
             "4. Do not read `src/data/sourceData.ts`, `src/data/svgPaths.ts`, raw HTML, or generated CSS in full. Search or read only the current region's named data/style/asset excerpt when a replacement row points to it.",
