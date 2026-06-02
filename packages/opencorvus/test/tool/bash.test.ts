@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, mock, test } from "bun:test"
+import fs from "fs/promises"
 import os from "os"
 import path from "path"
 import { PassThrough } from "stream"
@@ -201,6 +202,50 @@ describe("tool.bash", () => {
           )
           await Bun.sleep(150)
           expect(disposeCalls).toBe(1)
+        } finally {
+          restore()
+        }
+      },
+    })
+  })
+
+  test("resolves relative workdir against project before spawning", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const subdir = path.join(tmp.path, "app")
+        await fs.mkdir(subdir, { recursive: true })
+        let capturedCwd: string | undefined
+        const restore = ProcessSupervisor.setFactoryForTest(async (opts) => {
+          capturedCwd = opts.cwd
+          const stdout = new PassThrough()
+          queueMicrotask(() => {
+            stdout.write("relative-workdir\n")
+            stdout.end()
+          })
+          return {
+            pid: 9003,
+            stdin: null,
+            stdout,
+            stderr: new PassThrough(),
+            exited: Promise.resolve(0),
+            terminate: async () => {},
+            dispose: async () => {},
+            unref: () => {},
+          }
+        })
+        try {
+          const bash = await BashTool.init()
+          await bash.execute(
+            {
+              command: "echo relative-workdir",
+              description: "Echo from relative workdir",
+              workdir: "app",
+            },
+            ctx,
+          )
+          expect(capturedCwd).toBe(subdir)
         } finally {
           restore()
         }
