@@ -109,7 +109,7 @@ describe("frontend-design prompt assembly", () => {
     expect(prompt).toContain(".opencorvus/runtime/tasks/tsk_web_clone/frontend-design/web-clone-source/")
     expect(prompt).toContain(".opencorvus/runtime/tasks/tsk_web_clone/frontend-design/frontend-design-skeleton/")
     expect(prompt).toContain("After the source project tool returns")
-    expect(prompt).toContain("extract source-dom/rawcode evidence into the target delivery project")
+    expect(prompt).toContain("extract only that selected source region's source-dom/rawcode evidence into the target delivery project")
     expect(prompt).toContain("Build should receive the target project that frontend_design already populated")
     expect(prompt).toContain("Default target delivery project root: `web-clone-target`")
     expect(prompt).toContain("React + Vite + TypeScript")
@@ -125,6 +125,8 @@ describe("frontend-design prompt assembly", () => {
     expect(prompt).toContain("After the skeleton exists, the first target-project editing pass creates source files only")
     expect(prompt).toContain("Before the first target-project write, call `record_frontend_region_selection`")
     expect(prompt).toContain("target writes without a recorded source region are off-track")
+    expect(prompt).toContain("One region selection authorizes edits only for that named source region's data, component, style, assets, and App wiring")
+    expect(prompt).toContain("Before writing files for a different source region such as footer, economy tables, news, calendar, FAQ, map, chart, or card/list groups")
     expect(prompt).toContain("The first filesystem-changing operation for a new default target directory must be the source vertical slice itself")
     expect(prompt).toContain("not a directory-only shell command followed by root config")
     expect(prompt).toContain("The file write tools create parent directories for new files")
@@ -141,6 +143,8 @@ describe("frontend-design prompt assembly", () => {
     expect(prompt).toContain("frontend_project.project_root` should be `web-clone-target`")
     expect(prompt).toContain("Source coverage comes before manifest/config tuning and package installation")
     expect(prompt).toContain("before spending turns on root config edits, directory-only setup commands, or package-manager commands")
+    expect(prompt).toContain("extract only that selected source region's source-dom/rawcode evidence")
+    expect(prompt).toContain("Do not batch unrelated region files under a previous region selection")
     expect(prompt).toContain("Do not read `sourceData.ts`, `svgPaths.ts`, raw HTML, or generated CSS wholesale")
     expect(prompt).toContain("use search/excerpt reads only for the current region's named data/style/asset evidence")
     expect(prompt).toContain("Treat `nextSourceDomReplacement` as the first queue item only")
@@ -173,6 +177,8 @@ describe("frontend-design prompt assembly", () => {
         expect(result.output).toContain("The next target-project filesystem-changing operation should be a source vertical-slice file write")
         expect(result.output).toContain("not `bash mkdir`, `index.html`, `package.json`, `tsconfig.json`, or bundler config")
         expect(result.output).toContain("The write tool creates parent directories for new files")
+        expect(result.output).toContain("One region selection covers only that selected region's data/component/style/assets/App wiring")
+        expect(result.output).toContain("record a replacement result and call `record_frontend_region_selection` again before writing another region")
         expect(result.output).toContain("Do not write imports for components/data/style modules that you are not creating in the same pass")
         expect(result.output).toContain("Do not run install/build/render/dev-server commands yet")
         expect(result.output).toContain("Package-manager commands start only after `src/App.tsx`")
@@ -287,7 +293,7 @@ describe("frontend-design prompt assembly", () => {
   test("frontend_design process trace records region selection and source edits", async () => {
     const trace = FrontendDesignTestHooks.createFrontendProcessTrace()
     const tools = FrontendDesignTestHooks.createFrontendProcessTraceTools(trace)
-    await (tools.record_frontend_region_selection as any).execute({
+    const selectionResult = await (tools.record_frontend_region_selection as any).execute({
       regionComponentName: "HeroRegion",
       regionFilePath: "src/components/source-dom/HeroRegion.tsx",
       replacementPlanFile: "src/data/sourceDomReplacementPlan.ts",
@@ -296,6 +302,8 @@ describe("frontend-design prompt assembly", () => {
       replacementKind: "card_collection_component",
       reason: "nextSourceDomReplacement points at the hero source region.",
     })
+    expect(selectionResult.output).toContain("Next target edits should stay inside this selected region's data, component, style, assets, and App wiring")
+    expect(selectionResult.output).toContain("Before writing files for another region, record this region's replacement result")
     FrontendDesignTestHooks.recordFrontendToolResultEvents(trace, "edit", {
       filePath: "src/components/SourceDomPage.tsx",
     }, {
