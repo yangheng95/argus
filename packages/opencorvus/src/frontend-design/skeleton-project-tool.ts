@@ -20,7 +20,7 @@ export function createFrontendSkeletonProjectTool(options: {
       description:
         "Create the frontend-design editable source skeleton from the task-runtime web-clone-source package. " +
         "Use this for webpage replicas before submit_frontend_template: it writes a runnable React/Vite source project with JSX generated from source-skeleton, sourceData arrays, CSS sidecars, and asset references. " +
-        "Downstream Build should copy/adapt this source skeleton as the implementation starting point and refine named modules in place.",
+        "The skeleton is evidence, not the target delivery project. Frontend-design should use its bounded manifest/iteration sidecars to extract named source regions into the target project.",
       inputSchema: z.object({
         sourcePackageDir: z
           .string()
@@ -90,6 +90,15 @@ export function createFrontendSkeletonProjectTool(options: {
             `- Cards: ${result.stats.cardCount}`,
             `- Asset references: ${result.stats.assetRefCount}`,
             `- CSS sidecars: ${result.stats.copiedCssFiles}`,
+            "",
+            "## Bounded next action for frontend_design",
+            "",
+            "1. Treat this skeleton as read-only evidence. Do not install, build, render, or edit inside this output directory as the final project.",
+            "2. Read these bounded entry files first: `src/data/sourceProjectManifest.json`, `src/data/sourceDomIterationState.ts`, and the target root `package.json` when it exists.",
+            "3. Use `src/data/sourceDomReplacementPlan.ts` as the region queue, but locate rows by region/component name. Do not spend the next turns reading dense data sidecars wholesale.",
+            "4. Do not read `src/data/sourceData.ts`, `src/data/svgPaths.ts`, raw HTML, or generated CSS in full. Search or read only the current region's named data/style/asset excerpt when a replacement row points to it.",
+            "5. Populate the target delivery project root next: root package scripts, `src/main.tsx`, `src/App.tsx`, semantic components, data modules, CSS modules/sidecars, and owned assets.",
+            "6. After each target-project region replacement, run build/audit/render evidence against the target project and record the replacement result.",
           ].join("\n"),
           metadata: result,
         }

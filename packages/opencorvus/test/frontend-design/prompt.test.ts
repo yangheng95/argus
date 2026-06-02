@@ -7,6 +7,7 @@ import { PNG } from "pngjs"
 import { Instance } from "../../src/project/instance"
 import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 import { FrontendDesignTestHooks } from "../../src/frontend-design/agent"
+import { createFrontendSkeletonProjectTool } from "../../src/frontend-design/skeleton-project-tool"
 import { createFrontendTemplateOutputTools } from "../../src/frontend-design/output-tools"
 import {
   FRONTEND_DESIGN_CONTEXT_TOOL_IDS,
@@ -119,10 +120,36 @@ describe("frontend-design prompt assembly", () => {
     expect(prompt).toContain("When a target-root file already exists, read that exact file first with `read_file`")
     expect(prompt).toContain("use direct `write` only for genuinely new target-project files")
     expect(prompt).toContain("Before any build/render/server command, create or populate the target delivery project specified by the Target Delivery Project Contract")
+    expect(prompt).toContain("Do not read `sourceData.ts`, `svgPaths.ts`, raw HTML, or generated CSS wholesale")
+    expect(prompt).toContain("use search/excerpt reads only for the current region's named data/style/asset evidence")
     expect(prompt).toContain("Treat `nextSourceDomReplacement` as the first queue item only")
     expect(prompt).not.toContain("The host already prepared the frontend-design high-fidelity editable source project before this model turn.")
     expect(prompt).not.toContain("Do not call `create_frontend_skeleton_project` again")
   })
+
+  test("skeleton project tool returns bounded source evidence entrypoints", async () => {
+    await using tmp = await tmpdir()
+    const sourcePackage = await writeAuditFixtureSourcePackage(tmp.path)
+    const outputDir = path.join(tmp.path, "frontend-design-skeleton")
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const tools = createFrontendSkeletonProjectTool()
+        const result = await (tools.create_frontend_skeleton_project as any).execute({
+          sourcePackageDir: sourcePackage,
+          outputDir,
+        }, {})
+
+        expect(result.output).toContain("Bounded next action for frontend_design")
+        expect(result.output).toContain("sourceProjectManifest.json")
+        expect(result.output).toContain("sourceDomIterationState.ts")
+        expect(result.output).toContain("sourceDomReplacementPlan.ts")
+        expect(result.output).toContain("Do not read `src/data/sourceData.ts`, `src/data/svgPaths.ts`, raw HTML, or generated CSS in full")
+        expect(result.output).toContain("Populate the target delivery project root next")
+      },
+    })
+  }, 30_000)
 
   test("frontend_design analyze toolkit includes source refinement tools", async () => {
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), "frontend-implementation-tools-"))
