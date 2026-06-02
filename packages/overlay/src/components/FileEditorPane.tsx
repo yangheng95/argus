@@ -4,7 +4,6 @@ import {
   closeFileEditor,
   selectedFilePath,
   shortWorkbenchPath,
-  showMessagesPane,
   type FileContent,
 } from "../services/file-workbench"
 import { t } from "../utils/i18n"
@@ -84,15 +83,6 @@ export function FileEditorPane() {
         }
       >
         <header class="file-editor-header">
-          <button
-            type="button"
-            class="file-editor-nav"
-            onClick={showMessagesPane}
-            title={t("file_editor.show_messages")}
-            aria-label={t("file_editor.show_messages")}
-          >
-            <Icon name="panel-left" size={13} />
-          </button>
           <div class="file-editor-title" title={path()}>
             <span class="file-editor-title-name">{shortWorkbenchPath(path())}</span>
             <Show when={dirty()}>

@@ -271,21 +271,6 @@ code .file-link:hover {
   flex-direction: column;
 }
 
-.file-editor-mount {
-  flex: 0 0 clamp(calc(420px * var(--ui-scale)), 58%, calc(980px * var(--ui-scale)));
-  min-width: min(calc(360px * var(--ui-scale)), 100%);
-  max-width: 68%;
-  min-height: 0;
-  display: none;
-  border-left: var(--oc-border-width) solid color-mix(in srgb, var(--border) 80%, transparent);
-  background: var(--surface);
-  container: message-workbench / inline-size;
-}
-
-.chat-content-frame[data-editor-open="true"] .file-editor-mount {
-  display: flex;
-}
-
 .file-editor-pane {
   flex: 1 1 0;
   min-width: 0;
@@ -431,8 +416,7 @@ code .file-link:hover {
 
 .file-editor-nav,
 .file-editor-close,
-.file-editor-save,
-.file-editor-toggle {
+.file-editor-save {
   border: 0;
   background: transparent;
   color: var(--text-muted);
@@ -449,8 +433,7 @@ code .file-link:hover {
 }
 
 .file-editor-nav:hover,
-.file-editor-close:hover,
-.file-editor-toggle:hover {
+.file-editor-close:hover {
   color: var(--text-strong);
   background: var(--subtle-2);
 }
@@ -553,50 +536,6 @@ code .file-link:hover {
   font-size: var(--ui-font-control);
 }
 
-.file-editor-toggle-mount {
-  display: inline-flex;
-  min-width: 0;
-}
-
-.file-editor-toggle {
-  max-width: calc(220px * var(--ui-scale));
-  min-height: calc(24px * var(--ui-scale));
-  display: inline-flex;
-  align-items: center;
-  gap: calc(5px * var(--ui-scale));
-  padding: 0 calc(8px * var(--ui-scale));
-  font-size: var(--ui-font-control);
-  color: var(--text-soft);
-}
-
-.file-editor-toggle[data-active="true"] {
-  color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 10%, transparent);
-}
-
-.file-editor-toggle span {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-@media (max-width: 1280px) {
-  .chat-content-frame[data-editor-open="true"][data-editor-focus="editor"] .chat-message-pane {
-    display: none;
-  }
-
-  .chat-content-frame[data-editor-open="true"][data-editor-focus="messages"] .file-editor-mount {
-    display: none;
-  }
-
-  .chat-content-frame[data-editor-open="true"] .file-editor-mount {
-    flex: 1 1 auto;
-    max-width: none;
-    border-left: 0;
-  }
-}
-
 @container message-workbench (max-width: 720px) {
   .message-workbench-switcher {
     display: flex;
@@ -616,22 +555,6 @@ code .file-link:hover {
   .message-workbench-changes[data-active="false"],
   .message-workbench-detail[data-active="false"] {
     display: none;
-  }
-}
-
-@container chat-workbench (max-width: 860px) {
-  .chat-content-frame[data-editor-open="true"][data-editor-focus="editor"] .chat-message-pane {
-    display: none;
-  }
-
-  .chat-content-frame[data-editor-open="true"][data-editor-focus="messages"] .file-editor-mount {
-    display: none;
-  }
-
-  .chat-content-frame[data-editor-open="true"] .file-editor-mount {
-    flex: 1 1 auto;
-    max-width: none;
-    border-left: 0;
   }
 }
 

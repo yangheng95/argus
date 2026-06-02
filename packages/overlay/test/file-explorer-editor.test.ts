@@ -3,12 +3,10 @@ import { readFileSync } from "node:fs"
 import path from "node:path"
 import {
   closeFileEditor,
-  fileEditorFocus,
   fileWorkbenchOpen,
   openFileEditor,
   selectedFilePath,
   showWorkbenchPane,
-  toggleFileEditorFocus,
 } from "../src/services/file-workbench"
 
 const ROOT = path.resolve(import.meta.dir, "..")
@@ -17,12 +15,11 @@ function readText(rel: string): string {
   return readFileSync(path.join(ROOT, rel), "utf8")
 }
 
-test("file explorer and editor are wired as a VS Code-style split workbench", () => {
+test("file explorer and editor are wired through the right-panel Files tab", () => {
   const explorer = readText("src/components/FileExplorerPanel.tsx")
   const editor = readText("src/components/FileEditorPane.tsx")
   const workbench = readText("src/components/MessageWorkbenchPane.tsx")
   const codeEditor = readText("src/components/primitives/CodeEditor.tsx")
-  const toggle = readText("src/components/FileEditorToggle.tsx")
   const service = readText("src/services/file-workbench.ts")
   const tabs = readText("src/components/RightPanelTabs.tsx")
   const html = readText("src/index.html")
@@ -30,18 +27,28 @@ test("file explorer and editor are wired as a VS Code-style split workbench", ()
   const inspectorCss = readText("src/styles/surfaces/inspector.css")
   const workspaceCss = readText("src/styles/surfaces/workspace.css")
 
-  expect(tabs).toContain('export type RightPanelTab = "explorer" | "inspector"')
+  expect(tabs).toContain('export type RightPanelTab = "files" | "explorer" | "inspector"')
   expect(tabs).toContain('export const DEFAULT_RIGHT_PANEL_TAB: RightPanelTab = "explorer"')
+  expect(tabs).toContain('onClick={() => props.onSelect("files")}')
   expect(tabs).not.toContain('props.onSelect("changes")')
   expect(html).toContain('id="rightPanelExplorer"')
+  expect(html).toContain('id="rightPanelFiles"')
+  expect(html).toContain('data-panel-tab="files" data-active="false"')
   expect(html).toContain('id="solidFileExplorerMount"')
   expect(html).toContain('id="chatContentFrame"')
   expect(html).toContain('id="solidFileEditorMount"')
-  expect(html).toContain('id="solidFileEditorToggleMount"')
+  expect(html).not.toContain('id="solidFileEditorToggleMount"')
+  expect(html).not.toContain('class="file-editor-mount"')
   expect(main).toContain('<FileExplorerPanel active={() => rightPanelTab() === "explorer"} directory={activeDirectory}')
   expect(main).toContain("<MessageWorkbenchPane")
   expect(main).toContain("diffOpen={workspaceOpen()}")
-  expect(main).toContain("frame.dataset.editorOpen = fileWorkbenchOpen() || workspaceOpen()")
+  expect(main).toContain('setRightPanelTab("files")')
+  expect(main).toContain('document.getElementById("rightPanelFiles")')
+  expect(main).toContain('files.dataset.active = String(active === "files")')
+  expect(main).toContain('if (fileWorkbenchOpen() || workspaceOpen()) setRightPanelTab("files")')
+  expect(main).not.toContain('document.getElementById("solidFileEditorToggleMount")')
+  expect(main).not.toContain("FileEditorToggle")
+  expect(main).not.toContain("frame.dataset.editorOpen = fileWorkbenchOpen() || workspaceOpen()")
   expect(main).not.toContain("frame.dataset.editorOpen = activeTaskID() || selectedFilePath() || workspaceOpen()")
 
   expect(explorer).toContain('apiJson(`file?path=')
@@ -79,11 +86,11 @@ test("file explorer and editor are wired as a VS Code-style split workbench", ()
   expect(codeEditor).toContain("EditorView.updateListener")
   expect(codeEditor).toContain("update.state.doc.toString()")
   expect(codeEditor).toContain("view?.destroy()")
-  expect(toggle).toContain("toggleFileEditorFocus")
-  expect(toggle).toContain("activeTaskID")
-  expect(service).toContain('createSignal<"messages" | "editor">')
+  expect(service).not.toContain('createSignal<"messages" | "editor">')
+  expect(service).not.toContain("toggleFileEditorFocus")
   expect(service).toContain("const [fileWorkbenchOpen, setFileWorkbenchOpen]")
   expect(service).toContain("setFileWorkbenchOpen(false)")
+  expect(editor).not.toContain("showMessagesPane")
   expect(workbench).toContain("<ChangesPanel hasSelectedTask />")
   expect(workbench).toContain("<FileEditorPane />")
   expect(workbench).toContain("<DiffPreviewPanel")
@@ -94,44 +101,38 @@ test("file explorer and editor are wired as a VS Code-style split workbench", ()
   expect(inspectorCss).toContain(".file-explorer-panel")
   expect(inspectorCss).toContain(".file-explorer-list[data-virtualized=\"true\"]")
   expect(inspectorCss).toContain(".file-explorer-retry")
+  expect(inspectorCss).toContain('.sections-tab-body[data-panel-tab="files"]')
+  expect(inspectorCss).toContain(".sections-files-tab")
+  expect(inspectorCss).toContain("container: message-workbench / inline-size")
   expect(workspaceCss).toContain(".chat-content-frame")
   expect(workspaceCss).toContain("container: chat-workbench / inline-size")
-  expect(workspaceCss).toContain(".file-editor-mount")
-  expect(workspaceCss).toContain("container: message-workbench / inline-size")
+  expect(workspaceCss).not.toContain(".file-editor-mount")
+  expect(workspaceCss).not.toContain(".file-editor-toggle")
   expect(workspaceCss).toContain(".message-workbench")
   expect(workspaceCss).toContain(".message-workbench-changes")
   expect(workspaceCss).toContain(".message-workbench-detail")
   expect(workspaceCss).toContain("@container message-workbench (max-width: 720px)")
   expect(workspaceCss).toContain(".file-editor-code")
   expect(workspaceCss).toContain(".file-editor-code .cm-editor")
-  expect(workspaceCss).toContain('@media (max-width: 1280px)')
-  expect(workspaceCss).toContain("@container chat-workbench (max-width: 860px)")
-  expect(workspaceCss).toContain('[data-editor-focus="editor"] .chat-message-pane')
-  expect(workspaceCss).toContain('[data-editor-focus="messages"] .file-editor-mount')
+  expect(workspaceCss).not.toContain("@container chat-workbench (max-width: 860px)")
+  expect(workspaceCss).not.toContain('[data-editor-focus="editor"] .chat-message-pane')
+  expect(workspaceCss).not.toContain('[data-editor-focus="messages"] .file-editor-mount')
 })
 
-test("file workbench close state is independent from selected task presence", () => {
+test("file workbench open state is independent from selected task presence", () => {
   closeFileEditor()
   expect(fileWorkbenchOpen()).toBe(false)
   expect(selectedFilePath()).toBe("")
-  expect(fileEditorFocus()).toBe("messages")
 
   showWorkbenchPane()
   expect(fileWorkbenchOpen()).toBe(true)
   expect(selectedFilePath()).toBe("")
-  expect(fileEditorFocus()).toBe("editor")
-
-  toggleFileEditorFocus()
-  expect(fileWorkbenchOpen()).toBe(false)
-  expect(fileEditorFocus()).toBe("messages")
 
   openFileEditor("src/main.tsx")
   expect(fileWorkbenchOpen()).toBe(true)
   expect(selectedFilePath()).toBe("src/main.tsx")
-  expect(fileEditorFocus()).toBe("editor")
 
   closeFileEditor()
   expect(fileWorkbenchOpen()).toBe(false)
   expect(selectedFilePath()).toBe("")
-  expect(fileEditorFocus()).toBe("messages")
 })

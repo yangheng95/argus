@@ -2,7 +2,7 @@ import type { Accessor } from "solid-js"
 import { t } from "../utils/i18n"
 import { Tab, Tabs } from "./ui/Tabs"
 
-export type RightPanelTab = "explorer" | "inspector"
+export type RightPanelTab = "files" | "explorer" | "inspector"
 
 export const DEFAULT_RIGHT_PANEL_TAB: RightPanelTab = "explorer"
 
@@ -22,6 +22,16 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
         aria-label={`${t("explorer.title")} / ${t("sections.title")}`}
         data-ui="right-tabs"
       >
+        <Tab
+          value="files"
+          active={props.active() === "files"}
+          size="sm"
+          tone="neutral"
+          data-ui="right-tab"
+          onClick={() => props.onSelect("files")}
+        >
+          {t("section.files")}
+        </Tab>
         <Tab
           value="explorer"
           active={props.active() === "explorer"}
