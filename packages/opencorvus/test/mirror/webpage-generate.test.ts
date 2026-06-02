@@ -170,6 +170,38 @@ describe("webpage-generate dependency guards", () => {
     expect(output.length).toBeLessThan(1400)
   })
 
+  test("codebase text tools omit inline base64 data URI payloads", async () => {
+    const { createCodebaseTools } = await import("../../src/engine/codebase-tools")
+    await using tmp = await tmpdir()
+    await Bun.write(
+      `${tmp.path}/asset.css`,
+      `:root { --icon: url("data:image/png;base64,${"A".repeat(2400)}"); }\n`,
+    )
+    await Bun.write(
+      `${tmp.path}/small-asset.css`,
+      `.icon { background: url("data:image/svg+xml;base64,${"B".repeat(80)}"); }\n`,
+    )
+
+    const tools = createCodebaseTools(tmp.path)
+    const readFile = tools.read_file as any
+    const searchCode = tools.search_code as any
+
+    const readOutput = await readFile.execute({ path: "asset.css", max_lines: 1 }, {})
+    expect(readOutput).toContain("[inline image/png base64 data URI omitted: 2400 chars")
+    expect(readOutput).not.toContain("data:image/png;base64")
+    expect(readOutput).not.toContain("A".repeat(100))
+
+    const omittedSearchOutput = await searchCode.execute({ pattern: "data:image", path: "asset.css", max_results: 1 }, {})
+    expect(omittedSearchOutput).toContain("[Omitted long matching line]")
+    expect(omittedSearchOutput).not.toContain("data:image/png;base64")
+    expect(omittedSearchOutput).not.toContain("A".repeat(100))
+
+    const searchOutput = await searchCode.execute({ pattern: "data:image", path: "small-asset.css", max_results: 1 }, {})
+    expect(searchOutput).toContain("[inline image/svg+xml base64 data URI omitted: 80 chars")
+    expect(searchOutput).not.toContain("data:image/svg+xml;base64")
+    expect(searchOutput).not.toContain("B".repeat(40))
+  })
+
   test("read_file supports paged reads with stable line numbers", async () => {
     const { createCodebaseTools } = await import("../../src/engine/codebase-tools")
     await using tmp = await tmpdir()

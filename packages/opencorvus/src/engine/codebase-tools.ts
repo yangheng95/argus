@@ -12,6 +12,13 @@ import { Instance } from "@/project/instance"
 
 const DENSE_MIRROR_ARTIFACT_MAX_LINES = 120
 const READ_FILE_MAX_LINE_CHARS = 1200
+const INLINE_BASE64_DATA_URI_RE = /data:([a-zA-Z0-9.+-]+\/[a-zA-Z0-9.+-]+);base64,([A-Za-z0-9+/=_-]+)/g
+
+function sanitizeInlineDataUrisForPrompt(text: string): string {
+  return text.replace(INLINE_BASE64_DATA_URI_RE, (_match, mime: string, payload: string) => {
+    return `[inline ${mime} base64 data URI omitted: ${payload.length} chars; use the owning asset file or manifest reference instead]`
+  })
+}
 
 function rawMirrorArtifactReason(relPath: string): string | null {
   const normalized = relPath.replace(/\\/g, "/")
@@ -178,10 +185,11 @@ export function createCodebaseTools(projectDir?: string) {
           }
           const slice = lines.slice(startIndex, startIndex + limit)
           const numbered = slice.map((line, i) => {
+            const safeLine = sanitizeInlineDataUrisForPrompt(line)
             const displayLine =
-              line.length > READ_FILE_MAX_LINE_CHARS
-                ? `${line.slice(0, READ_FILE_MAX_LINE_CHARS)}... (line truncated, ${line.length - READ_FILE_MAX_LINE_CHARS} more chars)`
-                : line
+              safeLine.length > READ_FILE_MAX_LINE_CHARS
+                ? `${safeLine.slice(0, READ_FILE_MAX_LINE_CHARS)}... (line truncated, ${safeLine.length - READ_FILE_MAX_LINE_CHARS} more chars)`
+                : safeLine
             return `${String(startIndex + i + 1).padStart(5)} | ${displayLine}`
           }).join("\n")
           const remaining = lines.length - (startIndex + slice.length)
@@ -270,7 +278,7 @@ export function createCodebaseTools(projectDir?: string) {
           )
           const output = await new Response(proc.stdout).text()
           await proc.exited
-          const trimmed = output.trim()
+          const trimmed = sanitizeInlineDataUrisForPrompt(output.trim())
           return trimmed || "No matches found."
         } catch {
           return "No matches found (or ripgrep not available)."
