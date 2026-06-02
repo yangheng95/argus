@@ -144,6 +144,64 @@ test("integrity review stream builds the integrity session card", () => {
   });
 });
 
+test("integrity review chunk reconstructs running card when started is outside the loaded event window", () => {
+  resetWriter();
+
+  applyEvent({
+    type: "review.stream.chunk",
+    emittedAt: 1700000000100,
+    properties: {
+      taskID: "tsk_team",
+      reviewID: "integrity:ses_late_chunk",
+      phase: "integrity",
+      kind: "reasoning",
+      attempt: 1,
+      delta: "late reasoning",
+    },
+  });
+
+  const card = cardTreeStore.cards["integrity:session:ses_late_chunk"];
+  expect(card?.status).toBe("running");
+  expect(card?.sessionID).toBe("ses_late_chunk");
+  expect(card?.parts).toEqual([
+    {
+      type: "reasoning",
+      partID: "review:integrity:ses_late_chunk:reasoning:1",
+      text: "late reasoning",
+    },
+  ]);
+});
+
+test("integrity review progress reconstructs running card when started is outside the loaded event window", () => {
+  resetWriter();
+
+  applyEvent({
+    type: "review.stream.progress",
+    emittedAt: 1700000020000,
+    properties: {
+      taskID: "tsk_team",
+      reviewID: "integrity:ses_late_progress",
+      phase: "integrity",
+      currentStep: "agent",
+      attempt: 2,
+      elapsedMs: 20_000,
+      summary: "reviewing loaded tail",
+    },
+  });
+
+  const card = cardTreeStore.cards["integrity:session:ses_late_progress"];
+  expect(card?.status).toBe("running");
+  expect(card?.sessionID).toBe("ses_late_progress");
+  expect(card?.subtitle).toContain("integrity.attempt_label");
+  expect(card?.reviewStream).toMatchObject({
+    phase: "integrity",
+    currentStep: "agent",
+    elapsedMs: 20_000,
+    summary: "reviewing loaded tail",
+  });
+  expect(card?.time).toBe(1700000000000);
+});
+
 test("multiple reviewers with independent reviewIDs do not cross-contaminate a single part", () => {
   // Regression: before the fix in
   // specs/new-arch/2026-05-26-integrity-reviewer-stream-reviewid.md
@@ -284,10 +342,7 @@ test("multiple reviewers with independent reviewIDs do not cross-contaminate a s
   expect(cardTreeStore.order).not.toContain("integrity:session:ses_rev_b");
 });
 
-test("reviewer chunk without its own started event throws (writer invariant)", () => {
-  // If a future code path regresses and emits reviewer chunks under the
-  // supervisor's reviewID without registering its own started event,
-  // tree-writer should not silently graft them onto the supervisor card.
+test("malformed reviewer chunk without a reconstructable integrity session still throws", () => {
   resetWriter();
 
   applyEvent({
@@ -307,8 +362,7 @@ test("reviewer chunk without its own started event throws (writer invariant)", (
       emittedAt: 1700000000100,
       properties: {
         taskID: "tsk_team",
-        // A reviewer-shaped reviewID that never had its own started event.
-        reviewID: "integrity:ses_rev_orphan",
+        reviewID: "integrity:not_a_session",
         phase: "integrity",
         kind: "reasoning",
         attempt: 1,

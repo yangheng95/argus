@@ -1119,6 +1119,44 @@ function reviewCardID(p: Pick<RunningReviewPayload, "phase" | "reviewID" | "sess
   return integrityCardID(p.sessionID);
 }
 
+function eventEmittedAt(event: any): number {
+  const emittedAt = Number(event?.emittedAt || event?.emitted_at || event?.timestamp || 0);
+  return Number.isFinite(emittedAt) && emittedAt > 0 ? emittedAt : Date.now();
+}
+
+function integritySessionIDFromReviewID(reviewID: string): string | undefined {
+  const prefix = "integrity:";
+  if (!reviewID.startsWith(prefix)) return undefined;
+  const sessionID = reviewID.slice(prefix.length);
+  return sessionID.startsWith("ses") ? sessionID : undefined;
+}
+
+function reconstructRunningIntegrityReview(input: {
+  taskID: string
+  reviewID: string
+  phase: ReviewStreamPhase
+  event: any
+  attempt: number
+  elapsedMs?: number
+}): RunningReviewPayload | undefined {
+  if (input.phase !== "integrity") return undefined;
+  const sessionID = integritySessionIDFromReviewID(input.reviewID);
+  if (!sessionID) return undefined;
+  const elapsedMs = Math.max(0, Number(input.elapsedMs || 0));
+  const payload: RunningReviewPayload = {
+    taskID: input.taskID,
+    reviewID: input.reviewID,
+    phase: input.phase,
+    sessionID,
+    startedAt: Math.max(1, eventEmittedAt(input.event) - elapsedMs),
+    attempt: input.attempt,
+    elapsedMs,
+  };
+  runningReviews.set(input.reviewID, payload);
+  materializeRunningReview(payload);
+  return payload;
+}
+
 function handleReviewStreamStarted(event: any): void {
   const props = propsOf(event);
   const taskID = String(props.taskID || "");
@@ -1151,7 +1189,14 @@ function handleReviewStreamProgress(event: any): void {
   if (!reviewID) throw new Error(`review.stream.progress missing reviewID (taskID=${taskID})`);
   const attempt = Number(props.attempt || 0);
   const elapsedMs = Number(props.elapsedMs || props.elapsed_ms || 0);
-  const existing = runningReviews.get(reviewID);
+  const existing = runningReviews.get(reviewID) ?? reconstructRunningIntegrityReview({
+    taskID,
+    reviewID,
+    phase,
+    event,
+    attempt,
+    elapsedMs,
+  });
   if (!existing) {
     throw new Error(`review.stream.progress arrived before started (taskID=${taskID}, reviewID=${reviewID})`);
   }
@@ -1188,7 +1233,13 @@ function handleReviewStreamChunk(event: any): void {
   }
   if (!delta) return;
 
-  const running = runningReviews.get(reviewID);
+  const running = runningReviews.get(reviewID) ?? reconstructRunningIntegrityReview({
+    taskID,
+    reviewID,
+    phase,
+    event,
+    attempt,
+  });
   const completedCardID = /^integrity:(.+)$/.test(reviewID)
     ? integrityCardID(reviewID.replace(/^integrity:/, ""))
     : "";
