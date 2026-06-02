@@ -97,8 +97,9 @@ export function createFrontendSkeletonProjectTool(options: {
             "2. Read these bounded entry files first: `src/data/sourceProjectManifest.json`, `src/data/sourceDomIterationState.ts`, and the target root `package.json` when it exists.",
             "3. Use `src/data/sourceDomReplacementPlan.ts` as the region queue, but locate rows by region/component name. Do not spend the next turns reading dense data sidecars wholesale.",
             "4. Do not read `src/data/sourceData.ts`, `src/data/svgPaths.ts`, raw HTML, or generated CSS in full. Search or read only the current region's named data/style/asset excerpt when a replacement row points to it.",
-            "5. Populate the target delivery project root next: root package scripts, `src/main.tsx`, `src/App.tsx`, semantic components, data modules, CSS modules/sidecars, and owned assets.",
-            "6. After each target-project region replacement, run build/audit/render evidence against the target project and record the replacement result.",
+            "5. Populate target source files next: `src/main.tsx`, `src/App.tsx`, semantic components, data modules, mock/API adapters, CSS modules/sidecars, and owned assets.",
+            "6. Treat root config files (`package.json`, `tsconfig.json`, bundler config) as late integration edits. Read each existing config file immediately before editing it, after source coverage exists.",
+            "7. After each target-project region replacement, run build/audit/render evidence against the target project and record the replacement result.",
           ].join("\n"),
           metadata: result,
         }
