@@ -56,7 +56,7 @@ describe("frontend-design prompt assembly", () => {
     expect(prompt).toContain("edit the target delivery project")
     expect(prompt).toContain("Build is not the primary rawproject-to-maintainable-code worker")
     expect(prompt).toContain("The target project plus the frontend_design iteration-state artifact are part of the deliverable surface")
-    expect(prompt).toContain("Do not run install/build/render/dev-server commands inside `frontend-design-skeleton`")
+    expect(prompt).toContain("Do not move, rename, install, build, render, or start a dev/preview server inside `frontend-design-skeleton`")
     expect(prompt).toContain("Baseline-first rule")
     expect(prompt).toContain("Region iteration algorithm")
     expect(prompt).toContain("at least 90% visual similarity")
@@ -114,6 +114,7 @@ describe("frontend-design prompt assembly", () => {
     })
 
     expect(prompt).toContain("call `create_frontend_skeleton_project`")
+    expect(prompt).toContain("Do not pass `web-clone-target` or any target app root to `create_frontend_skeleton_project`")
     expect(prompt).toContain("record_frontend_region_selection")
     expect(prompt).toContain("record_frontend_replacement_result")
     expect(prompt).toContain(".opencorvus/runtime/tasks/tsk_web_clone/frontend-design/web-clone-source/")
@@ -195,6 +196,7 @@ describe("frontend-design prompt assembly", () => {
         }, {})
 
         expect(result.output).toContain("Bounded next action for frontend_design")
+        expect(result.output).toContain("Do not move, rename, or repurpose this skeleton output as the target delivery project")
         expect(result.output).toContain("sourceProjectManifest.json")
         expect(result.output).toContain("sourceDomIterationState.ts")
         expect(result.output).toContain("sourceDomReplacementPlan.ts")
