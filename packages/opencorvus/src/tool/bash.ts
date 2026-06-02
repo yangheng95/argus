@@ -115,6 +115,11 @@ function sanitizeChildEnv(base: NodeJS.ProcessEnv, override: Record<string, stri
   return env
 }
 
+function resolveWorkdir(rawCwd: string): string {
+  const nativeCwd = process.platform === "win32" ? Filesystem.windowsPath(rawCwd) : rawCwd
+  return path.isAbsolute(nativeCwd) ? nativeCwd : path.resolve(Instance.directory, nativeCwd)
+}
+
 // TODO: we may wanna rename this tool so it works better on other shells
 export const BashTool = Tool.define("bash", async () => {
   const shell = Shell.acceptable()
@@ -156,7 +161,7 @@ export const BashTool = Tool.define("bash", async () => {
       // project root and an external_directory permission ask is raised for
       // workdirs that are actually inside the project.
       const rawCwd = params.workdir || Instance.directory
-      const cwd = process.platform === "win32" ? Filesystem.windowsPath(rawCwd) : rawCwd
+      const cwd = resolveWorkdir(rawCwd)
       await assertBuildWriteDirectory(ctx, cwd)
       if (params.timeout !== undefined && params.timeout < 0) {
         throw new Error(`Invalid timeout value: ${params.timeout}. Timeout must be a positive number.`)
