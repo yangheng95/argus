@@ -17,6 +17,7 @@ const mirrorDir = path.resolve(process.env.OPENCORVUS_WEB_CLONE_E2E_MIRROR ?? de
 const outputDir = path.resolve(process.env.OPENCORVUS_WEB_CLONE_E2E_OUTPUT ?? path.join(repoRoot, ".tmp", "opencorvus-web-clone-e2e-output"))
 const frontendDesignProjectDir = process.env.OPENCORVUS_FRONTEND_DESIGN_PROJECT_DIR ? path.resolve(process.env.OPENCORVUS_FRONTEND_DESIGN_PROJECT_DIR) : undefined
 const frontendDesignProcessTracePath = process.env.OPENCORVUS_FRONTEND_DESIGN_PROCESS_TRACE ? path.resolve(process.env.OPENCORVUS_FRONTEND_DESIGN_PROCESS_TRACE) : undefined
+const frontendDesignIterationStatePath = process.env.OPENCORVUS_FRONTEND_DESIGN_ITERATION_STATE ? path.resolve(process.env.OPENCORVUS_FRONTEND_DESIGN_ITERATION_STATE) : undefined
 const threshold = normalizeVisualThreshold(Number(process.env.OPENCORVUS_WEB_CLONE_E2E_THRESHOLD ?? 96))
 const worstThreshold = normalizeVisualThreshold(Number(process.env.OPENCORVUS_WEB_CLONE_E2E_WORST_THRESHOLD ?? 75))
 
@@ -39,6 +40,7 @@ interface BenchmarkProcessTrace {
   expectedFlow: string[]
   events: BenchmarkProcessEvent[]
   sourceProjectEvidence?: SourceProjectEvidence
+  frontendDesignIterationState?: FrontendDesignIterationState
   audits: {
     visualBaselineAllowed?: unknown
     maintainableReplacementRequired?: unknown
@@ -80,6 +82,16 @@ interface FrontendDesignProcessTrace {
   }>
 }
 
+interface FrontendDesignIterationState {
+  version: 1
+  purpose: "frontend-design-rawproject-iteration-state"
+  completedReplacements: Array<Record<string, unknown>>
+  blockedReplacements: Array<Record<string, unknown>>
+  deferredReplacements: Array<Record<string, unknown>>
+  remainingSourceDebt: string[]
+  lastUpdated: string
+}
+
 describe("web clone source project E2E", () => {
   test("process trace rejects missing rawproject refinement evidence", () => {
     const trace = createBenchmarkProcessTrace({
@@ -99,6 +111,7 @@ describe("web clone source project E2E", () => {
     expect(audit.findings.join("\n")).toContain("create_frontend_skeleton_project")
     expect(audit.findings.join("\n")).toContain("frontend_design_source_edit")
     expect(audit.findings.join("\n")).toContain("frontend_design_replacement_result")
+    expect(audit.findings.join("\n")).toContain("frontend_design iteration state artifact")
     expect(audit.findings.join("\n")).toContain("sourceDomReplacementPlan.ts")
     expect(audit.findings.join("\n")).toContain("maintainable_replacement_required")
   })
@@ -117,6 +130,7 @@ describe("web clone source project E2E", () => {
       sourceDomRegionFileCount: 0,
       semanticReplacementFileCount: 4,
     }
+    trace.frontendDesignIterationState = createCompletedFrontendDesignIterationState()
     for (const name of [
       "frontend_design_static_tool_surface",
       "web_clone_prepare_context",
@@ -213,6 +227,7 @@ describe("web clone source project E2E", () => {
       sourceDomRegionFileCount: 0,
       semanticReplacementFileCount: 4,
     }
+    trace.frontendDesignIterationState = createCompletedFrontendDesignIterationState()
     mergeFrontendDesignProcessTrace(trace, {
       version: 1,
       purpose: "frontend-design-process-trace",
@@ -253,10 +268,56 @@ describe("web clone source project E2E", () => {
     expect(audit.passed).toBe(true)
   })
 
+  test("process trace rejects remaining frontend_design source debt", () => {
+    const trace = createBenchmarkProcessTrace({
+      sourcePackageDir: "web-clone-source",
+      outputDir: "frontend-design-skeleton",
+    })
+    trace.sourceProjectEvidence = {
+      sourceDomPageExists: true,
+      replacementPlanExists: true,
+      iterationStateExists: true,
+      sourceRegionsExists: true,
+      referenceImageExists: true,
+      sourceDomRegionFileCount: 0,
+      semanticReplacementFileCount: 4,
+    }
+    trace.frontendDesignIterationState = {
+      ...createCompletedFrontendDesignIterationState(),
+      remainingSourceDebt: ["FaqRegion"],
+    }
+    mergeFrontendDesignProcessTrace(trace, createCompletedFrontendDesignProcessTrace())
+    recordTraceEvent(trace, {
+      step: "prepare-source-context",
+      kind: "tool",
+      name: "web_clone_prepare_context",
+      status: "passed",
+    })
+    recordTraceEvent(trace, {
+      step: "inspect-source-project-sidecars",
+      kind: "inspection",
+      name: "source-project-sidecars",
+      status: "passed",
+    })
+    recordTraceEvent(trace, {
+      step: "compare-rendered-reference",
+      kind: "command",
+      name: "visual-diff",
+      status: "passed",
+      details: { passed: true, mssim: 0.93 },
+    })
+
+    const audit = evaluateBenchmarkProcessTrace(trace)
+
+    expect(audit.passed).toBe(false)
+    expect(audit.findings.join("\n")).toContain("Frontend-design iteration state still has remaining source debt: FaqRegion.")
+  })
+
   e2eTest("runs the OpenCorvus tool chain and enforces the visual threshold", async () => {
     await assertDirectory(mirrorDir)
     if (frontendDesignProjectDir) await assertDirectory(frontendDesignProjectDir)
     if (frontendDesignProcessTracePath) await assertFile(frontendDesignProcessTracePath)
+    if (frontendDesignIterationStatePath) await assertFile(frontendDesignIterationStatePath)
     await Instance.provide({
       directory: repoRoot,
       fn: async () => {
@@ -292,6 +353,9 @@ describe("web clone source project E2E", () => {
 
         if (frontendDesignProcessTracePath) {
           mergeFrontendDesignProcessTrace(trace, await readFrontendDesignProcessTrace(frontendDesignProcessTracePath))
+        }
+        if (frontendDesignIterationStatePath) {
+          trace.frontendDesignIterationState = await readFrontendDesignIterationState(frontendDesignIterationStatePath)
         }
         if (!frontendDesignProjectDir) {
           const skeletonTrace = createFrontendSkeletonProjectTool({
@@ -454,6 +518,42 @@ function createBenchmarkProcessTrace(input: {
   }
 }
 
+function createCompletedFrontendDesignIterationState(): FrontendDesignIterationState {
+  return {
+    version: 1,
+    purpose: "frontend-design-rawproject-iteration-state",
+    completedReplacements: [
+      {
+        regionComponentName: "HeroRegion",
+        replacementStatus: "completed",
+        replacementComponentName: "HeroSection",
+      },
+    ],
+    blockedReplacements: [],
+    deferredReplacements: [],
+    remainingSourceDebt: [],
+    lastUpdated: new Date().toISOString(),
+  }
+}
+
+function createCompletedFrontendDesignProcessTrace(): FrontendDesignProcessTrace {
+  return {
+    version: 1,
+    purpose: "frontend-design-process-trace",
+    events: [
+      { name: "frontend_design_static_tool_surface", status: "passed", timestamp: new Date().toISOString() },
+      { name: "create_frontend_skeleton_project", status: "passed", timestamp: new Date().toISOString() },
+      { name: "frontend_design_region_selection", status: "passed", timestamp: new Date().toISOString() },
+      { name: "frontend_design_source_edit", status: "passed", timestamp: new Date().toISOString() },
+      { name: "frontend_design_replacement_result", status: "passed", timestamp: new Date().toISOString(), details: { replacementStatus: "completed", regionComponentName: "HeroRegion" } },
+      { name: "bun install", status: "passed", timestamp: new Date().toISOString() },
+      { name: "bun run build", status: "passed", timestamp: new Date().toISOString() },
+      { name: "web_clone_source_audit", status: "passed", timestamp: new Date().toISOString(), details: { finalDeliveryMode: "visual_baseline_allowed", passed: true } },
+      { name: "web_clone_source_audit", status: "passed", timestamp: new Date().toISOString(), details: { finalDeliveryMode: "maintainable_replacement_required", passed: true } },
+    ],
+  }
+}
+
 function recordTraceEvent(trace: BenchmarkProcessTrace, input: Omit<BenchmarkProcessEvent, "timestamp">): void {
   trace.events.push({
     ...input,
@@ -467,6 +567,22 @@ async function readFrontendDesignProcessTrace(file: string): Promise<FrontendDes
     throw new Error(`Invalid frontend_design process trace: ${file}`)
   }
   return parsed as FrontendDesignProcessTrace
+}
+
+async function readFrontendDesignIterationState(file: string): Promise<FrontendDesignIterationState> {
+  const parsed = JSON.parse(await fs.readFile(file, "utf8")) as Partial<FrontendDesignIterationState>
+  if (
+    parsed.version !== 1 ||
+    parsed.purpose !== "frontend-design-rawproject-iteration-state" ||
+    !Array.isArray(parsed.completedReplacements) ||
+    !Array.isArray(parsed.blockedReplacements) ||
+    !Array.isArray(parsed.deferredReplacements) ||
+    !Array.isArray(parsed.remainingSourceDebt) ||
+    typeof parsed.lastUpdated !== "string"
+  ) {
+    throw new Error(`Invalid frontend_design iteration state: ${file}`)
+  }
+  return parsed as FrontendDesignIterationState
 }
 
 function mergeFrontendDesignProcessTrace(trace: BenchmarkProcessTrace, frontendTrace: FrontendDesignProcessTrace): void {
@@ -563,6 +679,24 @@ function evaluateBenchmarkProcessTrace(trace: BenchmarkProcessTrace): BenchmarkP
   }
   if ((evidence?.sourceDomRegionFileCount ?? 0) > 0) {
     findings.push("Frontend-design source project still contains generated source-dom regions; rawproject refinement is incomplete.")
+  }
+
+  const iterationState = trace.frontendDesignIterationState
+  if (!iterationState) {
+    findings.push("Missing frontend_design iteration state artifact.")
+  } else {
+    if (iterationState.completedReplacements.length <= 0) {
+      findings.push("Frontend-design iteration state has no completed replacements.")
+    }
+    if (iterationState.remainingSourceDebt.length > 0) {
+      findings.push(`Frontend-design iteration state still has remaining source debt: ${iterationState.remainingSourceDebt.join(", ")}.`)
+    }
+    if (iterationState.blockedReplacements.length > 0) {
+      findings.push(`Frontend-design iteration state still has blocked replacements: ${iterationState.blockedReplacements.length}.`)
+    }
+    if (iterationState.deferredReplacements.length > 0) {
+      findings.push(`Frontend-design iteration state still has deferred replacements: ${iterationState.deferredReplacements.length}.`)
+    }
   }
 
   const generateIndex = eventNames.indexOf("create_frontend_skeleton_project")
