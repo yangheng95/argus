@@ -10,7 +10,6 @@ export const FRONTEND_DESIGN_STATIC_TOOL_IDS = [
   "memory_search",
   "memory_get",
   "url_screenshot",
-  "skill",
   "create_frontend_skeleton_project",
   "record_frontend_region_selection",
   "record_frontend_replacement_result",
@@ -39,7 +38,6 @@ export const FRONTEND_DESIGN_SESSION_TOOL_IDS = [
   "memory_search",
   "memory_get",
   "url_screenshot",
-  "skill",
   "create_frontend_skeleton_project",
   "record_frontend_region_selection",
   "record_frontend_replacement_result",
@@ -88,9 +86,7 @@ export const FRONTEND_DESIGN_IMPLEMENTATION_TOOL_IDS = [
   "webpage_vision_judge",
 ] as const
 
-export const FRONTEND_DESIGN_UTILITY_TOOL_IDS = [
-  "skill",
-] as const
+export const FRONTEND_DESIGN_UTILITY_TOOL_IDS = [] as const
 
 export type FrontendDesignStaticToolID = typeof FRONTEND_DESIGN_STATIC_TOOL_IDS[number]
 export type FrontendDesignSessionToolID = typeof FRONTEND_DESIGN_SESSION_TOOL_IDS[number]

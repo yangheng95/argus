@@ -39,7 +39,6 @@ import { BashTool } from "@/tool/bash"
 import { EditTool } from "@/tool/edit"
 import { WriteTool } from "@/tool/write"
 import { ApplyPatchTool } from "@/tool/apply_patch"
-import { SkillTool } from "@/tool/skill"
 import { WebCloneSourceAuditTool } from "@/tool/web-clone-source-audit"
 import type { AgentReport } from "@/agent/report"
 import {
@@ -416,10 +415,10 @@ function buildUserPrompt(input: {
     const allVisualsAreUrlScreenshots = visualAttachments.every((a) => a.source === "url-screenshot")
     const visualReferenceMode =
       hasLiveHttpUrl && allVisualsAreUrlScreenshots
-        ? "These URL screenshot captures are stored for provenance but are not inlined into this prompt. Use the matched webpage reference skill to acquire any missing evidence once, then read the named source artifacts and write the frontend template. "
+        ? "These URL screenshot captures are stored for provenance but are not inlined into this prompt. Use the task-runtime webpage evidence and mirror analysis tools for any missing evidence, then read the named source artifacts and write the frontend template. "
         : "These files are attached to this message as multimodal content — read the pixels directly. Do NOT use webfetch. Prefer these attached screenshots over re-capturing the same page. " +
           (hasLiveHttpUrl
-            ? "If the brief includes an additional live http(s) webpage URL that is not already represented here, use the matched webpage reference skill to acquire missing evidence once before writing specs. "
+            ? "If the brief includes an additional live http(s) webpage URL that is not already represented here, use the mirror analysis tools to acquire missing evidence once before writing specs. "
             : "")
     sections.push(
       `# Visual References\n\n${lines}\n\n` +
@@ -430,7 +429,7 @@ function buildUserPrompt(input: {
     sections.push(
       "# No visual references attached\n\n" +
       (hasLiveHttpUrl
-        ? "No screenshots, mockups, or design materials were attached yet. If the request includes a live http(s) webpage URL, use the matched webpage reference skill to acquire missing evidence once. If evidence acquisition fails, report the exact failure; do not invent page facts. "
+        ? "No screenshots, mockups, or design materials were attached yet. If the request includes a live http(s) webpage URL, use the mirror analysis tools to acquire missing evidence once. If evidence acquisition fails, report the exact failure; do not invent page facts. "
         : "No screenshots, mockups, or design materials were provided. ") +
       "Extract the frontend design/replica contract from the textual brief only when no visual input is available. Do NOT invent " +
       "visual specifics that have no source in the brief.",
@@ -467,7 +466,7 @@ function buildUserPrompt(input: {
   sections.push(
     "# Live URL Capture\n\n" +
     `For visual webpage URLs, first check the task-runtime evidence at \`${mirrorRef}/prd-evidence-summary.md\`, \`${mirrorRef}/source-ir/component-tree.json\`, \`${mirrorRef}/source-ir/content-model.json\`, \`${mirrorRef}/source-ir/layout-map.json\`, \`${mirrorRef}/source-ir/style-tokens.json\`, \`${mirrorRef}/source-ir/interaction-hints.json\`, \`${mirrorRef}/source-skeleton/critical.css\`, \`${mirrorRef}/visual-surface-candidates.json\`, and the task-runtime source package \`${sourcePackageRef}/implementation-blueprint.md\` when present. Use \`${mirrorRef}/source-skeleton/index.html\` only as raw evidence for exact hierarchy/source ids or missing text. ` +
-    "Use the matched webpage reference skill only if those files are missing or stale — not `webfetch` and not screenshot-only analysis. " +
+    "Use mirror analysis tools only if those files are missing or stale — not `webfetch`, not dynamic skills, and not screenshot-only analysis. " +
     "After evidence exists, stop acquiring and read the named source artifacts before finalizing; never inline raw extraction JSON or stored URL screenshot base64 into the frontend template prompt. " +
     (autoIteration
         ? "Because assistant.auto_iteration=true, do at least two frontend template review passes before `submit_frontend_template`: first check page inventory and visual coverage, then check downstream frontend replica implementability. "
@@ -948,9 +947,9 @@ async function createFrontendImplementationTools(input: { taskID?: string; signa
 }
 
 async function createFrontendUtilityTools(input: { taskID?: string; signal?: AbortSignal }, trace = createFrontendProcessTrace()): Promise<ToolSet> {
-  const tools = {
-    skill: await createFrontendTool(SkillTool, input, trace),
-  }
+  void input
+  void trace
+  const tools = {}
   return selectFrontendStaticTools(tools, FRONTEND_DESIGN_UTILITY_TOOL_IDS, "frontend-design utility")
 }
 

@@ -98,7 +98,7 @@ describe("frontend-design prompt assembly", () => {
     expect(parts).toHaveLength(1)
     expect(parts[0]?.type).toBe("text")
     expect(parts[0]?.text).toContain("stored for provenance but are not inlined")
-    expect(parts[0]?.text).toContain("Use the matched webpage reference skill")
+    expect(parts[0]?.text).toContain("Use the task-runtime webpage evidence and mirror analysis tools")
     expect(parts[0]?.text).toContain("assistant.auto_iteration=false")
     expect(parts[0]?.text).not.toContain("webpage_extract")
     expect(parts[0]?.text).not.toContain("webpage_compile")
@@ -266,7 +266,7 @@ describe("frontend-design prompt assembly", () => {
           ...utilityTools,
           ...mirrorTools,
         }
-        expect(Object.keys(tools)).toContain("skill")
+        expect(Object.keys(tools)).not.toContain("skill")
         expect(Object.keys(tools)).not.toContain("webfetch")
         expect(Object.keys(tools)).not.toContain("websearch")
         expect(Object.keys(tools)).not.toContain("todoread")
