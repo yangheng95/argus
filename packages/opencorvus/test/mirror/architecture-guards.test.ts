@@ -22,7 +22,7 @@ describe("mirror architecture guards", () => {
     expect(combined).not.toMatch(/createStaticServer/)
     expect(combined).not.toMatch(/node:http/)
     expect(renderTool).toMatch(/url:\s*z\s*\.\s*string\(\)\s*\.\s*url\(\)/)
-    expect(renderCore).toMatch(/headless:\s*false/)
+    expect(renderCore).toMatch(/headless:\s*true/)
   })
 
   test("vision judge failures do not synthesize verdict files", () => {
@@ -40,12 +40,12 @@ describe("mirror architecture guards", () => {
     expect(source).toMatch(/without explicit contracts\.imports/)
   })
 
-  test("url extraction treats selected image download failure as fatal", () => {
+  test("url extraction records selected image download failures as source evidence", () => {
     const source = readMirrorSource("url/extract.ts")
     expect(source).not.toMatch(/browser context fallback/i)
     expect(source).not.toMatch(/best-effort/i)
     expect(source).not.toMatch(/non-fatal/i)
-    expect(source).toMatch(/phase:\s*"asset"/)
-    expect(source).toMatch(/image download failed/)
+    expect(source).toMatch(/imageDownloadFailures/)
+    expect(source).toMatch(/image asset download failed/)
   })
 })
