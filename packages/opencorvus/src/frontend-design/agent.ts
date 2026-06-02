@@ -456,6 +456,7 @@ function buildUserPrompt(input: {
     "# Target Delivery Project Contract\n\n" +
     `Default target delivery project root: \`${targetProjectRef}\` (the current workspace root). ` +
     "If the workspace already contains a frontend app, inspect and use that existing app as the target. If it does not, create the runnable target app at the workspace root rather than inside `frontend-design-skeleton`. " +
+    "Benchmark workspaces often already contain minimal root files such as `package.json`, `tsconfig.json`, `data/`, `.git/`, and `.opencorvus/`; treat those as an editable target-project shell and populate it directly with file-edit tools (`src/main.tsx`, `src/App.tsx`, semantic components, data modules, CSS modules, and scripts) instead of running project scaffolding commands that expect an empty directory. " +
     "Default implementation stack for webpage replicas without an existing app contract: React + Vite + TypeScript with project-owned mock/API data modules. " +
     "Default scoped styling approach: CSS Modules or colocated project-owned CSS sidecars imported by semantic components; do not runtime-load raw source-site CSS bundles as the app styling system. " +
     "The final `submit_frontend_template.frontend_project.project_root` should be `.` when this default root is used, with entrypoints such as `package.json`, `src/main.tsx`, `src/App.tsx`, semantic component modules, data modules, style modules, and verification artifacts.",
