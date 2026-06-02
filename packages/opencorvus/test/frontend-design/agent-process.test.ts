@@ -1,5 +1,6 @@
 import { afterEach, expect, mock, test } from "bun:test"
 import fs from "node:fs/promises"
+import path from "node:path"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
@@ -168,3 +169,82 @@ test("FrontendDesignAgent.analyze persists process and iteration artifacts from 
     },
   })
 })
+
+test("FrontendDesignAgent.analyze persists process artifacts before failed finalization", async () => {
+  await using tmp = await tmpdir()
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const now = Date.now()
+      const taskID = "tsk_analyze_process_failure"
+      const rootSession = await Session.create({ kind: "root", title: "Frontend design process failure root" })
+      Database.use((db) => {
+        db.insert(EngineTaskTable).values({
+          id: taskID,
+          project_id: Instance.project.id,
+          session_id: rootSession.id,
+          source: "test",
+          title: "Analyze process trace failure",
+          request: "Refine the captured web-clone-source into maintainable source.",
+          priority: "normal",
+          time_created: now,
+          time_updated: now,
+          time_started: now,
+        }).run()
+      })
+
+      const { FrontendDesignAgent } = await import("../../src/frontend-design/agent")
+
+      runnerImpl = async (input: any) => {
+        await input.toolKit.tools.record_frontend_region_selection.execute({
+          regionComponentName: "FooterRegion",
+          regionFilePath: "src/components/source-dom/FooterRegion.tsx",
+          replacementPlanFile: "src/data/sourceDomReplacementPlan.ts",
+          iterationStateFile: "src/data/sourceDomIterationState.ts",
+          recommendedComponentName: "FooterNavigation",
+          replacementKind: "navigation_or_footer_component",
+          reason: "nextSourceDomReplacement selected FooterRegion.",
+        })
+        await input.toolKit.tools.record_frontend_replacement_result.execute({
+          regionComponentName: "FooterRegion",
+          replacementStatus: "completed",
+          replacementComponentName: "FooterNavigation",
+          filesChanged: ["src/components/semantic/FooterNavigation.tsx"],
+          dataModules: ["src/data/footerData.ts"],
+          styleModules: ["src/styles.css"],
+          removedGeneratedBoundaries: ["src/components/source-dom/FooterRegion.tsx"],
+          visualEvidence: ["acceptance/footer-webpage-evaluate.json"],
+          auditEvidence: ["acceptance/web-clone-source-maintainable-audit.json"],
+          remainingSourceDebt: [],
+        })
+        throw new Error("simulated frontend-design timeout after tools")
+      }
+
+      await expect(FrontendDesignAgent.analyze({
+        title: "Analyze process trace failure",
+        request: "Refine the captured web-clone-source into maintainable source.",
+        taskID,
+      })).rejects.toThrow("simulated frontend-design timeout after tools")
+
+      const artifactDir = path.join(tmp.path, ".opencorvus", "runtime", "tasks", taskID, "frontend-design")
+      const processTrace = await readJsonEventually(path.join(artifactDir, "frontend-design-process-trace.json"))
+      const iterationState = await readJsonEventually(path.join(artifactDir, "frontend-design-iteration-state.json"))
+      expect(processTrace.events.map((event: any) => event.name)).toContain("frontend_design_replacement_result")
+      expect(iterationState.completedReplacements[0].regionComponentName).toBe("FooterRegion")
+    },
+  })
+})
+
+async function readJsonEventually(file: string): Promise<any> {
+  let lastError: unknown
+  for (let attempt = 0; attempt < 20; attempt++) {
+    try {
+      return JSON.parse(await fs.readFile(file, "utf8"))
+    } catch (error) {
+      lastError = error
+      await new Promise((resolve) => setTimeout(resolve, 25))
+    }
+  }
+  throw lastError
+}
