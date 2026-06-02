@@ -5,6 +5,15 @@ import fs from "fs/promises"
 import path from "path"
 import { fileURLToPath } from "url"
 
+import {
+  overlayArchFromNode,
+  overlayExecutableFileName,
+  overlayPackageName,
+  overlayPlatformFromNode,
+  overlayServerDistName,
+  overlayServerFileName,
+} from "./artifact-names"
+
 const dir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const repo = path.resolve(dir, "../..")
 const opencorvus = path.resolve(repo, "packages/opencorvus")
@@ -12,18 +21,12 @@ const tauri = path.resolve(dir, "src-tauri")
 const target = path.join(tauri, "target")
 const release = path.join(target, "release")
 
-const serverFile = process.platform === "win32" ? "opencorvus.exe" : "opencorvus"
-const overlayFile = process.platform === "win32" ? "opencorvus-overlay.exe" : "opencorvus-overlay"
-const serverDistName = [
-  "opencorvus-overlay-server",
-  process.platform === "win32" ? "windows" : process.platform,
-  process.arch,
-].join("-")
-const packageName = [
-  "opencorvus-overlay",
-  process.platform === "win32" ? "windows" : process.platform,
-  process.arch,
-].join("-")
+const hostPlatform = overlayPlatformFromNode()
+const hostArch = overlayArchFromNode()
+const serverFile = overlayServerFileName(hostPlatform)
+const overlayFile = overlayExecutableFileName(hostPlatform)
+const serverDistName = overlayServerDistName(hostPlatform, hostArch)
+const packageName = overlayPackageName(hostPlatform, hostArch)
 
 const distServerDir = path.join(opencorvus, "dist", serverDistName)
 const distServer = path.join(distServerDir, serverFile)

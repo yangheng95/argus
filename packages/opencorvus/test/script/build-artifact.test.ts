@@ -3,6 +3,7 @@ import {
   artifactBrowserMcpNodeExecutableName,
   artifactEntrypoints,
   artifactExternalModules,
+  artifactHostCanProvideNodeRuntime,
   artifactPackageBaseName,
   artifactSourcemap,
   parseBuildFlavor,
@@ -37,5 +38,32 @@ describe("build-artifact", () => {
     expect(artifactBrowserMcpNodeExecutableName("win32")).toBe("node.exe")
     expect(artifactBrowserMcpNodeExecutableName("linux")).toBe("node")
     expect(artifactBrowserMcpNodeExecutableName("darwin")).toBe("node")
+  })
+
+  test("browser MCP node runtime host must match linux libc", () => {
+    expect(
+      artifactHostCanProvideNodeRuntime(
+        { os: "linux", arch: "x64", abi: "musl" },
+        { platform: "linux", arch: "x64", linuxLibc: "musl" },
+      ),
+    ).toBe(true)
+    expect(
+      artifactHostCanProvideNodeRuntime(
+        { os: "linux", arch: "x64", abi: "musl" },
+        { platform: "linux", arch: "x64", linuxLibc: "glibc" },
+      ),
+    ).toBe(false)
+    expect(
+      artifactHostCanProvideNodeRuntime(
+        { os: "linux", arch: "x64" },
+        { platform: "linux", arch: "x64", linuxLibc: "glibc" },
+      ),
+    ).toBe(true)
+    expect(
+      artifactHostCanProvideNodeRuntime(
+        { os: "win32", arch: "x64" },
+        { platform: "win32", arch: "x64" },
+      ),
+    ).toBe(true)
   })
 })

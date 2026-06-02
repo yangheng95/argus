@@ -27,6 +27,16 @@ import fs from "fs/promises"
 import path from "path"
 import { fileURLToPath } from "url"
 
+import {
+  overlayArchFromTriple,
+  overlayExecutableFileName,
+  overlayPackageName,
+  overlayPlatformFromNode,
+  overlayPlatformFromTriple,
+  overlayServerDistName,
+  overlayServerFileName,
+} from "./artifact-names"
+
 const dir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const repo = path.resolve(dir, "../..")
 const opencorvus = path.resolve(repo, "packages/opencorvus")
@@ -50,12 +60,11 @@ function hostTriple() {
 }
 const triple = targetTripleArg ?? hostTriple()
 const tripleIsWindows = triple.includes("windows")
-const tripleIsDarwin = triple.includes("apple-darwin")
-const tripleArch = triple.startsWith("x86_64") ? "x64" : triple.startsWith("aarch64") ? "arm64" : "x86"
-const triplePlatform = tripleIsWindows ? "windows" : tripleIsDarwin ? "darwin" : "linux"
+const tripleArch = overlayArchFromTriple(triple)
+const triplePlatform = overlayPlatformFromTriple(triple)
 
 // Host capability check: cross-OS Tauri builds don't work in this script.
-const hostPlatform = process.platform === "win32" ? "windows" : process.platform === "darwin" ? "darwin" : "linux"
+const hostPlatform = overlayPlatformFromNode()
 if (triplePlatform !== hostPlatform) {
   throw new Error(
     `Cross-OS build not supported (host=${hostPlatform}, target=${triplePlatform}). ` +
@@ -64,11 +73,11 @@ if (triplePlatform !== hostPlatform) {
 }
 
 const isWindows = tripleIsWindows
-const overlayFile = isWindows ? "opencorvus-overlay.exe" : "opencorvus-overlay"
-const serverFile = isWindows ? "opencorvus.exe" : "opencorvus"
+const overlayFile = overlayExecutableFileName(triplePlatform)
+const serverFile = overlayServerFileName(triplePlatform)
 
-const serverDistName = `opencorvus-overlay-server-${triplePlatform}-${tripleArch}`
-const packageName = `opencorvus-overlay-${triplePlatform}-${tripleArch}`
+const serverDistName = overlayServerDistName(triplePlatform, tripleArch)
+const packageName = overlayPackageName(triplePlatform, tripleArch)
 
 const distServerDir = path.join(opencorvus, "dist", serverDistName)
 const distServer = path.join(distServerDir, serverFile)

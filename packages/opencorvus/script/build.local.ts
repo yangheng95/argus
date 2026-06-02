@@ -18,10 +18,12 @@ import {
   artifactBrowserMcpNodeExecutableName,
   artifactEntrypoints,
   artifactExternalModules,
+  artifactHostCanProvideNodeRuntime,
   artifactPackageBaseName,
   artifactSourcemap,
   parseBuildFlavor,
 } from "./build-artifact"
+import { detectArtifactNodeRuntimeHost } from "./build-host-runtime"
 
 const modelsUrl = process.env.OPENCORVUS_MODELS_URL || "https://models.dev"
 // Fetch and generate models.dev snapshot
@@ -254,14 +256,11 @@ function findExecutableOnPath(name: string) {
   }
 }
 
-function hostMatchesTarget(item: Target) {
-  return item.os === process.platform && item.arch === process.arch && item.abi === undefined
-}
-
 async function copyBrowserMcpNodeRuntime(item: Target, outdir: string) {
   const nodeName = artifactBrowserMcpNodeExecutableName(item.os)
   const explicit = process.env.OPENCORVUS_BROWSER_MCP_NODE_BUILD_PATH?.trim()
-  const source = explicit || (hostMatchesTarget(item) ? findExecutableOnPath(nodeName) : undefined)
+  const host = explicit ? undefined : await detectArtifactNodeRuntimeHost()
+  const source = explicit || (host && artifactHostCanProvideNodeRuntime(item, host) ? findExecutableOnPath(nodeName) : undefined)
   if (!source) {
     throw new Error(
       `Missing Browser MCP Node runtime for target ${runtimeName(item)}. ` +
