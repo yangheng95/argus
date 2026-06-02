@@ -48,7 +48,7 @@ export namespace Config {
       message: 'Model must be in the format "provider/model".',
     })
     .meta({ $ref: "https://models.dev/model-schema.json#/$defs/Model" })
-  export const DEFAULT_MODEL = "deepseek/deepseek-v4-pro"
+  export const DEFAULT_MODEL = "hexin/kimi-k2.6"
 
   const log = Log.create({ service: "config" })
 
