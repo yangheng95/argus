@@ -384,7 +384,7 @@ function buildUserPrompt(input: {
   const mirrorRef = runtimePaths?.mirrorRelative ?? ".opencorvus/runtime/tasks/<taskID>/frontend-design/mirror"
   const sourcePackageRef = runtimePaths?.sourcePackageRelative ?? ".opencorvus/runtime/tasks/<taskID>/frontend-design/web-clone-source"
   const skeletonProjectRef = runtimePaths?.skeletonProjectRelative ?? ".opencorvus/runtime/tasks/<taskID>/frontend-design/frontend-design-skeleton"
-  const targetProjectRef = "."
+  const targetProjectRef = hostPreparedFrontendProject ? "." : "web-clone-target"
   const sections = [
     "# Delegation\n\nOrchestrator is asking frontend_design to produce the high-quality frontend project contract, frontend template, fillable modules, material inventory, visual/data contracts, known implementation problems, and downstream agent handoff notes for this task. Web-clone source artifacts are implementation seeds and visual evidence; keep the handoff anchored to source-region traceability instead of a standalone component checklist.",
     renderUserRequestSection({ heading: "# Task", title: input.title, request: input.request, taskID: input.taskID }),
@@ -454,14 +454,14 @@ function buildUserPrompt(input: {
 
   sections.push(
     "# Target Delivery Project Contract\n\n" +
-    `Default target delivery project root: \`${targetProjectRef}\` (the current workspace root). ` +
-    "If the workspace already contains a frontend app, inspect and use that existing app as the target. If it does not, create the runnable target app at the workspace root rather than inside `frontend-design-skeleton`. " +
-    "Benchmark workspaces often already contain minimal root files such as `package.json`, `tsconfig.json`, `data/`, `.git/`, and `.opencorvus/`; treat those as an editable target-project shell and populate it directly with file-edit tools (`src/main.tsx`, `src/App.tsx`, semantic components, data modules, CSS modules, and assets) instead of running project scaffolding commands that expect an empty directory. " +
+    `Default target delivery project root: \`${targetProjectRef}\`. ` +
+    "If the workspace already contains a real frontend app, inspect and use that existing app as the target. Root files alone are not a real frontend app: benchmark workspaces often contain minimal `package.json`, `tsconfig.json`, `data/`, `.git/`, and `.opencorvus/` shell files without app source, and those shell files should not become the delivery project. If no real app exists, create the runnable target app in the default target directory rather than inside `frontend-design-skeleton` or by overwriting root shell files. " +
+    "Populate the target delivery project directly with file-edit tools (`package.json`, `src/main.tsx`, `src/App.tsx`, semantic components, data modules, CSS modules, and assets) instead of running project scaffolding commands that expect an empty directory. " +
     "Configuration manifests are late-stage integration files, not the first workload. After the skeleton exists, the first target-project editing pass creates source files only: `src/main.tsx`, `src/App.tsx`, semantic components, data modules, mock/API adapters, CSS modules/sidecars, and owned assets. Do not call `write`, `edit`, or `apply_patch` for `package.json`, `tsconfig.json`, or bundler config during that source-coverage pass. Read and edit root config only immediately before a late integration/build command after source coverage exists. " +
     "When a target-root file already exists, read that exact file first with `read_file`, then edit or overwrite it; use direct `write` only for genuinely new target-project files and directories. " +
     "Default implementation stack for webpage replicas without an existing app contract: React + Vite + TypeScript with project-owned mock/API data modules. " +
     "Default scoped styling approach: CSS Modules or colocated project-owned CSS sidecars imported by semantic components; do not runtime-load raw source-site CSS bundles as the app styling system. " +
-    "The final `submit_frontend_template.frontend_project.project_root` should be `.` when this default root is used, with entrypoints such as `package.json`, `src/main.tsx`, `src/App.tsx`, semantic component modules, data modules, style modules, and verification artifacts.",
+    `The final \`submit_frontend_template.frontend_project.project_root\` should be \`${targetProjectRef}\` when this default root is used, with entrypoints such as \`${targetProjectRef}/package.json\`, \`${targetProjectRef}/src/main.tsx\`, \`${targetProjectRef}/src/App.tsx\`, semantic component modules, data modules, style modules, and verification artifacts.`,
   )
 
   sections.push(
