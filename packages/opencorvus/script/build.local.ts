@@ -4,6 +4,7 @@ import { $ } from "bun"
 import fs from "fs"
 import path from "path"
 import { fileURLToPath } from "url"
+import { createRequire } from "module"
 import solidPlugin from "./solid-plugin.local"
 
 const __filename = fileURLToPath(import.meta.url)
@@ -15,6 +16,7 @@ process.chdir(dir)
 import { Script } from "@opencorvus-ai/script"
 import pkg from "../package.json"
 import {
+  artifactBrowserMcpNodeExternalModules,
   artifactBrowserMcpNodeExecutableName,
   artifactEntrypoints,
   artifactExternalModules,
@@ -24,6 +26,8 @@ import {
   parseBuildFlavor,
 } from "./build-artifact"
 import { detectArtifactNodeRuntimeHost } from "./build-host-runtime"
+
+const requireFromPackage = createRequire(path.join(dir, "package.json"))
 
 const modelsUrl = process.env.OPENCORVUS_MODELS_URL || "https://models.dev"
 // Fetch and generate models.dev snapshot
@@ -235,13 +239,41 @@ async function buildBrowserMcpNodeBundle(outdir: string) {
     entrypoints: ["./src/mcp/browser/stdio.ts"],
     outdir,
     target: "node",
-    external: artifactExternalModules(),
+    external: artifactBrowserMcpNodeExternalModules(),
   })
   if (!result.success) {
     const detail = result.logs.map((item) => item.message).join("; ")
     throw new Error(`Failed to build Browser MCP node bundle: ${detail}`)
   }
   await fs.promises.rename(path.join(outdir, "stdio.js"), path.join(outdir, "stdio.mjs"))
+}
+
+async function copyPackageDirectory(source: string, destination: string) {
+  await fs.promises.rm(destination, { recursive: true, force: true })
+  await fs.promises.cp(source, destination, {
+    recursive: true,
+    dereference: true,
+    filter: (entry) => {
+      const rel = path.relative(source, entry)
+      return rel === "" || !rel.split(path.sep).includes("node_modules")
+    },
+  })
+}
+
+async function copyBrowserMcpNodeModules(outdir: string) {
+  const playwrightPackageJson = requireFromPackage.resolve("playwright/package.json")
+  const playwrightDir = path.dirname(playwrightPackageJson)
+  const requireFromPlaywright = createRequire(path.join(playwrightDir, "index.js"))
+  const playwrightCorePackageJson = requireFromPlaywright.resolve("playwright-core/package.json")
+  const packages = [
+    ["playwright", playwrightDir],
+    ["playwright-core", path.dirname(playwrightCorePackageJson)],
+  ] as const
+  const nodeModules = path.join(outdir, "node_modules")
+  await fs.promises.mkdir(nodeModules, { recursive: true })
+  for (const [name, source] of packages) {
+    await copyPackageDirectory(source, path.join(nodeModules, name))
+  }
 }
 
 function findExecutableOnPath(name: string) {
@@ -341,6 +373,7 @@ for (const item of targets) {
   })
   const browserMcpRuntimeDir = path.join(dir, "dist", name, "bin", "browser-mcp-node")
   await buildBrowserMcpNodeBundle(browserMcpRuntimeDir)
+  await copyBrowserMcpNodeModules(browserMcpRuntimeDir)
   await copyBrowserMcpNodeRuntime(item, browserMcpRuntimeDir)
 
   if (item.os === "win32") {

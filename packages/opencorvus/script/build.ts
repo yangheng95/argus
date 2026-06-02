@@ -5,6 +5,7 @@ import fs from "fs"
 import path from "path"
 import os from "os"
 import { fileURLToPath } from "url"
+import { createRequire } from "module"
 import solidPlugin from "../node_modules/@opentui/solid/scripts/solid-plugin"
 
 const __filename = fileURLToPath(import.meta.url)
@@ -17,6 +18,7 @@ import { Script } from "@opencorvus-ai/script"
 import pkg from "../package.json"
 import { selectBuildTargets, type BuildTarget } from "./build-targets"
 import {
+  artifactBrowserMcpNodeExternalModules,
   artifactBrowserMcpNodeExecutableName,
   artifactEntrypoints,
   artifactExternalModules,
@@ -185,8 +187,7 @@ if (!noCleanFlag) {
 
 const binaries: Record<string, string> = {}
 let windowsSupervisorHelper: string | undefined
-const browserMcpNodeBundleGenerated = path.join(dir, "src", "mcp", "browser", "node-bundle.generated.ts")
-const browserMcpNodeBundlePlaceholder = "export const BROWSER_MCP_NODE_BUNDLE: string | undefined = undefined\n"
+const requireFromPackage = createRequire(path.join(dir, "package.json"))
 
 async function buildWindowsSupervisorHelper() {
   if (windowsSupervisorHelper) return windowsSupervisorHelper
@@ -208,13 +209,41 @@ async function buildBrowserMcpNodeBundle(outdir: string) {
     entrypoints: ["./src/mcp/browser/stdio.ts"],
     outdir,
     target: "node",
-    external: artifactExternalModules(),
+    external: artifactBrowserMcpNodeExternalModules(),
   })
   if (!result.success) {
     const detail = result.logs.map((item) => item.message).join("; ")
     throw new Error(`Failed to build Browser MCP node bundle: ${detail}`)
   }
   await fs.promises.rename(path.join(outdir, "stdio.js"), path.join(outdir, "stdio.mjs"))
+}
+
+async function copyPackageDirectory(source: string, destination: string) {
+  await fs.promises.rm(destination, { recursive: true, force: true })
+  await fs.promises.cp(source, destination, {
+    recursive: true,
+    dereference: true,
+    filter: (entry) => {
+      const rel = path.relative(source, entry)
+      return rel === "" || !rel.split(path.sep).includes("node_modules")
+    },
+  })
+}
+
+async function copyBrowserMcpNodeModules(outdir: string) {
+  const playwrightPackageJson = requireFromPackage.resolve("playwright/package.json")
+  const playwrightDir = path.dirname(playwrightPackageJson)
+  const requireFromPlaywright = createRequire(path.join(playwrightDir, "index.js"))
+  const playwrightCorePackageJson = requireFromPlaywright.resolve("playwright-core/package.json")
+  const packages = [
+    ["playwright", playwrightDir],
+    ["playwright-core", path.dirname(playwrightCorePackageJson)],
+  ] as const
+  const nodeModules = path.join(outdir, "node_modules")
+  await fs.promises.mkdir(nodeModules, { recursive: true })
+  for (const [name, source] of packages) {
+    await copyPackageDirectory(source, path.join(nodeModules, name))
+  }
 }
 
 function findExecutableOnPath(name: string) {
@@ -246,21 +275,6 @@ async function copyBrowserMcpNodeRuntime(item: Target, outdir: string) {
     await fs.promises.chmod(destination, 0o755)
   }
 }
-
-async function buildBrowserMcpNodeBundleForEmbedding() {
-  const outdir = path.join(os.tmpdir(), "opencorvus-browser-mcp-node-embed-build")
-  await fs.promises.rm(outdir, { recursive: true, force: true }).catch(() => undefined)
-  await buildBrowserMcpNodeBundle(outdir)
-  return fs.promises.readFile(path.join(outdir, "stdio.mjs"), "utf8")
-}
-
-const browserMcpNodeBundle = await buildBrowserMcpNodeBundleForEmbedding()
-
-try {
-  await fs.promises.writeFile(
-    browserMcpNodeBundleGenerated,
-    `export const BROWSER_MCP_NODE_BUNDLE: string | undefined = ${JSON.stringify(browserMcpNodeBundle)}\n`,
-  )
 
 for (const item of targets) {
   const compileTarget = [
@@ -329,6 +343,7 @@ for (const item of targets) {
   })
   const browserMcpRuntimeDir = path.join(dir, "dist", name, "browser-mcp-node")
   await buildBrowserMcpNodeBundle(browserMcpRuntimeDir)
+  await copyBrowserMcpNodeModules(browserMcpRuntimeDir)
   await copyBrowserMcpNodeRuntime(item, browserMcpRuntimeDir)
 
   if (item.os === "win32") {
@@ -358,9 +373,6 @@ for (const item of targets) {
     ),
   )
   binaries[name] = Script.version
-}
-} finally {
-  await fs.promises.writeFile(browserMcpNodeBundleGenerated, browserMcpNodeBundlePlaceholder)
 }
 
 export { binaries }

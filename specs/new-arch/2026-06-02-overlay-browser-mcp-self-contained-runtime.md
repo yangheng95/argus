@@ -84,3 +84,17 @@ Codex independent review on 2026-06-02 found three follow-up gaps:
 The same review noted that Cargo reports macOS as `macos` while opencorvus
 artifacts use `darwin`; the build script default path must map `macos` to
 `darwin` so direct Tauri builds do not look in a second artifact directory.
+
+## Playwright Absolute Path Follow-Up
+
+The generated `browser-mcp-node/stdio.mjs` originally bundled Playwright into a
+single file. Bun preserved Playwright's internal `__dirname` values as absolute
+build-machine paths such as `D:\myhexin-local\opencorvus\node_modules\.bun\...`.
+The official build also embedded that bundle string into `overlay-server.js`,
+which is why failures on another machine were reported from `B:\~BUN\root`.
+
+Decision: packaged browser MCP has one runtime source, the sidecar payload. The
+compiled opencorvus executable must not embed a second copy of the browser MCP
+bundle. The sidecar `stdio.mjs` keeps `playwright` and `playwright-core`
+external, and the build copies those packages into
+`browser-mcp-node/node_modules`.
