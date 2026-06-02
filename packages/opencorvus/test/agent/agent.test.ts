@@ -916,6 +916,8 @@ test("frontend-design advertises url_screenshot and omits webfetch", async () =>
       expect(frontendDesign?.tools?.include).toContain("edit")
       expect(frontendDesign?.tools?.include).toContain("write")
       expect(frontendDesign?.tools?.include).toContain("apply_patch")
+      expect(frontendDesign?.tools?.include).toContain("create_frontend_skeleton_project")
+      expect(frontendDesign?.tools?.include).toContain("record_frontend_region_selection")
       expect(frontendDesign?.tools?.include).toContain("web_clone_source_audit")
       expect(frontendDesign?.tools?.include).toContain("webpage_render")
       expect(frontendDesign?.tools?.include).toContain("webpage_evaluate")
@@ -947,6 +949,8 @@ test("frontend-design statically declares mirror and source refinement tools", a
       expect(designToolIds.has("edit")).toBe(true)
       expect(designToolIds.has("write")).toBe(true)
       expect(designToolIds.has("apply_patch")).toBe(true)
+      expect(designToolIds.has("create_frontend_skeleton_project")).toBe(true)
+      expect(designToolIds.has("record_frontend_region_selection")).toBe(true)
       expect(designToolIds.has("web_clone_source_audit")).toBe(true)
     },
   })

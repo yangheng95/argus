@@ -94,6 +94,7 @@ describe("frontend-design prompt assembly", () => {
     })
 
     expect(prompt).toContain("call `create_frontend_skeleton_project`")
+    expect(prompt).toContain("record_frontend_region_selection")
     expect(prompt).toContain(".opencorvus/runtime/tasks/tsk_web_clone/frontend-design/web-clone-source/")
     expect(prompt).toContain(".opencorvus/runtime/tasks/tsk_web_clone/frontend-design/frontend-design-skeleton/")
     expect(prompt).toContain("After the source project tool returns")
@@ -146,6 +147,37 @@ describe("frontend-design prompt assembly", () => {
     expect(report.detail).toContain("## Frontend Design Process Trace")
     expect(report.detail).toContain("passed: create_frontend_skeleton_project")
     expect(report.detail).toContain("passed: edit")
+  })
+
+  test("frontend_design process trace records region selection and source edits", async () => {
+    const trace = FrontendDesignTestHooks.createFrontendProcessTrace()
+    const tools = FrontendDesignTestHooks.createFrontendProcessTraceTools(trace)
+    await (tools.record_frontend_region_selection as any).execute({
+      regionComponentName: "HeroRegion",
+      regionFilePath: "src/components/source-dom/HeroRegion.tsx",
+      replacementPlanFile: "src/data/sourceDomReplacementPlan.ts",
+      iterationStateFile: "src/data/sourceDomIterationState.ts",
+      recommendedComponentName: "HeroSection",
+      replacementKind: "card_collection_component",
+      reason: "nextSourceDomReplacement points at the hero source region.",
+    })
+    FrontendDesignTestHooks.recordFrontendToolResultEvents(trace, "edit", {
+      filePath: "src/components/SourceDomPage.tsx",
+    }, {
+      title: "src/components/SourceDomPage.tsx",
+    })
+    FrontendDesignTestHooks.recordFrontendToolResultEvents(trace, "bash", {
+      command: "bun run build",
+      workdir: "frontend-design-skeleton",
+    }, {
+      title: "Command completed",
+    })
+
+    expect(trace.events.map((event) => event.name)).toContain("frontend_design_region_selection")
+    expect(trace.events.map((event) => event.name)).toContain("frontend_design_source_edit")
+    expect(trace.events.map((event) => event.name)).toContain("bun run build")
+    const sourceEdit = trace.events.find((event) => event.name === "frontend_design_source_edit")
+    expect(sourceEdit?.details?.files).toEqual(["src/components/SourceDomPage.tsx"])
   })
 
   test("terminal frontend template submit tool accepts bounded review notes when auto iteration is off", async () => {
