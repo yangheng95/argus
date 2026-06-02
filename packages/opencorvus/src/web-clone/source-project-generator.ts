@@ -15,6 +15,7 @@ export interface GenerateWebCloneSourceProjectOutput {
   framework: "react"
   mirrorDir: string
   outputDir: string
+  visualIterationMatrix: string
   files: string[]
   stats: {
     textSignalCount: number
@@ -33,36 +34,61 @@ export interface SourceProjectVisualIterationViewport {
   width: number
   height: number
   evidenceRole: "primary_reference" | "responsive_review"
+  evidenceSource: "capture_viewport" | "reference_manifest" | "default"
   comparison: string
 }
 
-export const SOURCE_PROJECT_VISUAL_ITERATION_VIEWPORTS: SourceProjectVisualIterationViewport[] = [
-  {
-    name: "desktop-reference",
-    width: 1440,
-    height: 900,
-    evidenceRole: "primary_reference",
-    comparison: "Run measured webpage_evaluate against web-clone-source/reference.png after each region replacement.",
-  },
-  {
-    name: "mobile-review",
-    width: 390,
-    height: 844,
-    evidenceRole: "responsive_review",
-    comparison: "Capture and inspect the root app at this viewport; use measured comparison when matching reference evidence exists, otherwise record the evidence gap.",
-  },
-  {
-    name: "wide-review",
-    width: 1920,
-    height: 1080,
-    evidenceRole: "responsive_review",
-    comparison: "Capture and inspect the root app at this viewport; use measured comparison when matching reference evidence exists, otherwise record the evidence gap.",
-  },
-]
+export interface SourceProjectVisualIteration {
+  referenceImage: string
+  comparisonTool: "webpage_evaluate"
+  viewportMatrix: SourceProjectVisualIterationViewport[]
+  rule: string
+}
 
-export function renderSourceProjectVisualIterationMatrix(): string {
-  return SOURCE_PROJECT_VISUAL_ITERATION_VIEWPORTS
-    .map((viewport) => `${viewport.name} ${viewport.width}x${viewport.height} (${viewport.evidenceRole}): ${viewport.comparison}`)
+const DEFAULT_SOURCE_PROJECT_PRIMARY_VIEWPORT = {
+  width: 1440,
+  height: 900,
+  evidenceSource: "default" as const,
+}
+
+export const SOURCE_PROJECT_VISUAL_ITERATION_VIEWPORTS: SourceProjectVisualIterationViewport[] = buildSourceProjectVisualIterationViewports(DEFAULT_SOURCE_PROJECT_PRIMARY_VIEWPORT)
+
+function buildSourceProjectVisualIterationViewports(primary: {
+  width: number
+  height: number
+  evidenceSource: SourceProjectVisualIterationViewport["evidenceSource"]
+}): SourceProjectVisualIterationViewport[] {
+  return [
+    {
+      name: "desktop-reference",
+      width: primary.width,
+      height: primary.height,
+      evidenceRole: "primary_reference",
+      evidenceSource: primary.evidenceSource,
+      comparison: "Run measured webpage_evaluate against web-clone-source/reference.png after each region replacement.",
+    },
+    {
+      name: "mobile-review",
+      width: 390,
+      height: 844,
+      evidenceRole: "responsive_review",
+      evidenceSource: "default",
+      comparison: "Capture and inspect the root app at this viewport; use measured comparison when matching reference evidence exists, otherwise record the evidence gap.",
+    },
+    {
+      name: "wide-review",
+      width: 1920,
+      height: 1080,
+      evidenceRole: "responsive_review",
+      evidenceSource: "default",
+      comparison: "Capture and inspect the root app at this viewport; use measured comparison when matching reference evidence exists, otherwise record the evidence gap.",
+    },
+  ]
+}
+
+export function renderSourceProjectVisualIterationMatrix(viewports: readonly SourceProjectVisualIterationViewport[] = SOURCE_PROJECT_VISUAL_ITERATION_VIEWPORTS): string {
+  return viewports
+    .map((viewport) => `${viewport.name} ${viewport.width}x${viewport.height} (${viewport.evidenceRole}, ${viewport.evidenceSource}): ${viewport.comparison}`)
     .join(" ")
 }
 
@@ -850,13 +876,14 @@ export async function generateWebCloneSourceProject(
   const svgPaths = await readSvgPathData(mirrorDir)
   const sourceDomProject = renderSourceDomProject(sourceSkeleton, previewImagePaths, nodeStyleFallbacks, irChildrenByNodeId)
   const replacementPlan = buildSourceDomReplacementPlan(sourceDomProject.regionMetrics, projectData)
+  const visualIteration = await buildSourceProjectVisualIteration(mirrorDir)
 
   const packageName = normalizePackageName(input.packageName ?? `web-clone-${path.basename(outputDir)}`)
   const files = new Map<string, string>()
   files.set("package.json", renderPackageJson(packageName))
   files.set("tsconfig.json", renderTsconfigJson())
   files.set("index.html", renderIndexHtml(documentContext))
-  files.set("README.md", renderReadme(mirrorDir))
+  files.set("README.md", renderReadme(mirrorDir, visualIteration))
   files.set("vite.config.ts", renderViteConfigTs())
   files.set("src/vite-env.d.ts", renderViteEnvDts())
   files.set("src/main.tsx", renderMainTsx())
@@ -874,6 +901,7 @@ export async function generateWebCloneSourceProject(
     sourceDomProject.regionMetrics,
     replacementPlan,
     sourceDomProject.semanticReplacementMetrics,
+    visualIteration,
   ))
   files.set("src/data/sourceSvgAssetGroups.ts", renderSourceSvgAssetGroupsTs(sourceDomProject.svgAssetGroups))
   files.set("src/data/sourceFaqGroups.ts", renderSourceFaqGroupsTs(sourceDomProject.faqGroups))
@@ -919,12 +947,7 @@ export async function generateWebCloneSourceProject(
       iterationStateModule: "src/data/sourceDomIterationState.ts",
       components: sourceDomProject.semanticReplacementMetrics.map((item) => item.componentName),
     },
-    visualIteration: {
-      referenceImage: "reference.png",
-      comparisonTool: "webpage_evaluate",
-      viewportMatrix: SOURCE_PROJECT_VISUAL_ITERATION_VIEWPORTS,
-      rule: "Use the desktop-reference viewport as the primary measured comparison after each region replacement. Use responsive-review viewports for screenshot review and measured comparison when matching reference evidence exists; otherwise record the missing evidence instead of claiming responsive parity.",
-    },
+    visualIteration,
     rules: [
       "Use sourceData.ts and framework components as the editable implementation surface.",
       "Do not render reference.png, screenshot files, base64 payloads, or hidden semantic coverage layers as the clone.",
@@ -942,6 +965,7 @@ export async function generateWebCloneSourceProject(
     framework,
     mirrorDir,
     outputDir,
+    visualIterationMatrix: renderSourceProjectVisualIterationMatrix(visualIteration.viewportMatrix),
     files: writtenFiles.map((file) => path.join(outputDir, file)),
     stats: {
       textSignalCount: projectData.textSignals.length,
@@ -5946,6 +5970,7 @@ function renderSourceDomIterationStateTs(
   regions: SourceDomRegionMetric[],
   replacementPlan: SourceDomReplacementPlanItem[],
   semanticReplacements: SemanticSourceReplacementMetric[],
+  visualIteration: SourceProjectVisualIteration,
 ): string {
   const planByRegion = new Map(replacementPlan.map((item) => [item.regionComponentName, item]))
   const remainingGeneratedRegions = regions
@@ -5975,7 +6000,7 @@ function renderSourceDomIterationStateTs(
       }
     })
   const nextReplacement = remainingGeneratedRegions[0] ?? null
-  const viewportMatrix = SOURCE_PROJECT_VISUAL_ITERATION_VIEWPORTS
+  const viewportMatrix = visualIteration.viewportMatrix
   const viewportNames = viewportMatrix.map((viewport) => `${viewport.name} ${viewport.width}x${viewport.height}`).join(", ")
   const state = {
     version: 1,
@@ -5988,7 +6013,7 @@ function renderSourceDomIterationStateTs(
     nextReplacement,
     visualIteration: {
       referenceImage: "web-clone-source/reference.png",
-      comparisonTool: "webpage_evaluate",
+      comparisonTool: visualIteration.comparisonTool,
       viewportMatrix,
       evidenceRule: "Do not delete a source-dom region after replacement until desktop-reference has measured evidence and responsive-review captures have either matching evidence or an explicit source-evidence gap.",
     },
@@ -6086,7 +6111,7 @@ function renderStylesCss(input: { hasCriticalCss: boolean; hasFullCss: boolean }
   ].filter(Boolean).join("\n")
 }
 
-function renderReadme(mirrorDir: string): string {
+function renderReadme(mirrorDir: string, visualIteration: SourceProjectVisualIteration): string {
   return [
     "# Web Clone Source Project",
     "",
@@ -6111,7 +6136,7 @@ function renderReadme(mirrorDir: string): string {
     "- Keep `src/styles/source-critical.css`, `src/styles/source-full.css`, `src/data/svgPaths.ts`, `src/data/sourceSvgAssetGroups.ts`, `src/data/sourceFaqGroups.ts`, and `public/assets/` copied together with the React entrypoints; they are required for visual parity.",
     "- Use `src/data/sourceData.ts`, source IR, and component metadata as the maintainability/refactor material for replacing specific regions with semantic components or mature libraries.",
     "- Refine this baseline region by region while checking against `reference.png`.",
-    `- Visual iteration viewport matrix: ${renderSourceProjectVisualIterationMatrix()}`,
+    `- Visual iteration viewport matrix: ${renderSourceProjectVisualIterationMatrix(visualIteration.viewportMatrix)}`,
     "- Use `reference.png` only as visual validation evidence. Do not render it, replay screenshots, or add hidden semantic coverage layers.",
     "- Use `web_clone_source_audit` and overlay/visual comparison as diagnostics; fix the implementation when their findings describe a real user-visible or maintainability defect.",
     "",
@@ -6331,6 +6356,59 @@ async function readJsonOptional(filePath: string): Promise<unknown> {
   } catch {
     return undefined
   }
+}
+
+async function buildSourceProjectVisualIteration(mirrorDir: string): Promise<SourceProjectVisualIteration> {
+  const manifest = asRecord(await readJsonOptional(path.join(mirrorDir, "web-clone-source-manifest.json")))
+  const provenance = asRecord(manifest.provenance)
+  const manifestViewport = readVisualViewport(asRecord(provenance.captureViewport))
+  const extractedViewport = await readExtractedPageViewport(mirrorDir)
+  const reference = asRecord(provenance.reference)
+  const referenceWidth = readPositiveInteger(reference.width)
+  const referenceHeight = readPositiveInteger(reference.height)
+  const referenceViewport = referenceWidth && referenceHeight
+    ? readVisualViewport({
+        width: referenceWidth,
+        height: inferReferenceViewportHeight(referenceWidth, referenceHeight),
+      })
+    : undefined
+  const primary = manifestViewport
+    ? { ...manifestViewport, evidenceSource: "capture_viewport" as const }
+    : extractedViewport
+      ? { ...extractedViewport, evidenceSource: "capture_viewport" as const }
+      : referenceViewport
+        ? { ...referenceViewport, evidenceSource: "reference_manifest" as const }
+        : DEFAULT_SOURCE_PROJECT_PRIMARY_VIEWPORT
+  const viewportMatrix = buildSourceProjectVisualIterationViewports(primary)
+  return {
+    referenceImage: "reference.png",
+    comparisonTool: "webpage_evaluate",
+    viewportMatrix,
+    rule: "Use the desktop-reference viewport as the primary measured comparison after each region replacement. Use responsive-review viewports for screenshot review and measured comparison when matching reference evidence exists; otherwise record the missing evidence instead of claiming responsive parity.",
+  }
+}
+
+async function readExtractedPageViewport(mirrorDir: string): Promise<{ width: number; height: number } | undefined> {
+  const extractedPage = asRecord(await readJsonOptional(path.join(mirrorDir, "extracted-page.json")))
+  return readVisualViewport(asRecord(extractedPage.viewport))
+}
+
+function readVisualViewport(value: Record<string, unknown>): { width: number; height: number } | undefined {
+  const width = readPositiveInteger(value.width)
+  const height = readPositiveInteger(value.height)
+  if (!width || !height) return undefined
+  if (width < 240 || height < 180) return undefined
+  return { width, height }
+}
+
+function readPositiveInteger(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : undefined
+}
+
+function inferReferenceViewportHeight(width: number, referenceHeight: number): number {
+  if (referenceHeight <= 1200) return referenceHeight
+  if (width <= 480) return Math.min(referenceHeight, 844)
+  return 900
 }
 
 async function exists(filePath: string): Promise<boolean> {

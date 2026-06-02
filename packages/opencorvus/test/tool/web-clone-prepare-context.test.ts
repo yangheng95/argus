@@ -75,6 +75,8 @@ describe("tool.web_clone_prepare_context", () => {
         expect(contract.rules.visualEvaluation.report).toContain("structural differences")
         expect(contract.rules.forbidden).toContain("reference screenshot replay")
         expect(contract.content.tables[0].headers).toContain("Event")
+        const sourceManifest = JSON.parse(await Bun.file(path.join(sourcePackageDir, "web-clone-source-manifest.json")).text())
+        expect(sourceManifest.provenance.captureViewport).toEqual({ width: 1366, height: 768 })
       },
     })
   })
@@ -155,7 +157,10 @@ async function writeFixtureMirror(root: string): Promise<string> {
   await Bun.write(path.join(mirrorDir, "reference.png"), minimalPngBytes())
   await Bun.write(path.join(mirrorDir, "capture.html"), "<!doctype html><main>Economic calendar</main>")
   await Bun.write(path.join(mirrorDir, "singlefile.html"), "<!doctype html><main>Economic calendar SingleFile</main>")
-  await Bun.write(path.join(mirrorDir, "extracted-page.json"), JSON.stringify({ url: "https://example.com/markets" }, null, 2))
+  await Bun.write(path.join(mirrorDir, "extracted-page.json"), JSON.stringify({
+    url: "https://example.com/markets",
+    viewport: { width: 1366, height: 768 },
+  }, null, 2))
   await Bun.write(path.join(mirrorDir, "page.ir.json"), JSON.stringify({ version: 1 }, null, 2))
   await Bun.write(path.join(mirrorDir, "segments.json"), JSON.stringify({ segments: [] }, null, 2))
   await Bun.write(path.join(mirrorDir, "codegen-context.json"), JSON.stringify({ version: 1 }, null, 2))

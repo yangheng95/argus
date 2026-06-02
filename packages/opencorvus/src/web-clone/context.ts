@@ -283,6 +283,7 @@ async function materializeVisibleSourcePackage(input: {
 
   const manifestPath = path.join(input.outputDir, "web-clone-source-manifest.json")
   const referenceEvidence = await readPngEvidence(path.join(input.outputDir, "reference.png"))
+  const captureViewport = await readCaptureViewport(input.mirrorDir)
   const manifestEntries = await buildSourceManifestEntries(input.outputDir, input.mirrorDir, written)
   await fs.writeFile(manifestPath, `${JSON.stringify({
     version: 1,
@@ -292,6 +293,7 @@ async function materializeVisibleSourcePackage(input: {
       source: "mirror",
       mirrorDir: input.mirrorDir,
       requiredMirrorArtifacts: WEB_CLONE_REQUIRED_MIRROR_ARTIFACTS,
+      captureViewport,
       reference: referenceEvidence.valid
         ? {
             path: "reference.png",
@@ -664,6 +666,18 @@ async function readJsonOptional(filePath: string): Promise<unknown> {
   } catch {
     return undefined
   }
+}
+
+async function readCaptureViewport(mirrorDir: string): Promise<{ width: number; height: number } | undefined> {
+  const extractedPage = asRecord(await readJsonOptional(path.join(mirrorDir, "extracted-page.json")))
+  const viewport = asRecord(extractedPage.viewport)
+  const width = readPositiveInteger(viewport.width)
+  const height = readPositiveInteger(viewport.height)
+  return width && height ? { width, height } : undefined
+}
+
+function readPositiveInteger(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : undefined
 }
 
 async function readOptionalText(filePath: string): Promise<string> {
