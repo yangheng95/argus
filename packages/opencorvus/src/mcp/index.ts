@@ -174,6 +174,30 @@ export namespace MCP {
     if (name === BrowserMCPBuiltin.ServerName) return BrowserMCPBuiltin.localConfig()
   }
 
+  function errorMessage(error: unknown) {
+    return error instanceof Error ? error.message : String(error)
+  }
+
+  async function createSafely(key: string, mcp: Config.Mcp) {
+    try {
+      return await create(key, mcp)
+    } catch (error) {
+      const message = errorMessage(error)
+      log.error("mcp startup failed before status was available", {
+        key,
+        type: mcp.type,
+        error: message,
+      })
+      return {
+        mcpClient: undefined,
+        status: {
+          status: "failed" as const,
+          error: message,
+        },
+      }
+    }
+  }
+
   const state = lazyInstanceState(
     async () => {
       const cfg = await Config.get()
@@ -198,8 +222,7 @@ export namespace MCP {
             return
           }
 
-          const result = await create(key, mcp).catch(() => undefined)
-          if (!result) return
+          const result = await createSafely(key, mcp)
 
           status[key] = result.status
 
@@ -274,17 +297,7 @@ export namespace MCP {
 
   export async function add(name: string, mcp: Config.Mcp) {
     const s = await state()
-    const result = await create(name, mcp)
-    if (!result) {
-      const status = {
-        status: "failed" as const,
-        error: "unknown error",
-      }
-      s.status[name] = status
-      return {
-        status,
-      }
-    }
+    const result = await createSafely(name, mcp)
     if (!result.mcpClient) {
       s.status[name] = result.status
       return {
@@ -555,16 +568,7 @@ export namespace MCP {
       return
     }
 
-    const result = await create(name, { ...mcpToConnect, enabled: true })
-
-    if (!result) {
-      const s = await state()
-      s.status[name] = {
-        status: "failed",
-        error: "Unknown error during connection",
-      }
-      return
-    }
+    const result = await createSafely(name, { ...mcpToConnect, enabled: true })
 
     const s = await state()
     s.status[name] = result.status
