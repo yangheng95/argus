@@ -98,6 +98,7 @@ describe("web clone source project E2E", () => {
     expect(audit.passed).toBe(false)
     expect(audit.findings.join("\n")).toContain("create_frontend_skeleton_project")
     expect(audit.findings.join("\n")).toContain("frontend_design_source_edit")
+    expect(audit.findings.join("\n")).toContain("frontend_design_replacement_result")
     expect(audit.findings.join("\n")).toContain("sourceDomReplacementPlan.ts")
     expect(audit.findings.join("\n")).toContain("maintainable_replacement_required")
   })
@@ -123,6 +124,7 @@ describe("web clone source project E2E", () => {
       "source-project-sidecars",
       "frontend_design_region_selection",
       "frontend_design_source_edit",
+      "frontend_design_replacement_result",
       "bun install",
       "bun run build",
     ] as const) {
@@ -219,6 +221,7 @@ describe("web clone source project E2E", () => {
         { name: "create_frontend_skeleton_project", status: "passed", timestamp: new Date().toISOString() },
         { name: "frontend_design_region_selection", status: "passed", timestamp: new Date().toISOString() },
         { name: "frontend_design_source_edit", status: "passed", timestamp: new Date().toISOString() },
+        { name: "frontend_design_replacement_result", status: "passed", timestamp: new Date().toISOString(), details: { replacementStatus: "completed", regionComponentName: "HeroRegion" } },
         { name: "bun install", status: "passed", timestamp: new Date().toISOString() },
         { name: "bun run build", status: "passed", timestamp: new Date().toISOString() },
         { name: "web_clone_source_audit", status: "passed", timestamp: new Date().toISOString(), details: { finalDeliveryMode: "visual_baseline_allowed", passed: true } },
@@ -435,6 +438,7 @@ function createBenchmarkProcessTrace(input: {
       "source-project-sidecars",
       "frontend_design_region_selection",
       "frontend_design_source_edit",
+      "frontend_design_replacement_result",
       "bun install",
       "bun run build",
       "web_clone_source_audit:visual_baseline_allowed",
@@ -526,6 +530,7 @@ function evaluateBenchmarkProcessTrace(trace: BenchmarkProcessTrace): BenchmarkP
     "source-project-sidecars",
     "frontend_design_region_selection",
     "frontend_design_source_edit",
+    "frontend_design_replacement_result",
     "bun install",
     "bun run build",
     "visual-diff",

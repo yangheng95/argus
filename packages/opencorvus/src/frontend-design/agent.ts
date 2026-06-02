@@ -86,6 +86,16 @@ export namespace FrontendDesignAgent {
     details?: Record<string, unknown>
   }
 
+  export interface IterationState {
+    version: 1
+    purpose: "frontend-design-rawproject-iteration-state"
+    completedReplacements: Array<Record<string, unknown>>
+    blockedReplacements: Array<Record<string, unknown>>
+    deferredReplacements: Array<Record<string, unknown>>
+    remainingSourceDebt: string[]
+    lastUpdated: string
+  }
+
   export interface Result {
     specs: VisualSpec[]
     designSystem: string
@@ -115,6 +125,7 @@ export namespace FrontendDesignAgent {
     openQuestions: string[]
     processTrace: ProcessTrace
     processTraceArtifact?: string
+    iterationStateArtifact?: string
     report: AgentReport
   }
 
@@ -232,7 +243,11 @@ export namespace FrontendDesignAgent {
     }
 
     const processTraceArtifact = await writeFrontendProcessTraceArtifact(input.taskID, processTrace)
-    const report = appendFrontendProcessTrace(outputToolKit.buildReport(), processTrace, processTraceArtifact)
+    const iterationStateArtifact = await writeFrontendIterationStateArtifact(input.taskID, processTrace)
+    const report = appendFrontendProcessTrace(outputToolKit.buildReport(), processTrace, {
+      processTraceArtifact,
+      iterationStateArtifact,
+    })
 
     return {
       specs,
@@ -255,6 +270,7 @@ export namespace FrontendDesignAgent {
       openQuestions: structured.open_questions,
       processTrace,
       processTraceArtifact,
+      iterationStateArtifact,
       report,
       sessionID: out.session.id,
     }
@@ -441,7 +457,7 @@ function buildUserPrompt(input: {
     "In principle, downstream implementation must reuse existing project components/design-system primitives first and mature maintained libraries second; custom code is limited to simple page-specific glue or micro-adjust layout/spacing. Charts, maps, tables, calendars, popovers, dialogs, menus, forms, virtualized lists, drag/drop, editors, rich media, and complex layouts require reusable project or library options when available. " +
     "Your final report should not be a component catalog. Put known problems, evidence gaps, extraction-vs-rewrite risk, source organization, debug commands, reuse decisions, PRD delta boundaries, and agent handoff notes into `quality_project_contract`, `completeness_review`, and `open_questions`; leave `component_inventory` empty unless the provider requires a legacy compatibility summary. " +
     renderFinalDeliveryModeInstruction(Boolean(hostPreparedFrontendProject)) + " " +
-    "After the source project tool returns, record the project paths, replacement-plan sidecars, and warnings in `frontend_project`, then read the current `nextSourceDomReplacement` row and call `record_frontend_region_selection` before editing that region. Use your normal file-edit and command tools to replace source-dom regions inside the created project until the delivered frontend_design source is maintainable. At minimum, a maintainable rawproject turn must attempt the current `nextSourceDomReplacement` vertical slice or explicitly report why that exact region is blocked. Verification must include project build evidence, measured `webpage_evaluate` evidence when renderable, and zero-finding `web_clone_source_audit` evidence before claiming final maintainability. Do not alter evaluators, other agent prompts, communication paths, raw mirror/source packages, or generated evidence outputs to satisfy the report. " +
+    "After the source project tool returns, record the project paths, replacement-plan sidecars, and warnings in `frontend_project`, then read the current `nextSourceDomReplacement` row and call `record_frontend_region_selection` before editing that region. Use your normal file-edit and command tools to replace source-dom regions inside the created project until the delivered frontend_design source is maintainable, then call `record_frontend_replacement_result` with completed/blocked/deferred status, changed files, evidence artifacts, and remaining source debt. At minimum, a maintainable rawproject turn must attempt the current `nextSourceDomReplacement` vertical slice or explicitly report why that exact region is blocked. Verification must include project build evidence, measured `webpage_evaluate` evidence when renderable, and zero-finding `web_clone_source_audit` evidence before claiming final maintainability. Do not alter evaluators, other agent prompts, communication paths, raw mirror/source packages, or generated evidence outputs to satisfy the report. " +
     "The final `submit_frontend_template.frontend_project` field should name the created/refined source project root and entrypoints, mark role=implementation_target only when the project no longer depends on generated source-dom debt for the requested surface, otherwise mark role=source_baseline_input and explain the unfinished source debt. " +
     "Do not use todo or scratchpad tools for template review; write the review-pass findings directly into the final frontend template fields.",
   )
@@ -503,17 +519,55 @@ async function writeFrontendProcessTraceArtifact(
   return file
 }
 
+function buildFrontendIterationState(trace: FrontendDesignAgent.ProcessTrace): FrontendDesignAgent.IterationState {
+  const replacementEvents = trace.events.filter((event) => event.name === "frontend_design_replacement_result")
+  const completedReplacements = replacementEvents
+    .filter((event) => event.details?.replacementStatus === "completed")
+    .map((event) => event.details ?? {})
+  const blockedReplacements = replacementEvents
+    .filter((event) => event.details?.replacementStatus === "blocked")
+    .map((event) => event.details ?? {})
+  const deferredReplacements = replacementEvents
+    .filter((event) => event.details?.replacementStatus === "deferred")
+    .map((event) => event.details ?? {})
+  const remainingSourceDebt = Array.from(new Set(replacementEvents.flatMap((event) => {
+    const value = event.details?.remainingSourceDebt
+    return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string" && item.trim().length > 0) : []
+  })))
+  return {
+    version: 1,
+    purpose: "frontend-design-rawproject-iteration-state",
+    completedReplacements,
+    blockedReplacements,
+    deferredReplacements,
+    remainingSourceDebt,
+    lastUpdated: trace.events.at(-1)?.timestamp ?? new Date().toISOString(),
+  }
+}
+
+async function writeFrontendIterationStateArtifact(
+  taskID: string | undefined,
+  trace: FrontendDesignAgent.ProcessTrace,
+): Promise<string | undefined> {
+  if (!taskID) return undefined
+  const file = ProjectRuntimePaths.taskAbsolute(Instance.directory, taskID, "frontend-design", "frontend-design-iteration-state.json")
+  await fs.mkdir(path.dirname(file), { recursive: true })
+  await fs.writeFile(file, JSON.stringify(buildFrontendIterationState(trace), null, 2), "utf8")
+  return file
+}
+
 function appendFrontendProcessTrace(
   report: AgentReport,
   trace: FrontendDesignAgent.ProcessTrace,
-  artifactPath?: string,
+  artifacts?: { processTraceArtifact?: string; iterationStateArtifact?: string },
 ): AgentReport {
   const lines = [
     report.detail,
     "",
     "## Frontend Design Process Trace",
     "",
-    artifactPath ? `Artifact: ${artifactPath}` : undefined,
+    artifacts?.processTraceArtifact ? `Process trace artifact: ${artifacts.processTraceArtifact}` : undefined,
+    artifacts?.iterationStateArtifact ? `Iteration state artifact: ${artifacts.iterationStateArtifact}` : undefined,
     trace.events.length === 0
       ? "- No frontend_design tool events were recorded."
       : trace.events.map((event) => {
@@ -559,6 +613,44 @@ function createFrontendProcessTraceTools(trace: FrontendDesignAgent.ProcessTrace
             params.replacementKind ? `- Kind: ${params.replacementKind}` : undefined,
           ].filter(Boolean).join("\n"),
           metadata: { event: "frontend_design_region_selection", ...params },
+        }
+      },
+    }),
+    record_frontend_replacement_result: tool({
+      description:
+        "Record the result of one frontend_design rawproject source-region replacement attempt. " +
+        "Use after source edits, build/audit/visual checks, or a concrete blocker. This writes process evidence only; it does not mark acceptance by itself.",
+      inputSchema: z.object({
+        regionComponentName: z.string().describe("Generated source-dom region component from sourceDomReplacementPlan/sourceDomIterationState."),
+        replacementStatus: z.enum(["completed", "blocked", "deferred"]).describe("Current result for this named region replacement."),
+        replacementComponentName: z.string().optional().describe("Semantic component created or updated for this region."),
+        filesChanged: z.array(z.string()).default([]).describe("Project source files changed for this replacement attempt."),
+        dataModules: z.array(z.string()).default([]).describe("Data modules extracted or updated."),
+        styleModules: z.array(z.string()).default([]).describe("Scoped CSS/style modules extracted or updated."),
+        removedGeneratedBoundaries: z.array(z.string()).default([]).describe("Generated source-dom files/imports/boundaries removed or shrunk after parity evidence."),
+        visualEvidence: z.array(z.string()).default([]).describe("Rendered screenshots, webpage_evaluate reports, or visual-diff artifacts used for this replacement."),
+        auditEvidence: z.array(z.string()).default([]).describe("web_clone_source_audit outputs used for this replacement."),
+        remainingSourceDebt: z.array(z.string()).default([]).describe("Named source-dom/rawcode regions still unfinished after this attempt."),
+        nextRegionComponentName: z.string().optional().describe("Next source region selected from iteration evidence, if known."),
+        notes: z.string().optional().describe("Short evidence-grounded note for the result."),
+      }),
+      execute: async (params) => {
+        recordFrontendProcessEvent(trace, {
+          name: "frontend_design_replacement_result",
+          status: params.replacementStatus === "blocked" ? "failed" : "passed",
+          details: params,
+        })
+        return {
+          title: "Frontend replacement result recorded",
+          output: [
+            "# Frontend replacement result recorded",
+            "",
+            `- Region: ${params.regionComponentName}`,
+            `- Status: ${params.replacementStatus}`,
+            params.replacementComponentName ? `- Replacement: ${params.replacementComponentName}` : undefined,
+            params.remainingSourceDebt.length > 0 ? `- Remaining source debt: ${params.remainingSourceDebt.join(", ")}` : undefined,
+          ].filter(Boolean).join("\n"),
+          metadata: { event: "frontend_design_replacement_result", ...params },
         }
       },
     }),
@@ -735,6 +827,7 @@ export const FrontendDesignTestHooks = {
   createFrontendSubmitTools,
   createFrontendImplementationTools,
   createFrontendProcessTrace,
+  buildFrontendIterationState,
   createMirrorAnalysisTools,
   isTextOnlyNoVisualSource,
   recordFrontendStaticToolSurface,
@@ -745,4 +838,5 @@ export const FrontendDesignTestHooks = {
   summarizeHostPreparedSourceProject,
   summarizeReferencePixels,
   writeFrontendProcessTraceArtifact,
+  writeFrontendIterationStateArtifact,
 }
