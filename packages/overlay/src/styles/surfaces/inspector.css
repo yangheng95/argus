@@ -140,23 +140,77 @@
   flex-direction: column;
   padding: var(--ui-gap-sm);
   overflow: hidden;
-  container: message-workbench / inline-size;
+  container: right-files / inline-size;
 }
 
-.files-tab-panel,
-.files-tab-panel .file-changes-view {
+.right-files-panel,
+.right-files-body,
+.right-files-view,
+.right-files-panel .file-changes-view {
   display: flex;
   flex: 1 1 0;
   min-height: 0;
   flex-direction: column;
 }
 
-.files-tab-panel .changes-list {
+.right-files-switcher {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: calc(4px * var(--ui-scale));
+  margin-bottom: calc(6px * var(--ui-scale));
+}
+
+.right-files-tab {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: calc(26px * var(--ui-scale));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: calc(5px * var(--ui-scale));
+  border: 0;
+  border-radius: var(--oc-radius-soft);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: var(--ui-font-control);
+}
+
+.right-files-tab[data-active="true"] {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: var(--text-strong);
+}
+
+.right-files-tab:disabled {
+  opacity: var(--ui-opacity-dim);
+  cursor: default;
+}
+
+.right-files-view[data-active="false"] {
+  display: none;
+}
+
+.right-files-panel .changes-list {
   flex: 1 1 0;
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
   padding-right: calc(2px * var(--ui-scale));
+}
+
+.right-files-diff-header {
+  flex: 0 0 auto;
+  min-height: var(--ui-panel-header-height);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(8px * var(--ui-scale));
+  padding: 0 calc(8px * var(--ui-scale));
+  background: var(--surface-strong);
+  color: var(--text-strong);
+  font-size: var(--ui-font-title);
+  font-weight: var(--ui-font-weight-strong);
 }
 
 .file-explorer-panel {

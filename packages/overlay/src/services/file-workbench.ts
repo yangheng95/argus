@@ -33,10 +33,6 @@ export function closeFileEditor(): void {
   setFileWorkbenchOpen(false)
 }
 
-export function showWorkbenchPane(): void {
-  setFileWorkbenchOpen(true)
-}
-
 export function shortWorkbenchPath(path: string): string {
   const parts = String(path || "").split(/[\\/]/).filter(Boolean)
   if (parts.length <= 2) return path
