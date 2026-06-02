@@ -969,8 +969,7 @@ function extractReachableCssRules(
 }
 
 function compactCriticalCssBody(body: string): string {
-  const declarations = body
-    .split(";")
+  const declarations = splitCssDeclarations(body)
     .map((part) => part.trim())
     .filter(Boolean)
     .map((part) => {
@@ -984,6 +983,40 @@ function compactCriticalCssBody(body: string): string {
     })
     .filter((part): part is string => Boolean(part))
   return declarations.join(" ")
+}
+
+function splitCssDeclarations(body: string): string[] {
+  const declarations: string[] = []
+  let start = 0
+  let parenDepth = 0
+  let quote: string | undefined
+  for (let index = 0; index < body.length; index++) {
+    const char = body[index]
+    const prev = body[index - 1]
+    if (quote) {
+      if (char === quote && prev !== "\\") quote = undefined
+      continue
+    }
+    if (char === '"' || char === "'") {
+      quote = char
+      continue
+    }
+    if (char === "(") {
+      parenDepth++
+      continue
+    }
+    if (char === ")") {
+      parenDepth = Math.max(0, parenDepth - 1)
+      continue
+    }
+    if (char === ";" && parenDepth === 0) {
+      declarations.push(body.slice(start, index))
+      start = index + 1
+    }
+  }
+  const tail = body.slice(start)
+  if (tail.trim()) declarations.push(tail)
+  return declarations
 }
 
 function isCriticalCssProperty(property: string, value: string): boolean {
