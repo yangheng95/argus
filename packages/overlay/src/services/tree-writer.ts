@@ -682,6 +682,7 @@ function handleMessageUpdated(event: any): void {
   });
 
   const session = ensureSessionProjection(sessionID, { stage, parentSessionID, goalID });
+  const priorMessageCount = session.messageIDs.size;
   session.messageIDs.add(id);
 
   const { cardID, isPhase } = ensureMessageTurnProjection(session, id, {
@@ -698,8 +699,12 @@ function handleMessageUpdated(event: any): void {
   // live arrival order is the regression this path avoids.
   if (isPhase) {
     ensureBoundaryPart(session, cardID, id, displayRole, timeCreated);
-  } else {
+  } else if (priorMessageCount > 0) {
     regroupTimelineSegments();
+  } else if (Array.isArray(boardStore.board?.interactions) && boardStore.board.interactions.length > 0) {
+    rebuildCardHierarchy();
+  } else {
+    rebuildTopLevelOrder();
   }
 
   // Project per-message LLM usage (tokens + cost) onto this turn's card.
@@ -2148,8 +2153,11 @@ export function hydrateConversationView(view: any, transcript: any[]): void {
       if (!partID) {
         throw new Error(`hydrateConversationView: message ${messageID} contains part without id`);
       }
-      const projection = ensurePartProjection(part);
-      if (!projection) continue;
+      upsertPart(session, messageID, cardID, partID, {
+        ...part,
+        messageID,
+        sessionID,
+      });
     }
     touched.add(sessionID);
   }

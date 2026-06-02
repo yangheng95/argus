@@ -100,6 +100,132 @@ test("hydrateConversationView routes goal-phase transcript messages into the pha
   ).toBe(true);
 });
 
+test("hydrateConversationView uses transcript message identity for persisted goal-phase parts", () => {
+  resetWriter();
+  setBoardStore("selectedTaskID", "tsk_hydrate_persisted_parts");
+  setBoardStore("board", {
+    task: {
+      id: "tsk_hydrate_persisted_parts",
+      status: "active",
+      request: "restore persisted build parts",
+      sessionID: "ses_root",
+      time: { created: 1_776_000_010_000 },
+      attachments: [],
+    },
+    workflow: {
+      steps: [
+        {
+          id: "build",
+          phases: [
+            { id: "build", label: "Build", sessionKind: "build" },
+          ],
+        },
+      ],
+    },
+    goalWorkflows: [
+      {
+        goalID: "goal_persisted_parts",
+        goalRunID: "gr_persisted_parts",
+        goalTitle: "Persisted build",
+        goalStatus: "running",
+        orderIndex: 0,
+        steps: [
+          {
+            stepID: "build",
+            label: "Build",
+            status: "running",
+            startedAt: 1_776_000_010_100,
+            phases: {
+              build: { status: "running", startedAt: 1_776_000_010_200 },
+            },
+          },
+        ],
+      },
+    ],
+    interactions: [],
+  });
+
+  hydrateConversationView(
+    {
+      sessions: [
+        {
+          sessionID: "ses_build_persisted",
+          stage: "build",
+          goalID: "goal_persisted_parts",
+          parentSessionID: "ses_executor",
+          messageIDs: ["msg_build_persisted_1", "msg_build_persisted_2"],
+          firstMessageTime: 1_776_000_010_300,
+          lastMessageTime: 1_776_000_010_400,
+          placement: "goal_phase",
+          phase: { stepID: "build", phaseID: "build" },
+        },
+      ],
+    },
+    [
+      {
+        info: {
+          id: "msg_build_persisted_1",
+          sessionID: "ses_build_persisted",
+          role: "assistant",
+          resolvedRole: "build",
+          channel: "build",
+          time: { created: 1_776_000_010_300 },
+        },
+        parts: [
+          {
+            id: "part_build_persisted_1",
+            type: "text",
+            text: "First persisted build body.",
+          },
+        ],
+      },
+      {
+        info: {
+          id: "msg_build_persisted_2",
+          sessionID: "ses_build_persisted",
+          role: "assistant",
+          resolvedRole: "build",
+          channel: "build",
+          time: { created: 1_776_000_010_400 },
+        },
+        parts: [
+          {
+            id: "part_build_persisted_2",
+            messageID: "msg_stale_part_message",
+            sessionID: "ses_stale_part_session",
+            channel: "filtered",
+            type: "text",
+            text: "Second persisted build body.",
+          },
+        ],
+      },
+    ],
+  );
+
+  const phaseCardID = "step:goal_persisted_parts:build:phase:build";
+  const phaseParts = cardTreeStore.cards[phaseCardID]?.parts ?? [];
+  expect(cardTreeStore.cards["build:session:ses_build_persisted"]).toBeUndefined();
+  expect(cardTreeStore.cards["filtered:session:ses_stale_part_session:message:msg_stale_part_message"]).toBeUndefined();
+  expect(
+    phaseParts.some(
+      (part) =>
+        part.id === "part_build_persisted_1" &&
+        part.messageID === "msg_build_persisted_1" &&
+        part.sessionID === "ses_build_persisted" &&
+        String(part.text || "").includes("First persisted build body."),
+    ),
+  ).toBe(true);
+  expect(
+    phaseParts.some(
+      (part) =>
+        part.id === "part_build_persisted_2" &&
+        part.messageID === "msg_build_persisted_2" &&
+        part.sessionID === "ses_build_persisted" &&
+        String(part.text || "").includes("Second persisted build body."),
+    ),
+  ).toBe(true);
+});
+
 test("hydrateConversationView restores task-scope agent cards with reasoning parts", () => {
   resetWriter();
   setBoardStore("selectedTaskID", "tsk_task_scope_hydrate");
