@@ -79,6 +79,14 @@ import FRONTEND_DESIGN_CORE from "@/prompt/core/frontend-design-core.txt"
 
 const log = Log.create({ service: "frontend-design" })
 
+interface FrontendProcessTracePersistence {
+  processTraceFile: string
+  iterationStateFile: string
+  pending: Promise<void>
+}
+
+const frontendProcessTracePersistence = new WeakMap<FrontendDesignAgent.ProcessTrace, FrontendProcessTracePersistence>()
+
 export namespace FrontendDesignAgent {
   export interface ProcessTrace {
     version: 1
@@ -160,6 +168,7 @@ export namespace FrontendDesignAgent {
   export async function analyze(input: AnalyzeInput): Promise<Result & { sessionID: string }> {
     const autoIteration = (await EngineConfig.get()).auto_iteration === true
     const processTrace = createFrontendProcessTrace()
+    await configureFrontendProcessTracePersistence(input.taskID, processTrace)
     const contextTools = createFrontendDesignContextTools()
     const mirrorAnalysisTools = await createMirrorAnalysisTools({ taskID: input.taskID, signal: input.signal }, processTrace)
     const implementationTools = await createFrontendImplementationTools({ taskID: input.taskID, signal: input.signal }, processTrace)
@@ -241,8 +250,9 @@ export namespace FrontendDesignAgent {
       )
     }
 
-    const processTraceArtifact = await writeFrontendProcessTraceArtifact(input.taskID, processTrace)
-    const iterationStateArtifact = await writeFrontendIterationStateArtifact(input.taskID, processTrace)
+    const persistedArtifacts = await flushFrontendProcessTracePersistence(processTrace)
+    const processTraceArtifact = persistedArtifacts?.processTraceArtifact ?? await writeFrontendProcessTraceArtifact(input.taskID, processTrace)
+    const iterationStateArtifact = persistedArtifacts?.iterationStateArtifact ?? await writeFrontendIterationStateArtifact(input.taskID, processTrace)
     const report = appendFrontendProcessTrace(outputToolKit.buildReport(), processTrace, {
       processTraceArtifact,
       iterationStateArtifact,
@@ -495,6 +505,7 @@ function recordFrontendProcessEvent(
     ...input,
     timestamp: new Date().toISOString(),
   })
+  scheduleFrontendProcessTracePersistence(trace)
 }
 
 function recordFrontendStaticToolSurface(trace: FrontendDesignAgent.ProcessTrace, toolNames: string[]): void {
@@ -516,6 +527,67 @@ async function writeFrontendProcessTraceArtifact(
   await fs.mkdir(path.dirname(file), { recursive: true })
   await fs.writeFile(file, JSON.stringify(trace, null, 2), "utf8")
   return file
+}
+
+async function configureFrontendProcessTracePersistence(
+  taskID: string | undefined,
+  trace: FrontendDesignAgent.ProcessTrace,
+): Promise<{ processTraceArtifact?: string; iterationStateArtifact?: string }> {
+  if (!taskID) return {}
+  const dir = ProjectRuntimePaths.taskAbsolute(Instance.directory, taskID, "frontend-design")
+  const persistence: FrontendProcessTracePersistence = {
+    processTraceFile: path.join(dir, "frontend-design-process-trace.json"),
+    iterationStateFile: path.join(dir, "frontend-design-iteration-state.json"),
+    pending: Promise.resolve(),
+  }
+  frontendProcessTracePersistence.set(trace, persistence)
+  await fs.mkdir(dir, { recursive: true })
+  await persistFrontendProcessTraceNow(trace, persistence)
+  return {
+    processTraceArtifact: persistence.processTraceFile,
+    iterationStateArtifact: persistence.iterationStateFile,
+  }
+}
+
+function scheduleFrontendProcessTracePersistence(trace: FrontendDesignAgent.ProcessTrace): void {
+  const persistence = frontendProcessTracePersistence.get(trace)
+  if (!persistence) return
+  persistence.pending = persistence.pending
+    .catch(() => undefined)
+    .then(() => persistFrontendProcessTraceNow(trace, persistence))
+  persistence.pending.catch((error) => {
+    log.warn("frontend design process trace persistence failed", {
+      error: error instanceof Error ? error.message : String(error),
+    })
+  })
+}
+
+async function flushFrontendProcessTracePersistence(
+  trace: FrontendDesignAgent.ProcessTrace,
+): Promise<{ processTraceArtifact: string; iterationStateArtifact: string } | undefined> {
+  const persistence = frontendProcessTracePersistence.get(trace)
+  if (!persistence) return undefined
+  await persistence.pending.catch((error) => {
+    log.warn("frontend design process trace persistence flush failed", {
+      error: error instanceof Error ? error.message : String(error),
+    })
+  })
+  await persistFrontendProcessTraceNow(trace, persistence)
+  return {
+    processTraceArtifact: persistence.processTraceFile,
+    iterationStateArtifact: persistence.iterationStateFile,
+  }
+}
+
+async function persistFrontendProcessTraceNow(
+  trace: FrontendDesignAgent.ProcessTrace,
+  persistence: FrontendProcessTracePersistence,
+): Promise<void> {
+  await fs.mkdir(path.dirname(persistence.processTraceFile), { recursive: true })
+  await Promise.all([
+    fs.writeFile(persistence.processTraceFile, JSON.stringify(trace, null, 2), "utf8"),
+    fs.writeFile(persistence.iterationStateFile, JSON.stringify(buildFrontendIterationState(trace), null, 2), "utf8"),
+  ])
 }
 
 function buildFrontendIterationState(trace: FrontendDesignAgent.ProcessTrace): FrontendDesignAgent.IterationState {
@@ -601,6 +673,7 @@ function createFrontendProcessTraceTools(trace: FrontendDesignAgent.ProcessTrace
           status: "passed",
           details: params,
         })
+        await flushFrontendProcessTracePersistence(trace)
         return {
           title: "Frontend source region selection recorded",
           output: [
@@ -639,6 +712,7 @@ function createFrontendProcessTraceTools(trace: FrontendDesignAgent.ProcessTrace
           status: params.replacementStatus === "blocked" ? "failed" : "passed",
           details: params,
         })
+        await flushFrontendProcessTracePersistence(trace)
         return {
           title: "Frontend replacement result recorded",
           output: [
@@ -678,6 +752,7 @@ async function createFrontendTool(info: Tool.Info, input: { taskID?: string; sig
           ask: async () => {},
         })
         recordFrontendToolResultEvents(trace, info.id, args, result)
+        await flushFrontendProcessTracePersistence(trace)
         return result
       } catch (error) {
         recordFrontendProcessEvent(trace, {
@@ -685,6 +760,7 @@ async function createFrontendTool(info: Tool.Info, input: { taskID?: string; sig
           status: "failed",
           details: { error: error instanceof Error ? error.message : String(error) },
         })
+        await flushFrontendProcessTracePersistence(trace)
         throw error
       }
     },

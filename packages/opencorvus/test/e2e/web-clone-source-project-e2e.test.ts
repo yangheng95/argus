@@ -3,18 +3,29 @@ import { spawn } from "node:child_process"
 import fs from "node:fs/promises"
 import path from "node:path"
 import { Agent } from "../../src/agent/agent"
+import { EngineTaskTable } from "../../src/engine/engine.sql"
+import { FrontendDesignAgent } from "../../src/frontend-design/agent"
 import { createFrontendSkeletonProjectTool } from "../../src/frontend-design/skeleton-project-tool"
+import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 import { Instance } from "../../src/project/instance"
+import { Provider } from "../../src/provider/provider"
+import { Session } from "../../src/session"
+import { Database } from "../../src/storage/db"
 import { ToolRegistry } from "../../src/tool/registry"
 import { WebClonePrepareContextTool } from "../../src/tool/web-clone-prepare-context"
 import { WebCloneSourceAuditTool } from "../../src/tool/web-clone-source-audit"
+import { loadBenchmarkEnv } from "../../script/benchmark/env"
+
+await loadBenchmarkEnv(import.meta.dir)
 
 const runE2E = process.env.OPENCORVUS_RUN_WEB_CLONE_E2E === "1" || process.env.OPENCORVUS_RUN_WEB_CLONE_E2E === "true"
+const runFrontendDesignAgentE2E = process.env.OPENCORVUS_RUN_FRONTEND_DESIGN_AGENT_E2E === "1" || process.env.OPENCORVUS_RUN_FRONTEND_DESIGN_AGENT_E2E === "true"
 const e2eTest = runE2E ? test : test.skip
 const repoRoot = path.resolve(import.meta.dir, "../../../..")
 const defaultMirrorDir = path.join(repoRoot, ".tmp", "source-skeleton-tradingview-v2h", "mirror")
 const mirrorDir = path.resolve(process.env.OPENCORVUS_WEB_CLONE_E2E_MIRROR ?? defaultMirrorDir)
 const outputDir = path.resolve(process.env.OPENCORVUS_WEB_CLONE_E2E_OUTPUT ?? path.join(repoRoot, ".tmp", "opencorvus-web-clone-e2e-output"))
+const frontendDesignBenchmarkTaskID = process.env.OPENCORVUS_FRONTEND_DESIGN_TASK_ID ?? `tsk_web_clone_frontend_design_e2e_${Date.now().toString(16)}`
 const frontendDesignProjectDir = process.env.OPENCORVUS_FRONTEND_DESIGN_PROJECT_DIR ? path.resolve(process.env.OPENCORVUS_FRONTEND_DESIGN_PROJECT_DIR) : undefined
 const frontendDesignProcessTracePath = process.env.OPENCORVUS_FRONTEND_DESIGN_PROCESS_TRACE ? path.resolve(process.env.OPENCORVUS_FRONTEND_DESIGN_PROCESS_TRACE) : undefined
 const frontendDesignIterationStatePath = process.env.OPENCORVUS_FRONTEND_DESIGN_ITERATION_STATE ? path.resolve(process.env.OPENCORVUS_FRONTEND_DESIGN_ITERATION_STATE) : undefined
@@ -313,6 +324,24 @@ describe("web clone source project E2E", () => {
     expect(audit.findings.join("\n")).toContain("Frontend-design iteration state still has remaining source debt: FaqRegion.")
   })
 
+  test("frontend_design agent benchmark request points at runtime source project boundaries", () => {
+    const request = buildFrontendDesignAgentBenchmarkRequest({
+      sourcePackageDir: ".opencorvus/runtime/tasks/tsk_test/frontend-design/web-clone-source",
+      projectDir: ".opencorvus/runtime/tasks/tsk_test/frontend-design/frontend-design-skeleton",
+      mirrorDir: ".tmp/mirror",
+    })
+
+    expect(request).toContain("Call `create_frontend_skeleton_project`")
+    expect(request).toContain("overwrite=true")
+    expect(request).toContain(".opencorvus/runtime/tasks/tsk_test/frontend-design/web-clone-source")
+    expect(request).toContain(".opencorvus/runtime/tasks/tsk_test/frontend-design/frontend-design-skeleton")
+    expect(request).toContain("record_frontend_region_selection")
+    expect(request).toContain("record_frontend_replacement_result")
+    expect(request).toContain("frontend-design-process-trace.json")
+    expect(request).toContain("frontend-design-iteration-state.json")
+    expect(request).not.toContain("from scratch")
+  })
+
   e2eTest("runs the OpenCorvus tool chain and enforces the visual threshold", async () => {
     await assertDirectory(mirrorDir)
     if (frontendDesignProjectDir) await assertDirectory(frontendDesignProjectDir)
@@ -321,7 +350,13 @@ describe("web clone source project E2E", () => {
     await Instance.provide({
       directory: repoRoot,
       fn: async () => {
-        const projectDir = frontendDesignProjectDir ?? outputDir
+        const frontendDesignModel = runFrontendDesignAgentE2E
+          ? await resolveFrontendDesignBenchmarkModel()
+          : undefined
+        const frontendDesignPaths = ProjectRuntimePaths.frontendDesignPaths(repoRoot, frontendDesignBenchmarkTaskID)
+        const projectDir = runFrontendDesignAgentE2E
+          ? frontendDesignPaths.skeletonProjectAbsolute
+          : frontendDesignProjectDir ?? outputDir
         const trace = createBenchmarkProcessTrace({ sourcePackageDir: mirrorDir, outputDir: projectDir })
         const toolIds = await ToolRegistry.ids()
         expect(toolIds).toContain("web_clone_prepare_context")
@@ -341,7 +376,10 @@ describe("web clone source project E2E", () => {
         })
 
         const prepareTool = await WebClonePrepareContextTool.init()
-        const context = await prepareTool.execute({ mirrorDir }, ctx)
+        const context = await prepareTool.execute({
+          mirrorDir,
+          outputDir: runFrontendDesignAgentE2E ? frontendDesignPaths.sourcePackageAbsolute : undefined,
+        }, ctx)
         expect(context.title).toBe("Web clone context prepared")
         recordTraceEvent(trace, {
           step: "prepare-source-context",
@@ -351,13 +389,32 @@ describe("web clone source project E2E", () => {
           details: { mirrorDir, title: context.title },
         })
 
+        if (runFrontendDesignAgentE2E) {
+          await resetFrontendDesignBenchmarkSkeletonDir(frontendDesignPaths.skeletonProjectAbsolute)
+          await ensureFrontendDesignBenchmarkTask(frontendDesignBenchmarkTaskID)
+          const parsedModel = Provider.parseModel(frontendDesignModel!)
+          const analysis = await FrontendDesignAgent.analyze({
+            title: "Web clone rawproject refinement benchmark",
+            request: buildFrontendDesignAgentBenchmarkRequest({
+              sourcePackageDir: context.metadata.sourcePackageDir,
+              projectDir,
+              mirrorDir,
+            }),
+            taskID: frontendDesignBenchmarkTaskID,
+            model: { providerID: parsedModel.providerID, modelID: parsedModel.modelID },
+          })
+          expect(analysis.processTraceArtifact).toBeTruthy()
+          expect(analysis.iterationStateArtifact).toBeTruthy()
+          mergeFrontendDesignProcessTrace(trace, await readFrontendDesignProcessTrace(analysis.processTraceArtifact!))
+          trace.frontendDesignIterationState = await readFrontendDesignIterationState(analysis.iterationStateArtifact!)
+        }
         if (frontendDesignProcessTracePath) {
           mergeFrontendDesignProcessTrace(trace, await readFrontendDesignProcessTrace(frontendDesignProcessTracePath))
         }
         if (frontendDesignIterationStatePath) {
           trace.frontendDesignIterationState = await readFrontendDesignIterationState(frontendDesignIterationStatePath)
         }
-        if (!frontendDesignProjectDir) {
+        if (!frontendDesignProjectDir && !runFrontendDesignAgentE2E) {
           const skeletonTrace = createFrontendSkeletonProjectTool({
             onToolEvent: (event) => recordTraceEvent(trace, {
               step: event.name,
@@ -516,6 +573,111 @@ function createBenchmarkProcessTrace(input: {
       findings: ["Process trace has not been evaluated yet."],
     },
   }
+}
+
+function buildFrontendDesignAgentBenchmarkRequest(input: {
+  sourcePackageDir: string
+  projectDir: string
+  mirrorDir: string
+}): string {
+  return [
+    "Run the frontend-design rawproject refinement benchmark for the prepared webpage clone source package.",
+    "",
+    `Mirror evidence: ${input.mirrorDir}`,
+    `Prepared web-clone-source package: ${input.sourcePackageDir}`,
+    `Frontend-design project target: ${input.projectDir}`,
+    "",
+    "Call `create_frontend_skeleton_project` with that source package, that project target, and overwrite=true.",
+    "Then inspect sourceDomIterationState.ts, sourceDomReplacementPlan.ts, sourceDomRegions.ts, sourceData.ts, assets, and the generated page/components.",
+    "Use normal frontend-design source-edit tools to replace generated source-dom/rawcode regions with semantic project-owned components, extracted data modules, and scoped styles while preserving visual parity.",
+    "Before each replacement, call `record_frontend_region_selection`; after each replacement attempt, call `record_frontend_replacement_result` with completed/blocked/deferred status and exact remaining source debt.",
+    "Run build plus web_clone_source_audit in maintainable_replacement_required mode before claiming completion.",
+    "The benchmark consumes frontend-design-process-trace.json and frontend-design-iteration-state.json; make those artifacts prove the internal process did not drift.",
+  ].join("\n")
+}
+
+async function resetFrontendDesignBenchmarkSkeletonDir(projectDir: string): Promise<void> {
+  const runtimeTasksRoot = path.resolve(repoRoot, ".opencorvus", "runtime", "tasks")
+  const target = path.resolve(projectDir)
+  const relative = path.relative(runtimeTasksRoot, target)
+  if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) {
+    throw new Error(`Refusing to reset frontend-design benchmark project outside runtime tasks: ${target}`)
+  }
+  await fs.rm(target, { recursive: true, force: true })
+}
+
+async function ensureFrontendDesignBenchmarkTask(taskID: string): Promise<void> {
+  const rootSession = await Session.create({ kind: "root", title: "frontend-design benchmark root" })
+  const now = Date.now()
+  Database.use((db) =>
+    db.insert(EngineTaskTable).values({
+      id: taskID,
+      project_id: Instance.project.id,
+      session_id: rootSession.id,
+      source: "test",
+      title: "frontend-design rawproject benchmark",
+      request: "Refine the prepared web-clone-source package into a maintainable frontend-design source project.",
+      priority: "normal",
+      time_created: now,
+      time_updated: now,
+      time_started: now,
+    }).run(),
+  )
+}
+
+async function resolveFrontendDesignBenchmarkModel(): Promise<string> {
+  const providers = await Provider.list()
+  const explicit = firstEnv("OPENCORVUS_FRONTEND_DESIGN_E2E_MODEL", "OPENCORVUS_DESIGN_TEST_MODEL", "OPENCORVUS_E2E_MODEL")
+  const model = explicit
+    ? resolveModelRefFromProviders(providers, explicit)
+    : resolvePreferredFrontendDesignModel(providers)
+  const parsed = Provider.parseModel(model)
+  const resolved = await Provider.getModel(parsed.providerID, parsed.modelID)
+  await Provider.getLanguage(resolved)
+  return model
+}
+
+function firstEnv(...keys: string[]): string | undefined {
+  for (const key of keys) {
+    const value = process.env[key]?.trim()
+    if (value) return value
+  }
+  return undefined
+}
+
+function resolveModelRefFromProviders(
+  providers: Awaited<ReturnType<typeof Provider.list>>,
+  input: string,
+): string {
+  if (input.includes("/")) {
+    const parsed = Provider.parseModel(input)
+    if (!providers[parsed.providerID]?.models[parsed.modelID]) {
+      throw new Error(`frontend-design benchmark model not found in current project: ${input}`)
+    }
+    return input
+  }
+  for (const providerID of ["hexin", "moonshotai-cn", "moonshotai", "kimik26", "glm51", "huggingface"]) {
+    if (providers[providerID]?.models[input]) return `${providerID}/${input}`
+  }
+  throw new Error(`frontend-design benchmark model not found in current project: ${input}`)
+}
+
+function resolvePreferredFrontendDesignModel(providers: Awaited<ReturnType<typeof Provider.list>>): string {
+  for (const [providerID, modelID] of [
+    ["glm51", "glm51"],
+    ["hexin", "kimi-k2.5"],
+    ["hexin", "glm-5.1"],
+    ["kimik26", "kimik26"],
+    ["moonshotai-cn", "kimi-k2.5"],
+    ["moonshotai", "kimi-k2.5"],
+  ] as const) {
+    if (providers[providerID]?.models[modelID]) return `${providerID}/${modelID}`
+  }
+  for (const [providerID, provider] of Object.entries(providers)) {
+    const [modelID] = Object.keys(provider.models)
+    if (modelID) return `${providerID}/${modelID}`
+  }
+  throw new Error("No frontend-design benchmark model is available in the current project.")
 }
 
 function createCompletedFrontendDesignIterationState(): FrontendDesignIterationState {
