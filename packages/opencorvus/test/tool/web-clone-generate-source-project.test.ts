@@ -561,9 +561,15 @@ describe("tool.web_clone_generate_source_project", () => {
         const semanticComponent = await Bun.file(path.join(semanticDir, "FooterNavigation.tsx")).text()
         expect(semanticComponent).toContain("semantic-source-replacement")
         expect(semanticComponent).toContain(".socialLinks.map((link)")
+        expect(semanticComponent).toContain(".linkGroups.map((group")
+        expect(semanticComponent).toContain(".columns.map((column)")
         expect(semanticComponent).toContain(".links.map((link)")
+        expect(semanticComponent).toContain("footerLinksGroup-hezxxKBJ")
+        expect(semanticComponent).toContain("footerLinksColumn-hezxxKBJ")
+        expect(semanticComponent).toContain("lookFirstContainer-_gnlNXvh")
         expect(semanticComponent).toContain("TradingView on X")
         expect(semanticComponent).toContain("Select market data provided")
+        expect(semanticComponent).not.toContain("semantic-source-footer-")
         expect(semanticComponent).not.toContain("data-source-node-id")
         expect(sourceDomIterationState).toContain('"semanticReplacementCount": 1')
         expect(sourceDomIterationState).toContain('"remainingRegionCount": 0')
@@ -656,20 +662,23 @@ describe("tool.web_clone_generate_source_project", () => {
 
         const sourceDomPage = await Bun.file(path.join(outputDir, "src", "components", "SourceDomPage.tsx")).text()
         const sourceDomDir = path.join(outputDir, "src", "components", "source-dom")
-        const sourceDomFiles = (await fs.readdir(sourceDomDir)).filter((file) => file.endsWith(".tsx")).sort()
-        const mixedRegion = await Bun.file(path.join(sourceDomDir, sourceDomFiles[0] ?? "")).text()
+        const sourceDomDirExists = (await fs.stat(sourceDomDir).catch(() => undefined))?.isDirectory() === true
         const semanticDir = path.join(outputDir, "src", "components", "semantic")
         const semanticTexts = await Promise.all(
           (await fs.readdir(semanticDir))
             .filter((file) => file.endsWith(".tsx"))
             .map((file) => Bun.file(path.join(semanticDir, file)).text()),
         )
-        const generatedSource = [mixedRegion, ...semanticTexts].join("\n")
+        const generatedSource = [sourceDomPage, ...semanticTexts].join("\n")
 
-        expect(sourceDomPage).toContain('from "./source-dom/EconomicTrendsRegion"')
-        expect(mixedRegion).toContain("InflationMap")
-        expect(mixedRegion).toContain("GDPGrowth")
+        expect(sourceDomDirExists).toBe(false)
+        expect(sourceDomPage).not.toContain("./source-dom/")
+        expect(sourceDomPage).toContain('from "./semantic/InflationMapSurface"')
+        expect(sourceDomPage).toContain('from "./semantic/GDPGrowthYoYRanking"')
+        expect(sourceDomPage).toContain('from "./semantic/USUnemploymentRateMetricCard"')
+        expect(generatedSource).toContain("InflationMap")
         expect(generatedSource).toContain("GDPGrowthYoY")
+        expect(generatedSource).toContain("USUnemploymentRateMetricCard")
         expect(generatedSource).toContain("US unemployment rate")
         expect(generatedSource).toContain("4.3%")
         expect(generatedSource).toContain("Forecast")
@@ -1600,29 +1609,63 @@ async function writeSemanticFooterFixtureMirror(root: string): Promise<string> {
   await Bun.write(path.join(mirrorDir, "reference.png"), minimalPngBytes())
   await Bun.write(path.join(mirrorDir, "source-skeleton", "index.html"), `
     <footer data-source-node-id="footer-region" data-source-role="footer" class="tv-footer js-footer" data-nosnippet="">
-      <div class="footer-shell">
-        <div class="logoSocials-_gnlNXvh">
-          <a class="logoWrapper-_gnlNXvh" href="https://www.tradingview.com/" aria-label="TradingView main page">TradingView</a>
-          <div class="socials-bGBbwUbv">
-            <a href="https://x.com/tradingview/" rel="nofollow" target="_blank" aria-label="TradingView on X" class="socialsItem-bGBbwUbv">X</a>
-            <a href="https://www.facebook.com/tradingview/" rel="nofollow" target="_blank" aria-label="TradingView on Facebook" class="socialsItem-bGBbwUbv">Facebook</a>
-            <a href="https://www.youtube.com/@TradingView" rel="nofollow" target="_blank" aria-label="TradingView on YouTube" class="socialsItem-bGBbwUbv">YouTube</a>
-            <a href="https://www.instagram.com/tradingview/" rel="nofollow" target="_blank" aria-label="TradingView on Instagram" class="socialsItem-bGBbwUbv">Instagram</a>
+      <div class="js-promo-footer-init-ssr">
+        <div class="root-_gnlNXvh">
+          <div class="container-_gnlNXvh">
+            <div class="content-_gnlNXvh">
+              <div>
+                <div class="logoSocials-_gnlNXvh">
+                  <a class="logoWrapper-_gnlNXvh" href="https://www.tradingview.com/" aria-label="TradingView main page"><span class="logo-_gnlNXvh"></span></a>
+                  <div class="socials-bGBbwUbv">
+                    <a href="https://x.com/tradingview/" rel="nofollow" target="_blank" aria-label="TradingView on X" class="socialsItem-bGBbwUbv"><span class="slot-Mym3My5x"></span></a>
+                    <a href="https://www.facebook.com/tradingview/" rel="nofollow" target="_blank" aria-label="TradingView on Facebook" class="socialsItem-bGBbwUbv"><span class="slot-Mym3My5x"></span></a>
+                    <a href="https://www.youtube.com/@TradingView" rel="nofollow" target="_blank" aria-label="TradingView on YouTube" class="socialsItem-bGBbwUbv"><span class="slot-Mym3My5x"></span></a>
+                    <a href="https://www.instagram.com/tradingview/" rel="nofollow" target="_blank" aria-label="TradingView on Instagram" class="socialsItem-bGBbwUbv"><span class="slot-Mym3My5x"></span></a>
+                  </div>
+                </div>
+                <div class="copyrightContainer-_gnlNXvh">
+                  <button class="languageButton-_gnlNXvh">English</button>
+                  <p class="copyright-_gnlNXvh">
+                    <span>Select market data provided by <a class="textLink-_gnlNXvh" href="https://www.theice.com/market-data">ICE Data Services</a>.</span>
+                    <span>Select reference data provided by FactSet. Copyright 2026 FactSet Research Systems Inc.</span>
+                    <span>Copyright 2026 TradingView, Inc.</span>
+                  </p>
+                </div>
+              </div>
+              <div class="footerLinks-hezxxKBJ">
+                <div class="footerLinksGroup-hezxxKBJ">
+                  <div class="footerLinksColumn-hezxxKBJ">
+                    <span class="footerLinksColumnTitle-hezxxKBJ">More than a product</span>
+                    <ul class="footerLinksColumnList-hezxxKBJ">
+                      <li><a class="footerLinksColumnListItem-hezxxKBJ" href="https://example.com/supercharts">Supercharts</a></li>
+                    </ul>
+                  </div>
+                  <div class="footerLinksColumn-hezxxKBJ">
+                    <span class="footerLinksColumnTitle-hezxxKBJ">Screeners</span>
+                    <ul class="footerLinksColumnList-hezxxKBJ">
+                      <li><a class="footerLinksColumnListItem-hezxxKBJ" href="https://example.com/screener">Screener</a></li>
+                      <li><a class="footerLinksColumnListItem-hezxxKBJ" href="https://example.com/pricing">Pricing</a></li>
+                    </ul>
+                  </div>
+                </div>
+                <div class="footerLinksGroup-hezxxKBJ showTablet-hezxxKBJ">
+                  <div class="footerLinksColumn-hezxxKBJ">
+                    <span class="footerLinksColumnTitle-hezxxKBJ">Business solutions</span>
+                    <ul class="footerLinksColumnList-hezxxKBJ">
+                      <li><a class="footerLinksColumnListItem-hezxxKBJ" href="https://example.com/widgets">Widgets</a></li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="backgroundImage-_gnlNXvh"></div>
+            <div class="lookFirstContainer-_gnlNXvh">
+              <img class="lookFirstImg-_gnlNXvh lightImg-_gnlNXvh" src="/assets/images/asset_000001.svg" alt="Look First">
+              <div class="pepeContainer-_gnlNXvh animatePepe-_gnlNXvh"></div>
+            </div>
+            <div class="pepeLauncher-_gnlNXvh"></div>
           </div>
         </div>
-        <button class="languageButton-_gnlNXvh">English</button>
-        <p class="copyright-_gnlNXvh">
-          Select market data provided by <a class="textLink-_gnlNXvh" href="https://www.theice.com/market-data">ICE Data Services</a>.
-          Select reference data provided by FactSet. Copyright 2026 FactSet Research Systems Inc.
-          Copyright 2026 TradingView, Inc.
-        </p>
-        <nav class="footerLinks-hezxxKBJ">
-          <a href="https://example.com/supercharts">Supercharts</a>
-          <a href="https://example.com/screener">Screener</a>
-          <a href="https://example.com/pricing">Pricing</a>
-          <a href="https://example.com/widgets">Widgets</a>
-        </nav>
-        <img class="lookFirstImg-_gnlNXvh lightImg-_gnlNXvh" src="/assets/images/asset_000001.svg" alt="Look First">
       </div>
     </footer>
   `)
@@ -1820,11 +1863,12 @@ async function writeMixedEconomicTrendsFixtureMirror(root: string): Promise<stri
             </div>
             <div class="card-_bHcdE9E">
               <span class="title-KqgCoGM1">GDP growth, YoY</span>
-              <div data-source-role="header" class="header-LBIMiZWE"><span>Country</span><span>GDP Growth</span><span>Nominal GDP</span></div>
+              <div class="header-WMQb_1Ui column-LBIMiZWE"><span>Country</span><span>GDP Growth</span><span>Nominal GDP</span></div>
               <ul class="list-LBIMiZWE">${rows}</ul>
             </div>
             <div class="card-_bHcdE9E">
               <div class="header-Q4ifml3p"><a href="https://example.com/usur"><span class="title-uk1zko9U">US unemployment rate</span><span class="tickerBox-uk1zko9U">USUR</span></a></div>
+              <div class="content-Q4ifml3p"><div class="container-xBNJX2CY"><div class="chart-xBNJX2CY"><div class="tv-lightweight-charts"><table style="height: 20px; width: 40px"><tr><td style="padding: 0px"><canvas width="40" height="20" style="background-image: url('/assets/images/asset_000100.png'); width: 40px; height: 20px"></canvas></td></tr></table></div></div></div></div>
               <div class="wrapper-vE74cYTn"><div class="container-vE74cYTn">
                 <div class="wrapper-yXjDRT2e"><div class="label-yXjDRT2e">Actual</div><div class="value-yXjDRT2e">4.3%</div></div>
                 <div class="wrapper-yXjDRT2e"><div class="label-yXjDRT2e">Forecast</div><div class="value-yXjDRT2e">4.3%</div></div>
@@ -1847,6 +1891,7 @@ async function writeMixedEconomicTrendsFixtureMirror(root: string): Promise<stri
     const assetId = `asset_${String(index + 1).padStart(6, "0")}`
     await Bun.write(path.join(mirrorDir, "assets", "svg", `${assetId}.path.txt`), `M${index} ${index}h2v2z`)
   }
+  await Bun.write(path.join(mirrorDir, "assets", "images", "asset_000100.png"), minimalPngBytes())
   await Bun.write(path.join(mirrorDir, "assets", "manifest.json"), JSON.stringify({ version: 1, assets: [] }, null, 2))
   return mirrorDir
 }
