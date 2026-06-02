@@ -1,10 +1,14 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, spyOn, test } from "bun:test"
 import path from "path"
 import fs from "fs/promises"
 import { SessionCompaction } from "../../src/session/compaction"
 import { CompactionHandoff } from "../../src/session/compaction-handoff"
+import { MemoryFlush } from "../../src/memory/flush"
+import { Memory } from "../../src/memory"
+import { EffectiveConfig } from "../../src/config/effective"
 import { Token } from "../../src/util/token"
 import { Instance } from "../../src/project/instance"
+import { Identifier } from "../../src/id/id"
 import { Log } from "../../src/util/log"
 import { tmpdir } from "../fixture/fixture"
 import { Session } from "../../src/session"
@@ -14,6 +18,8 @@ import type { Config } from "../../src/config/config"
 import { Todo } from "../../src/session/todo"
 
 Log.init({ print: false })
+
+const sessionID = "ses_compaction_test"
 
 function handoffFixture(): CompactionHandoff.Info {
   return {
@@ -87,6 +93,92 @@ function handoffFixture(): CompactionHandoff.Info {
   }
 }
 
+function basePart(messageID: string, id: string) {
+  return {
+    id,
+    sessionID,
+    messageID,
+  }
+}
+
+function userMessage(id: string, parts: Message.Part[]): Message.WithParts {
+  return {
+    info: {
+      id,
+      sessionID,
+      role: "user",
+      time: { created: 0 },
+      agent: "build",
+      model: { providerID: "test", modelID: "test-model" },
+      tools: {},
+      mode: "",
+    } as unknown as Message.User,
+    parts,
+  }
+}
+
+function assistantMessage(id: string, parentID: string, parts: Message.Part[], info?: Partial<Message.Assistant>): Message.WithParts {
+  return {
+    info: {
+      id,
+      sessionID,
+      role: "assistant",
+      parentID,
+      time: { created: 0 },
+      agent: "build",
+      path: { cwd: "/", root: "/" },
+      cost: 0,
+      tokens: {
+        input: 0,
+        output: 0,
+        reasoning: 0,
+        cache: { read: 0, write: 0 },
+      },
+      modelID: "test-model",
+      providerID: "test",
+      mode: "",
+      ...info,
+    } as unknown as Message.Assistant,
+    parts,
+  }
+}
+
+function toolPart(messageID: string, id: string, output: string): Message.ToolPart {
+  return {
+    ...basePart(messageID, id),
+    type: "tool",
+    callID: `call-${id}`,
+    tool: "bash",
+    state: {
+      status: "completed",
+      input: { command: "echo test" },
+      output,
+      title: "bash",
+      metadata: {},
+      time: {
+        start: 0,
+        end: 1,
+      },
+    },
+  }
+}
+
+function previousRetention(handoff: CompactionHandoff.Info): NonNullable<CompactionHandoff.EvidenceRequirements["previousHandoff"]> {
+  return {
+    acceptanceCriteria: handoff.acceptanceCriteria,
+    workingContext: handoff.workingContext,
+    chronology: handoff.chronology.map((item) => item.event),
+    decisions: handoff.decisions.map((item) => item.decision),
+    evidence: handoff.evidence.map((item) => item.value),
+    files: handoff.files.map((item) => item.path),
+    testsAndCommands: handoff.testsAndCommands.map((item) => item.command),
+    errorsAndBlockers: handoff.errorsAndBlockers.map((item) => item.issue),
+    userMessages: handoff.userMessages,
+    nextActions: handoff.nextActions,
+    openRisks: handoff.openRisks,
+  }
+}
+
 describe("CompactionHandoff", () => {
   test("rejects generic placeholder actions", () => {
     const invalid = {
@@ -122,6 +214,80 @@ describe("CompactionHandoff", () => {
     expect(first).toContain("Source enabled tool switches: shell")
     expect(first).not.toContain("Source tools:")
   })
+
+  test("renders memory episode from structured handoff fields instead of display Markdown", () => {
+    const memory = CompactionHandoff.renderMemoryEpisode(handoffFixture())
+
+    expect(memory).toContain("# Compaction Handoff Memory")
+    expect(memory).toContain("## Working Context")
+    expect(memory).toContain("Rendered Markdown is display-only; assistant.structured is the resumable handoff source.")
+    expect(memory).toContain("## Chronology")
+    expect(memory).toContain("Identified generic summaries as insufficient for resuming session work")
+    expect(memory).not.toContain("This session is being continued from a previous conversation")
+    expect(memory).not.toContain("Summary:")
+  })
+
+  test("memory flush writes structured handoff facts even when display text conflicts", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const configSpy = spyOn(EffectiveConfig, "effective").mockResolvedValue({
+          experimental: {
+            memory: {
+              enabled: true,
+            },
+          },
+        } as never)
+        const session = await Session.create({ kind: "assistant", title: "structured flush" })
+        const handoff = handoffFixture()
+        const summary = await Session.updateMessage({
+          id: Identifier.ascending("message"),
+          sessionID: session.id,
+          role: "assistant",
+          parentID: "m-compaction-user",
+          time: { created: Date.now() },
+          agent: "compaction",
+          path: { cwd: "/", root: "/" },
+          cost: 0,
+          tokens: {
+            input: 0,
+            output: 0,
+            reasoning: 0,
+            cache: { read: 0, write: 0 },
+          },
+          modelID: "test-model",
+          providerID: "test",
+          mode: "",
+          summary: true,
+          finish: "stop",
+          structured: handoff,
+        } as Message.Assistant)
+        await Session.updatePart({
+          id: Identifier.ascending("part"),
+          sessionID: session.id,
+          messageID: summary.id,
+          type: "text",
+          text: "DISPLAY MARKDOWN CONFLICT: this stale rendered body must not be flushed",
+        })
+
+        try {
+          await MemoryFlush.flush({ sessionID: session.id, messageID: summary.id })
+
+          const episode = Memory.listFiles({ projectId: Instance.project.id, sessionID: session.id }).find((file) =>
+            file.title.includes("structured flush"),
+          )
+          expect(episode).toBeDefined()
+          if (!episode) return
+          const content = Memory.getChunks(episode.id).map((chunk) => chunk.content).join("\n")
+          expect(content).toContain("Rendered Markdown is display-only; assistant.structured is the resumable handoff source.")
+          expect(content).not.toContain("DISPLAY MARKDOWN CONFLICT")
+        } finally {
+          configSpy.mockRestore()
+        }
+      },
+    })
+  }, 15_000)
 
   test("rejects schema-valid handoff that omits required input evidence", () => {
     const handoff = {
@@ -331,7 +497,17 @@ describe("CompactionHandoff", () => {
   })
 
   test("rejects follow-up handoff that drops previous structured handoff facts", () => {
-    const previous = handoffFixture()
+    const previous = {
+      ...handoffFixture(),
+      errorsAndBlockers: [
+        {
+          issue: "Provider returned context overflow during compaction",
+          evidence: "ContextOverflowError in previous handoff",
+          nextAction: "Preserve overflow root cause for continuation",
+        },
+      ],
+      openRisks: ["Prior risk sentinel must survive follow-up compaction"],
+    } satisfies CompactionHandoff.Info
     const handoff = {
       ...handoffFixture(),
       acceptanceCriteria: ["New compacted-history acceptance only"],
@@ -342,6 +518,44 @@ describe("CompactionHandoff", () => {
           evidence: "new evidence",
         },
       ],
+      decisions: [
+        {
+          decision: "New compacted-history decision only",
+          rationale: "new-only rationale",
+          evidence: "new-only evidence",
+        },
+      ],
+      evidence: [
+        {
+          kind: "command",
+          value: "new-only command",
+          detail: "new-only evidence detail",
+        },
+      ],
+      files: [
+        {
+          path: "new-only.ts",
+          status: "modified",
+          detail: "new-only file detail",
+        },
+      ],
+      testsAndCommands: [
+        {
+          command: "new-only test",
+          result: "passed",
+          evidence: "new-only output",
+        },
+      ],
+      errorsAndBlockers: [
+        {
+          issue: "New compacted-history blocker only",
+          evidence: "new-only blocker evidence",
+          nextAction: "new-only blocker action",
+        },
+      ],
+      userMessages: ["New compacted-history user message only"],
+      nextActions: ["new-only next action"],
+      openRisks: ["new-only risk"],
     } satisfies CompactionHandoff.Info
 
     const result = CompactionHandoff.validateMinimumEvidence(handoff, {
@@ -355,11 +569,7 @@ describe("CompactionHandoff", () => {
       errorsAndBlockers: false,
       acceptanceCriteria: true,
       todos: handoff.todos,
-      previousHandoff: {
-        acceptanceCriteria: previous.acceptanceCriteria,
-        workingContext: previous.workingContext,
-        chronology: previous.chronology.map((item) => item.event),
-      },
+      previousHandoff: previousRetention(previous),
     })
 
     expect(result.success).toBe(false)
@@ -367,11 +577,29 @@ describe("CompactionHandoff", () => {
       expect(result.error).toContain("previousHandoff.acceptanceCriteria")
       expect(result.error).toContain("previousHandoff.workingContext")
       expect(result.error).toContain("previousHandoff.chronology")
+      expect(result.error).toContain("previousHandoff.decisions")
+      expect(result.error).toContain("previousHandoff.evidence")
+      expect(result.error).toContain("previousHandoff.files")
+      expect(result.error).toContain("previousHandoff.testsAndCommands")
+      expect(result.error).toContain("previousHandoff.errorsAndBlockers")
+      expect(result.error).toContain("previousHandoff.userMessages")
+      expect(result.error).toContain("previousHandoff.nextActions")
+      expect(result.error).toContain("previousHandoff.openRisks")
     }
   })
 
   test("accepts follow-up handoff that retains previous structured handoff facts", () => {
-    const previous = handoffFixture()
+    const previous = {
+      ...handoffFixture(),
+      errorsAndBlockers: [
+        {
+          issue: "Provider returned context overflow during compaction",
+          evidence: "ContextOverflowError in previous handoff",
+          nextAction: "Preserve overflow root cause for continuation",
+        },
+      ],
+      openRisks: ["Prior risk sentinel must survive follow-up compaction"],
+    } satisfies CompactionHandoff.Info
     const handoff = {
       ...handoffFixture(),
       acceptanceCriteria: [...previous.acceptanceCriteria, "New compacted-history acceptance"],
@@ -383,6 +611,49 @@ describe("CompactionHandoff", () => {
           evidence: "new evidence",
         },
       ],
+      decisions: [
+        ...previous.decisions,
+        {
+          decision: "New compacted-history decision",
+          rationale: "new rationale",
+          evidence: "new evidence",
+        },
+      ],
+      evidence: [
+        ...previous.evidence,
+        {
+          kind: "command",
+          value: "new command",
+          detail: "new evidence detail",
+        },
+      ],
+      files: [
+        ...previous.files,
+        {
+          path: "new.ts",
+          status: "modified",
+          detail: "new file detail",
+        },
+      ],
+      testsAndCommands: [
+        ...previous.testsAndCommands,
+        {
+          command: "new test",
+          result: "passed",
+          evidence: "new output",
+        },
+      ],
+      errorsAndBlockers: [
+        ...previous.errorsAndBlockers,
+        {
+          issue: "New compacted-history blocker",
+          evidence: "new blocker evidence",
+          nextAction: "new blocker action",
+        },
+      ],
+      userMessages: [...previous.userMessages, "New compacted-history user message"],
+      nextActions: [...previous.nextActions, "new next action"],
+      openRisks: [...previous.openRisks, "new risk"],
     } satisfies CompactionHandoff.Info
 
     const result = CompactionHandoff.validateMinimumEvidence(handoff, {
@@ -396,11 +667,7 @@ describe("CompactionHandoff", () => {
       errorsAndBlockers: false,
       acceptanceCriteria: true,
       todos: handoff.todos,
-      previousHandoff: {
-        acceptanceCriteria: previous.acceptanceCriteria,
-        workingContext: previous.workingContext,
-        chronology: previous.chronology.map((item) => item.event),
-      },
+      previousHandoff: previousRetention(previous),
     })
 
     expect(result.success).toBe(true)
@@ -575,6 +842,224 @@ describe("CompactionHandoff", () => {
       },
     })
   })
+})
+
+describe("session.compaction.prune", () => {
+  const largeOutput = "tool output evidence\n".repeat(6_000)
+
+  function compactedHistoryMessages(input?: { structured?: boolean; tail?: boolean }) {
+    const anchor = userMessage("m-anchor", [
+      { ...basePart("m-anchor", "p-anchor"), type: "text", text: "original user request" },
+    ])
+    const coveredOlder = assistantMessage("m-covered-older", "m-anchor", [
+      toolPart("m-covered-older", "p-covered-older", largeOutput),
+    ])
+    const coveredNewer = assistantMessage("m-covered-newer", "m-anchor", [
+      toolPart("m-covered-newer", "p-covered-newer", largeOutput),
+    ])
+    const tailUser = userMessage("m-tail", [
+      { ...basePart("m-tail", "p-tail-user"), type: "text", text: "retained tail request" },
+    ])
+    const tailAssistant = assistantMessage("m-tail-assistant", "m-tail", [
+      toolPart("m-tail-assistant", "p-tail-tool", largeOutput),
+    ])
+    const compactUser = userMessage("m-compact", [
+      {
+        ...basePart("m-compact", "p-compact"),
+        type: "compaction",
+        auto: true,
+        anchor_id: "m-anchor",
+        ...(input?.tail ? { tail_start_id: "m-tail" } : {}),
+      },
+    ])
+    const compactSummary = assistantMessage(
+      "m-compact-summary",
+      "m-compact",
+      [{ ...basePart("m-compact-summary", "p-summary"), type: "text", text: "rendered summary" }],
+      input?.structured
+        ? {
+            summary: true,
+            finish: "stop",
+            structured: handoffFixture(),
+          }
+        : {
+            summary: true,
+            finish: "stop",
+          },
+    )
+    return [anchor, coveredOlder, coveredNewer, tailUser, tailAssistant, compactUser, compactSummary]
+  }
+
+  test("does not prune tool outputs without a valid structured handoff boundary", () => {
+    const messages = compactedHistoryMessages({ structured: false, tail: true })
+
+    const selected = SessionCompaction.TestHooks.prunableToolParts(messages)
+
+    expect(selected).toHaveLength(0)
+  })
+
+  test("does not prune when stored tail_start_id is missing", () => {
+    const messages = compactedHistoryMessages({ structured: true, tail: true }).map((message) => {
+      if (message.info.id !== "m-compact") return message
+      return {
+        ...message,
+        parts: message.parts.map((part) =>
+          part.type === "compaction" ? { ...part, tail_start_id: "m-missing-tail" } : part,
+        ),
+      }
+    })
+
+    const selected = SessionCompaction.TestHooks.prunableToolParts(messages)
+
+    expect(selected).toHaveLength(0)
+  })
+
+  test("does not prune when stored tail_start_id points to an assistant message", () => {
+    const messages = compactedHistoryMessages({ structured: true, tail: true }).map((message) => {
+      if (message.info.id !== "m-compact") return message
+      return {
+        ...message,
+        parts: message.parts.map((part) =>
+          part.type === "compaction" ? { ...part, tail_start_id: "m-tail-assistant" } : part,
+        ),
+      }
+    })
+
+    const selected = SessionCompaction.TestHooks.prunableToolParts(messages)
+
+    expect(selected).toHaveLength(0)
+  })
+
+  test("prunes only tool outputs covered by the latest structured handoff", () => {
+    const messages = compactedHistoryMessages({ structured: true, tail: true })
+
+    const selected = SessionCompaction.TestHooks.prunableToolParts(messages)
+
+    expect(selected.map((part) => part.id)).toEqual(["p-covered-older"])
+    expect(selected.some((part) => part.id === "p-tail-tool")).toBe(false)
+  })
+
+  test("uses compaction marker as prune boundary when no tail was preserved", () => {
+    const messages = compactedHistoryMessages({ structured: true, tail: false })
+
+    const selected = SessionCompaction.TestHooks.prunableToolParts(messages)
+
+    expect(selected.map((part) => part.id)).toEqual(["p-covered-newer", "p-covered-older"])
+  })
+
+  test("database prune does not compact tool output when tail_start_id points to assistant", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ kind: "assistant", title: "malformed prune tail" })
+        const anchor = await Session.updateMessage({
+          id: Identifier.ascending("message"),
+          sessionID: session.id,
+          role: "user",
+          time: { created: Date.now() },
+          agent: "build",
+          model: { providerID: "test", modelID: "test-model" },
+        } as Message.User)
+        const covered = await Session.updateMessage({
+          id: Identifier.ascending("message"),
+          sessionID: session.id,
+          role: "assistant",
+          parentID: anchor.id,
+          time: { created: Date.now() + 1 },
+          agent: "build",
+          path: { cwd: "/", root: "/" },
+          cost: 0,
+          tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+          modelID: "test-model",
+          providerID: "test",
+          mode: "",
+        } as Message.Assistant)
+        const tailUser = await Session.updateMessage({
+          id: Identifier.ascending("message"),
+          sessionID: session.id,
+          role: "user",
+          time: { created: Date.now() + 2 },
+          agent: "build",
+          model: { providerID: "test", modelID: "test-model" },
+        } as Message.User)
+        const tailAssistant = await Session.updateMessage({
+          id: Identifier.ascending("message"),
+          sessionID: session.id,
+          role: "assistant",
+          parentID: tailUser.id,
+          time: { created: Date.now() + 3 },
+          agent: "build",
+          path: { cwd: "/", root: "/" },
+          cost: 0,
+          tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+          modelID: "test-model",
+          providerID: "test",
+          mode: "",
+        } as Message.Assistant)
+        const compactUser = await Session.updateMessage({
+          id: Identifier.ascending("message"),
+          sessionID: session.id,
+          role: "user",
+          time: { created: Date.now() + 4 },
+          agent: "compaction",
+          model: { providerID: "test", modelID: "test-model" },
+        } as Message.User)
+        await Session.updateMessage({
+          id: Identifier.ascending("message"),
+          sessionID: session.id,
+          role: "assistant",
+          parentID: compactUser.id,
+          time: { created: Date.now() + 5 },
+          agent: "compaction",
+          path: { cwd: "/", root: "/" },
+          cost: 0,
+          tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+          modelID: "test-model",
+          providerID: "test",
+          mode: "",
+          summary: true,
+          finish: "stop",
+          structured: handoffFixture(),
+        } as Message.Assistant)
+        const toolID = Identifier.ascending("part")
+        await Session.updatePart({
+          id: toolID,
+          sessionID: session.id,
+          messageID: covered.id,
+          type: "tool",
+          callID: "call-covered",
+          tool: "bash",
+          state: {
+            status: "completed",
+            input: { command: "echo covered" },
+            output: largeOutput,
+            title: "bash",
+            metadata: {},
+            time: { start: 0, end: 1 },
+          },
+        } satisfies Message.ToolPart)
+        await Session.updatePart({
+          id: Identifier.ascending("part"),
+          sessionID: session.id,
+          messageID: compactUser.id,
+          type: "compaction",
+          auto: true,
+          anchor_id: anchor.id,
+          tail_start_id: tailAssistant.id,
+        } satisfies Message.CompactionPart)
+
+        await SessionCompaction.prune({ sessionID: session.id })
+
+        const parts = await Message.parts(covered.id)
+        const tool = parts.find((part): part is Message.ToolPart => part.type === "tool")
+        expect(tool?.state.status).toBe("completed")
+        if (tool?.state.status === "completed") {
+          expect(tool.state.time.compacted).toBeUndefined()
+        }
+      },
+    })
+  }, 15_000)
 })
 
 function createModel(opts: {

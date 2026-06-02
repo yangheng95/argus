@@ -26,13 +26,7 @@ export namespace MemoryFlush {
       throw new Error(`Invalid compaction handoff summary cannot be flushed: ${input.messageID}`)
     }
 
-    // Extract text content from the summary
-    const textParts = summaryMsg.parts
-      .filter((p): p is Message.TextPart => p.type === "text")
-      .map((p) => p.text)
-      .filter(Boolean)
-
-    const summaryText = textParts.join("\n\n")
+    const summaryText = CompactionHandoff.renderMemoryEpisode(summaryMsg.info.structured)
     if (!summaryText || summaryText.length < 50) {
       throw new Error(`Compaction handoff summary is too short to flush: ${input.messageID}`)
     }

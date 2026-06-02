@@ -137,6 +137,14 @@ export namespace CompactionHandoff {
       acceptanceCriteria: string[]
       workingContext: string[]
       chronology: string[]
+      decisions: string[]
+      evidence: string[]
+      files: string[]
+      testsAndCommands: string[]
+      errorsAndBlockers: string[]
+      userMessages: string[]
+      nextActions: string[]
+      openRisks: string[]
     }
   }
 
@@ -175,6 +183,30 @@ export namespace CompactionHandoff {
           "<chronology>",
           ...prior.chronology,
           "</chronology>",
+          "<decisions>",
+          ...prior.decisions,
+          "</decisions>",
+          "<evidence>",
+          ...prior.evidence,
+          "</evidence>",
+          "<files>",
+          ...prior.files,
+          "</files>",
+          "<testsAndCommands>",
+          ...prior.testsAndCommands,
+          "</testsAndCommands>",
+          "<errorsAndBlockers>",
+          ...prior.errorsAndBlockers,
+          "</errorsAndBlockers>",
+          "<userMessages>",
+          ...prior.userMessages,
+          "</userMessages>",
+          "<nextActions>",
+          ...prior.nextActions,
+          "</nextActions>",
+          "<openRisks>",
+          ...prior.openRisks,
+          "</openRisks>",
           "</previous-handoff-required-retention>",
         ]
       : []
@@ -288,6 +320,49 @@ export namespace CompactionHandoff {
       if (missingChronology.length > 0) {
         missing.push(`previousHandoff.chronology (${missingChronology.length} omitted)`)
       }
+      const decisionTexts = new Set(handoff.decisions.map((item) => item.decision))
+      const missingDecisions = requirements.previousHandoff.decisions.filter((item) => !decisionTexts.has(item))
+      if (missingDecisions.length > 0) {
+        missing.push(`previousHandoff.decisions (${missingDecisions.length} omitted)`)
+      }
+      const evidenceTexts = new Set(handoff.evidence.map((item) => item.value))
+      const missingEvidence = requirements.previousHandoff.evidence.filter((item) => !evidenceTexts.has(item))
+      if (missingEvidence.length > 0) {
+        missing.push(`previousHandoff.evidence (${missingEvidence.length} omitted)`)
+      }
+      const filePaths = new Set(handoff.files.map((item) => item.path))
+      const missingFiles = requirements.previousHandoff.files.filter((item) => !filePaths.has(item))
+      if (missingFiles.length > 0) {
+        missing.push(`previousHandoff.files (${missingFiles.length} omitted)`)
+      }
+      const commands = new Set(handoff.testsAndCommands.map((item) => item.command))
+      const missingCommands = requirements.previousHandoff.testsAndCommands.filter((item) => !commands.has(item))
+      if (missingCommands.length > 0) {
+        missing.push(`previousHandoff.testsAndCommands (${missingCommands.length} omitted)`)
+      }
+      const blockerIssues = new Set(handoff.errorsAndBlockers.map((item) => item.issue))
+      const missingBlockers = requirements.previousHandoff.errorsAndBlockers.filter((item) => !blockerIssues.has(item))
+      if (missingBlockers.length > 0) {
+        missing.push(`previousHandoff.errorsAndBlockers (${missingBlockers.length} omitted)`)
+      }
+      const missingUserMessages = requirements.previousHandoff.userMessages.filter(
+        (item) => !handoff.userMessages.includes(item),
+      )
+      if (missingUserMessages.length > 0) {
+        missing.push(`previousHandoff.userMessages (${missingUserMessages.length} omitted)`)
+      }
+      const missingNextActions = requirements.previousHandoff.nextActions.filter(
+        (item) => !handoff.nextActions.includes(item),
+      )
+      if (missingNextActions.length > 0) {
+        missing.push(`previousHandoff.nextActions (${missingNextActions.length} omitted)`)
+      }
+      const missingOpenRisks = requirements.previousHandoff.openRisks.filter(
+        (item) => !handoff.openRisks.includes(item),
+      )
+      if (missingOpenRisks.length > 0) {
+        missing.push(`previousHandoff.openRisks (${missingOpenRisks.length} omitted)`)
+      }
     }
     if (JSON.stringify(handoff.todos) !== JSON.stringify(requirements.todos)) {
       missing.push("todos")
@@ -390,6 +465,76 @@ export namespace CompactionHandoff {
       "10. Optional Next Step:",
       normalized.nextActions[0] ? `   - ${normalized.nextActions[0]}` : "   - (none)",
       ...normalized.openRisks.map((item) => `   - Risk: ${item}`),
+    ].join("\n")
+  }
+
+  export function renderMemoryEpisode(handoff: Info) {
+    const normalized = Schema.parse(handoff)
+    const source = normalized.currentState.sourceUserMessage
+    return [
+      "# Compaction Handoff Memory",
+      "",
+      "## Objective",
+      normalized.objective,
+      "",
+      "## Acceptance Criteria",
+      list(normalized.acceptanceCriteria),
+      "",
+      "## Current State",
+      `- Phase: ${normalized.currentState.phase}`,
+      `- Active task: ${normalized.currentState.activeTask}`,
+      `- Source user message: ${source.id}`,
+      `- Source agent/model: ${source.agent} ${source.model.providerID}/${source.model.modelID}`,
+      "",
+      "## Working Context",
+      list(normalized.workingContext),
+      "",
+      "## Chronology",
+      section(
+        normalized.chronology,
+        (item) => `- ${item.event}${item.evidence ? ` Evidence: ${item.evidence}` : ""}`,
+      ).replaceAll("\n   - ", "\n- ").replace(/^   - /, "- "),
+      "",
+      "## Decisions",
+      section(
+        normalized.decisions,
+        (item) => `- ${item.decision} Rationale: ${item.rationale}${item.evidence ? ` Evidence: ${item.evidence}` : ""}`,
+      ).replaceAll("\n   - ", "\n- ").replace(/^   - /, "- "),
+      "",
+      "## Files",
+      section(normalized.files, (item) => `- [${item.status}] ${item.path}: ${item.detail}`)
+        .replaceAll("\n   - ", "\n- ")
+        .replace(/^   - /, "- "),
+      "",
+      "## Evidence",
+      section(normalized.evidence, (item) => `- [${item.kind}] ${item.value}: ${item.detail}`)
+        .replaceAll("\n   - ", "\n- ")
+        .replace(/^   - /, "- "),
+      "",
+      "## Tests And Commands",
+      section(normalized.testsAndCommands, (item) => `- ${item.command}: ${item.result} Evidence: ${item.evidence}`)
+        .replaceAll("\n   - ", "\n- ")
+        .replace(/^   - /, "- "),
+      "",
+      "## Errors And Blockers",
+      section(
+        normalized.errorsAndBlockers,
+        (item) => `- ${item.issue} Evidence: ${item.evidence} Next: ${item.nextAction}`,
+      )
+        .replaceAll("\n   - ", "\n- ")
+        .replace(/^   - /, "- "),
+      "",
+      "## Todos",
+      JSON.stringify(normalized.todos, null, 2),
+      "",
+      "## User Messages",
+      list(normalized.userMessages),
+      "",
+      "## Next Actions",
+      list(normalized.nextActions),
+      "",
+      "## Open Risks",
+      list(normalized.openRisks),
     ].join("\n")
   }
 }
