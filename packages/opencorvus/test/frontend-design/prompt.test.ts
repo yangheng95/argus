@@ -116,6 +116,8 @@ describe("frontend-design prompt assembly", () => {
     expect(prompt).toContain("Benchmark workspaces often already contain minimal root files")
     expect(prompt).toContain("populate it directly with file-edit tools")
     expect(prompt).toContain("instead of running project scaffolding commands")
+    expect(prompt).toContain("When a target-root file already exists, read that exact file first with `read_file`")
+    expect(prompt).toContain("use direct `write` only for genuinely new target-project files")
     expect(prompt).toContain("Before any build/render/server command, create or populate the target delivery project specified by the Target Delivery Project Contract")
     expect(prompt).toContain("Treat `nextSourceDomReplacement` as the first queue item only")
     expect(prompt).not.toContain("The host already prepared the frontend-design high-fidelity editable source project before this model turn.")
