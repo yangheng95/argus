@@ -9,7 +9,7 @@
  * only a compact anchor list beside the frontend template.
  *
  * Architecture constraints:
- * ✗ Cannot modify files or execute code
+ * ✓ May materialize frontend-design source projects through its own tools
  * ✗ Cannot call other agents
  * ✓ Reads codebase to discover existing design patterns/component libraries
  * ✓ Works from multimodal attachments (screenshots, PDF) and can capture a
@@ -48,7 +48,6 @@ import { createReadAttachmentTool } from "./read-attachment-tool"
 import { createUrlScreenshotTool } from "./url-screenshot-tool"
 import { createFrontendSkeletonProjectTool } from "./skeleton-project-tool"
 import {
-  maybeCreateHostPreparedFrontendProject,
   readHostPreparedCompactEvidence,
   renderHostPreparedFrontendProjectSection,
   selectFrontendTemplateSubmitTool,
@@ -124,7 +123,7 @@ export namespace FrontendDesignAgent {
     const screenshotToolKit = createUrlScreenshotTool()
     const skeletonProjectToolKit = createFrontendSkeletonProjectTool({ taskID: input.taskID })
     const outputToolKit = createFrontendTemplateOutputTools({ autoIteration })
-    const hostPreparedFrontendProject = await maybeCreateHostPreparedFrontendProject(input.taskID)
+    const hostPreparedFrontendProject = undefined
     const textOnlyNoVisualSource = isTextOnlyNoVisualSource(input)
     const submitFrontendTemplateTool = selectFrontendTemplateSubmitTool(
       outputToolKit,
@@ -407,7 +406,7 @@ function buildUserPrompt(input: {
 
   sections.push(
     "# Live URL Capture\n\n" +
-    `For visual webpage URLs, first check the host-prepared task-runtime evidence at \`${mirrorRef}/prd-evidence-summary.md\`, \`${mirrorRef}/source-ir/component-tree.json\`, \`${mirrorRef}/source-ir/content-model.json\`, \`${mirrorRef}/source-ir/layout-map.json\`, \`${mirrorRef}/source-ir/style-tokens.json\`, \`${mirrorRef}/source-ir/interaction-hints.json\`, \`${mirrorRef}/source-skeleton/critical.css\`, \`${mirrorRef}/visual-surface-candidates.json\`, and the task-runtime source package \`${sourcePackageRef}/implementation-blueprint.md\` when present. Use \`${mirrorRef}/source-skeleton/index.html\` only as raw evidence for exact hierarchy/source ids or missing text. ` +
+    `For visual webpage URLs, first check the task-runtime evidence at \`${mirrorRef}/prd-evidence-summary.md\`, \`${mirrorRef}/source-ir/component-tree.json\`, \`${mirrorRef}/source-ir/content-model.json\`, \`${mirrorRef}/source-ir/layout-map.json\`, \`${mirrorRef}/source-ir/style-tokens.json\`, \`${mirrorRef}/source-ir/interaction-hints.json\`, \`${mirrorRef}/source-skeleton/critical.css\`, \`${mirrorRef}/visual-surface-candidates.json\`, and the task-runtime source package \`${sourcePackageRef}/implementation-blueprint.md\` when present. Use \`${mirrorRef}/source-skeleton/index.html\` only as raw evidence for exact hierarchy/source ids or missing text. ` +
     "Use the matched webpage reference skill only if those files are missing or stale — not `webfetch` and not screenshot-only analysis. " +
     "After evidence exists, stop acquiring and read the named source artifacts before finalizing; never inline raw extraction JSON or stored URL screenshot base64 into the frontend template prompt. " +
     (autoIteration

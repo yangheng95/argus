@@ -30,6 +30,21 @@ describe("frontend-design prompt assembly", () => {
     expect(prompt).toContain("Vertical slice")
     expect(prompt).toContain("Stop condition")
     expect(prompt).toContain("maintainable_replacement_required")
+    expect(prompt).toContain("## Agent-Owned Rawproject Refinement")
+    expect(prompt).toContain("frontend_design is not merely a report writer")
+    expect(prompt).toContain("The source project plus its iteration sidecars are part of the deliverable surface")
+    expect(prompt).toContain("Baseline-first rule")
+    expect(prompt).toContain("Region iteration algorithm")
+    expect(prompt).toContain("at least 90% visual similarity")
+    expect(prompt).toContain("no relevant rawcode/source-dom debt")
+    expect(prompt).toContain("Benchmark is mainline")
+    expect(prompt).toContain("visual_baseline_allowed")
+    expect(prompt).toContain("maintainable_replacement_required")
+    expect(prompt).toContain("Process monitoring is part of the benchmark evidence")
+    expect(prompt).toContain("which evidence acquisition tool ran")
+    expect(prompt).toContain("which source region was selected")
+    expect(prompt).toContain("off-track process defect")
+    expect(prompt).toContain("Do not solve benchmark failures by lowering thresholds")
     expect(prompt).not.toContain("Do not loop through render/evaluation attempts")
     expect(prompt).toContain("Do not change other agent prompts, communication paths, evaluator scoring, runtime source packages, or generated outputs")
     expect(prompt).not.toContain("overallScore >=80/100")
@@ -65,6 +80,21 @@ describe("frontend-design prompt assembly", () => {
     expect(parts[0]?.text).not.toContain("webpage_compile")
     expect(parts[0]?.text).not.toContain("webpage_analyze")
     expect(parts[0]?.text).not.toContain("[inlined as file part]")
+  })
+
+  test("webpage rawproject prompts make frontend_design materialize the source project itself", () => {
+    const prompt = FrontendDesignTestHooks.buildUserPrompt({
+      title: "World economy replica",
+      request: "Clone https://www.tradingview.com/markets/world-economy/ into a maintainable rawproject replacement.",
+      taskID: "tsk_web_clone",
+    })
+
+    expect(prompt).toContain("call `create_frontend_skeleton_project`")
+    expect(prompt).toContain(".opencorvus/runtime/tasks/tsk_web_clone/frontend-design/web-clone-source/")
+    expect(prompt).toContain(".opencorvus/runtime/tasks/tsk_web_clone/frontend-design/frontend-design-skeleton/")
+    expect(prompt).toContain("After the source project tool returns")
+    expect(prompt).not.toContain("The host already prepared the frontend-design high-fidelity editable source project before this model turn.")
+    expect(prompt).not.toContain("Do not call `create_frontend_skeleton_project` again")
   })
 
   test("terminal frontend template submit tool accepts bounded review notes when auto iteration is off", async () => {

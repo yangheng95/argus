@@ -3252,6 +3252,7 @@ function isSemanticMapSurfaceCandidate(node: DomNode): boolean {
   if (isCompositeSemanticCardContainer(node)) return false
   const svg = findDominantAssetSvg(node)
   if (!svg?.attribs?.viewBox) return false
+  if (dominantSvgBelongsToMixedCardSibling(node, svg)) return false
   const svgDistance = descendantElementDistance(node, svg)
   if (svgDistance === undefined || svgDistance > 10) return false
   const text = visibleText(node).toLowerCase()
@@ -3895,6 +3896,7 @@ function isSemanticSectionShellCandidate(node: DomNode): boolean {
   if (isSemanticDataTableCandidate(node) || isSemanticMetricRankingCardCandidate(node) || isSemanticEventCardListCandidate(node) || isSemanticIdeaCardCollectionCandidate(node) || isSemanticLinkGridCandidate(node)) return false
   const compositeCardContainer = isCompositeSemanticCardContainer(node)
   if (node.attribs?.["data-base-widget"] !== "true" && !compositeCardContainer) return false
+  if (hasUncoveredMixedCardSiblings(node)) return false
   const tabs = findSemanticSectionTabs(node)
   if (isSemanticMapSurfaceCandidate(node) && tabs.length === 0 && !hasSemanticCardSurfaceChild(node)) return false
   const children = findSemanticSectionChildCandidates(node)
@@ -3910,9 +3912,7 @@ function isSemanticSectionShellCandidate(node: DomNode): boolean {
 
 function isCompositeSemanticCardContainer(node: DomNode): boolean {
   if (node.type !== "tag") return false
-  const cardChildren = directElementChildren(node).filter((child) =>
-    child.attribs?.["data-source-role"] === "card" || hasClassMatching(child, /^card-/)
-  )
+  const cardChildren = directElementChildren(node).filter(isSemanticCardLikeElement)
   if (cardChildren.length < 2) return false
   return cardChildren.some((child) =>
     isSemanticMetricRankingCardCandidate(child) ||
@@ -3922,6 +3922,30 @@ function isCompositeSemanticCardContainer(node: DomNode): boolean {
     isSemanticMapSurfaceCandidate(child) ||
     isSemanticLinkGridCandidate(child) ||
     isSemanticNewsListCandidate(child, countRenderableElements(child))
+  )
+}
+
+function isSemanticCardLikeElement(node: DomNode): boolean {
+  return node.type === "tag" && (node.attribs?.["data-source-role"] === "card" || hasClassMatching(node, /^card-/))
+}
+
+function dominantSvgBelongsToMixedCardSibling(node: DomNode, svg: DomNode): boolean {
+  const chain = elementAncestorChain(node, svg)
+  const card = chain.find((ancestor) => ancestor !== node && isSemanticCardLikeElement(ancestor))
+  if (!card) return false
+  const parent = findParentElement(node, card)
+  if (!parent) return false
+  return directElementChildren(parent).filter(isSemanticCardLikeElement).length > 1
+}
+
+function hasUncoveredMixedCardSiblings(node: DomNode): boolean {
+  const containers = findDescendantElements(node, (child) =>
+    directElementChildren(child).filter(isSemanticCardLikeElement).length > 1
+  )
+  return containers.some((container) =>
+    directElementChildren(container)
+      .filter(isSemanticCardLikeElement)
+      .some((card) => !isSemanticSectionChildCandidate(card))
   )
 }
 

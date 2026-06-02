@@ -643,6 +643,40 @@ describe("tool.web_clone_generate_source_project", () => {
     })
   }, 30_000)
 
+  test("keeps mixed semantic section siblings when only part of the section can be replaced", async () => {
+    await using tmp = await tmpdir()
+    const mirrorDir = await writeMixedEconomicTrendsFixtureMirror(tmp.path)
+    const outputDir = path.join(tmp.path, "generated-mixed-economic-trends-react")
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const generateTool = await WebCloneGenerateSourceProjectTool.init()
+        await generateTool.execute({ mirrorDir, outputDir }, ctx)
+
+        const sourceDomPage = await Bun.file(path.join(outputDir, "src", "components", "SourceDomPage.tsx")).text()
+        const sourceDomDir = path.join(outputDir, "src", "components", "source-dom")
+        const sourceDomFiles = (await fs.readdir(sourceDomDir)).filter((file) => file.endsWith(".tsx")).sort()
+        const mixedRegion = await Bun.file(path.join(sourceDomDir, sourceDomFiles[0] ?? "")).text()
+        const semanticDir = path.join(outputDir, "src", "components", "semantic")
+        const semanticTexts = await Promise.all(
+          (await fs.readdir(semanticDir))
+            .filter((file) => file.endsWith(".tsx"))
+            .map((file) => Bun.file(path.join(semanticDir, file)).text()),
+        )
+        const generatedSource = [mixedRegion, ...semanticTexts].join("\n")
+
+        expect(sourceDomPage).toContain('from "./source-dom/EconomicTrendsRegion"')
+        expect(mixedRegion).toContain("InflationMap")
+        expect(mixedRegion).toContain("GDPGrowth")
+        expect(generatedSource).toContain("GDPGrowthYoY")
+        expect(generatedSource).toContain("US unemployment rate")
+        expect(generatedSource).toContain("4.3%")
+        expect(generatedSource).toContain("Forecast")
+      },
+    })
+  }, 30_000)
+
   test("turns metric ranking cards into semantic data-loop components", async () => {
     await using tmp = await tmpdir()
     const mirrorDir = await writeSemanticMetricRankingFixtureMirror(tmp.path)
@@ -1753,6 +1787,65 @@ async function writeSemanticMetricRankingFixtureMirror(root: string): Promise<st
   }, null, 2))
   for (const asset of ["asset_000449.svg.txt", "asset_000450.svg.txt", "asset_000451.svg.txt"]) {
     await Bun.write(path.join(mirrorDir, "assets", "images", asset), `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#2962ff"/></svg>`)
+  }
+  await Bun.write(path.join(mirrorDir, "assets", "manifest.json"), JSON.stringify({ version: 1, assets: [] }, null, 2))
+  return mirrorDir
+}
+
+async function writeMixedEconomicTrendsFixtureMirror(root: string): Promise<string> {
+  const mirrorDir = path.join(root, "mirror-mixed-economic-trends")
+  await Bun.write(path.join(mirrorDir, "reference.png"), minimalPngBytes())
+  const mapPaths = Array.from({ length: 20 }, (_, index) => {
+    const assetId = `asset_${String(index + 1).padStart(6, "0")}`
+    return `<path data-source-node-id="map-path-${index}" data-asset-d="../assets/svg/${assetId}.path.txt" id="country-${index}" class="positive-s" fill="currentColor"></path>`
+  }).join("")
+  const rows = ["India", "Indonesia", "Mainland China"].map((label, index) => `
+    <li class="item-LBIMiZWE">
+      <div class="container-lLGceaUg"><div class="container-zBPPLXWm">
+        <a href="https://example.com/${index}" class="container-Nt5iBa6X"><span class="title-IIKn4NmC">${label}</span></a>
+        <span class="container-ItI7saAL"><span class="value-ItI7saAL">${index === 0 ? "7.80%" : index === 1 ? "5.61%" : "5.00%"}</span></span>
+        <span class="container-ItI7saAL"><span class="value-ItI7saAL">${index + 1}.40 T</span><span class="unit-ItI7saAL">USD</span></span>
+      </div></div>
+    </li>
+  `).join("")
+  await Bun.write(path.join(mirrorDir, "source-skeleton", "index.html"), `
+    <main class="mixed-page">
+      <section data-source-node-id="economic-trends-region" data-base-widget="true" data-container-name="economy-market-summary" data-an-widget-id="economy-market-summary" class="container-Gvxnai7n">
+        <div data-source-role="header" class="header-Gvxnai7n"><div class="wrapper-BQZK4DnU"><span class="titleAndHintWrapper-BQZK4DnU"><div class="container-BQZK4DnU"><h2 class="title-BQZK4DnU">Economic trends</h2></div></span></div></div>
+        <div class="content-Gvxnai7n" data-qa-id="economy-market-summary-content">
+          <div class="container-KqgCoGM1">
+            <div class="card-_bHcdE9E">
+              <span class="title-KqgCoGM1">Inflation map</span>
+              <div class="map-KqgCoGM1"><span data-qa-id="core-map-content" class="map-PucT6CA9"><svg viewBox="0 0 745 372">${mapPaths}</svg></span></div>
+            </div>
+            <div class="card-_bHcdE9E">
+              <span class="title-KqgCoGM1">GDP growth, YoY</span>
+              <div data-source-role="header" class="header-LBIMiZWE"><span>Country</span><span>GDP Growth</span><span>Nominal GDP</span></div>
+              <ul class="list-LBIMiZWE">${rows}</ul>
+            </div>
+            <div class="card-_bHcdE9E">
+              <div class="header-Q4ifml3p"><a href="https://example.com/usur"><span class="title-uk1zko9U">US unemployment rate</span><span class="tickerBox-uk1zko9U">USUR</span></a></div>
+              <div class="wrapper-vE74cYTn"><div class="container-vE74cYTn">
+                <div class="wrapper-yXjDRT2e"><div class="label-yXjDRT2e">Actual</div><div class="value-yXjDRT2e">4.3%</div></div>
+                <div class="wrapper-yXjDRT2e"><div class="label-yXjDRT2e">Forecast</div><div class="value-yXjDRT2e">4.3%</div></div>
+              </div></div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  `)
+  await Bun.write(path.join(mirrorDir, "source-skeleton", "critical.css"), ".container-KqgCoGM1 { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; } .card-_bHcdE9E { border: 1px solid #eee; }")
+  await Bun.write(path.join(mirrorDir, "source-ir", "component-tree.json"), JSON.stringify({
+    components: [{ name: "EconomicTrends", kind: "section", tag: "section", textPreview: ["Inflation map", "GDP growth, YoY", "US unemployment rate"] }],
+  }, null, 2))
+  await Bun.write(path.join(mirrorDir, "source-ir", "content-model.json"), JSON.stringify({
+    cards: [{ title: "Inflation map" }, { title: "GDP growth, YoY" }, { title: "US unemployment rate" }],
+    stats: { totalTables: 0, totalLists: 1, totalCards: 3, totalRepeatedGroups: 0 },
+  }, null, 2))
+  for (let index = 0; index < 20; index += 1) {
+    const assetId = `asset_${String(index + 1).padStart(6, "0")}`
+    await Bun.write(path.join(mirrorDir, "assets", "svg", `${assetId}.path.txt`), `M${index} ${index}h2v2z`)
   }
   await Bun.write(path.join(mirrorDir, "assets", "manifest.json"), JSON.stringify({ version: 1, assets: [] }, null, 2))
   return mirrorDir
