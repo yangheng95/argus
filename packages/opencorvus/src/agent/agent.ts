@@ -506,6 +506,8 @@ export namespace Agent {
             "memory_get",
             "url_screenshot",
             "skill",
+            "create_frontend_skeleton_project",
+            "record_frontend_region_selection",
             "web_clone_source_audit",
             ...MIRROR_ANALYSIS_TOOL_IDS,
             "webpage_render",

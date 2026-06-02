@@ -21,6 +21,7 @@
  * model / session / prompt-composition / abort / stream-error handling.
  */
 import { tool, type ToolSet } from "ai"
+import z from "zod"
 import { runAgentSession } from "@/agent/runner"
 import { withFactCheckRegistration } from "@/prompt/fragments/fact-check-registration"
 import { createAgentContextTools } from "@/agent/context-tools"
@@ -149,9 +150,20 @@ export namespace FrontendDesignAgent {
       taskID: input.taskID,
       onToolEvent: (event) => recordFrontendProcessEvent(processTrace, event),
     })
+    const processTraceToolKit = createFrontendProcessTraceTools(processTrace)
     const outputToolKit = createFrontendTemplateOutputTools({ autoIteration })
     const submitFrontendTemplateTool = createFrontendSubmitTools(outputToolKit)
     const hostPreparedFrontendProject = undefined
+    recordFrontendStaticToolSurface(processTrace, [
+      ...Object.keys(contextTools),
+      ...Object.keys(mirrorAnalysisTools),
+      ...Object.keys(screenshotToolKit),
+      ...Object.keys(skeletonProjectToolKit),
+      ...Object.keys(processTraceToolKit),
+      ...Object.keys(implementationTools),
+      "read_attachment",
+      ...Object.keys(submitFrontendTemplateTool),
+    ])
     const projectID = (() => {
       try {
         return Instance.project.id
@@ -183,6 +195,7 @@ export namespace FrontendDesignAgent {
           ...mirrorAnalysisTools,
           ...screenshotToolKit,
           ...skeletonProjectToolKit,
+          ...processTraceToolKit,
           ...implementationTools,
           ...createReadAttachmentTool(projectID),
           ...submitFrontendTemplateTool,
@@ -423,7 +436,7 @@ function buildUserPrompt(input: {
     "In principle, downstream implementation must reuse existing project components/design-system primitives first and mature maintained libraries second; custom code is limited to simple page-specific glue or micro-adjust layout/spacing. Charts, maps, tables, calendars, popovers, dialogs, menus, forms, virtualized lists, drag/drop, editors, rich media, and complex layouts require reusable project or library options when available. " +
     "Your final report should not be a component catalog. Put known problems, evidence gaps, extraction-vs-rewrite risk, source organization, debug commands, reuse decisions, PRD delta boundaries, and agent handoff notes into `quality_project_contract`, `completeness_review`, and `open_questions`; leave `component_inventory` empty unless the provider requires a legacy compatibility summary. " +
     renderFinalDeliveryModeInstruction(Boolean(hostPreparedFrontendProject)) + " " +
-    "After the source project tool returns, record the project paths, replacement-plan sidecars, and warnings in `frontend_project`, then use your normal file-edit and command tools to replace source-dom regions inside the created project until the delivered frontend_design source is maintainable. At minimum, a maintainable rawproject turn must attempt the current `nextSourceDomReplacement` vertical slice or explicitly report why that exact region is blocked. Verification must include project build evidence, measured `webpage_evaluate` evidence when renderable, and zero-finding `web_clone_source_audit` evidence before claiming final maintainability. Do not alter evaluators, other agent prompts, communication paths, raw mirror/source packages, or generated evidence outputs to satisfy the report. " +
+    "After the source project tool returns, record the project paths, replacement-plan sidecars, and warnings in `frontend_project`, then read the current `nextSourceDomReplacement` row and call `record_frontend_region_selection` before editing that region. Use your normal file-edit and command tools to replace source-dom regions inside the created project until the delivered frontend_design source is maintainable. At minimum, a maintainable rawproject turn must attempt the current `nextSourceDomReplacement` vertical slice or explicitly report why that exact region is blocked. Verification must include project build evidence, measured `webpage_evaluate` evidence when renderable, and zero-finding `web_clone_source_audit` evidence before claiming final maintainability. Do not alter evaluators, other agent prompts, communication paths, raw mirror/source packages, or generated evidence outputs to satisfy the report. " +
     "The final `submit_frontend_template.frontend_project` field should name the created/refined source project root and entrypoints, mark role=implementation_target only when the project no longer depends on generated source-dom debt for the requested surface, otherwise mark role=source_baseline_input and explain the unfinished source debt. " +
     "Do not use todo or scratchpad tools for template review; write the review-pass findings directly into the final frontend template fields.",
   )
@@ -464,6 +477,16 @@ function recordFrontendProcessEvent(
   })
 }
 
+function recordFrontendStaticToolSurface(trace: FrontendDesignAgent.ProcessTrace, toolNames: string[]): void {
+  recordFrontendProcessEvent(trace, {
+    name: "frontend_design_static_tool_surface",
+    status: "passed",
+    details: {
+      tools: Array.from(new Set(toolNames)).sort(),
+    },
+  })
+}
+
 function appendFrontendProcessTrace(report: AgentReport, trace: FrontendDesignAgent.ProcessTrace): AgentReport {
   const lines = [
     report.detail,
@@ -480,6 +503,44 @@ function appendFrontendProcessTrace(report: AgentReport, trace: FrontendDesignAg
   return {
     summary: report.summary,
     detail: lines.join("\n"),
+  }
+}
+
+function createFrontendProcessTraceTools(trace: FrontendDesignAgent.ProcessTrace): ToolSet {
+  return {
+    record_frontend_region_selection: tool({
+      description:
+        "Record the frontend_design agent's selected rawproject source region before editing the created source project. " +
+        "This is process evidence only: it does not replace source edits, audits, builds, or visual checks.",
+      inputSchema: z.object({
+        regionComponentName: z.string().describe("The generated source-dom region component selected for replacement."),
+        regionFilePath: z.string().describe("The region file path from sourceDomReplacementPlan/sourceDomIterationState."),
+        replacementPlanFile: z.string().describe("Path to the sourceDomReplacementPlan.ts row used as evidence."),
+        iterationStateFile: z.string().describe("Path to sourceDomIterationState.ts used to identify the candidate."),
+        recommendedComponentName: z.string().optional().describe("Semantic component name the agent intends to create or update."),
+        replacementKind: z.string().optional().describe("Replacement kind from the sourceDomReplacementPlan row."),
+        reason: z.string().optional().describe("Brief evidence-grounded reason for selecting this region now."),
+      }),
+      execute: async (params) => {
+        recordFrontendProcessEvent(trace, {
+          name: "frontend_design_region_selection",
+          status: "passed",
+          details: params,
+        })
+        return {
+          title: "Frontend source region selection recorded",
+          output: [
+            "# Frontend source region selection recorded",
+            "",
+            `- Region: ${params.regionComponentName}`,
+            `- Region file: ${params.regionFilePath}`,
+            params.recommendedComponentName ? `- Replacement: ${params.recommendedComponentName}` : undefined,
+            params.replacementKind ? `- Kind: ${params.replacementKind}` : undefined,
+          ].filter(Boolean).join("\n"),
+          metadata: { event: "frontend_design_region_selection", ...params },
+        }
+      },
+    }),
   }
 }
 
@@ -504,11 +565,7 @@ async function createFrontendTool(info: Tool.Info, input: { taskID?: string; sig
           metadata: () => {},
           ask: async () => {},
         })
-        recordFrontendProcessEvent(trace, {
-          name: info.id,
-          status: "passed",
-          details: { title: result.title },
-        })
+        recordFrontendToolResultEvents(trace, info.id, args, result)
         return result
       } catch (error) {
         recordFrontendProcessEvent(trace, {
@@ -520,6 +577,102 @@ async function createFrontendTool(info: Tool.Info, input: { taskID?: string; sig
       }
     },
   })
+}
+
+function recordFrontendToolResultEvents(
+  trace: FrontendDesignAgent.ProcessTrace,
+  toolID: string,
+  args: unknown,
+  result: { title?: unknown; metadata?: unknown },
+): void {
+  const details = summarizeFrontendToolResult(toolID, args, result)
+  recordFrontendProcessEvent(trace, {
+    name: toolID,
+    status: "passed",
+    details,
+  })
+
+  if (isFrontendSourceMutationTool(toolID)) {
+    recordFrontendProcessEvent(trace, {
+      name: "frontend_design_source_edit",
+      status: "passed",
+      details,
+    })
+  }
+
+  if (toolID === "bash") {
+    const command = stringField(args, "command")
+    const normalized = normalizeFrontendBenchmarkCommand(command)
+    if (normalized) {
+      recordFrontendProcessEvent(trace, {
+        name: normalized,
+        status: "passed",
+        details,
+      })
+    }
+  }
+}
+
+function summarizeFrontendToolResult(
+  toolID: string,
+  args: unknown,
+  result: { title?: unknown; metadata?: unknown },
+): Record<string, unknown> {
+  const details: Record<string, unknown> = {}
+  if (typeof result.title === "string" && result.title.trim()) details.title = result.title
+  const filePaths = extractFrontendMutationFiles(toolID, args, result.metadata)
+  if (filePaths.length > 0) details.files = filePaths
+  const command = stringField(args, "command")
+  if (command) details.command = command
+  const workdir = stringField(args, "workdir")
+  if (workdir) details.workdir = workdir
+  const finalDeliveryMode = stringField(args, "finalDeliveryMode")
+  if (finalDeliveryMode) details.finalDeliveryMode = finalDeliveryMode
+  const metadata = asRecord(result.metadata)
+  const audit = asRecord(metadata.audit)
+  if (typeof audit.passed === "boolean") details.passed = audit.passed
+  if (Array.isArray(audit.findings)) details.findings = audit.findings.slice(0, 8)
+  return details
+}
+
+function isFrontendSourceMutationTool(toolID: string): boolean {
+  return toolID === "edit" || toolID === "write" || toolID === "apply_patch"
+}
+
+function normalizeFrontendBenchmarkCommand(command: string | undefined): string | undefined {
+  if (!command) return undefined
+  const normalized = command.replace(/\s+/g, " ").trim().toLowerCase()
+  if (/^(?:bun|bun\.exe|bun\.cmd) install(?:\s|$)/.test(normalized)) return "bun install"
+  if (/^(?:bun|bun\.exe|bun\.cmd) run build(?:\s|$)/.test(normalized)) return "bun run build"
+  return undefined
+}
+
+function extractFrontendMutationFiles(toolID: string, args: unknown, metadata: unknown): string[] {
+  const files = new Set<string>()
+  const directPath = stringField(args, "filePath")
+  if (directPath) files.add(directPath)
+  if (toolID === "apply_patch") {
+    const meta = asRecord(metadata)
+    const patchFiles = Array.isArray(meta.files) ? meta.files : []
+    for (const item of patchFiles) {
+      const record = asRecord(item)
+      const relativePath = typeof record.relativePath === "string" ? record.relativePath : undefined
+      const filePath = typeof record.filePath === "string" ? record.filePath : undefined
+      if (relativePath) files.add(relativePath)
+      else if (filePath) files.add(filePath)
+    }
+  }
+  return Array.from(files)
+}
+
+function stringField(value: unknown, key: string): string | undefined {
+  const record = asRecord(value)
+  const field = record[key]
+  return typeof field === "string" && field.trim() ? field : undefined
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {}
 }
 
 function createFrontendSubmitTools(outputToolKit: ReturnType<typeof createFrontendTemplateOutputTools>): ToolSet {
@@ -557,12 +710,15 @@ export const FrontendDesignTestHooks = {
   buildPromptParts,
   buildUserPrompt,
   appendFrontendProcessTrace,
+  createFrontendProcessTraceTools,
   createFrontendSubmitTools,
   createFrontendImplementationTools,
   createFrontendProcessTrace,
   createMirrorAnalysisTools,
   isTextOnlyNoVisualSource,
+  recordFrontendStaticToolSurface,
   recordFrontendProcessEvent,
+  recordFrontendToolResultEvents,
   readHostPreparedCompactEvidence,
   summarizeHostPreparedSourceAudit,
   summarizeHostPreparedSourceProject,
