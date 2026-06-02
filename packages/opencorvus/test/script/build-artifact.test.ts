@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import {
+  artifactBrowserMcpNodeExecutableName,
   artifactEntrypoints,
   artifactExternalModules,
   artifactPackageBaseName,
@@ -30,5 +31,11 @@ describe("build-artifact", () => {
 
   test("optional Playwright Electron module is externalized", () => {
     expect(artifactExternalModules()).toContain("electron")
+  })
+
+  test("browser MCP node runtime executable name is platform specific", () => {
+    expect(artifactBrowserMcpNodeExecutableName("win32")).toBe("node.exe")
+    expect(artifactBrowserMcpNodeExecutableName("linux")).toBe("node")
+    expect(artifactBrowserMcpNodeExecutableName("darwin")).toBe("node")
   })
 })

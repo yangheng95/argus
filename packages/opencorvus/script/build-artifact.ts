@@ -26,3 +26,7 @@ export function artifactExternalModules(): string[] {
 export function artifactSourcemap(): "none" {
   return "none"
 }
+
+export function artifactBrowserMcpNodeExecutableName(os = process.platform): string {
+  return os === "win32" ? "node.exe" : "node"
+}

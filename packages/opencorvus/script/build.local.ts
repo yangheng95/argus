@@ -15,6 +15,7 @@ process.chdir(dir)
 import { Script } from "@opencorvus-ai/script"
 import pkg from "../package.json"
 import {
+  artifactBrowserMcpNodeExecutableName,
   artifactEntrypoints,
   artifactExternalModules,
   artifactPackageBaseName,
@@ -226,6 +227,54 @@ async function buildWindowsSupervisorHelper() {
   return windowsSupervisorHelper
 }
 
+async function buildBrowserMcpNodeBundle(outdir: string) {
+  await fs.promises.mkdir(outdir, { recursive: true })
+  const result = await Bun.build({
+    entrypoints: ["./src/mcp/browser/stdio.ts"],
+    outdir,
+    target: "node",
+    external: artifactExternalModules(),
+  })
+  if (!result.success) {
+    const detail = result.logs.map((item) => item.message).join("; ")
+    throw new Error(`Failed to build Browser MCP node bundle: ${detail}`)
+  }
+  await fs.promises.rename(path.join(outdir, "stdio.js"), path.join(outdir, "stdio.mjs"))
+}
+
+function findExecutableOnPath(name: string) {
+  const paths = (process.env.PATH ?? "").split(path.delimiter).filter(Boolean)
+  const extensions =
+    process.platform === "win32" ? (process.env.PATHEXT ?? ".EXE;.CMD;.BAT").split(";").filter(Boolean) : [""]
+  for (const dir of paths) {
+    for (const ext of extensions) {
+      const candidate = path.join(dir, name.endsWith(ext.toLowerCase()) || name.endsWith(ext) ? name : `${name}${ext}`)
+      if (fs.existsSync(candidate)) return candidate
+    }
+  }
+}
+
+function hostMatchesTarget(item: Target) {
+  return item.os === process.platform && item.arch === process.arch && item.abi === undefined
+}
+
+async function copyBrowserMcpNodeRuntime(item: Target, outdir: string) {
+  const nodeName = artifactBrowserMcpNodeExecutableName(item.os)
+  const explicit = process.env.OPENCORVUS_BROWSER_MCP_NODE_BUILD_PATH?.trim()
+  const source = explicit || (hostMatchesTarget(item) ? findExecutableOnPath(nodeName) : undefined)
+  if (!source) {
+    throw new Error(
+      `Missing Browser MCP Node runtime for target ${runtimeName(item)}. ` +
+        `Build on the target platform or set OPENCORVUS_BROWSER_MCP_NODE_BUILD_PATH to a ${nodeName} executable.`,
+    )
+  }
+  const destination = path.join(outdir, nodeName)
+  await fs.promises.copyFile(source, destination)
+  if (item.os !== "win32") {
+    await fs.promises.chmod(destination, 0o755)
+  }
+}
+
 for (const item of targets) {
   const compileTarget = [
     "bun",
@@ -291,6 +340,9 @@ for (const item of targets) {
       OPENCORVUS_EMBEDDED_ENV: embeddedEnvDefine,
     },
   })
+  const browserMcpRuntimeDir = path.join(dir, "dist", name, "bin", "browser-mcp-node")
+  await buildBrowserMcpNodeBundle(browserMcpRuntimeDir)
+  await copyBrowserMcpNodeRuntime(item, browserMcpRuntimeDir)
 
   if (item.os === "win32") {
     const helper = await buildWindowsSupervisorHelper()

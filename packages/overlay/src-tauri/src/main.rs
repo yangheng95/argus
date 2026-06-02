@@ -27,7 +27,8 @@ use tauri::{
     AppHandle, Manager, Runtime, UserAttentionType,
 };
 use base64::{engine::general_purpose::STANDARD, Engine as _};
-use tauri_plugin_dialog::DialogExt;
+use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
+use tauri_plugin_notification::NotificationExt;
 use tauri_plugin_opener::OpenerExt;
 
 include!(concat!(env!("OUT_DIR"), "/server_defaults.rs"));
@@ -160,6 +161,7 @@ extern "C" {
 struct ServerState {
     child: Option<Child>,
     port: Option<u16>,
+    sidecar_log_path: Option<PathBuf>,
     /// Windows: Job Object that auto-kills all job members on drop.
     #[cfg(windows)]
     job: Option<job_object::JobObject>,
@@ -194,6 +196,8 @@ struct OverlayServerInfo {
     /// pid-less `server_info` constructor was deleted as dead code).
     #[serde(skip_serializing_if = "Option::is_none")]
     pid: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    sidecar_log_path: Option<String>,
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
@@ -511,16 +515,12 @@ fn candidate_server_paths<R: Runtime>(app: &AppHandle<R>) -> Vec<PathBuf> {
     result
 }
 
-fn embedded_server_file_name() -> String {
-    let suffix = format!("-{}", EMBEDDED_SERVER_STAMP);
-    if let Some((stem, ext)) = EMBEDDED_SERVER_NAME.rsplit_once('.') {
-        return format!("{stem}{suffix}.{ext}");
-    }
-    format!("{EMBEDDED_SERVER_NAME}{suffix}")
+fn embedded_server_payload_dir_name() -> String {
+    format!("sidecar-{}", EMBEDDED_SERVER_STAMP)
 }
 
 fn ensure_embedded_server_path<R: Runtime>(app: &AppHandle<R>) -> Result<Option<PathBuf>, String> {
-    if EMBEDDED_SERVER_BYTES.is_empty() {
+    if EMBEDDED_SERVER_FILES.is_empty() {
         return Ok(None);
     }
 
@@ -529,29 +529,36 @@ fn ensure_embedded_server_path<R: Runtime>(app: &AppHandle<R>) -> Result<Option<
         .app_local_data_dir()
         .unwrap_or_else(|_| std::env::temp_dir());
     root.push("embedded");
+    root.push(embedded_server_payload_dir_name());
     fs::create_dir_all(&root).map_err(|err| err.to_string())?;
 
-    let path = root.join(embedded_server_file_name());
-    let expected_len = EMBEDDED_SERVER_BYTES.len() as u64;
-    let up_to_date = fs::metadata(&path)
-        .map(|meta| meta.len() == expected_len)
-        .unwrap_or(false);
-    if up_to_date {
-        return Ok(Some(path));
+    for file in EMBEDDED_SERVER_FILES {
+        let path = root.join(file.path);
+        let expected_len = file.bytes.len() as u64;
+        let up_to_date = fs::metadata(&path)
+            .map(|meta| meta.len() == expected_len)
+            .unwrap_or(false);
+        if up_to_date {
+            continue;
+        }
+
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).map_err(|err| err.to_string())?;
+        }
+        let tmp = path.with_extension(format!("tmp-{}", std::process::id()));
+        fs::write(&tmp, file.bytes).map_err(|err| err.to_string())?;
+        #[cfg(unix)]
+        if file.executable {
+            let perms = fs::Permissions::from_mode(0o755);
+            fs::set_permissions(&tmp, perms).map_err(|err| err.to_string())?;
+        }
+        if path.exists() {
+            let _ = fs::remove_file(&path);
+        }
+        fs::rename(&tmp, &path).map_err(|err| err.to_string())?;
     }
 
-    let tmp = path.with_extension(format!("tmp-{}", std::process::id()));
-    fs::write(&tmp, EMBEDDED_SERVER_BYTES).map_err(|err| err.to_string())?;
-    #[cfg(unix)]
-    {
-        let perms = fs::Permissions::from_mode(0o755);
-        fs::set_permissions(&tmp, perms).map_err(|err| err.to_string())?;
-    }
-    if path.exists() {
-        let _ = fs::remove_file(&path);
-    }
-    fs::rename(&tmp, &path).map_err(|err| err.to_string())?;
-    Ok(Some(path))
+    Ok(Some(root.join(EMBEDDED_SERVER_NAME)))
 }
 
 fn server_path<R: Runtime>(app: &AppHandle<R>) -> Option<PathBuf> {
@@ -560,11 +567,12 @@ fn server_path<R: Runtime>(app: &AppHandle<R>) -> Option<PathBuf> {
         .find(|path| path.exists())
 }
 
-fn server_info_with_pid(port: u16, pid: u32) -> OverlayServerInfo {
+fn server_info_with_pid_and_log(port: u16, pid: u32, sidecar_log_path: Option<PathBuf>) -> OverlayServerInfo {
     OverlayServerInfo {
         port,
         url: format!("http://{LOCAL_SERVER_HOST}:{port}"),
         pid: Some(pid),
+        sidecar_log_path: sidecar_log_path.map(|path| path.to_string_lossy().to_string()),
     }
 }
 
@@ -640,6 +648,7 @@ fn stop_server<R: Runtime>(app: &AppHandle<R>) {
     }
 
     lock.port = None;
+    lock.sidecar_log_path = None;
 }
 
 fn server_shutdown_authorization() -> Option<String> {
@@ -750,15 +759,78 @@ fn opencorvus_log_dir() -> PathBuf {
     std::env::temp_dir().join("opencorvus").join("log")
 }
 
+fn append_overlay_startup_diagnostic(message: &str) -> Option<PathBuf> {
+    let dir = opencorvus_log_dir();
+    if let Err(err) = fs::create_dir_all(&dir) {
+        eprintln!("overlay: cannot create startup diagnostic log dir {:?}: {}", dir, err);
+        return None;
+    }
+    let path = dir.join("overlay-startup.log");
+    let secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let entry = format!("[{secs}] {message}\n\n");
+    match fs::OpenOptions::new().create(true).append(true).open(&path) {
+        Ok(mut file) => {
+            if let Err(err) = file.write_all(entry.as_bytes()) {
+                eprintln!("overlay: cannot write startup diagnostic log {:?}: {}", path, err);
+                return None;
+            }
+            Some(path)
+        }
+        Err(err) => {
+            eprintln!("overlay: cannot open startup diagnostic log {:?}: {}", path, err);
+            None
+        }
+    }
+}
+
+fn startup_failure_diagnostic_message(error: &str, log_path: Option<&PathBuf>) -> String {
+    let mut parts = vec![
+        "OpenCorvus backend failed to start.".to_string(),
+        error.to_string(),
+    ];
+    if let Some(path) = log_path {
+        parts.push(format!("overlay diagnostic log: {}", path.to_string_lossy()));
+    }
+    parts.join("\n\n")
+}
+
+fn surface_initial_server_failure<R: Runtime>(app: &AppHandle<R>, error: &str) {
+    let log_path = append_overlay_startup_diagnostic(error);
+    let details = startup_failure_diagnostic_message(error, log_path.as_ref());
+    eprintln!("overlay: initial managed server start failed: {details}");
+
+    if let Err(err) = app
+        .notification()
+        .builder()
+        .title("OpenCorvus backend failed to start")
+        .body("Overlay could not start the managed backend. Open the error dialog for the diagnostic log path.")
+        .large_body(details.clone())
+        .show()
+    {
+        let retry = format!("native notification failed: {err}\n\n{details}");
+        let _ = append_overlay_startup_diagnostic(&retry);
+        eprintln!("overlay: native startup failure notification failed: {err}");
+    }
+
+    app.dialog()
+        .message(details)
+        .title("OpenCorvus backend failed to start")
+        .kind(MessageDialogKind::Error)
+        .show(|_| {});
+}
+
 /// Build (stdout, stderr) Stdio targets for the spawned sidecar. Both streams
 /// are written to a single per-launch file so chronological order is preserved.
 /// On any failure we fall back to Stdio::null() — capturing logs is best-effort
 /// diagnostic plumbing, not a hard requirement for the sidecar to run.
-fn sidecar_stdio_targets() -> (Stdio, Stdio) {
+fn sidecar_stdio_targets() -> (Stdio, Stdio, Option<PathBuf>) {
     let dir = opencorvus_log_dir();
     if let Err(err) = fs::create_dir_all(&dir) {
         eprintln!("overlay: cannot create sidecar log dir {:?}: {}", dir, err);
-        return (Stdio::null(), Stdio::null());
+        return (Stdio::null(), Stdio::null(), None);
     }
     let pid = std::process::id();
     let secs = std::time::SystemTime::now()
@@ -770,17 +842,17 @@ fn sidecar_stdio_targets() -> (Stdio, Stdio) {
         Ok(f) => f,
         Err(err) => {
             eprintln!("overlay: cannot open sidecar log {:?}: {}", path, err);
-            return (Stdio::null(), Stdio::null());
+            return (Stdio::null(), Stdio::null(), None);
         }
     };
     let dup = match file.try_clone() {
         Ok(f) => f,
         Err(err) => {
             eprintln!("overlay: cannot clone sidecar log handle: {}", err);
-            return (Stdio::null(), Stdio::null());
+            return (Stdio::null(), Stdio::null(), None);
         }
     };
-    (Stdio::from(file), Stdio::from(dup))
+    (Stdio::from(file), Stdio::from(dup), Some(path))
 }
 
 fn start_server<R: Runtime>(app: &AppHandle<R>) -> Result<OverlayServerInfo, String> {
@@ -797,7 +869,7 @@ fn start_server<R: Runtime>(app: &AppHandle<R>) -> Result<OverlayServerInfo, Str
     // VM-only failures impossible to diagnose. The Tauri-side stderr is
     // already eaten by the windows_subsystem = "windows" attribute, so the
     // log file is the only signal.
-    let (stdout_target, stderr_target) = sidecar_stdio_targets();
+    let (stdout_target, stderr_target, sidecar_log_path) = sidecar_stdio_targets();
 
     // W2-V35: ensure the spawned sidecar inherits a writable, predictable
     // cwd. Without this, macOS .app launched from Finder/Dock spawns the
@@ -812,7 +884,7 @@ fn start_server<R: Runtime>(app: &AppHandle<R>) -> Result<OverlayServerInfo, Str
             sidecar_cwd, err
         );
     }
-    let mut cmd = Command::new(path);
+    let mut cmd = Command::new(&path);
     cmd.current_dir(&sidecar_cwd)
         .arg("serve")
         .arg("--hostname")
@@ -843,7 +915,17 @@ fn start_server<R: Runtime>(app: &AppHandle<R>) -> Result<OverlayServerInfo, Str
         cmd.process_group(0);
     }
 
-    let child = cmd.spawn().map_err(|err| err.to_string())?;
+    let child = cmd.spawn().map_err(|err| {
+        let log = sidecar_log_path
+            .as_ref()
+            .map(|path| path.to_string_lossy().to_string())
+            .unwrap_or_else(|| "unavailable".to_string());
+        format!(
+            "failed to spawn bundled opencorvus server: {err}\nserver binary: {}\nserver cwd: {}\nserver port: {port}\nsidecar log: {log}",
+            path.to_string_lossy(),
+            sidecar_cwd.to_string_lossy(),
+        )
+    })?;
 
     // Windows: assign the child to a kill-on-close Job Object so the entire
     // process tree is terminated automatically when the overlay exits.
@@ -862,11 +944,12 @@ fn start_server<R: Runtime>(app: &AppHandle<R>) -> Result<OverlayServerInfo, Str
     let pgid = child.id();
 
     let pid = child.id();
-    let info = server_info_with_pid(port, pid);
+    let info = server_info_with_pid_and_log(port, pid, sidecar_log_path.clone());
     let state = app.state::<Server>();
     let mut lock = state.0.lock().unwrap();
     lock.child = Some(child);
     lock.port = Some(port);
+    lock.sidecar_log_path = sidecar_log_path;
     #[cfg(windows)]
     { lock.job = job; }
     #[cfg(unix)]
@@ -887,17 +970,19 @@ fn ensure_server<R: Runtime>(app: &AppHandle<R>) -> Result<OverlayServerInfo, St
         // the immutable read inside the `Ok(None)` arm overlaps the mutable
         // borrow held by `child` and the borrow checker rejects (E0502).
         let port_snapshot = lock.port;
+        let sidecar_log_path = lock.sidecar_log_path.clone();
         if let Some(child) = lock.child.as_mut() {
             match child.try_wait() {
                 Ok(None) => {
                     if let Some(port) = port_snapshot {
                         let pid = child.id();
-                        return Ok(server_info_with_pid(port, pid));
+                        return Ok(server_info_with_pid_and_log(port, pid, sidecar_log_path));
                     }
                 }
                 Ok(Some(_)) | Err(_) => {
                     lock.child = None;
                     lock.port = None;
+                    lock.sidecar_log_path = None;
                 }
             }
         }
@@ -1220,7 +1305,9 @@ fn main() {
                 cvar: Condvar::new(),
             });
             let handle = app.handle().clone();
-            restart_server(&handle)?;
+            if let Err(err) = restart_server(&handle) {
+                surface_initial_server_failure(&handle, &err);
+            }
 
             // Set window icon (needed for taskbar/alt-tab when decorations=false).
             // bundle.icon only applies to the packaged exe, not cargo run dev builds.
@@ -1559,6 +1646,38 @@ mod tests {
         assert_eq!(badge_count_value(0), None);
         assert_eq!(badge_count_value(-1), None);
         assert_eq!(badge_count_value(42_i64), Some(42_i64));
+    }
+
+    #[test]
+    fn server_info_preserves_sidecar_log_path() {
+        let path = PathBuf::from("C:/opencorvus/log/sidecar-test.log");
+        let info = server_info_with_pid_and_log(7878, 123, Some(path.clone()));
+
+        assert_eq!(info.port, 7878);
+        assert_eq!(info.pid, Some(123));
+        assert_eq!(info.sidecar_log_path, Some(path.to_string_lossy().to_string()));
+    }
+
+    #[test]
+    fn embedded_payload_contains_server_file_when_present() {
+        if EMBEDDED_SERVER_FILES.is_empty() {
+            return;
+        }
+        assert!(
+            EMBEDDED_SERVER_FILES.iter().any(|file| file.path == EMBEDDED_SERVER_NAME),
+            "embedded sidecar payload must include {}",
+            EMBEDDED_SERVER_NAME
+        );
+    }
+
+    #[test]
+    fn startup_failure_diagnostic_includes_error_and_log_path() {
+        let path = PathBuf::from("C:/opencorvus/log/overlay-startup.log");
+        let message = startup_failure_diagnostic_message("spawn failed", Some(&path));
+
+        assert!(message.contains("OpenCorvus backend failed to start."));
+        assert!(message.contains("spawn failed"));
+        assert!(message.contains("overlay-startup.log"));
     }
 
     #[test]
