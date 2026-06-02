@@ -155,6 +155,129 @@ describe("provider request-body contract", () => {
     })
   })
 
+  test("Hexin Claude drops text-only assistant tail after tool results for Bedrock Anthropic", async () => {
+    const hexinClaude = model({
+      id: "hexin/claude-sonnet-4-6-v2",
+      providerID: "hexin",
+      api: {
+        id: "claude-sonnet-4-6-v2",
+        url: "https://arsenal-openai.10jqka.com.cn:8443/ai-gateway/v1",
+        npm: "@ai-sdk/openai-compatible",
+      },
+    })
+
+    const messages = await ProviderTransform.message(
+      [
+        { role: "user", content: "decompose this task" },
+        {
+          role: "assistant",
+          content: [
+            {
+              type: "tool-call",
+              toolCallId: "toolu.bdrk.invalid",
+              toolName: "list_directory",
+              input: { path: "." },
+            },
+          ],
+        },
+        {
+          role: "tool",
+          content: [
+            {
+              type: "tool-result",
+              toolCallId: "toolu.bdrk.invalid",
+              toolName: "list_directory",
+              output: { type: "text", value: "[dir] src" },
+            },
+          ],
+        },
+        {
+          role: "assistant",
+          content: [{ type: "text", text: "I'll inspect the source tree next." }],
+        },
+      ] as any[],
+      hexinClaude,
+      {},
+    ) as any[]
+
+    expect(messages.map((message) => message.role)).toEqual(["user", "assistant", "tool"])
+    expect(messages[1].content[0].toolCallId).toBe("toolu_bdrk_invalid")
+    expect(messages[2].content[0].toolCallId).toBe("toolu_bdrk_invalid")
+  })
+
+  test("Claude keeps non-tail assistant history before a later user turn", async () => {
+    const claude = model({
+      id: "anthropic/claude-sonnet-4",
+      providerID: "anthropic",
+      api: {
+        id: "claude-sonnet-4",
+        url: "https://api.anthropic.com/v1",
+        npm: "@ai-sdk/anthropic",
+      },
+    })
+
+    const messages = await ProviderTransform.message(
+      [
+        { role: "user", content: "first" },
+        { role: "assistant", content: [{ type: "text", text: "prior answer" }] },
+        { role: "user", content: "continue" },
+      ] as any[],
+      claude,
+      {},
+    ) as any[]
+
+    expect(messages.map((message) => message.role)).toEqual(["user", "assistant", "user"])
+    expect(messages[1].content[0].text).toBe("prior answer")
+  })
+
+  test("non-Claude OpenAI-compatible providers keep assistant tail after tool results", async () => {
+    const glm = model({
+      id: "hexin/glm-5.1",
+      providerID: "hexin",
+      api: {
+        id: "glm-5.1",
+        url: "https://arsenal-openai.10jqka.com.cn:8443/ai-gateway/v1",
+        npm: "@ai-sdk/openai-compatible",
+      },
+    })
+
+    const messages = await ProviderTransform.message(
+      [
+        { role: "user", content: "decompose this task" },
+        {
+          role: "assistant",
+          content: [
+            {
+              type: "tool-call",
+              toolCallId: "call_1",
+              toolName: "list_directory",
+              input: { path: "." },
+            },
+          ],
+        },
+        {
+          role: "tool",
+          content: [
+            {
+              type: "tool-result",
+              toolCallId: "call_1",
+              toolName: "list_directory",
+              output: { type: "text", value: "[dir] src" },
+            },
+          ],
+        },
+        {
+          role: "assistant",
+          content: [{ type: "text", text: "I'll inspect the source tree next." }],
+        },
+      ] as any[],
+      glm,
+      {},
+    ) as any[]
+
+    expect(messages.map((message) => message.role)).toEqual(["user", "assistant", "tool", "assistant"])
+  })
+
   test("dotted OpenAI-compatible provider IDs use the SDK-readable providerOptions namespace", () => {
     const custom = model({
       id: "wafer/deepseek-r1",
