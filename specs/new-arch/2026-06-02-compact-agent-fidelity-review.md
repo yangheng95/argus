@@ -44,3 +44,24 @@ Relevant decisions:
 - Add a prompt test proving prior structured handoff JSON is preserved in the merge prompt and rendered Markdown is not used as the source.
 - Add a transcript truncation test proving head/tail evidence survives with the larger bounded budget.
 - Add schema/renderer/minimum-evidence assertions for `workingContext` and `chronology`.
+
+## Independent Review Follow-Up
+
+Independent review found two P1 gaps in the first patch:
+
+- `previousHandoff` was only prompt context. It was not part of the validation contract, so repeated compaction could legally drop prior `acceptanceCriteria`, `workingContext`, or `chronology`.
+- Assistant-step-only compacted history could pass with empty `workingContext` and `chronology` because minimum evidence only required those fields when compacted history contained user text.
+
+Follow-up implementation:
+
+- `EvidenceRequirements.previousHandoff` now carries exact prior acceptance criteria, working context, and chronology events that must be retained.
+- `renderRequiredEvidence()` emits a `<previous-handoff-required-retention>` block so the compaction model sees the exact retention contract.
+- `validateMinimumEvidence()` rejects omission of those previous handoff facts.
+- `selectedHeadEvidenceRequirements()` now sets `richContext` for assistant text, tools, patch parts, snapshots, and files, not only user text.
+- Minimum evidence now requires non-empty `workingContext` and `chronology` whenever `richContext` is true.
+
+Additional tests:
+
+- Previous handoff sentinel facts must survive follow-up validation.
+- Assistant-only selected head with real assistant content rejects empty `workingContext` and `chronology`.
+- Runtime context carries previous handoff retention requirements into the prompt.

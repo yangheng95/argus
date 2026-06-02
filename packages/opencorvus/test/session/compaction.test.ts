@@ -178,6 +178,63 @@ describe("CompactionHandoff", () => {
     expect(result.success).toBe(true)
   })
 
+  test("requires working context and chronology for assistant-only compacted history", () => {
+    const assistantOnlyHead: Message.WithParts[] = [
+      {
+        info: {
+          id: "m-assistant-only",
+          sessionID: "session",
+          role: "assistant",
+          time: { created: 0 },
+          parentID: "m-user",
+          modelID: "test-model",
+          providerID: "test",
+          agent: "build",
+          path: { cwd: "/", root: "/" },
+          cost: 0,
+          tokens: {
+            input: 0,
+            output: 0,
+            reasoning: 0,
+            cache: { read: 0, write: 0 },
+          },
+        } as Message.Assistant,
+        parts: [
+          {
+            id: "p-assistant-text",
+            sessionID: "session",
+            messageID: "m-assistant-only",
+            type: "text",
+            text: "Implemented the parser but still need to run regression tests.",
+          },
+        ],
+      },
+    ]
+    const requirements = SessionCompaction.TestHooks.selectedHeadEvidenceRequirements({
+      messages: assistantOnlyHead,
+      instructionPaths: ["/repo/AGENTS.md"],
+      sourceUserMessageID: "m-user",
+      todos: handoffFixture().todos,
+    })
+    const handoff = {
+      ...handoffFixture(),
+      userMessages: [],
+      workingContext: [],
+      chronology: [],
+    } satisfies CompactionHandoff.Info
+
+    expect(requirements.userMessages).toBe(false)
+    expect(requirements.richContext).toBe(true)
+    const result = CompactionHandoff.validateMinimumEvidence(handoff, requirements)
+
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error).toContain("workingContext")
+      expect(result.error).toContain("chronology")
+      expect(result.error).not.toContain("userMessages")
+    }
+  })
+
   test("rejects handoff todos that do not exactly match runtime todo order and fields", () => {
     const handoff = {
       ...handoffFixture(),
@@ -271,6 +328,82 @@ describe("CompactionHandoff", () => {
       expect(result.error).toContain("files")
       expect(result.error).toContain("errorsAndBlockers")
     }
+  })
+
+  test("rejects follow-up handoff that drops previous structured handoff facts", () => {
+    const previous = handoffFixture()
+    const handoff = {
+      ...handoffFixture(),
+      acceptanceCriteria: ["New compacted-history acceptance only"],
+      workingContext: ["New compacted-history working context only"],
+      chronology: [
+        {
+          event: "New compacted-history event only",
+          evidence: "new evidence",
+        },
+      ],
+    } satisfies CompactionHandoff.Info
+
+    const result = CompactionHandoff.validateMinimumEvidence(handoff, {
+      sourceUserMessageID: "m-user",
+      instructionPaths: ["/repo/AGENTS.md"],
+      patchFiles: [],
+      errorNames: [],
+      userMessages: false,
+      richContext: true,
+      fileEvidence: false,
+      errorsAndBlockers: false,
+      acceptanceCriteria: true,
+      todos: handoff.todos,
+      previousHandoff: {
+        acceptanceCriteria: previous.acceptanceCriteria,
+        workingContext: previous.workingContext,
+        chronology: previous.chronology.map((item) => item.event),
+      },
+    })
+
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error).toContain("previousHandoff.acceptanceCriteria")
+      expect(result.error).toContain("previousHandoff.workingContext")
+      expect(result.error).toContain("previousHandoff.chronology")
+    }
+  })
+
+  test("accepts follow-up handoff that retains previous structured handoff facts", () => {
+    const previous = handoffFixture()
+    const handoff = {
+      ...handoffFixture(),
+      acceptanceCriteria: [...previous.acceptanceCriteria, "New compacted-history acceptance"],
+      workingContext: [...previous.workingContext, "New compacted-history working context"],
+      chronology: [
+        ...previous.chronology,
+        {
+          event: "New compacted-history event",
+          evidence: "new evidence",
+        },
+      ],
+    } satisfies CompactionHandoff.Info
+
+    const result = CompactionHandoff.validateMinimumEvidence(handoff, {
+      sourceUserMessageID: "m-user",
+      instructionPaths: ["/repo/AGENTS.md"],
+      patchFiles: [],
+      errorNames: [],
+      userMessages: false,
+      richContext: true,
+      fileEvidence: false,
+      errorsAndBlockers: false,
+      acceptanceCriteria: true,
+      todos: handoff.todos,
+      previousHandoff: {
+        acceptanceCriteria: previous.acceptanceCriteria,
+        workingContext: previous.workingContext,
+        chronology: previous.chronology.map((item) => item.event),
+      },
+    })
+
+    expect(result.success).toBe(true)
   })
 
   test("host prompt always includes the structured handoff schema", () => {
@@ -406,6 +539,39 @@ describe("CompactionHandoff", () => {
         expect(runtime.text).toContain("Current todos. Copy this JSON array exactly")
         expect(runtime.text).toContain('"content": "Keep exact todo text"')
         expect(runtime.evidenceRequirements.todos).toEqual(todos)
+      },
+    })
+  })
+
+  test("runtime context carries previous structured handoff retention requirements", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ kind: "assistant", title: "previous handoff retention" })
+        const previous = handoffFixture()
+        const user = {
+          id: "m-user",
+          sessionID: session.id,
+          role: "user",
+          time: { created: 0 },
+          agent: "build",
+          model: { providerID: "test", modelID: "test-model" },
+        } as Message.User
+
+        const runtime = await SessionCompaction.TestHooks.runtimeContext({
+          sessionID: session.id,
+          userMessage: user,
+          selectedHead: [],
+          previousHandoff: previous,
+        })
+
+        expect(runtime.evidenceRequirements.previousHandoff?.acceptanceCriteria).toEqual(previous.acceptanceCriteria)
+        expect(runtime.evidenceRequirements.previousHandoff?.workingContext).toEqual(previous.workingContext)
+        expect(runtime.evidenceRequirements.previousHandoff?.chronology).toEqual(
+          previous.chronology.map((item) => item.event),
+        )
+        expect(runtime.text).toContain("<previous-handoff-required-retention>")
       },
     })
   })

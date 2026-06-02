@@ -256,9 +256,11 @@ export namespace SessionCompaction {
     instructionPaths: string[]
     sourceUserMessageID: string
     todos?: Todo.Info[]
+    previousHandoff?: CompactionHandoff.Info
     summarizePatchEvidence?: typeof Snapshot.patchEvidenceSummary
   }): CompactionHandoff.EvidenceRequirements {
     let userMessages = false
+    let richContext = input.previousHandoff !== undefined
     const patchFiles = new Set<string>()
     const errorNames = new Set<string>()
     const summarizePatchEvidence = input.summarizePatchEvidence ?? Snapshot.patchEvidenceSummary
@@ -268,6 +270,15 @@ export namespace SessionCompaction {
       }
       if (msg.info.role === "assistant" && msg.info.error) errorNames.add(msg.info.error.name)
       for (const part of msg.parts) {
+        if (
+          (part.type === "text" && part.text.trim().length > 0) ||
+          part.type === "tool" ||
+          part.type === "patch" ||
+          part.type === "snapshot" ||
+          part.type === "file"
+        ) {
+          richContext = true
+        }
         if (part.type === "patch") {
           const summary = summarizePatchEvidence(part)
           for (const file of summary.filesPreviewHead) patchFiles.add(file)
@@ -283,9 +294,17 @@ export namespace SessionCompaction {
       errorNames: [...errorNames],
       todos: input.todos ?? [],
       userMessages,
+      richContext,
       fileEvidence: patchFiles.size > 0,
       errorsAndBlockers: errorNames.size > 0,
-      acceptanceCriteria: userMessages,
+      acceptanceCriteria: userMessages || (input.previousHandoff?.acceptanceCriteria.length ?? 0) > 0,
+      previousHandoff: input.previousHandoff
+        ? {
+            acceptanceCriteria: input.previousHandoff.acceptanceCriteria,
+            workingContext: input.previousHandoff.workingContext,
+            chronology: input.previousHandoff.chronology.map((item) => item.event),
+          }
+        : undefined,
     }
   }
 
@@ -325,6 +344,7 @@ export namespace SessionCompaction {
     sessionID: string
     userMessage: Message.User
     selectedHead: Message.WithParts[]
+    previousHandoff?: CompactionHandoff.Info
     focus?: string
   }) {
     const instructionPaths = Array.from(await InstructionPrompt.systemPaths())
@@ -338,6 +358,7 @@ export namespace SessionCompaction {
       instructionPaths,
       sourceUserMessageID: input.userMessage.id,
       todos,
+      previousHandoff: input.previousHandoff,
     })
     const requiredEvidence = CompactionHandoff.renderRequiredEvidence(evidenceRequirements)
     const text = [
@@ -682,6 +703,7 @@ export namespace SessionCompaction {
       sessionID: input.sessionID,
       userMessage,
       selectedHead: selected.head,
+      previousHandoff: prior.at(-1)?.handoff,
       focus: input.focus ?? compactionPart?.focus,
     })
     const promptText = buildPrompt({

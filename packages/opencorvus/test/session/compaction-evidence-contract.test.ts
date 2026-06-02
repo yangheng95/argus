@@ -224,6 +224,39 @@ describe("compaction evidence contract", () => {
     expect(prompt).not.toContain("<required-error-evidence>")
   })
 
+  test("renders previous handoff retention requirements into the compaction prompt", () => {
+    const requirements: CompactionHandoff.EvidenceRequirements = {
+      sourceUserMessageID: "msg-source",
+      instructionPaths: ["/repo/AGENTS.md"],
+      patchFiles: [],
+      errorNames: [],
+      userMessages: false,
+      richContext: true,
+      fileEvidence: false,
+      errorsAndBlockers: false,
+      acceptanceCriteria: true,
+      todos: [],
+      previousHandoff: {
+        acceptanceCriteria: ["Prior acceptance sentinel must survive"],
+        workingContext: ["Prior working context sentinel must survive"],
+        chronology: ["Prior chronology sentinel must survive"],
+      },
+    }
+
+    const runtime = CompactionHandoff.renderRequiredEvidence(requirements)
+    const prompt = SessionCompaction.buildPrompt({
+      previousSummary: undefined,
+      runtime,
+      context: [],
+    })
+
+    expect(prompt).toContain("<previous-handoff-required-retention>")
+    expect(prompt).toContain("<acceptanceCriteria>\nPrior acceptance sentinel must survive\n</acceptanceCriteria>")
+    expect(prompt).toContain("<workingContext>\nPrior working context sentinel must survive\n</workingContext>")
+    expect(prompt).toContain("<chronology>\nPrior chronology sentinel must survive\n</chronology>")
+    expect(prompt).toContain("retain every listed value verbatim")
+  })
+
   test("normalizes absolute patch evidence to worktree-relative paths before prompt and validation use it", async () => {
     await using tmp = await tmpdir()
     await Instance.provide({

@@ -128,10 +128,16 @@ export namespace CompactionHandoff {
     patchFiles: string[]
     errorNames: string[]
     userMessages: boolean
+    richContext?: boolean
     fileEvidence: boolean
     errorsAndBlockers: boolean
     acceptanceCriteria: boolean
     todos: Todo.Info[]
+    previousHandoff?: {
+      acceptanceCriteria: string[]
+      workingContext: string[]
+      chronology: string[]
+    }
   }
 
   export const MODEL_OUTPUT_INSTRUCTIONS = [
@@ -149,9 +155,29 @@ export namespace CompactionHandoff {
     "When current todos are supplied, copy the todo array exactly into todos with the same item order, content, status, and priority.",
     "Fill workingContext with the compact active working set: concrete requirements, constraints, file relationships, ids, paths, and partial conclusions the next agent must keep in mind.",
     "Fill chronology with ordered progress events from the compacted history, including what changed, what was verified, and what remains unresolved.",
+    "When <previous-handoff-required-retention> is supplied, retain every listed value verbatim in the same handoff field while merging new facts.",
   ].join("\n")
 
-  export function renderRequiredEvidence(requirements: Pick<EvidenceRequirements, "patchFiles" | "errorNames">) {
+  export function renderRequiredEvidence(
+    requirements: Pick<EvidenceRequirements, "patchFiles" | "errorNames" | "previousHandoff">,
+  ) {
+    const prior = requirements.previousHandoff
+    const priorBlock = prior
+      ? [
+          "",
+          "<previous-handoff-required-retention>",
+          "<acceptanceCriteria>",
+          ...prior.acceptanceCriteria,
+          "</acceptanceCriteria>",
+          "<workingContext>",
+          ...prior.workingContext,
+          "</workingContext>",
+          "<chronology>",
+          ...prior.chronology,
+          "</chronology>",
+          "</previous-handoff-required-retention>",
+        ]
+      : []
     return [
       "<required-file-evidence>",
       ...requirements.patchFiles,
@@ -160,6 +186,7 @@ export namespace CompactionHandoff {
       "<runtime-error-context>",
       ...requirements.errorNames,
       "</runtime-error-context>",
+      ...priorBlock,
     ].join("\n")
   }
 
@@ -236,11 +263,31 @@ export namespace CompactionHandoff {
     if (requirements.acceptanceCriteria && handoff.acceptanceCriteria.length === 0) {
       missing.push("acceptanceCriteria")
     }
-    if (requirements.userMessages && handoff.workingContext.length === 0) {
+    const requiresRichContext = requirements.richContext ?? requirements.userMessages
+    if (requiresRichContext && handoff.workingContext.length === 0) {
       missing.push("workingContext")
     }
-    if (requirements.userMessages && handoff.chronology.length === 0) {
+    if (requiresRichContext && handoff.chronology.length === 0) {
       missing.push("chronology")
+    }
+    if (requirements.previousHandoff) {
+      const missingAcceptance = requirements.previousHandoff.acceptanceCriteria.filter(
+        (item) => !handoff.acceptanceCriteria.includes(item),
+      )
+      if (missingAcceptance.length > 0) {
+        missing.push(`previousHandoff.acceptanceCriteria (${missingAcceptance.length} omitted)`)
+      }
+      const missingWorkingContext = requirements.previousHandoff.workingContext.filter(
+        (item) => !handoff.workingContext.includes(item),
+      )
+      if (missingWorkingContext.length > 0) {
+        missing.push(`previousHandoff.workingContext (${missingWorkingContext.length} omitted)`)
+      }
+      const chronologyEvents = new Set(handoff.chronology.map((item) => item.event))
+      const missingChronology = requirements.previousHandoff.chronology.filter((item) => !chronologyEvents.has(item))
+      if (missingChronology.length > 0) {
+        missing.push(`previousHandoff.chronology (${missingChronology.length} omitted)`)
+      }
     }
     if (JSON.stringify(handoff.todos) !== JSON.stringify(requirements.todos)) {
       missing.push("todos")
