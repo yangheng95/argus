@@ -150,171 +150,67 @@ describe("frontend-design prompt assembly", () => {
     expect(Object.keys(tools).some((name) => name.startsWith("register_"))).toBe(false)
   })
 
-  test("host-prepared submit tool accepts empty input and materializes source-baseline handoff", async () => {
+  test("host-prepared turns use the full frontend template submit tool", () => {
     const kit = createFrontendTemplateOutputTools({ autoIteration: true })
-    const tools = FrontendDesignTestHooks.selectFrontendTemplateSubmitTool(kit, {
-      status: "created",
-      projectRoot: "C:\\tmp\\project\\frontend-design-skeleton",
-      sourcePackage: "C:\\tmp\\project\\web-clone-source",
-      projectRootRef: ".opencorvus/runtime/tasks/tsk_test/frontend-design/frontend-design-skeleton",
-      sourcePackageRef: ".opencorvus/runtime/tasks/tsk_test/frontend-design/web-clone-source",
-      entrypoints: ["README.md", "index.html", "src/App.tsx", "src/styles.css"],
-      generationTool: "host-prepared:create_frontend_skeleton_project",
-      warnings: [],
-      compactEvidence: "compact source evidence",
-      visualIterationMatrix:
-        "desktop-reference 1366x768 (primary_reference, capture_viewport): Run measured webpage_evaluate against web-clone-source/reference.png after each region replacement. mobile-review 390x844 (responsive_review, default): Capture and inspect the root app at this viewport; use measured comparison when matching reference evidence exists, otherwise record the evidence gap. wide-review 1920x1080 (responsive_review, default): Capture and inspect the root app at this viewport; use measured comparison when matching reference evidence exists, otherwise record the evidence gap.",
-      sourceAuditEvidence: [
-        "Host-prepared source audit supervision.",
-        "- visual_baseline_allowed: passed=true; generatedBaseline=true; finalBaselineOnly=false; sourceDomRegions=3; largestSourceDomRegionBytes=1200; oversizedGeneratedRegions=0",
-        "- maintainable_replacement_required: passed=false; generatedBaseline=true; finalBaselineOnly=true; sourceDomRegions=3; largestSourceDomRegionBytes=1200; oversizedGeneratedRegions=0",
-      ].join("\n"),
-      sourceReplacementPlan: [
+    const tools = FrontendDesignTestHooks.selectFrontendTemplateSubmitTool(kit, { hostPrepared: true })
+
+    expect(tools.submit_frontend_template).not.toBe(kit.tools.submit_frontend_template)
+  })
+
+  test("host-prepared submit normalizes final delivery mode to maintainable refactor", async () => {
+    const kit = createFrontendTemplateOutputTools({ autoIteration: true })
+    const tools = FrontendDesignTestHooks.selectFrontendTemplateSubmitTool(kit, { hostPrepared: true })
+
+    await (tools.submit_frontend_template as any).execute({
+      design_system: "source-derived webpage system",
+      tech_stack: ["React", "Vite", "TypeScript"],
+      final_delivery_mode: "visual_baseline_allowed",
+      frontend_template: "Adopt frontend-design-skeleton, then replace source regions from evidence.",
+      fillable_modules: "Root entrypoints, source data modules, scoped styles, and region replacements.",
+      component_inventory: "legacy summary",
+      component_reuse_plan: [
         {
-          regionComponentName: "FooterRegion",
-          regionFilePath: "src/components/source-dom/FooterRegion.tsx",
-          priority: "high",
-          replacementKind: "navigation_or_footer_component",
-          dataSources: ["src/data/sourceData.ts"],
-          assetSources: [],
-          parityGuard: "footer visual parity",
+          family_id: "comp-source-page-baseline",
+          name: "Source page baseline",
+          observed_surface: "Captured source page",
+          source_refs: ["frontend-design-skeleton/src/App.tsx", "web-clone-source/reference.png"],
+          implementation_strategy: "extracted_baseline_defer",
+          reuse_source: "frontend-design-skeleton source baseline",
+          mature_library_candidates: [],
+          props_states: "source regions and parity guards",
+          replacement_boundary: "full source page until named regions are replaced",
+          parity_guard: "compare against reference.png before deleting generated regions",
+          custom_fallback_reason: "",
         },
       ],
-    } as any)
+      baseline_replacement_plan: [],
+      quality_project_contract: "Maintainable delivery requires semantic region replacement and source audit evidence.",
+      material_inventory: "reference.png, source IR, CSS sidecars, data modules",
+      frontend_project: {
+        status: "created",
+        role: "source_baseline_input",
+        project_root: "frontend-design-skeleton",
+        source_package: "web-clone-source",
+        entrypoints: ["src/App.tsx"],
+        generation_tool: "host-prepared:create_frontend_skeleton_project",
+        notes: [],
+      },
+      visual_consistency_contract: "Match reference.png during every replacement.",
+      ui_data_contract: "Repeated content comes from source data modules.",
+      template_iteration_notes: ["pass 1 inventory", "pass 2 implementability"],
+      completeness_review: "Deferred source-dom regions remain unfinished source debt.",
+      reference_artifacts: ["web-clone-source/reference.png"],
+      open_questions: [],
+    }, {})
 
-    const result = await (tools.submit_frontend_template as any).execute({}, {})
-
-    expect(result).toContain("OK")
-    expect(kit.getCollector().final?.frontend_project.role).toBe("source_baseline_input")
-    expect(kit.getCollector().final?.frontend_project.project_root).toContain("frontend-design-skeleton")
-    expect(kit.getCollector().final?.quality_project_contract).toContain("root-level")
-    expect(kit.getCollector().final?.quality_project_contract).toContain("PRD")
-    expect(kit.getCollector().final?.quality_project_contract).toContain("measured visual evidence")
-    expect(kit.getCollector().final?.quality_project_contract).toContain("source audit has zero findings before claiming final maintainability")
-    expect(kit.getCollector().final?.quality_project_contract).toContain("deferred source-dom region remains source debt")
-    expect(kit.getCollector().final?.quality_project_contract).toContain("desktop-reference 1366x768")
-    expect(kit.getCollector().final?.quality_project_contract).toContain("capture_viewport")
-    expect(kit.getCollector().final?.quality_project_contract).toContain("mobile-review 390x844")
-    expect(kit.getCollector().final?.quality_project_contract).toContain("Current source audit supervision")
-    expect(kit.getCollector().final?.quality_project_contract).toContain("maintainable_replacement_required: passed=false")
-    expect(kit.getCollector().final?.visual_consistency_contract).toContain("measured webpage_evaluate evidence")
-    expect(kit.getCollector().final?.visual_consistency_contract).toContain("wide-review 1920x1080")
-    expect(JSON.stringify(kit.getCollector().final)).not.toContain("100/100")
-    expect(JSON.stringify(kit.getCollector().final)).not.toContain("overallScore >=80/100")
-    expect(kit.getCollector().final?.component_inventory).toContain("Compatibility summary only")
-    expect(kit.getCollector().final?.component_reuse_plan.map((item) => item.family_id)).toContain("comp-source-region-replacements")
-    expect(kit.getCollector().final?.baseline_replacement_plan[0]?.source_region).toContain("FooterRegion")
-    expect(kit.getCollector().final?.completeness_review).toContain("Public report handoff")
-    expect(kit.getCollector().final?.completeness_review).toContain("maintainable_replacement_required")
-    expect(kit.getCollector().final?.completeness_review).toContain("Deferred regions are unfinished source debt")
-    expect(kit.getCollector().final?.completeness_review).toContain("Current source audit supervision")
-    expect(kit.getCollector().final?.completeness_review).toContain("visual_baseline_allowed: passed=true")
-    expect(kit.getCollector().final?.completeness_review).toContain("source-region")
-    expect(kit.getCollector().final?.completeness_review).toContain("Known issue discipline")
-    expect(kit.getCollector().final?.completeness_review).toContain("Known source issue: FooterRegion")
-    expect(kit.getCollector().final?.completeness_review).toContain("reuse project components or mature libraries")
-    expect(kit.getCollector().final?.completeness_review).toContain("PRD delta handoff")
     expect(kit.getCollector().final?.final_delivery_mode).toBe("maintainable_replacement_required")
-    expect(JSON.stringify(kit.getCollector().final)).not.toContain("TradingView")
-    expect(JSON.stringify(kit.getCollector().final)).not.toContain("SQLite")
-    expect(JSON.stringify(kit.getCollector().final)).not.toContain("GDP")
-    expect(kit.getCollector().final?.template_iteration_notes).toHaveLength(2)
-
-    const report = kit.buildReport()
-    expect(report.detail).toContain("## Implementation Problems And Agent Handoff")
-    expect(report.detail).toContain("Public report handoff")
-    expect(report.detail).toContain("sourceDomReplacementPlan.ts")
-    expect(report.detail).toContain("## Source Region Evolution Plan")
-  })
-
-  test("host-prepared maintainable submit materializes page-level evolution plan when no region plan exists", async () => {
-    const kit = createFrontendTemplateOutputTools({ autoIteration: true })
-    const tools = FrontendDesignTestHooks.selectFrontendTemplateSubmitTool(kit, {
-      status: "created",
-      projectRoot: "C:\\tmp\\project\\frontend-design-skeleton",
-      sourcePackage: "C:\\tmp\\project\\web-clone-source",
-      projectRootRef: ".opencorvus/runtime/tasks/tsk_test/frontend-design/frontend-design-skeleton",
-      sourcePackageRef: ".opencorvus/runtime/tasks/tsk_test/frontend-design/web-clone-source",
-      entrypoints: ["README.md", "index.html", "src/App.tsx", "src/styles.css"],
-      generationTool: "host-prepared:create_frontend_skeleton_project",
-      warnings: [],
-      compactEvidence: "compact source evidence with RightToolbar",
-      sourceReplacementPlan: [],
-    } as any)
-
-    const result = await (tools.submit_frontend_template as any).execute({
-      final_delivery_mode: "maintainable_replacement_required",
-    }, {})
-
-    expect(result).toContain("OK")
-    expect(kit.getCollector().final?.baseline_replacement_plan[0]?.boundary_id).toBe("source-page-baseline")
-    expect(kit.getCollector().final?.baseline_replacement_plan[0]?.component_family_id).toBe("comp-source-page-baseline")
-    expect(kit.getCollector().final?.baseline_replacement_plan[0]?.source_refs.join("\n")).toContain("frontend-design-skeleton/src/components/SourceClonePage.tsx")
-    expect(kit.buildReport().detail).toContain("source-page-baseline")
-  })
-
-  test("host-prepared submit cannot downgrade rawproject refactoring to visual baseline", async () => {
-    const kit = createFrontendTemplateOutputTools({ autoIteration: true })
-    const tools = FrontendDesignTestHooks.selectFrontendTemplateSubmitTool(kit, {
-      status: "created",
-      projectRoot: "C:\\tmp\\project\\frontend-design-skeleton",
-      sourcePackage: "C:\\tmp\\project\\web-clone-source",
-      projectRootRef: ".opencorvus/runtime/tasks/tsk_test/frontend-design/frontend-design-skeleton",
-      sourcePackageRef: ".opencorvus/runtime/tasks/tsk_test/frontend-design/web-clone-source",
-      entrypoints: ["README.md", "index.html", "src/App.tsx", "src/styles.css"],
-      generationTool: "host-prepared:create_frontend_skeleton_project",
-      warnings: [],
-      compactEvidence: "compact source evidence",
-      sourceReplacementPlan: [],
-    } as any)
-
-    const result = await (tools.submit_frontend_template as any).execute({
-      final_delivery_mode: "visual_baseline_allowed",
-    }, {})
-
-    expect(result).toContain("OK")
-    expect(kit.getCollector().final?.final_delivery_mode).toBe("maintainable_replacement_required")
-    expect(kit.getCollector().final?.quality_project_contract).toContain("human-maintainable")
-    expect(kit.getCollector().final?.completeness_review).toContain("maintainable_replacement_required")
-    expect(kit.buildReport().detail).toContain("source-page-baseline")
-  })
-
-  test("host-prepared submit tolerates markdown string lists from provider retries", async () => {
-    const kit = createFrontendTemplateOutputTools({ autoIteration: true })
-    const tools = FrontendDesignTestHooks.selectFrontendTemplateSubmitTool(kit, {
-      status: "created",
-      projectRoot: "C:\\tmp\\project\\frontend-design-skeleton",
-      sourcePackage: "C:\\tmp\\project\\web-clone-source",
-      projectRootRef: ".opencorvus/runtime/tasks/tsk_test/frontend-design/frontend-design-skeleton",
-      sourcePackageRef: ".opencorvus/runtime/tasks/tsk_test/frontend-design/web-clone-source",
-      entrypoints: ["README.md", "index.html", "src/App.tsx", "src/styles.css"],
-      generationTool: "host-prepared:create_frontend_skeleton_project",
-      warnings: [],
-      compactEvidence: "compact source evidence with RightToolbar",
-      sourceReplacementPlan: [],
-    } as any)
-
-    const result = await (tools.submit_frontend_template as any).execute({
-      implementation_risks: "- right toolbar may be outside viewport\n- exact mobile breakpoint unknown",
-      agent_handoff_notes: "- reuse source baseline first\n- keep PRD deltas scoped",
-      open_questions: "- right toolbar capture ambiguity\n- exact 1600px max width",
-    }, {})
-
-    expect(result).toContain("OK")
-    expect(kit.getCollector().final?.open_questions).toEqual([
-      "right toolbar capture ambiguity",
-      "exact 1600px max width",
-    ])
-    expect(kit.getCollector().final?.completeness_review).toContain("Implementation risk: right toolbar may be outside viewport")
-    expect(kit.getCollector().final?.completeness_review).toContain("Handoff note: reuse source baseline first")
+    expect(kit.getCollector().final?.frontend_template).toContain("replace source regions")
   })
 
   test("agent keeps evidence read tools available before frontend template submission", () => {
     expect(FrontendDesignTestHooks.shouldScopeFrontendTemplateSubmitTool()).toBe(false)
-    expect(FrontendDesignTestHooks.shouldScopeFrontendTemplateSubmitTool({ hostPrepared: true })).toBe(true)
     expect(FrontendDesignTestHooks.shouldScopeFrontendTemplateSubmitTool({ textOnlyNoVisualSource: true })).toBe(true)
     expect(FrontendDesignTestHooks.shouldScopeFrontendTemplateSubmitTool({
-      hostPrepared: false,
       textOnlyNoVisualSource: false,
     })).toBe(false)
   })
@@ -342,7 +238,7 @@ describe("frontend-design prompt assembly", () => {
 
   test("text-only submit tool materializes the public report from the brief", async () => {
     const kit = createFrontendTemplateOutputTools({ autoIteration: true })
-    const tools = FrontendDesignTestHooks.selectFrontendTemplateSubmitTool(kit, undefined, {
+    const tools = FrontendDesignTestHooks.selectFrontendTemplateSubmitTool(kit, {
       textOnlyBrief: {
         title: "Docs page",
         request: "Build a docs page with a dark navy hero and teal CTA.",
@@ -359,7 +255,7 @@ describe("frontend-design prompt assembly", () => {
     expect(kit.buildReport().detail).toContain("## Implementation Problems And Agent Handoff")
   })
 
-  test("host-prepared prompt embeds compact evidence and forbids unavailable discovery tools", () => {
+  test("host-prepared prompt embeds compact evidence and requires bounded evidence inspection", () => {
     const prompt = FrontendDesignTestHooks.buildUserPrompt(
       { title: "Reference page", request: "clone https://example.com/product" },
       false,
@@ -383,14 +279,17 @@ describe("frontend-design prompt assembly", () => {
       } as any,
     )
 
-    expect(prompt).toContain("This is a terminal-only host-prepared turn")
-    expect(prompt).toContain("`read_file`, `list_files`, shell, browser, and mirror acquisition tools are intentionally unavailable")
+    expect(prompt).toContain("Host-prepared means source evidence exists; it does not mean the frontend template is already designed")
+    expect(prompt).toContain("Use `read_file`, `list_directory`, `find_files`, and `search_code`")
+    expect(prompt).toContain("obvious target project/package/component structure")
     expect(prompt).toContain("## source-ir/component-tree.json")
     expect(prompt).toContain("## source-ir/content-model.json")
-    expect(prompt).toContain("Only `submit_frontend_template` is available")
-    expect(prompt).toContain("schema is intentionally lightweight")
+    expect(prompt).toContain("call `submit_frontend_template` with the full frontend-design contract")
+    expect(prompt).not.toContain("Only `submit_frontend_template` is available")
+    expect(prompt).not.toContain("schema is intentionally lightweight")
+    expect(prompt).not.toContain("terminal-only host-prepared turn")
+    expect(prompt).not.toContain("discovery tools are intentionally unavailable")
     expect(prompt).toContain("public frontend_design report")
-    expect(prompt).toContain("terminal report")
     expect(prompt).toContain("Do not output a standalone component checklist")
     expect(prompt).toContain("maintainable rawproject refactor algorithm")
     expect(prompt).toContain("source map, region map, one replacement decision per region")

@@ -128,11 +128,12 @@ export namespace FrontendDesignAgent {
     const textOnlyNoVisualSource = isTextOnlyNoVisualSource(input)
     const submitFrontendTemplateTool = selectFrontendTemplateSubmitTool(
       outputToolKit,
-      hostPreparedFrontendProject,
-      textOnlyNoVisualSource ? { textOnlyBrief: { title: input.title, request: input.request } } : {},
+      {
+        ...(hostPreparedFrontendProject ? { hostPrepared: true } : {}),
+        ...(textOnlyNoVisualSource ? { textOnlyBrief: { title: input.title, request: input.request } } : {}),
+      },
     )
     const terminalOnlySubmit = shouldScopeFrontendTemplateSubmitTool({
-      hostPrepared: !!hostPreparedFrontendProject,
       textOnlyNoVisualSource,
     })
     const projectID = (() => {
@@ -170,9 +171,9 @@ export namespace FrontendDesignAgent {
         : undefined,
       toolKit: {
         tools: {
-          ...(terminalOnlySubmit ? {} : hostPreparedFrontendProject ? {} : contextTools),
+          ...(terminalOnlySubmit ? {} : contextTools),
           ...(terminalOnlySubmit ? {} : acquisitionTools),
-          ...(terminalOnlySubmit ? {} : hostPreparedFrontendProject ? {} : createReadAttachmentTool(projectID)),
+          ...(terminalOnlySubmit ? {} : createReadAttachmentTool(projectID)),
           ...submitFrontendTemplateTool,
         },
         getCollector: () => outputToolKit.getCollector(),
@@ -266,13 +267,8 @@ export namespace FrontendDesignAgent {
 }
 
 function shouldScopeFrontendTemplateSubmitTool(input: {
-  hostPrepared?: boolean
   textOnlyNoVisualSource?: boolean
 } = {}): boolean {
-  // When the host has already materialized web-clone-source and created the
-  // frontend-design skeleton, the model's job is contract synthesis. Keeping
-  // acquisition/browser tools open has repeatedly led to tool-loop bloat.
-  if (input.hostPrepared) return true
   // With no visual attachment and no live URL there is no reference evidence to
   // acquire. The only durable output frontend_design can produce is the public
   // report derived from the textual brief, so pin directly to the terminal tool.
