@@ -13,6 +13,15 @@ function handoffFixture(): CompactionHandoff.Info {
     durableInstructionSources: [{ path: "/repo/AGENTS.md", role: "project rules" }],
     activeBuildContracts: [],
     todos: [],
+    workingContext: [
+      "Required patch file paths and runtime errors must survive as exact evidence tokens in the handoff.",
+    ],
+    chronology: [
+      {
+        event: "Collected patch and runtime error evidence for handoff validation",
+        evidence: "server/db/schema.ts",
+      },
+    ],
     currentState: {
       phase: "validating compaction handoff evidence",
       activeTask: "pin required file and error evidence",

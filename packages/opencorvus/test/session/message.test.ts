@@ -115,6 +115,15 @@ function handoffFixture(): CompactionHandoff.Info {
     durableInstructionSources: [{ path: "/repo/AGENTS.md", role: "project rules" }],
     activeBuildContracts: [],
     todos: [],
+    workingContext: [
+      "Only structured compaction handoffs may become compacted history boundaries.",
+    ],
+    chronology: [
+      {
+        event: "Validated that legacy prose summaries do not compact away older turns",
+        evidence: "packages/opencorvus/src/session/message.ts",
+      },
+    ],
     currentState: {
       phase: "validating compaction boundary behavior",
       activeTask: "update filterCompacted summary boundary validation",

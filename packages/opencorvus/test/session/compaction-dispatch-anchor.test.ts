@@ -90,6 +90,15 @@ function handoffFixture(sourceUserMessageID = "m-source"): CompactionHandoff.Inf
     durableInstructionSources: [{ path: "/repo/AGENTS.md", role: "project rules" }],
     activeBuildContracts: [],
     todos: [],
+    workingContext: [
+      "The first dispatcher user message remains the visible anchor and must not be duplicated in userMessages.",
+    ],
+    chronology: [
+      {
+        event: "Separated dispatch anchor from the compactable post-anchor history",
+        evidence: sourceUserMessageID,
+      },
+    ],
     currentState: {
       phase: "validating dispatch anchor preservation",
       activeTask: "keep the first user message visible after compaction",
@@ -368,5 +377,44 @@ describe("session compaction dispatch anchor", () => {
     expect(wire).not.toContain('"type":"tool-call"')
     expect(wire).not.toContain('"type":"tool-result"')
     expect(wire).not.toContain('"role":"tool"')
+  })
+
+  test("compaction transcript keeps a 30k bounded head and tail for large tool output", () => {
+    const assistant = assistantInfo("m-assistant", "m-user")
+    const headMarker = "HEAD-REQUIREMENT-DO-NOT-LOSE"
+    const middleMarker = "MIDDLE-SHOULD-BE-OMITTED"
+    const tailMarker = "TAIL-NEXT-ACTION-DO-NOT-LOSE"
+    const largeOutput = [headMarker, "x".repeat(25_000), middleMarker, "y".repeat(25_000), tailMarker].join("\n")
+    const messages: Message.WithParts[] = [
+      textMessage("m-user", "user", "Inspect the large build log"),
+      {
+        info: assistant,
+        parts: [
+          {
+            ...basePart(assistant.id, "p-tool"),
+            type: "tool",
+            callID: "call_bash",
+            tool: "bash",
+            state: {
+              status: "completed",
+              input: { command: "bun test" },
+              output: largeOutput,
+              title: "Run tests",
+              metadata: {},
+              time: { start: 1, end: 2 },
+            },
+          },
+        ],
+      },
+    ] as Message.WithParts[]
+
+    const transcript = SessionCompaction.TestHooks.compactionTranscriptMessages(messages)
+    const transcriptText = (transcript[0].content as Array<{ type: "text"; text: string }>)[0].text
+
+    expect(transcriptText).toContain(headMarker)
+    expect(transcriptText).toContain(tailMarker)
+    expect(transcriptText).toContain("[omitted")
+    expect(transcriptText).toContain("chars from compaction transcript")
+    expect(transcriptText).not.toContain(middleMarker)
   })
 })

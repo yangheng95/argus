@@ -28,6 +28,16 @@ function handoffFixture(): CompactionHandoff.Info {
         priority: "high",
       },
     ],
+    workingContext: [
+      "Compaction must preserve requirements, command evidence, file paths, source user metadata, and todo state.",
+      "Rendered Markdown is display-only; assistant.structured is the resumable handoff source.",
+    ],
+    chronology: [
+      {
+        event: "Identified generic summaries as insufficient for resuming session work",
+        evidence: "packages/opencorvus/src/session/compaction-handoff.ts",
+      },
+    ],
     currentState: {
       phase: "implementing structured handoff validation",
       activeTask: "replace generic Markdown summary with host-rendered handoff",
@@ -102,6 +112,8 @@ describe("CompactionHandoff", () => {
     expect(first).toContain("7. Todo List (verbatim):")
     expect(first).toContain("9. Current Work:")
     expect(first).toContain("10. Optional Next Step:")
+    expect(first).toContain("Working context: Compaction must preserve requirements")
+    expect(first).toContain("Chronology: Identified generic summaries as insufficient")
     expect(first).toContain("Acceptance: The handoff must preserve exact acceptance criteria and command evidence")
     expect(first).toContain('"content": "Run targeted compaction tests"')
     expect(first).toContain("Fix compaction so it preserves resumable task state.")
@@ -115,6 +127,8 @@ describe("CompactionHandoff", () => {
     const handoff = {
       ...handoffFixture(),
       userMessages: [],
+      workingContext: [],
+      chronology: [],
       files: [],
       evidence: [],
     }
@@ -134,6 +148,8 @@ describe("CompactionHandoff", () => {
     expect(result.success).toBe(false)
     if (!result.success) {
       expect(result.error).toContain("userMessages")
+      expect(result.error).toContain("workingContext")
+      expect(result.error).toContain("chronology")
       expect(result.error).toContain("files")
     }
   })
@@ -272,16 +288,35 @@ describe("CompactionHandoff", () => {
     expect(prompt).toContain("plugin context")
   })
 
+  test("host prompt merges prior structured handoff instead of rendered Markdown", () => {
+    const handoff = handoffFixture()
+    const rendered = CompactionHandoff.renderMarkdown(handoff)
+    const prompt = SessionCompaction.buildPrompt({
+      previousSummary: rendered,
+      previousHandoff: handoff,
+      runtime: "<handoff-runtime-state></handoff-runtime-state>",
+      context: [],
+    })
+
+    expect(prompt).toContain("<previous-structured-handoff>")
+    expect(prompt).toContain('"objective": "Harden compaction handoff so session continuation keeps requirements intact"')
+    expect(prompt).toContain("rendered Markdown summaries are display-only")
+    expect(prompt).not.toContain("<previous-summary>")
+    expect(prompt).not.toContain("1. Primary Request and Intent:")
+  })
+
   test("handoff output format exposes the CompactionHandoff schema for StructuredOutput", () => {
     const format = SessionCompaction.handoffOutputFormat()
 
     expect(format.type).toBe("json_schema")
     expect(format.schema).toMatchObject({
       type: "object",
-      required: expect.arrayContaining(["objective", "currentState", "todos", "nextActions"]),
+      required: expect.arrayContaining(["objective", "currentState", "todos", "workingContext", "chronology", "nextActions"]),
     })
     expect(format.retryCount).toBe(2)
     expect(JSON.stringify(format.schema)).toContain("activeBuildContracts")
+    expect(JSON.stringify(format.schema)).toContain("workingContext")
+    expect(JSON.stringify(format.schema)).toContain("chronology")
   })
 
   test("compaction stop condition waits for captured handoff instead of first tool call", async () => {

@@ -42,7 +42,7 @@ export namespace SessionCompaction {
     ),
   }
 
-  const TRANSCRIPT_FIELD_MAX_CHARS = 2_000
+  const TRANSCRIPT_FIELD_MAX_CHARS = 30_000
   type Turn = {
     start: number
     end: number
@@ -63,7 +63,7 @@ export namespace SessionCompaction {
   type CompletedCompaction = {
     userIndex: number
     assistantIndex: number
-    summary: string | undefined
+    handoff: CompactionHandoff.Info
   }
 
   export async function isOverflow(input: { tokens: Message.Assistant["tokens"]; model: Provider.Model; sessionID?: string }) {
@@ -75,16 +75,6 @@ export namespace SessionCompaction {
   export const PRUNE_PROTECT = 40_000
 
   const PRUNE_PROTECTED_TOOLS = ["skill"]
-
-  function summaryText(message: Message.WithParts) {
-    const text = message.parts
-      .filter((part): part is Message.TextPart => part.type === "text")
-      .map((part) => part.text.trim())
-      .filter(Boolean)
-      .join("\n\n")
-      .trim()
-    return text || undefined
-  }
 
   function userText(message: Message.WithParts) {
     return message.parts
@@ -230,7 +220,7 @@ export namespace SessionCompaction {
       if (!CompactionHandoff.isValidSummaryMessage(msg.info)) return []
       const userIndex = users.get(msg.info.parentID)
       if (userIndex === undefined) return []
-      return [{ userIndex, assistantIndex, summary: summaryText(msg) }]
+      return [{ userIndex, assistantIndex, handoff: msg.info.structured }]
     })
   }
 
@@ -385,6 +375,7 @@ export namespace SessionCompaction {
 
   export function buildPrompt(input: {
     previousSummary?: string
+    previousHandoff?: CompactionHandoff.Info
     context: string[]
     runtime: string
     dispatchAnchor?: string
@@ -399,15 +390,25 @@ export namespace SessionCompaction {
             "</dispatch-anchor>",
           ].join("\n")
         : undefined
-    const anchor = input.previousSummary
+    const previousHandoff = input.previousHandoff ? JSON.stringify(input.previousHandoff, null, 2) : undefined
+    const anchor = previousHandoff
       ? [
-          "Update the anchored summary below using the conversation history above.",
+          "Update the anchored structured handoff below using the conversation history above.",
           "Preserve still-true details, remove stale details, and merge in the new facts.",
-          "<previous-summary>",
-          input.previousSummary,
-          "</previous-summary>",
+          "The prior handoff is authoritative structured data; rendered Markdown summaries are display-only and must not be treated as the merge source.",
+          "<previous-structured-handoff>",
+          previousHandoff,
+          "</previous-structured-handoff>",
         ].join("\n")
-      : "Create a new anchored summary from the conversation history above."
+      : input.previousSummary
+        ? [
+            "Update the anchored summary below using the conversation history above.",
+            "Preserve still-true details, remove stale details, and merge in the new facts.",
+            "<previous-summary>",
+            input.previousSummary,
+            "</previous-summary>",
+          ].join("\n")
+        : "Create a new anchored summary from the conversation history above."
     return [
       dispatchAnchorBlock,
       anchor,
@@ -526,7 +527,10 @@ export namespace SessionCompaction {
       const size = sizes[i]!
       if (total + size <= budget) {
         total += size
-        keep = { start: turn.start, id: turn.id }
+        const boundary = input.messages[turn.start]
+        if (boundary?.info.role === "user") {
+          keep = { start: turn.start, id: turn.id }
+        }
         continue
       }
       if (!keep) log.info("tail fallback", { budget, size, total })
@@ -534,6 +538,7 @@ export namespace SessionCompaction {
     }
 
     if (!keep) {
+      if (recent[0] && recent[0].start <= firstUserIdx + 1) return { head: [] }
       const head = input.messages.slice(firstUserIdx + 1)
       return head.length ? { anchor_id, head } : { head: [] }
     }
@@ -680,7 +685,7 @@ export namespace SessionCompaction {
       focus: input.focus ?? compactionPart?.focus,
     })
     const promptText = buildPrompt({
-      previousSummary: prior.at(-1)?.summary,
+      previousHandoff: prior.at(-1)?.handoff,
       context: compacting.context,
       runtime: runtime.text,
       dispatchAnchor,
