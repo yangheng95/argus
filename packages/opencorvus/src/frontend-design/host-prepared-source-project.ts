@@ -2,47 +2,15 @@ import { tool } from "ai"
 import fs from "node:fs/promises"
 import path from "node:path"
 import z from "zod"
-import { Instance } from "@/project/instance"
-import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { decodePNG, type DecodedPNG } from "@/util/pixel-stats"
 import { auditWebCloneSourceSkeletonConsumption } from "@/web-clone/source-skeleton-consumption-audit"
 import {
-  generateWebCloneSourceProject,
   renderSourceProjectVisualIterationMatrix,
-  type GenerateWebCloneSourceProjectOutput,
 } from "@/web-clone/source-project-generator"
 import {
   FrontendTemplateFinalSchema,
   type createFrontendTemplateOutputTools,
 } from "./output-tools"
-
-const FRONTEND_SKELETON_ENTRYPOINTS = [
-  "README.md",
-  "package.json",
-  "tsconfig.json",
-  "index.html",
-  "src/App.tsx",
-  "src/main.tsx",
-  "src/components/SourceClonePage.tsx",
-  "src/components/SourceDomPage.tsx",
-  "src/components/AssetPath.tsx",
-  "src/components/ContentTable.tsx",
-  "src/components/SourceAssetPathGroup.tsx",
-  "src/components/SourceFaqList.tsx",
-  "src/components/source-dom/*Region.tsx",
-  "src/data/sourceData.ts",
-  "src/data/sourceDomRegions.ts",
-  "src/data/sourceDomReplacementPlan.ts",
-  "src/data/sourceDomIterationState.ts",
-  "src/data/sourceSvgAssetGroups.ts",
-  "src/data/sourceFaqGroups.ts",
-  "src/data/svgPaths.ts",
-  "src/data/sourceProjectManifest.json",
-  "src/styles.css",
-  "src/styles/source-critical.css",
-  "src/styles/source-full.css",
-  "reference.png",
-]
 
 const FRONTEND_SKELETON_DEEP_REFERENCE_FILES = [
   "src/components/ContentTable.tsx",
@@ -287,89 +255,6 @@ function textOnlyFrontendTemplatePayload(
     ].join("\n"),
     reference_artifacts: briefRefs,
     open_questions: openQuestions,
-  }
-}
-
-export async function maybeCreateHostPreparedFrontendProject(taskID?: string): Promise<HostPreparedFrontendProject | undefined> {
-  if (!taskID) return undefined
-  const paths = ProjectRuntimePaths.frontendDesignPaths(Instance.directory, taskID)
-  const sourcePackage = paths.sourcePackageAbsolute
-  try {
-    const stat = await fs.stat(sourcePackage)
-    if (!stat.isDirectory()) return undefined
-  } catch {
-    return undefined
-  }
-
-  const projectRoot = paths.skeletonProjectAbsolute
-  const projectRootRef = paths.skeletonProjectRelative
-  const sourcePackageRef = paths.sourcePackageRelative
-  try {
-    const output = await generateWebCloneSourceProject({
-      mirrorDir: sourcePackage,
-      outputDir: projectRoot,
-      overwrite: false,
-    })
-    const sourceReplacementPlan = await readHostPreparedSourceReplacementPlan(projectRoot)
-    const sourceAuditEvidence = await summarizeHostPreparedSourceAudit({ sourcePackage, projectRoot })
-    return {
-      ...hostPreparedProjectFromOutput(output, { projectRootRef, sourcePackageRef }),
-      sourceReplacementPlan,
-      sourceAuditEvidence,
-      compactEvidence: await readHostPreparedCompactEvidence({ sourcePackage, projectRoot, sourceAuditEvidence }),
-    }
-  } catch (err) {
-    if (await hasExistingSkeletonProject(projectRoot)) {
-      const sourceAuditEvidence = await summarizeHostPreparedSourceAudit({ sourcePackage, projectRoot })
-      return {
-        status: "created",
-        projectRoot,
-        sourcePackage,
-        projectRootRef,
-        sourcePackageRef,
-        entrypoints: FRONTEND_SKELETON_ENTRYPOINTS,
-        generationTool: "host-prepared:create_frontend_skeleton_project",
-        warnings: ["Existing frontend-design-skeleton source project was reused."],
-        visualIterationMatrix: renderSourceProjectVisualIterationMatrix(),
-        sourceReplacementPlan: await readHostPreparedSourceReplacementPlan(projectRoot),
-        sourceAuditEvidence,
-        compactEvidence: await readHostPreparedCompactEvidence({ sourcePackage, projectRoot, sourceAuditEvidence }),
-      }
-    }
-    return {
-      status: "blocked",
-      projectRoot,
-      sourcePackage,
-      projectRootRef,
-      sourcePackageRef,
-      entrypoints: [],
-      generationTool: "host-prepared:create_frontend_skeleton_project",
-      warnings: [],
-      error: err instanceof Error ? err.message : String(err),
-      visualIterationMatrix: renderSourceProjectVisualIterationMatrix(),
-      sourceReplacementPlan: await readHostPreparedSourceReplacementPlan(projectRoot),
-      sourceAuditEvidence: "",
-      compactEvidence: await readHostPreparedCompactEvidence({ sourcePackage, projectRoot }),
-    }
-  }
-}
-
-function hostPreparedProjectFromOutput(output: GenerateWebCloneSourceProjectOutput, refs: {
-  projectRootRef: string
-  sourcePackageRef: string
-}): HostPreparedFrontendProject {
-  return {
-    status: "created",
-    projectRoot: output.outputDir,
-    sourcePackage: output.mirrorDir,
-    projectRootRef: refs.projectRootRef,
-    sourcePackageRef: refs.sourcePackageRef,
-    entrypoints: FRONTEND_SKELETON_ENTRYPOINTS,
-    generationTool: "host-prepared:create_frontend_skeleton_project",
-    warnings: [],
-    visualIterationMatrix: output.visualIterationMatrix,
-    compactEvidence: "",
-    sourceReplacementPlan: [],
   }
 }
 
@@ -892,27 +777,6 @@ function formatPercent(value: number): string {
 
 function formatRatio(value: number): string {
   return value.toFixed(2)
-}
-
-async function hasExistingSkeletonProject(projectRoot: string): Promise<boolean> {
-  const required = [
-    "index.html",
-    path.join("src", "App.tsx"),
-    path.join("src", "main.tsx"),
-    path.join("src", "components", "SourceClonePage.tsx"),
-    path.join("src", "components", "SourceDomPage.tsx"),
-    path.join("src", "data", "sourceData.ts"),
-    path.join("src", "styles.css"),
-  ]
-  for (const relative of required) {
-    try {
-      const stat = await fs.stat(path.join(projectRoot, relative))
-      if (!stat.isFile() || stat.size === 0) return false
-    } catch {
-      return false
-    }
-  }
-  return true
 }
 
 export function renderHostPreparedFrontendProjectSection(project: HostPreparedFrontendProject): string {

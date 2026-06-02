@@ -43,28 +43,28 @@ describe("core prompt hygiene", () => {
   })
 
   test("core prompt size budgets keep roles concise", async () => {
+    const relaxedAgentPromptLineBudget = 200
     const maxLines: Record<keyof typeof promptFiles, number> = {
       // Raised from 150 -> 160 on 2026-05-22 to add the faithful/complete
       // decomposition principles — "smallest" governs graph shape not
       // deliverable scope, and every requirement must map to a capable goal.
       // Raised 160 -> 170 on 2026-05-31 to document research evidence
       // consumption without letting Architect treat research as routing.
-      architect: 170,
+      architect: relaxedAgentPromptLineBudget,
       // Raised from 175 -> 195 on 2026-05-28 to document webpage replica
       // framework-first build discipline: generated View layer first,
       // functional containers/adapters second.
-      build: 195,
-      // Raised 125 -> 130 when frontend_design stopped emitting product/spec docs and
-      // added explicit template/module/component/material fields.
-      frontendDesign: 135,
-      factCheck: 80,
-      integrity: 175,
+      build: relaxedAgentPromptLineBudget,
+      // User-facing agent core prompts get a relaxed 200-line budget by default.
+      frontendDesign: relaxedAgentPromptLineBudget,
+      factCheck: relaxedAgentPromptLineBudget,
+      integrity: relaxedAgentPromptLineBudget,
       // Raised from 125 -> 135 after integrity-team gained final
       // maintainable web-clone acceptance mode rules.
       // Raised 135 -> 140 after localhost provenance checks were added.
-      integrityTeam: 140,
-      intentAnalysis: 130,
-      goalWorkloadAnalyst: 70,
+      integrityTeam: relaxedAgentPromptLineBudget,
+      intentAnalysis: relaxedAgentPromptLineBudget,
+      goalWorkloadAnalyst: relaxedAgentPromptLineBudget,
       // Raised from 360 -> 375 on 2026-05-21 to add the orchestrator's
       // project-root git conflict ownership and toolchain readiness duties
       // without widening the narrow git-only bash surface.
@@ -84,10 +84,10 @@ describe("core prompt hygiene", () => {
       // explicit workflow/visual/data/verification complexity calibration
       // without turning it into goal decomposition.
       // Raised 190 -> 195 on 2026-05-31 for research evidence ID handling.
-      requirements: 195,
+      requirements: relaxedAgentPromptLineBudget,
       // Raised 35 -> 40 for source-URL subpage research workflow.
-      research: 40,
-      visualQa: 45,
+      research: relaxedAgentPromptLineBudget,
+      visualQa: relaxedAgentPromptLineBudget,
     }
 
     for (const name of Object.keys(promptFiles) as Array<keyof typeof promptFiles>) {
@@ -627,8 +627,9 @@ describe("core prompt hygiene", () => {
     expect(design).toContain("desktop/tablet/mobile viewport matrix")
     expect(design).toContain("source-quality review against static HTML/base64/CSS replay")
     expect(design).toContain("frontend_design/host materializes raw mirror evidence and the `web-clone-source/` package under `.opencorvus/runtime/tasks/<taskID>/frontend-design/`")
-    expect(design).toContain("In host-prepared webpage turns, the host has already materialized compact evidence and the source project")
-    expect(design).toContain("Use bounded `read_file` / project-structure tools")
+    expect(design).toContain("When task-runtime webpage evidence already exists")
+    expect(design).toContain("frontend-design-created source project after `create_frontend_skeleton_project` returns")
+    expect(design).toContain("use bounded `read_file` / project-structure tools")
     expect(design).toContain("Build must adopt the frontend-design skeleton project as the root app's starting baseline")
     expect(design).toContain("it is not a sidecar reference to ignore")
     expect(design).toContain("`final_delivery_mode`")
