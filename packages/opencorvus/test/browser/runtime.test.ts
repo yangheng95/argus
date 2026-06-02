@@ -50,6 +50,11 @@ describe("BrowserRuntime", () => {
     expect(BrowserRuntime.defaultLaunchArgs()).toContain("--disable-remote-fonts")
   })
 
+  test("resolves source Playwright from the package root", async () => {
+    const entry = await BrowserRuntime.resolvePlaywrightEntry()
+    expect(entry.replaceAll("\\", "/")).toContain("/packages/opencorvus/node_modules/playwright/index.mjs")
+  })
+
   test("uses a stable launch timeout policy for all browser callers", () => {
     const previous = process.env.OPENCORVUS_BROWSER_LAUNCH_TIMEOUT_MS
 
