@@ -4,6 +4,7 @@ import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { PNG } from "pngjs"
+import { Instance } from "../../src/project/instance"
 import { FrontendDesignTestHooks } from "../../src/frontend-design/agent"
 import { createFrontendTemplateOutputTools } from "../../src/frontend-design/output-tools"
 import { MIRROR_ANALYSIS_TOOL_IDS } from "../../src/mirror/tools/ids"
@@ -31,7 +32,10 @@ describe("frontend-design prompt assembly", () => {
     expect(prompt).toContain("Stop condition")
     expect(prompt).toContain("maintainable_replacement_required")
     expect(prompt).toContain("## Agent-Owned Rawproject Refinement")
-    expect(prompt).toContain("frontend_design is not merely a report writer")
+    expect(prompt).toContain("frontend_design is not a report writer")
+    expect(prompt).toContain("Build should only fine-tune or integrate the source frontend_design delivers")
+    expect(prompt).toContain("edit the created source project")
+    expect(prompt).toContain("Build is not the primary rawproject-to-maintainable-code worker")
     expect(prompt).toContain("The source project plus its iteration sidecars are part of the deliverable surface")
     expect(prompt).toContain("Baseline-first rule")
     expect(prompt).toContain("Region iteration algorithm")
@@ -46,7 +50,7 @@ describe("frontend-design prompt assembly", () => {
     expect(prompt).toContain("off-track process defect")
     expect(prompt).toContain("Do not solve benchmark failures by lowering thresholds")
     expect(prompt).not.toContain("Do not loop through render/evaluation attempts")
-    expect(prompt).toContain("Do not change other agent prompts, communication paths, evaluator scoring, runtime source packages, or generated outputs")
+    expect(prompt).toContain("Do not change other agent prompts, communication paths, evaluator scoring, runtime source packages, raw mirror evidence, or generated evidence outputs")
     expect(prompt).not.toContain("overallScore >=80/100")
     expect(prompt).not.toContain("100/100")
     expect(prompt).not.toContain("96/100")
@@ -93,8 +97,32 @@ describe("frontend-design prompt assembly", () => {
     expect(prompt).toContain(".opencorvus/runtime/tasks/tsk_web_clone/frontend-design/web-clone-source/")
     expect(prompt).toContain(".opencorvus/runtime/tasks/tsk_web_clone/frontend-design/frontend-design-skeleton/")
     expect(prompt).toContain("After the source project tool returns")
+    expect(prompt).toContain("edit the created source project itself")
+    expect(prompt).toContain("Build should receive this maintainable frontend_design project and only perform root-app adoption, integration, and precision fixes")
+    expect(prompt).toContain("must attempt the current `nextSourceDomReplacement` vertical slice")
     expect(prompt).not.toContain("The host already prepared the frontend-design high-fidelity editable source project before this model turn.")
     expect(prompt).not.toContain("Do not call `create_frontend_skeleton_project` again")
+  })
+
+  test("frontend_design analyze toolkit includes source refinement tools", async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "frontend-implementation-tools-"))
+    await Instance.provide({
+      directory: dir,
+      fn: async () => {
+        const tools = await FrontendDesignTestHooks.createFrontendImplementationTools({})
+        expect(Object.keys(tools)).toEqual(expect.arrayContaining([
+          "bash",
+          "edit",
+          "write",
+          "apply_patch",
+          "web_clone_source_audit",
+          "webpage_render",
+          "webpage_evaluate",
+          "webpage_text_diff",
+          "webpage_vision_judge",
+        ]))
+      },
+    })
   })
 
   test("terminal frontend template submit tool accepts bounded review notes when auto iteration is off", async () => {
@@ -183,75 +211,10 @@ describe("frontend-design prompt assembly", () => {
   })
 
   test("agent exposes direct frontend template submit instead of register tools", () => {
-    const tools = FrontendDesignTestHooks.selectFrontendTemplateSubmitTool(createFrontendTemplateOutputTools())
+    const tools = FrontendDesignTestHooks.createFrontendSubmitTools(createFrontendTemplateOutputTools())
 
     expect(Object.keys(tools)).toEqual(["submit_frontend_template"])
     expect(Object.keys(tools).some((name) => name.startsWith("register_"))).toBe(false)
-  })
-
-  test("host-prepared turns use the full frontend template submit tool", () => {
-    const kit = createFrontendTemplateOutputTools({ autoIteration: true })
-    const tools = FrontendDesignTestHooks.selectFrontendTemplateSubmitTool(kit, { hostPrepared: true })
-
-    expect(tools.submit_frontend_template).not.toBe(kit.tools.submit_frontend_template)
-  })
-
-  test("host-prepared submit normalizes final delivery mode to maintainable refactor", async () => {
-    const kit = createFrontendTemplateOutputTools({ autoIteration: true })
-    const tools = FrontendDesignTestHooks.selectFrontendTemplateSubmitTool(kit, { hostPrepared: true })
-
-    await (tools.submit_frontend_template as any).execute({
-      design_system: "source-derived webpage system",
-      tech_stack: ["React", "Vite", "TypeScript"],
-      final_delivery_mode: "visual_baseline_allowed",
-      frontend_template: "Adopt frontend-design-skeleton, then replace source regions from evidence.",
-      fillable_modules: "Root entrypoints, source data modules, scoped styles, and region replacements.",
-      component_inventory: "legacy summary",
-      component_reuse_plan: [
-        {
-          family_id: "comp-source-page-baseline",
-          name: "Source page baseline",
-          observed_surface: "Captured source page",
-          source_refs: ["frontend-design-skeleton/src/App.tsx", "web-clone-source/reference.png"],
-          implementation_strategy: "extracted_baseline_defer",
-          reuse_source: "frontend-design-skeleton source baseline",
-          mature_library_candidates: [],
-          props_states: "source regions and parity guards",
-          replacement_boundary: "full source page until named regions are replaced",
-          parity_guard: "compare against reference.png before deleting generated regions",
-          custom_fallback_reason: "",
-        },
-      ],
-      baseline_replacement_plan: [],
-      quality_project_contract: "Maintainable delivery requires semantic region replacement and source audit evidence.",
-      material_inventory: "reference.png, source IR, CSS sidecars, data modules",
-      frontend_project: {
-        status: "created",
-        role: "source_baseline_input",
-        project_root: "frontend-design-skeleton",
-        source_package: "web-clone-source",
-        entrypoints: ["src/App.tsx"],
-        generation_tool: "host-prepared:create_frontend_skeleton_project",
-        notes: [],
-      },
-      visual_consistency_contract: "Match reference.png during every replacement.",
-      ui_data_contract: "Repeated content comes from source data modules.",
-      template_iteration_notes: ["pass 1 inventory", "pass 2 implementability"],
-      completeness_review: "Deferred source-dom regions remain unfinished source debt.",
-      reference_artifacts: ["web-clone-source/reference.png"],
-      open_questions: [],
-    }, {})
-
-    expect(kit.getCollector().final?.final_delivery_mode).toBe("maintainable_replacement_required")
-    expect(kit.getCollector().final?.frontend_template).toContain("replace source regions")
-  })
-
-  test("agent keeps evidence read tools available before frontend template submission", () => {
-    expect(FrontendDesignTestHooks.shouldScopeFrontendTemplateSubmitTool()).toBe(false)
-    expect(FrontendDesignTestHooks.shouldScopeFrontendTemplateSubmitTool({ textOnlyNoVisualSource: true })).toBe(true)
-    expect(FrontendDesignTestHooks.shouldScopeFrontendTemplateSubmitTool({
-      textOnlyNoVisualSource: false,
-    })).toBe(false)
   })
 
   test("text-only turns pin frontend_design to direct public report submission", () => {
@@ -273,25 +236,6 @@ describe("frontend-design prompt assembly", () => {
 
     expect(prompt).toContain("Text-only frontend_design turn")
     expect(prompt).toContain("Produce the public frontend_design report directly from the textual brief")
-  })
-
-  test("text-only submit tool materializes the public report from the brief", async () => {
-    const kit = createFrontendTemplateOutputTools({ autoIteration: true })
-    const tools = FrontendDesignTestHooks.selectFrontendTemplateSubmitTool(kit, {
-      textOnlyBrief: {
-        title: "Docs page",
-        request: "Build a docs page with a dark navy hero and teal CTA.",
-      },
-    })
-
-    const result = await (tools.submit_frontend_template as any).execute({}, {})
-
-    expect(result).toContain("OK")
-    expect(kit.getCollector().final?.frontend_template).toContain("dark navy hero")
-    expect(kit.getCollector().final?.component_reuse_plan[0]?.family_id).toBe("comp-text-brief-page")
-    expect(kit.getCollector().final?.completeness_review).toContain("Text-only public report handoff")
-    expect(kit.getCollector().final?.open_questions.join("\n")).toContain("No visual screenshot")
-    expect(kit.buildReport().detail).toContain("## Implementation Problems And Agent Handoff")
   })
 
   test("host-prepared prompt embeds compact evidence and requires bounded evidence inspection", () => {
@@ -331,7 +275,8 @@ describe("frontend-design prompt assembly", () => {
     expect(prompt).toContain("maintainable project source")
     expect(prompt).toContain("Do not output a standalone component checklist or advice-only report")
     expect(prompt).toContain("maintainable rawproject refactor algorithm")
-    expect(prompt).toContain("normal frontend-design and downstream implementation agent flow")
+    expect(prompt).toContain("normal frontend-design agent flow")
+    expect(prompt).toContain("Build receives the frontend_design project for root-app adoption, integration, and precision fixes")
     expect(prompt).toContain("Do not replace this judgment with host-side deterministic selector/card/table/map extraction rules.")
     expect(prompt).toContain("source map, region map, one replacement decision per region")
     expect(prompt).toContain("vertical-slice replacement with source data extraction")
