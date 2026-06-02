@@ -92,6 +92,13 @@ export namespace CompactionHandoff {
     })
     .strict()
 
+  export const ChronologyEntry = z
+    .object({
+      event: SpecificText,
+      evidence: NonEmpty.optional(),
+    })
+    .strict()
+
   export const Schema = z
     .object({
       objective: SpecificText,
@@ -99,6 +106,8 @@ export namespace CompactionHandoff {
       durableInstructionSources: z.array(InstructionSource),
       activeBuildContracts: z.array(ActiveBuildContract),
       todos: z.array(Todo.Info),
+      workingContext: z.array(SpecificText),
+      chronology: z.array(ChronologyEntry),
       currentState: CurrentState,
       decisions: z.array(Decision),
       evidence: z.array(Evidence),
@@ -138,6 +147,8 @@ export namespace CompactionHandoff {
     "Do not treat assistant reasoning, tool-choice indecision, or checkpoint prompts as user requirements.",
     "When active build-session contract facts are supplied, copy their ids into activeBuildContracts instead of paraphrasing them.",
     "When current todos are supplied, copy the todo array exactly into todos with the same item order, content, status, and priority.",
+    "Fill workingContext with the compact active working set: concrete requirements, constraints, file relationships, ids, paths, and partial conclusions the next agent must keep in mind.",
+    "Fill chronology with ordered progress events from the compacted history, including what changed, what was verified, and what remains unresolved.",
   ].join("\n")
 
   export function renderRequiredEvidence(requirements: Pick<EvidenceRequirements, "patchFiles" | "errorNames">) {
@@ -158,6 +169,8 @@ export namespace CompactionHandoff {
   "durableInstructionSources": [{"path": "absolute or configured instruction path", "role": "why this source is authoritative"}],
   "activeBuildContracts": [{"sessionID": "build session id", "goalID": "goal id", "goalRunID": "active logical attempt id", "artifactID": "build_session_contract artifact id", "sourceArtifactIDs": ["source artifact ids"], "digest": "contract snapshot digest"}],
   "todos": [{"content": "exact todo content", "status": "exact todo status", "priority": "exact todo priority"}],
+  "workingContext": ["compact active working set: requirements, constraints, ids, paths, file relationships, partial conclusions"],
+  "chronology": [{"event": "ordered progress event from the compacted history", "evidence": "optional exact source"}],
   "currentState": {
     "phase": "specific current phase",
     "activeTask": "specific active task",
@@ -223,6 +236,12 @@ export namespace CompactionHandoff {
     if (requirements.acceptanceCriteria && handoff.acceptanceCriteria.length === 0) {
       missing.push("acceptanceCriteria")
     }
+    if (requirements.userMessages && handoff.workingContext.length === 0) {
+      missing.push("workingContext")
+    }
+    if (requirements.userMessages && handoff.chronology.length === 0) {
+      missing.push("chronology")
+    }
     if (JSON.stringify(handoff.todos) !== JSON.stringify(requirements.todos)) {
       missing.push("todos")
     }
@@ -277,6 +296,7 @@ export namespace CompactionHandoff {
         (item) =>
           `   - Active build contract: session=${item.sessionID} goal=${item.goalID} goal_run=${item.goalRunID} artifact=${item.artifactID} digest=${item.digest}`,
       ),
+      ...normalized.workingContext.map((item) => `   - Working context: ${item}`),
       `   - Source agent/model: ${source.agent} using ${source.model.providerID}/${source.model.modelID}`,
       `   - Source format/system mode: ${source.formatType}; ${source.systemMode ?? "(none)"}`,
       `   - Source enabled tool switches: ${source.toolNames.join(", ") || "(none)"}`,
@@ -299,6 +319,9 @@ export namespace CompactionHandoff {
           `   - ${item.decision} Rationale: ${item.rationale}${item.evidence ? ` Evidence: ${item.evidence}` : ""}`,
       ),
       ...normalized.evidence.map((item) => `   - [${item.kind}] ${item.value}: ${item.detail}`),
+      ...normalized.chronology.map(
+        (item) => `   - Chronology: ${item.event}${item.evidence ? ` Evidence: ${item.evidence}` : ""}`,
+      ),
       "",
       "6. All user messages:",
       section(normalized.userMessages, (item) => `   - ${item}`),

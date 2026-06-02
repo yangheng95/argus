@@ -92,7 +92,7 @@ async function* stream(messages: Message.WithParts[]) {
 }
 
 describe("build-session compaction tail selection", () => {
-  test("splits assistant step boundaries so long dispatcher sessions keep a bounded tail", async () => {
+  test("compacts assistant step tails instead of emitting assistant-only tail markers", async () => {
     const preserveRecent = 8_000
     const messages: Message.WithParts[] = [
       userMessage("m-dispatch", "DISPATCH ANCHOR"),
@@ -108,16 +108,15 @@ describe("build-session compaction tail selection", () => {
     })
 
     expect(selected.anchor_id).toBe("m-dispatch")
-    expect(selected.tail_start_id).toBe("m-assistant-48")
+    expect(selected.tail_start_id).toBeUndefined()
     expect(selected.head.map((message) => message.info.id)).toEqual([
-      ...Array.from({ length: 48 }, (_, index) => `m-assistant-${index}`),
+      ...Array.from({ length: 50 }, (_, index) => `m-assistant-${index}`),
     ])
 
-    const tailStartIndex = messages.findIndex((message) => message.info.id === selected.tail_start_id)
-    const tailEstimate = Token.estimate(
-      JSON.stringify(SessionCompaction.TestHooks.compactionTranscriptMessages(messages.slice(tailStartIndex))),
+    const selectedEstimate = Token.estimate(
+      JSON.stringify(SessionCompaction.TestHooks.compactionTranscriptMessages(selected.head)),
     )
-    expect(tailEstimate).toBeLessThanOrEqual(preserveRecent)
+    expect(selectedEstimate).toBeGreaterThan(preserveRecent)
   })
 
   test("keeps low-volume assistant step sessions un-compacted when the recent tail covers the history", async () => {
@@ -175,6 +174,15 @@ describe("build-session compaction tail selection", () => {
             durableInstructionSources: [],
             activeBuildContracts: [],
             todos: [],
+            workingContext: [
+              "Assistant step tails must not be replayed without a real user turn boundary.",
+            ],
+            chronology: [
+              {
+                event: "Rejected assistant tail_start_id marker during compacted history filtering",
+                evidence: tailStart,
+              },
+            ],
             currentState: {
               phase: "validating assistant tail",
               activeTask: "preserve assistant step tail",
