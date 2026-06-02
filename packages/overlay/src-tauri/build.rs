@@ -10,7 +10,7 @@ use std::{
 fn dist_os(target_os: &str) -> &str {
     match target_os {
         "windows" => "windows",
-        "macos" => "macos",
+        "macos" => "darwin",
         "linux" => "linux",
         other => other,
     }

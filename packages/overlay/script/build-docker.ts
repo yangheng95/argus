@@ -13,6 +13,8 @@ import fs from "fs/promises"
 import path from "path"
 import { fileURLToPath } from "url"
 
+import { overlayPackageName, overlayServerDistName, overlayServerFileName } from "./artifact-names"
+
 const dir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const repo = path.resolve(dir, "../..")
 const opencorvus = path.resolve(repo, "packages/opencorvus")
@@ -79,16 +81,16 @@ async function ensureDockerImage(platform: "linux/amd64" | "linux/arm64") {
 for (const target of targets) {
   const [, arch] = target.split("-") as [string, "x64" | "arm64"]
   const dockerPlatform = arch === "x64" ? "linux/amd64" : "linux/arm64"
-  const packageName = `opencorvus-overlay-${target}`
+  const packageName = overlayPackageName("linux", arch)
 
   console.log(`\n=== overlay ${target} (Docker) ===`)
 
   // Verify pre-built opencorvus binary exists
-  const serverDir = path.join(opencorvus, "dist", `opencorvus-linux-${arch}`)
-  const serverBin = path.join(serverDir, "opencorvus")
+  const serverDir = path.join(opencorvus, "dist", overlayServerDistName("linux", arch))
+  const serverBin = path.join(serverDir, overlayServerFileName("linux"))
   if (!(await fileExists(serverBin))) {
     console.error(`ERROR: opencorvus binary not found: ${serverBin}`)
-    console.error("Run first: cd packages/opencorvus && bun run build --all")
+    console.error("Run first: cd packages/opencorvus && bun run build --overlay-server --all")
     process.exit(1)
   }
 

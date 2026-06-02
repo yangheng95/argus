@@ -1671,6 +1671,29 @@ mod tests {
     }
 
     #[test]
+    fn embedded_payload_contains_browser_mcp_runtime_when_present() {
+        if EMBEDDED_SERVER_FILES.is_empty() {
+            return;
+        }
+        let node = if cfg!(windows) {
+            "browser-mcp-node/node.exe"
+        } else {
+            "browser-mcp-node/node"
+        };
+        assert!(
+            EMBEDDED_SERVER_FILES.iter().any(|file| file.path == "browser-mcp-node/stdio.mjs"),
+            "embedded sidecar payload must include browser-mcp-node/stdio.mjs"
+        );
+        let node_entry = EMBEDDED_SERVER_FILES
+            .iter()
+            .find(|file| file.path == node)
+            .unwrap_or_else(|| panic!("embedded sidecar payload must include {node}"));
+        assert!(!node_entry.bytes.is_empty(), "{node} must not be embedded as an empty file");
+        #[cfg(unix)]
+        assert!(node_entry.executable, "{node} must be executable after extraction");
+    }
+
+    #[test]
     fn startup_failure_diagnostic_includes_error_and_log_path() {
         let path = PathBuf::from("C:/opencorvus/log/overlay-startup.log");
         let message = startup_failure_diagnostic_message("spawn failed", Some(&path));

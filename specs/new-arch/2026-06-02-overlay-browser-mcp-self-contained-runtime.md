@@ -71,3 +71,16 @@ Relevant callpoints:
   to an invalid path and use a PATH without Node; `/mcp` must connect browser
   instead of returning disabled or Node-not-found.
 
+## Independent Review Feedback
+
+Codex independent review on 2026-06-02 found three follow-up gaps:
+
+| Finding | Decision |
+| --- | --- |
+| Linux musl build copies no Node runtime because the host/target check only accepted targets with no `abi`. | Add a host runtime check that distinguishes glibc and musl. A target may use PATH Node only when OS, CPU arch, and Linux libc match; otherwise the build must receive `OPENCORVUS_BROWSER_MCP_NODE_BUILD_PATH`. |
+| Docker overlay build still mounted `dist/opencorvus-linux-*` instead of the overlay-server artifact directory. | Move overlay artifact naming into one helper and use it from every overlay build script, including Docker. |
+| Tests did not cover musl host matching, Docker artifact naming, or embedded browser MCP sidecar entries. | Add unit coverage for host runtime matching and overlay artifact names, and strengthen the Rust payload test to assert server, `stdio.mjs`, and Node executable entries when a payload is embedded. |
+
+The same review noted that Cargo reports macOS as `macos` while opencorvus
+artifacts use `darwin`; the build script default path must map `macos` to
+`darwin` so direct Tauri builds do not look in a second artifact directory.

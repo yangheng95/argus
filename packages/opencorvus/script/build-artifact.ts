@@ -30,3 +30,25 @@ export function artifactSourcemap(): "none" {
 export function artifactBrowserMcpNodeExecutableName(os = process.platform): string {
   return os === "win32" ? "node.exe" : "node"
 }
+
+export interface ArtifactNodeRuntimeTarget {
+  os: string
+  arch: string
+  abi?: "musl"
+}
+
+export interface ArtifactNodeRuntimeHost {
+  platform: string
+  arch: string
+  // libc is the Linux C standard library implementation: glibc or musl.
+  linuxLibc?: "glibc" | "musl"
+}
+
+export function artifactHostCanProvideNodeRuntime(
+  target: ArtifactNodeRuntimeTarget,
+  host: ArtifactNodeRuntimeHost,
+): boolean {
+  if (target.os !== host.platform || target.arch !== host.arch) return false
+  if (target.os !== "linux") return target.abi === undefined
+  return (target.abi ?? "glibc") === host.linuxLibc
+}
