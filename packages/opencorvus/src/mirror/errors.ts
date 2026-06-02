@@ -64,7 +64,7 @@ export const RenderError = NamedError.create(
   z.object({
     url: z.string(),
     reason: z.string(),
-    phase: z.enum(["launch", "navigate", "screenshot", "close"]).optional(),
+    phase: z.enum(["launch", "navigate", "evaluate", "screenshot", "close"]).optional(),
   }),
 )
 

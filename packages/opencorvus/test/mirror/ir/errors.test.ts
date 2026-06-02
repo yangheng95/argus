@@ -36,6 +36,7 @@ describe("Typed errors", () => {
   test("all error classes expose the expected names", () => {
     expect(new AnalyzeError({ reason: "x" }).name).toBe("MirrorAnalyzeError")
     expect(new RenderError({ url: "file:///tmp/index.html", reason: "x" }).name).toBe("MirrorRenderError")
+    expect(new RenderError({ url: "file:///tmp/index.html", reason: "x", phase: "evaluate" }).data.phase).toBe("evaluate")
     expect(new EvaluateError({ reason: "x" }).name).toBe("MirrorEvaluateError")
   })
 

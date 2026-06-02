@@ -306,8 +306,8 @@ test("submit_frontend_template renders compact structured fields into markdown h
   expect(report).toContain("## Reuse Constraints")
   expect(report).not.toContain("## Component Inventory")
   expect(report).toContain("- delivery_root: .")
-  expect(report).toContain("frontend-design-skeleton is a frontend_design-owned source project")
-  expect(report).toContain("the named source debt is unfinished maintainability work")
+  expect(report).toContain("frontend-design-skeleton is source_baseline_input evidence only")
+  expect(report).toContain("unfinished frontend_design work")
 })
 
 test("component reuse plan accepts provider naming and incomplete library hints without schema rejection", async () => {
@@ -412,7 +412,7 @@ test("component reuse plan accepts provider naming and incomplete library hints 
   expect(secondOk).toContain("OK")
 })
 
-test("maintainable delivery allows source skeleton without generated baseline replacement plan", async () => {
+test("maintainable delivery does not synthesize a whole-page source baseline replacement plan", async () => {
   const kit = createFrontendTemplateOutputTools()
   const submit = kit.tools.submit_frontend_template as any
   const base = {
@@ -461,11 +461,9 @@ test("maintainable delivery allows source skeleton without generated baseline re
   }, {})
 
   expect(okWithoutPlan).toContain("OK")
-  expect(kit.getCollector().final?.component_reuse_plan.map((item) => item.family_id)).toContain("comp-source-page-baseline")
-  expect(kit.getCollector().final?.baseline_replacement_plan).toHaveLength(1)
-  expect(kit.getCollector().final?.baseline_replacement_plan[0]?.boundary_id).toBe("source-page-baseline")
-  expect(kit.getCollector().final?.baseline_replacement_plan[0]?.replacement_strategy).toBe("extracted_baseline_defer")
-  expect(kit.getCollector().final?.quality_project_contract).toContain("source-page-baseline")
+  expect(kit.getCollector().final?.component_reuse_plan.map((item) => item.family_id)).not.toContain("comp-source-page-baseline")
+  expect(kit.getCollector().final?.baseline_replacement_plan).toHaveLength(0)
+  expect(kit.getCollector().final?.quality_project_contract).not.toContain("source-page-baseline")
 
   const secondSubmit = await submit.execute({
     ...base,

@@ -97,6 +97,12 @@ describe("web-clone source skeleton", () => {
     expect(usedSelectors.stats.reachableRules).toBeGreaterThan(0)
     expect(componentTree.components.length).toBeGreaterThan(0)
     expect(contentModel.tables.length).toBe(1)
+    expect(contentModel.sourceComponentPatterns).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: "data_grid_surface",
+        recommendedReplacementKind: "data_table_or_heatmap_component",
+      }),
+    ]))
     expect(sourceQualityAudit.passed).toBe(true)
     expect(readme).toContain("This directory is the only development-facing webpage clone seed.")
     expect(readme).toContain("component-tree.json")
@@ -114,6 +120,55 @@ describe("web-clone source skeleton", () => {
     })
     expect(evidence.referenced).toBe(true)
     expect(evidence.ok).toBe(true)
+  })
+
+  test("reports class-insensitive repeated component patterns", async () => {
+    await using tmp = await tmpdir()
+    const sourcePackageDir = path.join(tmp.path, "web-clone-source")
+    const extraction = extractArchiveHtml({
+      html: `<!doctype html><html><head>
+        <title>Products</title>
+        <style>
+          .catalog { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+          .sku-a-001 { border: 1px solid #ddd; padding: 12px; }
+          .sku-b-002 { border: 1px solid #ddd; padding: 12px; }
+          .sku-c-003 { border: 1px solid #ddd; padding: 12px; }
+        </style>
+      </head><body>
+        <main>
+          <section class="catalog">
+            <article class="sku-a-001 selected"><h2>Alpha lamp</h2><p>Ships today</p><a href="/alpha">View</a></article>
+            <article class="sku-b-002"><h2>Beta chair</h2><p>Ships tomorrow</p><a href="/beta">View</a></article>
+            <article class="sku-c-003"><h2>Gamma desk</h2><p>Ships Friday</p><a href="/gamma">View</a></article>
+          </section>
+        </main>
+      </body></html>`,
+      title: "Products",
+      url: "https://example.test/products",
+    })
+    await writeWebCloneArchiveExtraction(sourcePackageDir, extraction)
+    const handoff = buildWebCloneHandoff(extraction.pageIr, extraction.assetGraph)
+    await writeWebCloneSourceSkeleton({
+      outputDir: sourcePackageDir,
+      pageIr: extraction.pageIr,
+      assetGraph: extraction.assetGraph,
+      segments: handoff.segments,
+    })
+
+    const contentModel = JSON.parse(await Bun.file(path.join(sourcePackageDir, "source-ir", "content-model.json")).text())
+
+    expect(contentModel.repeatedGroups).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        count: 3,
+        itemTag: "article",
+      }),
+    ]))
+    expect(contentModel.sourceComponentPatterns).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: "card_collection_surface",
+        recommendedReplacementKind: "card_collection_component",
+      }),
+    ]))
   })
 
   test("source skeleton evidence reports a PNG signature without an IHDR chunk", async () => {

@@ -5,6 +5,7 @@ import os from "node:os"
 import path from "node:path"
 import { PNG } from "pngjs"
 import { Instance } from "../../src/project/instance"
+import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 import { FrontendDesignTestHooks } from "../../src/frontend-design/agent"
 import { createFrontendTemplateOutputTools } from "../../src/frontend-design/output-tools"
 import {
@@ -15,6 +16,7 @@ import {
 } from "../../src/frontend-design/static-tools"
 import { MIRROR_ANALYSIS_TOOL_IDS } from "../../src/mirror/tools/ids"
 import { generateWebCloneSkeletonProject } from "../../src/web-clone"
+import { tmpdir } from "../fixture/fixture"
 
 describe("frontend-design prompt assembly", () => {
   test("core prompt pins maintainable rawproject refactor algorithm", async () => {
@@ -26,7 +28,7 @@ describe("frontend-design prompt assembly", () => {
     expect(prompt).toContain("Baseline-first replacement workflow")
     expect(prompt).toContain("normal agent tool flow")
     expect(prompt).toContain("not by creating project-internal state machines")
-    expect(prompt).toContain("static next-candidate metadata")
+    expect(prompt).toContain("static first-candidate metadata")
     expect(prompt).toContain("does not ask the generated project to self-iterate")
     expect(prompt).toContain("sourceDomIterationState.ts")
     expect(prompt).toContain("nextSourceDomReplacement")
@@ -40,9 +42,10 @@ describe("frontend-design prompt assembly", () => {
     expect(prompt).toContain("## Agent-Owned Rawproject Refinement")
     expect(prompt).toContain("frontend_design is not a report writer")
     expect(prompt).toContain("Build should only fine-tune or integrate the source frontend_design delivers")
-    expect(prompt).toContain("edit the created source project")
+    expect(prompt).toContain("edit the target delivery project")
     expect(prompt).toContain("Build is not the primary rawproject-to-maintainable-code worker")
-    expect(prompt).toContain("The source project plus its iteration sidecars are part of the deliverable surface")
+    expect(prompt).toContain("The target project plus the frontend_design iteration-state artifact are part of the deliverable surface")
+    expect(prompt).toContain("Do not run install/build/render/dev-server commands inside `frontend-design-skeleton`")
     expect(prompt).toContain("Baseline-first rule")
     expect(prompt).toContain("Region iteration algorithm")
     expect(prompt).toContain("at least 90% visual similarity")
@@ -105,9 +108,10 @@ describe("frontend-design prompt assembly", () => {
     expect(prompt).toContain(".opencorvus/runtime/tasks/tsk_web_clone/frontend-design/web-clone-source/")
     expect(prompt).toContain(".opencorvus/runtime/tasks/tsk_web_clone/frontend-design/frontend-design-skeleton/")
     expect(prompt).toContain("After the source project tool returns")
-    expect(prompt).toContain("edit the created source project itself")
-    expect(prompt).toContain("Build should receive this maintainable frontend_design project and only perform root-app adoption, integration, and precision fixes")
-    expect(prompt).toContain("must attempt the current `nextSourceDomReplacement` vertical slice")
+    expect(prompt).toContain("extract source-dom/rawcode evidence into the target delivery project")
+    expect(prompt).toContain("Build should receive the target project that frontend_design already populated")
+    expect(prompt).toContain("Before any build/render/server command, create or populate the target delivery project")
+    expect(prompt).toContain("Treat `nextSourceDomReplacement` as the first queue item only")
     expect(prompt).not.toContain("The host already prepared the frontend-design high-fidelity editable source project before this model turn.")
     expect(prompt).not.toContain("Do not call `create_frontend_skeleton_project` again")
   })
@@ -414,12 +418,13 @@ describe("frontend-design prompt assembly", () => {
     expect(prompt).toContain("Do not output a standalone component checklist or advice-only report")
     expect(prompt).toContain("maintainable rawproject refactor algorithm")
     expect(prompt).toContain("normal frontend-design agent flow")
-    expect(prompt).toContain("Build receives the frontend_design project for root-app adoption, integration, and precision fixes")
+    expect(prompt).toContain("Build receives the target project for integration and precision fixes")
+    expect(prompt).toContain("Do not install, build, render, or start a dev/preview server inside `frontend-design-skeleton`")
     expect(prompt).toContain("Do not replace this judgment with host-side deterministic selector/card/table/map extraction rules.")
     expect(prompt).toContain("source map, region map, one replacement decision per region")
-    expect(prompt).toContain("vertical-slice replacement with source data extraction")
+    expect(prompt).toContain("vertical-slice extraction into the target project with source data extraction")
     expect(prompt).toContain("scoped style ownership")
-    expect(prompt).toContain("generated fixed-layout cleanup")
+    expect(prompt).toContain("no generated fixed-layout boundary in target source")
     expect(prompt).toContain("desktop-reference 1366x768")
     expect(prompt).toContain("capture_viewport")
     expect(prompt).toContain("mobile-review 390x844")
@@ -449,13 +454,83 @@ describe("frontend-design prompt assembly", () => {
     expect(prompt).not.toContain("new webpage build")
     expect(prompt).not.toContain("from scratch")
     expect(prompt).not.toContain("blank page")
-    expect(prompt).not.toContain("freehand")
+    expect(prompt).toContain("Do not implement by freehand redrawing")
     expect(prompt).not.toContain("greenfield")
     expect(prompt).not.toContain("overallScore >=80/100")
     expect(prompt).not.toContain("100/100")
     expect(prompt).not.toContain("TradingView")
     expect(prompt).not.toContain("world-economy")
   })
+
+  test("runtime host-prepared resolver loads compact evidence from task paths", async () => {
+    await using tmp = await tmpdir()
+    const taskID = "tsk_frontend_runtime_evidence"
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const paths = ProjectRuntimePaths.frontendDesignPaths(tmp.path, taskID)
+        await fs.mkdir(path.join(paths.sourcePackageAbsolute, "source-ir"), { recursive: true })
+        await fs.mkdir(path.join(paths.sourcePackageAbsolute, "source-skeleton"), { recursive: true })
+        await fs.mkdir(path.join(paths.skeletonProjectAbsolute, "src", "data"), { recursive: true })
+        await fs.mkdir(path.join(paths.skeletonProjectAbsolute, "src", "components", "source-dom"), { recursive: true })
+        const png = new PNG({ width: 8, height: 8 })
+        png.data.fill(255)
+        await fs.writeFile(path.join(paths.sourcePackageAbsolute, "reference.png"), PNG.sync.write(png))
+        await fs.writeFile(path.join(paths.skeletonProjectAbsolute, "src", "data", "sourceProjectManifest.json"), JSON.stringify({
+          sourceDomRegions: {
+            count: 1,
+            largestBytes: 24000,
+            highPriorityCount: 1,
+            replacementPlanCount: 1,
+            iterationStateModule: "src/data/sourceDomIterationState.ts",
+            semanticReplacementCount: 0,
+          },
+          visualIteration: {
+            referenceImage: "reference.png",
+            comparisonTool: "webpage_evaluate",
+            viewportMatrix: [{ name: "desktop-reference", width: 1366, height: 768, evidenceRole: "primary_reference" }],
+          },
+        }, null, 2))
+        await fs.writeFile(path.join(paths.skeletonProjectAbsolute, "src", "data", "sourceDomIterationState.ts"), [
+          "export const sourceDomIterationState = " + JSON.stringify({
+            generatedRegionCount: 1,
+            semanticReplacementCount: 0,
+            remainingRegionCount: 1,
+            nextReplacement: {
+              regionComponentName: "GenericRegion",
+              regionFilePath: "src/components/source-dom/GenericRegion.tsx",
+              priority: "high",
+              replacementKind: "card_collection_component",
+              recommendedComponentName: "GenericCards",
+            },
+          }, null, 2) + " as const",
+          "",
+        ].join("\n"))
+        await fs.writeFile(path.join(paths.skeletonProjectAbsolute, "src", "data", "sourceDomReplacementPlan.ts"), [
+          "export const sourceDomReplacementPlan = " + JSON.stringify([{
+            regionComponentName: "GenericRegion",
+            regionFilePath: "src/components/source-dom/GenericRegion.tsx",
+            priority: "high",
+            replacementKind: "card_collection_component",
+            firstReplacementStep: "Extract repeated cards into target project source.",
+          }], null, 2) + " as const",
+          "",
+        ].join("\n"))
+
+        const resolved = await FrontendDesignTestHooks.resolveHostPreparedFrontendProject(taskID)
+
+        expect(resolved?.status).toBe("created")
+        expect(resolved?.projectRoot).toBe(paths.skeletonProjectAbsolute)
+        expect(resolved?.sourcePackage).toBe(paths.sourcePackageAbsolute)
+        expect(resolved?.projectRootRef).toBe(paths.skeletonProjectRelative)
+        expect(resolved?.sourcePackageRef).toBe(paths.sourcePackageRelative)
+        expect(resolved?.compactEvidence).toContain("source-project-handoff-summary.md")
+        expect(resolved?.compactEvidence).toContain("nextReplacement: GenericRegion -> GenericCards")
+        expect(resolved?.compactEvidence).toContain("source-audit-supervision.md")
+      },
+    })
+  }, 30_000)
 
   test("host-prepared source project summary exposes replacement sidecars and known region work", async () => {
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), "frontend-source-summary-"))
@@ -550,7 +625,7 @@ describe("frontend-design prompt assembly", () => {
       expect(summary).toContain("sourceFaqGroups.ts")
       expect(summary).toContain("NewsRegion: priority=high")
       expect(summary).toContain("firstReplacementStep: Render NewsList")
-      expect(summary).toContain("Handoff rule")
+      expect(summary).toContain("Extraction rule")
     } finally {
       await fs.rm(dir, { recursive: true, force: true })
     }

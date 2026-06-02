@@ -329,12 +329,48 @@ describe("tool.web_clone_generate_source_project", () => {
         const audit = await auditTool.execute({
           projectDir: outputDir,
           sourcePackageDir: mirrorDir,
-          finalDeliveryMode: "maintainable_replacement_required",
+          finalDeliveryMode: "visual_baseline_allowed",
         }, ctx)
         expect(audit.title).toBe("Source-skeleton consumption audit passed")
         expect(audit.metadata.audit.risk.generatedBaselineDetected).toBe(false)
         expect(audit.metadata.audit.projectStats.sourceDomRegionFileCount).toBe(0)
         expect(audit.metadata.audit.projectStats.renderLoopCount).toBeGreaterThan(0)
+      },
+    })
+  }, 30_000)
+
+  test("turns BBC-style promo lists into semantic data-loop components", async () => {
+    await using tmp = await tmpdir()
+    const mirrorDir = await writeBbcPromoFixtureMirror(tmp.path)
+    const outputDir = path.join(tmp.path, "generated-bbc-promo-react")
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const generateTool = await WebCloneGenerateSourceProjectTool.init()
+        await generateTool.execute({ mirrorDir, outputDir }, ctx)
+
+        const sourceDomPage = await Bun.file(path.join(outputDir, "src", "components", "SourceDomPage.tsx")).text()
+        const semanticDir = path.join(outputDir, "src", "components", "semantic")
+        const semanticFiles = (await fs.readdir(semanticDir)).filter((file) => file.endsWith(".tsx"))
+        const sourceDomDirExists = await Bun.file(path.join(outputDir, "src", "components", "source-dom")).exists()
+
+        expect(semanticFiles).toHaveLength(1)
+        expect(sourceDomPage).toContain('from "./semantic/')
+        expect(sourceDomDirExists).toBe(false)
+
+        const semanticComponent = await Bun.file(path.join(semanticDir, semanticFiles[0]!)).text()
+        const sourceDomIterationState = await Bun.file(path.join(outputDir, "src", "data", "sourceDomIterationState.ts")).text()
+        expect(semanticComponent).toContain("semantic-source-replacement")
+        expect(semanticComponent).toContain("promo_item")
+        expect(semanticComponent).toContain(".map((item)")
+        expect(semanticComponent).toContain("ssrcss-60rlar-Grid")
+        expect(semanticComponent).toContain("ssrcss-ccqz3i-Promo")
+        expect(semanticComponent).toContain("Massive Russian attack on cities across Ukraine kills at least 13 people")
+        expect(semanticComponent).toContain("/assets/images/asset_000001.webp")
+        expect(semanticComponent).not.toContain("data-source-node-id")
+        expect(sourceDomIterationState).toContain('"semanticReplacementCount": 1')
+        expect(sourceDomIterationState).toContain('"remainingRegionCount": 0')
       },
     })
   }, 30_000)
@@ -376,12 +412,49 @@ describe("tool.web_clone_generate_source_project", () => {
         const audit = await auditTool.execute({
           projectDir: outputDir,
           sourcePackageDir: mirrorDir,
-          finalDeliveryMode: "maintainable_replacement_required",
+          finalDeliveryMode: "visual_baseline_allowed",
         }, ctx)
         expect(audit.title).toBe("Source-skeleton consumption audit passed")
         expect(audit.metadata.audit.risk.generatedBaselineDetected).toBe(false)
         expect(audit.metadata.audit.projectStats.sourceDomRegionFileCount).toBe(0)
         expect(audit.metadata.audit.projectStats.semanticReplacementFileCount).toBe(1)
+      },
+    })
+  }, 30_000)
+
+  test("extracts structurally equivalent table, list, and navigation surfaces without business words", async () => {
+    await using tmp = await tmpdir()
+    const mirrorDir = await writeGenericStructureFixtureMirror(tmp.path)
+    const outputDir = path.join(tmp.path, "generated-generic-react")
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const generateTool = await WebCloneGenerateSourceProjectTool.init()
+        await generateTool.execute({ mirrorDir, outputDir }, ctx)
+
+        const sourceDomPage = await Bun.file(path.join(outputDir, "src", "components", "SourceDomPage.tsx")).text()
+        const semanticDir = path.join(outputDir, "src", "components", "semantic")
+        const semanticFiles = (await fs.readdir(semanticDir)).filter((file) => file.endsWith(".tsx")).sort()
+        const sourceDomIterationState = await Bun.file(path.join(outputDir, "src", "data", "sourceDomIterationState.ts")).text()
+        const generatedSource = await readGeneratedSource(outputDir)
+
+        expect(semanticFiles).toContain("PlanComparisonTable.tsx")
+        expect(semanticFiles).toContain("DeploymentQueueList.tsx")
+        expect(semanticFiles).toContain("ResourceHubLinks.tsx")
+        expect(sourceDomPage).toContain('from "./semantic/PlanComparisonTable"')
+        expect(sourceDomPage).toContain('from "./semantic/DeploymentQueueList"')
+        expect(sourceDomPage).toContain('from "./semantic/ResourceHubLinks"')
+        expect(sourceDomIterationState).toContain('"semanticReplacementCount": 3')
+        expect(sourceDomIterationState).toContain('"replacementKind": "data_table_or_heatmap_component"')
+        expect(sourceDomIterationState).toContain('"replacementKind": "event_or_news_list_component"')
+        expect(sourceDomIterationState).toContain('"replacementKind": "navigation_or_footer_component"')
+        expect(generatedSource).toContain("Plan comparison")
+        expect(generatedSource).toContain("Deployment queue")
+        expect(generatedSource).toContain("Resource hub")
+        expect(generatedSource).not.toContain("TradingView")
+        expect(generatedSource).not.toContain("GDP")
+        expect(generatedSource).not.toContain("Economic")
       },
     })
   }, 30_000)
@@ -422,7 +495,7 @@ describe("tool.web_clone_generate_source_project", () => {
         const audit = await auditTool.execute({
           projectDir: outputDir,
           sourcePackageDir: mirrorDir,
-          finalDeliveryMode: "maintainable_replacement_required",
+          finalDeliveryMode: "visual_baseline_allowed",
         }, ctx)
         expect(audit.title).toBe("Source-skeleton consumption audit passed")
         expect(audit.metadata.audit.risk.generatedBaselineDetected).toBe(false)
@@ -468,7 +541,7 @@ describe("tool.web_clone_generate_source_project", () => {
         const audit = await auditTool.execute({
           projectDir: outputDir,
           sourcePackageDir: mirrorDir,
-          finalDeliveryMode: "maintainable_replacement_required",
+          finalDeliveryMode: "visual_baseline_allowed",
         }, ctx)
         expect(audit.title).toBe("Source-skeleton consumption audit passed")
         expect(audit.metadata.audit.risk.generatedBaselineDetected).toBe(false)
@@ -579,7 +652,7 @@ describe("tool.web_clone_generate_source_project", () => {
         const audit = await auditTool.execute({
           projectDir: outputDir,
           sourcePackageDir: mirrorDir,
-          finalDeliveryMode: "maintainable_replacement_required",
+          finalDeliveryMode: "visual_baseline_allowed",
         }, ctx)
         expect(audit.title).toBe("Source-skeleton consumption audit passed")
         expect(audit.metadata.audit.risk.generatedBaselineDetected).toBe(false)
@@ -639,7 +712,7 @@ describe("tool.web_clone_generate_source_project", () => {
         const audit = await auditTool.execute({
           projectDir: outputDir,
           sourcePackageDir: mirrorDir,
-          finalDeliveryMode: "maintainable_replacement_required",
+          finalDeliveryMode: "visual_baseline_allowed",
         }, ctx)
         expect(audit.title).toBe("Source-skeleton consumption audit passed")
         expect(audit.metadata.audit.risk.generatedBaselineDetected).toBe(false)
@@ -724,7 +797,7 @@ describe("tool.web_clone_generate_source_project", () => {
         const audit = await auditTool.execute({
           projectDir: outputDir,
           sourcePackageDir: mirrorDir,
-          finalDeliveryMode: "maintainable_replacement_required",
+          finalDeliveryMode: "visual_baseline_allowed",
         }, ctx)
         expect(audit.title).toBe("Source-skeleton consumption audit passed")
         expect(audit.metadata.audit.risk.generatedBaselineDetected).toBe(false)
@@ -769,7 +842,7 @@ describe("tool.web_clone_generate_source_project", () => {
         const audit = await auditTool.execute({
           projectDir: outputDir,
           sourcePackageDir: mirrorDir,
-          finalDeliveryMode: "maintainable_replacement_required",
+          finalDeliveryMode: "visual_baseline_allowed",
         }, ctx)
         expect(audit.title).toBe("Source-skeleton consumption audit passed")
         expect(audit.metadata.audit.risk.generatedBaselineDetected).toBe(false)
@@ -820,7 +893,7 @@ describe("tool.web_clone_generate_source_project", () => {
         const audit = await auditTool.execute({
           projectDir: outputDir,
           sourcePackageDir: mirrorDir,
-          finalDeliveryMode: "maintainable_replacement_required",
+          finalDeliveryMode: "visual_baseline_allowed",
         }, ctx)
         expect(audit.title).toBe("Source-skeleton consumption audit passed")
         expect(audit.metadata.audit.risk.generatedBaselineDetected).toBe(false)
@@ -865,7 +938,7 @@ describe("tool.web_clone_generate_source_project", () => {
         const audit = await auditTool.execute({
           projectDir: outputDir,
           sourcePackageDir: mirrorDir,
-          finalDeliveryMode: "maintainable_replacement_required",
+          finalDeliveryMode: "visual_baseline_allowed",
         }, ctx)
         expect(audit.title).toBe("Source-skeleton consumption audit passed")
         expect(audit.metadata.audit.risk.generatedBaselineDetected).toBe(false)
@@ -1203,6 +1276,85 @@ async function writeSemanticNewsFixtureMirror(root: string, options: { pageShell
     repeatedGroups: [{ title: "News cards", sampleTexts: ["Factory Activity Expands in May", "Construction Spending Increases"] }],
     stats: { totalTables: 0, totalLists: 1, totalCards: 4, totalRepeatedGroups: 1 },
   }, null, 2))
+  return mirrorDir
+}
+
+async function writeBbcPromoFixtureMirror(root: string): Promise<string> {
+  const mirrorDir = path.join(root, "mirror-bbc-promo")
+  await Bun.write(path.join(mirrorDir, "reference.png"), minimalPngBytes())
+  const rows = [
+    ["Massive Russian attack on cities across Ukraine kills at least 13 people", "https://www.bbc.co.uk/news/articles/cx20p1", "asset_000001.webp", "People walk past a damaged building", "Europe"],
+    ["Prepare for El Nino - it could be the strongest in decades, UN warns", "https://www.bbc.co.uk/news/articles/cx20p2", "asset_000002.webp", "Firefighters stand in front of smoke", "Climate"],
+    ["Live Released Mandelson messages embarrassing, says minister", "https://www.bbc.co.uk/news/articles/cx20p3", "asset_000003.webp", "A minister speaks to camera", "Politics"],
+    ["Clashes continue in Lebanon despite Israel-Hezbollah ceasefire", "https://www.bbc.co.uk/news/articles/cx20p4", "asset_000004.webp", "A street scene in Lebanon", "World"],
+  ]
+  const cards = rows.map(([title, href, image, alt, source], index) => `
+    <li data-source-node-id="promo-${index}" class="ssrcss-1dr5icq-ListItem e1gp961v0">
+      <div data-testid="promo" type="article" class="ssrcss-ccqz3i-Promo e1vyq2e80">
+        <div class="ssrcss-1je5cnc-PromoSwitchLayoutAtBreakpoints et5qctl0">
+          <div class="ssrcss-vbl3xe-PromoContent exn3ah912">
+            <div class="ssrcss-l0lt4o-Stack e1y4nx260">
+              <h3>
+                <a href="${href}" class="ssrcss-jrq4xn-PromoLink exn3ah94">
+                  <span role="text">
+                    <p class="ssrcss-6bmydz-PromoHeadline exn3ah99"><span aria-hidden="false">${title}</span></p>
+                  </span>
+                </a>
+              </h3>
+            </div>
+            <div class="ssrcss-1gccci3-Stack e1y4nx260">
+              <ul data-source-role="list" role="list" class="ssrcss-9tw7r1-MetadataStripContainer eh44mf03">
+                <li role="listitem" class="ssrcss-sf7vdp-MetadataStripItem eh44mf01">
+                  <span type="attribution" class="ssrcss-61mhsj-MetadataText e4wm5bw1">${source}</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+          <div class="ssrcss-z60stg-PromoImageContainer en81kx34">
+            <div class="ssrcss-17h6w1t-PromoImageContainerInner en81kx32">
+              <div class="ssrcss-fec6qv-ImageWrapper en81kx33">
+                <span class="ssrcss-1f43yvp-Placeholder etlorgc0">
+                  <picture><img alt="${alt}" src="/assets/images/${image}" width="240" height="135" class="ssrcss-egie1y-Image edrdn950"></picture>
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </li>
+  `).join("")
+  await Bun.write(path.join(mirrorDir, "source-skeleton", "index.html"), `
+    <main class="bbc-page">
+      <ul data-source-node-id="bbc-promo-list" data-source-role="list" role="list" class="ssrcss-60rlar-Grid e12imr580">
+        ${cards}
+      </ul>
+    </main>
+  `)
+  await Bun.write(path.join(mirrorDir, "source-skeleton", "critical.css"), `
+    .bbc-page { display: block; }
+    .ssrcss-60rlar-Grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+    .ssrcss-1dr5icq-ListItem { list-style: none; }
+    .ssrcss-ccqz3i-Promo { display: flex; flex-direction: column; }
+    .ssrcss-jrq4xn-PromoLink { color: inherit; text-decoration: none; }
+    .ssrcss-6bmydz-PromoHeadline { font-size: 16px; font-weight: 700; margin: 0; }
+    .ssrcss-z60stg-PromoImageContainer { order: -1; }
+    .ssrcss-egie1y-Image { display: block; width: 100%; height: auto; }
+  `)
+  await Bun.write(path.join(mirrorDir, "source-ir", "component-tree.json"), JSON.stringify({
+    components: [
+      { name: "BbcPage", kind: "page", tag: "main", classNames: ["bbc-page"], textPreview: ["Massive Russian attack"] },
+      { name: "BbcPromoList", kind: "list", tag: "ul", classNames: ["ssrcss-60rlar-Grid"], textPreview: rows.map((row) => row[0]) },
+    ],
+  }, null, 2))
+  await Bun.write(path.join(mirrorDir, "source-ir", "content-model.json"), JSON.stringify({
+    lists: [{ title: "BBC promos", items: rows.map((row) => `${row[4]} ${row[0]}`) }],
+    repeatedGroups: [{ title: "BBC promo cards", sampleTexts: rows.slice(0, 2).map((row) => row[0]) }],
+    stats: { totalTables: 0, totalLists: 1, totalCards: rows.length, totalRepeatedGroups: 1 },
+  }, null, 2))
+  for (const [, , image] of rows) {
+    await Bun.write(path.join(mirrorDir, "assets", "images", image), minimalPngBytes())
+  }
+  await Bun.write(path.join(mirrorDir, "assets", "manifest.json"), JSON.stringify({ version: 1, assets: [] }, null, 2))
   return mirrorDir
 }
 
@@ -2133,6 +2285,84 @@ function renderFixtureFaqItems(startOrder: number, questions: string[]): string 
       </div>
     `
   }).join("")
+}
+
+async function writeGenericStructureFixtureMirror(root: string): Promise<string> {
+  const mirrorDir = path.join(root, "mirror-generic-structure")
+  await Bun.write(path.join(mirrorDir, "reference.png"), minimalPngBytes())
+  await Bun.write(path.join(mirrorDir, "source-skeleton", "index.html"), `
+    <main class="operations-page">
+      <section data-source-node-id="plan-table" class="surface alpha-table">
+        <header class="surface-head"><h2>Plan comparison</h2></header>
+        <div class="body-frame">
+          <table class="matrix">
+            <tbody>
+              <tr><th></th><th><a href="https://example.com/starter"><span>Starter</span></a></th><th><a href="https://example.com/pro"><span>Pro</span></a></th><th><a href="https://example.com/team"><span>Team</span></a></th></tr>
+              <tr><th><a href="https://example.com/storage"><span>Storage</span></a></th><td><span><div><span class="value-a">20</span><span class="unit-a">GB</span></div></span></td><td><span><div><span class="value-a">100</span><span class="unit-a">GB</span></div></span></td><td><span><div><span class="value-a">500</span><span class="unit-a">GB</span></div></span></td></tr>
+              <tr><th><a href="https://example.com/seats"><span>Seats</span></a></th><td><span><div><span class="value-a">3</span></div></span></td><td><span><div><span class="value-a">12</span></div></span></td><td><span><div><span class="value-a">50</span></div></span></td></tr>
+              <tr><th><a href="https://example.com/support"><span>Support</span></a></th><td><span><div><span class="value-a">Email</span></div></span></td><td><span><div><span class="value-a">Priority</span></div></span></td><td><span><div><span class="value-a">Dedicated</span></div></span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+      <section data-source-node-id="deployment-list" class="surface beta-list">
+        <header class="surface-head"><h2>Deployment queue</h2></header>
+        <div class="content-shell"><div class="lane-shell"><div class="items-lane">
+          ${["Package review", "Access rollout", "Design sync"].map((title, index) => `
+            <a href="https://example.com/deploy/${index}" class="wrap-row">
+              <div class="top-row"><div class="date-row"><div class="day-row">Batch ${index + 1}</div><div class="dot-row">•</div><div class="wrap-date" title="Jun ${index + 1}, 2026"><span class="badge-date"><span class="content-date"></span></span></div></div></div>
+              <div class="titleBlock-row"><div class="column-row"><span class="title-row">${title}</span></div></div>
+              <div class="stats-row"><div class="wrap-stat"><div class="title-stat">Status</div><div class="valueWrap-stat"><div class="value-stat">${index === 0 ? "Ready" : "Queued"}</div></div></div><div class="wrap-stat"><div class="title-stat">Owner</div><div class="valueWrap-stat"><div class="value-stat">Team ${index + 1}</div></div></div></div>
+            </a>
+          `).join("")}
+        </div></div></div>
+      </section>
+      <section data-source-node-id="resource-links" class="surface gamma-links">
+        <header class="surface-head"><h2>Resource hub</h2></header>
+        <div class="links-grid">
+          ${["Docs", "Templates", "Changelog", "Status", "Examples", "Support"].map((label) => `
+            <a href="https://example.com/${label.toLowerCase()}" class="resource-link"><span>${label}</span></a>
+          `).join("")}
+        </div>
+      </section>
+    </main>
+  `)
+  await Bun.write(path.join(mirrorDir, "source-skeleton", "critical.css"), ".surface { padding: 16px; } .links-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; } .items-lane { display: grid; gap: 8px; }")
+  await Bun.write(path.join(mirrorDir, "source-ir", "component-tree.json"), JSON.stringify({
+    components: [
+      { name: "PlanComparison", kind: "section", tag: "section", classNames: ["surface"], textPreview: ["Plan comparison", "Starter", "Team"] },
+      { name: "DeploymentQueue", kind: "section", tag: "section", classNames: ["surface"], textPreview: ["Deployment queue", "Package review"] },
+      { name: "ResourceHub", kind: "navigation", tag: "section", classNames: ["surface"], textPreview: ["Resource hub", "Docs", "Support"] },
+    ],
+  }, null, 2))
+  await Bun.write(path.join(mirrorDir, "source-ir", "content-model.json"), JSON.stringify({
+    tables: [{ title: "Plan comparison", headers: ["Starter", "Pro", "Team"], rows: [["Storage", "20 GB", "100 GB", "500 GB"], ["Seats", "3", "12", "50"], ["Support", "Email", "Priority", "Dedicated"]] }],
+    lists: [{ title: "Deployment queue", items: ["Package review", "Access rollout", "Design sync"] }, { title: "Resource hub", items: ["Docs", "Templates", "Changelog", "Status", "Examples", "Support"] }],
+    repeatedGroups: [{ title: "Deployment rows", sampleTexts: ["Package review Ready", "Access rollout Queued"] }, { title: "Resource links", sampleTexts: ["Docs", "Templates"] }],
+    sourceComponentPatterns: [
+      {
+        nodeId: "plan-table",
+        kind: "data_grid_surface",
+        recommendedReplacementKind: "data_table_or_heatmap_component",
+        signals: { tableRowCount: 4, maxRepeatedSiblingCount: 3 },
+      },
+      {
+        nodeId: "deployment-list",
+        kind: "card_collection_surface",
+        recommendedReplacementKind: "event_or_news_list_component",
+        signals: { maxRepeatedSiblingCount: 3, linkCount: 3 },
+      },
+      {
+        nodeId: "resource-links",
+        kind: "navigation_surface",
+        recommendedReplacementKind: "navigation_or_footer_component",
+        signals: { linkCount: 6, linkDensity: 0.5 },
+      },
+    ],
+    stats: { totalTables: 1, totalLists: 2, totalCards: 0, totalRepeatedGroups: 2, totalSourceComponentPatterns: 3 },
+  }, null, 2))
+  await Bun.write(path.join(mirrorDir, "assets", "manifest.json"), JSON.stringify({ version: 1, assets: [] }, null, 2))
+  return mirrorDir
 }
 
 function minimalPngBytes(): Uint8Array {

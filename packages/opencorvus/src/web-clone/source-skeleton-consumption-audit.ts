@@ -46,6 +46,8 @@ export interface WebCloneSourceSkeletonConsumptionAudit {
     renderLoopCount: number
     base64DataUriCount: number
     sourceDomRegionFileCount: number
+    sourceDomPageExists: boolean
+    sourceDomBaselineModuleCount: number
     largestSourceDomRegionBytes: number
     oversizedSourceDomRegionCount: number
     sourceDomReplacementPlanExists: boolean
@@ -79,6 +81,7 @@ export interface WebCloneSourceSkeletonConsumptionAudit {
     skeletonIgnored: boolean
     generatedBaselineDetected: boolean
     finalBaselineOnlyDetected: boolean
+    finalSourceDomModuleResidueDetected: boolean
     mechanicalSkeletonConversionDetected: boolean
     thirdPartyCssRuntimeLoaderDetected: boolean
     sourcePackageContaminated: boolean
@@ -187,6 +190,7 @@ export async function auditWebCloneSourceSkeletonConsumption(
   const htmlStringStats = countHtmlStringStats(projectText)
   const base64DataUriCount = projectText.match(/data:[^"')\s]+;base64,/g)?.length ?? 0
   const sourceDomRegionSources = projectSources.filter((source) => /^src\/components\/source-dom\/.+\.tsx$/i.test(source.relative))
+  const sourceDomBaselineModuleSources = projectSources.filter((source) => isFinalSourceDomBaselineResidueFile(source.relative))
   const sourceDomRegionBytes = sourceDomRegionSources.map((source) => source.bytes)
   const largestSourceDomRegionBytes = Math.max(0, ...sourceDomRegionBytes)
   const oversizedSourceDomRegionSources = sourceDomRegionSources.filter((source) => source.bytes >= SOURCE_DOM_REGION_OVERSIZE_BYTES)
@@ -218,6 +222,7 @@ export async function auditWebCloneSourceSkeletonConsumption(
   const textCoverageRatio = textSignals.length === 0 ? 0 : matchedTexts.length / textSignals.length
   const skeletonIgnored = !generatedBaselineDetected && textSignals.length > 0 && (matchedTexts.length < Math.min(3, textSignals.length) || textCoverageRatio < 0.25)
   const finalBaselineOnlyDetected = finalDeliveryMode === "maintainable_replacement_required" && generatedBaselineDetected
+  const finalSourceDomModuleResidueDetected = finalDeliveryMode === "maintainable_replacement_required" && sourceDomBaselineModuleSources.length > 0
 
   const projectStats = {
     sourceFileCount: sourceFiles.length,
@@ -229,6 +234,8 @@ export async function auditWebCloneSourceSkeletonConsumption(
     renderLoopCount,
     base64DataUriCount,
     sourceDomRegionFileCount: sourceDomRegionSources.length,
+    sourceDomPageExists: projectSources.some((source) => source.relative === "src/components/SourceDomPage.tsx"),
+    sourceDomBaselineModuleCount: sourceDomBaselineModuleSources.length,
     largestSourceDomRegionBytes,
     oversizedSourceDomRegionCount: oversizedSourceDomRegionSources.length,
     sourceDomReplacementPlanExists,
@@ -262,6 +269,7 @@ export async function auditWebCloneSourceSkeletonConsumption(
     skeletonIgnored,
     generatedBaselineDetected,
     finalBaselineOnlyDetected,
+    finalSourceDomModuleResidueDetected,
     mechanicalSkeletonConversionDetected,
     thirdPartyCssRuntimeLoaderDetected,
     sourcePackageContaminated,
@@ -295,6 +303,16 @@ export async function auditWebCloneSourceSkeletonConsumption(
         findings.push(`Largest remaining generated source-dom regions still need semantic replacement before final maintainable acceptance: ${priorityList.join(", ")}.`)
       }
     }
+  }
+  if (finalSourceDomModuleResidueDetected) {
+    const residue = sourceDomBaselineModuleSources
+      .slice()
+      .sort((a, b) => a.relative.localeCompare(b.relative))
+      .slice(0, 12)
+      .map((source) => source.relative)
+    findings.push(
+      `Target project still contains source-dom baseline modules in maintainable replacement mode: ${residue.join(", ")}. Extract their source evidence into semantic target-project components/data/styles, then remove these rawcode modules from final app source.`,
+    )
   }
   if (!generatedBaselineDetected && sourceComponentCount >= 2 && componentFileCount(projectSources) < 2) {
     findings.push(`Source IR exposes ${sourceComponentCount} component boundary hints, but fewer than 2 project-owned component files were found.`)
@@ -518,6 +536,13 @@ function isFrontendDesignGeneratedBaselineFile(relative: string): boolean {
     relative === "src/data/sourceSvgAssetGroups.ts" ||
     relative === "src/data/sourceFaqGroups.ts" ||
     relative.startsWith("src/components/source-dom/")
+}
+
+function isFinalSourceDomBaselineResidueFile(relative: string): boolean {
+  return relative === "src/components/SourceClonePage.tsx" ||
+    relative === "src/components/SourceDomPage.tsx" ||
+    /^src\/components\/source-dom\/.+\.tsx$/i.test(relative) ||
+    /^src\/data\/sourceDom[A-Z].*\.(?:ts|tsx|js|jsx|json)$/i.test(relative)
 }
 
 function isConsumptionAudit(value: unknown): value is WebCloneSourceSkeletonConsumptionAudit {
