@@ -21,6 +21,8 @@
  * model / session / prompt-composition / abort / stream-error handling.
  */
 import { tool, type ToolSet } from "ai"
+import fs from "node:fs/promises"
+import path from "node:path"
 import z from "zod"
 import { runAgentSession } from "@/agent/runner"
 import { withFactCheckRegistration } from "@/prompt/fragments/fact-check-registration"
@@ -112,6 +114,7 @@ export namespace FrontendDesignAgent {
     referenceArtifacts: string[]
     openQuestions: string[]
     processTrace: ProcessTrace
+    processTraceArtifact?: string
     report: AgentReport
   }
 
@@ -228,7 +231,8 @@ export namespace FrontendDesignAgent {
       )
     }
 
-    const report = appendFrontendProcessTrace(outputToolKit.buildReport(), processTrace)
+    const processTraceArtifact = await writeFrontendProcessTraceArtifact(input.taskID, processTrace)
+    const report = appendFrontendProcessTrace(outputToolKit.buildReport(), processTrace, processTraceArtifact)
 
     return {
       specs,
@@ -250,6 +254,7 @@ export namespace FrontendDesignAgent {
       referenceArtifacts: structured.reference_artifacts,
       openQuestions: structured.open_questions,
       processTrace,
+      processTraceArtifact,
       report,
       sessionID: out.session.id,
     }
@@ -487,19 +492,35 @@ function recordFrontendStaticToolSurface(trace: FrontendDesignAgent.ProcessTrace
   })
 }
 
-function appendFrontendProcessTrace(report: AgentReport, trace: FrontendDesignAgent.ProcessTrace): AgentReport {
+async function writeFrontendProcessTraceArtifact(
+  taskID: string | undefined,
+  trace: FrontendDesignAgent.ProcessTrace,
+): Promise<string | undefined> {
+  if (!taskID) return undefined
+  const file = ProjectRuntimePaths.taskAbsolute(Instance.directory, taskID, "frontend-design", "frontend-design-process-trace.json")
+  await fs.mkdir(path.dirname(file), { recursive: true })
+  await fs.writeFile(file, JSON.stringify(trace, null, 2), "utf8")
+  return file
+}
+
+function appendFrontendProcessTrace(
+  report: AgentReport,
+  trace: FrontendDesignAgent.ProcessTrace,
+  artifactPath?: string,
+): AgentReport {
   const lines = [
     report.detail,
     "",
     "## Frontend Design Process Trace",
     "",
+    artifactPath ? `Artifact: ${artifactPath}` : undefined,
     trace.events.length === 0
       ? "- No frontend_design tool events were recorded."
       : trace.events.map((event) => {
         const detail = event.details ? ` ${JSON.stringify(event.details)}` : ""
         return `- ${event.status}: ${event.name}${detail}`
       }).join("\n"),
-  ]
+  ].filter((line) => line !== undefined)
   return {
     summary: report.summary,
     detail: lines.join("\n"),
@@ -723,4 +744,5 @@ export const FrontendDesignTestHooks = {
   summarizeHostPreparedSourceAudit,
   summarizeHostPreparedSourceProject,
   summarizeReferencePixels,
+  writeFrontendProcessTraceArtifact,
 }

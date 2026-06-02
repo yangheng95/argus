@@ -149,6 +149,28 @@ describe("frontend-design prompt assembly", () => {
     expect(report.detail).toContain("passed: edit")
   })
 
+  test("frontend_design process trace writes task runtime artifact", async () => {
+    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "frontend-design-trace-"))
+    await Instance.provide({
+      directory: tmp,
+      fn: async () => {
+        const trace = FrontendDesignTestHooks.createFrontendProcessTrace()
+        FrontendDesignTestHooks.recordFrontendProcessEvent(trace, {
+          name: "frontend_design_static_tool_surface",
+          status: "passed",
+        })
+
+        const artifact = await FrontendDesignTestHooks.writeFrontendProcessTraceArtifact("tsk_frontend_trace", trace)
+        expect(artifact).toContain("frontend-design-process-trace.json")
+        const persisted = JSON.parse(await fs.readFile(artifact!, "utf8"))
+        expect(persisted.purpose).toBe("frontend-design-process-trace")
+        expect(persisted.events[0].name).toBe("frontend_design_static_tool_surface")
+        const report = FrontendDesignTestHooks.appendFrontendProcessTrace({ summary: "summary", detail: "detail" }, trace, artifact)
+        expect(report.detail).toContain(`Artifact: ${artifact}`)
+      },
+    })
+  })
+
   test("frontend_design process trace records region selection and source edits", async () => {
     const trace = FrontendDesignTestHooks.createFrontendProcessTrace()
     const tools = FrontendDesignTestHooks.createFrontendProcessTraceTools(trace)
