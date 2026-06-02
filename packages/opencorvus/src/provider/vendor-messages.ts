@@ -75,6 +75,26 @@ const claudeSanitizeToolCallIds: NormalizeMessages = (msgs) => {
   })
 }
 
+const claudeDropToolResultAssistantTail: NormalizeMessages = (msgs) => {
+  const last = msgs[msgs.length - 1]
+  const previous = msgs[msgs.length - 2]
+  if (!last || !previous) return msgs
+  if (previous.role !== "tool" || last.role !== "assistant") return msgs
+  if (!isTextOnlyAssistant(last)) return msgs
+  return msgs.slice(0, -1)
+}
+
+const claudeNormalize: NormalizeMessages = (msgs, model) => {
+  return claudeDropToolResultAssistantTail(claudeSanitizeToolCallIds(msgs, model), model)
+}
+
+function isTextOnlyAssistant(msg: ModelMessage) {
+  if (msg.role !== "assistant") return false
+  if (typeof msg.content === "string") return msg.content.length > 0
+  if (!Array.isArray(msg.content) || msg.content.length === 0) return false
+  return msg.content.every((part) => part.type === "text" && part.text.length > 0)
+}
+
 const mistralToolCallIdPadAndSeq: NormalizeMessages = (msgs) => {
   // Mistral tool IDs must be exactly 9 alphanumeric characters; pad/truncate.
   // Also: a `tool` message cannot be followed directly by `user`; insert an
@@ -174,7 +194,7 @@ const TERMINAL_NORMALIZERS: NormalizerEntry[] = [
   {
     tag: "claude-tool-ids",
     match: (m) => m.api.id.includes("claude"),
-    normalize: claudeSanitizeToolCallIds,
+    normalize: claudeNormalize,
   },
   {
     tag: "mistral-tool-ids-and-seq",
