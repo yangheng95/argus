@@ -163,6 +163,51 @@ describe("web-clone source skeleton", () => {
     expect(evidence.findings.join("\n")).toContain("IHDR")
   })
 
+  test("keeps data URL background declarations intact in critical CSS", async () => {
+    await using tmp = await tmpdir()
+    const sourcePackageDir = path.join(tmp.path, "web-clone-source")
+    const extraction = extractArchiveHtml({
+      html: `<!doctype html><html><head>
+        <title>BBC style fixture</title>
+        <style>
+          .hero {
+            background-image: image-set(url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB) 1x type("image/png"));
+            color: #181818;
+          }
+        </style>
+      </head><body>
+        <main class="hero">Welcome to the BBC</main>
+      </body></html>`,
+      title: "BBC style fixture",
+      url: "https://example.test/bbc",
+    })
+    extraction.pageIr = mergeExtractedLayoutIntoPageIr(extraction.pageIr, {
+      tree: [{
+        selector: "main.hero",
+        tag: "main",
+        bounds: { x: 0, y: 0, w: 1440, h: 900 },
+        styles: { backgroundImage: "image-set(url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB) 1x type(\"image/png\"))", color: "rgb(24, 24, 24)" },
+        text: "Welcome to the BBC",
+      }],
+    })
+    await writeWebCloneArchiveExtraction(sourcePackageDir, extraction)
+    const handoff = buildWebCloneHandoff(extraction.pageIr, extraction.assetGraph)
+    const result = await writeWebCloneSourceSkeleton({
+      outputDir: sourcePackageDir,
+      pageIr: extraction.pageIr,
+      assetGraph: extraction.assetGraph,
+      segments: handoff.segments,
+    })
+
+    const criticalCss = await Bun.file(path.join(result.skeletonDir, "critical.css")).text()
+
+    expect(result.audit.passed).toBe(true)
+    expect(criticalCss).toContain("data:image/png;base64")
+    expect(criticalCss).toContain('type("image/png")')
+    expect(criticalCss).toContain("color: #181818")
+    expect(criticalCss).not.toContain("background-image: image-set(url(data:image/png; color")
+  })
+
   test("audit rejects runtime replay and generated-project markers", async () => {
     await using tmp = await tmpdir()
     const skeletonDir = path.join(tmp.path, "source-skeleton")
