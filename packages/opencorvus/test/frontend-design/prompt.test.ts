@@ -7,6 +7,12 @@ import { PNG } from "pngjs"
 import { Instance } from "../../src/project/instance"
 import { FrontendDesignTestHooks } from "../../src/frontend-design/agent"
 import { createFrontendTemplateOutputTools } from "../../src/frontend-design/output-tools"
+import {
+  FRONTEND_DESIGN_CONTEXT_TOOL_IDS,
+  FRONTEND_DESIGN_IMPLEMENTATION_TOOL_IDS,
+  FRONTEND_DESIGN_MIRROR_ANALYSIS_TOOL_IDS,
+  FRONTEND_DESIGN_UTILITY_TOOL_IDS,
+} from "../../src/frontend-design/static-tools"
 import { MIRROR_ANALYSIS_TOOL_IDS } from "../../src/mirror/tools/ids"
 import { generateWebCloneSkeletonProject } from "../../src/web-clone"
 
@@ -123,6 +129,35 @@ describe("frontend-design prompt assembly", () => {
           "webpage_text_diff",
           "webpage_vision_judge",
         ]))
+      },
+    })
+  })
+
+  test("frontend_design runtime tool groups are static and complete", async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "frontend-static-tools-"))
+    await Instance.provide({
+      directory: dir,
+      fn: async () => {
+        const contextTools = FrontendDesignTestHooks.createFrontendDesignContextTools()
+        const mirrorTools = await FrontendDesignTestHooks.createMirrorAnalysisTools({})
+        const implementationTools = await FrontendDesignTestHooks.createFrontendImplementationTools({})
+        const utilityTools = await FrontendDesignTestHooks.createFrontendUtilityTools({})
+
+        expect(Object.keys(contextTools)).toEqual([...FRONTEND_DESIGN_CONTEXT_TOOL_IDS])
+        expect(Object.keys(mirrorTools)).toEqual([...FRONTEND_DESIGN_MIRROR_ANALYSIS_TOOL_IDS])
+        expect(Object.keys(implementationTools)).toEqual([...FRONTEND_DESIGN_IMPLEMENTATION_TOOL_IDS])
+        expect(Object.keys(utilityTools)).toEqual([...FRONTEND_DESIGN_UTILITY_TOOL_IDS])
+
+        const tools = {
+          ...implementationTools,
+          ...contextTools,
+          ...utilityTools,
+          ...mirrorTools,
+        }
+        expect(Object.keys(tools)).toContain("skill")
+        expect(Object.keys(tools)).not.toContain("webfetch")
+        expect(Object.keys(tools)).not.toContain("websearch")
+        expect(Object.keys(tools)).not.toContain("todoread")
       },
     })
   })

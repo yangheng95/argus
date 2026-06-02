@@ -8,6 +8,7 @@ import { PermissionNext } from "../../src/permission/next"
 import { SystemPrompt } from "../../src/session/system"
 import { ToolRegistry } from "../../src/tool/registry"
 import { MIRROR_ANALYSIS_TOOL_IDS, MIRROR_DELIVERY_TOOL_IDS, MIRROR_TOOL_IDS } from "../../src/mirror/tools/ids"
+import { FRONTEND_DESIGN_STATIC_TOOL_IDS } from "../../src/frontend-design/static-tools"
 import BUILD_CORE from "../../src/prompt/core/build-core.txt"
 import VISUAL_QA_CORE from "../../src/prompt/core/visual-qa-core.txt"
 import PROMPT_CODING from "../../src/agent/prompt/coding.txt"
@@ -386,10 +387,12 @@ test("native stage agent registry tool surfaces match role boundaries", async ()
       // frontend-design owns mirror extraction (URL/Figma/pixels); generic
       // websearch is redundant with that chain and risks score loops.
       const design = await Agent.get("frontend-design")
+      expect(design?.tools?.include).toEqual([...FRONTEND_DESIGN_STATIC_TOOL_IDS])
       expect(design?.tools?.include).toContain("url_screenshot")
       expect(design?.tools?.include).toContain("skill")
+      expect(design?.tools?.include).toContain("webpage_render")
+      expect(design?.tools?.include).toContain("webpage_evaluate")
       expect(design?.tools?.include).not.toContain("websearch")
-      expect(design?.tools?.include).not.toContain("webpage_render")
       expect(design?.tools?.include).not.toContain("task")
 
       const research = await Agent.get("research")
@@ -939,6 +942,7 @@ test("frontend-design statically declares mirror and source refinement tools", a
     fn: async () => {
       const frontendDesign = await Agent.get("frontend-design")
       expect(frontendDesign).toBeDefined()
+      expect(frontendDesign?.tools?.include).toEqual([...FRONTEND_DESIGN_STATIC_TOOL_IDS])
       const designToolIds = new Set(frontendDesign?.tools?.include ?? [])
       for (const id of MIRROR_ANALYSIS_TOOL_IDS) {
         expect(designToolIds.has(id)).toBe(true)
@@ -954,6 +958,25 @@ test("frontend-design statically declares mirror and source refinement tools", a
       expect(designToolIds.has("record_frontend_region_selection")).toBe(true)
       expect(designToolIds.has("record_frontend_replacement_result")).toBe(true)
       expect(designToolIds.has("web_clone_source_audit")).toBe(true)
+    },
+  })
+})
+
+test("frontend-design rejects config-defined dynamic tool surface", async () => {
+  await using tmp = await tmpdir({
+    config: {
+      agent: {
+        "frontend-design": {
+          tools: { include: ["read_file"] },
+        },
+      },
+    },
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await expect(Agent.get("frontend-design")).rejects.toThrow("config.agent.frontend-design.tools is not supported")
     },
   })
 })
