@@ -138,11 +138,17 @@ export const ExtractedPageAssetIconSchema = z.object({
   type: z.enum(["svg", "icon-font", "img"]),
 })
 
+export const ExtractedPageAssetDownloadFailureSchema = z.object({
+  src: z.string(),
+  reason: z.string(),
+})
+
 export const ExtractedPageAssetsSchema = z.object({
   images: z.array(ExtractedPageAssetImageSchema),
   icons: z.array(ExtractedPageAssetIconSchema),
   canvasCaptures: z.array(z.object({ dataUrl: z.string() })).optional(),
   imageMap: z.record(z.string(), z.string()).optional(),
+  imageDownloadFailures: z.array(ExtractedPageAssetDownloadFailureSchema).optional(),
 })
 
 export const ExtractedPageStatsSchema = z.object({
