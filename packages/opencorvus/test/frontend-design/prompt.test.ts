@@ -162,6 +162,8 @@ describe("frontend-design prompt assembly", () => {
       generationTool: "host-prepared:create_frontend_skeleton_project",
       warnings: [],
       compactEvidence: "compact source evidence",
+      visualIterationMatrix:
+        "desktop-reference 1366x768 (primary_reference, capture_viewport): Run measured webpage_evaluate against web-clone-source/reference.png after each region replacement. mobile-review 390x844 (responsive_review, default): Capture and inspect the root app at this viewport; use measured comparison when matching reference evidence exists, otherwise record the evidence gap. wide-review 1920x1080 (responsive_review, default): Capture and inspect the root app at this viewport; use measured comparison when matching reference evidence exists, otherwise record the evidence gap.",
       sourceAuditEvidence: [
         "Host-prepared source audit supervision.",
         "- visual_baseline_allowed: passed=true; generatedBaseline=true; finalBaselineOnly=false; sourceDomRegions=3; largestSourceDomRegionBytes=1200; oversizedGeneratedRegions=0",
@@ -190,7 +192,8 @@ describe("frontend-design prompt assembly", () => {
     expect(kit.getCollector().final?.quality_project_contract).toContain("measured visual evidence")
     expect(kit.getCollector().final?.quality_project_contract).toContain("source audit has zero findings before claiming final maintainability")
     expect(kit.getCollector().final?.quality_project_contract).toContain("deferred source-dom region remains source debt")
-    expect(kit.getCollector().final?.quality_project_contract).toContain("desktop-reference 1440x900")
+    expect(kit.getCollector().final?.quality_project_contract).toContain("desktop-reference 1366x768")
+    expect(kit.getCollector().final?.quality_project_contract).toContain("capture_viewport")
     expect(kit.getCollector().final?.quality_project_contract).toContain("mobile-review 390x844")
     expect(kit.getCollector().final?.quality_project_contract).toContain("Current source audit supervision")
     expect(kit.getCollector().final?.quality_project_contract).toContain("maintainable_replacement_required: passed=false")
@@ -369,6 +372,8 @@ describe("frontend-design prompt assembly", () => {
         entrypoints: ["README.md", "src/App.tsx", "src/styles.css"],
         generationTool: "host-prepared:create_frontend_skeleton_project",
         warnings: [],
+        visualIterationMatrix:
+          "desktop-reference 1366x768 (primary_reference, capture_viewport): Run measured webpage_evaluate against web-clone-source/reference.png after each region replacement. mobile-review 390x844 (responsive_review, default): Capture and inspect the root app at this viewport; use measured comparison when matching reference evidence exists, otherwise record the evidence gap. wide-review 1920x1080 (responsive_review, default): Capture and inspect the root app at this viewport; use measured comparison when matching reference evidence exists, otherwise record the evidence gap.",
         compactEvidence: [
           "## source-ir/component-tree.json",
           "{\"components\":[{\"name\":\"ProductPage\"}]}",
@@ -392,7 +397,8 @@ describe("frontend-design prompt assembly", () => {
     expect(prompt).toContain("vertical-slice replacement with source data extraction")
     expect(prompt).toContain("scoped style ownership")
     expect(prompt).toContain("generated fixed-layout cleanup")
-    expect(prompt).toContain("desktop-reference 1440x900")
+    expect(prompt).toContain("desktop-reference 1366x768")
+    expect(prompt).toContain("capture_viewport")
     expect(prompt).toContain("mobile-review 390x844")
     expect(prompt).toContain("wide-review 1920x1080")
     expect(prompt).toContain("source-region traceable refactoring")

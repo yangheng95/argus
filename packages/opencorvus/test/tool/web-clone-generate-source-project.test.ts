@@ -43,6 +43,8 @@ describe("tool.web_clone_generate_source_project", () => {
         const generated = await generateTool.execute({ mirrorDir, outputDir }, ctx)
 
         expect(generated.title).toBe("Web clone source project generated")
+        expect(generated.output).toContain("Visual iteration matrix")
+        expect(generated.output).toContain("desktop-reference 1366x768")
         expect(generated.metadata.outputDir).toBe(outputDir)
         expect(await Bun.file(path.join(outputDir, "src", "components", "SourceClonePage.tsx")).exists()).toBe(true)
         expect(await Bun.file(path.join(outputDir, "src", "components", "ContentTable.tsx")).exists()).toBe(true)
@@ -93,15 +95,25 @@ describe("tool.web_clone_generate_source_project", () => {
         expect(sourceDomIterationState).toContain("nextSourceDomReplacement")
         expect(sourceDomIterationState).toContain('"viewportMatrix"')
         expect(sourceDomIterationState).toContain('"desktop-reference"')
+        expect(sourceDomIterationState).toContain('"width": 1366')
+        expect(sourceDomIterationState).toContain('"height": 768')
+        expect(sourceDomIterationState).toContain('"evidenceSource": "capture_viewport"')
         expect(sourceDomIterationState).toContain('"mobile-review"')
         expect(sourceDomIterationState).toContain('"wide-review"')
         expect(sourceProjectManifest.visualIteration.comparisonTool).toBe("webpage_evaluate")
+        expect(sourceProjectManifest.visualIteration.viewportMatrix[0]).toMatchObject({
+          name: "desktop-reference",
+          width: 1366,
+          height: 768,
+          evidenceSource: "capture_viewport",
+        })
         expect(sourceProjectManifest.visualIteration.viewportMatrix.map((item: { name: string }) => item.name)).toEqual([
           "desktop-reference",
           "mobile-review",
           "wide-review",
         ])
         expect(readme).toContain("Visual iteration viewport matrix")
+        expect(readme).toContain("desktop-reference 1366x768")
         expect(sourceSvgAssetGroups).toContain("sourceSvgAssetGroups")
         expect(sourceFaqGroups).toContain("sourceFaqGroups")
         expect(await Bun.file(path.join(outputDir, "public", "assets", "images", "asset_000002.webp")).exists()).toBe(true)
@@ -144,6 +156,40 @@ describe("tool.web_clone_generate_source_project", () => {
       },
     })
   }, 30_000)
+
+  test("prefers source package capture viewport over raw extracted-page viewport", async () => {
+    await using tmp = await tmpdir()
+    const mirrorDir = await writeFixtureMirror(tmp.path)
+    const outputDir = path.join(tmp.path, "generated-react")
+    await Bun.write(path.join(mirrorDir, "web-clone-source-manifest.json"), JSON.stringify({
+      version: 1,
+      purpose: "web-clone-visible-source-package",
+      provenance: {
+        captureViewport: { width: 1024, height: 700 },
+        reference: { path: "reference.png", width: 1440, height: 2400 },
+      },
+    }, null, 2))
+    await Bun.write(path.join(mirrorDir, "extracted-page.json"), JSON.stringify({
+      url: "https://example.com/markets",
+      viewport: { width: 1280, height: 720 },
+    }, null, 2))
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const tool = await WebCloneGenerateSourceProjectTool.init()
+        await tool.execute({ mirrorDir, outputDir }, ctx)
+        const sourceProjectManifest = JSON.parse(await Bun.file(path.join(outputDir, "src", "data", "sourceProjectManifest.json")).text())
+
+        expect(sourceProjectManifest.visualIteration.viewportMatrix[0]).toMatchObject({
+          name: "desktop-reference",
+          width: 1024,
+          height: 700,
+          evidenceSource: "capture_viewport",
+        })
+      },
+    })
+  })
 
   test("does not overwrite an existing output directory unless requested", async () => {
     await using tmp = await tmpdir()
@@ -222,6 +268,8 @@ describe("tool.web_clone_generate_source_project", () => {
         expect(sourceDomIterationState).toContain('"replacementKind": "map_or_chart_asset_component"')
         expect(sourceProjectManifest.visualIteration.referenceImage).toBe("reference.png")
         expect(sourceProjectManifest.visualIteration.viewportMatrix[0].name).toBe("desktop-reference")
+        expect(sourceProjectManifest.visualIteration.viewportMatrix[0].width).toBe(1440)
+        expect(sourceProjectManifest.visualIteration.viewportMatrix[0].evidenceSource).toBe("default")
         expect(sourceProjectManifest.sourceDomRegions.count).toBe(regionFiles.length)
         expect(sourceProjectManifest.sourceDomRegions.metricsModule).toBe("src/data/sourceDomRegions.ts")
         expect(sourceProjectManifest.sourceDomRegions.replacementPlanModule).toBe("src/data/sourceDomReplacementPlan.ts")
@@ -801,6 +849,10 @@ async function generatedSourceFiles(dir: string): Promise<string[]> {
 async function writeFixtureMirror(root: string): Promise<string> {
   const mirrorDir = path.join(root, "mirror")
   await Bun.write(path.join(mirrorDir, "reference.png"), minimalPngBytes())
+  await Bun.write(path.join(mirrorDir, "extracted-page.json"), JSON.stringify({
+    url: "https://example.com/markets",
+    viewport: { width: 1366, height: 768 },
+  }, null, 2))
   await Bun.write(path.join(mirrorDir, "source-skeleton", "index.html"), `
     <main class="economic-calendar">
       <nav><a href="/markets">Markets</a></nav>
