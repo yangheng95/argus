@@ -126,8 +126,8 @@ function renderComponentInventoryFromReusePlan(items: readonly FrontendTemplateF
 function renderQualityProjectContract(final: FrontendTemplateFinal): string {
   const lines = [
     "## Maintainable Target Project",
-    "- The frontend-design high-fidelity source project is the implementation starting point, not a sidecar reference to ignore.",
-    "- Build should preserve the readable source ownership frontend_design delivered: React/Vue components, data modules, CSS sidecars, asset references, runtime entrypoints, and verification commands.",
+    "- The frontend-design high-fidelity skeleton project is source evidence, not the implementation target.",
+    "- Build should preserve the readable target-project source ownership frontend_design delivered: React/Vue components, data modules, CSS modules/sidecars, asset references, runtime entrypoints, and verification commands.",
     "- Repeated rows/cards/items must be rendered from arrays and component loops.",
     "- Complex controls must follow component_reuse_plan; use baseline_replacement_plan only for specifically named raw/generated regions that need in-place evolution.",
   ]
@@ -147,10 +147,10 @@ function renderQualityProjectContract(final: FrontendTemplateFinal): string {
 }
 
 function normalizeFrontendTemplateFinal(final: FrontendTemplateFinal): FrontendTemplateFinal {
-  const next = ensureMaintainableSourceRegionPlan({
+  const next = {
     ...final,
     frontend_project: normalizeFrontendProject(final.frontend_project),
-  })
+  }
   next.frontend_template = next.frontend_template.trim() || renderNamedItems("Frontend Template", next.frontend_template_sections)
   next.fillable_modules = next.fillable_modules.trim() || renderNamedItems("Fillable Modules", next.fillable_module_items)
   next.component_inventory = next.component_inventory.trim() || renderComponentInventoryFromReusePlan(next.component_reuse_plan)
@@ -159,73 +159,6 @@ function normalizeFrontendTemplateFinal(final: FrontendTemplateFinal): FrontendT
   next.visual_consistency_contract = next.visual_consistency_contract.trim() || renderNamedItems("Visual Consistency Contract", next.visual_consistency_items)
   next.ui_data_contract = next.ui_data_contract.trim() || renderNamedItems("UI Data Contract", next.ui_data_contract_items)
   return next
-}
-
-function ensureMaintainableSourceRegionPlan(final: FrontendTemplateFinal): FrontendTemplateFinal {
-  if (final.final_delivery_mode !== "maintainable_replacement_required") return final
-  if (final.baseline_replacement_plan.length > 0) return final
-  if (!isSourceBaselineFrontendProject(final.frontend_project)) return final
-
-  const familyID = "comp-source-page-baseline"
-  const componentReusePlan = final.component_reuse_plan.some((item) => item.family_id === familyID)
-    ? final.component_reuse_plan
-    : [
-        ...final.component_reuse_plan,
-        {
-          family_id: familyID,
-          name: "Source page baseline",
-          observed_surface: "Full captured webpage source baseline adopted from frontend-design output",
-          source_refs: [
-            "frontend-design-skeleton/src/components/SourceClonePage.tsx",
-            "frontend-design-skeleton/src/components/SourceDomPage.tsx",
-            "frontend-design-skeleton/src/styles.css",
-            "web-clone-source/reference.png",
-          ],
-          implementation_strategy: "extracted_baseline_defer" as const,
-          reuse_source: "frontend-design-skeleton source baseline plus sourceDomReplacementPlan.ts when available",
-          mature_library_candidates: [],
-          props_states: "source regions, source data, source assets, responsive layout, interactions, and parity guards",
-          replacement_boundary: "Whole captured source page until named regions are replaced with parity-preserving semantic components",
-          parity_guard: "Keep the adopted baseline only as an intermediate parity anchor while replacing source regions; compare against reference.png and run source audit before final maintainability claims.",
-          custom_fallback_reason: "",
-        },
-      ]
-
-  return {
-    ...final,
-    component_reuse_plan: componentReusePlan,
-    baseline_replacement_plan: [
-      {
-        boundary_id: "source-page-baseline",
-        source_region: "frontend-design-skeleton full source page baseline",
-        action: "defer_baseline_until_parity",
-        component_family_id: familyID,
-        replacement_strategy: "extracted_baseline_defer",
-        reuse_source: "frontend-design-skeleton entrypoints, source-dom regions, CSS sidecars, source data, source assets, and web-clone-source/reference.png",
-        mature_library_candidates: [],
-        deletion_rule: "Do not delete the source baseline wholesale; replace named regions only after source data extraction, semantic component rendering, scoped CSS ownership, screenshot parity, and source audit evidence. Any deferred region remains unfinished source debt.",
-        source_refs: [
-          "frontend-design-skeleton/README.md",
-          "frontend-design-skeleton/src/App.tsx",
-          "frontend-design-skeleton/src/components/SourceClonePage.tsx",
-          "frontend-design-skeleton/src/components/SourceDomPage.tsx",
-          "frontend-design-skeleton/src/styles.css",
-          "web-clone-source/reference.png",
-        ],
-        parity_guard: "Root visual comparison against reference.png plus zero-finding web_clone_source_audit evidence before claiming final maintainability; a deferred baseline keeps final maintainability unproven.",
-        custom_fallback_reason: "",
-      },
-    ],
-  }
-}
-
-function isSourceBaselineFrontendProject(project: FrontendTemplateFinal["frontend_project"]): boolean {
-  const root = normalizeProjectRootForReport(project.project_root)
-  const sourcePackage = normalizeProjectRootForReport(project.source_package)
-  return (project.role === "source_baseline_input" && project.status === "created") ||
-    isFrontendDesignSkeletonRoot(root) ||
-    sourcePackage === "web-clone-source" ||
-    sourcePackage.endsWith("/web-clone-source")
 }
 
 function normalizeFrontendProject(project: FrontendTemplateFinal["frontend_project"]): FrontendTemplateFinal["frontend_project"] {
@@ -469,7 +402,7 @@ export const FrontendTemplateFinalSchema = z.object({
       "Explicit delivery mode. Use maintainable_replacement_required whenever the user asks for maintainability, real implementation, component reuse, or replacement of mechanical output; otherwise use visual_baseline_allowed. This field selects implementation expectations; it is not a standalone pass/fail mechanism.",
     ),
   frontend_template: OptionalMarkdownField(
-    "Authoritative frontend template for the frontend_design-delivered source project and downstream fine-tuning: routes, layout slots, source-package entrypoints, semantic containers, states, and acceptance anchors.",
+    "Authoritative frontend template for the frontend_design-delivered target project and downstream fine-tuning: routes, layout slots, source-package entrypoints, semantic containers, states, and acceptance anchors.",
   ),
   frontend_template_sections: z
     .array(CompactTemplateItemSchema)
@@ -498,7 +431,7 @@ export const FrontendTemplateFinalSchema = z.object({
       "Optional source-region evolution plan. Use it only when a specific raw/generated skeleton region should be replaced, deleted, or deferred during in-place refinement. It is diagnostic/planning evidence, not a schema requirement and not a requirement to delete the whole skeleton.",
     ),
   quality_project_contract: OptionalMarkdownField(
-      "The high-quality project contract for the source project frontend_design is delivering before Build fine-tuning. It defines the maintainable target app shape, source ownership, semantic component tree, data modules, styling system, library use, runtime entrypoints, verification commands, measured webpage_evaluate visual evidence, and zero-finding web_clone_source_audit evidence needed before claiming final maintainability.",
+      "The high-quality project contract for the target delivery project frontend_design is delivering before Build fine-tuning. It defines the maintainable target app shape, source ownership, semantic component tree, data modules, styling system, library use, runtime entrypoints, verification commands, measured webpage_evaluate visual evidence, and zero-finding web_clone_source_audit evidence needed before claiming final maintainability. The skeleton project is source evidence only.",
   ),
   quality_project_items: z
     .array(CompactTemplateItemSchema)
@@ -531,8 +464,8 @@ export const FrontendTemplateFinalSchema = z.object({
       notes: [],
     })
     .describe(
-      "Concrete frontend-design project output. For webpage replicas, this should identify the skeleton/project root created from web-clone-source, " +
-      "its role, entrypoints, source package, generation tool, completed replacements, unfinished source debt, and any materialization defects. Editable frontend-design-skeleton projects start as source_baseline_input, but should become implementation_target when frontend_design has refined the requested surface into maintainable source. Build starts from that project for root-app adoption and precision fixes.",
+      "Concrete frontend-design project output. For webpage replicas, this should identify the target delivery project root when role=implementation_target, " +
+      "its role, entrypoints, source package, generation tool, completed replacements, unfinished source debt, and any materialization defects. frontend-design-skeleton is source_baseline_input evidence only and must never be the implementation_target. Build starts from the target project for integration and precision fixes.",
     ),
   visual_consistency_contract: OptionalMarkdownField(
     "Binding visual-fidelity frontend template section: viewport inventory, pixel hierarchy, colors, typography, spacing, states, responsive rules, comparison criteria, and reference artifacts.",
@@ -688,7 +621,7 @@ function renderFrontendProjectReport(project: FrontendTemplateFinal["frontend_pr
     `- generation_tool: ${project.generation_tool || "(not specified)"}`,
   ]
   if (isFrontendDesignSkeleton) {
-    lines.push("- adoption_rule: frontend-design-skeleton is a frontend_design-owned source project. If its role is implementation_target, copy/adapt it into the root app and fine-tune; if it remains source_baseline_input, the named source debt is unfinished maintainability work.")
+    lines.push("- adoption_rule: frontend-design-skeleton is source_baseline_input evidence only. frontend_design must extract from it into the target delivery project; if this remains the named project in maintainable mode, the named source debt is unfinished frontend_design work.")
   }
   if (project.entrypoints.length > 0) {
     lines.push("- entrypoints:")

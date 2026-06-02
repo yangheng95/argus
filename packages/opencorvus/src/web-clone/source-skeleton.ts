@@ -758,6 +758,7 @@ function buildContentModel(root: WebCloneNode, assetGraph: WebCloneAssetGraph) {
   const media: unknown[] = []
   const cards: unknown[] = []
   const repeatedGroups: unknown[] = []
+  const sourceComponentPatterns: unknown[] = []
   walk(root, (node, parent) => {
     if (node.type !== "element") return
     const tag = normalizeTag(node.tag) ?? "div"
@@ -780,6 +781,7 @@ function buildContentModel(root: WebCloneNode, assetGraph: WebCloneAssetGraph) {
     }
   })
   collectRepeatedGroups(root, repeatedGroups)
+  collectSourceComponentPatterns(root, sourceComponentPatterns)
   return withContentModelLimits({
     version: 1,
     purpose: "web-clone-content-model",
@@ -790,6 +792,7 @@ function buildContentModel(root: WebCloneNode, assetGraph: WebCloneAssetGraph) {
     links,
     media,
     repeatedGroups,
+    sourceComponentPatterns,
   })
 }
 
@@ -865,6 +868,7 @@ function withContentModelLimits(model: {
   links: unknown[]
   media: unknown[]
   repeatedGroups: unknown[]
+  sourceComponentPatterns: unknown[]
 }) {
   const limit = {
     tables: 40,
@@ -874,6 +878,7 @@ function withContentModelLimits(model: {
     links: 240,
     media: 160,
     repeatedGroups: 120,
+    sourceComponentPatterns: 160,
   }
   return {
     ...model,
@@ -884,6 +889,7 @@ function withContentModelLimits(model: {
     links: model.links.slice(0, limit.links),
     media: model.media.slice(0, limit.media),
     repeatedGroups: model.repeatedGroups.slice(0, limit.repeatedGroups),
+    sourceComponentPatterns: model.sourceComponentPatterns.slice(0, limit.sourceComponentPatterns),
     stats: {
       totalTables: model.tables.length,
       totalLists: model.lists.length,
@@ -892,6 +898,7 @@ function withContentModelLimits(model: {
       totalLinks: model.links.length,
       totalMedia: model.media.length,
       totalRepeatedGroups: model.repeatedGroups.length,
+      totalSourceComponentPatterns: model.sourceComponentPatterns.length,
       omittedTables: Math.max(0, model.tables.length - limit.tables),
       omittedLists: Math.max(0, model.lists.length - limit.lists),
       omittedCards: Math.max(0, model.cards.length - limit.cards),
@@ -899,6 +906,7 @@ function withContentModelLimits(model: {
       omittedLinks: Math.max(0, model.links.length - limit.links),
       omittedMedia: Math.max(0, model.media.length - limit.media),
       omittedRepeatedGroups: Math.max(0, model.repeatedGroups.length - limit.repeatedGroups),
+      omittedSourceComponentPatterns: Math.max(0, model.sourceComponentPatterns.length - limit.sourceComponentPatterns),
     },
   }
 }
@@ -1185,8 +1193,133 @@ function structuralSignature(node: WebCloneNode): string {
     .map((child) => normalizeTag(child.tag) ?? "div")
     .slice(0, 8)
     .join(".")
-  const classes = classTokens(node.attrs).slice(0, 4).join(".")
-  return `${normalizeTag(node.tag) ?? "div"}|${classes}|${childTags}`
+  const roles = [
+    attr(node.attrs, "role"),
+    attr(node.attrs, "type"),
+    attr(node.attrs, "aria-haspopup") ? "popup" : undefined,
+    attr(node.attrs, "href") ? "link" : undefined,
+  ].filter(Boolean).join(".")
+  return `${normalizeTag(node.tag) ?? "div"}|${roles}|${childTags}`
+}
+
+function collectSourceComponentPatterns(node: WebCloneNode, patterns: unknown[]): void {
+  if (node.type !== "element") {
+    for (const child of node.children ?? []) collectSourceComponentPatterns(child, patterns)
+    return
+  }
+  const pattern = sourceComponentPattern(node)
+  if (pattern) patterns.push(pattern)
+  for (const child of node.children ?? []) collectSourceComponentPatterns(child, patterns)
+}
+
+function sourceComponentPattern(node: WebCloneNode): Record<string, unknown> | undefined {
+  const tag = normalizeTag(node.tag) ?? "div"
+  if (["html", "body", "script", "style", "meta", "link"].includes(tag)) return undefined
+  const signals = sourceComponentSignals(node)
+  const kind = sourceComponentPatternKind(tag, signals)
+  if (!kind) return undefined
+  return {
+    nodeId: node.id,
+    tag,
+    classNames: classTokens(node.attrs),
+    bounds: node.layout?.bounds,
+    textPreview: compactText(visibleText(node), 180),
+    kind,
+    signals,
+    recommendedReplacementKind: recommendedReplacementKindForPattern(kind),
+    implementationHint: implementationHintForSourceComponentPattern(kind),
+  }
+}
+
+function sourceComponentSignals(node: WebCloneNode): Record<string, unknown> {
+  const elementCount = countElementDescendants(node)
+  const linkCount = countElementDescendants(node, (child) => normalizeTag(child.tag) === "a" || Boolean(child.layout?.href))
+  const mediaCount = countElementDescendants(node, (child) => {
+    const tag = normalizeTag(child.tag)
+    return tag === "img" || tag === "svg" || tag === "canvas" || Boolean(child.layout?.imageSrc)
+  })
+  const controlCount = countElementDescendants(node, (child) => isControlTag(normalizeTag(child.tag) ?? ""))
+  const headingCount = countElementDescendants(node, (child) => /^h[1-4]$/.test(normalizeTag(child.tag) ?? ""))
+  const tableRowCount = countElementDescendants(node, (child) => normalizeTag(child.tag) === "tr")
+  const maxRepeatedSiblingCount = maxRepeatedDirectChildCount(node)
+  const display = String(node.layout?.styles?.display ?? "").toLowerCase()
+  return {
+    elementCount,
+    linkCount,
+    linkDensity: elementCount > 0 ? Number((linkCount / elementCount).toFixed(3)) : 0,
+    mediaCount,
+    controlCount,
+    headingCount,
+    tableRowCount,
+    maxRepeatedSiblingCount,
+    display,
+    gridOrFlex: display.includes("grid") || display.includes("flex"),
+    textLength: visibleText(node).length,
+  }
+}
+
+function sourceComponentPatternKind(tag: string, signals: Record<string, unknown>): string | undefined {
+  const elementCount = numberSignal(signals.elementCount)
+  const linkCount = numberSignal(signals.linkCount)
+  const linkDensity = numberSignal(signals.linkDensity)
+  const mediaCount = numberSignal(signals.mediaCount)
+  const controlCount = numberSignal(signals.controlCount)
+  const headingCount = numberSignal(signals.headingCount)
+  const tableRowCount = numberSignal(signals.tableRowCount)
+  const maxRepeatedSiblingCount = numberSignal(signals.maxRepeatedSiblingCount)
+  const gridOrFlex = signals.gridOrFlex === true
+  const textLength = numberSignal(signals.textLength)
+  if (tag === "table" || tableRowCount >= 3) return "data_grid_surface"
+  if (mediaCount > 0 && (tag === "svg" || mediaCount >= 2 || elementCount >= 8)) return "media_chart_surface"
+  if (tag === "form" || controlCount >= 2) return "form_control_surface"
+  if (tag === "nav" || tag === "header" || tag === "footer" || (linkCount >= 4 && linkDensity >= 0.2)) return "navigation_surface"
+  if (maxRepeatedSiblingCount >= 3 && (gridOrFlex || mediaCount > 0 || linkCount >= 3 || headingCount >= 3)) return "card_collection_surface"
+  if (headingCount > 0 && elementCount >= 6 && textLength > 20) return "section_shell_surface"
+  if (textLength > 160 && elementCount >= 4) return "text_content_surface"
+  return undefined
+}
+
+function recommendedReplacementKindForPattern(kind: string): string {
+  if (kind === "data_grid_surface") return "data_table_or_heatmap_component"
+  if (kind === "card_collection_surface") return "card_collection_component"
+  if (kind === "media_chart_surface") return "map_or_chart_asset_component"
+  if (kind === "navigation_surface") return "navigation_or_footer_component"
+  if (kind === "section_shell_surface") return "baseline_defer"
+  if (kind === "form_control_surface") return "baseline_defer"
+  return "baseline_defer"
+}
+
+function implementationHintForSourceComponentPattern(kind: string): string {
+  if (kind === "data_grid_surface") return "Extract rows and columns into typed data and render through a table/grid component."
+  if (kind === "card_collection_surface") return "Extract repeated item records and render them through a reusable collection component."
+  if (kind === "media_chart_surface") return "Move dense SVG/canvas/image evidence into owned assets or a maintained chart/map component."
+  if (kind === "navigation_surface") return "Extract links, labels, active state, and controls into navigation data and components."
+  if (kind === "form_control_surface") return "Model form controls with real state, labels, validation, and disabled/loading states."
+  if (kind === "section_shell_surface") return "Extract the section chrome and delegate repeated child surfaces to narrower components."
+  return "Use semantic project components, data modules, and scoped styles for this source surface."
+}
+
+function countElementDescendants(node: WebCloneNode, predicate?: (node: WebCloneNode) => boolean): number {
+  let count = 0
+  walk(node, (candidate) => {
+    if (candidate.type !== "element") return
+    if (!predicate || predicate(candidate)) count += 1
+  })
+  return count
+}
+
+function maxRepeatedDirectChildCount(node: WebCloneNode): number {
+  const groups = new Map<string, number>()
+  for (const child of node.children ?? []) {
+    if (child.type !== "element") continue
+    const signature = structuralSignature(child)
+    groups.set(signature, (groups.get(signature) ?? 0) + 1)
+  }
+  return Math.max(0, ...groups.values())
+}
+
+function numberSignal(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0
 }
 
 function fieldTexts(node: WebCloneNode): string[] {

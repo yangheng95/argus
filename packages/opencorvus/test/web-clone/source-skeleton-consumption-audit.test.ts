@@ -237,6 +237,31 @@ describe("web-clone source skeleton consumption audit", () => {
     expect(audit.findings.join("\n")).toContain("TinyDebtRegion.tsx")
   })
 
+  test("rejects source-dom skeleton sidecars left in target app source", async () => {
+    await using tmp = await tmpdir()
+    const sourcePackageDir = await writeFixtureMirror(tmp.path)
+    const projectDir = path.join(tmp.path, "app")
+    await writePassingProject(projectDir)
+    await Bun.write(path.join(projectDir, "src", "data", "sourceDomReplacementPlan.ts"), `
+      export const sourceDomReplacementPlan = [
+        { regionComponentName: "CalendarRegion", regionFilePath: "src/components/source-dom/CalendarRegion.tsx" },
+      ] as const
+    `)
+
+    const audit = await auditWebCloneSourceSkeletonConsumption({
+      projectDir,
+      sourcePackageDir,
+      finalDeliveryMode: "maintainable_replacement_required",
+    })
+
+    expect(audit.passed).toBe(false)
+    expect(audit.risk.generatedBaselineDetected).toBe(false)
+    expect(audit.risk.finalSourceDomModuleResidueDetected).toBe(true)
+    expect(audit.projectStats.sourceDomBaselineModuleCount).toBe(1)
+    expect(audit.findings.join("\n")).toContain("Target project still contains source-dom baseline modules")
+    expect(audit.findings.join("\n")).toContain("sourceDomReplacementPlan.ts")
+  })
+
   test("does not require the provenance mirror to be reachable after source package handoff", async () => {
     await using tmp = await tmpdir()
     const sourcePackageDir = await writeFixtureMirror(tmp.path)

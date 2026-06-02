@@ -181,7 +181,7 @@ export namespace FrontendDesignAgent {
     const processTraceToolKit = createFrontendProcessTraceTools(processTrace)
     const outputToolKit = createFrontendTemplateOutputTools({ autoIteration })
     const submitFrontendTemplateTool = createFrontendSubmitTools(outputToolKit)
-    const hostPreparedFrontendProject = undefined
+    const hostPreparedFrontendProject = await resolveHostPreparedFrontendProject(input.taskID)
     const projectID = (() => {
       try {
         return Instance.project.id
@@ -459,15 +459,15 @@ function buildUserPrompt(input: {
     (autoIteration
         ? "Because assistant.auto_iteration=true, do at least two frontend template review passes before `submit_frontend_template`: first check page inventory and visual coverage, then check downstream frontend replica implementability. "
       : "Because assistant.auto_iteration=false, do one bounded frontend template review pass before `submit_frontend_template`; report remaining gaps in completeness_review/open_questions instead of looping automatically. ") +
-    `For webpage replicas, after the task-runtime source package \`${sourcePackageRef}/\` exists, call \`create_frontend_skeleton_project\` to create the high-fidelity editable source project at \`${skeletonProjectRef}/\` before \`submit_frontend_template\`. ` +
-    "The source project is the frontend_design implementation target before handoff: after creating it, inspect `sourceDomIterationState.ts`, `sourceDomReplacementPlan.ts`, `sourceDomRegions.ts`, source data/assets, and the target project component/package structure; then edit the created source project itself into project-owned semantic components/data modules/scoped styles. Build should receive this maintainable frontend_design project and only perform root-app adoption, integration, and precision fixes. If the generator cannot produce that high-fidelity source project, record the exact materialization defect in `frontend_project.notes`. " +
+    `For webpage replicas, after the task-runtime source package \`${sourcePackageRef}/\` exists, call \`create_frontend_skeleton_project\` to create the high-fidelity skeleton evidence project at \`${skeletonProjectRef}/\` before \`submit_frontend_template\`. ` +
+    "The generated skeleton project is frontend_design's source-evidence baseline, not the final worktree. Do not run install/build/render/dev-server commands inside `frontend-design-skeleton` in maintainable delivery. After creating it, inspect `sourceDomIterationState.ts`, `sourceDomReplacementPlan.ts`, `sourceDomRegions.ts`, source data/assets, and the target project component/package structure; then extract the skeleton's observed source structure, data, styles, and assets into the target delivery project as project-owned semantic components/data modules/scoped styles. Build should receive the target project that frontend_design already populated, and only perform integration and precision fixes. If the generator cannot produce that high-fidelity source evidence project, record the exact materialization defect in `frontend_project.notes`. " +
     "Describe this as rawproject source-region refactoring: all new components, styles, and data modules must trace to rawproject source nodes/regions/assets/reference screenshots, and replacement work must happen source-region by source-region. " +
     "When the target is an existing frontend project, inspect package manifests and obvious component/UI directories if tools are available, then tell downstream agents whether to add a route/page to the existing app, adopt the source baseline into the root app, or stop on a materialization blocker. " +
     "In principle, downstream implementation must reuse existing project components/design-system primitives first and mature maintained libraries second; custom code is limited to simple page-specific glue or micro-adjust layout/spacing. Charts, maps, tables, calendars, popovers, dialogs, menus, forms, virtualized lists, drag/drop, editors, rich media, and complex layouts require reusable project or library options when available. " +
     "Your final report should not be a component catalog. Put known problems, evidence gaps, extraction-vs-rewrite risk, source organization, debug commands, reuse decisions, PRD delta boundaries, and agent handoff notes into `quality_project_contract`, `completeness_review`, and `open_questions`; leave `component_inventory` empty unless the provider requires a legacy compatibility summary. " +
     renderFinalDeliveryModeInstruction(Boolean(hostPreparedFrontendProject)) + " " +
-    "After the source project tool returns, record the project paths, replacement-plan sidecars, and warnings in `frontend_project`, then read the current `nextSourceDomReplacement` row and call `record_frontend_region_selection` before editing that region. Use your normal file-edit and command tools to replace source-dom regions inside the created project until the delivered frontend_design source is maintainable, then call `record_frontend_replacement_result` with completed/blocked/deferred status, changed files, evidence artifacts, and remaining source debt. At minimum, a maintainable rawproject turn must attempt the current `nextSourceDomReplacement` vertical slice or explicitly report why that exact region is blocked. Verification must include project build evidence, measured `webpage_evaluate` evidence when renderable, and zero-finding `web_clone_source_audit` evidence before claiming final maintainability. Do not alter evaluators, other agent prompts, communication paths, raw mirror/source packages, or generated evidence outputs to satisfy the report. " +
-    "The final `submit_frontend_template.frontend_project` field should name the created/refined source project root and entrypoints, mark role=implementation_target only when the project no longer depends on generated source-dom debt for the requested surface, otherwise mark role=source_baseline_input and explain the unfinished source debt. " +
+    "After the source project tool returns, record the skeleton evidence paths, replacement-plan sidecars, and warnings in `reference_artifacts` and `frontend_project.notes`, then read `sourceDomIterationState.ts` and the full `sourceDomReplacementPlan.ts`. Treat `nextSourceDomReplacement` as the first queue item only, not as the workload limit. Before any build/render/server command, create or populate the target delivery project named in the request and perform all runnable commands there. For every in-scope replacement-plan row, call `record_frontend_region_selection` before editing, then use your normal file-edit and command tools to extract source-dom/rawcode evidence into the target delivery project with semantic components, data modules, scoped styles, mock/API adapters when data is visible, and owned assets. Do not implement by freehand redrawing, and do not use the skeleton project itself as the final work area. After each replacement call `record_frontend_replacement_result` with completed/blocked/deferred status, changed target-project files, evidence artifacts, remaining source debt, and the next region. Verification must include target project build evidence, measured `webpage_evaluate` evidence when renderable, and zero-finding `web_clone_source_audit` evidence on the target project before claiming final maintainability. Do not alter evaluators, other agent prompts, communication paths, raw mirror/source packages, or generated evidence outputs to satisfy the report. " +
+    "The final `submit_frontend_template.frontend_project` field should name the target delivery project root and entrypoints, mark role=implementation_target only when all requested-surface replacement-plan rows are completed or proven out of scope and the target app source no longer imports/renders `SourceDomPage`, `src/components/source-dom/*`, or `src/data/sourceDom*` raw baseline modules. Never mark `frontend-design-skeleton` itself as implementation_target. In maintainable mode, role=source_baseline_input means frontend_design is explicitly incomplete or blocked; it is not a Build follow-up contract. " +
     "Do not use todo or scratchpad tools for template review; write the review-pass findings directly into the final frontend template fields.",
   )
 
@@ -483,7 +483,7 @@ function renderFinalDeliveryModeInstruction(hostPrepared: boolean): string {
     return [
       "For host-prepared webpage clone turns, frame the work as source-region refactoring of the captured rawproject.",
       "Set `submit_frontend_template.final_delivery_mode` to `maintainable_replacement_required` whenever the operator asks for maintainability, real implementation, component reuse, or replacement of generated/mechanical output.",
-      "The captured source project is evidence and a temporary seed; do not downgrade host-prepared rawproject refinement to visual-baseline delivery.",
+      "The captured skeleton project is evidence and a temporary seed; do not downgrade host-prepared rawproject refinement to visual-baseline delivery.",
     ].join(" ")
   }
   return "Set `submit_frontend_template.final_delivery_mode` to `maintainable_replacement_required` whenever the user asks for maintainability, real implementation, component reuse, or replacing generated/mechanical output."
@@ -656,7 +656,7 @@ function createFrontendProcessTraceTools(trace: FrontendDesignAgent.ProcessTrace
   return {
     record_frontend_region_selection: tool({
       description:
-        "Record the frontend_design agent's selected rawproject source region before editing the created source project. " +
+        "Record the frontend_design agent's selected rawproject source region before extracting it from the skeleton evidence into the target delivery project. " +
         "This is process evidence only: it does not replace source edits, audits, builds, or visual checks.",
       inputSchema: z.object({
         regionComponentName: z.string().describe("The generated source-dom region component selected for replacement."),
@@ -936,6 +936,53 @@ async function createFrontendUtilityTools(input: { taskID?: string; signal?: Abo
   return selectFrontendStaticTools(tools, FRONTEND_DESIGN_UTILITY_TOOL_IDS, "frontend-design utility")
 }
 
+async function resolveHostPreparedFrontendProject(taskID?: string): Promise<HostPreparedFrontendProject | undefined> {
+  if (!taskID) return undefined
+  const paths = ProjectRuntimePaths.frontendDesignPaths(Instance.directory, taskID)
+  const [sourcePackageExists, skeletonProjectExists] = await Promise.all([
+    pathExists(paths.sourcePackageAbsolute),
+    pathExists(paths.skeletonProjectAbsolute),
+  ])
+  if (!sourcePackageExists || !skeletonProjectExists) return undefined
+  const sourceAuditEvidence = await summarizeHostPreparedSourceAudit({
+    sourcePackage: paths.sourcePackageAbsolute,
+    projectRoot: paths.skeletonProjectAbsolute,
+  })
+  const compactEvidence = await readHostPreparedCompactEvidence({
+    sourcePackage: paths.sourcePackageAbsolute,
+    projectRoot: paths.skeletonProjectAbsolute,
+    sourceAuditEvidence,
+  })
+  return {
+    status: "created",
+    projectRoot: paths.skeletonProjectAbsolute,
+    sourcePackage: paths.sourcePackageAbsolute,
+    projectRootRef: paths.skeletonProjectRelative,
+    sourcePackageRef: paths.sourcePackageRelative,
+    entrypoints: [
+      "README.md",
+      "src/App.tsx",
+      "src/components/SourceClonePage.tsx",
+      "src/components/SourceDomPage.tsx",
+      "src/styles.css",
+    ],
+    generationTool: "host-prepared:create_frontend_skeleton_project",
+    warnings: [],
+    compactEvidence,
+    sourceReplacementPlan: [],
+    sourceAuditEvidence,
+  }
+}
+
+async function pathExists(file: string): Promise<boolean> {
+  try {
+    await fs.stat(file)
+    return true
+  } catch {
+    return false
+  }
+}
+
 export const FrontendDesignTestHooks = {
   buildPromptParts,
   buildUserPrompt,
@@ -957,6 +1004,7 @@ export const FrontendDesignTestHooks = {
   summarizeHostPreparedSourceAudit,
   summarizeHostPreparedSourceProject,
   summarizeReferencePixels,
+  resolveHostPreparedFrontendProject,
   writeFrontendProcessTraceArtifact,
   writeFrontendIterationStateArtifact,
 }

@@ -114,6 +114,13 @@ interface SourceRepeatedGroup {
   sampleTexts: string[]
 }
 
+interface SourceComponentPattern {
+  nodeId: string
+  kind?: string
+  recommendedReplacementKind?: SourceDomReplacementPlanItem["replacementKind"]
+  signals?: Record<string, unknown>
+}
+
 interface SourceComponent {
   name: string
   kind?: string
@@ -139,6 +146,7 @@ interface SourceProjectData {
   lists: SourceList[]
   cards: SourceCard[]
   repeatedGroups: SourceRepeatedGroup[]
+  sourceComponentPatterns: SourceComponentPattern[]
   assets: SourceAssetRef[]
 }
 
@@ -175,6 +183,7 @@ interface SourceDomRegionMetric {
   sourceNodeId?: string
   sourceSegmentId?: string
   sourceBounds?: SourceBounds
+  sourceComponentPattern?: SourceComponentPattern
   tag: string
   heading?: string
   textPreview: string
@@ -340,6 +349,7 @@ interface SourceDomRenderContext {
   nodeStyleFallbacks: Map<string, string>
   nodeBoundsById: Map<string, SourceBounds>
   irChildrenByNodeId: Map<string, DomNode[]>
+  sourceComponentPatternsByNodeId: Map<string, SourceComponentPattern>
   regionFiles: Map<string, string>
   regionMetrics: SourceDomRegionMetric[]
   semanticReplacementMetrics: SemanticSourceReplacementMetric[]
@@ -386,6 +396,37 @@ interface SemanticNewsItem {
   dateClassName: string
   timestampTitle?: string
   logoImages: Array<{ src: string; alt: string; className: string }>
+}
+
+interface SemanticRepeatedListCollection {
+  componentName: string
+  rootTagName: "ul" | "ol" | "div"
+  rootClassName: string
+  rootSourceNodeId?: string
+  items: SemanticRepeatedListItem[]
+}
+
+interface SemanticRepeatedListItem {
+  id: string
+  itemClassName: string
+  cardClassName: string
+  titleClassName: string
+  metaClassName: string
+  imageClassName: string
+  href: string
+  title: string
+  meta: string
+  imageSrc: string
+  imageAlt: string
+}
+
+interface SemanticRepeatedListItemCandidate extends SemanticRepeatedListItem {
+  sourceNode: DomNode
+}
+
+interface SemanticRepeatedListTitleCandidate {
+  sourceNode: DomNode
+  text: string
 }
 
 interface SemanticDataTable {
@@ -976,7 +1017,7 @@ export async function generateWebCloneSourceProject(
   const irChildrenByNodeId = extractIrChildrenByNodeId(pageIr)
   const documentContext = extractDocumentContext(pageIr)
   const svgPaths = await readSvgPathData(mirrorDir)
-  const sourceDomProject = renderSourceDomProject(sourceSkeleton, previewImagePaths, nodeStyleFallbacks, nodeBoundsById, irChildrenByNodeId)
+  const sourceDomProject = renderSourceDomProject(sourceSkeleton, previewImagePaths, nodeStyleFallbacks, nodeBoundsById, irChildrenByNodeId, projectData.sourceComponentPatterns)
   const replacementPlan = buildSourceDomReplacementPlan(sourceDomProject.regionMetrics, projectData)
   const visualIteration = await buildSourceProjectVisualIteration(mirrorDir)
 
@@ -1092,6 +1133,7 @@ function buildSourceProjectData(input: {
   const lists = readLists(input.contentModel)
   const cards = readCards(input.contentModel)
   const repeatedGroups = readRepeatedGroups(input.contentModel)
+  const sourceComponentPatterns = readSourceComponentPatterns(input.contentModel)
   const components = readComponents(input.componentTree)
   const assets = readAssetRefs(input.assetManifest)
   const textSignals = rankTextSignals([
@@ -1111,6 +1153,7 @@ function buildSourceProjectData(input: {
     lists,
     cards,
     repeatedGroups,
+    sourceComponentPatterns,
     assets,
   }
 }
@@ -1347,6 +1390,38 @@ function readRepeatedGroups(contentModel: unknown): SourceRepeatedGroup[] {
     })
     .filter((group) => group.sampleTexts.length > 0)
     .slice(0, MAX_REPEATED_GROUPS)
+}
+
+function readSourceComponentPatterns(contentModel: unknown): SourceComponentPattern[] {
+  return readArray(contentModel, "sourceComponentPatterns")
+    .map((item): SourceComponentPattern | undefined => {
+      const row = asRecord(item)
+      const nodeId = readString(row.nodeId)
+      const replacementKind = readSourceReplacementKind(row.recommendedReplacementKind)
+      if (!nodeId) return undefined
+      return {
+        nodeId,
+        kind: readString(row.kind),
+        recommendedReplacementKind: replacementKind,
+        signals: asRecord(row.signals),
+      }
+    })
+    .filter((item): item is SourceComponentPattern => Boolean(item))
+    .slice(0, 240)
+}
+
+function readSourceReplacementKind(value: unknown): SourceDomReplacementPlanItem["replacementKind"] | undefined {
+  if (typeof value !== "string") return undefined
+  if (
+    value === "map_or_chart_asset_component" ||
+    value === "data_table_or_heatmap_component" ||
+    value === "card_collection_component" ||
+    value === "faq_disclosure_component" ||
+    value === "navigation_or_footer_component" ||
+    value === "event_or_news_list_component" ||
+    value === "baseline_defer"
+  ) return value
+  return undefined
 }
 
 function readComponents(componentTree: unknown): SourceComponent[] {
@@ -1771,6 +1846,7 @@ function renderSourceDomProject(
   nodeStyleFallbacks: Map<string, string>,
   nodeBoundsById: Map<string, SourceBounds>,
   irChildrenByNodeId: Map<string, DomNode[]>,
+  sourceComponentPatterns: SourceComponentPattern[],
 ): SourceDomRenderProject {
   const currentImports = new Map<string, string>()
   const currentSvgAssetGroupNames = new Set<string>()
@@ -1780,6 +1856,7 @@ function renderSourceDomProject(
     nodeStyleFallbacks,
     nodeBoundsById,
     irChildrenByNodeId,
+    sourceComponentPatternsByNodeId: new Map(sourceComponentPatterns.map((pattern) => [pattern.nodeId, pattern])),
     regionFiles: new Map(),
     regionMetrics: [],
     semanticReplacementMetrics: [],
@@ -2079,6 +2156,8 @@ function renderExtractedSourceRegion(node: DomNode, context: SourceDomRenderCont
   if (semanticRegion) return semanticRegion
   const semanticEventCardsRegion = renderSemanticEventCardListRegion(node, componentName, context)
   if (semanticEventCardsRegion) return semanticEventCardsRegion
+  const semanticRepeatedListRegion = renderSemanticRepeatedListRegion(node, componentName, context)
+  if (semanticRepeatedListRegion) return semanticRepeatedListRegion
   const semanticTableRegion = renderSemanticDataTableRegion(node, componentName, context)
   if (semanticTableRegion) return semanticTableRegion
   const semanticMetricRankingRegion = renderSemanticMetricRankingCardRegion(node, componentName, context)
@@ -2124,6 +2203,7 @@ function renderExtractedSourceRegion(node: DomNode, context: SourceDomRenderCont
       sourceNodeId: node.attribs?.["data-source-node-id"],
       sourceSegmentId: node.attribs?.["data-source-segment-id"],
       sourceBounds: sourceNodeBounds(node, context),
+      sourceComponentPattern: sourceComponentPatternForNode(node, context),
       tag: node.name ?? "div",
       heading: findFirstHeadingText(node),
       textPreview: visibleText(node).slice(0, 180),
@@ -2183,6 +2263,7 @@ function renderExtractedSourceRegion(node: DomNode, context: SourceDomRenderCont
     sourceNodeId: node.attribs?.["data-source-node-id"],
     sourceSegmentId: node.attribs?.["data-source-segment-id"],
     sourceBounds: sourceNodeBounds(node, context),
+    sourceComponentPattern: sourceComponentPatternForNode(node, context),
     tag: node.name ?? "div",
     heading: findFirstHeadingText(node),
     textPreview: visibleText(node).slice(0, 180),
@@ -2200,6 +2281,11 @@ function sourceDomImportPath(context: SourceDomRenderContext, componentName: str
 function sourceNodeBounds(node: DomNode, context: SourceDomRenderContext): SourceBounds | undefined {
   const sourceNodeId = node.attribs?.["data-source-node-id"]
   return sourceNodeId ? context.nodeBoundsById.get(sourceNodeId) : undefined
+}
+
+function sourceComponentPatternForNode(node: DomNode, context: SourceDomRenderContext): SourceComponentPattern | undefined {
+  const sourceNodeId = node.attribs?.["data-source-node-id"]
+  return sourceNodeId ? context.sourceComponentPatternsByNodeId.get(sourceNodeId) : undefined
 }
 
 function semanticImportPath(context: SourceDomRenderContext, componentName: string): string {
@@ -2236,6 +2322,33 @@ function renderSemanticNewsListRegion(
   return {
     componentName: semanticList.componentName,
     importPath: semanticImportPath(context, semanticList.componentName),
+  }
+}
+
+function renderSemanticRepeatedListRegion(
+  node: DomNode,
+  sourceRegionComponentName: string,
+  context: SourceDomRenderContext,
+): SourceRegionRenderRef | undefined {
+  const collection = extractSemanticRepeatedListCollection(node, sourceRegionComponentName)
+  if (!collection) return undefined
+  const content = renderSemanticRepeatedListComponent(collection)
+  const filePath = `src/components/semantic/${collection.componentName}.tsx`
+  context.regionFiles.set(filePath, content)
+  context.semanticReplacementMetrics.push({
+    componentName: collection.componentName,
+    filePath,
+    sourceRegionComponentName,
+    sourceNodeId: collection.rootSourceNodeId,
+    replacementKind: "card_collection_component",
+    itemCount: collection.items.length,
+    bytes: Buffer.byteLength(content, "utf8"),
+    rootClassName: collection.rootClassName,
+    textPreview: collection.items.map((item) => item.title).join(" | ").slice(0, 180),
+  })
+  return {
+    componentName: collection.componentName,
+    importPath: semanticImportPath(context, collection.componentName),
   }
 }
 
@@ -2649,6 +2762,90 @@ function extractSemanticNewsList(node: DomNode, sourceRegionComponentName: strin
   }
 }
 
+function extractSemanticRepeatedListCollection(
+  node: DomNode,
+  sourceRegionComponentName: string,
+): SemanticRepeatedListCollection | undefined {
+  if (!isSemanticRepeatedListCandidate(node)) return undefined
+  const itemNodes = directElementChildren(node).filter((child) => child.type === "tag")
+  const items = itemNodes
+    .map((item, index) => semanticRepeatedListItem(item, index))
+    .filter((item): item is SemanticRepeatedListItemCandidate => Boolean(item))
+    .slice(0, 80)
+  if (items.length < 3) return undefined
+  const tag = node.name?.toLowerCase()
+  const componentName = sourceRegionComponentName.replace(/Region\d*$/, "List")
+  return {
+    componentName: componentName === sourceRegionComponentName ? `${sourceRegionComponentName}List` : componentName,
+    rootTagName: tag === "ol" ? "ol" : tag === "ul" ? "ul" : "div",
+    rootClassName: node.attribs?.class ?? "",
+    rootSourceNodeId: node.attribs?.["data-source-node-id"],
+    items: items.map(({ sourceNode: _sourceNode, ...item }) => item),
+  }
+}
+
+function isSemanticRepeatedListCandidate(node: DomNode): boolean {
+  if (node.type !== "tag") return false
+  const tag = node.name?.toLowerCase() ?? ""
+  if (tag !== "ul" && tag !== "ol" && node.attribs?.["data-source-role"] !== "list") return false
+  const itemNodes = directElementChildren(node).filter((child) => child.type === "tag")
+  if (itemNodes.length < 3) return false
+  const extractableItems = itemNodes
+    .map((item, index) => semanticRepeatedListItem(item, index))
+    .filter(Boolean)
+  return extractableItems.length >= 3
+}
+
+function semanticRepeatedListItem(node: DomNode, index: number): SemanticRepeatedListItemCandidate | undefined {
+  const anchor = findDescendantElement(node, (child) => child.name?.toLowerCase() === "a" && normalizeVisibleText(visibleText(child)).length > 0)
+  const titleCandidate = semanticRepeatedListTitle(node, anchor)
+  if (!anchor || !titleCandidate) return undefined
+  const image = findDescendantElement(node, (child) => child.name?.toLowerCase() === "img")
+  const card = firstElementChild(node) ?? node
+  const meta = semanticRepeatedListMetaText(node, titleCandidate.sourceNode)
+  return {
+    sourceNode: node,
+    id: node.attribs?.["data-source-node-id"] ?? `item-${index + 1}`,
+    itemClassName: node.attribs?.class ?? "",
+    cardClassName: card.attribs?.class ?? "",
+    titleClassName: titleCandidate.sourceNode.attribs?.class ?? "",
+    metaClassName: semanticRepeatedListMetaNode(node, titleCandidate.sourceNode)?.attribs?.class ?? "",
+    imageClassName: image?.attribs?.class ?? "",
+    href: normalizeReferencedAssetUrl(anchor.attribs?.href ?? ""),
+    title: titleCandidate.text,
+    meta,
+    imageSrc: normalizeReferencedAssetUrl(image?.attribs?.src ?? ""),
+    imageAlt: image?.attribs?.alt ?? "",
+  }
+}
+
+function semanticRepeatedListTitle(node: DomNode, anchor?: DomNode): SemanticRepeatedListTitleCandidate | undefined {
+  const titleNode = findDescendantElement(anchor ?? node, (child) => {
+    if (child.type !== "tag") return false
+    const tag = child.name?.toLowerCase() ?? ""
+    if (/^h[1-6]$/.test(tag)) return true
+    if (tag === "p" || tag === "span") return /(?:headline|title|promo)/i.test(child.attribs?.class ?? "")
+    return false
+  }) ?? anchor
+  const text = normalizeVisibleText(titleNode ? visibleText(titleNode) : "")
+  return titleNode && text ? { sourceNode: titleNode, text } : undefined
+}
+
+function semanticRepeatedListMetaNode(node: DomNode, titleNode: DomNode): DomNode | undefined {
+  return findDescendantElement(node, (child) => {
+    if (child === titleNode || child.type !== "tag") return false
+    const text = normalizeVisibleText(visibleText(child))
+    if (!text || text.length > 80) return false
+    const className = child.attribs?.class ?? ""
+    return /(?:meta|source|attribution|tag|label|category|strip)/i.test(className)
+  })
+}
+
+function semanticRepeatedListMetaText(node: DomNode, titleNode: DomNode): string {
+  const metaNode = semanticRepeatedListMetaNode(node, titleNode)
+  return metaNode ? normalizeVisibleText(visibleText(metaNode)) : ""
+}
+
 function isSemanticDataTableCandidate(node: DomNode): boolean {
   const table = findDescendantElement(node, (child) => child.name?.toLowerCase() === "table")
   if (!table) return false
@@ -2662,8 +2859,7 @@ function isSemanticDataTableCandidate(node: DomNode): boolean {
   if (headerCells.length < 3) return false
   const dataRows = rows.slice(1).filter((row) => tableRowCells(row).length >= 3)
   if (dataRows.length < 2) return false
-  const text = visibleText(node).toLowerCase()
-  return /\b(heatmap|table|gdp|country|countries|interest rate|inflation|unemployment|budget)\b/.test(text)
+  return true
 }
 
 function extractSemanticDataTable(node: DomNode, sourceRegionComponentName: string): SemanticDataTable | undefined {
@@ -3078,8 +3274,7 @@ function isSemanticEventCardListCandidate(node: DomNode): boolean {
   if (containerDistance === undefined || containerDistance > 4) return false
   const cards = semanticEventCardAnchors(itemsContainer)
   if (cards.length < 3) return false
-  const text = visibleText(node).toLowerCase()
-  return /\b(calendar|event|actual|forecast|prior|today|tomorrow|auction|inflation|revenue)\b/.test(text)
+  return true
 }
 
 function extractSemanticEventCardList(node: DomNode, sourceRegionComponentName: string): SemanticEventCardList | undefined {
@@ -3837,7 +4032,6 @@ function extractMapLegendLabels(node: DomNode): string[] {
 
 function isSemanticLinkGridCandidate(node: DomNode): boolean {
   if (node.type !== "tag") return false
-  if (node.attribs?.["data-base-widget"] !== "true") return false
   if (isSemanticDataTableCandidate(node) || isSemanticMetricRankingCardCandidate(node) || isSemanticEventCardListCandidate(node) || isSemanticIdeaCardCollectionCandidate(node) || isSemanticMapSurfaceCandidate(node)) return false
   const container = findLinkGridContainer(node)
   if (!container) return false
@@ -4561,6 +4755,35 @@ function renderSemanticNewsListComponent(list: SemanticNewsList): string {
     "        </div>",
     "      </div>",
     "    </div>",
+    "  )",
+    "}",
+    "",
+  ].join("\n")
+}
+
+function renderSemanticRepeatedListComponent(collection: SemanticRepeatedListCollection): string {
+  const rootTag = collection.rootTagName
+  return [
+    "// @ts-nocheck",
+    "// semantic-source-replacement: generated from repeated sibling source structure with explicit data and render loops.",
+    "",
+    `const items = ${JSON.stringify(collection.items, null, 2)} as const`,
+    "",
+    `export function ${collection.componentName}() {`,
+    "  return (",
+    `    <${rootTag} className={${JSON.stringify(collection.rootClassName)}} data-source-region={${JSON.stringify(collection.rootSourceNodeId ?? "")}}>`,
+    "      {items.map((item) => (",
+    "        <li key={item.id} className={item.itemClassName} data-source-role=\"promo_item\">",
+    "          <article className={item.cardClassName}>",
+    "            {item.imageSrc ? <img className={item.imageClassName} src={item.imageSrc} alt={item.imageAlt} /> : null}",
+    "            <a href={item.href}>",
+    "              <span className={item.titleClassName}>{item.title}</span>",
+    "            </a>",
+    "            {item.meta ? <span className={item.metaClassName}>{item.meta}</span> : null}",
+    "          </article>",
+    "        </li>",
+    "      ))}",
+    `    </${rootTag}>`,
     "  )",
     "}",
     "",
@@ -5784,6 +6007,7 @@ function buildSourceDomReplacementPlan(
 }
 
 function classifySourceDomReplacementKind(region: SourceDomRegionMetric): SourceDomReplacementPlanItem["replacementKind"] {
+  if (region.sourceComponentPattern?.recommendedReplacementKind) return region.sourceComponentPattern.recommendedReplacementKind
   const componentWords = region.componentName.replace(/([a-z0-9])([A-Z])/g, "$1 $2")
   const haystack = `${componentWords} ${region.heading ?? ""} ${region.textPreview}`.toLowerCase()
   if (/\b(main content|page shell)\b/.test(haystack)) return "baseline_defer"
@@ -5951,6 +6175,8 @@ function shouldExtractSourceRegion(
   if (VOID_TAGS.has(tag)) return false
   if (isSourcePageShellNode(node)) return false
   if (isSingleSemanticChildWrapper(node)) return false
+  const sourcePattern = sourceComponentPatternForNode(node, context)
+  if (sourcePattern?.recommendedReplacementKind && sourcePattern.recommendedReplacementKind !== "baseline_defer") return true
   if (isSemanticHeaderNavigationCandidate(node)) return true
   if (isSemanticFooterCandidate(node)) return true
   if (isSemanticIdeaCardCollectionCandidate(node)) return true
