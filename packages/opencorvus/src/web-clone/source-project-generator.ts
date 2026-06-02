@@ -236,6 +236,7 @@ interface SemanticSourceReplacementMetric {
     | "map_or_chart_asset_component"
     | "faq_disclosure_component"
     | "card_collection_component"
+    | "metric_chart_card_component"
   itemCount: number
   bytes: number
   rootClassName: string
@@ -244,6 +245,45 @@ interface SemanticSourceReplacementMetric {
   cardContainerClassName?: string
   mapPathCount?: number
   textPreview: string
+}
+
+interface SemanticMetricChartCard {
+  componentName: string
+  rootClassName: string
+  rootSourceNodeId?: string
+  rootStyle?: Record<string, string>
+  headerClassName: string
+  linkHref: string
+  linkClassName: string
+  titleClassName: string
+  titleTooltip?: string
+  title: string
+  tickerClassName: string
+  ticker: string
+  contentClassName: string
+  chartShellClassName: string
+  chartFrame?: SemanticChartNode
+  statsWrapperClassName: string
+  statsContainerClassName: string
+  stats: SemanticMetricChartStat[]
+}
+
+interface SemanticChartNode {
+  tagName: "table" | "tbody" | "tr" | "td" | "div" | "canvas"
+  className: string
+  style?: Record<string, string>
+  width?: string
+  height?: string
+  children: SemanticChartNode[]
+}
+
+interface SemanticMetricChartStat {
+  wrapperClassName: string
+  labelClassName: string
+  label: string
+  valueClassName: string
+  value: string
+  valueInnerClassName: string
 }
 
 interface SourceSvgAssetGroupItem {
@@ -497,10 +537,26 @@ interface SemanticFooter {
   rootClassName: string
   rootSourceNodeId?: string
   dataNosnippet?: string
+  promoClassName: string
+  visualRootClassName: string
+  containerClassName: string
+  contentClassName: string
+  leadingClassName: string
+  logoSocialsClassName: string
+  logoLink?: SemanticFooterLogoLink
+  socialsClassName: string
   socialLinks: SemanticFooterLink[]
-  links: SemanticFooterLink[]
+  copyrightContainerClassName: string
+  languageButtonClassName: string
+  copyrightClassName: string
+  legalParts: SemanticFooterLegalPart[]
+  footerLinksClassName: string
+  linkGroups: SemanticFooterLinkGroup[]
+  backgroundImageClassName: string
+  lookFirstContainerClassName: string
   images: Array<{ src: string; alt: string; className: string }>
-  legalText: string[]
+  pepeContainerClassName: string
+  pepeLauncherClassName: string
   languageLabel?: string
 }
 
@@ -511,6 +567,30 @@ interface SemanticFooterLink {
   className: string
   target?: string
   rel?: string
+  iconClassName?: string
+}
+
+interface SemanticFooterLogoLink extends SemanticFooterLink {
+  markClassName: string
+}
+
+interface SemanticFooterLegalPart {
+  kind: "text" | "link"
+  text: string
+  link?: SemanticFooterLink
+}
+
+interface SemanticFooterLinkGroup {
+  className: string
+  columns: SemanticFooterLinkColumn[]
+}
+
+interface SemanticFooterLinkColumn {
+  className: string
+  titleClassName: string
+  title: string
+  listClassName: string
+  links: SemanticFooterLink[]
 }
 
 interface SemanticHeaderNavigation {
@@ -2003,6 +2083,8 @@ function renderExtractedSourceRegion(node: DomNode, context: SourceDomRenderCont
   if (semanticTableRegion) return semanticTableRegion
   const semanticMetricRankingRegion = renderSemanticMetricRankingCardRegion(node, componentName, context)
   if (semanticMetricRankingRegion) return semanticMetricRankingRegion
+  const semanticMetricChartCardRegion = renderSemanticMetricChartCardRegion(node, componentName, context)
+  if (semanticMetricChartCardRegion) return semanticMetricChartCardRegion
   const semanticHeaderRegion = renderSemanticHeaderNavigationRegion(node, componentName, context)
   if (semanticHeaderRegion) return semanticHeaderRegion
   const semanticFooterRegion = renderSemanticFooterRegion(node, componentName, context)
@@ -2226,6 +2308,35 @@ function renderSemanticMetricRankingCardRegion(
   }
 }
 
+function renderSemanticMetricChartCardRegion(
+  node: DomNode,
+  sourceRegionComponentName: string,
+  context: SourceDomRenderContext,
+): SourceRegionRenderRef | undefined {
+  if (!isSemanticMetricChartCardCandidate(node)) return undefined
+  const card = extractSemanticMetricChartCard(node, sourceRegionComponentName)
+  if (!card) return undefined
+
+  const content = renderSemanticMetricChartCardComponent(card)
+  const filePath = `src/components/semantic/${card.componentName}.tsx`
+  context.regionFiles.set(filePath, content)
+  context.semanticReplacementMetrics.push({
+    componentName: card.componentName,
+    filePath,
+    sourceRegionComponentName,
+    sourceNodeId: card.rootSourceNodeId,
+    replacementKind: "metric_chart_card_component",
+    itemCount: card.stats.length,
+    bytes: Buffer.byteLength(content, "utf8"),
+    rootClassName: card.rootClassName,
+    textPreview: [card.title, card.ticker, ...card.stats.map((stat) => `${stat.label} ${stat.value}`)].join(" | ").slice(0, 180),
+  })
+  return {
+    componentName: card.componentName,
+    importPath: semanticImportPath(context, card.componentName),
+  }
+}
+
 function renderSemanticEventCardListRegion(
   node: DomNode,
   sourceRegionComponentName: string,
@@ -2271,6 +2382,8 @@ function renderSemanticFooterRegion(
 
   const content = renderSemanticFooterComponent(footer)
   const filePath = `src/components/semantic/${footer.componentName}.tsx`
+  const footerLinks = footer.linkGroups.flatMap((group) => group.columns).flatMap((column) => column.links)
+  const legalText = footer.legalParts.map((part) => part.text).filter(Boolean)
   context.regionFiles.set(filePath, content)
   context.semanticReplacementMetrics.push({
     componentName: footer.componentName,
@@ -2278,14 +2391,14 @@ function renderSemanticFooterRegion(
     sourceRegionComponentName,
     sourceNodeId: footer.rootSourceNodeId,
     replacementKind: "navigation_or_footer_component",
-    itemCount: footer.links.length + footer.socialLinks.length,
+    itemCount: footerLinks.length + footer.socialLinks.length,
     bytes: Buffer.byteLength(content, "utf8"),
     rootClassName: footer.rootClassName,
     textPreview: [
       footer.languageLabel,
       ...footer.socialLinks.slice(0, 4).map((item) => item.label),
-      ...footer.links.slice(0, 8).map((item) => item.label),
-      ...footer.legalText.slice(0, 2),
+      ...footerLinks.slice(0, 8).map((item) => item.label),
+      ...legalText.slice(0, 2),
     ].filter(Boolean).join(" | ").slice(0, 180),
   })
   return {
@@ -2694,6 +2807,126 @@ function isSemanticMetricRankingCardCandidate(node: DomNode): boolean {
   return /\b(country|gdp|growth|nominal|rate|inflation|unemployment|market cap|population)\b/.test(text)
 }
 
+function isSemanticMetricChartCardCandidate(node: DomNode): boolean {
+  if (!isSemanticCardLikeElement(node)) return false
+  const headerLink = findSemanticMetricChartHeaderLink(node)
+  if (!headerLink) return false
+  const title = semanticMetricChartTitleNode(headerLink)
+  if (!title || normalizeVisibleText(visibleText(title)).length < 2) return false
+  const hasChartAsset = Boolean(findSemanticMetricChartFrame(node))
+  if (!hasChartAsset) return false
+  const stats = semanticMetricChartStats(node)
+  if (stats.length < 1) return false
+  const text = visibleText(node).toLowerCase()
+  return /\b(actual|forecast|next release|rate|balance|unemployment|interest|trade|inflation|gdp)\b/.test(text)
+}
+
+function extractSemanticMetricChartCard(
+  node: DomNode,
+  sourceRegionComponentName: string,
+): SemanticMetricChartCard | undefined {
+  const header = findDescendantElement(node, (child) => hasClassMatching(child, /^header-/))
+  const headerLink = findSemanticMetricChartHeaderLink(node)
+  const titleNode = headerLink ? semanticMetricChartTitleNode(headerLink) : undefined
+  const tickerNode = headerLink ? findDescendantElement(headerLink, (child) => hasClassMatching(child, /^tickerBox-/)) : undefined
+  const title = normalizeVisibleText(titleNode ? visibleText(titleNode) : "")
+  if (!headerLink || !title) return undefined
+  const content = findDescendantElement(node, (child) => hasClassMatching(child, /^content-/))
+  const chartShell = content ? firstElementChild(content) : findSemanticMetricChartFrame(node)
+  const chartFrame = findSemanticMetricChartFrame(node)
+  const statsWrapper = findDescendantElement(node, (child) => hasClassMatching(child, /^wrapper-vE74cYTn/) || hasClassMatching(child, /^stats/))
+  const statsContainer = statsWrapper ? firstElementChild(statsWrapper) : undefined
+  const stats = semanticMetricChartStats(node)
+  if (!chartFrame || stats.length < 1) return undefined
+  const componentBaseName = toPascalIdentifier(title || sourceRegionComponentName.replace(/Region\d*$/, ""))
+
+  return {
+    componentName: `${componentBaseName}MetricCard`,
+    rootClassName: node.attribs?.class ?? "",
+    rootSourceNodeId: node.attribs?.["data-source-node-id"],
+    rootStyle: parseStyleRecord(node.attribs?.style ?? ""),
+    headerClassName: header?.attribs?.class ?? "",
+    linkHref: normalizeReferencedAssetUrl(headerLink.attribs?.href ?? ""),
+    linkClassName: headerLink.attribs?.class ?? "",
+    titleClassName: titleNode?.attribs?.class ?? "",
+    titleTooltip: titleNode?.attribs?.["data-overflow-tooltip-text"],
+    title,
+    tickerClassName: tickerNode?.attribs?.class ?? "",
+    ticker: normalizeVisibleText(tickerNode ? visibleText(tickerNode) : ""),
+    contentClassName: content?.attribs?.class ?? "",
+    chartShellClassName: chartShell?.attribs?.class ?? "",
+    chartFrame: semanticChartNode(chartFrame, 0),
+    statsWrapperClassName: statsWrapper?.attribs?.class ?? "",
+    statsContainerClassName: statsContainer?.attribs?.class ?? "",
+    stats,
+  }
+}
+
+function findSemanticMetricChartHeaderLink(node: DomNode): DomNode | undefined {
+  return findDescendantElement(node, (child) =>
+    child.name?.toLowerCase() === "a" &&
+    Boolean(semanticMetricChartTitleNode(child)) &&
+    Boolean(findDescendantElement(child, (candidate) => hasClassMatching(candidate, /^tickerBox-/)))
+  )
+}
+
+function semanticMetricChartTitleNode(node: DomNode): DomNode | undefined {
+  return findDescendantElement(node, (child) => hasClassMatching(child, /^title-/))
+}
+
+function findSemanticMetricChartFrame(node: DomNode): DomNode | undefined {
+  const lightweightChart = findDescendantElement(node, (child) => hasClassMatching(child, /^tv-lightweight-charts$/))
+  return lightweightChart ?? findDescendantElement(node, (child) =>
+    child.name?.toLowerCase() === "canvas" &&
+    /backgroundImage|background-image|url\(/.test(child.attribs?.style ?? "")
+  )
+}
+
+function semanticMetricChartStats(node: DomNode): SemanticMetricChartStat[] {
+  return findDescendantElements(node, isSemanticMetricChartStatNode)
+    .map((statNode) => {
+      const labelNode = findDescendantElement(statNode, (child) => hasClassMatching(child, /^label-/))
+      const valueNode = findDescendantElement(statNode, (child) => hasClassMatching(child, /^value-/))
+      const valueInner = valueNode ? firstElementChild(valueNode) : undefined
+      return {
+        wrapperClassName: statNode.attribs?.class ?? "",
+        labelClassName: labelNode?.attribs?.class ?? "",
+        label: normalizeVisibleText(labelNode ? visibleText(labelNode) : ""),
+        valueClassName: valueNode?.attribs?.class ?? "",
+        value: normalizeVisibleText(valueNode ? visibleText(valueNode) : ""),
+        valueInnerClassName: valueInner?.attribs?.class ?? "",
+      }
+    })
+    .filter((stat) => stat.label || stat.value)
+    .slice(0, 8)
+}
+
+function isSemanticMetricChartStatNode(node: DomNode): boolean {
+  if (node.type !== "tag") return false
+  if (hasClassMatching(node, /^wrapper-yXjDRT2e/)) return true
+  const children = directElementChildren(node)
+  if (children.length < 2 || children.length > 3) return false
+  return children.some((child) => hasClassMatching(child, /^label-/)) &&
+    children.some((child) => hasClassMatching(child, /^value-/))
+}
+
+function semanticChartNode(node: DomNode, depth: number): SemanticChartNode | undefined {
+  if (depth > 8 || node.type !== "tag") return undefined
+  const tagName = node.name?.toLowerCase()
+  if (tagName !== "table" && tagName !== "tbody" && tagName !== "tr" && tagName !== "td" && tagName !== "div" && tagName !== "canvas") return undefined
+  const children = directElementChildren(node)
+    .map((child) => semanticChartNode(child, depth + 1))
+    .filter((child): child is SemanticChartNode => Boolean(child))
+  return {
+    tagName,
+    className: node.attribs?.class ?? "",
+    style: parseStyleRecord(node.attribs?.style ?? ""),
+    width: node.attribs?.width,
+    height: node.attribs?.height,
+    children,
+  }
+}
+
 function extractSemanticMetricRankingCard(
   node: DomNode,
   sourceRegionComponentName: string,
@@ -2710,8 +2943,12 @@ function extractSemanticMetricRankingCard(
 
   const wrapper = firstElementChild(node)
   const titleNode = findDescendantElement(wrapper ?? node, (child) =>
-    child.attribs?.["data-source-role"] === "header" &&
     child !== headerRow &&
+    (
+      child.attribs?.["data-source-role"] === "header" ||
+      hasClassMatching(child, /^header-/) ||
+      hasClassMatching(child, /^title-/)
+    ) &&
     normalizeVisibleText(visibleText(child)).length > 0,
   )
   const firstItem = directElementChildren(list).find((child) => child.name?.toLowerCase() === "li")
@@ -2764,8 +3001,12 @@ function findSemanticMetricRankingList(node: DomNode): DomNode | undefined {
 
 function findSemanticMetricRankingHeaderRow(node: DomNode): DomNode | undefined {
   return findDescendantElement(node, (child) => {
-    if (child.attribs?.["data-source-role"] !== "header") return false
-    return semanticMetricRankingHeaderLabels(child).length >= 2
+    if (semanticMetricRankingHeaderLabels(child).length < 2) return false
+    if (child.attribs?.["data-source-role"] === "header") return true
+    return hasClassMatching(child, /^header-/) && (
+      hasClassMatching(child, /^column/) ||
+      /\b(country|gdp|growth|nominal|rate|inflation|unemployment|market cap|population)\b/i.test(visibleText(child))
+    )
   })
 }
 
@@ -2980,14 +3221,31 @@ function isSemanticFooterCandidate(node: DomNode): boolean {
 }
 
 function extractSemanticFooter(node: DomNode, sourceRegionComponentName: string): SemanticFooter | undefined {
-  const anchors = findDescendantElements(node, (child) => child.name?.toLowerCase() === "a")
+  const promo = findDescendantElement(node, (child) => /(?:promo-footer|footer-shell)/i.test(child.attribs?.class ?? ""))
+  const visualRoot = findDescendantElement(node, (child) => hasClassMatching(child, /^root-/))
+  const container = findDescendantElement(visualRoot ?? promo ?? node, (child) => hasClassMatching(child, /^container-/))
+  const content = container ? directElementChildren(container).find((child) => hasClassMatching(child, /^content-/)) : undefined
+  const leading = content ? directElementChildren(content).find((child) => child.name?.toLowerCase() === "div" && !hasClassMatching(child, /^footerLinks-/)) : undefined
+  const logoSocials = findDescendantElement(leading ?? node, (child) => hasClassMatching(child, /^logoSocials-/))
+  const logoAnchor = logoSocials ? findDescendantElement(logoSocials, (child) => child.name?.toLowerCase() === "a" && hasClassMatching(child, /^logoWrapper-/)) : undefined
+  const logoMark = logoAnchor ? findDescendantElement(logoAnchor, (child) => hasClassMatching(child, /^logo-/)) : undefined
+  const socials = logoSocials ? findDescendantElement(logoSocials, (child) => hasClassMatching(child, /^socials-/)) : undefined
+  const socialLinks = (socials ? directElementChildren(socials) : [])
+    .filter((child) => child.name?.toLowerCase() === "a")
     .map(semanticFooterLink)
     .filter((item): item is SemanticFooterLink => Boolean(item))
-  if (anchors.length < 4) return undefined
-  const socialLinks = anchors.filter((item) => /\b(on|x|facebook|youtube|instagram|linkedin|telegram|tiktok|reddit)\b/i.test(item.ariaLabel ?? ""))
-  const socialKeys = new Set(socialLinks.map((item) => `${item.href}|${item.label}`))
-  const links = anchors.filter((item) => !socialKeys.has(`${item.href}|${item.label}`)).slice(0, 120)
-  const images = findDescendantElements(node, (child) => child.name?.toLowerCase() === "img")
+  const copyrightContainer = findDescendantElement(leading ?? node, (child) => hasClassMatching(child, /^copyrightContainer-/))
+  const languageButton = findDescendantElement(copyrightContainer ?? node, (child) => child.name?.toLowerCase() === "button" && /language/i.test(child.attribs?.class ?? ""))
+  const copyright = findDescendantElement(copyrightContainer ?? node, (child) => child.name?.toLowerCase() === "p" && hasClassMatching(child, /^copyright-/))
+  const footerLinks = findDescendantElement(content ?? node, (child) => hasClassMatching(child, /^footerLinks-/))
+  const linkGroups = extractSemanticFooterLinkGroups(footerLinks)
+  const footerLinkCount = linkGroups.flatMap((group) => group.columns).flatMap((column) => column.links).length
+  if (socialLinks.length + footerLinkCount < 4) return undefined
+  const backgroundImage = container ? directElementChildren(container).find((child) => hasClassMatching(child, /^backgroundImage-/)) : undefined
+  const lookFirstContainer = container ? directElementChildren(container).find((child) => hasClassMatching(child, /^lookFirstContainer-/)) : undefined
+  const pepeContainer = lookFirstContainer ? findDescendantElement(lookFirstContainer, (child) => hasClassMatching(child, /^pepeContainer-/)) : undefined
+  const pepeLauncher = container ? directElementChildren(container).find((child) => hasClassMatching(child, /^pepeLauncher-/)) : undefined
+  const images = findDescendantElements(lookFirstContainer ?? node, (child) => child.name?.toLowerCase() === "img")
     .map((image) => ({
       src: normalizeReferencedAssetUrl(image.attribs?.src ?? ""),
       alt: image.attribs?.alt ?? "",
@@ -2995,21 +3253,32 @@ function extractSemanticFooter(node: DomNode, sourceRegionComponentName: string)
     }))
     .filter((image) => image.src && image.src !== "data:,")
     .slice(0, 12)
-  const legalText = findDescendantElements(node, (child) => child.name?.toLowerCase() === "p")
-    .map((child) => normalizeVisibleText(visibleText(child)))
-    .filter(Boolean)
-    .slice(0, 8)
-  const languageButton = findDescendantElement(node, (child) => child.name?.toLowerCase() === "button" && /language/i.test(child.attribs?.class ?? ""))
   const componentName = sourceRegionComponentName.replace(/Region\d*$/, "Navigation")
   return {
     componentName: componentName === sourceRegionComponentName ? `${sourceRegionComponentName}Navigation` : componentName,
     rootClassName: node.attribs?.class ?? "",
     rootSourceNodeId: node.attribs?.["data-source-node-id"],
     dataNosnippet: node.attribs?.["data-nosnippet"],
+    promoClassName: promo?.attribs?.class ?? "",
+    visualRootClassName: visualRoot?.attribs?.class ?? "",
+    containerClassName: container?.attribs?.class ?? "",
+    contentClassName: content?.attribs?.class ?? "",
+    leadingClassName: leading?.attribs?.class ?? "",
+    logoSocialsClassName: logoSocials?.attribs?.class ?? "",
+    logoLink: logoAnchor ? semanticFooterLogoLink(logoAnchor, logoMark) : undefined,
+    socialsClassName: socials?.attribs?.class ?? "",
     socialLinks,
-    links,
+    copyrightContainerClassName: copyrightContainer?.attribs?.class ?? "",
+    languageButtonClassName: languageButton?.attribs?.class ?? "",
+    copyrightClassName: copyright?.attribs?.class ?? "",
+    legalParts: copyright ? semanticFooterLegalParts(copyright) : [],
+    footerLinksClassName: footerLinks?.attribs?.class ?? "",
+    linkGroups,
+    backgroundImageClassName: backgroundImage?.attribs?.class ?? "",
+    lookFirstContainerClassName: lookFirstContainer?.attribs?.class ?? "",
     images,
-    legalText,
+    pepeContainerClassName: pepeContainer?.attribs?.class ?? "",
+    pepeLauncherClassName: pepeLauncher?.attribs?.class ?? "",
     languageLabel: languageButton ? normalizeVisibleText(visibleText(languageButton)) : undefined,
   }
 }
@@ -3025,7 +3294,74 @@ function semanticFooterLink(anchor: DomNode): SemanticFooterLink | undefined {
     className: anchor.attribs?.class ?? "",
     target: anchor.attribs?.target,
     rel: anchor.attribs?.rel,
+    iconClassName: findDescendantElement(anchor, (child) => child.name?.toLowerCase() === "span")?.attribs?.class,
   }
+}
+
+function semanticFooterLogoLink(anchor: DomNode, mark?: DomNode): SemanticFooterLogoLink | undefined {
+  const link = semanticFooterLink(anchor)
+  if (!link) return undefined
+  return {
+    ...link,
+    markClassName: mark?.attribs?.class ?? "",
+  }
+}
+
+function extractSemanticFooterLinkGroups(footerLinks?: DomNode): SemanticFooterLinkGroup[] {
+  if (!footerLinks) return []
+  const groupNodes = directElementChildren(footerLinks).filter((child) => hasClassMatching(child, /^footerLinksGroup-/))
+  const groups = groupNodes.length > 0 ? groupNodes : [footerLinks]
+  return groups
+    .map((group) => ({
+      className: group === footerLinks ? "" : group.attribs?.class ?? "",
+      columns: extractSemanticFooterLinkColumns(group),
+    }))
+    .filter((group) => group.columns.length > 0)
+    .slice(0, 12)
+}
+
+function extractSemanticFooterLinkColumns(group: DomNode): SemanticFooterLinkColumn[] {
+  const columnNodes = directElementChildren(group).filter((child) => hasClassMatching(child, /^footerLinksColumn-/))
+  const columns = columnNodes.length > 0 ? columnNodes : [group]
+  return columns
+    .map((column) => {
+      const titleNode = directElementChildren(column).find((child) => hasClassMatching(child, /^footerLinksColumnTitle-/))
+      const listNode = directElementChildren(column).find((child) => hasClassMatching(child, /^footerLinksColumnList-/) || child.name?.toLowerCase() === "ul")
+      const anchorScope = listNode ?? column
+      const links = findDescendantElements(anchorScope, (child) => child.name?.toLowerCase() === "a")
+        .map(semanticFooterLink)
+        .filter((item): item is SemanticFooterLink => Boolean(item))
+        .slice(0, 40)
+      return {
+        className: column === group ? "" : column.attribs?.class ?? "",
+        titleClassName: titleNode?.attribs?.class ?? "",
+        title: normalizeVisibleText(titleNode ? visibleText(titleNode) : ""),
+        listClassName: listNode?.attribs?.class ?? "",
+        links,
+      }
+    })
+    .filter((column) => column.links.length > 0)
+    .slice(0, 24)
+}
+
+function semanticFooterLegalParts(node: DomNode): SemanticFooterLegalPart[] {
+  const parts: SemanticFooterLegalPart[] = []
+  function visit(current: DomNode): void {
+    if (current.type === "text") {
+      const text = normalizeVisibleText(current.data ?? "")
+      if (text) parts.push({ kind: "text", text })
+      return
+    }
+    if (current.type !== "tag") return
+    if (current.name?.toLowerCase() === "a") {
+      const link = semanticFooterLink(current)
+      if (link) parts.push({ kind: "link", text: link.label, link })
+      return
+    }
+    for (const child of current.children ?? []) visit(child)
+  }
+  for (const child of node.children ?? []) visit(child)
+  return parts.slice(0, 80)
 }
 
 function isSemanticHeaderNavigationCandidate(node: DomNode): boolean {
@@ -3961,7 +4297,7 @@ function hasSemanticCardSurfaceChild(node: DomNode): boolean {
 function findSemanticSectionChildCandidates(node: DomNode): DomNode[] {
   const result: DomNode[] = []
   function visit(child: DomNode, depth: number): void {
-    if (depth > 8 || result.length >= 3 || child.type !== "tag") return
+    if (depth > 8 || result.length >= 8 || child.type !== "tag") return
     if (child !== node && isSemanticSectionChildCandidate(child)) {
       result.push(child)
       return
@@ -4049,6 +4385,7 @@ function renderSemanticSectionChild(node: DomNode, context: SourceDomRenderConte
     renderSemanticEventCardListRegion(node, childSourceRegionComponentName, context) ??
     renderSemanticDataTableRegion(node, childSourceRegionComponentName, context) ??
     renderSemanticMetricRankingCardRegion(node, childSourceRegionComponentName, context) ??
+    renderSemanticMetricChartCardRegion(node, childSourceRegionComponentName, context) ??
     renderSemanticIdeaCardCollectionRegion(node, childSourceRegionComponentName, context) ??
     renderSemanticMapSurfaceRegion(node, childSourceRegionComponentName, context) ??
     renderSemanticLinkGridRegion(node, childSourceRegionComponentName, context) ??
@@ -4366,6 +4703,59 @@ function renderSemanticMetricRankingCardComponent(ranking: SemanticMetricRanking
   ].join("\n")
 }
 
+function renderSemanticMetricChartCardComponent(card: SemanticMetricChartCard): string {
+  const cardName = `${card.componentName.charAt(0).toLowerCase()}${card.componentName.slice(1)}Data`
+  return [
+    "// @ts-nocheck",
+    "// semantic-source-replacement: generated from source mini metric chart card structure, chart asset layers, and stat rows.",
+    "",
+    `const ${cardName} = ${JSON.stringify(card, null, 2)} as const`,
+    "",
+    "function ChartNode({ node }) {",
+    "  if (!node) return null",
+    "  const Tag = node.tagName",
+    "  const props = { className: node.className, style: node.style, width: node.width, height: node.height }",
+    "  return (",
+    "    <Tag {...props}>",
+    "      {node.children.map((child, index) => <ChartNode node={child} key={`${child.tagName}-${index}`} />)}",
+    "    </Tag>",
+    "  )",
+    "}",
+    "",
+    `export function ${card.componentName}() {`,
+    `  const card = ${cardName}`,
+    "  return (",
+    "    <div className={card.rootClassName} data-source-region={card.rootSourceNodeId} style={card.rootStyle}>",
+    "      <div className={card.headerClassName}>",
+    "        <a href={card.linkHref} className={card.linkClassName}>",
+    "          <span className={card.titleClassName} data-overflow-tooltip-text={card.titleTooltip}>{card.title}</span>",
+    "          {card.ticker ? <span className={card.tickerClassName}>{card.ticker}</span> : null}",
+    "        </a>",
+    "      </div>",
+    "      <div className={card.contentClassName}>",
+    "        <div className={card.chartShellClassName}>",
+    "          <ChartNode node={card.chartFrame} />",
+    "        </div>",
+    "      </div>",
+    "      <div className={card.statsWrapperClassName}>",
+    "        <div className={card.statsContainerClassName}>",
+    "          {card.stats.map((stat) => (",
+    "            <div className={stat.wrapperClassName} key={`${stat.label}-${stat.value}`}>",
+    "              <div className={stat.labelClassName}>{stat.label}</div>",
+    "              <div className={stat.valueClassName}>",
+    "                {stat.valueInnerClassName ? <div className={stat.valueInnerClassName}>{stat.value}</div> : stat.value}",
+    "              </div>",
+    "            </div>",
+    "          ))}",
+    "        </div>",
+    "      </div>",
+    "    </div>",
+    "  )",
+    "}",
+    "",
+  ].join("\n")
+}
+
 function renderSemanticEventCardListComponent(list: SemanticEventCardList): string {
   const listName = `${list.componentName.charAt(0).toLowerCase()}${list.componentName.slice(1)}Data`
   const rootDataAttrLines = Object.keys(list.rootDataAttrs)
@@ -4454,7 +4844,7 @@ function renderSemanticFooterComponent(footer: SemanticFooter): string {
   const footerName = `${footer.componentName.charAt(0).toLowerCase()}${footer.componentName.slice(1)}Data`
   return [
     "// @ts-nocheck",
-    "// semantic-source-replacement: generated from source footer navigation, social links, assets, and legal text with data loops.",
+    "// semantic-source-replacement: generated from source footer structure, navigation groups, social links, assets, and legal text with data loops.",
     "",
     `const ${footerName} = ${JSON.stringify(footer, null, 2)} as const`,
     "",
@@ -4462,29 +4852,64 @@ function renderSemanticFooterComponent(footer: SemanticFooter): string {
     `  const footer = ${footerName}`,
     "  return (",
     "    <footer className={footer.rootClassName} data-source-region={footer.rootSourceNodeId} data-nosnippet={footer.dataNosnippet}>",
-    "      <div className=\"semantic-source-footer-shell\">",
-    "        <div className=\"semantic-source-footer-brand\">",
-    "          {footer.images.map((image) => (",
-    "            <img className={image.className} src={image.src} alt={image.alt} key={`${image.src}-${image.alt}`} />",
-    "          ))}",
-    "        </div>",
-    "        {footer.languageLabel ? <button className=\"semantic-source-footer-language\">{footer.languageLabel}</button> : null}",
-    "        <nav className=\"semantic-source-footer-socials\" aria-label=\"Social links\">",
-    "          {footer.socialLinks.map((link) => (",
-    "            <a className={link.className} href={link.href} aria-label={link.ariaLabel} target={link.target} rel={link.rel} key={`${link.href}-${link.label}`}>",
-    "              {link.label}",
-    "            </a>",
-    "          ))}",
-    "        </nav>",
-    "        <nav className=\"semantic-source-footer-links\" aria-label=\"Footer links\">",
-    "          {footer.links.map((link) => (",
-    "            <a className={link.className} href={link.href} aria-label={link.ariaLabel} target={link.target} rel={link.rel} key={`${link.href}-${link.label}`}>",
-    "              {link.label}",
-    "            </a>",
-    "          ))}",
-    "        </nav>",
-    "        <div className=\"semantic-source-footer-legal\">",
-    "          {footer.legalText.map((text) => <p key={text}>{text}</p>)}",
+    "      <div className={footer.promoClassName}>",
+    "        <div className={footer.visualRootClassName}>",
+    "          <div className={footer.containerClassName}>",
+    "            <div className={footer.contentClassName}>",
+    "              <div className={footer.leadingClassName}>",
+    "                <div className={footer.logoSocialsClassName}>",
+    "                  {footer.logoLink ? (",
+    "                    <a className={footer.logoLink.className} href={footer.logoLink.href} aria-label={footer.logoLink.ariaLabel} target={footer.logoLink.target} rel={footer.logoLink.rel}>",
+    "                      <span className={footer.logoLink.markClassName}></span>",
+    "                    </a>",
+    "                  ) : null}",
+    "                  <div className={footer.socialsClassName}>",
+    "                    {footer.socialLinks.map((link) => (",
+    "                      <a className={link.className} href={link.href} aria-label={link.ariaLabel} target={link.target} rel={link.rel} key={`${link.href}-${link.ariaLabel ?? link.label}`}>",
+    "                        <span className={link.iconClassName}></span>",
+    "                      </a>",
+    "                    ))}",
+    "                  </div>",
+    "                </div>",
+    "                <div className={footer.copyrightContainerClassName}>",
+    "                  {footer.languageLabel ? <button className={footer.languageButtonClassName}>{footer.languageLabel}</button> : null}",
+    "                  <p className={footer.copyrightClassName}>",
+    "                    {footer.legalParts.map((part, index) => part.kind === \"link\" && part.link ? (",
+    "                      <a className={part.link.className} href={part.link.href} target={part.link.target} rel={part.link.rel} key={`${part.link.href}-${index}`}>{part.text}</a>",
+    "                    ) : (",
+    "                      <span key={`${part.text}-${index}`}>{part.text}</span>",
+    "                    ))}",
+    "                  </p>",
+    "                </div>",
+    "              </div>",
+    "              <div className={footer.footerLinksClassName}>",
+    "                {footer.linkGroups.map((group, groupIndex) => (",
+    "                  <div className={group.className} key={groupIndex}>",
+    "                    {group.columns.map((column) => (",
+    "                      <div className={column.className} key={column.title}>",
+    "                        {column.title ? <span className={column.titleClassName}>{column.title}</span> : null}",
+    "                        <ul className={column.listClassName}>",
+    "                          {column.links.map((link) => (",
+    "                            <li key={`${column.title}-${link.href}-${link.label}`}>",
+    "                              <a className={link.className} href={link.href} aria-label={link.ariaLabel} target={link.target} rel={link.rel}>{link.label}</a>",
+    "                            </li>",
+    "                          ))}",
+    "                        </ul>",
+    "                      </div>",
+    "                    ))}",
+    "                  </div>",
+    "                ))}",
+    "              </div>",
+    "            </div>",
+    "            {footer.backgroundImageClassName ? <div className={footer.backgroundImageClassName}></div> : null}",
+    "            {footer.lookFirstContainerClassName ? (",
+    "              <div className={footer.lookFirstContainerClassName}>",
+    "                {footer.images.map((image) => <img className={image.className} src={image.src} alt={image.alt} key={`${image.src}-${image.alt}`} />)}",
+    "                {footer.pepeContainerClassName ? <div className={footer.pepeContainerClassName}></div> : null}",
+    "              </div>",
+    "            ) : null}",
+    "            {footer.pepeLauncherClassName ? <div className={footer.pepeLauncherClassName}></div> : null}",
+    "          </div>",
     "        </div>",
     "      </div>",
     "    </footer>",
@@ -5530,6 +5955,7 @@ function shouldExtractSourceRegion(
   if (isSemanticFooterCandidate(node)) return true
   if (isSemanticIdeaCardCollectionCandidate(node)) return true
   if (isSemanticMetricRankingCardCandidate(node)) return true
+  if (isSemanticMetricChartCardCandidate(node)) return true
   if (isCompositeSourceWidgetShell(node)) return false
   if (isSemanticSectionShellCandidate(node)) return true
   if (isSemanticMapSurfaceCandidate(node)) return true
@@ -5541,6 +5967,7 @@ function shouldExtractSourceRegion(
   if (isSemanticEventCardListCandidate(node)) return true
   if (isSemanticDataTableCandidate(node)) return true
   if (isSemanticMetricRankingCardCandidate(node)) return true
+  if (isSemanticMetricChartCardCandidate(node)) return true
   if (isSemanticIdeaCardCollectionCandidate(node)) return true
   if (isSemanticMapSurfaceCandidate(node)) return true
   if (isSemanticLinkGridCandidate(node)) return true
@@ -5600,6 +6027,7 @@ function isNestedSurfaceCandidate(node: DomNode): boolean {
   if (attrs["data-base-widget"] === "true") return true
   if (isSemanticDataTableCandidate(node)) return true
   if (isSemanticMetricRankingCardCandidate(node)) return true
+  if (isSemanticMetricChartCardCandidate(node)) return true
   if (isSemanticEventCardListCandidate(node)) return true
   if (isSemanticIdeaCardCollectionCandidate(node)) return true
   if (isSemanticMapSurfaceCandidate(node)) return true
