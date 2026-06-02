@@ -174,6 +174,7 @@ interface SourceDomRegionMetric {
   filePath: string
   sourceNodeId?: string
   sourceSegmentId?: string
+  sourceBounds?: SourceBounds
   tag: string
   heading?: string
   textPreview: string
@@ -196,11 +197,30 @@ interface SourceDomReplacementPlanItem {
     | "event_or_news_list_component"
     | "baseline_defer"
   problem: string
+  sourceMap: {
+    sourceNodeId?: string
+    sourceSegmentId?: string
+    bounds?: SourceBounds
+    domRegion: string
+    styleSources: string[]
+    dataSources: string[]
+    assetSources: string[]
+    visualSources: string[]
+  }
   reusableSources: string[]
   dataSources: string[]
   assetSources: string[]
+  generatedCleanupTargets: string[]
+  verticalSliceSteps: string[]
   firstReplacementStep: string
   parityGuard: string
+}
+
+interface SourceBounds {
+  x: number
+  y: number
+  w: number
+  h: number
 }
 
 interface SemanticSourceReplacementMetric {
@@ -278,6 +298,7 @@ interface SourceDomRenderContext {
   previewImagePaths: string[]
   previewImageIndex: number
   nodeStyleFallbacks: Map<string, string>
+  nodeBoundsById: Map<string, SourceBounds>
   irChildrenByNodeId: Map<string, DomNode[]>
   regionFiles: Map<string, string>
   regionMetrics: SourceDomRegionMetric[]
@@ -871,10 +892,11 @@ export async function generateWebCloneSourceProject(
   const projectData = buildSourceProjectData({ sourceSkeleton, contentModel, componentTree, assetManifest })
   const previewImagePaths = await readPreviewImagePaths(mirrorDir)
   const nodeStyleFallbacks = extractNodeStyleFallbacks(pageIr)
+  const nodeBoundsById = extractNodeBounds(pageIr)
   const irChildrenByNodeId = extractIrChildrenByNodeId(pageIr)
   const documentContext = extractDocumentContext(pageIr)
   const svgPaths = await readSvgPathData(mirrorDir)
-  const sourceDomProject = renderSourceDomProject(sourceSkeleton, previewImagePaths, nodeStyleFallbacks, irChildrenByNodeId)
+  const sourceDomProject = renderSourceDomProject(sourceSkeleton, previewImagePaths, nodeStyleFallbacks, nodeBoundsById, irChildrenByNodeId)
   const replacementPlan = buildSourceDomReplacementPlan(sourceDomProject.regionMetrics, projectData)
   const visualIteration = await buildSourceProjectVisualIteration(mirrorDir)
 
@@ -1040,6 +1062,39 @@ function extractNodeStyleFallbacks(pageIr: unknown): Map<string, string> {
 
   visit(pageIr)
   return styles
+}
+
+function extractNodeBounds(pageIr: unknown): Map<string, SourceBounds> {
+  const boundsById = new Map<string, SourceBounds>()
+
+  function visit(value: unknown): void {
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item)
+      return
+    }
+    if (!value || typeof value !== "object") return
+    const row = value as Record<string, unknown>
+    const bounds = asSourceBounds((row.layout as Record<string, unknown> | undefined)?.bounds)
+    if (typeof row.id === "string" && bounds) boundsById.set(row.id, bounds)
+    if (row.root) visit(row.root)
+    if (Array.isArray(row.children)) {
+      for (const child of row.children) visit(child)
+    }
+  }
+
+  visit(pageIr)
+  return boundsById
+}
+
+function asSourceBounds(value: unknown): SourceBounds | undefined {
+  if (!value || typeof value !== "object") return undefined
+  const row = value as Record<string, unknown>
+  const x = typeof row.x === "number" ? row.x : undefined
+  const y = typeof row.y === "number" ? row.y : undefined
+  const w = typeof row.w === "number" ? row.w : undefined
+  const h = typeof row.h === "number" ? row.h : undefined
+  if (x === undefined || y === undefined || w === undefined || h === undefined) return undefined
+  return { x, y, w, h }
 }
 
 function extractDocumentContext(pageIr: unknown): DocumentContext {
@@ -1634,6 +1689,7 @@ function renderSourceDomProject(
   sourceSkeleton: string,
   previewImagePaths: string[],
   nodeStyleFallbacks: Map<string, string>,
+  nodeBoundsById: Map<string, SourceBounds>,
   irChildrenByNodeId: Map<string, DomNode[]>,
 ): SourceDomRenderProject {
   const currentImports = new Map<string, string>()
@@ -1642,6 +1698,7 @@ function renderSourceDomProject(
     previewImagePaths,
     previewImageIndex: 0,
     nodeStyleFallbacks,
+    nodeBoundsById,
     irChildrenByNodeId,
     regionFiles: new Map(),
     regionMetrics: [],
@@ -1984,6 +2041,7 @@ function renderExtractedSourceRegion(node: DomNode, context: SourceDomRenderCont
       filePath,
       sourceNodeId: node.attribs?.["data-source-node-id"],
       sourceSegmentId: node.attribs?.["data-source-segment-id"],
+      sourceBounds: sourceNodeBounds(node, context),
       tag: node.name ?? "div",
       heading: findFirstHeadingText(node),
       textPreview: visibleText(node).slice(0, 180),
@@ -2042,6 +2100,7 @@ function renderExtractedSourceRegion(node: DomNode, context: SourceDomRenderCont
     filePath,
     sourceNodeId: node.attribs?.["data-source-node-id"],
     sourceSegmentId: node.attribs?.["data-source-segment-id"],
+    sourceBounds: sourceNodeBounds(node, context),
     tag: node.name ?? "div",
     heading: findFirstHeadingText(node),
     textPreview: visibleText(node).slice(0, 180),
@@ -2054,6 +2113,11 @@ function renderExtractedSourceRegion(node: DomNode, context: SourceDomRenderCont
 
 function sourceDomImportPath(context: SourceDomRenderContext, componentName: string): string {
   return `${context.currentImportPrefix}${componentName}`
+}
+
+function sourceNodeBounds(node: DomNode, context: SourceDomRenderContext): SourceBounds | undefined {
+  const sourceNodeId = node.attribs?.["data-source-node-id"]
+  return sourceNodeId ? context.nodeBoundsById.get(sourceNodeId) : undefined
 }
 
 function semanticImportPath(context: SourceDomRenderContext, componentName: string): string {
@@ -5238,6 +5302,10 @@ function buildSourceDomReplacementPlan(
     .map((region) => {
       const replacementKind = classifySourceDomReplacementKind(region)
       const recommendedComponentName = semanticReplacementComponentName(region, replacementKind)
+      const dataSources = sourceDomDataSources(data, replacementKind)
+      const assetSources = sourceDomAssetSources(data, replacementKind)
+      const styleSources = sourceDomStyleSources(replacementKind)
+      const visualSources = sourceDomVisualSources(region)
       return {
         regionComponentName: region.componentName,
         regionFilePath: region.filePath,
@@ -5245,9 +5313,21 @@ function buildSourceDomReplacementPlan(
         recommendedComponentName,
         replacementKind,
         problem: sourceDomReplacementProblem(region),
+        sourceMap: {
+          sourceNodeId: region.sourceNodeId,
+          sourceSegmentId: region.sourceSegmentId,
+          bounds: region.sourceBounds,
+          domRegion: region.filePath,
+          styleSources,
+          dataSources,
+          assetSources,
+          visualSources,
+        },
         reusableSources: sourceDomReusableSources(region, replacementKind),
-        dataSources: sourceDomDataSources(data, replacementKind),
-        assetSources: sourceDomAssetSources(data, replacementKind),
+        dataSources,
+        assetSources,
+        generatedCleanupTargets: sourceDomGeneratedCleanupTargets(region),
+        verticalSliceSteps: sourceDomVerticalSliceSteps(region, recommendedComponentName, replacementKind),
         firstReplacementStep: sourceDomFirstReplacementStep(region, recommendedComponentName, replacementKind),
         parityGuard: sourceDomParityGuard(region, replacementKind),
       }
@@ -5326,6 +5406,50 @@ function sourceDomAssetSources(
   if (kind === "card_collection_component" || kind === "map_or_chart_asset_component") sources.push("public/assets/images/")
   if (data.assets.length > 0) sources.push("src/data/sourceData.ts:sourceAssets")
   return Array.from(new Set(sources))
+}
+
+function sourceDomStyleSources(kind: SourceDomReplacementPlanItem["replacementKind"]): string[] {
+  const sources = [
+    "src/styles/source-critical.css",
+    "src/styles/source-full.css",
+    "web-clone-source/source-skeleton/critical.css",
+    "web-clone-source/source-ir/style-tokens.json",
+  ]
+  if (kind === "map_or_chart_asset_component") sources.push("src/data/sourceSvgAssetGroups.ts", "src/data/svgPaths.ts")
+  return Array.from(new Set(sources))
+}
+
+function sourceDomVisualSources(region: SourceDomRegionMetric): string[] {
+  return Array.from(new Set([
+    "web-clone-source/reference.png",
+    "reference.png",
+    "web-clone-source/visual-surface-candidates.json",
+    region.sourceNodeId ? `source-node:${region.sourceNodeId}` : "",
+    region.sourceSegmentId ? `source-segment:${region.sourceSegmentId}` : "",
+  ].filter(Boolean)))
+}
+
+function sourceDomGeneratedCleanupTargets(region: SourceDomRegionMetric): string[] {
+  return [
+    region.filePath,
+    "src/components/SourceDomPage.tsx import/render reference for this region",
+    "unused selectors in src/styles/source-critical.css and src/styles/source-full.css after visual parity is preserved",
+  ]
+}
+
+function sourceDomVerticalSliceSteps(
+  region: SourceDomRegionMetric,
+  recommendedComponentName: string,
+  kind: SourceDomReplacementPlanItem["replacementKind"],
+): string[] {
+  return [
+    `Read ${region.filePath} plus sourceMap evidence for source ids, text, classes, and asset references.`,
+    `Extract the visible data for ${recommendedComponentName} into sourceData.ts or a small typed module instead of duplicating JSX literals.`,
+    `Render ${recommendedComponentName} as a semantic component with loops/props/states appropriate for ${kind}.`,
+    "Preserve only the scoped classes or CSS variables needed by the replacement; leave unrelated source CSS untouched.",
+    `Swap ${region.componentName} for ${recommendedComponentName} at the existing SourceDomPage boundary.`,
+    "Compare the same visual viewport matrix against reference.png before deleting generated DOM/CSS coverage.",
+  ]
 }
 
 function sourceDomFirstReplacementStep(
@@ -6124,15 +6248,15 @@ function renderReadme(mirrorDir: string, visualIteration: SourceProjectVisualIte
     "- `source-ir/component-tree.json` for component boundary hints",
     "- `assets/manifest.json` for sidecar asset references",
     "- `src/data/sourceDomRegions.ts` for generated-region size, text preview, and replacement priority metrics",
-    "- `src/data/sourceDomReplacementPlan.ts` for concrete semantic replacement steps, data sources, asset sources, and parity guards",
-    "- `src/data/sourceDomIterationState.ts` for the current maintainable-refactor loop state, semantic replacements already produced, remaining source-dom debt, and the next region to replace",
+    "- `src/data/sourceDomReplacementPlan.ts` for concrete semantic replacement steps, sourceMap evidence, data/style/asset/visual sources, generated cleanup targets, verticalSliceSteps, and parity guards",
+    "- `src/data/sourceDomIterationState.ts` for static replacement progress metadata: semantic replacements already produced, remaining source-dom debt, and the next candidate region",
     "- `src/data/sourceProjectManifest.json` for the visual iteration viewport matrix and generated-source ownership rules",
     "- `src/data/sourceSvgAssetGroups.ts` for large SVG path runs that are data-driven through `SourceAssetPathGroup` instead of hand-maintained TSX repetition",
     "- `src/data/sourceFaqGroups.ts` for FAQ/disclosure content that is data-driven through `SourceFaqList` instead of repeated generated accordion JSX",
     "",
     "Implementation guidance:",
     "- The default app entrypoint renders `src/components/SourceDomPage.tsx` through `src/components/SourceClonePage.tsx`; this is the high-fidelity visual baseline, not a placeholder scaffold.",
-    "- `src/components/source-dom/*Region.tsx` splits the high-fidelity baseline into bounded source regions. Start semantic replacement from `nextSourceDomReplacement` in `src/data/sourceDomIterationState.ts`, then use the matching row in `src/data/sourceDomReplacementPlan.ts` instead of editing a monolithic DOM file.",
+    "- `src/components/source-dom/*Region.tsx` splits the high-fidelity baseline into bounded source regions. Use `nextSourceDomReplacement` in `src/data/sourceDomIterationState.ts` as a static priority hint, then use the matching row in `src/data/sourceDomReplacementPlan.ts` instead of editing a monolithic DOM file.",
     "- Keep `src/styles/source-critical.css`, `src/styles/source-full.css`, `src/data/svgPaths.ts`, `src/data/sourceSvgAssetGroups.ts`, `src/data/sourceFaqGroups.ts`, and `public/assets/` copied together with the React entrypoints; they are required for visual parity.",
     "- Use `src/data/sourceData.ts`, source IR, and component metadata as the maintainability/refactor material for replacing specific regions with semantic components or mature libraries.",
     "- Refine this baseline region by region while checking against `reference.png`.",

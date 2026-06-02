@@ -60,10 +60,10 @@ The frontend template should request downstream implementation evidence from `we
 
 Visual acceptance must be a viewport matrix, not a single screenshot. Name the required desktop, tablet, and narrow/mobile viewport sizes in `visual_consistency_contract`; each viewport must be rendered and evaluated with measured visual comparison evidence, and source review must reject screenshot replay, hidden coverage, inline base64, or unrelated freehand rebuilds.
 
-For maintainable rawproject/refinement requests, frontend_design must teach and supervise a baseline-first, region-by-region iteration loop rather than handing off a freehand rewrite:
+For maintainable rawproject/refinement requests, frontend_design must encode a baseline-first, region-by-region replacement algorithm rather than handing off a freehand rewrite. Use the normal frontend_design tool flow; do not create project-internal state machines, self-dispatch loops, or extra runtime blocking mechanisms:
 
 1. Adopt the traceable `frontend-design-skeleton/` source baseline into the delivery root and compare it with `web-clone-source/reference.png`.
-2. Pick the next region from `frontend-design-skeleton/src/data/sourceDomIterationState.ts` (`nextSourceDomReplacement`), then use the matching row in `frontend-design-skeleton/src/data/sourceDomReplacementPlan.ts`.
+2. Read the static next-candidate metadata from `frontend-design-skeleton/src/data/sourceDomIterationState.ts` (`nextSourceDomReplacement`), then use the matching row in `frontend-design-skeleton/src/data/sourceDomReplacementPlan.ts`: its `sourceMap`, `dataSources`, `assetSources`, `generatedCleanupTargets`, `verticalSliceSteps`, and `parityGuard` are the per-region replacement algorithm.
 3. Replace only that region through a vertical slice: source data extraction, semantic component boundary, scoped style ownership, generated fixed-layout cleanup, asset ownership, and interaction/state wiring.
 4. Re-render the same viewport matrix, run visual comparison, and run `web_clone_source_audit` in `maintainable_replacement_required` mode.
 5. If visual parity regresses or the source audit finds baseline-only/replay/freehand/default-scaffold defects, repair the changed region from source evidence before moving to another region.
