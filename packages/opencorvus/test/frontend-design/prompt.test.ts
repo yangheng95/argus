@@ -125,6 +125,29 @@ describe("frontend-design prompt assembly", () => {
     })
   })
 
+  test("frontend_design report includes process trace events", () => {
+    const trace = FrontendDesignTestHooks.createFrontendProcessTrace()
+    FrontendDesignTestHooks.recordFrontendProcessEvent(trace, {
+      name: "create_frontend_skeleton_project",
+      status: "passed",
+      details: { outputDir: "frontend-design-skeleton" },
+    })
+    FrontendDesignTestHooks.recordFrontendProcessEvent(trace, {
+      name: "edit",
+      status: "passed",
+      details: { title: "Edited source region" },
+    })
+
+    const report = FrontendDesignTestHooks.appendFrontendProcessTrace({
+      summary: "summary",
+      detail: "detail",
+    }, trace)
+
+    expect(report.detail).toContain("## Frontend Design Process Trace")
+    expect(report.detail).toContain("passed: create_frontend_skeleton_project")
+    expect(report.detail).toContain("passed: edit")
+  })
+
   test("terminal frontend template submit tool accepts bounded review notes when auto iteration is off", async () => {
     const kit = createFrontendTemplateOutputTools()
     const submit = kit.tools.submit_frontend_template as any

@@ -306,7 +306,8 @@ test("submit_frontend_template renders compact structured fields into markdown h
   expect(report).toContain("## Reuse Constraints")
   expect(report).not.toContain("## Component Inventory")
   expect(report).toContain("- delivery_root: .")
-  expect(report).toContain("frontend-design-skeleton is a source baseline excluded from final delivery")
+  expect(report).toContain("frontend-design-skeleton is a frontend_design-owned source project")
+  expect(report).toContain("the named source debt is unfinished maintainability work")
 })
 
 test("component reuse plan accepts provider naming and incomplete library hints without schema rejection", async () => {

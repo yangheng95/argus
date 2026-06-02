@@ -70,6 +70,19 @@ import FRONTEND_DESIGN_CORE from "@/prompt/core/frontend-design-core.txt"
 const log = Log.create({ service: "frontend-design" })
 
 export namespace FrontendDesignAgent {
+  export interface ProcessTrace {
+    version: 1
+    purpose: "frontend-design-process-trace"
+    events: ProcessTraceEvent[]
+  }
+
+  export interface ProcessTraceEvent {
+    name: string
+    status: "started" | "passed" | "failed"
+    timestamp: string
+    details?: Record<string, unknown>
+  }
+
   export interface Result {
     specs: VisualSpec[]
     designSystem: string
@@ -97,6 +110,7 @@ export namespace FrontendDesignAgent {
     completenessReview: string
     referenceArtifacts: string[]
     openQuestions: string[]
+    processTrace: ProcessTrace
     report: AgentReport
   }
 
@@ -123,14 +137,18 @@ export namespace FrontendDesignAgent {
 
   export async function analyze(input: AnalyzeInput): Promise<Result & { sessionID: string }> {
     const autoIteration = (await EngineConfig.get()).auto_iteration === true
+    const processTrace = createFrontendProcessTrace()
     const contextTools = await filterAgentTools(createAgentContextTools(), "frontend-design", {
       taskID: input.taskID,
       sessionID: input.parentSessionID,
     })
-    const mirrorAnalysisTools = await createMirrorAnalysisTools({ taskID: input.taskID, signal: input.signal })
-    const implementationTools = await createFrontendImplementationTools({ taskID: input.taskID, signal: input.signal })
+    const mirrorAnalysisTools = await createMirrorAnalysisTools({ taskID: input.taskID, signal: input.signal }, processTrace)
+    const implementationTools = await createFrontendImplementationTools({ taskID: input.taskID, signal: input.signal }, processTrace)
     const screenshotToolKit = createUrlScreenshotTool()
-    const skeletonProjectToolKit = createFrontendSkeletonProjectTool({ taskID: input.taskID })
+    const skeletonProjectToolKit = createFrontendSkeletonProjectTool({
+      taskID: input.taskID,
+      onToolEvent: (event) => recordFrontendProcessEvent(processTrace, event),
+    })
     const outputToolKit = createFrontendTemplateOutputTools({ autoIteration })
     const submitFrontendTemplateTool = createFrontendSubmitTools(outputToolKit)
     const hostPreparedFrontendProject = undefined
@@ -170,7 +188,7 @@ export namespace FrontendDesignAgent {
           ...submitFrontendTemplateTool,
         },
         getCollector: () => outputToolKit.getCollector(),
-        buildReport: () => outputToolKit.buildReport(),
+        buildReport: () => appendFrontendProcessTrace(outputToolKit.buildReport(), processTrace),
       },
       buildUserPrompt: () => buildUserPrompt(input, autoIteration, hostPreparedFrontendProject),
       buildUserParts: () => buildPromptParts(input, autoIteration, hostPreparedFrontendProject),
@@ -197,7 +215,7 @@ export namespace FrontendDesignAgent {
       )
     }
 
-    const report = outputToolKit.buildReport()
+    const report = appendFrontendProcessTrace(outputToolKit.buildReport(), processTrace)
 
     return {
       specs,
@@ -218,6 +236,7 @@ export namespace FrontendDesignAgent {
       completenessReview: structured.completeness_review,
       referenceArtifacts: structured.reference_artifacts,
       openQuestions: structured.open_questions,
+      processTrace,
       report,
       sessionID: out.session.id,
     }
@@ -427,7 +446,44 @@ function renderFinalDeliveryModeInstruction(hostPrepared: boolean): string {
   return "Set `submit_frontend_template.final_delivery_mode` to `maintainable_replacement_required` whenever the user asks for maintainability, real implementation, component reuse, or replacing generated/mechanical output."
 }
 
-async function createFrontendTool(info: Tool.Info, input: { taskID?: string; signal?: AbortSignal }) {
+function createFrontendProcessTrace(): FrontendDesignAgent.ProcessTrace {
+  return {
+    version: 1,
+    purpose: "frontend-design-process-trace",
+    events: [],
+  }
+}
+
+function recordFrontendProcessEvent(
+  trace: FrontendDesignAgent.ProcessTrace,
+  input: Omit<FrontendDesignAgent.ProcessTraceEvent, "timestamp">,
+): void {
+  trace.events.push({
+    ...input,
+    timestamp: new Date().toISOString(),
+  })
+}
+
+function appendFrontendProcessTrace(report: AgentReport, trace: FrontendDesignAgent.ProcessTrace): AgentReport {
+  const lines = [
+    report.detail,
+    "",
+    "## Frontend Design Process Trace",
+    "",
+    trace.events.length === 0
+      ? "- No frontend_design tool events were recorded."
+      : trace.events.map((event) => {
+        const detail = event.details ? ` ${JSON.stringify(event.details)}` : ""
+        return `- ${event.status}: ${event.name}${detail}`
+      }).join("\n"),
+  ]
+  return {
+    summary: report.summary,
+    detail: lines.join("\n"),
+  }
+}
+
+async function createFrontendTool(info: Tool.Info, input: { taskID?: string; signal?: AbortSignal }, trace: FrontendDesignAgent.ProcessTrace) {
   const initialized = await info.init()
   return tool({
     description: initialized.description,
@@ -435,17 +491,33 @@ async function createFrontendTool(info: Tool.Info, input: { taskID?: string; sig
     execute: async (args, options) => {
       const meta = (options as { opencorvus?: { sessionID?: string; messageID?: string; toolCallID?: string } } | undefined)?.opencorvus
       const abort = (options as { abortSignal?: AbortSignal } | undefined)?.abortSignal ?? input.signal ?? new AbortController().signal
-      return initialized.execute(args as never, {
-        sessionID: meta?.sessionID ?? "",
-        messageID: meta?.messageID ?? "",
-        callID: meta?.toolCallID,
-        agent: "frontend-design",
-        abort,
-        messages: [],
-        extra: { taskID: input.taskID },
-        metadata: () => {},
-        ask: async () => {},
-      })
+      recordFrontendProcessEvent(trace, { name: info.id, status: "started" })
+      try {
+        const result = await initialized.execute(args as never, {
+          sessionID: meta?.sessionID ?? "",
+          messageID: meta?.messageID ?? "",
+          callID: meta?.toolCallID,
+          agent: "frontend-design",
+          abort,
+          messages: [],
+          extra: { taskID: input.taskID },
+          metadata: () => {},
+          ask: async () => {},
+        })
+        recordFrontendProcessEvent(trace, {
+          name: info.id,
+          status: "passed",
+          details: { title: result.title },
+        })
+        return result
+      } catch (error) {
+        recordFrontendProcessEvent(trace, {
+          name: info.id,
+          status: "failed",
+          details: { error: error instanceof Error ? error.message : String(error) },
+        })
+        throw error
+      }
     },
   })
 }
@@ -456,38 +528,41 @@ function createFrontendSubmitTools(outputToolKit: ReturnType<typeof createFronte
   }
 }
 
-async function createMirrorAnalysisTools(input: { taskID?: string; signal?: AbortSignal }): Promise<ToolSet> {
+async function createMirrorAnalysisTools(input: { taskID?: string; signal?: AbortSignal }, trace = createFrontendProcessTrace()): Promise<ToolSet> {
   return {
-    webpage_extract: await createFrontendTool(WebpageExtractTool, input),
-    webpage_compile: await createFrontendTool(WebpageCompileTool, input),
-    webpage_analyze: await createFrontendTool(WebpageAnalyzeTool, input),
-    webpage_image_extract: await createFrontendTool(WebpageImageExtractTool, input),
-    webpage_image_compile: await createFrontendTool(WebpageImageCompileTool, input),
-    webpage_image_analyze: await createFrontendTool(WebpageImageAnalyzeTool, input),
+    webpage_extract: await createFrontendTool(WebpageExtractTool, input, trace),
+    webpage_compile: await createFrontendTool(WebpageCompileTool, input, trace),
+    webpage_analyze: await createFrontendTool(WebpageAnalyzeTool, input, trace),
+    webpage_image_extract: await createFrontendTool(WebpageImageExtractTool, input, trace),
+    webpage_image_compile: await createFrontendTool(WebpageImageCompileTool, input, trace),
+    webpage_image_analyze: await createFrontendTool(WebpageImageAnalyzeTool, input, trace),
   }
 }
 
-async function createFrontendImplementationTools(input: { taskID?: string; signal?: AbortSignal }): Promise<ToolSet> {
+async function createFrontendImplementationTools(input: { taskID?: string; signal?: AbortSignal }, trace = createFrontendProcessTrace()): Promise<ToolSet> {
   return {
-    bash: await createFrontendTool(BashTool, input),
-    edit: await createFrontendTool(EditTool, input),
-    write: await createFrontendTool(WriteTool, input),
-    apply_patch: await createFrontendTool(ApplyPatchTool, input),
-    web_clone_source_audit: await createFrontendTool(WebCloneSourceAuditTool, input),
-    webpage_render: await createFrontendTool(WebpageRenderTool, input),
-    webpage_evaluate: await createFrontendTool(WebpageEvaluateTool, input),
-    webpage_text_diff: await createFrontendTool(WebpageTextDiffTool, input),
-    webpage_vision_judge: await createFrontendTool(WebpageVisionJudgeTool, input),
+    bash: await createFrontendTool(BashTool, input, trace),
+    edit: await createFrontendTool(EditTool, input, trace),
+    write: await createFrontendTool(WriteTool, input, trace),
+    apply_patch: await createFrontendTool(ApplyPatchTool, input, trace),
+    web_clone_source_audit: await createFrontendTool(WebCloneSourceAuditTool, input, trace),
+    webpage_render: await createFrontendTool(WebpageRenderTool, input, trace),
+    webpage_evaluate: await createFrontendTool(WebpageEvaluateTool, input, trace),
+    webpage_text_diff: await createFrontendTool(WebpageTextDiffTool, input, trace),
+    webpage_vision_judge: await createFrontendTool(WebpageVisionJudgeTool, input, trace),
   }
 }
 
 export const FrontendDesignTestHooks = {
   buildPromptParts,
   buildUserPrompt,
+  appendFrontendProcessTrace,
   createFrontendSubmitTools,
   createFrontendImplementationTools,
+  createFrontendProcessTrace,
   createMirrorAnalysisTools,
   isTextOnlyNoVisualSource,
+  recordFrontendProcessEvent,
   readHostPreparedCompactEvidence,
   summarizeHostPreparedSourceAudit,
   summarizeHostPreparedSourceProject,
