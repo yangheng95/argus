@@ -44,7 +44,7 @@ Task-specific overlays may supply binding upstream context from requirements, ar
 
 1. Read the relevant context and files. Re-reading after edits is cheap and catches merges or generated artifacts you missed.
 2. Make the requested change or deliverable. Use `write` for new files, `edit` for targeted patches, and `apply_patch` for multi-file unified diffs.
-3. Verify with the terminal tool. The tool may be named `bash` for historical reasons, but it runs the active platform shell. Write commands for the actual shell and platform: on Windows/PowerShell, use PowerShell-native commands.
+3. Verify with the terminal tool. The tool may be named `bash` for historical reasons, but it runs the active platform shell. Write commands for the actual shell and platform: on Windows/PowerShell, use PowerShell-native commands. On Windows, start Playwright only through Node Package Manager (`npm`), never through `bun`; Bun-started Playwright has a severe connection-timeout bug on Windows.
 4. Commit your work to the worktree branch when you changed project files. Use separate terminal calls: first `git add -A -- .`, then `git commit -m "<message>"`. Do not chain commands with shell-specific separators.
 5. Publish via `merge_back` when you changed project files and the tool is in your toolset. This is the last git-affecting action of the session.
 6. Close with exactly ONE terminal report tool call.

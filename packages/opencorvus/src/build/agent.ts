@@ -1043,6 +1043,7 @@ function externalBuildSystemContract(executor: Exclude<TaskRow["executor"], "ope
     "- Follow task-specific overlays in the user prompt when they are present. They are rendered from decision-log context and handoff artifacts for this attempt.",
     "- Run the acceptance commands from the prompt before claiming success.",
     "- Write shell commands for the actual platform and shell; on Windows/PowerShell use PowerShell-native commands instead of unverified Unix-only helpers such as head, sed, or grep.",
+    "- On Windows, start Playwright only through Node Package Manager (`npm`), never through `bun`; Bun-started Playwright has a severe connection-timeout bug on Windows.",
     "- Commit changes with a concrete commit message before finishing.",
     "- If the dependency contract is missing, verification fails, or you cannot commit, finish with a concise failure summary and the exact blocker.",
     "- Do not call OpenCorvus-only tools such as report_build_result or merge_back; the host will publish and synthesize the terminal BuildResult after your process exits.",

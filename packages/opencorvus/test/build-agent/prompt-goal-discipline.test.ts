@@ -41,6 +41,15 @@ describe("build agent goal execution discipline prompt", () => {
     expect(renderBuildAutoIterationMode(true)).toContain("dependency, toolchain, port, script, test, and worktree merge repairs")
   })
 
+  test("warns Windows builds to start Playwright through npm, not bun", async () => {
+    const prompt = await readBuildPrompt()
+    const normalized = prompt.replace(/\s+/g, " ")
+
+    expect(normalized).toContain("On Windows, start Playwright only through Node Package Manager (`npm`)")
+    expect(normalized).toContain("never through `bun`")
+    expect(normalized).toContain("severe connection-timeout bug on Windows")
+  })
+
   test("keeps scenario policy out of the build role core", async () => {
     const prompt = await readBuildPrompt()
 
