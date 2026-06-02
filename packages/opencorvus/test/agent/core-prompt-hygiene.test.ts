@@ -524,6 +524,13 @@ describe("core prompt hygiene", () => {
     expect(build).toContain("Never stop with prose if you cannot complete")
   })
 
+  test("build prompt requires long deliverables to be written in bounded sections", async () => {
+    const build = await readPrompt("build")
+    expect(build).toContain("do not emit the entire artifact in one large tool payload")
+    expect(build).toContain("add later sections in separate")
+    expect(build).toContain("section-sized writes")
+  })
+
   test("build prompt does not define a repository-investigation success branch", async () => {
     const build = await readPrompt("build")
     expect(build).toContain("direct-path workflow")
