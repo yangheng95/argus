@@ -2,9 +2,10 @@ import { describe, expect, test } from "bun:test"
 import { spawn } from "node:child_process"
 import fs from "node:fs/promises"
 import path from "node:path"
+import { Agent } from "../../src/agent/agent"
+import { createFrontendSkeletonProjectTool } from "../../src/frontend-design/skeleton-project-tool"
 import { Instance } from "../../src/project/instance"
 import { ToolRegistry } from "../../src/tool/registry"
-import { WebCloneGenerateSourceProjectTool } from "../../src/tool/web-clone-generate-source-project"
 import { WebClonePrepareContextTool } from "../../src/tool/web-clone-prepare-context"
 import { WebCloneSourceAuditTool } from "../../src/tool/web-clone-source-audit"
 
@@ -14,6 +15,8 @@ const repoRoot = path.resolve(import.meta.dir, "../../../..")
 const defaultMirrorDir = path.join(repoRoot, ".tmp", "source-skeleton-tradingview-v2h", "mirror")
 const mirrorDir = path.resolve(process.env.OPENCORVUS_WEB_CLONE_E2E_MIRROR ?? defaultMirrorDir)
 const outputDir = path.resolve(process.env.OPENCORVUS_WEB_CLONE_E2E_OUTPUT ?? path.join(repoRoot, ".tmp", "opencorvus-web-clone-e2e-output"))
+const frontendDesignProjectDir = process.env.OPENCORVUS_FRONTEND_DESIGN_PROJECT_DIR ? path.resolve(process.env.OPENCORVUS_FRONTEND_DESIGN_PROJECT_DIR) : undefined
+const frontendDesignProcessTracePath = process.env.OPENCORVUS_FRONTEND_DESIGN_PROCESS_TRACE ? path.resolve(process.env.OPENCORVUS_FRONTEND_DESIGN_PROCESS_TRACE) : undefined
 const threshold = normalizeVisualThreshold(Number(process.env.OPENCORVUS_WEB_CLONE_E2E_THRESHOLD ?? 96))
 const worstThreshold = normalizeVisualThreshold(Number(process.env.OPENCORVUS_WEB_CLONE_E2E_WORST_THRESHOLD ?? 75))
 
@@ -64,6 +67,17 @@ interface SourceProjectEvidence {
   referenceImageExists: boolean
   sourceDomRegionFileCount: number
   semanticReplacementFileCount: number
+}
+
+interface FrontendDesignProcessTrace {
+  version: 1
+  purpose: "frontend-design-process-trace"
+  events: Array<{
+    name: string
+    status: "started" | "passed" | "failed"
+    timestamp: string
+    details?: Record<string, unknown>
+  }>
 }
 
 describe("web clone source project E2E", () => {
@@ -183,23 +197,82 @@ describe("web clone source project E2E", () => {
     expect(audit.findings.join("\n")).toContain("create_frontend_skeleton_project")
   })
 
+  test("process trace accepts merged frontend_design agent events", () => {
+    const trace = createBenchmarkProcessTrace({
+      sourcePackageDir: "web-clone-source",
+      outputDir: "frontend-design-skeleton",
+    })
+    trace.sourceProjectEvidence = {
+      sourceDomPageExists: true,
+      replacementPlanExists: true,
+      iterationStateExists: true,
+      sourceRegionsExists: true,
+      referenceImageExists: true,
+      sourceDomRegionFileCount: 0,
+      semanticReplacementFileCount: 4,
+    }
+    mergeFrontendDesignProcessTrace(trace, {
+      version: 1,
+      purpose: "frontend-design-process-trace",
+      events: [
+        { name: "frontend_design_static_tool_surface", status: "passed", timestamp: new Date().toISOString() },
+        { name: "create_frontend_skeleton_project", status: "passed", timestamp: new Date().toISOString() },
+        { name: "frontend_design_region_selection", status: "passed", timestamp: new Date().toISOString() },
+        { name: "frontend_design_source_edit", status: "passed", timestamp: new Date().toISOString() },
+        { name: "bun install", status: "passed", timestamp: new Date().toISOString() },
+        { name: "bun run build", status: "passed", timestamp: new Date().toISOString() },
+        { name: "web_clone_source_audit", status: "passed", timestamp: new Date().toISOString(), details: { finalDeliveryMode: "visual_baseline_allowed", passed: true } },
+        { name: "web_clone_source_audit", status: "passed", timestamp: new Date().toISOString(), details: { finalDeliveryMode: "maintainable_replacement_required", passed: true } },
+      ],
+    })
+    recordTraceEvent(trace, {
+      step: "prepare-source-context",
+      kind: "tool",
+      name: "web_clone_prepare_context",
+      status: "passed",
+    })
+    recordTraceEvent(trace, {
+      step: "inspect-source-project-sidecars",
+      kind: "inspection",
+      name: "source-project-sidecars",
+      status: "passed",
+    })
+    recordTraceEvent(trace, {
+      step: "compare-rendered-reference",
+      kind: "command",
+      name: "visual-diff",
+      status: "passed",
+      details: { passed: true, mssim: 0.93 },
+    })
+
+    const audit = evaluateBenchmarkProcessTrace(trace)
+
+    expect(audit.passed).toBe(true)
+  })
+
   e2eTest("runs the OpenCorvus tool chain and enforces the visual threshold", async () => {
     await assertDirectory(mirrorDir)
+    if (frontendDesignProjectDir) await assertDirectory(frontendDesignProjectDir)
+    if (frontendDesignProcessTracePath) await assertFile(frontendDesignProcessTracePath)
     await Instance.provide({
       directory: repoRoot,
       fn: async () => {
-        const trace = createBenchmarkProcessTrace({ sourcePackageDir: mirrorDir, outputDir })
+        const projectDir = frontendDesignProjectDir ?? outputDir
+        const trace = createBenchmarkProcessTrace({ sourcePackageDir: mirrorDir, outputDir: projectDir })
         const toolIds = await ToolRegistry.ids()
         expect(toolIds).toContain("web_clone_prepare_context")
-        expect(toolIds).toContain("web_clone_generate_source_project")
         expect(toolIds).toContain("web_clone_source_audit")
+        const frontendDesign = await Agent.get("frontend-design")
+        const frontendDesignToolIds = new Set(frontendDesign?.tools?.include ?? [])
+        expect(frontendDesignToolIds.has("create_frontend_skeleton_project")).toBe(true)
+        expect(frontendDesignToolIds.has("record_frontend_region_selection")).toBe(true)
         recordTraceEvent(trace, {
           step: "registry-tool-surface",
           kind: "inspection",
-          name: "ToolRegistry.ids",
+          name: "frontend_design_static_tool_surface",
           status: "passed",
           details: {
-            requiredTools: ["web_clone_prepare_context", "web_clone_generate_source_project", "web_clone_source_audit"],
+            requiredTools: ["create_frontend_skeleton_project", "record_frontend_region_selection", "web_clone_source_audit"],
           },
         })
 
@@ -214,21 +287,27 @@ describe("web clone source project E2E", () => {
           details: { mirrorDir, title: context.title },
         })
 
-        const generateTool = await WebCloneGenerateSourceProjectTool.init()
-        const generated = await generateTool.execute({ mirrorDir, outputDir, overwrite: true }, ctx)
-        expect(generated.title).toBe("Web clone source project generated")
-        recordTraceEvent(trace, {
-          step: "materialize-source-project",
-          kind: "tool",
-          name: "web_clone_generate_source_project",
-          status: "passed",
-          details: {
-            mirrorDir: generated.metadata.mirrorDir,
-            outputDir: generated.metadata.outputDir,
-            visualIterationMatrix: generated.metadata.visualIterationMatrix,
-          },
-        })
-        trace.sourceProjectEvidence = await inspectSourceProjectEvidence(outputDir)
+        if (frontendDesignProcessTracePath) {
+          mergeFrontendDesignProcessTrace(trace, await readFrontendDesignProcessTrace(frontendDesignProcessTracePath))
+        }
+        if (!frontendDesignProjectDir) {
+          const skeletonTrace = createFrontendSkeletonProjectTool({
+            onToolEvent: (event) => recordTraceEvent(trace, {
+              step: event.name,
+              kind: "tool",
+              name: event.name,
+              status: event.status,
+              details: event.details,
+            }),
+          })
+          const created = await (skeletonTrace.create_frontend_skeleton_project as any).execute({
+            sourcePackageDir: context.metadata.sourcePackageDir,
+            outputDir: projectDir,
+            overwrite: true,
+          })
+          expect(created.title).toBe("Frontend source skeleton project created")
+        }
+        trace.sourceProjectEvidence = await inspectSourceProjectEvidence(projectDir)
         recordTraceEvent(trace, {
           step: "inspect-source-project-sidecars",
           kind: "inspection",
@@ -237,28 +316,28 @@ describe("web clone source project E2E", () => {
           details: trace.sourceProjectEvidence,
         })
 
-        await run("bun", ["install"], outputDir)
+        await run("bun", ["install"], projectDir)
         recordTraceEvent(trace, {
           step: "install-source-project",
           kind: "command",
           name: "bun install",
           status: "passed",
-          details: { cwd: outputDir },
+          details: { cwd: projectDir },
         })
-        await run("bun", ["run", "build"], outputDir)
+        await run("bun", ["run", "build"], projectDir)
         recordTraceEvent(trace, {
           step: "build-source-project",
           kind: "command",
           name: "bun run build",
           status: "passed",
-          details: { cwd: outputDir },
+          details: { cwd: projectDir },
         })
 
         const auditTool = await WebCloneSourceAuditTool.init()
         const audit = await auditTool.execute({
-          projectDir: outputDir,
-          sourcePackageDir: mirrorDir,
-          outputPath: path.join(outputDir, "acceptance", "web-clone-source-skeleton-consumption-audit.json"),
+          projectDir,
+          sourcePackageDir: context.metadata.sourcePackageDir,
+          outputPath: path.join(projectDir, "acceptance", "web-clone-source-skeleton-consumption-audit.json"),
         }, ctx)
         expect(audit.metadata.audit.passed).toBe(true)
         trace.audits.visualBaselineAllowed = audit.metadata.audit
@@ -270,11 +349,11 @@ describe("web clone source project E2E", () => {
           details: { finalDeliveryMode: "visual_baseline_allowed", passed: audit.metadata.audit.passed },
         })
 
-        const acceptanceDir = path.join(outputDir, "acceptance")
+        const acceptanceDir = path.join(projectDir, "acceptance")
         await fs.mkdir(acceptanceDir, { recursive: true })
         const maintainableAudit = await auditTool.execute({
-          projectDir: outputDir,
-          sourcePackageDir: mirrorDir,
+          projectDir,
+          sourcePackageDir: context.metadata.sourcePackageDir,
           finalDeliveryMode: "maintainable_replacement_required",
           outputPath: path.join(acceptanceDir, "web-clone-source-maintainable-audit.json"),
         }, ctx)
@@ -292,8 +371,8 @@ describe("web clone source project E2E", () => {
         })
         const visualOutDir = path.join(acceptanceDir, "overlay-visual-diff")
         const visualExitCode = await runVisualDiffCli({
-          renderedDir: outputDir,
-          reference: path.join(mirrorDir, "reference.png"),
+          renderedDir: projectDir,
+          reference: path.join(context.metadata.sourcePackageDir, "reference.png"),
           outDir: visualOutDir,
           threshold,
           worstThreshold,
@@ -326,7 +405,7 @@ describe("web clone source project E2E", () => {
           threshold,
           worstThreshold,
           mirrorDir,
-          outputDir,
+          outputDir: projectDir,
           processTrace: path.join(acceptanceDir, "web-clone-benchmark-process-trace.json"),
           visualBaselineAudit: audit.metadata.audit,
           maintainableAudit: maintainableAudit.metadata.audit,
@@ -376,6 +455,38 @@ function recordTraceEvent(trace: BenchmarkProcessTrace, input: Omit<BenchmarkPro
     ...input,
     timestamp: new Date().toISOString(),
   })
+}
+
+async function readFrontendDesignProcessTrace(file: string): Promise<FrontendDesignProcessTrace> {
+  const parsed = JSON.parse(await fs.readFile(file, "utf8")) as Partial<FrontendDesignProcessTrace>
+  if (parsed.version !== 1 || parsed.purpose !== "frontend-design-process-trace" || !Array.isArray(parsed.events)) {
+    throw new Error(`Invalid frontend_design process trace: ${file}`)
+  }
+  return parsed as FrontendDesignProcessTrace
+}
+
+function mergeFrontendDesignProcessTrace(trace: BenchmarkProcessTrace, frontendTrace: FrontendDesignProcessTrace): void {
+  for (const event of frontendTrace.events) {
+    recordTraceEvent(trace, {
+      step: event.name,
+      kind: frontendDesignEventKind(event.name),
+      name: event.name,
+      status: event.status,
+      details: event.details,
+    })
+  }
+}
+
+function frontendDesignEventKind(name: string): BenchmarkProcessEvent["kind"] {
+  if (
+    name === "frontend_design_static_tool_surface" ||
+    name === "frontend_design_region_selection" ||
+    name === "source-project-sidecars"
+  ) {
+    return "inspection"
+  }
+  if (name === "bun install" || name === "bun run build" || name === "visual-diff") return "command"
+  return "tool"
 }
 
 async function inspectSourceProjectEvidence(projectDir: string): Promise<SourceProjectEvidence> {
@@ -469,6 +580,11 @@ function evaluateBenchmarkProcessTrace(trace: BenchmarkProcessTrace): BenchmarkP
 async function assertDirectory(dir: string): Promise<void> {
   const stat = await fs.stat(dir).catch(() => undefined)
   if (!stat?.isDirectory()) throw new Error(`web clone e2e mirror directory does not exist: ${dir}`)
+}
+
+async function assertFile(file: string): Promise<void> {
+  const stat = await fs.stat(file).catch(() => undefined)
+  if (!stat?.isFile()) throw new Error(`web clone e2e file does not exist: ${file}`)
 }
 
 function normalizeVisualThreshold(value: number): number {
