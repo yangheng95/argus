@@ -260,6 +260,12 @@ describe("tool.web_clone_generate_source_project", () => {
         expect(sourceFaqGroups).toContain("How is GDP calculated?")
         expect(sourceDomRegions).toContain("replacementPriority")
         expect(sourceDomReplacementPlan).toContain("firstReplacementStep")
+        expect(sourceDomReplacementPlan).toContain('"sourceMap"')
+        expect(sourceDomReplacementPlan).toContain('"bounds"')
+        expect(sourceDomReplacementPlan).toContain('"styleSources"')
+        expect(sourceDomReplacementPlan).toContain('"visualSources"')
+        expect(sourceDomReplacementPlan).toContain('"generatedCleanupTargets"')
+        expect(sourceDomReplacementPlan).toContain('"verticalSliceSteps"')
         expect(sourceDomReplacementPlan).toContain("parityGuard")
         expect(sourceDomIterationState).toContain('"remainingRegionCount"')
         expect(sourceDomIterationState).toContain("nextReplacement")
@@ -1000,7 +1006,7 @@ async function writeRegionizedFixtureMirror(root: string): Promise<string> {
   }).join("")
   const sections = ["Overview", "Markets", "Ideas", "Indicators", "News", "Calendar"]
     .map((title, sectionIndex) => `
-      <section class="dashboard-section section-${sectionIndex}">
+      <section class="dashboard-section section-${sectionIndex}" data-source-node-id="${title.toLowerCase()}-region">
         <h2>${title}</h2>
         <div class="cards">
           ${Array.from({ length: 18 }, (_, itemIndex) => `
@@ -1044,6 +1050,20 @@ async function writeRegionizedFixtureMirror(root: string): Promise<string> {
   `)
   await Bun.write(path.join(mirrorDir, "source-skeleton", "critical.css"), ".dashboard { display: grid; gap: 24px; } .cards { display: grid; grid-template-columns: repeat(3, 1fr); }")
   await Bun.write(path.join(mirrorDir, "source-skeleton", "full-source.css"), ".card { border: 1px solid #ddd; padding: 12px; }")
+  await Bun.write(path.join(mirrorDir, "page.ir.json"), JSON.stringify({
+    root: {
+      id: "root",
+      type: "element",
+      tag: "body",
+      children: ["Overview", "Markets", "Ideas", "Indicators", "News", "Calendar"].map((title, index) => ({
+        id: `${title.toLowerCase()}-region`,
+        type: "element",
+        tag: "section",
+        layout: { bounds: { x: 0, y: index * 220, w: 1180, h: 180 } },
+        children: [],
+      })),
+    },
+  }, null, 2))
   await Bun.write(path.join(mirrorDir, "source-ir", "component-tree.json"), JSON.stringify({
     components: [
       { name: "DashboardShell", kind: "page", tag: "main", classNames: ["dashboard"], textPreview: ["Overview", "Markets"] },
