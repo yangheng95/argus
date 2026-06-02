@@ -21,6 +21,7 @@ import INTENT_ANALYSIS_CORE from "@/prompt/core/intent-analysis-core.txt"
 import FACT_CHECK_CORE from "@/prompt/core/fact-check-core.txt"
 import RESEARCH_CORE from "@/prompt/core/research-core.txt"
 import GOAL_WORKLOAD_ANALYST_CORE from "@/prompt/core/goal-workload-analyst-core.txt"
+import { FRONTEND_DESIGN_STATIC_TOOL_IDS } from "@/frontend-design/static-tools"
 import PROMPT_CODING from "./prompt/coding.txt"
 import PROMPT_COMPACTION from "./prompt/compaction.txt"
 import PROMPT_EXPLORE from "./prompt/explore.txt"
@@ -493,29 +494,7 @@ export namespace Agent {
         // maintainable source project before Build handoff, so it also needs
         // file-edit, command, source-audit, and visual verification tools.
         tools: {
-          include: [
-            "bash",
-            "edit",
-            "write",
-            "apply_patch",
-            "read_file",
-            "find_files",
-            "search_code",
-            "list_directory",
-            "memory_search",
-            "memory_get",
-            "url_screenshot",
-            "skill",
-            "create_frontend_skeleton_project",
-            "record_frontend_region_selection",
-            "record_frontend_replacement_result",
-            "web_clone_source_audit",
-            ...MIRROR_ANALYSIS_TOOL_IDS,
-            "webpage_render",
-            "webpage_evaluate",
-            "webpage_text_diff",
-            "webpage_vision_judge",
-          ],
+          include: [...FRONTEND_DESIGN_STATIC_TOOL_IDS],
         },
         options: {},
         mode: "primary",
@@ -636,6 +615,7 @@ export namespace Agent {
     }
 
     const fixedReadonlyAgents = new Set(["fact-check", "research"])
+    const fixedToolSurfaceAgents = new Set(["frontend-design"])
     for (const [key, value] of entries((cfg.agent ?? {}) as NonNullable<Config.Info["agent"]>)) {
       if (fixedReadonlyAgents.has(key) && value.disable) {
         throw new Error(
@@ -645,6 +625,12 @@ export namespace Agent {
       if (fixedReadonlyAgents.has(key) && value.tools !== undefined) {
         throw new Error(
           `config.agent.${key}.tools is not supported: ${key} is a fixed read-only evidence agent. ` +
+            "Do not add or remove tools through config.",
+        )
+      }
+      if (fixedToolSurfaceAgents.has(key) && value.tools !== undefined) {
+        throw new Error(
+          `config.agent.${key}.tools is not supported: ${key} has a static tool surface. ` +
             "Do not add or remove tools through config.",
         )
       }

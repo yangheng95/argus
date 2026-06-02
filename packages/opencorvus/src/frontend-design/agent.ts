@@ -27,7 +27,6 @@ import z from "zod"
 import { runAgentSession } from "@/agent/runner"
 import { withFactCheckRegistration } from "@/prompt/fragments/fact-check-registration"
 import { createAgentContextTools } from "@/agent/context-tools"
-import { filterAgentTools } from "@/agent/filter-tools"
 import { Log } from "@/util/log"
 import { AttachmentStore } from "@/storage/attachment-store"
 import { renderUserRequestSection } from "@/intent/request-prompt"
@@ -40,6 +39,7 @@ import { BashTool } from "@/tool/bash"
 import { EditTool } from "@/tool/edit"
 import { WriteTool } from "@/tool/write"
 import { ApplyPatchTool } from "@/tool/apply_patch"
+import { SkillTool } from "@/tool/skill"
 import { WebCloneSourceAuditTool } from "@/tool/web-clone-source-audit"
 import type { AgentReport } from "@/agent/report"
 import {
@@ -59,6 +59,13 @@ import { createFrontendTemplateOutputTools, type FrontendTemplateFinal, type Fro
 import { createReadAttachmentTool } from "./read-attachment-tool"
 import { createUrlScreenshotTool } from "./url-screenshot-tool"
 import { createFrontendSkeletonProjectTool } from "./skeleton-project-tool"
+import {
+  FRONTEND_DESIGN_CONTEXT_TOOL_IDS,
+  FRONTEND_DESIGN_IMPLEMENTATION_TOOL_IDS,
+  FRONTEND_DESIGN_MIRROR_ANALYSIS_TOOL_IDS,
+  FRONTEND_DESIGN_SESSION_TOOL_IDS,
+  FRONTEND_DESIGN_UTILITY_TOOL_IDS,
+} from "./static-tools"
 import {
   readHostPreparedCompactEvidence,
   renderHostPreparedFrontendProjectSection,
@@ -153,12 +160,10 @@ export namespace FrontendDesignAgent {
   export async function analyze(input: AnalyzeInput): Promise<Result & { sessionID: string }> {
     const autoIteration = (await EngineConfig.get()).auto_iteration === true
     const processTrace = createFrontendProcessTrace()
-    const contextTools = await filterAgentTools(createAgentContextTools(), "frontend-design", {
-      taskID: input.taskID,
-      sessionID: input.parentSessionID,
-    })
+    const contextTools = createFrontendDesignContextTools()
     const mirrorAnalysisTools = await createMirrorAnalysisTools({ taskID: input.taskID, signal: input.signal }, processTrace)
     const implementationTools = await createFrontendImplementationTools({ taskID: input.taskID, signal: input.signal }, processTrace)
+    const utilityTools = await createFrontendUtilityTools({ taskID: input.taskID, signal: input.signal }, processTrace)
     const screenshotToolKit = createUrlScreenshotTool()
     const skeletonProjectToolKit = createFrontendSkeletonProjectTool({
       taskID: input.taskID,
@@ -168,16 +173,6 @@ export namespace FrontendDesignAgent {
     const outputToolKit = createFrontendTemplateOutputTools({ autoIteration })
     const submitFrontendTemplateTool = createFrontendSubmitTools(outputToolKit)
     const hostPreparedFrontendProject = undefined
-    recordFrontendStaticToolSurface(processTrace, [
-      ...Object.keys(contextTools),
-      ...Object.keys(mirrorAnalysisTools),
-      ...Object.keys(screenshotToolKit),
-      ...Object.keys(skeletonProjectToolKit),
-      ...Object.keys(processTraceToolKit),
-      ...Object.keys(implementationTools),
-      "read_attachment",
-      ...Object.keys(submitFrontendTemplateTool),
-    ])
     const projectID = (() => {
       try {
         return Instance.project.id
@@ -185,6 +180,19 @@ export namespace FrontendDesignAgent {
         return ""
       }
     })()
+    const agentTools = {
+      ...implementationTools,
+      ...contextTools,
+      ...screenshotToolKit,
+      ...utilityTools,
+      ...skeletonProjectToolKit,
+      ...processTraceToolKit,
+      ...mirrorAnalysisTools,
+      ...createReadAttachmentTool(projectID),
+      ...submitFrontendTemplateTool,
+    }
+    assertFrontendStaticToolSurface(agentTools)
+    recordFrontendStaticToolSurface(processTrace, Object.keys(agentTools))
     log.info("frontend design starting", {
       title: input.title,
       hasAttachments: !!input.attachments?.length,
@@ -204,16 +212,7 @@ export namespace FrontendDesignAgent {
         ? (session) => { input.onSessionCreated!(session.id) }
         : undefined,
       toolKit: {
-        tools: {
-          ...contextTools,
-          ...mirrorAnalysisTools,
-          ...screenshotToolKit,
-          ...skeletonProjectToolKit,
-          ...processTraceToolKit,
-          ...implementationTools,
-          ...createReadAttachmentTool(projectID),
-          ...submitFrontendTemplateTool,
-        },
+        tools: agentTools,
         getCollector: () => outputToolKit.getCollector(),
         buildReport: () => appendFrontendProcessTrace(outputToolKit.buildReport(), processTrace),
       },
@@ -794,8 +793,41 @@ function createFrontendSubmitTools(outputToolKit: ReturnType<typeof createFronte
   }
 }
 
+function createFrontendDesignContextTools(): ToolSet {
+  return selectFrontendStaticTools(createAgentContextTools(), FRONTEND_DESIGN_CONTEXT_TOOL_IDS, "frontend-design context")
+}
+
+function selectFrontendStaticTools(
+  tools: ToolSet,
+  ids: readonly string[],
+  label: string,
+): ToolSet {
+  const selected: ToolSet = {}
+  for (const id of ids) {
+    const item = tools[id]
+    if (!item) throw new Error(`${label} static tool is missing: ${id}`)
+    selected[id] = item
+  }
+  return selected
+}
+
+function assertFrontendStaticToolSurface(tools: ToolSet): void {
+  const expected = [...FRONTEND_DESIGN_SESSION_TOOL_IDS].sort()
+  const actual = Object.keys(tools).sort()
+  const expectedSet = new Set<string>(expected)
+  const actualSet = new Set<string>(actual)
+  const missing = expected.filter((id) => !actualSet.has(id))
+  const extra = actual.filter((id) => !expectedSet.has(id))
+  if (missing.length > 0 || extra.length > 0) {
+    throw new Error(
+      "frontend-design runtime tool surface diverged from static definition: " +
+      `missing=[${missing.join(", ")}] extra=[${extra.join(", ")}]`,
+    )
+  }
+}
+
 async function createMirrorAnalysisTools(input: { taskID?: string; signal?: AbortSignal }, trace = createFrontendProcessTrace()): Promise<ToolSet> {
-  return {
+  const tools = {
     webpage_extract: await createFrontendTool(WebpageExtractTool, input, trace),
     webpage_compile: await createFrontendTool(WebpageCompileTool, input, trace),
     webpage_analyze: await createFrontendTool(WebpageAnalyzeTool, input, trace),
@@ -803,10 +835,11 @@ async function createMirrorAnalysisTools(input: { taskID?: string; signal?: Abor
     webpage_image_compile: await createFrontendTool(WebpageImageCompileTool, input, trace),
     webpage_image_analyze: await createFrontendTool(WebpageImageAnalyzeTool, input, trace),
   }
+  return selectFrontendStaticTools(tools, FRONTEND_DESIGN_MIRROR_ANALYSIS_TOOL_IDS, "frontend-design mirror analysis")
 }
 
 async function createFrontendImplementationTools(input: { taskID?: string; signal?: AbortSignal }, trace = createFrontendProcessTrace()): Promise<ToolSet> {
-  return {
+  const tools = {
     bash: await createFrontendTool(BashTool, input, trace),
     edit: await createFrontendTool(EditTool, input, trace),
     write: await createFrontendTool(WriteTool, input, trace),
@@ -817,6 +850,14 @@ async function createFrontendImplementationTools(input: { taskID?: string; signa
     webpage_text_diff: await createFrontendTool(WebpageTextDiffTool, input, trace),
     webpage_vision_judge: await createFrontendTool(WebpageVisionJudgeTool, input, trace),
   }
+  return selectFrontendStaticTools(tools, FRONTEND_DESIGN_IMPLEMENTATION_TOOL_IDS, "frontend-design implementation")
+}
+
+async function createFrontendUtilityTools(input: { taskID?: string; signal?: AbortSignal }, trace = createFrontendProcessTrace()): Promise<ToolSet> {
+  const tools = {
+    skill: await createFrontendTool(SkillTool, input, trace),
+  }
+  return selectFrontendStaticTools(tools, FRONTEND_DESIGN_UTILITY_TOOL_IDS, "frontend-design utility")
 }
 
 export const FrontendDesignTestHooks = {
@@ -825,8 +866,11 @@ export const FrontendDesignTestHooks = {
   appendFrontendProcessTrace,
   createFrontendProcessTraceTools,
   createFrontendSubmitTools,
+  createFrontendDesignContextTools,
   createFrontendImplementationTools,
+  createFrontendUtilityTools,
   createFrontendProcessTrace,
+  assertFrontendStaticToolSurface,
   buildFrontendIterationState,
   createMirrorAnalysisTools,
   isTextOnlyNoVisualSource,
