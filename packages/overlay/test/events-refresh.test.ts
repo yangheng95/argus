@@ -83,10 +83,15 @@ async function waitForStreamCount(
   }
 }
 
+function selectTaskForTest(taskID: string): void {
+  setBoardStore("selectedTaskID", taskID);
+  setBoardStore("selectedSource", taskID ? { kind: "task", id: taskID } : null);
+}
+
 afterEach(() => {
   __setHostTransportForTest(undefined);
   resetSelectedLiveCursor();
-  setBoardStore("selectedTaskID", "");
+  selectTaskForTest("");
   setBoardStore("board", null);
   setBoardStore("boardSyncPending", false);
   setBoardStore("taskSequence", 0);
@@ -102,7 +107,7 @@ afterEach(() => {
 
 test("selected-task message events update card tree without board refresh", () => {
   resetWriter();
-  setBoardStore("selectedTaskID", "tsk_refresh");
+  selectTaskForTest("tsk_refresh");
   setBoardStore("board", {
     snapshotVersion: "board:refresh",
     task: {
@@ -140,7 +145,7 @@ test("selected-task message events advance the visible cursor without recovery",
   resetWriter();
   const streams: Array<{ path: string; query?: Record<string, string> }> = [];
   __setHostTransportForTest(fakeRecoveryTransport(streams, 9));
-  setBoardStore("selectedTaskID", "tsk_refresh");
+  selectTaskForTest("tsk_refresh");
   setBoardStore("taskSequence", 5);
   setBoardStore("board", {
     snapshotVersion: "board:refresh",
@@ -198,7 +203,7 @@ test("selected-task protocol task_id envelope advances the visible cursor", asyn
   resetWriter();
   const streams: Array<{ path: string; query?: Record<string, string> }> = [];
   __setHostTransportForTest(fakeRecoveryTransport(streams, 9));
-  setBoardStore("selectedTaskID", "tsk_refresh");
+  selectTaskForTest("tsk_refresh");
   setBoardStore("taskSequence", 5);
   setBoardStore("board", {
     snapshotVersion: "board:refresh",
@@ -254,7 +259,7 @@ test("selected-task protocol task_id envelope advances the visible cursor", asyn
 
 test("selected-task part removal updates the card tree in real time", () => {
   resetWriter();
-  setBoardStore("selectedTaskID", "tsk_refresh");
+  selectTaskForTest("tsk_refresh");
   setBoardStore("taskSequence", 7);
   setBoardStore("board", {
     snapshotVersion: "board:refresh",
@@ -320,7 +325,7 @@ test("selected-task part removal updates the card tree in real time", () => {
 
 test("selected-task message removal removes its visible card in real time", () => {
   resetWriter();
-  setBoardStore("selectedTaskID", "tsk_refresh");
+  selectTaskForTest("tsk_refresh");
   setBoardStore("taskSequence", 3);
   setBoardStore("board", {
     snapshotVersion: "board:refresh",
@@ -386,7 +391,7 @@ test("selected-task message removal removes its visible card in real time", () =
 
 test("selected-task message payload is still applied when board cursor is ahead", () => {
   resetWriter();
-  setBoardStore("selectedTaskID", "tsk_refresh");
+  selectTaskForTest("tsk_refresh");
   setBoardStore("taskSequence", 10);
   setBoardStore("board", {
     snapshotVersion: "board:refresh",
@@ -425,7 +430,7 @@ test("board-owned run progress advances selected-task cursor", async () => {
   resetWriter();
   const streams: Array<{ path: string; query?: Record<string, string> }> = [];
   __setHostTransportForTest(fakeRecoveryTransport(streams, 9));
-  setBoardStore("selectedTaskID", "tsk_refresh");
+  selectTaskForTest("tsk_refresh");
   setBoardStore("taskSequence", 5);
   setBoardStore("board", {
     snapshotVersion: "board:refresh",
@@ -474,7 +479,7 @@ test("message delta with missing tree prerequisites triggers selected-task recov
   resetWriter();
   const streams: Array<{ path: string; query?: Record<string, string> }> = [];
   __setHostTransportForTest(fakeRecoveryTransport(streams));
-  setBoardStore("selectedTaskID", "tsk_refresh");
+  selectTaskForTest("tsk_refresh");
   setBoardStore("board", {
     snapshotVersion: "board:refresh",
     task: {
@@ -520,7 +525,7 @@ test("board-owned run progress still schedules board refresh", () => {
 
 test("selected-task session status updates cards without board refresh", () => {
   resetWriter();
-  setBoardStore("selectedTaskID", "tsk_refresh");
+  selectTaskForTest("tsk_refresh");
   setBoardStore("boardSyncPending", false);
   setBoardStore("board", {
     snapshotVersion: "board:refresh",
@@ -553,7 +558,7 @@ test("selected-task session status updates cards without board refresh", () => {
 
 test("task-list session status notification does not refresh selected board", () => {
   resetWriter();
-  setBoardStore("selectedTaskID", "tsk_refresh");
+  selectTaskForTest("tsk_refresh");
   setBoardStore("boardSyncPending", false);
   setBoardStore("taskSequence", 5);
 
@@ -571,7 +576,7 @@ test("consumed sequenced run progress advances selected cursor and avoids false 
   resetWriter();
   const streams: Array<{ path: string; query?: Record<string, string> }> = [];
   __setHostTransportForTest(fakeRecoveryTransport(streams, 9));
-  setBoardStore("selectedTaskID", "tsk_refresh");
+  selectTaskForTest("tsk_refresh");
   setBoardStore("taskSequence", 5);
 
   expect(routeSSEEvent({
@@ -605,7 +610,7 @@ test("consumed sequenced run output advances selected cursor and avoids false re
   resetWriter();
   const streams: Array<{ path: string; query?: Record<string, string> }> = [];
   __setHostTransportForTest(fakeRecoveryTransport(streams, 9));
-  setBoardStore("selectedTaskID", "tsk_refresh");
+  selectTaskForTest("tsk_refresh");
   setBoardStore("taskSequence", 5);
 
   expect(routeSSEEvent({
@@ -642,7 +647,7 @@ test("consumed sequenced task rewound advances selected cursor and avoids false 
   resetWriter();
   const streams: Array<{ path: string; query?: Record<string, string> }> = [];
   __setHostTransportForTest(fakeRecoveryTransport(streams, 9));
-  setBoardStore("selectedTaskID", "tsk_refresh");
+  selectTaskForTest("tsk_refresh");
   setBoardStore("taskSequence", 5);
 
   expect(routeSSEEvent({
@@ -676,7 +681,7 @@ test("selected task sequence gap triggers recovery without advancing cursor", as
   resetWriter();
   const streams: Array<{ path: string; query?: Record<string, string> }> = [];
   __setHostTransportForTest(fakeRecoveryTransport(streams, 9));
-  setBoardStore("selectedTaskID", "tsk_refresh");
+  selectTaskForTest("tsk_refresh");
   setBoardStore("taskSequence", 5);
 
   handleEventStreamEvent({
@@ -697,7 +702,7 @@ test("production dispatch gates sequence gap before tree writer prerequisites ca
   resetWriter();
   const streams: Array<{ path: string; query?: Record<string, string> }> = [];
   __setHostTransportForTest(fakeRecoveryTransport(streams, 12));
-  setBoardStore("selectedTaskID", "tsk_refresh");
+  selectTaskForTest("tsk_refresh");
   setBoardStore("taskSequence", 5);
 
   const event = {
@@ -728,7 +733,7 @@ test("task-list notification does not advance visible cursor before per-task pay
   resetWriter();
   const streams: Array<{ path: string; query?: Record<string, string> }> = [];
   __setHostTransportForTest(fakeRecoveryTransport(streams, 13));
-  setBoardStore("selectedTaskID", "tsk_refresh");
+  selectTaskForTest("tsk_refresh");
   setBoardStore("taskSequence", 5);
 
   handleTaskListNotification({
@@ -766,7 +771,7 @@ test("task-list selected sequence gap triggers selected-task recovery", async ()
   resetWriter();
   const streams: Array<{ path: string; query?: Record<string, string> }> = [];
   __setHostTransportForTest(fakeRecoveryTransport(streams, 10));
-  setBoardStore("selectedTaskID", "tsk_refresh");
+  selectTaskForTest("tsk_refresh");
   setBoardStore("taskSequence", 5);
 
   handleTaskListNotification({
@@ -888,8 +893,7 @@ test("session.updated invalidates session config resources", () => {
 
 test("session.diff SSE is consumed without card or board refresh", () => {
   resetWriter();
-  setBoardStore("selectedTaskID", "tsk_session_diff");
-  setBoardStore("selectedSource", { kind: "task", id: "tsk_session_diff" });
+  selectTaskForTest("tsk_session_diff");
   setBoardStore("board", {
     snapshotVersion: "board:session-diff",
     task: {
