@@ -95,6 +95,7 @@ describe("frontend-design prompt assembly", () => {
 
     expect(prompt).toContain("call `create_frontend_skeleton_project`")
     expect(prompt).toContain("record_frontend_region_selection")
+    expect(prompt).toContain("record_frontend_replacement_result")
     expect(prompt).toContain(".opencorvus/runtime/tasks/tsk_web_clone/frontend-design/web-clone-source/")
     expect(prompt).toContain(".opencorvus/runtime/tasks/tsk_web_clone/frontend-design/frontend-design-skeleton/")
     expect(prompt).toContain("After the source project tool returns")
@@ -165,8 +166,16 @@ describe("frontend-design prompt assembly", () => {
         const persisted = JSON.parse(await fs.readFile(artifact!, "utf8"))
         expect(persisted.purpose).toBe("frontend-design-process-trace")
         expect(persisted.events[0].name).toBe("frontend_design_static_tool_surface")
-        const report = FrontendDesignTestHooks.appendFrontendProcessTrace({ summary: "summary", detail: "detail" }, trace, artifact)
-        expect(report.detail).toContain(`Artifact: ${artifact}`)
+        const iterationArtifact = await FrontendDesignTestHooks.writeFrontendIterationStateArtifact("tsk_frontend_trace", trace)
+        expect(iterationArtifact).toContain("frontend-design-iteration-state.json")
+        const iterationState = JSON.parse(await fs.readFile(iterationArtifact!, "utf8"))
+        expect(iterationState.purpose).toBe("frontend-design-rawproject-iteration-state")
+        const report = FrontendDesignTestHooks.appendFrontendProcessTrace({ summary: "summary", detail: "detail" }, trace, {
+          processTraceArtifact: artifact,
+          iterationStateArtifact: iterationArtifact,
+        })
+        expect(report.detail).toContain(`Process trace artifact: ${artifact}`)
+        expect(report.detail).toContain(`Iteration state artifact: ${iterationArtifact}`)
       },
     })
   })
@@ -194,12 +203,29 @@ describe("frontend-design prompt assembly", () => {
     }, {
       title: "Command completed",
     })
+    await (tools.record_frontend_replacement_result as any).execute({
+      regionComponentName: "HeroRegion",
+      replacementStatus: "completed",
+      replacementComponentName: "HeroSection",
+      filesChanged: ["src/components/semantic/HeroSection.tsx"],
+      dataModules: ["src/data/sourceData.ts"],
+      styleModules: ["src/styles.css"],
+      removedGeneratedBoundaries: ["src/components/source-dom/HeroRegion.tsx"],
+      visualEvidence: ["acceptance/hero-webpage-evaluate.json"],
+      auditEvidence: ["acceptance/web-clone-source-maintainable-audit.json"],
+      remainingSourceDebt: ["FooterRegion"],
+      nextRegionComponentName: "FooterRegion",
+    })
 
     expect(trace.events.map((event) => event.name)).toContain("frontend_design_region_selection")
     expect(trace.events.map((event) => event.name)).toContain("frontend_design_source_edit")
+    expect(trace.events.map((event) => event.name)).toContain("frontend_design_replacement_result")
     expect(trace.events.map((event) => event.name)).toContain("bun run build")
     const sourceEdit = trace.events.find((event) => event.name === "frontend_design_source_edit")
     expect(sourceEdit?.details?.files).toEqual(["src/components/SourceDomPage.tsx"])
+    const iterationState = FrontendDesignTestHooks.buildFrontendIterationState(trace)
+    expect(iterationState.completedReplacements[0]?.regionComponentName).toBe("HeroRegion")
+    expect(iterationState.remainingSourceDebt).toEqual(["FooterRegion"])
   })
 
   test("terminal frontend template submit tool accepts bounded review notes when auto iteration is off", async () => {
