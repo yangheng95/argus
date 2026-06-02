@@ -84,6 +84,7 @@ describe("ExecutorSelector dual chip bar", () => {
 
   test("selected task without resolved root session disables mirror writes instead of falling back to project config", () => {
     expect(SRC).toMatch(/const mirrorWriteDisabled = createMemo\(\(\) => hasSelectedTask\(\) && !taskRootSessionID\(\)\)/)
+    expect(SRC).toMatch(/if \(hasSelectedTask\(\) && !taskRootSessionID\(\)\) return ""/)
     expect(SRC).toMatch(/function openMirror\(\)[\s\S]*?if \(mirrorWriteDisabled\(\)\) return/)
     expect(SRC).toMatch(/if \(hasSelectedTask\(\)\)[\s\S]*?if \(!sessionID\)[\s\S]*?return/)
     expect(SRC).toMatch(/disabled=\{mirrorWriteDisabled\(\)\}/)

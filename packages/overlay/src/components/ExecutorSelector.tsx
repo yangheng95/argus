@@ -190,6 +190,7 @@ export function ExecutorSelector() {
   );
 
   const openCorvusModel = createMemo(() => {
+    if (hasSelectedTask() && !taskRootSessionID()) return "";
     if (taskRootSessionID()) {
       const model = sessionConfig()?.config?.model;
       return typeof model === "string" ? model : "";
