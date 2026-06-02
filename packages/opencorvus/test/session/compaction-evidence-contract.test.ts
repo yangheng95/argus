@@ -240,6 +240,14 @@ describe("compaction evidence contract", () => {
         acceptanceCriteria: ["Prior acceptance sentinel must survive"],
         workingContext: ["Prior working context sentinel must survive"],
         chronology: ["Prior chronology sentinel must survive"],
+        decisions: ["Prior decision sentinel must survive"],
+        evidence: ["Prior evidence sentinel must survive"],
+        files: ["prior/file.ts"],
+        testsAndCommands: ["bun test prior"],
+        errorsAndBlockers: ["Prior blocker sentinel must survive"],
+        userMessages: ["Prior user message sentinel must survive"],
+        nextActions: ["Prior next action sentinel must survive"],
+        openRisks: ["Prior risk sentinel must survive"],
       },
     }
 
@@ -254,6 +262,14 @@ describe("compaction evidence contract", () => {
     expect(prompt).toContain("<acceptanceCriteria>\nPrior acceptance sentinel must survive\n</acceptanceCriteria>")
     expect(prompt).toContain("<workingContext>\nPrior working context sentinel must survive\n</workingContext>")
     expect(prompt).toContain("<chronology>\nPrior chronology sentinel must survive\n</chronology>")
+    expect(prompt).toContain("<decisions>\nPrior decision sentinel must survive\n</decisions>")
+    expect(prompt).toContain("<evidence>\nPrior evidence sentinel must survive\n</evidence>")
+    expect(prompt).toContain("<files>\nprior/file.ts\n</files>")
+    expect(prompt).toContain("<testsAndCommands>\nbun test prior\n</testsAndCommands>")
+    expect(prompt).toContain("<errorsAndBlockers>\nPrior blocker sentinel must survive\n</errorsAndBlockers>")
+    expect(prompt).toContain("<userMessages>\nPrior user message sentinel must survive\n</userMessages>")
+    expect(prompt).toContain("<nextActions>\nPrior next action sentinel must survive\n</nextActions>")
+    expect(prompt).toContain("<openRisks>\nPrior risk sentinel must survive\n</openRisks>")
     expect(prompt).toContain("retain every listed value verbatim")
   })
 

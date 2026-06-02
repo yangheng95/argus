@@ -300,10 +300,18 @@ export namespace SessionCompaction {
       acceptanceCriteria: userMessages || (input.previousHandoff?.acceptanceCriteria.length ?? 0) > 0,
       previousHandoff: input.previousHandoff
         ? {
-            acceptanceCriteria: input.previousHandoff.acceptanceCriteria,
-            workingContext: input.previousHandoff.workingContext,
-            chronology: input.previousHandoff.chronology.map((item) => item.event),
-          }
+          acceptanceCriteria: input.previousHandoff.acceptanceCriteria,
+          workingContext: input.previousHandoff.workingContext,
+          chronology: input.previousHandoff.chronology.map((item) => item.event),
+          decisions: input.previousHandoff.decisions.map((item) => item.decision),
+          evidence: input.previousHandoff.evidence.map((item) => item.value),
+          files: input.previousHandoff.files.map((item) => item.path),
+          testsAndCommands: input.previousHandoff.testsAndCommands.map((item) => item.command),
+          errorsAndBlockers: input.previousHandoff.errorsAndBlockers.map((item) => item.issue),
+          userMessages: input.previousHandoff.userMessages,
+          nextActions: input.previousHandoff.nextActions,
+          openRisks: input.previousHandoff.openRisks,
+        }
         : undefined,
     }
   }
@@ -571,6 +579,62 @@ export namespace SessionCompaction {
     }
   }
 
+  function latestCompactionPruneRange(messages: Message.WithParts[]) {
+    const latest = completedCompactions(messages).at(-1)
+    if (!latest) return undefined
+    const marker = messages[latest.userIndex]
+    const markerPart = marker?.parts.find((part): part is Message.CompactionPart => part.type === "compaction")
+    if (!marker || !markerPart) return undefined
+    const anchorIndex = markerPart.anchor_id
+      ? messages.findIndex((message) => message.info.id === markerPart.anchor_id)
+      : messages.findIndex(
+          (message) => message.info.role === "user" && !message.parts.some((part) => part.type === "compaction"),
+        )
+    if (anchorIndex < 0) return undefined
+    const tailIndex = markerPart.tail_start_id
+      ? messages.findIndex((message) => message.info.id === markerPart.tail_start_id)
+      : -1
+    if (markerPart.tail_start_id) {
+      const tailMessage = tailIndex >= 0 ? messages[tailIndex] : undefined
+      if (!tailMessage || tailMessage.info.role !== "user") return undefined
+    }
+    const endIndex = tailIndex >= 0 ? tailIndex : latest.userIndex
+    if (endIndex <= anchorIndex + 1) return undefined
+    return {
+      startIndex: anchorIndex + 1,
+      endIndex,
+      summaryID: messages[latest.assistantIndex]?.info.id,
+      markerID: marker.info.id,
+      tailID: markerPart.tail_start_id,
+      anchorID: markerPart.anchor_id,
+    }
+  }
+
+  function prunableToolParts(messages: Message.WithParts[]): Message.ToolPart[] {
+    const range = latestCompactionPruneRange(messages)
+    if (!range) return []
+    let total = 0
+    let pruned = 0
+    const toPrune: Message.ToolPart[] = []
+    for (let msgIndex = range.endIndex - 1; msgIndex >= range.startIndex; msgIndex--) {
+      const msg = messages[msgIndex]
+      for (let partIndex = msg.parts.length - 1; partIndex >= 0; partIndex--) {
+        const part = msg.parts[partIndex]
+        if (part.type !== "tool") continue
+        if (part.state.status !== "completed") continue
+        if (PRUNE_PROTECTED_TOOLS.includes(part.tool)) continue
+        if (part.state.time.compacted) continue
+        const estimate = Token.estimate(part.state.output)
+        total += estimate
+        if (total > PRUNE_PROTECT) {
+          pruned += estimate
+          toPrune.push(part)
+        }
+      }
+    }
+    return pruned > PRUNE_MINIMUM ? toPrune : []
+  }
+
   // goes backwards through parts until there are 40_000 tokens worth of tool
   // calls. then erases output of previous tool calls. idea is to throw away old
   // tool calls that are no longer relevant.
@@ -579,42 +643,28 @@ export namespace SessionCompaction {
     if (config.compaction?.prune === false) return
     log.info("pruning")
     const msgs = await Session.messages({ sessionID: input.sessionID })
-    let total = 0
-    let pruned = 0
-    const toPrune: Message.ToolPart[] = []
-    let turns = 0
-
-    loop: for (let msgIndex = msgs.length - 1; msgIndex >= 0; msgIndex--) {
-      const msg = msgs[msgIndex]
-      if (msg.info.role === "user") turns++
-      if (turns < 2) continue
-      if (msg.info.role === "assistant" && msg.info.summary) break loop
-      for (let partIndex = msg.parts.length - 1; partIndex >= 0; partIndex--) {
-        const part = msg.parts[partIndex]
-        if (part.type === "tool")
-          if (part.state.status === "completed") {
-            if (PRUNE_PROTECTED_TOOLS.includes(part.tool)) continue
-
-            if (part.state.time.compacted) break loop
-            const estimate = Token.estimate(part.state.output)
-            total += estimate
-            if (total > PRUNE_PROTECT) {
-              pruned += estimate
-              toPrune.push(part)
-            }
-          }
+    const range = latestCompactionPruneRange(msgs)
+    if (!range) {
+      log.info("skipping prune because no structured compaction boundary covers old tool output", {
+        sessionID: input.sessionID,
+      })
+      return
+    }
+    const toPrune = prunableToolParts(msgs)
+    log.info("found prunable compacted-history tool outputs", {
+      count: toPrune.length,
+      summaryID: range.summaryID,
+      markerID: range.markerID,
+      anchorID: range.anchorID,
+      tailID: range.tailID,
+    })
+    for (const part of toPrune) {
+      if (part.state.status === "completed") {
+        part.state.time.compacted = Date.now()
+        await Session.updatePart(part)
       }
     }
-    log.info("found", { pruned, total })
-    if (pruned > PRUNE_MINIMUM) {
-      for (const part of toPrune) {
-        if (part.state.status === "completed") {
-          part.state.time.compacted = Date.now()
-          await Session.updatePart(part)
-        }
-      }
-      log.info("pruned", { count: toPrune.length })
-    }
+    if (toPrune.length > 0) log.info("pruned", { count: toPrune.length })
   }
 
   export async function process(input: {
@@ -903,6 +953,8 @@ export namespace SessionCompaction {
     runtimeContext,
     compactionTranscriptMessages,
     structuredHandoffStopCondition,
+    latestCompactionPruneRange,
+    prunableToolParts,
   }
 
   const workflowAutoCompactionDisabledSessionKinds = new Set([
