@@ -228,16 +228,6 @@ interface SemanticSourceReplacementMetric {
   filePath: string
   sourceRegionComponentName: string
   sourceNodeId?: string
-  sourceMap?: {
-    sourceNodeId?: string
-    sourceSegmentId?: string
-    bounds?: SourceBounds
-    domRegion: string
-    styleSources: string[]
-    dataSources: string[]
-    assetSources: string[]
-    visualSources: string[]
-  }
   rootQaId?: string
   replacementKind:
     | "event_or_news_list_component"
@@ -864,34 +854,6 @@ interface SemanticSectionTab {
 
 interface SemanticSectionChild {
   componentName: string
-}
-
-interface SemanticGenericCardCollection {
-  componentName: string
-  rootTag: string
-  rootClassName: string
-  rootDataAttrs: Record<string, string>
-  rootSourceNodeId?: string
-  rootStyle?: Record<string, string>
-  titleTag: string
-  titleClassName: string
-  titleId?: string
-  titleText: string
-  contentTag: string
-  contentClassName: string
-  cards: SemanticGenericCard[]
-}
-
-interface SemanticGenericCard {
-  rootTag: string
-  rootClassName: string
-  rootStyle?: Record<string, string>
-  href?: string
-  titleTag: string
-  titleClassName: string
-  title: string
-  bodyClassName: string
-  body: string
 }
 
 const MAX_TEXT_SIGNALS = 160
@@ -2055,8 +2017,6 @@ function renderExtractedSourceRegion(node: DomNode, context: SourceDomRenderCont
   if (semanticLinkGridRegion) return semanticLinkGridRegion
   const semanticFaqRegion = renderSemanticFaqRegion(node, componentName, context)
   if (semanticFaqRegion) return semanticFaqRegion
-  const semanticGenericCardsRegion = renderSemanticGenericCardCollectionRegion(node, componentName, context)
-  if (semanticGenericCardsRegion) return semanticGenericCardsRegion
 
   const faqGroup = extractSourceFaqGroup(node, context)
   if (faqGroup) {
@@ -2160,50 +2120,6 @@ function sourceNodeBounds(node: DomNode, context: SourceDomRenderContext): Sourc
   return sourceNodeId ? context.nodeBoundsById.get(sourceNodeId) : undefined
 }
 
-function semanticReplacementSourceMap(
-  node: DomNode,
-  filePath: string,
-  replacementKind: SemanticSourceReplacementMetric["replacementKind"],
-  context: SourceDomRenderContext,
-): NonNullable<SemanticSourceReplacementMetric["sourceMap"]> {
-  const sourceNodeId = node.attribs?.["data-source-node-id"]
-  const sourceSegmentId = node.attribs?.["data-source-segment-id"]
-  return {
-    sourceNodeId,
-    sourceSegmentId,
-    bounds: sourceNodeBounds(node, context),
-    domRegion: filePath,
-    styleSources: semanticReplacementStyleSources(replacementKind),
-    dataSources: [
-      "src/data/sourceData.ts",
-      "web-clone-source/source-ir/content-model.json",
-      "web-clone-source/source-ir/component-tree.json",
-    ],
-    assetSources: [
-      "web-clone-source/assets/manifest.json",
-      "public/assets/",
-    ],
-    visualSources: Array.from(new Set([
-      "web-clone-source/reference.png",
-      "reference.png",
-      "web-clone-source/visual-surface-candidates.json",
-      sourceNodeId ? `source-node:${sourceNodeId}` : "",
-      sourceSegmentId ? `source-segment:${sourceSegmentId}` : "",
-    ].filter(Boolean))),
-  }
-}
-
-function semanticReplacementStyleSources(kind: SemanticSourceReplacementMetric["replacementKind"]): string[] {
-  const sources = [
-    "src/styles/source-critical.css",
-    "src/styles/source-full.css",
-    "web-clone-source/source-skeleton/critical.css",
-    "web-clone-source/source-ir/style-tokens.json",
-  ]
-  if (kind === "map_or_chart_asset_component") sources.push("src/data/sourceSvgAssetGroups.ts", "src/data/svgPaths.ts")
-  return sources
-}
-
 function semanticImportPath(context: SourceDomRenderContext, componentName: string): string {
   return context.currentImportPrefix === "./source-dom/"
     ? `./semantic/${componentName}`
@@ -2227,7 +2143,6 @@ function renderSemanticNewsListRegion(
     filePath,
     sourceRegionComponentName,
     sourceNodeId: semanticList.rootSourceNodeId,
-    sourceMap: semanticReplacementSourceMap(node, filePath, "event_or_news_list_component", context),
     rootQaId: semanticList.rootQaId,
     replacementKind: "event_or_news_list_component",
     itemCount: semanticList.items.length,
@@ -2259,7 +2174,6 @@ function renderSemanticDataTableRegion(
     filePath,
     sourceRegionComponentName,
     sourceNodeId: semanticTable.rootSourceNodeId,
-    sourceMap: semanticReplacementSourceMap(node, filePath, "data_table_or_heatmap_component", context),
     rootQaId: semanticTable.rootDataAttrs["data-qa-id"],
     replacementKind: "data_table_or_heatmap_component",
     itemCount: semanticTable.rows.length,
@@ -2295,7 +2209,6 @@ function renderSemanticMetricRankingCardRegion(
     filePath,
     sourceRegionComponentName,
     sourceNodeId: ranking.rootSourceNodeId,
-    sourceMap: semanticReplacementSourceMap(node, filePath, "data_table_or_heatmap_component", context),
     replacementKind: "data_table_or_heatmap_component",
     itemCount: ranking.rows.length,
     bytes: Buffer.byteLength(content, "utf8"),
@@ -2330,7 +2243,6 @@ function renderSemanticEventCardListRegion(
     filePath,
     sourceRegionComponentName,
     sourceNodeId: semanticList.rootSourceNodeId,
-    sourceMap: semanticReplacementSourceMap(node, filePath, "event_or_news_list_component", context),
     rootQaId: semanticList.rootDataAttrs["data-qa-id"],
     replacementKind: "event_or_news_list_component",
     itemCount: semanticList.items.length,
@@ -2365,7 +2277,6 @@ function renderSemanticFooterRegion(
     filePath,
     sourceRegionComponentName,
     sourceNodeId: footer.rootSourceNodeId,
-    sourceMap: semanticReplacementSourceMap(node, filePath, "navigation_or_footer_component", context),
     replacementKind: "navigation_or_footer_component",
     itemCount: footer.links.length + footer.socialLinks.length,
     bytes: Buffer.byteLength(content, "utf8"),
@@ -2400,7 +2311,6 @@ function renderSemanticHeaderNavigationRegion(
     filePath,
     sourceRegionComponentName,
     sourceNodeId: header.rootSourceNodeId,
-    sourceMap: semanticReplacementSourceMap(node, filePath, "navigation_or_footer_component", context),
     replacementKind: "navigation_or_footer_component",
     itemCount: header.menuItems.length + (header.searchButton ? 1 : 0) + (header.languageButton ? 1 : 0) + (header.offerLink ? 1 : 0),
     bytes: Buffer.byteLength(content, "utf8"),
@@ -2435,7 +2345,6 @@ function renderSemanticMapSurfaceRegion(
     filePath,
     sourceRegionComponentName,
     sourceNodeId: mapSurface.rootSourceNodeId,
-    sourceMap: semanticReplacementSourceMap(node, filePath, "map_or_chart_asset_component", context),
     rootQaId: mapSurface.rootDataAttrs["data-qa-id"],
     replacementKind: "map_or_chart_asset_component",
     itemCount: mapSurface.paths.length,
@@ -2471,7 +2380,6 @@ function renderSemanticLinkGridRegion(
     filePath,
     sourceRegionComponentName,
     sourceNodeId: linkGrid.rootSourceNodeId,
-    sourceMap: semanticReplacementSourceMap(node, filePath, linkGrid.replacementKind, context),
     rootQaId: linkGrid.rootDataAttrs["data-qa-id"],
     replacementKind: linkGrid.replacementKind,
     itemCount: linkGrid.links.length,
@@ -2505,7 +2413,6 @@ function renderSemanticIdeaCardCollectionRegion(
     filePath,
     sourceRegionComponentName,
     sourceNodeId: collection.rootSourceNodeId,
-    sourceMap: semanticReplacementSourceMap(node, filePath, "card_collection_component", context),
     rootQaId: collection.rootDataAttrs["data-qa-id"] ?? collection.contentQaId,
     replacementKind: "card_collection_component",
     itemCount: collection.cards.length + collection.tabs.length + (collection.moreLink ? 1 : 0),
@@ -2555,7 +2462,6 @@ function renderSemanticFaqRegion(
     filePath,
     sourceRegionComponentName,
     sourceNodeId: node.attribs?.["data-source-node-id"],
-    sourceMap: semanticReplacementSourceMap(node, filePath, "faq_disclosure_component", context),
     rootQaId: faqGroup.dataAttributes.contentQaId,
     replacementKind: "faq_disclosure_component",
     itemCount: faqItems.length,
@@ -2589,7 +2495,6 @@ function renderSemanticSectionShellRegion(
     filePath,
     sourceRegionComponentName,
     sourceNodeId: section.rootSourceNodeId,
-    sourceMap: semanticReplacementSourceMap(node, filePath, section.replacementKind, context),
     rootQaId: section.rootDataAttrs["data-qa-id"],
     replacementKind: section.replacementKind,
     itemCount: section.tabs.length + section.children.length + (section.footerLink ? 1 : 0),
@@ -2605,40 +2510,6 @@ function renderSemanticSectionShellRegion(
   return {
     componentName: section.componentName,
     importPath: semanticImportPath(context, section.componentName),
-  }
-}
-
-function renderSemanticGenericCardCollectionRegion(
-  node: DomNode,
-  sourceRegionComponentName: string,
-  context: SourceDomRenderContext,
-): SourceRegionRenderRef | undefined {
-  if (!isSemanticGenericCardCollectionCandidate(node)) return undefined
-  const collection = extractSemanticGenericCardCollection(node, sourceRegionComponentName, context)
-  if (!collection) return undefined
-
-  const content = renderSemanticGenericCardCollectionComponent(collection)
-  const filePath = `src/components/semantic/${collection.componentName}.tsx`
-  context.regionFiles.set(filePath, content)
-  context.semanticReplacementMetrics.push({
-    componentName: collection.componentName,
-    filePath,
-    sourceRegionComponentName,
-    sourceNodeId: collection.rootSourceNodeId,
-    sourceMap: semanticReplacementSourceMap(node, filePath, "card_collection_component", context),
-    replacementKind: "card_collection_component",
-    itemCount: collection.cards.length,
-    bytes: Buffer.byteLength(content, "utf8"),
-    rootClassName: collection.rootClassName,
-    cardContainerClassName: collection.contentClassName,
-    textPreview: [
-      collection.titleText,
-      ...collection.cards.slice(0, 6).map((card) => card.title),
-    ].filter(Boolean).join(" | ").slice(0, 180),
-  })
-  return {
-    componentName: collection.componentName,
-    importPath: semanticImportPath(context, collection.componentName),
   }
 }
 
@@ -4148,140 +4019,6 @@ function extractSemanticSectionShell(
   }
 }
 
-function isSemanticGenericCardCollectionCandidate(node: DomNode): boolean {
-  if (node.type !== "tag") return false
-  if (isSemanticDataTableCandidate(node)) return false
-  if (isSemanticMetricRankingCardCandidate(node)) return false
-  if (isSemanticEventCardListCandidate(node)) return false
-  if (isSemanticIdeaCardCollectionCandidate(node)) return false
-  if (isSemanticMapSurfaceCandidate(node)) return false
-  if (isSemanticLinkGridCandidate(node)) return false
-  if (isSemanticNewsListCandidate(node, countRenderableElements(node))) return false
-  const collection = findSemanticGenericCardCollection(node)
-  if (!collection) return false
-  const heading = findFirstHeadingText(node)
-  return Boolean(heading || node.attribs?.["data-source-node-id"])
-}
-
-function extractSemanticGenericCardCollection(
-  node: DomNode,
-  sourceRegionComponentName: string,
-  context: SourceDomRenderContext,
-): SemanticGenericCardCollection | undefined {
-  const collection = findSemanticGenericCardCollection(node)
-  if (!collection) return undefined
-  const cards = collection.cards
-    .map((card) => semanticGenericCard(card, context))
-    .filter((card): card is SemanticGenericCard => Boolean(card))
-    .slice(0, 120)
-  if (cards.length < 3) return undefined
-
-  const titleNode = findDescendantElement(node, (child) => /^h[1-4]$/i.test(child.name ?? ""))
-  const componentName = sourceRegionComponentName.replace(/Region\d*$/, "Cards")
-  return {
-    componentName: componentName === sourceRegionComponentName ? `${sourceRegionComponentName}Cards` : componentName,
-    rootTag: semanticSafeTagName(node.name, "section"),
-    rootClassName: node.attribs?.class ?? "",
-    rootDataAttrs: pickDataAttributes(node.attribs ?? {}, ["data-base-widget", "data-container-name", "data-an-widget-id", "data-source-role"]),
-    rootSourceNodeId: node.attribs?.["data-source-node-id"],
-    rootStyle: semanticNodeStyleRecord(node, context),
-    titleTag: semanticSafeHeadingTagName(titleNode?.name, "h2"),
-    titleClassName: titleNode?.attribs?.class ?? "",
-    titleId: titleNode?.attribs?.id,
-    titleText: normalizeVisibleText(titleNode ? visibleText(titleNode) : findFirstHeadingText(node) ?? sourceRegionComponentName.replace(/Region\d*$/, "")),
-    contentTag: semanticSafeTagName(collection.container.name, "div"),
-    contentClassName: collection.container.attribs?.class ?? "",
-    cards,
-  }
-}
-
-function findSemanticGenericCardCollection(node: DomNode): { container: DomNode; cards: DomNode[] } | undefined {
-  const candidates = findDescendantElements(node, (child) => {
-    if (child.type !== "tag") return false
-    const distance = descendantElementDistance(node, child)
-    if (distance === undefined || distance > 3) return false
-    return dominantGenericCardChildren(child).length >= 3
-  })
-    .map((container) => ({ container, cards: dominantGenericCardChildren(container) }))
-    .filter((item) => item.cards.length >= 3)
-    .sort((a, b) => {
-      const distanceA = descendantElementDistance(node, a.container) ?? 999
-      const distanceB = descendantElementDistance(node, b.container) ?? 999
-      return distanceA - distanceB || b.cards.length - a.cards.length
-    })
-  return candidates[0]
-}
-
-function dominantGenericCardChildren(container: DomNode): DomNode[] {
-  const children = directElementChildren(container).filter(isGenericCardItemCandidate)
-  if (children.length < 3) return []
-  const bySignature = new Map<string, DomNode[]>()
-  for (const child of children) {
-    const signature = genericCardSignature(child)
-    const group = bySignature.get(signature) ?? []
-    group.push(child)
-    bySignature.set(signature, group)
-  }
-  return Array.from(bySignature.values()).sort((a, b) => b.length - a.length)[0] ?? []
-}
-
-function isGenericCardItemCandidate(node: DomNode): boolean {
-  if (node.type !== "tag") return false
-  const tag = node.name?.toLowerCase() ?? ""
-  if (!["article", "li", "a", "div", "section"].includes(tag)) return false
-  if (isSemanticMapSurfaceCandidate(node) || isSemanticDataTableCandidate(node)) return false
-  const text = normalizeVisibleText(visibleText(node))
-  if (text.length < 8) return false
-  if (countRenderableElements(node) > 80) return false
-  return true
-}
-
-function genericCardSignature(node: DomNode): string {
-  const tag = node.name?.toLowerCase() ?? "div"
-  const firstClass = (node.attribs?.class ?? "").split(/\s+/).find(Boolean)?.replace(/-[A-Za-z0-9_]{5,}$/g, "") ?? ""
-  return `${tag}:${firstClass}`
-}
-
-function semanticGenericCard(node: DomNode, context: SourceDomRenderContext): SemanticGenericCard | undefined {
-  const titleNode = findDescendantElement(node, (child) =>
-    /^h[2-6]$/i.test(child.name ?? "") ||
-    (child.name?.toLowerCase() === "a" && normalizeVisibleText(visibleText(child)).length > 0),
-  )
-  const bodyNode = findDescendantElement(node, (child) =>
-    child !== titleNode &&
-    ["p", "span", "div"].includes(child.name?.toLowerCase() ?? "") &&
-    normalizeVisibleText(visibleText(child)).length > 0,
-  )
-  const title = normalizeVisibleText(titleNode ? visibleText(titleNode) : visibleText(node).slice(0, 80))
-  if (!title) return undefined
-  const rawBody = normalizeVisibleText(bodyNode ? visibleText(bodyNode) : visibleText(node))
-  const body = rawBody === title ? "" : rawBody.replace(title, "").trim()
-  const anchor = node.name?.toLowerCase() === "a"
-    ? node
-    : findDescendantElement(node, (child) => child.name?.toLowerCase() === "a" && Boolean(child.attribs?.href))
-  return {
-    rootTag: semanticSafeTagName(node.name, "article"),
-    rootClassName: node.attribs?.class ?? "",
-    rootStyle: semanticNodeStyleRecord(node, context),
-    href: normalizeReferencedAssetUrl(anchor?.attribs?.href ?? ""),
-    titleTag: semanticSafeHeadingTagName(titleNode?.name, "h3"),
-    titleClassName: titleNode?.attribs?.class ?? "",
-    title,
-    bodyClassName: bodyNode?.attribs?.class ?? "",
-    body,
-  }
-}
-
-function semanticSafeTagName(value: string | undefined, fallback: string): string {
-  const tag = value?.toLowerCase() ?? ""
-  return /^[a-z][a-z0-9-]*$/.test(tag) && !["html", "body", "script", "style"].includes(tag) ? tag : fallback
-}
-
-function semanticSafeHeadingTagName(value: string | undefined, fallback: string): string {
-  const tag = value?.toLowerCase() ?? ""
-  return /^h[1-6]$/.test(tag) ? tag : fallback
-}
-
 function renderSemanticSectionChild(node: DomNode, context: SourceDomRenderContext): SemanticSectionChild | undefined {
   const childSourceRegionComponentName = allocateSourceRegionComponentName(node, context)
   const ref = renderSemanticNewsListRegion(node, childSourceRegionComponentName, context) ??
@@ -4292,8 +4029,7 @@ function renderSemanticSectionChild(node: DomNode, context: SourceDomRenderConte
     renderSemanticMapSurfaceRegion(node, childSourceRegionComponentName, context) ??
     renderSemanticLinkGridRegion(node, childSourceRegionComponentName, context) ??
     renderSemanticFaqRegion(node, childSourceRegionComponentName, context) ??
-    renderSemanticSectionShellRegion(node, childSourceRegionComponentName, context) ??
-    renderSemanticGenericCardCollectionRegion(node, childSourceRegionComponentName, context)
+    renderSemanticSectionShellRegion(node, childSourceRegionComponentName, context)
   return ref ? { componentName: ref.componentName } : undefined
 }
 
@@ -5304,56 +5040,6 @@ function renderSemanticSectionShellComponent(section: SemanticSectionShell): str
     "        </div>",
     "      ) : null}",
     "    </div>",
-    "  )",
-    "}",
-    "",
-  ].join("\n")
-}
-
-function renderSemanticGenericCardCollectionComponent(collection: SemanticGenericCardCollection): string {
-  const dataName = `${collection.componentName.charAt(0).toLowerCase()}${collection.componentName.slice(1)}Data`
-  const rootDataAttrLines = Object.keys(collection.rootDataAttrs)
-    .sort()
-    .map((name) => `      ${name}={${dataName}.rootDataAttrs[${JSON.stringify(name)}]}`)
-  return [
-    "// @ts-nocheck",
-    "// semantic-source-replacement: generated from a repeated source card/list region with explicit data and render loops.",
-    "",
-    `const ${dataName} = ${JSON.stringify(collection, null, 2)} as const`,
-    "",
-    `export function ${collection.componentName}() {`,
-    `  const collection = ${dataName}`,
-    "  const RootTag = collection.rootTag",
-    "  const TitleTag = collection.titleTag",
-    "  const ContentTag = collection.contentTag",
-    "  return (",
-    "    <RootTag",
-    "      className={collection.rootClassName}",
-    "      data-source-region={collection.rootSourceNodeId}",
-    "      style={collection.rootStyle}",
-    ...rootDataAttrLines,
-    "    >",
-    "      {collection.titleText ? (",
-    "        <TitleTag className={collection.titleClassName} id={collection.titleId}>",
-    "          {collection.titleText}",
-    "        </TitleTag>",
-    "      ) : null}",
-    "      <ContentTag className={collection.contentClassName}>",
-    "        {collection.cards.map((card, index) => {",
-    "          const ItemTag = card.rootTag",
-    "          const ItemTitleTag = card.titleTag",
-    "          const title = card.href ? (",
-    "            <a href={card.href}>{card.title}</a>",
-    "          ) : card.title",
-    "          return (",
-    "            <ItemTag className={card.rootClassName} style={card.rootStyle} key={`${card.title}-${index}`}>",
-    "              <ItemTitleTag className={card.titleClassName}>{title}</ItemTitleTag>",
-    "              {card.body ? <p className={card.bodyClassName}>{card.body}</p> : null}",
-    "            </ItemTag>",
-    "          )",
-    "        })}",
-    "      </ContentTag>",
-    "    </RootTag>",
     "  )",
     "}",
     "",
@@ -6442,7 +6128,7 @@ function renderSourceDomIterationStateTs(
   const viewportNames = viewportMatrix.map((viewport) => `${viewport.name} ${viewport.width}x${viewport.height}`).join(", ")
   const state = {
     version: 1,
-    purpose: "source-region-maintainable-progress-metadata",
+    purpose: "source-dom-maintainable-iteration-state",
     generatedRegionCount: regions.length,
     semanticReplacementCount: semanticReplacements.length,
     remainingRegionCount: remainingGeneratedRegions.length,
@@ -6460,7 +6146,7 @@ function renderSourceDomIterationStateTs(
       "Replace nextReplacement.regionFilePath with nextReplacement.recommendedComponentName using source data, sidecar assets, and scoped styles.",
       "Delete the replaced source-dom region only after the screenshot comparison is stable for the unchanged surrounding surface.",
       "Run web_clone_source_audit with finalDeliveryMode=maintainable_replacement_required after each region replacement.",
-      "Continue through the normal agent tool flow until remainingRegionCount is zero or each remaining source-dom region has measured evidence proving it is outside the requested delivery surface.",
+      "Repeat until remainingRegionCount is zero or each remaining source-dom region has measured evidence proving it is outside the requested delivery surface.",
     ],
     stopCondition: {
       sourceDomRegionFileCount: 0,

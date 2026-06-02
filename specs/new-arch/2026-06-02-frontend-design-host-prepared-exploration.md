@@ -38,16 +38,3 @@ Run targeted tests:
 - `bun test packages/opencorvus/test/agent/core-prompt-hygiene.test.ts`
 
 Then rerun the TradingView overlay benchmark with visual reference images and inspect frontend-design session tool exposure before judging the result.
-
-## 2026-06-02 Follow-up: Generic Semantic Region Replacement
-
-The next root cause is inside `web-clone/source-project-generator.ts`: specialized recognizers already replace news lists, tables, maps, FAQ, header/footer, and several TradingView card surfaces, but generic repeated heading + card/list regions still fall back to `src/components/source-dom/*Region.tsx`. That preserves the rawproject as visual baseline but leaves raw DOM/CSS in the generated source project.
-
-Required algorithm change:
-
-- keep rawproject as evidence and visual baseline;
-- detect generic repeated card/list regions after specialized recognizers decline a region;
-- extract heading, wrapper, item title/body/link, classes, style, source node id, and bounds into data;
-- render a semantic component with data arrays and `.map()`;
-- record source map evidence in the semantic replacement progress metadata;
-- leave source-dom fallback only for regions that genuinely lack enough structure for a semantic replacement.
