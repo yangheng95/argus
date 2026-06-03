@@ -50,6 +50,7 @@ import {
   WebpageImageCompileTool,
   WebpageImageExtractTool,
   WebpageRenderTool,
+  WebpageRuntimeStateTool,
   WebpageTextDiffTool,
   WebpageVisionJudgeTool,
 } from "@/mirror/tools"
@@ -465,7 +466,7 @@ function buildUserPrompt(input: {
 
   sections.push(
     "# Live URL Capture\n\n" +
-    `For visual webpage URLs, first check the task-runtime evidence at \`${mirrorRef}/prd-evidence-summary.md\`, \`${mirrorRef}/source-ir/component-tree.json\`, \`${mirrorRef}/source-ir/content-model.json\`, \`${mirrorRef}/source-ir/layout-map.json\`, \`${mirrorRef}/source-ir/style-tokens.json\`, \`${mirrorRef}/source-ir/interaction-hints.json\`, \`${mirrorRef}/source-skeleton/critical.css\`, \`${mirrorRef}/visual-surface-candidates.json\`, and the task-runtime source package \`${sourcePackageRef}/implementation-blueprint.md\` when present. Use \`${mirrorRef}/source-skeleton/index.html\` only as raw evidence for exact hierarchy/source ids or missing text. ` +
+    `For visual webpage URLs, first check the task-runtime evidence at \`${mirrorRef}/prd-evidence-summary.md\`, \`${mirrorRef}/source-ir/component-tree.json\`, \`${mirrorRef}/source-ir/content-model.json\`, \`${mirrorRef}/source-ir/layout-map.json\`, \`${mirrorRef}/source-ir/style-tokens.json\`, \`${mirrorRef}/source-ir/interaction-hints.json\`, \`${mirrorRef}/source-ir/interaction-state-snapshots.json\`, \`${mirrorRef}/source-skeleton/critical.css\`, \`${mirrorRef}/visual-surface-candidates.json\`, and the task-runtime source package \`${sourcePackageRef}/implementation-blueprint.md\` when present. Use \`${mirrorRef}/source-skeleton/index.html\` only as raw evidence for exact hierarchy/source ids or missing text. ` +
     "Use mirror analysis tools only if those files are missing or stale — not `webfetch`, not dynamic skills, and not screenshot-only analysis. " +
     "After evidence exists, stop acquiring and read the named source artifacts before finalizing; never inline raw extraction JSON or stored URL screenshot base64 into the frontend template prompt. " +
     (autoIteration
@@ -933,6 +934,7 @@ async function createMirrorAnalysisTools(input: { taskID?: string; signal?: Abor
     webpage_extract: await createFrontendTool(WebpageExtractTool, input, trace),
     webpage_compile: await createFrontendTool(WebpageCompileTool, input, trace),
     webpage_analyze: await createFrontendTool(WebpageAnalyzeTool, input, trace),
+    webpage_runtime_state: await createFrontendTool(WebpageRuntimeStateTool, input, trace),
     webpage_image_extract: await createFrontendTool(WebpageImageExtractTool, input, trace),
     webpage_image_compile: await createFrontendTool(WebpageImageCompileTool, input, trace),
     webpage_image_analyze: await createFrontendTool(WebpageImageAnalyzeTool, input, trace),

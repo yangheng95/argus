@@ -89,6 +89,7 @@ Prompt-readable mirror artifacts:
 - `mirror/source-ir/content-model.json` as tables/lists/cards/controls/repeated group evidence.
 - `mirror/source-ir/style-tokens.json` as color/typography/spacing/radius/shadow candidates.
 - `mirror/source-ir/interaction-hints.json` as link/button/input/tab/dropdown/search/accordion candidates.
+- `mirror/source-ir/interaction-state-snapshots.json` as browser runtime evidence for scroll-triggered sticky/floating surfaces, active/selected tabs, expanded controls, and viewport-persistent elements.
 - `mirror/source-skeleton/index.html` as raw semantic HTML evidence that downstream Build may read for exact hierarchy/source ids only. It is not a template to mechanically convert into one giant component.
 - `mirror/source-skeleton/critical.css` as reachable CSS plus computed-style fallback rules.
 - `mirror/source-skeleton/full-source.css` as the complete CSS sidecar for targeted missing style detail.

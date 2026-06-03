@@ -2,6 +2,7 @@ export const MIRROR_ANALYSIS_TOOL_IDS = [
   "webpage_extract",
   "webpage_compile",
   "webpage_analyze",
+  "webpage_runtime_state",
   "webpage_image_extract",
   "webpage_image_compile",
   "webpage_image_analyze",

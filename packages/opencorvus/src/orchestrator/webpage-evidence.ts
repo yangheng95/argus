@@ -4,6 +4,7 @@ import path from "node:path"
 import { WebpageAnalyzeTool } from "@/mirror/tools/webpage-analyze"
 import { WebpageCompileTool } from "@/mirror/tools/webpage-compile"
 import { WebpageExtractTool } from "@/mirror/tools/webpage-extract"
+import { captureWebpageRuntimeStateEvidence } from "@/mirror/url/runtime-state"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { TaskRuntimeMaterializer } from "@/project/task-runtime-materializer"
 import type { Tool } from "@/tool/tool"
@@ -23,6 +24,7 @@ export interface LiveWebpageEvidencePipeline {
   extract(input: { url: string; outputDir: string; signal?: AbortSignal; taskID: string }): Promise<void>
   compile(input: { outputDir: string; signal?: AbortSignal; taskID: string }): Promise<void>
   analyze(input: { outputDir: string; signal?: AbortSignal; taskID: string }): Promise<void>
+  captureRuntimeState(input: { url: string; outputDir: string; signal?: AbortSignal; taskID: string }): Promise<void>
 }
 
 const PRIMARY_WEBPAGE_EVIDENCE_FILES = [
@@ -50,7 +52,12 @@ const PRIMARY_WEBPAGE_EVIDENCE_FILES = [
   "source-ir/layout-map.json",
   "source-ir/style-tokens.json",
   "source-ir/interaction-hints.json",
+  "source-ir/interaction-state-snapshots.json",
   "source-ir/source-quality-audit.json",
+  "interaction-states/initial.png",
+  "interaction-states/scroll-25.png",
+  "interaction-states/scroll-50.png",
+  "interaction-states/scroll-75.png",
 ] as const
 
 export function primaryWebpageEvidenceArtifacts(taskID?: string): string[] {
@@ -82,7 +89,12 @@ const PRIMARY_WEBPAGE_SOURCE_PACKAGE_FILES = [
   "source-ir/layout-map.json",
   "source-ir/style-tokens.json",
   "source-ir/interaction-hints.json",
+  "source-ir/interaction-state-snapshots.json",
   "source-ir/source-quality-audit.json",
+  "interaction-states/initial.png",
+  "interaction-states/scroll-25.png",
+  "interaction-states/scroll-50.png",
+  "interaction-states/scroll-75.png",
 ] as const
 
 export function primaryWebpageSourcePackageArtifacts(taskID?: string): string[] {
@@ -124,6 +136,7 @@ export async function ensureLiveWebpageEvidence(input: {
   await pipeline.extract({ url, outputDir: mirrorDir, signal: input.signal, taskID: input.taskID })
   await pipeline.compile({ outputDir: mirrorDir, signal: input.signal, taskID: input.taskID })
   await pipeline.analyze({ outputDir: mirrorDir, signal: input.signal, taskID: input.taskID })
+  await pipeline.captureRuntimeState({ url, outputDir: mirrorDir, signal: input.signal, taskID: input.taskID })
   if (!(await hasCompletePrimaryEvidence(mirrorDir, url))) {
     throw new Error(`Live webpage evidence pipeline finished but did not produce the complete primary mirror artifact set in ${mirrorDir}`)
   }
@@ -188,6 +201,14 @@ function defaultLiveWebpageEvidencePipeline(): LiveWebpageEvidencePipeline {
     },
     analyze: async ({ outputDir, signal, taskID }) => {
       await runTool(WebpageAnalyzeTool, { outputDir }, signal, taskID)
+    },
+    captureRuntimeState: async ({ url, outputDir, signal }) => {
+      await captureWebpageRuntimeStateEvidence({
+        url,
+        outputDir,
+        viewport: { width: 1440, height: 900 },
+        signal,
+      })
     },
   }
 }

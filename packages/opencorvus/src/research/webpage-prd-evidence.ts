@@ -49,6 +49,10 @@ const PROMPT_ARTIFACTS = [
     label: "Interaction hints",
     relative: ["web-clone-source", "source-ir", "interaction-hints.json"],
   },
+  {
+    label: "Runtime interaction state snapshots",
+    relative: ["web-clone-source", "source-ir", "interaction-state-snapshots.json"],
+  },
 ] as const
 
 export interface WebpagePrdEvidenceExcerpt {
@@ -139,6 +143,7 @@ export function renderWebpagePrdEvidencePromptSection(evidence: WebpagePrdEviden
     `Visual reference image: ${evidence.referenceImageRelative}`,
     "",
     "Use this rendered webpage evidence as the primary source for page layout, visible content, responsive behavior, style tokens, interactions, maps, charts, cards, tables, and footer/header inventory.",
+    "`source-ir/interaction-state-snapshots.json` is factual runtime evidence captured from browser scroll/click states. Use it for sticky/floating bars, active tabs, viewport-persistent elements, expanded/selected states, and interaction-state PRD contracts; do not treat it as prewritten PRD prose.",
     "Do not call `webfetch` against this same URL for visual layout or content extraction. Use `webfetch` only for narrow metadata or linked-source confirmation when these artifacts identify a missing fact.",
     "Return `document_outline` as the PRD major module list for downstream agent splitting. Order modules by visible page flow and include evidence ids for each module.",
     "Also submit `webpage_contract`. It must be faithful to the rendered page and must cover functional_surfaces, visual_layout, style_requirements, interaction_states, data_content_inventory, fidelity_acceptance, and fidelity_risks. Do not substitute a raw artifact/material list for this contract.",
