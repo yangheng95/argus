@@ -24,6 +24,7 @@ import { t } from "../utils/i18n";
 import { goalRevisionLabelFromIndexes } from "../utils/goal-label";
 import { goalState, type GoalState } from "../utils/goal-state";
 import { Icon } from "./Icon";
+import { createAnimationFrameScheduler } from "../utils/animation-frame";
 
 /** Visible pill rows before the strip collapses behind a "+N more" toggle.
  *  Operators scanning a long task want the goal list visible at a glance, not
@@ -145,9 +146,10 @@ export function TaskProgressBar() {
 
   onMount(() => {
     if (!pillsEl) return;
-    // Initial measure (microtask so the first paint has flushed).
-    queueMicrotask(remeasure);
-    const ro = new ResizeObserver(remeasure);
+    const remeasureOnFrame = createAnimationFrameScheduler(remeasure);
+    // Initial measure waits for the first paint so offsetTop values are stable.
+    remeasureOnFrame.schedule();
+    const ro = new ResizeObserver(remeasureOnFrame.schedule);
     ro.observe(pillsEl);
     // Pill children may resize independently of the container (i18n switch
     // changes label length; UI scale changes pill padding). Observe each pill
@@ -165,12 +167,13 @@ export function TaskProgressBar() {
     observePills();
     const mo = new MutationObserver(() => {
       observePills();
-      remeasure();
+      remeasureOnFrame.schedule();
     });
     mo.observe(pillsEl, { childList: true, subtree: false });
     onCleanup(() => {
       ro.disconnect();
       mo.disconnect();
+      remeasureOnFrame.cancel();
     });
   });
 

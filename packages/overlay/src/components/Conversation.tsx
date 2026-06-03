@@ -14,6 +14,7 @@ import { StoreCardNode } from "./StoreCardNode";
 import { canLoadOlderConversationHistory, loadOlderConversationHistory } from "../services/conversation";
 import { conversationAgentStore } from "../store/conversation-agents";
 import { listenConversationCardScroll, type ConversationCardScrollRequest } from "../services/conversation-scroll";
+import { createAnimationFrameScheduler } from "../utils/animation-frame";
 
 const VIRTUAL_OVERSCAN_ITEMS = 16;
 const ESTIMATED_CARD_HEIGHT = 132;
@@ -177,15 +178,15 @@ function VirtualizedConversationCards(props: {
   };
 
   onMount(() => {
-    const ro = new ResizeObserver(() => props.onMeasuredContentChanged());
+    const measuredContentChangedOnFrame = createAnimationFrameScheduler(props.onMeasuredContentChanged);
+    const ro = new ResizeObserver(measuredContentChangedOnFrame.schedule);
     ro.observe(props.container);
     queueMicrotask(() => {
       if (rootEl) ro.observe(rootEl);
     });
     const stopCardScrollListener = listenConversationCardScroll(scrollCardIntoView);
     const onLayoutShiftSignal = () => {
-      props.onMeasuredContentChanged();
-      requestAnimationFrame(props.onMeasuredContentChanged);
+      measuredContentChangedOnFrame.schedule();
     };
     props.container.addEventListener("click", onLayoutShiftSignal, { passive: true });
     props.container.addEventListener("transitionend", onLayoutShiftSignal, true);
@@ -193,6 +194,7 @@ function VirtualizedConversationCards(props: {
       props.container.removeEventListener("click", onLayoutShiftSignal);
       props.container.removeEventListener("transitionend", onLayoutShiftSignal, true);
       ro.disconnect();
+      measuredContentChangedOnFrame.cancel();
       stopCardScrollListener();
     });
   });
