@@ -182,7 +182,7 @@ const PIPELINE: MiniWorkflow = {
       id: "frontend_research",
       tool: "frontend_research",
       label: "Frontend Research",
-      hint: "网页/URL 参考任务的功能、布局、样式、交互、内容清单、fidelity acceptance 专职研究阶段。与 frontend_design 并行：frontend_design 产出可维护实现模板和素材/源码入口；frontend_research 产出 source-backed frontend_research_brief/webpage_contract，供 requirements 和 architect 转成 REQ-N、goal coverage、验收依据。它不写 final PRD，不产出 frontend implementation template，不选择下一步路线。",
+      hint: "网页/URL 参考任务的功能、布局、样式、交互、内容清单、fidelity acceptance 研究协调阶段。与 frontend_design 并行：frontend_design 产出可维护实现模板和素材/源码入口；frontend_research 组织 prepared evidence 并把深度调查包委派给 build，最终产出 source-backed frontend_research_brief/webpage_contract，供 requirements 和 architect 转成 REQ-N、goal coverage、验收依据。它不亲自做深度调查，不写 final PRD，不产出 frontend implementation template，不选择下一步路线。",
       scope: "task",
       skippable: true,
       after: [],

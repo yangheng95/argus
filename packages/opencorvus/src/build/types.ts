@@ -143,7 +143,10 @@ const BuildResultBase = {
   summary: z
     .string()
     .min(1)
-    .describe("One-line plain-prose description of what changed or why it failed."),
+    .describe(
+      "One-line plain-prose description of what changed or why it failed. " +
+        "For explicit investigation/report deliverables, this may contain the detailed multi-section report.",
+    ),
   files_changed: z
     .array(BuildFileChange)
     .describe(

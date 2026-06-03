@@ -253,7 +253,7 @@ describe("build agent prompt context", () => {
     )
   })
 
-  test("request-path rejects repository-investigation-only work instead of exposing success instructions", () => {
+  test("request-path rejects ad-hoc exploration without a concrete deliverable", () => {
     const prompt = buildUserPrompt(
       {
         kind: "request",
@@ -262,12 +262,23 @@ describe("build agent prompt context", () => {
       {},
     )
 
-    expect(prompt).toContain("This direct request path is for implementation/rework")
+    expect(prompt).toContain("concrete deliverables such as investigation reports")
     expect(prompt).toContain("Build is the wrong stage")
     expect(prompt).not.toContain(["exploration", "investigation", "or analysis"].join(", "))
     expect(prompt).not.toContain("skip commit / merge_back")
     expect(prompt).not.toContain('status="passed"')
     expect(prompt).not.toContain("files_changed: []")
+  })
+
+  test("request-path accepts explicit investigation report deliverables", () => {
+    const prompt = buildUserPrompt({
+      kind: "request",
+      text: "Produce an investigation report for the referenced webpage layout.",
+    })
+
+    expect(prompt).toContain("concrete deliverables such as investigation reports")
+    expect(prompt).toContain("Product Requirements Documents (PRDs), research briefs, audits")
+    expect(prompt).toContain("Build is the wrong stage")
   })
 
   test("retryGuidance section is dropped when undefined / empty / whitespace-only", () => {
@@ -527,7 +538,7 @@ describe("build agent prompt context", () => {
     expect(prompt).toContain("If the request is a port, migration, rewrite, clone, parity restoration")
     expect(prompt).toContain("complete investigation of the named source surface")
     expect(prompt).toContain("existing target conventions")
-    expect(prompt).toContain("Build is the wrong stage")
+    expect(prompt).toContain("ad-hoc exploration")
   })
 
   test("request-path build receives frontend-design template source manifest", () => {
