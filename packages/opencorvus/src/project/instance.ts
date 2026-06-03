@@ -27,6 +27,7 @@ type InstanceApi = {
   readonly directory: string
   readonly worktree: string
   readonly project: Project.Info
+  current(): Context | undefined
   refresh(directory?: string): Promise<Context>
   containsPath(filepath: string): boolean
   state: StateFactory
@@ -132,6 +133,9 @@ export const Instance: InstanceApi = {
   },
   get project() {
     return context.use().project
+  },
+  current() {
+    return context.tryUse()
   },
   async refresh(directory = Instance.directory) {
     const key = Filesystem.resolve(directory)
