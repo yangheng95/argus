@@ -20,6 +20,38 @@ function sanitizeInlineDataUrisForPrompt(text: string): string {
   })
 }
 
+async function collectLimitedLines(input: ReadableStream<Uint8Array>, limit: number, onLimit: () => void) {
+  const decoder = new TextDecoder()
+  const reader = input.getReader()
+  const lines: string[] = []
+  let buffer = ""
+  let limited = false
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    while (true) {
+      const newline = buffer.search(/\r?\n/)
+      if (newline < 0) break
+      const line = buffer.slice(0, newline)
+      buffer = buffer.slice(buffer[newline] === "\r" ? newline + 2 : newline + 1)
+      lines.push(line)
+      if (lines.length >= limit) {
+        limited = true
+        onLimit()
+        reader.releaseLock()
+        return { text: lines.join("\n"), limited }
+      }
+    }
+  }
+
+  buffer += decoder.decode()
+  reader.releaseLock()
+  if (buffer.length > 0) lines.push(buffer)
+  return { text: lines.slice(0, limit).join("\n"), limited: lines.length > limit }
+}
+
 function rawMirrorArtifactReason(relPath: string): string | null {
   const normalized = relPath.replace(/\\/g, "/")
   if (
@@ -253,7 +285,7 @@ export function createCodebaseTools(projectDir?: string) {
         max_results: z.number().optional().describe("Maximum matching lines (default 30)"),
       }),
       execute: async ({ pattern, path: searchPath, max_results }) => {
-        const limit = max_results ?? 30
+        const limit = Math.max(1, Math.floor(max_results ?? 30))
         const target = searchPath ? safePath(searchPath) : dir
         if (!target) return "Error: search path is outside the project boundary."
         try {
@@ -262,8 +294,6 @@ export function createCodebaseTools(projectDir?: string) {
               "rg",
               "--no-heading",
               "--line-number",
-              "--max-count",
-              String(limit),
               "--max-columns",
               "200",
               "--glob",
@@ -276,10 +306,17 @@ export function createCodebaseTools(projectDir?: string) {
             ],
             { stdout: "pipe", stderr: "pipe" },
           )
-          const output = await new Response(proc.stdout).text()
+          const output = await collectLimitedLines(proc.stdout, limit, () => {
+            try {
+              proc.kill()
+            } catch {
+              // Process may already have exited after producing the final allowed line.
+            }
+          })
           await proc.exited
-          const trimmed = sanitizeInlineDataUrisForPrompt(output.trim())
-          return trimmed || "No matches found."
+          const trimmed = sanitizeInlineDataUrisForPrompt(output.text.trim())
+          if (!trimmed) return "No matches found."
+          return output.limited ? `${trimmed}\n(limited to ${limit} results)` : trimmed
         } catch {
           return "No matches found (or ripgrep not available)."
         }
