@@ -83,6 +83,13 @@ export namespace MCP {
         }),
       z
         .object({
+          status: z.literal("disconnected"),
+        })
+        .meta({
+          ref: "MCPStatusDisconnected",
+        }),
+      z
+        .object({
           status: z.literal("failed"),
           error: z.string(),
         })
@@ -205,32 +212,18 @@ export namespace MCP {
       const clients: Record<string, MCPClient> = {}
       const status: Record<string, Status> = {}
 
-      await Promise.all(
-        entries(config).map(async ([key, mcp]) => {
-          if (isMcpDisabledOverride(mcp)) {
-            status[key] = { status: "disabled" }
-            return
-          }
-          if (!isMcpConfigured(mcp)) {
-            log.error("Ignoring MCP config entry without type", { key })
-            return
-          }
+      for (const [key, mcp] of entries(config)) {
+        if (isMcpDisabledOverride(mcp)) {
+          status[key] = { status: "disabled" }
+          continue
+        }
+        if (!isMcpConfigured(mcp)) {
+          log.error("Ignoring MCP config entry without type", { key })
+          continue
+        }
 
-          // If disabled by config, mark as disabled without trying to connect
-          if (mcp.enabled === false) {
-            status[key] = { status: "disabled" }
-            return
-          }
-
-          const result = await createSafely(key, mcp)
-
-          status[key] = result.status
-
-          if (result.mcpClient) {
-            clients[key] = result.mcpClient
-          }
-        }),
-      )
+        status[key] = mcp.enabled === false ? { status: "disabled" } : { status: "disconnected" }
+      }
       return {
         status,
         clients,
@@ -543,7 +536,7 @@ export namespace MCP {
         continue
       }
       if (!isMcpConfigured(mcp)) continue
-      result[key] = s.status[key] ?? { status: "disabled" }
+      result[key] = s.status[key] ?? (mcp.enabled === false ? { status: "disabled" } : { status: "disconnected" })
     }
 
     return result

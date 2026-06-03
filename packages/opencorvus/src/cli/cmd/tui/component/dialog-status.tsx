@@ -63,6 +63,7 @@ export function DialogStatus() {
                         connected: theme.success,
                         failed: theme.error,
                         disabled: theme.textMuted,
+                        disconnected: theme.textMuted,
                         needs_auth: theme.warning,
                         needs_client_registration: theme.error,
                       } as Record<string, typeof theme.success>
@@ -78,6 +79,7 @@ export function DialogStatus() {
                       <Match when={item.status === "connected"}>Connected</Match>
                       <Match when={item.status === "failed" && item}>{(val) => val().error}</Match>
                       <Match when={item.status === "disabled"}>Disabled in configuration</Match>
+                      <Match when={(item.status as string) === "disconnected"}>Disconnected</Match>
                       <Match when={(item.status as string) === "needs_auth"}>
                         Needs authentication (run: opencorvus mcp auth {key})
                       </Match>
