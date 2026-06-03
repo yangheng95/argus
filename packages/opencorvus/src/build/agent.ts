@@ -279,6 +279,8 @@ export namespace BuildAgent {
     existingSessionID?: string
     /** Explicit model override (provider / model). Skips `resolveAgentModel`. */
     model?: { providerID: string; modelID: string }
+    /** Overrides the engine auto-iteration prompt mode for bounded one-pass callers. */
+    autoIteration?: boolean
     signal?: AbortSignal
     /** Fires after the child build session exists, before model work starts.
      *  Goal builds return the newly opened logical goal_run_id so the runtime
@@ -397,7 +399,7 @@ export namespace BuildAgent {
    */
   export async function run(input: RunInput): Promise<RunOutput> {
     return AgentSemaphore.withSlot(input.task, async () => {
-      const autoIteration = (await EngineConfig.get()).auto_iteration === true
+      const autoIteration = input.autoIteration ?? ((await EngineConfig.get()).auto_iteration === true)
       // ── Worktree acquisition ─────────────────────────────────────────────
       // Happens OUTSIDE runAgentSession because the worktree is the
       // session's working directory — the runner needs it resolved before
