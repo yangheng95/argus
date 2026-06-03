@@ -86,6 +86,7 @@ import os from "node:os"
 import path from "node:path"
 import puppeteer, { type Page } from "puppeteer-core"
 import { parseSSE } from "../../src/util/sse"
+import { standaloneGitEnvForProject } from "./git"
 import { auditWorkspace, deriveRunMetrics, evaluateQualityGates, moduleBlocksFromRequest } from "./quality-gates"
 
 type OverlayBenchmarkWindow = Window & {
@@ -1241,7 +1242,12 @@ async function scaffoldProject(dir: string, model: string) {
   // unattended and creates its own scratch dir, so it must init git itself
   // — there is no overlay user gesture to prompt for.
   {
-    const proc = Bun.spawn(["git", "init"], { cwd: dir, stdout: "pipe", stderr: "pipe" })
+    const proc = Bun.spawn(["git", "init"], {
+      cwd: dir,
+      env: standaloneGitEnvForProject(dir),
+      stdout: "pipe",
+      stderr: "pipe",
+    })
     const code = await proc.exited
     if (code !== 0) {
       const err = (await proc.stderr.text()).trim() || "git init failed"
