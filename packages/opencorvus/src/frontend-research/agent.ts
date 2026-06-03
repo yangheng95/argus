@@ -15,7 +15,7 @@ function frontendResearchSessionConfig(): ResearchSessionConfig {
     kind: "frontend-research",
     core: FRONTEND_RESEARCH_CORE,
     sessionTitlePrefix: "Frontend Research",
-    prepareWebpageEvidence: "always-for-source-url",
+    prepareWebpageEvidence: "read-existing-for-source-url",
     bundlePathKind: "frontend-research",
     delegation:
       "Orchestrator is asking frontend-research to publish webpage investigation work packets for downstream requirements, architecture, and implementation. " +

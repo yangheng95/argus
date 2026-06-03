@@ -5,7 +5,7 @@ describe("frontend-research agent", () => {
   test("publishes investigation work packets without performing deep investigation", () => {
     const config = FrontendResearchTestHooks.frontendResearchSessionConfig()
 
-    expect(config.prepareWebpageEvidence).toBe("always-for-source-url")
+    expect(config.prepareWebpageEvidence).toBe("read-existing-for-source-url")
     expect(config.bundlePathKind).toBe("frontend-research")
     expect(config).not.toHaveProperty("includeRetrievalTools")
     expect(config).not.toHaveProperty("createAdditionalTools")
