@@ -3,8 +3,12 @@ import path from "node:path"
 
 import {
   ensureLiveWebpageEvidence,
+  hasCompletePrimaryEvidence,
+  hasCompleteSourcePackage,
   type LiveWebpageEvidencePipeline,
   type LiveWebpageEvidenceResult,
+  primaryWebpageEvidenceArtifacts,
+  primaryWebpageSourcePackageArtifacts,
 } from "@/orchestrator/webpage-evidence"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
 
@@ -94,15 +98,43 @@ export async function prepareWebpagePrdEvidence(input: {
   })
   if (!evidence.url) throw new Error("webpage PRD evidence preparation did not resolve a source URL")
 
-  const paths = ProjectRuntimePaths.frontendDesignPaths(input.projectDir, input.taskID)
-  const excerpts = await Promise.all(PROMPT_ARTIFACTS.map((artifact) => readPromptArtifact(paths.relativeDir, paths, artifact)))
-  return {
+  return readPreparedWebpagePrdEvidence({
+    projectDir: input.projectDir,
+    taskID: input.taskID,
     url: evidence.url,
     status: evidence.status,
+    artifacts: evidence.artifacts,
+  })
+}
+
+export async function readPreparedWebpagePrdEvidence(input: {
+  projectDir: string
+  taskID: string
+  url: string
+  status?: LiveWebpageEvidenceResult["status"]
+  artifacts?: string[]
+}): Promise<WebpagePrdEvidence> {
+  const paths = ProjectRuntimePaths.frontendDesignPaths(input.projectDir, input.taskID)
+  const [hasMirror, hasSourcePackage] = await Promise.all([
+    hasCompletePrimaryEvidence(paths.mirrorAbsolute, input.url),
+    hasCompleteSourcePackage(paths.sourcePackageAbsolute),
+  ])
+  if (!hasMirror || !hasSourcePackage) {
+    throw new Error(
+      "frontend-research requires existing frontend-design webpage evidence; run frontend_design before frontend_research for webpage PRD evidence",
+    )
+  }
+  const excerpts = await Promise.all(PROMPT_ARTIFACTS.map((artifact) => readPromptArtifact(paths.relativeDir, paths, artifact)))
+  return {
+    url: input.url,
+    status: input.status ?? "reused",
     mirrorRelative: paths.mirrorRelative,
     sourcePackageRelative: paths.sourcePackageRelative,
     referenceImageRelative: path.posix.join(paths.sourcePackageRelative, "reference.png"),
-    artifacts: evidence.artifacts,
+    artifacts: input.artifacts ?? [
+      ...primaryWebpageEvidenceArtifacts(input.taskID),
+      ...primaryWebpageSourcePackageArtifacts(input.taskID),
+    ],
     excerpts,
   }
 }

@@ -11,7 +11,7 @@ export namespace FrontendResearchAgent {
       kind: "frontend-research",
       core: FRONTEND_RESEARCH_CORE,
       sessionTitlePrefix: "Frontend Research",
-      prepareWebpageEvidence: "always-for-source-url",
+      prepareWebpageEvidence: "existing-frontend-design",
       bundlePathKind: "frontend-research",
       includeRetrievalTools: false,
       createAdditionalTools: ({ runInput, webpagePrdEvidence, getSessionID }) =>

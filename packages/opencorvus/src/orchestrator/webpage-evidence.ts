@@ -171,7 +171,7 @@ export async function hasCompletePrimaryEvidence(mirrorDir: string, url?: string
   return normalizeUrlForEvidence(extractedUrl) === normalizeUrlForEvidence(url)
 }
 
-async function hasCompleteSourcePackage(sourcePackageDir: string): Promise<boolean> {
+export async function hasCompleteSourcePackage(sourcePackageDir: string): Promise<boolean> {
   for (const relative of PRIMARY_WEBPAGE_SOURCE_PACKAGE_FILES) {
     const file = path.join(sourcePackageDir, relative)
     if (relative === "reference.png") {
