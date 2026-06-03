@@ -33,7 +33,6 @@ export const WEB_CLONE_SOURCE_PACKAGE_FORBIDDEN_ARTIFACTS = [
 export const WEB_CLONE_REQUIRED_MIRROR_ARTIFACTS = [
   "reference.png",
   "capture.html",
-  "singlefile.html",
   "extracted-page.json",
   "page.ir.json",
   "assets/manifest.json",

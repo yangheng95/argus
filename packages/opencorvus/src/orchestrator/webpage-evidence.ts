@@ -30,7 +30,6 @@ export interface LiveWebpageEvidencePipeline {
 const PRIMARY_WEBPAGE_EVIDENCE_FILES = [
   "reference.png",
   "capture.html",
-  "singlefile.html",
   "extracted-page.json",
   "page.ir.json",
   "assets/manifest.json",
@@ -74,7 +73,6 @@ const PRIMARY_WEBPAGE_SOURCE_PACKAGE_FILES = [
   "web-clone-implementation-contract.json",
   "web-clone-source-manifest.json",
   "reference.png",
-  "singlefile.html",
   "visual-surface-candidates.json",
   "visual-surface-scaffold.json",
   "assets/manifest.json",
