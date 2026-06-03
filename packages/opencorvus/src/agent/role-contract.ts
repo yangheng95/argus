@@ -154,7 +154,7 @@ export namespace AgentRoleContract {
     research: {
       id: "research",
       description:
-        "Research agent. Read-only advisory evidence gatherer for external facts, source maps, current documentation, PRD/SPEC/report source material, constraints, document outlines, and open questions. Dedicated webpage functional/visual PRD evidence belongs to frontend-research. Research never chooses routes or delivers final documents.",
+        "Research agent. Read-only advisory evidence gatherer for external facts, source maps, current documentation, PRD/SPEC/report source material, constraints, document outlines, and open questions. Dedicated webpage functional/visual investigation division belongs to frontend-research. Research never chooses routes or delivers final documents.",
       promptEditable: true,
       defaultPromptRequired: true,
       promptConfigMode: "append",
@@ -162,7 +162,7 @@ export namespace AgentRoleContract {
     "frontend-research": {
       id: "frontend-research",
       description:
-        "Frontend research agent. Directly performs read-only webpage functional and visual research from prepared evidence and source retrieval, then emits a source-backed frontend_research_brief with webpage_contract covering functions, layout, styles, interactions, content inventory, fidelity acceptance, risks, document outlines, constraints, and open questions. It does not create the frontend implementation template, does not call build, and never chooses routes or delivers final documents.",
+        "Frontend research agent. Publishes source-backed webpage investigation work packets from prepared evidence indexes, summaries, bounded excerpts, and source URLs, then emits a frontend_research_brief with an investigation-partition webpage_contract covering visible surfaces, component questions, layout/style checks, interaction/data checks, fidelity risks, document outlines, constraints, and open questions. It does not perform deep investigation itself, does not create the frontend implementation template, does not call build, and never chooses routes or delivers final documents.",
       promptEditable: true,
       defaultPromptRequired: true,
       promptConfigMode: "append",

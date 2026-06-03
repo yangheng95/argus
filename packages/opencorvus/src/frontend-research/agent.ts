@@ -18,8 +18,8 @@ function frontendResearchSessionConfig(): ResearchSessionConfig {
     prepareWebpageEvidence: "always-for-source-url",
     bundlePathKind: "frontend-research",
     delegation:
-      "Orchestrator is asking frontend-research to perform read-only webpage research for downstream requirements and architecture. " +
-      "Investigate the supplied page directly from prepared evidence and read-only source retrieval, then synthesize page functions, layout, style, interactions, content inventory, fidelity acceptance, risks, document outline, and open questions. " +
+      "Orchestrator is asking frontend-research to publish webpage investigation work packets for downstream requirements, architecture, and implementation. " +
+      "Read only the prepared evidence index, summaries, source URLs, and bounded excerpts needed to partition the investigation; do not perform deep source-page or artifact investigation yourself. " +
       "Do not create the frontend implementation template, do not build source, do not produce final REQ-N, acceptance specs, goal graph, implementation plan, or next-tool routing instructions.",
   }
 }

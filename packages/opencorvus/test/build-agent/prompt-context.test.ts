@@ -145,7 +145,7 @@ describe("build agent prompt context", () => {
     expect(prompt).toContain("active REQ-N rows are the implementation contract")
     expect(prompt).toContain("map each requirement that touches your goal/request")
     expect(prompt).toContain("Do not treat PRD/research/design material as optional background")
-    expect(prompt).toContain("read the PRD/frontend-research/frontend-design material in page chunks")
+    expect(prompt).toContain("read the PRD/frontend_design material and any frontend_research investigation packets in page chunks")
     expect(prompt).toContain("identify the component kind for each chunk")
     expect(prompt).toContain("All visible content must be componentized and fed by props, data modules, fixtures, or API adapters")
     expect(prompt).toContain("instead of hardcoded directly into page wrappers, generated SVG, or one-off JSX literals")
@@ -154,6 +154,7 @@ describe("build agent prompt context", () => {
     expect(prompt).toContain("Weight the sources accordingly")
     expect(prompt).toContain("drive roughly 70% of implementation decisions")
     expect(prompt).toContain("supplies roughly 30% style, geometry, CSS, assets, and pixel-consistency support")
+    expect(prompt).toContain("Frontend_research packets are coverage and investigation prompts")
     expect(prompt).toContain("REQ-12")
     expect(prompt).toContain("fr-interaction-scroll-tabs")
     expect(prompt).toContain("## Terminal Report Contract")
@@ -494,7 +495,7 @@ describe("build agent prompt context", () => {
     expect(prompt).toContain("Referenced images, captures, and visual specs are binding source material")
   })
 
-  test("request-path build receives frontend-research PRD evidence overlay", () => {
+  test("request-path build receives frontend-research investigation plan overlay", () => {
     const prompt = buildUserPrompt(
       {
         kind: "request",
@@ -502,25 +503,24 @@ describe("build agent prompt context", () => {
       },
       {
         frontendResearch:
-          "# Frontend Research Brief (advisory webpage functional/visual input)\n\n" +
-          "webpage_contract: floating tab bar appears after scroll and switches economic indicators.",
+          "# Frontend Research Brief (webpage investigation division)\n\n" +
+          "work_packet: verify whether the floating tab bar appears after scroll and switches economic indicators.",
         frontendDesign:
           "# Frontend Design Public Report\n\n" +
           "- key=visual_consistency_contract value=Match the researched page.",
       },
     )
 
-    expect(prompt).toContain("Rendered overlays: frontend-research-prd-evidence, frontend-design-handoff")
-    expect(prompt).toContain("## Frontend Research PRD Evidence")
-    expect(prompt).toContain("Treat it as binding evidence for the surfaces it describes")
-    expect(prompt).toContain("do not skip it and implement from screenshots or source files alone")
-    expect(prompt).toContain("read this PRD evidence by page chunk")
-    expect(prompt).toContain("preserve the named component kinds")
+    expect(prompt).toContain("Rendered overlays: frontend-research-investigation-plan, frontend-design-handoff")
+    expect(prompt).toContain("## Frontend Research Investigation Plan")
+    expect(prompt).toContain("Treat it as a coverage checklist and work-packet index")
+    expect(prompt).toContain("do not treat it as completed PRD facts")
+    expect(prompt).toContain("read the named work packets")
+    expect(prompt).toContain("Preserve component-kind hypotheses unless deeper evidence disproves them")
     expect(prompt).toContain("do not flatten it into SVG/image markup")
-    expect(prompt).toContain("Use PRD evidence as the primary source for about 70%")
-    expect(prompt).toContain("Use skeleton/source evidence as about 30% support")
+    expect(prompt).toContain("Use requirements, architect contracts, and frontend_design as the binding implementation contract")
     expect(prompt).toContain("floating tab bar appears after scroll")
-    expect(prompt.indexOf("## Frontend Research PRD Evidence")).toBeLessThan(
+    expect(prompt.indexOf("## Frontend Research Investigation Plan")).toBeLessThan(
       prompt.indexOf("## Frontend Design Handoff"),
     )
   })
