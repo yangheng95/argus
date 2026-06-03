@@ -1,4 +1,5 @@
 import { afterEach, expect, test } from "bun:test"
+import { Database as BunDatabase } from "bun:sqlite"
 import fs from "fs"
 import os from "os"
 import path from "path"
@@ -84,4 +85,49 @@ test("Database.reset removes the global DB and the specified project's scratch",
   expect(fs.existsSync(runtimeDir)).toBe(false)
   expect(fs.existsSync(worktreesDir)).toBe(false)
   expect(fs.existsSync(ownershipDir)).toBe(false)
+})
+
+test("Database.Client recreates stale on-disk schema instead of applying column compatibility", () => {
+  const tempHome = mktemp("opencorvus-db-stale-schema-")
+  process.env.OPENCORVUS_HOME = tempHome
+
+  const dbPath = Database.Path()
+  fs.mkdirSync(path.dirname(dbPath), { recursive: true })
+  const stale = new BunDatabase(dbPath, { create: true })
+  stale.exec(`
+    CREATE TABLE engine_artifact (
+      id           text PRIMARY KEY,
+      task_id      text NOT NULL,
+      run_id       text,
+      goal_run_id  text,
+      kind         text NOT NULL,
+      label        text NOT NULL,
+      payload      text,
+      time_created integer NOT NULL,
+      time_updated integer NOT NULL
+    );
+    INSERT INTO engine_artifact (
+      id, task_id, run_id, goal_run_id, kind, label, payload, time_created, time_updated
+    ) VALUES (
+      'stale-artifact', 'task-1', NULL, NULL, 'acceptance', 'stale', '{}', 1, 1
+    );
+  `)
+  stale.close()
+
+  Database.Client()
+  Database.close()
+
+  const current = new BunDatabase(dbPath)
+  try {
+    const columns = current
+      .query<{ name: string }, []>("PRAGMA table_info(engine_artifact)")
+      .all()
+      .map((column) => column.name)
+    const staleRows = current.query<{ count: number }, []>("SELECT count(*) AS count FROM engine_artifact").get()
+
+    expect(columns).toContain("acceptance_id")
+    expect(staleRows?.count).toBe(0)
+  } finally {
+    current.close()
+  }
 })
