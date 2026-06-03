@@ -90,8 +90,9 @@ function renderDelegatedBuildRequest(input: {
     "# Frontend Research Deep Investigation Delegation",
     "",
     "You are build acting as the investigation worker for frontend-research.",
-    "This is a no-change research packet: inspect evidence, use tools as needed, and return detailed findings through `report_build_result.summary`.",
+    "This is a bounded no-change research packet: inspect only the packet scope and return detailed findings through `report_build_result.summary`.",
     "Do not edit, create, commit, or merge project files for this packet. If file mutation becomes necessary, report `status=\"failed\"`, explain why, and keep `files_changed=[]`.",
+    "Do not crawl the full site, enumerate unrelated menus, or keep expanding the investigation after the requested evidence fields are answered.",
     "",
     "## Parent Task",
     "",
@@ -130,10 +131,18 @@ function renderDelegatedBuildRequest(input: {
   const evidence = renderDelegatedBuildEvidenceSection(input.webpagePrdEvidence)
   if (evidence) sections.push(evidence)
   sections.push(
+    "## Investigation Budget",
+    "",
+    "Use the smallest read-only evidence set that answers this packet. Prefer prepared artifact excerpts when present.",
+    "When live URL inspection is needed, run at most three focused read-only checks for this packet, then stop investigating.",
+    "Do not use implementation, edit, write, merge, task-spawn, or broad crawl behavior. This worker only supplies evidence back to frontend-research.",
+    "If the packet cannot be answered within this bounded pass, return `status=\"failed\"` with the exact missing evidence instead of continuing to browse.",
+    "",
     "## Report Contract",
     "",
     "Return `status=\"passed\"` only when the investigation is complete enough for frontend-research to cite.",
     "Put the full evidence-backed research report in `summary`; it may be multi-section Markdown for this delegated investigation.",
+    "Call `report_build_result` immediately after the bounded checks; do not start another research loop after the summary is sufficient.",
     "Use `tests[]` for real commands or checks you ran. Use `fact_check_items[]` for any factual claim you could not verify.",
     "Keep `files_changed=[]` unless you are reporting `status=\"failed\"` because a file mutation would be required.",
   )
