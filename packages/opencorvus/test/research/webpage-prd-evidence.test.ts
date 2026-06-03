@@ -143,7 +143,7 @@ async function writeCompleteEvidence(
 ): Promise<void> {
   await fs.mkdir(webpageEvidenceDir, { recursive: true })
   for (const artifact of primaryWebpageEvidenceArtifacts()) {
-    const relative = artifact.replace(/^webpage-evidence[\\/]/, "").replace(/^mirror[\\/]/, "")
+    const relative = artifact.replace(/^webpage-evidence[\\/]/, "")
     const file = path.join(webpageEvidenceDir, relative)
     await fs.mkdir(path.dirname(file), { recursive: true })
     if (relative === "reference.png") {

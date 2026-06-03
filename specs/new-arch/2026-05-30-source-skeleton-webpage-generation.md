@@ -13,7 +13,7 @@ reference screenshot. The development handoff should therefore be plain source
 files:
 
 ```text
-mirror/
+webpage-evidence/
   reference.png
   source-skeleton/
     README.md
@@ -96,14 +96,14 @@ Architect, and Build must treat it as the implementation seed.
 Build instructions:
 
 ```text
-Read mirror/source-skeleton/README.md, mirror/source-ir/component-tree.json,
-mirror/source-ir/content-model.json, mirror/source-ir/style-tokens.json,
-mirror/source-ir/interaction-hints.json, and mirror/source-skeleton/critical.css
+Read webpage-evidence/source-skeleton/README.md, webpage-evidence/source-ir/component-tree.json,
+webpage-evidence/source-ir/content-model.json, webpage-evidence/source-ir/style-tokens.json,
+webpage-evidence/source-ir/interaction-hints.json, and webpage-evidence/source-skeleton/critical.css
 first.
-Use mirror/source-skeleton/index.html and full-source.css only for exact
+Use webpage-evidence/source-skeleton/index.html and full-source.css only for exact
 hierarchy or targeted missing style detail.
 Generate normal project-owned framework source from the skeleton.
-Use mirror/reference.png for visual acceptance.
+Use webpage-evidence/reference.png for visual acceptance.
 Use IR/assets/segments only as diagnostics when the skeleton leaves a specific
 gap.
 Do not use generated runnable projects as app source.

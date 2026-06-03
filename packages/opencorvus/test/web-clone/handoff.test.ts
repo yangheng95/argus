@@ -126,9 +126,9 @@ describe("web-clone handoff", () => {
     await using tmp = await tmpdir()
     const extraction = extractArchiveHtml({ html: "<html><body><main>Hello</main></body></html>" })
     const handoff = buildWebCloneHandoff(extraction.pageIr, extraction.assetGraph)
-    await writeWebCloneHandoff(path.join(tmp.path, "mirror"), handoff)
+    await writeWebCloneHandoff(path.join(tmp.path, "webpage-evidence"), handoff)
 
-    expect(await Bun.file(path.join(tmp.path, "mirror", "segments.json")).exists()).toBe(true)
-    expect(await Bun.file(path.join(tmp.path, "mirror", "codegen-context.json")).exists()).toBe(true)
+    expect(await Bun.file(path.join(tmp.path, "webpage-evidence", "segments.json")).exists()).toBe(true)
+    expect(await Bun.file(path.join(tmp.path, "webpage-evidence", "codegen-context.json")).exists()).toBe(true)
   })
 })

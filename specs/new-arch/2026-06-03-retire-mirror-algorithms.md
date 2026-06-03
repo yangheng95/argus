@@ -25,7 +25,7 @@ they are actually used.
 | Figma REST algorithms | `src/webpage-evidence/figma/*`, `CompressedDesign` | Delete. Product Figma evidence comes from Figma MCP through frontend-design, not REST mirror algorithms. |
 | Image-to-code algorithms and tools | `src/webpage-evidence/image/*`, `ImageAnalysis`, `webpage_image_*`, `image-generate.md` | Delete. Screenshot references are handled by frontend-design multimodal context and source-region workflow, not a parallel image2code toolchain. |
 | XML IR compatibility | `src/webpage-evidence/url/compile.ts`, `ir/xml-ir.ts`, `page-ir.xml`, `buildClonePrompt` | Delete. Canonical structure is `web-clone/page.ir.json` and source handoff files. |
-| Task runtime artifact directory | `.opencorvus/runtime/tasks/<task>/frontend-design/webpage-evidence/` | Keep artifact name. It is a runtime evidence directory, not a package/module. Legacy `frontend-design/mirror/` may be read as old input and promoted to the canonical artifact directory. |
+| Task runtime artifact directory | `.opencorvus/runtime/tasks/<task>/frontend-design/webpage-evidence/` | Keep artifact name. It is a runtime evidence directory, not a package/module. Do not accept or promote `frontend-design/mirror/` as compatibility input. |
 
 ## Implementation Rules
 
@@ -38,8 +38,8 @@ they are actually used.
   longer required primary artifacts. `visual-surface-candidates.json` remains
   only if generated from `web-clone` segments/source IR.
 - The artifact path string `webpage-evidence/` is allowed in prompts and runtime
-  paths. The legacy string `mirror/` is allowed only in compatibility readers
-  and tests that prove old task outputs are promoted or ignored.
+  paths. The legacy artifact path string `mirror/` must not be accepted as an
+  alias, promoted, or materialized.
 - URL extraction, runtime state capture, and screenshot rendering all run
   browser automation through the packaged Node sidecar. This removes the
   Windows Bun+Playwright launch path that caused frontend_design Chrome startup

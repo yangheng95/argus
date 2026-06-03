@@ -7,9 +7,6 @@
  *
  * The default lives in the task runtime:
  *   `<project>/.opencorvus/runtime/tasks/<task>/frontend-design/webpage-evidence/`
- * Legacy `mirror/...` override strings are resolved as aliases into that
- * runtime directory; no project-root mirror directory is created.
- *
  * Callers that want a different location, such as benchmark drivers and tests,
  * still override via the tool's outputDir parameter.
  */
@@ -22,7 +19,6 @@ import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { TaskRuntimeMaterializer } from "@/project/task-runtime-materializer"
 
 const WEBPAGE_EVIDENCE_SUBDIR = "webpage-evidence"
-const LEGACY_WEBPAGE_EVIDENCE_SUBDIR = "mirror"
 
 export interface ResolveWebpageEvidenceOutputDirInput {
   override?: string
@@ -34,8 +30,7 @@ export interface ResolveWebpageEvidenceOutputDirInput {
  *
  * - No override -> task-scoped frontend-design webpage evidence directory.
  * - Override without a session -> explicit benchmark/test directory.
- * - Override inside a task session -> must resolve under `webpage-evidence/`
- *   or legacy `mirror/`.
+ * - Override inside a task session -> must resolve under `webpage-evidence/`.
  *
  * `mkdir -p` is always invoked so tools can immediately write artifacts
  * without each having to repeat the existence check.
@@ -79,19 +74,13 @@ async function resolveSessionDefault(sessionID: string): Promise<string> {
 async function resolveSessionOverride(override: string, sessionID: string): Promise<string> {
   const evidenceRoot = await resolveSessionDefault(sessionID)
   const viewRoot = path.resolve(Instance.directory, WEBPAGE_EVIDENCE_SUBDIR)
-  const legacyViewRoot = path.resolve(Instance.directory, LEGACY_WEBPAGE_EVIDENCE_SUBDIR)
   const requested = path.isAbsolute(override)
     ? path.resolve(override)
     : path.resolve(Instance.directory, override)
 
-  if (samePath(requested, viewRoot) || samePath(requested, legacyViewRoot)) return evidenceRoot
+  if (samePath(requested, viewRoot)) return evidenceRoot
   if (isPathInside(viewRoot, requested)) {
     const target = path.join(evidenceRoot, path.relative(viewRoot, requested))
-    await fs.mkdir(target, { recursive: true })
-    return target
-  }
-  if (isPathInside(legacyViewRoot, requested)) {
-    const target = path.join(evidenceRoot, path.relative(legacyViewRoot, requested))
     await fs.mkdir(target, { recursive: true })
     return target
   }

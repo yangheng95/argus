@@ -2,7 +2,7 @@
 
 - Date: 2026-05-29
 - Status: Draft, must be implemented before treating browser MCP as a finished built-in capability.
-- Related work: built-in `mcp.browser` registration, `opencorvus mcp browser`, existing acceptance and mirror browser capture paths.
+- Related work: built-in `mcp.browser` registration, `opencorvus mcp browser`, existing acceptance and webpage capture paths.
 - Decision source: user requested browser MCP to become built-in, then requested independent agent discussion before implementation.
 
 ---
@@ -13,7 +13,7 @@ The surface request is simple: make `browser-mcp.zip` an OpenCorvus built-in Mod
 
 The real engineering problem is broader:
 
-1. OpenCorvus already has browser usage in acceptance checks, design capture, mirror rendering, and URL extraction.
+1. OpenCorvus already has browser usage in acceptance checks, design capture, webpage rendering, and URL extraction.
 2. The imported browser MCP code starts its own Playwright Chromium runtime directly.
 3. That creates two browser runtime sources: existing `puppeteer-core` plus Chrome discovery, and new Playwright browser cache semantics.
 4. A built-in capability must work on a clean machine, in source mode, and in packaged binary mode.
@@ -59,9 +59,9 @@ Create a single browser execution layer, tentatively named `BrowserRuntime`, and
 
 ### Runtime engine choice
 
-The short-term single source must be the existing `puppeteer-core` plus Chrome discovery path, promoted into a real runtime module. The repository already uses this path in acceptance, mirror, and design capture. Keeping Playwright as a second browser stack creates install, packaging, and behavior drift.
+The short-term single source must be the existing `puppeteer-core` plus Chrome discovery path, promoted into a real runtime module. The repository already uses this path in acceptance, webpage capture, and design capture. Keeping Playwright as a second browser stack creates install, packaging, and behavior drift.
 
-Long-term Playwright is allowed only if acceptance, mirror, design capture, and browser MCP move together to the same runtime. Parallel browser stacks are forbidden.
+Long-term Playwright is allowed only if acceptance, webpage capture, design capture, and browser MCP move together to the same runtime. Parallel browser stacks are forbidden.
 
 ---
 
@@ -394,7 +394,7 @@ Rules:
 1. Move browser discovery out of acceptance-specific modules.
 2. Introduce `BrowserRuntime` browser check, launch, diagnostics, and session APIs.
 3. Rewire acceptance checks to use `BrowserRuntime`.
-4. Rewire mirror visual rendering and URL extraction to use `BrowserRuntime`.
+4. Rewire webpage visual rendering and URL extraction to use `BrowserRuntime`.
 5. Rewire browser MCP tools to call `BrowserRuntime`.
 6. Remove direct `playwright.chromium.launch()` from browser MCP.
 
@@ -436,8 +436,8 @@ These are the known browser-related call points that must be unified or reviewed
 - `packages/opencorvus/src/runtime/visual-page.ts`
 - `packages/opencorvus/src/acceptance/checks/walkthrough/run.ts`
 - `packages/opencorvus/src/frontend-design/capture-gate.ts`
-- `packages/opencorvus/src/mirror/visual/render.ts`
-- `packages/opencorvus/src/mirror/url/extract.ts`
+- `packages/opencorvus/src/browser/webpage/render.ts`
+- `packages/opencorvus/src/browser/webpage/extract.ts`
 
 ### Evidence and rendering users
 
@@ -485,7 +485,7 @@ Required tests before browser MCP is considered complete:
 
 5. Integration tests
    - acceptance visual capture uses `BrowserRuntime`;
-   - mirror rendering uses `BrowserRuntime`;
+   - webpage rendering uses `BrowserRuntime`;
    - MCP image result materializes to attachment;
    - overlay can render browser evidence metadata.
 
@@ -513,7 +513,7 @@ The migration is complete only when all of these are true:
 3. Browser MCP can be disabled through a documented config marker.
 4. Browser MCP does not directly own browser executable discovery.
 5. Browser MCP does not directly launch Playwright Chromium as a separate source.
-6. Acceptance, mirror, design capture, and browser MCP use the same Browser Runtime.
+6. Acceptance, webpage capture, design capture, and browser MCP use the same Browser Runtime.
 7. Source mode and packaged mode use the same runtime behavior.
 8. Missing browser executable produces actionable diagnostics.
 9. Browser screenshots and observations become attachment-backed evidence.

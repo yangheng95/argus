@@ -33,7 +33,7 @@ describe("tool.web_clone_generate_source_project", () => {
 
   test("writes editable React source from source-skeleton and passes the source audit", async () => {
     await using tmp = await tmpdir()
-    const webpageEvidenceDir = await writeFixtureMirror(tmp.path)
+    const webpageEvidenceDir = await writeFixtureEvidence(tmp.path)
     const outputDir = path.join(tmp.path, "generated-react")
 
     await Instance.provide({
@@ -159,7 +159,7 @@ describe("tool.web_clone_generate_source_project", () => {
 
   test("prefers source package capture viewport over raw extracted-page viewport", async () => {
     await using tmp = await tmpdir()
-    const webpageEvidenceDir = await writeFixtureMirror(tmp.path)
+    const webpageEvidenceDir = await writeFixtureEvidence(tmp.path)
     const outputDir = path.join(tmp.path, "generated-react")
     await Bun.write(path.join(webpageEvidenceDir, "web-clone-source-manifest.json"), JSON.stringify({
       version: 1,
@@ -193,7 +193,7 @@ describe("tool.web_clone_generate_source_project", () => {
 
   test("does not overwrite an existing output directory unless requested", async () => {
     await using tmp = await tmpdir()
-    const webpageEvidenceDir = await writeFixtureMirror(tmp.path)
+    const webpageEvidenceDir = await writeFixtureEvidence(tmp.path)
     const outputDir = path.join(tmp.path, "generated-react")
     await Bun.write(path.join(outputDir, "keep.txt"), "existing")
 
@@ -212,7 +212,7 @@ describe("tool.web_clone_generate_source_project", () => {
 
   test("splits large generated DOM baselines into source-region components", async () => {
     await using tmp = await tmpdir()
-    const webpageEvidenceDir = await writeRegionizedFixtureMirror(tmp.path)
+    const webpageEvidenceDir = await writeRegionizedFixtureEvidence(tmp.path)
     const outputDir = path.join(tmp.path, "generated-react")
 
     await Instance.provide({
@@ -292,7 +292,7 @@ describe("tool.web_clone_generate_source_project", () => {
 
   test("turns repeated news card regions into semantic data-loop components", async () => {
     await using tmp = await tmpdir()
-    const webpageEvidenceDir = await writeSemanticNewsFixtureMirror(tmp.path)
+    const webpageEvidenceDir = await writeSemanticNewsFixtureEvidence(tmp.path)
     const outputDir = path.join(tmp.path, "generated-news-react")
 
     await Instance.provide({
@@ -341,7 +341,7 @@ describe("tool.web_clone_generate_source_project", () => {
 
   test("turns BBC-style promo lists into semantic data-loop components", async () => {
     await using tmp = await tmpdir()
-    const webpageEvidenceDir = await writeBbcPromoFixtureMirror(tmp.path)
+    const webpageEvidenceDir = await writeBbcPromoFixtureEvidence(tmp.path)
     const outputDir = path.join(tmp.path, "generated-bbc-promo-react")
 
     await Instance.provide({
@@ -377,7 +377,7 @@ describe("tool.web_clone_generate_source_project", () => {
 
   test("turns source table heatmap regions into semantic data-loop components", async () => {
     await using tmp = await tmpdir()
-    const webpageEvidenceDir = await writeSemanticTableFixtureMirror(tmp.path)
+    const webpageEvidenceDir = await writeSemanticTableFixtureEvidence(tmp.path)
     const outputDir = path.join(tmp.path, "generated-table-react")
 
     await Instance.provide({
@@ -424,7 +424,7 @@ describe("tool.web_clone_generate_source_project", () => {
 
   test("extracts structurally equivalent table, list, and navigation surfaces without business words", async () => {
     await using tmp = await tmpdir()
-    const webpageEvidenceDir = await writeGenericStructureFixtureMirror(tmp.path)
+    const webpageEvidenceDir = await writeGenericStructureFixtureEvidence(tmp.path)
     const outputDir = path.join(tmp.path, "generated-generic-react")
 
     await Instance.provide({
@@ -461,7 +461,7 @@ describe("tool.web_clone_generate_source_project", () => {
 
   test("turns repeated economic event card regions into semantic data-loop components", async () => {
     await using tmp = await tmpdir()
-    const webpageEvidenceDir = await writeSemanticEventFixtureMirror(tmp.path)
+    const webpageEvidenceDir = await writeSemanticEventFixtureEvidence(tmp.path)
     const outputDir = path.join(tmp.path, "generated-events-react")
 
     await Instance.provide({
@@ -507,7 +507,7 @@ describe("tool.web_clone_generate_source_project", () => {
 
   test("turns repeated idea card regions into semantic data-loop components", async () => {
     await using tmp = await tmpdir()
-    const webpageEvidenceDir = await writeSemanticIdeaCardsFixtureMirror(tmp.path)
+    const webpageEvidenceDir = await writeSemanticIdeaCardsFixtureEvidence(tmp.path)
     const outputDir = path.join(tmp.path, "generated-ideas-react")
 
     await Instance.provide({
@@ -553,7 +553,7 @@ describe("tool.web_clone_generate_source_project", () => {
 
   test("does not turn page shell regions into semantic news lists", async () => {
     await using tmp = await tmpdir()
-    const webpageEvidenceDir = await writeSemanticNewsFixtureMirror(tmp.path, { pageShell: true })
+    const webpageEvidenceDir = await writeSemanticNewsFixtureEvidence(tmp.path, { pageShell: true })
     const outputDir = path.join(tmp.path, "generated-news-page-shell-react")
 
     await Instance.provide({
@@ -587,7 +587,7 @@ describe("tool.web_clone_generate_source_project", () => {
 
   test("keeps composite widget shells out of the replacement queue and extracts their child surfaces", async () => {
     await using tmp = await tmpdir()
-    const webpageEvidenceDir = await writeCompositeWidgetFixtureMirror(tmp.path)
+    const webpageEvidenceDir = await writeCompositeWidgetFixtureEvidence(tmp.path)
     const outputDir = path.join(tmp.path, "generated-composite-react")
 
     await Instance.provide({
@@ -612,7 +612,7 @@ describe("tool.web_clone_generate_source_project", () => {
 
   test("turns footer navigation regions into semantic data-loop components", async () => {
     await using tmp = await tmpdir()
-    const webpageEvidenceDir = await writeSemanticFooterFixtureMirror(tmp.path)
+    const webpageEvidenceDir = await writeSemanticFooterFixtureEvidence(tmp.path)
     const outputDir = path.join(tmp.path, "generated-footer-react")
 
     await Instance.provide({
@@ -664,7 +664,7 @@ describe("tool.web_clone_generate_source_project", () => {
 
   test("turns SVG map asset regions into semantic data-loop components", async () => {
     await using tmp = await tmpdir()
-    const webpageEvidenceDir = await writeSemanticMapFixtureMirror(tmp.path)
+    const webpageEvidenceDir = await writeSemanticMapFixtureEvidence(tmp.path)
     const outputDir = path.join(tmp.path, "generated-map-react")
 
     await Instance.provide({
@@ -724,7 +724,7 @@ describe("tool.web_clone_generate_source_project", () => {
 
   test("keeps mixed semantic section siblings when only part of the section can be replaced", async () => {
     await using tmp = await tmpdir()
-    const webpageEvidenceDir = await writeMixedEconomicTrendsFixtureMirror(tmp.path)
+    const webpageEvidenceDir = await writeMixedEconomicTrendsFixtureEvidence(tmp.path)
     const outputDir = path.join(tmp.path, "generated-mixed-economic-trends-react")
 
     await Instance.provide({
@@ -761,7 +761,7 @@ describe("tool.web_clone_generate_source_project", () => {
 
   test("turns metric ranking cards into semantic data-loop components", async () => {
     await using tmp = await tmpdir()
-    const webpageEvidenceDir = await writeSemanticMetricRankingFixtureMirror(tmp.path)
+    const webpageEvidenceDir = await writeSemanticMetricRankingFixtureEvidence(tmp.path)
     const outputDir = path.join(tmp.path, "generated-ranking-react")
 
     await Instance.provide({
@@ -809,7 +809,7 @@ describe("tool.web_clone_generate_source_project", () => {
 
   test("turns repeated link-grid regions into semantic data-loop components", async () => {
     await using tmp = await tmpdir()
-    const webpageEvidenceDir = await writeSemanticLinkGridFixtureMirror(tmp.path)
+    const webpageEvidenceDir = await writeSemanticLinkGridFixtureEvidence(tmp.path)
     const outputDir = path.join(tmp.path, "generated-link-grid-react")
 
     await Instance.provide({
@@ -854,7 +854,7 @@ describe("tool.web_clone_generate_source_project", () => {
 
   test("turns source header navigation into a semantic menu component", async () => {
     await using tmp = await tmpdir()
-    const webpageEvidenceDir = await writeSemanticHeaderFixtureMirror(tmp.path)
+    const webpageEvidenceDir = await writeSemanticHeaderFixtureEvidence(tmp.path)
     const outputDir = path.join(tmp.path, "generated-header-react")
 
     await Instance.provide({
@@ -905,7 +905,7 @@ describe("tool.web_clone_generate_source_project", () => {
 
   test("turns section chrome around semantic child surfaces into semantic shell components", async () => {
     await using tmp = await tmpdir()
-    const webpageEvidenceDir = await writeSemanticSectionShellFixtureMirror(tmp.path)
+    const webpageEvidenceDir = await writeSemanticSectionShellFixtureEvidence(tmp.path)
     const outputDir = path.join(tmp.path, "generated-section-shell-react")
 
     await Instance.provide({
@@ -968,8 +968,8 @@ async function generatedSourceFiles(dir: string): Promise<string[]> {
   return files.flat().sort()
 }
 
-async function writeFixtureMirror(root: string): Promise<string> {
-  const webpageEvidenceDir = path.join(root, "mirror")
+async function writeFixtureEvidence(root: string): Promise<string> {
+  const webpageEvidenceDir = path.join(root, "webpage-evidence")
   await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
   await Bun.write(path.join(webpageEvidenceDir, "extracted-page.json"), JSON.stringify({
     url: "https://example.com/markets",
@@ -1113,8 +1113,8 @@ async function writeFixtureMirror(root: string): Promise<string> {
   return webpageEvidenceDir
 }
 
-async function writeRegionizedFixtureMirror(root: string): Promise<string> {
-  const webpageEvidenceDir = path.join(root, "mirror-regionized")
+async function writeRegionizedFixtureEvidence(root: string): Promise<string> {
+  const webpageEvidenceDir = path.join(root, "webpage-evidence-regionized")
   await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
   const mapPaths = Array.from({ length: 36 }, (_, index) => {
     const assetId = `asset_${String(index + 1).padStart(6, "0")}`
@@ -1208,8 +1208,8 @@ async function writeRegionizedFixtureMirror(root: string): Promise<string> {
   return webpageEvidenceDir
 }
 
-async function writeSemanticNewsFixtureMirror(root: string, options: { pageShell?: boolean } = {}): Promise<string> {
-  const webpageEvidenceDir = path.join(root, "mirror-news")
+async function writeSemanticNewsFixtureEvidence(root: string, options: { pageShell?: boolean } = {}): Promise<string> {
+  const webpageEvidenceDir = path.join(root, "webpage-evidence-news")
   await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
   const cards = [
     ["Dow Jones Newswires", "Factory Activity Expands in May", "https://example.com/news/1"],
@@ -1279,8 +1279,8 @@ async function writeSemanticNewsFixtureMirror(root: string, options: { pageShell
   return webpageEvidenceDir
 }
 
-async function writeBbcPromoFixtureMirror(root: string): Promise<string> {
-  const webpageEvidenceDir = path.join(root, "mirror-bbc-promo")
+async function writeBbcPromoFixtureEvidence(root: string): Promise<string> {
+  const webpageEvidenceDir = path.join(root, "webpage-evidence-bbc-promo")
   await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
   const rows = [
     ["Massive Russian attack on cities across Ukraine kills at least 13 people", "https://www.bbc.co.uk/news/articles/cx20p1", "asset_000001.webp", "People walk past a damaged building", "Europe"],
@@ -1358,8 +1358,8 @@ async function writeBbcPromoFixtureMirror(root: string): Promise<string> {
   return webpageEvidenceDir
 }
 
-async function writeSemanticTableFixtureMirror(root: string): Promise<string> {
-  const webpageEvidenceDir = path.join(root, "mirror-table")
+async function writeSemanticTableFixtureEvidence(root: string): Promise<string> {
+  const webpageEvidenceDir = path.join(root, "webpage-evidence-table")
   await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
   await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "index.html"), `
     <main class="economy-page">
@@ -1433,8 +1433,8 @@ async function writeSemanticTableFixtureMirror(root: string): Promise<string> {
   return webpageEvidenceDir
 }
 
-async function writeSemanticEventFixtureMirror(root: string): Promise<string> {
-  const webpageEvidenceDir = path.join(root, "mirror-events")
+async function writeSemanticEventFixtureEvidence(root: string): Promise<string> {
+  const webpageEvidenceDir = path.join(root, "webpage-evidence-events")
   await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
   const cards = [
     ["Today", "Jun 1, 2026, 23:30 GMT+8", "USA", "3-Month Bill Auction", "18:59", "—", "3.595", "%"],
@@ -1513,8 +1513,8 @@ async function writeSemanticEventFixtureMirror(root: string): Promise<string> {
   return webpageEvidenceDir
 }
 
-async function writeSemanticIdeaCardsFixtureMirror(root: string): Promise<string> {
-  const webpageEvidenceDir = path.join(root, "mirror-ideas")
+async function writeSemanticIdeaCardsFixtureEvidence(root: string): Promise<string> {
+  const webpageEvidenceDir = path.join(root, "webpage-evidence-ideas")
   await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
   await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "index.html"), `
     <main class="ideas-page">
@@ -1684,8 +1684,8 @@ function renderFixtureIdeaCard(input: {
   `
 }
 
-async function writeCompositeWidgetFixtureMirror(root: string): Promise<string> {
-  const webpageEvidenceDir = path.join(root, "mirror-composite")
+async function writeCompositeWidgetFixtureEvidence(root: string): Promise<string> {
+  const webpageEvidenceDir = path.join(root, "webpage-evidence-composite")
   await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
   await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "index.html"), `
     <main class="composite-page">
@@ -1756,8 +1756,8 @@ function renderCompositeFixtureEvents(): string {
   `
 }
 
-async function writeSemanticFooterFixtureMirror(root: string): Promise<string> {
-  const webpageEvidenceDir = path.join(root, "mirror-footer")
+async function writeSemanticFooterFixtureEvidence(root: string): Promise<string> {
+  const webpageEvidenceDir = path.join(root, "webpage-evidence-footer")
   await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
   await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "index.html"), `
     <footer data-source-node-id="footer-region" data-source-role="footer" class="tv-footer js-footer" data-nosnippet="">
@@ -1836,8 +1836,8 @@ async function writeSemanticFooterFixtureMirror(root: string): Promise<string> {
   return webpageEvidenceDir
 }
 
-async function writeSemanticMapFixtureMirror(root: string): Promise<string> {
-  const webpageEvidenceDir = path.join(root, "mirror-map")
+async function writeSemanticMapFixtureEvidence(root: string): Promise<string> {
+  const webpageEvidenceDir = path.join(root, "webpage-evidence-map")
   await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
   const mapPaths = Array.from({ length: 24 }, (_, index) => {
     const assetId = `asset_${String(index + 1).padStart(6, "0")}`
@@ -1924,8 +1924,8 @@ async function writeSemanticMapFixtureMirror(root: string): Promise<string> {
   return webpageEvidenceDir
 }
 
-async function writeSemanticMetricRankingFixtureMirror(root: string): Promise<string> {
-  const webpageEvidenceDir = path.join(root, "mirror-ranking")
+async function writeSemanticMetricRankingFixtureEvidence(root: string): Promise<string> {
+  const webpageEvidenceDir = path.join(root, "webpage-evidence-ranking")
   await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
   const rows = [
     ["India", "india", "7.80%", "3.91 T", "USD", "asset_000449.svg.txt"],
@@ -1987,8 +1987,8 @@ async function writeSemanticMetricRankingFixtureMirror(root: string): Promise<st
   return webpageEvidenceDir
 }
 
-async function writeMixedEconomicTrendsFixtureMirror(root: string): Promise<string> {
-  const webpageEvidenceDir = path.join(root, "mirror-mixed-economic-trends")
+async function writeMixedEconomicTrendsFixtureEvidence(root: string): Promise<string> {
+  const webpageEvidenceDir = path.join(root, "webpage-evidence-mixed-economic-trends")
   await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
   const mapPaths = Array.from({ length: 20 }, (_, index) => {
     const assetId = `asset_${String(index + 1).padStart(6, "0")}`
@@ -2048,8 +2048,8 @@ async function writeMixedEconomicTrendsFixtureMirror(root: string): Promise<stri
   return webpageEvidenceDir
 }
 
-async function writeSemanticLinkGridFixtureMirror(root: string): Promise<string> {
-  const webpageEvidenceDir = path.join(root, "mirror-link-grid")
+async function writeSemanticLinkGridFixtureEvidence(root: string): Promise<string> {
+  const webpageEvidenceDir = path.join(root, "webpage-evidence-link-grid")
   await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
   const countries = [
     ["Argentina", "argentina"],
@@ -2105,8 +2105,8 @@ async function writeSemanticLinkGridFixtureMirror(root: string): Promise<string>
   return webpageEvidenceDir
 }
 
-async function writeSemanticHeaderFixtureMirror(root: string): Promise<string> {
-  const webpageEvidenceDir = path.join(root, "mirror-header")
+async function writeSemanticHeaderFixtureEvidence(root: string): Promise<string> {
+  const webpageEvidenceDir = path.join(root, "webpage-evidence-header")
   await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
   const iconPaths = Array.from({ length: 8 }, (_, index) => {
     const assetId = `asset_${String(index + 1).padStart(6, "0")}`
@@ -2195,8 +2195,8 @@ async function writeSemanticHeaderFixtureMirror(root: string): Promise<string> {
   return webpageEvidenceDir
 }
 
-async function writeSemanticSectionShellFixtureMirror(root: string): Promise<string> {
-  const webpageEvidenceDir = path.join(root, "mirror-section-shell")
+async function writeSemanticSectionShellFixtureEvidence(root: string): Promise<string> {
+  const webpageEvidenceDir = path.join(root, "webpage-evidence-section-shell")
   await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
   const chartPaths = Array.from({ length: 18 }, (_, index) => {
     const assetId = `asset_${String(index + 1).padStart(6, "0")}`
@@ -2287,8 +2287,8 @@ function renderFixtureFaqItems(startOrder: number, questions: string[]): string 
   }).join("")
 }
 
-async function writeGenericStructureFixtureMirror(root: string): Promise<string> {
-  const webpageEvidenceDir = path.join(root, "mirror-generic-structure")
+async function writeGenericStructureFixtureEvidence(root: string): Promise<string> {
+  const webpageEvidenceDir = path.join(root, "webpage-evidence-generic-structure")
   await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
   await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "index.html"), `
     <main class="operations-page">

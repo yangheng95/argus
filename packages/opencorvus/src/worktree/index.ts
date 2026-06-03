@@ -709,7 +709,7 @@ export namespace Worktree {
       branch,
       "--",
       "web-clone-source",
-      "mirror",
+      "webpage-evidence",
     ], { cwd: worktreeDir, timeoutProfile: "default" }).catch(() => undefined)
     if (!result || result.exitCode !== 0) return []
     return outputText(result.stdout)
@@ -732,7 +732,7 @@ export namespace Worktree {
   }
 
   async function commitPrimaryDirtyWorktree(input: { branch: string; primaryDir: string; dirtyPaths: string[] }) {
-    await runGit(["reset", "--", "web-clone-source", "mirror"], { cwd: input.primaryDir, timeoutProfile: "fast" })
+    await runGit(["reset", "--", "web-clone-source", "webpage-evidence"], { cwd: input.primaryDir, timeoutProfile: "fast" })
     const trackedAdd = await runGit(["add", "-u", "--", "."], { cwd: input.primaryDir, timeoutProfile: "default" })
     if (trackedAdd.exitCode !== 0) {
       throw new MergeFailedError({

@@ -19,7 +19,7 @@ const ctx = {
 describe("tool.web_clone_source_audit", () => {
   test("defaults to the legacy execution-directory web-clone-source package", async () => {
     await using tmp = await tmpdir()
-    const sourcePackageDir = await writeFixtureMirror(tmp.path)
+    const sourcePackageDir = await writeFixtureEvidence(tmp.path)
     const projectDir = path.join(tmp.path, "app")
     await writePassingProject(projectDir)
 
@@ -37,7 +37,7 @@ describe("tool.web_clone_source_audit", () => {
 
   test("writes a failing audit for default framework scaffold output", async () => {
     await using tmp = await tmpdir()
-    const webpageEvidenceDir = await writeFixtureMirror(tmp.path)
+    const webpageEvidenceDir = await writeFixtureEvidence(tmp.path)
     const projectDir = path.join(tmp.path, "app")
     await Bun.write(path.join(projectDir, "src", "App.tsx"), `
       import reactLogo from './assets/react.svg'
@@ -66,7 +66,7 @@ describe("tool.web_clone_source_audit", () => {
 
   test("writes a passing audit for a component/data-loop implementation", async () => {
     await using tmp = await tmpdir()
-    const webpageEvidenceDir = await writeFixtureMirror(tmp.path)
+    const webpageEvidenceDir = await writeFixtureEvidence(tmp.path)
     const projectDir = path.join(tmp.path, "app")
     await Bun.write(path.join(projectDir, "src", "data", "calendar.ts"), `
       export const calendarEvents = [
@@ -102,7 +102,7 @@ describe("tool.web_clone_source_audit", () => {
 
   test("rejects outputPath outside the audited project directory", async () => {
     await using tmp = await tmpdir()
-    const webpageEvidenceDir = await writeFixtureMirror(tmp.path)
+    const webpageEvidenceDir = await writeFixtureEvidence(tmp.path)
     const projectDir = path.join(tmp.path, "app")
     await writePassingProject(projectDir)
 
@@ -139,7 +139,7 @@ async function writePassingProject(projectDir: string): Promise<void> {
   `)
 }
 
-async function writeFixtureMirror(root: string): Promise<string> {
+async function writeFixtureEvidence(root: string): Promise<string> {
   const webpageEvidenceDir = path.join(root, "web-clone-source")
   await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
   await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "index.html"), `
@@ -187,7 +187,7 @@ async function writeMinimalSourceManifest(sourcePackageDir: string): Promise<voi
       webpageEvidenceDir: sourcePackageDir,
       reference: { path: "reference.png", sha256: referenceSha256, width: 1, height: 1, bytes: minimalPngBytes().length },
     },
-    files: [{ path: "reference.png", sha256: referenceSha256, bytes: minimalPngBytes().length, source: "mirror/reference.png" }],
+    files: [{ path: "reference.png", sha256: referenceSha256, bytes: minimalPngBytes().length, source: "webpage-evidence/reference.png" }],
   }, null, 2))
 }
 

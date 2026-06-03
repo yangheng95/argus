@@ -88,7 +88,7 @@ describe("webpage evidence output directory", () => {
     })
   })
 
-  test("task session override maps legacy mirror alias to canonical runtime", async () => {
+  test("task session override rejects retired mirror alias", async () => {
     await using tmp = await tmpdir({ git: true })
 
     await Instance.provide({
@@ -98,17 +98,11 @@ describe("webpage evidence output directory", () => {
         const taskID = `tsk_webpage_evidence_view_${Date.now().toString(36)}`
         seedTask({ projectID: Instance.project.id, taskID, sessionID: session.id })
 
-        const paths = ProjectRuntimePaths.frontendDesignPaths(tmp.path, taskID)
-        const outputDir = await resolveWebpageEvidenceOutputDir({ override: "mirror", sessionID: session.id })
-        expect(outputDir).toBe(paths.webpageEvidenceAbsolute)
-
-        const nested = await resolveWebpageEvidenceOutputDir({ override: "mirror/nested", sessionID: session.id })
-        expect(nested).toBe(path.join(paths.webpageEvidenceAbsolute, "nested"))
-        expect(await Filesystem.exists(nested)).toBe(true)
-
-        await fs.writeFile(path.join(nested, "reference.txt"), "reference", "utf8")
-        expect(await Filesystem.exists(path.join(tmp.path, "mirror", "nested", "reference.txt"))).toBe(false)
-        expect(await Filesystem.readText(path.join(paths.webpageEvidenceAbsolute, "nested", "reference.txt"))).toBe("reference")
+        await expect(resolveWebpageEvidenceOutputDir({ override: "mirror", sessionID: session.id }))
+          .rejects.toThrow("task sessions may only write webpage evidence artifacts")
+        await expect(resolveWebpageEvidenceOutputDir({ override: "mirror/nested", sessionID: session.id }))
+          .rejects.toThrow("task sessions may only write webpage evidence artifacts")
+        expect(await Filesystem.exists(path.join(tmp.path, "mirror"))).toBe(false)
 
         const status = await $`git status --porcelain=v1`.cwd(tmp.path).quiet()
         expect(status.stdout.toString().trim()).toBe("")

@@ -32,7 +32,6 @@ host-side routing mechanism.
   - `packages/opencorvus/src/tool/skill.ts`
 - Built-in skills:
   - `packages/opencorvus/src/skill/builtin/webpage-generate.md`
-  - `packages/opencorvus/src/skill/builtin/image-generate.md`
   - `packages/opencorvus/src/skill/builtin/research-report.md`
 - Tests:
   - `packages/opencorvus/test/engine/skill-inject.test.ts`

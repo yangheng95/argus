@@ -111,7 +111,7 @@
   - **`src/pipeline/` 只剩 `goal-contract.schema.ts` + `types.ts`** 两个 schema 文件，
     所有运行时代码（`executor.ts` / `runner.ts` 等）均已迁走
   - 新增独立包：`src/intent/`（`bundle.ts` 单文件）、`src/intent-analysis/`、`src/integrity/`、
-    `src/prosecutor/`、`src/acceptance/`（`contract-audit.ts` + `types.ts`）、`src/mirror/`、
+    `src/prosecutor/`、`src/acceptance/`（`contract-audit.ts` + `types.ts`）、`src/browser/webpage/`、`src/frontend-design/tools/`、
     `src/preview/`、`src/build/`（build 独立成包仅 4 个文件：`agent.ts` / `index.ts` /
     `report.ts` / `types.ts`；**worktree+executor 执行体仍在 `src/goal/runner.ts`**，共享
     sub-agent 协议在 `src/agent/sub-agent-protocol.ts`，build/ 下没有 `runner.ts` /
@@ -232,8 +232,8 @@
   - **08-agent-tool-adapter.md** — 头注修正 #7 扩展：`integrity` / `prosecutor` 也是
     ToolRegistry agent（`agent.ts:379-405`），`include: []` 因为 verdict / counter-example
     tools 是 per-call 由 SessionLoop extra tools 注入；新增 #9（orchestrator 本身走
-    ToolRegistry，include 在 `agent.ts:276-310`）和 #10（mirror tool gating 在
-    `tool/registry.ts:181-183`，仅 `frontend-design` 保留 mirror tools）
+    ToolRegistry，include 在 `agent.ts:276-310`）和 #10（webpage evidence tool gating 在
+    `tool/registry.ts:181-183`，仅 `frontend-design` 保留 webpage evidence tools）
   - **09-verification-evidence.md** — 头部加 `engine_evaluation` 表已删除（`engine.sql.ts:552-556`）
     的注释；保留 `EngineEvaluation*` 类型仍存活（`engine.sql.ts:120-160`）；补 2026-05-10
     后的事实：`AcceptanceSpec.scenario`（`acceptance/types.ts:24,119`）、

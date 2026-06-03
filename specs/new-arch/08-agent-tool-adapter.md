@@ -6,7 +6,7 @@
 > 对应代码（真源）：`src/agent/agent.ts`（Agent.Info 注册） · `src/tool/registry.ts`
 > （`tools(model, agent)` 过滤） · `src/session/loop.ts`（`resolveTools` 在 line 1732
 > 附近——**没有** `src/session/tool-resolver.ts` 这个文件） · `src/orchestrator/tools.ts` ·
-> `src/config/config.ts` · `src/mirror/`（`MIRROR_TOOL_IDS` 集合）
+> `src/config/config.ts` · `src/frontend-design/tools/`（`WEBPAGE_EVIDENCE_TOOL_IDS` 集合）
 >
 > **关键修正**：
 > 1. `Agent.Info.tools` schema 是 `z.object({ include?: string[], exclude?: string[] }).optional()`，
@@ -15,9 +15,9 @@
 >    存在**——下文 §各 native agent 工具声明 / §Build 快速通道里用到这些名字的行均为
 >    早期草稿，不要照抄。spec / plan 这两个 native agent 也不存在。
 > 3. 实际 build agent 的 `exclude` 集合（`agent.ts:125`）是
->    `["panel", "task_report", "analytics", ...MIRROR_TOOL_IDS]`——无 `planner` / `tui`。
+>    `["panel", "task_report", "analytics", ...WEBPAGE_EVIDENCE_TOOL_IDS]`——无 `planner` / `tui`。
 > 4. 实际 general agent 的 `exclude`（`agent.ts:140`）是
->    `["planner", "panel", "task_report", "analytics", "todoread", "todowrite", ...MIRROR_TOOL_IDS]`。
+>    `["planner", "panel", "task_report", "analytics", "todoread", "todowrite", ...WEBPAGE_EVIDENCE_TOOL_IDS]`。
 > 5. 实际 explore agent 的 `include`（`agent.ts:157`）是
 >    `["read", "glob", "search_code", "bash", "external_code_search", "lsp", "webfetch", "memory"]`
 >    ——下文里写的 `grep` / `codesearch` 都已重命名为 `search_code` / `external_code_search`。
@@ -34,10 +34,10 @@
 >    `planner` agent 已随 the removed planning package 删除。
 > 9. `orchestrator` 自己也走 ToolRegistry（`agent.ts:243`，`tools.include` 列出 dispatch /
 >    observation / bookkeeping 三类约 30 个 tool id；见 §6 通信白名单与 11 spec 第五章）。
-> 10. frontend-design 是 mirror 工具的**唯一**消费者（`tool/registry.ts:181` 显式跳过
->     `isMirrorToolId` 过滤）；其他 agent 的 registry 视图先剔除 `MIRROR_TOOL_IDS` 再做
->     include/exclude。本文 §各 native agent 工具声明表里 `MIRROR_TOOL_IDS` 没显式列出，
->     默认所有非 frontend-design agent 都看不到 mirror tools，与表格行为一致。
+> 10. frontend-design 是网页证据工具的**唯一**消费者（`tool/registry.ts:181` 显式跳过
+>     `isWebpageEvidenceToolId` 过滤）；其他 agent 的 registry 视图先剔除 `WEBPAGE_EVIDENCE_TOOL_IDS` 再做
+>     include/exclude。本文 §各 native agent 工具声明表里 `WEBPAGE_EVIDENCE_TOOL_IDS` 没显式列出，
+>     默认所有非 frontend-design agent 都看不到 webpage evidence tools，与表格行为一致。
 
 ## 问题
 
@@ -92,9 +92,9 @@ export async function tools(model, agent?) {
 
 | Agent | 模式 | 声明 | 理由 |
 |---|---|---|---|
-| coding | exclude | `["panel", "task_report", "analytics", ...MIRROR_TOOL_IDS]` | 通用交互编码角色，**独立命名角色**（非 build 别名）；prompt = `agent/prompt/coding.txt`（`agent.ts:127`） |
-| build | exclude | `["panel", "task_report", "analytics", ...MIRROR_TOOL_IDS]` | goal executor，与 `coding` 同一 exclude 集合；orchestrator `build` tool 另注入 session 级 deny（见下节）（`agent.ts:142`） |
-| general | exclude | `["planner", "panel", "task_report", "analytics", "todoread", "todowrite", ...MIRROR_TOOL_IDS]` | 通用 sub-agent（`agent.ts:158`） |
+| coding | exclude | `["panel", "task_report", "analytics", ...WEBPAGE_EVIDENCE_TOOL_IDS]` | 通用交互编码角色，**独立命名角色**（非 build 别名）；prompt = `agent/prompt/coding.txt`（`agent.ts:127`） |
+| build | exclude | `["panel", "task_report", "analytics", ...WEBPAGE_EVIDENCE_TOOL_IDS]` | goal executor，与 `coding` 同一 exclude 集合；orchestrator `build` tool 另注入 session 级 deny（见下节）（`agent.ts:142`） |
+| general | exclude | `["planner", "panel", "task_report", "analytics", "todoread", "todowrite", ...WEBPAGE_EVIDENCE_TOOL_IDS]` | 通用 sub-agent（`agent.ts:158`） |
 | explore | include | `["read", "glob", "search_code", "bash", "external_code_search", "lsp", "webfetch", "memory"]` | 只读搜索专用（`agent.ts:174`） |
 | compaction | include | `[]` | 无工具 |
 | title | include | `[]` | 无工具 |
@@ -104,7 +104,7 @@ export async function tools(model, agent?) {
 | orchestrator | include | dispatch/observation/interaction/bookkeeping 共一组（含 `cancel_subagent`，见 `agent.ts:299-332`） | **走** ToolRegistry（`agent.ts:267+`） |
 | requirements | include | `["read_file", "find_files", "search_code", "list_directory", "memory_search", "memory_get", "todoread", "todowrite"]` | **走** ToolRegistry（`agent.ts:340+`，`mode:"primary"` + `hidden` native） |
 | architect | include | `["read_file", "find_files", "search_code", "list_directory", "memory_search", "memory_get", "todoread", "todowrite"]` | **走** ToolRegistry（`agent.ts:355+`） |
-| frontend-design | include | `["read_file", "find_files", "search_code", "list_directory", "memory_search", "memory_get", "url_screenshot", ...MIRROR_ANALYSIS_TOOL_IDS]` | **走** ToolRegistry（`agent.ts:366+`） |
+| frontend-design | include | `["read_file", "find_files", "search_code", "list_directory", "memory_search", "memory_get", "url_screenshot", ...WEBPAGE_EVIDENCE_ANALYSIS_TOOL_IDS]` | **走** ToolRegistry（`agent.ts:366+`） |
 | intent-analysis | include | `["read_file", "find_files", "search_code", "list_directory", "memory_search", "memory_get", "todoread", "todowrite"]` | **走** ToolRegistry（`agent.ts:393+`） |
 | integrity | include | `[]` | **走** ToolRegistry（`agent.ts:403+`）；工具集经 session 注入 |
 | prosecutor | include | `[]` | **走** ToolRegistry（`agent.ts:414+`）；工具集经 session 注入 |

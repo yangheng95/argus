@@ -2921,7 +2921,7 @@ export function createOrchestratorTools(input: {
             phase: "frontend_design",
             key: "frontend_template",
             value: analysis.frontendTemplate,
-            reason: "Mirror-grounded frontend replica scope produced before requirements decomposition.",
+            reason: "Webpage-evidence-grounded frontend replica scope produced before requirements decomposition.",
           })
           decisionLog.append({
             phase: "frontend_design",

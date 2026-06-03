@@ -53,9 +53,9 @@
 | 类型 | 证据 | 用途 |
 | --- | --- | --- |
 | Live page | `https://www.tradingview.com/markets/world-economy/` | 确认页面标题、可见模块、可见文案和链接语义。 |
-| Rendered evidence | `.opencorvus/runtime/tasks/tsk_e8b012d9e001/frontend-design/mirror/reference.png` | 确认桌面视口视觉结构。 |
-| Evidence summary | `.opencorvus/runtime/tasks/tsk_e8b012d9e001/frontend-design/mirror/prd-evidence-summary.md` | 确认页面 surface、颜色、字体、组件模式。 |
-| Source IR | `.opencorvus/runtime/tasks/tsk_e8b012d9e001/frontend-design/mirror/source-ir/*` | 确认布局、内容模型、样式 token 和交互 hint。 |
+| Rendered evidence | `.opencorvus/runtime/tasks/tsk_e8b012d9e001/frontend-design/webpage-evidence/reference.png` | 确认桌面视口视觉结构。 |
+| Evidence summary | `.opencorvus/runtime/tasks/tsk_e8b012d9e001/frontend-design/webpage-evidence/prd-evidence-summary.md` | 确认页面 surface、颜色、字体、组件模式。 |
+| Source IR | `.opencorvus/runtime/tasks/tsk_e8b012d9e001/frontend-design/webpage-evidence/source-ir/*` | 确认布局、内容模型、样式 token 和交互 hint。 |
 | Target package | `packages/tradingview-world-economy` | 确认已有实现包、抽取数据和测试基线。 |
 | Extracted data | `packages/tradingview-world-economy/src/data/economicTrendsExtracted.ts` | 确认地图路径、GDP 行、国家入口、指标卡、新闻、日历、FAQ 信号。 |
 | Extracted table | `packages/tradingview-world-economy/src/data/sourceData.ts` | 确认 heatmap 表格和可见文本信号。 |

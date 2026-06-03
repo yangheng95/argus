@@ -271,7 +271,7 @@ export const ResearchConstraintSchema = z.object({
 - `apply_patch`
 - `task`
 - `panel`
-- mirror tools
+- webpage evidence tools
 
 测试不能只看 `Agent.Info.tools.include`，也不能只看 `filterAgentTools(createAgentContextTools())`；必须验证 `runAgentSession` 实际 tool switches。
 
@@ -485,7 +485,7 @@ build 不重新调研。它只能读：
 ### 11.2 Runtime Tools
 
 - `research` effective runtime tools 包含 read-only retrieval tools。
-- 不包含 bash/edit/write/apply_patch/task/panel/mirror tools。
+- 不包含 bash/edit/write/apply_patch/task/panel/webpage evidence tools。
 - config override 不能让内置 research 打开禁止工具。
 - `fact-check` 和 `research` 共用同一个 retrieval tool factory。
 

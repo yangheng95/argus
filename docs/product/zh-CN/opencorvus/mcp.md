@@ -150,7 +150,7 @@ OpenCorvus 自动把这个 URL 注入到执行器配置里：
 - **Claude Code**：`MCPServe.url(...)` 返回 `McpHttpServerConfig`（`{ type: "http", url, headers }`），由 Anthropic Agent SDK 通过 `--mcp-config` 转发给 claude-code CLI。
 - **Codex**：opencorvus 给 `codex app-server` 注入 `-c mcp_servers.opencorvus.url=...`。
 
-暴露工具（`src/mcp/serve.ts`）：`memory`、`task_report`、`webpage_*` 镜像工具链（`webpage_extract`、`webpage_compile`、`webpage_analyze`、`webpage_image_extract/compile/analyze`、`webpage_render`、`webpage_evaluate`、`webpage_text_diff`、`webpage_vision_judge`）、`figma_*` 工具链。本地已连接的外部 MCP Server 工具也会作为代理工具一并暴露。
+暴露工具（`src/mcp/serve.ts`）：`memory`、`task_report`、网页证据工具（`webpage_extract`、`webpage_compile`、`webpage_analyze`、`webpage_runtime_state`、`webpage_render`、`webpage_evaluate`、`webpage_text_diff`、`webpage_vision_judge`）。本地已连接的外部 MCP Server 工具也会作为代理工具一并暴露。
 
 ## 7. 连接状态
 

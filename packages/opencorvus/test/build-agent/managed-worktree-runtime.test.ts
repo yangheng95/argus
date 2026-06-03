@@ -6,6 +6,7 @@ import { BuildAgent } from "../../src/build/agent"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { findTask } from "../../src/engine/store"
 import { Instance } from "../../src/project/instance"
+import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 import { Database } from "../../src/storage/db"
 import { Worktree } from "../../src/worktree"
 import { tmpdir } from "../fixture/fixture"
@@ -29,7 +30,7 @@ function seedTask(input: { projectID: string; taskID: string }) {
 }
 
 describe("BuildAgent managed worktree runtime", () => {
-  test("fails before model work when the managed mirror view is invalid", async () => {
+  test("fails before model work when the managed runtime evidence view is invalid", async () => {
     await using tmp = await tmpdir({ git: true })
 
     await Instance.provide({
@@ -47,9 +48,11 @@ describe("BuildAgent managed worktree runtime", () => {
           taskID,
           sessionID,
         })
-        const mirrorView = path.join(info.directory, "mirror")
-        await fs.rm(mirrorView, { recursive: true, force: true })
-        await fs.mkdir(mirrorView, { recursive: true })
+        const paths = ProjectRuntimePaths.frontendDesignPaths(tmp.path, taskID)
+        const runtimeTaskParent = path.dirname(path.join(info.directory, paths.relativeDir))
+        await fs.rm(runtimeTaskParent, { recursive: true, force: true })
+        await fs.mkdir(path.dirname(runtimeTaskParent), { recursive: true })
+        await fs.writeFile(runtimeTaskParent, "not a directory", "utf8")
 
         await expect(
           BuildAgent.run({
@@ -64,7 +67,7 @@ describe("BuildAgent managed worktree runtime", () => {
               baseRef: null,
             },
           }),
-        ).rejects.toThrow("refusing to replace existing non-link path")
+        ).rejects.toThrow("failed to materialize task runtime artifacts")
       },
     })
   }, 30_000)

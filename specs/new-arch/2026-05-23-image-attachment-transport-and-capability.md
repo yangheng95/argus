@@ -69,8 +69,7 @@ curl ... -d '{... "image_url":{"url":"data:image/png;base64,iVBOR..."} ...}'
 | 路径 | 行 | 用途 |
 |---|---|---|
 | `provider/transform.ts` | 155-163 (`unsupportedParts`) | 把不支持的图替换成 ERROR text 给模型 |
-| `mirror/tools/webpage-vision-judge.ts` | 156-160 | 强制要求 vision 才能跑 webpage_vision_judge |
-| `mirror/tools/webpage-image-extract.ts` | 69-73 | 同上 |
+| `frontend-design/tools/webpage-vision-judge.ts` | vision model guard | 强制要求 vision 才能跑 webpage_vision_judge |
 | `storage/attachment-capability-gate.test.ts` | 全文 | 断言 gate 行为 |
 | overlay 前端 | (需穷举：`packages/overlay/src` 中查 `attachment` 字段读处) | UI 上传 / 拖拽时的 gate |
 
@@ -183,7 +182,7 @@ L1 + L2.step2 一个 PR 闭环（"立即能用"），L2 单独 PR（"系统性�
 
 ## Codex Review
 
-1. `ProviderTransform.message()` is the single production transform chokepoint only for wrapped language models. The main session path (`session/llm.ts`) and mirror vision tools (`mirror/tools/webpage-image-extract.ts`, `mirror/tools/webpage-vision-judge.ts`) use `ProviderLLM.wrapModel`, so their streaming, structured-output, and tool-result replay payloads pass through this transform. There are direct `streamText` callers that use `Provider.getLanguage()` without wrapping (`agent/agent.ts` agent generation, `gateway/decompose.ts`, `task-api/index.ts` follow-up suggestion, `server/routes/provider.ts` provider test). They are text-only today, so they do not block Layer 1, but the spec overstates "100% outbound messages" unless it scopes that claim to multimodal/session traffic. A future direct multimodal helper would bypass this fix unless it wraps the model.
+1. `ProviderTransform.message()` is the single production transform chokepoint only for wrapped language models. The main session path (`session/llm.ts`) and frontend-design vision judge use `ProviderLLM.wrapModel`, so its streaming, structured-output, and tool-result replay payloads pass through this transform. There are direct `streamText` callers that use `Provider.getLanguage()` without wrapping (`agent/agent.ts` agent generation, `gateway/decompose.ts`, `task-api/index.ts` follow-up suggestion, `server/routes/provider.ts` provider test). They are text-only today, so they do not block Layer 1, but the spec overstates "100% outbound messages" unless it scopes that claim to multimodal/session traffic. A future direct multimodal helper would bypass this fix unless it wraps the model.
 2. The spec uses `url` for file parts, but AI SDK v6 canonical `ModelMessage` file parts use `data` plus `mediaType`; UI parts carry `url` only before `convertToModelMessages()`. `ProviderTransform.message()` runs on the canonical prompt inside the language-model middleware, so Layer 1 must inline `/attachment/...` found in `part.data` and should also cover legacy/ad-hoc `part.url` shapes in tests. Implementing only `url` would miss the real middleware payload.
 3. Existing local URL to base64 logic is close but not a reusable exact fit. `AttachmentStore.inlineFileParts()` already resolves `/attachment/...` to data URLs, but it operates on attachment references before model-message construction and throws on unresolved URLs. `session/message.ts` also has a private `userFileUrl()` helper. Layer 1 should factor a small `AttachmentStore` helper for "attachment ref + MIME -> data URL" and reuse it from the provider transform, rather than creating a third independent read/base64 implementation.
 4. Making `ProviderTransform.message()` async has a small but real cascade: the production middleware in `provider/llm.ts` must `await` it, and every direct unit test of `ProviderTransform.message()` must become async. The structured-output paths do not need separate call-site edits if they already pass a wrapped model, because AI SDK awaits async `transformParams`.

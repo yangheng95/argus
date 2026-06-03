@@ -32,7 +32,7 @@ describe("tool.web_clone_prepare_context", () => {
 
   test("writes compact context and implementation contract from webpage evidence", async () => {
     await using tmp = await tmpdir()
-    const webpageEvidenceDir = await writeFixtureMirror(tmp.path)
+    const webpageEvidenceDir = await writeFixtureEvidence(tmp.path)
 
     await Instance.provide({
       directory: tmp.path,
@@ -83,7 +83,7 @@ describe("tool.web_clone_prepare_context", () => {
 
   test("accepts a compiled source-skeleton handoff without raw extraction diagnostics", async () => {
     await using tmp = await tmpdir()
-    const webpageEvidenceDir = await writeFixtureMirror(tmp.path)
+    const webpageEvidenceDir = await writeFixtureEvidence(tmp.path)
     for (const file of ["capture.html", "singlefile.html", "extracted-page.json", "segments.json", "codegen-context.json"]) {
       await fs.rm(path.join(webpageEvidenceDir, file), { force: true })
     }
@@ -108,7 +108,7 @@ describe("tool.web_clone_prepare_context", () => {
 
   test("rejects outputDir outside the worktree", async () => {
     await using tmp = await tmpdir()
-    const webpageEvidenceDir = await writeFixtureMirror(tmp.path)
+    const webpageEvidenceDir = await writeFixtureEvidence(tmp.path)
 
     await Instance.provide({
       directory: tmp.path,
@@ -124,7 +124,7 @@ describe("tool.web_clone_prepare_context", () => {
   test("rejects webpageEvidenceDir outside the current project", async () => {
     await using tmp = await tmpdir()
     await using outside = await tmpdir()
-    const outsideWebpageEvidenceDir = await writeFixtureMirror(outside.path)
+    const outsideWebpageEvidenceDir = await writeFixtureEvidence(outside.path)
 
     await Instance.provide({
       directory: tmp.path,
@@ -139,7 +139,7 @@ describe("tool.web_clone_prepare_context", () => {
 
   test("rejects a webpage evidence package whose reference image has a fake PNG header", async () => {
     await using tmp = await tmpdir()
-    const webpageEvidenceDir = await writeFixtureMirror(tmp.path)
+    const webpageEvidenceDir = await writeFixtureEvidence(tmp.path)
     await Bun.write(path.join(webpageEvidenceDir, "reference.png"), fakePngWithoutIhdr())
 
     await Instance.provide({
@@ -152,8 +152,8 @@ describe("tool.web_clone_prepare_context", () => {
   })
 })
 
-async function writeFixtureMirror(root: string): Promise<string> {
-  const webpageEvidenceDir = path.join(root, "mirror")
+async function writeFixtureEvidence(root: string): Promise<string> {
+  const webpageEvidenceDir = path.join(root, "webpage-evidence")
   await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
   await Bun.write(path.join(webpageEvidenceDir, "capture.html"), "<!doctype html><main>Economic calendar</main>")
   await Bun.write(path.join(webpageEvidenceDir, "singlefile.html"), "<!doctype html><main>Economic calendar SingleFile</main>")
