@@ -32,7 +32,7 @@ export {
 export type {
   EngineBudget,
   EngineMetadata,
-  DeliveryResult,
+  AcceptanceResult,
   EngineTaskStatus,
   EngineTaskPriority,
   EngineExecutor,
@@ -40,7 +40,7 @@ export type {
   EngineRunPhase,
   EngineInteractionStatus,
   EngineArtifactKind,
-  EngineDeliveryStatus,
+  EngineAcceptanceStatus,
   EngineEvaluationStatus,
   EngineGoalRunStatus,
 } from "./engine.sql"

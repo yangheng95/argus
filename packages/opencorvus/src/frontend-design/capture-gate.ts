@@ -31,7 +31,7 @@ export type CaptureBboxType = z.infer<typeof CaptureBbox>
 
 /**
  * Frontend-design 采集阶段产出的权威 manifest。
- * 作为下游 goal / delivery / evaluator 的只读事实源（禁自造锚点，rule 11）。
+ * 作为下游 goal / acceptance / evaluator 的只读事实源（禁自造锚点，rule 11）。
  */
 export const CaptureManifest = z.object({
   url: z.string().url(),

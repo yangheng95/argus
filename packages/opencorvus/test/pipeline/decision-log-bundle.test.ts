@@ -17,7 +17,7 @@ import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 
 // Covers the ISOLATED units landed for "decision log complete on disk +
 // agent can reference it" (artifacts/2026-05-18-decision-log-disk-
-// materialization.md). Delivery / orchestrator / build-agent wiring is
+// materialization.md). Acceptance / orchestrator / build-agent wiring is
 // deferred behind a concurrent branch refactor (§11) and not exercised here.
 
 describe("DecisionLog.toFullDocument()", () => {

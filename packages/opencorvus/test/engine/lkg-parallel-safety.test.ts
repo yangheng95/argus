@@ -14,7 +14,7 @@ afterEach(async () => {
   await resetDatabase()
 })
 
-describe("delivery Last-Known-Good parallel safety", () => {
+describe("acceptance Last-Known-Good parallel safety", () => {
   test("no active sibling goals: regression resets to the recorded LKG sha", async () => {
     const dir = await makeGitDir()
     try {
@@ -152,7 +152,7 @@ function withLKG(task: TaskRow, bestCommitSha: string, bestScore: number): TaskR
     ...task,
     metadata: {
       git: {
-        delivery_lkg: {
+        acceptance_lkg: {
           best_score: bestScore,
           best_commit_sha: bestCommitSha,
           best_round: 1,

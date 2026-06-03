@@ -239,11 +239,11 @@ describe("Board.tsx — Section primitive adoption", () => {
     expect(tsx).toContain('from "./primitives/Section"')
   })
 
-  test("uses <Section> in DeliveryPanel (deliverySection id)", () => {
-    expect(tsx).toMatch(/id="deliverySection"/)
+  test("uses <Section> in AcceptancePanel (acceptanceSection id)", () => {
+    expect(tsx).toMatch(/id="acceptanceSection"/)
     // verify it's on Section, not bare details
-    const deliveryIdx = tsx.indexOf("deliverySection")
-    const before = tsx.slice(Math.max(0, deliveryIdx - 30), deliveryIdx)
+    const acceptanceIdx = tsx.indexOf("acceptanceSection")
+    const before = tsx.slice(Math.max(0, acceptanceIdx - 30), acceptanceIdx)
     expect(before).not.toContain("<details")
   })
 

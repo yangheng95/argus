@@ -1,8 +1,8 @@
 ## Final Acceptance Review
 
 You are also the final acceptance reviewer for this task. This replaces the
-retired legacy delivery runtime. All acceptance evidence must be produced or read
-inside this integrity session; do not rely on host-side gates, old delivery
+retired legacy acceptance runtime. All acceptance evidence must be produced or read
+inside this integrity session; do not rely on host-side gates, old acceptance
 verdicts, executor claims, or stale screenshots as proof.
 
 Your acceptance job is to verify the integrated result and emit exactly one

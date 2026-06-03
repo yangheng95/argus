@@ -140,7 +140,7 @@ describe("executor.opencorvus", () => {
     })
   })
 
-  test("delivery only includes messages since the current run start", async () => {
+  test("acceptance only includes messages since the current run start", async () => {
     await using tmp = await tmpdir({ git: true })
     const old = Date.now() - 10_000
     const now = Date.now()
@@ -189,7 +189,7 @@ describe("executor.opencorvus", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const result = await OpencorvusExecutor.delivery({
+        const result = await OpencorvusExecutor.acceptance({
           sessionID: "ses_test",
           since: now - 100,
         })

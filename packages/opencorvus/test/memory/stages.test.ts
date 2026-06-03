@@ -191,7 +191,7 @@ describe("memory multi-stage lifecycle", () => {
             retry_count: 2,
             plan_version_id: "plan_v1",
           },
-          delivery: {
+          acceptance: {
             id: "del_test_1",
             summary: "Added /api/auth/login and /api/auth/register endpoints with bcrypt password hashing and JWT token generation",
             result: { changed_files: ["src/routes/auth.ts", "src/middleware/jwt.ts", "test/auth.test.ts"] },

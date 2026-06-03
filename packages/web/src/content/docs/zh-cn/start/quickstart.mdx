@@ -49,7 +49,7 @@ curl -X POST http://127.0.0.1:7878/task \
 curl -N http://127.0.0.1:7878/task/<task_id>/events
 ```
 
-你会看到 orchestrator 和各阶段事件，例如 `requirements`、`architect`、`goal.running`、`integrity`、`delivery_running`、`done`。
+你会看到 orchestrator 和各阶段事件，例如 `requirements`、`architect`、`goal.running`、`integrity`、`acceptance_running`、`done`。
 
 失败时会看到 `replan.triggered` 或 `retry.triggered`，然后回到执行阶段。
 
@@ -73,7 +73,7 @@ curl -N http://127.0.0.1:7878/task/<task_id>/events
 opencorvus
 ```
 
-会进入 TUI：直接输入任务 → 实时看到 spec / goals / plan / run / eval / delivery 滚动。
+会进入 TUI：直接输入任务 → 实时看到 spec / goals / plan / run / eval / acceptance 滚动。
 
 ## 7. 通过 Slack 创建任务
 

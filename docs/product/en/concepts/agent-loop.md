@@ -63,7 +63,7 @@ All tool `output` fields are **JSON strings** (not objects). Consumers must `JSO
 
 ### 5. Build agent shares the sub-agent protocol
 
-build / intent-analysis / requirements / architect / frontend-design / integrity / prosecutor / delivery all share the structured output contract in `agent/sub-agent-protocol.ts` (Zod tool calls); results are written to `engine_artifact`.
+build / intent-analysis / requirements / architect / frontend-design / integrity / prosecutor / acceptance all share the structured output contract in `agent/sub-agent-protocol.ts` (Zod tool calls); results are written to `engine_artifact`.
 
 ## Doom-loop detection
 
@@ -76,5 +76,5 @@ Every LLM call, tool call / result, and agent boundary is written to `AgentTrace
 ## What's next
 
 - [Architecture overview](./architecture.md)
-- [Delivery checks and verdict](../opencorvus/evaluator.md)
+- [Acceptance checks and verdict](../opencorvus/evaluator.md)
 - [Permissions](../opencorvus/permissions.md)

@@ -39,7 +39,7 @@ import { tmpdir } from "../fixture/fixture"
 import {
   findActiveRunForTask,
   findActivePlanForTask,
-  findDeliveryByRun,
+  findAcceptanceByRun,
   findActiveSpecForTask,
   findEvaluationByRun,
   findGoal,
@@ -167,7 +167,7 @@ function integrityTeamResult(input: {
   const findings = input.findings ?? []
   const requiredRepairs = input.requiredRepairs ?? []
   const requirementsVerdict = verdict === "needs_correction" ? "needs_correction" : "pass"
-  const deliveryVerdict = verdict === "pass" ? "pass" : "concerns"
+  const acceptanceVerdict = verdict === "pass" ? "pass" : "concerns"
   return {
     verdict,
     summary,
@@ -191,12 +191,12 @@ function integrityTeamResult(input: {
         openQuestions: [],
       },
       {
-        reviewerID: "delivery_surface",
-        scope: "Delivery and implementation evidence",
-        verdict: deliveryVerdict,
-        summary: verdict === "pass" ? "Delivery evidence is acceptable." : summary,
-        evidence: ["Mock delivery evidence."],
-        findings: findings.filter((finding) => finding.reviewers.includes("delivery_surface")),
+        reviewerID: "acceptance_surface",
+        scope: "Acceptance and implementation evidence",
+        verdict: acceptanceVerdict,
+        summary: verdict === "pass" ? "Acceptance evidence is acceptable." : summary,
+        evidence: ["Mock acceptance evidence."],
+        findings: findings.filter((finding) => finding.reviewers.includes("acceptance_surface")),
         openQuestions: [],
       },
     ],
@@ -289,17 +289,17 @@ async function markBuildSlotAcquired(
   })
 }
 
-function deliveryDecisionFixture(verdict: any) {
+function acceptanceDecisionFixture(verdict: any) {
   return {
     final: verdict,
     rawAgentVerdict: verdict,
     hostGate: {
       passed: true,
       manifest: {
-        id: "artifact_delivery_manifest_fixture",
-        taskId: "tsk_delivery_fixture",
-        runId: "run_delivery_fixture",
-        deliveryId: "dlv_delivery_fixture",
+        id: "artifact_acceptance_manifest_fixture",
+        taskId: "tsk_acceptance_fixture",
+        runId: "run_acceptance_fixture",
+        acceptanceId: "dlv_acceptance_fixture",
         iteration: 0,
         requiredChecks: [],
         checkResults: [],
@@ -309,7 +309,7 @@ function deliveryDecisionFixture(verdict: any) {
         changedFiles: [],
         finalGate: {
           status: "passed",
-          summary: "Delivery evidence gate passed 0 required check(s).",
+          summary: "Acceptance evidence gate passed 0 required check(s).",
           failedCheckIds: [],
           failedCoverageIds: [],
           failedReviewIds: [],
@@ -2043,7 +2043,7 @@ describe("orchestrator tools", () => {
           project_id: projectID,
           source: "test",
           title: "Direct build deliver task",
-          request: "Apply a direct edit and verify it through delivery.",
+          request: "Apply a direct edit and verify it through acceptance.",
           kind: "build",
           priority: "normal",
           time_created: now,
@@ -2099,9 +2099,9 @@ describe("orchestrator tools", () => {
         expect(run?.plan_version_id).toBeNull()
 
         expect("deliver" in tools).toBe(false)
-        expect("publish_delivery" in tools).toBe(false)
+        expect("publish_acceptance" in tools).toBe(false)
         expect(findRun(run!.id)?.phase).not.toBe("deliver")
-        expect(findDeliveryByRun(run!.id)).toBeUndefined()
+        expect(findAcceptanceByRun(run!.id)).toBeUndefined()
       },
     })
   })
@@ -2292,7 +2292,7 @@ describe("orchestrator tools", () => {
         expect(taskRow?.time_completed).toBeNumber()
         expect(deriveTaskStatus(taskRow!)).toBe("completed")
         expect(findRun(run!.id)?.status).toBe("completed")
-        expect(findDeliveryByRun(run!.id)).toBeUndefined()
+        expect(findAcceptanceByRun(run!.id)).toBeUndefined()
         expect(findEvaluationByRun(run!.id)).toBeUndefined()
         const artifact = findLatestIntegrityAttemptArtifact({ taskID, specSnapshotID: `spec_${goalID}` })
         const payload = artifact?.payload as Record<string, any> | undefined
@@ -2305,7 +2305,7 @@ describe("orchestrator tools", () => {
           "REQ-1 evidence is acceptable but should be strengthened next time.",
         )
 
-        expect("publish_delivery" in tools).toBe(false)
+        expect("publish_acceptance" in tools).toBe(false)
         const taskAfterPublishAttempt = Database.use((db) =>
           db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get(),
         )
@@ -2319,7 +2319,7 @@ describe("orchestrator tools", () => {
         expect(reopened.time_completed).toBeNull()
         expect(deriveTaskStatus(reopened)).toBe("queued")
         expect(findRun(run!.id)?.status).toBe("completed")
-        expect(findDeliveryByRun(run!.id)).toBeUndefined()
+        expect(findAcceptanceByRun(run!.id)).toBeUndefined()
         expect(findEvaluationByRun(run!.id)).toBeUndefined()
       },
     })
@@ -2983,7 +2983,7 @@ describe("orchestrator tools", () => {
       designSystem: "Reference design system",
       techStack: ["React", "Bun"],
       frontendTemplate: "Frontend replica scope body",
-      finalDeliveryMode: "maintainable_replacement_required",
+      finalAcceptanceMode: "maintainable_replacement_required",
       fillableModules:
         "Frontend fillable modules body. Use web-clone-source/README.md, web-clone-source/implementation-blueprint.md, web-clone-source/source-ir/component-tree.json, web-clone-source/source-ir/content-model.json, web-clone-source/source-skeleton/critical.css, and web-clone-source/reference.png as the development handoff; use raw mirror only as diagnostics for named gaps.",
       componentInventory: "Component inventory body.",
@@ -3059,7 +3059,7 @@ describe("orchestrator tools", () => {
           "## Frontend Template",
           "Frontend replica scope body",
           "",
-          "## Final Delivery Mode",
+          "## Final Acceptance Mode",
           "maintainable_replacement_required",
           "",
           "## Fillable Modules",
@@ -3086,10 +3086,10 @@ describe("orchestrator tools", () => {
           "- status: created",
           "- role: source_baseline_input",
           "- project_root: C:\\tmp\\frontend-design-skeleton",
-          "- delivery_root: .",
+          "- acceptance_root: .",
           "- source_package: web-clone-source",
           "- generation_tool: test",
-          "- adoption_rule: frontend-design-skeleton is a source baseline excluded from final delivery",
+          "- adoption_rule: frontend-design-skeleton is a source baseline excluded from final acceptance",
           "",
           "## Visual Consistency Contract",
           "Match reference layout, typography, colors, and spacing exactly. Verify 1440x900, 1024x768, and 390x844 with measured visual comparison plus source-quality review.",
@@ -3139,8 +3139,8 @@ describe("orchestrator tools", () => {
         expect(template).toContain("High-quality target project body")
         expect(template).toContain("source skeleton")
         expect(template).toContain("role: source_baseline_input")
-        expect(template).toContain("delivery_root: .")
-        expect(template).toContain("frontend-design-skeleton is a source baseline excluded from final delivery")
+        expect(template).toContain("acceptance_root: .")
+        expect(template).toContain("frontend-design-skeleton is a source baseline excluded from final acceptance")
         expect(template).toContain("Match reference layout, typography, colors, and spacing exactly.")
         expect(template).toContain(paths.manifestRelative)
         expect(template).toContain("web-clone-source/implementation-blueprint.md")
@@ -3625,7 +3625,7 @@ describe("orchestrator tools", () => {
         designSystem: "Figma MCP design system",
         techStack: ["React"],
         frontendTemplate: "Frontend replica scope from Figma MCP evidence",
-        finalDeliveryMode: "maintainable_replacement_required",
+        finalAcceptanceMode: "maintainable_replacement_required",
         fillableModules: "Frontend fillable modules from Figma MCP evidence",
         componentInventory: "Figma component inventory.",
         qualityProjectContract:
@@ -4007,7 +4007,7 @@ describe("orchestrator tools", () => {
     })
   })
 
-  test("publish gate failures are post-delivery export feedback instead of task lifecycle decisions", async () => {
+  test("publish gate failures are post-acceptance export feedback instead of task lifecycle decisions", async () => {
     const source = await fs.readFile(path.join(import.meta.dir, "../../src/orchestrator/tools.ts"), "utf8")
 
     expect(source).toContain("publishGateArtifactResult")
@@ -4419,7 +4419,7 @@ describe("orchestrator tools", () => {
                 description: "Current goal is too broad",
                 targetIDs: [goalID],
                 repair: "Narrow the goal before accepting the task.",
-                reviewers: ["delivery_surface"],
+                reviewers: ["acceptance_surface"],
               }),
             ],
             requiredRepairs: [
@@ -4488,7 +4488,7 @@ describe("orchestrator tools", () => {
     })
   })
 
-  test("post-build architecture concerns open targeted rework instead of passive delivery", async () => {
+  test("post-build architecture concerns open targeted rework instead of passive acceptance", async () => {
     await tmp?.[Symbol.asyncDispose]?.()
     tmp = await tmpdir({ git: true })
 
@@ -4510,7 +4510,7 @@ describe("orchestrator tools", () => {
           worktree: tmp.path,
           projectName: "Goal review concern test",
           taskTitle: "Goal review concern task",
-          request: "Architecture concerns must drive rework before delivery",
+          request: "Architecture concerns must drive rework before acceptance",
           goalTitle: "Review concerns are actionable",
           goalSlug: "review-concerns-actionable",
           objective: "Verify post-build concerns are not a no-op",
@@ -4681,7 +4681,7 @@ describe("orchestrator tools", () => {
                 description: "Feature goal acceptance depends on bootstrap details",
                 targetIDs: [siblingGoalID],
                 repair: "Clarify acceptance across the bootstrap and feature goals.",
-                reviewers: ["delivery_surface"],
+                reviewers: ["acceptance_surface"],
               }),
             ],
             sessionID: "ses_integrity_sibling",
@@ -5030,7 +5030,7 @@ describe("orchestrator tools", () => {
                 description: "Dependency prose only",
                 targetIDs: [goalID],
                 repair: "Route explicit dependency repair instead of applying no-op updates.",
-                reviewers: ["delivery_surface"],
+                reviewers: ["acceptance_surface"],
               }),
             ],
             sessionID: "ses_integrity_noop",
@@ -5426,7 +5426,7 @@ describe("orchestrator tools", () => {
                 id: "F-import-export-inconsistent",
                 description: "Import/export contract is still inconsistent.",
                 repair: "Repair the import/export contract.",
-                reviewers: ["delivery_surface"],
+                reviewers: ["acceptance_surface"],
               }),
               integrityFinding({
                 id: "F-invented-artifact",
@@ -5437,7 +5437,7 @@ describe("orchestrator tools", () => {
                 id: "F-granularity-unstable",
                 description: "Goal granularity remains unstable.",
                 repair: "Stabilize goal granularity before acceptance.",
-                reviewers: ["delivery_surface"],
+                reviewers: ["acceptance_surface"],
               }),
             ],
             requiredRepairs: [
@@ -6228,7 +6228,7 @@ describe("orchestrator tools", () => {
         })
 
         expect("deliver" in tools).toBe(false)
-        expect("publish_delivery" in tools).toBe(false)
+        expect("publish_acceptance" in tools).toBe(false)
         const artifact = findLatestIntegrityAttemptArtifact({ taskID, specSnapshotID: specID })
         expect(artifact).toBeUndefined()
         const throwArtifact = Database.use((db) =>
@@ -6236,7 +6236,7 @@ describe("orchestrator tools", () => {
             .select()
             .from(EngineArtifactTable)
             .where(
-              and(eq(EngineArtifactTable.task_id, taskID), eq(EngineArtifactTable.kind, "delivery_verification_threw")),
+              and(eq(EngineArtifactTable.task_id, taskID), eq(EngineArtifactTable.kind, "acceptance_review_threw")),
             )
             .get(),
         )
@@ -6246,7 +6246,7 @@ describe("orchestrator tools", () => {
             .select()
             .from(EngineArtifactTable)
             .where(
-              and(eq(EngineArtifactTable.task_id, taskID), eq(EngineArtifactTable.label, "delivery-agent-verdict")),
+              and(eq(EngineArtifactTable.task_id, taskID), eq(EngineArtifactTable.label, "acceptance-review-verdict")),
             )
             .get(),
         )
@@ -6511,7 +6511,7 @@ describe("orchestrator tools", () => {
           worktree: tmp.path,
           projectName: "Retry rendered attachment test",
           taskTitle: "Retry rendered attachment task",
-          request: "Build a visual UI and retry from delivery feedback",
+          request: "Build a visual UI and retry from acceptance feedback",
           goalTitle: "Visual goal",
           goalSlug: "visual-goal",
           objective: "Verify retry screenshots keep canonical attachment URLs",
@@ -6543,9 +6543,9 @@ describe("orchestrator tools", () => {
         createDecisionLog(taskID).append({
           phase: "retry",
           goalID,
-          key: "delivery_rejection",
+          key: "acceptance_rejection",
           value: "Previous rendered page missed the reference layout.",
-          reason: "Delivery rejected visual fidelity.",
+          reason: "Acceptance rejected visual fidelity.",
         })
         for (const key of [
           "public_report",
@@ -6599,8 +6599,8 @@ describe("orchestrator tools", () => {
         const result = await tools.build.execute(
           {
             goalID,
-            request: "Apply delivery visual feedback",
-            reason: "Retry after delivery rejection.",
+            request: "Apply acceptance visual feedback",
+            reason: "Retry after acceptance rejection.",
           },
           buildToolOptions(),
         )
@@ -6622,8 +6622,8 @@ describe("orchestrator tools", () => {
   // version, so a violation surfaces as goals + goal_run cards disappearing
   // from the overlay even though the data is intact in the DB. The
   // `restart_from_stage(plan)` test in this block covers that invariant;
-  // earlier post-delivery hardening regressions were removed alongside the
-  // retired delivery agent.
+  // earlier post-acceptance hardening regressions were removed alongside the
+  // retired acceptance review.
 
   test("restart_from_stage(plan) supersedes every active plan, not just one", async () => {
     const now = Date.now()

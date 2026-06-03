@@ -143,7 +143,7 @@ function stripWrappingQuotes(value: string | undefined): string | undefined {
 // `--reference-images "C:/path with space.png"` getting split). We refuse
 // to start in that case rather than silently using defaults.
 const KNOWN_FLAGS = new Set<string>([
-  "--delivery-verify-cmd",
+  "--acceptance-verify-cmd",
   "--executor",
   "--idle-timeout-ms",
   "--max-executor-groups",
@@ -223,7 +223,7 @@ if (requestFile && requestAttachment) {
   process.exit(2)
 }
 const figmaUrl = flag("--figma-url")?.trim() || undefined
-const deliveryVerifyCmd = flag("--delivery-verify-cmd")
+const acceptanceVerifyCmd = flag("--acceptance-verify-cmd")
 const skipLocalVerify = process.argv.includes("--skip-local-verify")
 // `--no-browser` bypasses the puppeteer-driven overlay UI and drives the
 // benchmark entirely through HTTP API polling. The downstream code already
@@ -316,7 +316,7 @@ if (requestAttachment) {
   TASK_REQUEST =
     `The full task brief is attached as the file "${filename}" (${mime}, ${Math.round(bytes.byteLength / 1024)} KB). ` +
     `It contains the complete requirements, scope, and acceptance criteria — treat it as the authoritative source of truth. ` +
-    `Run the standard pipeline (requirements → architect → planner → executor → delivery); the attachment is ` +
+    `Run the standard pipeline (requirements → architect → planner → executor → acceptance); the attachment is ` +
     `forwarded automatically to each sub-agent and they will read it via their \`read\` tool when needed.`
 }
 // Reference images are NOT injected as task attachments — the agent owns its
@@ -327,13 +327,13 @@ const TASK_TITLE = flag("--title")?.trim()
   || (requestFile ? path.parse(requestFile).name : undefined)
   || (requestAttachment ? path.parse(requestAttachment).name : undefined)
   || DEFAULT_TASK_TITLE
-// DELIVERY_VERIFY_CMD is assigned after temp.dir is initialized (see below).
-// Auto-registration rules when no explicit --delivery-verify-cmd is supplied:
+// ACCEPTANCE_VERIFY_CMD is assigned after temp.dir is initialized (see below).
+// Auto-registration rules when no explicit --acceptance-verify-cmd is supplied:
 //   1. --reference-images provided → visual-diff SSIM gate against that file
 //   2. no reference images (default chat-app brief, or external --request-file) → no auto-verify
 // Web-clone SSIM thresholds are explicit. The visual-diff CLI defaults are
 // looser generic smoke-test values and are not acceptable for replica scoring.
-let DELIVERY_VERIFY_CMD = ""
+let ACCEPTANCE_VERIFY_CMD = ""
 
 const AUTO_REPLY =
   "Complete the task autonomously end-to-end. Choose reasonable defaults consistent with the request, keep scope minimal, continue execution, and do not ask again unless the request is contradictory or unsafe."
@@ -371,7 +371,7 @@ const DIAG_TYPES = new Set([
   // formatEventLine handler above filters streaming/idle and surfaces only
   // terminal + retry transitions in the digest.
   "orchestrator.session.status",
-  "orchestrator.delivery.ready",
+  "orchestrator.acceptance.ready",
   "orchestrator.evaluation.completed",
 ])
 const projectDir = flag("--project-dir")
@@ -426,9 +426,9 @@ await ensureBenchmarkModel(import.meta.dir, model)
 
 process.env.OPENCORVUS_AUTO_DISCOVER_EXECUTORS = "1"
 process.env.OPENCORVUS_EXECUTOR_CLAUDE_PERMISSION_MODE = "bypassPermissions"
-// Complex replication tasks legitimately need >3 delivery iterations to converge.
+// Complex replication tasks legitimately need >3 acceptance iterations to converge.
 // Schema allows up to 10. 6 balances convergence room against total wall time.
-process.env.OPENCORVUS_MAX_DELIVERY_ITERATIONS = "6"
+process.env.OPENCORVUS_MAX_ACCEPTANCE_ITERATIONS = "6"
 
 console.log(
   `[overlay-benchmark] config model=${model} executor=${executor} groups=${maxExecutorGroups ?? "config-default"} idle_timeout_ms=disabled`,
@@ -520,7 +520,7 @@ const defaultReportDir = path.resolve(import.meta.dir, "../../../..", ".scratch"
 const reportFile = report ? path.resolve(report) : path.join(defaultReportDir, `overlay-web-benchmark-report-${Date.now()}.json`)
 await fs.mkdir(path.dirname(reportFile), { recursive: true })
 
-// Now that temp.dir and reportFile are known, resolve DELIVERY_VERIFY_CMD.
+// Now that temp.dir and reportFile are known, resolve ACCEPTANCE_VERIFY_CMD.
 {
   const visualDiffScript = path.join(import.meta.dir, "visual-diff.ts")
   // The verify command is executed through `cmd /c <string>` on Windows or
@@ -560,12 +560,12 @@ await fs.mkdir(path.dirname(reportFile), { recursive: true })
       ].join(" ")
     }).join(" && ")
   }
-  DELIVERY_VERIFY_CMD = skipLocalVerify
+  ACCEPTANCE_VERIFY_CMD = skipLocalVerify
     ? ""
-    : (deliveryVerifyCmd?.trim()
+    : (acceptanceVerifyCmd?.trim()
       || (referenceImages.length > 0 ? buildVisualDiffCmd(referenceImages) : ""))
-  if (DELIVERY_VERIFY_CMD) {
-    console.log(`[overlay-benchmark] delivery_verify_cmd=${DELIVERY_VERIFY_CMD}`)
+  if (ACCEPTANCE_VERIFY_CMD) {
+    console.log(`[overlay-benchmark] acceptance_verify_cmd=${ACCEPTANCE_VERIFY_CMD}`)
   }
 }
 _emergencyReportPath = reportFile.endsWith(".json")
@@ -703,9 +703,9 @@ function formatEventLine(
     // streaming / idle: too noisy to surface line-by-line in the log digest.
     return ""
   }
-  if (entry.type === "orchestrator.delivery.ready") {
+  if (entry.type === "orchestrator.acceptance.ready") {
     const summary = clipText(String(props.summary ?? entry.summary ?? ""), 240)
-    return `[overlay-benchmark] delivery.ready summary="${summary}"`
+    return `[overlay-benchmark] acceptance.ready summary="${summary}"`
   }
   if (entry.type === "orchestrator.evaluation.completed") {
     const status = String(props.status ?? entry.status ?? "")
@@ -984,10 +984,10 @@ try {
           maxFixRuns,
           ...(maxExecutorGroups != null ? { maxExecutorGroups } : {}),
         },
-        ...(DELIVERY_VERIFY_CMD || figmaUrl
+        ...(ACCEPTANCE_VERIFY_CMD || figmaUrl
           ? {
               metadata: {
-                ...(DELIVERY_VERIFY_CMD ? { delivery_verify_cmd: DELIVERY_VERIFY_CMD } : {}),
+                ...(ACCEPTANCE_VERIFY_CMD ? { acceptance_verify_cmd: ACCEPTANCE_VERIFY_CMD } : {}),
                 ...(figmaUrl ? { figma_url: figmaUrl } : {}),
               },
             }
@@ -1137,7 +1137,7 @@ try {
 
   const pass = stopAfterArchitect
     ? out.assertions.planning_visible.pass && out.assertions.streaming_visible.pass && out.assertions.materialized.pass && out.assertions.frontend_design_agent_card.pass && out.assertions.architect_contract_graph.pass
-    : out.assertions.planning_visible.pass && out.assertions.streaming_visible.pass && out.assertions.materialized.pass && out.assertions.frontend_design_agent_card.pass && out.assertions.delivery.pass && out.failure_matrix.verdict === "accepted"
+    : out.assertions.planning_visible.pass && out.assertions.streaming_visible.pass && out.assertions.materialized.pass && out.assertions.frontend_design_agent_card.pass && out.assertions.acceptance.pass && out.failure_matrix.verdict === "accepted"
   if (!pass) {
     process.exit(1)
   }
@@ -1487,16 +1487,16 @@ async function buildBenchmarkReport(error?: unknown) {
       reportError
         ? `skipped because benchmark ended before task completion: ${reportError}`
         : `skipped because task status is ${currentTaskStatus || "unknown"}, not completed`,
-      DELIVERY_VERIFY_CMD,
+      ACCEPTANCE_VERIFY_CMD,
     )
-    : await runLocalVerify(temp.dir, DELIVERY_VERIFY_CMD)
-  const deliveryChangedFiles = progress?.delivery?.result?.changedFiles ?? currentFinalBoard?.delivery?.result?.changedFiles ?? []
-  // Delivery changedFiles may only contain internal .opencorvus/ files while
+    : await runLocalVerify(temp.dir, ACCEPTANCE_VERIFY_CMD)
+  const acceptanceChangedFiles = progress?.acceptance?.result?.changedFiles ?? currentFinalBoard?.acceptance?.result?.changedFiles ?? []
+  // Acceptance changedFiles may only contain internal .opencorvus/ files while
   // actual source files are in committed diffs. Git is a parallel evidence
   // source, not a substitute; failures throw instead of producing an empty
   // changed-files list.
   const gitObservedFiles = await gitChangedFiles(temp.dir)
-  const changedFiles = dedupePaths([...deliveryChangedFiles, ...gitObservedFiles])
+  const changedFiles = dedupePaths([...acceptanceChangedFiles, ...gitObservedFiles])
   const moduleBlocks = resolveModuleBlocks(progress, currentFinalBoard ?? currentBoard, TASK_REQUEST)
   const artifactAudit = await auditWorkspace({
     rootDir: temp.dir,
@@ -1651,7 +1651,7 @@ async function buildBenchmarkReport(error?: unknown) {
           architectSummary: currentFinalBoard?.architect?.summary ?? null,
         },
       },
-      delivery: {
+      acceptance: {
         pass: (progress?.task?.status || currentFinalBoard?.task?.status) === "completed" &&
             (progress?.evaluation?.verdict || currentFinalBoard?.evaluation?.verdict) === "accepted" &&
             qualityVerdict.verdict === "accepted",
@@ -1755,7 +1755,7 @@ async function gitChangedFiles(dir: string): Promise<string[]> {
   ])
   if (modified.length > 0 || untracked.length > 0) return [...modified, ...untracked]
   // 2. Committed changes: compare initial checkpoint to HEAD.
-  //    The orchestrator creates a checkpoint commit, executor works, delivery commits.
+  //    The orchestrator creates a checkpoint commit, executor works, acceptance commits.
   //    `git diff HEAD` is empty because everything is committed.
   const commits = await run(["log", "--oneline", "--reverse"])
   if (commits.length >= 2) {
@@ -1935,7 +1935,7 @@ function progressSignature(progress: any) {
     phase: progress?.run?.phase || progress?.activeRun?.phase || "",
     retry_count: progress?.run?.retryCount ?? progress?.activeRun?.retryCount ?? 0,
     verdict: progress?.evaluation?.verdict || "",
-    delivery: progress?.delivery?.status || "",
+    acceptance: progress?.acceptance?.status || "",
     goals: Array.isArray(progress?.goals)
       ? progress.goals.map((item: any) => `${item.id || "goal"}:${item.status || ""}`)
       : [],
@@ -2264,7 +2264,7 @@ function summarizeEvents(events: Array<Record<string, unknown>>, taskID: string)
     "planner",
     "build",
     "integrity",
-    "delivery",
+    "acceptance",
     // legacy stage names kept so old reports remain comparable
     "spec",
     "evaluator",

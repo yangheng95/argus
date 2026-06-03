@@ -13,7 +13,7 @@
 import z from "zod"
 
 export const AcceptanceSeverity = z.enum(["essential", "important", "optional", "pitfall"])
-export const AcceptanceTrigger = z.enum(["on_goal", "on_integrity", "on_delivery"])
+export const AcceptanceTrigger = z.enum(["on_goal", "on_integrity", "on_acceptance"])
 
 const GherkinScenarioSchema = z
   .object({
@@ -75,9 +75,9 @@ const LlmJudgeScorerSchema = z.object({
     .optional()
     .describe("Ordinal anchors, 2-5 levels. Omit for binary MET/UNMET."),
   inputs: z
-    .array(z.enum(["delivery_summary", "changed_files", "requirement_text"]))
+    .array(z.enum(["acceptance_summary", "changed_files", "requirement_text"]))
     .optional()
-    .describe("Which parts of the delivery to feed the judge. Default: delivery_summary."),
+    .describe("Which parts of the acceptance to feed the judge. Default: acceptance_summary."),
 })
 
 const PREBUILT_SCORER_NAMES = [
@@ -134,7 +134,7 @@ export const AcceptanceSpecSchema = z.object({
   scorers: z.array(ScorerSchema).min(1).describe("At least one scorer — a spec without a scorer is untestable."),
   severity: AcceptanceSeverity,
   trigger: AcceptanceTrigger.optional().describe(
-    "Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_integrity. on_delivery is legacy and maps to on_integrity.",
+    "Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_integrity. on_acceptance is legacy and maps to on_integrity.",
   ),
 })
 
@@ -152,7 +152,7 @@ export type RubricLevel = z.infer<typeof RubricLevelSchema>
  */
 export function resolveTrigger(spec: AcceptanceSpec, scorer: AcceptanceScorer): "on_goal" | "on_integrity" {
   if (spec.trigger === "on_goal") return "on_goal"
-  if (spec.trigger === "on_integrity" || spec.trigger === "on_delivery") return "on_integrity"
+  if (spec.trigger === "on_integrity" || spec.trigger === "on_acceptance") return "on_integrity"
   if (scorer.type === "heuristic" || scorer.type === "prebuilt" || scorer.type === "contract_audit") return "on_goal"
   // llm_judge: essential runs per-goal so failures fail fast; others batch at integrity acceptance.
   return spec.severity === "essential" ? "on_goal" : "on_integrity"

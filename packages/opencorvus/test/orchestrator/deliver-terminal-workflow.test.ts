@@ -10,7 +10,7 @@ test("orchestrator workflow retires deliver and uses integrity as the final gate
   expect(normalizedPrompt).toContain("Integrity is the workflow acceptance gate")
   expect(normalizedPrompt).toContain("no separate final acceptance object")
   expect(normalizedPrompt).toContain("host-owned final acceptance gate")
-  expect(normalizedPrompt).toContain("There is no `deliver` or `publish_delivery` tool")
+  expect(normalizedPrompt).toContain("There is no `deliver` or `publish_acceptance` tool")
   expect(normalizedPrompt).toContain("A pass verdict completes the task")
   expect(normalizedPrompt).toContain("Valid next actions include task-level build")
   expect(prompt).not.toContain("Accepted deliveries complete the task inside the tool")
@@ -24,19 +24,19 @@ test("orchestrator workflow retires deliver and uses integrity as the final gate
   expect(agent).toContain("build")
   expect(agent).toContain("integrity")
   expect(agent).not.toContain('"deliver",')
-  expect(agent).not.toContain('"publish_delivery",')
+  expect(agent).not.toContain('"publish_acceptance",')
   expect(agent).not.toContain("withStepHook")
   expect(agent).not.toContain("stopSignal")
 
   expect(tools).not.toContain("deliver: tool")
-  expect(tools).not.toContain("publish_delivery: tool")
+  expect(tools).not.toContain("publish_acceptance: tool")
   expect(tools).toContain("Task completed by passing integrity gate")
   expect(tools).not.toContain("requestStopAfterCurrentStep")
   expect(tools).not.toContain("finalizeDeferredStop")
   expect(tools).not.toContain("stopAfterDispatch")
-  // Retirement removed the delivery-rework auto-wake loop: the host no longer
+  // Retirement removed the acceptance-rework auto-wake loop: the host no longer
   // re-dispatches the task loop to queue repair work after a verdict.
   expect(tools).not.toContain("dispatchTaskLoop({")
-  expect(tools).not.toContain("queueDeliveryReworkWake")
-  expect(tools).not.toContain("deliveryRework")
+  expect(tools).not.toContain("queueAcceptanceReworkWake")
+  expect(tools).not.toContain("acceptanceRework")
 })

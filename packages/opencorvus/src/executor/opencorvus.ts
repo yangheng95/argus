@@ -37,7 +37,7 @@ export namespace OpencorvusExecutor {
       submit: true,
       status: true,
       abort: true,
-      delivery: true,
+      acceptance: true,
       resume: true,
       events: true,
     }
@@ -114,7 +114,7 @@ export namespace OpencorvusExecutor {
     return true
   }
 
-  export async function delivery(input: { sessionID: string; since?: number }) {
+  export async function acceptance(input: { sessionID: string; since?: number }) {
     const msgs = await Session.messages({ sessionID: input.sessionID })
     const scoped = typeof input.since === "number"
       ? msgs.filter((item) => (item.info.time?.created ?? 0) >= input.since!)

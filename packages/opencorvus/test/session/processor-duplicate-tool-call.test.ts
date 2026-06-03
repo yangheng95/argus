@@ -54,7 +54,7 @@ function stalledAfter(events: Array<Record<string, unknown>>): AsyncIterable<any
 // Regression: a provider re-emit or a retried stream can deliver the SAME tool
 // call — identical `call_*` id — twice inside one assistant turn. `toolcalls`
 // only tracks in-flight calls and is cleared on tool-result, so before the fix
-// the second delivery minted a fresh part with a new id but the same callID.
+// the second acceptance minted a fresh part with a new id but the same callID.
 // `toModelMessages` then emitted that callID in two messages and the provider
 // rejected the next request with HTTP 400 `Duplicate value for 'tool_call_id'`.
 // The processor must resolve the part by (messageID, callID) and reuse it.

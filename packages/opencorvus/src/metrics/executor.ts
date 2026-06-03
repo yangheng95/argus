@@ -1,6 +1,6 @@
 /**
  * Metric Executor — runs every baseline + challenge metric spec against the
- * current iteration's delivery snapshot and writes engine_metric_result rows.
+ * current iteration's acceptance snapshot and writes engine_metric_result rows.
  *
  * Five evaluator kinds, one dispatcher. Each evaluator returns a raw_value
  * (direction-native) and the Executor normalizes it to [0,1] using the spec's
@@ -52,11 +52,11 @@ export interface ExecuteMetricsInput {
   iteration: number
   /** Goal-run this iteration belongs to, if any. Attached to every result row. */
   goal_run_id?: string | null
-  /** Delivery context fed to the judge evaluator (summary, diff text, etc.). */
-  delivery?: DeliveryContext
+  /** Acceptance context fed to the judge evaluator (summary, diff text, etc.). */
+  acceptance?: AcceptanceContext
 }
 
-export interface DeliveryContext {
+export interface AcceptanceContext {
   summary?: string
   changed_files?: string[]
   requirement_text?: string
@@ -299,7 +299,7 @@ export interface JudgeRequest {
   criteria: string
   rubric?: Array<{ score: number; label: string; anchor: string; passes: boolean }>
   inputs: {
-    delivery_summary?: string
+    acceptance_summary?: string
     changed_files?: string[]
     requirement_text?: string
   }
@@ -316,7 +316,7 @@ export type JudgeRunner = (req: JudgeRequest) => Promise<JudgeResponse>
 interface JudgeConfig {
   criteria: string
   rubric?: Array<{ score: number; label: string; anchor: string; passes: boolean }>
-  inputs?: Array<"delivery_summary" | "changed_files" | "requirement_text">
+  inputs?: Array<"acceptance_summary" | "changed_files" | "requirement_text">
 }
 
 async function runJudge(
@@ -340,16 +340,16 @@ async function runJudge(
       evidence_fresh: false,
     }
   }
-  const requested = new Set(cfg.inputs ?? ["delivery_summary"])
-  const delivery = input.delivery ?? {}
+  const requested = new Set(cfg.inputs ?? ["acceptance_summary"])
+  const acceptance = input.acceptance ?? {}
   const req: JudgeRequest = {
     spec,
     criteria: cfg.criteria,
     rubric: cfg.rubric,
     inputs: {
-      delivery_summary: requested.has("delivery_summary") ? delivery.summary : undefined,
-      changed_files: requested.has("changed_files") ? delivery.changed_files : undefined,
-      requirement_text: requested.has("requirement_text") ? delivery.requirement_text : undefined,
+      acceptance_summary: requested.has("acceptance_summary") ? acceptance.summary : undefined,
+      changed_files: requested.has("changed_files") ? acceptance.changed_files : undefined,
+      requirement_text: requested.has("requirement_text") ? acceptance.requirement_text : undefined,
     },
   }
   const resp = await ctx.judge(req)

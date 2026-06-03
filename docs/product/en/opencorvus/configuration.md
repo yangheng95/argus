@@ -104,7 +104,7 @@ Fine-tunes orchestration policy and each agent (merged in `EngineConfig.get()` â
     "requirements": { "max_steps": 20 },
     "architect": { "max_steps": 40 },
     "build": { "max_steps": 80, "skills": [] },
-    "delivery": { "max_retries": 2 },
+    "acceptance": { "max_retries": 2 },
     "max_executor_groups": 3
   }
 }

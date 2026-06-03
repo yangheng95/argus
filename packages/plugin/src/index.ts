@@ -246,7 +246,7 @@ export interface Hooks {
         mode: "soft" | "strict"
         run: (ctx: {
           request?: string
-          delivery: { summary: string; diffs?: any[] }
+          acceptance: { summary: string; diffs?: any[] }
         }) => Promise<{
           status: "passed" | "failed" | "skipped"
           evidence: string
@@ -288,7 +288,7 @@ export interface Hooks {
         priority: "blocking" | "advisory"
         check_selector?: string[]
       }>
-      delivery: {
+      acceptance: {
         summary: string
         changedFiles: string[]
         diffs?: Array<{ file: string; diff?: string }>
@@ -320,14 +320,14 @@ export interface Hooks {
     },
   ) => Promise<void>
   /**
-   * Called after delivery is persisted. Plugins can trigger deployment, doc generation, etc.
+   * Called after acceptance is persisted. Plugins can trigger deployment, doc generation, etc.
    */
-  "delivery.ready"?: (
+  "acceptance.ready"?: (
     input: {
       taskID: string
       runID: string
-      deliveryID: string
-      delivery: { summary: string; changedFiles: string[]; diffs: any[] }
+      acceptanceID: string
+      acceptance: { summary: string; changedFiles: string[]; diffs: any[] }
     },
     output: {
       actions: Array<{ name: string; status: string; summary: string; artifacts?: any[] }>

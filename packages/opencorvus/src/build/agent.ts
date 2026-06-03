@@ -217,10 +217,10 @@ export namespace BuildAgent {
      *  retry entries. Empty / undefined on the first attempt. The caller
      *  composes the markdown so this agent doesn't need DB access. */
     retryFeedback?: string
-    /** Canonical delivery rejection packet read directly from persisted
+    /** Canonical acceptance rejection packet read directly from persisted
      *  verdict / manifest artifacts. Unlike retryFeedback, this is not an
      *  orchestrator-written summary and also exists for task-scope rework. */
-    deliveryFeedback?: string
+    acceptanceFeedback?: string
     /** Task-wide fidelity contract derived from architect coverage rows. */
     fidelity?: {
       sourceCoverage?: SourceCoverageEntry[]
@@ -316,8 +316,8 @@ export namespace BuildAgent {
     /** Base commit captured when the goal worktree was first allocated. */
     worktreeBaseRef?: string
     /** Per-file diffs from worktree base → goal branch HEAD. Captured before
-     *  cleanup so the orchestrator can persist a per-goal delivery artifact
-     *  the overlay's right-side panel reads via `findDeliveryByGoalRun`.
+     *  cleanup so the orchestrator can persist a per-goal acceptance artifact
+     *  the overlay's right-side panel reads via `findAcceptanceByGoalRun`.
      *  Empty / undefined when no merge-back happened (failed build, caller-
      *  owned worktree, or no commit_ref). */
     diffs?: FileDiff[]
@@ -560,7 +560,7 @@ export namespace BuildAgent {
       // frontend-design evidence manifest as multimodal user-message parts so
       // the build LLM physically sees what to clone. This includes user
       // attachments and frontend-design materialized visual artifacts
-      // (system_artifacts intent=visual_reference), not delivery retry renders.
+      // (system_artifacts intent=visual_reference), not acceptance retry renders.
       const taskAttachments = buildReferenceAttachments
       const retryAttachments = (input.context?.retryAttachments ?? []).filter(
         (a) => typeof a?.url === "string" && typeof a?.mime === "string",
@@ -857,7 +857,7 @@ export namespace BuildAgent {
         }
 
         // Capture the goal's diff against its original baseRef while the
-        // worktree's git dir is still healthy — overlay's per-goal delivery
+        // worktree's git dir is still healthy — overlay's per-goal acceptance
         // panel reads this; the orchestrator-facing tool result also renders
         // it as actual_changed_files. Always collect when the worktree
         // exists, regardless of status: the orchestrator LLM benefits from
@@ -996,7 +996,7 @@ export namespace BuildAgent {
         if (head) worktreeHead = head.slice(0, 12)
       }
 
-      // Translate the contribution diff (already collected for delivery
+      // Translate the contribution diff (already collected for acceptance
       // panel) into a compact host-truth files list. Render against the
       // contribution base, not baseRef..HEAD raw, so merge commits don't
       // attribute sibling-goal files to this build.
@@ -2189,10 +2189,10 @@ export async function resolveGoalContributionBaseRef(worktreeDir: string, baseRe
 /**
  * Collect per-file diffs for a ref range as `baseRef..HEAD`.
  * Returns FileDiff objects with full before/after blobs so the overlay's
- * goal-run delivery endpoint can serve diff previews without a separate
+ * goal-run acceptance endpoint can serve diff previews without a separate
  * git read at click time. Mirrors the shape of `Snapshot.diffFull` so the
- * existing `viewDelivery` / overlay diff service consume the same schema
- * as the task-level delivery path.
+ * existing `viewAcceptance` / overlay diff service consume the same schema
+ * as the task-level acceptance path.
  *
  * Filters out worktree scratch (`.opencorvus/`) so the panel doesn't list
  * worktree-internal files like ownership markers.
@@ -2533,7 +2533,7 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
       lines.push("")
     }
 
-    const overlays = renderBuildPromptOverlays(context ? { ...context, deliveryFeedback: undefined } : undefined)
+    const overlays = renderBuildPromptOverlays(context ? { ...context, acceptanceFeedback: undefined } : undefined)
     if (overlays.sections.length > 0) {
       lines.push("## Task-Specific Build Overlays")
       lines.push("")
@@ -2609,7 +2609,7 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
       lines.push(context.retryFeedback)
       lines.push("")
     }
-    const acceptanceOverlay = renderBuildPromptOverlays({ deliveryFeedback: context?.deliveryFeedback })
+    const acceptanceOverlay = renderBuildPromptOverlays({ acceptanceFeedback: context?.acceptanceFeedback })
     if (acceptanceOverlay.sections.length > 0) {
       lines.push(acceptanceOverlay.sections.join("\n\n"))
       lines.push("")
@@ -2652,7 +2652,7 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
   if (reqs.length > 0) {
     contextLines.push(renderBuildRequirementsSection(reqs, { directRequest: true }))
   }
-  const overlays = renderBuildPromptOverlays(context ? { ...context, deliveryFeedback: undefined } : undefined)
+  const overlays = renderBuildPromptOverlays(context ? { ...context, acceptanceFeedback: undefined } : undefined)
   if (overlays.sections.length > 0) {
     contextLines.push("## Task-Specific Build Overlays")
     contextLines.push("")
@@ -2673,7 +2673,7 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
     contextLines.push(context.retryFeedback.trim())
     contextLines.push("")
   }
-  const acceptanceOverlay = renderBuildPromptOverlays({ deliveryFeedback: context?.deliveryFeedback })
+  const acceptanceOverlay = renderBuildPromptOverlays({ acceptanceFeedback: context?.acceptanceFeedback })
   if (acceptanceOverlay.sections.length > 0) {
     contextLines.push(acceptanceOverlay.sections.join("\n\n"))
     contextLines.push("")
@@ -2720,7 +2720,7 @@ export function buildRetryFeedbackPrompt(target: BuildTarget, context?: BuildAge
     lines.push("Target: direct build request")
   }
   lines.push("")
-  const overlays = renderBuildPromptOverlays(context ? { ...context, deliveryFeedback: undefined } : undefined)
+  const overlays = renderBuildPromptOverlays(context ? { ...context, acceptanceFeedback: undefined } : undefined)
   if (overlays.sections.length > 0) {
     lines.push("## Task-Specific Build Overlays")
     lines.push("")
@@ -2741,7 +2741,7 @@ export function buildRetryFeedbackPrompt(target: BuildTarget, context?: BuildAge
     lines.push(context.retryFeedback.trim())
     lines.push("")
   }
-  const acceptanceOverlay = renderBuildPromptOverlays({ deliveryFeedback: context?.deliveryFeedback })
+  const acceptanceOverlay = renderBuildPromptOverlays({ acceptanceFeedback: context?.acceptanceFeedback })
   if (acceptanceOverlay.sections.length > 0) {
     lines.push(acceptanceOverlay.sections.join("\n\n"))
     lines.push("")

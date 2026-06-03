@@ -14,7 +14,7 @@ OpenCorvus 的编排围绕 **agent** 构建。代理注册表（名称、模式�
 | `build` | primary | 默认 agent。在配置的权限规则下执行 read / edit / bash / mirror 工具链。 |
 | `general` | subagent | 通用多步研究 / 并行工作 agent，由 `task` 工具派发。 |
 | `explore` | subagent | 代码库探索——快速文件 / 代码搜索，默认只读。 |
-| `delivery` | primary（hidden） | 交付 agent。基于交付证据提交语义 accept / reject 判断；确定性仲裁器最终化 delivery-stage verdict。 |
+| `acceptance` | primary（hidden） | 交付 agent。基于交付证据提交语义 accept / reject 判断；确定性仲裁器最终化 acceptance-stage verdict。 |
 | `orchestrator` | primary（hidden） | 编排 agent。拥有任务生命周期决策权，并调用 `requirements` / `architect` / `build` / `deliver` 等显式工作流工具。 |
 | `requirements` | primary（hidden） | 需求阶段。抽取用户需求和基础技术决策；不产出 goals。 |
 
@@ -75,7 +75,7 @@ orchestrator 跑 `pipeline` 工作流时，每个 goal 在独立的 Goal worktre
   "assistant": {
     "requirements":    { "max_steps": 20 },
     "architect":       { "max_steps": 40 },
-    "delivery":        { "max_steps": 160, "max_retries": 3 },
+    "acceptance":        { "max_steps": 160, "max_retries": 3 },
     "frontend_design":  { "max_steps": 30 },
     "intent_analysis": { "max_steps": 10 },
     "build":           { "max_steps": 80 }

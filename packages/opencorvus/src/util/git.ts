@@ -51,11 +51,11 @@ export function resolveGitTimeoutMs(opts: Pick<GitOptions, "timeoutMs" | "timeou
  * issues in embedded/client environments.
  *
  * Timeout resolution order: `opts.timeoutMs` > `opts.timeoutProfile` >
- * legacy default (90s). A merged delivery worktree may carry node_modules /
+ * legacy default (90s). A merged acceptance worktree may carry node_modules /
  * dist artefacts, where `git add -A` walks every entry to decide tracked vs
  * ignored — on Windows with hot file caches that can run >60s. Without a
  * deadline a hung git call would block the orchestrator's post-rejection
- * wake (the commitDeliveryRound site that motivated this bound). Phase-1
+ * wake (the commitAcceptanceRound site that motivated this bound). Phase-1
  * sweep migrates risk-path callers to explicit profiles to make intent
  * legible; Phase-2 will lint-forbid the legacy default.
  */

@@ -115,15 +115,15 @@ describe("panel.query_task execution", () => {
     expect(out.tasks[1]?.taskID).toBe("task_bad")
   })
 
-  test("includes evaluation + delivery when present on board", async () => {
+  test("includes evaluation + acceptance when present on board", async () => {
     spyOn(EngineService, "getBoard").mockImplementation(async (taskID: string) => ({
       task: { id: taskID, title: "t", status: "completed" as const, time: { created: 1, updated: 2, completed: 5 } },
       evaluation: { verdict: "accepted", summary: "all checks passed" },
-      delivery: { summary: "delivered v1" },
+      acceptance: { summary: "delivered v1" },
     }) as any)
     const out = await runQuery({ taskIDs: ["task_done"] })
     expect(out.tasks[0]?.evaluation).toEqual({ verdict: "accepted", summary: "all checks passed" })
-    expect(out.tasks[0]?.delivery).toEqual({ summary: "delivered v1" })
+    expect(out.tasks[0]?.acceptance).toEqual({ summary: "delivered v1" })
     expect(out.tasks[0]?.completed).toBe(5)
   })
 

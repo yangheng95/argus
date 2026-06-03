@@ -27,14 +27,14 @@ afterEach(async () => {
 function fakeStuckAdapter(): ExecutorAdapter {
   return {
     capabilities: () => ({
-      submit: true, status: true, abort: true, delivery: false, resume: false, events: false,
+      submit: true, status: true, abort: true, acceptance: false, resume: false, events: false,
     }),
     submit: async () => { throw new Error("not used") },
     status: async () => { throw new Error("not used") },
     abort: () => new Promise<boolean>(() => {
       // Never resolves. Tests rely on cancelTask's withTimeout wrapper.
     }),
-    delivery: async () => { throw new Error("not used") },
+    acceptance: async () => { throw new Error("not used") },
     resume: async () => { throw new Error("not used") },
     events: () => { throw new Error("not used") },
   } as unknown as ExecutorAdapter

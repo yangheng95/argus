@@ -1,20 +1,20 @@
-# Delivery Checks and Verdict
+# Acceptance Checks and Verdict
 
-> **Important change (2026-05)**: The old `evaluator` agent and `src/evaluator/` directory have been **removed entirely**. The "determine whether a deliverable is acceptable" responsibility they previously held is now fulfilled by the **Delivery agent** + `src/delivery/checks/` modules; verdict artifacts are persisted as `engine_artifact[kind="evaluation" | "verdict" | "verification-evidence"]`. This page retains URL compatibility; content has been replaced with the new model.
+> **Important change (2026-05)**: The old `evaluator` agent and `src/acceptance/checks/` directory have been **removed entirely**. The "determine whether a deliverable is acceptable" responsibility they previously held is now fulfilled by the **Acceptance review** + `src/acceptance/checks/` modules; verdict artifacts are persisted as `engine_artifact[kind="evaluation" | "verdict" | "verification-evidence"]`. This page retains URL compatibility; content has been replaced with the new model.
 
 ## Two-stage verification
 
 ### Stage 1: deterministic checks
 
-The Delivery agent resolves the current task's check family via `delivery/checks/discovery.ts` and runs checks in the following order:
+The Acceptance review resolves the current task's check family via `acceptance/checks/discovery.ts` and runs checks in the following order:
 
 1. **Extract commands from `done_definition` / `check_selectors`** — parse commands declared on Goal / Requirement metadata (`bun run typecheck`, `bun test`, `pytest`, etc.); run them directly; trust exit codes. Commands must come from structured metadata — **never inferred from keywords** (see `check/policy.ts::inferSelectors`, which returns an empty array by design).
-2. **Project discovery** — walk up from `owned_paths` to find the nearest `package.json` / `pyproject.toml` / `Cargo.toml` / `go.mod`; auto-detect build / test / lint commands. Exact rules live in `delivery/checks/project-gate.ts` and `delivery/checks/runtime-readiness.ts`.
+2. **Project discovery** — walk up from `owned_paths` to find the nearest `package.json` / `pyproject.toml` / `Cargo.toml` / `go.mod`; auto-detect build / test / lint commands. Exact rules live in `acceptance/checks/project-gate.ts` and `acceptance/checks/runtime-readiness.ts`.
 3. **Semantic criteria** — plain-text criteria that cannot be executed (e.g., "conforms to architecture spec") contribute only as evidence; they do not affect pass/fail.
 
 ### Stage 2: LLM judge
 
-Engaged **only when deterministic checks cannot decide** (e.g., no executable tests, or a UI visual fidelity judgment). Visual rendering evidence uses `runtime/visual-page.ts`; content fingerprint helpers live under `delivery/checks/content-fingerprint.ts`. Integrity review aggregates the final acceptance verdict.
+Engaged **only when deterministic checks cannot decide** (e.g., no executable tests, or a UI visual fidelity judgment). Visual rendering evidence uses `runtime/visual-page.ts`; content fingerprint helpers live under `acceptance/checks/content-fingerprint.ts`. Integrity review aggregates the final acceptance verdict.
 
 ## CheckSelector
 
@@ -31,10 +31,10 @@ code_review · dead_code_review · startup · spec_check
 
 ## Configuration
 
-Configure via `assistant.delivery.*` / `assistant.delivery_visual.*` in `opencorvus.jsonc`. The old `assistant.evaluator.tier` field no longer exists:
+Configure via `assistant.acceptance.*` / `assistant.acceptance_visual.*` in `opencorvus.jsonc`. The old `assistant.evaluator.tier` field no longer exists:
 
-- `delivery.max_retries` — maximum remediation attempts in the delivery phase
-- `delivery_visual.*` — numeric hard-threshold values for visual judgment
+- `acceptance.max_retries` — maximum remediation attempts in the acceptance phase
+- `acceptance_visual.*` — numeric hard-threshold values for visual judgment
 - Full schema: [05-config.md](../../../specs/new-arch/05-config.md)
 
 ## `selectorsSatisfied` semantics
@@ -55,21 +55,21 @@ Verdicts are persisted as `engine_artifact[kind="verdict"]`:
 
 | verdict        | Next action                                                                                                                                                           |
 | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `accepted`     | `deliver` completes the task directly; if additional artifacts (patch / git preview) are needed, call `publish_delivery` explicitly for post-delivery artifact export |
-| `rejected`     | Remediation via `delivery-retry-feedback.ts`; once `delivery.max_retries` is exceeded, the Orchestrator decides whether to retry / replan / fail                      |
+| `accepted`     | `deliver` completes the task directly; if additional artifacts (patch / git preview) are needed, call `publish_acceptance` explicitly for post-acceptance artifact export |
+| `rejected`     | Remediation via `acceptance-retry-feedback.ts`; once `acceptance.max_retries` is exceeded, the Orchestrator decides whether to retry / replan / fail                      |
 | `inconclusive` | Treated as rejected, but prefers replan (an inability to decide usually means incomplete information or a doom-loop)                                                  |
 
-The Delivery agent is responsible only for verdicts and evidence. Starting / stopping / retrying / cancelling / failing the current task, and publishing new follow-up tasks, are Orchestrator lifecycle authority. If Delivery determines the work should be split into a new task, it can only recommend this in verdict evidence — it cannot create the task directly.
+The Acceptance review is responsible only for verdicts and evidence. Starting / stopping / retrying / cancelling / failing the current task, and publishing new follow-up tasks, are Orchestrator lifecycle authority. If Acceptance determines the work should be split into a new task, it can only recommend this in verdict evidence — it cannot create the task directly.
 
 ## Relationship to benchmarks
 
-A benchmark `qualityVerdict === "accepted"` now means the delivery agent has written a verdict artifact of `accepted` and the `verification-evidence` satisfies `required_check_pass_rate > 0` (`script/benchmark/quality-gates.ts`).
+A benchmark `qualityVerdict === "accepted"` now means the acceptance review has written a verdict artifact of `accepted` and the `verification-evidence` satisfies `required_check_pass_rate > 0` (`script/benchmark/quality-gates.ts`).
 
 ## Prosecutor / Integrity review
 
-`accepted` candidates may undergo a further independent review by two agents, but neither is an internal Delivery step or an automatic delivery gate:
+`accepted` candidates may undergo a further independent review by two agents, but neither is an internal Acceptance step or an automatic acceptance gate:
 
-- **Integrity Reviewer** (`integrity/agent.ts`): a multi-dimension review explicitly invoked by the Orchestrator (requirement_fidelity / technical_feasibility / hallucination / solution_quality); results land in `engine_artifact[kind="integrity_attempt"]`. Delivery does not automatically run or consume it as an internal gate; evidence for fixing a Delivery rejection should go directly into the next build round.
+- **Integrity Reviewer** (`integrity/agent.ts`): a multi-dimension review explicitly invoked by the Orchestrator (requirement_fidelity / technical_feasibility / hallucination / solution_quality); results land in `engine_artifact[kind="integrity_attempt"]`. Acceptance does not automatically run or consume it as an internal gate; evidence for fixing a Acceptance rejection should go directly into the next build round.
 - **Prosecutor** (`prosecutor/agent.ts`): adversarial review; results land in `engine_artifact[kind="prosecutor_attempt"]`.
 
 Both are invoked actively by the Orchestrator via tool calls — not part of an automatic pipeline.

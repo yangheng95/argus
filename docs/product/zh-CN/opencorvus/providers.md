@@ -122,7 +122,7 @@ per-agent 覆盖与执行模型分离的目的：**用强但慢的模型规划�
 }
 ```
 
-> ~~`assistant.planner.model`~~ 已不再有效——planner agent 整体下线（见 [Agent 家族](../../../specs/new-arch/01-agents.md)）。
+> ~~`assistant.planner.model`~~ 已不再有效——planning tool role 整体下线（见 [Agent 家族](../../../specs/new-arch/01-agents.md)）。
 
 ## Reasoning 模型注意事项
 

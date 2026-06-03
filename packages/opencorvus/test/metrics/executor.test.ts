@@ -228,12 +228,12 @@ describe("executeMetrics — judge evaluator (pluggable runner)", () => {
       gate_class: "blocking",
       evaluator_kind: "judge",
       evaluator_config: {
-        criteria: "Does the delivery honor the user intent?",
+        criteria: "Does the acceptance honor the user intent?",
         rubric: [
           { score: 0, label: "off-intent", anchor: "ignores user ask", passes: false },
           { score: 1, label: "on-intent", anchor: "honors user ask", passes: true },
         ],
-        inputs: ["delivery_summary"],
+        inputs: ["acceptance_summary"],
       },
       source_requirement_ids: [],
     })
@@ -246,7 +246,7 @@ describe("executeMetrics — judge evaluator (pluggable runner)", () => {
       {
         task_id: taskID,
         iteration: 0,
-        delivery: { summary: "Built the login page as requested." },
+        acceptance: { summary: "Built the login page as requested." },
       },
       { judge },
     )

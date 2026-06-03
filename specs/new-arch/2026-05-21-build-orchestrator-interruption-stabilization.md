@@ -186,7 +186,7 @@ Remaining gap:
 6. Retry cannot start until the prior same-session attempt is fully settled.
 7. Task-level direct build completion and per-goal build completion are scoped
    separately in artifacts, workflow events, and UI messages.
-8. Goal status is advisory. Delivery/verification decisions are evidence-based,
+8. Goal status is advisory. Acceptance/verification decisions are evidence-based,
    not "all goal rows must be completed".
 9. Overlay card identity is message-display identity. Attempt identity remains
    `goal_run_id`; runtime identity remains `session_id`.
@@ -350,8 +350,8 @@ Update orchestrator prompt/context language:
 
 - Goal status describes the latest implementation attempt.
 - Superseded/pending goal status is not itself a mandatory rebuild command.
-- If direct build, delivery evidence, or integrity evidence already satisfies
-  the requirement, choose verification/delivery rather than retrying a goal for
+- If direct build, acceptance evidence, or integrity evidence already satisfies
+  the requirement, choose verification/acceptance rather than retrying a goal for
   cosmetic status convergence.
 
 Host code should not auto-route this. The prompt/context must make the evidence

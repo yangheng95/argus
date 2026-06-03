@@ -158,26 +158,26 @@ describe("core prompt hygiene", () => {
     }
   })
 
-  test("no core prompt routes final acceptance authority to the retired Delivery role", async () => {
-    // Regression guard (rule 8 single-source): delivery is retired; integrity
-    // owns final acceptance. No active agent core prompt may name Delivery as
+  test("no core prompt routes final acceptance authority to the retired Acceptance review", async () => {
+    // Regression guard (rule 8 single-source): acceptance is retired; integrity
+    // owns final acceptance. No active agent core prompt may name Acceptance as
     // the acceptance/verdict authority. Lowercase generic "deliver" verbs are
     // fine — these patterns target the retired role-as-authority constructs
     // that requirements-core used to carry.
     const forbidden = [
-      /Delivery owns/,
-      /Delivery reviewer/,
-      /\bto Delivery\b/,
-      /delivery-surface evidence/,
-      /not Delivery, Build/,
-      /Delivery's own/,
+      /Acceptance owns/,
+      /Acceptance reviewer/,
+      /\bto Acceptance\b/,
+      /acceptance-surface evidence/,
+      /not Acceptance, Build/,
+      /Acceptance's own/,
     ]
     for (const name of Object.keys(promptFiles) as Array<keyof typeof promptFiles>) {
       const text = await readPrompt(name)
       for (const pat of forbidden) {
         expect(
           text,
-          `${name} prompt still routes acceptance authority to the retired Delivery role (${pat})`,
+          `${name} prompt still routes acceptance authority to the retired Acceptance review (${pat})`,
         ).not.toMatch(pat)
       }
     }
@@ -252,8 +252,8 @@ describe("core prompt hygiene", () => {
     const workflow = await readSource("engine/workflow.ts")
     const orchestratorAgentFlat = orchestratorAgent.replace(/\s*\*\s*/g, " ").replace(/\s+/g, " ")
 
-    expect(orchestratorAgent).not.toContain("requirements → goals → plan → execute → eval → delivery verify → publish")
-    expect(orchestratorAgent).not.toContain("plan, eval, delivery")
+    expect(orchestratorAgent).not.toContain("requirements → goals → plan → execute → eval → acceptance verify → publish")
+    expect(orchestratorAgent).not.toContain("plan, eval, acceptance")
     expect(orchestratorAgentFlat).toContain("MiniWorkflow renders an advisory path")
     expect(orchestratorAgentFlat).toContain("Specialist agents own their structured artifacts")
 
@@ -498,7 +498,7 @@ describe("core prompt hygiene", () => {
   })
 
   test("build visual reference preamble bans inline base64 and routes assets through references/", async () => {
-    // Spec: delivery-attachment-store-single-source-2026-05-11.md companion
+    // Spec: acceptance-attachment-store-single-source-2026-05-11.md companion
     // (Session.updatePart `InlineBase64InPartError` host gate). The host gate
     // is rule-6.1 second branch (data integrity); this prompt clause is
     // rule-6.1 first branch — teach the LLM to never reach for inline
@@ -698,12 +698,12 @@ describe("core prompt hygiene", () => {
     )
     expect(design).toContain("use bounded `read_file` / project-structure tools")
     expect(design).toContain(
-      "then frontend_design creates the runtime `frontend-design-skeleton/` captured source project from that package as evidence and extracts from it into the target delivery project before handoff",
+      "then frontend_design creates the runtime `frontend-design-skeleton/` captured source project from that package as evidence and extracts from it into the target acceptance project before handoff",
     )
     expect(design).toContain(
       "Build must start from the target project that frontend_design populated and should only perform integration and precision fixes",
     )
-    expect(design).toContain("`final_delivery_mode`")
+    expect(design).toContain("`final_acceptance_mode`")
     expect(design).toContain("`baseline_replacement_plan`")
     expect(design).toContain("maintainable_replacement_required")
     expect(design).toContain("existing project components and mature libraries")
@@ -721,14 +721,14 @@ describe("core prompt hygiene", () => {
     expect(design).toContain("Component-kind fidelity is mandatory")
     expect(design).toContain("chart, map, heatmap, geographic visualization")
     expect(design).toContain("must not be delivered as a flat copied SVG, image, or decorative vector")
-    expect(design).toContain("All visible content in maintainable UI/webpage delivery must be componentized")
+    expect(design).toContain("All visible content in maintainable UI/webpage acceptance must be componentized")
     expect(design).toContain("fed by props/data modules/fixtures/API adapters")
 
     expect(requirements).toContain("skeleton-first implementation constraint")
     expect(requirements).toContain("must first be adopted into the root app as a temporary visual baseline")
     expect(requirements).toContain('Do not phrase this as "skeleton is reference only"')
     expect(requirements).toContain("first implementation goal must copy/adapt the frontend-design skeleton entrypoints")
-    expect(requirements).toContain("`final_delivery_mode`")
+    expect(requirements).toContain("`final_acceptance_mode`")
     expect(requirements).toContain("`baseline_replacement_plan`")
     expect(requirements).toContain("web-clone-source/implementation-blueprint.md")
     expect(requirements).toContain("source-skeleton/index.html` is raw evidence only")
@@ -1020,13 +1020,13 @@ describe("core prompt hygiene", () => {
     expect(normalized).toContain(
       "Pipeline workflow tasks complete only after the `integrity` reviewer returns a pass verdict",
     )
-    expect(normalized).toContain("There is no `deliver` or `publish_delivery` tool")
+    expect(normalized).toContain("There is no `deliver` or `publish_acceptance` tool")
     expect(normalized).toContain("A pass verdict completes the task")
     expect(normalized).toContain("Completed does not mean context deletion")
     expect(normalized).toContain("historical terminal review is baseline evidence")
     expect(normalized).not.toContain("Only an accepted host-arbiter verdict completes the task")
-    expect(normalized).not.toContain("delivery has accepted and been published")
-    expect(normalized).not.toContain("publish_delivery remains the normal terminal path")
+    expect(normalized).not.toContain("acceptance has accepted and been published")
+    expect(normalized).not.toContain("publish_acceptance remains the normal terminal path")
   })
 
   test("orchestrator prompt keeps visual workflow ordering and verification-goal lifecycle coherent", async () => {
@@ -1101,10 +1101,10 @@ describe("core prompt hygiene", () => {
     // The strengthened rule explicitly calls verification a non-exception.
     expect(text).toContain("Verification goals are NOT an")
     expect(text.replace(/\s+/g, " ")).toContain("A single passed goal is not task acceptance")
-    expect(text).toContain("There is no `deliver` or `publish_delivery` tool")
+    expect(text).toContain("There is no `deliver` or `publish_acceptance` tool")
   })
 
-  test("orchestrator prompt keeps pre-delivery work moving and cascades 1:1 reference fidelity to build", async () => {
+  test("orchestrator prompt keeps pre-acceptance work moving and cascades 1:1 reference fidelity to build", async () => {
     const text = await readPrompt("orchestrator")
     const normalized = text.replace(/\s+/g, " ")
     expect(text).toContain("Do not stop to ask")

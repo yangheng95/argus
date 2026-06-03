@@ -87,13 +87,13 @@
 - [x] 05-config.md · 06-provider.md · 07-panel.md · 99-principles.md 全部填充
 - [x] `src/calculator/` 已删除（零消费者，git rm）
 - [x] 2026-04-17 同步：`orchestrator/` → `engine/` · `task-agent/` → `orchestrator/` ·
-      `orchestrator/service.ts` → `task-api/index.ts` · `evaluator/` → `delivery/checks/` ·
+      `orchestrator/service.ts` → `task-api/index.ts` · `evaluator/` → `acceptance/checks/` ·
       `control-plane/` 拆并入 `workspace/` + `util/sse.ts` ·
       `session.channel_key` + `session_gateway_singleton_idx` 移除 ·
       `panel/api.ts` + `panel/settings.ts` 移除
 - [x] 2026-04-27 同步：
   - `engine_*` 表从 18 张缩到 13 张（Phase 6 把 `engine_run` / `engine_goal_run` /
-    `engine_delivery` / `engine_evaluation` / `engine_goal_snapshot` 合并为 `engine_artifact` + `kind` 区分）
+    `engine_acceptance` / `engine_evaluation` / `engine_goal_snapshot` 合并为 `engine_artifact` + `kind` 区分）
   - `engine/goal-pool.ts` 与 `pipeline/executor.ts` 已删除，调度逻辑并入 build tool + `goal/runner.ts`
   - `executor/` 新增 `codex.ts` / `bootstrap.ts` / `discovery.ts` / `external-process.ts` / `managed.ts` / `runtime-env.ts`
   - `provider/` 拆出 `vendor-headers.ts` / `vendor-messages.ts`；新增 `policy.ts` / `hexin-discovery.ts` / `hexin-profiles.ts`；删除 `codex-live.ts`
@@ -105,7 +105,7 @@
 - [x] 2026-05-11 同步（本轮）：
   - **`src/decompose/` 完全删除**（不再以"`requirements/` 是 re-export"形式存在）；
     `src/requirements/` 是独立包：`agent.ts` / `index.ts` / `output-tools.ts` / `types.ts`
-  - **`src/planner/` 整目录删除**：planner 不再是独立 sub-agent。session 级的
+  - **the removed planning package 整目录删除**：planner 不再是独立 sub-agent。session 级的
     `src/tool/planner.ts` 是 working-memory + scratchpad 工具（task tree / scratchpad），
     与旧的 per-goal "planGoal()" 完全不同
   - **`src/pipeline/` 只剩 `goal-contract.schema.ts` + `types.ts`** 两个 schema 文件，
@@ -120,20 +120,20 @@
     `requirements` · `frontend_design` · `architect` · `integrity` · `prosecute` ·
     `analyze_intent` · `modify_goal` · `query_failed_goals` · `read_context` ·
     `fail_task` · `cancel_task` · `retry_task` · `inject_operator_message` ·
-    `steer_subagent` · `restart_from_stage` · `deliver` · `publish_delivery` ·
+    `steer_subagent` · `restart_from_stage` · `deliver` · `publish_acceptance` ·
     `refine` · `question` · `propose_task` · `build`
-    `publish_delivery` is post-delivery artifact export only; accepted `deliver`
+    `publish_acceptance` is post-acceptance artifact export only; accepted `deliver`
     is the task lifecycle completion authority.
   - `panel/capability.ts` 当前注册 **20 个 action**（详见 03-control.md）
   - **SessionKind 实际是 15 种**（02-data.md 写"16 种"且把 `planner` 列入是错的）：
     `root` · `orchestrator` · `assistant` · `gateway` · `intent-analysis` ·
     `requirements` · `frontend-design` · `goal` · `architect` · `integrity` ·
-    `delivery` · `executor` · `build` · `evaluator` · `system`
+    `acceptance` · `executor` · `build` · `evaluator` · `system`
   - SSE 端点真源是 `src/server/routes/orchestrator.ts`（task / task event 双 SSE 主线）+
     `routes/panel.ts` / `routes/global.ts` / `routes/app.ts` / `routes/coding.ts` 5 个文件；
     `src/server/event.ts` 只是 7 行的 `BusEvent` 类型声明（`server.connected` / `global.disposed`），
     历史 `routes/task-event.ts` 路径不存在
-  - `delivery/` 新增 `arbiter.ts` / `manifest.ts` / `output-tools.ts` / `runtime-capture.ts` /
+  - `acceptance/` 新增 `arbiter.ts` / `manifest.ts` / `output-tools.ts` / `runtime-capture.ts` /
     `service.ts` / `specialist-review.ts` / `specialists/` / `surface-detector.ts` /
     `tool-result.ts` / `tools.ts` / `verdict.ts` / `visual-metric.ts`；checks 增 `walkthrough/`
   - `architect/` 新增 `contract-ir.ts` / `fidelity.ts` / `linker.ts` / `output-tools.ts`
@@ -145,11 +145,11 @@
     补全 `plugin/isolate.ts`（`runHookIsolated`）与 `mcp/materialize.ts`
   - **05-config.md** — 删除已不存在的 `assistant.spec / goal / planner / evaluator / adaptive`
     字段；删除 `experimental.unattended / auto_permission`（仅余 `auto_question`）；
-    补齐当前 `assistant` 子项（`architect / delivery / delivery_visual / frontend_design /
+    补齐当前 `assistant` 子项（`architect / acceptance / acceptance_visual / frontend_design /
     intent_analysis / build / activity / debug / default_workflow / workflows`）
   - **06-provider.md** — 数量改为 **20 bundled provider**（`provider/bundled.ts:27-48`）；
     Agent ↔ Model 示例替换 `planner / evaluator` 为 `orchestrator / requirements /
-    architect / build / delivery`
+    architect / build / acceptance`
   - **07-panel.md** — Config Panel agent 列删除 `Planner / Evaluator`，补 `Frontend Design /
     Intent-Analysis / Build`；Behavior 区只保留 `auto_question`；SSE 事件改为实际注册的
     `workflow.selected / workflow.step.updated / goal.workflow.progress`
@@ -158,20 +158,20 @@
     flushEvents / messagesBySession`，与 `partitionInteractions` / `goal-group:<gid>` 残留
   - **08-agent-tool-adapter.md** — 顶部加 **8 条关键修正**：`tools` schema 是
     `{ include?, exclude? }` 同对象而非 union；`spec_enter / spec_exit / plan_enter /
-    plan_exit` 这些 tool **从未存在**；build / general / explore / delivery 真实工具集已对齐
+    plan_exit` 这些 tool **从未存在**；build / general / explore / acceptance 真实工具集已对齐
     `agent.ts:125/140/157/233`；`requirements / architect / frontend-design / intent-analysis`
     实际走 ToolRegistry（之前列为"不走"是错的）；`src/session/tool-resolver.ts` 不存在，
     `resolveTools` 在 `session/loop.ts:1732`
-  - **09-verification-evidence.md** — 头部状态条更新：arbiter 真源是 `delivery/arbiter.ts`，
+  - **09-verification-evidence.md** — 头部状态条更新：arbiter 真源是 `acceptance/arbiter.ts`，
     `metrics/arbiter.ts` 不存在；`computeSignature` 从未在 `src/` 中落地；`goal-pool.ts` /
     `engine_evaluation` / `buildRetryFeedbackSection@goal/runner.ts:467` /
-    `prefetchDeliveryContext` 等具体符号已失效；`verification/persist.ts` 实际导出 5 个查询
-    helper（含 `findGoalRunEvidence` / `findPreviousDeliveryEvidence`）
+    `prefetchAcceptanceContext` 等具体符号已失效；`verification/persist.ts` 实际导出 5 个查询
+    helper（含 `findGoalRunEvidence` / `findPreviousAcceptanceEvidence`）
   - **10-worktree-lifecycle.md** — Status: Draft → **Implemented (2026-05-05)**；数据模型
     **以 §3.2 注脚的"per-attempt artifact payload"方案落地，不是 §3.1 在 `engine_goal` 加列**。
     `engine.sql.ts:383-391` 注释明确 Phase B (2026-05-05) 把 workspace 列从 `engine_goal`
     回退，改写到 `engine_artifact[goal_run_attempt].payload`
-  - **11-agent-oop-protocol.md** — `ORCHESTRATOR_INSTRUCTIONS` 与 `DELIVERY_AGENT_SYSTEM`
+  - **11-agent-oop-protocol.md** — `ORCHESTRATOR_INSTRUCTIONS` 与 `ACCEPTANCE_AGENT_SYSTEM`
     inline → `.txt` 迁移**已完成**；§七迁移表 `planGoal()` 行整删；新增 `IntegrityAgent` /
     `ProsecutorAgent` 行（已接线）；§4.1 待迁移段改为"全部已完成"
   - **13-agent-communication-matrix.md** — 修正"真源文件索引"：build 包没有 `runner.ts` /
@@ -194,7 +194,7 @@
 - [x] 2026-05-12 同步（follow-up：4 个并行 agent 复核 13 个 numbered spec vs 当前代码）：
   - **01-agents.md** — line 56 build-dispatch 描述：`goal/runner.ts` 只剩 `cleanupGoalWorkspace`
     （121 行），build 派发实际由 `orchestrator/agent.ts:161` + `orchestrator/tools.ts:5075` +
-    `build/agent.ts` + `engine/workflow.ts` 协同；line 139 delivery checks 文件清单换成实际盘上
+    `build/agent.ts` + `engine/workflow.ts` 协同；line 139 acceptance checks 文件清单换成实际盘上
     `visual.ts` / `runtime-evidence.ts` / `runtime-readiness.ts` / `walkthrough/` /
     `content-fingerprint.ts` / `contract-audit-review.ts` / `project-gate.ts`；line 181-184
     EngineService 暴露 API 改为 `handleTaskMessage` / `injectMessage` / `getBoard` / `getBrief` /
@@ -212,7 +212,7 @@
   - **05-config.md** — 顶层字段补 `disabled_providers / small_model / default_agent /
     preview / terminal / locale`；移除"每个 agent 都有 `max_steps · timeout_ms · quality_threshold
     · max_attempts · skills[]`"的谬误（`config.ts:1259-1365` 实际每个 agent 字段集
-    不一样：build = max_steps+skills，delivery = +max_retries，delivery_visual = numeric
+    不一样：build = max_steps+skills，acceptance = +max_retries，acceptance_visual = numeric
     thresholds，activity = idle/timeout ms gates）；标注 2026-05-11 新增 `locale` 与
     Overlay UI locale 的区分
   - **06-provider.md** — Layer 6 溢出 regex 数 12 → 19（`provider/error.ts:8-28`）；
@@ -239,8 +239,8 @@
     后的事实：`AcceptanceSpec.scenario`（`acceptance/types.ts:24,119`）、
     `engine_artifact.kind="orchestrator-stream-error"`、integrity post-build + freshness
     gate、ContractIR/Linker/contract_audit 链接、arbiter 真源导出列表
-    （`arbitrateDeliveryGate` / `arbitrateDeliveryVerdict` / `appendManifestEvidence`）
-  - **11-agent-oop-protocol.md** — §三 inheritance hierarchy 删除 `PlannerAgent`，新增
+    （`arbitrateAcceptanceGate` / `arbitrateAcceptanceVerdict` / `appendManifestEvidence`）
+  - **11-agent-oop-protocol.md** — §三 inheritance hierarchy 删除 `RetiredPlanningRole`，新增
     `IntegrityAgent` / `ProsecutorAgent`；BuildAgent 双路径注（SessionAgent vs
     PipelineAgent）；§4.1 prompt 目录表对齐实际盘上文件（`agent/prompt/` 有 `judge.txt`
     无 `summary.txt`；`prompt/core/` 含 `build-core.txt`）；§七迁移表把

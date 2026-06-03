@@ -149,7 +149,7 @@ export const BashTool = Tool.define("bash", async () => {
       background: z
         .boolean()
         .describe(
-          "When true, the command keeps running after this tool call returns until explicitly stopped or until the background lease expires. The tool returns immediately with the spawned PID once stdout/stderr are observed (or after a short readiness window). Use ONLY for long-lived servers (dev/preview/serve) that must outlive a single tool call so delivery checks can probe them. You are responsible for stopping it later (e.g. `kill <pid>` or `lsof -ti :<port> | xargs kill`).",
+          "When true, the command keeps running after this tool call returns until explicitly stopped or until the background lease expires. The tool returns immediately with the spawned PID once stdout/stderr are observed (or after a short readiness window). Use ONLY for long-lived servers (dev/preview/serve) that must outlive a single tool call so acceptance checks can probe them. You are responsible for stopping it later (e.g. `kill <pid>` or `lsof -ti :<port> | xargs kill`).",
         )
         .optional(),
       leaseTimeout: z

@@ -63,7 +63,7 @@ Tool 调用超时必须是"无输出后的真实超时"，不能从启动时刻�
 
 ### 5. Build agent 共享 sub-agent 协议
 
-build / intent-analysis / requirements / architect / frontend-design / integrity / prosecutor / delivery 共用 `agent/sub-agent-protocol.ts` 的结构化输出契约（Zod tool call），结果写入 `engine_artifact`。
+build / intent-analysis / requirements / architect / frontend-design / integrity / prosecutor / acceptance 共用 `agent/sub-agent-protocol.ts` 的结构化输出契约（Zod tool call），结果写入 `engine_artifact`。
 
 ## Doom-loop 检测
 
@@ -76,5 +76,5 @@ build / intent-analysis / requirements / architect / frontend-design / integrity
 ## 你接下来要看的
 
 - [架构总览](./architecture.md)
-- [Delivery 检查与判决](../opencorvus/evaluator.md)
+- [Acceptance 检查与判决](../opencorvus/evaluator.md)
 - [Permissions](../opencorvus/permissions.md)

@@ -26,7 +26,7 @@ export const DIRECT_REPLY_AGENT_KINDS: ReadonlySet<string> = new Set([
   "goal",
   "architect",
   "integrity",
-  "delivery",
+  "acceptance",
   "evaluator",
 ]);
 

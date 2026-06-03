@@ -56,9 +56,9 @@ export interface DomRefs {
   goalsSection: HTMLElement | null;
   executorSection: HTMLElement | null;
   criteriaSection: HTMLElement | null;
-  deliverySection: HTMLElement | null;
-  deliveryBadge: HTMLElement | null;
-  deliveryBody: HTMLElement | null;
+  acceptanceSection: HTMLElement | null;
+  acceptanceBadge: HTMLElement | null;
+  acceptanceBody: HTMLElement | null;
   changesSection: HTMLElement | null;
 
  // Channel section
@@ -201,9 +201,9 @@ export function getDomRefs(): DomRefs {
     goalsSection: $<HTMLElement>("#goalsSection"),
     executorSection: $<HTMLElement>("#executorSection"),
     criteriaSection: $<HTMLElement>("#criteriaSection"),
-    deliverySection: $<HTMLElement>("#deliverySection"),
-    deliveryBadge: $<HTMLElement>("#deliveryBadge"),
-    deliveryBody: $<HTMLElement>("#deliveryBody"),
+    acceptanceSection: $<HTMLElement>("#acceptanceSection"),
+    acceptanceBadge: $<HTMLElement>("#acceptanceBadge"),
+    acceptanceBody: $<HTMLElement>("#acceptanceBody"),
     changesSection: $<HTMLElement>("#changesSection"),
 
  // Channel section

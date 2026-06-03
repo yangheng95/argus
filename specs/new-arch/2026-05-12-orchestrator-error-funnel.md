@@ -62,7 +62,7 @@ instead of grepping flat strings.
 
 | Site                                           | Effect                                                                                                   |
 | ---------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| retired delivery agent provider setup          | bubbled raw `Provider.getModel` failure to orchestrator delivery flow                                    |
+| retired acceptance review provider setup          | bubbled raw `Provider.getModel` failure to orchestrator acceptance flow                                    |
 | `orchestrator/tools.ts:4791` (`refine`)        | bubbles raw `resolveAgentModel` failure to the tool caller                                               |
 | `control/message.ts:224-230`                   | `Provider.defaultModel()` is intentionally uncaught; missing config stays operator-visible               |
 | `session/wake.ts:101-103`                      | wake loop `resolveModel()` returns `Provider.defaultModel()` raw; no local swallow                       |

@@ -1,5 +1,5 @@
 // ── FilesSection ──
-// Top-level right-panel Files tab. The tab stays mounted so delivery
+// Top-level right-panel Files tab. The tab stays mounted so acceptance
 // focus events can retarget the selected goal without remount churn.
 
 import { createMemo } from "solid-js"

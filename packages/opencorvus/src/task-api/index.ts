@@ -7,7 +7,7 @@ import { resolveAgentModel, resolveAgentModelRef, resolveConfiguredModelRef } fr
 import { Bus } from "@/bus"
 import { Config } from "@/config/config"
 import { EffectiveConfig } from "@/config/effective"
-import { discoverChecks, resolveConfig, resolvedChecks } from "@/delivery/checks/discovery"
+import { discoverChecks, resolveConfig, resolvedChecks } from "@/acceptance/checks/discovery"
 import { ExecutorNotConfiguredError } from "@/executor/contract"
 import { ExecutorBootstrap } from "@/executor/bootstrap"
 import { ExecutorRegistry } from "@/executor/registry"
@@ -91,10 +91,10 @@ import { sessionRole, taskIDForSession } from "@/orchestrator/task-event"
 import {
   activeRunBySession,
   findArtifacts,
-  findDeliveryByGoalRun,
-  findDeliveryByRun,
+  findAcceptanceByGoalRun,
+  findAcceptanceByRun,
   findGoalRun,
-  findLatestDeliveryForRun,
+  findLatestAcceptanceForRun,
   findActivePlanForTask,
   findActiveRunForTask,
   findEvaluationByRun,
@@ -123,7 +123,7 @@ import {
   requireRun,
   requireTask,
   viewArtifact,
-  viewDelivery,
+  viewAcceptance,
   viewEvaluation,
   viewGoal,
   viewInteraction,
@@ -682,7 +682,7 @@ async function taskChecks(checks?: z.input<typeof CheckConfig>) {
   return CheckConfig.parse(next)
 }
 
-/** Thrown when the planner agent cannot produce a valid plan. Server routes
+/** Thrown when the planning tool role cannot produce a valid plan. Server routes
  *  map this to a 4xx so the user sees the planner failure rather than a
  *  generic 500. */
 export class PlannerFailureError extends Error {
@@ -763,13 +763,13 @@ export namespace EngineService {
     // Phase-6-f-3-bis-b: workflow_state is no longer persisted. The
     // orchestrator resolves the default workflow fresh on each wake and
     // projects step status from side-effects (spec / goals / runs /
-    // delivery presence). board.ts::buildWorkflowFields likewise no
+    // acceptance presence). board.ts::buildWorkflowFields likewise no
     // longer reads task.workflow_state — it always defaults to pipeline
     // and projects step status from DB rows.
 
     // Hierarchical permission model (rule 23): built-in tools default to
     // `allow` (see PermissionNext.evaluate). Agent-scoped overlays
-    // (orchestrator, delivery, ...) layer on top via setPermission. Operators
+    // (orchestrator, acceptance, ...) layer on top via setPermission. Operators
     // restrict via explicit `deny` / `ask` rules under `tool_permissions`
     // in their config — only those keys appear here. We intentionally do
     // NOT inject a `*: "ask"` catch-all; that turned the LLM autonomy gate
@@ -922,7 +922,7 @@ export namespace EngineService {
    * Register a USER-CONTRACT attachment on a task. Use for files the user
    * explicitly attached (user-upload) or for assets the user pointed the
    * orchestrator at via a contract-level URL (figma frames). Read by
-   * requirements / frontend-design as user intent and by delivery for visual
+   * requirements / frontend-design as user intent and by acceptance for visual
    * comparison.
    *
    * For orchestrator-generated evidence (URL screenshots, rendered.png,
@@ -944,7 +944,7 @@ export namespace EngineService {
   /**
    * Register a SYSTEM-GENERATED artifact on a task. Use for evidence the
    * orchestrator/agents produced on the user's behalf — URL screenshots,
-   * local material reads. Read only by delivery for visual diff against the
+   * local material reads. Read only by acceptance for visual diff against the
    * user contract; never fed to requirements or frontend-design as user
    * intent. Idempotent on sha collision.
    */
@@ -961,7 +961,7 @@ export namespace EngineService {
   /**
    * Replace all system artifacts carrying a given `intent` with a single new
    * artifact. Use when each rerun should supersede the previous output for
-   * that semantic slot (e.g. delivery rendered_output: keeping every prior
+   * that semantic slot (e.g. acceptance rendered_output: keeping every prior
    * rendered.png would balloon the task and confuse the visual diff).
    */
   export async function replaceTaskSystemArtifactByIntent(
@@ -987,7 +987,7 @@ export namespace EngineService {
    * Merge a batch of evaluation checks into `engine_task.criteria_results`.
    * Upsert by `name` — the latest write for a given check name wins. Called
    * by the in-process visual-diff gate (orchestrator/tools.ts) and by the
-   * delivery-verdict sink that flattens DeliveryVerdict.deferred_checks +
+   * acceptance-verdict sink that flattens AcceptanceVerdict.deferred_checks +
    * rejection_details into the unified criteria stream. Does not change
    * task.status.
    */
@@ -1002,7 +1002,7 @@ export namespace EngineService {
     const item = listTaskRows([task])[0]
     const plan = findActivePlanForTask(task.id)
     const run = findActiveRunForTask(task.id)
-    const delivery = run ? findDeliveryByRun(run.id) : undefined
+    const acceptance = run ? findAcceptanceByRun(run.id) : undefined
     const evaluation = run ? findEvaluationByRun(run.id) : undefined
     const milestones = plan ? listMilestonesByPlan(plan.id) : listMilestones(taskID)
     return {
@@ -1017,7 +1017,7 @@ export namespace EngineService {
       pendingInteractions: listInteractions(taskID)
         .filter((item) => item.status === "pending")
         .map(viewInteraction),
-      delivery: delivery ? viewDelivery(delivery) : undefined,
+      acceptance: acceptance ? viewAcceptance(acceptance) : undefined,
       evaluation: evaluation ? viewEvaluation(evaluation) : undefined,
       snapshots: listSnapshots(taskID).map(viewSnapshot),
       // activeSessions surfaces pre-plan agent work (requirements / architect /
@@ -1150,28 +1150,28 @@ export namespace EngineService {
     }
   }
 
-  export async function getDelivery(runID: string) {
+  export async function getAcceptance(runID: string) {
     // Read-only — poll loop handles state advancement asynchronously.
-    // Prefer task-level delivery (goal_run_id IS NULL); fall back to any delivery for this run
+    // Prefer task-level acceptance (goal_run_id IS NULL); fall back to any acceptance for this run
     // so that goal-run deliveries (shown in the board) are also previewable.
-    const delivery = findDeliveryByRun(runID) ?? findLatestDeliveryForRun(runID)
-    if (!delivery) throw new NotFoundError({ message: `Delivery not found for run ${runID}` })
-    return viewDelivery(delivery)
+    const acceptance = findAcceptanceByRun(runID) ?? findLatestAcceptanceForRun(runID)
+    if (!acceptance) throw new NotFoundError({ message: `Acceptance not found for run ${runID}` })
+    return viewAcceptance(acceptance)
   }
 
-  export async function getGoalRunDelivery(goalRunID: string) {
+  export async function getGoalRunAcceptance(goalRunID: string) {
     // Read-only — goal-level diff previews must resolve against the
-    // specific goal_run delivery instead of the task-level aggregate.
+    // specific goal_run acceptance instead of the task-level aggregate.
     // Distinguish "goal_run does not exist" (true 404) from "goal_run
-    // exists but delivery has not landed yet" (legitimate in-flight state).
+    // exists but acceptance has not landed yet" (legitimate in-flight state).
     // Mirrors the convention documented on getSessionTrace below: in-flight
     // resources return 200 with an empty payload, not 404.
     if (!findGoalRun(goalRunID)) {
       throw new NotFoundError({ message: `goal_run ${goalRunID} not found` })
     }
-    const delivery = findDeliveryByGoalRun(goalRunID)
-    if (!delivery) return null
-    return viewDelivery(delivery)
+    const acceptance = findAcceptanceByGoalRun(goalRunID)
+    if (!acceptance) return null
+    return viewAcceptance(acceptance)
   }
 
   /** Surface the per-session AgentTrace event stream so the overlay's debug

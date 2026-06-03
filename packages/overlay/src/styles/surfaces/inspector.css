@@ -733,13 +733,13 @@
   line-height: 1.4;
 }
 
-/* Delivery panel — verdict card with a left-rail accent stripe.
+/* Acceptance panel — verdict card with a left-rail accent stripe.
    Tone is driven by the data-verdict attribute (`accepted` →
    --good, `rejected` → --bad, `inflight` → --accent, `empty` →
    transparent). The accent rail is rendered via `::before` against
-   the local `--delivery-panel-accent` cascade var. */
-.delivery-panel {
-  --delivery-panel-accent: var(--text-muted);
+   the local `--acceptance-panel-accent` cascade var. */
+.acceptance-panel {
+  --acceptance-panel-accent: var(--text-muted);
   position: relative;
   padding: calc(6px * var(--ui-scale));
   border: 0;
@@ -752,34 +752,34 @@
   overflow: hidden;
 }
 
-.delivery-panel::before {
+.acceptance-panel::before {
   content: "";
   position: absolute;
   inset-block: calc(6px * var(--ui-scale));
   inset-inline-start: 0;
   width: calc(2px * var(--ui-scale));
   border-radius: var(--oc-radius-pill);
-  background: var(--delivery-panel-accent);
+  background: var(--acceptance-panel-accent);
   pointer-events: none;
 }
 
-.delivery-panel[data-verdict="accepted"] {
-  --delivery-panel-accent: var(--good);
+.acceptance-panel[data-verdict="accepted"] {
+  --acceptance-panel-accent: var(--good);
 }
 
-.delivery-panel[data-verdict="rejected"] {
-  --delivery-panel-accent: var(--bad);
+.acceptance-panel[data-verdict="rejected"] {
+  --acceptance-panel-accent: var(--bad);
 }
 
-.delivery-panel[data-verdict="inflight"] {
-  --delivery-panel-accent: var(--accent);
+.acceptance-panel[data-verdict="inflight"] {
+  --acceptance-panel-accent: var(--accent);
 }
 
-.delivery-panel[data-verdict="empty"] {
+.acceptance-panel[data-verdict="empty"] {
   background: transparent;
 }
 
-.delivery-panel[data-verdict="empty"]::before {
+.acceptance-panel[data-verdict="empty"]::before {
   display: none;
 }
 
@@ -2399,15 +2399,15 @@
   color: var(--accent);
 }
 
-.delivery-evidence-group {
+.acceptance-evidence-group {
   border: 0 solid transparent;
   border-radius: 0;
   background: transparent;
 }
-.delivery-evidence-group[open] {
+.acceptance-evidence-group[open] {
   background: transparent;
 }
-.delivery-evidence-group-head {
+.acceptance-evidence-group-head {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -2416,30 +2416,30 @@
   font-size: var(--ui-font-control);
   list-style: none;
 }
-.delivery-evidence-group-head::-webkit-details-marker {
+.acceptance-evidence-group-head::-webkit-details-marker {
   display: none;
 }
-.delivery-evidence-group-head::before {
+.acceptance-evidence-group-head::before {
   content: "▸";
   margin-right: calc(6px * var(--ui-scale));
   color: var(--text-muted);
   transition: transform var(--ui-duration-base) var(--ui-timing-standard);
 }
-.delivery-evidence-group[open] > .delivery-evidence-group-head::before {
+.acceptance-evidence-group[open] > .acceptance-evidence-group-head::before {
   transform: rotate(90deg);
   display: inline-block;
 }
-.delivery-evidence-group-label {
+.acceptance-evidence-group-label {
   font-weight: var(--ui-font-weight-strong);
   color: var(--text);
 }
-.delivery-evidence-group-count {
+.acceptance-evidence-group-count {
   font-size: var(--ui-font-tiny);
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
 }
 
-.delivery-evidence-list {
+.acceptance-evidence-list {
   display: grid;
   gap: calc(4px * var(--ui-scale));
   margin: 0;
@@ -2447,18 +2447,18 @@
   list-style: none;
 }
 
-.delivery-evidence-row {
+.acceptance-evidence-row {
   display: grid;
   grid-template-columns: minmax(0, max-content) minmax(0, 1fr) max-content;
   gap: calc(8px * var(--ui-scale));
   align-items: center;
   font-size: var(--ui-font-control);
 }
-.delivery-evidence-row:not([data-has-pill]) {
+.acceptance-evidence-row:not([data-has-pill]) {
   grid-template-columns: minmax(0, 1fr) max-content;
 }
 
-.delivery-evidence-goal-pill {
+.acceptance-evidence-goal-pill {
   background: var(--surface-inset);
   border: var(--oc-border-width) solid var(--border);
   border-radius: var(--oc-radius-pill);
@@ -2468,12 +2468,12 @@
   color: var(--text-soft);
   cursor: pointer;
 }
-.delivery-evidence-goal-pill:hover {
+.acceptance-evidence-goal-pill:hover {
   border-color: var(--accent);
   color: var(--text);
 }
 
-.delivery-evidence-name {
+.acceptance-evidence-name {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;

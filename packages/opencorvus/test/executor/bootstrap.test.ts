@@ -156,7 +156,7 @@ describe("executor.bootstrap", () => {
           submit: true,
           status: true,
           abort: true,
-          delivery: true,
+          acceptance: true,
           resume: true,
           events: true,
         }
@@ -177,7 +177,7 @@ describe("executor.bootstrap", () => {
       async abort() {
         return true
       },
-      async delivery() {
+      async acceptance() {
         return {
           summary: "",
           diffs: [],

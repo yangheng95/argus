@@ -144,7 +144,7 @@ export const ManagedCodingExecutor = {
           submit: true,
           status: true,
           abort: true,
-          delivery: true,
+          acceptance: true,
           resume: true,
           events: true,
         }
@@ -152,7 +152,7 @@ export const ManagedCodingExecutor = {
       async submit(input) {
         const id = Identifier.ascending("task")
         const startHash = await Snapshot.track().catch((error) => {
-          log.warn("initial snapshot failed; delivery diffs will be empty", {
+          log.warn("initial snapshot failed; acceptance diffs will be empty", {
             sessionID: input.sessionID,
             queueTaskID: id,
             error: error instanceof Error ? error.message : String(error),
@@ -233,7 +233,7 @@ export const ManagedCodingExecutor = {
         await bestEffortInterrupt(provider, state)
         return true
       },
-      async delivery(input) {
+      async acceptance(input) {
         const state = pick(tasks, latest, { sessionID: input.sessionID })
         if (!state) return { summary: "", diffs: [] }
         const currentHash = await Snapshot.track()

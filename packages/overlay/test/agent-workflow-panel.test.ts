@@ -25,17 +25,17 @@ test("agent workflow projection stacks repeated retry sessions by parent and age
       {
         ts: 1200,
         kind: "llm_request",
-        sessionID: "ses_delivery_a",
+        sessionID: "ses_acceptance_a",
         parentSessionID: "ses_root",
-        agentName: "delivery",
+        agentName: "acceptance",
         payload: { model: { providerID: "hexin", modelID: "sonnet" } },
       },
       {
         ts: 1300,
         kind: "agent_report_failure",
-        sessionID: "ses_delivery_a",
+        sessionID: "ses_acceptance_a",
         parentSessionID: "ses_root",
-        agentName: "delivery",
+        agentName: "acceptance",
         payload: {
           error: "missing runtime evidence",
           report: { summary: "missing runtime evidence", detail: "missing runtime evidence" },
@@ -44,17 +44,17 @@ test("agent workflow projection stacks repeated retry sessions by parent and age
       {
         ts: 1400,
         kind: "llm_request",
-        sessionID: "ses_delivery_b",
+        sessionID: "ses_acceptance_b",
         parentSessionID: "ses_root",
-        agentName: "delivery",
+        agentName: "acceptance",
         payload: { model: { providerID: "hexin", modelID: "sonnet" } },
       },
       {
         ts: 1500,
         kind: "agent_report_retry_final",
-        sessionID: "ses_delivery_b",
+        sessionID: "ses_acceptance_b",
         parentSessionID: "ses_root",
-        agentName: "delivery",
+        agentName: "acceptance",
         payload: {
           attempts: 2,
           report: {
@@ -67,11 +67,11 @@ test("agent workflow projection stacks repeated retry sessions by parent and age
   })
 
   expect(projection.records).toHaveLength(3)
-  const deliveryStack = projection.stacks.find((stack) => stack.agentName === "delivery")
-  expect(deliveryStack?.records.map((record) => record.sessionID)).toEqual(["ses_delivery_a", "ses_delivery_b"])
-  expect(deliveryStack?.records[0]?.status).toBe("error")
-  expect(deliveryStack?.records[1]?.attempts).toBe(2)
-  expect(deliveryStack?.records[1]?.traceReport?.summary).toBe("Accepted after runtime evidence was attached")
+  const acceptanceStack = projection.stacks.find((stack) => stack.agentName === "acceptance")
+  expect(acceptanceStack?.records.map((record) => record.sessionID)).toEqual(["ses_acceptance_a", "ses_acceptance_b"])
+  expect(acceptanceStack?.records[0]?.status).toBe("error")
+  expect(acceptanceStack?.records[1]?.attempts).toBe(2)
+  expect(acceptanceStack?.records[1]?.traceReport?.summary).toBe("Accepted after runtime evidence was attached")
 })
 
 test("agent workflow projection uses live phase cards without subscribing to streamed text", () => {

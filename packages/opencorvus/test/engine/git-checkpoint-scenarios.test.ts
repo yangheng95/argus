@@ -6,7 +6,7 @@ import { EngineGit, ensureGitignore } from "../../src/engine/git"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { Identifier } from "../../src/id/id"
 import { Instance } from "../../src/project/instance"
-import { listSnapshots, requireTask, type DeliveryRow, type PlanRow, type ProgressRow, type TaskRow } from "../../src/engine/store"
+import { listSnapshots, requireTask, type AcceptanceRow, type PlanRow, type ProgressRow, type TaskRow } from "../../src/engine/store"
 import { Log } from "../../src/util/log"
 import { tmpdir } from "../fixture/fixture"
 import { resetDatabase } from "../fixture/db"
@@ -100,14 +100,14 @@ function fakePlan(steps: string[] = ["alpha step", "beta step"]): PlanRow {
   } as unknown as PlanRow
 }
 
-function fakeDelivery(summary = "delivery accepted in the test fixture"): DeliveryRow {
+function fakeAcceptance(summary = "acceptance accepted in the test fixture"): AcceptanceRow {
   const now = Date.now()
   return {
-    id: Identifier.ascending("delivery"),
+    id: Identifier.ascending("acceptance"),
     task_id: "fixture-task",
     run_id: "fixture-run",
     goal_run_id: null,
-    status: "accepted" as DeliveryRow["status"],
+    status: "accepted" as AcceptanceRow["status"],
     summary,
     result: null,
     time_created: now,
@@ -337,7 +337,7 @@ describe("EngineGit.complete — result scenarios", () => {
         const headBefore = await gitHead(tmp.path)
         const commitsBefore = await gitCommitCount(tmp.path)
 
-        const completed = await EngineGit.complete(prepared.task, fakePlan(), fakeDelivery())
+        const completed = await EngineGit.complete(prepared.task, fakePlan(), fakeAcceptance())
 
         expect(completed.error).toBeUndefined()
         const r = gitResult(completed.task)!
@@ -345,8 +345,8 @@ describe("EngineGit.complete — result scenarios", () => {
         expect(r.commit).toBe(headBefore)
         expect(r.head_before).toBe(headBefore)
         expect(r.dirty).toBe(false)
-        expect(r.delivery_id).toBeTruthy()
-        expect(r.delivery_summary).toContain("delivery")
+        expect(r.acceptance_id).toBeTruthy()
+        expect(r.acceptance_summary).toContain("acceptance")
 
         expect(await gitCommitCount(tmp.path)).toBe(commitsBefore)
         const progress = gitProgress(listSnapshots(completed.task.id), "result")
@@ -356,7 +356,7 @@ describe("EngineGit.complete — result scenarios", () => {
     })
   })
 
-  test("scenario 8: dirty tree at completion → created_commit with plan + delivery body", async () => {
+  test("scenario 8: dirty tree at completion → created_commit with plan + acceptance body", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,
@@ -365,11 +365,11 @@ describe("EngineGit.complete — result scenarios", () => {
         const task = await insertTaskRow({ title: "produce result artifact" })
         const prepared = await EngineGit.prepare(task)
         // Simulate executor edits between prepare and complete.
-        await writeFile(tmp.path, "result.txt", "delivery artifact\n")
+        await writeFile(tmp.path, "result.txt", "acceptance artifact\n")
 
         const plan = fakePlan(["first step", "second step"])
-        const delivery = fakeDelivery("final delivery summary text")
-        const completed = await EngineGit.complete(prepared.task, plan, delivery)
+        const acceptance = fakeAcceptance("final acceptance summary text")
+        const completed = await EngineGit.complete(prepared.task, plan, acceptance)
 
         expect(completed.error).toBeUndefined()
         const r = gitResult(completed.task)!
@@ -385,7 +385,7 @@ describe("EngineGit.complete — result scenarios", () => {
         expect(bodyText).toContain("Plan summary:")
         expect(bodyText).toContain("first step")
         expect(bodyText).toContain("second step")
-        expect(bodyText).toContain("final delivery summary text")
+        expect(bodyText).toContain("final acceptance summary text")
 
         const ls = await $`git ls-tree --name-only HEAD`.cwd(tmp.path).quiet()
         expect(ls.stdout.toString()).toContain("result.txt")
@@ -409,7 +409,7 @@ describe("EngineGit.complete — result scenarios", () => {
         // complete must short-circuit.
         await makeMergeConflict(tmp.path)
 
-        const completed = await EngineGit.complete(prepared.task, fakePlan(), fakeDelivery())
+        const completed = await EngineGit.complete(prepared.task, fakePlan(), fakeAcceptance())
 
         expect(completed.error).toBeTruthy()
         expect(completed.error).toContain("merge conflicts")
@@ -431,7 +431,7 @@ describe("EngineGit.complete — result scenarios", () => {
         const task = await insertTaskRow()
         const prepared = await EngineGit.prepare(task)
         await writeFile(tmp.path, "result.txt", "first round\n")
-        const firstComplete = await EngineGit.complete(prepared.task, fakePlan(), fakeDelivery())
+        const firstComplete = await EngineGit.complete(prepared.task, fakePlan(), fakeAcceptance())
         const firstResultCommit = gitResult(firstComplete.task)!.commit
         const commitsAfter = await gitCommitCount(tmp.path)
         const progressAfter = gitProgress(listSnapshots(firstComplete.task.id), "result").length
@@ -439,7 +439,7 @@ describe("EngineGit.complete — result scenarios", () => {
         // Touch the worktree again — second call must NOT capture this, because
         // task.metadata.git.result is already set and complete short-circuits.
         await writeFile(tmp.path, "ignored-second.txt", "should not enter result\n")
-        const secondComplete = await EngineGit.complete(firstComplete.task, fakePlan(), fakeDelivery())
+        const secondComplete = await EngineGit.complete(firstComplete.task, fakePlan(), fakeAcceptance())
 
         expect(secondComplete.error).toBeUndefined()
         expect(gitResult(secondComplete.task)!.commit).toBe(firstResultCommit)

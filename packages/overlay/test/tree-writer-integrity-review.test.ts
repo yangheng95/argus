@@ -40,28 +40,28 @@ test("retired legacy gate event is not accepted by the tree writer", () => {
 
   expect(() =>
     applyEvent({
-      type: "delivery.gate.rejected",
+      type: "acceptance.gate.rejected",
       emittedAt: 1700000000000,
       properties: {
         taskID: "tsk_abc",
         iteration: 0,
-        summary: "Runtime-evidence gate rejected delivery.",
+        summary: "Runtime-evidence gate rejected acceptance.",
         violations: [{ kind: "empty_root_shell", detail: "empty root" }],
       },
     }),
   ).toThrow(/unhandled event type/);
 });
 
-test("legacy delivery evidence remains pass-through and does not materialize a card", () => {
+test("legacy acceptance evidence remains pass-through and does not materialize a card", () => {
   resetWriter();
 
   applyEvent({
-    type: "delivery.evidence.updated",
+    type: "acceptance.evidence.updated",
     emittedAt: 1700000000000,
     properties: {
       taskID: "tsk_manifest",
       runID: "run_manifest",
-      deliveryID: "dlv_manifest",
+      acceptanceID: "dlv_manifest",
       manifestID: "artifact_manifest",
       iteration: 2,
       status: "failed",
@@ -82,20 +82,20 @@ test("legacy delivery evidence remains pass-through and does not materialize a c
     },
   });
 
-  expect(cardTreeStore.cards["delivery-evidence:tsk_manifest:2"]).toBeUndefined();
-  expect(cardTreeStore.order.includes("delivery-evidence:tsk_manifest:2")).toBe(false);
+  expect(cardTreeStore.cards["acceptance-evidence:tsk_manifest:2"]).toBeUndefined();
+  expect(cardTreeStore.order.includes("acceptance-evidence:tsk_manifest:2")).toBe(false);
 });
 
-test("retired delivery review completion event is not accepted by the tree writer", () => {
+test("retired acceptance review completion event is not accepted by the tree writer", () => {
   resetWriter();
 
   expect(() =>
     applyEvent({
-      type: "delivery.review.completed",
+      type: "acceptance.review.completed",
       emittedAt: 1700000000200,
       properties: {
         taskID: "tsk_review",
-        reviewID: "delivery:tsk_review:2",
+        reviewID: "acceptance:tsk_review:2",
         verdict: "rejected",
         source: "host_gate",
         summary: "Host gate rejected",
@@ -372,7 +372,7 @@ test("malformed reviewer chunk without a reconstructable integrity session still
   ).toThrow(/arrived before started/);
 });
 
-test("review stream rejects retired delivery phase", () => {
+test("review stream rejects retired acceptance phase", () => {
   resetWriter();
 
   expect(() =>
@@ -381,9 +381,9 @@ test("review stream rejects retired delivery phase", () => {
       emittedAt: 1700000000000,
       properties: {
         taskID: "tsk_review",
-        reviewID: "delivery:tsk_review:0",
-        phase: "delivery",
+        reviewID: "acceptance:tsk_review:0",
+        phase: "acceptance",
       },
     }),
-  ).toThrow(/review\.stream phase unsupported: delivery/);
+  ).toThrow(/review\.stream phase unsupported: acceptance/);
 });

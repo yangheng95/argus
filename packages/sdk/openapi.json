@@ -3089,7 +3089,7 @@
                       "goal-workload-analyst",
                       "integrity",
                       "fact-check",
-                      "delivery",
+                      "acceptance",
                       "executor",
                       "build",
                       "explore",
@@ -12655,12 +12655,12 @@
                                           }
                                         },
                                         "inputs": {
-                                          "description": "Which parts of the delivery to feed the judge. Default: delivery_summary.",
+                                          "description": "Which parts of the acceptance to feed the judge. Default: acceptance_summary.",
                                           "type": "array",
                                           "items": {
                                             "type": "string",
                                             "enum": [
-                                              "delivery_summary",
+                                              "acceptance_summary",
                                               "changed_files",
                                               "requirement_text"
                                             ]
@@ -12772,12 +12772,12 @@
                                 ]
                               },
                               "trigger": {
-                                "description": "Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_integrity. on_delivery is legacy and maps to on_integrity.",
+                                "description": "Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_integrity. on_acceptance is legacy and maps to on_integrity.",
                                 "type": "string",
                                 "enum": [
                                   "on_goal",
                                   "on_integrity",
-                                  "on_delivery"
+                                  "on_acceptance"
                                 ]
                               }
                             },
@@ -13076,12 +13076,12 @@
                                                 }
                                               },
                                               "inputs": {
-                                                "description": "Which parts of the delivery to feed the judge. Default: delivery_summary.",
+                                                "description": "Which parts of the acceptance to feed the judge. Default: acceptance_summary.",
                                                 "type": "array",
                                                 "items": {
                                                   "type": "string",
                                                   "enum": [
-                                                    "delivery_summary",
+                                                    "acceptance_summary",
                                                     "changed_files",
                                                     "requirement_text"
                                                   ]
@@ -13193,12 +13193,12 @@
                                       ]
                                     },
                                     "trigger": {
-                                      "description": "Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_integrity. on_delivery is legacy and maps to on_integrity.",
+                                      "description": "Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_integrity. on_acceptance is legacy and maps to on_integrity.",
                                       "type": "string",
                                       "enum": [
                                         "on_goal",
                                         "on_integrity",
-                                        "on_delivery"
+                                        "on_acceptance"
                                       ]
                                     }
                                   },
@@ -13827,7 +13827,7 @@
                                 "type": "string",
                                 "pattern": "^run.*"
                               },
-                              "deliveryID": {
+                              "acceptanceID": {
                                 "anyOf": [
                                   {
                                     "type": "string",
@@ -14496,7 +14496,7 @@
                                 "type": "string",
                                 "pattern": "^run.*"
                               },
-                              "deliveryID": {
+                              "acceptanceID": {
                                 "anyOf": [
                                   {
                                     "type": "string",
@@ -16146,7 +16146,7 @@
                         ]
                       }
                     },
-                    "delivery": {
+                    "acceptance": {
                       "type": "object",
                       "properties": {
                         "id": {
@@ -16271,7 +16271,7 @@
                           "type": "string",
                           "pattern": "^run.*"
                         },
-                        "deliveryID": {
+                        "acceptanceID": {
                           "anyOf": [
                             {
                               "type": "string",
@@ -17100,7 +17100,7 @@
                             "time"
                           ]
                         },
-                        "delivery": {
+                        "acceptance": {
                           "type": "object",
                           "properties": {
                             "id": {
@@ -17210,7 +17210,7 @@
                             "time"
                           ]
                         },
-                        "candidateDelivery": {
+                        "candidateAcceptance": {
                           "type": "object",
                           "properties": {
                             "id": {
@@ -17320,7 +17320,7 @@
                             "time"
                           ]
                         },
-                        "acceptedDelivery": {
+                        "acceptedAcceptance": {
                           "type": "object",
                           "properties": {
                             "id": {
@@ -17445,7 +17445,7 @@
                               "type": "string",
                               "pattern": "^run.*"
                             },
-                            "deliveryID": {
+                            "acceptanceID": {
                               "anyOf": [
                                 {
                                   "type": "string",
@@ -17704,7 +17704,7 @@
                                 "type": "string",
                                 "pattern": "^run.*"
                               },
-                              "deliveryID": {
+                              "acceptanceID": {
                                 "anyOf": [
                                   {
                                     "type": "string",
@@ -17842,7 +17842,7 @@
                                     "retry",
                                     "replan",
                                     "observe",
-                                    "review_delivery",
+                                    "review_acceptance",
                                     "message"
                                   ]
                                 },
@@ -20001,7 +20001,7 @@
                         "time"
                       ]
                     },
-                    "delivery": {
+                    "acceptance": {
                       "type": "object",
                       "properties": {
                         "id": {
@@ -20111,7 +20111,7 @@
                         "time"
                       ]
                     },
-                    "candidateDelivery": {
+                    "candidateAcceptance": {
                       "type": "object",
                       "properties": {
                         "id": {
@@ -20221,7 +20221,7 @@
                         "time"
                       ]
                     },
-                    "acceptedDelivery": {
+                    "acceptedAcceptance": {
                       "type": "object",
                       "properties": {
                         "id": {
@@ -20346,7 +20346,7 @@
                           "type": "string",
                           "pattern": "^run.*"
                         },
-                        "deliveryID": {
+                        "acceptanceID": {
                           "anyOf": [
                             {
                               "type": "string",
@@ -20605,7 +20605,7 @@
                             "type": "string",
                             "pattern": "^run.*"
                           },
-                          "deliveryID": {
+                          "acceptanceID": {
                             "anyOf": [
                               {
                                 "type": "string",
@@ -20743,7 +20743,7 @@
                                 "retry",
                                 "replan",
                                 "observe",
-                                "review_delivery",
+                                "review_acceptance",
                                 "message"
                               ]
                             },
@@ -23296,9 +23296,9 @@
         ]
       }
     },
-    "/run/{runID}/delivery": {
+    "/run/{runID}/acceptance": {
       "get": {
-        "operationId": "run.delivery",
+        "operationId": "run.acceptance",
         "parameters": [
           {
             "in": "query",
@@ -23317,10 +23317,10 @@
             "required": true
           }
         ],
-        "summary": "Get run delivery",
+        "summary": "Get run acceptance",
         "responses": {
           "200": {
-            "description": "Run delivery",
+            "description": "Run acceptance",
             "content": {
               "application/json": {
                 "schema": {
@@ -23450,14 +23450,14 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.run.delivery({\n  ...\n})"
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.run.acceptance({\n  ...\n})"
           }
         ]
       }
     },
-    "/goal-run/{goalRunID}/delivery": {
+    "/goal-run/{goalRunID}/acceptance": {
       "get": {
-        "operationId": "goalRun.delivery",
+        "operationId": "goalRun.acceptance",
         "parameters": [
           {
             "in": "query",
@@ -23476,10 +23476,10 @@
             "required": true
           }
         ],
-        "summary": "Get goal-run delivery",
+        "summary": "Get goal-run acceptance",
         "responses": {
           "200": {
-            "description": "Goal-run delivery, or null when the goal_run exists but has not produced a delivery yet (in-flight build).",
+            "description": "Goal-run acceptance, or null when the goal_run exists but has not produced a acceptance yet (in-flight build).",
             "content": {
               "application/json": {
                 "schema": {
@@ -23616,7 +23616,7 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.goalRun.delivery({\n  ...\n})"
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.goalRun.acceptance({\n  ...\n})"
           }
         ]
       }
@@ -23875,7 +23875,7 @@
                         "type": "string",
                         "pattern": "^run.*"
                       },
-                      "deliveryID": {
+                      "acceptanceID": {
                         "anyOf": [
                           {
                             "type": "string",
@@ -24002,7 +24002,7 @@
                         "type": "string",
                         "pattern": "^run.*"
                       },
-                      "deliveryID": {
+                      "acceptanceID": {
                         "anyOf": [
                           {
                             "type": "string",
@@ -24737,12 +24737,12 @@
                                     }
                                   },
                                   "inputs": {
-                                    "description": "Which parts of the delivery to feed the judge. Default: delivery_summary.",
+                                    "description": "Which parts of the acceptance to feed the judge. Default: acceptance_summary.",
                                     "type": "array",
                                     "items": {
                                       "type": "string",
                                       "enum": [
-                                        "delivery_summary",
+                                        "acceptance_summary",
                                         "changed_files",
                                         "requirement_text"
                                       ]
@@ -24854,12 +24854,12 @@
                           ]
                         },
                         "trigger": {
-                          "description": "Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_integrity. on_delivery is legacy and maps to on_integrity.",
+                          "description": "Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_integrity. on_acceptance is legacy and maps to on_integrity.",
                           "type": "string",
                           "enum": [
                             "on_goal",
                             "on_integrity",
-                            "on_delivery"
+                            "on_acceptance"
                           ]
                         }
                       },
@@ -28688,12 +28688,12 @@
           "properties"
         ]
       },
-      "Event.delivery.ready": {
+      "Event.acceptance.ready": {
         "type": "object",
         "properties": {
           "type": {
             "type": "string",
-            "const": "delivery.ready"
+            "const": "acceptance.ready"
           },
           "properties": {
             "type": "object",
@@ -28706,7 +28706,7 @@
                 "type": "string",
                 "pattern": "^run.*"
               },
-              "deliveryID": {
+              "acceptanceID": {
                 "type": "string",
                 "pattern": "^dlv.*"
               },
@@ -28717,7 +28717,7 @@
             "required": [
               "taskID",
               "runID",
-              "deliveryID",
+              "acceptanceID",
               "summary"
             ]
           }
@@ -29102,7 +29102,7 @@
                 "type": "string",
                 "enum": [
                   "integrity",
-                  "delivery"
+                  "acceptance"
                 ]
               },
               "sessionID": {
@@ -29143,7 +29143,7 @@
                 "type": "string",
                 "enum": [
                   "integrity",
-                  "delivery"
+                  "acceptance"
                 ]
               },
               "currentStep": {
@@ -29212,7 +29212,7 @@
                 "type": "string",
                 "enum": [
                   "integrity",
-                  "delivery"
+                  "acceptance"
                 ]
               },
               "kind": {
@@ -29241,12 +29241,12 @@
           "properties"
         ]
       },
-      "Event.delivery.evidence.updated": {
+      "Event.acceptance.evidence.updated": {
         "type": "object",
         "properties": {
           "type": {
             "type": "string",
-            "const": "delivery.evidence.updated"
+            "const": "acceptance.evidence.updated"
           },
           "properties": {
             "type": "object",
@@ -29259,7 +29259,7 @@
                 "type": "string",
                 "pattern": "^run.*"
               },
-              "deliveryID": {
+              "acceptanceID": {
                 "type": "string",
                 "pattern": "^dlv.*"
               },
@@ -29330,7 +29330,7 @@
             },
             "required": [
               "taskID",
-              "deliveryID",
+              "acceptanceID",
               "manifestID",
               "iteration",
               "status",
@@ -33449,7 +33449,7 @@
               "goal-workload-analyst",
               "integrity",
               "fact-check",
-              "delivery",
+              "acceptance",
               "executor",
               "build",
               "explore",
@@ -33803,7 +33803,7 @@
             "$ref": "#/components/schemas/Event.interaction.resolved"
           },
           {
-            "$ref": "#/components/schemas/Event.delivery.ready"
+            "$ref": "#/components/schemas/Event.acceptance.ready"
           },
           {
             "$ref": "#/components/schemas/Event.evaluation.completed"
@@ -33839,7 +33839,7 @@
             "$ref": "#/components/schemas/Event.review.stream.chunk"
           },
           {
-            "$ref": "#/components/schemas/Event.delivery.evidence.updated"
+            "$ref": "#/components/schemas/Event.acceptance.evidence.updated"
           },
           {
             "$ref": "#/components/schemas/Event.integrity.review.completed"
@@ -35557,7 +35557,7 @@
                   }
                 }
               },
-              "delivery_visual": {
+              "acceptance_visual": {
                 "description": "P0-B visual numeric evidence thresholds.",
                 "type": "object",
                 "properties": {
@@ -36681,7 +36681,7 @@
               "goal-workload-analyst",
               "integrity",
               "fact-check",
-              "delivery",
+              "acceptance",
               "executor",
               "build",
               "explore",

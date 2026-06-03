@@ -149,7 +149,7 @@ Collector（`output-tools.ts`，镜像 architect collector）：`{ briefs, summa
 **单 artifact、task 级、latest-wins**（镜像 `persistArchitectContractGraph`, `engine/persist.ts:402-426`）：
 
 - 新增 artifact kind `"goal_workload"`（加入 `EngineArtifactKind` union, `engine/engine.sql.ts:89-116`）。
-- 写：`db.insert(EngineArtifactTable).values({ id, task_id, run_id:null, goal_run_id:null, delivery_id:null, kind:"goal_workload", label:"active", payload: GoalWorkloadResult, time_created, time_updated })`。
+- 写：`db.insert(EngineArtifactTable).values({ id, task_id, run_id:null, goal_run_id:null, acceptance_id:null, kind:"goal_workload", label:"active", payload: GoalWorkloadResult, time_created, time_updated })`。
 - 不用 N 个 per-goal artifact（artifact 表无 `goal_id` 列；单 task artifact 更简单且自带 staleness）。briefs 是 per-goal，存 payload 数组。
 
 **新增辅助**：`persistGoalWorkload(db,{taskID,specSnapshotID,briefs,now})`（persist.ts）；`findLatestGoalWorkloadArtifact(taskID): GoalWorkloadResult|undefined`（store.ts）。

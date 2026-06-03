@@ -628,14 +628,14 @@ test("concurrent Config.update calls preserve all overrides", async () => {
 
       await Promise.all([
         Config.update({ agent: { build: { model: "anthropic/claude-sonnet-4-6" } } } as any),
-        Config.update({ agent: { delivery: { model: "openai/gpt-4.1" } } } as any),
+        Config.update({ agent: { acceptance: { model: "openai/gpt-4.1" } } } as any),
         Config.update({ agent: { general: { model: "anthropic/claude-haiku-4-5" } } } as any),
       ])
 
       const written = await Filesystem.readJson(path.join(tmp.path, ".opencorvus", "opencorvus.jsonc"))
       expect(written.model).toBe("openai/gpt-4o-mini")
       expect(written.agent?.build?.model).toBe("anthropic/claude-sonnet-4-6")
-      expect(written.agent?.delivery?.model).toBe("openai/gpt-4.1")
+      expect(written.agent?.acceptance?.model).toBe("openai/gpt-4.1")
       expect(written.agent?.general?.model).toBe("anthropic/claude-haiku-4-5")
     },
   })

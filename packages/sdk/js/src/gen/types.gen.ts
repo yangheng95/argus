@@ -284,12 +284,12 @@ export type EventInteractionResolved = {
   }
 }
 
-export type EventDeliveryReady = {
-  type: "delivery.ready"
+export type EventAcceptanceReady = {
+  type: "acceptance.ready"
   properties: {
     taskID: string
     runID: string
-    deliveryID: string
+    acceptanceID: string
     summary: string
   }
 }
@@ -388,7 +388,7 @@ export type EventReviewStreamStarted = {
   properties: {
     taskID: string
     reviewID: string
-    phase: "integrity" | "delivery"
+    phase: "integrity" | "acceptance"
     sessionID?: string
   }
 }
@@ -398,7 +398,7 @@ export type EventReviewStreamProgress = {
   properties: {
     taskID: string
     reviewID: string
-    phase: "integrity" | "delivery"
+    phase: "integrity" | "acceptance"
     currentStep?: "manifest" | "runtime" | "visual" | "specialist" | "agent" | "post_repair"
     activity?: string
     reviewerID?: string
@@ -414,19 +414,19 @@ export type EventReviewStreamChunk = {
   properties: {
     taskID: string
     reviewID: string
-    phase: "integrity" | "delivery"
+    phase: "integrity" | "acceptance"
     kind: "reasoning"
     delta: string
     attempt: number
   }
 }
 
-export type EventDeliveryEvidenceUpdated = {
-  type: "delivery.evidence.updated"
+export type EventAcceptanceEvidenceUpdated = {
+  type: "acceptance.evidence.updated"
   properties: {
     taskID: string
     runID?: string
-    deliveryID: string
+    acceptanceID: string
     manifestID: string
     iteration: number
     status: "passed" | "failed"
@@ -1594,7 +1594,7 @@ export type Session = {
     | "goal-workload-analyst"
     | "integrity"
     | "fact-check"
-    | "delivery"
+    | "acceptance"
     | "executor"
     | "build"
     | "explore"
@@ -1703,7 +1703,7 @@ export type Event =
   | EventRunUpdated
   | EventInteractionRequested
   | EventInteractionResolved
-  | EventDeliveryReady
+  | EventAcceptanceReady
   | EventEvaluationCompleted
   | EventTaskMessage
   | EventRunProgress
@@ -1715,7 +1715,7 @@ export type Event =
   | EventReviewStreamStarted
   | EventReviewStreamProgress
   | EventReviewStreamChunk
-  | EventDeliveryEvidenceUpdated
+  | EventAcceptanceEvidenceUpdated
   | EventIntegrityReviewCompleted
   | EventInstallationUpdated
   | EventInstallationUpdateAvailable
@@ -2663,7 +2663,7 @@ export type Config = {
     /**
      * P0-B visual numeric evidence thresholds.
      */
-    delivery_visual?: {
+    acceptance_visual?: {
       /**
        * P0-B hard gate: pHash Hamming distance upper bound (structure)
        */
@@ -3112,7 +3112,7 @@ export type GlobalSession = {
     | "goal-workload-analyst"
     | "integrity"
     | "fact-check"
-    | "delivery"
+    | "acceptance"
     | "executor"
     | "build"
     | "explore"
@@ -4701,7 +4701,7 @@ export type SessionCreateData = {
       | "goal-workload-analyst"
       | "integrity"
       | "fact-check"
-      | "delivery"
+      | "acceptance"
       | "executor"
       | "build"
       | "explore"
@@ -8101,9 +8101,9 @@ export type TaskCreateData = {
                 passes: boolean
               }>
               /**
-               * Which parts of the delivery to feed the judge. Default: delivery_summary.
+               * Which parts of the acceptance to feed the judge. Default: acceptance_summary.
                */
-              inputs?: Array<"delivery_summary" | "changed_files" | "requirement_text">
+              inputs?: Array<"acceptance_summary" | "changed_files" | "requirement_text">
             }
           | {
               /**
@@ -8132,9 +8132,9 @@ export type TaskCreateData = {
         >
         severity: "essential" | "important" | "optional" | "pitfall"
         /**
-         * Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_integrity. on_delivery is legacy and maps to on_integrity.
+         * Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_integrity. on_acceptance is legacy and maps to on_integrity.
          */
-        trigger?: "on_goal" | "on_integrity" | "on_delivery"
+        trigger?: "on_goal" | "on_integrity" | "on_acceptance"
       }>
       kind?: "bootstrap" | "feature" | "verification" | "integration" | "system"
       metadata?: {
@@ -8246,9 +8246,9 @@ export type TaskCreateData = {
                   passes: boolean
                 }>
                 /**
-                 * Which parts of the delivery to feed the judge. Default: delivery_summary.
+                 * Which parts of the acceptance to feed the judge. Default: acceptance_summary.
                  */
-                inputs?: Array<"delivery_summary" | "changed_files" | "requirement_text">
+                inputs?: Array<"acceptance_summary" | "changed_files" | "requirement_text">
               }
             | {
                 /**
@@ -8277,9 +8277,9 @@ export type TaskCreateData = {
           >
           severity: "essential" | "important" | "optional" | "pitfall"
           /**
-           * Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_integrity. on_delivery is legacy and maps to on_integrity.
+           * Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_integrity. on_acceptance is legacy and maps to on_integrity.
            */
-          trigger?: "on_goal" | "on_integrity" | "on_delivery"
+          trigger?: "on_goal" | "on_integrity" | "on_acceptance"
         }>
         kind?: "bootstrap" | "feature" | "verification" | "integration" | "system"
         metadata?: {
@@ -8453,7 +8453,7 @@ export type TaskListResponses = {
         id: string
         taskID: string
         runID: string
-        deliveryID?: string | null
+        acceptanceID?: string | null
         status: "pending" | "passed" | "failed" | "inconclusive"
         verdict: "accepted" | "rejected" | "inconclusive"
         summary: string
@@ -8599,7 +8599,7 @@ export type TaskGlobalListResponses = {
         id: string
         taskID: string
         runID: string
-        deliveryID?: string | null
+        acceptanceID?: string | null
         status: "pending" | "passed" | "failed" | "inconclusive"
         verdict: "accepted" | "rejected" | "inconclusive"
         summary: string
@@ -9066,7 +9066,7 @@ export type TaskProgressResponses = {
         resolved?: number
       }
     }>
-    delivery?: {
+    acceptance?: {
       id: string
       taskID: string
       runID: string
@@ -9096,7 +9096,7 @@ export type TaskProgressResponses = {
       id: string
       taskID: string
       runID: string
-      deliveryID?: string | null
+      acceptanceID?: string | null
       status: "pending" | "passed" | "failed" | "inconclusive"
       verdict: "accepted" | "rejected" | "inconclusive"
       summary: string
@@ -9299,7 +9299,7 @@ export type TaskConversationResponses = {
           completed?: number
         }
       }
-      delivery?: {
+      acceptance?: {
         id: string
         taskID: string
         runID: string
@@ -9325,7 +9325,7 @@ export type TaskConversationResponses = {
           updated: number
         }
       }
-      candidateDelivery?: {
+      candidateAcceptance?: {
         id: string
         taskID: string
         runID: string
@@ -9351,7 +9351,7 @@ export type TaskConversationResponses = {
           updated: number
         }
       }
-      acceptedDelivery?: {
+      acceptedAcceptance?: {
         id: string
         taskID: string
         runID: string
@@ -9381,7 +9381,7 @@ export type TaskConversationResponses = {
         id: string
         taskID: string
         runID: string
-        deliveryID?: string | null
+        acceptanceID?: string | null
         status: "pending" | "passed" | "failed" | "inconclusive"
         verdict: "accepted" | "rejected" | "inconclusive"
         summary: string
@@ -9437,7 +9437,7 @@ export type TaskConversationResponses = {
         id: string
         taskID: string
         runID: string
-        deliveryID?: string | null
+        acceptanceID?: string | null
         kind: "patch" | "changed_file" | "log" | "report" | "image" | "diff" | "link" | "git_ref" | "pr"
         label: string
         payload?: {
@@ -9464,7 +9464,7 @@ export type TaskConversationResponses = {
           }>
         }
         nextStep: {
-          kind: "resolve_blocker" | "retry" | "replan" | "observe" | "review_delivery" | "message"
+          kind: "resolve_blocker" | "retry" | "replan" | "observe" | "review_acceptance" | "message"
           title: string
           detail?: string
         }
@@ -10001,7 +10001,7 @@ export type TaskBoardResponses = {
         completed?: number
       }
     }
-    delivery?: {
+    acceptance?: {
       id: string
       taskID: string
       runID: string
@@ -10027,7 +10027,7 @@ export type TaskBoardResponses = {
         updated: number
       }
     }
-    candidateDelivery?: {
+    candidateAcceptance?: {
       id: string
       taskID: string
       runID: string
@@ -10053,7 +10053,7 @@ export type TaskBoardResponses = {
         updated: number
       }
     }
-    acceptedDelivery?: {
+    acceptedAcceptance?: {
       id: string
       taskID: string
       runID: string
@@ -10083,7 +10083,7 @@ export type TaskBoardResponses = {
       id: string
       taskID: string
       runID: string
-      deliveryID?: string | null
+      acceptanceID?: string | null
       status: "pending" | "passed" | "failed" | "inconclusive"
       verdict: "accepted" | "rejected" | "inconclusive"
       summary: string
@@ -10139,7 +10139,7 @@ export type TaskBoardResponses = {
       id: string
       taskID: string
       runID: string
-      deliveryID?: string | null
+      acceptanceID?: string | null
       kind: "patch" | "changed_file" | "log" | "report" | "image" | "diff" | "link" | "git_ref" | "pr"
       label: string
       payload?: {
@@ -10166,7 +10166,7 @@ export type TaskBoardResponses = {
         }>
       }
       nextStep: {
-        kind: "resolve_blocker" | "retry" | "replan" | "observe" | "review_delivery" | "message"
+        kind: "resolve_blocker" | "retry" | "replan" | "observe" | "review_acceptance" | "message"
         title: string
         detail?: string
       }
@@ -11000,7 +11000,7 @@ export type RunAbortResponses = {
 
 export type RunAbortResponse = RunAbortResponses[keyof RunAbortResponses]
 
-export type RunDeliveryData = {
+export type RunAcceptanceData = {
   body?: never
   path: {
     runID: string
@@ -11008,21 +11008,21 @@ export type RunDeliveryData = {
   query?: {
     directory?: string
   }
-  url: "/run/{runID}/delivery"
+  url: "/run/{runID}/acceptance"
 }
 
-export type RunDeliveryErrors = {
+export type RunAcceptanceErrors = {
   /**
    * Not found
    */
   404: NotFoundError
 }
 
-export type RunDeliveryError = RunDeliveryErrors[keyof RunDeliveryErrors]
+export type RunAcceptanceError = RunAcceptanceErrors[keyof RunAcceptanceErrors]
 
-export type RunDeliveryResponses = {
+export type RunAcceptanceResponses = {
   /**
-   * Run delivery
+   * Run acceptance
    */
   200: {
     id: string
@@ -11052,9 +11052,9 @@ export type RunDeliveryResponses = {
   }
 }
 
-export type RunDeliveryResponse = RunDeliveryResponses[keyof RunDeliveryResponses]
+export type RunAcceptanceResponse = RunAcceptanceResponses[keyof RunAcceptanceResponses]
 
-export type GoalRunDeliveryData = {
+export type GoalRunAcceptanceData = {
   body?: never
   path: {
     goalRunID: string
@@ -11062,21 +11062,21 @@ export type GoalRunDeliveryData = {
   query?: {
     directory?: string
   }
-  url: "/goal-run/{goalRunID}/delivery"
+  url: "/goal-run/{goalRunID}/acceptance"
 }
 
-export type GoalRunDeliveryErrors = {
+export type GoalRunAcceptanceErrors = {
   /**
    * Not found
    */
   404: NotFoundError
 }
 
-export type GoalRunDeliveryError = GoalRunDeliveryErrors[keyof GoalRunDeliveryErrors]
+export type GoalRunAcceptanceError = GoalRunAcceptanceErrors[keyof GoalRunAcceptanceErrors]
 
-export type GoalRunDeliveryResponses = {
+export type GoalRunAcceptanceResponses = {
   /**
-   * Goal-run delivery, or null when the goal_run exists but has not produced a delivery yet (in-flight build).
+   * Goal-run acceptance, or null when the goal_run exists but has not produced a acceptance yet (in-flight build).
    */
   200: {
     id: string
@@ -11106,7 +11106,7 @@ export type GoalRunDeliveryResponses = {
   } | null
 }
 
-export type GoalRunDeliveryResponse = GoalRunDeliveryResponses[keyof GoalRunDeliveryResponses]
+export type GoalRunAcceptanceResponse = GoalRunAcceptanceResponses[keyof GoalRunAcceptanceResponses]
 
 export type SessionTraceData = {
   body?: never
@@ -11217,7 +11217,7 @@ export type RunArtifactsResponses = {
     id: string
     taskID: string
     runID: string
-    deliveryID?: string | null
+    acceptanceID?: string | null
     kind: "patch" | "changed_file" | "log" | "report" | "image" | "diff" | "link" | "git_ref" | "pr"
     label: string
     payload?: {
@@ -11260,7 +11260,7 @@ export type RunEvaluationsResponses = {
     id: string
     taskID: string
     runID: string
-    deliveryID?: string | null
+    acceptanceID?: string | null
     status: "pending" | "passed" | "failed" | "inconclusive"
     verdict: "accepted" | "rejected" | "inconclusive"
     summary: string
@@ -11520,9 +11520,9 @@ export type GoalUpdateData = {
               passes: boolean
             }>
             /**
-             * Which parts of the delivery to feed the judge. Default: delivery_summary.
+             * Which parts of the acceptance to feed the judge. Default: acceptance_summary.
              */
-            inputs?: Array<"delivery_summary" | "changed_files" | "requirement_text">
+            inputs?: Array<"acceptance_summary" | "changed_files" | "requirement_text">
           }
         | {
             /**
@@ -11551,9 +11551,9 @@ export type GoalUpdateData = {
       >
       severity: "essential" | "important" | "optional" | "pitfall"
       /**
-       * Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_integrity. on_delivery is legacy and maps to on_integrity.
+       * Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_integrity. on_acceptance is legacy and maps to on_integrity.
        */
-      trigger?: "on_goal" | "on_integrity" | "on_delivery"
+      trigger?: "on_goal" | "on_integrity" | "on_acceptance"
     }>
   }
   path: {

@@ -104,7 +104,7 @@ facts around the same task, use `research` separately.
 
 Research output is a `research_brief` artifact plus bundle paths. It is not
 REQ-N, not acceptance specs, not a goal graph, not an implementation plan, not a
-delivery path, and not a route selector. Do not treat a research result as a
+acceptance path, and not a route selector. Do not treat a research result as a
 process command; choose the next tool from the full task context, including
 stale status, open questions, existing requirements, goals, build evidence, and
 integrity evidence.
@@ -114,7 +114,7 @@ Do not use `research` for dedicated webpage functional/visual evidence; use
 `frontend_research` for that.
 Do not use `research` to produce the final PRD/SPEC markdown file; if a file
 artifact is needed, dispatch the appropriate existing execution and verification
-surfaces from the evidence. Never use or revive `publish_delivery`.
+surfaces from the evidence. Never use or revive `publish_acceptance`.
 
 ## Deadlock Repair Responsibility
 You own same-task recovery when the task is stuck. A failed goal, missing
@@ -157,7 +157,7 @@ question, or fail_task decision is available. If no responsible repair exists
 inside this task, call fail_task with the evidence or question for the concrete
 external blocker; do not passively report and leave the task active.
 
-There is no `deliver` or `publish_delivery` tool. Integrity is the terminal
+There is no `deliver` or `publish_acceptance` tool. Integrity is the terminal
 acceptance path; artifact export is not part of task acceptance.
 
 ## Fact-Check Dispatch
@@ -182,7 +182,7 @@ note. Fact-check is non-gating; it informs but does not block task completion.
 Never call `integrity` as the final gate while an owned build tool call is
 still running in this turn. Goal status is an implementation-attempt
 projection, not a cosmetic completion gate: if task-level build evidence,
-delivery evidence, or integrity correction evidence already satisfies the
+acceptance evidence, or integrity correction evidence already satisfies the
 user-facing requirement, do not retry a goal only to make every goal row read
 completed. Mandatory pre-`integrity` audit ritual: freely inspect the current evidence and confirm:
 
@@ -198,7 +198,7 @@ like every other goal. A single passed goal is not task acceptance.
 ## Workflow Choice
 The system delivers a project through its specialist agent team, not through
 you doing or shortcutting the work. For a `kind=workflow` task the team IS the
-delivery mechanism: `analyze_intent` (when scope is unclear) -> `requirements`
+acceptance mechanism: `analyze_intent` (when scope is unclear) -> `requirements`
 -> `architect` -> `workload_analysis` -> per-goal `build` -> `integrity`. Each
 stage owns durable structured output the next stage consumes. Your job is to
 orchestrate that team faithfully and explain each dispatch — not to improvise.
@@ -229,7 +229,7 @@ exception, allowed only for:
   workflow), or
 - a subsequent, concretely-scoped problem fix after a `build`/`integrity`
   review delta (see Integrity Correction) — i.e. follow-up repair of work the
-  team already produced, not first-pass delivery.
+  team already produced, not first-pass acceptance.
 
 Build is an implementation tool, never a repository-investigation tool.
 Repository investigation belongs to `analyze_intent`, `requirements`, or the

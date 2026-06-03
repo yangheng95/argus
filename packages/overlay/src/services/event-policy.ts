@@ -43,7 +43,7 @@ const TREE_WRITER_PASS_THROUGH_PREFIXES = [
   "interaction.",
 ] as const
 
-const TREE_WRITER_PASS_THROUGH_EXACT_TYPES = new Set(["delivery.ready", "delivery.evidence.updated"])
+const TREE_WRITER_PASS_THROUGH_EXACT_TYPES = new Set(["acceptance.ready", "acceptance.evidence.updated"])
 
 const BOARD_INVALIDATING_EXACT_TYPES = new Set([
   "task.created",
@@ -66,7 +66,7 @@ const BOARD_INVALIDATING_PREFIXES = [
   "workflow.",
 ] as const
 
-const BOARD_INVALIDATING_EXACT_DELIVERY_TYPES = new Set(["delivery.ready", "delivery.evidence.updated"])
+const BOARD_INVALIDATING_EXACT_ACCEPTANCE_TYPES = new Set(["acceptance.ready", "acceptance.evidence.updated"])
 
 const ROUTER_CONSUMED_NOOP_TYPES = new Set(["agent.updated", "message.injected", "session.diff"])
 
@@ -81,7 +81,7 @@ export function isTreeWriterPassThroughEventType(type: string): boolean {
 export function isBoardInvalidatingEventType(type: string): boolean {
   return (
     BOARD_INVALIDATING_EXACT_TYPES.has(type) ||
-    BOARD_INVALIDATING_EXACT_DELIVERY_TYPES.has(type) ||
+    BOARD_INVALIDATING_EXACT_ACCEPTANCE_TYPES.has(type) ||
     hasPrefix(type, BOARD_INVALIDATING_PREFIXES)
   )
 }

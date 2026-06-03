@@ -6,7 +6,7 @@ import { contractAuditBlocksBuild, runContractAudit } from "@/acceptance/contrac
 import type { AcceptanceSpec, ContractAuditScorer } from "@/acceptance/types"
 import type { ContractIR } from "@/architect/contract-ir"
 import { contractGraphIRIndex, type ArchitectContractGraph } from "@/architect/contract-graph"
-import { buildContractAuditReviewEvidence } from "@/delivery/checks/contract-audit-review"
+import { buildContractAuditReviewEvidence } from "@/acceptance/checks/contract-audit-review"
 
 const tempDirs: string[] = []
 

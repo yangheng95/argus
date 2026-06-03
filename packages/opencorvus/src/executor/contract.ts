@@ -118,7 +118,7 @@ export type ExecutorAdapter = {
     submit: boolean
     status: boolean
     abort: boolean
-    delivery: boolean
+    acceptance: boolean
     resume: boolean
     events: boolean
   }
@@ -144,7 +144,7 @@ export type ExecutorAdapter = {
     error: string | null
   }>
   abort(input: { sessionID?: string; queueTaskID?: string }): Promise<boolean>
-  delivery(input: { sessionID: string; since?: number }): Promise<{
+  acceptance(input: { sessionID: string; since?: number }): Promise<{
     summary: string
     diffs: z.infer<typeof Snapshot.FileDiff>[]
   }>

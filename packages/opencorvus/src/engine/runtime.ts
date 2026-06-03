@@ -17,7 +17,7 @@ import {
 } from "./persist"
 
 import {
-  findDeliveryByRun,
+  findAcceptanceByRun,
   findEvaluationByRun,
   findInteractionByExternal,
   findPendingInteractions,
@@ -37,8 +37,8 @@ import { isInteractionBlockingReason } from "./run-blocking"
 import { isTaskCancelled } from "./task-status"
 
 const log = Log.create({ service: "engine-runtime" })
-const DELIVERY_FETCH_TIMEOUT_MS = parseInt(process.env.OPENCORVUS_DELIVERY_FETCH_TIMEOUT_MS || "300000", 10) // 5 min for executor.delivery() (git operations can be slow on Windows with large repos)
-const SYNC_RUN_TIMEOUT_MS = parseInt(process.env.OPENCORVUS_SYNC_RUN_TIMEOUT_MS || String(DELIVERY_FETCH_TIMEOUT_MS + 15 * 60 * 1000), 10) // must exceed fetch + Orchestrator eval/verify/publish time
+const ACCEPTANCE_FETCH_TIMEOUT_MS = parseInt(process.env.OPENCORVUS_ACCEPTANCE_FETCH_TIMEOUT_MS || "300000", 10) // 5 min for executor.acceptance() (git operations can be slow on Windows with large repos)
+const SYNC_RUN_TIMEOUT_MS = parseInt(process.env.OPENCORVUS_SYNC_RUN_TIMEOUT_MS || String(ACCEPTANCE_FETCH_TIMEOUT_MS + 15 * 60 * 1000), 10) // must exceed fetch + Orchestrator eval/verify/publish time
 const EXECUTOR_STATUS_TIMEOUT_MS = 30_000 // 30s for executor.status()
 
 const eventBridgeAborts = new Map<string, AbortController>() // goalRunID or runID → AbortController
@@ -177,7 +177,7 @@ export namespace EngineRuntime {
     }
 
     const task = requireTask(run.task_id)
-    const delivery = findDeliveryByRun(run.id)
+    const acceptance = findAcceptanceByRun(run.id)
     const queueTaskID = run.executor_ref?.queue_task_id
     const pending = findPendingInteractions(run.id)
     if (pending.length > 0) {

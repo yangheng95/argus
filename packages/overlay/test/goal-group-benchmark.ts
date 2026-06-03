@@ -48,8 +48,8 @@ const boardData = {
     version: 1,
   },
   evaluation: null,
-  delivery: null,
-  acceptedDelivery: null,
+  acceptance: null,
+  acceptedAcceptance: null,
   interactions: [],
   lanes: [
     {
@@ -64,8 +64,8 @@ const boardData = {
       }],
     },
     {
-      id: "delivery",
-      title: "Delivery",
+      id: "acceptance",
+      title: "Acceptance",
       cards: [],
     },
     {

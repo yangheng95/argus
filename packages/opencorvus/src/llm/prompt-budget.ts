@@ -52,7 +52,7 @@ export function modelInputCharLimit(model: PromptBudgetModel): number {
   return limit
 }
 
-export function deliveryUserPromptCharBudget(model: PromptBudgetModel): number {
+export function acceptanceUserPromptCharBudget(model: PromptBudgetModel): number {
   const limit = modelInputCharLimit(model)
   return Math.max(4096, Math.floor(limit * 0.6))
 }
@@ -128,7 +128,7 @@ export class PromptBudget {
     const lines = [
       "# Prompt Truncation Notice",
       "",
-      "Some auxiliary delivery context was shortened to fit the model input budget. Treat omitted details as unavailable unless you inspect the referenced artifacts or call tools.",
+      "Some auxiliary acceptance context was shortened to fit the model input budget. Treat omitted details as unavailable unless you inspect the referenced artifacts or call tools.",
       "",
       ...this.notices.map((item) =>
         `- ${item.section}: rendered ${item.renderedChars}/${item.originalChars} chars (${item.reason})`

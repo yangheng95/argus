@@ -22,7 +22,7 @@ function resolveOverlayDir(): string | undefined {
   // import.meta.dir = .../packages/opencorvus/src/server
   const pkgRoot = import.meta.dir.replace(/[/\\]src[/\\]server$/, "")
 
-  // 2. Workspace bundle: keep runtime and packaged delivery on the same built UI.
+  // 2. Workspace bundle: keep runtime and packaged acceptance on the same built UI.
   const viteUi = path.resolve(pkgRoot, "../overlay/dist-vite")
   if (fs.existsSync(path.join(viteUi, "index.html"))) return viteUi
 

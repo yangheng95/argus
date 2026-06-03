@@ -89,13 +89,13 @@ describe("terminal task writes finalize live runs", () => {
 
     await updateTask(
       findTask(taskID)!,
-      { status: "failed", error: "delivery publish failed", time_completed: completed },
-      "delivery publish failed",
+      { status: "failed", error: "acceptance publish failed", time_completed: completed },
+      "acceptance publish failed",
     )
 
     const run = findRun(runID)
     expect(run?.status).toBe("failed")
-    expect(run?.error).toBe("delivery publish failed")
+    expect(run?.error).toBe("acceptance publish failed")
     expect(run?.blocking_reason).toBeNull()
     expect(run?.time_completed).toBe(completed)
   })

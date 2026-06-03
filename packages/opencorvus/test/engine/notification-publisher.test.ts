@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, mock, test } from "bun:test"
 import { EngineArtifactTable, EngineTaskTable } from "../../src/engine/engine.sql"
-import { updateEvaluationFromDeliveryVerdict } from "../../src/engine/persist"
+import { updateEvaluationFromAcceptanceVerdict } from "../../src/engine/persist"
 import { ProtocolStore } from "../../src/protocol/store"
 import { ProjectTable } from "../../src/project/project.sql"
 import { Database } from "../../src/storage/db"
@@ -9,7 +9,7 @@ import { resetDatabase } from "../fixture/db"
 let projectID = ""
 let taskID = ""
 let runID = ""
-let deliveryID = ""
+let acceptanceID = ""
 
 beforeEach(async () => {
   await resetDatabase()
@@ -17,7 +17,7 @@ beforeEach(async () => {
   projectID = `project_notification_publish_${suffix}`
   taskID = `tsk_notification_publish_${suffix}`
   runID = `run_notification_publish_${suffix}`
-  deliveryID = `dlv_notification_publish_${suffix}`
+  acceptanceID = `dlv_notification_publish_${suffix}`
   seedTask()
 })
 
@@ -26,13 +26,13 @@ afterEach(async () => {
   await resetDatabase()
 })
 
-test("updateEvaluationFromDeliveryVerdict emits one evaluation.completed event", async () => {
+test("updateEvaluationFromAcceptanceVerdict emits one evaluation.completed event", async () => {
   seedEvidence(`art_notification_seed_${taskID}`)
 
-  updateEvaluationFromDeliveryVerdict({
-    deliveryID,
+  updateEvaluationFromAcceptanceVerdict({
+    acceptanceID,
     verdict: "rejected",
-    summary: "Delivery rejected",
+    summary: "Acceptance rejected",
     now: 1000,
   })
 
@@ -43,7 +43,7 @@ test("updateEvaluationFromDeliveryVerdict emits one evaluation.completed event",
     evaluationID: expect.stringMatching(/^art_/),
     status: "failed",
     verdict: "rejected",
-    summary: "Delivery rejected",
+    summary: "Acceptance rejected",
   })
   expect(ProtocolStore.listTaskEvents(taskID).filter((item) => item.type === "evaluation.completed")).toHaveLength(1)
 })
@@ -85,11 +85,11 @@ function seedEvidence(id: string) {
         task_id: taskID,
         run_id: runID,
         goal_run_id: null,
-        delivery_id: deliveryID,
+        acceptance_id: acceptanceID,
         kind: "verification-evidence",
-        label: "evidence-delivery",
+        label: "evidence-acceptance",
         payload: {
-          scope: "delivery",
+          scope: "acceptance",
           status: "pending",
           verdict: "inconclusive",
           summary: "Pending evidence",

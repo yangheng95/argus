@@ -19,7 +19,7 @@
  *
  *   1. `agent/prompt/explore.txt` had no "your response IS the deliverable"
  *      rule; the Memory section encouraged writing findings to memory
- *      immediately without saying memory is not a delivery channel.
+ *      immediately without saying memory is not a acceptance channel.
  *   2. The dispatcher's local prompt in `orchestrator/tools.ts` told the
  *      agent to "return concrete findings" but did not say WHERE those
  *      findings must appear, and did not preempt the "system ping"
@@ -61,11 +61,11 @@ describe("explore subagent — response channel contract", () => {
     expect(n).toContain("do not treat a tool-result echo as a signal to suspend work")
   })
 
-  test("explore.txt's Memory section names memory as supplementary, not a delivery channel", async () => {
+  test("explore.txt's Memory section names memory as supplementary, not a acceptance channel", async () => {
     const prompt = await Bun.file(explorePromptPath).text()
     const n = norm(prompt)
 
-    expect(n).toContain("Memory is supplementary cross-session retention, not a delivery channel")
+    expect(n).toContain("Memory is supplementary cross-session retention, not a acceptance channel")
     expect(n).toContain("IN ADDITION to including them in your final text response")
   })
 

@@ -20,7 +20,7 @@ import { join } from "path"
 import { createArchitectOutputTools } from "@/architect/output-tools"
 import { ArchitectContractRefSchema } from "@/architect/contract-graph"
 import { ContractIRSchema, ValueDomainSchema } from "@/architect/contract-ir"
-import { WalkthroughStepsSchema } from "@/delivery/checks/walkthrough/dsl"
+import { WalkthroughStepsSchema } from "@/acceptance/checks/walkthrough/dsl"
 import { createToolCallRepair, discriminatorRepairHint, zodIssuesFromError } from "@/session/repair-hint"
 
 function registerContractJsonSchema(): Record<string, any> {
@@ -150,7 +150,7 @@ describe("prompt ↔ schema single-source consistency (locks rule 8 drift)", () 
 
 describe("createToolCallRepair — wrapper-level single source covers ALL streamText callers", () => {
   // Closes the rule-35 gap codex flagged: walkthrough translation
-  // (`delivery/checks/walkthrough/translate.ts`) calls `@/llm/api` streamText
+  // (`acceptance/checks/walkthrough/translate.ts`) calls `@/llm/api` streamText
   // directly and never wired a per-call repair. The repair now lives at the
   // wrapper, so this previously-uncovered discriminated union is covered too.
   const walkthroughToolSchema = z.object({ steps: WalkthroughStepsSchema })

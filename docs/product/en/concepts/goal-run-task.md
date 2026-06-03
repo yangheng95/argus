@@ -2,7 +2,7 @@
 
 All engine-domain table definitions are centralized in `packages/opencorvus/src/engine/engine.sql.ts`, with the unified naming prefix `engine_*` (the historical `orchestrator_*` prefix has been fully renamed).
 
-> **Key change (2026-05)**: Phase 6 merged 5 process tables (`engine_run` / `engine_goal_run` / `engine_delivery` / `engine_evaluation` / `engine_goal_snapshot`) into a **single `engine_artifact` table**, distinguished by the `kind` field. If you came from older docs that treated Run / GoalRun / Evaluation / Delivery as separate tables, that model is entirely obsolete.
+> **Key change (2026-05)**: Phase 6 merged 5 process tables (`engine_run` / `engine_goal_run` / `engine_acceptance` / `engine_evaluation` / `engine_goal_snapshot`) into a **single `engine_artifact` table**, distinguished by the `kind` field. If you came from older docs that treated Run / GoalRun / Evaluation / Acceptance as separate tables, that model is entirely obsolete.
 
 ## Entity relationships
 
@@ -14,7 +14,7 @@ Task (kind: "workflow" | "build")
      ├─ Requirement[]         ← requirement traceability
      └─ PlanNode[]            ← plan steps
 
-Artifact[]   (run / goal_run_attempt / delivery / verification-evidence / verdict / patch / …)
+Artifact[]   (run / goal_run_attempt / acceptance / verification-evidence / verdict / patch / …)
 SpecSnapshot · SpecItem        ← requirements output
 InteractionRequest             ← permission / question
 ChannelBinding                 ← external channel ↔ task binding
@@ -64,7 +64,7 @@ Architect decomposition must analyze the requirement surface, implementation own
 
 ### Milestone (`EngineMilestoneTable`)
 
-Advances through `status ∈ {pending, active, passed, failed}`. Milestones connect the delivery handoff points between Requirements, Architect, and Delivery.
+Advances through `status ∈ {pending, active, passed, failed}`. Milestones connect the acceptance handoff points between Requirements, Architect, and Acceptance.
 
 ### Requirement (`EngineRequirementTable`) / SpecItem (`EngineSpecItemTable`)
 
@@ -75,11 +75,11 @@ Written by the `requirements` agent; serve as traceability anchors for fidelity 
 `kind` determines semantics. Full `EngineArtifactKind` values (`engine.sql.ts:90`):
 
 ```
-run · goal_run_attempt · delivery · verification-evidence · evaluation ·
+run · goal_run_attempt · acceptance · verification-evidence · evaluation ·
 verdict · patch · changed_file · diff · log · report · image · link ·
 git_ref · pr · integrity_attempt · prosecutor_attempt ·
-delivery_evidence_manifest · delivery_surface_manifest ·
-delivery_specialist_review · delivery_verification_threw ·
+acceptance_evidence_manifest · acceptance_surface_manifest ·
+acceptance_specialist_review · acceptance_review_threw ·
 orchestrator-stream-error
 ```
 
@@ -89,11 +89,11 @@ orchestrator-stream-error
 | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
 | `run`                                                                   | Root node for one task execution attempt (replaces the old `engine_run` table)                         |
 | `goal_run_attempt`                                                      | One worktree attempt for a single goal; `payload.workspace_*` is the single source for worktree info   |
-| `delivery`                                                              | One delivery candidate (replaces the old `engine_delivery` table)                                      |
+| `acceptance`                                                              | One acceptance candidate (replaces the old `engine_acceptance` table)                                      |
 | `evaluation` / `verdict`                                                | Evaluation decision (`accepted / rejected / inconclusive`; replaces the old `engine_evaluation` table) |
-| `verification-evidence`                                                 | Delivery check evidence (with `scope = goal_run` / `delivery`)                                         |
+| `verification-evidence`                                                 | Acceptance check evidence (with `scope = goal_run` / `acceptance`)                                         |
 | `patch` / `changed_file` / `diff`                                       | Code change artifacts                                                                                  |
-| `delivery_evidence_manifest` / `surface_manifest` / `specialist_review` | Delivery-phase artifacts                                                                               |
+| `acceptance_evidence_manifest` / `surface_manifest` / `specialist_review` | Acceptance-phase artifacts                                                                               |
 | `integrity_attempt` / `prosecutor_attempt`                              | Integrity / prosecutor agent output                                                                    |
 
 `inconclusive` verdict means "unable to decide" — not a pass and not a failure; it triggers replan rather than retry.
@@ -124,7 +124,7 @@ External channel (platform / channel / thread) ↔ task binding; `ChannelIngress
 ```
 root · orchestrator · assistant · mission · intent-analysis ·
 requirements · frontend-design · goal · architect · integrity ·
-delivery · executor · build · evaluator · system
+acceptance · executor · build · evaluator · system
 ```
 
 **15 kinds** total. `planner` has been removed and is **no longer a valid SessionKind**.
@@ -148,5 +148,5 @@ All state lives in SQLite (default `~/.opencorvus/opencorvus.db`) and persists a
 
 - [Architecture overview](./architecture.md)
 - [Agentic Loop](./agent-loop.md)
-- [Delivery checks and verdict](../opencorvus/evaluator.md)
+- [Acceptance checks and verdict](../opencorvus/evaluator.md)
 - Full data-plane spec: [specs/new-arch/02-data.md](../../../specs/new-arch/02-data.md)

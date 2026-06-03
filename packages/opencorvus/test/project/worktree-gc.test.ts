@@ -112,7 +112,7 @@ describe("WorktreeGC orphan sweep", () => {
         const now = Date.now()
         seedProject(Instance.project.id, tmp.path, now)
         const wt = await Worktree.create({ name: "gc-in-transit-commit" })
-        await Bun.write(path.join(wt.directory, "feature.txt"), "delivery")
+        await Bun.write(path.join(wt.directory, "feature.txt"), "acceptance")
         await $`git add -A`.cwd(wt.directory).quiet()
         await $`git -c user.name=t -c user.email=t@t commit -m "in-transit attempt"`
           .cwd(wt.directory)

@@ -37,7 +37,7 @@ const NDJSON_STAGE_COLORS: Record<string, string> = {
   planner: "#7B54C9",
   goal: "#2ECC71",
   judge: "#F39C12",
-  delivery: "#28B4A0",
+  acceptance: "#28B4A0",
 };
 
 const NDJSON_TOOL_COLORS: Record<string, string> = {

@@ -11,7 +11,7 @@
  * Default url: http://localhost:5173/
  */
 
-import { findBrowserExecutable } from "../src/delivery/checks/visual"
+import { findBrowserExecutable } from "../src/acceptance/checks/visual"
 import puppeteer from "puppeteer-core"
 import path from "node:path"
 

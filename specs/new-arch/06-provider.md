@@ -125,9 +125,9 @@ Agent.run()                                     agent 发起 LLM 调用
     "requirements": { "model": "anthropic/claude-sonnet-4-..." }, // 需求分析
     "architect":    { "model": "openai/gpt-5" },                  // 跨目标契约
     "build":        { "model": "anthropic/claude-sonnet-4-..." }, // 实际写代码
-    "delivery":     { "model": "openai/gpt-4o-mini" }             // 低成本验收
+    "acceptance":     { "model": "openai/gpt-4o-mini" }             // 低成本验收
   },
-  // 注：planner / evaluator agent 已下线（见 [01-agents.md](01-agents.md)），不要再配。
+  // 注：planner / acceptance review 已下线（见 [01-agents.md](01-agents.md)），不要再配。
   "model": "anthropic/claude-sonnet-4-...",   // 全局默认
   "small_model": "openai/gpt-4o-mini"         // 小任务快速
 }

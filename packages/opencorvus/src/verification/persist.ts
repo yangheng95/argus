@@ -8,7 +8,7 @@
  *   the same structure without a JOIN-heavy schema.
  *
  * Public API (`persistEvidence / queryEvidence / findLatestGoalRunEvidence /
- * findGoalRunEvidence / findLatestDeliveryEvidence / findPreviousDeliveryEvidence`)
+ * findGoalRunEvidence / findLatestAcceptanceEvidence / findPreviousAcceptanceEvidence`)
  * signatures stay stable for artifact-backed evidence readers.
  *
  * Post-DAM Phase 5 note: signature-based convergence detection lives in
@@ -37,7 +37,7 @@ export interface VerificationEvidence {
   taskID: string
   runID: string
   goalRunID?: string
-  deliveryID?: string
+  acceptanceID?: string
   scope: EngineEvaluationScope
   status: EngineEvaluationStatus
   verdict: EngineEvaluationVerdict
@@ -63,7 +63,7 @@ function rowToEvidence(row: {
   task_id: string
   run_id: string | null
   goal_run_id: string | null
-  delivery_id: string | null
+  acceptance_id: string | null
   payload: unknown
   time_created: number
   time_updated: number
@@ -75,7 +75,7 @@ function rowToEvidence(row: {
     taskID: row.task_id,
     runID: row.run_id ?? "",
     goalRunID: row.goal_run_id ?? undefined,
-    deliveryID: row.delivery_id ?? undefined,
+    acceptanceID: row.acceptance_id ?? undefined,
     scope: payload.scope,
     status: payload.status,
     verdict: payload.verdict,
@@ -92,8 +92,8 @@ export interface PersistEvidenceInput {
   runID: string
   /** Required when scope="goal_run"; otherwise omit. Enforced below. */
   goalRunID?: string
-  /** Required when scope="delivery"; otherwise omit. Enforced below. */
-  deliveryID?: string
+  /** Required when scope="acceptance"; otherwise omit. Enforced below. */
+  acceptanceID?: string
   scope: EngineEvaluationScope
   status: EngineEvaluationStatus
   verdict: EngineEvaluationVerdict
@@ -104,15 +104,15 @@ export interface PersistEvidenceInput {
 }
 
 /** Insert one new evidence row as an engine_artifact. Returns the persisted
- *  `VerificationEvidence`. Does NOT update goal_run / delivery status —
+ *  `VerificationEvidence`. Does NOT update goal_run / acceptance status —
  *  callers own those state transitions; this function only owns the
  *  artifact row. */
 export function persistEvidence(input: PersistEvidenceInput): VerificationEvidence {
   if (input.scope === "goal_run" && !input.goalRunID) {
     throw new Error("persistEvidence: scope='goal_run' requires goalRunID")
   }
-  if (input.scope === "delivery" && !input.deliveryID) {
-    throw new Error("persistEvidence: scope='delivery' requires deliveryID")
+  if (input.scope === "acceptance" && !input.acceptanceID) {
+    throw new Error("persistEvidence: scope='acceptance' requires acceptanceID")
   }
   const now = input.now ?? Date.now()
   const id = Identifier.ascending("artifact")
@@ -132,7 +132,7 @@ export function persistEvidence(input: PersistEvidenceInput): VerificationEviden
         task_id: input.taskID,
         run_id: input.runID,
         goal_run_id: input.goalRunID ?? null,
-        delivery_id: input.deliveryID ?? null,
+        acceptance_id: input.acceptanceID ?? null,
         kind: ARTIFACT_KIND,
         label: labelForScope(input.scope),
         payload,
@@ -146,7 +146,7 @@ export function persistEvidence(input: PersistEvidenceInput): VerificationEviden
     taskID: input.taskID,
     runID: input.runID,
     goalRunID: input.goalRunID,
-    deliveryID: input.deliveryID,
+    acceptanceID: input.acceptanceID,
     scope: input.scope,
     status: input.status,
     verdict: input.verdict,
@@ -203,7 +203,7 @@ export function findLatestGoalRunEvidence(goalID: string): VerificationEvidence 
   return rowToEvidence(row)
 }
 
-/** Latest evidence for a specific goal_run. Useful during delivery when the
+/** Latest evidence for a specific goal_run. Useful during acceptance when the
  *  orchestrator needs to read each goal's most recent on_goal results. */
 export function findGoalRunEvidence(goalRunID: string): VerificationEvidence | undefined {
   const row = Database.use((db) =>
@@ -225,8 +225,8 @@ export function findGoalRunEvidence(goalRunID: string): VerificationEvidence | u
   return rowToEvidence(row)
 }
 
-/** Latest delivery-scope evidence for a task. */
-export function findLatestDeliveryEvidence(taskID: string): VerificationEvidence | undefined {
+/** Latest acceptance-scope evidence for a task. */
+export function findLatestAcceptanceEvidence(taskID: string): VerificationEvidence | undefined {
   const row = Database.use((db) =>
     db
       .select()
@@ -235,7 +235,7 @@ export function findLatestDeliveryEvidence(taskID: string): VerificationEvidence
         and(
           eq(EngineArtifactTable.task_id, taskID),
           eq(EngineArtifactTable.kind, ARTIFACT_KIND),
-          eq(EngineArtifactTable.label, labelForScope("delivery")),
+          eq(EngineArtifactTable.label, labelForScope("acceptance")),
         ),
       )
       .orderBy(desc(EngineArtifactTable.time_created))

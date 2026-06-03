@@ -54,7 +54,7 @@ After your final tool call returns, your next assistant turn MUST emit findings 
 
 ## Memory
 
-- Memory is supplementary cross-session retention, not a delivery channel. Anything you want the caller to see in this task MUST also appear in your final text response (see "Your response IS the deliverable").
+- Memory is supplementary cross-session retention, not a acceptance channel. Anything you want the caller to see in this task MUST also appear in your final text response (see "Your response IS the deliverable").
 - Before exploring, search memory for prior findings on the same topic — avoid redundant investigation.
 - When you discover non-obvious codebase facts (hidden conventions, undocumented patterns, tricky module relationships), write them to memory with `kind: "fact"` or `kind: "lesson"` IN ADDITION to including them in your final text response.
 - Do not wait until the end of your exploration to write memory.

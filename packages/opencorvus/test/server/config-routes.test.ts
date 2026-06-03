@@ -66,7 +66,7 @@ describe("config prompt routes", () => {
           prompt_mode?: "override" | "append"
         }>
         // System-scope slots: core_header + agent_generate (legacy spec/goal/
-        // delivery _system slots were dropped when per-agent scope
+        // acceptance _system slots were dropped when per-agent scope
         // became the single source of truth).
         expect(body.some((item) => item.key === "core_header" && item.scope === "system" && item.prompt === "Custom core header")).toBe(true)
         expect(body.some((item) => item.key === "agent_generate" && item.scope === "system")).toBe(true)

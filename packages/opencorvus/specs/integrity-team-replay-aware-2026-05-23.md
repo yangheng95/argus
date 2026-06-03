@@ -88,7 +88,7 @@ adversarial team runtime, but the prompt context is single-turn:
 - `buildReviewerPrompt` only includes assigned focus and the current evidence.
 - `buildSupervisorConsensusPrompt` only compares current reviewer reports.
 - `buildIntegrityEvidencePrompt` includes request, requirements, requirement
-  status, delivery evidence, design specs, goals, contract graph, and decision
+  status, acceptance evidence, design specs, goals, contract graph, and decision
   log, but no prior integrity attempts.
 - `attempt` is hard-coded to `1` in supervisor planning, supervisor consensus,
   reviewer streaming, soft no-goals event emission, and completed event
@@ -109,7 +109,7 @@ Important existing core-prompt constraints that this plan must preserve:
 
 - Integrity does not edit files, mutate goals, write memory, or complete the
   task itself.
-- The original user request is the audit source; generated rows and delivery
+- The original user request is the audit source; generated rows and acceptance
   evidence are evidence, not trusted truth.
 - Every finding needs concrete evidence.
 - Runtime behavior must be tested when material.
@@ -133,7 +133,7 @@ rg -n "reviewIntegrity\(|runIntegrityReviewOnce|findLatestIntegrityAttemptArtifa
 | `packages/opencorvus/src/integrity/index.ts:2` | Re-exports `reviewIntegrity` from `team-agent`. | No semantic change; exported input type changes through the same single source. |
 | `packages/opencorvus/src/orchestrator/tools.ts:1600` `runIntegrityReviewOnce` | Builds current evidence, then calls review. | Build replay context after `phase` is known and pass it to `reviewIntegrity`. |
 | `packages/opencorvus/src/orchestrator/tools.ts:1682` / `1716` | Imports and calls `reviewIntegrity`. | Import helper or build it through integrity export; pass `replayContext`. |
-| `packages/opencorvus/src/delivery/tools.ts:144` / `156` | Delivery-triggered integrity review calls the same entrypoint without delivery evidence context. | Build the same replay context and pass it to `reviewIntegrity`; use the same helper, not duplicated extraction. |
+| `packages/opencorvus/src/acceptance/tools.ts:144` / `156` | Acceptance-triggered integrity review calls the same entrypoint without acceptance evidence context. | Build the same replay context and pass it to `reviewIntegrity`; use the same helper, not duplicated extraction. |
 
 ### Same-Name Legacy Definition And Tests
 
@@ -154,10 +154,10 @@ rg -n "reviewIntegrity\(|runIntegrityReviewOnce|findLatestIntegrityAttemptArtifa
 | `packages/opencorvus/src/engine/workflow.ts:361` | Uses latest post-build attempt as workflow gate fact. | Keep latest-only gate behavior; do not replace it with replay list. |
 | `packages/opencorvus/src/engine/persist.ts:2098` `recordIntegrityAttempt` | Persists append-only attempt payload. | No new field required for attempt count; the ordered artifact list is the source of attempt number. |
 | `packages/opencorvus/src/orchestrator/tools.ts:1741` | Records attempt after review. | No persistence schema change; the next review will count this artifact. |
-| `packages/opencorvus/src/delivery/tools.ts:174` | Records delivery-triggered attempt. | Same. |
+| `packages/opencorvus/src/acceptance/tools.ts:174` | Records acceptance-triggered attempt. | Same. |
 | `packages/opencorvus/test/orchestrator/tools.test.ts:1646,2803,3788,3857,3946,4061,4386` | Reads latest attempt in tests. | Keep latest helper tests; add list helper tests. |
 | `packages/opencorvus/test/engine/workflow-integrity-step.test.ts:155,221,289` | Records attempts for workflow step tests. | Keep; add coverage that list helper ordering does not break latest helper. |
-| `packages/opencorvus/test/delivery/project-gate.test.ts:853` | Records attempts for delivery gate tests. | Keep; no replay prompt assertion unless delivery integrity caller test is added here. |
+| `packages/opencorvus/test/acceptance/project-gate.test.ts:853` | Records attempts for acceptance gate tests. | Keep; no replay prompt assertion unless acceptance integrity caller test is added here. |
 
 ### Hard-Coded Attempt Lines In `team-agent.ts`
 
@@ -204,7 +204,7 @@ export type IntegrityBuildEvidenceSinceLastReview = {
   sinceTimeCreated?: number
   changedFiles: string[]
   diffs: Array<{ file: string; status?: string; additions?: number; deletions?: number }>
-  deliverySummaries: string[]
+  acceptanceSummaries: string[]
   goalRuns: Array<{
     goalID: string
     goalRunID: string
@@ -250,7 +250,7 @@ export function buildIntegrityReplayContext(input: {
   phase?: "pre_build" | "post_build"
   goals: GoalContractFields[]
   requirements?: ParsedRequirement[]
-  deliveries: DeliveryRow[]
+  deliveries: AcceptanceRow[]
   goalRuns: GoalRunRow[]
 }): IntegrityReplayContext
 
@@ -294,9 +294,9 @@ Build evidence since last review:
 
 - If prior attempts exist, use the newest prior attempt's `time_created` as
   the lower bound.
-- Include delivery rows and goal-run rows with evidence newer than that bound.
-- Extract changed files from `delivery.result.changed_files`,
-  `delivery.result.changedFiles`, and `delivery.result.diffs[].file`, matching
+- Include acceptance rows and goal-run rows with evidence newer than that bound.
+- Extract changed files from `acceptance.result.changed_files`,
+  `acceptance.result.changedFiles`, and `acceptance.result.diffs[].file`, matching
   the existing orchestrator extraction.
 - Host code must not label a repair as successful or failed. It only renders
   what changed after the prior review.
@@ -352,7 +352,7 @@ input:
   `renderIntegrityReplayContextPrompt(input.replayContext)` before current
   reviewer reports so consensus can mark persistent blockers.
 - `buildIntegrityEvidencePrompt(input)` stays the current evidence dossier
-  (request, requirements, delivery evidence, goals, contract graph, decision
+  (request, requirements, acceptance evidence, goals, contract graph, decision
   log). Keeping replay rendering in the three role prompts avoids duplicated
   replay sections.
 
@@ -381,7 +381,7 @@ After `phase` is computed and before `reviewIntegrity` is called:
 This caller is the main task-backed path and should get the strongest test
 coverage.
 
-### `delivery/tools.ts` `runDeliveryIntegrityReview`
+### `acceptance/tools.ts` `runAcceptanceIntegrityReview`
 
 Use the same helper:
 
@@ -389,7 +389,7 @@ Use the same helper:
 - Build `replayContext` for the active spec.
 - Pass `replayContext` into `reviewIntegrity`.
 
-Do not duplicate changed-file extraction in delivery. The helper is the single
+Do not duplicate changed-file extraction in acceptance. The helper is the single
 source for replay context assembly.
 
 ### Tests And Mocks
@@ -398,8 +398,8 @@ source for replay context assembly.
 `reviewIntegrity`. Update the mock expectations where integrity is invoked so
 the tests fail if `replayContext` is omitted.
 
-Add delivery-triggered coverage if no existing test exercises
-`runDeliveryIntegrityReview` with the mocked `reviewIntegrity` input.
+Add acceptance-triggered coverage if no existing test exercises
+`runAcceptanceIntegrityReview` with the mocked `reviewIntegrity` input.
 
 ## Prompt Design
 
@@ -424,7 +424,7 @@ Prior attempts for this task/spec:
 
 Build evidence after latest integrity attempt:
 - Changed files: src/services/storage.ts, src/contexts/SettingsContext.tsx
-- Delivery summaries: ...
+- Acceptance summaries: ...
 - Goal runs after latest review: goal_settings completed at ...
 
 Scale signals:
@@ -550,7 +550,7 @@ Add `packages/opencorvus/test/integrity/replay-context.test.ts`:
   counts from the supplied goals/requirements/deliveries.
 - Two prior attempts return `attemptNumber=3` in chronological attempt order,
   with reviewer ids/scopes, blocking findings only, required repairs, and phase.
-- Evidence since latest review includes only delivery/goal-run rows newer than
+- Evidence since latest review includes only acceptance/goal-run rows newer than
   the latest prior attempt.
 - Changed files are extracted from `changed_files`, `changedFiles`, and
   `diffs[].file` with de-duplication.
@@ -576,7 +576,7 @@ team-agent path:
 
 - Construct attempt #2 input with one prior `integrity_attempt` artifact that
   contains a blocking settings validation finding.
-- Add a later delivery row with `src/services/storage.ts` changed.
+- Add a later acceptance row with `src/services/storage.ts` changed.
 - Invoke `reviewIntegrity` through the orchestrator integrity path or a direct
   team-agent test fixture.
 - Assert the captured supervisor planning prompt includes:
@@ -592,7 +592,7 @@ team-agent path:
 - `packages/opencorvus/test/orchestrator/tools.test.ts`: add/adjust a mock
   assertion that `reviewIntegrity` receives `replayContext` from
   `runIntegrityReviewOnce`.
-- Delivery-triggered integrity review: add a test if no existing one captures
+- Acceptance-triggered integrity review: add a test if no existing one captures
   its `reviewIntegrity` input.
 - `packages/opencorvus/test/integrity/team-schema.test.ts`: add positive
   coverage for `attempts: 2`.
@@ -608,7 +608,7 @@ bun test packages/opencorvus/test/integrity/replay-context.test.ts packages/open
 bun test packages/opencorvus/test/orchestrator/tools.test.ts
 ```
 
-If delivery-triggered coverage lands in a separate delivery test file, include
+If acceptance-triggered coverage lands in a separate acceptance test file, include
 that file in the targeted run. Do not run broad `bun test` unless a later code
 change expands the blast radius enough to justify it.
 
@@ -665,10 +665,10 @@ Reviewer count behavior:
 5. [ ] Add replay sections to supervisor planning, reviewer, and consensus
    prompts.
 6. [ ] Wire `runIntegrityReviewOnce` in `orchestrator/tools.ts`.
-7. [ ] Wire `runDeliveryIntegrityReview` in `delivery/tools.ts`.
+7. [ ] Wire `runAcceptanceIntegrityReview` in `acceptance/tools.ts`.
 8. [ ] Update mocks/tests for all active `reviewIntegrity` callers.
 9. [ ] Add integration test for attempt #2 prompt contents.
-10. [ ] Run targeted integrity/orchestrator/delivery tests.
+10. [ ] Run targeted integrity/orchestrator/acceptance tests.
 
 ## Plan Updates From Patched Review (2026-05-24): Shared Prompt Cap Owner
 
@@ -710,7 +710,7 @@ Rules:
   file and render its path rather than silently omit findings.
 - Persistent roots get second priority. Roots present in the latest attempt
   and roots with repeated lineage history render before older one-off roots.
-- Changed files and build/delivery evidence since the latest attempt get
+- Changed files and build/acceptance evidence since the latest attempt get
   third priority. File paths and current changed-file evidence render before
   old reviewer prose.
 - Older attempts get only pointer + summary after the three priority classes
@@ -803,7 +803,7 @@ export type BuildIntegrityReplayContextInput = {
   phase?: "pre_build" | "post_build"
   goals: GoalContractFields[]
   requirements?: ParsedRequirement[]
-  deliveries: DeliveryRow[]
+  deliveries: AcceptanceRow[]
   goalRuns: GoalRunRow[]
 }
 

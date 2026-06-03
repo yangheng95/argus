@@ -30,7 +30,7 @@ const LOGGED_TYPES = new Set([
   "engine.run.output",
   "engine.interaction.requested",
   "engine.interaction.resolved",
-  "engine.delivery.ready",
+  "engine.acceptance.ready",
   "engine.evaluation.completed",
 ])
 
@@ -225,8 +225,8 @@ export namespace EngineEventLog {
         tl(ctx, `[${elapsed(ctx)}] INTERACTION resolved  ${summary}`)
         nd(ctx, { at: now, elapsed_ms: ms, type, taskID, summary })
         break
-      case "engine.delivery.ready":
-        tl(ctx, `[${elapsed(ctx)}] DELIVERY ready  ${summary}`)
+      case "engine.acceptance.ready":
+        tl(ctx, `[${elapsed(ctx)}] ACCEPTANCE ready  ${summary}`)
         nd(ctx, { at: now, elapsed_ms: ms, type, taskID, summary })
         break
       case "engine.evaluation.completed": {

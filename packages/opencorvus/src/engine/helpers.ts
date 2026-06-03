@@ -105,14 +105,14 @@ export function operatorNotesSection(taskID: string): string {
 /**
  * Query answered clarification interactions for a task and format as a prompt section.
  * Single source of truth for all clarification Q&A: every agent (Orchestrator, Requirements,
- * Architect, frontend_design, Delivery) reads the same transcript so
+ * Architect, frontend_design, Acceptance) reads the same transcript so
  * downstream agents never duplicate questions already answered upstream.
  *
  * Returns "" when no answered question interactions exist.
  */
 /**
  * Caps for clarification transcript. Every sub-agent (orchestrator,
- * requirements, architect, delivery) reads this section
+ * requirements, architect, acceptance) reads this section
  * into its own system prompt; an unbounded transcript would get multiplied
  * across N parallel prompts and amplify token cost linearly in both
  * question count and active sub-agent count. We keep the most recent

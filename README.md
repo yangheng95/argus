@@ -6,7 +6,7 @@
 
 <p align="center"><em>An open-source harness for AI coding agents</em></p>
 
-Coding agents are powerful, but raw model output is unreliable. OpenCorvus is the **harness** that turns one-shot coding agents into durable, evaluator-driven development workflows. You hand it a task. It promotes the request into an executable spec, decomposes it into goals, plans the execution, dispatches a coding agent, evaluates the delivery against the spec, and either completes, retries, or replans — autonomously.
+Coding agents are powerful, but raw model output is unreliable. OpenCorvus is the **harness** that turns one-shot coding agents into durable, evaluator-driven development workflows. You hand it a task. It promotes the request into an executable spec, decomposes it into goals, plans the execution, dispatches a coding agent, evaluates the acceptance against the spec, and either completes, retries, or replans — autonomously.
 
 ### Why a Harness
 
@@ -16,10 +16,10 @@ Without a harness, you get a single attempt with no structured verification. Wit
 
 - **Spec agent** — researches the codebase and turns a vague request into a precise, testable specification
 - **Architect agent** — analyzes boundaries and decomposes the spec into at least two modest, independently verifiable implementation goals
-- **Planner agent** — expands goals into an execution plan with subtasks, risks, and assumptions
+- **Planning tool role** — expands goals into an execution plan with subtasks, risks, and assumptions
 - **Executor** — dispatches to OpenCorvus, Codex, or Claude Code against the real repo
-- **Evaluator agent** — runs `build`, `test`, `lint`, `startup`, `artifact`, `visual`, `puppeteer`, LLM review checks and the default-on `spec check` acceptance gate; classifies failures and generates replan guidance
-- **Delivery agent** — performs end-to-end verification before publishing
+- **Acceptance review** — runs `build`, `test`, `lint`, `startup`, `artifact`, `visual`, `puppeteer`, LLM review checks and the default-on `spec check` acceptance gate; classifies failures and generates replan guidance
+- **Acceptance review** — performs end-to-end verification before publishing
 
 The result is **delegated development**: durable task orchestration with SQLite state persistence, scoped project memory shared across sessions, human-in-the-loop permission handling, and evaluator-driven retry loops — accessible from a local TUI, headless HTTP API, overlay UI, Slack, or any of the 14 channel adapters in `packages/channel-runtime`.
 
@@ -67,7 +67,7 @@ Open the local overlay UI at `http://127.0.0.1:7878/ui/`, then create a task ove
 curl -X POST http://127.0.0.1:7878/task \
   -H "content-type: application/json" \
   -d '{
-    "request": "Implement the requested change, run validation, and stop only when the delivery is ready."
+    "request": "Implement the requested change, run validation, and stop only when the acceptance is ready."
   }'
 ```
 
@@ -103,7 +103,7 @@ opencorvus slack
 What the Slack gateway does today:
 
 - Starts a task from the first message in a thread
-- Mirrors spec, plan, run, delivery, and evaluation updates back into the thread
+- Mirrors spec, plan, run, acceptance, and evaluation updates back into the thread
 - Accepts permission replies like `allow`, `always`, and `reject`
 - Accepts follow-up operator messages and routes them into the task loop
 

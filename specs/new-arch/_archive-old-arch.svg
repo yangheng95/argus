@@ -100,7 +100,7 @@
   <text class="h2" x="805" y="274">Executor (外部)</text>
   <text class="body" x="805" y="290">opencode / claude-code / codex</text>
   <text class="body" x="805" y="304">worktree 隔离执行</text>
-  <text class="body" x="805" y="318">→ delivery (diffs)</text>
+  <text class="body" x="805" y="318">→ acceptance (diffs)</text>
 
   <!-- Decision Log (shared) -->
   <rect class="log" x="60" y="336" width="850" height="54"/>
@@ -242,7 +242,7 @@
   <text class="mono-h" x="980" y="326">INFRASTRUCTURE (无 LLM, 无决策, 纯机械)</text>
   <text class="mono" x="980" y="346">  orchestrator/task-loop.ts       Task Control Loop: Decision → GoalPool → collect → repeat (单入口)</text>
   <text class="mono" x="980" y="362">  orchestrator/goal-pool.ts       GoalPool: concurrent execution + deterministic-eval (exit code) + drain</text>
-  <text class="mono" x="980" y="378">  pipeline/executor.ts            Goal pipeline: worktree + executor + delivery extraction (async generator)</text>
+  <text class="mono" x="980" y="378">  pipeline/executor.ts            Goal pipeline: worktree + executor + acceptance extraction (async generator)</text>
   <text class="mono" x="980" y="394">  goal/merge.ts                   Serialized merge + commit + HEAD advance</text>
   <text class="mono" x="980" y="410">  goal/scheduler.ts               Dependency DAG → layer computation (utility)</text>
   <text class="mono" x="980" y="426">  shell/pid-guard.ts              PID guard: BASH_ENV/ZDOTDIR kill() override protects host PIDs</text>
@@ -261,7 +261,7 @@
   <text class="mono" x="980" y="562">   infrastructure 只执行, 不决策, 不自动 dispatch.</text>
 
   <text class="mono-h" x="980" y="584">2. Sub-agents 是 agent, 不是 tool</text>
-  <text class="mono" x="980" y="600">   Requirements/Planner/Delivery 各有自己的 LLM + tools + 推理循环.</text>
+  <text class="mono" x="980" y="600">   Requirements/Planner/Acceptance 各有自己的 LLM + tools + 推理循环.</text>
   <text class="mono" x="980" y="616">   它们返回结构化结果, Task Agent 据此推理下一步.</text>
 
   <text class="mono-h" x="980" y="638">3. Goal 并行执行, 依赖驱动调度</text>
@@ -308,7 +308,7 @@
   <text class="mono" x="40" y="162">run              writer: Task Agent              per-task execution run</text>
   <text class="mono" x="40" y="178">goal_run         writer: Infrastructure          per-goal execution instance (status: queued→running→completed|failed)</text>
   <text class="mono" x="40" y="194">plan_node        writer: Planner Agent           per-goal implementation steps</text>
-  <text class="mono" x="40" y="210">delivery         writer: Infrastructure          per-goal delivery (diffs)</text>
+  <text class="mono" x="40" y="210">acceptance         writer: Infrastructure          per-goal acceptance (diffs)</text>
   <text class="mono" x="40" y="226">evaluation       writer: Infrastructure (deterministic eval) / Task Agent (manual re-eval via eval_goal)  per-goal verdict + evidence; 按 task_id + goal_run_id 双索引</text>
   <text class="mono" x="40" y="242">decision_log     writer: ALL agents (append)     shared context — Architect 是主要写入者 (接口契约·目录蓝图·导出清单)</text>
 
@@ -327,7 +327,7 @@
   <text class="mono" x="40" y="432">  dispatch_ready_goals()      → 检查 ready goals → abort 信号 → GoalPool dispatch (依赖 DAG)</text>
   <text class="mono" x="40" y="448">  create_run()                → 创建 run record + plan nodes (goals 作为 plan 节点)</text>
   <text class="mono" x="40" y="464">  submit_execution(runID)     → 激活 run → abort 信号 → GoalPool 在 Task Control Loop 中执行</text>
-  <text class="mono" x="40" y="480">  deliver()                   → 聚合所有 goal deliveries → DeliveryAgent 验证 build/test</text>
+  <text class="mono" x="40" y="480">  deliver()                   → 聚合所有 goal deliveries → AcceptanceReview 验证 build/test</text>
   <text class="mono" x="40" y="496">  read_context(scope)         → 读 goal 状态 / eval evidence / Decision Log / deliveries</text>
 
   <text class="mono-h" x="40" y="520">Goal 动态调整:</text>
@@ -335,7 +335,7 @@
   <text class="mono" x="40" y="552">  modify_goal(goalID, updates) → UPDATE goal row (done_definition 不够精确时)</text>
 
   <text class="mono-h" x="40" y="576">终态 + 重启控制:</text>
-  <text class="mono" x="40" y="592">  publish_delivery()          → git publish + task.status='completed'</text>
+  <text class="mono" x="40" y="592">  publish_acceptance()          → git publish + task.status='completed'</text>
   <text class="mono" x="40" y="608">  fail_task(reason)           → task.status='failed'</text>
   <text class="mono" x="40" y="624">  restart_from_stage(stage)   → task.status='active' (从 requirements/plan/executor 重来)</text>
 
@@ -369,7 +369,7 @@
   <text class="mono" x="40" y="1034">  • 无 agentNotifiedRuns dedup: 单控制点不需要去重</text>
 
   <text class="mono" x="40" y="1058">owned_paths 互斥: 并行 goals 的 owned_paths 不重叠 (Requirements Agent 保证).</text>
-  <text class="mono" x="40" y="1074">Merge 串行化: per-run lock, 同一时间只有一个 goal 的 delivery 被 merge + commit → HEAD advance.</text>
+  <text class="mono" x="40" y="1074">Merge 串行化: per-run lock, 同一时间只有一个 goal 的 acceptance 被 merge + commit → HEAD advance.</text>
 
   <text class="mono-h" x="40" y="1106">Retry 时的 eval 反馈机制:</text>
   <text class="mono" x="40" y="1122">  • GoalPool.executeAndEval 调用 findLatestFailedEvalForGoal(goalID) 获取最近 rejected 的 eval</text>
@@ -382,7 +382,7 @@
   <text class="mono" x="40" y="1102">• requirements 返回 5 goals, recommended_next=[architect] → "多 goal, 需要共识" → architect(goalIDs)</text>
   <text class="mono" x="40" y="1118">• architect 完成 → create_run → submit_execution (dispatch 所有依赖满足的 goals)</text>
   <text class="mono" x="40" y="1134">• batch 完成 → deterministic eval 已完成, 2 passed + 1 failed → read_context 拿 evidence → retry_failed_goals("fix bug") 或 execute_goal(failed_goal_id)</text>
-  <text class="mono" x="40" y="1150">• 全部 goal passed → deliver() → publish_delivery()</text>
+  <text class="mono" x="40" y="1150">• 全部 goal passed → deliver() → publish_acceptance()</text>
   </g>
 
   <!-- ================================================================ -->
@@ -506,7 +506,7 @@
 
   <text class="mono" x="954" y="192">核心字段: provider, model, agent, mcp, lsp, formatter, permission, compaction</text>
   <text class="mono" x="954" y="208">          channel, command, skills, plugin, prompt, instructions, username</text>
-  <text class="mono" x="954" y="228">assistant: requirements{} ←替代 spec, goal{}, planner{}, evaluator{tier,model,...}, delivery{}</text>
+  <text class="mono" x="954" y="228">assistant: requirements{} ←替代 spec, goal{}, planner{}, evaluator{tier,model,...}, acceptance{}</text>
   <text class="mono" x="954" y="244">           adaptive{}, max_runs, max_fix_runs, max_executor_groups</text>
   <text class="mono" x="954" y="260">           所有 agent 子项含: max_steps, timeout_ms, quality_threshold?, max_attempts?, skills[]</text>
   <text class="mono" x="954" y="280">experimental: unattended, auto_permission, auto_question</text>
@@ -915,7 +915,7 @@
   <text class="mono" x="42" y="608">  auto_select: "复杂需求、PRD、多文件改动、新功能开发"</text>
   <text class="mono" x="42" y="624">  steps:</text>
   <text class="mono" x="42" y="640">    requirements(required) → architect(required if multi-goal) → per-goal:[plan → execute → eval] → deliver</text>
-  <text class="mono" x="42" y="660">  面板渲染: 需求分析区 + Architect 区 + Goal#1[plan·exec·eval] + Goal#2[...] + ... + Delivery 区</text>
+  <text class="mono" x="42" y="660">  面板渲染: 需求分析区 + Architect 区 + Goal#1[plan·exec·eval] + Goal#2[...] + ... + Acceptance 区</text>
   <text class="mono" x="42" y="680">  per-goal 步骤 plan→execute→eval 构成一个可折叠 GoalWorkflowGroup, 同层并行</text>
   <text class="mono" x="42" y="700">  这是 Task Agent 的默认工作路径, 也是 recommended_next 的默认基准</text>
 
@@ -1022,7 +1022,7 @@
 
   <text class="h3" x="40" y="78">右侧信息面板 — 按 Workflow 结构组织</text>
 
-  <text class="mono" x="40" y="100">现状问题: Spec / Plan / Goals / Criteria / Eval / Delivery 扁平罗列, 无法体现 per-goal 进度.</text>
+  <text class="mono" x="40" y="100">现状问题: Spec / Plan / Goals / Criteria / Eval / Acceptance 扁平罗列, 无法体现 per-goal 进度.</text>
   <text class="mono" x="40" y="116">重设计: 按 workflow 阶段 + per-goal 分组展示. 每个 goal 是一个可折叠的 GoalWorkflowGroup.</text>
 
   <!-- Panel Layout Diagram -->
@@ -1068,7 +1068,7 @@
   <text class="body" x="240" y="674">展开: 失败证据 · eval reasoning · retry 状态</text>
 
   <rect class="output" x="42" y="694" width="396" height="42"/>
-  <text class="h2" x="240" y="712" style="fill:#16a34a">▼ Delivery</text>
+  <text class="h2" x="240" y="712" style="fill:#16a34a">▼ Acceptance</text>
   <text class="body" x="240" y="728">状态 · 变更文件数 · 摘要 · publish 按钮</text>
 
   <rect class="infra" x="42" y="744" width="396" height="42"/>
@@ -1100,7 +1100,7 @@
 
   <text class="mono-h" x="475" y="330">保留不变:</text>
   <text class="mono" x="475" y="348">  = Overview            — headline · nextStep · controls</text>
-  <text class="mono" x="475" y="364">  = Delivery            — 状态 · 摘要 · 变更文件 · publish</text>
+  <text class="mono" x="475" y="364">  = Acceptance            — 状态 · 摘要 · 变更文件 · publish</text>
   <text class="mono" x="475" y="380">  = Interactions        — permission · question · auto-reply</text>
   <text class="mono" x="475" y="396">  = Agent Cards (左侧)  — 各 agent 的实时消息流</text>
 
@@ -1128,7 +1128,7 @@
   <text class="mono" x="475" y="726">  - snapshots: ProgressSnapshot[]    → 未使用, 删除</text>
 
   <text class="mono-h" x="475" y="750">保留字段:</text>
-  <text class="mono" x="475" y="768">  = task, run, goalRuns, delivery, evaluation, interactions, overview, brief, artifacts</text>
+  <text class="mono" x="475" y="768">  = task, run, goalRuns, acceptance, evaluation, interactions, overview, brief, artifacts</text>
 
   <!-- ═══════════════════════════════════════════════════════════════ -->
   <!--  RIGHT: Settings Panel Redesign                                 -->
@@ -1163,7 +1163,7 @@
   <text class="bl" x="966" y="420">  ├ Architect    max_steps:20  timeout:3min             ← 新增</text>
   <text class="bl" x="966" y="436">  ├ Planner      max_steps:30  timeout:5min  quality:0.5</text>
   <text class="bl" x="966" y="452">  ├ Evaluator    max_steps:25  timeout:4min  tier:[std ▾]</text>
-  <text class="bl" x="966" y="468">  └ Delivery     max_steps:40  timeout:10min retries:2</text>
+  <text class="bl" x="966" y="468">  └ Acceptance     max_steps:40  timeout:10min retries:2</text>
   <text class="bl" x="966" y="488">  每个 agent 可展开: skills[], model 选择</text>
   <text class="bl" x="966" y="504">  直接映射 OrchestratorConfig — 改这里 = 改 opencorvus.jsonc</text>
   <text class="bl" x="966" y="520">  通过 PATCH /config { assistant: { architect: { ... } } } 保存</text>

@@ -11,10 +11,10 @@ export interface WebCloneSourceSkeletonConsumptionAuditInput {
   projectDir: string
   sourcePackageDir: string
   outputPath?: string
-  finalDeliveryMode?: WebCloneFinalDeliveryMode
+  finalAcceptanceMode?: WebCloneFinalAcceptanceMode
 }
 
-export type WebCloneFinalDeliveryMode =
+export type WebCloneFinalAcceptanceMode =
   | "visual_baseline_allowed"
   | "maintainable_replacement_required"
 
@@ -22,7 +22,7 @@ export interface WebCloneSourceSkeletonConsumptionAudit {
   version: 1
   purpose: "web-clone-source-skeleton-consumption-audit"
   passed: boolean
-  finalDeliveryMode: WebCloneFinalDeliveryMode
+  finalAcceptanceMode: WebCloneFinalAcceptanceMode
   projectDir: string
   sourcePackageDir: string
   sourceEvidence: {
@@ -139,7 +139,7 @@ export async function auditWebCloneSourceSkeletonConsumption(
 ): Promise<WebCloneSourceSkeletonConsumptionAudit> {
   const projectDir = path.resolve(input.projectDir)
   const sourcePackageDir = path.resolve(input.sourcePackageDir)
-  const finalDeliveryMode = input.finalDeliveryMode ?? "visual_baseline_allowed"
+  const finalAcceptanceMode = input.finalAcceptanceMode ?? "visual_baseline_allowed"
   const sourceLabel = normalizePath(path.basename(sourcePackageDir) || "web-clone-source")
   const referenceImagePath = path.join(sourcePackageDir, "reference.png")
   const sourceSkeletonPath = path.join(sourcePackageDir, "source-skeleton", "index.html")
@@ -221,8 +221,8 @@ export async function auditWebCloneSourceSkeletonConsumption(
   const sourcePackageContaminated = contaminatedSourceArtifacts.length > 0
   const textCoverageRatio = textSignals.length === 0 ? 0 : matchedTexts.length / textSignals.length
   const skeletonIgnored = !generatedBaselineDetected && textSignals.length > 0 && (matchedTexts.length < Math.min(3, textSignals.length) || textCoverageRatio < 0.25)
-  const finalBaselineOnlyDetected = finalDeliveryMode === "maintainable_replacement_required" && generatedBaselineDetected
-  const finalSourceDomModuleResidueDetected = finalDeliveryMode === "maintainable_replacement_required" && sourceDomBaselineModuleSources.length > 0
+  const finalBaselineOnlyDetected = finalAcceptanceMode === "maintainable_replacement_required" && generatedBaselineDetected
+  const finalSourceDomModuleResidueDetected = finalAcceptanceMode === "maintainable_replacement_required" && sourceDomBaselineModuleSources.length > 0
 
   const projectStats = {
     sourceFileCount: sourceFiles.length,
@@ -336,7 +336,7 @@ export async function auditWebCloneSourceSkeletonConsumption(
     version: 1,
     purpose: "web-clone-source-skeleton-consumption-audit",
     passed: findings.length === 0,
-    finalDeliveryMode,
+    finalAcceptanceMode,
     projectDir,
     sourcePackageDir,
     sourceEvidence,
@@ -364,11 +364,11 @@ export async function inspectWebCloneSourceSkeletonConsumptionEvidence(input: {
   projectDir: string
   citedText: string
   originalRequest?: string
-  finalDeliveryMode?: WebCloneFinalDeliveryMode
+  finalAcceptanceMode?: WebCloneFinalAcceptanceMode
 }): Promise<WebCloneSourceSkeletonConsumptionEvidenceResult> {
   if (!referencesWebCloneSource(input.citedText)) return { referenced: false, ok: true, findings: [] }
   const projectDir = path.resolve(input.projectDir)
-  const finalDeliveryMode = input.finalDeliveryMode ?? inferWebCloneFinalDeliveryMode(`${input.originalRequest ?? ""}\n${input.citedText}`)
+  const finalAcceptanceMode = input.finalAcceptanceMode ?? inferWebCloneFinalAcceptanceMode(`${input.originalRequest ?? ""}\n${input.citedText}`)
   const expectedSourcePackageDir = path.join(projectDir, WEB_CLONE_SOURCE_PACKAGE_DIR)
   const canonicalAuditPath = path.join(projectDir, "web-clone-source-skeleton-consumption-audit.json")
   if (!await exists(canonicalAuditPath)) {
@@ -389,7 +389,7 @@ export async function inspectWebCloneSourceSkeletonConsumptionEvidence(input: {
       referenced: true,
       ok: false,
       auditPath: canonicalAuditPath,
-      findings: [`${canonicalAuditPath}: audit projectDir must be the current delivery root (${projectDir}), got ${parsed.projectDir}`],
+      findings: [`${canonicalAuditPath}: audit projectDir must be the current acceptance root (${projectDir}), got ${parsed.projectDir}`],
     }
   }
   if (!samePath(parsed.sourcePackageDir, expectedSourcePackageDir)) {
@@ -400,12 +400,12 @@ export async function inspectWebCloneSourceSkeletonConsumptionEvidence(input: {
       findings: [`${canonicalAuditPath}: audit sourcePackageDir must be ${expectedSourcePackageDir}, got ${parsed.sourcePackageDir}`],
     }
   }
-  if ((parsed.finalDeliveryMode ?? "visual_baseline_allowed") !== finalDeliveryMode) {
+  if ((parsed.finalAcceptanceMode ?? "visual_baseline_allowed") !== finalAcceptanceMode) {
     return {
       referenced: true,
       ok: false,
       auditPath: canonicalAuditPath,
-      findings: [`${canonicalAuditPath}: audit finalDeliveryMode must be ${finalDeliveryMode}, got ${parsed.finalDeliveryMode ?? "visual_baseline_allowed"}`],
+      findings: [`${canonicalAuditPath}: audit finalAcceptanceMode must be ${finalAcceptanceMode}, got ${parsed.finalAcceptanceMode ?? "visual_baseline_allowed"}`],
     }
   }
   if (!parsed.passed) {
@@ -417,7 +417,7 @@ export async function inspectWebCloneSourceSkeletonConsumptionEvidence(input: {
     liveAudit = await auditWebCloneSourceSkeletonConsumption({
       projectDir,
       sourcePackageDir: expectedSourcePackageDir,
-      finalDeliveryMode,
+      finalAcceptanceMode,
     })
   } catch (error) {
     return { referenced: true, ok: false, auditPath: canonicalAuditPath, findings: [`${canonicalAuditPath}: live audit failed (${error instanceof Error ? error.message : String(error)})`] }
@@ -443,7 +443,7 @@ function referencesWebCloneSource(citedText: string): boolean {
   ].some((needle) => normalized.includes(needle))
 }
 
-export function inferWebCloneFinalDeliveryMode(text: string): WebCloneFinalDeliveryMode {
+export function inferWebCloneFinalAcceptanceMode(text: string): WebCloneFinalAcceptanceMode {
   const normalized = text.toLowerCase()
   const maintainableSignals = [
     "maintainable",

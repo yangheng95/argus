@@ -1,6 +1,6 @@
 # Benchmark
 
-The benchmark harness provides **end-to-end quality regression**. It simulates a real request from creation to delivery and emits `qualityVerdict` (accepted / rejected) as the pass signal.
+The benchmark harness provides **end-to-end quality regression**. It simulates a real request from creation to acceptance and emits `qualityVerdict` (accepted / rejected) as the pass signal.
 
 ## Main script
 
@@ -71,7 +71,7 @@ accepted evaluation when present, and a passing local verification command.
 | `--max-fix-runs=N` | maximum repair runs |
 | `--max-executor-groups=N` | maximum parallel executor groups |
 | `--max-auto-resumes=N` | automatic resume attempts after failed/cancelled terminal status |
-| `--delivery-verify-cmd=CMD` | custom delivery verification command |
+| `--acceptance-verify-cmd=CMD` | custom acceptance verification command |
 | `--resume-task-id=TID` / `--resume-home-dir=DIR` / `--resume-message=TEXT` | resume mode |
 | `--no-keep` | delete tmp directory on finish |
 | `--skip-local-verify` | skip local re-verification |

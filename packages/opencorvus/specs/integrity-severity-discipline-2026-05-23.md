@@ -26,7 +26,7 @@ CLAUDE.md rules that govern this spec:
 | ADV  | advisory finding (informational, non-blocking) |
 | BF   | blocking finding |
 | LLM  | Large Language Model — the model-backed reviewer agent |
-| MVP  | Minimum Viable Product (smallest delivery that satisfies the request) |
+| MVP  | Minimum Viable Product (smallest acceptance that satisfies the request) |
 | brief     | Source brief for implementation and acceptance |
 | REQ  | Requirement row mined from the user request |
 | SSE  | Server-Sent Events (chat streaming protocol) |
@@ -40,7 +40,7 @@ Hazard audit rewrites in this spec:
   H-6 defines `new evidence` and explicitly excludes deeper prose over
   unchanged evidence.
 - [`3.2 Scope-Bounded Maturity Evidence (added to evidence prompt)`](#32-scope-bounded-maturity-evidence-added-to-evidence-prompt):
-  H-10 removes the independent delivery-maturity-class interpretation.
+  H-10 removes the independent acceptance-maturity-class interpretation.
   Maturity words are interpreted only through the bounded REQ path owned by
   `acceptance-spec-scope-discipline-2026-05-23.md`.
 - [`3.3 Consensus Severity Reconciliation (added to consensus prompt)`](#33-consensus-severity-reconciliation-added-to-consensus-prompt):
@@ -123,7 +123,7 @@ Where the words `blocking` / `advisory` appear in the integrity prompt path:
 | `packages/opencorvus/src/prompt/core/integrity-core.txt` (legacy) | 60, 78, 107, 145 | Mentions `advisory-only concerns can pass`, advisory findings have no executable repair, etc. Still does not say *what kind of problem is blocking vs advisory*. Also this is the LEGACY single-reviewer prompt — the active team prompt does not inherit it. |
 | `packages/opencorvus/src/integrity/team-agent.ts` `buildSupervisorPlanPrompt` / `buildReviewerPrompt` / `buildSupervisorConsensusPrompt` (lines 411–449) | — | No severity guidance. No maturity threshold. No user-request maturity context beyond the raw request text. |
 | `packages/opencorvus/src/intent/request-prompt.ts` `renderUserRequestSection` | 50–76 | Renders the raw user request excerpt and a pointer to the bundle file. No maturity / risk-tolerance signal extracted. |
-| `packages/opencorvus/src/integrity/team-agent.ts` `buildIntegrityEvidencePrompt` (451–535) | — | Renders requirements, requirement status, delivery, design specs, goal contracts, contract graph, decision log. No maturity-class, target-audience, or risk-acceptance signal. |
+| `packages/opencorvus/src/integrity/team-agent.ts` `buildIntegrityEvidencePrompt` (451–535) | — | Renders requirements, requirement status, acceptance, design specs, goal contracts, contract graph, decision log. No maturity-class, target-audience, or risk-acceptance signal. |
 
 There is **no prompt-level definition of `blocking` vs `advisory` anywhere in
 the active team path**. The model is left to interpolate from training data,
@@ -144,7 +144,7 @@ The severity drift has two interacting causes:
    页面" ("mature chat page"), then immediately added "你自己写 template" (you write
    the template yourself). That phrasing must be resolved by the Requirements /
    scope pipeline into bounded REQs or one requirements-extraction concern.
-   Severity must not independently translate "mature" into a delivery class
+   Severity must not independently translate "mature" into a acceptance class
    or a lower blocking threshold. Without bounded REQs, every reviewer defaults
    to its own highest-bar interpretation of "mature".
 
@@ -171,7 +171,7 @@ block. Single source — no parallel copy in role prompts or schema comments.
 ## Severity Discipline
 
 There are exactly two severities. They are not a sliding scale; they encode
-**whether the orchestrator must rebuild before delivery**.
+**whether the orchestrator must rebuild before acceptance**.
 
 `blocking` — the deliverable cannot be accepted in its current state. The
 finding satisfies at least one of:
@@ -227,9 +227,9 @@ escalation is a regression machine.
 
 ### 3.2 Scope-Bounded Maturity Evidence (added to evidence prompt)
 
-<!-- removed: independent Delivery Maturity Class interpretation; reason: H-10 assigns all maturity-word interpretation to the scope spec's bounded REQ path. -->
+<!-- removed: independent Acceptance Maturity Class interpretation; reason: H-10 assigns all maturity-word interpretation to the scope spec's bounded REQ path. -->
 
-Severity no longer renders or derives a `Delivery Maturity Class`. The
+Severity no longer renders or derives a `Acceptance Maturity Class`. The
 severity prompt must not independently interpret "成熟", "mature",
 "polished", "production-ready", or similar words. All maturity-word meaning
 comes from `acceptance-spec-scope-discipline-2026-05-23.md`:
@@ -324,7 +324,7 @@ host only ensures the reconciliation is *prompted for*, not *enforced*.
   generated-script/helper changes, and OpenAPI/SDK/doc cleanup are
   implementation changes. They require their own rule-35 grep inventory
   before landing.
-- H-10 maturity single source: this spec must not add a delivery class,
+- H-10 maturity single source: this spec must not add a acceptance class,
   maturity enum, or local maturity phrase table. It reads only bounded REQs
   and request-quote evidence emitted by the scope discipline path.
 - H-12 prompt budget: severity prompt additions must use the replay-aware
@@ -360,8 +360,8 @@ does not replace this inventory.
   Pass" section.
 - `buildIntegrityEvidencePrompt` contains a "Scope-Bounded Maturity Evidence"
   section. It renders maturity-related bounded REQs and the "missing bounded
-  REQ" branch; it does not render `Delivery Maturity Class`,
-  `delivery_class`, `demo`, or `production` classification text.
+  REQ" branch; it does not render `Acceptance Maturity Class`,
+  `acceptance_class`, `demo`, or `production` classification text.
 
 ### 4.2 Severity Stability Regression Test
 
@@ -399,7 +399,7 @@ the **prompt provides what the LLM needs** to make the same call twice.
 - Fixture where scope did not produce a bounded REQ for "成熟" → prompt
   renders the single requirements-extraction-concern branch.
 - Negative assertion: prompt does not render an independent maturity class,
-  delivery class, production/demo enum, or local phrase table.
+  acceptance class, production/demo enum, or local phrase table.
 
 ### 4.4 Consensus Severity Fold Test
 
@@ -421,7 +421,7 @@ prompt-content only; LLM behavior is tested via the existing team-schema
   definition, lineage-based replay context, and scope-bounded maturity
   evidence.
 - The stub may return a canned advisory-to-blocking promotion to exercise the
-  submission path, but the test assertion is prompt/context delivery, not live
+  submission path, but the test assertion is prompt/context acceptance, not live
   model quality.
 
 ### 4.6 Targeted Run

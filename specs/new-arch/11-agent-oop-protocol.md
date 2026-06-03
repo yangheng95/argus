@@ -11,7 +11,7 @@
 > `packages/opencorvus/src/agent/role-contract.ts` 定义了 `AgentRoleContract` 接口（含
 > `id`、`description`、`promptEditable`、`defaultPromptRequired`、`promptConfigMode` 等字段）
 > 与 `AgentRoleID` 联合类型（覆盖全部 16 个 native agent 角色：`coding` · `build` · `general` ·
-> `explore` · `compaction` · `title` · `summary` · `control` · `delivery` · `orchestrator` ·
+> `explore` · `compaction` · `title` · `summary` · `control` · `acceptance` · `orchestrator` ·
 > `requirements` · `architect` · `frontend-design` · `intent-analysis` · `integrity` · `prosecutor`）。
 > OOP 继承体系（`BaseAgent` / `AgentMailbox` / `AgentRegistry`）及 mailbox 数据库表仍**待实现**。
 >
@@ -33,7 +33,7 @@
 | 问题             | 现状                                                                      |
 | ---------------- | ------------------------------------------------------------------------- |
 | 无统一基类       | 10 个 agent 各自独立，接口不统一，无法多态调用                            |
-| 系统 prompt 散乱 | Orchestrator、Delivery 使用内联字符串常量；其余用 `.txt` 文件；无统一管理 |
+| 系统 prompt 散乱 | Orchestrator、Acceptance 使用内联字符串常量；其余用 `.txt` 文件；无统一管理 |
 | 通信无协议       | orchestrator tools 直接调用子 agent 函数，无任何消息约束                  |
 | 无白名单声明     | 任何 tool 都可调任何 agent，通信关系隐式且不可查                          |
 | 无能力契约       | LLM 无法查询"某个 agent 能做什么、接收什么"，路由靠硬编码                 |
@@ -230,7 +230,7 @@ BaseAgent<TInbox, TOutbox>          (抽象基类)
 │   ├── RequirementsAgent           inbox: RequirementsInput   outbox: RequirementsResult
 │   ├── ArchitectAgent              inbox: ArchitectInput      outbox: ArchitectResult
 │   ├── FrontendDesignAgent          inbox: FrontendDesignInput  outbox: FrontendDesignResult
-│   ├── DeliveryAgent               inbox: DeliveryInput       outbox: DeliveryVerdictType
+│   ├── AcceptanceReview               inbox: AcceptanceInput       outbox: AcceptanceVerdictType
 │   ├── IntentAnalysisAgent         inbox: IntentInput         outbox: IntentAnalysisResult
 │   ├── IntegrityAgent              inbox: IntegrityInput      outbox: IntegrityResult
 │   ├── ProsecutorAgent             inbox: ProsecutorInput     outbox: ProsecutorResult
@@ -241,7 +241,7 @@ BaseAgent<TInbox, TOutbox>          (抽象基类)
     └── ExploreAgent                inbox: ExploreInput        outbox: ExploreSummary
 ```
 
-> **注**：`PlannerAgent` 已从层次中移除——`src/planner/` 整目录已删除，planning
+> **注**：`RetiredPlanningRole` 已从层次中移除——the removed planning package 整目录已删除，planning
 > 现由 architect contract + build agent 直接消费，不再独立成 agent。BuildAgent
 > 同时存在 SessionAgent（用户交互态，见 `agent/agent.ts:122`）和 PipelineAgent
 > （orchestrator build tool 自建子 session，见 `build/agent.ts`）两条路径，本表只
@@ -289,13 +289,13 @@ abstract class SessionAgent<TIn extends z.ZodType, TOut extends z.ZodType> exten
 | 目录                | 存放内容                                                                                                                                                                                                                                                                                                                                                                                               |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `src/agent/prompt/` | SessionAgent 的 prompt（实际盘上：`coding.txt` / `general.txt` / `explore.txt` / `compaction.txt` / `title.txt` / `judge.txt`，**无** `summary.txt`）                                                                                                                                                                                                                                                  |
-| `src/prompt/core/`  | PipelineAgent 的 prompt（实际盘上：`requirements-core.txt` / `architect-core.txt` / `delivery-core.txt` / `frontend-design-core.txt` / `intent-analysis-core.txt` / `orchestrator-core.txt` / `integrity-core.txt` / `prosecutor-core.txt` / `build-core.txt`——`build-core.txt` 服务于 `build/agent.ts` 这条 pipeline-agent 路径；direct interactive SessionAgent 路径使用 `agent/prompt/coding.txt`） |
+| `src/prompt/core/`  | PipelineAgent 的 prompt（实际盘上：`requirements-core.txt` / `architect-core.txt` / `acceptance-core.txt` / `frontend-design-core.txt` / `intent-analysis-core.txt` / `orchestrator-core.txt` / `integrity-core.txt` / `prosecutor-core.txt` / `build-core.txt`——`build-core.txt` 服务于 `build/agent.ts` 这条 pipeline-agent 路径；direct interactive SessionAgent 路径使用 `agent/prompt/coding.txt`） |
 
 **迁移状态（2026-05-12）**：
 
 - ✅ `orchestrator/agent.ts:ORCHESTRATOR_INSTRUCTIONS` 已迁移：`= ORCHESTRATOR_CORE`（来自 `src/prompt/core/orchestrator-core.txt`，常量在 `orchestrator/agent.ts:642`）
-- 历史 delivery agent prompt 已退休；当前验收归属 integrity。
-- ⚠️ `planner-core.txt` 不再存在（`src/planner/` 整目录删除；planner-as-agent 概念已下线）
+- 历史 acceptance review prompt 已退休；当前验收归属 integrity。
+- ⚠️ `removed-planning-prompt.txt` 不再存在（the removed planning package 整目录删除；planner-as-agent 概念已下线）
 
 ### 4.2 运行时分层（三级覆盖）
 
@@ -330,7 +330,7 @@ private loadPromptFile(): string {
   ├ Requirements  max_steps:30  timeout:5min  [编辑 Prompt ▸]
   ├ Architect     max_steps:20  timeout:3min  [编辑 Prompt ▸]
   ├ Planner       max_steps:30  timeout:5min  [编辑 Prompt ▸]
-  ├ Delivery      max_steps:40  timeout:10min [编辑 Prompt ▸]
+  ├ Acceptance      max_steps:40  timeout:10min [编辑 Prompt ▸]
   ├ Orchestrator  max_steps:20              [编辑 Prompt ▸]
   └ ...
 
@@ -386,7 +386,7 @@ private loadPromptFile(): string {
 
 ### 5.3 当前通信拓扑白名单
 
-> **2026-05-12 数据现状**：`planner` agent 已下线（`src/planner/` 整目录删除），从下表
+> **2026-05-12 数据现状**：`planner` agent 已下线（the removed planning package 整目录删除），从下表
 > 移除；`integrity` / `prosecutor` 在 orchestrator tool 集里已实装（见 §七表格），
 > 一并补入。orchestrator 实际可调用的子 agent 集合权威来源是
 > `agent/agent.ts:276-310` 的 `orchestrator.tools.include`。
@@ -395,7 +395,7 @@ private loadPromptFile(): string {
 agent              receiveWhitelist              sendWhitelist
 ──────────────────────────────────────────────────────────────
 orchestrator       [system_entry]                [requirements, architect,
-                                                  frontend-design, delivery,
+                                                  frontend-design, acceptance,
                                                   build, intent-analysis,
                                                   integrity, prosecutor,
                                                   cancel_subagent（task-control tool，
@@ -404,7 +404,7 @@ orchestrator       [system_entry]                [requirements, architect,
 requirements       [orchestrator]                [orchestrator]
 architect          [orchestrator]                [orchestrator]
 frontend-design     [orchestrator]                [orchestrator]
-delivery           [orchestrator]                [orchestrator]
+acceptance           [orchestrator]                [orchestrator]
 intent-analysis    [orchestrator]                [orchestrator]
 integrity          [orchestrator]                [orchestrator]
 prosecutor         [orchestrator]                [orchestrator]
@@ -469,7 +469,7 @@ Orchestrator system prompt 中明确指引：
 
 **禁止的 LLM 路由方式**：
 
-- 硬编码工具调用顺序（`requirements → architect → planner → build → delivery`）
+- 硬编码工具调用顺序（`requirements → architect → planner → build → acceptance`）
 - 根据任务类型关键词匹配 agent
 - 任何形式的 if-else 状态机
 
@@ -482,8 +482,8 @@ Orchestrator system prompt 中明确指引：
 | `RequirementsAgent.run()`                                                                              | `PipelineAgent` | `RequirementsInputSchema`   | `RequirementsResultSchema`   | 已在 `.txt`，无需迁移                                                             |
 | `ArchitectAgent.coordinate()`                                                                          | `PipelineAgent` | `ArchitectInputSchema`      | `ArchitectResultSchema`      | 已在 `.txt`，无需迁移                                                             |
 | `FrontendDesignAgent.analyze()`                                                                        | `PipelineAgent` | `FrontendDesignInputSchema` | `FrontendDesignResultSchema` | 已在 `.txt`，无需迁移                                                             |
-| ~~`planGoal()` 函数~~                                                                                  | —               | —                           | —                            | **已删除**：`src/planner/` 整目录下线，build agent 直接读 architect contract 推进 |
-| `DeliveryAgent.verify()`                                                                               | `PipelineAgent` | `DeliveryInputSchema`       | `DeliveryVerdictSchema`      | ✅ 已迁移：`DELIVERY_AGENT_SYSTEM = DELIVERY_CORE`                                |
+| ~~`planGoal()` 函数~~                                                                                  | —               | —                           | —                            | **已删除**：the removed planning package 整目录下线，build agent 直接读 architect contract 推进 |
+| `AcceptanceReview.verify()`                                                                               | `PipelineAgent` | `AcceptanceInputSchema`       | `AcceptanceVerdictSchema`      | ✅ 已迁移：`ACCEPTANCE_AGENT_SYSTEM = ACCEPTANCE_CORE`                                |
 | `Orchestrator.runTaskLoop()`                                                                           | `PipelineAgent` | `OrchestratorTriggerSchema` | `z.void()`                   | ✅ 已迁移：`ORCHESTRATOR_INSTRUCTIONS = ORCHESTRATOR_CORE`                        |
 | `IntentAnalysisAgent.analyze()`                                                                        | `PipelineAgent` | `IntentInputSchema`         | `IntentResultSchema`         | 已在 `.txt`，已接线 `analyze_intent` tool                                         |
 | `reviewIntegrity()` （`integrity/agent.ts:257`，函数式入口；本文 §三的 `IntegrityAgent` 类是未来形态） | `PipelineAgent` | `IntegrityInputSchema`      | `IntegrityResultSchema`      | 已在 `.txt`，已接线 orchestrator `integrity` tool（`tools.ts:2811`）              |
@@ -492,7 +492,7 @@ Orchestrator system prompt 中明确指引：
 | `Agent.Info["general"]`                                                                                | `SessionAgent`  | `GeneralInputSchema`        | `GeneralSummarySchema`       | 已在 `.txt`，无需迁移                                                             |
 | `Agent.Info["explore"]`                                                                                | `SessionAgent`  | `ExploreInputSchema`        | `ExploreSummarySchema`       | 已在 `.txt`，无需迁移                                                             |
 
-**迁移状态（2026-05-12）**：Orchestrator + Delivery 内联 prompt 已全部移到 `.txt`。整张表的所有 `.txt` 迁移项已完成；剩下未完成的只有 base-class / mailbox / whitelist 等结构性抽象，本文整体仍标记 "未来方案"。
+**迁移状态（2026-05-12）**：Orchestrator + Acceptance 内联 prompt 已全部移到 `.txt`。整张表的所有 `.txt` 迁移项已完成；剩下未完成的只有 base-class / mailbox / whitelist 等结构性抽象，本文整体仍标记 "未来方案"。
 
 ---
 

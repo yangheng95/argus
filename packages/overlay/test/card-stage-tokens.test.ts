@@ -26,7 +26,7 @@ const KNOWN_STAGES = [
   "build",
   "explore",
   "evaluator",
-  "delivery",
+  "acceptance",
   "integrity",
   "tool",
 ] as const

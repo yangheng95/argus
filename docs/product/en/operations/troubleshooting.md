@@ -66,7 +66,7 @@ Usually evaluator's `replan_guidance` isn't providing improvement info. Check:
 
 ### Benchmark shows "accepted" but the artifact doesn't run
 
-Classic symptom: delivery worktree merge failed but evaluator didn't catch it. Check:
+Classic symptom: acceptance worktree merge failed but evaluator didn't catch it. Check:
 
 1. Merge log for `EEXIST` / conflict
 2. Evaluator's `qa_rule_selectors` includes `build` and `startup`

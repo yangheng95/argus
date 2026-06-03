@@ -81,7 +81,7 @@ export const MyPlugin: Plugin = async (ctx) => {
       })
     },
 
-    "delivery.ready": async (input, output) => {
+    "acceptance.ready": async (input, output) => {
       output.actions.push({ name: "notify", status: "ok", summary: "通知已发" })
     },
   }
@@ -109,7 +109,7 @@ export const MyPlugin: Plugin = async (ctx) => {
 | `evaluation.checks` | 评估阶段注入自定义检查 |
 | `evaluation.result` | 评估完成后（通知 / 写外部） |
 | `evaluation.analysis` | 完整替换默认 LLM 评估分析 |
-| `delivery.ready` | 交付持久化后（部署钩子） |
+| `acceptance.ready` | 交付持久化后（部署钩子） |
 | `experimental.chat.system.transform` | system prompt 构建后 |
 
 ## 6. 在 config 中声明
@@ -141,6 +141,6 @@ Plugin 不直接替换 Provider 或 Executor，但可通过：
 - `auth` hook — 为特定 Provider 实现自定义认证
 - `chat.headers` / `chat.params` — 请求前修改参数
 - `evaluation.analysis` — 完整接管评估
-- `delivery.ready` — 交付后触发部署
+- `acceptance.ready` — 交付后触发部署
 
 Executor 选择（OpenCorvus / Codex / Claude Code）由 Orchestrator 控制，Plugin 不干预。

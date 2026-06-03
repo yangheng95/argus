@@ -75,14 +75,14 @@ test("frontend-design handoff points to source files and keeps excerpts bounded"
       })
       log.append({
         phase: "frontend_design",
-        key: "final_delivery_mode",
+        key: "final_acceptance_mode",
         value: "maintainable_replacement_required",
         reason: "maintainable mode",
       })
       log.append({
         phase: "frontend_design",
         key: "frontend_project",
-        value: "status: created\nrole: source_baseline_input\nproject_root: frontend-design-skeleton\ndelivery_root: .",
+        value: "status: created\nrole: source_baseline_input\nproject_root: frontend-design-skeleton\nacceptance_root: .",
         reason: "source skeleton role",
       })
       log.append({

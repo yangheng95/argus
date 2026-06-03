@@ -44,7 +44,7 @@ test("integrity evidence tools expose scoped drilldown without upstream full-con
         attachments: [],
       })
 
-      expect(Object.keys(tools)).not.toContain("inspect_delivery_context")
+      expect(Object.keys(tools)).not.toContain("inspect_acceptance_context")
       expect(Object.keys(tools)).not.toContain("edit_file")
       expect(Object.keys(tools)).not.toContain("write_file")
       expect(Object.keys(tools)).not.toContain("memory_write")

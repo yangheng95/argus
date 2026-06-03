@@ -155,7 +155,7 @@ weak-output pattern:
   `type: "heuristic"` with `spec.kind: "shell"`;
 - `submit_architect` blocks only invalid execution graph structure. Completion,
   fidelity, traceability, and contract quality remain visible findings for
-  downstream orchestrator / integrity / delivery decisions.
+  downstream orchestrator / integrity / acceptance decisions.
 
 ## Validator Redesign
 
@@ -173,7 +173,7 @@ interface ArchitectValidationFinding {
 
 `submit_architect` hard-blocks only invalid execution graph structure.
 Everything else is a concern. Architect must not be trapped into retrying until
-it produces perfect delivery evidence before Build has run.
+it produces perfect acceptance evidence before Build has run.
 
 ### Blockers
 
@@ -186,7 +186,7 @@ it produces perfect delivery evidence before Build has run.
 
 - missing or incomplete traceability for claimed `requirement_ids`
 - source/reference coverage gaps
-- reference-driven task missing final delivery visual acceptance
+- reference-driven task missing final acceptance visual acceptance
 - multi-goal graph missing assembly owner
 - contract graph references unknown goals or contract ids
 - contract edge names a producer that is not in dependency ancestry
@@ -197,7 +197,7 @@ it produces perfect delivery evidence before Build has run.
 - dependency edge has no contract but is bootstrap/scaffold-only
 - a consumer imports a broad rendered surface that may be too coupled
 - a graph contract with closed literal domains is not referenced by any graph-owned
-  contract-audit criterion (concern before delivery, delivery blocker only if the
+  contract-audit criterion (concern before acceptance, acceptance blocker only if the
   declared criterion fails)
 
 Concerns are persisted into architect result / decision log for downstream integrity,
@@ -286,7 +286,7 @@ Architect remains the source that declares whether a graph contract needs audit:
   scorer that names the contract id;
 - if not present, `submit_architect` records a `concern`, not a blocker, so planning
   does not loop forever;
-- delivery/project-gate treats a declared `contract_audit` failure as a blocker.
+- acceptance/project-gate treats a declared `contract_audit` failure as a blocker.
 
 Acceptance must include a regression where a goal has no old `exports/imports` fields
 but a graph `contract_graph` scorer still audits a closed literal contract.
@@ -367,12 +367,12 @@ are switched.
 | `integrity/agent.ts` / `dimensions.ts`                                       | prompt and schema mention exports/imports          | switch to graph                                      |
 | `acceptance/types.ts`                                                        | contract audit scorer uses symbols                 | replace with graph contract ids                      |
 | `acceptance/contract-audit.ts`                                               | derives boundary from imports/exports              | resolve graph contract ids                           |
-| `delivery/checks/types.ts`                                                   | GoalInfo carries imports/exports                   | remove fields; add graph refs                        |
-| `delivery/checks/contract-audit-review.ts`                                   | boundary detection uses imports/exports            | use graph audit criteria                             |
-| `delivery/specialists/backend-client.ts`                                     | client contract gate uses imports/exports          | use route/static graph contracts                     |
-| retired delivery tool surface                                                | renders imports/exports in goal detail             | render graph contracts                               |
-| `prompt/upstream-context.ts`                                                 | delivery catalog says exports/imports are gating   | render graph catalog                                 |
-| `prompt/core/build-core.txt` / `delivery-core.txt` / `orchestrator-core.txt` | system prompts name imports/exports                | switch to graph vocabulary                           |
+| `acceptance/checks/types.ts`                                                   | GoalInfo carries imports/exports                   | remove fields; add graph refs                        |
+| `acceptance/checks/contract-audit-review.ts`                                   | boundary detection uses imports/exports            | use graph audit criteria                             |
+| `acceptance/specialists/backend-client.ts`                                     | client contract gate uses imports/exports          | use route/static graph contracts                     |
+| retired acceptance tool surface                                                | renders imports/exports in goal detail             | render graph contracts                               |
+| `prompt/upstream-context.ts`                                                 | acceptance catalog says exports/imports are gating   | render graph catalog                                 |
+| `prompt/core/build-core.txt` / `acceptance-core.txt` / `orchestrator-core.txt` | system prompts name imports/exports                | switch to graph vocabulary                           |
 | `overlay/src/main.tsx`                                                       | debug SQL template selects exports/imports         | select graph artifact                                |
 | `prompt/core/architect-core.txt`                                             | asks for exports/imports and per-kind tools        | rewrite around graph tools                           |
 
@@ -388,8 +388,8 @@ Update or replace:
 - `test/acceptance/contract-audit.test.ts`
 - `test/orchestrator/tools.test.ts`
 - `test/engine/describe*.test.ts`
-- delivery project-gate / specialist tests touching `GoalInfo`
-- upstream-context tests for delivery catalog
+- acceptance project-gate / specialist tests touching `GoalInfo`
+- upstream-context tests for acceptance catalog
 - overlay debug template coverage
 - export/import route tests for task-scoped graph artifacts
 - integrity workflow tests that assert imports/exports text
@@ -410,11 +410,11 @@ Update or replace:
 8. Switch orchestrator build context to load and pass contract graph.
 9. Switch Build target types and prompt rendering to graph sections.
 10. Switch contract_audit scorer schema/runtime to consume graph `contract_ids`.
-11. Switch delivery, upstream-context, and specialists from imports/exports to graph.
+11. Switch acceptance, upstream-context, and specialists from imports/exports to graph.
 12. Switch integrity prompts, issue schema, and correction schema to graph vocabulary.
 13. Remove `exports/imports` from goal schema, DB DDL, persistence, store, prompt, and
     tests. Reset DB.
-14. Run targeted architect + orchestrator + build prompt + delivery + integrity tests.
+14. Run targeted architect + orchestrator + build prompt + acceptance + integrity tests.
 15. Run typecheck, api route check, docs check, then commit and push.
 
 ## Acceptance
@@ -433,7 +433,7 @@ Update or replace:
 - `contract_audit` still audits closed literal domains for typed graph contracts.
 - graph artifact ids use durable `engine_goal.id`, not Architect temporary ids.
 - task export/import preserves the active contract graph.
-- no production prompt, delivery catalog, read-context output, overlay debug SQL, or
+- no production prompt, acceptance catalog, read-context output, overlay debug SQL, or
   SDK model still treats `exports/imports` as active goal fields.
 - no `contract_audit` path can skip solely because old `imports/exports` are empty.
 

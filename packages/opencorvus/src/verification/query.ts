@@ -12,7 +12,7 @@ import type {
 } from "@/engine/engine.sql"
 import {
   findGoalRunEvidence,
-  findLatestDeliveryEvidence,
+  findLatestAcceptanceEvidence,
   findLatestGoalRunEvidence,
   type VerificationEvidence,
 } from "./persist"
@@ -23,7 +23,7 @@ export interface QueryEvidenceInput {
   goalID?: string
   /** Required when scope="goal_run" AND caller wants a specific attempt. */
   goalRunID?: string
-  /** Required when scope="delivery". */
+  /** Required when scope="acceptance". */
   taskID?: string
 }
 
@@ -39,11 +39,11 @@ export function queryEvidence(
     if (input.goalID) return findLatestGoalRunEvidence(input.goalID)
     throw new Error("queryEvidence: scope='goal_run' requires goalID or goalRunID")
   }
-  if (input.scope === "delivery") {
+  if (input.scope === "acceptance") {
     if (!input.taskID) {
-      throw new Error("queryEvidence: scope='delivery' requires taskID")
+      throw new Error("queryEvidence: scope='acceptance' requires taskID")
     }
-    return findLatestDeliveryEvidence(input.taskID)
+    return findLatestAcceptanceEvidence(input.taskID)
   }
   throw new Error(`queryEvidence: unknown scope ${String(input.scope)}`)
 }

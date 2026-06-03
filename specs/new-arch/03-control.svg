@@ -125,7 +125,7 @@
   <text class="h2" x="180" y="614" style="fill:#047857">Executor</text>
   <text class="code" x="180" y="630">executor/</text>
   <text class="body" x="180" y="652">跑代码的外部进程</text>
-  <text class="body" x="180" y="668">产出 diff / delivery</text>
+  <text class="body" x="180" y="668">产出 diff / acceptance</text>
   <text class="body" x="180" y="690" style="font-weight:600">3 家 × 3 形态:</text>
   <text class="code" x="180" y="708">claude-cli / agent / code</text>
   <text class="code" x="180" y="724">codex-cli / app-server</text>

@@ -55,9 +55,9 @@ workflow.step.updated      ← requirements / architect / build / deliver 各步
 goal.progress              ← 单个 goal 的 build attempt 在跑
 goal.workflow.progress     ← 单个 goal 的 step 计数
 goal.passed / goal.failed
-delivery.ready
-delivery.evidence.updated
-delivery.gate.rejected     ← 触发回修循环（不一定出现）
+acceptance.ready
+acceptance.evidence.updated
+acceptance.gate.rejected     ← 触发回修循环（不一定出现）
 task.completed | task.failed | task.cancelled
 ```
 
@@ -83,7 +83,7 @@ task.completed | task.failed | task.cancelled
 opencorvus
 ```
 
-会进入 TUI：直接输入任务 → 实时看到 requirements / architect / build / delivery 滚动。
+会进入 TUI：直接输入任务 → 实时看到 requirements / architect / build / acceptance 滚动。
 
 ## 7. Workspace 与 terminal
 
@@ -102,7 +102,7 @@ opencorvus slack
 ## 常见陷阱
 
 1. **任务卡在 requirements 阶段**：多半是 LLM provider 连不通。`opencorvus doctor` 检查。
-2. **delivery 永远 rejected**：仓库里可能没有可执行的 build / test 命令。Delivery checks 会从 `owned_paths` 向上找最近的 `package.json` / `pyproject.toml` / `Cargo.toml` / `go.mod`。
+2. **acceptance 永远 rejected**：仓库里可能没有可执行的 build / test 命令。Acceptance checks 会从 `owned_paths` 向上找最近的 `package.json` / `pyproject.toml` / `Cargo.toml` / `go.mod`。
 3. **permission 无限等待**：内置权限默认 `allow`；检查项目配置是否显式写了 `ask`，然后在 UI 中回复，或把对应规则改为 `allow`。
 
 下一步：[架构总览](../concepts/architecture.md)。

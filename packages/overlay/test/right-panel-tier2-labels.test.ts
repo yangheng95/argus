@@ -47,7 +47,7 @@ function blockFor(selector: string): string {
   // Find the first CSS rule whose selector list STARTS with the given
   // class name (e.g. `.verdict-pill {` or `.verdict-pill,` or
   // `.verdict-pill[...]`). Anchored at line start so a descendant rule
-  // like `.delivery-panel .verdict-pill` does not steal the match.
+  // like `.acceptance-panel .verdict-pill` does not steal the match.
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
   const ruleRe = new RegExp(`(^|\\n)\\s*${escaped}(?=[\\s,{[])[^{]*\\{`, "m")
   const head = ruleRe.exec(CSS)

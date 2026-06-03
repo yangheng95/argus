@@ -201,12 +201,12 @@ export namespace ProjectRuntimePaths {
     }
   }
 
-  export function deliveryPaths(projectDir: string, taskID: string): {
+  export function acceptancePaths(projectDir: string, taskID: string): {
     root: string
     screenshots: string
     checkWorkspaces: string
   } {
-    const root = taskAbsolute(projectDir, taskID, "delivery")
+    const root = taskAbsolute(projectDir, taskID, "acceptance")
     return {
       root,
       screenshots: path.join(root, "screenshots"),
@@ -214,11 +214,11 @@ export namespace ProjectRuntimePaths {
     }
   }
 
-  export function tasklessDeliveryPaths(projectDir: string): {
+  export function tasklessAcceptancePaths(projectDir: string): {
     root: string
     checkWorkspaces: string
   } {
-    const root = path.join(projectRuntimeRoot(projectDir), "delivery", "no-task")
+    const root = path.join(projectRuntimeRoot(projectDir), "acceptance", "no-task")
     return {
       root,
       checkWorkspaces: path.join(root, "check-workspaces"),

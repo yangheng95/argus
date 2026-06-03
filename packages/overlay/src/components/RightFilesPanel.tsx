@@ -21,8 +21,8 @@ export function RightFilesPanel(props: RightFilesPanelProps) {
 
   onMount(() => {
     const handler = () => setActiveView("changes")
-    window.addEventListener("delivery:focus-changes", handler)
-    onCleanup(() => window.removeEventListener("delivery:focus-changes", handler))
+    window.addEventListener("acceptance:focus-changes", handler)
+    onCleanup(() => window.removeEventListener("acceptance:focus-changes", handler))
   })
 
   return (

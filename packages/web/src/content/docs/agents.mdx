@@ -14,7 +14,7 @@ The registry currently ships with the agents below. `mode` controls how the agen
 | `build` | primary | Default agent. Executes tools (read / edit / bash / mirror toolchain) under the configured permission ruleset. |
 | `general` | subagent | General-purpose multi-step research / parallel-work agent. Dispatched via the `task` tool. |
 | `explore` | subagent | Codebase exploration — fast file / code search, read-only by default. |
-| `delivery` | primary (hidden) | Delivery agent. Submits semantic accept/reject judgments from delivery evidence; deterministic arbitration finalizes the delivery-stage verdict. |
+| `acceptance` | primary (hidden) | Acceptance review. Submits semantic accept/reject judgments from acceptance evidence; deterministic arbitration finalizes the acceptance-stage verdict. |
 | `orchestrator` | primary (hidden) | Orchestrator agent. Owns task lifecycle decisions and dispatches explicit workflow tools (`requirements`, `architect`, `build`, `deliver`, etc.). |
 | `requirements` | primary (hidden) | Requirements stage. Extracts user requirements and foundational technical decisions; it does not produce goals. |
 
@@ -75,7 +75,7 @@ Per-agent step budgets and skill paths live under `assistant.<name>` (config.ts:
   "assistant": {
     "requirements":   { "max_steps": 20 },
     "architect":      { "max_steps": 40 },
-    "delivery":       { "max_steps": 160, "max_retries": 3 },
+    "acceptance":       { "max_steps": 160, "max_retries": 3 },
     "frontend_design": { "max_steps": 30 },
     "intent_analysis": { "max_steps": 10 },
     "build":          { "max_steps": 80 }

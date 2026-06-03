@@ -10,7 +10,7 @@
 //                 var(--section-corner) radius, `--subtle-1`
 //                 bg, no shadow, transition.
 //   - line ~12362: !important reset shared with .section /
-//                 .gwg / .delivery-panel / .criteria-group /
+//                 .gwg / .acceptance-panel / .criteria-group /
 //                 .eval-error / .channel-doc-card /
 //                 .detail-card — `var(--surface-inset)
 //                 !important` bg overriding the canonical's

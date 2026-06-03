@@ -24,7 +24,7 @@ export type AgentRole =
   | "explore"
   | "integrity"
   | "fact-check"
-  | "delivery"
+  | "acceptance"
   | "system";
 
 /** Stages that get their own collapsible agent card in the conversation view. */
@@ -45,7 +45,7 @@ export const AGENT_CARD_STAGES = new Set<AgentRole>([
   "explore",
   "integrity",
   "fact-check",
-  "delivery",
+  "acceptance",
   "system",
 ]);
 
@@ -79,7 +79,7 @@ export function normalizeAgentRole(name: string): AgentRole {
       text === "opencorvus" || text === "codex" || text === "claude-code") return "executor";
   if (text === "judge" || text === "evaluator" || text === "evaluation" || text === "eval" ||
       text === "scheduler" || text === "review" || text === "evaluate") return "evaluator";
-  if (text === "delivery" || text === "deliver" || text === "publish" || text === "refine") return "delivery";
+  if (text === "acceptance" || text === "deliver" || text === "publish" || text === "refine") return "acceptance";
   if (text === "files") return "assistant";
   if (text === "integrity") return "integrity";
   if (text === "fact-check" || text === "fact_check" || text === "factcheck") return "fact-check";
@@ -101,7 +101,7 @@ export function agentRoleToSectionPhase(role: AgentRole): string {
   if (role === "goal") return "goals";
   if (role === "executor") return "executor";
   if (role === "evaluator") return "evaluation";
-  if (role === "delivery") return "delivery";
+  if (role === "acceptance") return "acceptance";
   return "";
 }
 
@@ -152,7 +152,7 @@ export function roleLabel(role: string): string {
   if (role === "executor") return t("chat.role.executor");
   if (role === "build") return t("chat.role.build");
   if (role === "explore") return t("chat.role.explore");
-  if (role === "delivery") return t("chat.role.delivery");
+  if (role === "acceptance") return t("chat.role.acceptance");
   if (role === "integrity") return t("chat.role.integrity");
   if (role === "fact-check") return t("chat.role.fact-check");
   return t("chat.role.assistant");
@@ -213,7 +213,7 @@ export function agentStageLabel(stage: string): string {
   if (role === "executor") return t("chat.role.executor");
   if (role === "build") return t("chat.role.build");
   if (role === "explore") return t("chat.role.explore");
-  if (role === "delivery") return t("chat.role.delivery");
+  if (role === "acceptance") return t("chat.role.acceptance");
   if (role === "integrity") return t("chat.role.integrity");
   if (role === "fact-check") return t("chat.role.fact-check");
   return t("chat.role.assistant");

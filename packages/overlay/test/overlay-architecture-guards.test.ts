@@ -1686,23 +1686,23 @@ describe("overlay architecture guards", () => {
     expect(inspectorSurface).toMatch(/\.criteria-group-icon svg\s*\{/)
   })
 
-  test("delivery panel chrome is owned by surfaces/inspector.css", () => {
+  test("acceptance panel chrome is owned by surfaces/inspector.css", () => {
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
 
-    expect(styles).not.toMatch(/(^|\n)\.delivery-panel\s*\{/)
-    expect(styles).not.toMatch(/(^|\n)\.delivery-panel::before\s*\{/)
-    expect(inspectorSurface).toMatch(/\.delivery-panel\s*\{/)
-    expect(inspectorSurface).toMatch(/\.delivery-panel::before\s*\{/)
+    expect(styles).not.toMatch(/(^|\n)\.acceptance-panel\s*\{/)
+    expect(styles).not.toMatch(/(^|\n)\.acceptance-panel::before\s*\{/)
+    expect(inspectorSurface).toMatch(/\.acceptance-panel\s*\{/)
+    expect(inspectorSurface).toMatch(/\.acceptance-panel::before\s*\{/)
 
     for (const verdict of ["accepted", "rejected", "inflight", "empty"]) {
       expect(inspectorSurface).toMatch(
-        new RegExp(`\\.delivery-panel\\[data-verdict="${verdict}"\\]`),
+        new RegExp(`\\.acceptance-panel\\[data-verdict="${verdict}"\\]`),
       )
     }
 
-    expect(inspectorSurface).toMatch(/--delivery-panel-accent: var\(--good\)/)
-    expect(inspectorSurface).toMatch(/--delivery-panel-accent: var\(--bad\)/)
+    expect(inspectorSurface).toMatch(/--acceptance-panel-accent: var\(--good\)/)
+    expect(inspectorSurface).toMatch(/--acceptance-panel-accent: var\(--bad\)/)
     expect(inspectorSurface).not.toMatch(/#63a2ff/)
   })
 
@@ -2132,7 +2132,7 @@ describe("overlay architecture guards", () => {
   test("right-panel inner headers do not rely on theme reset chrome", () => {
     const styles = readLegacyStylesCss("src/styles.css")
 
-    expect(styles).not.toMatch(/body[^{]*(?:delivery-panel-header|criteria-group-head)[^{]*\{/)
+    expect(styles).not.toMatch(/body[^{]*(?:acceptance-panel-header|criteria-group-head)[^{]*\{/)
   })
 
   test("right-panel primary headers do not rely on theme spacing resets", () => {
@@ -2165,7 +2165,7 @@ describe("overlay architecture guards", () => {
     }
   })
 
-  test("delivery panel keeps verdict accent outside theme chrome resets", () => {
+  test("acceptance panel keeps verdict accent outside theme chrome resets", () => {
     const styles = readLegacyStylesCss("src/styles.css")
     const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
 
@@ -2174,13 +2174,13 @@ describe("overlay architecture guards", () => {
       const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(selector)
       if (!isThemeSelector) continue
 
-      expect(selector).not.toMatch(/delivery-panel/)
+      expect(selector).not.toMatch(/acceptance-panel/)
     }
 
     expect(inspectorSurface).toMatch(
-      /\.delivery-panel::before\s*\{[^}]*background:\s*var\(--delivery-panel-accent\)/,
+      /\.acceptance-panel::before\s*\{[^}]*background:\s*var\(--acceptance-panel-accent\)/,
     )
-    expect(inspectorSurface).not.toMatch(/\.delivery-panel\s*\{[^}]*border-left\s*:/)
+    expect(inspectorSurface).not.toMatch(/\.acceptance-panel\s*\{[^}]*border-left\s*:/)
   })
 
   test("evaluation errors keep semantic error chrome outside theme resets", () => {

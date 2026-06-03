@@ -91,7 +91,7 @@ export const Instance: InstanceApi = {
           const { ensureGitignore } = await import("@/engine/git")
           await ensureGitignore()
           // Sweep orphan attachments on first bootstrap per project
-          // (specs/delivery-attachment-store-single-source-2026-05-11.md).
+          // (specs/acceptance-attachment-store-single-source-2026-05-11.md).
           // `AttachmentStore.write` is content-addressed and write-only —
           // without this hook, removed parts / archived sessions leave
           // bytes on disk forever. Skipped for the "global" pseudo-

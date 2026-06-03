@@ -1,7 +1,7 @@
 // ── DiffPreviewPanel ──
 // Right-hand workspace view that shows the full diff for a single file.
 // Given a file path, it resolves the FileChange from the shared diff service
-// (which lazy-loads from the delivery API when necessary) and renders it
+// (which lazy-loads from the acceptance API when necessary) and renders it
 // through the shared DiffView component.
 
 import { createResource, createMemo, Show } from "solid-js";
@@ -19,7 +19,7 @@ export interface DiffPreviewPanelProps {
 export function DiffPreviewPanel(props: DiffPreviewPanelProps) {
   // Re-resolve whenever the target file path changes. createResource caches
   // the last value, so switching back to a previously-viewed file is
-  // instantaneous as long as the underlying delivery cache is still warm.
+  // instantaneous as long as the underlying acceptance cache is still warm.
   const [change] = createResource<FileChange | null, string>(
     () => {
       const target = props.target;

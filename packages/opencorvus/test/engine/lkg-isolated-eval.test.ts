@@ -4,7 +4,7 @@ import { PNG } from "pngjs"
 import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
-import { evaluateLKGInIsolatedWorktree } from "../../src/delivery/lkg-isolated-eval"
+import { evaluateLKGInIsolatedWorktree } from "../../src/acceptance/lkg-isolated-eval"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
 import type { TaskRow } from "../../src/engine/store"
 import { Instance } from "../../src/project/instance"
@@ -16,7 +16,7 @@ afterEach(async () => {
   await resetDatabase()
 })
 
-describe("isolated delivery LKG evaluation", () => {
+describe("isolated acceptance LKG evaluation", () => {
   test("evaluates and rolls back only the temporary worktree, leaving primary HEAD unchanged", async () => {
     const dir = await makeGitDir()
     try {
@@ -124,7 +124,7 @@ function withLKG(task: TaskRow, bestCommitSha: string, bestScore: number): TaskR
     ...task,
     metadata: {
       git: {
-        delivery_lkg: {
+        acceptance_lkg: {
           best_score: bestScore,
           best_commit_sha: bestCommitSha,
           best_round: 1,
@@ -136,7 +136,7 @@ function withLKG(task: TaskRow, bestCommitSha: string, bestScore: number): TaskR
 }
 
 function evalDir(root: string, taskID: string, iteration: number, roundSha: string): string {
-  return path.join(root, ".opencorvus", "delivery-eval", `${taskID}-${iteration}-${roundSha.slice(0, 12)}`)
+  return path.join(root, ".opencorvus", "acceptance-eval", `${taskID}-${iteration}-${roundSha.slice(0, 12)}`)
 }
 
 function pngBuffer(rgba: [number, number, number, number]): Buffer {

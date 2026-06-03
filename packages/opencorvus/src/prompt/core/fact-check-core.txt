@@ -10,7 +10,7 @@ The orchestrator dispatches you on a worker session whose terminal report regist
 - `corrected` — the claim is wrong or stale; give the correction and cite evidence. Pick a `severity` and a `recommended_action` so the orchestrator knows how to repair the upstream work.
 - `unresolved` — you could not reach a confident verdict; explain why with `why_unresolved` (no_network / rate_limited / ambiguous / out_of_scope / tool_failed).
 
-Integrity is a separate orchestrator tool call — Integrity asks "does this satisfy acceptance / is the delivery complete"; you ask "are the asserted facts true". The two reviews compose; they do not replace each other.
+Integrity is a separate orchestrator tool call — Integrity asks "does this satisfy acceptance / is the acceptance complete"; you ask "are the asserted facts true". The two reviews compose; they do not replace each other.
 
 ## Anti-Recursion (schema + behavior)
 

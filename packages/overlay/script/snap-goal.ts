@@ -11,7 +11,7 @@
  *   bun run script/snap-goal.ts <out.png> [w] [h] [theme]
  */
 
-import { findBrowserExecutable } from "../../opencorvus/src/delivery/checks/visual"
+import { findBrowserExecutable } from "../../opencorvus/src/acceptance/checks/visual"
 import puppeteer from "puppeteer-core"
 import path from "node:path"
 

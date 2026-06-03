@@ -217,7 +217,7 @@ export namespace SessionLoop {
   const runtimeContractRequiredAgentKinds = new Set([
     "architect",
     "build",
-    "delivery",
+    "acceptance",
     "fact-check",
     "frontend-design",
     "frontend-research",
@@ -2419,7 +2419,7 @@ export namespace SessionLoop {
           // MCP tool image / resource content used to inline as
           // `data:<mime>;base64,...` directly into `attachment.url`,
           // which (a) blew up `part.data` (see DB forensics in specs/
-          // delivery-attachment-store-single-source-2026-05-11.md) and
+          // acceptance-attachment-store-single-source-2026-05-11.md) and
           // (b) now trips Session.updatePart's inline-base64 guard.
           // Funnel both branches through AttachmentStore so the
           // persisted url is the canonical `/attachment/<id>/<sha>.<ext>`

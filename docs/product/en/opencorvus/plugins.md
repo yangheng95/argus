@@ -40,7 +40,7 @@ export const MyPlugin: Plugin = async (ctx) => {
         run: async () => ({ status: "passed", evidence: "ok" }),
       })
     },
-    "delivery.ready": async (input, output) => {
+    "acceptance.ready": async (input, output) => {
       output.actions.push({ name: "deploy", status: "ok", summary: "deployed" })
     },
   }
@@ -57,7 +57,7 @@ Full hooks: `packages/plugin/src/index.ts:148-337`.
 | `shell.env` | Inject env before shell |
 | `evaluation.checks` | Add custom checks |
 | `evaluation.analysis` | Fully replace evaluator |
-| `delivery.ready` | Post-delivery hook |
+| `acceptance.ready` | Post-acceptance hook |
 | `experimental.chat.system.transform` | Append to system prompt |
 
 ## Declaring plugins
@@ -80,4 +80,4 @@ Skips `opencode-anthropic-auth` install & load (`src/plugin/index.ts:52-54`). Re
 
 ## Relation to providers and executors
 
-Plugins don't directly replace providers or executors. They influence them via `auth` (custom auth flows), `chat.headers`/`chat.params` (request mutation), `evaluation.analysis` (full replacement), and `delivery.ready` (post-delivery hooks). Executor choice stays under the orchestrator.
+Plugins don't directly replace providers or executors. They influence them via `auth` (custom auth flows), `chat.headers`/`chat.params` (request mutation), `evaluation.analysis` (full replacement), and `acceptance.ready` (post-acceptance hooks). Executor choice stays under the orchestrator.

@@ -9,7 +9,7 @@ Evaluator 决定"交付物合不合格"。它先跑**确定性检查**（真·�
 
 ### 阶段 1：确定性检查
 
-`evaluateGoal`（`packages/opencorvus/src/evaluator/per-goal.ts`）按优先级执行：
+`evaluateGoal`（`packages/opencorvus/src/acceptance/checks/per-goal.ts`）按优先级执行：
 
 1. **从 `done_definition` 提取命令**：解析 Goal 验收标准文本中的可执行命令（`pnpm test`、`cargo build`、`pytest` 等），直接运行，以 exit-code 为准。
 2. **Project discovery**：从 `owned_paths` 向上找最近的 `package.json` / `pyproject.toml` / `Cargo.toml` / `go.mod`，自动发现 build/test/lint 命令。
@@ -17,7 +17,7 @@ Evaluator 决定"交付物合不合格"。它先跑**确定性检查**（真·�
 
 ### 阶段 2：LLM judge
 
-仅当确定性检查**不足以裁定**（例如没有可执行的测试）时，LLM judge 才出场，产出 `EvaluatorAnalysis`（`src/evaluator/types.ts:37`）：
+仅当确定性检查**不足以裁定**（例如没有可执行的测试）时，LLM judge 才出场，产出 `EvaluatorAnalysis`（`src/acceptance/checks/types.ts:37`）：
 
 ```typescript
 interface EvaluatorAnalysis {
@@ -65,7 +65,7 @@ startup | spec_check
 
 | verdict | 后续动作 |
 |---|---|
-| `accepted` | 进入 Delivery 阶段 |
+| `accepted` | 进入 Acceptance 阶段 |
 | `rejected` | 重试（同一 plan） 或 重规划（新 plan）——根据 `replan_guidance` 决定 |
 | `inconclusive` | 视为 rejected 但优先 replan（无法判决通常意味着信息不全） |
 

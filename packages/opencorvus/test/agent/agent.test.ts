@@ -7,7 +7,7 @@ import { Config } from "../../src/config/config"
 import { PermissionNext } from "../../src/permission/next"
 import { SystemPrompt } from "../../src/session/system"
 import { ToolRegistry } from "../../src/tool/registry"
-import { MIRROR_ANALYSIS_TOOL_IDS, MIRROR_DELIVERY_TOOL_IDS, MIRROR_TOOL_IDS } from "../../src/mirror/tools/ids"
+import { MIRROR_ANALYSIS_TOOL_IDS, MIRROR_ACCEPTANCE_TOOL_IDS, MIRROR_TOOL_IDS } from "../../src/mirror/tools/ids"
 import { FRONTEND_DESIGN_STATIC_TOOL_IDS } from "../../src/frontend-design/static-tools"
 import BUILD_CORE from "../../src/prompt/core/build-core.txt"
 import VISUAL_QA_CORE from "../../src/prompt/core/visual-qa-core.txt"
@@ -86,7 +86,7 @@ test("build agent has correct default properties", async () => {
   })
 }, 30_000)
 
-test("visual-qa agent is full-function build-grade with visual delivery tools", async () => {
+test("visual-qa agent is full-function build-grade with visual acceptance tools", async () => {
   await using tmp = await tmpdir()
   await Instance.provide({
     directory: tmp.path,
@@ -108,7 +108,7 @@ test("visual-qa agent is full-function build-grade with visual delivery tools", 
 
       const tools = await ToolRegistry.tools({ providerID: "", modelID: "" }, visualQa)
       const ids = new Set(tools.map((tool) => tool.id))
-      for (const id of MIRROR_DELIVERY_TOOL_IDS) expect(ids.has(id)).toBe(true)
+      for (const id of MIRROR_ACCEPTANCE_TOOL_IDS) expect(ids.has(id)).toBe(true)
       for (const id of MIRROR_ANALYSIS_TOOL_IDS) expect(ids.has(id)).toBe(false)
     },
   })
@@ -438,7 +438,7 @@ test("native stage agent registry tool surfaces match role boundaries", async ()
       const integrity = await Agent.get("integrity")
       expect(integrity).toBeDefined()
       expect(integrity?.tools?.include).toEqual([])
-      expect(await Agent.get("delivery")).toBeUndefined()
+      expect(await Agent.get("acceptance")).toBeUndefined()
     },
   })
 })
@@ -530,7 +530,7 @@ test("orchestrator registry exposes lifecycle tools it teaches in prompt", async
       expect(include).toContain("research")
       expect(include).toContain("frontend_research")
       expect(include).not.toContain("deliver")
-      expect(include).not.toContain("publish_delivery")
+      expect(include).not.toContain("publish_acceptance")
       expect(orchestrator?.prompt).toContain("propose_task")
     },
   })
@@ -976,7 +976,7 @@ test("frontend-design statically declares mirror and source refinement tools", a
       for (const id of MIRROR_ANALYSIS_TOOL_IDS) {
         expect(designToolIds.has(id)).toBe(true)
       }
-      for (const id of MIRROR_DELIVERY_TOOL_IDS) {
+      for (const id of MIRROR_ACCEPTANCE_TOOL_IDS) {
         expect(designToolIds.has(id)).toBe(true)
       }
       expect(designToolIds.has("bash")).toBe(true)

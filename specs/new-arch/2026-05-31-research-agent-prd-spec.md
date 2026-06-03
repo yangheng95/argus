@@ -22,7 +22,7 @@
 - `build` 写代码或 markdown 文档文件；
 - `integrity` 做最终验收。
 
-明确删除旧草案中的错误路径：`research -> publish_delivery`。`publish_delivery` 当前已禁用，不能作为 PRD/SPEC-only 任务的交付路径。纯文档任务如果需要产出文件，应通过现有可执行工作面完成并由 `integrity` 验收；具体是否需要 `requirements` / `architect` / `build` 由 orchestrator 从任务上下文推理，而不是由 research 固定指派。
+明确删除旧草案中的错误路径：`research -> publish_acceptance`。`publish_acceptance` 当前已禁用，不能作为 PRD/SPEC-only 任务的交付路径。纯文档任务如果需要产出文件，应通过现有可执行工作面完成并由 `integrity` 验收；具体是否需要 `requirements` / `architect` / `build` 由 orchestrator 从任务上下文推理，而不是由 research 固定指派。
 
 ---
 
@@ -71,8 +71,8 @@
 | REQ-3 | implicit | 所有非显然事实必须可追溯到来源。 | 每个 fact 关联有效 evidence id；每个 evidence 有 pointer、retrieved_at、reliability、bundle pointer。 | 不为无法验证的事实编造来源。 |
 | REQ-4 | implicit | research 结果必须能被 downstream agents 结构化消费且可判过期。 | artifact 包含 request_hash、source_digest、research_session_id、created_for_message_id、created_at；下游只消费未过期 brief。 | 不通过隐藏消息或 UI-only 文本传递上下文。 |
 | REQ-5 | implicit | 调研必须区分事实、推断、约束、文档结构和待确认问题。 | schema 中分别记录 facts、inferences、constraints、document_outline、open_questions。 | 不把建议或推断伪装成事实。 |
-| REQ-6 | implicit | 纯文档交付不得新增平行 delivery 系统。 | 当 orchestrator 判断需要文件交付时，使用现有可执行/验收工具面产出和验收 markdown；不调用 disabled publish_delivery。 | research 不选择交付路径，不直接交付最终文档。 |
-| REQ-7 | implicit | agent 只读，不执行 shell、不写代码、不编辑仓库。 | effective runtime tools 不包含 bash/edit/write/apply_patch/task。 | 不承担 build、delivery 或 integrity 职责。 |
+| REQ-6 | implicit | 纯文档交付不得新增平行 acceptance 系统。 | 当 orchestrator 判断需要文件交付时，使用现有可执行/验收工具面产出和验收 markdown；不调用 disabled publish_acceptance。 | research 不选择交付路径，不直接交付最终文档。 |
+| REQ-7 | implicit | agent 只读，不执行 shell、不写代码、不编辑仓库。 | effective runtime tools 不包含 bash/edit/write/apply_patch/task。 | 不承担 build、acceptance 或 integrity 职责。 |
 
 ---
 
@@ -301,7 +301,7 @@ EngineArtifactTable {
   payload: ResearchBriefSchema,
   run_id: null,
   goal_run_id: null,
-  delivery_id: null
+  acceptance_id: null
 }
 ```
 
@@ -356,7 +356,7 @@ Tool result：
 - stale status
 - evidence coverage summary
 
-不得返回 “NEXT: call ...” 类型的流程指令；不得返回 “call publish_delivery”。`publish_delivery` disabled。tool result 只暴露事实，下一步由 orchestrator LLM 决定。
+不得返回 “NEXT: call ...” 类型的流程指令；不得返回 “call publish_acceptance”。`publish_acceptance` disabled。tool result 只暴露事实，下一步由 orchestrator LLM 决定。
 
 `orchestrator-core.txt` 增加：
 
@@ -449,7 +449,7 @@ build 不重新调研。它只能读：
 不修改：
 
 - 不新增第三条 built-in workflow。
-- 不启用 `publish_delivery`。
+- 不启用 `publish_acceptance`。
 - 不让 research 写文件作为交付物；它只写 bundle/artifact。
 
 ---
@@ -497,7 +497,7 @@ build 不重新调研。它只能读：
 - schema-invalid 不写 active artifact。
 - tool_error 不伪造 research brief。
 - blocking open questions 出现在 tool result。
-- tool result 不建议 `publish_delivery`。
+- tool result 不建议 `publish_acceptance`。
 
 ### 11.4 Persistence / Staleness
 
@@ -542,6 +542,6 @@ build 不重新调研。它只能读：
 - 多轮 crawling 队列。
 - 专门 UI research 面板。
 - 新 workflow。
-- 启用 `publish_delivery`。
+- 启用 `publish_acceptance`。
 
 这样保留核心价值：在需求不清或资料依赖强时，系统可以生成可追溯、可过期、可校验的证据包；随后由 orchestrator 基于完整上下文选择现有工具面完成需求、设计、实现、文档交付或继续澄清，而不是由 research 固定后续路径。

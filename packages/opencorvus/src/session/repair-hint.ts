@@ -134,10 +134,10 @@ export function discriminatorRepairHint(
  * The single tool-call repair function for every `streamText` call.
  *
  * Installed once at the `@/llm/api` streamText wrapper so EVERY agent and
- * direct LLM call (architect, orchestrator, build, integrity, delivery
+ * direct LLM call (architect, orchestrator, build, integrity, acceptance
  * walkthrough translation, …) gets identical behaviour. Per-call injection
  * was the structural cause of the rule-35 gap: any new `streamText` caller
- * that forgot to wire repair (e.g. `delivery/checks/walkthrough/translate.ts`)
+ * that forgot to wire repair (e.g. `acceptance/checks/walkthrough/translate.ts`)
  * silently reverted to the opaque-`invalid_union` death loop. A wrapper-level
  * single source (rule 8) makes that omission structurally impossible.
  *

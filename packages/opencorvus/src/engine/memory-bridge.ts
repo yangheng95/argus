@@ -16,7 +16,7 @@ interface RunRow {
   plan_version_id: string | null
 }
 
-interface DeliveryRow {
+interface AcceptanceRow {
   id: string
   summary: string | null
   result: Record<string, unknown> | null
@@ -39,14 +39,14 @@ export namespace EngineMemoryBridge {
   export async function flushTaskLearnings(input: {
     task: TaskRow
     run: RunRow
-    delivery: DeliveryRow
+    acceptance: AcceptanceRow
     evaluation?: EvaluationRow | null
     plan?: PlanRow | null
   }) {
-    const { task, run, delivery, evaluation, plan } = input
+    const { task, run, acceptance, evaluation, plan } = input
     try {
-      const changedFiles = Array.isArray(delivery.result?.changed_files)
-        ? delivery.result.changed_files.filter((item): item is string => typeof item === "string")
+      const changedFiles = Array.isArray(acceptance.result?.changed_files)
+        ? acceptance.result.changed_files.filter((item): item is string => typeof item === "string")
         : []
       const checks = (evaluation?.checks as Array<{ name: string; status: string; evidence?: string }>) ?? []
 
@@ -61,8 +61,8 @@ export namespace EngineMemoryBridge {
         sections.push("", `## Approach (Plan v${plan.version})`, plan.summary.slice(0, 500))
       }
 
-      if (delivery.summary) {
-        sections.push("", "## Outcome", delivery.summary.slice(0, 1000))
+      if (acceptance.summary) {
+        sections.push("", "## Outcome", acceptance.summary.slice(0, 1000))
       }
 
       if (changedFiles.length > 0) {
@@ -84,8 +84,8 @@ export namespace EngineMemoryBridge {
       const atomics: Array<{ kind: "profile" | "lesson" | "fact"; text: string; section: string; importance?: number }> = []
 
       // Outcome section contains facts about what was delivered
-      if (delivery.summary) {
-        atomics.push({ kind: "fact", text: delivery.summary.slice(0, 240), section: "Outcome" })
+      if (acceptance.summary) {
+        atomics.push({ kind: "fact", text: acceptance.summary.slice(0, 240), section: "Outcome" })
       }
 
       // Plan summary is a fact about the approach taken

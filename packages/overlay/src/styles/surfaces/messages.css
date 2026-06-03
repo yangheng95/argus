@@ -593,7 +593,7 @@
    Extracted from styles.css 2026-05-04: chat-message accessory
    chrome (reasoning panel, msg-patch chip, msg-tool-* chrome,
    path-box / path-link rendering) + the cross-class min-width
-   reset that pinned overflow behavior across msg-* / delivery-*.
+   reset that pinned overflow behavior across msg-* / acceptance-*.
    ───────────────────────────────────────────────────────────── */
 
 .msg-reasoning {
@@ -731,7 +731,7 @@
 .goal-item,
 .criteria-group,
 .eval-error,
-.delivery-panel,
+.acceptance-panel,
 .extension-row,
 .channel-doc-card,
 .detail-card,
@@ -741,8 +741,8 @@
 .change-path,
 .eval-summary,
 .eval-error-detail,
-.delivery-summary,
-.delivery-files-link,
+.acceptance-summary,
+.acceptance-files-link,
 .msg-text,
 .msg-tool,
 .msg-tool-output,

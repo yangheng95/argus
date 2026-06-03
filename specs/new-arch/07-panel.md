@@ -51,7 +51,7 @@
   ┊ Eval    ✗  failed · test 3/5 passed
   展开: 失败证据 · eval reasoning · retry 状态
 
-▼ Delivery
+▼ Acceptance
   状态 · 变更文件数 · 摘要 · publish 按钮
 
 ▼ Interactions (2)
@@ -81,7 +81,7 @@ Agent Cards（chat 左侧） — 各 agent 实时消息流
 - **GoalWorkflowGroup** — per-goal [plan · execute · eval] 可折叠组
 
 ### 保留不变
-- Overview · Delivery · Interactions · Agent Cards
+- Overview · Acceptance · Interactions · Agent Cards
 
 ## TaskBoard 模型变更
 
@@ -112,7 +112,7 @@ goalWorkflows: Array<GoalWorkflowGroup>    // per-goal 工作流状态
 | `snapshots: ProgressSnapshot[]` | 未使用 |
 
 ### 保留字段
-`task` · `run` · `goalRuns` · `delivery` · `evaluation` · `interactions` · `overview` · `brief` · `artifacts`
+`task` · `run` · `goalRuns` · `acceptance` · `evaluation` · `interactions` · `overview` · `brief` · `artifacts`
 
 ## 配置面板重设计
 
@@ -138,16 +138,16 @@ goalWorkflows: Array<GoalWorkflowGroup>    // per-goal 工作流状态
   ├ Frontend Design  max_steps  skills[]
   ├ Intent-Analysis max_steps  skills[]
   ├ Build           max_steps  skills[]
-  └ Delivery        max_steps  max_retries  skills[]
+  └ Acceptance        max_steps  max_retries  skills[]
   注：实际默认 max_steps = 1000（见 `engine/config.ts:170-212`）；schema 中没有
       `timeout_ms` / `quality_threshold` / `max_attempts` 字段（这些字段在
       2026-05-12 sync 中随 assistant.spec / planner / evaluator 一同删除）。
-      delivery_visual{} 是数值硬门槛阈值，不在 agent 行内展示。
+      acceptance_visual{} 是数值硬门槛阈值，不在 agent 行内展示。
       activity{} 的 stream-idle / executor-events-idle / task-queue-run-timeout
       是 host 层 watchdog，归 Orchestration 而非 Agent Config。
   每个 agent 可展开: skills[] · model 选择
   → PATCH /config { assistant: { architect: { ... } } }
-  注：planner / evaluator agent 已下线（详见 [01-agents.md](01-agents.md)）。
+  注：planner / acceptance review 已下线（详见 [01-agents.md](01-agents.md)）。
 
 ▼ Orchestration
   max_executor_groups: 3
@@ -178,7 +178,7 @@ Panel → PATCH /config {partial} → mergeDeep → 写文件
 | 事件 | 触发 |
 |---|---|
 | `workflow.selected` | 更新 workflow 标识 |
-| `workflow.step.updated` | 刷新 stage（requirements / architect / build / delivery 等步骤进度） |
+| `workflow.step.updated` | 刷新 stage（requirements / architect / build / acceptance 等步骤进度） |
 | `goal.workflow.progress` | per-goal workflow 进度 |
 
 > 历史版本规划过 `requirements.completed` / `architect.completed` / `goal.workflow.updated` 等

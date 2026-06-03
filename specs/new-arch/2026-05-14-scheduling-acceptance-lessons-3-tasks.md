@@ -1,7 +1,7 @@
 # 三任务调度与验收复盘：KeyStatisticsMT / CandlestickChart / TrendChart
 
 > 撰写日：2026-05-14
-> 取证：`engine_artifact` (kind=run / goal_run_attempt / delivery / integrity_attempt / verification-evidence / orchestrator-stream-error)、`protocol_event` (workflow.step.updated / integrity.review.\*)、`session` 树、`engine_interaction_request`。
+> 取证：`engine_artifact` (kind=run / goal_run_attempt / acceptance / integrity_attempt / verification-evidence / orchestrator-stream-error)、`protocol_event` (workflow.step.updated / integrity.review.\*)、`session` 树、`engine_interaction_request`。
 > 数据库快照：`C:\Users\chuan\AppData\Local\opencorvus\.opencorvus\opencorvus.db`，三任务时间窗 2026-05-13 11:20 — 2026-05-14 02:03。
 
 ---
@@ -10,7 +10,7 @@
 
 | Task             | id                               | 结局                                                                                                     | Goal 数                                                  | 耗时                                                                 | 关键现象                                                                                                                                                                                        |
 | ---------------- | -------------------------------- | -------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- | -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| KeyStatisticsMT  | `tsk_e2110fadf001oLDWI9aO0Wrq7U` | **cancelled**（metadata.cancelled=true）；**真正原因是 retired delivery verifier threw** —— 见 §7-修订 1 | 5 / 5 passed（goal 4 retry=1，superseded=`build_retry`） | 11:20 → 14:16（约 2h 56m）                                           | DAG 串行由 architect 设计强制；无 orchestrator stream error；无 interaction；终态来自 delivery_verification_threw                                                                               |
+| KeyStatisticsMT  | `tsk_e2110fadf001oLDWI9aO0Wrq7U` | **cancelled**（metadata.cancelled=true）；**真正原因是 retired acceptance verifier threw** —— 见 §7-修订 1 | 5 / 5 passed（goal 4 retry=1，superseded=`build_retry`） | 11:20 → 14:16（约 2h 56m）                                           | DAG 串行由 architect 设计强制；无 orchestrator stream error；无 interaction；终态来自 acceptance_review_threw                                                                               |
 | CandlestickChart | `tsk_e21cff31a001KYZ7u8h27S0tKo` | **failed**                                                                                               | 1 / 1 passed                                             | 14:48 → 17:12（约 2h 24m）                                           | 4 次 deliver 拒绝 + 1 次 worktree 创建失败；component 全部 10 条 spec 通过；系统**确实**发了 `interaction_request` "阻断问题处理"，但 5min 后被自动 reject（见 §7-修订 3）                      |
 | TrendChart       | `tsk_e21d04c70001ElmU0hK4MZwZEP` | **cancelled**（用户在凌晨 02:03 手动取消）                                                               | 1 goal pending（retry=1）                                | 14:49 → 02:03（约 11h 14m，其中 19:33—02:03 共 6.5h 处于 `blocked`） | LLMActivity 总 deadline 3600000ms 触发后无人收拾；6 次 build→deliver 循环；架构师下了缩量修正，executor 仍按全量做；任务前期早有一次 `interaction_request`（C# 源码路径） 也被 5min auto-reject |
 
@@ -216,15 +216,15 @@ TrendChart 终态 cancelled 而非 failed，没有 `task.error` postmortem，没
 
 > 取证：Codex 用同一 DB，独立查 `engine_goal.depends_on` / `engine_interaction_request` / artifact kinds、并对照 `build-core.txt` / `dimensions.ts` / `runtime.ts` / `merge-never-crash-plan.md` / CLAUDE.md。verdict = `agree-with-revisions`。原文档保留以便对比；以下条目为修订与补充，**优先级以本节为准**。
 
-### 修订 1：KeyStatisticsMT 的"成功"是假象 —— `delivery_verification_threw`（原文 §3 错误）
+### 修订 1：KeyStatisticsMT 的"成功"是假象 —— `acceptance_review_threw`（原文 §3 错误）
 
 `engine_artifact[task=KSM]` 含三条同时间戳（2026-05-13T14:16:59.293Z）证据：
 
-- `kind=delivery_verification_threw label=delivery_verification_threw payload={"error":"delivery agent failed","iteration":0,"verdict":"rejected"}` (id `art_e21b2b09d001lisYuliorQv72B`)
-- `kind=verdict label=delivery-agent-verdict summary="retired delivery verifier threw before producing a verdict"`
-- `kind=verification-evidence label=evidence-delivery status=failed verdict=rejected`
+- `kind=acceptance_review_threw label=acceptance_review_threw payload={"error":"acceptance review failed","iteration":0,"verdict":"rejected"}` (id `art_e21b2b09d001lisYuliorQv72B`)
+- `kind=verdict label=acceptance-review-verdict summary="retired acceptance verifier threw before producing a verdict"`
+- `kind=verification-evidence label=evidence-acceptance status=failed verdict=rejected`
 
-时间戳与 `engine_task.time_completed=1778681819305` / `error="task cancelled"` 完全重合。即所谓"用户取消"几乎可以肯定是**系统在 verifier 异常时把 task `metadata.cancelled` 翻成 true 并归于 cancel 终态**，并非真正的人工 cancel。原文档把 KSM 当"5/5 passed 但被用户 cancel"是错的——它是个 **delivery verifier 自身抛异常**的样本，比"串行慢"严重得多。
+时间戳与 `engine_task.time_completed=1778681819305` / `error="task cancelled"` 完全重合。即所谓"用户取消"几乎可以肯定是**系统在 verifier 异常时把 task `metadata.cancelled` 翻成 true 并归于 cancel 终态**，并非真正的人工 cancel。原文档把 KSM 当"5/5 passed 但被用户 cancel"是错的——它是个 **acceptance verifier 自身抛异常**的样本，比"串行慢"严重得多。
 
 **对应 AGENTS.md**：rule 28b——cancel 路径在这里又一次吞掉了真实失败语义；用户看到的是 `task cancelled`，而结构化失败原因只能从 artifact 翻出来。
 
@@ -270,7 +270,7 @@ DB 实测：
 
 复核 `build-core.txt:89` 与 `dimensions.ts:147`：browser / UI deliverable 的契约**已经规定**：
 
-- 必须有 root `package.json` / `packageManager` / `scripts.dev`，delivery 从仓库根启动；
+- 必须有 root `package.json` / `packageManager` / `scripts.dev`，acceptance 从仓库根启动；
 - runtime entrypoint / root config 必须被某个 goal owning。
 
 CC 的唯一 goal 仅 own `src/shared/components/CandlestickChart/` + C# 源目录；root `package.json` / lockfile / preview 注册位 / CDN 注入都**没有任何 goal 认领**——按 `dimensions.ts` 的口径这本来就该被 integrity 标 `missing_capability`，但实际没有。也就是说，原文档把 §1 定性为"host gate 错配 + 让 LLM 改 host"是表面诊断，**真正的根因**是 **architect/integrity 在浏览器交付物上没生成 infra goal**，导致环境配置变成"无主之地"，每次 deliver-fail 才被 LLM 临时认领去打补丁。
@@ -301,7 +301,7 @@ CC 的唯一 goal 仅 own `src/shared/components/CandlestickChart/` + C# 源目�
 | --- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- | -------------------------------------------------------------------- |
 | 1   | **P0** | **真正实现"两次 deliver-reject 后硬阻塞用户"**：`engine_interaction_request` 不得 5min auto-reject；至少在 `request_type=question + parent run 来自 deliver-fail` 时不许 stale；commit `15506698b` 是 prompt 级，现在需要 runtime 级保证 | 直接消灭 CC / TC 的失败模式                         | 中（`runtime.ts:48` 的 5min 兜底要分类 + UI 侧需要更显眼地展示求助） |
 | 2   | **P0** | **parent run blocked/failed 时 child session 强制接管 + workflow step status 改从 `session.status.terminal.reason` 派生**                                                                                                                | 修复 TC 父子脱钩与 step 错记 completed 的真值源问题 | 中                                                                   |
-| 3   | **P0** | **retired delivery verifier 抛异常的结构化失败路径**：当 verifier 自身抛错时，task 终态不应混淆成 cancelled；要把 `delivery_verification_threw` 标记进 `engine_task.error` 并触发明确的 retry/escalation 语义                            | 修复 KSM 的"假取消"误诊                             | 小                                                                   |
+| 3   | **P0** | **retired acceptance verifier 抛异常的结构化失败路径**：当 verifier 自身抛错时，task 终态不应混淆成 cancelled；要把 `acceptance_review_threw` 标记进 `engine_task.error` 并触发明确的 retry/escalation 语义                            | 修复 KSM 的"假取消"误诊                             | 小                                                                   |
 | 4   | **P1** | **architect/integrity 必须为 browser/UI deliverable 物化 infra goal**：root `package.json` / lockfile / preview/test runtime surface / 必要 CDN 要么被某个 goal `owned_paths` 覆盖，要么 integrity 在 `missing_capability` 维度 fail     | 切断 CC 与 TC 的环境补丁雪崩根因                    | 中（`dimensions.ts` 的 capability 维度扩展 + architect prompt 调整） |
 | 5   | **P1** | **integrity correction 必须真物化为新 contract / 新 goal**，build session prompt 必须从更新后 contract 派生，不能从 task-level 原始请求派生                                                                                              | 修复 TC 的 goal 双源行为                            | 中                                                                   |
 | 6   | **P1** | **cancel 与 fail 共用 postmortem 写入路径**：cancel 时把"已完成 / 未完成 / 失败原因 / 建议后续"落到 `engine_artifact[kind=verification-evidence, label=cancel-evidence]`                                                                 | 解决 KSM/TC 的 cancel 吞诊断                        | 小                                                                   |
@@ -335,7 +335,7 @@ CC 的唯一 goal 仅 own `src/shared/components/CandlestickChart/` + C# 源目�
 ### M-3. integrity advisory + deliver 双层 hard gate 之间的语义错位（原"gate 方向反了"收紧）
 
 - **integrity 确为 advisory**：`packages/opencorvus/src/engine/workflow.ts:386-395` 显式将 `needs_correction / corrections_count / missing_count` 排除出 workflow `failed`，CC 完全跳过 integrity 仍能进 deliver。
-- **但 deliver 不止环境 hard gate**：`packages/opencorvus/src/delivery/checks/project-gate.ts:234` 把 `review:contract_audit` 设成 blocking；`packages/opencorvus/src/delivery/checks/runtime-evidence.ts:12-14` 也阻止 accepted。
+- **但 deliver 不止环境 hard gate**：`packages/opencorvus/src/acceptance/checks/project-gate.ts:234` 把 `review:contract_audit` 设成 blocking；`packages/opencorvus/src/acceptance/checks/runtime-evidence.ts:12-14` 也阻止 accepted。
 - 真正的错位是：**架构正确性（fallback、死代码、scope drift）由 integrity 评但 advisory**，**部署可行性由 deliver 评且 hard**——前者不可恢复、后者可恢复，硬度与不可恢复性反向。修法是把 integrity 关键维度（`requirement_fidelity` + `solution_quality`）提升为 deliver 的 blocking 输入。
 
 ### M-4. fuse 兜底覆盖窗口太窄，TC 风格的"单次 deadline + 长尾静默"漏接（原"无非-LLM 终态收敛"收紧）
@@ -345,12 +345,12 @@ CC 的唯一 goal 仅 own `src/shared/components/CandlestickChart/` + C# 源目�
 
 ### M-5. 已有 runtime-evidence hard gate，但其行为级断言无法生成可达性/语义/fallback 检查（原"spec 退化"撤回重写）
 
-- **撤回**："spec 全部退化为 linting++"是错的——`packages/opencorvus/src/delivery/checks/runtime-evidence.ts:5-13` 强制 live preview / 真实 DOM / walkthrough 作为 host hard-gate evidence；`packages/opencorvus/src/architect/output-tools.ts:397-400` 对 reference-driven 任务强制 `llm_judge`。
+- **撤回**："spec 全部退化为 linting++"是错的——`packages/opencorvus/src/acceptance/checks/runtime-evidence.ts:5-13` 强制 live preview / 真实 DOM / walkthrough 作为 host hard-gate evidence；`packages/opencorvus/src/architect/output-tools.ts:397-400` 对 reference-driven 任务强制 `llm_judge`。
 - **真正的缺陷收紧为**：现有 runtime-evidence 检查的是"能渲染、有 DOM 节点、文案命中"等**视觉级**事实，无法生成需要执行内部状态的断言——比如 KSM `resolveMarketKey` 的 11 条规则可达性（要 11 个不同 stock 输入）、三组件的 Mock fallback 触发条件（要 `window.dataAccessor` 不可用场景）、CC subscribe streaming 缺失（要观察是否有 onPush 路径被调用）。这些需要**契约级 fuzz / 反例数据驱动**的 spec 生成机制，目前 architect LLM 凭文本无法产出。
 
 ### M-6. 未声明 contract 的跨 goal 副作用无 host 发现机制（Codex 二轮独立挖出，本文档没看到）
 
-`packages/opencorvus/src/delivery/checks/project-gate.ts:234` 只对**已声明的** `review:contract_audit` 做 hard gate。但实际事故里，最大的副作用都来自**未声明的隐式跨 goal 耦合**：
+`packages/opencorvus/src/acceptance/checks/project-gate.ts:234` 只对**已声明的** `review:contract_audit` 做 hard gate。但实际事故里，最大的副作用都来自**未声明的隐式跨 goal 耦合**：
 
 - CC 的"TrendView import 拖垮 root build"——CC goal 没 own `TrendView.tsx`，但其交付改了 lockfile 让 TrendView import 失效；
 - TC 的 `447494e` UI 层 commit 改了 `src/web/src/components/index.ts`——这条 import 注入是 cross-goal effect，但不在任何 goal contract 里。
@@ -382,7 +382,7 @@ CC 的唯一 goal 仅 own `src/shared/components/CandlestickChart/` + C# 源目�
 
 | 项目 | DB 状态                                   | 真实完成度                                  | 真实完成度的"假象层"                                                                                                                                               |
 | ---- | ----------------------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| KSM  | 5/5 passed，`delivery_verification_threw` | **~85%** 但**核心路由有逻辑 bug**           | integrity `requirement_fidelity=pass` 没接住 `resolveMarketKey` 11 条规则中有 5 条死代码                                                                           |
+| KSM  | 5/5 passed，`acceptance_review_threw` | **~85%** 但**核心路由有逻辑 bug**           | integrity `requirement_fidelity=pass` 没接住 `resolveMarketKey` 11 条规则中有 5 条死代码                                                                           |
 | CC   | 1/1 passed，task failed at deliver        | **~70%** 且**从未经过 integrity**           | 整个任务全程**没有任何 `integrity_attempt` 行**，所谓 `goal passed` 仅代表 build 通过；`/test/` 页面从未真正渲染过                                                 |
 | TC   | 1 goal pending，task cancelled            | **~55%** 且**实际工作量超出 goal contract** | 文件系统上有 481 行 `TrendChart.tsx` + 220 行 `utils.ts` + 集成层（commit `447494e`），但 goal contract 仅声明数据层；DB `pending` 与磁盘"已实现一大半 UI"严重错位 |
 
@@ -490,7 +490,7 @@ if (market === 'USHA' || market === 'USZA') {  // ← 死代码：规则 1 已 r
 
 - 关键缺失：渐变填充、昨收基准线、键盘导航、hi-DPI、SubscribeTrend 接入；
 - DB 状态完全失真：goal=pending 表示"还没做"，但 `TrendChart.tsx 481 行`已在 master；
-- 这部分工作是 integrity 标记 11 missing goals 之后由 executor "私自"做的，未被 architect 物化为新 goal，未走 integrity 二审，未进 delivery 验收范围。
+- 这部分工作是 integrity 标记 11 missing goals 之后由 executor "私自"做的，未被 architect 物化为新 goal，未走 integrity 二审，未进 acceptance 验收范围。
 
 这是**最危险的失败模式**：用户看 UI 以为没做 / DB 以为没做，但代码已写、合并到 master，后续任何人接手都会撞见"有半成品但没人管"的状态。
 
@@ -529,5 +529,5 @@ if (market === 'USHA' || market === 'USZA') {  // ← 死代码：规则 1 已 r
 | rule 28b（敢于宣告失败）               | CandlestickChart 的 task.error 是优秀范例；TrendChart 的 cancel 路径欠这条                                                                                     |
 | rule 30（并行 SubAgent）               | ~~KeyStatisticsMT 的 5-goal 串行违反~~ —— **修订后撤回**：DAG 由 architect 设计为串行，scheduler 已按 DAG 执行；要修就修 architect 让它给出更宽的 DAG（§8 #7） |
 | rule 35（穷举调用点 / 不要单点采样）   | 本文档自己第一版犯了——`KSM 可并行`只看了 `owned_paths` 没看 `depends_on`；`TC 19:33 后静默`只看了非 stream event 没看 part 表                                  |
-| rule 28b（敢于宣告失败）               | CC 的 `task.error` 是优秀范例；KSM 是反例（`delivery_verification_threw` 被悄悄翻成 cancelled）；TC 也是反例（cancel 吞诊断）                                  |
+| rule 28b（敢于宣告失败）               | CC 的 `task.error` 是优秀范例；KSM 是反例（`acceptance_review_threw` 被悄悄翻成 cancelled）；TC 也是反例（cancel 吞诊断）                                  |
 | rule 28c（无）                         | 当前规则集**缺失**一条"用户输入是真实硬阻塞"——CC/TC 的 5min auto-reject 直接撞这个缺口；建议补 rule 28c                                                        |

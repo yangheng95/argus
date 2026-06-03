@@ -34,11 +34,11 @@ OpenCorvus 的配置分三层：**CLI flag > 环境变量 > `opencorvus.jsonc` �
 
 assistant:
   auto_iteration
-  requirements{} · architect{} · delivery{} · delivery_visual{}
+  requirements{} · architect{} · acceptance{} · acceptance_visual{}
   frontend_design{} · intent_analysis{} · build{} · activity{} · debug{}
   default_workflow · workflows[] · max_executor_groups
   （每个 agent 子项是 agent 特化的：build 只有 max_steps + skills；
-    delivery 多一个 max_retries；delivery_visual 全是数值硬门槛阈值。
+    acceptance 多一个 max_retries；acceptance_visual 全是数值硬门槛阈值。
     **没有**统一的 max_steps / timeout_ms / quality_threshold / max_attempts / skills 模板。）
 
 experimental:
@@ -48,7 +48,7 @@ experimental:
 
 ### 不再存在的字段（2026-05 清理）
 
-- ~~`assistant.spec{}`~~ / ~~`assistant.goal{}`~~ / ~~`assistant.planner{}`~~ / ~~`assistant.evaluator{}`~~ / ~~`assistant.adaptive{}`~~ —— planner / evaluator agent 整体下线（见 [Agent 家族](../../../specs/new-arch/01-agents.md)），spec / goal / adaptive 在 workflow 系统替代后删除
+- ~~`assistant.spec{}`~~ / ~~`assistant.goal{}`~~ / ~~`assistant.planner{}`~~ / ~~`assistant.evaluator{}`~~ / ~~`assistant.adaptive{}`~~ —— planner / acceptance review 整体下线（见 [Agent 家族](../../../specs/new-arch/01-agents.md)），spec / goal / adaptive 在 workflow 系统替代后删除
 - ~~`experimental.unattended`~~ / ~~`experimental.auto_permission`~~ —— 仅剩 `experimental.auto_question`
 - ~~`max_replans` · `same_plan_retry_limit` · `stage_max_retries`~~
 
@@ -85,7 +85,7 @@ experimental:
     "auto_iteration": false,
     "max_executor_groups": 3,
     "default_workflow": "pipeline",
-    "delivery": { "max_retries": 2 },
+    "acceptance": { "max_retries": 2 },
     "build": { "max_steps": 80 },
   },
 
@@ -134,7 +134,7 @@ experimental:
     "requirements": { "max_steps": 20 },
     "architect": { "max_steps": 40 },
     "build": { "max_steps": 80, "skills": [] },
-    "delivery": { "max_retries": 2 },
+    "acceptance": { "max_retries": 2 },
     "max_executor_groups": 3,
     "default_workflow": "pipeline",
     "workflows": [],
@@ -181,5 +181,5 @@ Env 快照时机：`Env.state()` 在实例创建时快照 `process.env`，因此
 
 - [Providers](./providers.md)
 - [Permissions](./permissions.md)
-- [Delivery 检查与判决](./evaluator.md)
+- [Acceptance 检查与判决](./evaluator.md)
 - 完整 schema：[specs/new-arch/05-config.md](../../../specs/new-arch/05-config.md)

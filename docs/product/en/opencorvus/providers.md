@@ -99,7 +99,7 @@ Splitting per-agent models from the execution default lets you **plan with a str
 }
 ```
 
-> `assistant.planner.model` is no longer valid — the planner agent has been removed.
+> `assistant.planner.model` is no longer valid — the planning tool role has been removed.
 
 ## Reasoning-model constraints
 

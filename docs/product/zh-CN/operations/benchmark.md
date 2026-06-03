@@ -77,7 +77,7 @@ bun run script/benchmark/mission-benchmark.ts \
 | `--max-fix-runs=N` | 最大回修次数，默认 8 |
 | `--max-executor-groups=N` | 并行 goal/build 上限 |
 | `--max-auto-resumes=N` | 失败后自动 resume 次数 |
-| `--delivery-verify-cmd=CMD` | 自定义 delivery 阶段的 verify 命令 |
+| `--acceptance-verify-cmd=CMD` | 自定义 acceptance 阶段的 verify 命令 |
 | `--resume-task-id=TID` / `--resume-home-dir=DIR` / `--resume-message=TEXT` | resume 模式（一般用 fresh bench，详见 [resume 注意](#resume-注意)） |
 | `--no-keep` | 任务结束删除临时目录 |
 | `--skip-local-verify` | 跳过本地二次验证 |
@@ -127,7 +127,7 @@ CLAUDE.md rule 7：`qualityVerdict === "accepted"` 只是自声明。完整复�
 cd <worktree-from-report>
 # 安装依赖、跑项目
 bun install && bun run build && bun run start
-# 跑指定的 delivery-verify-cmd
+# 跑指定的 acceptance-verify-cmd
 ```
 
 报告里 `accepted` 不代表可发布。
@@ -141,7 +141,7 @@ bun install && bun run build && bun run start
 `--report` 产出的 JSON 包含：
 
 - 任务元信息（title、model、executor）
-- 各阶段耗时（requirements / architect / build / delivery）
+- 各阶段耗时（requirements / architect / build / acceptance）
 - 每个 Goal 的 check 结果
 - `qualityVerdict` 与 `localVerify`
 - 失败样本：stderr / stdout 尾部 + 相关 artifact 路径

@@ -67,16 +67,16 @@ interface ActivityConfig {
 }
 
 /**
- * DeliveryVisualConfig — P0-B 数值硬门阈值 + 复合 score 权重。
+ * AcceptanceVisualConfig — P0-B 数值硬门阈值 + 复合 score 权重。
  *
  * 单源化：所有阈值都在 EngineConfig 下统一管理（rule 25 禁散配置文件），
- * 用户可通过 opencorvus.jsonc `assistant.delivery_visual` 覆盖。改动阈值
+ * 用户可通过 opencorvus.jsonc `assistant.acceptance_visual` 覆盖。改动阈值
  * 后需在下一次 benchmark 跑中重新评估 accept/reject 分布。
  *
  * score_weights 四项相加必须为 1（运行时校验）；score 的单调性是 P0-C.4
  * LKG 回滚比较的语义基础，禁止破坏。
  */
-interface DeliveryVisualConfig {
+interface AcceptanceVisualConfig {
   /** aHash 8×8 汉明距离上限；越小越相似。 */
   phash_hamming_max: number
   /** mean SSIM 下限；越大越相似。 */
@@ -117,7 +117,7 @@ export interface EngineConfigType {
   auto_iteration: boolean
   requirements: RequirementsConfig
   architect: ArchitectConfig
-  delivery_visual: DeliveryVisualConfig
+  acceptance_visual: AcceptanceVisualConfig
   frontend_design: FrontendDesignConfig
   intent_analysis: IntentAnalysisConfig
   build: BuildConfig
@@ -150,7 +150,7 @@ const DEFAULTS: EngineConfigType = {
   architect: {
     max_steps: 1000,
   },
-  delivery_visual: {
+  acceptance_visual: {
     // 经验值基线（ainvest 事故复盘 2026-04-24）。后续用 dev/ accept/reject
     // 样本标定时，改这里即可，其它代码路径不需要改。
     phash_hamming_max: 18,
@@ -242,31 +242,31 @@ function merge(user?: Config.Info["assistant"]): EngineConfigType {
     architect: {
       max_steps: user?.architect?.max_steps ?? DEFAULTS.architect.max_steps,
     },
-    delivery_visual: {
+    acceptance_visual: {
       phash_hamming_max:
-        user?.delivery_visual?.phash_hamming_max ?? DEFAULTS.delivery_visual.phash_hamming_max,
-      ssim_min: user?.delivery_visual?.ssim_min ?? DEFAULTS.delivery_visual.ssim_min,
+        user?.acceptance_visual?.phash_hamming_max ?? DEFAULTS.acceptance_visual.phash_hamming_max,
+      ssim_min: user?.acceptance_visual?.ssim_min ?? DEFAULTS.acceptance_visual.ssim_min,
       chart_region_density_min_ratio:
-        user?.delivery_visual?.chart_region_density_min_ratio ??
-        DEFAULTS.delivery_visual.chart_region_density_min_ratio,
+        user?.acceptance_visual?.chart_region_density_min_ratio ??
+        DEFAULTS.acceptance_visual.chart_region_density_min_ratio,
       unique_color_ratio_min:
-        user?.delivery_visual?.unique_color_ratio_min ??
-        DEFAULTS.delivery_visual.unique_color_ratio_min,
+        user?.acceptance_visual?.unique_color_ratio_min ??
+        DEFAULTS.acceptance_visual.unique_color_ratio_min,
       text_hit_ratio_min:
-        user?.delivery_visual?.text_hit_ratio_min ?? DEFAULTS.delivery_visual.text_hit_ratio_min,
+        user?.acceptance_visual?.text_hit_ratio_min ?? DEFAULTS.acceptance_visual.text_hit_ratio_min,
       score_weights: {
         phash:
-          user?.delivery_visual?.score_weights?.phash ??
-          DEFAULTS.delivery_visual.score_weights.phash,
+          user?.acceptance_visual?.score_weights?.phash ??
+          DEFAULTS.acceptance_visual.score_weights.phash,
         ssim:
-          user?.delivery_visual?.score_weights?.ssim ??
-          DEFAULTS.delivery_visual.score_weights.ssim,
+          user?.acceptance_visual?.score_weights?.ssim ??
+          DEFAULTS.acceptance_visual.score_weights.ssim,
         density:
-          user?.delivery_visual?.score_weights?.density ??
-          DEFAULTS.delivery_visual.score_weights.density,
+          user?.acceptance_visual?.score_weights?.density ??
+          DEFAULTS.acceptance_visual.score_weights.density,
         text_hit:
-          user?.delivery_visual?.score_weights?.text_hit ??
-          DEFAULTS.delivery_visual.score_weights.text_hit,
+          user?.acceptance_visual?.score_weights?.text_hit ??
+          DEFAULTS.acceptance_visual.score_weights.text_hit,
       },
     },
     frontend_design: {

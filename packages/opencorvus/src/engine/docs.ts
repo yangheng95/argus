@@ -1,6 +1,6 @@
 import { mkdirSync, writeFileSync } from "fs"
 import path from "path"
-import type { GoalJudgmentType } from "@/delivery/checks"
+import type { GoalJudgmentType } from "@/acceptance/checks"
 import { Instance } from "@/project/instance"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { Log } from "@/util/log"
@@ -139,7 +139,7 @@ function evaluationText(input: {
   evaluation: Pick<EvaluationRow, "id" | "status" | "verdict" | "summary"> & { checks: Check[] }
   goals: GoalRow[]
   analysis?: GoalJudgmentType
-  delivery?: {
+  acceptance?: {
     summary: string
     diffs: Array<{ file: string }>
   }
@@ -174,11 +174,11 @@ function evaluationText(input: {
     }
   }
 
-  if (input.delivery) {
-    lines.push("", "## Delivery", "", `- Summary: ${input.delivery.summary}`)
-    if (input.delivery.diffs.length > 0) {
+  if (input.acceptance) {
+    lines.push("", "## Acceptance", "", `- Summary: ${input.acceptance.summary}`)
+    if (input.acceptance.diffs.length > 0) {
       lines.push("- Changed Files:")
-      lines.push(...input.delivery.diffs.map((item) => `  - ${item.file}`))
+      lines.push(...input.acceptance.diffs.map((item) => `  - ${item.file}`))
     }
   }
 
@@ -242,7 +242,7 @@ export function writeEvaluationSnapshot(input: {
   evaluation: Pick<EvaluationRow, "id" | "status" | "verdict" | "summary"> & { checks: Check[] }
   goals: GoalRow[]
   analysis?: GoalJudgmentType
-  delivery?: {
+  acceptance?: {
     summary: string
     diffs: Array<{ file: string }>
   }

@@ -4,7 +4,7 @@
  * This is the single read-path the orchestrator LLM uses to see "what's going
  * on." It composes an LLM-readable snapshot from append-only events:
  *   - engine_goal_run (attempt history, immutable)
- *   - engine_iteration (delivery arbiter trajectory)
+ *   - engine_iteration (acceptance arbiter trajectory)
  *   - engine_artifact  (latest verdict payload)
  *   - decision_log     (operator + agent decisions)
  *   - clarifications / operator notes
@@ -38,7 +38,7 @@ import {
   findActivePlanForTask,
   findActiveRunForTask,
   findActiveSpecForTask,
-  findLatestDeliveryVerdictArtifact,
+  findLatestAcceptanceVerdictArtifact,
   findLatestFrontendResearchBriefArtifact,
   findLatestGoalWorkloadArtifact,
   findLatestResearchBriefArtifact,
@@ -76,7 +76,7 @@ export interface GoalAttemptSummary {
   /** FSM status of this particular goal_run row (immutable once terminal). */
   outcome: string
   /** If non-null, this attempt was itself superseded by a newer one — the
-   *  typed reason names why (delivery_rework / manual_retry / modify_contract /
+   *  typed reason names why (acceptance_rework / manual_retry / modify_contract /
    *  restart_stage). Terminal + superseded_reason means "redispatchable." */
   superseded_reason?: string
   superseded_at?: number
@@ -159,7 +159,7 @@ export interface AgentFailureDesc {
   goal_id?: string
 }
 
-export interface DeliveryVerdictDesc {
+export interface AcceptanceVerdictDesc {
   iteration: number
   verdict: string
   summary: string
@@ -213,7 +213,7 @@ export interface TaskDesc {
     fix_count: number
     max_executor_groups: number
   }
-  recent_verdict?: DeliveryVerdictDesc
+  recent_verdict?: AcceptanceVerdictDesc
   /** Recent orchestrator-stream-error artifacts (newest first, capped at
    *  STREAM_FAILURE_PROMPT_CAP). Each entry marks a wake whose LLM stream
    *  aborted before any decision was made. The orchestrator LLM reads this
@@ -419,8 +419,8 @@ function buildCollaborationClosure(goals: GoalDesc[]): CollaborationClosureDesc 
 // Task description
 // ---------------------------------------------------------------------------
 
-function describeVerdict(taskID: string): DeliveryVerdictDesc | undefined {
-  const art = findLatestDeliveryVerdictArtifact(taskID)
+function describeVerdict(taskID: string): AcceptanceVerdictDesc | undefined {
+  const art = findLatestAcceptanceVerdictArtifact(taskID)
   if (!art) return undefined
   const payload = (art.payload ?? {}) as Record<string, unknown>
   const history = readHistory(taskID)
@@ -429,7 +429,7 @@ function describeVerdict(taskID: string): DeliveryVerdictDesc | undefined {
   // structured field; the human-readable issues list is derived from each
   // entry's `.error`, not stored as a separate `issues_found` shadow field.
   const details = Array.isArray(payload.rejection_details)
-    ? (payload.rejection_details as DeliveryVerdictDesc["details"])
+    ? (payload.rejection_details as AcceptanceVerdictDesc["details"])
     : []
   const issues = details.map((d) => (typeof d.error === "string" ? d.error : "")).filter((s) => s.length > 0)
   return {
@@ -682,7 +682,7 @@ export function renderCollaborationClosure(
       "The active goal graph has entered execution. Treat it as the shared collaboration contract, not a scratchpad to re-plan for ordinary shared-file edits.",
     )
     lines.push(
-      "Ordinary collaboration drift belongs in Build `files_changed[]` reports and, when the written contract needs a point correction, `modify_goal`. Architect re-entry is structural re-planning and needs delivery/reference-coverage evidence or an explicit upstream restart.",
+      "Ordinary collaboration drift belongs in Build `files_changed[]` reports and, when the written contract needs a point correction, `modify_goal`. Architect re-entry is structural re-planning and needs acceptance/reference-coverage evidence or an explicit upstream restart.",
     )
   } else {
     lines.push("Execution has not started yet; this is still the planning window.")
@@ -760,7 +760,7 @@ export function renderTaskDescription(desc: TaskDesc, options: { autoIteration?:
   lines.push(
     `Runtime facts: ${desc.budget.runs_used} run(s) recorded, ` +
       `${desc.budget.fix_count} fix attempt(s) on the active run, ` +
-      `${desc.iterations_count} delivery iteration(s), ` +
+      `${desc.iterations_count} acceptance iteration(s), ` +
       `agent_parallelism=${desc.budget.max_executor_groups}.`,
   )
   lines.push(
@@ -797,7 +797,7 @@ export function renderTaskDescription(desc: TaskDesc, options: { autoIteration?:
           `scaffold-level files (\`package.json\`, \`vite.config.ts\`/\`bunfig.toml\`, ` +
           `\`tsconfig.json\`, \`src/main.*\`, \`src/App.*\`); every other goal ` +
           `would inevitably touch those files on its worktree, producing ` +
-          `coordination risk at merge and delivery time. Plan deliberately: ` +
+          `coordination risk at merge and acceptance time. Plan deliberately: ` +
           `dispatch the bootstrap goal first when the scaffold is not yet real, ` +
           `or dispatch another goal only when its prompt and files_changed[] ` +
           `can explain how it cooperates with the shared scaffold milestone.`,
@@ -858,7 +858,7 @@ export function renderTaskDescription(desc: TaskDesc, options: { autoIteration?:
   if (desc.recent_verdict) {
     const v = desc.recent_verdict
     lines.push("")
-    lines.push(`## Latest Delivery Verdict (iteration ${v.iteration})`)
+    lines.push(`## Latest Acceptance Verdict (iteration ${v.iteration})`)
     lines.push(`Verdict: ${v.verdict}`)
     if (v.summary) lines.push(`Summary: ${truncate(v.summary, 800)}`)
     if (v.issues.length > 0) {

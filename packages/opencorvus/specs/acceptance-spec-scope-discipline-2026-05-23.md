@@ -105,7 +105,7 @@ Three reinforcing failures:
    `team-schema.ts:37-38`: `requirementIDs` and `specIDs` default to `[]`.
    `integrity-team-core.txt` line 28-31 says "cite concrete evidence ...
    user request phrases, REQ ids, goal ids, spec ids, file paths, command
-   output, runtime screenshots, or delivery context" — the citation list is
+   output, runtime screenshots, or acceptance context" — the citation list is
    an **OR**, so a finding citing only a file path is valid. Combined with
    "do not use fixed review dimensions" (line 19) and "the original user
    request is the audit source" (line 22-23, where "request" includes the
@@ -216,7 +216,7 @@ Evidence requirements:
   `userRequestQuotes` citing the adjective — do not generate a parade of
   blockers for each maturity sub-aspect.
 - Within scope, still cite concrete evidence (file paths, command output,
-  runtime screenshots, delivery context).
+  runtime screenshots, acceptance context).
 - Do not pass on intent summaries alone.
 - Do not accept grep/listing-only proof when runtime behavior is material.
 - If a potentially blocking disagreement remains unresolved, the final

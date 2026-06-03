@@ -40,10 +40,10 @@ Emit IMMEDIATELY when ANY of these are true:
   when files_changed[] is required, depends_on[] missing when the
   prompt says "those goals are merged into your worktree base".
 - The prompt names an artifact (image, screenshot, reference URL,
-  attachment://<sha>, prior delivery feedback, decision_log entry,
+  attachment://<sha>, prior acceptance feedback, decision_log entry,
   spec line, file path) but the actual payload is absent.
 - The prompt says "previous attempt failed" / "rejection feedback" /
-  "delivery rejection" but no concrete error / failure_class /
+  "acceptance rejection" but no concrete error / failure_class /
   expected_fix / category is provided.
 - You are about to write or call a tool with a value (color,
   dimension, copy text, model ID, env var name, file path, route,

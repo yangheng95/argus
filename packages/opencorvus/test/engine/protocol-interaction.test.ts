@@ -195,7 +195,7 @@ const adapter: ExecutorAdapter = {
       submit: true,
       status: true,
       abort: true,
-      delivery: true,
+      acceptance: true,
       resume: true,
       events: true,
     }
@@ -216,7 +216,7 @@ const adapter: ExecutorAdapter = {
   async abort() {
     return true
   },
-  async delivery() {
+  async acceptance() {
     return {
       summary: "",
       diffs: [],

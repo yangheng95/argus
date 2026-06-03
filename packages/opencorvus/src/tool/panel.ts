@@ -120,7 +120,7 @@ export const PanelTool = Tool.define("panel", {
             `Status: ${board.task.status}`,
             board.overview?.headline,
             board.overview?.summary,
-            board.delivery ? `Delivery: ${board.delivery.summary}` : undefined,
+            board.acceptance ? `Acceptance: ${board.acceptance.summary}` : undefined,
             board.evaluation ? `Evaluation: ${board.evaluation.verdict} — ${board.evaluation.summary}` : undefined,
           ].filter(Boolean).join("\n"),
           metadata: {},
@@ -158,8 +158,8 @@ export const PanelTool = Tool.define("panel", {
               if (board.evaluation) {
                 item.evaluation = { verdict: board.evaluation.verdict, summary: board.evaluation.summary }
               }
-              if (board.delivery) {
-                item.delivery = { summary: board.delivery.summary }
+              if (board.acceptance) {
+                item.acceptance = { summary: board.acceptance.summary }
               }
               if (params.includeChildren) {
                 item.children = findChildrenOfTask(taskID)

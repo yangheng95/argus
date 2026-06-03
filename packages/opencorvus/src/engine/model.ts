@@ -404,7 +404,7 @@ export const Artifact = z.object({
   id: Identifier.schema("artifact"),
   taskID: Identifier.schema("task"),
   runID: Identifier.schema("run"),
-  deliveryID: Identifier.schema("delivery").nullable().optional(),
+  acceptanceID: Identifier.schema("acceptance").nullable().optional(),
   kind: z.enum(["patch", "changed_file", "log", "report", "image", "diff", "link", "git_ref", "pr"]),
   label: z.string(),
   payload: z.record(z.string(), z.any()).optional(),
@@ -414,8 +414,8 @@ export const Artifact = z.object({
   }),
 })
 
-export const Delivery = z.object({
-  id: Identifier.schema("delivery"),
+export const Acceptance = z.object({
+  id: Identifier.schema("acceptance"),
   taskID: Identifier.schema("task"),
   runID: Identifier.schema("run"),
   status: z.enum(["candidate", "publishing", "delivered", "failed"]),
@@ -453,7 +453,7 @@ export const Evaluation = z.object({
   id: Identifier.schema("evaluation"),
   taskID: Identifier.schema("task"),
   runID: Identifier.schema("run"),
-  deliveryID: Identifier.schema("delivery").nullable().optional(),
+  acceptanceID: Identifier.schema("acceptance").nullable().optional(),
   status: z.enum(["pending", "passed", "failed", "inconclusive"]),
   verdict: z.enum(["accepted", "rejected", "inconclusive"]),
   summary: z.string(),
@@ -497,7 +497,7 @@ export const Progress = z.object({
   milestones: Milestone.array().optional(),
   run: Run.optional(),
   pendingInteractions: Interaction.array(),
-  delivery: Delivery.optional(),
+  acceptance: Acceptance.optional(),
   evaluation: Evaluation.optional(),
   snapshots: ProgressSnapshot.array(),
   activeSessions: ActiveSession.array(),
@@ -601,7 +601,7 @@ export const TaskBoardFailure = z.object({
 })
 
 export const TaskBoardNextStep = z.object({
-  kind: z.enum(["resolve_blocker", "retry", "replan", "observe", "review_delivery", "message"]),
+  kind: z.enum(["resolve_blocker", "retry", "replan", "observe", "review_acceptance", "message"]),
   title: z.string(),
   detail: z.string().optional(),
 })
@@ -717,9 +717,9 @@ export const TaskBoardGoalStepPayload = z.object({
   buildSessionID: z.string().optional(),
   commitRef: z.string().optional(),
   changedFiles: z.array(z.string()).optional(),
-  /** Per-file diff stats sourced from the goal_run delivery row. Carries
+  /** Per-file diff stats sourced from the goal_run acceptance row. Carries
    *  additions/deletions/status so the overlay's ChangesPanel renders
-   *  +N/-N immediately from the board payload — no second `goal-run/<id>/delivery`
+   *  +N/-N immediately from the board payload — no second `goal-run/<id>/acceptance`
    *  fetch needed (rule 22: single source for the per-file numbers).
    *  Sibling to `changedFiles`; one row per file in the same order. */
   changedFileDiffs: z
@@ -828,9 +828,9 @@ export const TaskBoard = z.object({
   spec: SpecSnapshot.optional(),
   plan: PlanVersion.optional(),
   run: Run.optional(),
-  delivery: Delivery.optional(),
-  candidateDelivery: Delivery.optional(),
-  acceptedDelivery: Delivery.optional(),
+  acceptance: Acceptance.optional(),
+  candidateAcceptance: Acceptance.optional(),
+  acceptedAcceptance: Acceptance.optional(),
   evaluation: Evaluation.optional(),
   interactions: Interaction.array(),
   channels: TaskChannelBinding.array(),
@@ -853,7 +853,7 @@ export const TaskBoard = z.object({
   /** Task-level rollup of every quality criterion that touched this task —
    *  per-goal evaluator outcomes, integrity acceptance review, and external
    *  quality gates (e.g. visual-diff). Persisted in engine_task.criteria_results
-   *  and exposed here so the overlay's EvaluationCriteriaPanel and the delivery
+   *  and exposed here so the overlay's EvaluationCriteriaPanel and the acceptance
    *  agent's `query_criteria` tool both read from the same place. */
   criteriaResults: EvaluationCheck.array().optional(),
 })
@@ -1087,12 +1087,12 @@ export const RunMetrics = z.object({
   feature_coverage_p0: z.number(),
   scope_drift_score: z.number(),
   plan_to_change_traceability: z.number(),
-  delivery_focus_score: z.number(),
+  acceptance_focus_score: z.number(),
 })
 
-export type AgentStageType = "assistant" | "requirements" | "spec" | "goal" | "architect" | "evaluator" | "delivery"
+export type AgentStageType = "assistant" | "requirements" | "spec" | "goal" | "architect" | "evaluator" | "acceptance"
 
-export const ReviewStreamPhase = z.enum(["integrity", "delivery"])
+export const ReviewStreamPhase = z.enum(["integrity", "acceptance"])
 export const ReviewStreamStep = z.enum(["manifest", "runtime", "visual", "specialist", "agent", "post_repair"])
 
 export const Event = {
@@ -1254,12 +1254,12 @@ export const Event = {
       summary: z.string(),
     }),
   ),
-  DeliveryReady: BusEvent.define(
-    "delivery.ready",
+  AcceptanceReady: BusEvent.define(
+    "acceptance.ready",
     z.object({
       taskID: Identifier.schema("task"),
       runID: Identifier.schema("run"),
-      deliveryID: Identifier.schema("delivery"),
+      acceptanceID: Identifier.schema("acceptance"),
       summary: z.string(),
     }),
   ),
@@ -1408,12 +1408,12 @@ export const Event = {
    *  can chip-render REQ-N / acc-* references and downstream consumers can
    *  navigate from a fidelity issue to the failing REQ row or acceptance spec
    *  surfaced post-build by the Requirement Status Snapshot. */
-  DeliveryEvidenceUpdated: BusEvent.define(
-    "delivery.evidence.updated",
+  AcceptanceEvidenceUpdated: BusEvent.define(
+    "acceptance.evidence.updated",
     z.object({
       taskID: Identifier.schema("task"),
       runID: Identifier.schema("run").optional(),
-      deliveryID: Identifier.schema("delivery"),
+      acceptanceID: Identifier.schema("acceptance"),
       manifestID: Identifier.schema("artifact"),
       iteration: z.number(),
       status: z.enum(["passed", "failed"]),

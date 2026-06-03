@@ -71,7 +71,7 @@
 |------|------|
 | `packages/opencorvus/src/engine/persist.ts` `recordIntegrityAttempt` | `perDimension: Array<{ id: string; ... }>` 已 string-typed，无代码改动；注释行 1807 字面量改名 |
 | `packages/opencorvus/src/engine/store.ts` `findLatestIntegrityAttemptArtifact` | 无 |
-| `packages/opencorvus/src/delivery/checks/project-gate.ts` | 无（按 kind 检索，不依赖 dimension id） |
+| `packages/opencorvus/src/acceptance/checks/project-gate.ts` | 无（按 kind 检索，不依赖 dimension id） |
 
 ### 1.6 测试（mock 改名 + 新增）
 
@@ -80,8 +80,8 @@ mock 改名（仅替换字面量）：
 - `packages/opencorvus/test/orchestrator/tools.test.ts` 行 177, 1002, 1109, 1346, 1442, 1580, 1740, 1922, 1984, 2054, 2072, 2139, 2157, 2251, 2413, 2503
 - `packages/opencorvus/test/server/task-conversation-routes.test.ts` line 61
 - `packages/opencorvus/test/engine/workflow-integrity-step.test.ts` 行 138, 202, 270
-- `packages/opencorvus/test/delivery/project-gate.test.ts` line 1013
-- `packages/opencorvus/test/benchmark/delivery-runtime-flow-benchmark.test.ts` line 187
+- `packages/opencorvus/test/acceptance/project-gate.test.ts` line 1013
+- `packages/opencorvus/test/benchmark/acceptance-runtime-flow-benchmark.test.ts` line 187
 - `packages/overlay/test/tree-writer-hierarchy.test.ts` 行 593, 607
 - `packages/opencorvus/test/integrity/tool-payload-budget.test.ts` 重测 schema 字符数（新增 `requirement_ids` 字段对单维度 schema 的字符数影响 < 200B，不会越 990k 阈值，但要落新 baseline）
 
@@ -116,7 +116,7 @@ mock 改名（仅替换字面量）：
 9. **跑 codegen**：`bun run docs:api` → 重生 openapi + sdk types。
 10. **typecheck**：`cd packages/opencorvus && bun run typecheck`，`cd packages/overlay && bun run typecheck`。
 11. **靶向测试**（rule 21、no_bun_test）：
-    - `bun test packages/opencorvus/test/integrity packages/opencorvus/test/orchestrator/tools.test.ts packages/opencorvus/test/engine/workflow-integrity-step.test.ts packages/opencorvus/test/delivery/project-gate.test.ts packages/opencorvus/test/server/task-conversation-routes.test.ts`
+    - `bun test packages/opencorvus/test/integrity packages/opencorvus/test/orchestrator/tools.test.ts packages/opencorvus/test/engine/workflow-integrity-step.test.ts packages/opencorvus/test/acceptance/project-gate.test.ts packages/opencorvus/test/server/task-conversation-routes.test.ts`
     - `cd packages/overlay && bun test test/tree-writer-hierarchy.test.ts`
 12. **api:routes-check + docs:check**（pre-push hook 会自动跑，不绕 hook — rule 33）。
 13. **DB reset + 一次 bench dry-run** 验真：`cd packages/opencorvus && OPENCORVUS_DISABLE_DEFAULT_PLUGINS=1 ... bun run script/benchmark/overlay-web-benchmark.ts --executor=opencorvus`，确认 overlay 正常显示新维度名 + REQ-id chip。
@@ -322,7 +322,7 @@ Pre-build 阶段 `requirementStatus` 自然为空数组（无 goal_run / 无 evi
 - §1.5 表追加 `session.sql.ts` line 35 注释字面量改名一行。
 - §1.6 mock 列表追加 `test/integrity/apply-corrections.test.ts` — 仅类型导入，无字面量改动；但若 §6.4 决定收口 implicit_dependency_missing，则保持原样。
 
-**[codex #2]** `packages/opencorvus/src/orchestrator/tools.ts:152-158` 的 `renderIntegrityMarkdown` 只渲染 `goalIDs` + `evidence`，新增的 `requirement_ids` / `spec_ids` 会在 markdown 里被丢弃，而 markdown 是 orchestrator + delivery 读 review 的主路径。
+**[codex #2]** `packages/opencorvus/src/orchestrator/tools.ts:152-158` 的 `renderIntegrityMarkdown` 只渲染 `goalIDs` + `evidence`，新增的 `requirement_ids` / `spec_ids` 会在 markdown 里被丢弃，而 markdown 是 orchestrator + acceptance 读 review 的主路径。
 **修订**：§1.2 `orchestrator/tools.ts` 行追加修改：`renderIntegrityMarkdown` 在 issue 行后加 `req=[REQ-N,...]` 与 `specs=[acc-...,...]` 两个可选段，与 `goal_ids=[...]` 并列。
 
 **[codex #3]** `packages/overlay/src/styles/surfaces/inspector.css:1718` 列举了 issue `data-type` 选择器，新增 issue type 没 CSS → 渲染无样式。
@@ -348,11 +348,11 @@ Pre-build 阶段 `requirementStatus` 自然为空数组（无 goal_run / 无 evi
 ### 6.4 状态/时序 gap
 
 **[codex #8] post-build integrity 会被 pre-build 的 attempt 跳过。**
-`project-gate.ts:332` + `orchestrator/tools.ts:3631` 的 `findLatestIntegrityAttemptArtifact` 只按 `(taskID, kind=integrity_attempt, payload.spec_snapshot_id)` 检索，不区分 pre-build vs post-build。一次 pre-build 通过的 attempt 会被 delivery gate 当作"已审"，post-build 永远不重跑。
-**修订**：在 attempt payload 加 `phase: "pre_build" | "post_build"` 字段（`recordIntegrityAttempt` 输入加 `phase` 必填）。`buildReviewEvidence` (project-gate.ts) 与 `findLatestIntegrityAttemptArtifact`（store.ts）都按 phase 过滤；`runIntegrityReviewOnce` 自己依据上下文（是否存在 tip goal_run with completed/failed status）决定本次 phase。delivery 阶段必须看到一个 `phase=post_build` 且新于最近 tip goal_run completion 的 attempt 才算 "已审"。
+`project-gate.ts:332` + `orchestrator/tools.ts:3631` 的 `findLatestIntegrityAttemptArtifact` 只按 `(taskID, kind=integrity_attempt, payload.spec_snapshot_id)` 检索，不区分 pre-build vs post-build。一次 pre-build 通过的 attempt 会被 acceptance gate 当作"已审"，post-build 永远不重跑。
+**修订**：在 attempt payload 加 `phase: "pre_build" | "post_build"` 字段（`recordIntegrityAttempt` 输入加 `phase` 必填）。`buildReviewEvidence` (project-gate.ts) 与 `findLatestIntegrityAttemptArtifact`（store.ts）都按 phase 过滤；`runIntegrityReviewOnce` 自己依据上下文（是否存在 tip goal_run with completed/failed status）决定本次 phase。acceptance 阶段必须看到一个 `phase=post_build` 且新于最近 tip goal_run completion 的 attempt 才算 "已审"。
 - §1.5 追加 `engine/persist.ts recordIntegrityAttempt` 加 `phase` 字段；`findLatestIntegrityAttemptArtifact` 加 `phase` 参数。
-- §1.5 追加 `delivery/checks/project-gate.ts:332` 改逻辑（按 phase + freshness 过滤）。
-- §1.6 追加测试："pre-build integrity attempt does not satisfy post-build delivery gate"。
+- §1.5 追加 `acceptance/checks/project-gate.ts:332` 改逻辑（按 phase + freshness 过滤）。
+- §1.6 追加测试："pre-build integrity attempt does not satisfy post-build acceptance gate"。
 
 **[codex #9] §5.5 (pre-build 空) vs §5.9 (no goal_run → unstarted) 表述自相矛盾。**
 **修订**：澄清规则 — `computeRequirementStatusSnapshot` 永远走完整 join，但只有当至少一个 REQ 的 claiming goal 存在 goal_run 行（任意状态）时才返回非空数组；否则返回 `[]`。`buildIntegrityPrompt` 仅在数组非空时插入 `# Requirement Status Snapshot` 段。"no goal_run → unstarted" 描述的是数组非空但某些 goal 没跑过的情形（混合状态）。修在 §5.2 文字里。
@@ -366,7 +366,7 @@ Pre-build 阶段 `requirementStatus` 自然为空数组（无 goal_run / 无 evi
 - retry / superseded 场景下，snapshot 取 tip run evidence、不被旧 run 污染。
 - claiming goals 全 fail → snapshot 显示 essential spec failed=true；prompt 给 LLM 后 LLM 输出 `partial` verdict（agent 集成测试用 mock LLM）。
 - 多 claiming goals 混合 pass/fail → snapshot 列每个 goal 各自的 specOutcomes；不在 host 做 OR 聚合。
-- pre-build phase attempt 不通过 post-build delivery gate（project-gate 集成测试）。
+- pre-build phase attempt 不通过 post-build acceptance gate（project-gate 集成测试）。
 - snapshot 为 `[]` 时，prompt 不渲染 `# Requirement Status Snapshot` 标题（避免空标题）。
 
 ### 6.6 对 §0~§5 的最终增量

@@ -2,14 +2,14 @@
 
 > 对应代码：`src/orchestrator/` · `src/engine/` · `src/agent/` · `src/requirements/` ·
 > `src/architect/` · `src/build/` · `src/frontend-design/` · `src/intent-analysis/` ·
-> `src/integrity/` · `src/prosecutor/` · `src/delivery/` · `src/delivery/checks/` ·
+> `src/integrity/` · `src/prosecutor/` · `src/acceptance/` · `src/acceptance/checks/` ·
 > `src/executor/` · `src/goal/runner.ts` · `src/task-api/` · `src/control/` ·
 > `src/channel/` · `src/decision-log/`
 >
 > 注（2026-05-11 状态）：旧 `src/pipeline/` 仅保留 `goal-contract.schema.ts` + `types.ts`
 > 两个 schema 文件，运行时代码全部迁走；`src/engine/goal-pool.ts` / `src/pipeline/executor.ts`
-> 已在 Phase 5 删除；`src/planner/` 整目录删除（不再有 per-goal planner agent，session 级的
-> `src/tool/planner.ts` 是 working-memory + scratchpad 工具，与旧 planner agent 完全不同）；
+> 已在 Phase 5 删除；the removed planning package 整目录删除（不再有 per-goal planning tool role，session 级的
+> `src/tool/planner.ts` 是 working-memory + scratchpad 工具，与旧 planning tool role 完全不同）；
 > `src/decompose/` 已删除，需求分解逻辑统一落在 `src/requirements/`。
 
 ## 核心原则
@@ -74,7 +74,7 @@ orchestrator/loop.ts — runTaskLoop()
 │  Decision Point (Orchestrator LLM)          │
 │    触发 kind:                               │
 │      created / batch_complete /             │
-│      delivery_rejected / retry              │
+│      acceptance_rejected / retry              │
 │    读 engine_* 全量 + decision-log          │
 │    推理：调 sub-agent? 重试? 加 goal?       │
 │           交付? 终止?                       │
@@ -99,7 +99,7 @@ orchestrator/loop.ts — runTaskLoop()
                           │
                           ▼
         ┌─────────────────────────┐
-        │  Checks                 │  delivery/checks/
+        │  Checks                 │  acceptance/checks/
         │  deterministic runner   │  discovery / visual /
         │  + LLM judge            │  content-fingerprint /
         │                         │  runtime-evidence / types
@@ -109,7 +109,7 @@ orchestrator/loop.ts — runTaskLoop()
               回到 Decision Point
 ```
 
-**Loop 触发**：早期版本使用 `trigger.kind ∈ {created, batch_complete, delivery_rejected, retry}` 枚举，已在 Phase 2 移除。当前 `runTaskLoop` 接受任意自由形式事件，由 LLM 读 `engine_*` + decision-log 事实后自行判断（参见 [15-no-fsm.md](15-no-fsm.md)）。
+**Loop 触发**：早期版本使用 `trigger.kind ∈ {created, batch_complete, acceptance_rejected, retry}` 枚举，已在 Phase 2 移除。当前 `runTaskLoop` 接受任意自由形式事件，由 LLM 读 `engine_*` + decision-log 事实后自行判断（参见 [15-no-fsm.md](15-no-fsm.md)）。
 
 **Loop 消灭的旧机制**（不要再引入）：
 
@@ -137,12 +137,12 @@ orchestrator/loop.ts — runTaskLoop()
 > 任务树，**不是** 旧 per-goal planner 的替代。pipeline 流程里 "per-goal 实现步骤" 的职责
 > 已归并到 build agent 自身（结合 architect 写的 contract）。
 
-**Delivery agent 已删除**：最终验收归属 `integrity`，运行时截图证据归属 Build；旧 delivery tool/service surface 不再存在。
+**Acceptance review 已删除**：最终验收归属 `integrity`，运行时截图证据归属 Build；旧 acceptance tool/service surface 不再存在。
 
-**`orchestrator/tools.ts` 当前导出 22 个 tool**（2026-05-18，下面按职责分组；文件内的实际出现顺序为 `requirements` · `frontend_design` · `architect` · `integrity` · `prosecute` · `analyze_intent` · `modify_goal` · `query_failed_goals` · `read_context` · `fail_task` · `cancel_task` · `retry_task` · `inject_operator_message` · `steer_subagent` · `cancel_subagent` · `restart_from_stage` · `deliver` · `publish_delivery` · `refine` · `question` · `propose_task` · `build`）：
+**`orchestrator/tools.ts` 当前导出 22 个 tool**（2026-05-18，下面按职责分组；文件内的实际出现顺序为 `requirements` · `frontend_design` · `architect` · `integrity` · `prosecute` · `analyze_intent` · `modify_goal` · `query_failed_goals` · `read_context` · `fail_task` · `cancel_task` · `retry_task` · `inject_operator_message` · `steer_subagent` · `cancel_subagent` · `restart_from_stage` · `deliver` · `publish_acceptance` · `refine` · `question` · `propose_task` · `build`）：
 
 1. **Stage 调用**：`requirements`、`frontend_design`、`frontend_research`、`architect`、`build`、`deliver`
-2. **Post-delivery artifact export**：`publish_delivery`（不决定 task lifecycle；accepted `deliver` 已完成 task）
+2. **Post-acceptance artifact export**：`publish_acceptance`（不决定 task lifecycle；accepted `deliver` 已完成 task）
 3. **审查 / 复核**：`integrity`（integrity reviewer）、`prosecute`（prosecutor）、`analyze_intent`
 4. **Goal 维护**：`modify_goal`、`query_failed_goals`
 5. **状态 / 上下文**：`read_context`
@@ -152,7 +152,7 @@ orchestrator/loop.ts — runTaskLoop()
 7. **用户交互**：`question`
 8. **任务繁衍**：`propose_task`（拟新建关联任务，需用户确认后才落 `EngineService.createTask`）
 
-**Planner agent 已删除**，因此 orchestrator 也没有 `planner` tool。pipeline build 路径里 "per-goal 实现步骤" 的旧 `planGoal()` 入口随同 `engine/goal-pool.ts` 一起删掉了；现在 build agent 直接读 architect contract + decision-log 自行推进。
+**Planning tool role 已删除**，因此 orchestrator 也没有 `planner` tool。pipeline build 路径里 "per-goal 实现步骤" 的旧 `planGoal()` 入口随同 `engine/goal-pool.ts` 一起删掉了；现在 build agent 直接读 architect contract + decision-log 自行推进。
 
 `panel` control-plane tool **不**属于 orchestrator。Gateway 入口独占 panel capability action；orchestrator 只能通过自身的 workflow / task-control tools 推进任务。
 
@@ -175,7 +175,7 @@ Executor 是**外部**进程，不属于 Agent Team：
 - `executor/opencode.ts`
 - 共享层：`bootstrap.ts` · `contract.ts` · `discovery.ts` · `external-process.ts` · `managed.ts` · `registry.ts` · `runtime-env.ts`
 
-注册到 `executor/registry.ts`，由 `goal/runner.ts` 在 worktree 内隔离执行，产出 delivery diff。
+注册到 `executor/registry.ts`，由 `goal/runner.ts` 在 worktree 内隔离执行，产出 acceptance diff。
 （旧 `pipeline/executor.ts` 已删除；编排层已并入 build tool + goal/runner.ts。）
 
 ## EngineService 入口一览

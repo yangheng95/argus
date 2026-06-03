@@ -56,7 +56,7 @@ state is `cardTreeStore`.
 3. Hydration, reconnect, and replay-expired recovery must rebuild the visible
    `cardTreeStore`, not only the legacy `messages` store.
 4. Board refreshes must be reserved for board-owned data: task metadata,
-   goal workflows, interactions, files, changes, and delivery state.
+   goal workflows, interactions, files, changes, and acceptance state.
 5. Expanded cards must not run recursive activity/todo/preview scans.
 6. Collapsed cards may compute collapsed summaries, because the collapsed body
    is hidden and the summary is the visible representation.
@@ -153,7 +153,7 @@ that classifies events explicitly:
   `message.part.delta`, and converted text/tool/reasoning output that only
   affects `cardTreeStore`
 - board refresh: task lifecycle, goal workflow, interaction, file/change,
-  delivery, replay, sequence gap, and executor status/progress subtypes that
+  acceptance, replay, sequence gap, and executor status/progress subtypes that
   are proven to update board-owned data
 - unknown board-impacting subtype: throw or add an explicit mapping; do not
   silently treat it as "probably no refresh"
@@ -163,7 +163,7 @@ Keep board refresh for events that affect board-owned data:
 - task lifecycle changes
 - goal workflow changes
 - interaction changes
-- file/change/delivery snapshot changes
+- file/change/acceptance snapshot changes
 - explicit replay expiration or sequence gap recovery
 
 For sequence gaps, use selected-task hydration as the recovery path, because a

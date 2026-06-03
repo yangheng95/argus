@@ -29,13 +29,13 @@ Line-count requirement: this file intentionally exceeds 1000 lines.
 - GLOSSARY-018 CodeMirror: CodeMirror 6，成熟代码编辑器组件，用于文件编辑器而不是手写 textarea 编辑体验。
 - GLOSSARY-019 Virtua: virtua/solid，虚拟列表库，用于长会话、日志和文件树的大列表渲染。
 - GLOSSARY-020 Worktree: Git 工作树，用于每个目标或任务隔离执行文件改动。
-- GLOSSARY-021 Artifact: engine_artifact，append-only 运行期产物记录，是 run、goal_run_attempt、delivery、verification evidence 等的单一来源。
+- GLOSSARY-021 Artifact: engine_artifact，append-only 运行期产物记录，是 run、goal_run_attempt、acceptance、verification evidence 等的单一来源。
 - GLOSSARY-022 Mission: OpenCorvus 长运行目标和外部 channel 的控制页面模式，和 Panel 共用 overlay shell。
 - GLOSSARY-023 Panel: 默认工作台页面模式，包含任务列表、对话、composer、右侧 Explorer/Files/Inspector。
 - GLOSSARY-024 Composer: 消息输入区，负责发送用户自然语言、附件和 web search 参数。
 - GLOSSARY-025 Inspector: 右侧检查面板，展示 Requirements、Architect、Goals、Evaluation、Trace 等任务结构化信息。
 - GLOSSARY-026 Explorer: 右侧文件浏览器，使用 project-scoped file API 懒加载目录并打开文件编辑器。
-- GLOSSARY-027 Files: 右侧文件变化面板，展示 delivery 投影出的 changedFiles、diffs、commitRef 和 diff stats。
+- GLOSSARY-027 Files: 右侧文件变化面板，展示 acceptance 投影出的 changedFiles、diffs、commitRef 和 diff stats。
 - GLOSSARY-028 Diagnostics: 诊断信息，指 API error、runtime error、log、health、debug blob 和 notification 等可定位问题的数据。
 - GLOSSARY-029 Fallback: 备用兼容路径，本 PRD 禁止将 fallback 作为产品方案，错误必须显式暴露并修根因。
 
@@ -57,7 +57,7 @@ Line-count requirement: this file intentionally exceeds 1000 lines.
 - SCOPE-003 默认 mode 是 Panel，body[data-page-mode='panel'] 下显示工作台三栏。
 - SCOPE-004 Mission mode 与 Panel mode 并列挂载，不卸载 Panel，以保留选中任务和对话状态。
 - SCOPE-005 右侧 panel tab 的默认值是 Explorer。
-- SCOPE-006 Files tab 是 delivery file projection，不是本地文件浏览器。
+- SCOPE-006 Files tab 是 acceptance file projection，不是本地文件浏览器。
 - SCOPE-007 Inspector tab 是任务结构化状态，不是通用设置中心。
 - SCOPE-008 File editor 是 conversation sidecar，不是 right panel 内部 tab。
 - SCOPE-009 Workspace panel 是 diff/workspace 底部区域，不是持久文件编辑器。
@@ -107,7 +107,7 @@ Line-count requirement: this file intentionally exceeds 1000 lines.
 - USER-GOAL-004 在任务卡住时知道是等待权限、等待用户输入、LLM stream stall、server error、directory missing 还是 connection failure。
 - USER-GOAL-005 在交付完成后查看 changed files、diff、commit reference、evaluation 和 follow-up suggestion。
 - USER-GOAL-006 打开项目文件，搜索文件，编辑文本文件，并通过 project-scoped API 保存。
-- USER-GOAL-007 从 right inspector 检查需求、架构、目标、trace、review 和 delivery evidence。
+- USER-GOAL-007 从 right inspector 检查需求、架构、目标、trace、review 和 acceptance evidence。
 - USER-GOAL-008 从 titlebar 进入 settings、providers、models、tools、view、diagnostics 和 log viewer。
 - USER-GOAL-009 在 Mission mode 中查看 Mission records、启动或恢复 Mission、查看 channel runtime。
 - USER-GOAL-010 在桌面 overlay 中完成窗口控制、编辑器启动、terminal 启动和 coding CLI 启动。
@@ -115,7 +115,7 @@ Line-count requirement: this file intentionally exceeds 1000 lines.
 ## 6. 非目标
 - NON-GOAL-001 不把 Overlay 变成营销 landing page。
 - NON-GOAL-002 不把 Mission ledger 重新复用 TaskList。
-- NON-GOAL-003 不在前端合成 task、Mission、delivery 或 conversation 的影子数据。
+- NON-GOAL-003 不在前端合成 task、Mission、acceptance 或 conversation 的影子数据。
 - NON-GOAL-004 不为错误状态提供静默 fallback。
 - NON-GOAL-005 不引入 route bypass、flow gate 或状态机式用户引导。
 - NON-GOAL-006 不把 file editor 做成独立 IDE 的全部功能。
@@ -217,7 +217,7 @@ Line-count requirement: this file intentionally exceeds 1000 lines.
 - SURFACE-028 File editor must save through PATCH /file/content.
 - SURFACE-029 File editor must use CodeMirror for editable text.
 - SURFACE-030 File editor binary state must be non-editable and explicit.
-- SURFACE-031 Files tab must use delivery projection from board goal workflows.
+- SURFACE-031 Files tab must use acceptance projection from board goal workflows.
 - SURFACE-032 Diff view must use the diff package instead of handwritten LCS.
 - SURFACE-033 Inspector must render board-owned structured task sections.
 - SURFACE-034 Goal edit must open GoalDialog.
@@ -288,7 +288,7 @@ Line-count requirement: this file intentionally exceeds 1000 lines.
 - STATE-VISIBILITY-001 No directory selected must show workspace onboarding or explicit directory required.
 - STATE-VISIBILITY-002 No tasks must show empty recent chats.
 - STATE-VISIBILITY-003 No active task must show start/select prompt.
-- STATE-VISIBILITY-004 No delivery files must show no files changed.
+- STATE-VISIBILITY-004 No acceptance files must show no files changed.
 - STATE-VISIBILITY-005 No Explorer children must show empty directory.
 - STATE-VISIBILITY-006 No Explorer search results must show no matching files.
 - STATE-VISIBILITY-007 No selected file must show file editor empty.
@@ -330,11 +330,11 @@ Line-count requirement: this file intentionally exceeds 1000 lines.
 
 ## 16. User journeys
 - JOURNEY-001 Create task: user chooses workspace, clicks New Chat, enters request, sends, sees ledger row, watches conversation stream, checks Inspector, reviews Files diff, and follows up.
-- JOURNEY-002 Diagnose stuck task: user checks pending interactions, last unfinished card, goal workflow, Files delivery, LogViewer, task debug blob, project-scoped probes, SQL templates, and then retries, replans, cancels, or reports the exact bug.
+- JOURNEY-002 Diagnose stuck task: user checks pending interactions, last unfinished card, goal workflow, Files acceptance, LogViewer, task debug blob, project-scoped probes, SQL templates, and then retries, replans, cancels, or reports the exact bug.
 - JOURNEY-003 Browse and edit file: user opens Explorer, expands directory, searches file, opens text file, edits in CodeMirror, saves through PATCH /file/content, sees dirty clear or explicit error.
 - JOURNEY-004 Run Mission: user opens Mission, searches Mission records, selects a Mission row, hydrates session conversation, sends follow-up, wakes Mission, refreshes list, and returns to Panel with state preserved.
 - JOURNEY-005 Recover from startup failure: user sees notification/connection diagnostics, opens logs, reads concrete failing operation, fixes config or server, and reloads without guessing from empty screens.
-- JOURNEY-006 Review delivery: user opens Files tab, clicks changed file, inspects diff, compares with Requirements and Evaluation, and confirms commitRef and diffStats before accepting.
+- JOURNEY-006 Review acceptance: user opens Files tab, clicks changed file, inspects diff, compares with Requirements and Evaluation, and confirms commitRef and diffStats before accepting.
 - JOURNEY-007 Change workspace: user selects recent directory, project-scoped resources refresh, task list changes, Explorer resets, and old project data is not shown as current.
 - JOURNEY-008 Respond to pending interaction: user sees pending interaction card/dialog, replies or rejects, board refreshes, and task resumes from server state.
 - JOURNEY-009 Use titlebar settings: user opens provider/model/tool/channel configuration, sees load errors, saves through real APIs, and returns to workbench without losing task selection.
@@ -784,7 +784,7 @@ Line-count requirement: this file intentionally exceeds 1000 lines.
 - REQ-RIGHT-003 Explorer search: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
 - REQ-RIGHT-004 Explorer virtualization: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
 - REQ-RIGHT-005 file selection: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
-- REQ-RIGHT-006 Files delivery projection: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
+- REQ-RIGHT-006 Files acceptance projection: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
 - REQ-RIGHT-007 diff open: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
 - REQ-RIGHT-008 Inspector board: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
 - REQ-RIGHT-009 goal workflow: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
@@ -796,7 +796,7 @@ Line-count requirement: this file intentionally exceeds 1000 lines.
 - REQ-RIGHT-015 Explorer search: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
 - REQ-RIGHT-016 Explorer virtualization: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
 - REQ-RIGHT-017 file selection: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
-- REQ-RIGHT-018 Files delivery projection: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
+- REQ-RIGHT-018 Files acceptance projection: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
 - REQ-RIGHT-019 diff open: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
 - REQ-RIGHT-020 Inspector board: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
 - REQ-RIGHT-021 goal workflow: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
@@ -808,7 +808,7 @@ Line-count requirement: this file intentionally exceeds 1000 lines.
 - REQ-RIGHT-027 Explorer search: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
 - REQ-RIGHT-028 Explorer virtualization: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
 - REQ-RIGHT-029 file selection: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
-- REQ-RIGHT-030 Files delivery projection: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
+- REQ-RIGHT-030 Files acceptance projection: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
 - REQ-RIGHT-031 diff open: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
 - REQ-RIGHT-032 Inspector board: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
 - REQ-RIGHT-033 goal workflow: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
@@ -820,7 +820,7 @@ Line-count requirement: this file intentionally exceeds 1000 lines.
 - REQ-RIGHT-039 Explorer search: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
 - REQ-RIGHT-040 Explorer virtualization: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
 - REQ-RIGHT-041 file selection: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
-- REQ-RIGHT-042 Files delivery projection: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
+- REQ-RIGHT-042 Files acceptance projection: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
 - REQ-RIGHT-043 diff open: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
 - REQ-RIGHT-044 Inspector board: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
 - REQ-RIGHT-045 goal workflow: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
@@ -832,7 +832,7 @@ Line-count requirement: this file intentionally exceeds 1000 lines.
 - REQ-RIGHT-051 Explorer search: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
 - REQ-RIGHT-052 Explorer virtualization: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
 - REQ-RIGHT-053 file selection: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
-- REQ-RIGHT-054 Files delivery projection: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
+- REQ-RIGHT-054 Files acceptance projection: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
 - REQ-RIGHT-055 diff open: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
 - REQ-RIGHT-056 Inspector board: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
 - REQ-RIGHT-057 goal workflow: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
@@ -844,7 +844,7 @@ Line-count requirement: this file intentionally exceeds 1000 lines.
 - REQ-RIGHT-063 Explorer search: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
 - REQ-RIGHT-064 Explorer virtualization: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
 - REQ-RIGHT-065 file selection: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
-- REQ-RIGHT-066 Files delivery projection: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
+- REQ-RIGHT-066 Files acceptance projection: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
 - REQ-RIGHT-067 diff open: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
 - REQ-RIGHT-068 Inspector board: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
 - REQ-RIGHT-069 goal workflow: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
@@ -856,7 +856,7 @@ Line-count requirement: this file intentionally exceeds 1000 lines.
 - REQ-RIGHT-075 Explorer search: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
 - REQ-RIGHT-076 Explorer virtualization: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
 - REQ-RIGHT-077 file selection: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
-- REQ-RIGHT-078 Files delivery projection: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
+- REQ-RIGHT-078 Files acceptance projection: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
 - REQ-RIGHT-079 diff open: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
 - REQ-RIGHT-080 Inspector board: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
 - REQ-RIGHT-081 goal workflow: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
@@ -868,7 +868,7 @@ Line-count requirement: this file intentionally exceeds 1000 lines.
 - REQ-RIGHT-087 Explorer search: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
 - REQ-RIGHT-088 Explorer virtualization: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
 - REQ-RIGHT-089 file selection: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
-- REQ-RIGHT-090 Files delivery projection: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
+- REQ-RIGHT-090 Files acceptance projection: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
 - REQ-RIGHT-091 diff open: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
 - REQ-RIGHT-092 Inspector board: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
 - REQ-RIGHT-093 goal workflow: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
@@ -880,7 +880,7 @@ Line-count requirement: this file intentionally exceeds 1000 lines.
 - REQ-RIGHT-099 Explorer search: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
 - REQ-RIGHT-100 Explorer virtualization: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
 - REQ-RIGHT-101 file selection: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
-- REQ-RIGHT-102 Files delivery projection: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
+- REQ-RIGHT-102 Files acceptance projection: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
 - REQ-RIGHT-103 diff open: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
 - REQ-RIGHT-104 Inspector board: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
 - REQ-RIGHT-105 goal workflow: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
@@ -892,7 +892,7 @@ Line-count requirement: this file intentionally exceeds 1000 lines.
 - REQ-RIGHT-111 Explorer search: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
 - REQ-RIGHT-112 Explorer virtualization: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
 - REQ-RIGHT-113 file selection: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
-- REQ-RIGHT-114 Files delivery projection: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
+- REQ-RIGHT-114 Files acceptance projection: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
 - REQ-RIGHT-115 diff open: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
 - REQ-RIGHT-116 Inspector board: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
 - REQ-RIGHT-117 goal workflow: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.

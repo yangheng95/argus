@@ -69,10 +69,10 @@ function integrityReviewCompletedPayload(input: { taskID: string; sessionID: str
         openQuestions: [],
       },
       {
-        reviewerID: "delivery_surface",
-        scope: "Delivery surface",
+        reviewerID: "acceptance_surface",
+        scope: "Acceptance surface",
         verdict: "pass" as const,
-        summary: "Delivery remains covered.",
+        summary: "Acceptance remains covered.",
         evidence: ["The replayed event preserves emittedAt fidelity."],
         findings: [],
         openQuestions: [],

@@ -24,11 +24,11 @@
            channel · command · skills · plugin · prompt · instructions ·
            username · locale
 
-assistant: requirements{} · architect{} · delivery{} · delivery_visual{} ·
+assistant: requirements{} · architect{} · acceptance{} · acceptance_visual{} ·
            frontend_design{} · intent_analysis{} · build{} · activity{} · debug{} ·
            default_workflow · workflows[] · max_executor_groups
            每个 agent 子项的形状是 agent 特化的（例如 build 只有 max_steps + skills；
-           delivery 多一个 max_retries；delivery_visual 全是数值硬门槛阈值）——
+           acceptance 多一个 max_retries；acceptance_visual 全是数值硬门槛阈值）——
            没有统一的 max_steps/timeout_ms/quality_threshold/max_attempts/skills 模板。
 
 experimental: auto_question · batch_tool · disable_paste_summary · continue_loop_on_deny
@@ -41,7 +41,7 @@ experimental: auto_question · batch_tool · disable_paste_summary · continue_l
 >
 > **2026-05-12 更正**：以下旧 schema 字段已删除，不再存在：
 > - `assistant.spec{}` / `assistant.goal{}` / `assistant.planner{}` / `assistant.evaluator{}` /
->   `assistant.adaptive{}` —— planner / evaluator agent 整体下线（见 [01-agents.md](01-agents.md)），
+>   `assistant.adaptive{}` —— planner / acceptance review 整体下线（见 [01-agents.md](01-agents.md)），
 >   spec/goal/adaptive 字段在 workflow 系统替代后删除。
 > - `experimental.unattended` / `experimental.auto_permission` —— 仅剩 `experimental.auto_question`。
 

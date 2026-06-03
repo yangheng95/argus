@@ -67,7 +67,7 @@ import {
   findActiveRunForTask,
   findActiveSpecForTask,
   findDeliveriesForTask,
-  findDeliveryByRun,
+  findAcceptanceByRun,
   findEvaluationByRun,
   findGoal,
   findGoalRun,
@@ -77,8 +77,8 @@ import {
   findLatestFrontendResearchBriefArtifact,
   findLatestGoalWorkloadArtifact,
   findLatestResearchBriefArtifact,
-  findLatestDeliveryVerdictArtifact,
-  findLatestDeliveryVerdictArtifactForDelivery,
+  findLatestAcceptanceVerdictArtifact,
+  findLatestAcceptanceVerdictArtifactForAcceptance,
   findLatestIntegrityArtifactMissingStatus,
   findLatestTipGoalRun,
   findPlan,
@@ -125,7 +125,7 @@ import {
   type ContractAuditCriteriaResult,
 } from "@/acceptance/contract-audit"
 import { isLiveRunStatus, isRunReadyForGoalDispatch, restartStagePlan, type RestartStage } from "./scheduler"
-import { composeDeliveryRetryFeedback } from "./delivery-retry-feedback"
+import { composeAcceptanceRetryFeedback } from "./acceptance-retry-feedback"
 import { parsedRequirementFromRow } from "@/requirements/row"
 import {
   architectFidelityIssues,
@@ -351,7 +351,7 @@ type IntegrityReviewOutcome =
       /** Full per-dimension breakdown including issues / corrections /
        *  missing_goals — kept on the outcome so every consumer (build tool
        *  return, renderIntegrityOutcome, recordIntegrityAttempt persistence,
-       *  read_context, delivery upstream context) renders the same complete
+       *  read_context, acceptance upstream context) renders the same complete
        *  text instead of a count summary. The orchestrator LLM reads this
        *  markdown and decides modify_goal / build / architect / fail_task
        *  itself; nothing in code routes/supersedes from the outcome. */
@@ -410,7 +410,7 @@ function renderEvidenceSourceManifest(input: {
   lines.push(`Canonical frontend_design public report file: ${paths.templateRelative}`)
   lines.push(`Canonical source manifest file: ${paths.manifestRelative}`)
   lines.push(
-    "Canonical decision-log entries: phase=frontend_design keys public_report, frontend_template, final_delivery_mode, fillable_modules, component_reuse_plan, baseline_replacement_plan, quality_project_contract, frontend_project, material_inventory, visual_consistency_contract, ui_data_contract, template_iteration_notes, completeness_review, open_questions.",
+    "Canonical decision-log entries: phase=frontend_design keys public_report, frontend_template, final_acceptance_mode, fillable_modules, component_reuse_plan, baseline_replacement_plan, quality_project_contract, frontend_project, material_inventory, visual_consistency_contract, ui_data_contract, template_iteration_notes, completeness_review, open_questions.",
   )
   lines.push(
     "Optional visual anchors: task.design_specs, when present. They are secondary to visual_consistency_contract.",
@@ -778,11 +778,11 @@ export function validatePersistedArchitectFidelity(input: {
   })
 }
 
-export async function composeLatestDeliveryFeedbackForBuild(input: {
+export async function composeLatestAcceptanceFeedbackForBuild(input: {
   taskID: string
   goalID?: string
 }): Promise<string | undefined> {
-  const verdictArtifact = findLatestDeliveryVerdictArtifact(input.taskID)
+  const verdictArtifact = findLatestAcceptanceVerdictArtifact(input.taskID)
   const verdictPayload = (verdictArtifact?.payload ?? {}) as Record<string, unknown>
   if (!verdictArtifact || verdictPayload.verdict !== "rejected") return undefined
 
@@ -793,15 +793,15 @@ export async function composeLatestDeliveryFeedbackForBuild(input: {
     ? rejectionDetails.filter((detail) => detail.goal_id === input.goalID)
     : rejectionDetails
 
-  const { deliveryManifestFailureDetails, findLatestDeliveryEvidenceManifest, formatDeliveryManifestFailureDetails } =
-    await import("@/delivery/manifest")
-  const deliveryID = verdictArtifact.delivery_id ?? undefined
-  const manifest = deliveryID ? findLatestDeliveryEvidenceManifest({ deliveryID }) : undefined
-  const manifestFailureDetails = manifest ? formatDeliveryManifestFailureDetails(manifest) : []
+  const { acceptanceManifestFailureDetails, findLatestAcceptanceEvidenceManifest, formatAcceptanceManifestFailureDetails } =
+    await import("@/acceptance/manifest")
+  const acceptanceID = verdictArtifact.acceptance_id ?? undefined
+  const manifest = acceptanceID ? findLatestAcceptanceEvidenceManifest({ acceptanceID }) : undefined
+  const manifestFailureDetails = manifest ? formatAcceptanceManifestFailureDetails(manifest) : []
   const failedReviewIds = new Set(manifest?.finalGate.failedReviewIds ?? [])
   const packet = {
     verdict_artifact_id: verdictArtifact.id,
-    delivery_id: deliveryID,
+    acceptance_id: acceptanceID,
     scope: input.goalID ? "goal" : "integrated_tree",
     goal_id: input.goalID,
     verdict: {
@@ -815,7 +815,7 @@ export async function composeLatestDeliveryFeedbackForBuild(input: {
           id: manifest.id,
           iteration: manifest.iteration,
           finalGate: manifest.finalGate,
-          failureDetails: deliveryManifestFailureDetails(manifest),
+          failureDetails: acceptanceManifestFailureDetails(manifest),
           reviewEvidence: manifest.reviewEvidence.filter(
             (review) => review.status === "failed" || failedReviewIds.has(review.id),
           ),
@@ -823,7 +823,7 @@ export async function composeLatestDeliveryFeedbackForBuild(input: {
       : undefined,
   }
 
-  return composeDeliveryRetryFeedback({
+  return composeAcceptanceRetryFeedback({
     iteration: typeof manifest?.iteration === "number" ? manifest.iteration : 0,
     verdict: String(verdictPayload.verdict),
     summary: typeof verdictPayload.summary === "string" ? verdictPayload.summary : "",
@@ -1251,19 +1251,19 @@ export function createOrchestratorTools(input: {
   }
 
   async function publishGateArtifactResult(input: {
-    deliveryID: string
+    acceptanceID: string
     runID: string
     summary: string
-    source: "publish_delivery"
+    source: "publish_acceptance"
   }) {
     const detail =
-      `Publish gate blocked delivery ${input.deliveryID}: ${input.summary}. ` +
-      `This is an artifact/export failure, not a delivery verdict. Task lifecycle is unchanged; ` +
+      `Publish gate blocked acceptance ${input.acceptanceID}: ${input.summary}. ` +
+      `This is an artifact/export failure, not a acceptance verdict. Task lifecycle is unchanged; ` +
       `integrity is the workflow completion authority.`
     try {
       const { createDecisionLog } = await import("@/decision-log")
       createDecisionLog(taskID).append({
-        phase: "delivery",
+        phase: "acceptance",
         key: `publish_gate_rework_${Date.now()}`,
         value: detail,
         reason: input.source,
@@ -1272,9 +1272,9 @@ export function createOrchestratorTools(input: {
       /* best effort */
     }
     return SubAgentProtocol.yieldResult({
-      headline: `Publish gate blocked delivery artifact export. Task lifecycle is unchanged.`,
+      headline: `Publish gate blocked acceptance artifact export. Task lifecycle is unchanged.`,
       fields: [
-        ["delivery_id", input.deliveryID],
+        ["acceptance_id", input.acceptanceID],
         ["run_id", input.runID],
         ["publish_gate", input.summary],
         [
@@ -1282,7 +1282,7 @@ export function createOrchestratorTools(input: {
           "inspect declared changed files vs exported workspace; artifact export needs a separate non-gate tool",
         ],
       ],
-      pointer: `delivery ${input.deliveryID}; publish gate failure is post-delivery export feedback`,
+      pointer: `acceptance ${input.acceptanceID}; publish gate failure is post-acceptance export feedback`,
     })
   }
 
@@ -1751,8 +1751,8 @@ export function createOrchestratorTools(input: {
     const deliveriesForAcceptance = findDeliveriesForTask(taskID)
     const acceptanceChangedFiles = Array.from(
       new Set(
-        deliveriesForAcceptance.flatMap((delivery) => {
-          const result = delivery.result as
+        deliveriesForAcceptance.flatMap((acceptance) => {
+          const result = acceptance.result as
             | { changed_files?: string[]; changedFiles?: string[]; diffs?: Array<{ file?: string }> }
             | null
             | undefined
@@ -1766,8 +1766,8 @@ export function createOrchestratorTools(input: {
         }),
       ),
     )
-    const acceptanceDiffs = deliveriesForAcceptance.flatMap((delivery) => {
-      const result = delivery.result as
+    const acceptanceDiffs = deliveriesForAcceptance.flatMap((acceptance) => {
+      const result = acceptance.result as
         | {
             diffs?: Array<{
               file: string
@@ -1786,10 +1786,10 @@ export function createOrchestratorTools(input: {
     const acceptanceSummary =
       deliveriesForAcceptance.length > 0
         ? deliveriesForAcceptance
-            .map((delivery) => delivery.summary)
+            .map((acceptance) => acceptance.summary)
             .filter(Boolean)
             .join("\n")
-        : "No delivery artifact rows were found; review the requirement status snapshot and repository directly."
+        : "No acceptance artifact rows were found; review the requirement status snapshot and repository directly."
 
     const {
       reviewIntegrity,
@@ -1814,7 +1814,7 @@ export function createOrchestratorTools(input: {
     // queued / running / blocked tip means the build is still in flight —
     // its evidence is incomplete and integrity has nothing real to judge
     // beyond the structural decomposition. Treating in-flight runs as
-    // post_build would let the delivery freshness gate accept attempts that
+    // post_build would let the acceptance freshness gate accept attempts that
     // were taken mid-build, which is what codex review §6.4 #8 flagged.
     // Per @/engine/catalog GOAL_RUN_STATUS_CATALOG: completed = terminal,
     // failed/aborted = retriable, everything else = live.
@@ -2887,7 +2887,7 @@ export function createOrchestratorTools(input: {
             key: "public_report",
             value: analysis.report.detail,
             reason:
-              "Frontend-design terminal report; public readable handoff for Requirements, Architect, Build, and Delivery.",
+              "Frontend-design terminal report; public readable handoff for Requirements, Architect, Build, and Acceptance.",
           })
           decisionLog.append({
             phase: "frontend_design",
@@ -2925,8 +2925,8 @@ export function createOrchestratorTools(input: {
           })
           decisionLog.append({
             phase: "frontend_design",
-            key: "final_delivery_mode",
-            value: analysis.finalDeliveryMode ?? "visual_baseline_allowed",
+            key: "final_acceptance_mode",
+            value: analysis.finalAcceptanceMode ?? "visual_baseline_allowed",
             reason:
               "Whether downstream Build may keep the visual baseline or must replace requested surfaces with maintainable semantic components/data/API bindings.",
           })
@@ -2988,7 +2988,7 @@ export function createOrchestratorTools(input: {
             phase: "frontend_design",
             key: "visual_consistency_contract",
             value: analysis.visualConsistencyContract,
-            reason: "Primary visual-fidelity contract for downstream implementation and delivery review.",
+            reason: "Primary visual-fidelity contract for downstream implementation and acceptance review.",
           })
           decisionLog.append({
             phase: "frontend_design",
@@ -3044,7 +3044,7 @@ export function createOrchestratorTools(input: {
           return SubAgentProtocol.yieldResult({
             headline:
               "SUCCESS: frontend_design public report, visual_consistency_contract, and evidence manifest persisted. " +
-              "Downstream agents can now read the public report before requirements, architecture, build, or delivery work.",
+              "Downstream agents can now read the public report before requirements, architecture, build, or acceptance work.",
             fields: [
               ["optional_visual_anchors", String(analysis.specs.length)],
               ["color", String(countByCategory.color ?? 0)],
@@ -3930,7 +3930,7 @@ export function createOrchestratorTools(input: {
     // module (audit 2026-04-25). The agent runs at the very front of the
     // pipeline (before requirements / architect) to reconstruct the user's
     // real intent from a typically-terse request, the surrounding work
-    // record (decision log + prior delivery feedback when re-entering a
+    // record (decision log + prior acceptance feedback when re-entering a
     // task), and a read-only tour of the repository. When visual/reference
     // artifacts are actually the task contract, the orchestrator can run
     // frontend_design first so intent analysis reads the same frontend template source
@@ -3941,7 +3941,7 @@ export function createOrchestratorTools(input: {
       description:
         "OPTIONAL stage agent. Reconstruct the user's real intent from a (typically " +
         "terse) request. Reads the request, the existing work record on this task " +
-        "(decision log, prior delivery rejections, refine notes when present), and " +
+        "(decision log, prior acceptance rejections, refine notes when present), and " +
         "uses read-only codebase tools (read/find/search/list) to ground complexity " +
         "and scope estimates in the repo's actual shape. Output: an " +
         "IntentAnalysisResult (intent class, complexity band, extracted slots, " +
@@ -4080,7 +4080,7 @@ export function createOrchestratorTools(input: {
 
     frontend_research: tool({
       description:
-        "OPTIONAL stage coordinator for webpage/UI reference research. Use alongside `frontend_design` for supplied page URLs when downstream requirements and architect need faithful source-backed facts about page functions, visual layout, style requirements, interactions, content/data inventory, responsive behavior, fidelity acceptance, and risks. It organizes rendered webpage evidence, delegates deep investigation packets to build workers, and persists a frontend_research_brief/webpage_contract artifact. It is NOT the frontend implementation template owner, NOT requirements, NOT architect, NOT a route selector, and NOT final PRD/SPEC/report delivery.",
+        "OPTIONAL stage coordinator for webpage/UI reference research. Use alongside `frontend_design` for supplied page URLs when downstream requirements and architect need faithful source-backed facts about page functions, visual layout, style requirements, interactions, content/data inventory, responsive behavior, fidelity acceptance, and risks. It organizes rendered webpage evidence, delegates deep investigation packets to build workers, and persists a frontend_research_brief/webpage_contract artifact. It is NOT the frontend implementation template owner, NOT requirements, NOT architect, NOT a route selector, and NOT final PRD/SPEC/report acceptance.",
       inputSchema: z.object({
         reason: z.string().min(1).describe("Why frontend webpage research is needed for this task."),
         source_urls: z
@@ -4162,7 +4162,7 @@ export function createOrchestratorTools(input: {
 
     research: tool({
       description:
-        "OPTIONAL advisory evidence side-tool agent. Use when the task depends on external facts, current documentation, competitor/industry/API research, source maps, or PRD/SPEC/report source material that should become a durable citation bundle. For supplied webpage URLs that need functional/visual frontend analysis, use `frontend_research` instead; for implementation-template/source handoff, use `frontend_design`. The result is a compact research_brief artifact plus bundle paths and may include subpage_research_tasks for independent follow-up research. It is NOT a workflow step, NOT a route selector, NOT requirements, NOT architect, NOT build, and NOT a delivery path.",
+        "OPTIONAL advisory evidence side-tool agent. Use when the task depends on external facts, current documentation, competitor/industry/API research, source maps, or PRD/SPEC/report source material that should become a durable citation bundle. For supplied webpage URLs that need functional/visual frontend analysis, use `frontend_research` instead; for implementation-template/source handoff, use `frontend_design`. The result is a compact research_brief artifact plus bundle paths and may include subpage_research_tasks for independent follow-up research. It is NOT a workflow step, NOT a route selector, NOT requirements, NOT architect, NOT build, and NOT a acceptance path.",
       inputSchema: z.object({
         reason: z.string().min(1).describe("Why evidence research is needed for this task."),
         target_deliverable: z
@@ -4476,17 +4476,17 @@ export function createOrchestratorTools(input: {
 
     query_failed_goals: tool({
       description:
-        "Query all currently failed goals with their latest delivery info. Returns one block per failed goal (acceptance_specs truncated, only latest run). Use BEFORE re-running build on a failed goal to understand per-goal failure reasons.",
+        "Query all currently failed goals with their latest acceptance info. Returns one block per failed goal (acceptance_specs truncated, only latest run). Use BEFORE re-running build on a failed goal to understand per-goal failure reasons.",
       inputSchema: z.object({}),
       execute: async () => {
         const dbGoals = listGoals(taskID)
         const failed = dbGoals.filter((g) => goalStatusByID(g.id) === "failed")
         if (failed.length === 0) return "No failed goals."
-        const { listGoalRunsForTask, findDeliveryByGoalRun } = await import("@/engine/store")
+        const { listGoalRunsForTask, findAcceptanceByGoalRun } = await import("@/engine/store")
         const goalRuns = listGoalRunsForTask(taskID)
         const sections: string[] = [`## Failed Goals (${failed.length})`]
         const ACCEPTANCE_SPEC_CAP = 300
-        const DELIVERY_FILES_CAP = 10
+        const ACCEPTANCE_FILES_CAP = 10
         for (const goal of failed) {
           const label = `#G${goal.order_index + 1}V${getGoalRetryCount(goal.id) + 1}`
           sections.push(`\n### ${label} ${goal.id}: ${goal.title}`)
@@ -4497,20 +4497,20 @@ export function createOrchestratorTools(input: {
           // listGoalRunsForTask is desc by time_created; first match is latest.
           const latestGr = goalRuns.find((gr) => gr.goal_id === goal.id)
           if (latestGr) {
-            const delivery = findDeliveryByGoalRun(latestGr.id)
-            if (delivery) {
-              sections.push(`- delivery summary: ${delivery.summary}`)
-              const diffs = (delivery.result as any)?.diffs as Array<{ file: string }> | undefined
+            const acceptance = findAcceptanceByGoalRun(latestGr.id)
+            if (acceptance) {
+              sections.push(`- acceptance summary: ${acceptance.summary}`)
+              const diffs = (acceptance.result as any)?.diffs as Array<{ file: string }> | undefined
               if (diffs?.length) {
                 const shown = diffs
-                  .slice(0, DELIVERY_FILES_CAP)
+                  .slice(0, ACCEPTANCE_FILES_CAP)
                   .map((f) => f.file)
                   .join(", ")
-                const more = diffs.length > DELIVERY_FILES_CAP ? ` (+${diffs.length - DELIVERY_FILES_CAP} more)` : ""
-                sections.push(`- delivery files: ${shown}${more}`)
+                const more = diffs.length > ACCEPTANCE_FILES_CAP ? ` (+${diffs.length - ACCEPTANCE_FILES_CAP} more)` : ""
+                sections.push(`- acceptance files: ${shown}${more}`)
               }
             } else {
-              sections.push(`- delivery: none`)
+              sections.push(`- acceptance: none`)
             }
             sections.push(`- goal_run status: ${latestGr.status}`)
             sections.push(`- current implementation version: ${label}`)
@@ -4539,7 +4539,7 @@ export function createOrchestratorTools(input: {
 
     read_context: tool({
       description:
-        "Read current task context: goal states, delivery verdicts, Decision Log, delivery summaries, integrity attempts, and integrity root history. Use this to gather information before making decisions. Goal/eval/delivery sections return latest state; integrity_history renders fact-only cross-round integrity attempt history for the spec snapshot lineage.",
+        "Read current task context: goal states, acceptance verdicts, Decision Log, acceptance summaries, integrity attempts, and integrity root history. Use this to gather information before making decisions. Goal/eval/acceptance sections return latest state; integrity_history renders fact-only cross-round integrity attempt history for the spec snapshot lineage.",
       inputSchema: z.object({
         scope: z
           .enum(["goals", "evaluations", "decisions", "deliveries", "integrity_history", "all"])
@@ -4553,7 +4553,7 @@ export function createOrchestratorTools(input: {
         // Source-level caps on read_context output. Rationale: this tool is
         // called every orchestrator turn; tool results live forever in session
         // history. Unbounded accumulation (every historical eval, every run's
-        // delivery, every decision) was the dominant contributor to the
+        // acceptance, every decision) was the dominant contributor to the
         // orchestrator session growing from ~10K to 125K tokens across 16 turns.
         // Caps below preserve the LATEST state per goal rather than history.
         // The decision-log cap is the shared DECISION_LOG_PROMPT_LIMIT (single
@@ -4732,30 +4732,30 @@ export function createOrchestratorTools(input: {
         }
 
         if (scope === "deliveries" || scope === "all") {
-          const { listGoalRunsForTask, findDeliveryByGoalRun } = await import("@/engine/store")
+          const { listGoalRunsForTask, findAcceptanceByGoalRun } = await import("@/engine/store")
           const goalRuns = listGoalRunsForTask(taskID) // desc by time_created
-          // Keep only the latest delivery per goal. Previous runs' deliveries
+          // Keep only the latest acceptance per goal. Previous runs' deliveries
           // are historical noise once superseded; the orchestrator decides from
-          // current state, not delivery history.
+          // current state, not acceptance history.
           const seenGoals = new Set<string>()
           const deliveries: Array<{
             goalRunID: string
             goalID: string
             status: string
-            delivery: ReturnType<typeof findDeliveryByGoalRun>
+            acceptance: ReturnType<typeof findAcceptanceByGoalRun>
           }> = []
           for (const gr of goalRuns) {
             if (seenGoals.has(gr.goal_id)) continue
-            const delivery = findDeliveryByGoalRun(gr.id)
-            if (!delivery) continue
+            const acceptance = findAcceptanceByGoalRun(gr.id)
+            if (!acceptance) continue
             seenGoals.add(gr.goal_id)
-            deliveries.push({ goalRunID: gr.id, goalID: gr.goal_id, status: gr.status, delivery })
+            deliveries.push({ goalRunID: gr.id, goalID: gr.goal_id, status: gr.status, acceptance })
           }
           if (deliveries.length > 0) {
             sections.push(`\n## Deliveries (${deliveries.length} — latest per goal)`)
             for (const d of deliveries) {
-              const diffs = (d.delivery!.result as any)?.diffs as Array<{ file: string }> | undefined
-              sections.push(`- goal_run ${d.goalRunID} [${d.status}]: ${d.delivery!.summary}`)
+              const diffs = (d.acceptance!.result as any)?.diffs as Array<{ file: string }> | undefined
+              sections.push(`- goal_run ${d.goalRunID} [${d.status}]: ${d.acceptance!.summary}`)
               if (diffs?.length) sections.push(`  files: ${diffs.map((f) => f.file).join(", ")}`)
             }
           }
@@ -5097,17 +5097,17 @@ export function createOrchestratorTools(input: {
         await trackStepStart("refine")
         const task = requireTask(taskID)
 
-        // Gather delivery context
+        // Gather acceptance context
         const goals = listGoals(taskID)
-        const { listGoalRunsForTask, findDeliveryByGoalRun } = await import("@/engine/store")
+        const { listGoalRunsForTask, findAcceptanceByGoalRun } = await import("@/engine/store")
         const goalRuns = listGoalRunsForTask(taskID)
 
         const goalSummaries: string[] = []
         const allChangedFiles: string[] = []
         for (const goal of goals) {
           const gr = goalRuns.find((r) => r.goal_id === goal.id)
-          const delivery = gr ? findDeliveryByGoalRun(gr.id) : undefined
-          const files = (delivery?.result as any)?.diffs?.map((d: any) => d.file) ?? []
+          const acceptance = gr ? findAcceptanceByGoalRun(gr.id) : undefined
+          const files = (acceptance?.result as any)?.diffs?.map((d: any) => d.file) ?? []
           allChangedFiles.push(...files)
           goalSummaries.push(
             `- [${goalStatusByID(goal.id)}] ${goal.title}: ${renderSpecsAsText((goal.acceptance_specs ?? []) as AcceptanceSpec[]).slice(0, 300)}`,
@@ -5408,7 +5408,7 @@ export function createOrchestratorTools(input: {
         "`freshContext: true` to start a new build session; restate every useful prior lesson in `request` " +
         "because the new session will not inherit old reasoning or tool calls. `build({ request, directBuildIntent })` without goalID is a task-level " +
         "direct implementation build. It is supported for explicit `kind=build` tasks, whole-task rework after " +
-        "delivery rejection, and rare operator/orchestrator decisions to bypass goal decomposition for a scoped " +
+        "acceptance rejection, and rare operator/orchestrator decisions to bypass goal decomposition for a scoped " +
         "workflow implementation task. It also owns same-task stuck-state repairs that require file edits: " +
         "dependency materialization, package metadata/scripts, local dependency wiring, Playwright/browser " +
         "configuration, dynamic port selection, runtime/tool configuration, product fixes proven by verification, " +
@@ -5432,12 +5432,12 @@ export function createOrchestratorTools(input: {
           .string()
           .optional()
           .describe(
-            "For per-goal builds: optional retry/rework guidance for THIS attempt, rendered as a separate 'Retry Guidance From Orchestrator' section in the build prompt. Does NOT replace the goal's objective / acceptance_specs / owned_paths — populate freely whenever you have concrete advice for the next attempt, including dependency materialization, worktree MERGING resolution, package/script/toolchain fixes, port selection, or product behavior fixes proven by verification. For task-level direct builds (no goalID): required; include the user's request plus concise rejected delivery details the build agent must address.",
+            "For per-goal builds: optional retry/rework guidance for THIS attempt, rendered as a separate 'Retry Guidance From Orchestrator' section in the build prompt. Does NOT replace the goal's objective / acceptance_specs / owned_paths — populate freely whenever you have concrete advice for the next attempt, including dependency materialization, worktree MERGING resolution, package/script/toolchain fixes, port selection, or product behavior fixes proven by verification. For task-level direct builds (no goalID): required; include the user's request plus concise rejected acceptance details the build agent must address.",
           ),
         reason: z
           .string()
           .describe(
-            "One sentence explaining why this build is valid now: explicit kind=build, per-goal pipeline execution, post-delivery whole-task rework, or a conscious direct-build decision for this workflow task.",
+            "One sentence explaining why this build is valid now: explicit kind=build, per-goal pipeline execution, post-acceptance whole-task rework, or a conscious direct-build decision for this workflow task.",
           ),
         goalID: z
           .string()
@@ -5558,7 +5558,7 @@ export function createOrchestratorTools(input: {
         // the user message.
         //
         // Coordinator Run lazy-create: build is the dispatcher, so every
-        // implementation build owns the run that later anchors delivery
+        // implementation build owns the run that later anchors acceptance
         // evidence. Goal-scoped builds create a dispatchable run from the
         // active goal graph; task-level direct builds create a run without a
         // plan_version_id because there is intentionally no goal graph.
@@ -5818,7 +5818,7 @@ export function createOrchestratorTools(input: {
                     "",
                     "The previous attempt was rejected. The worktree still has those files; edit in place rather than start from scratch unless the failure forces a structural rewrite.",
                     "",
-                    "### Coordinator Root-Cause + Delivery Rejection",
+                    "### Coordinator Root-Cause + Acceptance Rejection",
                     ...retryEntries.map((e) => `- ${e.value}${e.reason ? ` — _why: ${e.reason}_` : ""}`),
                     "",
                     "### Required For This Retry",
@@ -5827,7 +5827,7 @@ export function createOrchestratorTools(input: {
                     "- If the fix touches a shared file, explain the collaboration impact in files_changed[] instead of hiding the cross-goal dependency.",
                   ].join("\n")
                 : undefined
-            const deliveryFeedback = await composeLatestDeliveryFeedbackForBuild({
+            const acceptanceFeedback = await composeLatestAcceptanceFeedbackForBuild({
               taskID,
               goalID: goal.id,
             })
@@ -5836,13 +5836,13 @@ export function createOrchestratorTools(input: {
               activeSpecSnapshotID: activeSpecForContext?.id,
             })
 
-            // Visual feedback closure-loop: when delivery rejected on visual
+            // Visual feedback closure-loop: when acceptance rejected on visual
             // grounds, attach the previous rendered.png so the build LLM
             // physically compares its output to the user reference instead of
             // re-painting from text alone.
             const retryAttachments = await loadLatestRenderedRetryAttachment({
               taskID,
-              enabled: retryEntries.length > 0 || Boolean(deliveryFeedback),
+              enabled: retryEntries.length > 0 || Boolean(acceptanceFeedback),
             })
 
             // Goal Workload Analyst brief for this goal (spec §6B). Injected
@@ -5873,7 +5873,7 @@ export function createOrchestratorTools(input: {
               retryGuidance: requestText.length > 0 ? requestText : undefined,
               integrityFeedback,
               retryFeedback,
-              deliveryFeedback,
+              acceptanceFeedback,
               retryAttachments,
               workloadBrief,
             }
@@ -5883,7 +5883,7 @@ export function createOrchestratorTools(input: {
             // to this branch — there's no separate goal contract for the
             // request to "supplement".
             target = { kind: "request", text: requestText }
-            const deliveryFeedback = await composeLatestDeliveryFeedbackForBuild({ taskID })
+            const acceptanceFeedback = await composeLatestAcceptanceFeedbackForBuild({ taskID })
             const activeSpecForContext = findActiveSpecForTask(taskID)
             const integrityFeedback = await composeIntegrityFeedbackMarkdownForBuild({
               taskID,
@@ -5891,7 +5891,7 @@ export function createOrchestratorTools(input: {
             })
             const retryAttachments = await loadLatestRenderedRetryAttachment({
               taskID,
-              enabled: Boolean(deliveryFeedback),
+              enabled: Boolean(acceptanceFeedback),
             })
             const designSpecs = Array.isArray(task.design_specs) ? (task.design_specs as any) : undefined
             const frontendDesign = renderFrontendDesignHandoffReference(taskID)
@@ -5903,7 +5903,7 @@ export function createOrchestratorTools(input: {
             const requirements = reqRows.map(parsedRequirementFromRow)
             context =
               integrityFeedback ||
-              deliveryFeedback ||
+              acceptanceFeedback ||
               retryAttachments ||
               designSpecs ||
               frontendResearch.trim().length > 0 ||
@@ -5915,7 +5915,7 @@ export function createOrchestratorTools(input: {
                     frontendResearch: frontendResearch.trim().length > 0 ? frontendResearch : undefined,
                     frontendDesign: frontendDesign.trim().length > 0 ? frontendDesign : undefined,
                     integrityFeedback,
-                    deliveryFeedback,
+                    acceptanceFeedback,
                     retryAttachments,
                   }
                 : undefined
@@ -6325,9 +6325,9 @@ export function createOrchestratorTools(input: {
 
           // Finalize the goal_run opened above. updateGoalRun writes a new
           // append-only artifact with the terminal status + time_completed,
-          // and finalizeBuildAttempt also lays down the per-goal delivery
+          // and finalizeBuildAttempt also lays down the per-goal acceptance
           // artifact when the build passed with concrete diffs (overlay's
-          // right-side Files panel reads it via findDeliveryByGoalRun).
+          // right-side Files panel reads it via findAcceptanceByGoalRun).
           // For the throw branch we synthesise a failed finalisation from
           // the underlying error message — diffs/commit/summary are absent
           // by definition, but the goal_run row reaches a clean terminal

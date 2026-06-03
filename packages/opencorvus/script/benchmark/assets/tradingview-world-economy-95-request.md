@@ -27,4 +27,4 @@ Verification requirements:
 
 - Run the project build/typecheck/test commands.
 - Run visual comparison against the benchmark reference screenshot.
-- Treat any visual score below 0.95 or any missing visible source section as a failed delivery that must be repaired before acceptance.
+- Treat any visual score below 0.95 or any missing visible source section as a failed acceptance that must be repaired before acceptance.

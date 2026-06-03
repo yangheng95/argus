@@ -83,7 +83,7 @@ status, parts[], children[], ...`），类型定义挪到 `store/card-tree.ts`�
 | `agent.updated` (原 agentEvents) | 与 message.* 合并：作为同一 session 卡片上的 live part；删除独立 agentEvents 概念 |
 | `goal.status` 变化 | `setStore("cards", "goal:"+gid, "status", ...)` |
 | `goal.step.*` | `setStore("cards", "goal:"+gid, "steps", stepIdx, ...)` |
-| `session.status` | 单一通道。按 `e.sessionID` 定位卡片，`setStore("cards", cardID, { status: e.status, terminalReason: e.terminalReason })`。`status ∈ {streaming, idle, terminal}`；session 未 materialize 时缓冲到 `pendingSessionStatus`，`ensureSessionCard` 在收到首个 `message.updated` 时 drain。所有 session（orchestrator 根 / 4 个 spec 阶段 / build / deliver / refine / prosecute / analyze_intent / modify_goal / publish_delivery / 未来新 phase）走同一条路径，不再有 phase 专属事件。 |
+| `session.status` | 单一通道。按 `e.sessionID` 定位卡片，`setStore("cards", cardID, { status: e.status, terminalReason: e.terminalReason })`。`status ∈ {streaming, idle, terminal}`；session 未 materialize 时缓冲到 `pendingSessionStatus`，`ensureSessionCard` 在收到首个 `message.updated` 时 drain。所有 session（orchestrator 根 / 4 个 spec 阶段 / build / deliver / refine / prosecute / analyze_intent / modify_goal / publish_acceptance / 未来新 phase）走同一条路径，不再有 phase 专属事件。 |
 | `interaction.*` | 写入对应 session 卡片的 parts（不再走 partitionInteractions 后处理） |
 | `task.selected` / `transcript` 全量重载 | `setCardTreeStore("order",[])+("cards",{})` 后按序列写入 |
 
@@ -99,7 +99,7 @@ SessionPrompt 真实生命周期切换处单点发射，不在 tool 层、不在
 
 **任何 session 都走这条路径**：orchestrator 根 session、subagent（requirements /
 architect / frontend-design / integrity / build / deliver / refine / prosecute /
-analyze_intent / modify_goal / publish_delivery / ...）、未来新加的 phase。**不再有
+analyze_intent / modify_goal / publish_acceptance / ...）、未来新加的 phase。**不再有
 `<phase>.completed`、不再有 `applyOrchestratorRootTerminal` 把 task 终态映射到根
 session 卡的旁路**——根 session 自己会在 LLM 流退出时发 `terminal`。
 
@@ -116,7 +116,7 @@ overlay 端从 session 的 tool result part 自然读取，**不上总线**。
 
 实现 ID 前缀（`packages/overlay/src/services/tree-writer.ts` 为唯一写入方）：
 
-- `<stage>:session:<sid>` —— 一个 session 一张卡，stage 取自 message.info.channel / agent / resolvedRole；stage 未知时临时用 `pending:session:<sid>`，收到真正的 message.updated 后 rename。**每个 session 默认都是顶级卡**——assistant orchestrator 和 frontend-design / requirements / architect / planner / build / evaluator / delivery 等 sub-agent session 在 `cardTreeStore.order` 里按 time 并列，没有 session ↔ session 的嵌套。
+- `<stage>:session:<sid>` —— 一个 session 一张卡，stage 取自 message.info.channel / agent / resolvedRole；stage 未知时临时用 `pending:session:<sid>`，收到真正的 message.updated 后 rename。**每个 session 默认都是顶级卡**——assistant orchestrator 和 frontend-design / requirements / architect / planner / build / evaluator / acceptance 等 sub-agent session 在 `cardTreeStore.order` 里按 time 并列，没有 session ↔ session 的嵌套。
 - `goal-group:<gid>` —— 一个 goal 一个容器卡
 - `goal-group:<gid>:step:<stepID>` —— goal 容器内的 step 行
 - `goal-group:<gid>:step:<stepID>:phase:<phaseID>` —— step 内部的 phase 行（仅当 workflow 层在 step 上声明了 `phases` 时存在；当前 `pipeline.build` 仅声明一个 phase `build`，见 `engine/workflow.ts:232-234`。历史上规划过 plan / build / evaluate 三 phase，2026-04-20 起 per-goal evaluator 下线、planner 不再作为独立 phase 渲染，最终落点是单 phase。`goalStagePhaseID` 兼容 `planner → {build, plan}` 是为历史 session.kind 留的兜底映射，没有 phase 卡片真正消费）

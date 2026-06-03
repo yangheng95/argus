@@ -14,7 +14,7 @@
  *      | providers | agentModels | about    (default: providers)
  */
 
-import { findBrowserExecutable } from "../../opencorvus/src/delivery/checks/visual"
+import { findBrowserExecutable } from "../../opencorvus/src/acceptance/checks/visual"
 import puppeteer from "puppeteer-core"
 import path from "node:path"
 

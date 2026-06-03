@@ -40,7 +40,7 @@
 **调用链**：
 ```
 Orchestrator build tool → build/agent.ts (LLM 决策 + Worktree.create) →
-   ExecutorRegistry.require() → Executor 进程 → diff / delivery
+   ExecutorRegistry.require() → Executor 进程 → diff / acceptance
    + goal/runner.ts::cleanupGoalWorkspace 在 worktree 生命周期末端回收
 ```
 （旧 `pipeline/executor.ts` 与 `engine/goal-pool.ts` 已删除。`goal/runner.ts` 当前仅

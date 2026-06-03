@@ -83,7 +83,7 @@ describe("terminal seam materializes the complete decision-log bundle", () => {
       directory: tmp.path,
       fn: async () => {
         const log = createDecisionLog(taskID)
-        log.append({ phase: "delivery", key: "first", value: "v1", reason: "r1" })
+        log.append({ phase: "acceptance", key: "first", value: "v1", reason: "r1" })
         await updateTask(findTask(taskID)!, { status: "completed", time_completed: completed }, "done")
 
         // A LATER decision lands, then the SAME terminal write replays (row is

@@ -56,7 +56,7 @@ describe("overlay contract", () => {
           "compaction",
           "title",
           "summary",
-          "delivery",
+          "acceptance",
           "orchestrator",
           "requirements",
           "architect",
@@ -70,14 +70,14 @@ describe("overlay contract", () => {
 
   test("Agent.list surfaces stage agents and user-facing agents", async () => {
     // audit-2026-04-29 W2-V34 — pre-fix asserted stage agents
-    // (delivery, orchestrator, requirements, architect,
+    // (acceptance, orchestrator, requirements, architect,
     // frontend-design, summary) have UNDEFINED permission and
     // user-facing agents (build, spec, plan, general, explore,
     // compaction, title) have ARRAY permission. Two pieces of
     // drift:
     //   - "spec" and "plan" agents were removed entirely (W2-V27).
-    //   - delivery / others now carry permission rulesets
-    //     (see agent.ts:289 for delivery `PermissionNext.merge(
+    //   - acceptance / others now carry permission rulesets
+    //     (see agent.ts:289 for acceptance `PermissionNext.merge(
     //     defaults, user)`).
     //     The "AgentRuntime-driven, no permission needed"
     //     architecture changed.
@@ -92,7 +92,7 @@ describe("overlay contract", () => {
         const agents = await Agent.list()
 
         for (const stageName of [
-          "delivery",
+          "acceptance",
           "orchestrator",
           "requirements",
           "architect",
