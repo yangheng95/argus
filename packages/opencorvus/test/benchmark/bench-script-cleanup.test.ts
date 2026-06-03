@@ -28,6 +28,7 @@ const BENCH_SCRIPT = path.join(
   "benchmark",
   "overlay-web-benchmark.ts",
 )
+const BENCHMARK_DIR = path.dirname(BENCH_SCRIPT)
 
 const src = await Bun.file(BENCH_SCRIPT).text()
 
@@ -148,4 +149,10 @@ test("benchmark evidence inputs stay outside the project worktree", () => {
   expect(src).not.toContain("path.join(dir, \"opencorvus.json\")")
   expect(src).not.toContain("path.join(dir, \".opencorvus\", \"opencorvus.json\")")
   expect(src).toContain("await Bun.write(path.join(temp.config, \"opencorvus.json\"), config)")
+})
+
+test("retired mirror and image-to-code benchmark entrypoints stay removed", async () => {
+  expect(await Bun.file(path.join(BENCHMARK_DIR, "mirror-baidu-clone.ts")).exists()).toBe(false)
+  expect(await Bun.file(path.join(BENCHMARK_DIR, "mirror-bbc-clone.ts")).exists()).toBe(false)
+  expect(await Bun.file(path.join(BENCHMARK_DIR, "image2code-benchmark.ts")).exists()).toBe(false)
 })
