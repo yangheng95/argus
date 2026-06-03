@@ -9,7 +9,7 @@ import { Log } from "../util/log"
 import { NamedError } from "@opencorvus-ai/util/error"
 import z from "zod"
 import path from "path"
-import { mkdirSync } from "fs"
+import { mkdirSync, rmSync } from "fs"
 import { rm } from "fs/promises"
 import * as schema from "./schema"
 import { SCHEMA_DDL } from "./ddl"
@@ -24,13 +24,111 @@ export const NotFoundError = NamedError.create(
 
 const log = Log.create({ service: "db" })
 
-function ensureSchemaCompatibility(sqlite: BunDatabase) {
-  const engineTaskColumns = sqlite.query<{ name: string }, []>("PRAGMA table_info(engine_task)").all()
-  if (engineTaskColumns.length > 0 && !engineTaskColumns.some((column) => column.name === "queue_order")) {
-    sqlite.run("ALTER TABLE engine_task ADD COLUMN queue_order integer NOT NULL DEFAULT 0")
+type SchemaShape = Map<string, string[]>
+
+function quoteIdentifier(name: string) {
+  return `"${name.replaceAll('"', '""')}"`
+}
+
+function readOrdinaryTableShape(sqlite: BunDatabase): SchemaShape {
+  const tableRows = sqlite
+    .query<{ name: string }, []>(
+      "SELECT name FROM sqlite_schema WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND sql LIKE 'CREATE TABLE%' ORDER BY name",
+    )
+    .all()
+
+  const shape: SchemaShape = new Map()
+  for (const row of tableRows) {
+    const columns = sqlite
+      .query<{ name: string }, []>(`PRAGMA table_info(${quoteIdentifier(row.name)})`)
+      .all()
+      .map((column) => column.name)
+    shape.set(row.name, columns)
+  }
+  return shape
+}
+
+function expectedSchemaShape(): SchemaShape {
+  const sqlite = new BunDatabase(":memory:")
+  try {
+    sqlite.exec(SCHEMA_DDL)
+    return readOrdinaryTableShape(sqlite)
+  } finally {
+    sqlite.close()
   }
 }
 
+function findSchemaDrift(sqlite: BunDatabase): string | undefined {
+  const expected = expectedSchemaShape()
+  const actual = readOrdinaryTableShape(sqlite)
+
+  for (const tableName of actual.keys()) {
+    if (!expected.has(tableName)) return `unexpected table ${tableName}`
+  }
+  for (const [tableName, expectedColumns] of expected) {
+    const actualColumns = actual.get(tableName)
+    if (!actualColumns) return `missing table ${tableName}`
+    const actualColumnList = actualColumns.join(",")
+    const expectedColumnList = expectedColumns.join(",")
+    if (actualColumnList !== expectedColumnList) {
+      return `table ${tableName} columns differ: actual [${actualColumnList}], expected [${expectedColumnList}]`
+    }
+  }
+}
+
+function configureSqlite(sqlite: BunDatabase) {
+  // auto_vacuum must be set before any table is created. For existing DBs
+  // opened with auto_vacuum=NONE this pragma is silently ignored — delete
+  // opencorvus.db to adopt the new mode (project rule: no DB migration).
+  sqlite.run("PRAGMA auto_vacuum = INCREMENTAL")
+  sqlite.run("PRAGMA journal_mode = WAL")
+  sqlite.run("PRAGMA synchronous = NORMAL")
+  sqlite.run("PRAGMA busy_timeout = 5000")
+  sqlite.run("PRAGMA cache_size = -64000")
+  sqlite.run("PRAGMA foreign_keys = ON")
+  // Cap WAL file size on disk — anything above the limit is truncated at
+  // the next checkpoint instead of staying resident.
+  sqlite.run("PRAGMA journal_size_limit = 67108864")
+  sqlite.run("PRAGMA wal_checkpoint(PASSIVE)")
+}
+
+function removeDatabaseFiles(dbPath: string) {
+  rmSync(dbPath, { force: true })
+  rmSync(`${dbPath}-wal`, { force: true })
+  rmSync(`${dbPath}-shm`, { force: true })
+}
+
+function openSqlite(dbPath: string) {
+  const sqlite = new BunDatabase(dbPath, { create: true })
+  configureSqlite(sqlite)
+  return sqlite
+}
+
+function ensureCurrentSchema(sqlite: BunDatabase, dbPath: string): BunDatabase {
+  try {
+    sqlite.exec(SCHEMA_DDL)
+    const drift = findSchemaDrift(sqlite)
+    if (!drift) return sqlite
+    log.warn("database schema drift detected; recreating database", { path: dbPath, reason: drift })
+  } catch (err) {
+    log.warn("database schema apply failed; recreating database", {
+      path: dbPath,
+      error: err instanceof Error ? err.message : String(err),
+    })
+  }
+
+  sqlite.close()
+  removeDatabaseFiles(dbPath)
+
+  const fresh = openSqlite(dbPath)
+  fresh.exec(SCHEMA_DDL)
+  const drift = findSchemaDrift(fresh)
+  if (drift) {
+    fresh.close()
+    throw new Error(`Fresh database schema does not match SCHEMA_DDL: ${drift}`)
+  }
+  return fresh
+}
 
 export namespace Database {
   // SQLite state is global and single-source: `<Global.Path.data>/opencorvus.db`.
@@ -60,25 +158,8 @@ export namespace Database {
     // module-load ensureDirectory calls.
     mkdirSync(path.dirname(dbPath), { recursive: true })
 
-    const sqlite = new BunDatabase(dbPath, { create: true })
+    const sqlite = ensureCurrentSchema(openSqlite(dbPath), dbPath)
     state.sqlite = sqlite
-
-    // auto_vacuum must be set before any table is created. For existing DBs
-    // opened with auto_vacuum=NONE this pragma is silently ignored — delete
-    // opencorvus.db to adopt the new mode (project rule: no DB migration).
-    sqlite.run("PRAGMA auto_vacuum = INCREMENTAL")
-    sqlite.run("PRAGMA journal_mode = WAL")
-    sqlite.run("PRAGMA synchronous = NORMAL")
-    sqlite.run("PRAGMA busy_timeout = 5000")
-    sqlite.run("PRAGMA cache_size = -64000")
-    sqlite.run("PRAGMA foreign_keys = ON")
-    // Cap WAL file size on disk — anything above the limit is truncated at
-    // the next checkpoint instead of staying resident.
-    sqlite.run("PRAGMA journal_size_limit = 67108864")
-    sqlite.run("PRAGMA wal_checkpoint(PASSIVE)")
-
-    ensureSchemaCompatibility(sqlite)
-    sqlite.exec(SCHEMA_DDL)
     log.info("schema applied")
 
     const db = drizzle({ client: sqlite, schema })
