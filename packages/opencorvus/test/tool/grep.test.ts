@@ -53,6 +53,27 @@ describe("tool.search_code", () => {
     expect(result).toBe("Error: path is outside the project boundary.")
   })
 
+  test("workflow search_code max_results limits total matches, not matches per file", async () => {
+    await using tmp = await tmpdir()
+    await fs.mkdir(path.join(tmp.path, "src"), { recursive: true })
+    for (let file = 1; file <= 3; file++) {
+      await Bun.write(
+        path.join(tmp.path, "src", `file-${file}.ts`),
+        Array.from({ length: 4 }, (_, line) => `export const needle_${file}_${line + 1} = true`).join("\n"),
+      )
+    }
+
+    const searchCode = createCodebaseTools(tmp.path).search_code as any
+    const result = await searchCode.execute(
+      { pattern: "needle", path: "src", max_results: 5 },
+      {} as any,
+    )
+    const resultLines = String(result).split(/\r?\n/).filter((line) => line.includes("needle_"))
+
+    expect(resultLines).toHaveLength(5)
+    expect(result).toContain("(limited to 5 results)")
+  })
+
   test("basic search", async () => {
     await Instance.provide({
       directory: projectRoot,
