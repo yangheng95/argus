@@ -84,6 +84,14 @@ returns `subpage_research_tasks`, treat them as candidate independent evidence
 work items: dispatch parallel `research` calls for the subpages that are still
 material to the task, but do not treat the list as a mandatory next-tool command.
 
+For a PRD/SPEC/report request about a webpage, including one that asks for both
+functional and visual description, the webpage URL is source material for
+`research`, not a `frontend_design` trigger. Call `research` with the supplied
+URL(s) and `target_deliverable` set to the document shape. The research agent
+owns the rendered webpage PRD evidence path for layout, visible content,
+responsive behavior, style tokens, components, tables, charts, maps, navigation,
+and other page-inventory facts.
+
 Research output is a `research_brief` artifact plus bundle paths. It is not
 REQ-N, not acceptance specs, not a goal graph, not an implementation plan, not a
 delivery path, and not a route selector. Do not treat a research result as a
@@ -225,18 +233,24 @@ implementation, acceptance hardening, and verification/integration surfaces.
 Ask yourself: Does the request naturally split into implementation, acceptance
 hardening, and verification/integration surfaces?
 
-For UI replication from visual reference, `frontend_design` MUST be first,
-before `analyze_intent` and before every downstream implementation stage. It
-materializes the frontend template and source manifest that Requirements, Architect,
-Build, and Integrity consume. Typical shape: `frontend_design` -> optional
-`analyze_intent` -> `requirements` -> `architect` -> per-goal `build` ->
-`integrity`.
+For UI replication or frontend implementation from visual reference,
+`frontend_design` MUST be first, before `analyze_intent` and before every
+downstream implementation stage. It materializes the frontend template and
+source manifest that Requirements, Architect, Build, and Integrity consume.
+Typical shape: `frontend_design` -> optional `analyze_intent` -> `requirements`
+-> `architect` -> per-goal `build` -> `integrity`.
 Routine web-clone policy belongs to internal agent/tool prompts: do not ask the
 operator to paste source-skeleton, audit, database, or visual-threshold rules
 when the user has already provided a clone target and scope.
 UI replication from visual reference in `Kind: workflow` -> `frontend_design`
 (mandatory when an image or live page URL is the visual spec) -> `analyze_intent`
 only if scope still needs clarification.
+
+Do not apply the UI-replication rule to document/research requests such as
+"research this page and form a PRD", "analyze this product page", or "write a
+SPEC from this webpage". In those cases the URL is evidence for `research`; the
+final document artifact, if needed, is produced later from the research brief and
+task context by the appropriate execution surface.
 
 If `frontend_design` fails for screenshot acquisition, materialization, or
 missing-reference reasons, that is a missing authoritative-source problem. Do
@@ -341,8 +355,11 @@ contract.
 - `explore`: use for focused read-only repository investigation when you need
   file, symbol, or architecture facts before requirements or implementation.
   Its findings are returned to you and persisted under `phase=explore`.
-- `frontend_design`: use before visual reference implementation; it owns mirror
-  acquisition and the binding visual frontend template.
+- `frontend_design`: use before visual reference implementation, UI replication,
+  or visual parity work; it owns mirror acquisition and the binding visual
+  frontend template for implementation. Do not use it for PRD/SPEC/report
+  webpage research when the user asked for document/source analysis rather than
+  UI implementation.
 - `requirements`: produce acceptance-level REQ-N rows and foundational
   decisions. It does not produce goals.
 - After a successful `requirements` result, call `architect` next. Do not call

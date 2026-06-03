@@ -124,7 +124,7 @@ export namespace AgentRoleContract {
     },
     "frontend-design": {
       id: "frontend-design",
-      description: "Frontend design and webpage-replica agent. Converts visual/reference evidence into the authoritative frontend template, fillable modules, component inventory, material inventory, source handoff, and visual/data contracts.",
+      description: "Frontend design and webpage-replica agent. Converts visual/reference evidence into the authoritative frontend implementation template, fillable modules, component inventory, material inventory, source handoff, and visual/data contracts. It is not the owner for PRD/SPEC/report webpage research unless the requested deliverable is UI implementation or replication.",
       promptEditable: true,
       defaultPromptRequired: true,
       promptConfigMode: "append",
@@ -153,7 +153,7 @@ export namespace AgentRoleContract {
     research: {
       id: "research",
       description:
-        "Research agent. Read-only advisory evidence gatherer for external facts, source maps, PRD/SPEC input material, constraints, document outlines, and open questions. It starts from supplied webpages with webfetch, can emit subpage_research_tasks, and never chooses routes or delivers final documents.",
+        "Research agent. Read-only advisory evidence gatherer for external facts, source maps, PRD/SPEC/report input material, webpage functional/visual analysis for document outlines, constraints, and open questions. It starts from supplied webpages, can use rendered webpage PRD evidence, can emit subpage_research_tasks, and never chooses routes or delivers final documents.",
       promptEditable: true,
       defaultPromptRequired: true,
       promptConfigMode: "append",

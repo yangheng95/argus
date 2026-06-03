@@ -169,6 +169,16 @@ test("compaction prompt is host-owned and not configurable", async () => {
   ).toThrow("prompt configuration is not editable")
 })
 
+test("research and frontend-design role descriptions keep document research distinct from UI replication", () => {
+  expect(AgentRoleContract.description("frontend-design")).toContain("frontend implementation template")
+  expect(AgentRoleContract.description("frontend-design")).toContain("not the owner for PRD/SPEC/report webpage research")
+  expect(AgentRoleContract.description("frontend-design")).toContain("UI implementation or replication")
+
+  expect(AgentRoleContract.description("research")).toContain("PRD/SPEC/report input material")
+  expect(AgentRoleContract.description("research")).toContain("webpage functional/visual analysis")
+  expect(AgentRoleContract.description("research")).toContain("rendered webpage PRD evidence")
+})
+
 test("public docs and live prompt do not describe deleted planner or requirements-owned goals", async () => {
   const root = process.cwd()
   const files = [
