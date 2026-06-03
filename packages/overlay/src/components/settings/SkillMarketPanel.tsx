@@ -11,6 +11,7 @@ import {
   createSignal,
   createMemo,
   For,
+  onCleanup,
   Show,
 } from "solid-js";
 import { createStore } from "solid-js/store";
@@ -114,6 +115,7 @@ function ExtensionSettingsPanel(props: { mode: ExtensionPanelMode; active?: bool
   const removableSkills = createMemo(() => customSkills().filter(skillRemovable));
   const builtinCount = createMemo(() => skills().length - customSkills().length);
   const mcpEntries = createMemo(() => Object.entries(mcp()));
+  const hasConnectingMcp = createMemo(() => mcpEntries().some(([, item]) => item?.status === "connecting"));
 
   async function reloadAll() {
     setLoading(true);
@@ -273,6 +275,23 @@ function ExtensionSettingsPanel(props: { mode: ExtensionPanelMode; active?: bool
     setNotice("");
     loadSkillMarket().catch((e) => {
       setNotice(e instanceof Error ? e.message : String(e));
+    });
+  });
+
+  createEffect(() => {
+    if (props.mode !== "mcp" || props.active !== true || !hasConnectingMcp()) return;
+
+    let disposed = false;
+    const timer = window.setTimeout(() => {
+      if (disposed) return;
+      loadExtensions().catch((e) => {
+        setNotice(e instanceof Error ? e.message : String(e));
+      });
+    }, 1_000);
+
+    onCleanup(() => {
+      disposed = true;
+      window.clearTimeout(timer);
     });
   });
 
