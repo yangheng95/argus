@@ -12,7 +12,7 @@
 
 ## Decision
 
-Remove per-column compatibility. On DB open, apply the DDL, compare the on-disk ordinary table shape against a fresh in-memory database created from the same `SCHEMA_DDL`, and if the existing DB does not match the current schema, close and recreate the DB files. This keeps `SCHEMA_DDL` as the single schema source and follows the project rule that this unpublished project resets DB state instead of migrating it.
+Remove per-column compatibility. On DB open, if ordinary tables already exist, compare the on-disk ordinary table shape against a fresh in-memory database created from the same `SCHEMA_DDL` before applying DDL to the existing file. If the existing DB does not match the current schema, close and recreate the DB files, then apply `SCHEMA_DDL` only to the fresh file. This keeps `SCHEMA_DDL` as the single schema source and follows the project rule that this unpublished project resets DB state instead of migrating it.
 
 ## Verification
 
