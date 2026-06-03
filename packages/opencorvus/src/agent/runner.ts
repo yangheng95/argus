@@ -177,6 +177,8 @@ export interface RunAgentSessionInput<C> {
     contractKind?: "stage-attempt" | "orchestrator-wake"
     /** Controls Model Context Protocol tool loading for this worker session. */
     includeMcpTools?: boolean
+    /** Uses only runtime contract tools, skipping registry and Model Context Protocol tools. */
+    exactTools?: boolean
   }
   /** Additional per-run registry/runtime tool switches merged after defaults. */
   toolSwitches?: Record<string, boolean>
@@ -901,6 +903,7 @@ export async function runAgentSession<C>(
     structuredOutputGuard: input.format?.validate,
     stream: input.stream,
     includeMcpTools: input.runtimeContract?.includeMcpTools,
+    exactTools: input.runtimeContract?.exactTools,
   })
   try {
     try {

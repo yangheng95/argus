@@ -67,11 +67,14 @@ export function createFrontendResearchBuildDelegationTools(input: FrontendResear
           model: input.model,
           autoIteration: false,
           includeMcpTools: false,
+          exactRuntimeTools: true,
+          additionalRuntimeTools: createDelegatedEvidenceCollectionTools({
+            sourceUrls: source_urls.length > 0 ? source_urls : (input.sourceUrls ?? []),
+            signal: input.signal,
+          }),
           toolSwitches: {
-            edit: false,
-            write: false,
-            todowrite: false,
             merge_back: false,
+            screenshot: false,
           },
           signal: input.signal,
         })
@@ -79,6 +82,140 @@ export function createFrontendResearchBuildDelegationTools(input: FrontendResear
       },
     }),
   }
+}
+
+function createDelegatedEvidenceCollectionTools(input: {
+  sourceUrls: string[]
+  signal?: AbortSignal
+}) {
+  return {
+    collect_frontend_research_evidence: tool({
+      description:
+        "Collect one bounded source-backed evidence packet for frontend-research. " +
+        "Call this at most once, then call report_build_result with the research summary.",
+      inputSchema: z.object({}),
+      execute: async () => {
+        const urls = input.sourceUrls.filter((url) => url.trim().length > 0).slice(0, 3)
+        if (urls.length === 0) {
+          return "No source URLs were supplied. Report the missing source URL through report_build_result(status=\"failed\")."
+        }
+        const reports: string[] = []
+        for (const url of urls) {
+          reports.push(await collectUrlEvidence(url, input.signal))
+        }
+        return [
+          "# Collected Frontend Research Evidence",
+          "",
+          ...reports,
+          "",
+          "The bounded evidence collection is complete. Call `report_build_result` now; do not request more tools.",
+        ].join("\n")
+      },
+    }),
+  }
+}
+
+async function collectUrlEvidence(url: string, parentSignal: AbortSignal | undefined): Promise<string> {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 12_000)
+  const abort = () => controller.abort()
+  parentSignal?.addEventListener("abort", abort, { once: true })
+  try {
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        "user-agent": "OpenCorvus frontend research build worker",
+        accept: "text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.8",
+      },
+    })
+    const contentType = response.headers.get("content-type") ?? "unknown"
+    const body = await response.text()
+    return renderUrlEvidence({
+      url,
+      status: response.status,
+      contentType,
+      body,
+    })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    return [`## ${url}`, "", `Fetch failed: ${message}`].join("\n")
+  } finally {
+    clearTimeout(timeout)
+    parentSignal?.removeEventListener("abort", abort)
+  }
+}
+
+function renderUrlEvidence(input: {
+  url: string
+  status: number
+  contentType: string
+  body: string
+}): string {
+  const html = input.body
+  const withoutScripts = html
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, " ")
+  const title = firstMatch(withoutScripts, /<title[^>]*>([\s\S]*?)<\/title>/i)
+  const description = firstMatch(
+    withoutScripts,
+    /<meta[^>]+name=["']description["'][^>]+content=["']([^"']*)["'][^>]*>/i,
+  )
+  const headings = collectMatches(withoutScripts, /<h([1-6])\b[^>]*>([\s\S]*?)<\/h\1>/gi, 80).map(
+    (match) => `h${match[1]} ${cleanHtmlText(match[2])}`,
+  )
+  const links = collectMatches(withoutScripts, /<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi, 80)
+    .map((match) => {
+      const text = cleanHtmlText(match[2])
+      return text ? `${text} -> ${match[1]}` : undefined
+    })
+    .filter((item): item is string => Boolean(item))
+  const text = cleanHtmlText(withoutScripts)
+  return [
+    `## ${input.url}`,
+    "",
+    `HTTP status: ${input.status}`,
+    `Content-Type: ${input.contentType}`,
+    title ? `Title: ${title}` : "Title: unavailable",
+    description ? `Meta description: ${description}` : "Meta description: unavailable",
+    "",
+    "### Heading Evidence",
+    headings.length > 0 ? headings.map((item) => `- ${item}`).join("\n") : "- none extracted",
+    "",
+    "### Link / Navigation Evidence",
+    links.length > 0 ? links.map((item) => `- ${item}`).join("\n") : "- none extracted",
+    "",
+    "### Text Evidence Excerpt",
+    "```",
+    text.slice(0, 12_000),
+    "```",
+  ].join("\n")
+}
+
+function firstMatch(text: string, pattern: RegExp): string | undefined {
+  const match = text.match(pattern)
+  return match?.[1] ? cleanHtmlText(match[1]) : undefined
+}
+
+function collectMatches(text: string, pattern: RegExp, limit: number): RegExpExecArray[] {
+  const matches: RegExpExecArray[] = []
+  let match: RegExpExecArray | null
+  while ((match = pattern.exec(text)) && matches.length < limit) {
+    matches.push(match)
+  }
+  return matches
+}
+
+function cleanHtmlText(text: string): string {
+  return text
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, " ")
+    .trim()
 }
 
 function renderDelegatedBuildRequest(input: {

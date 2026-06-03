@@ -119,6 +119,8 @@ export namespace SessionLoop {
     stream?: TextHooks
     /** False disables Model Context Protocol tools for this exact worker session. */
     includeMcpTools?: boolean
+    /** True skips registry and Model Context Protocol tools for this exact worker session. */
+    exactTools?: boolean
   }
 
   // ---------------------------------------------------------------------------
@@ -2502,6 +2504,7 @@ export namespace SessionLoop {
     contract: SessionRuntimeContract | undefined,
   ): boolean {
     if (!contract) return false
+    if (contract.exactTools === true) return true
     if (
       agentName === "orchestrator" &&
       contract.identity.agentKind === "orchestrator" &&

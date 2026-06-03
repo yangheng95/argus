@@ -69,11 +69,11 @@ describe("frontend-research build delegation", () => {
     expect(captured.parentSessionID).toBe("ses_frontend_research")
     expect(captured.autoIteration).toBe(false)
     expect(captured.includeMcpTools).toBe(false)
+    expect(captured.exactRuntimeTools).toBe(true)
+    expect(Object.keys(captured.additionalRuntimeTools)).toEqual(["collect_frontend_research_evidence"])
     expect(captured.toolSwitches).toMatchObject({
-      edit: false,
-      write: false,
-      todowrite: false,
       merge_back: false,
+      screenshot: false,
     })
     expect(captured.target.kind).toBe("request")
     expect(captured.target.text).toContain("no-change research packet")

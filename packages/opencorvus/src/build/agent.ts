@@ -283,6 +283,10 @@ export namespace BuildAgent {
     autoIteration?: boolean
     /** False disables Model Context Protocol tools for bounded research-only callers. */
     includeMcpTools?: boolean
+    /** True exposes only BuildAgent runtime tools for bounded special-purpose callers. */
+    exactRuntimeTools?: boolean
+    /** Extra runtime tools added to BuildAgent's terminal/report toolset for bounded callers. */
+    additionalRuntimeTools?: ToolSet
     /** Additional per-run tool switches merged after the build defaults. */
     toolSwitches?: Record<string, boolean>
     signal?: AbortSignal
@@ -698,6 +702,7 @@ export namespace BuildAgent {
           projectDir: Instance.project.worktree,
           taskID: input.task.id,
         }),
+        ...(input.additionalRuntimeTools ?? {}),
         report_build_result: tool({
           description:
             "Finalize this build session with status='passed' or status='failed'. " +
@@ -821,6 +826,7 @@ export namespace BuildAgent {
               attemptID: runtimeGoalRunID,
               contractKind: "stage-attempt",
               includeMcpTools: input.includeMcpTools,
+              exactTools: input.exactRuntimeTools,
             },
             toolSwitches: input.toolSwitches,
             terminalTool: {
