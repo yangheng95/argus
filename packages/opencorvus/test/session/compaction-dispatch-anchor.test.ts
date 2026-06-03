@@ -315,7 +315,7 @@ describe("session compaction dispatch anchor", () => {
     })
   })
 
-  test("buildPrompt carries dispatch-anchor text while selected head excludes it", async () => {
+  test("buildPrompt carries dispatch-anchor reference while selected head excludes it", async () => {
     const messages: Message.WithParts[] = [
       textMessage("m-dispatch", "user", "DISPATCH ANCHOR"),
       textMessage("m-a0", "assistant", "first answer", "m-dispatch"),
@@ -333,12 +333,37 @@ describe("session compaction dispatch anchor", () => {
       previousSummary: undefined,
       runtime: "<handoff-runtime-state></handoff-runtime-state>",
       context: [],
-      dispatchAnchor: "DISPATCH ANCHOR",
+      dispatchAnchor: { id: "m-dispatch", text: "DISPATCH ANCHOR" },
     })
 
-    expect(prompt).toContain("<dispatch-anchor>\nDISPATCH ANCHOR\n</dispatch-anchor>")
-    expect(prompt).toContain("Do not re-summarize it into userMessages[]")
+    expect(prompt).toContain("<dispatch-anchor-reference>")
+    expect(prompt).toContain("message_id: m-dispatch")
+    expect(prompt).toContain("characters: 15")
+    expect(prompt).toContain("<dispatch-anchor-excerpt>\nDISPATCH ANCHOR\n</dispatch-anchor-excerpt>")
+    expect(prompt).toContain("Do not copy it into userMessages[]")
     expect(selectedWire).not.toContain("DISPATCH ANCHOR")
+  })
+
+  test("buildPrompt bounds large dispatch-anchor text", () => {
+    const head = "ANCHOR-HEAD-RETAINED"
+    const middle = "ANCHOR-MIDDLE-MUST-NOT-ENTER-PROMPT"
+    const tail = "ANCHOR-TAIL-RETAINED"
+    const hugeAnchor = [head, "x".repeat(20_000), middle, "y".repeat(20_000), tail].join("\n")
+    const prompt = SessionCompaction.buildPrompt({
+      previousSummary: undefined,
+      runtime: "<handoff-runtime-state></handoff-runtime-state>",
+      context: [],
+      dispatchAnchor: { id: "m-dispatch", text: hugeAnchor },
+    })
+
+    expect(prompt).toContain("<dispatch-anchor-reference>")
+    expect(prompt).toContain("message_id: m-dispatch")
+    expect(prompt).toContain(`characters: ${hugeAnchor.length}`)
+    expect(prompt).toContain(head)
+    expect(prompt).toContain(tail)
+    expect(prompt).toContain("[omitted")
+    expect(prompt).not.toContain(middle)
+    expect(prompt.length).toBeLessThan(20_000)
   })
 
   test("compaction transcript flattens historical tool calls into inert text", () => {
